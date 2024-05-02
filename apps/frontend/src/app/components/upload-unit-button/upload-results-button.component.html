@@ -1,0 +1,13 @@
+<button mat-menu-item
+        (click)="hiddenFileInput.click()">
+  <mat-icon>input</mat-icon>
+  Ergebnisse importieren
+</button>
+
+<input #hiddenFileInput type="file"
+       name="files"
+       accept=".csv"
+       multiple
+       [hidden]="true"
+       (change)="onFileSelected($event.currentTarget)"/>
+

@@ -7,13 +7,13 @@ import { NgIf } from '@angular/common';
 import { TranslateModule, TranslatePipe } from '@ngx-translate/core';
 import { KeycloakService } from 'keycloak-angular';
 import { UnitPlayerComponent } from '../unit-player/unit-player.component';
-import { UploadUnitButtonComponent } from '../upload-unit-button/upload-unit-button.component';
+import { UploadResultsButtonComponent } from '../upload-unit-button/upload-results-button.component';
 
 @Component({
   selector: 'coding-box-login',
   standalone: true,
   // eslint-disable-next-line max-len
-  imports: [MatFormFieldModule, MatInputModule, MatButtonModule, ReactiveFormsModule, NgIf, TranslateModule, UnitPlayerComponent,UploadUnitButtonComponent],
+  imports: [MatFormFieldModule, MatInputModule, MatButtonModule, ReactiveFormsModule, NgIf, TranslateModule, UnitPlayerComponent,UploadResultsButtonComponent],
   templateUrl: './login.component.html',
   styleUrl: './login.component.scss'
 })
