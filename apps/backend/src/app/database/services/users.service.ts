@@ -2,10 +2,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import { MoreThan, Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import User from '../entities/user.entity';
-import { UserInListDto } from '../../../../../frontend/api-dto/user/user-in-list-dto';
 import { UserFullDto } from '../../../../../frontend/api-dto/user/user-full-dto';
 import { CreateUserDto } from '../../../../../frontend/api-dto/user/create-user-dto';
-import { MyDataDto } from '../../../../../frontend/api-dto/user/my-data-dto';
 
 @Injectable()
 export class UsersService {
@@ -14,25 +12,6 @@ export class UsersService {
     @InjectRepository(User)
     private usersRepository: Repository<User>
   ) {
-  }
-
-  async findAllUsers(workspaceId?: number): Promise<UserInListDto[]> {
-    this.logger.log(`Returning users${workspaceId ? ` for workspaceId: ${workspaceId}` : '.'}`);
-    const validUsers: number[] = [];
-    const users: User[] = await this.usersRepository.find({ order: { username: 'ASC' } });
-    const returnUsers: UserInListDto[] = [];
-    users.forEach(user => {
-      if (!workspaceId || (validUsers.indexOf(user.id) > -1)) {
-        const displayName = user.lastName ? user.lastName : user.username;
-        returnUsers.push(<UserInListDto>{
-          id: user.id,
-          name: user.username,
-          isAdmin: user.isAdmin,
-          displayName: user.firstName ? `${displayName}, ${user.firstName}` : displayName
-        });
-      }
-    });
-    return returnUsers;
   }
 
   async findOne(id: number): Promise<UserFullDto> {
@@ -178,21 +157,5 @@ export class UsersService {
       if (userData.email) userToUpdate.email = userData.email;
       await this.usersRepository.save(userToUpdate);
     }
-  }
-
-  async patchMyData(userData: MyDataDto): Promise<void> {
-    const userToUpdate = await this.usersRepository.findOne({
-      where: { id: userData.id },
-      select: {
-        id: true,
-        firstName: true,
-        lastName: true,
-        email: true
-      }
-    });
-    if (userData.lastName) userToUpdate.lastName = userData.lastName;
-    if (userData.firstName) userToUpdate.firstName = userData.firstName;
-    if (userData.email) userToUpdate.email = userData.email;
-    await this.usersRepository.save(userToUpdate);
   }
 }
