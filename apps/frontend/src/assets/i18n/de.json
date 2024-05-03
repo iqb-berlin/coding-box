@@ -1,2 +1,30 @@
 {
+  "home": {
+    "welcome": "Willkommen!",
+    "home-page": "Startseite",
+    "go-home": "Gehe zur Startseite",
+    "select-workspace": "Arbeitsbereich wählen",
+    "goto-admin": "Allgemeine Systemverwaltung",
+    "goto-wsg-admin": "Verwaltung der Bereichsgruppe",
+    "imprint": "Impressum/Datenschutz",
+    "logout": "Abmelden",
+    "confirm-logout": "Möchten Sie sich abmelden?",
+    "user-name": "Anmeldename",
+    "editMyData": "Nutzerdaten ändern",
+    "edit-my-data-title": "Meine Daten ändern",
+    "login": "Anmelden",
+    "lastName": "Nachname",
+    "firstName": "Vorname",
+    "email": "E-Mail",
+    "note": "Notiz",
+    "first-login": "Anlegen eines ersten User-Accounts",
+    "no-user": " Dieses System hat aktuell keine User angelegt. Mit den Anmeldedaten unten legen Sie einen ersten Account mit Administrationsrechten an. Bitte notieren Sie sich die Daten!",
+    "no-user-workspaces": "Für diese Anmeldung wurden keine Arbeitsbereiche gefunden.",
+    "user-menu": "Profil verwalten",
+    "appName": "Kennung der Anwendung: {{name}}",
+    "appVersion": "Version: {{version}}",
+    "not-logged-in": "Nicht angemeldet",
+    "logged-in-as": "Angemeldet als: {{name}}",
+    "isAdminMessage": "Berechtigung zum Ändern von Nutzerrechten und Arbeitsbereichen"
+  }
 }
