@@ -58,5 +58,4 @@ Thumbs.db
 
 auth.constants.ts
 database.constants.ts
-docker.env
 apps/backend/ormconfig.json
