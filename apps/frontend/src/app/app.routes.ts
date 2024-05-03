@@ -1,6 +1,9 @@
 import { Routes } from '@angular/router';
-import { UnitPlayerComponent } from './components/unit-player/unit-player.component';
+import { ReplayComponent } from './components/replay/replay.component';
+import { HomeComponent } from './components/home/home.component';
 
 export const routes: Routes = [
-  { path: 'player', component: UnitPlayerComponent },
+  { path: '', redirectTo: 'home', pathMatch: 'full' },
+  { path: 'home', component: HomeComponent },
+  { path: 'replay', component: ReplayComponent },
 ];
