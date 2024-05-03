@@ -1,5 +1,26 @@
+@if (appService.dataLoading) {
+  <div
+    class="spinner-container fx-column-start-center">
+    <mat-spinner class="fx-flex-fix-100"></mat-spinner>
+      <button
+        mat-button
+        class="fx-flex-fill">
+      </button>
+  </div>
+}
+<div class="fx-row-space-between-center">
+  <div class="logo hide-on-print">
+    <a [routerLink]="['/']" [attr.aria-label]="'home.go-home' | translate">
+      <img [src]="appService.appLogo?.data"
+           [matTooltip]="appService.appLogo ? appService.appLogo.alt : 'home.home-page' | translate"
+           [alt]="appService.appLogo ? appService.appLogo.alt : 'home.home-page' | translate"/>
+    </a>
+  </div>
+  <button mat-button class="fx-flex-fill" (click)="logout()">Logout</button>
+</div>
+
+
 <div class="container">
-  <coding-box-login></coding-box-login>
   <router-outlet />
 </div>
 
