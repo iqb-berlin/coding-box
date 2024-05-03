@@ -1,6 +1,8 @@
 import { Injectable, Inject } from '@angular/core';
 import { HttpClient, HttpEventType } from '@angular/common/http';
 import { map, Observable, of } from 'rxjs';
+import { CreateUserDto } from '../../../api-dto/user/create-user-dto';
+import { AppService } from './app.service';
 
 const SERVER_URL = 'http://localhost:3333/api/';
 @Injectable({
@@ -9,11 +11,16 @@ const SERVER_URL = 'http://localhost:3333/api/';
 export class BackendService {
   constructor(
     @Inject('SERVER_URL') private readonly serverUrl: string,
-    private http: HttpClient
-  ) {}
+    private http: HttpClient, public appService: AppService
+  ) {
+  }
 
   getVeronaPlayer(): Observable<any> {
     return this.http.get(`${SERVER_URL}player`);
+  }
+
+  login(user: CreateUserDto): Observable<string> {
+    return this.http.post<string>(`${SERVER_URL}login`, user);
   }
 
   uploadUnits(files: FileList | null): Observable<any | number> {
