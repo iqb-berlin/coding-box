@@ -1,21 +1,15 @@
 import {
   Body,
-  Controller, Get, Post, UploadedFiles, UseGuards, UseInterceptors
+  Controller, Get, Post, UploadedFiles, UseInterceptors
 } from '@nestjs/common';
 
 import * as fs from 'fs';
 import * as path from 'path';
 import { FilesInterceptor } from '@nestjs/platform-express';
-import {
-  ApiBearerAuth, ApiHeader, ApiOkResponse, ApiTags
-} from '@nestjs/swagger';
+import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { AppService } from './app.service';
 import { CreateUserDto } from '../../../frontend/api-dto/user/create-user-dto';
 import { AuthService } from './auth/service/auth.service';
-import { JwtAuthGuard } from './auth/jwt-auth.guard';
-import { UserId, UserName } from './auth/user.decorator';
-import { AuthDataDto } from '../../../frontend/src/app/components/auth-data-dto';
-import { UsersService } from './database/services/users.service';
 
 @Controller()
 export class AppController {
@@ -34,34 +28,6 @@ export class AppController {
     return this.appService.uploadResults(files);
   }
 
-  @Get('auth-data')
-  @UseGuards(JwtAuthGuard)
-  @ApiHeader({
-    name: 'app-version',
-    description: 'version of frontend',
-    required: true,
-    allowEmptyValue: false
-  })
-  @ApiBearerAuth()
-  @ApiOkResponse({ description: 'User auth data successfully retrieved.' }) // TODO: Add Exception
-  @ApiTags('auth')
-  async findCanDos(
-    @UserId() userId: number, @UserName() userName: string
-  ): Promise<AuthDataDto> {
-    if (userId) {
-      return <AuthDataDto>{
-        userId: userId,
-        userName: userName,
-        userLongName: 'long',
-        isAdmin: true
-      };
-    }
-    return <AuthDataDto>{
-      userId: 0,
-      userName: '',
-      isAdmin: false
-    };
-  }
   @Post('login')
   @ApiTags('auth')
   @ApiOkResponse({ description: 'Login successful.' })
