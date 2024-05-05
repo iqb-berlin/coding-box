@@ -5,15 +5,15 @@
   "projectType": "application",
   "targets": {
     "build": {
-      "executor": "@nx/esbuild:esbuild",
+      "executor": "@nx/webpack:webpack",
       "outputs": ["{options.outputPath}"],
       "options": {
+        "webpackConfig": "apps/backend/webpack.config.js",
         "outputPath": "dist/apps/backend",
         "main": "apps/backend/src/main.ts",
         "tsConfig": "apps/backend/tsconfig.app.json",
-        "assets": ["apps/backend/src/assets"],
         "generatePackageJson": true,
-        "target": "node20.11.1",
+        "target": "node",
         "compiler": "tsc"
       },
       "configurations": {
