@@ -59,52 +59,11 @@ export class UsersService {
         email: true
       }
     });
-    const existingKeycloakUser: User = await this.usersRepository.findOne({
-      where: { identity: user.identity, issuer: user.issuer },
-      select: {
-        username: true,
-        id: true,
-        firstName: true,
-        lastName: true,
-        email: true
-      }
-    });
+    this.logger.log(`Creating user with username: ${JSON.stringify(user)}`);
     if (existingUser) {
-      if (user.username) existingUser.username = user?.username || '';
-      if (user.lastName) existingUser.lastName = user?.lastName || '';
-      if (user.firstName) existingUser.firstName = user?.firstName || '';
-      if (user.email) existingUser.email = user?.email || '';
-      if (user.issuer) existingUser.issuer = user?.issuer;
-      if (user.identity) existingUser.identity = user?.identity;
-      await this.usersRepository.update(
-        { id: existingUser.id },
-        {
-          identity: user.identity,
-          issuer: user.issuer
-        }
-      );
-      this.logger.log(`Updating keycloak user with username: ${JSON.stringify(user)}`);
-      return existingKeycloakUser.id;
-    }
-    if (existingUser) {
-      if (user.username) existingUser.username = user?.username || '';
-      if (user.lastName) existingUser.lastName = user?.lastName || '';
-      if (user.firstName) existingUser.firstName = user?.firstName || '';
-      if (user.email) existingUser.email = user?.email || '';
-      if (user.issuer) existingUser.issuer = user?.issuer;
-      if (user.identity) existingUser.identity = user?.identity;
-      await this.usersRepository.update(
-        { id: existingUser.id },
-        {
-          identity: user.identity,
-          issuer: user.issuer
-        }
-      );
-      this.logger.log(`Updating user with username: ${JSON.stringify(user)}`);
+      this.logger.log(`User with username ${user.username} already exists`);
       return existingUser.id;
     }
-
-    this.logger.log(`Creating user with username: ${JSON.stringify(user)}`);
     const newUser = this.usersRepository.create(user);
     await this.usersRepository.save(newUser);
     return newUser.id;
