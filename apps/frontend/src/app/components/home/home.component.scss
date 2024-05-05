@@ -1,4 +1,8 @@
-.container {
-
-  height: 100vh;
+.home-body {
+  position: absolute;
+  width: 100%;
+  top: 70px;
+  bottom: 0;
+  overflow-y: auto;
+  max-height: calc(100% - 65px);
 }

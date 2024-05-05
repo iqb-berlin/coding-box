@@ -1,4 +1,10 @@
-<div class="container fx-column-start-start">
+<div class="home-body fx-row-center-stretch">
+  <coding-box-user-workspaces-area>
+    class="fx-column-start-stretch box-left"
+    [workspaceGroups]="appService.authData.workspaces"
+    [warning]="appService.globalWarning"
+    [isAdmin]="appService.authData.isAdmin">
+  </coding-box-user-workspaces-area>
   <coding-box-app-info class="fx-column-start-stretch box-right"
                         [appTitle]="'Webanwendung zur Kodierung'"
                         [introHtml]="'appService.appConfig.introHtml'"

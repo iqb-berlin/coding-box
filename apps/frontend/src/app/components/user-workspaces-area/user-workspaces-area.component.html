@@ -1,0 +1,12 @@
+<div class="fx-row-space-between-center">
+  <div>
+      <button mat-button
+        [routerLink]="['/admin']"
+        [matTooltip]="'home.goto-admin' | translate"
+        matTooltipPosition="above"
+        data-cy="goto-admin">
+        <coding-box-wrapped-icon icon="settings"></coding-box-wrapped-icon>
+      </button>
+    <coding-box-user-menu></coding-box-user-menu>
+  </div>
+</div>
