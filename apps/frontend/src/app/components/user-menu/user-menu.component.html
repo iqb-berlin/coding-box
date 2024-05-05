@@ -1,0 +1,20 @@
+<button mat-button
+        [matMenuTriggerFor]="menuUser"
+        [matTooltip]="'home.user-menu' | translate"
+        matTooltipPosition="above">
+  <coding-box-wrapped-icon icon="account_box"></coding-box-wrapped-icon>
+</button>
+<mat-menu #menuUser="matMenu">
+  <coding-box-account-action
+    [type]="'changePassword'"
+    [iconName]="'lock'">
+  </coding-box-account-action>
+  <coding-box-account-action
+    [type]="'editMyData'"
+    [iconName]="'edit'">
+  </coding-box-account-action>
+  <coding-box-account-action
+    [type]="'logout'"
+    [iconName]="'logout'">
+  </coding-box-account-action>
+</mat-menu>
