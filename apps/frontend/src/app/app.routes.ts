@@ -3,6 +3,7 @@ import { ReplayComponent } from './components/replay/replay.component';
 import { HomeComponent } from './components/home/home.component';
 import { AdminComponent } from './components/admin/components/admin/admin.component';
 import { UsersComponent } from './components/admin/components/users/users.component';
+import { WorkspacesComponent } from './components/admin/components/workspaces/workspaces.component';
 
 export const routes: Routes = [
   { path: '', redirectTo: 'home', pathMatch: 'full' },
@@ -15,6 +16,7 @@ export const routes: Routes = [
     children: [
       { path: '', redirectTo: 'users', pathMatch: 'full' },
       { path: 'users', component: UsersComponent },
+      { path: 'workspaces', component: WorkspacesComponent },
       { path: '**', component: UsersComponent }]
   }
 ];

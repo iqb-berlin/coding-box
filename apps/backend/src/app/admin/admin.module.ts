@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { UsersController } from './users/users.controller';
 import { DatabaseModule } from '../database/database.module';
 import { AuthModule } from '../auth/auth.module';
+import { WorkspaceController } from './workspace/workspace.controller';
 
 @Module({
   imports: [
@@ -9,7 +10,7 @@ import { AuthModule } from '../auth/auth.module';
     AuthModule
   ],
   controllers: [
-    UsersController
+    UsersController, WorkspaceController
   ]
 })
 export class AdminModule {}

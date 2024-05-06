@@ -8,6 +8,7 @@ import * as path from 'path';
 import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { AuthService } from './auth/service/auth.service';
 import { CreateUserDto } from '../../../frontend/api-dto/user/create-user-dto';
+import { WorkspaceService } from './database/services/workspace.service';
 
 @Controller()
 export class AppController {

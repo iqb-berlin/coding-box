@@ -6,6 +6,10 @@ import {
 import { CreateUserDto } from '../../../api-dto/user/create-user-dto';
 import { AppService } from './app.service';
 import { UserFullDto } from '../../../api-dto/user/user-full-dto';
+import { WorkspaceFullDto } from '../../../api-dto/workspaces/workspace-full-dto';
+import { WorkspaceInListDto } from '../../../api-dto/workspaces/workspace-in-list-dto';
+import { CreateWorkspaceDto } from '../../../api-dto/workspaces/create-workspace-dto';
+import { AuthDataDto } from '../../../api-dto/auth-data-dto';
 
 const SERVER_URL = 'http://localhost:3333/api/';
 @Injectable({
@@ -24,6 +28,10 @@ export class BackendService {
 
   login(user: CreateUserDto): Observable<string> {
     return this.http.post<string>(`${SERVER_URL}login`, user);
+  }
+
+  getAuthData(): Observable<AuthDataDto> {
+    return this.http.get<AuthDataDto>(`${this.serverUrl}auth-data`);
   }
 
   getUsersFull(): Observable<UserFullDto[]> {
@@ -55,6 +63,41 @@ export class BackendService {
   deleteUsers(users: number[]): Observable<boolean> {
     return this.http
       .delete(`${this.serverUrl}admin/users/${users.join(';')}`)
+      .pipe(
+        catchError(() => of(false)),
+        map(() => true)
+      );
+  }
+
+
+  getWorkspaceList(): Observable<WorkspaceInListDto[]> {
+    return this.http
+      .get<WorkspaceInListDto[]>(`${this.serverUrl}admin/workspace`)
+      .pipe(
+        catchError(() => of([]))
+      );
+  }
+
+  addWorkspace(workspaceData: CreateWorkspaceDto): Observable<boolean> {
+    return this.http
+      .post<boolean>(`${this.serverUrl}admin/workspace`, workspaceData)
+      .pipe(
+        catchError(() => of(false))
+      );
+  }
+
+  deleteWorkspace(ids: number[]): Observable<boolean> {
+    return this.http
+      .delete(`${this.serverUrl}admin/workspace/${ids.join(';')}`)
+      .pipe(
+        catchError(() => of(false)),
+        map(() => true)
+      );
+  }
+
+  changeWorkspace(workspaceData: WorkspaceFullDto): Observable<boolean> {
+    return this.http
+      .patch<boolean>(`${this.serverUrl}admin/workspace`, workspaceData)
       .pipe(
         catchError(() => of(false)),
         map(() => true)
