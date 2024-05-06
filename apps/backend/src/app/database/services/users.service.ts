@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, MethodNotAllowedException } from '@nestjs/common';
 import { MoreThan, Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import User from '../entities/user.entity';
@@ -12,6 +12,25 @@ export class UsersService {
     @InjectRepository(User)
     private usersRepository: Repository<User>
   ) {
+  }
+
+  async findAllFull(workspaceId?: number): Promise<UserFullDto[]> {
+    const validUsers: number[] = [];
+    const users: User[] = await this.usersRepository.find({ order: { username: 'ASC' } });
+    const returnUsers: UserFullDto[] = [];
+    users.forEach(user => {
+      if (!workspaceId || (validUsers.indexOf(user.id) > -1)) {
+        returnUsers.push(<UserFullDto>{
+          id: user.id,
+          name: user.username,
+          isAdmin: user.isAdmin,
+          lastName: user.lastName,
+          firstName: user.firstName,
+          email: user.email
+        });
+      }
+    });
+    return returnUsers;
   }
 
   async findOne(id: number): Promise<UserFullDto> {
@@ -93,6 +112,15 @@ export class UsersService {
   async remove(id: number | number[]): Promise<void> {
     this.logger.log(`Deleting user with id: ${id}`);
     await this.usersRepository.delete(id);
+  }
+
+  removeIds(ids: number[]) {
+    // TODO: Sich selbst bzw. alle löschen verhindern?
+    if (ids && ids.length) {
+      ids.forEach(id => this.remove(id));
+    }
+    // TODO: Eigene Exception mit Custom-Parametern
+    throw new MethodNotAllowedException();
   }
 
   async patch(userData: UserFullDto): Promise<void> {

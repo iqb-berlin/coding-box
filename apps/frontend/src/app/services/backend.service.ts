@@ -1,8 +1,11 @@
 import { Injectable, Inject } from '@angular/core';
 import { HttpClient, HttpEventType } from '@angular/common/http';
-import { map, Observable, of } from 'rxjs';
+import {
+  catchError, map, Observable, of
+} from 'rxjs';
 import { CreateUserDto } from '../../../api-dto/user/create-user-dto';
 import { AppService } from './app.service';
+import { UserFullDto } from '../../../api-dto/user/user-full-dto';
 
 const SERVER_URL = 'http://localhost:3333/api/';
 @Injectable({
@@ -21,6 +24,41 @@ export class BackendService {
 
   login(user: CreateUserDto): Observable<string> {
     return this.http.post<string>(`${SERVER_URL}login`, user);
+  }
+
+  getUsersFull(): Observable<UserFullDto[]> {
+    return this.http
+      .get<UserFullDto[]>(`${this.serverUrl}admin/users/full`)
+      .pipe(
+        catchError(() => of([]))
+      );
+  }
+
+  addUser(newUser: CreateUserDto): Observable<boolean> {
+    return this.http
+      .post(`${this.serverUrl}admin/users`, newUser)
+      .pipe(
+        catchError(() => of(false)),
+        map(() => true)
+      );
+  }
+
+  changeUserData(newData: UserFullDto): Observable<boolean> {
+    return this.http
+      .patch(`${this.serverUrl}admin/users`, newData)
+      .pipe(
+        catchError(() => of(false)),
+        map(() => true)
+      );
+  }
+
+  deleteUsers(users: number[]): Observable<boolean> {
+    return this.http
+      .delete(`${this.serverUrl}admin/users/${users.join(';')}`)
+      .pipe(
+        catchError(() => of(false)),
+        map(() => true)
+      );
   }
 
   uploadUnits(files: FileList | null): Observable<any | number> {
