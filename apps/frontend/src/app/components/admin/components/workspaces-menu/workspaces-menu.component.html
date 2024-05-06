@@ -1,0 +1,19 @@
+<div class="fx-row-start-stretch">
+  <button mat-button
+          [matTooltip]="'admin.add-group' | translate"
+          (click)="addGroup()">
+    <coding-box-wrapped-icon icon="add"></coding-box-wrapped-icon>
+  </button>
+  <button mat-button
+          [disabled]="!selectedWorkspaceGroupId && (!checkedRows || !checkedRows.length)"
+          [matTooltip]="'admin.delete-selected-groups' | translate"
+          (click)="deleteGroups()">
+    <coding-box-wrapped-icon icon="delete"></coding-box-wrapped-icon>
+  </button>
+  <button mat-button
+          [disabled]="!selectedWorkspaceGroupId  && checkedRows && checkedRows.length !== 1"
+          [matTooltip]="'admin.edit-selected-group' | translate"
+          (click)="editGroup()">
+    <coding-box-wrapped-icon icon="edit"></coding-box-wrapped-icon>
+  </button>
+</div>
