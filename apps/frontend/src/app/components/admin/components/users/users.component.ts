@@ -60,7 +60,9 @@ export class UsersComponent implements OnInit {
   }
 
   ngOnInit(): void {
-    this.updateUserList();
+    setTimeout(() => {
+      this.updateUserList();
+    });
   }
 
   private setObjectsDatasource(users: UserFullDto[]): void {
