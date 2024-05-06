@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { Subject } from 'rxjs';
-import { AppLogoDto } from './app-logo-dto';
+import { AppLogoDto } from '../../../api-dto/app-logo-dto';
 
 @Injectable({
   providedIn: 'root'
