@@ -1,0 +1,63 @@
+<div class="fx-row-space-between-start admin-tab-content">
+  <div class="object-list fx-column-start-stretch fx-flex-row-50">
+  <button (click)="authService.redirectToProfile()">Manage Account</button>
+  <coding-box-users-menu [selectedUser]="selectedUser"
+                          [selectedRows]="tableSelectionRow.selected"
+                          [checkedRows]="tableSelectionCheckboxes.selected"
+                          (userAdded)="addUser($event)"
+                         (userEdited)="editUser($event)"
+                         (usersDeleted)="deleteUsers($event)">
+  </coding-box-users-menu>
+
+  @if (objectsDatasource.data.length) {
+    <coding-box-search-filter
+      [title]="'search-filter.filter-users' | translate"
+      (valueChange)="objectsDatasource.filter = $event.trim().toLowerCase()">
+    </coding-box-search-filter>
+  }
+
+  <mat-table [dataSource]="objectsDatasource"
+             matSortDisableClear
+             matSort
+             class="scroll-area">
+    <ng-container matColumnDef="selectCheckbox">
+      <mat-header-cell *matHeaderCellDef class="fx-flex-row-fix-70">
+        <mat-checkbox [checked]="(tableSelectionCheckboxes | hasSelectionValue : tableSelectionCheckboxes.selected.length) &&  (tableSelectionCheckboxes.selected.length | isAllSelected : objectsDatasource.data.length)"
+                      [indeterminate]="(tableSelectionCheckboxes | hasSelectionValue : tableSelectionCheckboxes.selected.length) && !(tableSelectionCheckboxes.selected.length | isAllSelected : objectsDatasource.data.length)"
+                      (change)="$event ? masterToggle() : null">
+        </mat-checkbox>
+      </mat-header-cell>
+      <mat-cell *matCellDef="let row" class="fx-flex-row-fix-70">
+        <mat-checkbox [checked]="tableSelectionCheckboxes | isSelected: row : tableSelectionCheckboxes.selected.length"
+                      (click)="$event.stopPropagation()"
+                      (change)="$event ? tableSelectionCheckboxes.toggle(row) : null">
+        </mat-checkbox>
+      </mat-cell>
+    </ng-container>
+
+    <ng-container matColumnDef="name">
+      <mat-header-cell *matHeaderCellDef
+                       mat-sort-header="name">
+        {{'user.login-name' | translate}}
+      </mat-header-cell>
+      <mat-cell *matCellDef="let element">
+        {{element.name}} {{element.isAdmin ? '*' : ''}}
+      </mat-cell>
+    </ng-container>
+
+    <ng-container matColumnDef="displayName">
+      <mat-header-cell *matHeaderCellDef
+                       mat-sort-header="lastName">
+        {{'user.full-name' | translate}}
+      </mat-header-cell>
+      <mat-cell *matCellDef="let row"
+                class="secondary-cell">
+        {{row.lastName ? row.lastName : row.name}}{{row.firstName ? (', ' + row.firstName) : ''}}
+      </mat-cell>
+    </ng-container>
+
+    <mat-header-row *matHeaderRowDef="displayedColumns"></mat-header-row>
+    <mat-row *matRowDef="let row; columns: displayedColumns;"></mat-row>
+  </mat-table>
+  </div>
+</div>
