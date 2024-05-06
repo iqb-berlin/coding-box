@@ -7,7 +7,7 @@ export function initializer(keycloak: KeycloakService): () => Promise<boolean> {
       config: {
         url: 'https://www.iqb-login.de',
         realm: 'iqb',
-        clientId: 'studio'
+        clientId: 'coding-box'
       },
       loadUserProfileAtStartUp: true,
       initOptions: {
@@ -24,7 +24,7 @@ export function initializer(keycloak: KeycloakService): () => Promise<boolean> {
     config: {
       url: 'https://www.iqb-login.de',
       realm: 'iqb',
-      clientId: 'studio'
+      clientId: 'coding-box'
     },
     loadUserProfileAtStartUp: true,
     initOptions: {
