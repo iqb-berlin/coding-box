@@ -13,8 +13,8 @@ import { UntypedFormGroup } from '@angular/forms';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { UsersComponent } from './users.component';
-import { UserFullDto } from '../../../../../api-dto/user/user-full-dto';
-import { environment } from '../../../../environments/environment';
+import { UserFullDto } from '../../../../../../api-dto/user/user-full-dto';
+import { environment } from '../../../../../environments/environment';
 
 describe('UsersComponent', () => {
   let component: UsersComponent;
