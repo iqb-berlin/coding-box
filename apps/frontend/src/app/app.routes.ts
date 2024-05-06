@@ -1,8 +1,8 @@
 import { Routes } from '@angular/router';
 import { ReplayComponent } from './components/replay/replay.component';
 import { HomeComponent } from './components/home/home.component';
-import { AdminComponent } from './components/admin/admin/admin.component';
-import { UsersComponent } from './components/admin/users/users.component';
+import { AdminComponent } from './components/admin/components/admin/admin.component';
+import { UsersComponent } from './components/admin/components/users/users.component';
 
 export const routes: Routes = [
   { path: '', redirectTo: 'home', pathMatch: 'full' },
