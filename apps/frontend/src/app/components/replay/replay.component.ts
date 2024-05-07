@@ -6,13 +6,12 @@ import { ReactiveFormsModule } from '@angular/forms';
 import { NgIf } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
 import { UnitPlayerComponent } from '../unit-player/unit-player.component';
-import { UploadResultsButtonComponent } from '../upload-unit-button/upload-results-button.component';
 
 @Component({
   selector: 'coding-box-replay',
   standalone: true,
   // eslint-disable-next-line max-len
-  imports: [MatFormFieldModule, MatInputModule, MatButtonModule, ReactiveFormsModule, NgIf, TranslateModule, UnitPlayerComponent, UploadResultsButtonComponent],
+  imports: [MatFormFieldModule, MatInputModule, MatButtonModule, ReactiveFormsModule, NgIf, TranslateModule, UnitPlayerComponent],
   templateUrl: './replay.component.html',
   styleUrl: './replay.component.scss'
 })

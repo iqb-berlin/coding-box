@@ -1,8 +1,7 @@
 <div class="home-body fx-row-center-stretch">
-  <coding-box-user-workspaces-area>
+  <coding-box-user-workspaces-area
     class="fx-column-start-stretch box-left"
-    [workspaceGroups]="appService.authData.workspaces"
-    [warning]="appService.globalWarning"
+    [workspaces]="appService.authData.workspaces"
     [isAdmin]="appService.authData.isAdmin">
   </coding-box-user-workspaces-area>
   <coding-box-app-info class="fx-column-start-stretch box-right"
