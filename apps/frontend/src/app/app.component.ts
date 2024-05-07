@@ -27,6 +27,7 @@ import { BackendService } from './services/backend.service';
 })
 export class AppComponent implements OnInit {
   constructor(
+    // eslint-disable-next-line max-len
     public appService: AppService, public authService:AuthService, public keycloakService:KeycloakService, public backendService:BackendService) {}
 
   loggedIn = false;
@@ -37,6 +38,10 @@ export class AppComponent implements OnInit {
       this.loggedIn = false;
     } else {
       this.loggedIn = true;
+      this.backendService.getAuthData().subscribe(authData => {
+        console.log('authData', authData);
+        this.appService.authData = authData;
+      });
       const loggedUser = this.authService.getLoggedUser();
       console.log('loggedUser', loggedUser);
       const userProfile = await this.authService.loadUserProfile();

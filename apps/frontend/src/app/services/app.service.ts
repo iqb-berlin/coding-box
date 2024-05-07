@@ -1,17 +1,21 @@
 import { Injectable } from '@angular/core';
 import { Subject } from 'rxjs';
 import { AppLogoDto } from '../../../api-dto/app-logo-dto';
+import { AuthDataDto } from '../../../api-dto/auth-data-dto';
 
 @Injectable({
   providedIn: 'root'
 })
 export class AppService {
-  authData = {
+  static defaultAuthData = <AuthDataDto>{
     userId: 0,
     userName: '',
     userLongName: '',
-    isAdmin: false
+    isAdmin: false,
+    workspaces: []
   };
+
+  authData = AppService.defaultAuthData;
 
   dataLoading: boolean | number = false;
   appLogo: AppLogoDto = standardLogo;

@@ -31,7 +31,7 @@ export class BackendService {
   }
 
   getAuthData(): Observable<AuthDataDto> {
-    return this.http.get<AuthDataDto>(`${this.serverUrl}auth-data`);
+    return this.http.get<AuthDataDto>(`${SERVER_URL}auth-data`);
   }
 
   getUsersFull(): Observable<UserFullDto[]> {
