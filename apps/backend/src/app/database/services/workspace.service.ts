@@ -83,4 +83,16 @@ export class WorkspaceService {
     await this.workspaceRepository.delete(id);
   }
 
+  async uploadTestFiles(id: number, originalFiles: FileIo[]): Promise<any> {
+    const functionReturn: any = {
+      source: 'upload-units',
+      messages: []
+    };
+    const files: FileIo[] = [];
+
+    files.forEach(f => {
+      console.log('FILE', f);
+      return functionReturn;
+    });
+  }
 }

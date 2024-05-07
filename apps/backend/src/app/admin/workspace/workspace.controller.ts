@@ -51,12 +51,12 @@ export class WorkspaceController {
     return this.workspaceService.remove(idsAsNumberArray);
   }
 
-  @Patch()
-  @ApiBearerAuth()
-  @ApiTags('admin workspaces')
-  async patch(@Body() workspaceGroupFullDto: WorkspaceFullDto) {
-    return this.workspaceService.patch(workspaceGroupFullDto);
-  }
+  // @Patch()
+  // @ApiBearerAuth()
+  // @ApiTags('admin workspaces')
+  // async patch(@Body() workspaceGroupFullDto: WorkspaceFullDto) {
+  //   return this.workspaceService.patch(workspaceGroupFullDto);
+  // }
 
   @Post()
   @ApiBearerAuth()

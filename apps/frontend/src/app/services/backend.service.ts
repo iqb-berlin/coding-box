@@ -104,14 +104,14 @@ export class BackendService {
       );
   }
 
-  uploadUnits(files: FileList | null): Observable<any | number> {
+  uploadTestFiles(workspaceId: number, files: FileList | null): Observable<any | number> {
     if (files) {
       const formData = new FormData();
       for (let i = 0; i < files.length; i++) {
         formData.append('files', files[i]);
       }
 
-      return this.http.post<any>(`${SERVER_URL}upload/results`, formData, {
+      return this.http.post<any>(`${SERVER_URL}workspace/${workspaceId}/upload`, formData, {
         reportProgress: true,
         observe: 'events'
       }).pipe(

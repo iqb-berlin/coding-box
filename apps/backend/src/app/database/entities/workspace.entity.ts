@@ -2,11 +2,11 @@ import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
 
 @Entity()
 class Workspace {
-  @PrimaryGeneratedColumn()
-    id: number;
+  @PrimaryGeneratedColumn({ type: 'int' })
+    id: number = 0;
 
-  @Column()
-    name: string;
+  @Column({ type: 'varchar' })
+    name: string = '';
 
   @Column({
     type: 'jsonb',
