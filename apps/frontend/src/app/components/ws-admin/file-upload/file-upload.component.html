@@ -1,0 +1,16 @@
+<div class="fx-column-start-start fx-gap-10 container">
+  <a mat-raised-button color="primary">
+    <mat-icon>upload</mat-icon>
+    Testcenter Import
+  </a>
+  <a mat-raised-button color="primary" (click)="hiddenFileInput.click()">
+    <mat-icon>upload</mat-icon>
+    Test Dateien hochladen
+  </a>
+  <input #hiddenFileInput type="file"
+         name="files"
+         accept=".xml,.voud,.zip,.vomd"
+         multiple
+         [hidden]="true"
+         (change)="onFileSelected($event.currentTarget)"/>
+</div>
