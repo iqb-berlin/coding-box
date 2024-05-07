@@ -1,7 +1,7 @@
 <div class="fx-row-space-between-start admin-tab-content">
   <div class="object-list fx-column-start-stretch fx-flex-row-50">
 
-    <coding-box-workspaces-menu [selectedWorkspaceGroupId]="selectedWorkspaceGroupId"
+    <coding-box-workspaces-menu [selectedWorkspaceGroupId]="selectedWorkspaceId"
       [selectedRows]="tableSelectionRow.selected"
       [checkedRows]="tableSelectionCheckboxes.selected"
       (groupAdded)="addGroup($event)"
@@ -46,7 +46,7 @@
 
       <mat-header-row *matHeaderRowDef="displayedColumns"></mat-header-row>
       <mat-row *matRowDef="let row; columns: displayedColumns;"
-        [class.selected] = "row | isSelectedId: selectedWorkspaceGroupId"
+        [class.selected] = "row | isSelectedId: selectedWorkspaceId"
         (click)="toggleRowSelection(row)">
       </mat-row>
     </mat-table>

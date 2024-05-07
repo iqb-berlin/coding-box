@@ -48,7 +48,7 @@ export class WorkspacesComponent implements OnInit {
   displayedColumns = ['selectCheckbox', 'name'];
   tableSelectionCheckboxes = new SelectionModel<WorkspaceInListDto>(true, []);
   tableSelectionRow = new SelectionModel<WorkspaceInListDto>(false, []);
-  selectedWorkspaceGroupId = 0;
+  selectedWorkspaceId = 0;
 
   @ViewChild(MatSort) sort = new MatSort();
 
@@ -64,7 +64,6 @@ export class WorkspacesComponent implements OnInit {
     setTimeout(() => {
       this.updateWorkspaceList();
     });
-
   }
 
   addGroup(result: UntypedFormGroup): void {
@@ -141,11 +140,10 @@ export class WorkspacesComponent implements OnInit {
   }
 
   private updateWorkspaceList(): void {
-    this.selectedWorkspaceGroupId = 0;
-
+    this.selectedWorkspaceId = 0;
     this.appService.dataLoading = true;
-    this.backendService.getWorkspaceList().subscribe(groups => {
-      this.setObjectsDatasource(groups);
+    this.backendService.getWorkspaceList().subscribe(workspaces => {
+      this.setObjectsDatasource(workspaces);
       this.tableSelectionCheckboxes.clear();
       this.tableSelectionRow.clear();
       this.appService.dataLoading = false;
