@@ -5,6 +5,8 @@ import { RouterLink } from '@angular/router';
 import { MatButton } from '@angular/material/button';
 import { WrappedIconComponent } from '../wrapped-icon/wrapped-icon.component';
 import { UserMenuComponent } from '../user-menu/user-menu.component';
+import { WorkspaceFullDto } from '../../../../api-dto/workspaces/workspace-full-dto';
+import { UserWorkspacesComponent } from '../user-workspaces/user-workspaces.component';
 
 @Component({
   selector: 'coding-box-user-workspaces-area',
@@ -12,9 +14,10 @@ import { UserMenuComponent } from '../user-menu/user-menu.component';
   styleUrls: ['./user-workspaces-area.component.scss'],
   standalone: true,
   // eslint-disable-next-line max-len
-  imports: [MatButton, RouterLink, MatTooltip, WrappedIconComponent, TranslateModule, WrappedIconComponent, UserMenuComponent]
+  imports: [MatButton, RouterLink, MatTooltip, WrappedIconComponent, TranslateModule, WrappedIconComponent, UserMenuComponent, UserWorkspacesComponent]
 })
 export class UserWorkspacesAreaComponent {
   @Input() warning!: string;
   @Input() isAdmin!: boolean;
+  @Input() workspaces!: WorkspaceFullDto[];
 }
