@@ -10,6 +10,7 @@ import { WorkspaceFullDto } from '../../../api-dto/workspaces/workspace-full-dto
 import { WorkspaceInListDto } from '../../../api-dto/workspaces/workspace-in-list-dto';
 import { CreateWorkspaceDto } from '../../../api-dto/workspaces/create-workspace-dto';
 import { AuthDataDto } from '../../../api-dto/auth-data-dto';
+import { FilesDto } from '../../../api-dto/files/files.dto';
 
 const SERVER_URL = 'http://localhost:3333/api/';
 @Injectable({
@@ -20,10 +21,6 @@ export class BackendService {
     @Inject('SERVER_URL') private readonly serverUrl: string,
     private http: HttpClient, public appService: AppService
   ) {
-  }
-
-  getVeronaPlayer(): Observable<any> {
-    return this.http.get(`${SERVER_URL}player`);
   }
 
   login(user: CreateUserDto): Observable<string> {
@@ -69,7 +66,6 @@ export class BackendService {
       );
   }
 
-
   getWorkspaceList(): Observable<WorkspaceInListDto[]> {
     return this.http
       .get<WorkspaceInListDto[]>(`${this.serverUrl}admin/workspace`)
@@ -111,7 +107,7 @@ export class BackendService {
         formData.append('files', files[i]);
       }
 
-      return this.http.post<any>(`${SERVER_URL}workspace/${workspaceId}/upload`, formData, {
+      return this.http.post<any>(`${SERVER_URL}admin/workspace/${workspaceId}/upload`, formData, {
         reportProgress: true,
         observe: 'events'
       }).pipe(
@@ -133,5 +129,9 @@ export class BackendService {
       );
     }
     return of(-1);
+  }
+
+  getTestFiles(workspaceId: number): Observable<any> {
+    return this.http.get<FilesDto[]>(`${SERVER_URL}admin/workspace/${workspaceId}/files`);
   }
 }

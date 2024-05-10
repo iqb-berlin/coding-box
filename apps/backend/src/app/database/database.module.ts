@@ -8,12 +8,16 @@ import { UsersService } from './services/users.service';
 import { WorkspaceService } from './services/workspace.service';
 import Workspace from './entities/workspace.entity';
 import WorkspaceAdmin from './entities/workspace-admin.entity';
+import FileUpload from './entities/file_upload.entity';
+import Responses from './entities/responses.entity';
 
 @Module({
   imports: [
     User,
     Workspace,
     WorkspaceAdmin,
+    FileUpload,
+    Responses,
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => ({
@@ -24,17 +28,18 @@ import WorkspaceAdmin from './entities/workspace-admin.entity';
         password: configService.get('POSTGRES_PASSWORD'),
         database: configService.get('POSTGRES_DB'),
         entities: [
-          User, Workspace, WorkspaceAdmin
+          User, Workspace, WorkspaceAdmin, FileUpload, Responses
         ],
         synchronize: false
       }),
       inject: [ConfigService]
     }),
-    TypeOrmModule.forFeature([User,Workspace,WorkspaceAdmin])
+    TypeOrmModule.forFeature([User, Workspace, WorkspaceAdmin, FileUpload, Responses])
   ],
-  providers: [UsersService,WorkspaceService],
+  providers: [UsersService, WorkspaceService],
   exports: [
     User,
+    FileUpload,
     Workspace,
     WorkspaceAdmin,
     WorkspaceService,

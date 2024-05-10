@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
 import { TranslateModule } from '@ngx-translate/core';
 import { RouterLink } from '@angular/router';
 import { MatAnchor } from '@angular/material/button';
@@ -6,7 +6,6 @@ import { MatIcon } from '@angular/material/icon';
 import { Subscription } from 'rxjs';
 import { AppService } from '../../../services/app.service';
 import { BackendService } from '../../../services/backend.service';
-import { WorkspaceService } from '../../../../../../backend/src/app/database/services/workspace.service';
 
 @Component({
   selector: 'coding-box-file-upload',
@@ -15,9 +14,9 @@ import { WorkspaceService } from '../../../../../../backend/src/app/database/ser
   standalone: true,
   imports: [MatAnchor, RouterLink, TranslateModule, MatIcon]
 })
-export class FileUploadComponent {
+export class FileUploadComponent implements OnInit {
   private uploadSubscription: Subscription | null = null;
-  constructor(public appService:AppService, public backendService:BackendService, public workspaceService:WorkspaceService) { }
+  constructor(public appService:AppService, public backendService:BackendService) { }
 
   onFileSelected(targetElement: EventTarget | null) {
     if (targetElement) {
@@ -40,5 +39,13 @@ export class FileUploadComponent {
         });
       }
     }
+  }
+
+  ngOnInit(): void {
+    this.backendService.getTestFiles(2).subscribe(files => {
+      if (files) {
+        console.log('FILES', files);
+      }
+    });
   }
 }

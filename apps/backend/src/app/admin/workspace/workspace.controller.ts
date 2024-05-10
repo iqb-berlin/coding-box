@@ -3,24 +3,25 @@ import {
   Controller,
   Delete,
   Get, Param,
-  Patch,
-  Post,
+  Post, UploadedFiles, UseInterceptors
 } from '@nestjs/common';
 import {
   ApiBearerAuth, ApiCreatedResponse, ApiNotFoundResponse, ApiOkResponse, ApiParam, ApiTags
 } from '@nestjs/swagger';
+import { FilesInterceptor } from '@nestjs/platform-express';
 import { UsersService } from '../../database/services/users.service';
 import { WorkspaceInListDto } from '../../../../../frontend/api-dto/workspaces/workspace-in-list-dto';
 import { WorkspaceFullDto } from '../../../../../frontend/api-dto/workspaces/workspace-full-dto';
 import { CreateWorkspaceDto } from '../../../../../frontend/api-dto/workspaces/create-workspace-dto';
 import { WorkspaceService } from '../../database/services/workspace.service';
 import { WorkspaceId } from './workspace.decorator';
+import { FilesDto } from '../../../../../frontend/api-dto/files/files.dto';
+import Responses from '../../database/entities/responses.entity';
 
 @Controller('admin/workspace')
 export class WorkspaceController {
   constructor(
     private workspaceService: WorkspaceService,
-    private userService: UsersService
   ) {}
 
   @Get()
@@ -39,6 +40,22 @@ export class WorkspaceController {
   @ApiTags('admin workspaces')
   async findOne(@WorkspaceId() id: number): Promise<WorkspaceFullDto> {
     return this.workspaceService.findOne(id);
+  }
+
+  @Get(':workspace_id/files')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  async findFiles(@WorkspaceId() id: number): Promise<FilesDto[]> {
+    return this.workspaceService.findFiles(id);
+  }
+
+
+  @Post(':workspace_id/upload')
+  @ApiBearerAuth()
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @UseInterceptors(FilesInterceptor('files'))
+  @ApiTags('workspace')
+  async addTestFiles(@WorkspaceId() workspaceId: number, @UploadedFiles() files): Promise<any> {
+    return this.workspaceService.uploadTestFiles(workspaceId, files);
   }
 
   @Delete(':ids')

@@ -1,12 +1,16 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { ArgumentOutOfRangeError } from 'rxjs';
+import * as cheerio from 'cheerio';
 import Workspace from '../entities/workspace.entity';
 import { WorkspaceInListDto } from '../../../../../frontend/api-dto/workspaces/workspace-in-list-dto';
 import { WorkspaceFullDto } from '../../../../../frontend/api-dto/workspaces/workspace-full-dto';
 import { CreateWorkspaceDto } from '../../../../../frontend/api-dto/workspaces/create-workspace-dto';
 import { AdminWorkspaceNotFoundException } from '../../exceptions/admin-workspace-not-found.exception';
 import { FileIo } from '../../admin/test-files/interfaces/file-io.interface';
+import FileUpload from '../entities/file_upload.entity';
+import { FilesDto } from '../../../../../frontend/api-dto/files/files.dto';
 
 @Injectable()
 export class WorkspaceService {
@@ -14,7 +18,9 @@ export class WorkspaceService {
 
   constructor(
     @InjectRepository(Workspace)
-    private workspaceRepository: Repository<Workspace>
+    private workspaceRepository: Repository<Workspace>,
+    @InjectRepository(FileUpload)
+    private fileUploadRepository: Repository<FileUpload>,
   ) {
   }
 
@@ -24,6 +30,11 @@ export class WorkspaceService {
     return workspaces.map(workspace => ({ id: workspace.id, name: workspace.name }));
   }
 
+  async findFiles(id: number): Promise<FilesDto[]> {
+    this.logger.log('Returning all files for workspace', id);
+    const files = await this.fileUploadRepository.find({});
+    return files;
+  }
   async findOne(id: number): Promise<WorkspaceFullDto> {
     this.logger.log(`Returning workspace with id: ${id}`);
     const workspaceGroup = await this.workspaceRepository.findOne({
@@ -47,35 +58,72 @@ export class WorkspaceService {
     return newWorkspace.id;
   }
 
-  // async patch(workspaceGroupData: WorkspaceFullDto): Promise<void> {
-  //   this.logger.log(`Updating workspace with id: ${workspaceGroupData.id}`);
-  //   if (workspaceGroupData.id) {
-  //     const workspaceGroupToUpdate = await this.workspaceRepository.findOne({
-  //       where: { id: workspaceGroupData.id }
-  //     });
-  //     if (workspaceGroupData.name) workspaceGroupToUpdate.name = workspaceGroupData.name;
-  //     if (workspaceGroupData.settings) workspaceGroupToUpdate.settings = workspaceGroupData.settings;
-  //     await this.workspaceRepository.save(workspaceGroupToUpdate);
-  //   } else {
-  //     throw new ArgumentOutOfRangeError();
-  //   }
-  // }
+  async patch(workspaceData: WorkspaceFullDto): Promise<void> {
+    this.logger.log(`Updating workspace with id: ${workspaceData.id}`);
+    if (workspaceData.id) {
+      const workspaceGroupToUpdate = await this.workspaceRepository.findOne({
+        where: { id: workspaceData.id }
+      });
+      if (workspaceData.name) workspaceGroupToUpdate.name = workspaceData.name;
+      if (workspaceData.settings) workspaceGroupToUpdate.settings = workspaceData.settings;
+      await this.workspaceRepository.save(workspaceGroupToUpdate);
+    } else {
+      throw new ArgumentOutOfRangeError();
+    }
+  }
 
   async remove(id: number[]): Promise<void> {
     this.logger.log(`Deleting workspaces with ids: ${id.join(', ')}`);
     await this.workspaceRepository.delete(id);
   }
 
-  async uploadTestFiles(id: number, originalFiles: FileIo[]): Promise<any> {
-    const functionReturn: any = {
-      source: 'upload-units',
-      messages: []
-    };
-    const files: FileIo[] = [];
-
-    files.forEach(f => {
-      console.log('FILE', f);
-      return functionReturn;
+  static csvToArr(stringVal, splitter) {
+    const [keys, ...rest] = stringVal
+      .trim()
+      .split('\n')
+      .map(item => item.split(splitter));
+    return rest.map(item => {
+      const object = {};
+      keys.forEach((key, index) => (object[key] = item.at(index)));
+      return object;
     });
+  }
+
+  async uploadTestFiles(id: number, originalFiles: FileIo[]): Promise<any> {
+    if (originalFiles[0].mimetype === 'text/xml') {
+      const xmlDocument = cheerio.load(originalFiles[0].buffer.toString(), {
+        xmlMode: true,
+        recognizeSelfClosing: true
+      });
+      const registry = this.fileUploadRepository.create(
+        { filename: originalFiles[0].originalname, workspace_id: 2, data: xmlDocument.html() });
+      await this.fileUploadRepository.save(registry);
+    }
+    if (originalFiles[0].mimetype === 'text/html') {
+      const registry = this.fileUploadRepository.create(
+        { filename: originalFiles[0].originalname, workspace_id: 2, data: originalFiles[0].buffer.toString() });
+      await this.fileUploadRepository.save(registry);
+    }
+    if (originalFiles[0].mimetype === 'application/octet-stream') {
+      const json = originalFiles[0].buffer.toString();
+      const registry = this.fileUploadRepository.create(
+        { filename: originalFiles[0].originalname, workspace_id: 2, data: json });
+      await this.fileUploadRepository.save(registry);
+    }
+    if (originalFiles[0].mimetype === 'text/csv') {
+      const rows = WorkspaceService.csvToArr(originalFiles[0].buffer.toString(), ';');
+      const mappedRows = rows.map((row: Response) => {
+        const testPerson = `${row.loginname}${row.code}`.replace(/"/g, '');
+        const unitId = row.unitname.replace(/"/g, '');
+        const responses = row.responses.slice(1, -1);
+        return ({
+          test_person: testPerson,
+          unit_id: unitId,
+          responses: responses
+        });
+      });
+      const registry = this.responsesRepository.create(mappedRows);
+      await this.responsesRepository.save(registry);
+    }
   }
 }
