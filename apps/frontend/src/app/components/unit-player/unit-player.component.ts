@@ -1,6 +1,6 @@
 import {
   AfterViewInit,
-  Component, ElementRef, ViewChild
+  Component, ElementRef, Input, OnChanges, OnInit, SimpleChanges, ViewChild
 } from '@angular/core';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
@@ -11,9 +11,7 @@ import { Subject, takeUntil } from 'rxjs';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { BackendService } from '../../services/backend.service';
 import { AppService } from '../../services/app.service';
-import { unitDef } from './unitDefinition';
 import { dataParts } from './dataParts';
-
 
 export interface PageData {
   index: number;
@@ -31,7 +29,9 @@ export type Progress = 'none' | 'some' | 'complete';
   templateUrl: './unit-player.component.html',
   styleUrl: './unit-player.component.scss'
 })
-export class UnitPlayerComponent implements AfterViewInit {
+export class UnitPlayerComponent implements AfterViewInit,OnChanges {
+  @Input() unitDef!: string;
+  @Input() unitPlayer!: string;
   @ViewChild('hostingIframe') hostingIframe!: ElementRef;
   private iFrameElement: HTMLIFrameElement | undefined;
   postMessageTarget: Window | undefined;
@@ -43,21 +43,14 @@ export class UnitPlayerComponent implements AfterViewInit {
   responseProgress: Progress = 'none';
   hasFocus: boolean = false;
   responses!: Response[] | null;
+  count: number = 0;
 
-  constructor(
-    private backendService:BackendService,
-    private appService: AppService,
-    private snackBar: MatSnackBar,
-    private translateService: TranslateService
-  ) {
-    this.subscribeForMessages();
-  }
-
-  ngAfterViewInit(): void {
-    this.iFrameElement = this.hostingIframe?.nativeElement;
-    this.backendService.getVeronaPlayer().subscribe((player: string) => {
+  ngOnChanges(changes: SimpleChanges) {
+    if (this.count > 0) {
+      const parsedJSONUnitDef = JSON.parse(changes['unitDef'].currentValue);
+      this.unitDef = parsedJSONUnitDef;
       if (this.iFrameElement) {
-        this.iFrameElement.srcdoc = player;
+        this.iFrameElement.srcdoc = (changes['unitPlayer'].currentValue).replace('&quot;', '');
         if (this.postMessageTarget) {
           this.postMessageTarget.postMessage({
             type: 'vopStartCommand',
@@ -72,11 +65,24 @@ export class UnitPlayerComponent implements AfterViewInit {
               pagingMode: 'auto',
               directDownloadUrl: ''
             },
-            unitDefinition: unitDef
+            unitDefinition: parsedJSONUnitDef
           }, '*');
         }
       }
-    });
+    }
+    this.count++;
+  }
+
+  constructor(
+    private appService: AppService,
+    private snackBar: MatSnackBar,
+    private translateService: TranslateService
+  ) {
+    this.subscribeForMessages();
+  }
+
+  ngAfterViewInit(): void {
+    this.iFrameElement = this.hostingIframe?.nativeElement;
   }
 
   private subscribeForMessages(): void {
@@ -191,7 +197,7 @@ export class UnitPlayerComponent implements AfterViewInit {
   }
 
   private postUnitDef(): void {
-    const unitDefStringified = JSON.stringify(unitDef);
+    const unitDefStringified = JSON.stringify(this.unitDef);
     if (this.postMessageTarget) {
       if (this.playerApiVersion === 1) {
         this.postMessageTarget.postMessage({
@@ -204,7 +210,7 @@ export class UnitPlayerComponent implements AfterViewInit {
           type: 'vopStartCommand',
           sessionId: this.sessionId,
           unitState: {
-            dataParts: dataParts ,
+            dataParts: dataParts,
             presentationProgress: 'none',
             responseProgress: 'none'
           },
