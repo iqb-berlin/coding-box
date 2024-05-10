@@ -9,7 +9,6 @@ import {
   ApiBearerAuth, ApiCreatedResponse, ApiNotFoundResponse, ApiOkResponse, ApiParam, ApiTags
 } from '@nestjs/swagger';
 import { FilesInterceptor } from '@nestjs/platform-express';
-import { UsersService } from '../../database/services/users.service';
 import { WorkspaceInListDto } from '../../../../../frontend/api-dto/workspaces/workspace-in-list-dto';
 import { WorkspaceFullDto } from '../../../../../frontend/api-dto/workspaces/workspace-full-dto';
 import { CreateWorkspaceDto } from '../../../../../frontend/api-dto/workspaces/create-workspace-dto';
@@ -48,6 +47,11 @@ export class WorkspaceController {
     return this.workspaceService.findFiles(id);
   }
 
+  @Get(':workspace_id/:testPerson/responses')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  async findResponse(@WorkspaceId() id: number, @Param('testPerson') testPerson:string): Promise<Responses[]> {
+    return this.workspaceService.findResponse(id, testPerson);
+  }
 
   @Post(':workspace_id/upload')
   @ApiBearerAuth()

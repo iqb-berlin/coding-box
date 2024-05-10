@@ -40,6 +40,7 @@ import Responses from './entities/responses.entity';
   exports: [
     User,
     FileUpload,
+    Responses,
     Workspace,
     WorkspaceAdmin,
     WorkspaceService,

@@ -11,6 +11,17 @@ import { AdminWorkspaceNotFoundException } from '../../exceptions/admin-workspac
 import { FileIo } from '../../admin/test-files/interfaces/file-io.interface';
 import FileUpload from '../entities/file_upload.entity';
 import { FilesDto } from '../../../../../frontend/api-dto/files/files.dto';
+import Responses from '../entities/responses.entity';
+
+type Response = {
+  groupname:string,
+  loginname : string,
+  code : string,
+  bookletname : string,
+  unitname : string,
+  responses : string,
+  laststate : string,
+};
 
 @Injectable()
 export class WorkspaceService {
@@ -21,6 +32,8 @@ export class WorkspaceService {
     private workspaceRepository: Repository<Workspace>,
     @InjectRepository(FileUpload)
     private fileUploadRepository: Repository<FileUpload>,
+    @InjectRepository(Responses)
+    private responsesRepository:Repository<Responses>
   ) {
   }
 
@@ -35,6 +48,15 @@ export class WorkspaceService {
     const files = await this.fileUploadRepository.find({});
     return files;
   }
+
+  async findResponse(id: number, testPerson:string): Promise<Responses[]> {
+    this.logger.log('Returning response for test person', testPerson);
+
+    const response = await this.responsesRepository.find(
+      { where: { test_person: testPerson }, select: { responses: true } });
+    return response;
+  }
+
   async findOne(id: number): Promise<WorkspaceFullDto> {
     this.logger.log(`Returning workspace with id: ${id}`);
     const workspaceGroup = await this.workspaceRepository.findOne({
