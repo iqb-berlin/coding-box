@@ -1,4 +1,4 @@
-<button mat-button
+<button mat-button [style]="{color:'lightgrey'}"
         [matMenuTriggerFor]="menuUser"
         [matTooltip]="'home.user-menu' | translate"
         matTooltipPosition="above">
@@ -7,7 +7,8 @@
 <mat-menu #menuUser="matMenu">
   <coding-box-account-action
     [type]="'changePassword'"
-    [iconName]="'lock'">
+    [iconName]="'lock'"
+    codingBoxChangePassword>
   </coding-box-account-action>
   <coding-box-account-action
     [type]="'editMyData'"
@@ -15,6 +16,8 @@
   </coding-box-account-action>
   <coding-box-account-action
     [type]="'logout'"
-    [iconName]="'logout'">
+    [iconName]="'logout'"
+    (click)="logout()"
+  >
   </coding-box-account-action>
 </mat-menu>

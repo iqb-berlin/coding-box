@@ -28,16 +28,10 @@ export class EditUserComponent {
               @Inject(MAT_DIALOG_DATA) public data: any) {
     this.editUserForm = this.fb.group({
       name: this.fb.control(this.data.name,
-        [Validators.required, Validators.pattern(/^[a-zäöüß]{3,}$/)]),
+        [Validators.required]),
       lastName: this.fb.control(this.data.lastName),
       firstName: this.fb.control(this.data.firstName),
-      email: this.fb.control(this.data.email),
-      description: this.fb.control(this.data.description),
-      isAdmin: this.fb.control(this.data.isAdmin),
-      password: this.fb.control(this.data.password,
-        data.newUser ?
-          [Validators.pattern(/^\S{3,}$/), Validators.required] :
-          [Validators.pattern(/^\S{3,}$/)])
+
     });
   }
 }

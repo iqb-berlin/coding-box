@@ -11,11 +11,13 @@ import { AuthService } from './auth/service/auth.service';
 import { initializer } from './auth/keycloak-initializer';
 import { CreateUserDto } from '../../api-dto/user/create-user-dto';
 import { BackendService } from './services/backend.service';
+import { UserMenuComponent } from './components/user-menu/user-menu.component';
+import { WrappedIconComponent } from './components/wrapped-icon/wrapped-icon.component';
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [RouterOutlet, MatSlideToggleModule, MatProgressSpinner, RouterLink, TranslateModule, MatTooltip, MatButton],
+  imports: [RouterOutlet, MatSlideToggleModule, MatProgressSpinner, RouterLink, TranslateModule, MatTooltip, MatButton, UserMenuComponent, WrappedIconComponent],
   templateUrl: './app.component.html',
   styleUrl: './app.component.scss',
   providers: [AuthService, {
@@ -64,9 +66,5 @@ export class AppComponent implements OnInit {
     window.addEventListener('message', event => {
       this.appService.processMessagePost(event);
     }, false);
-  }
-
-  logout() {
-    this.authService.logout();
   }
 }

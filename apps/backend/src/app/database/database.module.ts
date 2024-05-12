@@ -11,6 +11,8 @@ import WorkspaceAdmin from './entities/workspace-admin.entity';
 import FileUpload from './entities/file_upload.entity';
 import Responses from './entities/responses.entity';
 import WorkspaceUser from './entities/workspace_user.entity';
+import { HttpModule, HttpService } from '@nestjs/axios';
+import { HttpClient } from '@angular/common/http';
 
 @Module({
   imports: [
@@ -20,6 +22,7 @@ import WorkspaceUser from './entities/workspace_user.entity';
     FileUpload,
     Responses,
     WorkspaceUser,
+    HttpModule,
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => ({

@@ -1,16 +1,1 @@
-<div class="fx-row-space-between-center">
-  <div>
-      <button mat-button
-        [routerLink]="['/admin']"
-        [matTooltip]="'home.goto-admin' | translate"
-        matTooltipPosition="above"
-        data-cy="goto-admin">
-        <coding-box-wrapped-icon icon="settings"></coding-box-wrapped-icon>
-      </button>
-    <coding-box-user-menu></coding-box-user-menu>
-    <coding-book-user-workspaces
-      class="fx-column-start-stretch workspace-groups"
-      [workspaces]="workspaces">
-    </coding-book-user-workspaces>
-  </div>
-</div>
+<coding-book-user-workspaces class="fx-column-start-stretch workspaces" [workspaces]="workspaces"></coding-book-user-workspaces>

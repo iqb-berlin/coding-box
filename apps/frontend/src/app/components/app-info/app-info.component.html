@@ -1,10 +1,7 @@
-<div class="scroll-area"
-  [innerHTML]="introHtml">
-</div>
-<div>
+<div class="app-info">
+  <p>Das Institut zur Qualitätsentwicklung im Bildungswesen (IQB) betreibt auf diesen Seiten eine Anwendung für die computerbasierte Erfassung schulischer Kompetenzen. Der Zugang zu einem Test ist nur möglich, wenn Sie von Testverantwortlichen Zugangsdaten erhalten haben. Es sind keine weiteren Seiten öffentlich verfügbar.</p>
   <ul>
-    <li>{{'home.appName' | translate: {name: appName} }}</li>
-    <li>{{'home.appVersion' | translate: {version: appVersion} }}</li>
+    <li>{{'home.appName' | translate: {name: appName} }} {{'home.appVersion' | translate: {version: appVersion} }}</li>
     @if (!isUserLoggedIn) {
       <li>
         {{(hasReviews ? 'home.logged-in-for-review' : 'home.not-logged-in') | translate}}
@@ -19,9 +16,7 @@
       <li>{{'home.isAdminMessage' | translate}}</li>
     }
   </ul>
+  <a mat-raised-button color="primary" class="full-width" [routerLink]="['/about']">
+    {{'home.imprint' | translate}}
+  </a>
 </div>
-<a mat-raised-button color="primary"
-  class="full-width"
-  [routerLink]="['/about']">
-  {{'home.imprint' | translate}}
-</a>

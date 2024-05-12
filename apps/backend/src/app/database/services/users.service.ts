@@ -4,13 +4,19 @@ import { InjectRepository } from '@nestjs/typeorm';
 import User from '../entities/user.entity';
 import { UserFullDto } from '../../../../../frontend/api-dto/user/user-full-dto';
 import { CreateUserDto } from '../../../../../frontend/api-dto/user/create-user-dto';
+import WorkspaceUser from '../entities/workspace_user.entity';
+import { HttpService } from '@nestjs/axios';
+import { Observable } from 'rxjs';
 
 @Injectable()
 export class UsersService {
   private readonly logger = new Logger(UsersService.name);
   constructor(
+    private httpService: HttpService,
     @InjectRepository(User)
-    private usersRepository: Repository<User>
+    private usersRepository: Repository<User>,
+    @InjectRepository(WorkspaceUser)
+    private workspaceUserRepository: Repository<WorkspaceUser>
   ) {
   }
 
@@ -31,6 +37,14 @@ export class UsersService {
       }
     });
     return returnUsers;
+  }
+
+  async findUserWorkspaces(userId: number): Promise<any> {
+    const workspaces: any = await this.workspaceUserRepository.find({ where: { userId: userId }})
+
+    console.log(workspaces);
+
+    return workspaces.map(workspace => workspace.workspaceId);
   }
 
   async findOne(id: number): Promise<UserFullDto> {
@@ -123,26 +137,8 @@ export class UsersService {
     throw new MethodNotAllowedException();
   }
 
-  async patch(userData: UserFullDto): Promise<void> {
-    this.logger.log(`Updating user with id: ${userData.id}`);
-    const userToUpdate = await this.usersRepository.findOne({
-      where: { id: userData.id },
-      select: {
-        username: true,
-        isAdmin: true,
-        id: true,
-        firstName: true,
-        lastName: true,
-        email: true
-      }
-    });
-    if (userToUpdate) {
-      if (typeof userData.isAdmin === 'boolean') userToUpdate.isAdmin = userData.isAdmin;
-      if (userData.name) userToUpdate.username = userData.name;
-      if (userData.lastName) userToUpdate.lastName = userData.lastName;
-      if (userData.firstName) userToUpdate.firstName = userData.firstName;
-      if (userData.email) userToUpdate.email = userData.email;
-      await this.usersRepository.save(userToUpdate);
-    }
+  setPassword(newPassword: string,token:string): Observable<any> {
+    this.logger.log(`Setting password for user with id:`);
+    return this.httpService.put('');
   }
 }

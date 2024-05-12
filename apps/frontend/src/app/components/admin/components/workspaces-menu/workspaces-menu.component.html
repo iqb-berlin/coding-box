@@ -1,19 +1,25 @@
-<div class="fx-row-start-stretch">
+<div class="fx-row-start-stretch container">
   <button mat-button
-          [matTooltip]="'admin.add-group' | translate"
-          (click)="addGroup()">
+          [matTooltip]="'admin.add-workspace' | translate"
+          (click)="addWorkspace()">
     <coding-box-wrapped-icon icon="add"></coding-box-wrapped-icon>
   </button>
   <button mat-button
           [disabled]="!selectedWorkspaceGroupId && (!checkedRows || !checkedRows.length)"
           [matTooltip]="'admin.delete-selected-groups' | translate"
-          (click)="deleteGroups()">
+          (click)="deleteWorkspace()">
     <coding-box-wrapped-icon icon="delete"></coding-box-wrapped-icon>
   </button>
   <button mat-button
           [disabled]="!selectedWorkspaceGroupId  && checkedRows && checkedRows.length !== 1"
           [matTooltip]="'admin.edit-selected-group' | translate"
-          (click)="editGroup()">
+          (click)="editWorkspace()">
     <coding-box-wrapped-icon icon="edit"></coding-box-wrapped-icon>
+  </button>
+  <button mat-button
+          [disabled]="!selectedWorkspaceGroupId  && checkedRows && checkedRows.length !== 1"
+          [matTooltip]="'admin.edit-selected-group' | translate"
+          (click)="editUserAccessRightsToWorkspace()">
+    <coding-box-wrapped-icon icon="group"></coding-box-wrapped-icon>
   </button>
 </div>

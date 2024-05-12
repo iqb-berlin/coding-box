@@ -1,10 +1,10 @@
-<div class="home-body fx-row-center-stretch">
+<div class="fx-row-center-stretch fx-gap-20 app-container" >
   <coding-box-user-workspaces-area
-    class="fx-column-start-stretch box-left"
+    class="fx-column-start-stretch  fx-flex-row-30"
     [workspaces]="appService.authData.workspaces"
     [isAdmin]="appService.authData.isAdmin">
   </coding-box-user-workspaces-area>
-  <coding-box-app-info class="fx-column-start-stretch box-right"
+  <coding-box-app-info class="fx-column-start-stretch  fx-flex-row-30"
                         [appTitle]="'Webanwendung zur Kodierung'"
                         [introHtml]="'appService.appConfig.introHtml'"
                         [appName]="'Kodierbox'"

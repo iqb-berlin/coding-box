@@ -13,6 +13,9 @@ import {
   ConfirmDialogData
 } from '../../../../../../iqb-components/src/lib/dialogs/confirm-dialog.component';
 import { EditWorkspaceComponent } from '../../../edit-workspace/edit-workspace.component';
+import {
+  WorkspaceAccessRightsDialogComponent
+} from '../workspace-access-rights-dialog/workspace-access-rights-dialog.component';
 
 
 @Component({
@@ -27,18 +30,20 @@ export class WorkspacesMenuComponent {
   @Input() selectedRows!: WorkspaceInListDto[];
   @Input() checkedRows!: WorkspaceInListDto[];
   @Output() downloadWorkspacesReport: EventEmitter<boolean> = new EventEmitter<boolean>();
-  @Output() groupAdded: EventEmitter<UntypedFormGroup> = new EventEmitter<UntypedFormGroup>();
-  @Output() groupsDeleted: EventEmitter< WorkspaceInListDto[]> = new EventEmitter< WorkspaceInListDto[]>();
-  @Output() groupSettingsEdited = new EventEmitter();
-  @Output() groupEdited: EventEmitter<{ selection: WorkspaceInListDto[], group: UntypedFormGroup }> =
+  @Output() workspaceAdded: EventEmitter<UntypedFormGroup> = new EventEmitter<UntypedFormGroup>();
+  @Output() workspaceDeleted: EventEmitter< WorkspaceInListDto[]> = new EventEmitter< WorkspaceInListDto[]>();
+  @Output() workspaceSettingsEdited = new EventEmitter();
+  @Output() workspaceAccessRightsChanged = new EventEmitter();
+  @Output() workspaceEdited: EventEmitter<{ selection: WorkspaceInListDto[], group: UntypedFormGroup }> =
     new EventEmitter<{ selection: WorkspaceInListDto[], group: UntypedFormGroup }>();
 
   constructor(
     private editWorkspaceDialog: MatDialog,
+    private UserAccessRightsToWorkspaceDialog: MatDialog,
     private deleteConfirmDialog: MatDialog,
     private translateService: TranslateService) {}
 
-  addGroup(): void {
+  addWorkspace(): void {
     const dialogRef = this.editWorkspaceDialog.open(EditWorkspaceComponent, {
       width: '600px',
       data: {
@@ -53,13 +58,13 @@ export class WorkspacesMenuComponent {
     dialogRef.afterClosed().subscribe((result: boolean | UntypedFormGroup) => {
       if (typeof result !== 'undefined') {
         if (result !== false) {
-          this.groupAdded.emit(result as UntypedFormGroup);
+          this.workspaceAdded.emit(result as UntypedFormGroup);
         }
       }
     });
   }
 
-  editGroup(): void {
+  editWorkspace(): void {
     let selectedRows = this.selectedRows;
     if (selectedRows.length === 0) {
       selectedRows = this.checkedRows;
@@ -77,14 +82,14 @@ export class WorkspacesMenuComponent {
       dialogRef.afterClosed().subscribe(result => {
         if (typeof result !== 'undefined') {
           if (result !== false) {
-            this.groupEdited.emit({ selection: selectedRows, group: result as UntypedFormGroup });
+            this.workspaceEdited.emit({ selection: selectedRows, group: result as UntypedFormGroup });
           }
         }
       });
     }
   }
 
-  deleteGroups(): void {
+  deleteWorkspace(): void {
     let selectedRows = this.selectedRows;
     if (selectedRows.length === 0) {
       selectedRows = this.checkedRows;
@@ -105,9 +110,27 @@ export class WorkspacesMenuComponent {
 
       dialogRef.afterClosed().subscribe(result => {
         if (result === true) {
-          this.groupsDeleted.emit(selectedRows);
+          this.workspaceDeleted.emit(selectedRows);
         }
       });
     }
+  }
+
+  editUserAccessRightsToWorkspace(): void {
+    const dialogRef = this.UserAccessRightsToWorkspaceDialog.open(WorkspaceAccessRightsDialogComponent, {
+      width: '600px',
+      minHeight: '600px',
+      data: {
+        selectedUser: this.selectedRows,
+      }
+    });
+
+    dialogRef.afterClosed().subscribe((result: boolean | UntypedFormGroup) => {
+      if (typeof result !== 'undefined') {
+        if (result !== false) {
+          this.workspaceAccessRightsChanged.emit(result as UntypedFormGroup);
+        }
+      }
+    });
   }
 }

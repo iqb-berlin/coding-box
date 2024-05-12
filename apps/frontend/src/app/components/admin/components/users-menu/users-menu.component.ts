@@ -17,6 +17,11 @@ import {
   ConfirmDialogComponent,
   ConfirmDialogData
 } from '../../../../../../iqb-components/src/lib/dialogs/confirm-dialog.component';
+import { WorkspacesComponent } from '../workspaces/workspaces.component';
+import { WorkspacesSelectionComponent } from '../workspaces-selection/workspaces-selection.component';
+import {
+  WorkspaceAccessRightsDialogComponent
+} from '../workspace-access-rights-dialog/workspace-access-rights-dialog.component';
 
 @Component({
   selector: 'coding-box-users-menu',
@@ -26,10 +31,9 @@ import {
   imports: [MatButton, MatTooltip, WrappedIconComponent, TranslateModule, WrappedIconComponent]
 })
 export class UsersMenuComponent {
-  @Input() selectedUser!: number;
+  @Input() selectedUser!: number[];
   @Input() selectedRows!: UserFullDto[];
   @Input() checkedRows!: UserFullDto[];
-
   @Output() userAdded: EventEmitter<UntypedFormGroup> = new EventEmitter<UntypedFormGroup>();
   @Output() usersDeleted: EventEmitter< UserFullDto[]> = new EventEmitter< UserFullDto[]>();
   @Output() userEdited: EventEmitter<{ selection: UserFullDto[], user: UntypedFormGroup }> =
@@ -37,6 +41,7 @@ export class UsersMenuComponent {
 
   constructor(private editUserDialog: MatDialog,
               private messsageDialog: MatDialog,
+              private editUserWorkspaceAccessRightDialog: MatDialog,
               private deleteConfirmDialog: MatDialog,
               private translateService: TranslateService) {}
 
@@ -131,5 +136,23 @@ export class UsersMenuComponent {
         }
       });
     }
+  }
+
+  setUserWorkspaceAccessRight(): void {
+    const dialogRef = this.editUserWorkspaceAccessRightDialog.open(WorkspaceAccessRightsDialogComponent, {
+      width: '600px',
+      minHeight: '600px',
+      data: {
+        selectedUser: this.selectedRows,
+      }
+    });
+
+    dialogRef.afterClosed().subscribe((result: boolean | UntypedFormGroup) => {
+      if (typeof result !== 'undefined') {
+        if (result !== false) {
+          this.userAdded.emit(result as UntypedFormGroup);
+        }
+      }
+    });
   }
 }
