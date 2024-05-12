@@ -182,19 +182,10 @@ export class UsersComponent implements OnInit {
     );
   }
 
-  toggleRowSelection(row: any): void {
-    this.tableSelectionRow.toggle(row);
-  }
-
-  private isAllSelected(): boolean {
-    const numSelected = this.tableSelectionCheckboxes.selected.length;
-    const numRows = this.objectsDatasource ? this.objectsDatasource.data.length : 0;
-    return numSelected === numRows;
-  }
-
-  masterToggle(): void {
-    this.isAllSelected() || !this.objectsDatasource ?
-      this.tableSelectionCheckboxes.clear() :
-      this.objectsDatasource.data.forEach(row => this.tableSelectionCheckboxes.select(row));
+  createWorkspaceList(): void {
+    this.backendService.getAllWorkspacesList().subscribe(workspaces => {
+      if (workspaces.length > 0) { this.userWorkspaces = workspaces; }
+      console.log('Workspaces: ', this.userWorkspaces);
+    });
   }
 }
