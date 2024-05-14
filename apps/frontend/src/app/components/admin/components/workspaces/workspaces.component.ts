@@ -32,20 +32,20 @@ import { IsSelectedIdPipe } from '../../pipes/isSelectedId.pipe';
 import { WorkspacesMenuComponent } from '../workspaces-menu/workspaces-menu.component';
 import { WorkspaceInListDto } from '../../../../../../api-dto/workspaces/workspace-in-list-dto';
 import { CreateWorkspaceDto } from '../../../../../../api-dto/workspaces/create-workspace-dto';
+import { WorkspacesSelectionComponent } from '../workspaces-selection/workspaces-selection.component';
 
 const datePipe = new DatePipe('de-DE');
 
 @Component({
-  selector: 'studio-lite-workspace-groups',
+  selector: 'coding-box-workspaces',
   templateUrl: './workspaces.component.html',
   styleUrls: ['./workspaces.component.scss'],
   standalone: true,
   // eslint-disable-next-line max-len
-  imports: [WorkspacesMenuComponent, NgIf, SearchFilterComponent, MatTable, MatSort, MatColumnDef, MatHeaderCellDef, MatHeaderCell, MatCheckbox, MatCellDef, MatCell, MatSortHeader, MatHeaderRowDef, MatHeaderRow, MatRowDef, MatRow, MatButton, MatTooltip, WrappedIconComponent, NgFor, FormsModule, TranslateModule, IsSelectedPipe, IsAllSelectedPipe, HasSelectionValuePipe, IsSelectedIdPipe]
+  imports: [WorkspacesMenuComponent, NgIf, SearchFilterComponent, MatTable, MatSort, MatColumnDef, MatHeaderCellDef, MatHeaderCell, MatCheckbox, MatCellDef, MatCell, MatSortHeader, MatHeaderRowDef, MatHeaderRow, MatRowDef, MatRow, MatButton, MatTooltip, WrappedIconComponent, NgFor, FormsModule, TranslateModule, IsSelectedPipe, IsAllSelectedPipe, HasSelectionValuePipe, IsSelectedIdPipe, WorkspacesSelectionComponent]
 })
 export class WorkspacesComponent implements OnInit {
   objectsDatasource = new MatTableDataSource<WorkspaceInListDto>();
-  displayedColumns = ['selectCheckbox', 'name'];
   tableSelectionCheckboxes = new SelectionModel<WorkspaceInListDto>(true, []);
   tableSelectionRow = new SelectionModel<WorkspaceInListDto>(false, []);
   selectedWorkspaceId = 0;
@@ -66,7 +66,7 @@ export class WorkspacesComponent implements OnInit {
     });
   }
 
-  addGroup(result: UntypedFormGroup): void {
+  addWorkspace(result: UntypedFormGroup): void {
     this.appService.dataLoading = true;
     this.backendService.addWorkspace(<CreateWorkspaceDto>{
       name: (<UntypedFormGroup>result).get('name')?.value,
@@ -90,7 +90,7 @@ export class WorkspacesComponent implements OnInit {
     );
   }
 
-  editGroup(value: { selection: WorkspaceInListDto[], group: UntypedFormGroup }): void {
+  editWorkspace(value: { selection: WorkspaceInListDto[], group: UntypedFormGroup }): void {
     this.appService.dataLoading = true;
     this.backendService.changeWorkspace({
       id: value.selection[0].id,
@@ -116,7 +116,7 @@ export class WorkspacesComponent implements OnInit {
       );
   }
 
-  deleteGroups(groups: WorkspaceInListDto[]): void {
+  deleteWorkspace(groups: WorkspaceInListDto[]): void {
     this.appService.dataLoading = true;
     const workspaceGroupsToDelete: number[] = [];
     groups.forEach(r => workspaceGroupsToDelete.push(r.id));
@@ -142,7 +142,7 @@ export class WorkspacesComponent implements OnInit {
   private updateWorkspaceList(): void {
     this.selectedWorkspaceId = 0;
     this.appService.dataLoading = true;
-    this.backendService.getWorkspaceList().subscribe(workspaces => {
+    this.backendService.getAllWorkspacesList().subscribe(workspaces => {
       this.setObjectsDatasource(workspaces);
       this.tableSelectionCheckboxes.clear();
       this.tableSelectionRow.clear();

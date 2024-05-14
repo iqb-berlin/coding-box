@@ -66,9 +66,16 @@ export class BackendService {
       );
   }
 
-  getWorkspaceList(): Observable<WorkspaceInListDto[]> {
+  getAllWorkspacesList(): Observable<WorkspaceInListDto[]> {
     return this.http
       .get<WorkspaceInListDto[]>(`${this.serverUrl}admin/workspace`)
+      .pipe(
+        catchError(() => of([]))
+      );
+  }
+  getWorkspacesByUserList(userId:number): Observable<number[]> {
+    return this.http
+      .get<number[]>(`${this.serverUrl}admin/users/${userId}/workspaces`)
       .pipe(
         catchError(() => of([]))
       );
@@ -133,6 +140,10 @@ export class BackendService {
 
   getTestFiles(workspaceId: number): Observable<any> {
     return this.http.get<FilesDto[]>(`${SERVER_URL}admin/workspace/${workspaceId}/files`);
+  }
+
+  getTestPersons(workspaceId: number): Observable<any> {
+    return this.http.get<any[]>(`${SERVER_URL}admin/workspace/${workspaceId}/test-persons`);
   }
 
   getResponses(workspaceId: number, testPerson: string): Observable<any> {

@@ -1,0 +1,19 @@
+<mat-dialog-content>
+  <h2>Nutzer Zugriffs Rechte für Arbeitsbereich(e) </h2>
+<coding-box-workspaces-selection [selectedWorkspacesIds] = selectedWorkspacesIds></coding-box-workspaces-selection>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-raised-button
+          color="primary"
+          type="submit"
+          [mat-dialog-close]="true">
+    {{ 'save' | translate }}
+  </button>
+  <button mat-raised-button
+          type="submit"
+          [mat-dialog-close]="false">
+    {{ 'close' | translate }}
+  </button>
+
+</mat-dialog-actions>

@@ -4,5 +4,9 @@
   top: 70px;
   bottom: 0;
   overflow-y: auto;
-  max-height: calc(100% - 65px);
+}
+
+.app-container{
+  height: 80%;
+  margin: 20px;
 }

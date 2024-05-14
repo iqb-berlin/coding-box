@@ -9,6 +9,9 @@ import { UsersService } from '../../database/services/users.service';
 import { UserFullDto } from '../../../../../frontend/api-dto/user/user-full-dto';
 import { CreateUserDto } from '../../../../../frontend/api-dto/user/create-user-dto';
 
+
+
+
 @Controller('admin/users')
 export class UsersController {
   constructor(
@@ -23,6 +26,16 @@ export class UsersController {
   @ApiTags('admin users')
   async findAllFull(): Promise<UserFullDto[]> {
     return this.usersService.findAllFull();
+  }
+
+  @Get(':userId/workspaces')
+  @ApiBearerAuth()
+  @ApiCreatedResponse({
+    type: [UserFullDto]
+  })
+  @ApiTags('admin users')
+  async findUserWorkspaces(@Param('userId') userId:number ): Promise<number[]> {
+    return this.usersService.findUserWorkspaces(userId);
   }
 
   // TODO: Delete mit id (statt ids) nur für ein Element (für mehrere s.u.)

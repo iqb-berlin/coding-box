@@ -1,25 +1,22 @@
-@if (workspaces.length === 0) {
-  <div>
-    <p>{{'home.no-user-workspaces' | translate}}</p>
-  </div>
-}
-@if (workspaces.length > 0) {
-  <div
-    class="fx-column-start-stretch workspace-gap">
-    @for (ws of workspaces; track ws) {
-      <div
-        class="fx-column-start-stretch">
-        <div
-          class="fx-row-space-between-center workspace-group-header">
-          <div [id]="'iosaihoihlnkk_' + ws.id">{{ws.name}}</div>
-          <a
-            mat-button
-            [routerLink]="['/workspace-admin/' + ws.id]"
-            [matTooltip]="'home.goto-ws' | translate">
-            <coding-box-wrapped-icon icon="settings"></coding-box-wrapped-icon>
-          </a>
+<div class="workspaces">
+  @if (workspaces.length === 0) {
+    <div>
+      <p>{{'home.no-user-workspaces' | translate}}</p>
+    </div>
+  }
+  @if (workspaces.length > 0) {
+    <div class="fx-column-start-stretch workspace-gap">
+      <h1>Arbeitsbereiche</h1>
+      @for (ws of workspaces; track ws) {
+        <div class="fx-column-start-stretch">
+          <div class="fx-row-space-between-center">
+              <a mat-raised-button color="primary" class="workspace"
+                [routerLink]="['/workspace-admin/' + ws.id]">
+                {{ws.name}}
+              </a>
+          </div>
         </div>
-      </div>
-    }
-  </div>
-}
+      }
+    </div>
+  }
+</div>

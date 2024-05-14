@@ -53,12 +53,19 @@ export class WorkspaceController {
     return this.workspaceService.findResponse(id, testPerson);
   }
 
+  @Get(':workspace_id/test-persons')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  async findTestPersons(@WorkspaceId() id: number, @Param('testPerson') testPerson:string): Promise<Responses[]> {
+    return this.workspaceService.findTestPersons(id, testPerson);
+  }
+
   @Post(':workspace_id/upload')
   @ApiBearerAuth()
   @ApiParam({ name: 'workspace_id', type: Number })
   @UseInterceptors(FilesInterceptor('files'))
   @ApiTags('workspace')
   async addTestFiles(@WorkspaceId() workspaceId: number, @UploadedFiles() files): Promise<any> {
+    console.log('""""');
     return this.workspaceService.uploadTestFiles(workspaceId, files);
   }
 
