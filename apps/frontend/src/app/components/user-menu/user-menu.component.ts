@@ -6,6 +6,8 @@ import { MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { WrappedIconComponent } from '../wrapped-icon/wrapped-icon.component';
 import { AccountActionComponent } from '../account-action/account-action.component';
+import { AuthService } from '../../auth/service/auth.service';
+import { ChangePasswordDirective } from '../directives/change-password.directive';
 
 @Component({
   selector: 'coding-box-user-menu',
@@ -13,7 +15,15 @@ import { AccountActionComponent } from '../account-action/account-action.compone
   styleUrls: ['./user-menu.component.scss'],
   standalone: true,
   // eslint-disable-next-line max-len
-  imports: [MatButton, MatMenuTrigger, MatTooltip, WrappedIconComponent, MatMenu, TranslateModule, MatIcon, AccountActionComponent]
+  imports: [MatButton, MatMenuTrigger, MatTooltip, WrappedIconComponent, MatMenu, TranslateModule, MatIcon, AccountActionComponent, ChangePasswordDirective]
 })
 export class UserMenuComponent {
+  constructor(
+    private authService: AuthService
+  ) {
+  }
+async logout(){
+  await this.authService.logout();
+
+}
 }

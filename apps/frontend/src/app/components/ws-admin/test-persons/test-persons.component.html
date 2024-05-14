@@ -1,0 +1,37 @@
+
+  @if (testPersonsObjectsDatasource.data.length) {
+    <coding-box-search-filter
+      [title]="'search-filter.filter-test-persons' | translate"
+      (valueChange)="testPersonsObjectsDatasource.filter = $event.trim().toLowerCase()">
+    </coding-box-search-filter>
+  }
+
+  <mat-table [dataSource]="testPersonsObjectsDatasource"
+             matSortDisableClear
+             matSort
+             class="scroll-area">
+
+    <ng-container matColumnDef="name">
+      <mat-header-cell *matHeaderCellDef
+                       mat-sort-header="name">
+        Testpersonen
+      </mat-header-cell>
+      <mat-cell *matCellDef="let element">
+        {{element.name}} {{element.isAdmin ? '*' : ''}}
+      </mat-cell>
+    </ng-container>
+
+    <ng-container matColumnDef="displayName">
+      <mat-header-cell *matHeaderCellDef
+                       mat-sort-header="lastName">
+        {{'user.full-name' | translate}}
+      </mat-header-cell>
+      <mat-cell *matCellDef="let row"
+                class="secondary-cell">
+        {{row.lastName ? row.lastName : row.name}}{{row.firstName ? (', ' + row.firstName) : ''}}
+      </mat-cell>
+    </ng-container>
+
+    <mat-header-row *matHeaderRowDef="displayedTestPersonsColumns"></mat-header-row>
+    <mat-row *matRowDef="let row; columns: displayedTestPersonsColumns;"></mat-row>
+  </mat-table>

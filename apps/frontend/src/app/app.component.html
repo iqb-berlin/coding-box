@@ -1,24 +1,34 @@
-@if (appService.dataLoading) {
-  <div
-    class="spinner-container fx-column-start-center">
-    <mat-spinner class="fx-flex-fix-100"></mat-spinner>
+<div class="app">
+  @if (appService.dataLoading) {
+    <div
+      class="spinner-container fx-column-start-center">
+      <mat-spinner class="fx-flex-fix-100"></mat-spinner>
       <button
         mat-button
         class="fx-flex-fill">
       </button>
+    </div>
+  }
+  <div class="fx-row-space-between-center app-header">
+      <a [routerLink]="['/']" [attr.aria-label]="'home.go-home' | translate">
+        <img [src]="appService.appLogo?.data"
+             [matTooltip]="appService.appLogo ? appService.appLogo.alt : 'home.home-page' | translate"
+             [alt]="appService.appLogo ? appService.appLogo.alt : 'home.home-page' | translate"/>
+      </a>
+    <!--  <button (click)="authService.redirectToProfile()">Manage Account</button>-->
+    <h1 [style]="{color:'lightgrey',fontSize:'30px'}">Kodierbox</h1>
+    <div class="admin">
+      <button  [style]="{color:'lightgrey'}" mat-button class="icon-button-large"
+              [routerLink]="['/admin']"
+              [matTooltip]="'home.goto-admin' | translate"
+              matTooltipPosition="above"
+              data-cy="goto-admin">
+        <coding-box-wrapped-icon icon="settings"></coding-box-wrapped-icon>
+      </button>
+      <coding-box-user-menu></coding-box-user-menu>
+    </div>
   </div>
-}
-<div class="fx-row-space-between-center">
-  <div class="logo hide-on-print">
-    <a [routerLink]="['/']" [attr.aria-label]="'home.go-home' | translate">
-      <img [src]="appService.appLogo?.data"
-           [matTooltip]="appService.appLogo ? appService.appLogo.alt : 'home.home-page' | translate"
-           [alt]="appService.appLogo ? appService.appLogo.alt : 'home.home-page' | translate"/>
-    </a>
-  </div>
-  <button mat-button class="fx-flex-fill" (click)="logout()">Logout</button>
+  <router-outlet />
 </div>
 
-
-  <router-outlet />
 

@@ -51,9 +51,14 @@ export class WorkspaceService {
 
   async findResponse(id: number, testPerson:string): Promise<Responses[]> {
     this.logger.log('Returning response for test person', testPerson);
-
     const response = await this.responsesRepository.find(
       { where: { test_person: testPerson }, select: { responses: true } });
+    return response;
+  }
+
+  async findTestPersons(id: number, testPerson:string): Promise<any> {
+    this.logger.log('Returning all test persons for workspace ', id);
+    const response =  this.responsesRepository.find({select: ['test_person']});
     return response;
   }
 
@@ -112,6 +117,7 @@ export class WorkspaceService {
   }
 
   async uploadTestFiles(id: number, originalFiles: FileIo[]): Promise<any> {
+    console.log('""""',originalFiles);
     if (originalFiles[0].mimetype === 'text/xml') {
       const xmlDocument = cheerio.load(originalFiles[0].buffer.toString(), {
         xmlMode: true,

@@ -46,4 +46,11 @@ export class AppController {
     const token = await this.authService.login(user);
     return `"${token}"`;
   }
+
+  @Post('password')
+  @ApiOkResponse({ description: 'Password successfully updated.' })
+  @ApiTags('auth')
+  async setPassword(@Body() new_password, token): Promise<any> {
+    return this.userService.setPassword(new_password, token);
+  }
 }

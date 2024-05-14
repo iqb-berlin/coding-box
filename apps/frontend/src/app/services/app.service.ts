@@ -8,7 +8,7 @@ import { AuthDataDto } from '../../../api-dto/auth-data-dto';
 })
 export class AppService {
   static defaultAuthData = <AuthDataDto>{
-    userId: 0,
+    userId: 4,
     userName: '',
     userLongName: '',
     isAdmin: false,

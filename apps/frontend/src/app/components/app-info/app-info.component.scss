@@ -2,6 +2,11 @@
   overflow-y: auto;
 }
 
-.full-width {
-  min-width: 100%;
+.app-info{
+  overflow-y: auto;
+  height:70%;
+  background: lightgray;
+  border-radius: 10px;
+  padding: 50px;
 }
+

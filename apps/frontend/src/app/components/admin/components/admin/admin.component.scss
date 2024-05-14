@@ -5,11 +5,13 @@
   margin: 0 15px 15px 15px;
   height: calc(100% - 65px);
 }
-
-.communication-error-message {
-  color: red;
-  padding: 10px 50px;
-}
 .active-link {
   color: black;
+}
+.page-body{
+  height: calc(90% - 5px);
+}
+
+a{
+  font-size: 18px;
 }

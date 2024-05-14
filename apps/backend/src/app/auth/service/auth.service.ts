@@ -6,10 +6,9 @@ import { CreateUserDto } from '../../../../../frontend/api-dto/user/create-user-
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
-
   constructor(
     private usersService: UsersService,
-    private jwtService: JwtService
+    private jwtService: JwtService,
   ) {
   }
 
