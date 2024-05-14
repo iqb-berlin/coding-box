@@ -5,7 +5,7 @@ class Responses {
   @PrimaryColumn({ type: 'varchar' })
     test_person!: string;
 
-  @Column({ type: 'integer' })
+  @Column({ type: 'varchar' })
     unit_id!: string;
 
   @Column({

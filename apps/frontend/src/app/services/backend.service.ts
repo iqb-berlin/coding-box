@@ -141,6 +141,11 @@ export class BackendService {
   getTestFiles(workspaceId: number): Observable<any> {
     return this.http.get<FilesDto[]>(`${SERVER_URL}admin/workspace/${workspaceId}/files`);
   }
+
+  getTestPersons(workspaceId: number): Observable<any> {
+    return this.http.get<any[]>(`${SERVER_URL}admin/workspace/${workspaceId}/test-persons`);
+  }
+
   getResponses(workspaceId: number, testPerson: string): Observable<any> {
     return this.http.get<FilesDto[]>(`${SERVER_URL}admin/workspace/${workspaceId}/${testPerson}/responses`);
   }

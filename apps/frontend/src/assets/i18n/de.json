@@ -139,7 +139,8 @@
     "workspaces": "Arbeitsbereiche",
     "settings": "Einstellungen",
     "units-count": "Anzahl der Aufgaben",
-    "test-files": "Testdateien"
+    "test-files": "Testdateien",
+    "test-persons": "Testpersonen"
   },
   "search-filter": {
     "filter-users": "Suche nach Nutzer:innen",
