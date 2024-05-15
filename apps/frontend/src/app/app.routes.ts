@@ -7,6 +7,7 @@ import { WorkspacesComponent } from './components/admin/components/workspaces/wo
 import { WsAdminComponent } from './components/ws-admin/ws-admin/ws-admin.component';
 import { FileUploadComponent } from './components/ws-admin/file-upload/file-upload.component';
 import { TestPersonsComponent } from './components/ws-admin/test-persons/test-persons.component';
+import { SelectReplayComponent } from './components/ws-admin/select-replay/select-replay.component';
 
 export const routes: Routes = [
   { path: '', redirectTo: 'home', pathMatch: 'full' },
@@ -27,6 +28,7 @@ export const routes: Routes = [
     component: WsAdminComponent,
     children: [
       { path: '', redirectTo: 'test-files', pathMatch: 'full' },
+      { path: 'select-replay', component: SelectReplayComponent },
       { path: 'test-files', component: FileUploadComponent },
       { path: 'test-persons', component: TestPersonsComponent },
       { path: 'users', component: UsersComponent },
