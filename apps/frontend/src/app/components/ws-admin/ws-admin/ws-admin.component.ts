@@ -13,5 +13,5 @@ import { MatTabLink, MatTabNav, MatTabNavPanel } from '@angular/material/tabs';
   imports: [MatTabNav, MatTabLink, RouterLinkActive, RouterLink, MatTabNavPanel, RouterOutlet, TranslateModule]
 })
 export class WsAdminComponent {
-  navLinks: string[] = ['test-files','test-persons','users',  'settings'];
+  navLinks: string[] = ['select-replay','test-files','test-persons','users',  'settings'];
 }

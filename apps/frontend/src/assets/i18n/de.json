@@ -140,7 +140,8 @@
     "settings": "Einstellungen",
     "units-count": "Anzahl der Aufgaben",
     "test-files": "Testdateien",
-    "test-persons": "Testpersonen"
+    "test-persons": "Testpersonen",
+    "select-replay": "Replay"
   },
   "search-filter": {
     "filter-users": "Suche nach Nutzer:innen",
