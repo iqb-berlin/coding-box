@@ -20,6 +20,8 @@ export class UsersService {
   ) {
   }
 
+
+
   async findAllFull(workspaceId?: number): Promise<UserFullDto[]> {
     const validUsers: number[] = [];
     const users: User[] = await this.usersRepository.find({ order: { username: 'ASC' } });

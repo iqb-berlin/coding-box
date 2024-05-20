@@ -25,7 +25,7 @@ export class AppController {
   }
 
   @Get('auth-data')
-  @ApiOkResponse({ description: 'User auth data successfully retrieved.' }) // TODO: Add Exception
+  @ApiOkResponse({ description: 'User auth data successfully retrieved.' })
   @ApiTags('auth')
   async findCanDos(
     @UserId() userId: number, @UserName() userName: string

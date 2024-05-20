@@ -1,13 +1,13 @@
 import { Routes } from '@angular/router';
-import { ReplayComponent } from './components/replay/replay.component';
+import { ReplayComponent } from './replay/components/replay/replay.component';
 import { HomeComponent } from './components/home/home.component';
-import { AdminComponent } from './components/admin/components/admin/admin.component';
-import { UsersComponent } from './components/admin/components/users/users.component';
-import { WorkspacesComponent } from './components/admin/components/workspaces/workspaces.component';
-import { WsAdminComponent } from './components/ws-admin/ws-admin/ws-admin.component';
-import { FileUploadComponent } from './components/ws-admin/file-upload/file-upload.component';
-import { TestPersonsComponent } from './components/ws-admin/test-persons/test-persons.component';
-import { SelectReplayComponent } from './components/ws-admin/select-replay/select-replay.component';
+import { AdminComponent } from './sys-admin/components/admin/admin.component';
+import { UsersComponent } from './sys-admin/components/users/users.component';
+import { WorkspacesComponent } from './sys-admin/components/workspaces/workspaces.component';
+import { WsAdminComponent } from './ws-admin/ws-admin/ws-admin.component';
+import { SelectReplayComponent } from './ws-admin/select-replay/select-replay.component';
+import { FileUploadComponent } from './ws-admin/file-upload/file-upload.component';
+import { TestPersonsComponent } from './ws-admin/test-persons/test-persons.component';
 
 export const routes: Routes = [
   { path: '', redirectTo: 'home', pathMatch: 'full' },

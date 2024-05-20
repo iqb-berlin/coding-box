@@ -8,6 +8,7 @@ import {
 import { UsersService } from '../../database/services/users.service';
 import { UserFullDto } from '../../../../../frontend/api-dto/user/user-full-dto';
 import { CreateUserDto } from '../../../../../frontend/api-dto/user/create-user-dto';
+import { AuthService } from '../../auth/service/auth.service';
 
 
 
@@ -15,8 +16,20 @@ import { CreateUserDto } from '../../../../../frontend/api-dto/user/create-user-
 @Controller('admin/users')
 export class UsersController {
   constructor(
-    private usersService: UsersService
+    private usersService: UsersService,
+    private authService: AuthService
   ) {}
+
+
+  @Get('roles')
+  @ApiBearerAuth()
+  @ApiCreatedResponse({
+    type: [UserFullDto]
+  })
+  @ApiTags('admin users')
+  async findUserWithRoles(): Promise<UserFullDto[]> {
+    return this.authService.getUserRoles();
+  }
 
   @Get('full')
   @ApiBearerAuth()
