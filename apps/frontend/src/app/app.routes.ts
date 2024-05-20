@@ -13,7 +13,7 @@ export const routes: Routes = [
   { path: '', redirectTo: 'home', pathMatch: 'full' },
 
   { path: 'home', component: HomeComponent },
-  { path: 'replay', component: ReplayComponent },
+  { path: 'replay/:testPerson/:unitId/:page', component: ReplayComponent },
   {
     path: 'admin',
     component: AdminComponent,
@@ -34,5 +34,6 @@ export const routes: Routes = [
       { path: 'users', component: UsersComponent },
       { path: '**', component: UsersComponent }
     ]
-  }
+  },
+  { path: '**', component: HomeComponent }
 ];

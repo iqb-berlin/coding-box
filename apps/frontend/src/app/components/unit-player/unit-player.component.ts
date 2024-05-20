@@ -1,6 +1,6 @@
 import {
   AfterViewInit,
-  Component, ElementRef, Input, OnChanges, OnInit, SimpleChanges, ViewChild
+  Component, ElementRef, Input, OnChanges, SimpleChanges, ViewChild
 } from '@angular/core';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
@@ -9,7 +9,6 @@ import { ReactiveFormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { Subject, takeUntil } from 'rxjs';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { BackendService } from '../../services/backend.service';
 import { AppService } from '../../services/app.service';
 import { dataParts } from './dataParts';
 
@@ -32,6 +31,7 @@ export type Progress = 'none' | 'some' | 'complete';
 export class UnitPlayerComponent implements AfterViewInit,OnChanges {
   @Input() unitDef!: string;
   @Input() unitPlayer!: string;
+  //@Input() responses!: string;
   @ViewChild('hostingIframe') hostingIframe!: ElementRef;
   private iFrameElement: HTMLIFrameElement | undefined;
   postMessageTarget: Window | undefined;
