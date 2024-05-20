@@ -11,8 +11,8 @@ import { AuthService } from './auth/service/auth.service';
 import { initializer } from './auth/keycloak-initializer';
 import { CreateUserDto } from '../../api-dto/user/create-user-dto';
 import { BackendService } from './services/backend.service';
-import { UserMenuComponent } from './components/user-menu/user-menu.component';
-import { WrappedIconComponent } from './components/wrapped-icon/wrapped-icon.component';
+import { WrappedIconComponent } from './shared/wrapped-icon/wrapped-icon.component';
+import { UserMenuComponent } from './sys-admin/components/user-menu/user-menu.component';
 
 @Component({
   selector: 'app-root',
@@ -28,18 +28,22 @@ import { WrappedIconComponent } from './components/wrapped-icon/wrapped-icon.com
   }]
 })
 export class AppComponent implements OnInit {
-  constructor(
-    // eslint-disable-next-line max-len
-    public appService: AppService, public authService:AuthService, public keycloakService:KeycloakService, public backendService:BackendService) {}
-
-  loggedIn = false;
   title = 'coding-box';
+  constructor(
+    public appService: AppService,
+    public authService:AuthService,
+    public keycloakService:KeycloakService,
+    public backendService:BackendService) {
+  }
+
   async ngOnInit(): Promise<void> {
+    // this.backendService.userRoles().subscribe(async ok => {
+    //   console.log('userRoles', ok);
+    // });
+
     if (!this.keycloakService.isLoggedIn()) {
       await this.authService.login();
-      this.loggedIn = false;
     } else {
-      this.loggedIn = true;
       this.backendService.getAuthData().subscribe(authData => {
         console.log('authData', authData);
         this.appService.authData = authData;
@@ -48,9 +52,9 @@ export class AppComponent implements OnInit {
       console.log('loggedUser', loggedUser);
       const userProfile = await this.authService.loadUserProfile();
       console.log('userProfile', userProfile);
-      if (userProfile.username) {
+      if (userProfile.username && loggedUser) {
         const user: CreateUserDto = {
-          issuer: loggedUser?.iss || '',
+          issuer: loggedUser.iss || '',
           identity: userProfile.id,
           username: userProfile.username,
           lastName: userProfile.lastName || '',

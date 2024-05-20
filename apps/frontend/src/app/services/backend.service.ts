@@ -23,6 +23,10 @@ export class BackendService {
   ) {
   }
 
+  userRoles(): Observable<string> {
+    return this.http.get<string>(`${SERVER_URL}users/roles`);
+  }
+
   login(user: CreateUserDto): Observable<string> {
     return this.http.post<string>(`${SERVER_URL}login`, user);
   }

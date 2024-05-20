@@ -2,13 +2,19 @@ import { ForbiddenException, Injectable, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { UsersService } from '../../database/services/users.service';
 import { CreateUserDto } from '../../../../../frontend/api-dto/user/create-user-dto';
+import { HttpService } from '@nestjs/axios';
+import * as https from 'https';
 
+const agent = new https.Agent({
+  rejectUnauthorized: false
+});
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
   constructor(
     private usersService: UsersService,
     private jwtService: JwtService,
+    private httpService: HttpService,
   ) {
   }
 
@@ -41,5 +47,19 @@ export class AuthService {
 
   async isAdminUser(userId: number): Promise<boolean> {
     return !!userId && this.usersService.getUserIsAdmin(userId);
+  }
+
+  async getUserRoles(): Promise<any> {
+    const headersRequest = {
+      //Authorization: await this.keycloakService.getToken()
+    };
+    const usersPromise = this.httpService.axiosRef
+      .get<any>(`http://iqb-login.de/admin/iqb/clients/coding-box/roles/admin/users`,
+        {
+          httpsAgent: agent,
+          headers: headersRequest
+        });
+    const users = await usersPromise.then(res => res.data).catch(err => { err; });
+    console.log('users',users);
   }
 }

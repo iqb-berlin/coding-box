@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { Logger } from '@nestjs/common';
 import { AppModule } from './app/app.module';
 
+
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService);
@@ -19,4 +20,4 @@ async function bootstrap() {
     `🚀 Application is running on: http://${host}:${port}/${globalPrefix}`
   );
 }
-bootstrap();
+ bootstrap();
