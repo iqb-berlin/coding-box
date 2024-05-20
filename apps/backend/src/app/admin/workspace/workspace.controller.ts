@@ -3,7 +3,7 @@ import {
   Controller,
   Delete,
   Get, Param,
-  Post, UploadedFiles, UseInterceptors
+  Post, Query, UploadedFiles, UseInterceptors
 } from '@nestjs/common';
 import {
   ApiBearerAuth, ApiCreatedResponse, ApiNotFoundResponse, ApiOkResponse, ApiParam, ApiTags
@@ -16,6 +16,7 @@ import { WorkspaceService } from '../../database/services/workspace.service';
 import { WorkspaceId } from './workspace.decorator';
 import { FilesDto } from '../../../../../frontend/api-dto/files/files.dto';
 import Responses from '../../database/entities/responses.entity';
+import { TestcenterService } from '../../testcenter/service/testcenter.service';
 
 @Controller('admin/workspace')
 export class WorkspaceController {
@@ -29,6 +30,20 @@ export class WorkspaceController {
   @ApiTags('admin workspaces')
   async findAll(): Promise<WorkspaceInListDto[]> {
     return this.workspaceService.findAll();
+  }
+
+  @Post('authenticate')
+  async authenticate(@Body() credentials: any): Promise<any> {
+    return this.testcenterService.authenticate(credentials);
+  }
+
+  @Get('importWorkspaceFiles')
+  async importWorkspaceFiles(
+    @Query('server') server: string,
+      @Query('workspace') workspace: string,
+      @Query('token') token: string)
+      : Promise<any> {
+    return this.testcenterService.importWorkspaceFiles(workspace, server, token);
   }
 
   @Get(':workspace_id')
@@ -82,12 +97,6 @@ export class WorkspaceController {
   @ApiParam({ name: 'workspace_id', type: Number })
   async findResponse(@WorkspaceId() id: number, @Param('testPerson') testPerson:string): Promise<Responses[]> {
     return this.workspaceService.findResponse(id, testPerson);
-  }
-
-  @Get(':workspace_id/test-persons')
-  @ApiParam({ name: 'workspace_id', type: Number })
-  async findTestPersons(@WorkspaceId() id: number, @Param('testPerson') testPerson:string): Promise<Responses[]> {
-    return this.workspaceService.findTestPersons(id, testPerson);
   }
 
   @Post(':workspace_id/upload')

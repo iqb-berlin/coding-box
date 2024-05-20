@@ -8,7 +8,6 @@ import { WorkspaceInListDto } from '../../../../../frontend/api-dto/workspaces/w
 import { WorkspaceFullDto } from '../../../../../frontend/api-dto/workspaces/workspace-full-dto';
 import { CreateWorkspaceDto } from '../../../../../frontend/api-dto/workspaces/create-workspace-dto';
 import { AdminWorkspaceNotFoundException } from '../../exceptions/admin-workspace-not-found.exception';
-import { FileIo } from '../../admin/test-files/interfaces/file-io.interface';
 import FileUpload from '../entities/file_upload.entity';
 import { FilesDto } from '../../../../../frontend/api-dto/files/files.dto';
 import Responses from '../entities/responses.entity';
@@ -178,5 +177,10 @@ export class WorkspaceService {
       const registry = this.responsesRepository.create(mappedRows);
       await this.responsesRepository.save(registry);
     }
+  }
+
+  async testcenterImport(entries:any): Promise<any> {
+    const registry = this.fileUploadRepository.create(entries);
+    await this.fileUploadRepository.save(registry);
   }
 }
