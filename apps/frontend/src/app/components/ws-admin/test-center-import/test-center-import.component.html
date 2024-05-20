@@ -1,0 +1,90 @@
+
+<mat-dialog-content>
+  <h2>Test Center Import</h2>
+  @if(!authenticated)
+  {
+    <form class="fx-column-start-stretch"
+                             [formGroup]="loginForm"
+                             (ngSubmit)="authenticate()">
+    <div class="fx-column-start-stretch">
+      <mat-form-field >
+        <input matInput formControlName="name"
+               [placeholder]="'home.user-name' | translate"
+               (keyup.enter)="pw.focus()">
+      </mat-form-field>
+      <mat-form-field>
+        <input matInput #pw
+               type="password"
+               formControlName="pw"
+               [placeholder]="'home.password' | translate"
+               (keyup.enter)="authenticate()">
+      </mat-form-field>
+      <mat-form-field>
+        <mat-select formControlName="testcenter">
+          <mat-option value="1">Testcenter 1</mat-option>
+          <mat-option value="2">Testcenter 2</mat-option>
+          <mat-option value="3">Testcenter 3</mat-option>
+          <mat-option value="4">Testcenter 4</mat-option>
+          <mat-option value="5">Testcenter 5</mat-option>
+        </mat-select>
+      </mat-form-field>
+    </div>
+    <button mat-raised-button
+            type="submit"
+            [disabled]="loginForm.invalid"
+            color="primary">{{ 'login' | translate }}
+    </button>
+    @if (authenticationError){
+      <div class="warning">
+        {{'login-error' | translate}}
+      </div>
+    }
+
+  </form>
+  } @else {
+    @if (workspaces){
+    <form class="fx-column-start-stretch"
+          [formGroup]="importFilesForm"
+          (ngSubmit)="importWorkspaceFiles()">
+      <div class="fx-column-start-stretch">
+          <mat-radio-group>
+            <mat-radio-button>
+              Ressourcen
+            </mat-radio-button>
+          </mat-radio-group>
+        <mat-form-field>
+
+          <mat-select formControlName="workspace">
+            @for (workspace of workspaces;track workspace){
+              <mat-option [value]="workspace.id">{{ workspace.label }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+      </div>
+      <button mat-raised-button
+              type="submit"
+              [disabled]="importFilesForm.invalid"
+              color="primary">{{ 'upload' | translate }}
+      </button>
+      @if (authenticationError){
+        <div class="warning">
+          {{'login-error' | translate}}
+        </div>
+      }
+
+    </form>
+    } @else{
+      <p class="warning">Keine Arebitsbereiche auswählbar</p>
+    }
+  }
+
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-raised-button
+          color="primary"
+          type="submit"
+          [mat-dialog-close]="true">
+    {{ 'close' | translate }}
+  </button>
+</mat-dialog-actions>
