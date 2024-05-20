@@ -20,7 +20,7 @@ import Responses from '../../database/entities/responses.entity';
 @Controller('admin/workspace')
 export class WorkspaceController {
   constructor(
-    private workspaceService: WorkspaceService,
+    private workspaceService: WorkspaceService, private testcenterService: TestcenterService
   ) {}
 
   @Get()
@@ -45,6 +45,37 @@ export class WorkspaceController {
   @ApiParam({ name: 'workspace_id', type: Number })
   async findFiles(@WorkspaceId() id: number): Promise<FilesDto[]> {
     return this.workspaceService.findFiles(id);
+  }
+
+  @Get(':workspace_id/player')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  async findPlayer(@WorkspaceId() id: number): Promise<FilesDto[]> {
+    return this.workspaceService.findPlayer(id);
+  }
+
+  @Get(':workspace_id/units/:testPerson')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  async findTestPersonUnits(@WorkspaceId() id: number, @Param('testPerson') testPerson:string): Promise<Responses[]> {
+    return this.workspaceService.findTestPersonUnits(id, testPerson);
+  }
+
+  @Get(':workspace_id/test-groups')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  async findTestGroups(@WorkspaceId() id: number): Promise<Responses[]> {
+    return this.workspaceService.findTestGroups(id);
+  }
+
+  @Get(':workspace_id/test-groups/:testGroup')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  async findTestPersons(@WorkspaceId() id: number, @Param('testGroup') testGroup:string): Promise<Responses[]> {
+    return this.workspaceService.findTestPersons(id, testGroup);
+  }
+
+
+  @Get(':workspace_id/:unit/unitDef')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  async findUnitDef(@WorkspaceId() id: number, @Param('unit') unit:string): Promise<FilesDto[]> {
+    return this.workspaceService.findUnitDef(unit);
   }
 
   @Get(':workspace_id/:testPerson/responses')
