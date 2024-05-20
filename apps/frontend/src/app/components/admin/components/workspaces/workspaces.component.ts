@@ -16,7 +16,7 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatSort, MatSortHeader } from '@angular/material/sort';
 import { FormsModule, UntypedFormGroup } from '@angular/forms';
 import { SelectionModel } from '@angular/cdk/collections';
-import { DatePipe, NgFor, NgIf } from '@angular/common';
+import { NgFor, NgIf } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MatButton } from '@angular/material/button';
@@ -33,8 +33,6 @@ import { WorkspacesMenuComponent } from '../workspaces-menu/workspaces-menu.comp
 import { WorkspaceInListDto } from '../../../../../../api-dto/workspaces/workspace-in-list-dto';
 import { CreateWorkspaceDto } from '../../../../../../api-dto/workspaces/create-workspace-dto';
 import { WorkspacesSelectionComponent } from '../workspaces-selection/workspaces-selection.component';
-
-const datePipe = new DatePipe('de-DE');
 
 @Component({
   selector: 'coding-box-workspaces',
