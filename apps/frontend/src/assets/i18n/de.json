@@ -8,6 +8,8 @@
   "export": "Exportieren",
   "construct": "Erstellen",
   "delete": "Löschen",
+  "login": "Anmelden",
+  "login-error": "Anmeldung fehlgeschlagen",
   "download": "Herunterladen",
   "display": "Anzeigen",
   "cancel": "Abbrechen",
@@ -37,6 +39,7 @@
     "firstName": "Vorname",
     "email": "E-Mail",
     "note": "Notiz",
+    "password": "Passwort",
     "first-login": "Anlegen eines ersten User-Accounts",
     "no-user": " Dieses System hat aktuell keine User angelegt. Mit den Anmeldedaten unten legen Sie einen ersten Account mit Administrationsrechten an. Bitte notieren Sie sich die Daten!",
     "no-user-workspaces": "Für diese Anmeldung wurden keine Arbeitsbereiche gefunden.",
@@ -140,7 +143,8 @@
     "settings": "Einstellungen",
     "units-count": "Anzahl der Aufgaben",
     "test-files": "Testdateien",
-    "test-persons": "Testpersonen"
+    "test-persons": "Testpersonen",
+    "select-replay": "Replay"
   },
   "search-filter": {
     "filter-users": "Suche nach Nutzer:innen",

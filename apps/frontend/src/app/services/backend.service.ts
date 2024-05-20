@@ -73,6 +73,7 @@ export class BackendService {
         catchError(() => of([]))
       );
   }
+
   getWorkspacesByUserList(userId:number): Observable<number[]> {
     return this.http
       .get<number[]>(`${this.serverUrl}admin/users/${userId}/workspaces`)
@@ -142,11 +143,44 @@ export class BackendService {
     return this.http.get<FilesDto[]>(`${SERVER_URL}admin/workspace/${workspaceId}/files`);
   }
 
-  getTestPersons(workspaceId: number): Observable<any> {
-    return this.http.get<any[]>(`${SERVER_URL}admin/workspace/${workspaceId}/test-persons`);
+  getUnitDef(workspaceId: number, unit: string): Observable<any> {
+    return this.http.get<FilesDto[]>(`${SERVER_URL}admin/workspace/${workspaceId}/${unit}/unitDef`);
   }
+
+  getPlayer(workspaceId: number): Observable<any> {
+    return this.http.get<FilesDto[]>(`${SERVER_URL}admin/workspace/${workspaceId}/player`);
+  }
+
+
 
   getResponses(workspaceId: number, testPerson: string): Observable<any> {
     return this.http.get<FilesDto[]>(`${SERVER_URL}admin/workspace/${workspaceId}/${testPerson}/responses`);
+  }
+
+  getTestpersonUnits(workspaceId: number, testPerson: string): Observable<any> {
+    return this.http.get<any[]>(`${SERVER_URL}admin/workspace/${workspaceId}/units/${testPerson}`);
+  }
+  getTestGroups(workspaceId: number): Observable<any> {
+    return this.http.get<any[]>(`${SERVER_URL}admin/workspace/${workspaceId}/test-groups`);
+  }
+  getTestPersons(workspaceId: number,testGroup:string): Observable<any> {
+    return this.http.get<any[]>(`${SERVER_URL}admin/workspace/${workspaceId}/test-groups/${testGroup}`);
+  }
+
+  // eslint-disable-next-line class-methods-use-this
+  authenticate(username:string, password:string, server:string): Observable<any> {
+    return this.http
+      .post<any>(`${SERVER_URL}admin/workspace/authenticate`, { username, password, server })
+      .pipe(
+        catchError(() => of(false))
+      );
+  }
+
+  importWorkspaceFiles(workspace: string, server:string, token:string): Observable<any> {
+    return this.http
+      .get<any>(`${SERVER_URL}admin/workspace/importWorkspaceFiles?workspace=${workspace}&server=${server}&token=${token}`, {})
+      .pipe(
+        catchError(() => of(false))
+      );
   }
 }

@@ -1,5 +1,4 @@
 import {
-  // eslint-disable-next-line max-len
   MatTable,
   MatColumnDef,
   MatHeaderCellDef,
@@ -12,11 +11,12 @@ import {
   MatRow,
   MatTableDataSource
 } from '@angular/material/table';
-import { ViewChild, Component, OnInit, Output, EventEmitter } from '@angular/core';
-import { MatSnackBar } from '@angular/material/snack-bar';
+import {
+  ViewChild, Component, OnInit, Output, EventEmitter
+} from '@angular/core';
 import { MatSort, MatSortHeader } from '@angular/material/sort';
-import { FormsModule, UntypedFormGroup } from '@angular/forms';
-import { TranslateService, TranslateModule } from '@ngx-translate/core';
+import { FormsModule,  } from '@angular/forms';
+import { TranslateModule } from '@ngx-translate/core';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MatButton } from '@angular/material/button';
 import { MatCheckbox } from '@angular/material/checkbox';
@@ -29,7 +29,6 @@ import { WorkspaceInListDto } from '../../../../../api-dto/workspaces/workspace-
 import { WrappedIconComponent } from '../../wrapped-icon/wrapped-icon.component';
 import { SearchFilterComponent } from '../../shared/search-filter/search-filter.component';
 
-
 @Component({
   selector: 'coding-box-test-persons',
   templateUrl: './test-persons.component.html',
@@ -39,21 +38,19 @@ import { SearchFilterComponent } from '../../shared/search-filter/search-filter.
   imports: [MatTable, MatSort, MatColumnDef, MatHeaderCellDef, MatHeaderCell, MatCheckbox, MatCellDef, MatCell, MatSortHeader, MatHeaderRowDef, MatHeaderRow, MatRowDef, MatRow, MatButton, MatTooltip, WrappedIconComponent, FormsModule, TranslateModule, SearchFilterComponent, JsonPipe]
 })
 export class TestPersonsComponent implements OnInit {
-  selectedPersons : number[]= [];
+  selectedPersons : number[] = [];
   testPersonsObjectsDatasource = new MatTableDataSource<any>();
   displayedTestPersonsColumns = ['name'];
   tableSelectionRow = new SelectionModel<UserFullDto>(false, []);
   tableSelectionCheckboxes = new SelectionModel<UserFullDto>(true, []);
-  testPersons  = [];
-  filteredUserWorkspaces: WorkspaceInListDto[] = [];
+  testPersons = [];
 
   @ViewChild(MatSort) sort = new MatSort();
   @Output() userSelectionChanged: EventEmitter< UserFullDto[]> = new EventEmitter< UserFullDto[]>();
 
-
-    constructor(
+  constructor(
     private backendService: BackendService,
-    private appService: AppService,
+    private appService: AppService
   ) {
   }
 
@@ -68,7 +65,7 @@ export class TestPersonsComponent implements OnInit {
     this.testPersonsObjectsDatasource = new MatTableDataSource(testPersons);
     this.testPersonsObjectsDatasource
       .filterPredicate = (userList: any, filter) => [
-        'name',
+        'name'
       ].some(column => (userList[column as keyof UserFullDto] as string || '')
         .toLowerCase()
         .includes(filter));
@@ -76,16 +73,16 @@ export class TestPersonsComponent implements OnInit {
   }
 
   updateTestPersonsList(): void {
-          this.setObjectsDatasource(this.testPersons);
-          this.tableSelectionCheckboxes.clear();
-          this.tableSelectionRow.clear();
-          this.appService.dataLoading = false;
+    this.setObjectsDatasource(this.testPersons);
+    this.tableSelectionCheckboxes.clear();
+    this.tableSelectionRow.clear();
+    this.appService.dataLoading = false;
   }
 
   createTestPersonsList(): void {
-    this.backendService.getTestPersons(1).subscribe(testPersons => {
+    this.backendService.getTestPersons(1,'').subscribe(testPersons => {
       if (testPersons.length > 0) { this.testPersons = testPersons; }
-      console.log('testPersons', testPersons)
+      console.log('testPersons', testPersons);
     });
   }
 }

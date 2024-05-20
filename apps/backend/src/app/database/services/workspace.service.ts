@@ -8,7 +8,6 @@ import { WorkspaceInListDto } from '../../../../../frontend/api-dto/workspaces/w
 import { WorkspaceFullDto } from '../../../../../frontend/api-dto/workspaces/workspace-full-dto';
 import { CreateWorkspaceDto } from '../../../../../frontend/api-dto/workspaces/create-workspace-dto';
 import { AdminWorkspaceNotFoundException } from '../../exceptions/admin-workspace-not-found.exception';
-import { FileIo } from '../../admin/test-files/interfaces/file-io.interface';
 import FileUpload from '../entities/file_upload.entity';
 import { FilesDto } from '../../../../../frontend/api-dto/files/files.dto';
 import Responses from '../entities/responses.entity';
@@ -49,18 +48,42 @@ export class WorkspaceService {
     return files;
   }
 
+  async findPlayer(id: number): Promise<FilesDto[]> {
+    this.logger.log('Returning player for workspace', id);
+    const files = await this.fileUploadRepository.find({ where: { filename: 'iqb-player-aspect-2.4.1.html' } });
+    return files;
+  }
+
+  async findUnitDef(unitId: string): Promise<FilesDto[]> {
+    this.logger.log('Returning unit def for unit', unitId);
+    const files = await this.fileUploadRepository.find({ where: { filename: `${unitId}.VOUD` } });
+    return files;
+  }
+
   async findResponse(id: number, testPerson:string): Promise<Responses[]> {
     this.logger.log('Returning response for test person', testPerson);
     const response = await this.responsesRepository.find(
       { where: { test_person: testPerson }, select: { responses: true } });
     return response;
   }
-
-  async findTestPersons(id: number, testPerson:string): Promise<any> {
-    this.logger.log('Returning all test persons for workspace ', id);
-    const response =  this.responsesRepository.find({select: ['test_person']});
-    return response;
+  async findTestGroups(id: number): Promise<any> {
+    this.logger.log('Returning all test groups for workspace ', id);
+    const response = await this.responsesRepository.find({ select: ['test_group'] });
+    return Array.from(new Set(response.map(item => item.test_group)));
   }
+
+  async findTestPersons(id: number, testGroup:string): Promise<any> {
+    this.logger.log('Returning ind all test persons for test group ', testGroup);
+    const response = await this.responsesRepository.find({ select: ['test_person'], where: { test_group: testGroup } });
+    return Array.from(new Set(response.map(item => item.test_person)));
+
+  }
+  async findTestPersonUnits(id: number, testPerson:string): Promise<any> {
+    this.logger.log('Returning all unit Ids for testperson ', testPerson);
+    return this.responsesRepository.find({ where: { test_person: testPerson }, select: ['unit_id'] });
+  }
+
+
 
   async findOne(id: number): Promise<WorkspaceFullDto> {
     this.logger.log(`Returning workspace with id: ${id}`);
@@ -111,13 +134,12 @@ export class WorkspaceService {
       .map(item => item.split(splitter));
     return rest.map(item => {
       const object = {};
-      keys.forEach((key, index) => (object[key] = item.at(index)));
+      keys.forEach((key, index) => (object[key] = item.at(index).replace('""', '"').replace('"', '')));
       return object;
     });
   }
 
-  async uploadTestFiles(id: number, originalFiles: FileIo[]): Promise<any> {
-    console.log('""""',originalFiles);
+  async uploadTestFiles(id: number, originalFiles: BufferSource): Promise<any> {
     if (originalFiles[0].mimetype === 'text/xml') {
       const xmlDocument = cheerio.load(originalFiles[0].buffer.toString(), {
         xmlMode: true,
@@ -142,16 +164,23 @@ export class WorkspaceService {
       const rows = WorkspaceService.csvToArr(originalFiles[0].buffer.toString(), ';');
       const mappedRows = rows.map((row: Response) => {
         const testPerson = `${row.loginname}${row.code}`.replace(/"/g, '');
+        const groupName = `${row.groupname}`.replace(/"/g, '');
         const unitId = row.unitname.replace(/"/g, '');
         const responses = row.responses.slice(1, -1);
         return ({
           test_person: testPerson,
           unit_id: unitId,
-          responses: responses
+          responses: responses,
+          test_group: groupName
         });
       });
       const registry = this.responsesRepository.create(mappedRows);
       await this.responsesRepository.save(registry);
     }
+  }
+
+  async testcenterImport(entries:any): Promise<any> {
+    const registry = this.fileUploadRepository.create(entries);
+    await this.fileUploadRepository.save(registry);
   }
 }
