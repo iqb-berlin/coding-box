@@ -42,7 +42,7 @@ export class WorkspaceController {
     @Query('server') server: string,
       @Query('workspace') workspace: string,
       @Query('token') token: string)
-      : Promise<any> {
+      : Promise<boolean> {
     return this.testcenterService.importWorkspaceFiles(workspace, server, token);
   }
 
@@ -106,7 +106,7 @@ export class WorkspaceController {
   @ApiTags('workspace')
   async addTestFiles(@WorkspaceId() workspaceId: number, @UploadedFiles() files): Promise<any> {
     console.log('""""');
-    return this.workspaceService.uploadTestFiles(workspaceId, files);
+    return this.workspaceService.uploadTestFiles(workspaceId, files,'');
   }
 
   @Delete(':ids')

@@ -11,6 +11,7 @@ import { Subject, takeUntil } from 'rxjs';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { AppService } from '../../../services/app.service';
 import { dataParts } from './dataParts';
+import { BackendService } from '../../../services/backend.service';
 
 export interface PageData {
   index: number;
@@ -62,8 +63,9 @@ export class UnitPlayerComponent implements AfterViewInit,OnChanges {
             },
             playerConfig: {
               stateReportPolicy: 'eager',
-              pagingMode: 'auto',
-              directDownloadUrl: ''
+              pagingMode: 'seperate',
+              directDownloadUrl: this.backendService.getDirectDownloadLink()
+
             },
             unitDefinition: parsedJSONUnitDef
           }, '*');
@@ -76,7 +78,8 @@ export class UnitPlayerComponent implements AfterViewInit,OnChanges {
   constructor(
     private appService: AppService,
     private snackBar: MatSnackBar,
-    private translateService: TranslateService
+    private translateService: TranslateService,
+    private backendService: BackendService
   ) {
     this.subscribeForMessages();
   }

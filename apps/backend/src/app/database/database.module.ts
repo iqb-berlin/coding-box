@@ -13,6 +13,8 @@ import Responses from './entities/responses.entity';
 import WorkspaceUser from './entities/workspace_user.entity';
 import { HttpModule, HttpService } from '@nestjs/axios';
 import { HttpClient } from '@angular/common/http';
+import ResourcePackage from './entities/resource-package.entity';
+import { ResourcePackageService } from './services/resource-package.service';
 
 @Module({
   imports: [
@@ -23,6 +25,7 @@ import { HttpClient } from '@angular/common/http';
     Responses,
     WorkspaceUser,
     HttpModule,
+    ResourcePackage,
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => ({
@@ -33,15 +36,15 @@ import { HttpClient } from '@angular/common/http';
         password: configService.get('POSTGRES_PASSWORD'),
         database: configService.get('POSTGRES_DB'),
         entities: [
-          User, Workspace, WorkspaceAdmin, FileUpload, Responses,WorkspaceUser
+          User, Workspace, WorkspaceAdmin, FileUpload, Responses,WorkspaceUser,ResourcePackage
         ],
         synchronize: false
       }),
       inject: [ConfigService]
     }),
-    TypeOrmModule.forFeature([User, Workspace, WorkspaceAdmin, FileUpload, Responses,WorkspaceUser])
+    TypeOrmModule.forFeature([User, Workspace, WorkspaceAdmin, FileUpload, Responses,WorkspaceUser,ResourcePackage])
   ],
-  providers: [UsersService, WorkspaceService],
+  providers: [UsersService, WorkspaceService,ResourcePackageService],
   exports: [
     User,
     FileUpload,
@@ -50,7 +53,8 @@ import { HttpClient } from '@angular/common/http';
     WorkspaceAdmin,
     WorkspaceService,
     UsersService,
-    WorkspaceUser
+    WorkspaceUser,
+    ResourcePackage
   ]
 })
 export class DatabaseModule {}

@@ -15,6 +15,7 @@ import { MatInput } from '@angular/material/input';
 import { MatOption, MatSelect } from '@angular/material/select';
 import { MatRadioButton, MatRadioGroup } from '@angular/material/radio';
 import { BackendService } from '../../services/backend.service';
+import { AppService } from '../../services/app.service';
 
 type ServerResponse = {
   token: string,
@@ -78,7 +79,8 @@ export class TestCenterImportComponent {
   uploadError: boolean = false;
   uploadedFiles: boolean = false;
   constructor(private backendService: BackendService,
-              private fb: UntypedFormBuilder) {
+              private fb: UntypedFormBuilder,
+              private appService: AppService) {
     this.loginForm = this.fb.group({
       name: this.fb.control('', [Validators.required, Validators.minLength(1)]),
       pw: this.fb.control('', [Validators.required, Validators.minLength(1)]),
@@ -108,8 +110,10 @@ export class TestCenterImportComponent {
   importWorkspaceFiles(): void {
     const testcenter = this.loginForm.get('testcenter')?.value;
     const workspace = this.importFilesForm.get('workspace')?.value;
+    this.appService.dataLoading = true;
     this.backendService.importWorkspaceFiles(workspace, testcenter, this.authToken)
       .subscribe((response:ServerFilesResponse) => {
+        this.appService.dataLoading = false;
         if (!response) {
           this.uploadedFiles = false;
           this.uploadError = true;

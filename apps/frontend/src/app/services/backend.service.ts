@@ -23,6 +23,10 @@ export class BackendService {
   ) {
   }
 
+  getDirectDownloadLink(): string {
+    return `${this.serverUrl}packages/`;
+  }
+
   userRoles(): Observable<string> {
     return this.http.get<string>(`${SERVER_URL}users/roles`);
   }
@@ -182,7 +186,7 @@ export class BackendService {
 
   importWorkspaceFiles(workspace: string, server:string, token:string): Observable<any> {
     return this.http
-      .get<any>(`${SERVER_URL}admin/workspace/importWorkspaceFiles?workspace=${workspace}&server=${server}&token=${token}`, {})
+      .get<boolean>(`${SERVER_URL}admin/workspace/importWorkspaceFiles?workspace=${workspace}&server=${server}&token=${token}`, {})
       .pipe(
         catchError(() => of(false))
       );

@@ -54,7 +54,7 @@ export class TestcenterService {
     return data;
   }
 
-  async importWorkspaceFiles(workspace:string, server:string, authToken:string): Promise<any> {
+  async importWorkspaceFiles(workspace:string, server:string, authToken:string): Promise<boolean> {
     const headersRequest = {
       Authtoken: authToken
     };
@@ -66,13 +66,25 @@ export class TestcenterService {
 
     const files = await filesPromise.then(res => res.data.Resource).catch(err => { err; });
     if (files) {
-      const promises = files
-        .filter(file => file.name.includes('.voud'))
-        .map(file => this.getFile(file, server, workspace, authToken, { name: file.id, type: file.type }));
-      const results = await Promise.all(promises);
-      const dbEntries = results.map(result => ({ filename: result.name, workspace_id: workspace, data: result.data }));
-      await this.testFileService.testcenterImport(dbEntries);
+      // console.log(files,'files');
+      const zipFiles = files.filter(file => file.name.includes('.zip'));
+      const unitDefFiles = files.filter(file => file.name.includes('.voud'));
+      const playerFiles = files.filter(file => file.name.includes('.html'));
+      const notZipFiles = [...unitDefFiles, ...playerFiles];
+      const notZipFilesPromises = notZipFiles.map(file => this.getFile(file, server, workspace, authToken, { name: file.id, type: file.type }));
+      const results = await Promise.all(notZipFilesPromises);
+      if (results.length > 0) {
+        const dbEntries = results.map(result => ({
+          filename: result.name,
+          workspace_id: workspace,
+          data: result.data
+        }));
+        await this.testFileService.testcenterImport(dbEntries);
+        return true;
+      }
+      return false;
     }
+    return false;
   }
 
   async getFile(res:Resource, server:string, workspace:string, authToken:string, fileOptions:any): Promise<any> {
@@ -86,6 +98,7 @@ export class TestcenterService {
         headers: headersRequest
       });
     const file = await filePromise.then(res => res.data).catch(err => { err; });
+    console.log({ data: file, name: fileOptions.name, type: fileOptions.type });
     return { data: file, name: fileOptions.name, type: fileOptions.type };
   }
 }
