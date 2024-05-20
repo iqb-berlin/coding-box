@@ -29,6 +29,7 @@ export class FileUploadComponent {
       const inputElement = targetElement as HTMLInputElement;
       if (inputElement.files && inputElement.files.length > 0) {
         this.appService.dataLoading = true;
+        console.log(inputElement,'inputElement.files',inputElement.files)
         this.uploadSubscription = this.backendService.uploadTestFiles(
           1,
           inputElement.files

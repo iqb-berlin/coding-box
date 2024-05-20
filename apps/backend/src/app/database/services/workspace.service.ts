@@ -11,6 +11,7 @@ import { AdminWorkspaceNotFoundException } from '../../exceptions/admin-workspac
 import FileUpload from '../entities/file_upload.entity';
 import { FilesDto } from '../../../../../frontend/api-dto/files/files.dto';
 import Responses from '../entities/responses.entity';
+import { ResourcePackageService } from './resource-package.service';
 
 type Response = {
   groupname:string,
@@ -32,7 +33,8 @@ export class WorkspaceService {
     @InjectRepository(FileUpload)
     private fileUploadRepository: Repository<FileUpload>,
     @InjectRepository(Responses)
-    private responsesRepository:Repository<Responses>
+    private responsesRepository:Repository<Responses>,
+    private resourcePackageService: ResourcePackageService
   ) {
   }
 
@@ -66,6 +68,7 @@ export class WorkspaceService {
       { where: { test_person: testPerson }, select: { responses: true } });
     return response;
   }
+
   async findTestGroups(id: number): Promise<any> {
     this.logger.log('Returning all test groups for workspace ', id);
     const response = await this.responsesRepository.find({ select: ['test_group'] });
@@ -76,14 +79,12 @@ export class WorkspaceService {
     this.logger.log('Returning ind all test persons for test group ', testGroup);
     const response = await this.responsesRepository.find({ select: ['test_person'], where: { test_group: testGroup } });
     return Array.from(new Set(response.map(item => item.test_person)));
-
   }
+
   async findTestPersonUnits(id: number, testPerson:string): Promise<any> {
     this.logger.log('Returning all unit Ids for testperson ', testPerson);
     return this.responsesRepository.find({ where: { test_person: testPerson }, select: ['unit_id'] });
   }
-
-
 
   async findOne(id: number): Promise<WorkspaceFullDto> {
     this.logger.log(`Returning workspace with id: ${id}`);
@@ -139,7 +140,8 @@ export class WorkspaceService {
     });
   }
 
-  async uploadTestFiles(id: number, originalFiles: BufferSource): Promise<any> {
+  async uploadTestFiles(id: number, originalFiles: BufferSource,file:any): Promise<any> {
+    console.log(originalFiles[0],file);
     if (originalFiles[0].mimetype === 'text/xml') {
       const xmlDocument = cheerio.load(originalFiles[0].buffer.toString(), {
         xmlMode: true,
@@ -160,6 +162,13 @@ export class WorkspaceService {
         { filename: originalFiles[0].originalname, workspace_id: 2, data: json });
       await this.fileUploadRepository.save(registry);
     }
+    if (originalFiles[0].mimetype === 'application/zip') {
+      const json = originalFiles[0].buffer.toString();
+      const registry = this.fileUploadRepository.create(
+        { filename: originalFiles[0].originalname, workspace_id: 2, data: json });
+      await this.fileUploadRepository.save(registry);
+    }
+
     if (originalFiles[0].mimetype === 'text/csv') {
       const rows = WorkspaceService.csvToArr(originalFiles[0].buffer.toString(), ';');
       const mappedRows = rows.map((row: Response) => {
@@ -180,6 +189,7 @@ export class WorkspaceService {
   }
 
   async testcenterImport(entries:any): Promise<any> {
+    console.log(entries);
     const registry = this.fileUploadRepository.create(entries);
     await this.fileUploadRepository.save(registry);
   }
