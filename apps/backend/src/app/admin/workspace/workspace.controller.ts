@@ -16,7 +16,7 @@ import { WorkspaceService } from '../../database/services/workspace.service';
 import { WorkspaceId } from './workspace.decorator';
 import { FilesDto } from '../../../../../frontend/api-dto/files/files.dto';
 import Responses from '../../database/entities/responses.entity';
-import { TestcenterService } from '../../testcenter/service/testcenter.service';
+import { TestcenterService } from '../../database/services/testcenter.service';
 
 @Controller('admin/workspace')
 export class WorkspaceController {
@@ -41,9 +41,12 @@ export class WorkspaceController {
   async importWorkspaceFiles(
     @Query('server') server: string,
       @Query('workspace') workspace: string,
-      @Query('token') token: string)
+      @Query('token') token: string,
+      @Query('definitions') definitions: string,
+      @Query('responses') responses: string)
+
       : Promise<boolean> {
-    return this.testcenterService.importWorkspaceFiles(workspace, server, token);
+    return this.testcenterService.importWorkspaceFiles(workspace, server, token, responses, definitions);
   }
 
   @Get(':workspace_id')
@@ -86,17 +89,18 @@ export class WorkspaceController {
     return this.workspaceService.findTestPersons(id, testGroup);
   }
 
-
   @Get(':workspace_id/:unit/unitDef')
   @ApiParam({ name: 'workspace_id', type: Number })
   async findUnitDef(@WorkspaceId() id: number, @Param('unit') unit:string): Promise<FilesDto[]> {
     return this.workspaceService.findUnitDef(unit);
   }
 
-  @Get(':workspace_id/:testPerson/responses')
+  @Get(':workspace_id/responses/:testPerson/:unitId')
   @ApiParam({ name: 'workspace_id', type: Number })
-  async findResponse(@WorkspaceId() id: number, @Param('testPerson') testPerson:string): Promise<Responses[]> {
-    return this.workspaceService.findResponse(id, testPerson);
+  async findResponse(@WorkspaceId() id: number,
+    @Param('testPerson') testPerson:string,
+    @Param('unitId') unitId:string): Promise<Responses[]> {
+    return this.workspaceService.findResponse(id, testPerson, unitId);
   }
 
   @Post(':workspace_id/upload')
@@ -105,8 +109,7 @@ export class WorkspaceController {
   @UseInterceptors(FilesInterceptor('files'))
   @ApiTags('workspace')
   async addTestFiles(@WorkspaceId() workspaceId: number, @UploadedFiles() files): Promise<any> {
-    console.log('""""');
-    return this.workspaceService.uploadTestFiles(workspaceId, files,'');
+    return this.workspaceService.uploadTestFiles(workspaceId, files, '');
   }
 
   @Delete(':ids')

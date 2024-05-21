@@ -15,6 +15,6 @@ export class TestFilesController {
   @UseInterceptors(FileInterceptor('file'))
   @ApiTags('ws admin test-files')
   async addTestFile(@UploadedFile() file) {
-    return this.workspaceService.uploadTestFiles(1, file.buffer,file);
+    return this.workspaceService.uploadTestFiles(1, file.buffer, file);
   }
 }
