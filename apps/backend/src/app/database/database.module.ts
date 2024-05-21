@@ -1,8 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
-// eslint-disable-next-line import/no-extraneous-dependencies
-
+import { HttpModule } from '@nestjs/axios';
 import User from './entities/user.entity';
 import { UsersService } from './services/users.service';
 import { WorkspaceService } from './services/workspace.service';
@@ -11,10 +10,9 @@ import WorkspaceAdmin from './entities/workspace-admin.entity';
 import FileUpload from './entities/file_upload.entity';
 import Responses from './entities/responses.entity';
 import WorkspaceUser from './entities/workspace_user.entity';
-import { HttpModule, HttpService } from '@nestjs/axios';
-import { HttpClient } from '@angular/common/http';
 import ResourcePackage from './entities/resource-package.entity';
 import { ResourcePackageService } from './services/resource-package.service';
+import { TestcenterService } from './services/testcenter.service';
 
 @Module({
   imports: [
@@ -36,15 +34,15 @@ import { ResourcePackageService } from './services/resource-package.service';
         password: configService.get('POSTGRES_PASSWORD'),
         database: configService.get('POSTGRES_DB'),
         entities: [
-          User, Workspace, WorkspaceAdmin, FileUpload, Responses,WorkspaceUser,ResourcePackage
+          User, Workspace, WorkspaceAdmin, FileUpload, Responses, WorkspaceUser, ResourcePackage
         ],
         synchronize: false
       }),
       inject: [ConfigService]
     }),
-    TypeOrmModule.forFeature([User, Workspace, WorkspaceAdmin, FileUpload, Responses,WorkspaceUser,ResourcePackage])
+    TypeOrmModule.forFeature([User, Workspace, WorkspaceAdmin, FileUpload, Responses, WorkspaceUser, ResourcePackage])
   ],
-  providers: [UsersService, WorkspaceService,ResourcePackageService],
+  providers: [UsersService, WorkspaceService, ResourcePackageService, TestcenterService],
   exports: [
     User,
     FileUpload,
@@ -54,7 +52,8 @@ import { ResourcePackageService } from './services/resource-package.service';
     WorkspaceService,
     UsersService,
     WorkspaceUser,
-    ResourcePackage
+    ResourcePackage,
+    TestcenterService
   ]
 })
 export class DatabaseModule {}
