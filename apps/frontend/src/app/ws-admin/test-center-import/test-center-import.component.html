@@ -47,11 +47,19 @@
           [formGroup]="importFilesForm"
           (ngSubmit)="importWorkspaceFiles()">
       <div class="fx-column-start-stretch">
-          <mat-radio-group>
-            <mat-radio-button>
-              Ressourcen
-            </mat-radio-button>
-          </mat-radio-group>
+        <section class="fx-column-start-start">
+          <span class="example-list-section">
+            <mat-checkbox class="example-margin" formControlName="responses">
+            Antworten
+            </mat-checkbox>
+          </span>
+          <span class="example-list-section">
+            <mat-checkbox class="example-margin" formControlName="definitions">
+            Aufgabendefinitionen
+            </mat-checkbox>
+          </span>
+
+        </section>
         <mat-form-field>
 
           <mat-select formControlName="workspace">

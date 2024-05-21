@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { createMock } from '@golevelup/ts-jest';
 import { JwtService } from '@nestjs/jwt';
 import { TestcenterService } from './testcenter.service';
-import { UsersService } from '../../database/services/users.service';
+import { UsersService } from './users.service';
 
 describe('TestcenterService', () => {
   let service: TestcenterService;

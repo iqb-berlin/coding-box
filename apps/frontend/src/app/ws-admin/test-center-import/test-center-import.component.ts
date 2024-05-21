@@ -14,6 +14,7 @@ import {
 import { MatInput } from '@angular/material/input';
 import { MatOption, MatSelect } from '@angular/material/select';
 import { MatRadioButton, MatRadioGroup } from '@angular/material/radio';
+import { MatCheckbox } from '@angular/material/checkbox';
 import { BackendService } from '../../services/backend.service';
 import { AppService } from '../../services/app.service';
 
@@ -66,7 +67,7 @@ type Ressource = {
   styleUrls: ['./test-center-import.component.scss'],
   standalone: true,
   // eslint-disable-next-line max-len
-  imports: [MatDialogContent, MatIcon, MatDialogActions, MatButton, MatDialogClose, TranslateModule, MatFormField, ReactiveFormsModule, MatInput, MatSelect, MatOption, MatRadioGroup, MatRadioButton]
+  imports: [MatDialogContent, MatIcon, MatDialogActions, MatButton, MatDialogClose, TranslateModule, MatFormField, ReactiveFormsModule, MatInput, MatSelect, MatOption, MatRadioGroup, MatRadioButton, MatCheckbox]
 })
 
 export class TestCenterImportComponent {
@@ -87,7 +88,9 @@ export class TestCenterImportComponent {
       testcenter: this.fb.control('2', [Validators.required])
     });
     this.importFilesForm = this.fb.group({
-      workspace: this.fb.control('', [Validators.required])
+      workspace: this.fb.control('', [Validators.required]),
+      responses: this.fb.control(true),
+      definitions: this.fb.control(true)
     });
   }
 
@@ -110,8 +113,14 @@ export class TestCenterImportComponent {
   importWorkspaceFiles(): void {
     const testcenter = this.loginForm.get('testcenter')?.value;
     const workspace = this.importFilesForm.get('workspace')?.value;
+    const definitions = this.importFilesForm.get('definitions')?.value;
+    const responses = this.importFilesForm.get('responses')?.value;
+    const exportOptions = {
+      definitions: definitions,
+      responses: responses
+    };
     this.appService.dataLoading = true;
-    this.backendService.importWorkspaceFiles(workspace, testcenter, this.authToken)
+    this.backendService.importWorkspaceFiles(workspace, testcenter, this.authToken, exportOptions)
       .subscribe((response:ServerFilesResponse) => {
         this.appService.dataLoading = false;
         if (!response) {

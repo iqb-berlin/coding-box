@@ -13,7 +13,7 @@ import { FilesDto } from '../../../../../frontend/api-dto/files/files.dto';
 import Responses from '../entities/responses.entity';
 import { ResourcePackageService } from './resource-package.service';
 
-type Response = {
+export type Response = {
   groupname:string,
   loginname : string,
   code : string,
@@ -52,7 +52,7 @@ export class WorkspaceService {
 
   async findPlayer(id: number): Promise<FilesDto[]> {
     this.logger.log('Returning player for workspace', id);
-    const files = await this.fileUploadRepository.find({ where: { filename: 'iqb-player-aspect-2.4.1.html' } });
+    const files = await this.fileUploadRepository.find({ where: { filename: 'IQB-PLAYER-ASPECT-2.4' } });
     return files;
   }
 
@@ -62,10 +62,10 @@ export class WorkspaceService {
     return files;
   }
 
-  async findResponse(id: number, testPerson:string): Promise<Responses[]> {
+  async findResponse(id: number, testPerson:string, unitId:string): Promise<Responses[]> {
     this.logger.log('Returning response for test person', testPerson);
     const response = await this.responsesRepository.find(
-      { where: { test_person: testPerson }, select: { responses: true } });
+      { where: { test_person: testPerson, unit_id: unitId } });
     return response;
   }
 
@@ -135,13 +135,12 @@ export class WorkspaceService {
       .map(item => item.split(splitter));
     return rest.map(item => {
       const object = {};
-      keys.forEach((key, index) => (object[key] = item.at(index).replace('""', '"').replace('"', '')));
+      keys.forEach((key, index) => (object[key] = (item.at(index)).replace('""', '"').replace('"', '')));
       return object;
     });
   }
 
-  async uploadTestFiles(id: number, originalFiles: BufferSource,file:any): Promise<any> {
-    console.log(originalFiles[0],file);
+  async uploadTestFiles(id: number, originalFiles: BufferSource, file:any): Promise<any> {
     if (originalFiles[0].mimetype === 'text/xml') {
       const xmlDocument = cheerio.load(originalFiles[0].buffer.toString(), {
         xmlMode: true,
@@ -175,7 +174,8 @@ export class WorkspaceService {
         const testPerson = `${row.loginname}${row.code}`.replace(/"/g, '');
         const groupName = `${row.groupname}`.replace(/"/g, '');
         const unitId = row.unitname.replace(/"/g, '');
-        const responses = row.responses.slice(1, -1);
+        const responses = row.responses.slice(0, -1).replace(/""/g, '"');
+
         return ({
           test_person: testPerson,
           unit_id: unitId,
@@ -183,6 +183,7 @@ export class WorkspaceService {
           test_group: groupName
         });
       });
+
       const registry = this.responsesRepository.create(mappedRows);
       await this.responsesRepository.save(registry);
     }
