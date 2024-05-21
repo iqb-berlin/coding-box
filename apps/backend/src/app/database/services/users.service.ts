@@ -1,12 +1,12 @@
 import { Injectable, Logger, MethodNotAllowedException } from '@nestjs/common';
 import { MoreThan, Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
+import { HttpService } from '@nestjs/axios';
+import { Observable } from 'rxjs';
 import User from '../entities/user.entity';
 import { UserFullDto } from '../../../../../frontend/api-dto/user/user-full-dto';
 import { CreateUserDto } from '../../../../../frontend/api-dto/user/create-user-dto';
 import WorkspaceUser from '../entities/workspace_user.entity';
-import { HttpService } from '@nestjs/axios';
-import { Observable } from 'rxjs';
 
 @Injectable()
 export class UsersService {
@@ -19,8 +19,6 @@ export class UsersService {
     private workspaceUserRepository: Repository<WorkspaceUser>
   ) {
   }
-
-
 
   async findAllFull(workspaceId?: number): Promise<UserFullDto[]> {
     const validUsers: number[] = [];
@@ -42,7 +40,7 @@ export class UsersService {
   }
 
   async findUserWorkspaces(userId: number): Promise<any> {
-    const workspaces: any = await this.workspaceUserRepository.find({ where: { userId: userId }})
+    const workspaces: any = await this.workspaceUserRepository.find({ where: { userId: userId } });
 
     console.log(workspaces);
 
@@ -139,8 +137,8 @@ export class UsersService {
     throw new MethodNotAllowedException();
   }
 
-  setPassword(newPassword: string,token:string): Observable<any> {
-    this.logger.log(`Setting password for user with id:`);
+  setPassword(newPassword: string, token:string): Observable<any> {
+    this.logger.log('Setting password for user with id:');
     return this.httpService.put('');
   }
 }

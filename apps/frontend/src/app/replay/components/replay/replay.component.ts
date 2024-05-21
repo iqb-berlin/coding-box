@@ -41,29 +41,25 @@ export class ReplayComponent implements OnInit, OnDestroy {
     const unitData = await this.getUnitData();
     this.player = unitData.player[0].data;
     this.unitDef = unitData.unitDef[0].data;
-    this.responses = unitData.unitDef[0].data;
+    this.responses = unitData.response[0];
   }
 
   async getUnitData() {
-    const playerFile = await firstValueFrom(this.backendService.getPlayer(2).pipe(
-      catchError(error => {
-        throw new Error(error);
-      })
-    ));
     const unitDefFile = await firstValueFrom(this.backendService.getUnitDef(2, this.unitId).pipe(
       catchError(error => {
         throw new Error(error);
       })
     ));
-    const responsesFile = await firstValueFrom(this.backendService.getResponses(2, this.testPerson).pipe(
+    const playerFile = await firstValueFrom(this.backendService.getPlayer(2).pipe(
       catchError(error => {
         throw new Error(error);
       })
     ));
-
-    console.log('playerFile', playerFile);
-    // this.player = playerFile[0].data;
-    // this.unitDef = unitDefFile[0].data;
+    const responsesFile = await firstValueFrom(this.backendService.getResponses(2, this.testPerson, this.unitId).pipe(
+      catchError(error => {
+        throw new Error(error);
+      })
+    ));
     return { player: playerFile, unitDef: unitDefFile, response: responsesFile };
   }
 

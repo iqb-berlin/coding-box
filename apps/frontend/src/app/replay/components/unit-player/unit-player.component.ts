@@ -10,7 +10,6 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { Subject, takeUntil } from 'rxjs';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { AppService } from '../../../services/app.service';
-import { dataParts } from './dataParts';
 import { BackendService } from '../../../services/backend.service';
 
 export interface PageData {
@@ -29,10 +28,10 @@ export type Progress = 'none' | 'some' | 'complete';
   templateUrl: './unit-player.component.html',
   styleUrl: './unit-player.component.scss'
 })
-export class UnitPlayerComponent implements AfterViewInit,OnChanges {
+export class UnitPlayerComponent implements AfterViewInit, OnChanges {
   @Input() unitDef!: string;
   @Input() unitPlayer!: string;
-  //@Input() responses!: string;
+  @Input() unitResponses!: string;
   @ViewChild('hostingIframe') hostingIframe!: ElementRef;
   private iFrameElement: HTMLIFrameElement | undefined;
   postMessageTarget: Window | undefined;
@@ -45,19 +44,37 @@ export class UnitPlayerComponent implements AfterViewInit,OnChanges {
   hasFocus: boolean = false;
   responses!: Response[] | null;
   count: number = 0;
+  dataparts!: { stateVariableCodes: string, elementCodes:string };
 
   ngOnChanges(changes: SimpleChanges) {
     if (this.count > 0) {
-      const parsedJSONUnitDef = JSON.parse(changes['unitDef'].currentValue);
+      const { unitDef, unitPlayer, unitResponses } = changes;
+      const parsedJSONUnitDef = JSON.parse(unitDef.currentValue);
+      if (unitResponses.currentValue && (unitResponses.currentValue).responses) {
+        let elementCodes: string = '';
+        let stateVariableCodes: string = '';
+        (unitResponses.currentValue).responses.forEach((response:any) => {
+          if (response.id === 'elementCodes') {
+            elementCodes = elementCodes.concat(response.content);
+          }
+          if (response.id === 'stateVariableCodes') {
+            stateVariableCodes = stateVariableCodes.concat(response.content);
+          }
+        });
+        this.dataparts = {
+          stateVariableCodes: stateVariableCodes,
+          elementCodes: elementCodes
+        };
+      }
       this.unitDef = parsedJSONUnitDef;
       if (this.iFrameElement) {
-        this.iFrameElement.srcdoc = (changes['unitPlayer'].currentValue).replace('&quot;', '');
+        this.iFrameElement.srcdoc = (unitPlayer.currentValue).replace('&quot;', '');
         if (this.postMessageTarget) {
           this.postMessageTarget.postMessage({
             type: 'vopStartCommand',
             sessionId: 3,
             unitState: {
-              dataParts: {},
+              dataParts: this.dataparts,
               presentationProgress: 'none',
               responseProgress: 'none'
             },
@@ -72,7 +89,7 @@ export class UnitPlayerComponent implements AfterViewInit,OnChanges {
         }
       }
     }
-    this.count++;
+    this.count += 1;
   }
 
   constructor(
@@ -213,14 +230,15 @@ export class UnitPlayerComponent implements AfterViewInit,OnChanges {
           type: 'vopStartCommand',
           sessionId: this.sessionId,
           unitState: {
-            dataParts: dataParts,
+            dataParts: this.dataparts,
             presentationProgress: 'none',
             responseProgress: 'none'
           },
           playerConfig: {
             stateReportPolicy: 'eager',
             pagingMode: 'auto',
-            directDownloadUrl: ''
+            directDownloadUrl: '',
+            startPage: '1'
           },
           unitDefinition: unitDefStringified
         }, '*');

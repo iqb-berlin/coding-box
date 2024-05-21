@@ -159,19 +159,19 @@ export class BackendService {
     return this.http.get<FilesDto[]>(`${SERVER_URL}admin/workspace/${workspaceId}/player`);
   }
 
-
-
-  getResponses(workspaceId: number, testPerson: string): Observable<any> {
-    return this.http.get<FilesDto[]>(`${SERVER_URL}admin/workspace/${workspaceId}/${testPerson}/responses`);
+  getResponses(workspaceId: number, testPerson: string, unitId:string): Observable<any> {
+    return this.http.get<FilesDto[]>(`${SERVER_URL}admin/workspace/${workspaceId}/responses/${testPerson}/${unitId}`);
   }
 
   getTestpersonUnits(workspaceId: number, testPerson: string): Observable<any> {
     return this.http.get<any[]>(`${SERVER_URL}admin/workspace/${workspaceId}/units/${testPerson}`);
   }
+
   getTestGroups(workspaceId: number): Observable<any> {
     return this.http.get<any[]>(`${SERVER_URL}admin/workspace/${workspaceId}/test-groups`);
   }
-  getTestPersons(workspaceId: number,testGroup:string): Observable<any> {
+
+  getTestPersons(workspaceId: number, testGroup:string): Observable<any> {
     return this.http.get<any[]>(`${SERVER_URL}admin/workspace/${workspaceId}/test-groups/${testGroup}`);
   }
 
@@ -184,9 +184,15 @@ export class BackendService {
       );
   }
 
-  importWorkspaceFiles(workspace: string, server:string, token:string): Observable<any> {
+  importWorkspaceFiles(workspace: string,
+                       server:string,
+                       token:string,
+                       exportOptions:{
+                         responses:boolean, definitions:boolean
+                       }): Observable<any> {
     return this.http
-      .get<boolean>(`${SERVER_URL}admin/workspace/importWorkspaceFiles?workspace=${workspace}&server=${server}&token=${token}`, {})
+      // eslint-disable-next-line max-len
+      .get<boolean>(`${SERVER_URL}admin/workspace/importWorkspaceFiles?workspace=${workspace}&server=${server}&responses=${exportOptions.responses}&definitions=${exportOptions.definitions}&token=${token}`, {})
       .pipe(
         catchError(() => of(false))
       );
