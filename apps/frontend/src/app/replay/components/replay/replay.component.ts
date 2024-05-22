@@ -9,6 +9,7 @@ import { ActivatedRoute } from '@angular/router';
 import {
   catchError, firstValueFrom, Subject
 } from 'rxjs';
+import * as xml2js from 'xml2js';
 import { UnitPlayerComponent } from '../unit-player/unit-player.component';
 import { BackendService } from '../../../services/backend.service';
 
@@ -45,17 +46,29 @@ export class ReplayComponent implements OnInit, OnDestroy {
   }
 
   async getUnitData() {
+    let player = '';
     const unitDefFile = await firstValueFrom(this.backendService.getUnitDef(2, this.unitId).pipe(
       catchError(error => {
         throw new Error(error);
       })
     ));
-    const playerFile = await firstValueFrom(this.backendService.getPlayer(2).pipe(
+
+    const responsesFile = await firstValueFrom(this.backendService.getResponses(2, this.testPerson, this.unitId).pipe(
       catchError(error => {
         throw new Error(error);
       })
     ));
-    const responsesFile = await firstValueFrom(this.backendService.getResponses(2, this.testPerson, this.unitId).pipe(
+    const unitFile = await firstValueFrom(this.backendService.getUnit(2, this.testPerson, this.unitId).pipe(
+      catchError(error => {
+        throw new Error(error);
+      })
+    ));
+    xml2js.parseString(unitFile[0].data, (err:any, result:any) => {
+      player = result.Unit.DefinitionRef[0].$.player;
+      console.log(player);
+      console.log(result);
+    });
+    const playerFile = await firstValueFrom(this.backendService.getPlayer(2, player).pipe(
       catchError(error => {
         throw new Error(error);
       })
