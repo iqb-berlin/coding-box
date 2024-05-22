@@ -8,6 +8,7 @@ import { WsAdminComponent } from './ws-admin/ws-admin/ws-admin.component';
 import { SelectReplayComponent } from './ws-admin/select-replay/select-replay.component';
 import { FileUploadComponent } from './ws-admin/file-upload/file-upload.component';
 import { TestPersonsComponent } from './ws-admin/test-persons/test-persons.component';
+import { WsSettingsComponent } from './ws-admin/ws-settings/ws-settings.component';
 
 export const routes: Routes = [
   { path: '', redirectTo: 'home', pathMatch: 'full' },
@@ -32,6 +33,7 @@ export const routes: Routes = [
       { path: 'test-files', component: FileUploadComponent },
       { path: 'test-persons', component: TestPersonsComponent },
       { path: 'users', component: UsersComponent },
+      { path: 'settings', component: WsSettingsComponent },
       { path: '**', component: UsersComponent }
     ]
   },
