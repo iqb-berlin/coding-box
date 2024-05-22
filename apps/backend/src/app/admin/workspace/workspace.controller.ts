@@ -17,6 +17,9 @@ import { WorkspaceId } from './workspace.decorator';
 import { FilesDto } from '../../../../../frontend/api-dto/files/files.dto';
 import Responses from '../../database/entities/responses.entity';
 import { TestcenterService } from '../../database/services/testcenter.service';
+import {
+  ImportOptions
+} from '../../../../../frontend/src/app/ws-admin/test-center-import/test-center-import.component';
 
 @Controller('admin/workspace')
 export class WorkspaceController {
@@ -43,10 +46,18 @@ export class WorkspaceController {
       @Query('workspace') workspace: string,
       @Query('token') token: string,
       @Query('definitions') definitions: string,
-      @Query('responses') responses: string)
-
+      @Query('responses') responses: string,
+      @Query('player') player: string,
+      @Query('units') units: string)
       : Promise<boolean> {
-    return this.testcenterService.importWorkspaceFiles(workspace, server, token, responses, definitions);
+    const importOptions:ImportOptions = {
+      definitions: definitions,
+      responses: responses,
+      units: units,
+      player: player
+    };
+
+    return this.testcenterService.importWorkspaceFiles(workspace, server, token, importOptions);
   }
 
   @Get(':workspace_id')
@@ -65,10 +76,11 @@ export class WorkspaceController {
     return this.workspaceService.findFiles(id);
   }
 
-  @Get(':workspace_id/player')
+  @Get(':workspace_id/player/:playerName')
   @ApiParam({ name: 'workspace_id', type: Number })
-  async findPlayer(@WorkspaceId() id: number): Promise<FilesDto[]> {
-    return this.workspaceService.findPlayer(id);
+  async findPlayer(@WorkspaceId() id: number,
+    @Param('playerName') playerName:string): Promise<FilesDto[]> {
+    return this.workspaceService.findPlayer(id, playerName);
   }
 
   @Get(':workspace_id/units/:testPerson')
@@ -93,6 +105,14 @@ export class WorkspaceController {
   @ApiParam({ name: 'workspace_id', type: Number })
   async findUnitDef(@WorkspaceId() id: number, @Param('unit') unit:string): Promise<FilesDto[]> {
     return this.workspaceService.findUnitDef(unit);
+  }
+
+  @Get(':workspace_id/unit/:testPerson/:unitId')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  async findUnit(@WorkspaceId() id: number,
+    @Param('testPerson') testPerson:string,
+    @Param('unitId') unitId:string): Promise<Responses[]> {
+    return this.workspaceService.findUnit(id, testPerson, unitId);
   }
 
   @Get(':workspace_id/responses/:testPerson/:unitId')

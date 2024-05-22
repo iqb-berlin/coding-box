@@ -6,6 +6,9 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { WorkspaceService } from './workspace.service';
 import Responses from '../entities/responses.entity';
+import {
+  ImportOptions
+} from '../../../../../frontend/src/app/ws-admin/test-center-import/test-center-import.component';
 
 const agent = new https.Agent({
   rejectUnauthorized: false
@@ -13,8 +16,8 @@ const agent = new https.Agent({
 
 type ServerFilesResponse = {
   Booklet:[],
-  Resource:Resource[],
-  Unit:[],
+  Resource:File[],
+  Unit:File[],
   Testtakers:[],
 };
 
@@ -29,7 +32,7 @@ type TestserverResponse = {
   lastChange: number,
 };
 
-type Resource = {
+type File = {
   name: string,
   size: number,
   modificationTime: number,
@@ -83,8 +86,12 @@ export class TestcenterService {
   async importWorkspaceFiles(workspace:string,
                              server:string,
                              authToken:string,
-                             responses:string,
-                             definitions:string): Promise<boolean> {
+                             importOptions:ImportOptions
+  ): Promise<boolean> {
+    const {
+      units, responses, definitions, player
+    } = importOptions;
+
     const headersRequest = {
       Authtoken: authToken
     };
@@ -115,32 +122,36 @@ export class TestcenterService {
       }
     }
 
-    if (definitions) {
-      console.log('===', responses, definitions);
+    if (definitions || player || units) {
       const filesPromise = this.httpService.axiosRef
         .get<ServerFilesResponse>(`http://iqb-testcenter${server}.de/api/workspace/${workspace}/files`, {
         httpsAgent: agent,
         headers: headersRequest
       });
-      const filenames = await filesPromise.then(res => res.data.Resource).catch(err => { err; });
-      console.log('filenames', filenames);
-      const files = [];
+      const files = await filesPromise.then(res => res.data).catch(err => { err; });
       if (files) {
-        // console.log(files,'files');
-        const zipFiles = files.filter(file => file.name.includes('.zip'));
-        const unitDefFiles = files.filter(file => file.name.includes('.voud'));
-        const playerFiles = files.filter(file => file.name.includes('.html'));
-        const notZipFiles = [...unitDefFiles, ...playerFiles];
-        console.log({
-          zipFiles,
-          notZipFiles
-        });
-        const notZipFilesPromises = notZipFiles
-          .map(file => this.getFile(file, server, workspace, authToken, {
-            name: file.id,
-            type: file.type
-          }));
-        const results = await Promise.all(notZipFilesPromises);
+        // const zipFiles = files.filter(file => file.name.includes('.zip'));
+        const unitDefFiles = files.Resource.filter(file => file.name.includes('.voud'));
+        const playerFiles = files.Resource.filter(file => file.name.includes('.html'));
+        const unitFiles = files.Unit;
+        console.log(unitFiles);
+        let promises = [];
+        if (player === 'true' && playerFiles.length > 0) {
+          const playerPromises = playerFiles
+            .map(file => this.getFile(file, server, workspace, authToken, file.name, file.type));
+          promises = [...promises, ...playerPromises];
+        }
+        if (units === 'true' && unitFiles.length > 0) {
+          const unitFilesPromises = unitFiles
+            .map(file => this.getFile(file, server, workspace, authToken, file.name, file.type));
+          promises = [...promises, ...unitFilesPromises];
+        }
+        if (definitions === 'true' && unitDefFiles.length > 0) {
+          const unitDefPromises = unitDefFiles
+            .map(file => this.getFile(file, server, workspace, authToken, file.name, file.type));
+          promises = [...promises, ...unitDefPromises];
+        }
+        const results = await Promise.all(promises);
         if (results.length > 0) {
           const dbEntries = results.map(result => ({
             filename: result.name,
@@ -157,18 +168,18 @@ export class TestcenterService {
     return true;
   }
 
-  async getFile(res:Resource, server:string, workspace:string, authToken:string, fileOptions:any): Promise<any> {
+  async getFile(res:File, server:string, workspace:string, authToken:string, fileId:string, fileType:string): Promise<any> {
     const headersRequest = {
       Authtoken: authToken
     };
     const filePromise = this.httpService.axiosRef
-      .get<Resource>(`http://iqb-testcenter${server}.de/api/workspace/${workspace}/file/Resource/${res.name}`,
+      .get<File>(`http://iqb-testcenter${server}.de/api/workspace/${workspace}/file/${fileType}/${res.name}`,
       {
         httpsAgent: agent,
         headers: headersRequest
       });
     const file = await filePromise.then(res => res.data).catch(err => { err; });
-    console.log({ data: file, name: fileOptions.name, type: fileOptions.type });
-    return { data: file, name: fileOptions.name, type: fileOptions.type };
+    console.log({ data: file, name: fileId, type: fileType });
+    return { data: file, name: fileId, type: fileType };
   }
 }

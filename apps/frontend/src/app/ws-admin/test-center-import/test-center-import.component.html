@@ -48,14 +48,24 @@
           (ngSubmit)="importWorkspaceFiles()">
       <div class="fx-column-start-stretch">
         <section class="fx-column-start-start">
-          <span class="example-list-section">
-            <mat-checkbox class="example-margin" formControlName="responses">
+          <span class="">
+            <mat-checkbox class="" formControlName="responses">
             Antworten
             </mat-checkbox>
           </span>
-          <span class="example-list-section">
-            <mat-checkbox class="example-margin" formControlName="definitions">
+          <span class="">
+            <mat-checkbox class="" formControlName="definitions">
             Aufgabendefinitionen
+            </mat-checkbox>
+          </span>
+          <span class="">
+            <mat-checkbox class="" formControlName="units">
+              Units-XML
+            </mat-checkbox>
+          </span>
+          <span class="">
+            <mat-checkbox class="" formControlName="player">
+            Player
             </mat-checkbox>
           </span>
 
@@ -82,7 +92,7 @@
 
     </form>
     } @else{
-      <p class="warning">Keine Arebitsbereiche auswählbar</p>
+      <p class="warning">Keine Arbeitsbereiche auswählbar</p>
     }
   }
 
