@@ -11,7 +11,6 @@ import { AdminWorkspaceNotFoundException } from '../../exceptions/admin-workspac
 import FileUpload from '../entities/file_upload.entity';
 import { FilesDto } from '../../../../../frontend/api-dto/files/files.dto';
 import Responses from '../entities/responses.entity';
-import { ResourcePackageService } from './resource-package.service';
 
 export type Response = {
   groupname:string,
@@ -33,8 +32,7 @@ export class WorkspaceService {
     @InjectRepository(FileUpload)
     private fileUploadRepository: Repository<FileUpload>,
     @InjectRepository(Responses)
-    private responsesRepository:Repository<Responses>,
-    private resourcePackageService: ResourcePackageService
+    private responsesRepository:Repository<Responses>
   ) {
   }
 
@@ -50,15 +48,16 @@ export class WorkspaceService {
     return files;
   }
 
-  async findPlayer(id: number): Promise<FilesDto[]> {
+  async findPlayer(id: number, playerName:string): Promise<FilesDto[]> {
     this.logger.log('Returning player for workspace', id);
-    const files = await this.fileUploadRepository.find({ where: { filename: 'IQB-PLAYER-ASPECT-2.4' } });
+
+    const files = await this.fileUploadRepository.find({ where: { filename: 'iqb-player-aspect-2.4.11.ht' } });
     return files;
   }
 
   async findUnitDef(unitId: string): Promise<FilesDto[]> {
     this.logger.log('Returning unit def for unit', unitId);
-    const files = await this.fileUploadRepository.find({ where: { filename: `${unitId}.VOUD` } });
+    const files = await this.fileUploadRepository.find({ where: { filename: `${unitId}.voud` } });
     return files;
   }
 
@@ -66,6 +65,13 @@ export class WorkspaceService {
     this.logger.log('Returning response for test person', testPerson);
     const response = await this.responsesRepository.find(
       { where: { test_person: testPerson, unit_id: unitId } });
+    return response;
+  }
+
+  async findUnit(id: number, testPerson:string, unitId:string): Promise<any[]> {
+    this.logger.log('Returning unit for test person', testPerson);
+    const response = await this.fileUploadRepository.find(
+      { where: { filename: `${unitId}.xml` } });
     return response;
   }
 

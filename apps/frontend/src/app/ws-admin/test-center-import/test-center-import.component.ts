@@ -61,6 +61,10 @@ type Ressource = {
   }
 };
 
+export type ImportOptions = {
+  responses:string, definitions:string, units:string, player:string
+};
+
 @Component({
   selector: 'coding-box-test-center-import',
   templateUrl: 'test-center-import.component.html',
@@ -90,7 +94,10 @@ export class TestCenterImportComponent {
     this.importFilesForm = this.fb.group({
       workspace: this.fb.control('', [Validators.required]),
       responses: this.fb.control(true),
-      definitions: this.fb.control(true)
+      definitions: this.fb.control(true),
+      units: this.fb.control(true),
+      player: this.fb.control(true)
+
     });
   }
 
@@ -115,12 +122,17 @@ export class TestCenterImportComponent {
     const workspace = this.importFilesForm.get('workspace')?.value;
     const definitions = this.importFilesForm.get('definitions')?.value;
     const responses = this.importFilesForm.get('responses')?.value;
-    const exportOptions = {
+    const player = this.importFilesForm.get('player')?.value;
+    const units = this.importFilesForm.get('units')?.value;
+
+    const importOptions = {
       definitions: definitions,
-      responses: responses
+      responses: responses,
+      units: units,
+      player: player
     };
     this.appService.dataLoading = true;
-    this.backendService.importWorkspaceFiles(workspace, testcenter, this.authToken, exportOptions)
+    this.backendService.importWorkspaceFiles(workspace, testcenter, this.authToken, importOptions)
       .subscribe((response:ServerFilesResponse) => {
         this.appService.dataLoading = false;
         if (!response) {

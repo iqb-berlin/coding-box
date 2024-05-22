@@ -5,14 +5,12 @@ import { DatabaseModule } from '../database/database.module';
 import { AuthModule } from '../auth/auth.module';
 import { WorkspaceController } from './workspace/workspace.controller';
 import { TestFilesController } from './test-files/test-files.controller';
-import ResourcePackage from '../database/entities/resource-package.entity';
 
 @Module({
   imports: [
     DatabaseModule,
     AuthModule,
-    HttpModule,
-    ResourcePackage
+    HttpModule
   ],
   controllers: [
     UsersController, WorkspaceController, TestFilesController

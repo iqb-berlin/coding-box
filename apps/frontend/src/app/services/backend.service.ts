@@ -11,6 +11,7 @@ import { WorkspaceInListDto } from '../../../api-dto/workspaces/workspace-in-lis
 import { CreateWorkspaceDto } from '../../../api-dto/workspaces/create-workspace-dto';
 import { AuthDataDto } from '../../../api-dto/auth-data-dto';
 import { FilesDto } from '../../../api-dto/files/files.dto';
+import { ImportOptions } from '../ws-admin/test-center-import/test-center-import.component';
 
 const SERVER_URL = 'http://localhost:3333/api/';
 @Injectable({
@@ -155,12 +156,16 @@ export class BackendService {
     return this.http.get<FilesDto[]>(`${SERVER_URL}admin/workspace/${workspaceId}/${unit}/unitDef`);
   }
 
-  getPlayer(workspaceId: number): Observable<any> {
-    return this.http.get<FilesDto[]>(`${SERVER_URL}admin/workspace/${workspaceId}/player`);
+  getPlayer(workspaceId: number, player:string): Observable<any> {
+    return this.http.get<FilesDto[]>(`${SERVER_URL}admin/workspace/${workspaceId}/player/${player}`);
   }
 
   getResponses(workspaceId: number, testPerson: string, unitId:string): Observable<any> {
     return this.http.get<FilesDto[]>(`${SERVER_URL}admin/workspace/${workspaceId}/responses/${testPerson}/${unitId}`);
+  }
+
+  getUnit(workspaceId: number, testPerson: string, unitId:string): Observable<any> {
+    return this.http.get<FilesDto[]>(`${SERVER_URL}admin/workspace/${workspaceId}/unit/${testPerson}/${unitId}`);
   }
 
   getTestpersonUnits(workspaceId: number, testPerson: string): Observable<any> {
@@ -187,12 +192,13 @@ export class BackendService {
   importWorkspaceFiles(workspace: string,
                        server:string,
                        token:string,
-                       exportOptions:{
-                         responses:boolean, definitions:boolean
-                       }): Observable<any> {
+                       importOptions:any): Observable<any> {
+    const {
+      units, responses, definitions, player
+    } = importOptions;
     return this.http
       // eslint-disable-next-line max-len
-      .get<boolean>(`${SERVER_URL}admin/workspace/importWorkspaceFiles?workspace=${workspace}&server=${server}&responses=${exportOptions.responses}&definitions=${exportOptions.definitions}&token=${token}`, {})
+      .get<boolean>(`${SERVER_URL}admin/workspace/importWorkspaceFiles?workspace=${workspace}&server=${server}&responses=${responses}&definitions=${definitions}&units=${units}&player=${player}&token=${token}`, {})
       .pipe(
         catchError(() => of(false))
       );
