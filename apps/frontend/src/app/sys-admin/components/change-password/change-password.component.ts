@@ -11,7 +11,7 @@ import {
 } from '@angular/material/dialog';
 
 @Component({
-  selector: 'studio-lite-change-password',
+  selector: 'coding-box-change-password',
   templateUrl: './change-password.component.html',
   styleUrls: ['./change-password.component.scss'],
   standalone: true,

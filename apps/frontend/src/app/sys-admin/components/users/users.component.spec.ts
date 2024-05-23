@@ -13,19 +13,19 @@ import { UntypedFormGroup } from '@angular/forms';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { UsersComponent } from './users.component';
-import { UserFullDto } from '../../../../../../api-dto/user/user-full-dto';
-import { environment } from '../../../../../environments/environment';
+import { UserFullDto } from '../../../../../api-dto/user/user-full-dto';
+import { environment } from '../../../../environments/environment';
 
 describe('UsersComponent', () => {
   let component: UsersComponent;
   let fixture: ComponentFixture<UsersComponent>;
 
-  @Component({ selector: 'studio-lite-search-filter', template: '' })
+  @Component({ selector: 'coding-box-search-filter', template: '' })
   class MockSearchFilterComponent {
     @Input() title!: string;
   }
 
-  @Component({ selector: 'studio-lite-users-menu', template: '' })
+  @Component({ selector: 'coding-box-users-menu', template: '' })
   class MockUsersMenuComponent {
     @Input() selectedUser!: number;
     @Input() selectedRows!: UserFullDto[];

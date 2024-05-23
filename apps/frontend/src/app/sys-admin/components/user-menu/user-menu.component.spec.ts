@@ -10,13 +10,13 @@ describe('UserMenuComponent', () => {
   let component: UserMenuComponent;
   let fixture: ComponentFixture<UserMenuComponent>;
 
-  @Component({ selector: 'studio-lite-account-action', standalone: true, template: '' })
+  @Component({ selector: 'coding-box-account-action', standalone: true, template: '' })
   class MockAccountActionComponentComponent {
     @Input() type!: string;
     @Input() iconName!: string;
   }
 
-  @Component({ selector: 'studio-lite-wrapped-icon', standalone: true, template: '' })
+  @Component({ selector: 'coding-box-wrapped-icon', standalone: true, template: '' })
   class MockWrappedIconComponent {
     @Input() icon!: string;
   }
