@@ -29,20 +29,20 @@ services:
       - "traefik.docker.network=app-net"
     build:
       context: .
-      dockerfile: apps/api/Dockerfile
+      dockerfile: apps/backend/Dockerfile
       target: dev
       args:
         REGISTRY_PATH: ${REGISTRY_PATH}
-        PROJECT: api
+        PROJECT: backend
     ports:
       - "${API_PORT}:3333"  # api
       - "9229:9229"         # default debug port
     volumes:
-      - ./apps/api/src:/coding-box/apps/backend/src
+      - ./apps/backend/src:/coding-box/apps/backend/src
       - backend_vol:/coding-box/packages
     command:
       - "serve"
-      - "api"
+      - "backend"
       - "--host=backend"
 
   frontend:
