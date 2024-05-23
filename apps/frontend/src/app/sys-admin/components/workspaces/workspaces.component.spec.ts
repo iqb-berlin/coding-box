@@ -17,6 +17,7 @@ import { WorkspacesComponent } from './workspaces.component';
 import { WorkspaceInListDto } from '../../../../../api-dto/workspaces/workspace-in-list-dto';
 import { environment } from '../../../../environments/environment';
 
+
 describe('WorkspaceGroupsComponent', () => {
   let component: WorkspacesComponent;
   let fixture: ComponentFixture<WorkspacesComponent>;

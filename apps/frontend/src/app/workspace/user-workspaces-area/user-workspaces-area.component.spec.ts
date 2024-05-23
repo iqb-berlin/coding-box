@@ -7,12 +7,14 @@ import { environment } from '../../../environments/environment';
 import { HomeComponent } from '../../components/home/home.component';
 import { BackendService } from '../../services/backend.service';
 
+
 describe('UserWorkspacesAreaComponent', () => {
   let component: UserWorkspacesAreaComponent;
   let fixture: ComponentFixture<UserWorkspacesAreaComponent>;
 
   @Component({ selector: 'coding-box-user-menu', template: '' })
   class MockUserMenuComponent {}
+
 
   @Component({ selector: 'coding-box-warning', template: '' })
   class MockWarningComponent {
@@ -44,7 +46,7 @@ describe('UserWorkspacesAreaComponent', () => {
           useValue: MockBackendService
         },
         {
-          // provide: AuthService,
+          //provide: AuthService,
           useValue: MockAuthService
         },
         {
