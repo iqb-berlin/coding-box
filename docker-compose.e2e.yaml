@@ -1,0 +1,111 @@
+services:
+  test-e2e:
+    image: ${REGISTRY_PATH}iqbberlin/studio-lite-frontend-e2e:${TAG}
+    command:
+      - "e2e"
+      - "frontend-e2e"
+      - "--baseUrl=http://frontend:80"
+      - "--browser=chrome"
+    volumes:
+      - ./apps/frontend-e2e:/studio-lite/apps/frontend-e2e
+    networks:
+      - application-network
+
+  test-e2e-api:
+    image: ${REGISTRY_PATH}iqbberlin/studio-lite-frontend-e2e:${TAG}
+    command:
+      - "e2e"
+      - "frontend-e2e"
+      - "--baseUrl=http://frontend:80"
+      - "--browser=chrome"
+      - "--spec=\"./apps/frontend-e2e/src/e2e/api/*\""
+    volumes:
+      - ./apps/frontend-e2e:/studio-lite/apps/frontend-e2e
+    networks:
+      - application-network
+
+  test-e2e-ui-chrome:
+    image: ${REGISTRY_PATH}iqbberlin/studio-lite-frontend-e2e:${TAG}
+    command:
+      - "e2e"
+      - "frontend-e2e"
+      - "--baseUrl=http://frontend:80"
+      - "--browser=chrome"
+      - "--spec=\"./apps/frontend-e2e/src/e2e/ui/*\""
+    volumes:
+      - ./apps/frontend-e2e:/studio-lite/apps/frontend-e2e
+    networks:
+      - application-network
+
+  test-e2e-ui-chrome-mobile:
+    image: ${REGISTRY_PATH}iqbberlin/studio-lite-frontend-e2e:${TAG}
+    command:
+      - "e2e"
+      - "frontend-e2e"
+      - "--baseUrl=http://frontend:80"
+      - "--browser=chrome"
+      - "--spec=\"./apps/frontend-e2e/src/e2e/ui/*\""
+      - "--config=\"viewportWidth=375,viewportHeight=667\""
+    volumes:
+      - ./apps/frontend-e2e:/studio-lite/apps/frontend-e2e
+    networks:
+      - application-network
+
+  test-e2e-ui-firefox:
+    image: ${REGISTRY_PATH}iqbberlin/studio-lite-frontend-e2e:${TAG}
+    command:
+      - "e2e"
+      - "frontend-e2e"
+      - "--baseUrl=http://frontend:80"
+      - "--browser=firefox"
+      - "--spec=\"./apps/frontend-e2e/src/e2e/ui/*\""
+    volumes:
+      - ./apps/frontend-e2e:/studio-lite/apps/frontend-e2e
+    networks:
+      - application-network
+
+  test-e2e-ui-firefox-mobile:
+    image: ${REGISTRY_PATH}iqbberlin/studio-lite-frontend-e2e:${TAG}
+    command:
+      - "e2e"
+      - "frontend-e2e"
+      - "--baseUrl=http://frontend:80"
+      - "--browser=firefox"
+      - "--spec=\"./apps/frontend-e2e/src/e2e/ui/*\""
+      - "--config=\"viewportWidth=375,viewportHeight=667\""
+    volumes:
+      - ./apps/frontend-e2e:/studio-lite/apps/frontend-e2e
+    networks:
+      - application-network
+
+  test-e2e-ui-edge:
+    image: ${REGISTRY_PATH}iqbberlin/studio-lite-frontend-e2e:${TAG}
+    command:
+      - "e2e"
+      - "frontend-e2e"
+      - "--baseUrl=http://frontend:80"
+      - "--browser=edge"
+      - "--spec=\"./apps/frontend-e2e/src/e2e/ui/*\""
+    volumes:
+      - ./apps/frontend-e2e:/studio-lite/apps/frontend-e2e
+    networks:
+      - application-network
+
+  test-e2e-ui-edge-mobile:
+    image: ${REGISTRY_PATH}iqbberlin/studio-lite-frontend-e2e:${TAG}
+    command:
+      - "e2e"
+      - "frontend-e2e"
+      - "--baseUrl=http://frontend:80"
+      - "--browser=edge"
+      - "--spec=\"./apps/frontend-e2e/src/e2e/ui/*\""
+      - "--config=\"viewportWidth=375,viewportHeight=667\""
+    volumes:
+      - ./apps/frontend-e2e:/studio-lite/apps/frontend-e2e
+    networks:
+      - application-network
+
+networks:
+  application-network:
+    name: app-net
+    external: true
