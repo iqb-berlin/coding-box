@@ -14,19 +14,19 @@ import {
 import { UntypedFormGroup } from '@angular/forms';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { WorkspacesComponent } from './workspaces.component';
-import { environment } from '../../../../../environments/environment';
-import { WorkspaceInListDto } from '../../../../../../api-dto/workspaces/workspace-in-list-dto';
+import { WorkspaceInListDto } from '../../../../../api-dto/workspaces/workspace-in-list-dto';
+import { environment } from '../../../../environments/environment';
 
 describe('WorkspaceGroupsComponent', () => {
   let component: WorkspacesComponent;
   let fixture: ComponentFixture<WorkspacesComponent>;
 
-  @Component({ selector: 'studio-lite-search-filter', template: '' })
+  @Component({ selector: 'coding-box-search-filter', template: '' })
   class MockSearchFilterComponent {
     @Input() title!: string;
   }
 
-  @Component({ selector: 'studio-lite-workspace-groups-menu', template: '' })
+  @Component({ selector: 'coding-box-workspace-groups-menu', template: '' })
   class MockWorkspaceGroupsMenuComponent {
     @Input() selectedWorkspaceGroupId!: number;
     @Input() selectedRows!: WorkspaceInListDto[];

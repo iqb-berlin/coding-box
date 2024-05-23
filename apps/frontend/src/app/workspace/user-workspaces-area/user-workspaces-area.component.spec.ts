@@ -5,33 +5,26 @@ import { TranslateModule } from '@ngx-translate/core';
 import { UserWorkspacesAreaComponent } from './user-workspaces-area.component';
 import { environment } from '../../../environments/environment';
 import { HomeComponent } from '../../components/home/home.component';
-import { UserMenuComponent } from '../sys-admin/user-menu/user-menu.component';
 import { BackendService } from '../../services/backend.service';
-
 
 describe('UserWorkspacesAreaComponent', () => {
   let component: UserWorkspacesAreaComponent;
   let fixture: ComponentFixture<UserWorkspacesAreaComponent>;
 
-  @Component({ selector: 'studio-lite-user-menu', template: '' })
+  @Component({ selector: 'coding-box-user-menu', template: '' })
   class MockUserMenuComponent {}
 
-  @Component({ selector: 'studio-lite-user-workspaces-groups', template: '' })
-  class MockUserWorkspacesGroupsComponent {
-    //@Input() workspaceGroups!: WorkspaceGroupDto[];
-  }
-
-  @Component({ selector: 'studio-lite-warning', template: '' })
+  @Component({ selector: 'coding-box-warning', template: '' })
   class MockWarningComponent {
     @Input() warnMessage!: string;
   }
 
-  @Component({ selector: 'studio-lite-area-title', template: '' })
+  @Component({ selector: 'coding-box-area-title', template: '' })
   class MockAreaTitleComponent {
     @Input() title!: string;
   }
 
-  @Component({ selector: 'studio-lite-wrapped-icon', template: '' })
+  @Component({ selector: 'coding-box-wrapped-icon', template: '' })
   class MockWrappedIconComponent {
     @Input() icon!: string;
   }
@@ -51,7 +44,7 @@ describe('UserWorkspacesAreaComponent', () => {
           useValue: MockBackendService
         },
         {
-          //provide: AuthService,
+          // provide: AuthService,
           useValue: MockAuthService
         },
         {
@@ -61,15 +54,11 @@ describe('UserWorkspacesAreaComponent', () => {
     }).overrideComponent(HomeComponent, {
       remove: {
         imports: [
-
-          UserMenuComponent,
-
         ]
       },
       add: {
         imports: [
           MockUserMenuComponent,
-          MockUserWorkspacesGroupsComponent,
           MockAreaTitleComponent,
           MockWarningComponent,
           MockWrappedIconComponent
@@ -79,7 +68,6 @@ describe('UserWorkspacesAreaComponent', () => {
 
     fixture = TestBed.createComponent(UserWorkspacesAreaComponent);
     component = fixture.componentInstance;
-    //component.workspaceGroups = [];
     fixture.detectChanges();
   });
 
