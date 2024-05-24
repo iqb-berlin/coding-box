@@ -15,7 +15,7 @@ import {
   ViewChild, Component, OnInit, Output, EventEmitter
 } from '@angular/core';
 import { MatSort, MatSortHeader } from '@angular/material/sort';
-import { FormsModule,  } from '@angular/forms';
+import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MatButton } from '@angular/material/button';
@@ -27,7 +27,9 @@ import { BackendService } from '../../services/backend.service';
 import { AppService } from '../../services/app.service';
 import { WrappedIconComponent } from '../../shared/wrapped-icon/wrapped-icon.component';
 import { SearchFilterComponent } from '../../shared/search-filter/search-filter.component';
-
+import { HasSelectionValuePipe } from '../../sys-admin/pipes/hasSelectionValue.pipe';
+import { IsAllSelectedPipe } from '../../sys-admin/pipes/isAllSelected.pipe';
+import { IsSelectedPipe } from '../../sys-admin/pipes/isSelected.pipe';
 
 @Component({
   selector: 'coding-box-test-persons',
@@ -35,15 +37,15 @@ import { SearchFilterComponent } from '../../shared/search-filter/search-filter.
   styleUrls: ['./test-persons.component.scss'],
   standalone: true,
   // eslint-disable-next-line max-len
-  imports: [MatTable, MatSort, MatColumnDef, MatHeaderCellDef, MatHeaderCell, MatCheckbox, MatCellDef, MatCell, MatSortHeader, MatHeaderRowDef, MatHeaderRow, MatRowDef, MatRow, MatButton, MatTooltip, WrappedIconComponent, FormsModule, TranslateModule, SearchFilterComponent, JsonPipe]
+  imports: [MatTable, MatSort, MatColumnDef, MatHeaderCellDef, MatHeaderCell, MatCheckbox, MatCellDef, MatCell, MatSortHeader, MatHeaderRowDef, MatHeaderRow, MatRowDef, MatRow, MatButton, MatTooltip, WrappedIconComponent, FormsModule, TranslateModule, SearchFilterComponent, JsonPipe, HasSelectionValuePipe, IsAllSelectedPipe, IsSelectedPipe]
 })
 export class TestPersonsComponent implements OnInit {
-  selectedPersons : number[] = [];
   testPersonsObjectsDatasource = new MatTableDataSource<any>();
-  displayedTestPersonsColumns = ['name'];
+  displayedColumns = ['name'];
   tableSelectionRow = new SelectionModel<UserFullDto>(false, []);
   tableSelectionCheckboxes = new SelectionModel<UserFullDto>(true, []);
   testPersons = [];
+  dataSource!: MatTableDataSource<any>;
 
   @ViewChild(MatSort) sort = new MatSort();
   @Output() userSelectionChanged: EventEmitter< UserFullDto[]> = new EventEmitter< UserFullDto[]>();
@@ -80,9 +82,10 @@ export class TestPersonsComponent implements OnInit {
   }
 
   createTestPersonsList(): void {
-    this.backendService.getTestPersons(1,'').subscribe(testPersons => {
-      if (testPersons.length > 0) { this.testPersons = testPersons; }
-      console.log('testPersons', testPersons);
+    this.backendService.getTestPersons(1, '').subscribe(testGroups => {
+      this.dataSource = new MatTableDataSource(testGroups.map((testGroup: any) => ({ name: testGroup })));
+      if (testGroups.length > 0) { this.testPersons = testGroups; }
+      console.log('testPersons', testGroups);
     });
   }
 }

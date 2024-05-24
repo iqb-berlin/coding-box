@@ -1,37 +1,32 @@
 
-  @if (testPersonsObjectsDatasource.data.length) {
+  @if (dataSource.data.length) {
     <coding-box-search-filter
       [title]="'search-filter.filter-test-persons' | translate"
-      (valueChange)="testPersonsObjectsDatasource.filter = $event.trim().toLowerCase()">
+      (valueChange)="dataSource.filter = $event.trim().toLowerCase()">
     </coding-box-search-filter>
   }
 
-  <mat-table [dataSource]="testPersonsObjectsDatasource"
-             matSortDisableClear
-             matSort
-             class="scroll-area">
-
-    <ng-container matColumnDef="name">
-      <mat-header-cell *matHeaderCellDef
-                       mat-sort-header="name">
-        Testpersonen
+  <mat-table [dataSource]="dataSource" matSort>
+    <ng-container matColumnDef="selectCheckbox">
+      <mat-header-cell *matHeaderCellDef class="fx-flex-row-fix-70">
+        <mat-checkbox [checked]="(tableSelectionCheckboxes | hasSelectionValue : tableSelectionCheckboxes.selected.length) &&  (tableSelectionCheckboxes.selected.length | isAllSelected : dataSource.data.length)"
+                      [indeterminate]="(tableSelectionCheckboxes | hasSelectionValue : tableSelectionCheckboxes.selected.length) && !(tableSelectionCheckboxes.selected.length | isAllSelected : dataSource.data.length)"
+                      (change)="$event ? '' : null">
+        </mat-checkbox>
       </mat-header-cell>
-      <mat-cell *matCellDef="let element">
-        {{element.name}} {{element.isAdmin ? '*' : ''}}
+      <mat-cell *matCellDef="let row" class="fx-flex-row-fix-70">
+        <mat-checkbox [checked]="tableSelectionCheckboxes | isSelected: row : tableSelectionCheckboxes.selected.length"
+                      (click)="$event.stopPropagation()"
+                      (change)="$event ? tableSelectionCheckboxes.toggle(row) : null">
+        </mat-checkbox>
       </mat-cell>
     </ng-container>
-
-    <ng-container matColumnDef="displayName">
-      <mat-header-cell *matHeaderCellDef
-                       mat-sort-header="lastName">
-        {{'user.full-name' | translate}}
-      </mat-header-cell>
-      <mat-cell *matCellDef="let row"
-                class="secondary-cell">
-        {{row.lastName ? row.lastName : row.name}}{{row.firstName ? (', ' + row.firstName) : ''}}
-      </mat-cell>
-    </ng-container>
-
-    <mat-header-row *matHeaderRowDef="displayedTestPersonsColumns"></mat-header-row>
-    <mat-row *matRowDef="let row; columns: displayedTestPersonsColumns;"></mat-row>
+    @for (column of displayedColumns; track column) {
+      <ng-container [matColumnDef]="column">
+        <th mat-header-cell *matHeaderCellDef mat-sort-header="name"> {{ 'testgroup-' + column | translate}}</th>
+        <td mat-cell [innerHTML]="element[column]" *matCellDef="let element"></td>
+      </ng-container>
+    }
+    <tr mat-header-row  *matHeaderRowDef="displayedColumns;sticky:true"></tr>
+    <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
   </mat-table>

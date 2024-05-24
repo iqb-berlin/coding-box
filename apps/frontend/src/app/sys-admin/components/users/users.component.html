@@ -7,7 +7,8 @@
                          (userEdited)="editUser($event)"
                          (usersDeleted)="deleteUsers($event)">
   </coding-box-users-menu>
-    <div class="fx-row-start-stretch">
+    <div class="fx-column-start-start">
+      <coding-box-search-filter></coding-box-search-filter>
       <coding-box-users-selection class="fx-flex-row-50 object-list"
                                   (userSelectionChanged)="userSelectionChanged($event)"
       ></coding-box-users-selection>

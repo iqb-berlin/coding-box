@@ -6,13 +6,13 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBarModule } from '@angular/material/snack-bar';
 import { HttpClientModule } from '@angular/common/http';
 import {
-  Component, EventEmitter, Input, Output
+  Component, Input
 } from '@angular/core';
 import { MatTableModule } from '@angular/material/table';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { TestPersonsComponent } from './test-persons.component';
-import { environment } from '../../../../environments/environment';
+import { environment } from '../../../environments/environment';
 
 describe('UsersComponent', () => {
   let component: TestPersonsComponent;
