@@ -134,27 +134,29 @@ export class TestcenterService {
         const unitDefFiles = files.Resource.filter(file => file.name.includes('.voud'));
         const playerFiles = files.Resource.filter(file => file.name.includes('.html'));
         const unitFiles = files.Unit;
-        console.log(unitFiles);
         let promises = [];
         if (player === 'true' && playerFiles.length > 0) {
           const playerPromises = playerFiles
-            .map(file => this.getFile(file, server, workspace, authToken, file.name, file.type));
+            .map(file => this.getFile(file, server, workspace, authToken));
           promises = [...promises, ...playerPromises];
         }
         if (units === 'true' && unitFiles.length > 0) {
           const unitFilesPromises = unitFiles
-            .map(file => this.getFile(file, server, workspace, authToken, file.name, file.type));
+            .map(file => this.getFile(file, server, workspace, authToken));
           promises = [...promises, ...unitFilesPromises];
         }
         if (definitions === 'true' && unitDefFiles.length > 0) {
           const unitDefPromises = unitDefFiles
-            .map(file => this.getFile(file, server, workspace, authToken, file.name, file.type));
+            .map(file => this.getFile(file, server, workspace, authToken));
           promises = [...promises, ...unitDefPromises];
         }
         const results = await Promise.all(promises);
         if (results.length > 0) {
           const dbEntries = results.map(result => ({
             filename: result.name,
+            file_id: result.id,
+            file_type: result.type,
+            file_size: result.size,
             workspace_id: workspace,
             data: result.data
           }));
@@ -168,18 +170,20 @@ export class TestcenterService {
     return true;
   }
 
-  async getFile(res:File, server:string, workspace:string, authToken:string, fileId:string, fileType:string): Promise<any> {
+  async getFile(res:File, server:string, workspace:string, authToken:string): Promise<any> {
     const headersRequest = {
       Authtoken: authToken
     };
     const filePromise = this.httpService.axiosRef
-      .get<File>(`http://iqb-testcenter${server}.de/api/workspace/${workspace}/file/${fileType}/${res.name}`,
+      .get<File>(`http://iqb-testcenter${server}.de/api/workspace/${workspace}/file/${res.type}/${res.name}`,
       {
         httpsAgent: agent,
         headers: headersRequest
       });
-    const file = await filePromise.then(res => res.data).catch(err => { err; });
-    console.log({ data: file, name: fileId, type: fileType });
-    return { data: file, name: fileId, type: fileType };
+    const fileData = await filePromise.then(res => res.data).catch(err => { err; });
+    console.log({ data: fileData });
+    return {
+      data: fileData, name: res.name, type: res.type, size: res.size, id: res.id
+    };
   }
 }

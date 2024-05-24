@@ -44,14 +44,13 @@ export class WorkspaceService {
 
   async findFiles(id: number): Promise<FilesDto[]> {
     this.logger.log('Returning all files for workspace', id);
-    const files = await this.fileUploadRepository.find({});
+    const files = await this.fileUploadRepository.find({ where: { workspace_id: 2 }, select: ['filename', 'file_size', 'file_type'] });
     return files;
   }
 
   async findPlayer(id: number, playerName:string): Promise<FilesDto[]> {
     this.logger.log('Returning player for workspace', id);
-
-    const files = await this.fileUploadRepository.find({ where: { filename: 'iqb-player-aspect-2.4.11.ht' } });
+    const files = await this.fileUploadRepository.find({ where: { filename: playerName.toUpperCase() } });
     return files;
   }
 
@@ -184,7 +183,7 @@ export class WorkspaceService {
 
         return ({
           test_person: testPerson,
-          unit_id: unitId,
+          unit_id: unitId.toUpperCase(),
           responses: responses,
           test_group: groupName
         });
