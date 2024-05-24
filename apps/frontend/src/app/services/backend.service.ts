@@ -11,7 +11,6 @@ import { WorkspaceInListDto } from '../../../api-dto/workspaces/workspace-in-lis
 import { CreateWorkspaceDto } from '../../../api-dto/workspaces/create-workspace-dto';
 import { AuthDataDto } from '../../../api-dto/auth-data-dto';
 import { FilesDto } from '../../../api-dto/files/files.dto';
-import { ImportOptions } from '../ws-admin/test-center-import/test-center-import.component';
 
 const SERVER_URL = 'http://localhost:3333/api/';
 @Injectable({
@@ -148,7 +147,7 @@ export class BackendService {
     return of(-1);
   }
 
-  getTestFiles(workspaceId: number): Observable<any> {
+  getFilesList(workspaceId: number): Observable<any> {
     return this.http.get<FilesDto[]>(`${SERVER_URL}admin/workspace/${workspaceId}/files`);
   }
 

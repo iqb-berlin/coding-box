@@ -10,6 +10,18 @@ class FileUpload {
   @Column({ type: 'integer' })
     workspace_id: number;
 
+  @Column({ type: 'integer' })
+    file_size: string;
+
+  @Column({ type: 'varchar' })
+    file_type: string;
+
+  @Column({ type: 'varchar' })
+    file_id: string;
+
+  @Column({ type: 'timestamp' })
+    created_at: number;
+
   @Column({ type: 'varchar' })
     data: string;
 }

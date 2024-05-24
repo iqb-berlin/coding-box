@@ -68,7 +68,7 @@ export class ReplayComponent implements OnInit, OnDestroy {
       console.log(player);
       console.log(result);
     });
-    const playerFile = await firstValueFrom(this.backendService.getPlayer(2, player).pipe(
+    const playerFile = await firstValueFrom(this.backendService.getPlayer(2, player.replace('@', '-')).pipe(
       catchError(error => {
         throw new Error(error);
       })

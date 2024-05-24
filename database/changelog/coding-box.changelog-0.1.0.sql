@@ -41,10 +41,11 @@ CREATE TABLE "public"."responses"
 (
   "id"          SERIAL
     PRIMARY KEY,
-  "unit_id"      INTEGER NOT NULL,
+  "unit_id"      VARCHAR(50) NOT NULL,
   "test_person"  VARCHAR(100),
   "test_group"   VARCHAR(100),
-  "responses"    JSONB
+  "responses"    JSONB,
+  "created_at"  TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
 -- rollback DROP TABLE "public"."responses;
 
