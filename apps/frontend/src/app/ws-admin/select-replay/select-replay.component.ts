@@ -22,7 +22,6 @@ export class SelectReplayComponent implements OnInit {
               public backendService:BackendService,
               private router: Router) {
 
-
   }
 
   testPersons = [];
@@ -35,14 +34,14 @@ export class SelectReplayComponent implements OnInit {
 
   ngOnInit(): void {
     this.backendService.getTestGroups(1).subscribe(data => {
-       this.testGroups = data;
+      this.testGroups = data;
     });
   }
 
   getTestPersons(testGroup:string): void {
     this.selectedTestGroup = testGroup;
-    this.backendService.getTestPersons(1,testGroup).subscribe(data => {
-      if (data.length > 0) { this.testPersons = data }
+    this.backendService.getTestPersons(1, testGroup).subscribe(data => {
+      if (data.length > 0) { this.testPersons = data; }
     });
   }
 
