@@ -6,10 +6,42 @@
   min-width: 100%;
 }
 
+coding-box-search-filter {
+min-width:100%;
+}
+
+.mat-column-file-upload.file_size {
+  flex: 0 0 50%;
+}
+.mat-column-productName {
+  flex: 0 0 50%;
+}
+
+mat-table{
+  min-width:100%;
+  min-height:100%;
+  overflow: scroll;
+}
+
 .container{
   margin:20px;
+  max-height: 78vh;
 }
 
 a{
-  min-width:400px;
+  min-width:300px;
+  padding:20px;
+  font-size: 16px;
+}
+
+.upload-buttons{
+  margin: 10px;
+}
+
+.mat-column-file_size,.mat-column-file_type,.mat-column-created_at {
+  width: 20%;
+}
+
+.mat-column-filename {
+  width: 40%;
 }

@@ -1,12 +1,14 @@
 <div class="fx-column-start-start fx-gap-10 container">
-  <a mat-raised-button color="primary" (click)="testCenterImport()">
-    <mat-icon>upload</mat-icon>
-    Testcenter Import
-  </a>
-  <a mat-raised-button color="primary" (click)="hiddenFileInput.click()">
-    <mat-icon>upload</mat-icon>
-    Test Dateien hochladen
-  </a>
+  <div class="fx-row-center-center-stretch fx-gap-20 upload-buttons">
+    <a mat-raised-button color="primary" (click)="testCenterImport()">
+      <mat-icon>upload</mat-icon>
+      Testcenter Import
+    </a>
+    <a mat-raised-button color="primary" (click)="hiddenFileInput.click()">
+      <mat-icon>upload</mat-icon>
+      Test Dateien hochladen
+    </a>
+  </div>
   <input #hiddenFileInput type="file"
          name="files"
          accept=".xml,.voud,.zip,.html,.csv"
@@ -19,7 +21,7 @@
   @if (!isLoading) {
     @if (dataSource.data.length) {
       <coding-box-search-filter
-        [title]="'search-filter.filter-test-persons' | translate"
+        [title]="'search-filter.filter-test-files' | translate"
         (valueChange)="dataSource.filter = $event.trim().toLowerCase()">
       </coding-box-search-filter>
     }
@@ -40,7 +42,7 @@
       </ng-container>
       @for (column of displayedColumns; track column) {
         <ng-container [matColumnDef]="column">
-          <th mat-header-cell *matHeaderCellDef mat-sort-header="name"> {{ 'file-upload.' + column | translate}}</th>
+          <th mat-header-cell *matHeaderCellDef mat-sort-header="column"> {{ 'file-upload.' + column | translate}}</th>
           <td mat-cell [innerHTML]="element[column]" *matCellDef="let element"></td>
         </ng-container>
       }

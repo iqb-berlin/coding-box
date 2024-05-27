@@ -10,7 +10,7 @@
                         [appName]="'Kodierbox'"
                         [appVersion]="'0.1.0'"
                         [userLongName]="this.appService.userProfile.firstName + ' ' + this.appService.userProfile.lastName"
-                        [isUserLoggedIn]="Number(this.appService.authData?.userId) > 0"
+                        [isUserLoggedIn]="Number(this.appService.authData.userId) > 0"
                         [isAdmin]="this.appService.authData.isAdmin">
   </coding-box-app-info>
 </div>

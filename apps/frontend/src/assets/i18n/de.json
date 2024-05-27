@@ -151,7 +151,9 @@
     "filter-users": "Suche nach Nutzer:innen",
     "filter-workspaces": "Suche nach Arbeitsbereichen",
     "delete-filter": "Suchbegriff zurücksetzen",
-    "enter-filter": "Suchbegriff"
+    "enter-filter": "Suchbegriff",
+    "filter-test-persons": "Suche nach Testpersonen",
+    "filter-test-files": "Suche nach Testdateien"
   },
   "access-rights": {
     "hint": "Zugriffsrechte: Bitte links Nutzer:in wählen",
@@ -159,6 +161,13 @@
     "not-saved": "Zugriffsrechte nicht gespeichert.",
     "changed": "Zugriffsrechte geändert",
     "not-changed": "Konnte Zugriffsrechte nicht ändern"
+  },
+
+  "file-upload" : {
+    "filename": "Dateiname",
+    "file_type": "Dateityp",
+    "file_size": "Dateigröße",
+    "created_at": "Erstellt am"
   },
 
   "workspace": {

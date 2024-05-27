@@ -1,5 +1,5 @@
-
-  @if (dataSource.data.length) {
+<div class="container">
+@if (dataSource.data.length) {
     <coding-box-search-filter
       [title]="'search-filter.filter-test-persons' | translate"
       (valueChange)="dataSource.filter = $event.trim().toLowerCase()">
@@ -30,3 +30,4 @@
     <tr mat-header-row  *matHeaderRowDef="displayedColumns;sticky:true"></tr>
     <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
   </mat-table>
+</div>

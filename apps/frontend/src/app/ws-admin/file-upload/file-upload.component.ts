@@ -1,6 +1,6 @@
-import { Component, ViewChild } from '@angular/core';
+import { Component, OnInit, ViewChild } from '@angular/core';
 import { TranslateModule } from '@ngx-translate/core';
-import { RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { MatAnchor } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { Subscription } from 'rxjs';
@@ -35,19 +35,20 @@ import { SearchFilterComponent } from '../../shared/search-filter/search-filter.
   standalone: true,
   imports: [MatAnchor, RouterLink, TranslateModule, MatIcon, TestCenterImportComponent, MatProgressSpinner, MatTable, MatColumnDef, MatHeaderCellDef, MatCellDef, MatHeaderRowDef, MatRowDef, MatHeaderCell, MatCell, MatSort, MatHeaderRow, MatRow, HasSelectionValuePipe, IsAllSelectedPipe, IsSelectedPipe, MatCheckbox, SearchFilterComponent]
 })
-export class FileUploadComponent {
+export class FileUploadComponent implements OnInit{
   private uploadSubscription: Subscription | null = null;
 
   constructor(public appService: AppService,
               public backendService: BackendService,
-              private TestCenterImportDialog: MatDialog
+              private TestCenterImportDialog: MatDialog,
+              private route: ActivatedRoute
   ) {
   }
 
   tableSelectionCheckboxes = new SelectionModel<WorkspaceInListDto>(true, []);
   tableSelectionRow = new SelectionModel<WorkspaceInListDto>(false, []);
   @ViewChild(MatSort) sort = new MatSort();
-  displayedColumns: string[] = ['filename', 'file_size', 'file_type', 'file-upload'];
+  displayedColumns: string[] = ['filename', 'file_size', 'file_type', 'created_at'];
   dataSource!: MatTableDataSource<any>;
   isLoading = false;
 
@@ -58,11 +59,11 @@ export class FileUploadComponent {
   }
 
   ngOnInit(): void {
+    this.appService.dataLoading = false;
     this.isLoading = true;
     this.backendService.getFilesList(2)
       .subscribe((files: any[]) => {
         this.dataSource = new MatTableDataSource(files);
-
         this.isLoading = false;
       });
   }
