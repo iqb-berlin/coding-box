@@ -10,9 +10,7 @@ import {
   MatRowDef,
   MatRow,
 } from '@angular/material/table';
-import {
-  ViewChild, Component, OnInit, Output, EventEmitter
-} from '@angular/core';
+import { Component } from '@angular/core';
 import { MatSort, MatSortHeader } from '@angular/material/sort';
 import { FormsModule,  } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
@@ -45,5 +43,9 @@ export class WsSettingsComponent  {
     private appService: AppService
   ) {
   }
-
+createToken(): void {
+    this.backendService.createToken().subscribe(authToken=>{
+      this.authToken = authToken;
+    });
+}
 }
