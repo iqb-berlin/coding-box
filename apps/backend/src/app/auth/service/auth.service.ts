@@ -51,6 +51,12 @@ export class AuthService {
     return this.usersService.getUserByNameAndPassword(username, pass);
   }
 
+  async createToken(): Promise<string> {
+    const payload = { username: 'a', sub: 1, sub2: 0 };
+    const token = this.jwtService.sign(payload);
+    return token;
+  }
+
   async login(user: CreateUserDto) {
     const {identity,username,email,lastName,firstName,issuer,isAdmin } = user;
     const userId = await this.usersService.createUser({

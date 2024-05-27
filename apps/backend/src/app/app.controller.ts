@@ -19,12 +19,10 @@ import { JwtAuthGuard } from './auth/jwt-auth.guard';
 export class AppController {
   constructor(public authService:AuthService, public userService: UsersService, public workspaceService:WorkspaceService) {}
 
-  @Get('player')
+  @Get('create-token')
   @UseGuards(JwtAuthGuard)
-  async getPlayer():Promise<string> {
-    const fileContent = fs.readFileSync(path.resolve(process.cwd(), 'apps/backend/src/verona/iqb-player-aspect-2.4.1.html'), 'utf8');
-    const stringifiedJSON = JSON.stringify(fileContent);
-    return stringifiedJSON;
+  async createToken():Promise<string> {
+    return await this.authService.createToken();
   }
 
   @Get('auth-data')

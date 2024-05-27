@@ -4,7 +4,7 @@
     <mat-form-field>
       <textarea matInput cdkTextareaAutosize placeholder="Autorisierungs Token">{{authToken}}</textarea>
     </mat-form-field>
-    <button mat-raised-button color="primary">Zugangstoken generieren</button>
+    <button mat-raised-button color="primary" (click)="createToken()">Zugangstoken generieren</button>
   </div>
 </div>
 
