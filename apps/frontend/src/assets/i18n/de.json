@@ -19,6 +19,7 @@
   "confirm": "Bestätigen",
   "filter-by": "Filtern nach...",
   "hour": "Uhr",
+  "files-import": "Dateien importieren",
 
   "home": {
     "welcome": "Willkommen!",
@@ -95,7 +96,7 @@
     "group-name": "Name",
     "select-group": "Zugriffsrechte: Bitte links Gruppe wählen",
     "selected-group": "Zugriffsrechte für \"{{group}}\"",
-    "new-group": "Neue Gruppe für Arbeitsbereiche",
+    "new-group": "Neuer Arbeitsbereich",
     "group-created": "Arbeitsbereichsgruppe hinzugefügt",
     "group-not-created": "Arbeitsbereichsgruppe konnte nicht hinzugefügt werden",
     "edit-group": "Arbeitsbereichsgruppe ändern",
