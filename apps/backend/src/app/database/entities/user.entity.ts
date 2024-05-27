@@ -16,19 +16,6 @@ class User {
 
   @Column({ type: 'varchar' })
     username: string;
-
-  @Column({
-    name: 'last_name', type: 'varchar'
-  })
-    lastName: string | null;
-
-  @Column({
-    name: 'first_name', type: 'varchar'
-  })
-    firstName: string | null;
-
-  @Column({ type: 'varchar' })
-    email: string | null;
 }
 
 export default User;

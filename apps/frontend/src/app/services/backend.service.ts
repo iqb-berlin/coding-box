@@ -1,7 +1,7 @@
 import { Injectable, Inject } from '@angular/core';
 import { HttpClient, HttpEventType } from '@angular/common/http';
 import {
-  catchError, map, Observable, of
+  catchError, map, Observable, of, switchMap
 } from 'rxjs';
 import { CreateUserDto } from '../../../api-dto/user/create-user-dto';
 import { AppService } from './app.service';
@@ -23,25 +23,44 @@ export class BackendService {
   ) {
   }
 
+  authHeader = { Authorization: `Bearer ${localStorage.getItem('id_token')}` };
+
   getDirectDownloadLink(): string {
     return `${this.serverUrl}packages/`;
   }
 
-  userRoles(): Observable<string> {
-    return this.http.get<string>(`${SERVER_URL}users/roles`);
+  keycloakLogin(user: CreateUserDto): Observable<boolean> {
+    return this.http.post<string>(`${this.serverUrl}keycloak-login`, user)
+      .pipe(
+        catchError(() => of(false)),
+        switchMap(loginToken => {
+          if (typeof loginToken === 'string') {
+            localStorage.setItem('id_token', loginToken);
+            return this.getAuthData()
+              .pipe(
+                map(authData => {
+                  this.appService.authData = authData;
+                  return true;
+                }),
+                catchError(() => of(false))
+              );
+          }
+          return of(loginToken);
+        })
+      );
   }
 
   login(user: CreateUserDto): Observable<string> {
-    return this.http.post<string>(`${SERVER_URL}login`, user);
+    return this.http.post<string>(`${SERVER_URL}login`, user,{ headers: this.authHeader });
   }
 
   getAuthData(): Observable<AuthDataDto> {
-    return this.http.get<AuthDataDto>(`${SERVER_URL}auth-data`);
+    return this.http.get<AuthDataDto>(`${SERVER_URL}auth-data`, { headers: this.authHeader });
   }
 
   getUsersFull(): Observable<UserFullDto[]> {
     return this.http
-      .get<UserFullDto[]>(`${this.serverUrl}admin/users/full`)
+      .get<UserFullDto[]>(`${this.serverUrl}admin/users/full`, { headers: this.authHeader })
       .pipe(
         catchError(() => of([]))
       );
@@ -49,7 +68,7 @@ export class BackendService {
 
   addUser(newUser: CreateUserDto): Observable<boolean> {
     return this.http
-      .post(`${this.serverUrl}admin/users`, newUser)
+      .post(`${this.serverUrl}admin/users`, newUser,{ headers: this.authHeader })
       .pipe(
         catchError(() => of(false)),
         map(() => true)
@@ -58,7 +77,7 @@ export class BackendService {
 
   changeUserData(newData: UserFullDto): Observable<boolean> {
     return this.http
-      .patch(`${this.serverUrl}admin/users`, newData)
+      .patch(`${this.serverUrl}admin/users`, newData,{ headers: this.authHeader })
       .pipe(
         catchError(() => of(false)),
         map(() => true)
@@ -67,7 +86,7 @@ export class BackendService {
 
   deleteUsers(users: number[]): Observable<boolean> {
     return this.http
-      .delete(`${this.serverUrl}admin/users/${users.join(';')}`)
+      .delete(`${this.serverUrl}admin/users/${users.join(';')}`,{ headers: this.authHeader })
       .pipe(
         catchError(() => of(false)),
         map(() => true)
@@ -76,7 +95,7 @@ export class BackendService {
 
   getAllWorkspacesList(): Observable<WorkspaceInListDto[]> {
     return this.http
-      .get<WorkspaceInListDto[]>(`${this.serverUrl}admin/workspace`)
+      .get<WorkspaceInListDto[]>(`${this.serverUrl}admin/workspace`,{ headers: this.authHeader })
       .pipe(
         catchError(() => of([]))
       );
@@ -84,7 +103,7 @@ export class BackendService {
 
   getWorkspacesByUserList(userId:number): Observable<number[]> {
     return this.http
-      .get<number[]>(`${this.serverUrl}admin/users/${userId}/workspaces`)
+      .get<number[]>(`${this.serverUrl}admin/users/${userId}/workspaces`,{ headers: this.authHeader })
       .pipe(
         catchError(() => of([]))
       );
@@ -92,7 +111,7 @@ export class BackendService {
 
   addWorkspace(workspaceData: CreateWorkspaceDto): Observable<boolean> {
     return this.http
-      .post<boolean>(`${this.serverUrl}admin/workspace`, workspaceData)
+      .post<boolean>(`${this.serverUrl}admin/workspace`, workspaceData,{ headers: this.authHeader })
       .pipe(
         catchError(() => of(false))
       );
@@ -100,7 +119,7 @@ export class BackendService {
 
   deleteWorkspace(ids: number[]): Observable<boolean> {
     return this.http
-      .delete(`${this.serverUrl}admin/workspace/${ids.join(';')}`)
+      .delete(`${this.serverUrl}admin/workspace/${ids.join(';')}`,{ headers: this.authHeader })
       .pipe(
         catchError(() => of(false)),
         map(() => true)
@@ -109,7 +128,7 @@ export class BackendService {
 
   changeWorkspace(workspaceData: WorkspaceFullDto): Observable<boolean> {
     return this.http
-      .patch<boolean>(`${this.serverUrl}admin/workspace`, workspaceData)
+      .patch<boolean>(`${this.serverUrl}admin/workspace`, workspaceData,{ headers: this.authHeader })
       .pipe(
         catchError(() => of(false)),
         map(() => true)
@@ -124,6 +143,7 @@ export class BackendService {
       }
 
       return this.http.post<any>(`${SERVER_URL}admin/workspace/${workspaceId}/upload`, formData, {
+        headers: this.authHeader,
         reportProgress: true,
         observe: 'events'
       }).pipe(
@@ -148,35 +168,35 @@ export class BackendService {
   }
 
   getFilesList(workspaceId: number): Observable<any> {
-    return this.http.get<FilesDto[]>(`${SERVER_URL}admin/workspace/${workspaceId}/files`);
+    return this.http.get<FilesDto[]>(`${SERVER_URL}admin/workspace/${workspaceId}/files`,{ headers: this.authHeader });
   }
 
   getUnitDef(workspaceId: number, unit: string): Observable<any> {
-    return this.http.get<FilesDto[]>(`${SERVER_URL}admin/workspace/${workspaceId}/${unit}/unitDef`);
+    return this.http.get<FilesDto[]>(`${SERVER_URL}admin/workspace/${workspaceId}/${unit}/unitDef`,{ headers: this.authHeader });
   }
 
   getPlayer(workspaceId: number, player:string): Observable<any> {
-    return this.http.get<FilesDto[]>(`${SERVER_URL}admin/workspace/${workspaceId}/player/${player}`);
+    return this.http.get<FilesDto[]>(`${SERVER_URL}admin/workspace/${workspaceId}/player/${player}`,{ headers: this.authHeader });
   }
 
   getResponses(workspaceId: number, testPerson: string, unitId:string): Observable<any> {
-    return this.http.get<FilesDto[]>(`${SERVER_URL}admin/workspace/${workspaceId}/responses/${testPerson}/${unitId}`);
+    return this.http.get<FilesDto[]>(`${SERVER_URL}admin/workspace/${workspaceId}/responses/${testPerson}/${unitId}`,{ headers: this.authHeader });
   }
 
   getUnit(workspaceId: number, testPerson: string, unitId:string): Observable<any> {
-    return this.http.get<FilesDto[]>(`${SERVER_URL}admin/workspace/${workspaceId}/unit/${testPerson}/${unitId}`);
+    return this.http.get<FilesDto[]>(`${SERVER_URL}admin/workspace/${workspaceId}/unit/${testPerson}/${unitId}`,{ headers: this.authHeader });
   }
 
   getTestpersonUnits(workspaceId: number, testPerson: string): Observable<any> {
-    return this.http.get<any[]>(`${SERVER_URL}admin/workspace/${workspaceId}/units/${testPerson}`);
+    return this.http.get<any[]>(`${SERVER_URL}admin/workspace/${workspaceId}/units/${testPerson}`,{ headers: this.authHeader });
   }
 
   getTestGroups(workspaceId: number): Observable<any> {
-    return this.http.get<any[]>(`${SERVER_URL}admin/workspace/${workspaceId}/test-groups`);
+    return this.http.get<any[]>(`${SERVER_URL}admin/workspace/${workspaceId}/test-groups`,{ headers: this.authHeader });
   }
 
   getTestPersons(workspaceId: number, testGroup:string): Observable<any> {
-    return this.http.get<any[]>(`${SERVER_URL}admin/workspace/${workspaceId}/test-groups/${testGroup}`);
+    return this.http.get<any[]>(`${SERVER_URL}admin/workspace/${workspaceId}/test-groups/${testGroup}`,{ headers: this.authHeader });
   }
 
   // eslint-disable-next-line class-methods-use-this
@@ -197,7 +217,7 @@ export class BackendService {
     } = importOptions;
     return this.http
       // eslint-disable-next-line max-len
-      .get<boolean>(`${SERVER_URL}admin/workspace/importWorkspaceFiles?workspace=${workspace}&server=${server}&responses=${responses}&definitions=${definitions}&units=${units}&player=${player}&token=${token}`, {})
+      .get<boolean>(`${SERVER_URL}admin/workspace/importWorkspaceFiles?workspace=${workspace}&server=${server}&responses=${responses}&definitions=${definitions}&units=${units}&player=${player}&token=${token}`, { headers: this.authHeader })
       .pipe(
         catchError(() => of(false))
       );

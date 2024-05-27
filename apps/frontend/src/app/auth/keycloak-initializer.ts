@@ -15,7 +15,7 @@ export function initializer(keycloak: KeycloakService): () => Promise<boolean> {
         // onLoad: 'login-required',
         checkLoginIframe: false
       },
-      bearerExcludedUrls: []
+      bearerExcludedUrls: ['/replay', '/assets']
     };
 
     return () => keycloak.init(options);
@@ -28,11 +28,12 @@ export function initializer(keycloak: KeycloakService): () => Promise<boolean> {
     },
     loadUserProfileAtStartUp: true,
     initOptions: {
-      onLoad: 'login-required',
-      // onLoad: 'login-required',
+      onLoad: 'check-sso',
+      //onLoad: 'login-required',
       checkLoginIframe: false
     },
-    bearerExcludedUrls: []
+    //enableBearerInterceptor: true,
+    //bearerExcludedUrls: ['replay']
   };
 
   return () => keycloak.init(options);

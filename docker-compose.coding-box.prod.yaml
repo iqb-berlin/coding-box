@@ -18,7 +18,7 @@ services:
       - "traefik.docker.network=app-net"
     image: ${REGISTRY_PATH}iqbberlin/coding-box-backend:${TAG}
     volumes:
-      - backend_vol:/studio-lite-api/packages
+      - backend_vol:/coding-box-api/packages
     restart: always
 
   frontend:
