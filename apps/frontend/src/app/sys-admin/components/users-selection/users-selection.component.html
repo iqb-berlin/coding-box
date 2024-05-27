@@ -1,4 +1,5 @@
 
+  <div>
   @if (userObjectsDatasource.data.length) {
     <coding-box-search-filter
       [title]="'search-filter.filter-users' | translate"
@@ -49,3 +50,4 @@
     <mat-header-row *matHeaderRowDef="displayedUserColumns"></mat-header-row>
     <mat-row *matRowDef="let row; columns: displayedUserColumns;"></mat-row>
   </mat-table>
+  </div>

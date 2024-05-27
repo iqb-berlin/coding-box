@@ -3,6 +3,10 @@
   overflow-y: auto;
 }
 
+.admin-tab-content{
+  min-width:500px;
+}
+
 .object-list {
   height: calc(100% - 5px);
 }

@@ -13,7 +13,6 @@ import { SysAdminSettingsComponent } from './sys-admin/components/sys-admin-sett
 
 export const routes: Routes = [
   { path: '', redirectTo: 'home', pathMatch: 'full' },
-
   { path: 'home', component: HomeComponent },
   { path: 'replay/:testPerson/:unitId/:page', component: ReplayComponent },
   {
@@ -27,7 +26,7 @@ export const routes: Routes = [
       { path: 'workspace/:ws', component: WorkspacesComponent },
       { path: '**', component: UsersComponent }]
   }, {
-    path: 'workspace-admin',
+    path: 'workspace-admin/:ws',
     component: WsAdminComponent,
     children: [
       { path: '', redirectTo: 'test-files', pathMatch: 'full' },
@@ -36,7 +35,7 @@ export const routes: Routes = [
       { path: 'test-persons', component: TestPersonsComponent },
       { path: 'users', component: UsersComponent },
       { path: 'settings', component: WsSettingsComponent },
-      { path: '**', component: UsersComponent }
+      { path: '**', component: SelectReplayComponent }
     ]
   },
   { path: '**', component: HomeComponent }

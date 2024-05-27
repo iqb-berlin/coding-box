@@ -12,12 +12,12 @@ import {
   MatTableDataSource
 } from '@angular/material/table';
 import {
-  Component, Input, OnInit, ViewChild
+  Component, EventEmitter, Input, OnInit, Output, ViewChild
 } from '@angular/core';
 import { MatSort, MatSortHeader } from '@angular/material/sort';
 import { FormsModule } from '@angular/forms';
 import { SelectionModel } from '@angular/cdk/collections';
-import { NgFor, NgIf } from '@angular/common';
+import { JsonPipe, NgFor, NgIf } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MatButton } from '@angular/material/button';
@@ -32,14 +32,13 @@ import { AppService } from '../../../services/app.service';
 import { BackendService } from '../../../services/backend.service';
 import { WrappedIconComponent } from '../../../shared/wrapped-icon/wrapped-icon.component';
 
-
 @Component({
   selector: 'coding-box-workspaces-selection',
   templateUrl: './workspaces-selection.component.html',
   styleUrls: ['./workspaces-selection.component.scss'],
   standalone: true,
   // eslint-disable-next-line max-len
-  imports: [NgIf, SearchFilterComponent, MatTable, MatSort, MatColumnDef, MatHeaderCellDef, MatHeaderCell, MatCheckbox, MatCellDef, MatCell, MatSortHeader, MatHeaderRowDef, MatHeaderRow, MatRowDef, MatRow, MatButton, MatTooltip, WrappedIconComponent, NgFor, FormsModule, TranslateModule, IsSelectedPipe, IsAllSelectedPipe, HasSelectionValuePipe, IsSelectedIdPipe]
+  imports: [NgIf, SearchFilterComponent, MatTable, MatSort, MatColumnDef, MatHeaderCellDef, MatHeaderCell, MatCheckbox, MatCellDef, MatCell, MatSortHeader, MatHeaderRowDef, MatHeaderRow, MatRowDef, MatRow, MatButton, MatTooltip, WrappedIconComponent, NgFor, FormsModule, TranslateModule, IsSelectedPipe, IsAllSelectedPipe, HasSelectionValuePipe, IsSelectedIdPipe, JsonPipe]
 })
 export class WorkspacesSelectionComponent implements OnInit {
   objectsDatasource = new MatTableDataSource<WorkspaceInListDto>();
@@ -51,6 +50,7 @@ export class WorkspacesSelectionComponent implements OnInit {
 
   @ViewChild(MatSort) sort = new MatSort();
   @Input() selectedWorkspacesIds!: number[];
+  @Output() selectionChanged: EventEmitter<WorkspaceInListDto[]> = new EventEmitter<WorkspaceInListDto[]>();
 
   constructor(
     private appService: AppService,
@@ -72,6 +72,11 @@ export class WorkspacesSelectionComponent implements OnInit {
       this.tableSelectionCheckboxes.clear();
       this.tableSelectionRow.clear();
       this.appService.dataLoading = false;
+      if (this.selectedWorkspacesIds?.length > 0) {
+        this.tableSelectionCheckboxes.select(...workspaces
+          .filter(workspace => this.selectedWorkspacesIds.includes(workspace.id)));
+        this.selectionChanged.emit(this.tableSelectionCheckboxes.selected);
+      }
     });
   }
 
@@ -86,6 +91,11 @@ export class WorkspacesSelectionComponent implements OnInit {
     this.objectsDatasource.sort = this.sort;
   }
 
+  selectCheckbox(row: WorkspaceInListDto): void {
+    this.tableSelectionCheckboxes.toggle(row);
+    this.selectionChanged.emit(this.tableSelectionCheckboxes.selected);
+  }
+
   private isAllSelected(): boolean {
     const numSelected = this.tableSelectionCheckboxes.selected.length;
     const numRows = this.objectsDatasource ? this.objectsDatasource.data.length : 0;
@@ -96,6 +106,7 @@ export class WorkspacesSelectionComponent implements OnInit {
     this.isAllSelected() || !this.objectsDatasource ?
       this.tableSelectionCheckboxes.clear() :
       this.objectsDatasource.data.forEach(row => this.tableSelectionCheckboxes.select(row));
+    this.selectionChanged.emit(this.tableSelectionCheckboxes.selected);
   }
 
   toggleRowSelection(row: WorkspaceInListDto): void {
