@@ -60,19 +60,19 @@ export class WorkspaceService {
 
   async findFiles(id: number): Promise<FilesDto[]> {
     this.logger.log('Returning all files for workspace', id);
-    const files = await this.fileUploadRepository.find({ where: { workspace_id: 2 }, select: ['filename', 'file_size', 'file_type'] });
+    const files = await this.fileUploadRepository.find({ where: { workspace_id: 2 }, select: ['filename', 'file_size', 'file_type','created_at'] });
     return files;
   }
 
   async findPlayer(id: number, playerName:string): Promise<FilesDto[]> {
-    this.logger.log('Returning player for workspace', id);
-    const files = await this.fileUploadRepository.find({ where: { filename: playerName.toUpperCase() } });
+    this.logger.log(`Returning ${playerName} for workspace`, id);
+    const files = await this.fileUploadRepository.find({ where: { file_id: playerName.toUpperCase() } });
     return files;
   }
 
   async findUnitDef(unitId: string): Promise<FilesDto[]> {
     this.logger.log('Returning unit def for unit', unitId);
-    const files = await this.fileUploadRepository.find({ where: { filename: `${unitId}.voud` } });
+    const files = await this.fileUploadRepository.find({ where: { file_id: `${unitId}.VOUD` } });
     return files;
   }
 
@@ -86,7 +86,7 @@ export class WorkspaceService {
   async findUnit(id: number, testPerson:string, unitId:string): Promise<any[]> {
     this.logger.log('Returning unit for test person', testPerson);
     const response = await this.fileUploadRepository.find(
-      { where: { filename: `${unitId}.xml` } });
+      { where: { file_id: `${unitId}` } });
     return response;
   }
 

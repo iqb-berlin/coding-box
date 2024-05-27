@@ -2,6 +2,10 @@
   height: calc(100% - 35px);
   overflow-y: auto;
 }
+div{
+  min-width:500px;
+
+}
 
 .object-list {
   height: calc(100% - 5px);

@@ -60,6 +60,7 @@ CREATE TABLE "public"."file_upload"
   "filename"    VARCHAR(100),
   "file_size"   INTEGER,
   "file_type"   VARCHAR(100),
+  "file_id"     VARCHAR(100),
   "created_at"  TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
 -- rollback DROP TABLE "public"."file_upload;

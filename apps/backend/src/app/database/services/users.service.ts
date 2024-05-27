@@ -56,6 +56,23 @@ export class UsersService {
     return user;
   }
 
+  async setUserWorkspaces(userId: number, workspaceIds: number[]): Promise<any> {
+    this.logger.log(`Setting workspaces for user with id: ${userId}`);
+    const entries = workspaceIds.map(workspace => ({ userId: userId, workspaceId: workspace }));
+    const hasRights = this.workspaceUserRepository.find({ where: { userId: userId } });
+    if (hasRights) {
+      await this.workspaceUserRepository.delete({ userId: userId });
+    }
+    await this.workspaceUserRepository.save(entries);
+
+    // workspaceIds.forEach(workspaceId => {
+    //   const workspaceUser = new WorkspaceUser();
+    //   workspaceUser.userId = userId;
+    //   workspaceUser.workspaceId = workspaceId;
+    //   this.workspaceUserRepository.save(workspaceUser);
+    // });
+  }
+
   async hasUsers(): Promise<boolean> {
     this.logger.log('Checking hasUsers');
     const user = await this.usersRepository.findOne({

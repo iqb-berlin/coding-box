@@ -15,7 +15,7 @@ import { WorkspaceInListDto } from '../../../../../api-dto/workspaces/workspace-
 import {
   ConfirmDialogComponent,
   ConfirmDialogData
-} from '../../../../../iqb-components/src/lib/dialogs/confirm-dialog.component';
+} from '../../../shared/dialogs/confirm-dialog.component';
 
 
 @Component({
@@ -121,7 +121,7 @@ export class WorkspacesMenuComponent {
       width: '600px',
       minHeight: '600px',
       data: {
-        selectedUser: this.selectedRows,
+        selectedUser: this.selectedRows
       }
     });
 

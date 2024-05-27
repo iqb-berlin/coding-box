@@ -5,10 +5,10 @@
                           [checkedRows]="selectedRows"
                           (userAdded)="addUser($event)"
                          (userEdited)="editUser($event)"
-                         (usersDeleted)="deleteUsers($event)">
+                         (usersDeleted)="deleteUsers($event)"
+                         (setUserWorkspaceAccessRights) ="setUserWorkspaceAccessRight($event)">
   </coding-box-users-menu>
     <div class="fx-column-start-start">
-      <coding-box-search-filter></coding-box-search-filter>
       <coding-box-users-selection class="fx-flex-row-50 object-list"
                                   (userSelectionChanged)="userSelectionChanged($event)"
       ></coding-box-users-selection>

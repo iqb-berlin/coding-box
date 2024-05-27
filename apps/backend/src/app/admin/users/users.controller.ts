@@ -76,6 +76,18 @@ export class UsersController {
     return this.usersService.removeIds(ids);
   }
 
+  @Post(':userId/workspaces')
+  @ApiBearerAuth()
+  @ApiCreatedResponse({
+    description: 'Sends back the id of the new user in database',
+    type: Number
+  })
+  @ApiTags('admin users')
+  async setUserWorkspaces(@Body() workspaceIds: number[],
+    @Param('userId') userId: number) {
+    return this.usersService.setUserWorkspaces(userId, workspaceIds);
+  }
+
   @Post()
   @ApiBearerAuth()
   @ApiCreatedResponse({

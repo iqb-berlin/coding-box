@@ -193,6 +193,26 @@ export class UsersComponent implements OnInit {
     );
   }
 
+  setUserWorkspaceAccessRight(workspaces: number[]): void {
+    this.appService.dataLoading = true;
+    this.backendService.setUserWorkspaceAccessRight(this.selectedUsers[0], workspaces).subscribe(
+      respOk => {
+        if (respOk) {
+          this.snackBar.open(
+            this.translateService.instant('admin.workspace-access-right-set'),
+            '',
+            { duration: 1000 });
+        } else {
+          this.snackBar.open(
+            this.translateService.instant('admin.workspace-access-right-not-set'),
+            this.translateService.instant('error'),
+            { duration: 3000 });
+        }
+        this.appService.dataLoading = false;
+      }
+    );
+  }
+
   createWorkspaceList(): void {
     this.backendService.getAllWorkspacesList().subscribe(workspaces => {
       if (workspaces.length > 0) { this.userWorkspaces = workspaces; }

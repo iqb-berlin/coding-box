@@ -1,8 +1,14 @@
 <div class="fx-row-start-stretch container">
+<!--  <button mat-button-->
+<!--          [matTooltip]="'admin.add-user' | translate"-->
+<!--          (click)="addUser()">-->
+<!--    <coding-box-wrapped-icon icon="add"></coding-box-wrapped-icon>-->
+<!--  </button>-->
   <button mat-button
-          [matTooltip]="'admin.add-user' | translate"
-          (click)="addUser()">
-    <coding-box-wrapped-icon icon="add"></coding-box-wrapped-icon>
+          [disabled]="selectedUser.length > 1"
+          [matTooltip]="'admin.edit-user-data' | translate"
+          (click)="editUser()">
+    <coding-box-wrapped-icon icon="edit"></coding-box-wrapped-icon>
   </button>
   <button mat-button
           [disabled]="!selectedUser"
@@ -10,12 +16,7 @@
           (click)="deleteUsers()">
     <coding-box-wrapped-icon icon="delete"></coding-box-wrapped-icon>
   </button>
-  <button mat-button
-          [disabled]="selectedUser.length > 1"
-          [matTooltip]="'admin.edit-user-data' | translate"
-          (click)="editUser()">
-    <coding-box-wrapped-icon icon="edit"></coding-box-wrapped-icon>
-  </button>
+
   <button mat-button
           [disabled]="selectedUser.length > 1"
           [matTooltip]="'admin.set-user-access-rights' | translate"

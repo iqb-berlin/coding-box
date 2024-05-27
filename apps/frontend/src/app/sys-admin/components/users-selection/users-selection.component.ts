@@ -12,16 +12,19 @@ import {
   MatRow,
   MatTableDataSource
 } from '@angular/material/table';
-import { ViewChild, Component, OnInit, Output, EventEmitter } from '@angular/core';
+import {
+  ViewChild, Component, OnInit, Output, EventEmitter
+} from '@angular/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatSort, MatSortHeader } from '@angular/material/sort';
-import { FormsModule, UntypedFormGroup } from '@angular/forms';
+import { FormsModule } from '@angular/forms';
 import { TranslateService, TranslateModule } from '@ngx-translate/core';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MatButton } from '@angular/material/button';
 import { MatCheckbox } from '@angular/material/checkbox';
 import { SelectionModel } from '@angular/cdk/collections';
 import { JsonPipe } from '@angular/common';
+import { emit } from '@angular-devkit/build-angular/src/tools/esbuild/angular/compilation/parallel-worker';
 import { UsersMenuComponent } from '../users-menu/users-menu.component';
 import { HasSelectionValuePipe } from '../../pipes/hasSelectionValue.pipe';
 import { IsSelectedPipe } from '../../pipes/isSelected.pipe';
@@ -29,7 +32,6 @@ import { IsAllSelectedPipe } from '../../pipes/isAllSelected.pipe';
 import { WorkspacesComponent } from '../workspaces/workspaces.component';
 import { IsSelectedIdPipe } from '../../pipes/isSelectedId.pipe';
 import { WorkspacesSelectionComponent } from '../workspaces-selection/workspaces-selection.component';
-import { emit } from '@angular-devkit/build-angular/src/tools/esbuild/angular/compilation/parallel-worker';
 import { UserFullDto } from '../../../../../api-dto/user/user-full-dto';
 import { WorkspaceInListDto } from '../../../../../api-dto/workspaces/workspace-in-list-dto';
 import { BackendService } from '../../../services/backend.service';
@@ -46,7 +48,7 @@ import { SearchFilterComponent } from '../../../shared/search-filter/search-filt
   imports: [MatTable, MatSort, MatColumnDef, MatHeaderCellDef, MatHeaderCell, MatCheckbox, MatCellDef, MatCell, MatSortHeader, MatHeaderRowDef, MatHeaderRow, MatRowDef, MatRow, MatButton, MatTooltip, WrappedIconComponent, FormsModule, TranslateModule, UsersMenuComponent, HasSelectionValuePipe, IsSelectedPipe, IsAllSelectedPipe, SearchFilterComponent, JsonPipe, WorkspacesComponent, IsSelectedIdPipe, WorkspacesSelectionComponent]
 })
 export class UsersSelectionComponent implements OnInit {
-  selectedUsers : number[]= [];
+  selectedUsers : number[] = [];
   userObjectsDatasource = new MatTableDataSource<UserFullDto>();
   displayedUserColumns = ['selectCheckbox', 'name', 'displayName'];
   tableSelectionRow = new SelectionModel<UserFullDto>(false, []);
@@ -57,8 +59,7 @@ export class UsersSelectionComponent implements OnInit {
   @ViewChild(MatSort) sort = new MatSort();
   @Output() userSelectionChanged: EventEmitter< UserFullDto[]> = new EventEmitter< UserFullDto[]>();
 
-
-    constructor(
+  constructor(
     private backendService: BackendService,
     private appService: AppService,
     private snackBar: MatSnackBar,
@@ -119,12 +120,8 @@ export class UsersSelectionComponent implements OnInit {
   updateUserWorkspacesList(userId: number): void {
     if (this.tableSelectionCheckboxes.selected.length === 1) {
       this.backendService.getWorkspacesByUserList(userId).subscribe(workspaces => {
-        console.log(workspaces, 'workspaces')
-        this.filteredUserWorkspaces = this.userWorkspaces.filter(workspace => {
-          return workspaces.includes(workspace.id);
-        });
+        this.filteredUserWorkspaces = this.userWorkspaces.filter(workspace => workspaces.includes(workspace.id));
       });
-      console.log(this.userWorkspaces);
     }
   }
 
@@ -138,6 +135,6 @@ export class UsersSelectionComponent implements OnInit {
     this.isAllSelected() || !this.userObjectsDatasource ?
       this.tableSelectionCheckboxes.clear() :
       this.userObjectsDatasource.data.forEach(row => this.tableSelectionCheckboxes.select(row));
-      this.userSelectionChanged.emit(this.tableSelectionCheckboxes.selected)
+    this.userSelectionChanged.emit(this.tableSelectionCheckboxes.selected);
   }
 }
