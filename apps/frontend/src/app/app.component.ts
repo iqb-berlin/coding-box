@@ -45,7 +45,7 @@ export class AppComponent implements OnInit {
 
   async keycloakLogin(user: CreateUserDto): Promise<void> {
     this.errorMessage = '';
-    this.appService.dataLoading = true;
+    //this.appService.dataLoading = true;
     this.appService.errorMessagesDisabled = true;
     // const initLoginMode = !this.appService.appConfig.hasUsers;
     this.backendService.keycloakLogin(user).subscribe(async ok => {

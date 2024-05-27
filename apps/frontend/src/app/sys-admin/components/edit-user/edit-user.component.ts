@@ -27,11 +27,8 @@ export class EditUserComponent {
   constructor(private fb: UntypedFormBuilder,
               @Inject(MAT_DIALOG_DATA) public data: any) {
     this.editUserForm = this.fb.group({
-      name: this.fb.control(this.data.name,
-        [Validators.required]),
-      lastName: this.fb.control(this.data.lastName),
-      firstName: this.fb.control(this.data.firstName),
-
+      name: this.fb.control(this.data.name, [Validators.required]),
+      isAdmin: this.fb.control(this.data.isAdmin, [Validators.required]),
     });
   }
 }

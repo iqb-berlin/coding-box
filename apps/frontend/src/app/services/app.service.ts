@@ -39,5 +39,5 @@ export const standardLogo: AppLogoDto = {
   alt: 'Zur Startseite',
   // eslint-disable-next-line max-len
   bodyBackground: 'linear-gradient(180deg, rgba(7,70,94,1) 0%, rgba(6,112,123,1) 24%, rgba(1,192,229,1) 85%)',
-  boxBackground: 'lightgray'
+  boxBackground: 'lightgray',
 };

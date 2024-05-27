@@ -3,24 +3,12 @@
   overflow-y: auto;
 }
 
-.object-list {
-  height: calc(100% - 5px);
+mat-table{
+  max-height: 600px;
+  overflow-y: scroll;
 }
 
-.secondary-cell {
-  color: gray;
-}
-
-.fx-flex-row-fix-70 {
-  flex: 1 1 70px;
-  box-sizing: border-box;
-  max-width: 70px;
-  min-width: 70px;
-}
-
-.selected {
-  background-color: #00606415;
-  &:hover {
-    background-color: #00606415 !important;
-  }
+.container{
+  margin:20px;
+  max-height: 78vh;
 }

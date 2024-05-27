@@ -11,11 +11,12 @@
   }
   <div class="fx-row-space-between-center app-header">
       <a [routerLink]="['/']" [attr.aria-label]="'home.go-home' | translate">
-        <img [src]="appService.appLogo?.data"
+        <img [src]="appService.appLogo.data"
              [matTooltip]="appService.appLogo ? appService.appLogo.alt : 'home.home-page' | translate"
              [alt]="appService.appLogo ? appService.appLogo.alt : 'home.home-page' | translate"/>
       </a>
     <h1 [style]="{color:'lightgrey',fontSize:'30px'}">Kodierbox</h1>
+
     <div class="admin">
       <button  [style]="{color:'lightgrey'}" mat-button class="icon-button-large"
               [routerLink]="['/admin']"
