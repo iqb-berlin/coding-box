@@ -16,9 +16,8 @@ export class AppInfoComponent {
   @Input() introHtml!: SafeUrl | undefined;
   @Input() appName!: string;
   @Input() appVersion!: string;
-  @Input() userName!: string;
-  @Input() userLongName!: string;
+  @Input() userName!: string | undefined;
+  @Input() userLongName!: string | undefined;
   @Input() isUserLoggedIn!: boolean;
   @Input() isAdmin!: boolean;
-  @Input() hasReviews!: boolean;
 }

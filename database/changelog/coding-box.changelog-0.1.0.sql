@@ -44,6 +44,7 @@ CREATE TABLE "public"."responses"
   "unit_id"      VARCHAR(50) NOT NULL,
   "test_person"  VARCHAR(100),
   "test_group"   VARCHAR(100),
+  "workspace_id" INTEGER     NOT NULL,
   "responses"    JSONB,
   "created_at"  TIMESTAMP WITH TIME ZONE DEFAULT now()
 );

@@ -3,20 +3,23 @@ import { WorkspaceFullDto } from './workspaces/workspace-full-dto';
 
 export class AuthDataDto {
   @ApiProperty()
-    userId!: number;
+    userId!: string;
 
   @ApiProperty()
     userName!: string;
 
   @ApiProperty()
-    userLongName!: string;
+    email!: string;
+
+  @ApiProperty()
+    firstName!: string;
+
+  @ApiProperty()
+    lastName!: string;
 
   @ApiProperty()
     isAdmin!: boolean;
 
   @ApiProperty()
-    workspaces!: WorkspaceFullDto[];
+    workspaces!: WorkspaceFullDto[] | [];
 }
-
-
-

@@ -4,12 +4,13 @@
     <li>{{'home.appName' | translate: {name: appName} }} {{'home.appVersion' | translate: {version: appVersion} }}</li>
     @if (!isUserLoggedIn) {
       <li>
-        {{(hasReviews ? 'home.logged-in-for-review' : 'home.not-logged-in') | translate}}
+        nicht angemeldet
       </li>
     }
+    {{isUserLoggedIn}}
     @if (isUserLoggedIn) {
       <li>
-        {{'home.logged-in-as' | translate: {name: (userLongName ? userName + ' - ' + userLongName: userName) } }}
+        {{'Angemeldet als: ' + userLongName }}
       </li>
     }
     @if (isAdmin) {

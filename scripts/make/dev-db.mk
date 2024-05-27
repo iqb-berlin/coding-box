@@ -44,8 +44,8 @@ dev-db-volumes-clean:
 
 ## Remove all unused (not just dangling) db and liquibase images!
 dev-db-images-clean:
-	if test "$(shell docker images -f reference=studio-lite-db -f reference=studio-lite-liquibase -q)";\
-		then docker rmi $(shell docker images -f reference=studio-lite-db -f reference=studio-lite-liquibase -q);\
+	if test "$(shell docker images -f reference=coding-box-db -f reference=coding-box-liquibase -q)";\
+		then docker rmi $(shell docker images -f reference=coding-box-db -f reference=coding-box-liquibase -q);\
 	fi
 
 ## Outputs the count of changesets that have not been deployed
@@ -59,7 +59,7 @@ dev-db-update-status:
 				--classpath=changelog\
 				--logLevel=info\
 			status\
-				--changelogFile=studio-lite.changelog-root.xml\
+				--changelogFile=coding-box.changelog-root.xml\
 				--url=jdbc:postgresql://db:5432/$(POSTGRES_DB)\
 				--username=$(POSTGRES_USER)\
 				--password=$(POSTGRES_PASSWORD)
@@ -75,7 +75,7 @@ dev-db-update-history:
 				--classpath=changelog\
 				--logLevel=info\
 			history\
-				--changelogFile=studio-lite.changelog-root.xml\
+				--changelogFile=coding-box.changelog-root.xml\
 				--url=jdbc:postgresql://db:5432/$(POSTGRES_DB)\
 				--username=$(POSTGRES_USER)\
 				--password=$(POSTGRES_PASSWORD)
@@ -91,7 +91,7 @@ dev-db-validate-changelog:
 				--classpath=changelog\
 				--logLevel=info\
 			validate\
-				--changelogFile=studio-lite.changelog-root.xml\
+				--changelogFile=coding-box.changelog-root.xml\
 				--url=jdbc:postgresql://db:5432/$(POSTGRES_DB)\
 				--username=$(POSTGRES_USER)\
 				--password=$(POSTGRES_PASSWORD)
@@ -107,7 +107,7 @@ dev-db-update-display-sql:
 				--classpath=changelog\
 				--logLevel=info\
 			updateSQL\
-				--changelogFile=studio-lite.changelog-root.xml\
+				--changelogFile=coding-box.changelog-root.xml\
 				--url=jdbc:postgresql://db:5432/$(POSTGRES_DB)\
 				--username=$(POSTGRES_USER)\
 				--password=$(POSTGRES_PASSWORD)
@@ -123,7 +123,7 @@ dev-db-update-testing-rollback:
 				--classpath=changelog\
 				--logLevel=info\
 			updateTestingRollback\
-				--changelogFile=studio-lite.changelog-root.xml\
+				--changelogFile=coding-box.changelog-root.xml\
 				--url=jdbc:postgresql://db:5432/$(POSTGRES_DB)\
 				--username=$(POSTGRES_USER)\
 				--password=$(POSTGRES_PASSWORD)
@@ -139,7 +139,7 @@ dev-db-update:
 				--classpath=changelog\
 				--logLevel=info\
 			update\
-				--changelogFile=studio-lite.changelog-root.xml\
+				--changelogFile=coding-box.changelog-root.xml\
 				--url=jdbc:postgresql://db:5432/$(POSTGRES_DB)\
 				--username=$(POSTGRES_USER)\
 				--password=$(POSTGRES_PASSWORD)
@@ -155,7 +155,7 @@ dev-db-rollback-lastchangeset:
 				--classpath=changelog\
 				--logLevel=info\
 			rollbackCount 1\
-				--changelogFile=studio-lite.changelog-root.xml\
+				--changelogFile=coding-box.changelog-root.xml\
 				--url=jdbc:postgresql://db:5432/$(POSTGRES_DB)\
 				--username=$(POSTGRES_USER)\
 				--password=$(POSTGRES_PASSWORD)
@@ -171,7 +171,7 @@ dev-db-generate-docs:
 				--classpath=changelog\
 				--logLevel=info\
 			db-doc\
-				--changelogFile=studio-lite.changelog-root.xml\
+				--changelogFile=coding-box.changelog-root.xml\
 				--url=jdbc:postgresql://db:5432/$(POSTGRES_DB)\
 				--username=$(POSTGRES_USER)\
 				--password=$(POSTGRES_PASSWORD)\

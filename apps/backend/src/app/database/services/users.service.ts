@@ -29,10 +29,7 @@ export class UsersService {
         returnUsers.push(<UserFullDto>{
           id: user.id,
           name: user.username,
-          isAdmin: user.isAdmin,
-          lastName: user.lastName,
-          firstName: user.firstName,
-          email: user.email
+          isAdmin: user.isAdmin
         });
       }
     });
@@ -41,9 +38,6 @@ export class UsersService {
 
   async findUserWorkspaces(userId: number): Promise<any> {
     const workspaces: any = await this.workspaceUserRepository.find({ where: { userId: userId } });
-
-    console.log(workspaces);
-
     return workspaces.map(workspace => workspace.workspaceId);
   }
 
@@ -56,10 +50,7 @@ export class UsersService {
       return <UserFullDto>{
         id: user.id,
         name: user.username,
-        isAdmin: user.isAdmin,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        email: user.email
+        isAdmin: user.isAdmin
       };
     }
     return user;
@@ -86,10 +77,7 @@ export class UsersService {
       where: { username: user.username },
       select: {
         username: true,
-        id: true,
-        firstName: true,
-        lastName: true,
-        email: true
+        id: true
       }
     });
     this.logger.log(`Creating user with username: ${JSON.stringify(user)}`);
@@ -111,16 +99,15 @@ export class UsersService {
     return false;
   }
 
-  async getLongName(userId: number): Promise<string> {
+  async getUserByNameAndPassword(name: string, password: string): Promise<number | null> {
     const user = await this.usersRepository.findOne({
-      where: { id: userId },
-      select: { lastName: true, firstName: true, username: true }
+      where: { username: name, id: 1 },
+      select: { id: true }
     });
     if (user) {
-      if (user.lastName) return user.firstName ? `${user.lastName}, ${user.firstName}` : user.lastName;
-      return user.firstName || '';
+      return user.id;
     }
-    return '';
+    return null;
   }
 
   async remove(id: number | number[]): Promise<void> {
@@ -140,5 +127,53 @@ export class UsersService {
   setPassword(newPassword: string, token:string): Observable<any> {
     this.logger.log('Setting password for user with id:');
     return this.httpService.put('');
+  }
+
+  async createKeycloakUser(keycloakUser: CreateUserDto): Promise<number> {
+    const existingUser: User = await this.usersRepository.findOne({
+      where: { username: keycloakUser.username },
+      select: {
+        username: true,
+        id: true
+      }
+    });
+    const existingKeycloakUser: User = await this.usersRepository.findOne({
+      where: { identity: keycloakUser.identity, issuer: keycloakUser.issuer },
+      select: {
+        username: true,
+        id: true
+      }
+    });
+    if (existingUser) {
+      if (keycloakUser.issuer) existingUser.issuer = keycloakUser?.issuer;
+      if (keycloakUser.identity) existingUser.identity = keycloakUser?.identity;
+      await this.usersRepository.update(
+        { id: existingUser.id },
+        {
+          identity: keycloakUser.identity,
+          issuer: keycloakUser.issuer
+        }
+      );
+      this.logger.log(`Updating keycloak user with username: ${JSON.stringify(keycloakUser)}`);
+      return existingKeycloakUser.id;
+    }
+    if (existingKeycloakUser) {
+      if (keycloakUser.issuer) existingKeycloakUser.issuer = keycloakUser?.issuer;
+      if (keycloakUser.identity) existingKeycloakUser.identity = keycloakUser?.identity;
+      await this.usersRepository.update(
+        { id: existingKeycloakUser.id },
+        {
+          identity: keycloakUser.identity,
+          issuer: keycloakUser.issuer
+        }
+      );
+      this.logger.log(`Updating keycloak user with username: ${JSON.stringify(keycloakUser)}`);
+      return existingKeycloakUser.id;
+    }
+
+    this.logger.log(`Creating keycloak user with username: ${JSON.stringify(keycloakUser)}`);
+    const newUser = this.usersRepository.create(keycloakUser);
+    await this.usersRepository.save(newUser);
+    return newUser.id;
   }
 }

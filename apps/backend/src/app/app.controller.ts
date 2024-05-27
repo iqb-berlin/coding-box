@@ -1,6 +1,6 @@
 import {
   Body,
-  Controller, Get, Post
+  Controller, Get, Post, UseGuards
 } from '@nestjs/common';
 
 import * as fs from 'fs';
@@ -12,12 +12,15 @@ import { UserId, UserName } from './admin/users/user.decorator';
 import { AuthDataDto } from '../../../frontend/api-dto/auth-data-dto';
 import { UsersService } from './database/services/users.service';
 import { WorkspaceService } from './database/services/workspace.service';
+import { LocalAuthGuard } from './auth/local-auth.guard';
+import { JwtAuthGuard } from './auth/jwt-auth.guard';
 
 @Controller()
 export class AppController {
   constructor(public authService:AuthService, public userService: UsersService, public workspaceService:WorkspaceService) {}
 
   @Get('player')
+  @UseGuards(JwtAuthGuard)
   async getPlayer():Promise<string> {
     const fileContent = fs.readFileSync(path.resolve(process.cwd(), 'apps/backend/src/verona/iqb-player-aspect-2.4.1.html'), 'utf8');
     const stringifiedJSON = JSON.stringify(fileContent);
@@ -25,21 +28,31 @@ export class AppController {
   }
 
   @Get('auth-data')
+  @UseGuards(JwtAuthGuard)
   @ApiOkResponse({ description: 'User auth data successfully retrieved.' })
   @ApiTags('auth')
   async findCanDos(
     @UserId() userId: number, @UserName() userName: string
   ): Promise<AuthDataDto> {
-    return <AuthDataDto>{
+    const workspaces = await this.workspaceService.findAllUserWorkspaces(userId);
+    return <AuthDataDto><unknown>{
       userId: userId,
       userName: userName,
-      userLongName: await this.userService.getLongName(userId),
       isAdmin: await this.authService.isAdminUser(userId),
-      workspaces: await this.workspaceService.findAll(userId)
+      workspaces: workspaces
     };
   }
 
+  @Post('keycloak-login')
+  @ApiTags('auth')
+  @ApiOkResponse({ description: 'Keycloak login successful.' })
+  async keycloakLogin(@Body() user: CreateUserDto) {
+    const token = await this.authService.keycloakLogin(user);
+    return `"${token}"`;
+  }
+
   @Post('login')
+  @UseGuards(LocalAuthGuard)
   @ApiTags('auth')
   @ApiOkResponse({ description: 'Login successful.' })
   async login(@Body() user: CreateUserDto) {
@@ -48,6 +61,7 @@ export class AppController {
   }
 
   @Post('password')
+  @UseGuards(JwtAuthGuard)
   @ApiOkResponse({ description: 'Password successfully updated.' })
   @ApiTags('auth')
   async setPassword(@Body() new_password, token): Promise<any> {

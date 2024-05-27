@@ -1,9 +1,9 @@
-import { Component } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
 import { ReactiveFormsModule } from '@angular/forms';
-import { NgIf } from '@angular/common';
+import { JsonPipe, NgIf } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
 import { UnitPlayerComponent } from '../../replay/components/unit-player/unit-player.component';
 import { AppService } from '../../services/app.service';
@@ -14,12 +14,15 @@ import { UserWorkspacesAreaComponent } from '../../workspace/user-workspaces-are
   selector: 'coding-box-home',
   standalone: true,
   // eslint-disable-next-line max-len
-  imports: [MatFormFieldModule, MatInputModule, MatButtonModule, ReactiveFormsModule, NgIf, TranslateModule, UnitPlayerComponent, AppInfoComponent, UserWorkspacesAreaComponent],
+  imports: [MatFormFieldModule, MatInputModule, MatButtonModule, ReactiveFormsModule, NgIf, TranslateModule, UnitPlayerComponent, AppInfoComponent, UserWorkspacesAreaComponent, JsonPipe],
   templateUrl: './home.component.html',
   styleUrl: './home.component.scss'
 })
-export class HomeComponent {
+export class HomeComponent implements OnInit {
   constructor(
     public appService: AppService
   ) {}
+
+  ngOnInit(): void {
+  }
 }

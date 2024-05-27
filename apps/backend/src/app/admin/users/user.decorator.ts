@@ -3,13 +3,13 @@ import { createParamDecorator, ExecutionContext } from '@nestjs/common';
 export const UserId = createParamDecorator(
   (data: unknown, ctx: ExecutionContext) => {
     const request = ctx.switchToHttp().getRequest();
-    return 1;
+    return request.user.id;
   }
 );
 
 export const UserName = createParamDecorator(
   (data: unknown, ctx: ExecutionContext) => {
     const request = ctx.switchToHttp().getRequest();
-    return 'test';
+    return request.user.name;
   }
 );

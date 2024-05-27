@@ -11,6 +11,7 @@ import { AdminWorkspaceNotFoundException } from '../../exceptions/admin-workspac
 import FileUpload from '../entities/file_upload.entity';
 import { FilesDto } from '../../../../../frontend/api-dto/files/files.dto';
 import Responses from '../entities/responses.entity';
+import WorkspaceUser from '../entities/workspace_user.entity';
 
 export type Response = {
   groupname:string,
@@ -32,14 +33,29 @@ export class WorkspaceService {
     @InjectRepository(FileUpload)
     private fileUploadRepository: Repository<FileUpload>,
     @InjectRepository(Responses)
-    private responsesRepository:Repository<Responses>
+    private responsesRepository:Repository<Responses>,
+    @InjectRepository(WorkspaceUser)
+    private workspaceUsersRepository:Repository<WorkspaceUser>
   ) {
   }
 
-  async findAll(userId?: number): Promise<WorkspaceInListDto[]> {
+  async findAll(): Promise<WorkspaceInListDto[]> {
     this.logger.log('Returning all workspace groups.');
     const workspaces = await this.workspaceRepository.find({});
     return workspaces.map(workspace => ({ id: workspace.id, name: workspace.name }));
+  }
+
+  async findAllUserWorkspaces(userId: number): Promise<WorkspaceFullDto[]> {
+    console.log('Returning all workspaces for user', userId);
+    const workspaces = await this.workspaceUsersRepository.find({
+      where: { userId: userId }
+    });
+    if (workspaces.length > 0) {
+      const mapped = workspaces.map(workspace => (this.findOne(workspace.workspaceId)));
+      const res = await Promise.all(mapped);
+      return res;
+    }
+    return [];
   }
 
   async findFiles(id: number): Promise<FilesDto[]> {
@@ -93,15 +109,15 @@ export class WorkspaceService {
 
   async findOne(id: number): Promise<WorkspaceFullDto> {
     this.logger.log(`Returning workspace with id: ${id}`);
-    const workspaceGroup = await this.workspaceRepository.findOne({
+    const workspace = await this.workspaceRepository.findOne({
       where: { id: id },
       select: { id: true, name: true, settings: true }
     });
-    if (workspaceGroup) {
+    if (workspace) {
       return <WorkspaceFullDto>{
-        id: workspaceGroup.id,
-        name: workspaceGroup.name,
-        settings: workspaceGroup.settings
+        id: workspace.id,
+        name: workspace.name,
+        settings: workspace.settings
       };
     }
     throw new AdminWorkspaceNotFoundException(id, 'GET');

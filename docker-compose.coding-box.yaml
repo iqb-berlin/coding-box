@@ -26,7 +26,7 @@ services:
       "--username=$POSTGRES_USER",
       "--password=$POSTGRES_PASSWORD",
       "--classpath=changelog",
-      "--changeLogFile=studio-lite.changelog-root.xml",
+      "--changeLogFile=coding-box.changelog-root.xml",
       "update"
     ]
     networks:
