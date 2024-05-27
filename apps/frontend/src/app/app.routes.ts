@@ -9,6 +9,7 @@ import { SelectReplayComponent } from './ws-admin/select-replay/select-replay.co
 import { FileUploadComponent } from './ws-admin/file-upload/file-upload.component';
 import { TestPersonsComponent } from './ws-admin/test-persons/test-persons.component';
 import { WsSettingsComponent } from './ws-admin/ws-settings/ws-settings.component';
+import { SysAdminSettingsComponent } from './sys-admin/components/sys-admin-settings/sys-admin-settings.component';
 
 export const routes: Routes = [
   { path: '', redirectTo: 'home', pathMatch: 'full' },
@@ -21,6 +22,7 @@ export const routes: Routes = [
     children: [
       { path: '', redirectTo: 'users', pathMatch: 'full' },
       { path: 'users', component: UsersComponent },
+      { path: 'settings', component: SysAdminSettingsComponent },
       { path: 'workspaces', component: WorkspacesComponent },
       { path: 'workspace/:ws', component: WorkspacesComponent },
       { path: '**', component: UsersComponent }]
