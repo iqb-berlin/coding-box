@@ -8,6 +8,7 @@ import { WrappedIconComponent } from '../../../shared/wrapped-icon/wrapped-icon.
 import { AccountActionComponent } from '../account-action/account-action.component';
 import { AuthService } from '../../../auth/service/auth.service';
 import { ChangePasswordDirective } from '../../directives/change-password.directive';
+import { AppService } from '../../../services/app.service';
 
 @Component({
   selector: 'coding-box-user-menu',
@@ -19,11 +20,16 @@ import { ChangePasswordDirective } from '../../directives/change-password.direct
 })
 export class UserMenuComponent {
   constructor(
-    private authService: AuthService
+    private authService: AuthService,
+    private appService: AppService
   ) {
   }
-async logout(){
-  await this.authService.logout();
 
-}
+  async logout() {
+    await this.authService.logout();
+  }
+
+  async editAccount() {
+    await this.authService.redirectToProfile();
+  };
 }
