@@ -11,12 +11,12 @@ import {
 import { MatTableModule } from '@angular/material/table';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
-import { TestPersonsComponent } from './test-persons.component';
 import { environment } from '../../../environments/environment';
+import { TestGroupsComponent } from './test-groups.component';
 
 describe('UsersComponent', () => {
-  let component: TestPersonsComponent;
-  let fixture: ComponentFixture<TestPersonsComponent>;
+  let component: TestGroupsComponent;
+  let fixture: ComponentFixture<TestGroupsComponent>;
 
   @Component({ selector: 'coding-box-search-filter', template: '' })
   class MockSearchFilterComponent {
@@ -46,7 +46,7 @@ describe('UsersComponent', () => {
       ]
     }).compileComponents();
 
-    fixture = TestBed.createComponent(TestPersonsComponent);
+    fixture = TestBed.createComponent(TestGroupsComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
   });

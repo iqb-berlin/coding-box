@@ -92,8 +92,10 @@ export class WorkspaceService {
 
   async findTestGroups(id: number): Promise<any> {
     this.logger.log('Returning all test groups for workspace ', id);
-    const response = await this.responsesRepository.find({ select: ['test_group'] });
-    return Array.from(new Set(response.map(item => item.test_group)));
+    const response = await this.responsesRepository.find({ select: ['test_group', 'created_at'] });
+    const uniqueGroups = response.filter((obj1, i, arr) => response
+      .findIndex(obj2 => ['test_group'].every(key => obj2[key] === obj1[key])) === i);
+    return uniqueGroups;
   }
 
   async findTestPersons(id: number, testGroup:string): Promise<any> {

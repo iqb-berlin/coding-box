@@ -145,6 +145,7 @@
     "units-count": "Anzahl der Aufgaben",
     "test-files": "Testdateien",
     "test-persons": "Testpersonen",
+    "test-groups": "Testgruppen",
     "select-replay": "Replay"
   },
   "search-filter": {
@@ -153,6 +154,7 @@
     "delete-filter": "Suchbegriff zurücksetzen",
     "enter-filter": "Suchbegriff",
     "filter-test-persons": "Suche nach Testpersonen",
+    "filter-test-groups": "Suche nach Testgruppen",
     "filter-test-files": "Suche nach Testdateien"
   },
   "access-rights": {
@@ -168,6 +170,11 @@
     "file_type": "Dateityp",
     "file_size": "Dateigröße",
     "created_at": "Erstellt am"
+  },
+
+  "test_group": {
+    "test_group": "Testgruppe",
+    "created_at": "Hochgeladen am"
   },
 
   "workspace": {

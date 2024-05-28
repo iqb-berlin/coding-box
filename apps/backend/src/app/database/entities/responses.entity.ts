@@ -1,9 +1,9 @@
-import { Column, Entity, PrimaryColumn, PrimaryGeneratedColumn } from 'typeorm';
+import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
 
 @Entity()
 class Responses {
   @PrimaryGeneratedColumn('increment')
-  public id: number;
+    id: number;
 
   @Column({ type: 'varchar' })
     test_person!: string;
@@ -12,7 +12,13 @@ class Responses {
     unit_id!: string;
 
   @Column({ type: 'varchar' })
-  test_group!: string;
+    test_group!: string;
+
+  @Column({ type: 'integer' })
+    workspace_id!: number;
+
+  @Column({ type: 'timestamp' })
+    created_at: number;
 
   @Column({
     type: 'varchar'

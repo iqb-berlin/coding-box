@@ -33,8 +33,8 @@ export class SelectReplayComponent implements OnInit {
   selectedTestGroup = '';
 
   ngOnInit(): void {
-    this.backendService.getTestGroups(1).subscribe(data => {
-      this.testGroups = data;
+    this.backendService.getTestGroups(1).subscribe(groups => {
+      this.testGroups = groups.map((g:any) => g.test_group);
     });
   }
 
@@ -52,13 +52,11 @@ export class SelectReplayComponent implements OnInit {
     });
   }
 
-  changedUnit(unit:any): void {
+  changedUnit(unit:string): void {
     this.selectedUnit = unit;
-    console.log('unit', unit);
   }
 
   replay(): void {
-    console.log('replay', this.selectedTestPerson, this.selectedUnit);
     this.selectedUnit = this.selectedUnit.toUpperCase();
     this.router.navigate([`/replay/${this.selectedTestPerson}/${this.selectedUnit}/1`]);
   }
