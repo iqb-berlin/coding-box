@@ -22,11 +22,11 @@ import { SelectionModel } from '@angular/cdk/collections';
 import { TestCenterImportComponent } from '../test-center-import/test-center-import.component';
 import { AppService } from '../../services/app.service';
 import { BackendService } from '../../services/backend.service';
-import { HasSelectionValuePipe } from '../../sys-admin/pipes/hasSelectionValue.pipe';
-import { IsAllSelectedPipe } from '../../sys-admin/pipes/isAllSelected.pipe';
-import { IsSelectedPipe } from '../../sys-admin/pipes/isSelected.pipe';
-import { WorkspaceInListDto } from '../../../../api-dto/workspaces/workspace-in-list-dto';
+import { HasSelectionValuePipe } from '../../shared/pipes/hasSelectionValue.pipe';
+import { IsAllSelectedPipe } from '../../shared/pipes/isAllSelected.pipe';
+import { IsSelectedPipe } from '../../shared/pipes/isSelected.pipe';
 import { SearchFilterComponent } from '../../shared/search-filter/search-filter.component';
+import { FileSizePipe } from '../../shared/pipes/filesize.pipe';
 
 @Component({
   selector: 'coding-box-file-upload',
