@@ -26,9 +26,9 @@ import { AppService } from '../../../services/app.service';
 import { BackendService } from '../../../services/backend.service';
 import { WrappedIconComponent } from '../../../shared/wrapped-icon/wrapped-icon.component';
 import { SearchFilterComponent } from '../../../shared/search-filter/search-filter.component';
-import { HasSelectionValuePipe } from '../../../sys-admin/pipes/hasSelectionValue.pipe';
-import { IsAllSelectedPipe } from '../../../sys-admin/pipes/isAllSelected.pipe';
-import { IsSelectedPipe } from '../../../sys-admin/pipes/isSelected.pipe';
+import { HasSelectionValuePipe } from '../../../shared/pipes/hasSelectionValue.pipe';
+import { IsAllSelectedPipe } from '../../../shared/pipes/isAllSelected.pipe';
+import { IsSelectedPipe } from '../../../shared/pipes/isSelected.pipe';
 import { UserFullDto } from '../../../../../api-dto/user/user-full-dto';
 
 
