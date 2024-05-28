@@ -1,9 +1,7 @@
-import { Component} from '@angular/core';
-import { RouterLink, RouterLinkActive, RouterOutlet
-} from '@angular/router';
+import { Component } from '@angular/core';
+import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatTabLink, MatTabNav, MatTabNavPanel } from '@angular/material/tabs';
-
 
 @Component({
   selector: 'coding-box-ws-admin',

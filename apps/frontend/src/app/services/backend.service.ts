@@ -130,6 +130,15 @@ export class BackendService {
       );
   }
 
+  deleteFiles(ids: any): Observable<boolean> {
+    return this.http
+      .delete(`${this.serverUrl}admin/workspace/${ids.join(';')}`, { headers: this.authHeader })
+      .pipe(
+        catchError(() => of(false)),
+        map(() => true)
+      );
+  }
+
   deleteTestGroups(ids: any): Observable<boolean> {
     return this.http
       .delete(`${this.serverUrl}admin/workspace/${ids.join(';')}`, { headers: this.authHeader })
@@ -146,6 +155,9 @@ export class BackendService {
         catchError(() => of(false)),
         map(() => true)
       );
+  }
+
+
   changeWorkspace(workspaceData: WorkspaceFullDto): Observable<boolean> {
     return this.http
       .patch<boolean>(`${this.serverUrl}admin/workspace`, workspaceData, { headers: this.authHeader })
