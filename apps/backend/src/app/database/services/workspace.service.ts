@@ -60,7 +60,8 @@ export class WorkspaceService {
 
   async findFiles(id: number): Promise<FilesDto[]> {
     this.logger.log('Returning all files for workspace', id);
-    const files = await this.fileUploadRepository.find({ where: { workspace_id: 2 }, select: ['filename', 'file_size', 'file_type','created_at'] });
+    const files = await this.fileUploadRepository
+      .find({ where: { workspace_id: 2 }, select: ['filename', 'file_size', 'file_type', 'created_at'] });
     return files;
   }
 

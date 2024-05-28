@@ -1,12 +1,14 @@
-import { Component, OnInit, ViewChild } from '@angular/core';
-import { TranslateModule } from '@ngx-translate/core';
-import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { MatAnchor } from '@angular/material/button';
+import {
+  Component, OnInit, ViewChild
+} from '@angular/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { ActivatedRoute, RouterLink } from '@angular/router';
+import { MatAnchor, MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { Subscription } from 'rxjs';
 import { MatDialog } from '@angular/material/dialog';
 import { UntypedFormGroup } from '@angular/forms';
-import { MatSort } from '@angular/material/sort';
+import { MatSort, MatSortHeader } from '@angular/material/sort';
 import {
   MatCell,
   MatCellDef,
@@ -19,6 +21,9 @@ import {
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { MatCheckbox } from '@angular/material/checkbox';
 import { SelectionModel } from '@angular/cdk/collections';
+import { DatePipe, JsonPipe } from '@angular/common';
+import { MatTooltip } from '@angular/material/tooltip';
+import { MatSnackBar } from '@angular/material/snack-bar';
 import { TestCenterImportComponent } from '../test-center-import/test-center-import.component';
 import { AppService } from '../../services/app.service';
 import { BackendService } from '../../services/backend.service';
@@ -27,28 +32,34 @@ import { IsAllSelectedPipe } from '../../shared/pipes/isAllSelected.pipe';
 import { IsSelectedPipe } from '../../shared/pipes/isSelected.pipe';
 import { SearchFilterComponent } from '../../shared/search-filter/search-filter.component';
 import { FileSizePipe } from '../../shared/pipes/filesize.pipe';
+import { WrappedIconComponent } from '../../shared/wrapped-icon/wrapped-icon.component';
+import { FilesInListDto } from '../../../../api-dto/files/files-in-list.dto';
 
 @Component({
   selector: 'coding-box-file-upload',
   templateUrl: './file-upload.component.html',
   styleUrls: ['./file-upload.component.scss'],
   standalone: true,
-  imports: [MatAnchor, RouterLink, TranslateModule, MatIcon, TestCenterImportComponent, MatProgressSpinner, MatTable, MatColumnDef, MatHeaderCellDef, MatCellDef, MatHeaderRowDef, MatRowDef, MatHeaderCell, MatCell, MatSort, MatHeaderRow, MatRow, HasSelectionValuePipe, IsAllSelectedPipe, IsSelectedPipe, MatCheckbox, SearchFilterComponent]
+  // eslint-disable-next-line max-len
+  imports: [MatAnchor, RouterLink, TranslateModule, MatIcon, TestCenterImportComponent, MatProgressSpinner, MatTable, MatColumnDef, MatHeaderCellDef, MatCellDef, MatHeaderRowDef, MatRowDef, MatHeaderCell, MatCell, MatSort, MatHeaderRow, MatRow, HasSelectionValuePipe, IsAllSelectedPipe, IsSelectedPipe, MatCheckbox, SearchFilterComponent, MatSortHeader, DatePipe, FileSizePipe, MatButton, WrappedIconComponent, MatTooltip, JsonPipe]
 })
-export class FileUploadComponent implements OnInit{
+export class FileUploadComponent implements OnInit {
   private uploadSubscription: Subscription | null = null;
 
   constructor(public appService: AppService,
               public backendService: BackendService,
               private TestCenterImportDialog: MatDialog,
+              private snackBar: MatSnackBar,
+              private translateService: TranslateService,
               private route: ActivatedRoute
   ) {
   }
 
-  tableSelectionCheckboxes = new SelectionModel<WorkspaceInListDto>(true, []);
-  tableSelectionRow = new SelectionModel<WorkspaceInListDto>(false, []);
+  selectedRows!: FilesInListDto[];
+  tableSelectionCheckboxes = new SelectionModel<FilesInListDto>(true, []);
+  tableSelectionRow = new SelectionModel<FilesInListDto>(false, []);
   @ViewChild(MatSort) sort = new MatSort();
-  displayedColumns: string[] = ['filename', 'file_size', 'file_type', 'created_at'];
+  displayedColumns: string[] = ['selectCheckbox', 'filename', 'file_size', 'file_type', 'created_at'];
   dataSource!: MatTableDataSource<any>;
   isLoading = false;
 
@@ -68,12 +79,12 @@ export class FileUploadComponent implements OnInit{
       });
   }
 
-  private setObjectsDatasource(groups: WorkspaceInListDto[]): void {
-    this.dataSource = new MatTableDataSource(groups);
+  private setObjectsDatasource(files: FilesInListDto[]): void {
+    this.dataSource = new MatTableDataSource(files);
     this.dataSource
-      .filterPredicate = (groupList: WorkspaceInListDto, filter) => [
+      .filterPredicate = (filesList: FilesInListDto, filter) => [
         'name'
-      ].some(column => (groupList[column as keyof WorkspaceInListDto] as string || '')
+      ].some(column => (filesList[column as keyof FilesInListDto] as string || '')
         .toLowerCase()
         .includes(filter));
     this.dataSource.sort = this.sort;
@@ -91,7 +102,7 @@ export class FileUploadComponent implements OnInit{
       this.dataSource.data.forEach(row => this.tableSelectionCheckboxes.select(row));
   }
 
-  toggleRowSelection(row: WorkspaceInListDto): void {
+  toggleRowSelection(row: FilesInListDto): void {
     this.tableSelectionRow.toggle(row);
   }
 
@@ -133,5 +144,26 @@ export class FileUploadComponent implements OnInit{
       }
       return false;
     });
+  }
+
+  deleteFiles(): void {
+    const filenames = this.tableSelectionCheckboxes.selected.map(file => file.filename);
+    this.backendService.deleteFiles(this.tableSelectionCheckboxes.selected).subscribe(
+      respOk => {
+        if (respOk) {
+          this.snackBar.open(
+            this.translateService.instant('admin.workspace-deleted'),
+            '',
+            { duration: 1000 });
+          // this.updateWorkspaceList();
+        } else {
+          this.snackBar.open(
+            this.translateService.instant('admin.workspace-not-deleted'),
+            this.translateService.instant('error'),
+            { duration: 1000 });
+          this.appService.dataLoading = false;
+        }
+      }
+    );
   }
 }

@@ -1,6 +1,4 @@
-.scroll-area {
-  overflow-y: auto;
-}
+
 
 .full-width {
   min-width: 100%;
@@ -10,22 +8,16 @@ coding-box-search-filter {
 min-width:100%;
 }
 
-.mat-column-file-upload.file_size {
-  flex: 0 0 50%;
-}
-.mat-column-productName {
-  flex: 0 0 50%;
-}
-
 mat-table{
-  min-width:100%;
-  min-height:100%;
-  overflow: scroll;
+  max-width:78vh;
+  max-height:78vh;
+  overflow-y: scroll;
 }
 
 .container{
   margin:20px;
   max-height: 78vh;
+  min-height: 78vh;
 }
 
 a{
