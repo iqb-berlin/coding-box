@@ -7,9 +7,10 @@ import { WorkspacesComponent } from './sys-admin/components/workspaces/workspace
 import { WsAdminComponent } from './ws-admin/ws-admin/ws-admin.component';
 import { SelectReplayComponent } from './ws-admin/select-replay/select-replay.component';
 import { FileUploadComponent } from './ws-admin/file-upload/file-upload.component';
-import { TestPersonsComponent } from './ws-admin/test-persons/test-persons.component';
 import { WsSettingsComponent } from './ws-admin/ws-settings/ws-settings.component';
 import { SysAdminSettingsComponent } from './sys-admin/components/sys-admin-settings/sys-admin-settings.component';
+import { TestGroupsComponent } from './ws-admin/test-groups/test-groups.component';
+import { WsUsersComponent } from './ws-admin/ws-users/ws-users.component';
 
 export const routes: Routes = [
   { path: '', redirectTo: 'home', pathMatch: 'full' },
@@ -32,8 +33,8 @@ export const routes: Routes = [
       { path: '', redirectTo: 'test-files', pathMatch: 'full' },
       { path: 'select-replay', component: SelectReplayComponent },
       { path: 'test-files', component: FileUploadComponent },
-      { path: 'test-persons', component: TestPersonsComponent },
-      { path: 'users', component: UsersComponent },
+      { path: 'test-groups', component: TestGroupsComponent },
+      { path: 'users', component: WsUsersComponent },
       { path: 'settings', component: WsSettingsComponent },
       { path: '**', component: SelectReplayComponent }
     ]
