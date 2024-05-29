@@ -248,10 +248,10 @@ export class BackendService {
                        server:string,
                        token:string,
                        importOptions:any): Observable<any> {
-    const { units, responses, definitions, player } = importOptions;
+    const { units, responses, definitions, player, codings } = importOptions;
     return this.http
       // eslint-disable-next-line max-len
-      .get<boolean>(`${SERVER_URL}admin/workspace/importWorkspaceFiles?workspace=${workspace}&server=${server}&responses=${responses}&definitions=${definitions}&units=${units}&player=${player}&token=${token}`, { headers: this.authHeader })
+      .get<boolean>(`${SERVER_URL}admin/workspace/${workspace_id}/importWorkspaceFiles?tc_workspace=${testCenterWorkspace}&server=${server}&responses=${responses}&definitions=${definitions}&units=${units}&codings=${codings}&player=${player}&token=${token}`, { headers: this.authHeader })
       .pipe(
         catchError(() => of(false))
       );

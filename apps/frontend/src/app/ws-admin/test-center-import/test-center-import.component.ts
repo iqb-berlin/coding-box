@@ -62,7 +62,7 @@ type Ressource = {
 };
 
 export type ImportOptions = {
-  responses:string, definitions:string, units:string, player:string
+  responses:string, definitions:string, units:string, player:string, codings:string
 };
 
 @Component({
@@ -96,7 +96,8 @@ export class TestCenterImportComponent {
       responses: this.fb.control(true),
       definitions: this.fb.control(true),
       units: this.fb.control(true),
-      player: this.fb.control(true)
+      player: this.fb.control(true),
+      codings: this.fb.control(true)
 
     });
   }
@@ -124,12 +125,14 @@ export class TestCenterImportComponent {
     const responses = this.importFilesForm.get('responses')?.value;
     const player = this.importFilesForm.get('player')?.value;
     const units = this.importFilesForm.get('units')?.value;
+    const codings = this.importFilesForm.get('codings')?.value;
 
     const importOptions = {
       definitions: definitions,
       responses: responses,
       units: units,
-      player: player
+      player: player,
+      codings: codings
     };
     this.appService.dataLoading = true;
     this.backendService.importWorkspaceFiles(workspace, testcenter, this.authToken, importOptions)

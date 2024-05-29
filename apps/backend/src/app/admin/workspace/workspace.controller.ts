@@ -49,12 +49,14 @@ export class WorkspaceController {
       @Query('responses') responses: string,
       @Query('player') player: string,
       @Query('units') units: string)
+      @Query('codings') codings: string)
       : Promise<boolean> {
     const importOptions:ImportOptions = {
       definitions: definitions,
       responses: responses,
       units: units,
-      player: player
+      player: player,
+      codings: codings
     };
 
     return this.testcenterService.importWorkspaceFiles(workspace, server, token, importOptions);
