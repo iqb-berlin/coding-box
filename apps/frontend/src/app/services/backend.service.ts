@@ -238,7 +238,7 @@ export class BackendService {
   // eslint-disable-next-line class-methods-use-this
   authenticate(username:string, password:string, server:string): Observable<any> {
     return this.http
-      .post<any>(`${SERVER_URL}admin/workspace/authenticate`, { username, password, server })
+      .post<any>(`${SERVER_URL}tc_authentication`, { username, password, server })
       .pipe(
         catchError(() => of(false))
       );
