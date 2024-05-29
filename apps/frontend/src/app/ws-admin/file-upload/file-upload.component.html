@@ -23,7 +23,7 @@
     <mat-spinner></mat-spinner>
   }
   @if (!isLoading) {
-    @if (dataSource.data.length) {
+    @if (dataSource && dataSource.data.length) {
       <coding-box-search-filter
         [title]="'search-filter.filter-test-files' | translate"
         (valueChange)="dataSource.filter = $event.trim().toLowerCase()">
