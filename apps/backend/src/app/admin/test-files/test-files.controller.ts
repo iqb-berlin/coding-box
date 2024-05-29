@@ -1,5 +1,6 @@
 import {
-  Controller, Post, UploadedFile, UseInterceptors
+  Body,
+  Controller, Delete, Param, Patch, Post, UploadedFile, UseInterceptors
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -14,7 +15,13 @@ export class TestFilesController {
   @Post()
   @UseInterceptors(FileInterceptor('file'))
   @ApiTags('ws admin test-files')
-  async addTestFile(@UploadedFile() file) {
+  async addTestFiles(@UploadedFile() file) {
     return this.workspaceService.uploadTestFiles(1, file.buffer, file);
+  }
+
+  @Delete(':ids')
+  @ApiTags('ws admin test-files')
+  async deleteTestFiles(@Param('ids')ids : string) {
+    return this.workspaceService.deleteTestFiles(ids.split(';'));
   }
 }

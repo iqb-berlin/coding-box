@@ -95,6 +95,12 @@ export class WorkspaceController {
     return this.workspaceService.findTestGroups(id);
   }
 
+  @Delete(':workspace_id/test-groups/:testGroupNames')
+  async deleteTestGroups(@Param('testGroupNames')testGroupNames:string): Promise<Responses[]> {
+    const splittedTestGroupNames = testGroupNames.split(';');
+    return this.workspaceService.deleteTestGroups(splittedTestGroupNames);
+  }
+
   @Get(':workspace_id/test-groups/:testGroup')
   @ApiParam({ name: 'workspace_id', type: Number })
   async findTestPersons(@WorkspaceId() id: number, @Param('testGroup') testGroup:string): Promise<Responses[]> {

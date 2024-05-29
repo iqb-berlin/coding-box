@@ -16,7 +16,7 @@ import {
 } from '@angular/core';
 import { MatSort, MatSortHeader } from '@angular/material/sort';
 import { FormsModule } from '@angular/forms';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MatAnchor, MatButton } from '@angular/material/button';
 import { MatCheckbox } from '@angular/material/checkbox';
@@ -24,7 +24,7 @@ import { SelectionModel } from '@angular/cdk/collections';
 import { DatePipe, JsonPipe } from '@angular/common';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { MatIcon } from '@angular/material/icon';
-import { UserFullDto } from '../../../../api-dto/user/user-full-dto';
+import { MatSnackBar } from '@angular/material/snack-bar';
 import { BackendService } from '../../services/backend.service';
 import { AppService } from '../../services/app.service';
 import { WrappedIconComponent } from '../../shared/wrapped-icon/wrapped-icon.component';
@@ -33,6 +33,7 @@ import { HasSelectionValuePipe } from '../../shared/pipes/hasSelectionValue.pipe
 import { IsAllSelectedPipe } from '../../shared/pipes/isAllSelected.pipe';
 import { IsSelectedPipe } from '../../shared/pipes/isSelected.pipe';
 import { FileSizePipe } from '../../shared/pipes/filesize.pipe';
+import { TestGroupsInListDto } from '../../../../api-dto/test-groups/testgroups-in-list.dto';
 
 @Component({
   selector: 'coding-box-test-groups',
@@ -45,41 +46,50 @@ import { FileSizePipe } from '../../shared/pipes/filesize.pipe';
 export class TestGroupsComponent implements OnInit {
   testPersonsObjectsDatasource = new MatTableDataSource<any>();
   displayedColumns = ['selectCheckbox', 'test_group', 'created_at'];
-  tableSelectionRow = new SelectionModel<UserFullDto>(false, []);
-  tableSelectionCheckboxes = new SelectionModel<UserFullDto>(true, []);
-  testPersons = [];
+  tableSelectionRow = new SelectionModel<TestGroupsInListDto>(false, []);
+  tableSelectionCheckboxes = new SelectionModel<TestGroupsInListDto>(true, []);
+  testGroups = [];
   dataSource!: MatTableDataSource<any>;
   isLoading = false;
 
   @ViewChild(MatSort) sort = new MatSort();
-  @Output() userSelectionChanged: EventEmitter< UserFullDto[]> = new EventEmitter< UserFullDto[]>();
+  @ViewChild(MatSort) set matSort(sort: MatSort) {
+    if (this.dataSource) {
+      this.dataSource.sort = sort;
+    }
+  }
 
   constructor(
     private backendService: BackendService,
-    private appService: AppService
+    private appService: AppService,
+    private snackBar: MatSnackBar,
+    private translateService: TranslateService
   ) {
   }
 
   ngOnInit(): void {
-    setTimeout(() => {
-      this.createTestPersonsList();
-      this.updateTestPersonsList();
+    this.appService.dataLoading = false;
+    this.isLoading = true;
+    this.backendService.getTestPersons(1, '').subscribe(testGroups => {
+      this.dataSource = new MatTableDataSource(testGroups);
+      this.isLoading = false;
     });
+    //this.updateTestGroupsList();
   }
 
-  private setObjectsDatasource(testPersons: any[]): void {
-    this.testPersonsObjectsDatasource = new MatTableDataSource(testPersons);
+  private setObjectsDatasource(testGroups: any[]): void {
+    this.testPersonsObjectsDatasource = new MatTableDataSource(testGroups);
     this.testPersonsObjectsDatasource
       .filterPredicate = (userList: any, filter) => [
         'name'
-      ].some(column => (userList[column as keyof UserFullDto] as string || '')
+      ].some(column => (userList[column as keyof TestGroupsInListDto] as string || '')
         .toLowerCase()
         .includes(filter));
     this.testPersonsObjectsDatasource.sort = this.sort;
   }
 
-  updateTestPersonsList(): void {
-    this.setObjectsDatasource(this.testPersons);
+  updateTestGroupsList(): void {
+    this.setObjectsDatasource(this.testGroups);
     this.tableSelectionCheckboxes.clear();
     this.tableSelectionRow.clear();
     this.appService.dataLoading = false;
@@ -88,9 +98,21 @@ export class TestGroupsComponent implements OnInit {
   deleteTestGroups(): void {
     this.isLoading = true;
     const selectedTestGroups = this.tableSelectionCheckboxes.selected;
-    this.backendService.deleteTestGroups(selectedTestGroups).subscribe(() => {
-      this.createTestPersonsList();
-      this.updateTestPersonsList();
+    this.backendService.deleteTestGroups(selectedTestGroups.map(testGroup => testGroup.test_group)).subscribe(respOk => {
+      if (respOk) {
+        this.snackBar.open(
+          this.translateService.instant('ws-admin.test-group-deleted'),
+          '',
+          { duration: 1000 });
+        this.isLoading = false;
+        this.createTestGroupsList();
+      } else {
+        this.snackBar.open(
+          this.translateService.instant('ws-admin.test-group-not-deleted'),
+          this.translateService.instant('error'),
+          { duration: 1000 });
+        this.isLoading = false;
+      }
     });
   }
 
@@ -98,8 +120,6 @@ export class TestGroupsComponent implements OnInit {
     this.isLoading = true;
     const selectedTestGroups = this.tableSelectionCheckboxes.selected;
     this.backendService.createCodingTestGroups(selectedTestGroups).subscribe(() => {
-      this.createTestPersonsList();
-      this.updateTestPersonsList();
     });
   }
 
@@ -115,7 +135,7 @@ export class TestGroupsComponent implements OnInit {
     return numSelected === numRows;
   }
 
-  createTestPersonsList(): void {
+  createTestGroupsList(): void {
     this.isLoading = true;
     this.backendService.getTestPersons(1, '').subscribe(testGroups => {
       this.dataSource = new MatTableDataSource(testGroups);
