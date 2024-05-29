@@ -1,40 +1,55 @@
-<div class="fx-column-start-start fx-gap-10 container">
-  <mat-form-field>
-    <mat-label>Testgruppe</mat-label>
-    <mat-select (valueChange)="getTestPersons($event)">
-      @for (testGroup of testGroups; track testGroup) {
-        <mat-option [value]="testGroup">
-          {{testGroup}}
-        </mat-option>
-      }
-    </mat-select>
-  </mat-form-field>
-  <mat-form-field>
-    <mat-label>Testperson</mat-label>
-    <mat-select [disabled]="!selectedTestGroup" (valueChange)="getUnits($event)">
-    @for (testPerson of testPersons; track testPerson) {
-      <mat-option [value]="testPerson">
-        {{testPerson}}
-      </mat-option>
-    }
-    </mat-select>
-  </mat-form-field>
+<div class="fx-column-start-start fx-gap-20 container">
+  @if(testGroups.length !== 0 ){
+    <div class="fx-row-start-start fx-gap-10">
+      {{selectedTestPerson}}
+      {{selectedUnit}}
 
-  <mat-form-field>
-    <mat-label>Aufgabe</mat-label>
-    <mat-select  [disabled]="!selectedTestPerson" (valueChange)="changedUnit($event)">
-      @for (unit of units; track unit) {
-        <mat-option [value]="unit">
-          {{unit}}
-        </mat-option>
-      }
-    </mat-select>
-  </mat-form-field>
+      <mat-form-field>
+        <mat-label>Testgruppe</mat-label>
+        <mat-select (valueChange)="getTestPersons($event)">
+          @for (testGroup of testGroups; track testGroup) {
+            <mat-option [value]="testGroup">
+              {{testGroup}}
+            </mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+      <mat-form-field>
+        <mat-label>Testperson</mat-label>
+        <mat-select [disabled]="!selectedTestGroup" (valueChange)="getUnits($event)">
+          @for (testPerson of testPersons; track testPerson) {
+            <mat-option [value]="testPerson">
+              {{testPerson}}
+            </mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
 
-  <button mat-raised-button color="primary"
-          (click)="replay()"
-          [disabled]="units.length === 0 ">
-    <mat-icon>play_arrow</mat-icon>
-    Abspielen
-    </button>
+      <mat-form-field>
+        <mat-label>Aufgabe</mat-label>
+        <mat-select  [disabled]="!selectedTestPerson" (valueChange)="changedUnit($event)">
+          @for (unit of units; track unit) {
+            <mat-option [value]="unit">
+              {{unit}}
+            </mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+
+      <button mat-raised-button color="primary"
+              (click)="replay()"
+              [disabled]="units.length === 0 ">
+        <mat-icon>play_arrow</mat-icon>
+        Abspielen
+      </button>
+    </div>
+  } @else if(!isLoading) {
+    <p>Keine Testgruppen vorhanden!</p>
+  } @else {
+    <mat-spinner mode="indeterminate"></mat-spinner>
+  }
+
+@if (selectedTestPerson && selectedUnit){
+  <coding-box-replay [testPersonInput]="selectedTestPerson" [unitIdInput]="selectedUnit"></coding-box-replay>
+}
 </div>

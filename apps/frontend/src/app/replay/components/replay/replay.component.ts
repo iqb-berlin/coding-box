@@ -1,4 +1,6 @@
-import { Component, OnDestroy, OnInit } from '@angular/core';
+import {
+  Component, Input, OnDestroy, OnInit
+} from '@angular/core';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
@@ -27,10 +29,13 @@ export class ReplayComponent implements OnInit, OnDestroy {
   player :string = '';
   unitDef :string = '';
   testPerson:string = '';
-  page!:number;
+  page!:string;
   unitId:string = '';
   responses:string = '';
-  constructor(private backendService:BackendService, private route:ActivatedRoute) {
+  isLoading = false;
+  @Input() testPersonInput!: string;
+  @Input() pageInput!: string;
+  @Input() unitIdInput!: string;
   constructor(private backendService:BackendService,
               private appService:AppService,
               private route:ActivatedRoute) {
@@ -39,10 +44,16 @@ export class ReplayComponent implements OnInit, OnDestroy {
 
   async ngOnInit(): Promise<void> {
     const params = await firstValueFrom(this.route.params);
-    const { page, testPerson, unitId } = params;
-    this.page = page;
-    this.testPerson = testPerson;
-    this.unitId = unitId;
+    if (Object.keys(params).length !== 0) {
+      const { page, testPerson, unitId } = params;
+      this.page = page;
+      this.testPerson = testPerson;
+      this.unitId = unitId;
+    } else {
+      this.page = this.pageInput;
+      this.testPerson = this.testPersonInput;
+      this.unitId = this.unitIdInput.toUpperCase();
+    }
     const unitData = await this.getUnitData();
     this.player = unitData.player[0].data;
     this.unitDef = unitData.unitDef[0].data;
@@ -51,7 +62,7 @@ export class ReplayComponent implements OnInit, OnDestroy {
 
   async getUnitData() {
     let player = '';
-    const unitDefFile = await firstValueFrom(this.backendService.getUnitDef(2, this.unitId).pipe(
+    const unitDefFile = await firstValueFrom(this.backendService.getUnitDef(this.appService.selectedWorkspaceId, this.unitId).pipe(
       catchError(error => {
         throw new Error(error);
       })
