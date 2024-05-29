@@ -3,8 +3,6 @@ import {
   Controller, Get, Post, UseGuards
 } from '@nestjs/common';
 
-import * as fs from 'fs';
-import * as path from 'path';
 import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { AuthService } from './auth/service/auth.service';
 import { CreateUserDto } from '../../../frontend/api-dto/user/create-user-dto';
@@ -14,10 +12,14 @@ import { UsersService } from './database/services/users.service';
 import { WorkspaceService } from './database/services/workspace.service';
 import { LocalAuthGuard } from './auth/local-auth.guard';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
+import { TestcenterService } from './database/services/testcenter.service';
 
 @Controller()
 export class AppController {
-  constructor(public authService:AuthService, public userService: UsersService, public workspaceService:WorkspaceService) {}
+  constructor(private authService:AuthService,
+              private userService: UsersService,
+              private testcenterService: TestcenterService,
+              private workspaceService:WorkspaceService) {}
 
   @Get('create-token')
   @UseGuards(JwtAuthGuard)
@@ -64,5 +66,10 @@ export class AppController {
   @ApiTags('auth')
   async setPassword(@Body() new_password, token): Promise<any> {
     return this.userService.setPassword(new_password, token);
+  }
+
+  @Post('tc_authentication')
+  async authenticate(@Body() credentials: any): Promise<any> {
+    return this.testcenterService.authenticate(credentials);
   }
 }
