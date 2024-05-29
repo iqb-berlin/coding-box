@@ -10,7 +10,7 @@
     </a>
 
   </div>
-@if (dataSource.data.length) {
+@if (dataSource && dataSource.data.length) {
     <coding-box-search-filter
       [title]="'search-filter.filter-test-groups' | translate"
       (valueChange)="dataSource.filter = $event.trim().toLowerCase()">

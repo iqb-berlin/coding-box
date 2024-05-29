@@ -2,10 +2,11 @@ import { Column, Entity, PrimaryColumn } from 'typeorm';
 
 @Entity()
 class FileUpload {
-  @PrimaryColumn({
-    name: 'filename'
-  })
-    filename: string;
+  @PrimaryColumn({ type: 'integer' })
+    id: number;
+
+  @Column({ type: 'varchar' })
+  filename: string;
 
   @Column({ type: 'integer' })
     workspace_id: number;

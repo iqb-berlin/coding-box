@@ -61,7 +61,14 @@ export class WorkspaceService {
   async findFiles(id: number): Promise<FilesDto[]> {
     this.logger.log('Returning all files for workspace', id);
     const files = await this.fileUploadRepository
-      .find({ where: { workspace_id: 2 }, select: ['filename', 'file_size', 'file_type', 'created_at'] });
+      .find({ where: { workspace_id: 2 }, select: ['id', 'filename', 'file_size', 'file_type', 'created_at'] });
+    return files;
+  }
+
+  async deleteTestFiles(fileIds: string[]): Promise<any> {
+    this.logger.log('delete files for workspace', fileIds);
+    const files = await this.fileUploadRepository
+      .delete(fileIds);
     return files;
   }
 
@@ -97,6 +104,13 @@ export class WorkspaceService {
     const uniqueGroups = response.filter((obj1, i, arr) => response
       .findIndex(obj2 => ['test_group'].every(key => obj2[key] === obj1[key])) === i);
     return uniqueGroups;
+  }
+
+  async deleteTestGroups(testGroupNames: string[]): Promise<any> {
+    this.logger.log('Delete test groups for workspace ', testGroupNames);
+    const mappedTestGroups = testGroupNames.map(testGroup => ({ test_group: testGroup }));
+    const testGroupResponsesIds = await this.responsesRepository.find({ where: mappedTestGroups, select: ['id'] });
+    await this.responsesRepository.delete(testGroupResponsesIds.map(item => item.id));
   }
 
   async findTestPersons(id: number, testGroup:string): Promise<any> {

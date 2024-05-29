@@ -29,7 +29,7 @@ export class BackendService {
     return `${this.serverUrl}packages/`;
   }
 
-  createToken(): Observable<string>{
+  createToken(): Observable<string> {
     return this.http.get<string>(`${this.serverUrl}create-token`, { headers: this.authHeader });
   }
 
@@ -130,18 +130,18 @@ export class BackendService {
       );
   }
 
-  deleteFiles(ids: any): Observable<boolean> {
+  deleteFiles(fileIds: number[]): Observable<boolean> {
     return this.http
-      .delete(`${this.serverUrl}admin/workspace/${ids.join(';')}`, { headers: this.authHeader })
+      .delete(`${this.serverUrl}workspaces/test-files/${fileIds.join(';')}`,{ headers: this.authHeader })
       .pipe(
         catchError(() => of(false)),
         map(() => true)
       );
   }
 
-  deleteTestGroups(ids: any): Observable<boolean> {
+  deleteTestGroups(testGroups: string[]): Observable<boolean> {
     return this.http
-      .delete(`${this.serverUrl}admin/workspace/${ids.join(';')}`, { headers: this.authHeader })
+      .delete(`${this.serverUrl}admin/workspace/2/test-groups/${testGroups.join(';')}`, { headers: this.authHeader })
       .pipe(
         catchError(() => of(false)),
         map(() => true)
@@ -156,7 +156,6 @@ export class BackendService {
         map(() => true)
       );
   }
-
 
   changeWorkspace(workspaceData: WorkspaceFullDto): Observable<boolean> {
     return this.http
@@ -249,9 +248,7 @@ export class BackendService {
                        server:string,
                        token:string,
                        importOptions:any): Observable<any> {
-    const {
-      units, responses, definitions, player
-    } = importOptions;
+    const { units, responses, definitions, player } = importOptions;
     return this.http
       // eslint-disable-next-line max-len
       .get<boolean>(`${SERVER_URL}admin/workspace/importWorkspaceFiles?workspace=${workspace}&server=${server}&responses=${responses}&definitions=${definitions}&units=${units}&player=${player}&token=${token}`, { headers: this.authHeader })

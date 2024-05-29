@@ -147,18 +147,18 @@ export class FileUploadComponent implements OnInit {
   }
 
   deleteFiles(): void {
-    const filenames = this.tableSelectionCheckboxes.selected.map(file => file.filename);
-    this.backendService.deleteFiles(this.tableSelectionCheckboxes.selected).subscribe(
+    const fileIds = this.tableSelectionCheckboxes.selected.map(file => file.id);
+    this.backendService.deleteFiles(fileIds).subscribe(
       respOk => {
         if (respOk) {
           this.snackBar.open(
-            this.translateService.instant('admin.workspace-deleted'),
+            this.translateService.instant('ws-admin.files-deleted'),
             '',
             { duration: 1000 });
           // this.updateWorkspaceList();
         } else {
           this.snackBar.open(
-            this.translateService.instant('admin.workspace-not-deleted'),
+            this.translateService.instant('ws-admin.files-not-deleted'),
             this.translateService.instant('error'),
             { duration: 1000 });
           this.appService.dataLoading = false;
