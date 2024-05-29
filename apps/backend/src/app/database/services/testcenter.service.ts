@@ -89,7 +89,7 @@ export class TestcenterService {
                              importOptions:ImportOptions
   ): Promise<boolean> {
     const {
-      units, responses, definitions, player
+      units, responses, definitions, player,codings
     } = importOptions;
 
     const headersRequest = {
@@ -133,6 +133,7 @@ export class TestcenterService {
         // const zipFiles = files.filter(file => file.name.includes('.zip'));
         const unitDefFiles = files.Resource.filter(file => file.name.includes('.voud'));
         const playerFiles = files.Resource.filter(file => file.name.includes('.html'));
+        const codingSchemeFiles = files.Resource.filter(file => file.name.includes('.vocs'));
         const unitFiles = files.Unit;
         let promises = [];
         if (player === 'true' && playerFiles.length > 0) {
@@ -149,6 +150,11 @@ export class TestcenterService {
           const unitDefPromises = unitDefFiles
             .map(file => this.getFile(file, server, workspace, authToken));
           promises = [...promises, ...unitDefPromises];
+        }
+        if (codings === 'true' && codingSchemeFiles.length > 0) {
+          const codingSchemePromises = codingSchemeFiles
+            .map(file => this.getFile(file, server, tc_workspace, authToken));
+          promises = [...promises, ...codingSchemePromises];
         }
         const results = await Promise.all(promises);
         if (results.length > 0) {
