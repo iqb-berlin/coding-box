@@ -135,7 +135,7 @@ export class TestCenterImportComponent {
       codings: codings
     };
     this.appService.dataLoading = true;
-    this.backendService.importWorkspaceFiles(workspace, testcenter, this.authToken, importOptions)
+    this.backendService.importWorkspaceFiles(this.appService.selectedWorkspaceId, workspace, testcenter, this.authToken, importOptions)
       .subscribe((response:ServerFilesResponse) => {
         this.appService.dataLoading = false;
         if (!response) {

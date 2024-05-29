@@ -115,7 +115,7 @@ export class FileUploadComponent implements OnInit {
         this.appService.dataLoading = true;
         console.log(inputElement, 'inputElement.files', inputElement.files);
         this.uploadSubscription = this.backendService.uploadTestFiles(
-          1,
+          this.appService.selectedWorkspaceId,
           inputElement.files
         ).subscribe(uploadStatus => {
           if (typeof uploadStatus === 'number') {
@@ -134,7 +134,7 @@ export class FileUploadComponent implements OnInit {
 
   createTestFilesList(): void {
     this.isLoading = true;
-    this.backendService.getFilesList(2)
+    this.backendService.getFilesList(this.appService.selectedWorkspaceId)
       .subscribe((files: any[]) => {
         this.dataSource = new MatTableDataSource(files);
         this.isLoading = false;
@@ -160,7 +160,7 @@ export class FileUploadComponent implements OnInit {
 
   deleteFiles(): void {
     const fileIds = this.tableSelectionCheckboxes.selected.map(file => file.id);
-    this.backendService.deleteFiles(fileIds).subscribe(
+    this.backendService.deleteFiles(this.appService.selectedWorkspaceId, fileIds).subscribe(
       respOk => {
         if (respOk) {
           this.snackBar.open(

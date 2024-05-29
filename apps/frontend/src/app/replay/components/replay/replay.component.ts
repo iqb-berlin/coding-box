@@ -12,6 +12,7 @@ import {
 import * as xml2js from 'xml2js';
 import { UnitPlayerComponent } from '../unit-player/unit-player.component';
 import { BackendService } from '../../../services/backend.service';
+import { AppService } from '../../../services/app.service';
 
 @Component({
   selector: 'coding-box-replay',
@@ -30,6 +31,9 @@ export class ReplayComponent implements OnInit, OnDestroy {
   unitId:string = '';
   responses:string = '';
   constructor(private backendService:BackendService, private route:ActivatedRoute) {
+  constructor(private backendService:BackendService,
+              private appService:AppService,
+              private route:ActivatedRoute) {
 
   }
 
@@ -53,12 +57,12 @@ export class ReplayComponent implements OnInit, OnDestroy {
       })
     ));
 
-    const responsesFile = await firstValueFrom(this.backendService.getResponses(2, this.testPerson, this.unitId).pipe(
+    const responsesFile = await firstValueFrom(this.backendService.getResponses(this.appService.selectedWorkspaceId, this.testPerson, this.unitId).pipe(
       catchError(error => {
         throw new Error(error);
       })
     ));
-    const unitFile = await firstValueFrom(this.backendService.getUnit(2, this.testPerson, this.unitId).pipe(
+    const unitFile = await firstValueFrom(this.backendService.getUnit(this.appService.selectedWorkspaceId, this.testPerson, this.unitId).pipe(
       catchError(error => {
         throw new Error(error);
       })
@@ -68,7 +72,7 @@ export class ReplayComponent implements OnInit, OnDestroy {
       console.log(player);
       console.log(result);
     });
-    const playerFile = await firstValueFrom(this.backendService.getPlayer(2, player.replace('@', '-')).pipe(
+    const playerFile = await firstValueFrom(this.backendService.getPlayer(this.appService.selectedWorkspaceId, player.replace('@', '-')).pipe(
       catchError(error => {
         throw new Error(error);
       })

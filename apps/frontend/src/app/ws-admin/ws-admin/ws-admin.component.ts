@@ -1,7 +1,8 @@
-import { Component } from '@angular/core';
-import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { Component, OnInit } from '@angular/core';
+import { ActivatedRoute, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatTabLink, MatTabNav, MatTabNavPanel } from '@angular/material/tabs';
+import { AppService } from '../../services/app.service';
 
 @Component({
   selector: 'coding-box-ws-admin',
@@ -10,6 +11,16 @@ import { MatTabLink, MatTabNav, MatTabNavPanel } from '@angular/material/tabs';
   standalone: true,
   imports: [MatTabNav, MatTabLink, RouterLinkActive, RouterLink, MatTabNavPanel, RouterOutlet, TranslateModule]
 })
-export class WsAdminComponent {
+export class WsAdminComponent implements OnInit{
   navLinks: string[] = ['select-replay', 'test-files', 'test-groups', 'users', 'settings'];
+  constructor(
+    private route: ActivatedRoute,
+    private appService: AppService
+  ) {
+  }
+
+  ngOnInit() {
+    const routeKey = 'ws';
+    this.appService.selectedWorkspaceId = Number(this.route.snapshot.params[routeKey]);
+  }
 }

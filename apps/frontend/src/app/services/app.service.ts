@@ -1,8 +1,8 @@
 import { Injectable } from '@angular/core';
 import { Subject } from 'rxjs';
+import { KeycloakProfile } from 'keycloak-js';
 import { AppLogoDto } from '../../../api-dto/app-logo-dto';
 import { AuthDataDto } from '../../../api-dto/auth-data-dto';
-import { KeycloakProfile } from 'keycloak-js';
 
 @Injectable({
   providedIn: 'root'
@@ -20,7 +20,7 @@ export class AppService {
   userProfile: KeycloakProfile = {};
   isLoggedInKeycloak = false;
   errorMessagesDisabled = false;
-  globalWarning = '';
+  selectedWorkspaceId = 0;
   authData = AppService.defaultAuthData;
   dataLoading: boolean | number = false;
   appLogo: AppLogoDto = standardLogo;

@@ -16,7 +16,7 @@ export class UsersService {
     @InjectRepository(User)
     private usersRepository: Repository<User>,
     @InjectRepository(WorkspaceUser)
-    private workspaceUserRepository: Repository<WorkspaceUser>
+    private workspaceUserRepository: Repository<WorkspaceUser>,
   ) {
   }
 
@@ -34,6 +34,14 @@ export class UsersService {
       }
     });
     return returnUsers;
+  }
+
+  async canAccessWorkSpace(userId: number, workspaceId: number): Promise<boolean> {
+    const wsUser = await this.workspaceUserRepository.findOne({
+      where: { userId: userId, workspaceId: workspaceId }
+    });
+    if (wsUser) return true;
+    return false;
   }
 
   async findUserWorkspaces(userId: number): Promise<any> {

@@ -58,49 +58,46 @@ export class WorkspaceService {
     return [];
   }
 
-  async findFiles(id: number): Promise<FilesDto[]> {
-    this.logger.log('Returning all files for workspace', id);
-    const files = await this.fileUploadRepository
-      .find({ where: { workspace_id: 2 }, select: ['id', 'filename', 'file_size', 'file_type', 'created_at'] });
+  async findFiles(workspace_id: number): Promise<FilesDto[]> {
+    this.logger.log('Returning all test files for workspace ', workspace_id);
+    return this.fileUploadRepository
+      .find({ where: { workspace_id: workspace_id }, select: ['id', 'filename', 'file_size', 'file_type', 'created_at'] });
+  }
+
+  async deleteTestFiles(workspace_id:number, fileIds: string[]): Promise<any> {
+    this.logger.log(`Delete test files for workspace ${workspace_id}`);
+    return this.fileUploadRepository.delete(fileIds);
+  }
+
+  async findPlayer(workspace_id: number, playerName:string): Promise<FilesDto[]> {
+    this.logger.log(`Returning ${playerName} for workspace`, workspace_id);
+    const files = await this.fileUploadRepository.find({ where: { file_id: playerName.toUpperCase(),workspace_id:workspace_id } });
     return files;
   }
 
-  async deleteTestFiles(fileIds: string[]): Promise<any> {
-    this.logger.log('delete files for workspace', fileIds);
-    const files = await this.fileUploadRepository
-      .delete(fileIds);
-    return files;
-  }
-
-  async findPlayer(id: number, playerName:string): Promise<FilesDto[]> {
-    this.logger.log(`Returning ${playerName} for workspace`, id);
-    const files = await this.fileUploadRepository.find({ where: { file_id: playerName.toUpperCase() } });
-    return files;
-  }
-
-  async findUnitDef(unitId: string): Promise<FilesDto[]> {
+  async findUnitDef(workspace_id:number, unitId: string): Promise<FilesDto[]> {
     this.logger.log('Returning unit def for unit', unitId);
-    const files = await this.fileUploadRepository.find({ where: { file_id: `${unitId}.VOUD` } });
+    const files = await this.fileUploadRepository.find({ where: { file_id: `${unitId}.VOUD`,workspace_id:workspace_id } });
     return files;
   }
 
-  async findResponse(id: number, testPerson:string, unitId:string): Promise<Responses[]> {
+  async findResponse(workspace_id: number, testPerson:string, unitId:string): Promise<Responses[]> {
     this.logger.log('Returning response for test person', testPerson);
     const response = await this.responsesRepository.find(
-      { where: { test_person: testPerson, unit_id: unitId } });
+      { where: { test_person: testPerson, unit_id: unitId,workspace_id:workspace_id } });
     return response;
   }
 
-  async findUnit(id: number, testPerson:string, unitId:string): Promise<any[]> {
+  async findUnit(workspace_id: number, testPerson:string, unitId:string): Promise<any[]> {
     this.logger.log('Returning unit for test person', testPerson);
     const response = await this.fileUploadRepository.find(
-      { where: { file_id: `${unitId}` } });
+      { where: { file_id: `${unitId}`,workspace_id:workspace_id } });
     return response;
   }
 
-  async findTestGroups(id: number): Promise<any> {
-    this.logger.log('Returning all test groups for workspace ', id);
-    const response = await this.responsesRepository.find({ select: ['test_group', 'created_at'] });
+  async findTestGroups(workspace_id: number): Promise<any> {
+    this.logger.log('Returning all test groups for workspace ', workspace_id);
+    const response = await this.responsesRepository.find({ select: ['test_group', 'created_at'], where: { workspace_id: workspace_id } });
     const uniqueGroups = response.filter((obj1, i, arr) => response
       .findIndex(obj2 => ['test_group'].every(key => obj2[key] === obj1[key])) === i);
     return uniqueGroups;
@@ -228,7 +225,6 @@ export class WorkspaceService {
   }
 
   async testcenterImport(entries:any): Promise<any> {
-    console.log(entries);
     const registry = this.fileUploadRepository.create(entries);
     await this.fileUploadRepository.save(registry);
   }

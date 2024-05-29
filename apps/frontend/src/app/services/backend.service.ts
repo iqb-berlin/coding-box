@@ -130,9 +130,9 @@ export class BackendService {
       );
   }
 
-  deleteFiles(fileIds: number[]): Observable<boolean> {
+  deleteFiles(workspace_id:number, fileIds: number[]): Observable<boolean> {
     return this.http
-      .delete(`${this.serverUrl}workspaces/test-files/${fileIds.join(';')}`,{ headers: this.authHeader })
+      .delete(`${this.serverUrl}admin/workspace/${workspace_id}/files/${fileIds.join(';')}`, { headers: this.authHeader })
       .pipe(
         catchError(() => of(false)),
         map(() => true)
@@ -244,11 +244,14 @@ export class BackendService {
       );
   }
 
-  importWorkspaceFiles(workspace: string,
+  importWorkspaceFiles(workspace_id: number,
+                       testCenterWorkspace: string,
                        server:string,
                        token:string,
                        importOptions:any): Observable<any> {
-    const { units, responses, definitions, player, codings } = importOptions;
+    const {
+      units, responses, definitions, player, codings
+    } = importOptions;
     return this.http
       // eslint-disable-next-line max-len
       .get<boolean>(`${SERVER_URL}admin/workspace/${workspace_id}/importWorkspaceFiles?tc_workspace=${testCenterWorkspace}&server=${server}&responses=${responses}&definitions=${definitions}&units=${units}&codings=${codings}&player=${player}&token=${token}`, { headers: this.authHeader })
