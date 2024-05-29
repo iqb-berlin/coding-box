@@ -8,12 +8,12 @@
 
 .container{
   margin:20px;
+  overflow: auto;
 }
 
+p{
+  font-size: 20px;
+}
 a{
   min-width:400px;
-}
-
-mat-form-field{
-  min-width:300px;
 }
