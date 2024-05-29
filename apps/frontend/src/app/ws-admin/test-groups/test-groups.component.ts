@@ -12,7 +12,7 @@ import {
   MatTableDataSource
 } from '@angular/material/table';
 import {
-  ViewChild, Component, OnInit, Output, EventEmitter
+  ViewChild, Component, OnInit
 } from '@angular/core';
 import { MatSort, MatSortHeader } from '@angular/material/sort';
 import { FormsModule } from '@angular/forms';
@@ -68,13 +68,7 @@ export class TestGroupsComponent implements OnInit {
   }
 
   ngOnInit(): void {
-    this.appService.dataLoading = false;
-    this.isLoading = true;
-    this.backendService.getTestPersons(1, '').subscribe(testGroups => {
-      this.dataSource = new MatTableDataSource(testGroups);
-      this.isLoading = false;
-    });
-    //this.updateTestGroupsList();
+    this.createTestGroupsList();
   }
 
   private setObjectsDatasource(testGroups: any[]): void {
@@ -137,7 +131,7 @@ export class TestGroupsComponent implements OnInit {
 
   createTestGroupsList(): void {
     this.isLoading = true;
-    this.backendService.getTestPersons(1, '').subscribe(testGroups => {
+    this.backendService.getTestGroups(this.appService.selectedWorkspaceId).subscribe(testGroups => {
       this.dataSource = new MatTableDataSource(testGroups);
       this.isLoading = false;
     });

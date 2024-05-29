@@ -83,10 +83,12 @@ export class TestcenterService {
     return data;
   }
 
-  async importWorkspaceFiles(workspace:string,
-                             server:string,
-                             authToken:string,
-                             importOptions:ImportOptions
+  async importWorkspaceFiles(
+    workspace_id:string,
+    tc_workspace:string,
+    server:string,
+    authToken:string,
+    importOptions:ImportOptions
   ): Promise<boolean> {
     const {
       units, responses, definitions, player,codings
@@ -97,7 +99,7 @@ export class TestcenterService {
     };
     if (responses) {
       const resultsPromise = this.httpService.axiosRef
-        .get<TestserverResponse[]>(`http://iqb-testcenter${server}.de/api/workspace/${workspace}/results`, {
+        .get<TestserverResponse[]>(`http://iqb-testcenter${server}.de/api/workspace/${tc_workspace}/results`, {
         httpsAgent: agent,
         headers: headersRequest
       });
@@ -105,7 +107,8 @@ export class TestcenterService {
       if (report) {
         const resultGroups = report.data.map(group => group.groupName);
         // eslint-disable-next-line max-len
-        const unitResponsesPromise = this.httpService.axiosRef.get<Response[]>(`http://iqb-testcenter${server}.de/api/workspace/${workspace}/report/response?dataIds=${resultGroups.join(',')}`, {
+        const unitResponsesPromise = this.httpService.axiosRef
+          .get<Response[]>(`http://iqb-testcenter${server}.de/api/workspace/${tc_workspace}/report/response?dataIds=${resultGroups.join(',')}`, {
           httpsAgent: agent,
           headers: headersRequest
         });
@@ -115,16 +118,17 @@ export class TestcenterService {
             test_person: unitResponse.loginname + unitResponse.code,
             unit_id: unitResponse.unitname,
             responses: JSON.stringify(unitResponse.responses),
-            test_group: unitResponse.groupname
+            test_group: unitResponse.groupname,
+            workspace_id: Number(workspace_id)
           }));
           await this.responsesRepository.save(mappedResponses, { chunk: 1000 });
         }
       }
     }
 
-    if (definitions || player || units) {
+    if (definitions || player || units || codings) {
       const filesPromise = this.httpService.axiosRef
-        .get<ServerFilesResponse>(`http://iqb-testcenter${server}.de/api/workspace/${workspace}/files`, {
+        .get<ServerFilesResponse>(`http://iqb-testcenter${server}.de/api/workspace/${tc_workspace}/files`, {
         httpsAgent: agent,
         headers: headersRequest
       });
@@ -138,17 +142,17 @@ export class TestcenterService {
         let promises = [];
         if (player === 'true' && playerFiles.length > 0) {
           const playerPromises = playerFiles
-            .map(file => this.getFile(file, server, workspace, authToken));
+            .map(file => this.getFile(file, server, tc_workspace, authToken));
           promises = [...promises, ...playerPromises];
         }
         if (units === 'true' && unitFiles.length > 0) {
           const unitFilesPromises = unitFiles
-            .map(file => this.getFile(file, server, workspace, authToken));
+            .map(file => this.getFile(file, server, tc_workspace, authToken));
           promises = [...promises, ...unitFilesPromises];
         }
         if (definitions === 'true' && unitDefFiles.length > 0) {
           const unitDefPromises = unitDefFiles
-            .map(file => this.getFile(file, server, workspace, authToken));
+            .map(file => this.getFile(file, server, tc_workspace, authToken));
           promises = [...promises, ...unitDefPromises];
         }
         if (codings === 'true' && codingSchemeFiles.length > 0) {
@@ -163,7 +167,7 @@ export class TestcenterService {
             file_id: result.id,
             file_type: result.type,
             file_size: result.size,
-            workspace_id: workspace,
+            workspace_id: workspace_id,
             data: result.data
           }));
           await this.testFileService.testcenterImport(dbEntries);
@@ -176,18 +180,17 @@ export class TestcenterService {
     return true;
   }
 
-  async getFile(res:File, server:string, workspace:string, authToken:string): Promise<any> {
+  async getFile(res:File, server:string, tc_workspace:string, authToken:string): Promise<any> {
     const headersRequest = {
       Authtoken: authToken
     };
     const filePromise = this.httpService.axiosRef
-      .get<File>(`http://iqb-testcenter${server}.de/api/workspace/${workspace}/file/${res.type}/${res.name}`,
+      .get<File>(`http://iqb-testcenter${server}.de/api/workspace/${tc_workspace}/file/${res.type}/${res.name}`,
       {
         httpsAgent: agent,
         headers: headersRequest
       });
     const fileData = await filePromise.then(res => res.data).catch(err => { err; });
-    console.log({ data: fileData });
     return {
       data: fileData, name: res.name, type: res.type, size: res.size, id: res.id
     };

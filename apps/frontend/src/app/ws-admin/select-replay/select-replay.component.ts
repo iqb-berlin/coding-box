@@ -31,23 +31,27 @@ export class SelectReplayComponent implements OnInit {
   selectedUnit = '';
   selectedPage = '';
   selectedTestGroup = '';
+  isLoading = false;
 
   ngOnInit(): void {
     this.backendService.getTestGroups(1).subscribe(groups => {
+    this.isLoading = true;
+    this.backendService.getTestGroups(this.appService.selectedWorkspaceId).subscribe(groups => {
       this.testGroups = groups.map((g:any) => g.test_group);
+      this.isLoading = false;
     });
   }
 
   getTestPersons(testGroup:string): void {
     this.selectedTestGroup = testGroup;
-    this.backendService.getTestPersons(1, testGroup).subscribe(data => {
+    this.backendService.getTestPersons(this.appService.selectedWorkspaceId, testGroup).subscribe(data => {
       if (data.length > 0) { this.testPersons = data; }
     });
   }
 
   getUnits(testPerson:string): void {
     this.selectedTestPerson = testPerson;
-    this.backendService.getTestpersonUnits(2, testPerson).subscribe(data => {
+    this.backendService.getTestpersonUnits(this.appService.selectedWorkspaceId, testPerson).subscribe(data => {
       this.units = data.map((d:any) => d.unit_id);
     });
   }
