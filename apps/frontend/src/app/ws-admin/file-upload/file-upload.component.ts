@@ -62,6 +62,7 @@ export class FileUploadComponent implements OnInit {
   displayedColumns: string[] = ['selectCheckbox', 'filename', 'file_size', 'file_type', 'created_at'];
   dataSource!: MatTableDataSource<any>;
   isLoading = false;
+  files = [];
 
   @ViewChild(MatSort) set matSort(sort: MatSort) {
     if (this.dataSource) {
@@ -70,13 +71,14 @@ export class FileUploadComponent implements OnInit {
   }
 
   ngOnInit(): void {
+    this.createTestFilesList();
+  }
+
+  updateTestGroupsList(): void {
+    // this.setObjectsDatasource(this.testGroups);
+    this.tableSelectionCheckboxes.clear();
+    this.tableSelectionRow.clear();
     this.appService.dataLoading = false;
-    this.isLoading = true;
-    this.backendService.getFilesList(2)
-      .subscribe((files: any[]) => {
-        this.dataSource = new MatTableDataSource(files);
-        this.isLoading = false;
-      });
   }
 
   private setObjectsDatasource(files: FilesInListDto[]): void {
@@ -130,15 +132,25 @@ export class FileUploadComponent implements OnInit {
     }
   }
 
+  createTestFilesList(): void {
+    this.isLoading = true;
+    this.backendService.getFilesList(2)
+      .subscribe((files: any[]) => {
+        this.dataSource = new MatTableDataSource(files);
+        this.isLoading = false;
+      });
+  }
+
+
   testCenterImport(): void {
     const dialogRef = this.TestCenterImportDialog.open(TestCenterImportComponent, {
       width: '600px',
       minHeight: '600px'
     });
-
     dialogRef.afterClosed().subscribe((result: boolean | UntypedFormGroup) => {
       if (typeof result !== 'undefined') {
         if (result !== false) {
+          this.createTestFilesList();
           return true;
         }
       }
@@ -155,7 +167,7 @@ export class FileUploadComponent implements OnInit {
             this.translateService.instant('ws-admin.files-deleted'),
             '',
             { duration: 1000 });
-          // this.updateWorkspaceList();
+          this.createTestFilesList();
         } else {
           this.snackBar.open(
             this.translateService.instant('ws-admin.files-not-deleted'),
