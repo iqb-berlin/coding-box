@@ -48,7 +48,7 @@ CREATE TABLE "public"."responses"
   "responses"    JSONB,
   "created_at"  TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
--- rollback DROP TABLE "public"."responses;
+-- rollback DROP TABLE "public"."responses";
 
 -- changeset jurei733:5
 CREATE TABLE "public"."file_upload"
@@ -63,7 +63,7 @@ CREATE TABLE "public"."file_upload"
   "file_id"     VARCHAR(100),
   "created_at"  TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
--- rollback DROP TABLE "public"."file_upload;
+-- rollback DROP TABLE "public"."file_upload";
 
 -- changeset jurei733:6
 CREATE TABLE "public"."resource_package"
