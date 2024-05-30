@@ -40,7 +40,7 @@ ENTRYPOINT ["npx", "nx"]
 FROM ${REGISTRY_PATH}nginx:stable AS base
 ARG PROJECT
 
-COPY config/frontend/default.conf.http-template /etc/nginx/templates/default.conf.template
+COPY config/frontend/default.conf.template /etc/nginx/templates/default.conf.template
 COPY --from=build /coding-box/dist/apps/${PROJECT} /usr/share/nginx/html
 
 EXPOSE 80
