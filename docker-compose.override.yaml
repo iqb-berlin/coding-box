@@ -35,7 +35,7 @@ services:
         REGISTRY_PATH: ${REGISTRY_PATH}
         PROJECT: backend
     ports:
-      - "${API_PORT}:3333"  # api
+      - "${API_PORT}:3333"  # backend
       - "9229:9229"         # default debug port
     volumes:
       - ./apps/backend/src:/coding-box/apps/backend/src

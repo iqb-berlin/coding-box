@@ -71,7 +71,7 @@
             "command": "docker login {args.registry}",
             "forwardAllArgs": false
           },
-          "docker build -f apps/api/Dockerfile --build-arg project=api --target=prod -t {args.registry}{args.registryProject}iqbberlin/coding-box-backend:{args.tag} -t {args.registry}{args.registryProject}iqbberlin/coding-box-backend:latest .",
+          "docker build -f apps/backend/Dockerfile --build-arg project=backend --target=prod -t {args.registry}{args.registryProject}iqbberlin/coding-box-backend:{args.tag} -t {args.registry}{args.registryProject}iqbberlin/coding-box-backend:latest .",
           "docker push -q -a {args.registry}{args.registryProject}iqbberlin/coding-box-backend"
         ],
         "parallel": false
