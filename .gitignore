@@ -1,9 +1,3 @@
-
-
-# config files
-config/frontend/default.conf.template
-config/frontend/default.conf.template.bkp
-
 # secret files
 *.pem
 *.cer
