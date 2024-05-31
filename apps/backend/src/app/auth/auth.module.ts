@@ -4,8 +4,8 @@ import { JwtModule } from '@nestjs/jwt';
 import { HttpModule } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { AuthService } from './service/auth.service';
-import { JwtStrategy } from './jwt.strategy';
 import { DatabaseModule } from '../database/database.module';
+import { JwtStrategy } from './jwt.strategy';
 
 @Module({
   imports: [
@@ -13,10 +13,9 @@ import { DatabaseModule } from '../database/database.module';
     DatabaseModule,
     HttpModule,
     JwtModule.registerAsync({
-      imports: [ConfigService],
       useFactory: async (configService: ConfigService) => ({
-        secret: configService.get('JWS_SECRET'),
-        signOptions: { expiresIn: '1d' }
+        secret: configService.get('JWT_SECRET'),
+        signOptions: { expiresIn: configService.get('JWT_EXPIRATION') }
       }),
       inject: [ConfigService]
     })

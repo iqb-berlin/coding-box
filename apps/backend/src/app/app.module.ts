@@ -7,6 +7,7 @@ import { AdminModule } from './admin/admin.module';
 
 @Module({
   imports: [ConfigModule.forRoot({
+    isGlobal: true,
     envFilePath: '.env.dev',
     cache: true
   }), AuthModule, DatabaseModule, AdminModule],

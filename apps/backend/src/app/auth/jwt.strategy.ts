@@ -16,8 +16,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   // eslint-disable-next-line class-methods-use-this
   async validate(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    payload: any
+    payload: {sub:string, username: string, workspaces: string[]}
   ) {
-    return { id: payload.sub, name: payload.username, reviewId: payload.sub2 };
+    return { id: payload.sub, name: payload.username, workspaces:payload.workspaces };
   }
 }
