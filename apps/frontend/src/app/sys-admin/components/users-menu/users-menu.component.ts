@@ -21,7 +21,6 @@ import {
   ConfirmDialogComponent,
   ConfirmDialogData
 } from '../../../shared/dialogs/confirm-dialog.component';
-import { WorkspaceInListDto } from '../../../../../api-dto/workspaces/workspace-in-list-dto';
 
 @Component({
   selector: 'coding-box-users-menu',
@@ -40,31 +39,11 @@ export class UsersMenuComponent {
     new EventEmitter<{ selection: UserFullDto[], user: UntypedFormGroup }>();
   @Output() setUserWorkspaceAccessRights: EventEmitter<number[]> = new EventEmitter<number[]>();
 
-
-
   constructor(private editUserDialog: MatDialog,
               private messageDialog: MatDialog,
-              private editUserWorkspaceAccessRightDialog: MatDialog,
+              private editUserAccessRightsDialog: MatDialog,
               private deleteConfirmDialog: MatDialog,
               private translateService: TranslateService) {}
-
-  addUser(): void {
-    const dialogRef = this.editUserDialog.open(EditUserComponent, {
-      width: '600px',
-      data: {
-        newUser: true,
-        isAdmin: false
-      }
-    });
-
-    dialogRef.afterClosed().subscribe((result: boolean | UntypedFormGroup) => {
-      if (typeof result !== 'undefined') {
-        if (result !== false) {
-          this.userAdded.emit(result as UntypedFormGroup);
-        }
-      }
-    });
-  }
 
   editUser(): void {
     let selectedRows = this.selectedRows;
@@ -84,8 +63,8 @@ export class UsersMenuComponent {
       const dialogRef = this.editUserDialog.open(EditUserComponent, {
         width: '600px',
         data: {
-          name: selectedRows[0].name,
-          isAdmin: selectedRows[0].isAdmin,
+          username: selectedRows[0].username,
+          isAdmin: selectedRows[0].isAdmin
         }
       });
 
@@ -115,7 +94,7 @@ export class UsersMenuComponent {
       });
     } else {
       const content = (selectedRows.length === 1) ?
-        this.translateService.instant('admin.delete-user', { name: selectedRows[0].name }) :
+        this.translateService.instant('admin.delete-user', { name: selectedRows[0].username }) :
         this.translateService.instant('admin.delete-users', { count: selectedRows.length });
       const dialogRef = this.deleteConfirmDialog.open(ConfirmDialogComponent, {
         width: '400px',
@@ -150,7 +129,7 @@ export class UsersMenuComponent {
         }
       });
     } else {
-      const dialogRef = this.editUserWorkspaceAccessRightDialog.open(WorkspaceAccessRightsDialogComponent, {
+      const dialogRef = this.editUserAccessRightsDialog.open(WorkspaceAccessRightsDialogComponent, {
         width: '600px',
         minHeight: '600px',
         data: {
@@ -158,7 +137,7 @@ export class UsersMenuComponent {
         }
       });
       dialogRef.afterClosed().subscribe((result: number[]) => {
-            this.setUserWorkspaceAccessRights.emit(result);
+        this.setUserWorkspaceAccessRights.emit(result);
       });
     }
   }

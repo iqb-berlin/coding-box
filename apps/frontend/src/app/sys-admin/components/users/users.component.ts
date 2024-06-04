@@ -136,22 +136,8 @@ export class UsersComponent implements OnInit {
 
   editUser(value: { selection: UserFullDto[], user: UntypedFormGroup }): void {
     this.appService.dataLoading = true;
-    const newPassword: string = value.user.get('password')?.value;
-    const newName: string = value.user.get('name')?.value;
-    const newFirstName: string = value.user.get('firstName')?.value;
-    const newLastName: string = value.user.get('lastName')?.value;
-    const newEmail: string = value.user.get('email')?.value;
-    const newDescription: string = value.user.get('description')?.value;
-    const newIsAdmin: boolean = value.user.get('isAdmin')?.value;
-    const changedData: UserFullDto = { id: value.selection[0].id };
-    if (newName !== value.selection[0].name) changedData.name = newName;
-    if (newDescription !== value.selection[0].description) changedData.description = newDescription;
-    if (newFirstName !== value.selection[0].firstName) changedData.firstName = newFirstName;
-    if (newLastName !== value.selection[0].lastName) changedData.lastName = newLastName;
-    if (newEmail !== value.selection[0].email) changedData.email = newEmail;
-    if (newPassword) changedData.password = newPassword;
-    if (newIsAdmin !== value.selection[0].isAdmin) changedData.isAdmin = newIsAdmin;
-    this.backendService.changeUserData(changedData).subscribe(
+    const changedData: UserFullDto = { id: value.selection[0].id, username: value.user.get('username')?.value, isAdmin: value.user.get('isAdmin')?.value };
+    this.backendService.changeUserData(this.appService.authData.userId, changedData).subscribe(
       respOk => {
         this.updateUserList();
         if (respOk) {
@@ -194,7 +180,6 @@ export class UsersComponent implements OnInit {
   }
 
   setUserWorkspaceAccessRight(workspaces: number[]): void {
-    this.appService.dataLoading = true;
     this.backendService.setUserWorkspaceAccessRight(this.selectedUsers[0], workspaces).subscribe(
       respOk => {
         if (respOk) {

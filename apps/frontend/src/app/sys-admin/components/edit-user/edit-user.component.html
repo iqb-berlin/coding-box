@@ -1,30 +1,14 @@
 <h1 mat-dialog-title>{{(data.newUser ? 'admin.new-user' : 'admin.edit-user') | translate}}</h1>
-
 <mat-dialog-content class="fx-column-start-stretch">
   <form [formGroup]="editUserForm"
     class="fx-column-start-stretch">
     <mat-form-field>
       <input matInput
-        formControlName="name"
+        formControlName="username"
         type="text" readonly
         [placeholder]="'user.login-name' | translate"
-        [value]="data.name"/>
+        [value]="data.username"/>
     </mat-form-field>
-<!--    <mat-form-field>-->
-<!--      <input-->
-<!--        matInput-->
-<!--        formControlName="lastName"-->
-<!--        type="text"-->
-<!--        [placeholder]="'user.last-name' | translate"-->
-<!--        [value]="data.lastName"/>-->
-<!--    </mat-form-field>-->
-<!--    <mat-form-field>-->
-<!--      <input matInput-->
-<!--        formControlName="firstName"-->
-<!--        type="text"-->
-<!--        [placeholder]="'user.first-name' | translate"-->
-<!--        [value]="data.firstName"/>-->
-<!--    </mat-form-field>-->
     <mat-checkbox formControlName="isAdmin"
       [value]="data.isAdmin ? 'true' : 'false'"
       class="consent">
@@ -38,7 +22,7 @@
     type="submit"
     [mat-dialog-close]="editUserForm"
     [disabled]="editUserForm.invalid">
-    {{(data.newUser ? 'create' : 'save') | translate}}
+    {{ 'save' | translate}}
   </button>
   <button mat-raised-button
     [mat-dialog-close]="false">

@@ -12,6 +12,7 @@ import FileUpload from '../entities/file_upload.entity';
 import { FilesDto } from '../../../../../frontend/api-dto/files/files.dto';
 import Responses from '../entities/responses.entity';
 import WorkspaceUser from '../entities/workspace_user.entity';
+import User from '../entities/user.entity';
 
 export type Response = {
   groupname:string,
@@ -35,7 +36,11 @@ export class WorkspaceService {
     @InjectRepository(Responses)
     private responsesRepository:Repository<Responses>,
     @InjectRepository(WorkspaceUser)
-    private workspaceUsersRepository:Repository<WorkspaceUser>
+    private workspaceUsersRepository:Repository<WorkspaceUser>,
+    @InjectRepository(ResourcePackage)
+    private resourcePackageRepository:Repository<ResourcePackage>,
+    @InjectRepository(User)
+    private usersRepository:Repository<User>
   ) {
   }
 
@@ -45,17 +50,28 @@ export class WorkspaceService {
     return workspaces.map(workspace => ({ id: workspace.id, name: workspace.name }));
   }
 
-  async findAllUserWorkspaces(userId: number): Promise<WorkspaceFullDto[]> {
-    console.log('Returning all workspaces for user', userId);
+  async findAllUserWorkspaces(identity: string): Promise<WorkspaceFullDto[]> {
+    console.log('Returning all workspaces for user', identity);
+    const user = await this.usersRepository.findOne({ where: { identity: identity } });
     const workspaces = await this.workspaceUsersRepository.find({
-      where: { userId: userId }
+      where: { userId: user.id }
     });
     if (workspaces.length > 0) {
-      const mapped = workspaces.map(workspace => (this.findOne(workspace.workspaceId)));
-      const res = await Promise.all(mapped);
-      return res;
+      const mappedWorkspaces = workspaces.map(workspace => ({ id: workspace.workspaceId }));
+      const ws = await this.workspaceRepository.find({ where: mappedWorkspaces });
+      return ws;
     }
     return [];
+  }
+
+  async setWorkspaceUsers(workspaceId: number, userIds: number[]): Promise<any> {
+    this.logger.log(`Setting users for workspace with id: ${workspaceId}`);
+    const entries = userIds.map(user => ({ userId: user, workspaceId: workspaceId }));
+    const hasRights = this.workspaceUsersRepository.find({ where: { workspaceId: workspaceId } });
+    if (hasRights) {
+      await this.workspaceUsersRepository.delete({ workspaceId: workspaceId });
+    }
+    await this.workspaceUsersRepository.save(entries);
   }
 
   async findFiles(workspace_id: number): Promise<FilesDto[]> {
@@ -71,27 +87,27 @@ export class WorkspaceService {
 
   async findPlayer(workspace_id: number, playerName:string): Promise<FilesDto[]> {
     this.logger.log(`Returning ${playerName} for workspace`, workspace_id);
-    const files = await this.fileUploadRepository.find({ where: { file_id: playerName.toUpperCase(),workspace_id:workspace_id } });
+    const files = await this.fileUploadRepository.find({ where: { file_id: playerName.toUpperCase(), workspace_id: workspace_id } });
     return files;
   }
 
   async findUnitDef(workspace_id:number, unitId: string): Promise<FilesDto[]> {
     this.logger.log('Returning unit def for unit', unitId);
-    const files = await this.fileUploadRepository.find({ where: { file_id: `${unitId}.VOUD`,workspace_id:workspace_id } });
+    const files = await this.fileUploadRepository.find({ where: { file_id: `${unitId}.VOUD`, workspace_id: workspace_id } });
     return files;
   }
 
   async findResponse(workspace_id: number, testPerson:string, unitId:string): Promise<Responses[]> {
     this.logger.log('Returning response for test person', testPerson);
     const response = await this.responsesRepository.find(
-      { where: { test_person: testPerson, unit_id: unitId,workspace_id:workspace_id } });
+      { where: { test_person: testPerson, unit_id: unitId, workspace_id: workspace_id } });
     return response;
   }
 
   async findUnit(workspace_id: number, testPerson:string, unitId:string): Promise<any[]> {
     this.logger.log('Returning unit for test person', testPerson);
     const response = await this.fileUploadRepository.find(
-      { where: { file_id: `${unitId}`,workspace_id:workspace_id } });
+      { where: { file_id: `${unitId}`, workspace_id: workspace_id } });
     return response;
   }
 

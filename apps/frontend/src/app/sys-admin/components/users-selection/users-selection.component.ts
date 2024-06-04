@@ -13,7 +13,7 @@ import {
   MatTableDataSource
 } from '@angular/material/table';
 import {
-  ViewChild, Component, OnInit, Output, EventEmitter
+  ViewChild, Component, OnInit, Output, EventEmitter, Input
 } from '@angular/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatSort, MatSortHeader } from '@angular/material/sort';
@@ -37,6 +37,7 @@ import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
 import { WrappedIconComponent } from '../../../shared/wrapped-icon/wrapped-icon.component';
 import { SearchFilterComponent } from '../../../shared/search-filter/search-filter.component';
+import { MatIcon } from '@angular/material/icon';
 
 @Component({
   selector: 'coding-box-users-selection',
@@ -44,12 +45,11 @@ import { SearchFilterComponent } from '../../../shared/search-filter/search-filt
   styleUrls: ['./users-selection.component.scss'],
   standalone: true,
   // eslint-disable-next-line max-len
-  imports: [MatTable, MatSort, MatColumnDef, MatHeaderCellDef, MatHeaderCell, MatCheckbox, MatCellDef, MatCell, MatSortHeader, MatHeaderRowDef, MatHeaderRow, MatRowDef, MatRow, MatButton, MatTooltip, WrappedIconComponent, FormsModule, TranslateModule, UsersMenuComponent, HasSelectionValuePipe, IsSelectedPipe, IsAllSelectedPipe, SearchFilterComponent, JsonPipe, WorkspacesComponent, IsSelectedIdPipe, WorkspacesSelectionComponent]
+  imports: [MatTable, MatSort, MatColumnDef, MatHeaderCellDef, MatHeaderCell, MatCheckbox, MatCellDef, MatCell, MatSortHeader, MatHeaderRowDef, MatHeaderRow, MatRowDef, MatRow, MatButton, MatTooltip, WrappedIconComponent, FormsModule, TranslateModule, UsersMenuComponent, HasSelectionValuePipe, IsSelectedPipe, IsAllSelectedPipe, SearchFilterComponent, JsonPipe, WorkspacesComponent, IsSelectedIdPipe, WorkspacesSelectionComponent, MatIcon]
 })
 export class UsersSelectionComponent implements OnInit {
-  selectedUsers : number[] = [];
   userObjectsDatasource = new MatTableDataSource<UserFullDto>();
-  displayedUserColumns = ['selectCheckbox', 'name', 'displayName'];
+  displayedUserColumns = ['selectCheckbox', 'username', 'displayName'];
   tableSelectionRow = new SelectionModel<UserFullDto>(false, []);
   tableSelectionCheckboxes = new SelectionModel<UserFullDto>(true, []);
   userWorkspaces :WorkspaceInListDto[] = [];
@@ -63,8 +63,9 @@ export class UsersSelectionComponent implements OnInit {
     private appService: AppService,
     private snackBar: MatSnackBar,
     private translateService: TranslateService
-  ) {
-  }
+  ) {}
+
+  @Input() selectedUserIds!: number[];
 
   ngOnInit(): void {
     setTimeout(() => {
@@ -77,7 +78,7 @@ export class UsersSelectionComponent implements OnInit {
     this.userObjectsDatasource = new MatTableDataSource(users);
     this.userObjectsDatasource
       .filterPredicate = (userList: UserFullDto, filter) => [
-        'name', 'firstName', 'lastName'
+        'username'
       ].some(column => (userList[column as keyof UserFullDto] as string || '')
         .toLowerCase()
         .includes(filter));
@@ -105,13 +106,11 @@ export class UsersSelectionComponent implements OnInit {
   createWorkspaceList(): void {
     this.backendService.getAllWorkspacesList().subscribe(workspaces => {
       if (workspaces.length > 0) { this.userWorkspaces = workspaces; }
-      console.log('Workspaces: ', this.userWorkspaces);
     });
   }
 
   checkboxToggle(row: UserFullDto): void {
     this.tableSelectionCheckboxes.toggle(row);
-    console.log('Checkbox toggled: ', row);
     this.updateUserWorkspacesList(row.id);
     this.userSelectionChanged.emit(this.tableSelectionCheckboxes.selected);
   }

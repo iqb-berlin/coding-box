@@ -2,7 +2,7 @@ import {
   Body,
   Controller,
   Delete,
-  Get, Param,
+  Get, Param, Patch,
   Post, Query, UploadedFiles, UseGuards, UseInterceptors
 } from '@nestjs/common';
 import {
@@ -27,7 +27,9 @@ import { AuthService } from '../../auth/service/auth.service';
 @Controller('admin/workspace')
 export class WorkspaceController {
   constructor(
-    private workspaceService: WorkspaceService, private testcenterService: TestcenterService
+    private workspaceService: WorkspaceService,
+    private testcenterService: TestcenterService,
+    private authService: AuthService
   ) {}
 
   @Get()
@@ -177,12 +179,12 @@ export class WorkspaceController {
     return this.workspaceService.remove(idsAsNumberArray);
   }
 
-  // @Patch()
-  // @ApiBearerAuth()
-  // @ApiTags('admin workspaces')
-  // async patch(@Body() workspaceGroupFullDto: WorkspaceFullDto) {
-  //   return this.workspaceService.patch(workspaceGroupFullDto);
-  // }
+  @Patch()
+  @ApiBearerAuth()
+  @ApiTags('admin workspaces')
+  async patch(@Body() workspaces: WorkspaceFullDto) {
+    return this.workspaceService.patch(workspaces);
+  }
 
   @Post()
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
@@ -192,7 +194,19 @@ export class WorkspaceController {
     type: Number
   })
   @ApiTags('admin workspaces')
-  async create(@Body() createWorkspaceGroupDto: CreateWorkspaceDto) {
-    return this.workspaceService.create(createWorkspaceGroupDto);
+  async create(@Body() createWorkspaceDto: CreateWorkspaceDto) {
+    return this.workspaceService.create(createWorkspaceDto);
+  }
+
+  @Post(':workspaceId/users')
+  @ApiBearerAuth()
+  @ApiCreatedResponse({
+    description: 'Sends back the id of the new user in database',
+    type: Number
+  })
+  @ApiTags('admin users')
+  async setWorkspaceUsers(@Body() userIds: number[],
+    @Param('workspaceId') workspaceId: number) {
+    return this.workspaceService.setWorkspaceUsers(workspaceId, userIds);
   }
 }

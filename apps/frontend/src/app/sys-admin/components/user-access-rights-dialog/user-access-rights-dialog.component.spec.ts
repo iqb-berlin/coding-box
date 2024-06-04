@@ -3,11 +3,11 @@ import { HttpClientModule } from '@angular/common/http';
 import { MAT_DIALOG_DATA, MatDialogModule } from '@angular/material/dialog';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatIconModule } from '@angular/material/icon';
-import { WorkspaceAccessRightsDialogComponent } from './workspace-access-rights-dialog.component';
+import { UserAccessRightsDialogComponent } from './user-access-rights-dialog.component';
 
-describe('WorkspaceAccessRightsDialogComponent', () => {
-  let component: WorkspaceAccessRightsDialogComponent;
-  let fixture: ComponentFixture<WorkspaceAccessRightsDialogComponent>;
+describe('UserAccessRightsDialogComponent', () => {
+  let component: UserAccessRightsDialogComponent;
+  let fixture: ComponentFixture<UserAccessRightsDialogComponent>;
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
@@ -24,7 +24,7 @@ describe('WorkspaceAccessRightsDialogComponent', () => {
       ]
     }).compileComponents();
 
-    fixture = TestBed.createComponent(WorkspaceAccessRightsDialogComponent);
+    fixture = TestBed.createComponent(UserAccessRightsDialogComponent);
     component = fixture.componentInstance;
   });
 

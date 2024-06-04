@@ -5,7 +5,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { TranslateModule } from '@ngx-translate/core';
 import { HttpClientModule } from '@angular/common/http';
 import { WorkspacesMenuComponent } from './workspaces-menu.component';
-import { environment } from '../../../../../environments/environment';
+import { environment } from '../../../../environments/environment';
 
 describe('WorkspacesMenuComponent', () => {
   let component: WorkspacesMenuComponent;

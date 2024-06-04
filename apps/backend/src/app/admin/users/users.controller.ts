@@ -1,6 +1,6 @@
 import {
   Body,
-  Controller, Delete, Get, Param, Post, UseGuards
+  Controller, Delete, Get, Param, Patch, Post, UseGuards
 } from '@nestjs/common';
 import {
   ApiBearerAuth, ApiCreatedResponse, ApiMethodNotAllowedResponse, ApiOkResponse, ApiQuery, ApiTags
@@ -37,6 +37,14 @@ export class UsersController {
   @ApiTags('admin users')
   async findAllFull(): Promise<UserFullDto[]> {
     return this.usersService.findAllFull();
+  }
+
+  @Patch(':userId')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiTags('admin users')
+  async editUser(@Param('userId') userId:number, @Body() change: UserFullDto): Promise<UserFullDto[]> {
+    return this.usersService.editUser(userId, change);
   }
 
   @Get(':userId/workspaces')

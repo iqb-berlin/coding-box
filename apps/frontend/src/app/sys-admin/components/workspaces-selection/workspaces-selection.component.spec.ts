@@ -9,11 +9,11 @@ import { MatTableModule } from '@angular/material/table';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatDialogModule } from '@angular/material/dialog';
 import {
-  Component, Input, Output
+  Component, Input
 } from '@angular/core';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { WorkspacesSelectionComponent } from './workspaces-selection.component';
-import { environment } from '../../../../../environments/environment';
+import { environment } from '../../../../environments/environment';
 
 describe('WorkspacesSelectionComponent', () => {
   let component: WorkspacesSelectionComponent;

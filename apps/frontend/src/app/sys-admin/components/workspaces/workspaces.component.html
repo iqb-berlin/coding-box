@@ -1,13 +1,15 @@
 <div class="fx-row-space-between-start admin-tab-content">
   <div class="object-list fx-column-start-stretch fx-flex-row-50">
     <coding-box-workspaces-menu
-      [selectedWorkspaceGroupId]="selectedWorkspaceId"
+      [selectedWorkspaces]="selectedWorkspaces"
       [selectedRows]="tableSelectionRow.selected"
       [checkedRows]="tableSelectionCheckboxes.selected"
       (workspaceAdded)="addWorkspace($event)"
       (workspaceEdited)="editWorkspace($event)"
-      (workspaceDeleted)="deleteWorkspace($event)">
+      (workspaceDeleted)="deleteWorkspace($event)"
+      (setWorkspaceUsersAccessRight) ="setWorkspaceUsersAccessRight($event)">
     </coding-box-workspaces-menu>
-    <coding-box-workspaces-selection></coding-box-workspaces-selection>
+    <coding-box-workspaces-selection
+      (workspaceSelectionChanged)="workspaceSelectionChanged($event)"></coding-box-workspaces-selection>
   </div>
 </div>
