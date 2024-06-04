@@ -3,6 +3,9 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ArgumentOutOfRangeError } from 'rxjs';
 import * as cheerio from 'cheerio';
+import AdmZip = require('adm-zip');
+import * as util from 'util';
+import * as fs from 'fs';
 import Workspace from '../entities/workspace.entity';
 import { WorkspaceInListDto } from '../../../../../frontend/api-dto/workspaces/workspace-in-list-dto';
 import { WorkspaceFullDto } from '../../../../../frontend/api-dto/workspaces/workspace-full-dto';
@@ -193,53 +196,76 @@ export class WorkspaceService {
     });
   }
 
-  async uploadTestFiles(id: number, originalFiles: BufferSource, file:any): Promise<any> {
-    if (originalFiles[0].mimetype === 'text/xml') {
-      const xmlDocument = cheerio.load(originalFiles[0].buffer.toString(), {
-        xmlMode: true,
-        recognizeSelfClosing: true
-      });
-      const registry = this.fileUploadRepository.create(
-        { filename: originalFiles[0].originalname, workspace_id: 2, data: xmlDocument.html() });
-      await this.fileUploadRepository.save(registry);
-    }
-    if (originalFiles[0].mimetype === 'text/html') {
-      const registry = this.fileUploadRepository.create(
-        { filename: originalFiles[0].originalname, workspace_id: 2, data: originalFiles[0].buffer.toString() });
-      await this.fileUploadRepository.save(registry);
-    }
-    if (originalFiles[0].mimetype === 'application/octet-stream') {
-      const json = originalFiles[0].buffer.toString();
-      const registry = this.fileUploadRepository.create(
-        { filename: originalFiles[0].originalname, workspace_id: 2, data: json });
-      await this.fileUploadRepository.save(registry);
-    }
-    if (originalFiles[0].mimetype === 'application/zip') {
-      const json = originalFiles[0].buffer.toString();
-      const registry = this.fileUploadRepository.create(
-        { filename: originalFiles[0].originalname, workspace_id: 2, data: json });
-      await this.fileUploadRepository.save(registry);
-    }
-
-    if (originalFiles[0].mimetype === 'text/csv') {
-      const rows = WorkspaceService.csvToArr(originalFiles[0].buffer.toString(), ';');
-      const mappedRows = rows.map((row: Response) => {
-        const testPerson = `${row.loginname}${row.code}`.replace(/"/g, '');
-        const groupName = `${row.groupname}`.replace(/"/g, '');
-        const unitId = row.unitname.replace(/"/g, '');
-        const responses = row.responses.slice(0, -1).replace(/""/g, '"');
-
-        return ({
-          test_person: testPerson,
-          unit_id: unitId.toUpperCase(),
-          responses: responses,
-          test_group: groupName
+  async uploadTestFiles(workspace_id: number, originalFiles: FileIo[]): Promise<any> {
+    const filePromises = [];
+    originalFiles.forEach(file => {
+      if (file.mimetype === 'text/xml') {
+        const xmlDocument = cheerio.load(file.buffer.toString(), {
+          xmlMode: true,
+          recognizeSelfClosing: true
         });
-      });
 
-      const registry = this.responsesRepository.create(mappedRows);
-      await this.responsesRepository.save(registry);
-    }
+        filePromises.push(this.fileUploadRepository.save({
+          filename: file.originalname, workspace_id: workspace_id, file_type: 'Unit', file_size: file.size, data: xmlDocument.html()
+        }));
+      }
+      if (file.mimetype === 'text/html') {
+        filePromises.push(this.fileUploadRepository.save({
+          filename: file.originalname, workspace_id: workspace_id, file_type: 'Resource', file_size: file.size, data: originalFiles[0].buffer.toString()
+        }));
+      }
+      if (file.mimetype === 'application/octet-stream') {
+        const json = originalFiles[0].buffer.toString();
+        filePromises.push(this.fileUploadRepository.save({
+          filename: file.originalname, workspace_id: workspace_id, file_type: 'Resource', file_size: file.size, data: json
+        }));
+      }
+      if (file.mimetype === 'application/zip' || file.mimetype === 'application/x-zip-compressed' || file.mimetype === 'application/x-zip') {
+        const zip = new AdmZip(file.buffer);
+        const packageFiles = zip.getEntries().map(entry => entry.entryName);
+        console.log('packageFiles', packageFiles);
+        const resourcePackagesPath = './packages';
+        const packageName = 'geogebra';
+        const zipExtractAllToAsync = util.promisify(zip.extractAllToAsync);
+        return zipExtractAllToAsync(`${resourcePackagesPath}/${packageName}`, true, true)
+          .then(async () => {
+            const newResourcePackage = this.resourcePackageRepository.create({
+              name: packageName,
+              elements: packageFiles,
+              createdAt: new Date()
+            });
+            await this.resourcePackageRepository.save(newResourcePackage);
+            fs.writeFileSync(
+              `${resourcePackagesPath}/${packageName}`,
+              file.buffer
+            );
+            return newResourcePackage.id;
+          })
+          .catch(error => {
+            throw new Error(error.message);
+          });
+      }
+
+      if (file.mimetype === 'text/csv') {
+        const rows = WorkspaceService.csvToArr(file.buffer.toString(), ';');
+        const mappedRows = rows.map((row: Response) => {
+          const testPerson = `${row.loginname}${row.code}`.replace(/"/g, '');
+          const groupName = `${row.groupname}`.replace(/"/g, '');
+          const unitId = row.unitname.replace(/"/g, '');
+          const responses = row.responses.replace(/^"|"$/g, '').replace(/""/g, '"');
+
+          return ({
+            test_person: testPerson,
+            unit_id: unitId.toUpperCase(),
+            responses: responses,
+            test_group: groupName,
+            workspace_id: workspace_id
+          });
+        });
+        filePromises.push(this.responsesRepository.save(mappedRows));
+      }
+    });
+    await Promise.all(filePromises);
   }
 
   async testcenterImport(entries:any): Promise<any> {
