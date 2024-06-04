@@ -6,6 +6,7 @@ import { TranslateModule } from '@ngx-translate/core';
 import { MatTooltip } from '@angular/material/tooltip';
 import { KeycloakService } from 'keycloak-angular';
 import { MatButton } from '@angular/material/button';
+import { LocationStrategy } from '@angular/common';
 import { AppService } from './services/app.service';
 import { AuthService } from './auth/service/auth.service';
 import { initializer } from './auth/keycloak-initializer';
@@ -17,6 +18,7 @@ import { UserMenuComponent } from './sys-admin/components/user-menu/user-menu.co
 @Component({
   selector: 'app-root',
   standalone: true,
+  // eslint-disable-next-line max-len
   imports: [RouterOutlet, MatSlideToggleModule, MatProgressSpinner, RouterLink, TranslateModule, MatTooltip, MatButton, UserMenuComponent, WrappedIconComponent],
   templateUrl: './app.component.html',
   styleUrl: './app.component.scss',
@@ -30,7 +32,7 @@ import { UserMenuComponent } from './sys-admin/components/user-menu/user-menu.co
   ]
 })
 export class AppComponent implements OnInit {
-  title = 'coding-box';
+  title = 'Kodierbox';
   loggedInKeycloak: boolean = false;
   errorMessage = '';
   constructor(
@@ -38,12 +40,13 @@ export class AppComponent implements OnInit {
     public authService:AuthService,
     public keycloakService:KeycloakService,
     public backendService:BackendService,
+    public url:LocationStrategy,
     private router: Router) {}
 
   async keycloakLogin(user: CreateUserDto): Promise<void> {
     this.errorMessage = '';
     this.appService.errorMessagesDisabled = true;
-    //const initLoginMode = !this.appService.appConfig.hasUsers;
+    // const initLoginMode = !this.appService.appConfig.hasUsers;
     this.backendService.keycloakLogin(user).subscribe(async ok => {
       console.log('keycloakLogin', ok);
       // await this.validLoginCheck(ok, initLoginMode);

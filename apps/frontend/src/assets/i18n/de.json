@@ -148,7 +148,7 @@
     "test-files": "Testdateien",
     "test-persons": "Testpersonen",
     "test-groups": "Testgruppen",
-    "select-replay": "Replay"
+    "select-unit-play": "Replay"
   },
   "search-filter": {
     "filter-users": "Suche nach Nutzer:innen",
