@@ -31,7 +31,7 @@ export class AuthService {
 
   async keycloakLogin(user: CreateUserDto) {
     const {
-      username, lastName, firstName, email, identity, issuer
+      username, lastName, firstName, email, identity, issuer, isAdmin
     } = user;
     const userId = await this.usersService.createKeycloakUser({
       identity: identity,
@@ -40,26 +40,25 @@ export class AuthService {
       lastName: lastName,
       firstName: firstName,
       issuer: issuer,
-      isAdmin: false
+      isAdmin: isAdmin
     });
     this.logger.log(`Keycloak User with id '${userId}' is logging in.`);
     const payload = { username: username, sub: userId, sub2: 0 };
     return this.jwtService.sign(payload);
   }
 
-  async validateUser(username: string, pass: string): Promise<number | null> {
-    return this.usersService.getUserByNameAndPassword(username, pass);
-  }
-
-  async createToken(): Promise<string> {
-    const payload = { username: 'a', sub: 1, sub2: 0 };
+  async createToken(identity:string, workspaceId:number): Promise<string> {
+    const user = await this.usersService.findUserByIdentity(identity);
+    const payload = {
+      username: user.username, sub: identity, sub2: 0, workspace: workspaceId
+    };
     const token = this.jwtService.sign(payload);
-    return token;
+    return JSON.stringify(token);
   }
 
   async login(user: CreateUserDto) {
     const {
-      identity, username, email, lastName, firstName, issuer, isAdmin
+      identity, username, email, lastName, firstName, issuer
     } = user;
     const userId = await this.usersService.createUser({
       identity: identity,
@@ -71,7 +70,7 @@ export class AuthService {
       isAdmin: false
     });
     this.logger.log(`User with id '${userId}' is logging in.`);
-    const payload = { username: 'a', sub: 1, sub2: 0 };
+    const payload = { username: username, sub: userId, sub2: 0 };
     return this.jwtService.sign(payload);
   }
 

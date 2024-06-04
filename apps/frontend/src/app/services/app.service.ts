@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { Subject } from 'rxjs';
-import { KeycloakProfile } from 'keycloak-js';
+import { KeycloakProfile, KeycloakTokenParsed } from 'keycloak-js';
 import { AppLogoDto } from '../../../api-dto/app-logo-dto';
 import { AuthDataDto } from '../../../api-dto/auth-data-dto';
 
@@ -9,7 +9,7 @@ import { AuthDataDto } from '../../../api-dto/auth-data-dto';
 })
 export class AppService {
   static defaultAuthData = <AuthDataDto>{
-    userId: '0',
+    userId: 0,
     userName: '',
     email: '',
     firstName: '',
@@ -25,6 +25,8 @@ export class AppService {
   dataLoading: boolean | number = false;
   appLogo: AppLogoDto = standardLogo;
   postMessage$ = new Subject<MessageEvent>();
+  loggedUser: KeycloakTokenParsed | undefined;
+
   processMessagePost(postData: MessageEvent): void {
     const msgData = postData.data;
     const msgType = msgData.type;
@@ -39,5 +41,5 @@ export const standardLogo: AppLogoDto = {
   alt: 'Zur Startseite',
   // eslint-disable-next-line max-len
   bodyBackground: 'linear-gradient(180deg, rgba(7,70,94,1) 0%, rgba(6,112,123,1) 24%, rgba(1,192,229,1) 85%)',
-  boxBackground: 'lightgray',
+  boxBackground: 'lightgray'
 };

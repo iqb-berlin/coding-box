@@ -6,7 +6,6 @@ import { TranslateModule } from '@ngx-translate/core';
 import { MatTooltip } from '@angular/material/tooltip';
 import { KeycloakService } from 'keycloak-angular';
 import { MatButton } from '@angular/material/button';
-import { KeycloakTokenParsed } from 'keycloak-js';
 import { AppService } from './services/app.service';
 import { AuthService } from './auth/service/auth.service';
 import { initializer } from './auth/keycloak-initializer';
@@ -34,8 +33,6 @@ export class AppComponent implements OnInit {
   title = 'coding-box';
   loggedInKeycloak: boolean = false;
   errorMessage = '';
-  private loggedUser: KeycloakTokenParsed | undefined;
-
   constructor(
     public appService: AppService,
     public authService:AuthService,
@@ -45,9 +42,8 @@ export class AppComponent implements OnInit {
 
   async keycloakLogin(user: CreateUserDto): Promise<void> {
     this.errorMessage = '';
-    //this.appService.dataLoading = true;
     this.appService.errorMessagesDisabled = true;
-    // const initLoginMode = !this.appService.appConfig.hasUsers;
+    //const initLoginMode = !this.appService.appConfig.hasUsers;
     this.backendService.keycloakLogin(user).subscribe(async ok => {
       console.log('keycloakLogin', ok);
       // await this.validLoginCheck(ok, initLoginMode);
@@ -60,23 +56,24 @@ export class AppComponent implements OnInit {
     } else {
       this.loggedInKeycloak = true;
       this.appService.isLoggedInKeycloak = true;
-      this.loggedUser = this.authService.getLoggedUser();
+      this.appService.loggedUser = this.authService.getLoggedUser();
       this.appService.userProfile = await this.authService.loadUserProfile();
+      const isAdmin = this.authService.getRoles().includes('admin');
       if (this.appService.userProfile.id && this.appService.userProfile.username) {
         const keycloakUser: CreateUserDto = {
-          issuer: this.loggedUser?.iss || '',
+          issuer: this.appService.loggedUser?.iss || '',
           identity: this.appService.userProfile.id,
           username: this.appService.userProfile.username,
           lastName: this.appService.userProfile.lastName || '',
           firstName: this.appService.userProfile.firstName || '',
           email: this.appService.userProfile.email || '',
-          isAdmin: false
+          isAdmin: isAdmin
         };
         await this.keycloakLogin(keycloakUser);
       }
       const token = localStorage.getItem('id_token');
       if (token) {
-        this.backendService.getAuthData().subscribe(async authData => {
+        this.backendService.getAuthData(this.appService.userProfile.id || '').subscribe(async authData => {
           this.appService.authData = authData;
         });
       }

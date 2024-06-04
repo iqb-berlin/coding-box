@@ -20,10 +20,9 @@ export class AuthService {
     }
   }
 
-  getToken() {
-    let  returnToken ='';
-     this.keycloakService.getToken().then(token =>  returnToken = token);
-    return returnToken;
+  async getToken() {
+    const token = await this.keycloakService.getToken();
+    return token;
   }
 
   isLoggedIn(): boolean {

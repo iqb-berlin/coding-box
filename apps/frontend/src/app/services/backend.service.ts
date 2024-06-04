@@ -29,8 +29,8 @@ export class BackendService {
     return `${this.serverUrl}packages/`;
   }
 
-  createToken(): Observable<string> {
-    return this.http.get<string>(`${this.serverUrl}create-token`, { headers: this.authHeader });
+  getToken(workspace_id:number, user:string): Observable<string> {
+    return this.http.get<string>(`${this.serverUrl}admin/workspace/${workspace_id}/${user}/token`, { headers: this.authHeader });
   }
 
   keycloakLogin(user: CreateUserDto): Observable<boolean> {
@@ -40,7 +40,7 @@ export class BackendService {
         switchMap(loginToken => {
           if (typeof loginToken === 'string') {
             localStorage.setItem('id_token', loginToken);
-            return this.getAuthData()
+            return this.getAuthData(user.identity || '')
               .pipe(
                 map(authData => {
                   this.appService.authData = authData;
@@ -58,8 +58,8 @@ export class BackendService {
     return this.http.post<string>(`${SERVER_URL}login`, user, { headers: this.authHeader });
   }
 
-  getAuthData(): Observable<AuthDataDto> {
-    return this.http.get<AuthDataDto>(`${SERVER_URL}auth-data`, { headers: this.authHeader });
+  getAuthData(id:string): Observable<AuthDataDto> {
+    return this.http.get<AuthDataDto>(`${SERVER_URL}auth-data?identity=${id}`, { headers: this.authHeader });
   }
 
   getUsersFull(): Observable<UserFullDto[]> {
