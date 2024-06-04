@@ -2,7 +2,6 @@ import { Injectable, Logger, MethodNotAllowedException } from '@nestjs/common';
 import { MoreThan, Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { HttpService } from '@nestjs/axios';
-import { Observable } from 'rxjs';
 import User from '../entities/user.entity';
 import { UserFullDto } from '../../../../../frontend/api-dto/user/user-full-dto';
 import { CreateUserDto } from '../../../../../frontend/api-dto/user/create-user-dto';
@@ -16,7 +15,7 @@ export class UsersService {
     @InjectRepository(User)
     private usersRepository: Repository<User>,
     @InjectRepository(WorkspaceUser)
-    private workspaceUserRepository: Repository<WorkspaceUser>,
+    private workspaceUserRepository: Repository<WorkspaceUser>
   ) {
   }
 
@@ -64,6 +63,12 @@ export class UsersService {
     return user;
   }
 
+  async editUser(userId:number, change:any): Promise<UserFullDto[]> {
+    this.logger.log(`Editing user with id: ${userId}`);
+    await this.usersRepository.save({ id: userId, ...change });
+    return [];
+  }
+
   async setUserWorkspaces(userId: number, workspaceIds: number[]): Promise<any> {
     this.logger.log(`Setting workspaces for user with id: ${userId}`);
     const entries = workspaceIds.map(workspace => ({ userId: userId, workspaceId: workspace }));
@@ -72,13 +77,6 @@ export class UsersService {
       await this.workspaceUserRepository.delete({ userId: userId });
     }
     await this.workspaceUserRepository.save(entries);
-
-    // workspaceIds.forEach(workspaceId => {
-    //   const workspaceUser = new WorkspaceUser();
-    //   workspaceUser.userId = userId;
-    //   workspaceUser.workspaceId = workspaceId;
-    //   this.workspaceUserRepository.save(workspaceUser);
-    // });
   }
 
   async hasUsers(): Promise<boolean> {
@@ -124,17 +122,6 @@ export class UsersService {
     return false;
   }
 
-  async getUserByNameAndPassword(name: string, password: string): Promise<number | null> {
-    const user = await this.usersRepository.findOne({
-      where: { username: name, id: 1 },
-      select: { id: true }
-    });
-    if (user) {
-      return user.id;
-    }
-    return null;
-  }
-
   async remove(id: number | number[]): Promise<void> {
     this.logger.log(`Deleting user with id: ${id}`);
     await this.usersRepository.delete(id);
@@ -147,11 +134,6 @@ export class UsersService {
     }
     // TODO: Eigene Exception mit Custom-Parametern
     throw new MethodNotAllowedException();
-  }
-
-  setPassword(newPassword: string, token:string): Observable<any> {
-    this.logger.log('Setting password for user with id:');
-    return this.httpService.put('');
   }
 
   async createKeycloakUser(keycloakUser: CreateUserDto): Promise<number> {

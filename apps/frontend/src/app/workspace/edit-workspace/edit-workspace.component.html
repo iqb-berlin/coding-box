@@ -1,11 +1,11 @@
 <h1 mat-dialog-title>{{data.title}}</h1>
 <mat-dialog-content >
-  <form [formGroup]="editWorkspaceGroupForm"
+  <form [formGroup]="editWorkspaceForm"
         class="fx-column-start-stretch">
       <mat-form-field>
         <input matInput
                formControlName="name"
-               [placeholder]="'admin.group-name' | translate"
+               [placeholder]="'admin.workspace-name' | translate"
                [value]="name">
       </mat-form-field>
   </form>
@@ -15,8 +15,8 @@
   <button mat-raised-button
           color="primary"
           type="submit"
-          [mat-dialog-close]="editWorkspaceGroupForm"
-          [disabled]="editWorkspaceGroupForm.invalid">
+          [mat-dialog-close]="editWorkspaceForm"
+          [disabled]="editWorkspaceForm.invalid">
     {{data.saveButtonLabel}}
   </button>
 

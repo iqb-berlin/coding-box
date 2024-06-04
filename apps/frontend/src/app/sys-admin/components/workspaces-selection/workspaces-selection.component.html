@@ -1,4 +1,4 @@
- @if (objectsDatasource.data.length) {
+@if (objectsDatasource.data.length) {
       <coding-box-search-filter
         [title]="'search-filter.filter-workspaces' | translate"
         (valueChange)="objectsDatasource.filter = $event.trim().toLowerCase()">
@@ -27,7 +27,7 @@
       <ng-container matColumnDef="name">
         <mat-header-cell *matHeaderCellDef
           mat-sort-header="name">
-          {{'admin.group-name' | translate}}
+          {{'admin.workspace-name' | translate}}
         </mat-header-cell>
         <mat-cell *matCellDef="let element"> {{element.name}} </mat-cell>
       </ng-container>

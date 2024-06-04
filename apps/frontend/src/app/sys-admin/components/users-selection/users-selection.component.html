@@ -1,4 +1,3 @@
-
   <div>
   @if (userObjectsDatasource.data.length) {
     <coding-box-search-filter
@@ -26,13 +25,13 @@
       </mat-cell>
     </ng-container>
 
-    <ng-container matColumnDef="name">
+    <ng-container matColumnDef="username">
       <mat-header-cell *matHeaderCellDef
-                       mat-sort-header="name">
+                       mat-sort-header="username">
         {{'user.login-name' | translate}}
       </mat-header-cell>
       <mat-cell *matCellDef="let element">
-        {{element.name}} {{element.isAdmin ? '*' : ''}}
+        {{  element.username}}{{element.isAdmin ? '*' : ''}}
       </mat-cell>
     </ng-container>
 

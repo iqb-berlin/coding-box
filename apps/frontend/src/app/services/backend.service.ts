@@ -79,9 +79,9 @@ export class BackendService {
       );
   }
 
-  changeUserData(newData: UserFullDto): Observable<boolean> {
+  changeUserData(userId:number, newData: UserFullDto): Observable<boolean> {
     return this.http
-      .patch(`${this.serverUrl}admin/users`, newData, { headers: this.authHeader })
+      .patch(`${this.serverUrl}admin/users/${userId}`, newData, { headers: this.authHeader })
       .pipe(
         catchError(() => of(false)),
         map(() => true)
@@ -108,6 +108,14 @@ export class BackendService {
   getWorkspacesByUserList(userId:number): Observable<number[]> {
     return this.http
       .get<number[]>(`${this.serverUrl}admin/users/${userId}/workspaces`, { headers: this.authHeader })
+      .pipe(
+        catchError(() => of([]))
+      );
+  }
+
+  getUsersByWorkspaceList(workspaceId:number): Observable<number[]> {
+    return this.http
+      .get<number[]>(`${this.serverUrl}admin/users/${workspaceId}/workspaces`, { headers: this.authHeader })
       .pipe(
         catchError(() => of([]))
       );
@@ -199,8 +207,11 @@ export class BackendService {
   }
 
   setUserWorkspaceAccessRight(userId: number, workspaceIds: number[]): Observable<boolean> {
-    console.log('öööööö', userId, workspaceIds);
     return this.http.post<boolean>(`${SERVER_URL}admin/users/${userId}/workspaces/`, workspaceIds, { headers: this.authHeader });
+  }
+
+  setWorkspaceUsersAccessRight(workspaceId: number, userIds: number[]): Observable<boolean> {
+    return this.http.post<boolean>(`${SERVER_URL}admin/workspace/${workspaceId}/users/`, userIds, { headers: this.authHeader });
   }
 
   getFilesList(workspaceId: number): Observable<any> {

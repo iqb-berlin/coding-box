@@ -19,11 +19,11 @@ import { MatFormField } from '@angular/material/form-field';
   imports: [MatDialogTitle, MatDialogContent, FormsModule, ReactiveFormsModule, MatFormField, MatInput, MatDialogActions, MatButton, MatDialogClose, TranslateModule]
 })
 export class EditWorkspaceComponent {
-  editWorkspaceGroupForm: UntypedFormGroup;
-  name = this.data.wsg?.name || '';
+  editWorkspaceForm: UntypedFormGroup;
+  name = this.data.ws?.name || '';
   constructor(private fb: UntypedFormBuilder,
               @Inject(MAT_DIALOG_DATA) public data: any) {
-    this.editWorkspaceGroupForm = this.fb.group({
+    this.editWorkspaceForm = this.fb.group({
       name: this.fb.control(this.name, [Validators.required, Validators.minLength(3)])
     });
   }

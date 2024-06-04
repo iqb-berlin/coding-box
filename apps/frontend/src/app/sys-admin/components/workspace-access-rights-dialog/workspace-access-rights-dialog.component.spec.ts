@@ -5,17 +5,16 @@ import { TranslateModule } from '@ngx-translate/core';
 import { MatIconModule } from '@angular/material/icon';
 import { WorkspaceAccessRightsDialogComponent } from './workspace-access-rights-dialog.component';
 
-
-describe('LoginAlternativeWarningComponent', () => {
+describe('WorkspaceAccessRightsDialogComponent', () => {
   let component: WorkspaceAccessRightsDialogComponent;
   let fixture: ComponentFixture<WorkspaceAccessRightsDialogComponent>;
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       providers: [{
-          provide: MAT_DIALOG_DATA,
-          useValue: {}
-        }
+        provide: MAT_DIALOG_DATA,
+        useValue: {}
+      }
       ],
       imports: [
         HttpClientModule,

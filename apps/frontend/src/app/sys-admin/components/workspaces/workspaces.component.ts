@@ -47,6 +47,8 @@ export class WorkspacesComponent implements OnInit {
   tableSelectionCheckboxes = new SelectionModel<WorkspaceInListDto>(true, []);
   tableSelectionRow = new SelectionModel<WorkspaceInListDto>(false, []);
   selectedWorkspaceId = 0;
+  selectedWorkspaces : number[] = [];
+  selectedRows : WorkspaceInListDto[] = [];
 
   @ViewChild(MatSort) sort = new MatSort();
 
@@ -59,9 +61,7 @@ export class WorkspacesComponent implements OnInit {
   }
 
   ngOnInit(): void {
-    setTimeout(() => {
-      this.updateWorkspaceList();
-    });
+
   }
 
   addWorkspace(result: UntypedFormGroup): void {
@@ -88,11 +88,10 @@ export class WorkspacesComponent implements OnInit {
     );
   }
 
-  editWorkspace(value: { selection: WorkspaceInListDto[], group: UntypedFormGroup }): void {
-    this.appService.dataLoading = true;
+  editWorkspace(value: { selection: number[], formData: UntypedFormGroup }): void {
     this.backendService.changeWorkspace({
-      id: value.selection[0].id,
-      name: value.group.get('name')?.value
+      id: value.selection[0],
+      name: value.formData.get('name')?.value
     })
       .subscribe(
         respOk => {
@@ -114,11 +113,9 @@ export class WorkspacesComponent implements OnInit {
       );
   }
 
-  deleteWorkspace(groups: WorkspaceInListDto[]): void {
+  deleteWorkspace(workspace_ids:number[]): void {
     this.appService.dataLoading = true;
-    const workspaceGroupsToDelete: number[] = [];
-    groups.forEach(r => workspaceGroupsToDelete.push(r.id));
-    this.backendService.deleteWorkspace(workspaceGroupsToDelete).subscribe(
+    this.backendService.deleteWorkspace(workspace_ids).subscribe(
       respOk => {
         if (respOk) {
           this.snackBar.open(
@@ -159,19 +156,28 @@ export class WorkspacesComponent implements OnInit {
     this.objectsDatasource.sort = this.sort;
   }
 
-  private isAllSelected(): boolean {
-    const numSelected = this.tableSelectionCheckboxes.selected.length;
-    const numRows = this.objectsDatasource ? this.objectsDatasource.data.length : 0;
-    return numSelected === numRows;
+  workspaceSelectionChanged(workspaceData: any): void {
+    this.selectedWorkspaces = workspaceData.map((workspace:any) => workspace.id);
+    // this.selectedWorkspaces = workspaceData;
   }
 
-  masterToggle(): void {
-    this.isAllSelected() || !this.objectsDatasource ?
-      this.tableSelectionCheckboxes.clear() :
-      this.objectsDatasource.data.forEach(row => this.tableSelectionCheckboxes.select(row));
-  }
 
-  toggleRowSelection(row: WorkspaceInListDto): void {
-    this.tableSelectionRow.toggle(row);
+  setWorkspaceUsersAccessRight(users: number[]): void {
+    this.backendService.setWorkspaceUsersAccessRight(this.selectedWorkspaces[0], users).subscribe(
+      respOk => {
+        if (respOk) {
+          this.snackBar.open(
+            this.translateService.instant('admin.workspace-access-right-set'),
+            '',
+            { duration: 1000 });
+        } else {
+          this.snackBar.open(
+            this.translateService.instant('admin.workspace-access-right-not-set'),
+            this.translateService.instant('error'),
+            { duration: 3000 });
+        }
+        this.appService.dataLoading = false;
+      }
+    );
   }
 }

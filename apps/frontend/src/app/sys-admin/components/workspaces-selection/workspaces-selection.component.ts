@@ -46,10 +46,10 @@ export class WorkspacesSelectionComponent implements OnInit {
   tableSelectionCheckboxes = new SelectionModel<WorkspaceInListDto>(true, []);
   tableSelectionRow = new SelectionModel<WorkspaceInListDto>(false, []);
   selectedWorkspaceId = 0;
-  userWorkspaces: WorkspaceInListDto[] = [];
 
   @ViewChild(MatSort) sort = new MatSort();
   @Input() selectedWorkspacesIds!: number[];
+  @Output() workspaceSelectionChanged: EventEmitter<WorkspaceInListDto[]> = new EventEmitter<WorkspaceInListDto[]>();
   @Output() selectionChanged: EventEmitter<WorkspaceInListDto[]> = new EventEmitter<WorkspaceInListDto[]>();
 
   constructor(
@@ -75,7 +75,7 @@ export class WorkspacesSelectionComponent implements OnInit {
       if (this.selectedWorkspacesIds?.length > 0) {
         this.tableSelectionCheckboxes.select(...workspaces
           .filter(workspace => this.selectedWorkspacesIds.includes(workspace.id)));
-        this.selectionChanged.emit(this.tableSelectionCheckboxes.selected);
+        this.workspaceSelectionChanged.emit(this.tableSelectionCheckboxes.selected);
       }
     });
   }
@@ -93,7 +93,7 @@ export class WorkspacesSelectionComponent implements OnInit {
 
   selectCheckbox(row: WorkspaceInListDto): void {
     this.tableSelectionCheckboxes.toggle(row);
-    this.selectionChanged.emit(this.tableSelectionCheckboxes.selected);
+    this.workspaceSelectionChanged.emit(this.tableSelectionCheckboxes.selected);
   }
 
   private isAllSelected(): boolean {
@@ -106,7 +106,7 @@ export class WorkspacesSelectionComponent implements OnInit {
     this.isAllSelected() || !this.objectsDatasource ?
       this.tableSelectionCheckboxes.clear() :
       this.objectsDatasource.data.forEach(row => this.tableSelectionCheckboxes.select(row));
-    this.selectionChanged.emit(this.tableSelectionCheckboxes.selected);
+    this.workspaceSelectionChanged.emit(this.tableSelectionCheckboxes.selected);
   }
 
   toggleRowSelection(row: WorkspaceInListDto): void {
