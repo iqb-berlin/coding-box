@@ -42,25 +42,8 @@ export class AppController {
     return `"${token}"`;
   }
 
-  @Post('login')
-  @UseGuards(LocalAuthGuard)
-  @ApiTags('auth')
-  @ApiOkResponse({ description: 'Login successful.' })
-  async login(@Body() user: CreateUserDto) {
-    const token = await this.authService.login(user);
-    return `"${token}"`;
-  }
-
-  @Post('password')
-  @UseGuards(JwtAuthGuard)
-  @ApiOkResponse({ description: 'Password successfully updated.' })
-  @ApiTags('auth')
-  async setPassword(@Body() new_password, token): Promise<any> {
-    return this.userService.setPassword(new_password, token);
-  }
-
   @Post('tc_authentication')
   async authenticate(@Body() credentials: any): Promise<any> {
-    return this.testcenterService.authenticate(credentials);
+    return this.testCenterService.authenticate(credentials);
   }
 }

@@ -12,6 +12,8 @@ import FileUpload from '../entities/file_upload.entity';
 import { FilesDto } from '../../../../../frontend/api-dto/files/files.dto';
 import Responses from '../entities/responses.entity';
 import WorkspaceUser from '../entities/workspace_user.entity';
+import { FileIo } from '../../admin/test-files/interfaces/file-io.interface';
+import ResourcePackage from '../entities/resource-package.entity';
 import User from '../entities/user.entity';
 
 export type Response = {

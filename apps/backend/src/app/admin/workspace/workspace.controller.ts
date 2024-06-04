@@ -164,8 +164,8 @@ export class WorkspaceController {
   @ApiParam({ name: 'workspace_id', type: Number })
   @UseInterceptors(FilesInterceptor('files'))
   @ApiTags('workspace')
-  async addTestFiles(@WorkspaceId() workspaceId: number, @UploadedFiles() files): Promise<any> {
-    return this.workspaceService.uploadTestFiles(workspaceId, files, '');
+  async addTestFiles(@Param('workspace_id') workspace_id:number, @UploadedFiles() files): Promise<any> {
+    return this.workspaceService.uploadTestFiles(workspace_id, files);
   }
 
   @Delete(':ids')

@@ -147,9 +147,9 @@ export class BackendService {
       );
   }
 
-  deleteTestGroups(testGroups: string[]): Observable<boolean> {
+  deleteTestGroups(workspace_id:number, testGroups: string[]): Observable<boolean> {
     return this.http
-      .delete(`${this.serverUrl}admin/workspace/2/test-groups/${testGroups.join(';')}`, { headers: this.authHeader })
+      .delete(`${this.serverUrl}admin/workspace/${workspace_id}/test-groups/${testGroups.join(';')}`, { headers: this.authHeader })
       .pipe(
         catchError(() => of(false)),
         map(() => true)
