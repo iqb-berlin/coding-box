@@ -1,9 +1,7 @@
 <div class="fx-column-start-start fx-gap-20 container">
   @if(testGroups.length !== 0 ){
-    <div class="fx-row-start-start fx-gap-10">
-      {{selectedTestPerson}}
-      {{selectedUnit}}
-
+    <div class="fx-row-start fx-gap-25" >
+    <div class="fx-row-start-center fx-gap-5" >
       <mat-form-field>
         <mat-label>Testgruppe</mat-label>
         <mat-select (valueChange)="getTestPersons($event)">
@@ -35,13 +33,13 @@
           }
         </mat-select>
       </mat-form-field>
-
-      <button mat-raised-button color="primary"
-              (click)="replay()"
-              [disabled]="units.length === 0 ">
-        <mat-icon>play_arrow</mat-icon>
-        Abspielen
-      </button>
+    </div>
+    <button mat-raised-button color="primary"
+            (click)="replay()"
+            [disabled]="!selectedUnit">
+      <mat-icon>fullscreen</mat-icon>
+      Vollbildansicht
+    </button>
     </div>
   } @else if(!isLoading) {
     <p>Keine Testgruppen vorhanden!</p>

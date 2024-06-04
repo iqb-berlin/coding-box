@@ -31,7 +31,7 @@ export const routes: Routes = [
     component: WsAdminComponent,
     children: [
       { path: '', redirectTo: 'test-files', pathMatch: 'full' },
-      { path: 'select-replay', component: SelectReplayComponent },
+      { path: 'select-unit-play', component: SelectReplayComponent },
       { path: 'test-files', component: FileUploadComponent },
       { path: 'test-groups', component: TestGroupsComponent },
       { path: 'users', component: WsUsersComponent },

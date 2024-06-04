@@ -9,6 +9,7 @@
       </button>
     </div>
   }
+  @if(!url.path().includes('replay')){
   <div class="fx-row-space-between-center app-header">
       <a [routerLink]="['/']" [attr.aria-label]="'home.go-home' | translate">
         <img [src]="appService.appLogo.data"
@@ -18,7 +19,7 @@
     <h1 [style]="{color:'lightgrey',fontSize:'30px'}">Kodierbox</h1>
 
     <div class="admin">
-      @if(appService.authData.isAdmin){
+      @if(appService.authData.isAdmin || this.authService.getRoles().includes('admin')){
         <button  [style]="{color:'lightgrey'}" mat-button class="icon-button-large"
                  [routerLink]="['/admin']"
                  [matTooltip]="'home.goto-admin' | translate"
@@ -30,6 +31,7 @@
       <coding-box-user-menu></coding-box-user-menu>
     </div>
   </div>
+}
   <router-outlet />
 </div>
 

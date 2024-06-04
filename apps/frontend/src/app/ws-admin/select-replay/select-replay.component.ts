@@ -59,7 +59,7 @@ export class SelectReplayComponent implements OnInit {
   }
 
   changedUnit(unit:string): void {
-    this.selectedUnit = unit;
+    this.selectedUnit = unit.toUpperCase();
   }
 
   replay(): void {

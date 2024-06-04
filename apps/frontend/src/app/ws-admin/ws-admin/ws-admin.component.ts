@@ -12,7 +12,7 @@ import { AppService } from '../../services/app.service';
   imports: [MatTabNav, MatTabLink, RouterLinkActive, RouterLink, MatTabNavPanel, RouterOutlet, TranslateModule]
 })
 export class WsAdminComponent implements OnInit {
-  navLinks: string[] = ['select-replay', 'test-files', 'test-groups', 'settings'];
+  navLinks: string[] = ['select-unit-play', 'test-files', 'test-groups', 'settings'];
   constructor(
     private route: ActivatedRoute,
     private appService: AppService
