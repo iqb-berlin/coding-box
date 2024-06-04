@@ -92,7 +92,7 @@ export class TestGroupsComponent implements OnInit {
   deleteTestGroups(): void {
     this.isLoading = true;
     const selectedTestGroups = this.tableSelectionCheckboxes.selected;
-    this.backendService.deleteTestGroups(selectedTestGroups.map(testGroup => testGroup.test_group)).subscribe(respOk => {
+    this.backendService.deleteTestGroups(this.appService.selectedWorkspaceId, selectedTestGroups.map(testGroup => testGroup.test_group)).subscribe(respOk => {
       if (respOk) {
         this.snackBar.open(
           this.translateService.instant('ws-admin.test-group-deleted'),

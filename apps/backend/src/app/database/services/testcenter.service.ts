@@ -9,6 +9,7 @@ import Responses from '../entities/responses.entity';
 import {
   ImportOptions
 } from '../../../../../frontend/src/app/ws-admin/test-center-import/test-center-import.component';
+import AdmZip = require('adm-zip');
 
 const agent = new https.Agent({
   rejectUnauthorized: false
@@ -134,12 +135,16 @@ export class TestcenterService {
       });
       const files = await filesPromise.then(res => res.data).catch(err => { err; });
       if (files) {
-        // const zipFiles = files.filter(file => file.name.includes('.zip'));
+        const zipFiles = files.Resource.filter(file => file.name.includes('.zip'));
         const unitDefFiles = files.Resource.filter(file => file.name.includes('.voud'));
         const playerFiles = files.Resource.filter(file => file.name.includes('.html'));
         const codingSchemeFiles = files.Resource.filter(file => file.name.includes('.vocs'));
         const unitFiles = files.Unit;
         let promises = [];
+        // const packagesPromises = zipFiles
+        //   .map(file => this.getPackage(file, server, tc_workspace, authToken));
+        // promises = [...promises, ...packagesPromises];
+
         if (player === 'true' && playerFiles.length > 0) {
           const playerPromises = playerFiles
             .map(file => this.getFile(file, server, tc_workspace, authToken));
@@ -163,7 +168,7 @@ export class TestcenterService {
         const results = await Promise.all(promises);
         if (results.length > 0) {
           const dbEntries = results.map(result => ({
-            filename: result.name,
+            filename: result.name || '',
             file_id: result.id,
             file_type: result.type,
             file_size: result.size,
@@ -194,5 +199,25 @@ export class TestcenterService {
     return {
       data: fileData, name: res.name, type: res.type, size: res.size, id: res.id
     };
+  }
+  async getPackage(res:File, server:string, tc_workspace:string, authToken:string): Promise<any> {
+    const headersRequest = {
+      Authtoken: authToken
+    };
+    const filePromise = this.httpService.axiosRef
+      .get(`http://iqb-testcenter${server}.de/api/workspace/${tc_workspace}/file/${res.type}/${res.name}`,
+        {
+          httpsAgent: agent,
+          headers: headersRequest
+        });
+    const fileData = await filePromise.then(res => res.data).catch(err => { err; });
+    console.log('fileData',fileData);
+    //const zip = new AdmZip(Buffer.from(fileData));
+    //const packageFiles = zip.getEntries().map(entry => entry.entryName);
+    //console.log('packageFiles',packageFiles);
+
+    // return {
+    //   data: fileData, name: res.name, type: res.type, size: res.size, id: res.id
+    // };
   }
 }

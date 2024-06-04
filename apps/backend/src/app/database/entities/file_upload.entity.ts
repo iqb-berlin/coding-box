@@ -6,13 +6,13 @@ class FileUpload {
     id: number;
 
   @Column({ type: 'varchar' })
-  filename: string;
+    filename: string;
 
   @Column({ type: 'integer' })
     workspace_id: number;
 
   @Column({ type: 'integer' })
-    file_size: string;
+    file_size: number;
 
   @Column({ type: 'varchar' })
     file_type: string;

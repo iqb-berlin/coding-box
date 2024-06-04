@@ -11,6 +11,7 @@ import FileUpload from './entities/file_upload.entity';
 import Responses from './entities/responses.entity';
 import WorkspaceUser from './entities/workspace_user.entity';
 import { TestcenterService } from './services/testcenter.service';
+import ResourcePackage from './entities/resource-package.entity';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { TestcenterService } from './services/testcenter.service';
     WorkspaceAdmin,
     FileUpload,
     Responses,
+    ResourcePackage,
     WorkspaceUser,
     HttpModule,
     TypeOrmModule.forRootAsync({
@@ -31,13 +33,13 @@ import { TestcenterService } from './services/testcenter.service';
         password: configService.get('POSTGRES_PASSWORD'),
         database: configService.get('POSTGRES_DB'),
         entities: [
-          User, Workspace, WorkspaceAdmin, FileUpload, Responses, WorkspaceUser
+          User, Workspace, WorkspaceAdmin, FileUpload, Responses, WorkspaceUser, ResourcePackage
         ],
         synchronize: false
       }),
       inject: [ConfigService]
     }),
-    TypeOrmModule.forFeature([User, Workspace, WorkspaceAdmin, FileUpload, Responses, WorkspaceUser])
+    TypeOrmModule.forFeature([User, Workspace, WorkspaceAdmin, FileUpload, Responses, WorkspaceUser, ResourcePackage])
   ],
   providers: [UsersService, WorkspaceService, TestcenterService],
   exports: [
@@ -49,7 +51,8 @@ import { TestcenterService } from './services/testcenter.service';
     WorkspaceService,
     UsersService,
     WorkspaceUser,
-    TestcenterService
+    TestcenterService,
+    ResourcePackage
   ]
 })
 export class DatabaseModule {}
