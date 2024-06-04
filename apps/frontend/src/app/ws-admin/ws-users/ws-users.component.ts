@@ -121,13 +121,11 @@ export class WsUsersComponent implements OnInit {
   createWorkspaceList(): void {
     this.backendService.getAllWorkspacesList().subscribe(workspaces => {
       if (workspaces.length > 0) { this.userWorkspaces = workspaces; }
-      console.log('Workspaces: ', this.userWorkspaces);
     });
   }
 
   checkboxToggle(row: UserFullDto): void {
     this.tableSelectionCheckboxes.toggle(row);
-    console.log('Checkbox toggled: ', row);
     this.updateUserWorkspacesList(row.id);
     this.userSelectionChanged.emit(this.tableSelectionCheckboxes.selected);
   }
@@ -171,7 +169,7 @@ export class WsUsersComponent implements OnInit {
       const dialogRef = this.editUserDialog.open(EditUserComponent, {
         width: '600px',
         data: {
-          name: selectedRows[0].name,
+          name: selectedRows[0].username,
           isAdmin: selectedRows[0].isAdmin
         }
       });
@@ -202,7 +200,7 @@ export class WsUsersComponent implements OnInit {
       });
     } else {
       const content = (selectedRows.length === 1) ?
-        this.translateService.instant('admin.delete-user', { name: selectedRows[0].name }) :
+        this.translateService.instant('admin.delete-user', { name: selectedRows[0].username }) :
         this.translateService.instant('admin.delete-users', { count: selectedRows.length });
       const dialogRef = this.deleteConfirmDialog.open(ConfirmDialogComponent, {
         width: '400px',

@@ -11,8 +11,8 @@ import { AppService } from '../../services/app.service';
   standalone: true,
   imports: [MatTabNav, MatTabLink, RouterLinkActive, RouterLink, MatTabNavPanel, RouterOutlet, TranslateModule]
 })
-export class WsAdminComponent implements OnInit{
-  navLinks: string[] = ['select-replay', 'test-files', 'test-groups', 'users', 'settings'];
+export class WsAdminComponent implements OnInit {
+  navLinks: string[] = ['select-replay', 'test-files', 'test-groups', 'settings'];
   constructor(
     private route: ActivatedRoute,
     private appService: AppService

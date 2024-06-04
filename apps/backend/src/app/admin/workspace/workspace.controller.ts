@@ -22,6 +22,7 @@ import {
 } from '../../../../../frontend/src/app/ws-admin/test-center-import/test-center-import.component';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
+import { AuthService } from '../../auth/service/auth.service';
 
 @Controller('admin/workspace')
 export class WorkspaceController {
@@ -35,6 +36,13 @@ export class WorkspaceController {
   @ApiTags('admin workspaces')
   async findAll(): Promise<WorkspaceInListDto[]> {
     return this.workspaceService.findAll();
+  }
+
+  @Get(':workspace_id/:user_id/token')
+  @UseGuards(JwtAuthGuard)
+  async createToken(@Param('user_id') user_id:string, @Param('workspace_id') workspace_id:number):Promise<string> {
+    const token = this.authService.createToken(user_id, workspace_id);
+    return token;
   }
 
   @Get(':workspace_id/importWorkspaceFiles')

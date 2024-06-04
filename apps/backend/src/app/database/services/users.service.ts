@@ -28,7 +28,7 @@ export class UsersService {
       if (!workspaceId || (validUsers.indexOf(user.id) > -1)) {
         returnUsers.push(<UserFullDto>{
           id: user.id,
-          name: user.username,
+          username: user.username,
           isAdmin: user.isAdmin
         });
       }
@@ -49,15 +49,15 @@ export class UsersService {
     return workspaces.map(workspace => workspace.workspaceId);
   }
 
-  async findOne(id: number): Promise<UserFullDto> {
+  async findUserByIdentity(id: string): Promise<UserFullDto> {
     this.logger.log(`Returning user with id: ${id}`);
     const user = await this.usersRepository.findOne({
-      where: { id: id }
+      where: { identity: id }
     });
     if (user) {
       return <UserFullDto>{
         id: user.id,
-        name: user.username,
+        username: user.username,
         isAdmin: user.isAdmin
       };
     }

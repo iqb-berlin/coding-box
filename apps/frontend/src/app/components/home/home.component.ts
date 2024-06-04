@@ -18,13 +18,10 @@ import { UserWorkspacesAreaComponent } from '../../workspace/user-workspaces-are
   templateUrl: './home.component.html',
   styleUrl: './home.component.scss'
 })
-export class HomeComponent implements OnInit {
+export class HomeComponent {
   constructor(
     public appService: AppService
   ) {}
-
-  ngOnInit(): void {
-  }
 
   protected readonly Number = Number;
 }

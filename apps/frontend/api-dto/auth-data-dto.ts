@@ -3,7 +3,7 @@ import { WorkspaceFullDto } from './workspaces/workspace-full-dto';
 
 export class AuthDataDto {
   @ApiProperty()
-    userId!: string;
+    userId!: number;
 
   @ApiProperty()
     userName!: string;

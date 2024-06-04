@@ -18,13 +18,15 @@
     <h1 [style]="{color:'lightgrey',fontSize:'30px'}">Kodierbox</h1>
 
     <div class="admin">
-      <button  [style]="{color:'lightgrey'}" mat-button class="icon-button-large"
-              [routerLink]="['/admin']"
-              [matTooltip]="'home.goto-admin' | translate"
-              matTooltipPosition="above"
-              data-cy="goto-admin">
-        <coding-box-wrapped-icon icon="settings"></coding-box-wrapped-icon>
-      </button>
+      @if(appService.authData.isAdmin){
+        <button  [style]="{color:'lightgrey'}" mat-button class="icon-button-large"
+                 [routerLink]="['/admin']"
+                 [matTooltip]="'home.goto-admin' | translate"
+                 matTooltipPosition="above"
+                 data-cy="goto-admin">
+          <coding-box-wrapped-icon icon="settings"></coding-box-wrapped-icon>
+        </button>
+      }
       <coding-box-user-menu></coding-box-user-menu>
     </div>
   </div>

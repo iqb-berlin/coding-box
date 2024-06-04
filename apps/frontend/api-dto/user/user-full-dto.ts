@@ -5,7 +5,7 @@ export class UserFullDto {
     id!: number;
 
   @ApiProperty()
-    name?: string;
+    username?: string;
 
   @ApiProperty()
     isAdmin?: boolean;

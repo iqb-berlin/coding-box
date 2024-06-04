@@ -24,9 +24,9 @@ export class ChangePasswordDirective {
       width: '400px'
     });
 
-    dialogRef.afterClosed().subscribe(result => {
+    dialogRef.afterClosed().subscribe(async result => {
       if (result !== false) {
-        const token = this.authService.getToken();
+        const token = await this.authService.getToken();
         this.authService.setPassword(result.controls.pw_new1.value,token).subscribe(
           respOk => {
             this.snackBar.open(
