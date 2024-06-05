@@ -1,5 +1,5 @@
 import {
-  Component, Input, OnDestroy, OnInit
+  Component, Input, OnChanges, OnDestroy, OnInit, SimpleChanges
 } from '@angular/core';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
@@ -24,7 +24,7 @@ import { AppService } from '../../../services/app.service';
   templateUrl: './replay.component.html',
   styleUrl: './replay.component.scss'
 })
-export class ReplayComponent implements OnInit, OnDestroy {
+export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   private ngUnsubscribe = new Subject<void>();
   player :string = '';
   unitDef :string = '';
@@ -60,6 +60,15 @@ export class ReplayComponent implements OnInit, OnDestroy {
     this.responses = unitData.response[0];
   }
 
+  async ngOnChanges(changes: SimpleChanges) {
+    const { unitIdInput } = changes;
+    this.unitId = unitIdInput.currentValue;
+    const unitData =await this.getUnitData();
+    this.player = unitData.player[0].data;
+    this.unitDef = unitData.unitDef[0].data;
+    this.responses = unitData.response[0] || [];
+  }
+
   async getUnitData() {
     let player = '';
     const unitDefFile = await firstValueFrom(this.backendService.getUnitDef(this.appService.selectedWorkspaceId, this.unitId).pipe(
@@ -79,7 +88,7 @@ export class ReplayComponent implements OnInit, OnDestroy {
       })
     ));
     xml2js.parseString(unitFile[0].data, (err:any, result:any) => {
-      player = result.Unit.DefinitionRef[0].$.player;
+      player = result?.Unit.DefinitionRef[0].$.player;
       console.log(player);
       console.log(result);
     });

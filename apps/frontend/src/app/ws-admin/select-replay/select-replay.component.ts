@@ -62,8 +62,10 @@ export class SelectReplayComponent implements OnInit {
     this.selectedUnit = unit.toUpperCase();
   }
 
-  replay(): void {
+  async replay(): Promise<void> {
     this.selectedUnit = this.selectedUnit.toUpperCase();
-    this.router.navigate([`/replay/${this.selectedTestPerson}/${this.selectedUnit}/1`]);
+    const url = this.router.serializeUrl(this.router.createUrlTree([`/replay/${this.selectedTestPerson}/${this.selectedUnit}/1`]));
+    window.open(url, '_blank');
+    //await this.router.navigate([`/replay/${this.selectedTestPerson}/${this.selectedUnit}/1`]);
   }
 }

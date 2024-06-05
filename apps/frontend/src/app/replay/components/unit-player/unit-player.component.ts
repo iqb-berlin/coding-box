@@ -44,9 +44,11 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges {
   hasFocus: boolean = false;
   responses!: Response[] | null;
   count: number = 0;
-  dataparts!: { stateVariableCodes: string, elementCodes:string };
+  dataParts!: { stateVariableCodes: string, elementCodes:string };
 
   ngOnChanges(changes: SimpleChanges) {
+    console.log(this.unitPlayer,this.unitDef,this.unitResponses);
+
     if (this.count > 0) {
       const { unitDef, unitPlayer, unitResponses } = changes;
       const parsedJSONUnitDef = JSON.parse(unitDef.currentValue);
@@ -61,20 +63,20 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges {
             stateVariableCodes = stateVariableCodes.concat(response.content);
           }
         });
-        this.dataparts = {
+        this.dataParts = {
           stateVariableCodes: stateVariableCodes,
           elementCodes: elementCodes
         };
       }
       this.unitDef = parsedJSONUnitDef;
       if (this.iFrameElement) {
-        this.iFrameElement.srcdoc = (unitPlayer.currentValue).replace('&quot;', '');
+        this.iFrameElement.srcdoc = (unitPlayer ?unitPlayer.currentValue : this.unitPlayer).replace('&quot;', '');
         if (this.postMessageTarget) {
           this.postMessageTarget.postMessage({
             type: 'vopStartCommand',
             sessionId: 3,
             unitState: {
-              dataParts: this.dataparts,
+              dataParts: this.dataParts,
               presentationProgress: 'none',
               responseProgress: 'none'
             },
@@ -230,7 +232,7 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges {
           type: 'vopStartCommand',
           sessionId: this.sessionId,
           unitState: {
-            dataParts: this.dataparts,
+            dataParts: this.dataParts,
             presentationProgress: 'none',
             responseProgress: 'none'
           },

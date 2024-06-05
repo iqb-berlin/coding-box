@@ -34,6 +34,7 @@ export class WorkspaceController {
 
   @Get()
   @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
   @ApiOkResponse({ description: 'Admin workspace retrieved successfully.' })
   @ApiTags('admin workspaces')
   async findAll(): Promise<WorkspaceInListDto[]> {
@@ -133,7 +134,7 @@ export class WorkspaceController {
   }
 
   @Get(':workspace_id/:unit/unitDef')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard)
   @ApiParam({ name: 'workspace_id', type: Number })
   async findUnitDef(@Param('workspace_id') workspace_id:number,
     @Param('unit') unit:string): Promise<FilesDto[]> {
@@ -141,7 +142,7 @@ export class WorkspaceController {
   }
 
   @Get(':workspace_id/unit/:testPerson/:unitId')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard)
   @ApiParam({ name: 'workspace_id', type: Number })
   async findUnit(@WorkspaceId() id: number,
     @Param('testPerson') testPerson:string,
@@ -150,7 +151,7 @@ export class WorkspaceController {
   }
 
   @Get(':workspace_id/responses/:testPerson/:unitId')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard)
   @ApiParam({ name: 'workspace_id', type: Number })
   async findResponse(@WorkspaceId() id: number,
     @Param('testPerson') testPerson:string,
