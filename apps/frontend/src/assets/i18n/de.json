@@ -171,7 +171,8 @@
     "filename": "Dateiname",
     "file_type": "Dateityp",
     "file_size": "Dateigröße",
-    "created_at": "Erstellt am"
+    "created_at": "Erstellt am",
+    "no-files": "Keine Dateien gefunden"
   },
 
   "test_group": {

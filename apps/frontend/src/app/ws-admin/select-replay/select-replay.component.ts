@@ -7,11 +7,11 @@ import { Router } from '@angular/router';
 import { MatRadioButton, MatRadioGroup } from '@angular/material/radio';
 import { ReactiveFormsModule } from '@angular/forms';
 import { MatLabel } from '@angular/material/form-field';
+import { MatProgressBar } from '@angular/material/progress-bar';
+import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { BackendService } from '../../services/backend.service';
 import { AppService } from '../../services/app.service';
 import { ReplayComponent } from '../../replay/components/replay/replay.component';
-import { MatProgressBar } from '@angular/material/progress-bar';
-import { MatProgressSpinner } from '@angular/material/progress-spinner';
 
 @Component({
   selector: 'coding-box-select-replay',
@@ -28,7 +28,7 @@ export class SelectReplayComponent implements OnInit {
   }
 
   testPersons = [];
-  testGroups = [];
+  testGroups :any[] = [];
   units = [];
   selectedTestPerson = '';
   selectedUnit = '';
@@ -38,10 +38,18 @@ export class SelectReplayComponent implements OnInit {
 
   ngOnInit(): void {
     this.isLoading = true;
-    this.backendService.getTestGroups(this.appService.selectedWorkspaceId).subscribe(groups => {
-      this.testGroups = groups.map((g:any) => g.test_group);
+    if (this.appService.workspaceData?.testGroups.length === 0) {
+      this.backendService.getTestGroups(this.appService.selectedWorkspaceId)
+        .subscribe(groups => {
+          this.appService.workspaceData.testGroups = groups;
+          this.testGroups = groups.map((g: any) => g.test_group);
+          this.isLoading = false;
+        });
+    } else {
+      this.testGroups = this.appService.workspaceData.testGroups
+        .map((g: any) => g.test_group);
       this.isLoading = false;
-    });
+    }
   }
 
   getTestPersons(testGroup:string): void {
@@ -52,9 +60,13 @@ export class SelectReplayComponent implements OnInit {
   }
 
   getUnits(testPerson:string): void {
+    this.units = [];
     this.selectedTestPerson = testPerson;
+    const formerSelectedUnit = this.selectedUnit;
+    this.selectedUnit = '';
     this.backendService.getTestpersonUnits(this.appService.selectedWorkspaceId, testPerson).subscribe(data => {
       this.units = data.map((d:any) => d.unit_id);
+      this.selectedUnit ? this.changedUnit(formerSelectedUnit) : '';
     });
   }
 
@@ -64,8 +76,12 @@ export class SelectReplayComponent implements OnInit {
 
   async replay(): Promise<void> {
     this.selectedUnit = this.selectedUnit.toUpperCase();
-    const url = this.router.serializeUrl(this.router.createUrlTree([`/replay/${this.selectedTestPerson}/${this.selectedUnit}/1`]));
-    window.open(url, '_blank');
-    //await this.router.navigate([`/replay/${this.selectedTestPerson}/${this.selectedUnit}/1`]);
+    this.backendService.getToken(this.appService.selectedWorkspaceId, this.appService.userProfile.id || '').subscribe(token => {
+      const queryParams = {
+        auth: token
+      };
+      const url = this.router.serializeUrl(this.router.createUrlTree([`/replay/${this.selectedTestPerson}/${this.selectedUnit}/1`], { queryParams: queryParams }));
+      window.open(url, '_blank');
+    });
   }
 }

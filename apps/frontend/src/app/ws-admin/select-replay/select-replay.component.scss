@@ -9,6 +9,8 @@
 .container{
   margin:20px;
   overflow: auto;
+  height: calc(90% - 100px);
+  overflow-x: hidden;
 }
 
 p{
@@ -20,4 +22,8 @@ a{
 
 button{
   margin-top: 10px;
+}
+replay{
+  overflow-y: auto;
+
 }

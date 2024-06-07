@@ -48,7 +48,7 @@ export class TestGroupsComponent implements OnInit {
   displayedColumns = ['selectCheckbox', 'test_group', 'created_at'];
   tableSelectionRow = new SelectionModel<TestGroupsInListDto>(false, []);
   tableSelectionCheckboxes = new SelectionModel<TestGroupsInListDto>(true, []);
-  testGroups = [];
+  testGroups :any[] = [];
   dataSource!: MatTableDataSource<any>;
   isLoading = false;
 
@@ -131,9 +131,17 @@ export class TestGroupsComponent implements OnInit {
 
   createTestGroupsList(): void {
     this.isLoading = true;
-    this.backendService.getTestGroups(this.appService.selectedWorkspaceId).subscribe(testGroups => {
-      this.dataSource = new MatTableDataSource(testGroups);
+    if(this.appService.workspaceData?.testGroups.length === 0) {
+      this.backendService.getTestGroups(this.appService.selectedWorkspaceId)
+        .subscribe(groups => {
+          this.dataSource = new MatTableDataSource(groups || []);
+          this.appService.workspaceData.testGroups = groups;
+          this.isLoading = false;
+        });
+    }
+    else{
+      this.dataSource = new MatTableDataSource(this.appService.workspaceData.testGroups || []);
       this.isLoading = false;
-    });
+    }
   }
 }

@@ -20,7 +20,7 @@
                (keyup.enter)="authenticate()">
       </mat-form-field>
       <mat-form-field>
-        <mat-select formControlName="testcenter">
+        <mat-select formControlName="testCenter">
           <mat-option value="1">Testcenter 1</mat-option>
           <mat-option value="2">Testcenter 2</mat-option>
           <mat-option value="3">Testcenter 3</mat-option>
@@ -84,11 +84,15 @@
           </mat-select>
         </mat-form-field>
       </div>
+      @if (isUploadingFiles){
+        <mat-spinner></mat-spinner>
+      } @else {
       <button mat-raised-button
               type="submit"
               [disabled]="importFilesForm.invalid"
               color="primary">{{ 'files-import' | translate }}
       </button>
+      }
       @if (authenticationError){
         <div class="warning">
           {{'login-error' | translate}}
@@ -107,6 +111,7 @@
   <button mat-raised-button
           color="primary"
           type="submit"
+          [disabled]="isUploadingFiles"
           [mat-dialog-close]="true">
     {{ 'close' | translate }}
   </button>

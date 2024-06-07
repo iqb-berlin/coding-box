@@ -4,6 +4,12 @@ import { KeycloakProfile, KeycloakTokenParsed } from 'keycloak-js';
 import { AppLogoDto } from '../../../api-dto/app-logo-dto';
 import { AuthDataDto } from '../../../api-dto/auth-data-dto';
 
+type WorkspaceData = {
+  testGroups: any[];
+  testFiles: any[];
+  settings: any;
+  selectUnitPlay: any;
+}
 @Injectable({
   providedIn: 'root'
 })
@@ -26,7 +32,12 @@ export class AppService {
   appLogo: AppLogoDto = standardLogo;
   postMessage$ = new Subject<MessageEvent>();
   loggedUser: KeycloakTokenParsed | undefined;
-
+  workspaceData : WorkspaceData ={
+    testGroups: [],
+    testFiles: [],
+    settings: {},
+    selectUnitPlay: {}
+  }
   processMessagePost(postData: MessageEvent): void {
     const msgData = postData.data;
     const msgType = msgData.type;

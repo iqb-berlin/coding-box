@@ -32,7 +32,6 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   page!:string;
   unitId:string = '';
   responses:string = '';
-  isLoading = false;
   @Input() testPersonInput!: string;
   @Input() pageInput!: string;
   @Input() unitIdInput!: string;
@@ -50,20 +49,20 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       this.testPerson = testPerson;
       this.unitId = unitId;
     } else {
-      this.page = this.pageInput;
+      this.page = '1';
       this.testPerson = this.testPersonInput;
       this.unitId = this.unitIdInput.toUpperCase();
     }
     const unitData = await this.getUnitData();
-    this.player = unitData.player[0].data;
-    this.unitDef = unitData.unitDef[0].data;
+    this.player = unitData.player[1].data;
+    this.unitDef = unitData.unitDef[1].data;
     this.responses = unitData.response[0];
   }
 
   async ngOnChanges(changes: SimpleChanges) {
     const { unitIdInput } = changes;
     this.unitId = unitIdInput.currentValue;
-    const unitData =await this.getUnitData();
+    const unitData = await this.getUnitData();
     this.player = unitData.player[0].data;
     this.unitDef = unitData.unitDef[0].data;
     this.responses = unitData.response[0] || [];
@@ -89,8 +88,6 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     ));
     xml2js.parseString(unitFile[0].data, (err:any, result:any) => {
       player = result?.Unit.DefinitionRef[0].$.player;
-      console.log(player);
-      console.log(result);
     });
     const playerFile = await firstValueFrom(this.backendService.getPlayer(this.appService.selectedWorkspaceId, player.replace('@', '-')).pipe(
       catchError(error => {

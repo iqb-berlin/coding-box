@@ -28,7 +28,7 @@
         [title]="'search-filter.filter-test-files' | translate"
         (valueChange)="dataSource.filter = $event.trim().toLowerCase()">
       </coding-box-search-filter>
-    }
+
 
     <mat-table [dataSource]="dataSource" matSort>
       <ng-container matColumnDef="selectCheckbox">
@@ -74,10 +74,15 @@
         </mat-cell>
       </ng-container>
 
-      <mat-header-row *matHeaderRowDef="displayedColumns"></mat-header-row>
+      <mat-header-row *matHeaderRowDef="displayedColumns;sticky: true"></mat-header-row>
       <mat-row *matRowDef="let row; columns: displayedColumns;"></mat-row>
 
     </mat-table>
+    } @else {
+      <div class="fx-row-center-center-stretch">
+        <p>{{'file-upload.no-files' | translate}}</p>
+      </div>
+    }
   }
 </div>
 

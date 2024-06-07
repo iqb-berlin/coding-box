@@ -36,14 +36,14 @@ import { WrappedIconComponent } from '../../shared/wrapped-icon/wrapped-icon.com
 import { FilesInListDto } from '../../../../api-dto/files/files-in-list.dto';
 
 @Component({
-  selector: 'coding-box-file-upload',
-  templateUrl: './file-upload.component.html',
-  styleUrls: ['./file-upload.component.scss'],
+  selector: 'coding-box-test-files',
+  templateUrl: './test-files.component.html',
+  styleUrls: ['./test-files.component.scss'],
   standalone: true,
   // eslint-disable-next-line max-len
   imports: [MatAnchor, RouterLink, TranslateModule, MatIcon, TestCenterImportComponent, MatProgressSpinner, MatTable, MatColumnDef, MatHeaderCellDef, MatCellDef, MatHeaderRowDef, MatRowDef, MatHeaderCell, MatCell, MatSort, MatHeaderRow, MatRow, HasSelectionValuePipe, IsAllSelectedPipe, IsSelectedPipe, MatCheckbox, SearchFilterComponent, MatSortHeader, DatePipe, FileSizePipe, MatButton, WrappedIconComponent, MatTooltip, JsonPipe]
 })
-export class FileUploadComponent implements OnInit {
+export class TestFilesComponent implements OnInit {
   private uploadSubscription: Subscription | null = null;
 
   constructor(public appService: AppService,
@@ -74,7 +74,7 @@ export class FileUploadComponent implements OnInit {
     this.createTestFilesList();
   }
 
-  updateTestGroupsList(): void {
+  updateTestFilesList(): void {
     // this.setObjectsDatasource(this.testGroups);
     this.tableSelectionCheckboxes.clear();
     this.tableSelectionRow.clear();
@@ -104,10 +104,6 @@ export class FileUploadComponent implements OnInit {
       this.dataSource.data.forEach(row => this.tableSelectionCheckboxes.select(row));
   }
 
-  toggleRowSelection(row: FilesInListDto): void {
-    this.tableSelectionRow.toggle(row);
-  }
-
   onFileSelected(targetElement: EventTarget | null) {
     if (targetElement) {
       const inputElement = targetElement as HTMLInputElement;
@@ -134,11 +130,18 @@ export class FileUploadComponent implements OnInit {
 
   createTestFilesList(): void {
     this.isLoading = true;
-    this.backendService.getFilesList(this.appService.selectedWorkspaceId)
-      .subscribe((files: any[]) => {
-        this.dataSource = new MatTableDataSource(files);
-        this.isLoading = false;
-      });
+    if(this.appService.workspaceData?.testGroups.length === 0) {
+      this.backendService.getFilesList(this.appService.selectedWorkspaceId)
+        .subscribe((files: any[]) => {
+          this.dataSource = new MatTableDataSource(files || []);
+          this.appService.workspaceData.testFiles = files;
+          this.isLoading = false;
+        });
+    }
+    else{
+      this.dataSource = new MatTableDataSource(this.appService.workspaceData.testFiles || []);
+      this.isLoading = false;
+    }
   }
 
 
