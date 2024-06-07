@@ -1,0 +1,12 @@
+.angular
+.git
+.gitkeep
+.vscode
+*Dockerfile*
+*docker-compose*
+backup
+cache
+changelogDocs
+dist
+node_modules
+secrets

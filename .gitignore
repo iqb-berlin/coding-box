@@ -1,3 +1,14 @@
+# See http://help.github.com/ignore-files/ for more about ignoring files.
+
+# custom folders
+/database/changelogDocs
+/backup
+
+# Caches
+.angular
+.nx/cache
+/.sass-cache
+
 # secret files
 *.pem
 *.cer
@@ -33,8 +44,20 @@ docker.env
 !.vscode/launch.json
 !.vscode/extensions.json
 
+# System Files
+.DS_Store
+Thumbs.db
+
+# Backend files
+auth.constants.ts
+database.constants.ts
+apps/backend/ormconfig.json
+
+# Frontend files
+config/frontend/default.conf.template
+config/frontend/default.conf.template.bkp
+
 # misc
-/.sass-cache
 /connect.lock
 /coverage
 /libpeerconnection.log
@@ -42,14 +65,3 @@ npm-debug.log
 yarn-error.log
 testem.log
 /typings
-
-# System Files
-.DS_Store
-Thumbs.db
-
-.angular
-/.nx
-
-auth.constants.ts
-database.constants.ts
-apps/backend/ormconfig.json

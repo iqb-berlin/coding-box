@@ -77,45 +77,45 @@ coding-box-status:
 # Param (optional): SERVICE - Show log of the specified service only, e.g. `make coding-box-logs SERVICE=db`
 coding-box-logs:
 	docker compose\
-			--file $(CODING_BOX_BASE_DIR)/docker-compose.studio-lite.yaml\
-			--file $(CODING_BOX_BASE_DIR)/docker-compose.studio-lite.prod.yaml\
-			--env-file $(CODING_BOX_BASE_DIR)/.env.studio-lite\
+			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
+			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.prod.yaml\
+			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 		logs -f $(SERVICE)
 
 ## Show services configuration
-# Param (optional): SERVICE - Show config of the specified service only, e.g. `make studio-lite-config SERVICE=db`
-studio-lite-config:
+# Param (optional): SERVICE - Show config of the specified service only, e.g. `make coding-box-config SERVICE=db`
+coding-box-config:
 	docker compose\
-			--file $(CODING_BOX_BASE_DIR)/docker-compose.studio-lite.yaml\
-			--file $(CODING_BOX_BASE_DIR)/docker-compose.studio-lite.prod.yaml\
-			--env-file $(CODING_BOX_BASE_DIR)/.env.studio-lite\
+			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
+			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.prod.yaml\
+			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 		config $(SERVICE)
 
 ## Remove unused dangling images, containers, networks, etc. Data volumes will stay untouched!
-studio-lite-system-prune:
+coding-box-system-prune:
 	docker system prune
 
 ## Remove all anonymous local volumes not used by at least one container.
-studio-lite-volumes-prune:
+coding-box-volumes-prune:
 	docker volume prune
 
 ## Remove all unused (not just dangling) images!
-studio-lite-images-clean: .EXPORT_ALL_VARIABLES
-	if test "$(shell docker images -f reference=${REGISTRY_PATH}iqbberlin/studio-lite-* -q)";\
-		then docker rmi $(shell docker images -f reference=${REGISTRY_PATH}iqbberlin/studio-lite-* -q);\
+coding-box-images-clean: .EXPORT_ALL_VARIABLES
+	if test "$(shell docker images -f reference=${REGISTRY_PATH}iqbberlin/coding-box-* -q)";\
+		then docker rmi $(shell docker images -f reference=${REGISTRY_PATH}iqbberlin/coding-box-* -q);\
 	fi
 
 ## Outputs the count of changesets that have not been deployed
 # (https://docs.liquibase.com/commands/status/status.html)
-studio-lite-liquibase-status: .EXPORT_ALL_VARIABLES
+coding-box-liquibase-status: .EXPORT_ALL_VARIABLES
 	cd $(CODING_BOX_BASE_DIR) &&\
 	docker compose\
-			--file $(CODING_BOX_BASE_DIR)/docker-compose.studio-lite.yaml\
-			--file $(CODING_BOX_BASE_DIR)/docker-compose.studio-lite.prod.yaml\
-			--env-file $(CODING_BOX_BASE_DIR)/.env.studio-lite\
+			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
+			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.prod.yaml\
+			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 		run --rm liquibase\
 			liquibase\
-					--changelogFile=studio-lite.changelog-root.xml\
+					--changelogFile=coding-box.changelog-root.xml\
 					--url=jdbc:postgresql://db:5432/$(POSTGRES_DB)\
 					--username=$(POSTGRES_USER)\
 					--password=$(POSTGRES_PASSWORD)\
@@ -124,74 +124,74 @@ studio-lite-liquibase-status: .EXPORT_ALL_VARIABLES
 				$(CMD)
 
 ## Open DB console
-studio-lite-connect-db: .EXPORT_ALL_VARIABLES
+coding-box-connect-db: .EXPORT_ALL_VARIABLES
 	docker compose\
-			--file $(CODING_BOX_BASE_DIR)/docker-compose.studio-lite.yaml\
-			--file $(CODING_BOX_BASE_DIR)/docker-compose.studio-lite.prod.yaml\
-			--env-file $(CODING_BOX_BASE_DIR)/.env.studio-lite\
+			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
+			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.prod.yaml\
+			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 		exec -it db\
 			psql --username=$(POSTGRES_USER) --dbname=$(POSTGRES_DB)
 
 ## Extract a database cluster into a script file
 # (https://www.postgresql.org/docs/current/app-pg-dumpall.html)
-studio-lite-dump-all: studio-lite-down .EXPORT_ALL_VARIABLES
+coding-box-dump-all: coding-box-down .EXPORT_ALL_VARIABLES
 	docker compose\
-			--file $(CODING_BOX_BASE_DIR)/docker-compose.studio-lite.yaml\
-			--file $(CODING_BOX_BASE_DIR)/docker-compose.studio-lite.prod.yaml\
-			--env-file $(CODING_BOX_BASE_DIR)/.env.studio-lite\
+			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
+			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.prod.yaml\
+			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 		up -d db
 	sleep 5 ## wait until db startup is completed
 	docker compose\
-			--file $(CODING_BOX_BASE_DIR)/docker-compose.studio-lite.yaml\
-			--file $(CODING_BOX_BASE_DIR)/docker-compose.studio-lite.prod.yaml\
-			--env-file $(CODING_BOX_BASE_DIR)/.env.studio-lite\
+			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
+			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.prod.yaml\
+			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 		exec -it db\
 			pg_dumpall --verbose --username=$(POSTGRES_USER) > $(CODING_BOX_BASE_DIR)/backup/database_dump/all.sql
 	docker compose\
-			--file $(CODING_BOX_BASE_DIR)/docker-compose.studio-lite.yaml\
-			--file $(CODING_BOX_BASE_DIR)/docker-compose.studio-lite.prod.yaml\
-			--env-file $(CODING_BOX_BASE_DIR)/.env.studio-lite\
+			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
+			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.prod.yaml\
+			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 		down
 
 ## PostgreSQL interactive terminal reads commands from the dump file all.sql
 # (https://www.postgresql.org/docs/14/app-psql.html)
-studio-lite-restore-all: studio-lite-down .EXPORT_ALL_VARIABLES
+coding-box-restore-all: coding-box-down .EXPORT_ALL_VARIABLES
 	docker compose\
-			--file $(CODING_BOX_BASE_DIR)/docker-compose.studio-lite.yaml\
-			--file $(CODING_BOX_BASE_DIR)/docker-compose.studio-lite.prod.yaml\
-			--env-file $(CODING_BOX_BASE_DIR)/.env.studio-lite\
+			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
+			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.prod.yaml\
+			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 		up -d db
 	docker compose\
-			--file $(CODING_BOX_BASE_DIR)/docker-compose.studio-lite.yaml\
-			--file $(CODING_BOX_BASE_DIR)/docker-compose.studio-lite.prod.yaml\
-			--env-file $(CODING_BOX_BASE_DIR)/.env.studio-lite\
+			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
+			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.prod.yaml\
+			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 		cp $(CODING_BOX_BASE_DIR)/backup/database_dump/all.sql db:/tmp/
 	sleep 10	## wait until file upload is completed
 	docker compose\
-			--file $(CODING_BOX_BASE_DIR)/docker-compose.studio-lite.yaml\
-			--file $(CODING_BOX_BASE_DIR)/docker-compose.studio-lite.prod.yaml\
-			--env-file $(CODING_BOX_BASE_DIR)/.env.studio-lite\
+			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
+			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.prod.yaml\
+			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 		exec -it db\
 			psql --username=$(POSTGRES_USER) --file=/tmp/all.sql postgres
 	docker compose\
-			--file $(CODING_BOX_BASE_DIR)/docker-compose.studio-lite.yaml\
-			--file $(CODING_BOX_BASE_DIR)/docker-compose.studio-lite.prod.yaml\
-			--env-file $(CODING_BOX_BASE_DIR)/.env.studio-lite\
+			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
+			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.prod.yaml\
+			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 		down
 
 ## Extract a database into a script file or other archive file
 # (https://www.postgresql.org/docs/current/app-pgdump.html)
-studio-lite-dump-db: studio-lite-down .EXPORT_ALL_VARIABLES
+coding-box-dump-db: coding-box-down .EXPORT_ALL_VARIABLES
 	docker compose\
-			--file $(CODING_BOX_BASE_DIR)/docker-compose.studio-lite.yaml\
-			--file $(CODING_BOX_BASE_DIR)/docker-compose.studio-lite.prod.yaml\
-			--env-file $(CODING_BOX_BASE_DIR)/.env.studio-lite\
+			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
+			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.prod.yaml\
+			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 		up -d db
 	sleep 5 ## wait until db startup is completed
 	docker compose\
-			--file $(CODING_BOX_BASE_DIR)/docker-compose.studio-lite.yaml\
-			--file $(CODING_BOX_BASE_DIR)/docker-compose.studio-lite.prod.yaml\
-			--env-file $(CODING_BOX_BASE_DIR)/.env.studio-lite\
+			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
+			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.prod.yaml\
+			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 		exec -it db\
 			pg_dump\
 					--verbose\
@@ -199,29 +199,29 @@ studio-lite-dump-db: studio-lite-down .EXPORT_ALL_VARIABLES
 					--format=t\
 				$(POSTGRES_DB) > $(CODING_BOX_BASE_DIR)/backup/database_dump/$(POSTGRES_DB).tar
 	docker compose\
-			--file $(CODING_BOX_BASE_DIR)/docker-compose.studio-lite.yaml\
-			--file $(CODING_BOX_BASE_DIR)/docker-compose.studio-lite.prod.yaml\
-			--env-file $(CODING_BOX_BASE_DIR)/.env.studio-lite\
+			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
+			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.prod.yaml\
+			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 		down
 
 ## Restore a database from an archive file created by pg_dump
 # (https://www.postgresql.org/docs/current/app-pgrestore.html)
-studio-lite-restore-db: studio-lite-down .EXPORT_ALL_VARIABLES
+coding-box-restore-db: coding-box-down .EXPORT_ALL_VARIABLES
 	docker compose\
-			--file $(CODING_BOX_BASE_DIR)/docker-compose.studio-lite.yaml\
-			--file $(CODING_BOX_BASE_DIR)/docker-compose.studio-lite.prod.yaml\
-			--env-file $(CODING_BOX_BASE_DIR)/.env.studio-lite\
+			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
+			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.prod.yaml\
+			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 		up -d db
 	docker compose\
-			--file $(CODING_BOX_BASE_DIR)/docker-compose.studio-lite.yaml\
-			--file $(CODING_BOX_BASE_DIR)/docker-compose.studio-lite.prod.yaml\
-			--env-file $(CODING_BOX_BASE_DIR)/.env.studio-lite\
+			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
+			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.prod.yaml\
+			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 		cp $(CODING_BOX_BASE_DIR)/backup/database_dump/$(POSTGRES_DB).tar db:/tmp/
 	sleep 10	## wait until file upload is completed
 	docker compose\
-			--file $(CODING_BOX_BASE_DIR)/docker-compose.studio-lite.yaml\
-			--file $(CODING_BOX_BASE_DIR)/docker-compose.studio-lite.prod.yaml\
-			--env-file $(CODING_BOX_BASE_DIR)/.env.studio-lite\
+			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
+			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.prod.yaml\
+			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 		exec -it db\
 			pg_restore\
 					--verbose\
@@ -230,23 +230,23 @@ studio-lite-restore-db: studio-lite-down .EXPORT_ALL_VARIABLES
 					--dbname=$(POSTGRES_DB)\
 				/tmp/$(POSTGRES_DB).tar
 	docker compose\
-			--file $(CODING_BOX_BASE_DIR)/docker-compose.studio-lite.yaml\
-			--file $(CODING_BOX_BASE_DIR)/docker-compose.studio-lite.prod.yaml\
-			--env-file $(CODING_BOX_BASE_DIR)/.env.studio-lite\
+			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
+			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.prod.yaml\
+			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 		down
 
 ## Extract a database data into a script file or other archive file
 # (https://www.postgresql.org/docs/current/app-pgdump.html)
-studio-lite-dump-db-data-only: studio-lite-down .EXPORT_ALL_VARIABLES
+coding-box-dump-db-data-only: coding-box-down .EXPORT_ALL_VARIABLES
 	docker compose\
-			--file $(CODING_BOX_BASE_DIR)/docker-compose.studio-lite.yaml\
-			--file $(CODING_BOX_BASE_DIR)/docker-compose.studio-lite.prod.yaml\
-			--env-file $(CODING_BOX_BASE_DIR)/.env.studio-lite\
+			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
+			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.prod.yaml\
+			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 		up -d db liquibase
 	docker compose\
-			--file $(CODING_BOX_BASE_DIR)/docker-compose.studio-lite.yaml\
-			--file $(CODING_BOX_BASE_DIR)/docker-compose.studio-lite.prod.yaml\
-			--env-file $(CODING_BOX_BASE_DIR)/.env.studio-lite\
+			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
+			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.prod.yaml\
+			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 		exec -it db\
 			pg_dump\
 					--verbose\
@@ -257,29 +257,29 @@ studio-lite-dump-db-data-only: studio-lite-down .EXPORT_ALL_VARIABLES
 					--format=t\
 			$(POSTGRES_DB) > $(CODING_BOX_BASE_DIR)/backup/database_dump/$(POSTGRES_DB)_data.tar
 	docker compose\
-			--file $(CODING_BOX_BASE_DIR)/docker-compose.studio-lite.yaml\
-			--file $(CODING_BOX_BASE_DIR)/docker-compose.studio-lite.prod.yaml\
-			--env-file $(CODING_BOX_BASE_DIR)/.env.studio-lite\
+			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
+			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.prod.yaml\
+			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 		down
 
 ## Restore a database data from an archive file created by pg_dump
 # (https://www.postgresql.org/docs/current/app-pgrestore.html)
-studio-lite-restore-db-data-only: studio-lite-down .EXPORT_ALL_VARIABLES
+coding-box-restore-db-data-only: coding-box-down .EXPORT_ALL_VARIABLES
 	docker compose\
-			--file $(CODING_BOX_BASE_DIR)/docker-compose.studio-lite.yaml\
-			--file $(CODING_BOX_BASE_DIR)/docker-compose.studio-lite.prod.yaml\
-			--env-file $(CODING_BOX_BASE_DIR)/.env.studio-lite\
+			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
+			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.prod.yaml\
+			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 		up -d db liquibase
 	docker compose\
-			--file $(CODING_BOX_BASE_DIR)/docker-compose.studio-lite.yaml\
-			--file $(CODING_BOX_BASE_DIR)/docker-compose.studio-lite.prod.yaml\
-			--env-file $(CODING_BOX_BASE_DIR)/.env.studio-lite\
+			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
+			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.prod.yaml\
+			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 		cp $(CODING_BOX_BASE_DIR)/backup/database_dump/$(POSTGRES_DB)_data.tar db:/tmp/
 	sleep 10	## wait until file upload is completed
 	docker compose\
-			--file $(CODING_BOX_BASE_DIR)/docker-compose.studio-lite.yaml\
-			--file $(CODING_BOX_BASE_DIR)/docker-compose.studio-lite.prod.yaml\
-			--env-file $(CODING_BOX_BASE_DIR)/.env.studio-lite\
+			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
+			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.prod.yaml\
+			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 		exec -it db\
 			pg_restore\
 					--verbose\
@@ -290,10 +290,10 @@ studio-lite-restore-db-data-only: studio-lite-down .EXPORT_ALL_VARIABLES
 					--dbname=$(POSTGRES_DB)\
 				/tmp/$(POSTGRES_DB)_data.tar
 	docker compose\
-			--file $(CODING_BOX_BASE_DIR)/docker-compose.studio-lite.yaml\
-			--file $(CODING_BOX_BASE_DIR)/docker-compose.studio-lite.prod.yaml\
-			--env-file $(CODING_BOX_BASE_DIR)/.env.studio-lite\
+			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
+			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.prod.yaml\
+			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 		down
 
-studio-lite-update:
+coding-box-update:
 	bash $(CODING_BOX_BASE_DIR)/scripts/update.sh
