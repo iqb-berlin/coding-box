@@ -41,6 +41,8 @@ services:
     environment:
       API_HOST: backend
       <<: *env-postgres
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRATION: ${JWT_EXPIRATION}
     networks:
       - application-network
 
