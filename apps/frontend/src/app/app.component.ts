@@ -40,23 +40,18 @@ export class AppComponent implements OnInit {
     public authService:AuthService,
     public keycloakService:KeycloakService,
     public backendService:BackendService,
-    public url:LocationStrategy,
-    private router: Router) {}
+    public url:LocationStrategy) {}
 
   async keycloakLogin(user: CreateUserDto): Promise<void> {
     this.errorMessage = '';
     this.appService.errorMessagesDisabled = true;
     // const initLoginMode = !this.appService.appConfig.hasUsers;
     this.backendService.keycloakLogin(user).subscribe(async ok => {
-      console.log('keycloakLogin', ok);
       // await this.validLoginCheck(ok, initLoginMode);
     });
   }
 
   async ngOnInit(): Promise<void> {
-    if (!this.keycloakService.isLoggedIn()) {
-      await this.authService.login();
-    } else {
       this.loggedInKeycloak = true;
       this.appService.isLoggedInKeycloak = true;
       this.appService.loggedUser = this.authService.getLoggedUser();
@@ -74,13 +69,13 @@ export class AppComponent implements OnInit {
         };
         await this.keycloakLogin(keycloakUser);
       }
-      const token = localStorage.getItem('id_token');
-      if (token) {
-        this.backendService.getAuthData(this.appService.userProfile.id || '').subscribe(async authData => {
-          this.appService.authData = authData;
-        });
-      }
-    }
+      // const token = localStorage.getItem('id_token');
+      // if (token) {
+      //   this.backendService.getAuthData(this.appService.userProfile.id || '').subscribe(async authData => {
+      //     this.appService.authData = authData;
+      //   });
+      // }
+
     window.addEventListener('message', event => {
       this.appService.processMessagePost(event);
     }, false);

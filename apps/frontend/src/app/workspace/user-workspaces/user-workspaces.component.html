@@ -1,22 +1,33 @@
 <div class="workspaces">
-  @if (workspaces.length === 0) {
-    <div>
-      <p>{{'home.no-user-workspaces' | translate}}</p>
-    </div>
-  }
-  @if (workspaces.length > 0) {
-    <div class="fx-column-start-stretch workspace-gap">
-      <h1>Arbeitsbereiche</h1>
-      @for (ws of workspaces; track ws) {
-        <div class="fx-column-start-stretch">
-          <div class="fx-row-space-between-center">
+  @if(this.keycloakService.isLoggedIn()){
+    @if (workspaces.length === 0) {
+      <div>
+        <p>{{'home.no-user-workspaces' | translate}}</p>
+      </div>
+    }
+    @if (workspaces.length > 0) {
+      <div class="fx-column-start-stretch workspace-gap">
+        <h1>Arbeitsbereiche</h1>
+        @for (ws of workspaces; track ws) {
+          <div class="fx-column-start-stretch">
+            <div class="fx-row-space-between-center">
               <a mat-raised-button color="primary" class="workspace"
-                [routerLink]="['/workspace-admin/' + ws.id]">
+                 [routerLink]="['/workspace-admin/' + ws.id]">
                 {{ws.name}}
               </a>
+            </div>
           </div>
-        </div>
-      }
+        }
+      </div>
+    }
+  }@else {
+    <div>
+      <p>
+        Bitte loggen Sie sich ein, um auf Ihre Arbeitsbereiche zuzugreifen.
+      </p>
+      <button mat-raised-button color="primary" (click)="this.keycloakService.login()">
+        Login
+      </button>
     </div>
   }
 </div>
