@@ -1,4 +1,4 @@
-<div class="container">
+<div class="fx-column-start-start fx-gap-10  container">
   <div class="fx-row-center-center-stretch fx-gap-20 upload-buttons">
     <a mat-raised-button color="primary" [disabled]="tableSelectionCheckboxes.selected.length === 0" (click)="createCodingTestGroups()">
       <mat-icon>code</mat-icon>
@@ -8,17 +8,17 @@
       <mat-icon>delete</mat-icon>
       Test Datei(en) löschen
     </a>
-
   </div>
+  @if (isLoading) {
+    <mat-spinner></mat-spinner>
+  }
 @if (dataSource && dataSource.data.length) {
     <coding-box-search-filter
       [title]="'search-filter.filter-test-groups' | translate"
       (valueChange)="dataSource.filter = $event.trim().toLowerCase()">
     </coding-box-search-filter>
   }
-  @if (isLoading) {
-    <mat-spinner></mat-spinner>
-  }
+
   @if (!isLoading) {
   <mat-table [dataSource]="dataSource" matSort>
     <ng-container matColumnDef="selectCheckbox">
@@ -48,7 +48,7 @@
       </mat-cell>
     </ng-container>
 
-    <mat-header-row *matHeaderRowDef="displayedColumns"></mat-header-row>
+    <mat-header-row *matHeaderRowDef="displayedColumns;sticky: true"></mat-header-row>
     <mat-row *matRowDef="let row; columns: displayedColumns;"></mat-row>
 
   </mat-table>

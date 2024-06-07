@@ -1,10 +1,10 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
-import { FileUploadComponent } from './file-upload.component';
+import { TestFilesComponent } from './test-files.component';
 
-describe('FileUploadComponent', () => {
-  let component: FileUploadComponent;
-  let fixture: ComponentFixture<FileUploadComponent>;
+describe('TestFilesComponent', () => {
+  let component: TestFilesComponent;
+  let fixture: ComponentFixture<TestFilesComponent>;
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
@@ -14,7 +14,7 @@ describe('FileUploadComponent', () => {
       ]
     }).compileComponents();
 
-    fixture = TestBed.createComponent(FileUploadComponent);
+    fixture = TestBed.createComponent(TestFilesComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
   });

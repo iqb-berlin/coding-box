@@ -47,8 +47,6 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges {
   dataParts!: { stateVariableCodes: string, elementCodes:string };
 
   ngOnChanges(changes: SimpleChanges) {
-    console.log(this.unitPlayer,this.unitDef,this.unitResponses);
-
     if (this.count > 0) {
       const { unitDef, unitPlayer, unitResponses } = changes;
       const parsedJSONUnitDef = JSON.parse(unitDef.currentValue);

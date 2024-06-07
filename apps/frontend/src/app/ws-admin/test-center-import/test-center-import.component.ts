@@ -17,6 +17,7 @@ import { MatRadioButton, MatRadioGroup } from '@angular/material/radio';
 import { MatCheckbox } from '@angular/material/checkbox';
 import { BackendService } from '../../services/backend.service';
 import { AppService } from '../../services/app.service';
+import { MatProgressSpinner } from '@angular/material/progress-spinner';
 
 type ServerResponse = {
   token: string,
@@ -71,7 +72,7 @@ export type ImportOptions = {
   styleUrls: ['./test-center-import.component.scss'],
   standalone: true,
   // eslint-disable-next-line max-len
-  imports: [MatDialogContent, MatIcon, MatDialogActions, MatButton, MatDialogClose, TranslateModule, MatFormField, ReactiveFormsModule, MatInput, MatSelect, MatOption, MatRadioGroup, MatRadioButton, MatCheckbox]
+  imports: [MatDialogContent, MatIcon, MatDialogActions, MatButton, MatDialogClose, TranslateModule, MatFormField, ReactiveFormsModule, MatInput, MatSelect, MatOption, MatRadioGroup, MatRadioButton, MatCheckbox, MatProgressSpinner]
 })
 
 export class TestCenterImportComponent {
@@ -81,15 +82,14 @@ export class TestCenterImportComponent {
   importFilesForm: UntypedFormGroup;
   authenticationError: boolean = false;
   authenticated: boolean = false;
-  uploadError: boolean = false;
-  uploadedFiles: boolean = false;
+  isUploadingFiles: boolean = false;
   constructor(private backendService: BackendService,
               private fb: UntypedFormBuilder,
               private appService: AppService) {
     this.loginForm = this.fb.group({
       name: this.fb.control('', [Validators.required, Validators.minLength(1)]),
       pw: this.fb.control('', [Validators.required, Validators.minLength(1)]),
-      testcenter: this.fb.control('2', [Validators.required])
+      testCenter: this.fb.control('2', [Validators.required])
     });
     this.importFilesForm = this.fb.group({
       workspace: this.fb.control('', [Validators.required]),
@@ -105,8 +105,8 @@ export class TestCenterImportComponent {
   authenticate(): void {
     const name = this.loginForm.get('name')?.value;
     const pw = this.loginForm.get('pw')?.value;
-    const testcenter = this.loginForm.get('testcenter')?.value;
-    this.backendService.authenticate(name, pw, testcenter).subscribe((response:ServerResponse) => {
+    const testCenter = this.loginForm.get('testCenter')?.value;
+    this.backendService.authenticate(name, pw, testCenter).subscribe((response:ServerResponse) => {
       if (!response) {
         this.authenticationError = true;
         return;
@@ -119,7 +119,7 @@ export class TestCenterImportComponent {
   }
 
   importWorkspaceFiles(): void {
-    const testcenter = this.loginForm.get('testcenter')?.value;
+    const testCenter = this.loginForm.get('testCenter')?.value;
     const workspace = this.importFilesForm.get('workspace')?.value;
     const definitions = this.importFilesForm.get('definitions')?.value;
     const responses = this.importFilesForm.get('responses')?.value;
@@ -134,17 +134,10 @@ export class TestCenterImportComponent {
       player: player,
       codings: codings
     };
-    this.appService.dataLoading = true;
-    this.backendService.importWorkspaceFiles(this.appService.selectedWorkspaceId, workspace, testcenter, this.authToken, importOptions)
+    this.isUploadingFiles = true;
+    this.backendService.importWorkspaceFiles(this.appService.selectedWorkspaceId, workspace, testCenter, this.authToken, importOptions)
       .subscribe((response:ServerFilesResponse) => {
-        this.appService.dataLoading = false;
-        if (!response) {
-          this.uploadedFiles = false;
-          this.uploadError = true;
-          return;
-        }
-        this.uploadedFiles = true;
-        this.uploadError = false;
+        this.isUploadingFiles = false;
       });
   }
 }

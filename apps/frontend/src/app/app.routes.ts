@@ -6,7 +6,7 @@ import { UsersComponent } from './sys-admin/components/users/users.component';
 import { WorkspacesComponent } from './sys-admin/components/workspaces/workspaces.component';
 import { WsAdminComponent } from './ws-admin/ws-admin/ws-admin.component';
 import { SelectReplayComponent } from './ws-admin/select-replay/select-replay.component';
-import { FileUploadComponent } from './ws-admin/file-upload/file-upload.component';
+import { TestFilesComponent } from './ws-admin/test-files/test-files.component';
 import { WsSettingsComponent } from './ws-admin/ws-settings/ws-settings.component';
 import { SysAdminSettingsComponent } from './sys-admin/components/sys-admin-settings/sys-admin-settings.component';
 import { TestGroupsComponent } from './ws-admin/test-groups/test-groups.component';
@@ -30,9 +30,9 @@ export const routes: Routes = [
     path: 'workspace-admin/:ws',
     component: WsAdminComponent,
     children: [
-      { path: '', redirectTo: 'test-files', pathMatch: 'full' },
+      { path: '', redirectTo: 'select-unit-play', pathMatch: 'full' },
       { path: 'select-unit-play', component: SelectReplayComponent },
-      { path: 'test-files', component: FileUploadComponent },
+      { path: 'test-files', component: TestFilesComponent },
       { path: 'test-groups', component: TestGroupsComponent },
       { path: 'users', component: WsUsersComponent },
       { path: 'settings', component: WsSettingsComponent },

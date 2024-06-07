@@ -1,6 +1,5 @@
-<div class="fx-column-start-start fx-gap-20 container">
-  @if(testGroups.length !== 0 ){
-    <div class="fx-row-start fx-gap-25" >
+@if(testGroups.length !== 0 ){
+  <div class="fx-row-start fx-gap-25" >
     <div class="fx-row-start-center fx-gap-5" >
       <mat-form-field>
         <mat-label>Testgruppe</mat-label>
@@ -40,14 +39,18 @@
       <mat-icon>fullscreen</mat-icon>
       Vollbildansicht
     </button>
-    </div>
-  } @else if(!isLoading) {
-    <p>Keine Testgruppen vorhanden!</p>
-  } @else {
-    <mat-spinner mode="indeterminate"></mat-spinner>
-  }
+  </div>
+} @else if(!isLoading) {
+  <p>Keine Testgruppen vorhanden!</p>
+} @else {
+  <mat-spinner mode="indeterminate"></mat-spinner>
+}
+<div class="fx-column-start-start fx-gap-20 container">
+
 
 @if (selectedTestPerson && selectedUnit){
+  <div class="replay">
   <coding-box-replay [testPersonInput]="selectedTestPerson" [unitIdInput]="selectedUnit"></coding-box-replay>
-}
+  </div>
+    }
 </div>

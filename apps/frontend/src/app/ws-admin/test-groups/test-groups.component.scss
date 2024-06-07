@@ -4,11 +4,27 @@
 }
 
 mat-table{
-  max-height: 600px;
+  max-width:78vh;
+  max-height:78vh;
   overflow-y: scroll;
+}
+
+coding-box-search-filter {
+  min-width:100%;
 }
 
 .container{
   margin:20px;
   max-height: 78vh;
+  min-height: 78vh;
+}
+
+.upload-buttons{
+  margin: 10px;
+}
+
+a{
+  min-width:300px;
+  padding:20px;
+  font-size: 16px;
 }
