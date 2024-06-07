@@ -30,7 +30,7 @@ dev-test-frontend:
 #				--pull\
 #				--build-arg REGISTRY_PATH=$(REGISTRY_PATH)\
 #				-f $(CODING_BOX_BASE_DIR)/apps/frontend-e2e/Dockerfile\
-#				-t studio-lite-frontend-e2e:$(TAG)\
+#				-t coding-box-frontend-e2e:$(TAG)\
 #			.
 #	@if test $(REGISTRY_PATH); then docker logout $(REGISTRY_PATH); fi
 #
@@ -40,9 +40,9 @@ dev-test-frontend:
 #		docker run\
 #				--rm\
 #				--pull never\
-#				-v ./apps/frontend-e2e:/studio-lite/apps/frontend-e2e\
+#				-v ./apps/frontend-e2e:/coding-box/apps/frontend-e2e\
 #				--network app-net\
-#			studio-lite-frontend-e2e:$(TAG) e2e frontend-e2e --baseUrl=http://frontend:80\
+#			coding-box-frontend-e2e:$(TAG) e2e frontend-e2e --baseUrl=http://frontend:80\
 #				--browser=chrome
 #
 ### Run all e2e api tests in dev environment (only in combination with 'make dev-up')
@@ -51,9 +51,9 @@ dev-test-frontend:
 #		docker run\
 #				--rm\
 #				--pull never\
-#				-v ./apps/frontend-e2e:/studio-lite/apps/frontend-e2e\
+#				-v ./apps/frontend-e2e:/coding-box/apps/frontend-e2e\
 #				--network app-net\
-#			studio-lite-frontend-e2e:$(TAG) e2e frontend-e2e --baseUrl=http://frontend:80\
+#			coding-box-frontend-e2e:$(TAG) e2e frontend-e2e --baseUrl=http://frontend:80\
 #				--browser=chrome\
 #				--spec="./apps/frontend-e2e/src/e2e/api/*"
 #
@@ -63,9 +63,9 @@ dev-test-frontend:
 #		docker run\
 #				--rm\
 #				--pull never\
-#				-v ./apps/frontend-e2e:/studio-lite/apps/frontend-e2e\
+#				-v ./apps/frontend-e2e:/coding-box/apps/frontend-e2e\
 #				--network app-net\
-#			studio-lite-frontend-e2e:$(TAG) e2e frontend-e2e --baseUrl=http://frontend:80\
+#			coding-box-frontend-e2e:$(TAG) e2e frontend-e2e --baseUrl=http://frontend:80\
 #				--browser=chrome\
 #				--spec="./apps/frontend-e2e/src/e2e/ui/*"
 #
@@ -75,9 +75,9 @@ dev-test-frontend:
 #		docker run\
 #				--rm\
 #				--pull never\
-#				-v ./apps/frontend-e2e:/studio-lite/apps/frontend-e2e\
+#				-v ./apps/frontend-e2e:/coding-box/apps/frontend-e2e\
 #				--network app-net\
-#			studio-lite-frontend-e2e:$(TAG) e2e frontend-e2e --baseUrl=http://frontend:80\
+#			coding-box-frontend-e2e:$(TAG) e2e frontend-e2e --baseUrl=http://frontend:80\
 #				--browser=chrome\
 #				--spec="./apps/frontend-e2e/src/e2e/ui/*"\
 #				--config="viewportWidth=375,viewportHeight=667"
@@ -88,9 +88,9 @@ dev-test-frontend:
 #		docker run\
 #				--rm\
 #				--pull never\
-#				-v ./apps/frontend-e2e:/studio-lite/apps/frontend-e2e\
+#				-v ./apps/frontend-e2e:/coding-box/apps/frontend-e2e\
 #				--network app-net\
-#			studio-lite-frontend-e2e:$(TAG) e2e frontend-e2e --baseUrl=http://frontend:80\
+#			coding-box-frontend-e2e:$(TAG) e2e frontend-e2e --baseUrl=http://frontend:80\
 #				--browser=firefox\
 #				--spec="./apps/frontend-e2e/src/e2e/ui/*"\
 #
@@ -100,9 +100,9 @@ dev-test-frontend:
 #		docker run\
 #				--rm\
 #				--pull never\
-#				-v ./apps/frontend-e2e:/studio-lite/apps/frontend-e2e\
+#				-v ./apps/frontend-e2e:/coding-box/apps/frontend-e2e\
 #				--network app-net\
-#			studio-lite-frontend-e2e:$(TAG) e2e frontend-e2e --baseUrl=http://frontend:80\
+#			coding-box-frontend-e2e:$(TAG) e2e frontend-e2e --baseUrl=http://frontend:80\
 #				--browser=firefox\
 #				--spec="./apps/frontend-e2e/src/e2e/ui/*"\
 #				--config="viewportWidth=375,viewportHeight=667"
@@ -113,9 +113,9 @@ dev-test-frontend:
 #		docker run\
 #				--rm\
 #				--pull never\
-#				-v ./apps/frontend-e2e:/studio-lite/apps/frontend-e2e\
+#				-v ./apps/frontend-e2e:/coding-box/apps/frontend-e2e\
 #				--network app-net\
-#			studio-lite-frontend-e2e:$(TAG) e2e frontend-e2e --baseUrl=http://frontend:80\
+#			coding-box-frontend-e2e:$(TAG) e2e frontend-e2e --baseUrl=http://frontend:80\
 #				--browser=edge\
 #				--spec="./apps/frontend-e2e/src/e2e/ui/*"
 #
@@ -125,9 +125,9 @@ dev-test-frontend:
 #		docker run\
 #				--rm\
 #				--pull never\
-#				-v ./apps/frontend-e2e:/studio-lite/apps/frontend-e2e\
+#				-v ./apps/frontend-e2e:/coding-box/apps/frontend-e2e\
 #				--network app-net\
-#			studio-lite-frontend-e2e:$(TAG) e2e frontend-e2e --baseUrl=http://frontend:80\
+#			coding-box-frontend-e2e:$(TAG) e2e frontend-e2e --baseUrl=http://frontend:80\
 #				--browser=edge\
 #				--spec="./apps/frontend-e2e/src/e2e/ui/*"\
 #				--config="viewportWidth=375,viewportHeight=667"
