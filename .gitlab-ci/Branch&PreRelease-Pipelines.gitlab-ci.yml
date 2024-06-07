@@ -1163,6 +1163,7 @@ build-pre-release:
     BACKEND_IMAGE_NAME: "${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-backend"
     FRONTEND_IMAGE_NAME: "${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-frontend"
   before_script:
+    - echo "$REGISTRY_PASSWORD" | docker login -u $REGISTRY_USER --password-stdin $REGISTRY
     - echo "$DOCKERHUB_PASSWORD" | docker login -u $DOCKERHUB_USER --password-stdin
     - docker pull -q ${DB_IMAGE_NAME}:${CI_COMMIT_SHA}
     - docker pull -q ${LIQUIBASE_IMAGE_NAME}:${CI_COMMIT_SHA}
