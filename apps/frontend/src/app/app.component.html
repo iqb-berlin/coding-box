@@ -28,7 +28,9 @@
           <coding-box-wrapped-icon icon="settings"></coding-box-wrapped-icon>
         </button>
       }
-      <coding-box-user-menu></coding-box-user-menu>
+      @if(this.keycloakService.isLoggedIn()){
+        <coding-box-user-menu></coding-box-user-menu>
+      }
     </div>
   </div>
 }
