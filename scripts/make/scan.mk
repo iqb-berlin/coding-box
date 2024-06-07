@@ -15,7 +15,7 @@ scan-db:
 				-f $(CODING_BOX_BASE_DIR)/database/Postgres.Dockerfile\
 				--no-cache\
 				--rm\
-				-t iqbberlin/studio-lite-db:scan\
+				-t iqbberlin/coding-box-db:scan\
 			.
 		docker run\
 				--rm\
@@ -26,7 +26,7 @@ scan-db:
 						--scanners vuln\
 						--ignore-unfixed\
 						--severity CRITICAL\
-					iqbberlin/studio-lite-db:scan
+					iqbberlin/coding-box-db:scan
 
 ## scans liquibase image for security vulnerabilities
 scan-liquibase:
@@ -36,7 +36,7 @@ scan-liquibase:
 				-f $(CODING_BOX_BASE_DIR)/database/Liquibase.Dockerfile\
 				--no-cache\
 				--rm\
-				-t iqbberlin/studio-lite-liquibase:scan\
+				-t iqbberlin/coding-box-liquibase:scan\
 			.
 		docker run\
 				--rm\
@@ -47,7 +47,7 @@ scan-liquibase:
 						--scanners vuln\
 						--ignore-unfixed\
 						--severity CRITICAL\
-					iqbberlin/studio-lite-liquibase:scan
+					iqbberlin/coding-box-liquibase:scan
 
 ## scans backend image for security vulnerabilities
 scan-backend:
@@ -59,7 +59,7 @@ scan-backend:
 				--target=prod\
 				--no-cache\
 				--rm\
-				-t iqbberlin/studio-lite-backend:scan\
+				-t iqbberlin/coding-box-backend:scan\
 			.
 		docker run\
 				--rm\
@@ -70,7 +70,7 @@ scan-backend:
 						--scanners vuln\
 						--ignore-unfixed\
 						--severity CRITICAL\
-					iqbberlin/studio-lite-backend:scan
+					iqbberlin/coding-box-backend:scan
 
 ## scans frontend image for security vulnerabilities
 scan-frontend:
@@ -82,7 +82,7 @@ scan-frontend:
 				--target=prod\
 				--no-cache\
 				--rm\
-				-t iqbberlin/studio-lite-frontend:scan\
+				-t iqbberlin/coding-box-frontend:scan\
 			.
 		docker run\
  				--rm\
@@ -93,4 +93,4 @@ scan-frontend:
  						--scanners vuln\
  						--ignore-unfixed\
  						--severity CRITICAL\
- 					iqbberlin/studio-lite-frontend:scan
+ 					iqbberlin/coding-box-frontend:scan
