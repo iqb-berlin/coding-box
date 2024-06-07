@@ -5,6 +5,10 @@ x-env-postgres: &env-postgres
   POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
   POSTGRES_DB: ${POSTGRES_DB}
 
+x-env-jwt: &env-jwt
+  JWT_SECRET: ${JWT_SECRET}
+  JWT_EXPIRATION: ${JWT_EXPIRATION}
+
 services:
   db:
     environment:
@@ -41,6 +45,7 @@ services:
     environment:
       API_HOST: backend
       <<: *env-postgres
+      <<: *env-jwt
     networks:
       - application-network
 
