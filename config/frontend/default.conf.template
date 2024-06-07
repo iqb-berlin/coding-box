@@ -21,7 +21,7 @@ server {
         root   /usr/share/nginx/html;
     }
 
-    # pass api calls to studio-lite backend host
+    # pass api calls to coding-box backend host
     location /api/ {
         proxy_pass  http://backend:3333;
     }
