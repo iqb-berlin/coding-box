@@ -29,6 +29,7 @@ export function initializer(keycloak: KeycloakService): () => Promise<boolean> {
     loadUserProfileAtStartUp: true,
     initOptions: {
       onLoad: 'check-sso',
+      redirectUri: 'http://localhost:4200/dashboard',
       //onLoad: 'login-required',
       checkLoginIframe: false
     },

@@ -12,6 +12,7 @@ import { MatTableModule } from '@angular/material/table';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { WsSettingsComponent } from './ws-settings.component';
+import { environment } from '../../../environments/environment';
 
 describe('WsSettingsComponent', () => {
   let component: WsSettingsComponent;
@@ -24,6 +25,10 @@ describe('WsSettingsComponent', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
+      providers: [{
+        provide: 'SERVER_URL',
+        useValue: environment.backendUrl
+      }],
       declarations: [
         MockSearchFilterComponent
       ],

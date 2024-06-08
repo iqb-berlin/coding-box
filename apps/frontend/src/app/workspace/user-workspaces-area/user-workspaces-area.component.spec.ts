@@ -6,6 +6,8 @@ import { UserWorkspacesAreaComponent } from './user-workspaces-area.component';
 import { environment } from '../../../environments/environment';
 import { HomeComponent } from '../../components/home/home.component';
 import { BackendService } from '../../services/backend.service';
+import { KeycloakService } from 'keycloak-angular';
+import { AuthService } from '../../auth/service/auth.service';
 
 
 describe('UserWorkspacesAreaComponent', () => {
@@ -41,12 +43,13 @@ describe('UserWorkspacesAreaComponent', () => {
         TranslateModule.forRoot()
       ],
       providers: [
+       KeycloakService,
         {
           provide: BackendService,
           useValue: MockBackendService
         },
         {
-          //provide: AuthService,
+          provide: AuthService,
           useValue: MockAuthService
         },
         {

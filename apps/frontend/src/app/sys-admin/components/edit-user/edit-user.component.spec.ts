@@ -7,8 +7,8 @@ import { TranslateModule } from '@ngx-translate/core';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatInputModule } from '@angular/material/input';
 import { MatIconModule } from '@angular/material/icon';
-import { environment } from '../../../../../environments/environment';
 import { EditUserComponent } from './edit-user.component';
+import { environment } from '../../../../environments/environment';
 
 describe('EditUserComponent', () => {
   let component: EditUserComponent;

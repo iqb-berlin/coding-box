@@ -1,10 +1,17 @@
 import { TestBed } from '@angular/core/testing';
 import { AppComponent } from './app.component';
+import { KeycloakService } from 'keycloak-angular';
+import { HttpClientModule } from '@angular/common/http';
+import { environment } from '../environments/environment';
 
 describe('AppComponent', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [AppComponent],
+      providers: [KeycloakService,{
+        provide: 'SERVER_URL',
+        useValue: environment.backendUrl
+      },],
+      imports: [AppComponent,HttpClientModule],
     }).compileComponents();
   });
 

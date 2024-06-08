@@ -42,7 +42,8 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   async ngOnInit(): Promise<void> {
-    const params = await firstValueFrom(this.route.params);
+      const params = await firstValueFrom(this.route.params);
+
     if (Object.keys(params).length !== 0) {
       const { page, testPerson, unitId } = params;
       this.page = page;

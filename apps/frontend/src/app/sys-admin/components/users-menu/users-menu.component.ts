@@ -50,7 +50,7 @@ export class UsersMenuComponent {
     if (!selectedRows.length) {
       selectedRows = this.checkedRows;
     }
-    if (!selectedRows.length) {
+    if (!selectedRows?.length) {
       this.messageDialog.open(MessageDialogComponent, {
         width: '400px',
         data: <MessageDialogData>{
