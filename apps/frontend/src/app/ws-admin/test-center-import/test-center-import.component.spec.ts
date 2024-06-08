@@ -4,6 +4,7 @@ import { MAT_DIALOG_DATA, MatDialogModule } from '@angular/material/dialog';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatIconModule } from '@angular/material/icon';
 import { TestCenterImportComponent } from './test-center-import.component';
+import { environment } from '../../../environments/environment';
 
 describe('TestCenterImportComponent', () => {
   let component: TestCenterImportComponent;
@@ -12,6 +13,9 @@ describe('TestCenterImportComponent', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       providers: [{
+        provide: 'SERVER_URL',
+        useValue: environment.backendUrl
+      },{
         provide: MAT_DIALOG_DATA,
         useValue: {}
       }

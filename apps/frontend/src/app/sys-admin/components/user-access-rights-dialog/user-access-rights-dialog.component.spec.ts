@@ -4,6 +4,7 @@ import { MAT_DIALOG_DATA, MatDialogModule } from '@angular/material/dialog';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatIconModule } from '@angular/material/icon';
 import { UserAccessRightsDialogComponent } from './user-access-rights-dialog.component';
+import { environment } from '../../../../environments/environment';
 
 describe('UserAccessRightsDialogComponent', () => {
   let component: UserAccessRightsDialogComponent;
@@ -14,6 +15,10 @@ describe('UserAccessRightsDialogComponent', () => {
       providers: [{
         provide: MAT_DIALOG_DATA,
         useValue: {}
+
+      },{
+        provide: 'SERVER_URL',
+        useValue: environment.backendUrl
       }
       ],
       imports: [

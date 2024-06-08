@@ -11,6 +11,7 @@ import { KeycloakService } from 'keycloak-angular';
   selector: 'coding-book-user-workspaces',
   templateUrl: './user-workspaces.component.html',
   styleUrls: ['./user-workspaces.component.scss'],
+  providers: [KeycloakService],
   standalone: true,
   // eslint-disable-next-line max-len
   imports: [MatAnchor, RouterLink, MatTooltip, WrappedIconComponent, TranslateModule, MatButton]

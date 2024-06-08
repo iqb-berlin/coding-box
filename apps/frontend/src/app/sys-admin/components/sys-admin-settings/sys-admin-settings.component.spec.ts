@@ -12,6 +12,7 @@ import { MatTableModule } from '@angular/material/table';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { SysAdminSettingsComponent } from './sys-admin-settings.component';
+import { environment } from '../../../../environments/environment';
 
 describe('SysAdminSettingsComponent', () => {
   let component: SysAdminSettingsComponent;
@@ -27,6 +28,10 @@ describe('SysAdminSettingsComponent', () => {
       declarations: [
         MockSearchFilterComponent
       ],
+      providers: [{
+        provide: 'SERVER_URL',
+        useValue: environment.backendUrl
+      }],
       imports: [
         MatSnackBarModule,
         MatCheckboxModule,

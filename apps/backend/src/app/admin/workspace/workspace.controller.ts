@@ -28,7 +28,7 @@ import { AuthService } from '../../auth/service/auth.service';
 export class WorkspaceController {
   constructor(
     private workspaceService: WorkspaceService,
-    private testcenterService: TestcenterService,
+    private testCenterService: TestcenterService,
     private authService: AuthService
   ) {}
 
@@ -67,7 +67,7 @@ export class WorkspaceController {
       player: player,
       codings: codings
     };
-    return this.testcenterService.importWorkspaceFiles(workspace_id, tc_workspace, server, token, importOptions);
+    return this.testCenterService.importWorkspaceFiles(workspace_id, tc_workspace, server, token, importOptions);
   }
 
   @Get(':workspace_id')

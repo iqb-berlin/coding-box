@@ -4,8 +4,9 @@ import { WorkspaceController } from './workspace.controller';
 import { AuthService } from '../../auth/service/auth.service';
 import { WorkspaceService } from '../../database/services/workspace.service';
 import { UsersService } from '../../database/services/users.service';
+import { TestcenterService } from '../../database/services/testcenter.service';
 
-describe('WorkspaceGroupsController', () => {
+describe('WorkspaceController', () => {
   let controller: WorkspaceController;
 
   beforeEach(async () => {
@@ -14,6 +15,10 @@ describe('WorkspaceGroupsController', () => {
       providers: [
         {
           provide: AuthService,
+          useValue: createMock<AuthService>()
+        },
+        {
+          provide: TestcenterService,
           useValue: createMock<AuthService>()
         },
         {

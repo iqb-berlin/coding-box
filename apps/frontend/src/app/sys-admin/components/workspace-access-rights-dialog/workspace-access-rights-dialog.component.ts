@@ -26,9 +26,12 @@ export class WorkspaceAccessRightsDialogComponent implements OnInit {
   result: number[] = [];
   constructor(@Inject(MAT_DIALOG_DATA) public data: { selectedUser:UserFullDto[] },
               private backendService: BackendService) {
-    this.backendService.getWorkspacesByUserList(this.data.selectedUser[0].id).subscribe(workspaces => {
-      this.selectedWorkspacesIds = workspaces;
-    });
+    if(this.data.selectedUser && this.data.selectedUser.length > 0) {
+      this.backendService.getWorkspacesByUserList(this.data.selectedUser[0].id).subscribe(workspaces => {
+        this.selectedWorkspacesIds = workspaces;
+      });
+    };
+
   }
 
   ngOnInit(): void {
