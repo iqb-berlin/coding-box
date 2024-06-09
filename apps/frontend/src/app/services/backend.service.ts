@@ -278,6 +278,32 @@ export class BackendService {
       { headers: this.authHeader });
   }
 
+  getUnitDefExternal(authToken:string, workspaceId: number, unit: string): Observable<{ data:string }[]> {
+    return this.http.get<{ data:string }[]>(
+      `${SERVER_URL}admin/workspace/${workspaceId}/${unit}/unitDef`,
+      { headers: { Authorization: `Bearer ${authToken}` } });
+  }
+
+  getPlayerExternal(authToken:string, workspaceId: number, player:string): Observable<{ data:string }[]> {
+    return this.http.get<{ data:string }[]>(
+      `${SERVER_URL}admin/workspace/${workspaceId}/player/${player}`,
+      { headers: { Authorization: `Bearer ${authToken}` } });
+  }
+
+  getResponsesExternal(authToken:string, workspaceId: number, testPerson: string, unitId:string): Observable<string[]> {
+    return this.http.get<string[]>(
+      `${SERVER_URL}admin/workspace/${workspaceId}/responses/${testPerson}/${unitId}`,
+      { headers: { Authorization: `Bearer ${authToken}` } });
+  }
+
+  getUnitExternal(authToken:string,
+                  workspaceId: number,
+                  testPerson: string, unitId:string): Observable<{ data:string }[]> {
+    return this.http.get<{ data:string }[]>(
+      `${SERVER_URL}admin/workspace/${workspaceId}/unit/${testPerson}/${unitId}`,
+      { headers: { Authorization: `Bearer ${authToken}` } });
+  }
+
   getTestPersonUnits(workspaceId: number, testPerson: string): Observable<{ unit_id:string }[]> {
     return this.http.get<{ unit_id:string }[]>(
       `${SERVER_URL}admin/workspace/${workspaceId}/units/${testPerson}`,

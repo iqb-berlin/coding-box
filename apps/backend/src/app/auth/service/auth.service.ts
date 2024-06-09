@@ -19,7 +19,7 @@ export class AuthService {
       username: username
     });
     this.logger.log(`First User with id '${newUserId}' is logging in.`);
-    const payload = { username: username, sub: newUserId, sub2: 0 };
+    const payload = { username: username, sub: 4 };
     return this.jwtService.sign(payload);
   }
 
@@ -37,14 +37,14 @@ export class AuthService {
       isAdmin: isAdmin
     });
     this.logger.log(`Keycloak User with id '${userId}' is logging in.`);
-    const payload = { username: username, sub: userId, sub2: 0 };
+    const payload = { username: username, sub: user, workspace: 4 };
     return this.jwtService.sign(payload);
   }
 
   async createToken(identity:string, workspaceId:number): Promise<string> {
     const user = await this.usersService.findUserByIdentity(identity);
     const payload = {
-      username: user.username, sub: identity, sub2: 0, workspace: workspaceId
+      username: user.username, sub: user, workspace: workspaceId
     };
     const token = this.jwtService.sign(payload);
     return JSON.stringify(token);
@@ -64,7 +64,7 @@ export class AuthService {
       isAdmin: false
     });
     this.logger.log(`User with id '${userId}' is logging in.`);
-    const payload = { username: username, sub: userId, sub2: 0 };
+    const payload = { username: username, sub: userId, workspace: 1 };
     return this.jwtService.sign(payload);
   }
 

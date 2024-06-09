@@ -6,6 +6,7 @@ import { MatAnchor, MatButton } from '@angular/material/button';
 import { KeycloakService } from 'keycloak-angular';
 import { WorkspaceFullDto } from '../../../../../../api-dto/workspaces/workspace-full-dto';
 import { WrappedIconComponent } from '../../shared/wrapped-icon/wrapped-icon.component';
+import { AuthService } from '../../auth/service/auth.service';
 
 @Component({
   selector: 'coding-book-user-workspaces',
@@ -18,6 +19,6 @@ import { WrappedIconComponent } from '../../shared/wrapped-icon/wrapped-icon.com
 })
 
 export class UserWorkspacesComponent {
-  constructor(public keycloakService: KeycloakService) {}
+  constructor(public keycloakService: KeycloakService, public authService:AuthService) {}
   @Input() workspaces!: WorkspaceFullDto[];
 }

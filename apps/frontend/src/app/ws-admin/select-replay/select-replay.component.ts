@@ -92,10 +92,10 @@ export class SelectReplayComponent implements OnInit {
         const url = this.router
           .serializeUrl(
             this.router.createUrlTree(
-              [`/replay/${this.selectedTestPerson}/${this.selectedUnit}/1`],
+              [`replay/${this.selectedTestPerson}/${this.selectedUnit}/1`],
               { queryParams: queryParams })
           );
-        window.open(url, '_blank');
+        window.open(`#/${url}`, '_blank');
       });
   }
 }
