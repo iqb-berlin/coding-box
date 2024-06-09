@@ -12,7 +12,7 @@ export function initializer(keycloak: KeycloakService): () => Promise<boolean> {
       loadUserProfileAtStartUp: true,
       initOptions: {
         onLoad: 'check-sso',
-        redirectUri: 'https://iqb-kodierbox.de',
+        // redirectUri: 'https://iqb-kodierbox.de',
         // onLoad: 'login-required',
         checkLoginIframe: false
       }

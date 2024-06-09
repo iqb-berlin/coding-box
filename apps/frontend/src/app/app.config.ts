@@ -6,6 +6,7 @@ import { TranslateHttpLoader } from '@ngx-translate/http-loader';
 import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
 import { KeycloakService } from 'keycloak-angular';
 import { provideStore } from '@ngrx/store';
+import { HashLocationStrategy, LocationStrategy } from '@angular/common';
 import { initializer } from './auth/keycloak-initializer';
 import { routes } from './app.routes';
 import { environment } from '../environments/environment';
@@ -31,11 +32,14 @@ export const appConfig: ApplicationConfig = {
   })),
   provideRouter(routes),
   provideAnimationsAsync(),
-
   KeycloakService,
   {
     provide: 'SERVER_URL',
     useValue: environment.backendUrl
+  },
+  {
+    provide: LocationStrategy,
+    useClass: HashLocationStrategy
   },
   {
     provide: APP_INITIALIZER,
