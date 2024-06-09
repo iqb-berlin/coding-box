@@ -2,7 +2,7 @@ import {
   Component, OnInit, ViewChild
 } from '@angular/core';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { RouterLink } from '@angular/router';
 import { MatAnchor, MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { Subscription } from 'rxjs';
@@ -50,8 +50,7 @@ export class TestFilesComponent implements OnInit {
               public backendService: BackendService,
               private TestCenterImportDialog: MatDialog,
               private snackBar: MatSnackBar,
-              private translateService: TranslateService,
-              private route: ActivatedRoute
+              private translateService: TranslateService
   ) {
   }
 
@@ -74,23 +73,23 @@ export class TestFilesComponent implements OnInit {
     this.createTestFilesList();
   }
 
-  updateTestFilesList(): void {
-    // this.setObjectsDatasource(this.testGroups);
-    this.tableSelectionCheckboxes.clear();
-    this.tableSelectionRow.clear();
-    this.appService.dataLoading = false;
-  }
-
-  private setObjectsDatasource(files: FilesInListDto[]): void {
-    this.dataSource = new MatTableDataSource(files);
-    this.dataSource
-      .filterPredicate = (filesList: FilesInListDto, filter) => [
-        'name'
-      ].some(column => (filesList[column as keyof FilesInListDto] as string || '')
-        .toLowerCase()
-        .includes(filter));
-    this.dataSource.sort = this.sort;
-  }
+  // updateTestFilesList(): void {
+  //   this.setObjectsDatasource(this.testGroups);
+  //   this.tableSelectionCheckboxes.clear();
+  //   this.tableSelectionRow.clear();
+  //   this.appService.dataLoading = false;
+  // }
+  //
+  // private setObjectsDatasource(files: FilesInListDto[]): void {
+  //   this.dataSource = new MatTableDataSource(files);
+  //   this.dataSource
+  //     .filterPredicate = (filesList: FilesInListDto, filter) => [
+  //       'name'
+  //     ].some(column => (filesList[column as keyof FilesInListDto] as string || '')
+  //       .toLowerCase()
+  //       .includes(filter));
+  //   this.dataSource.sort = this.sort;
+  // }
 
   private isAllSelected(): boolean {
     const numSelected = this.tableSelectionCheckboxes.selected.length;
@@ -113,14 +112,10 @@ export class TestFilesComponent implements OnInit {
           this.appService.selectedWorkspaceId,
           inputElement.files
         ).subscribe(uploadStatus => {
-          if (typeof uploadStatus === 'number') {
-            if (uploadStatus < 0) {
-              this.appService.dataLoading = false;
-            } else {
-              this.appService.dataLoading = uploadStatus;
-            }
-          } else {
+          if (uploadStatus < 0) {
             this.appService.dataLoading = false;
+          } else {
+            this.appService.dataLoading = uploadStatus;
           }
         });
       }
@@ -129,7 +124,7 @@ export class TestFilesComponent implements OnInit {
 
   createTestFilesList(): void {
     this.isLoading = true;
-    if (this.appService.workspaceData?.testGroups.length === 0) {
+    if (this.appService.workspaceData?.testFiles.length === 0) {
       this.backendService.getFilesList(this.appService.selectedWorkspaceId)
         .subscribe((files: FilesInListDto[]) => {
           this.dataSource = new MatTableDataSource(files || []);
