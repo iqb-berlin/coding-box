@@ -15,11 +15,12 @@ import { MatInput } from '@angular/material/input';
 import { MatOption, MatSelect } from '@angular/material/select';
 import { MatRadioButton, MatRadioGroup } from '@angular/material/radio';
 import { MatCheckbox } from '@angular/material/checkbox';
+import { MatProgressSpinner } from '@angular/material/progress-spinner';
+// eslint-disable-next-line import/no-cycle
 import { BackendService } from '../../services/backend.service';
 import { AppService } from '../../services/app.service';
-import { MatProgressSpinner } from '@angular/material/progress-spinner';
 
-type ServerResponse = {
+export type ServerResponse = {
   token: string,
   displayName: string,
   customTexts: unknown,
@@ -42,25 +43,25 @@ type WorkspaceAdmin = {
   }
 };
 
-type ServerFilesResponse = {
-  Booklet:[],
-  Ressource:Ressource[],
-  Unit:[],
-  Testtakers:[],
-};
+// type ServerFilesResponse = {
+//   Booklet:[],
+//   Ressource:Ressource[],
+//   Unit:[],
+//   Testtakers:[],
+// };
 
-type Ressource = {
-  name: string,
-  size: number,
-  modificationTime: number,
-  type: string,
-  id: string,
-  report: [],
-  info: {
-    label: string,
-    description: string
-  }
-};
+// type Ressource = {
+//   name: string,
+//   size: number,
+//   modificationTime: number,
+//   type: string,
+//   id: string,
+//   report: [],
+//   info: {
+//     label: string,
+//     description: string
+//   }
+// };
 
 export type ImportOptions = {
   responses:string, definitions:string, units:string, player:string, codings:string
@@ -106,7 +107,7 @@ export class TestCenterImportComponent {
     const name = this.loginForm.get('name')?.value;
     const pw = this.loginForm.get('pw')?.value;
     const testCenter = this.loginForm.get('testCenter')?.value;
-    this.backendService.authenticate(name, pw, testCenter).subscribe((response:ServerResponse) => {
+    this.backendService.authenticate(name, pw, testCenter).subscribe(response => {
       if (!response) {
         this.authenticationError = true;
         return;
@@ -135,8 +136,13 @@ export class TestCenterImportComponent {
       codings: codings
     };
     this.isUploadingFiles = true;
-    this.backendService.importWorkspaceFiles(this.appService.selectedWorkspaceId, workspace, testCenter, this.authToken, importOptions)
-      .subscribe((response:ServerFilesResponse) => {
+    this.backendService.importWorkspaceFiles(
+      this.appService.selectedWorkspaceId,
+      workspace,
+      testCenter,
+      this.authToken,
+      importOptions)
+      .subscribe(() => {
         this.isUploadingFiles = false;
       });
   }

@@ -1,5 +1,5 @@
 import {
-  Component, Inject, OnInit
+  Component, Inject
 } from '@angular/core';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatButton } from '@angular/material/button';
@@ -9,9 +9,9 @@ import {
 } from '@angular/material/dialog';
 import { JsonPipe } from '@angular/common';
 import { WorkspacesSelectionComponent } from '../workspaces-selection/workspaces-selection.component';
-import { UserFullDto } from '../../../../../api-dto/user/user-full-dto';
+import { UserFullDto } from '../../../../../../../api-dto/user/user-full-dto';
 import { BackendService } from '../../../services/backend.service';
-import { WorkspaceInListDto } from '../../../../../api-dto/workspaces/workspace-in-list-dto';
+// eslint-disable-next-line import/no-cycle
 import { UsersSelectionComponent } from '../users-selection/users-selection.component';
 
 @Component({
@@ -19,10 +19,11 @@ import { UsersSelectionComponent } from '../users-selection/users-selection.comp
   templateUrl: './user-access-rights-dialog.component.html',
   styleUrls: ['./user-access-rights-dialog.component.scss'],
   standalone: true,
+  // eslint-disable-next-line max-len
   imports: [MatDialogContent, MatIcon, MatDialogActions, MatButton, MatDialogClose, TranslateModule, WorkspacesSelectionComponent, JsonPipe, UsersSelectionComponent]
 })
 
-export class UserAccessRightsDialogComponent implements OnInit {
+export class UserAccessRightsDialogComponent {
   selectedUserIds!: number[];
   result: number[] = [];
   constructor(@Inject(MAT_DIALOG_DATA) public data: { selectedWorkspace:number },
@@ -32,12 +33,7 @@ export class UserAccessRightsDialogComponent implements OnInit {
     });
   }
 
-  ngOnInit(): void {
-
-  }
-
   setUsersSelection(result: UserFullDto[]): void {
     this.result = result.map(workspace => workspace.id);
-    console.log(this.result);
   }
 }

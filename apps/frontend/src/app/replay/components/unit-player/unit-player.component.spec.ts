@@ -1,8 +1,8 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { UnitPlayerComponent } from './unit-player.component';
 import { TranslateModule } from '@ngx-translate/core';
-import { environment } from '../../../../environments/environment';
 import { HttpClientModule } from '@angular/common/http';
+import { UnitPlayerComponent } from './unit-player.component';
+import { environment } from '../../../../environments/environment';
 
 describe('UnitPlayerComponent', () => {
   let component: UnitPlayerComponent;
@@ -19,7 +19,7 @@ describe('UnitPlayerComponent', () => {
         TranslateModule.forRoot(),
         HttpClientModule]
     })
-    .compileComponents();
+      .compileComponents();
 
     fixture = TestBed.createComponent(UnitPlayerComponent);
     component = fixture.componentInstance;

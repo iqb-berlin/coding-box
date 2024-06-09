@@ -1,7 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
-import { RouterTestingModule } from '@angular/router/testing';
-import { RouterModule } from '@nestjs/core';
 import { ActivatedRoute } from '@angular/router';
 import { AppInfoComponent } from './app-info.component';
 

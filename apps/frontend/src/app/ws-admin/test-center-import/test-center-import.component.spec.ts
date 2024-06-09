@@ -15,7 +15,7 @@ describe('TestCenterImportComponent', () => {
       providers: [{
         provide: 'SERVER_URL',
         useValue: environment.backendUrl
-      },{
+      }, {
         provide: MAT_DIALOG_DATA,
         useValue: {}
       }

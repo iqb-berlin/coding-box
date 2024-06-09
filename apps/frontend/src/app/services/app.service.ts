@@ -1,15 +1,18 @@
 import { Injectable } from '@angular/core';
 import { Subject } from 'rxjs';
 import { KeycloakProfile, KeycloakTokenParsed } from 'keycloak-js';
-import { AppLogoDto } from '../../../api-dto/app-logo-dto';
-import { AuthDataDto } from '../../../api-dto/auth-data-dto';
+import { AppLogoDto } from '../../../../../api-dto/app-logo-dto';
+import { AuthDataDto } from '../../../../../api-dto/auth-data-dto';
+import { AppHttpError } from '../interceptors/app-http-error.class';
+import { TestGroupsInListDto } from '../../../../../api-dto/test-groups/testgroups-in-list.dto';
+import { FilesInListDto } from '../../../../../api-dto/files/files-in-list.dto';
 
 type WorkspaceData = {
-  testGroups: any[];
-  testFiles: any[];
-  settings: any;
-  selectUnitPlay: any;
-}
+  testGroups: TestGroupsInListDto[];
+  testFiles: FilesInListDto[];
+  settings: unknown;
+  selectUnitPlay: unknown;
+};
 @Injectable({
   providedIn: 'root'
 })
@@ -32,12 +35,15 @@ export class AppService {
   appLogo: AppLogoDto = standardLogo;
   postMessage$ = new Subject<MessageEvent>();
   loggedUser: KeycloakTokenParsed | undefined;
-  workspaceData : WorkspaceData ={
+  errorMessages: AppHttpError[] = [];
+  errorMessageCounter = 0;
+  workspaceData : WorkspaceData = {
     testGroups: [],
     testFiles: [],
     settings: {},
     selectUnitPlay: {}
-  }
+  };
+
   processMessagePost(postData: MessageEvent): void {
     const msgData = postData.data;
     const msgType = msgData.type;
@@ -45,6 +51,31 @@ export class AppService {
       this.postMessage$.next(postData);
     }
   }
+
+  addErrorMessage(error: AppHttpError) {
+    if (!this.errorMessagesDisabled) {
+      const alikeErrors = this.errorMessages.filter(e => e.status === error.status);
+      if (alikeErrors.length > 0) {
+        alikeErrors[0].message += `; ${error.message}`;
+      } else {
+        this.errorMessageCounter += 1;
+        error.id = this.errorMessageCounter;
+        this.errorMessages.push(error);
+      }
+    }
+  }
+
+  // removeErrorMessage(error: AppHttpError) {
+  //   for (let i = 0; i < this.errorMessages.length; i++) {
+  //     if (this.errorMessages[i].id === error.id) {
+  //       this.errorMessages.splice(i, 1);
+  //     }
+  //   }
+  // }
+  //
+  // clearErrorMessages() {
+  //   this.errorMessages = [];
+  // }
 }
 
 export const standardLogo: AppLogoDto = {

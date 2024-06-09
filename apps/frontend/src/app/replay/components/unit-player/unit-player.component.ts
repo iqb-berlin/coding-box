@@ -53,7 +53,7 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges {
       if (unitResponses.currentValue && (unitResponses.currentValue).responses) {
         let elementCodes: string = '';
         let stateVariableCodes: string = '';
-        (unitResponses.currentValue).responses.forEach((response:any) => {
+        (unitResponses.currentValue).responses.forEach((response: { id:string, content:string }) => {
           if (response.id === 'elementCodes') {
             elementCodes = elementCodes.concat(response.content);
           }
@@ -68,7 +68,7 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges {
       }
       this.unitDef = parsedJSONUnitDef;
       if (this.iFrameElement) {
-        this.iFrameElement.srcdoc = (unitPlayer ?unitPlayer.currentValue : this.unitPlayer).replace('&quot;', '');
+        this.iFrameElement.srcdoc = (unitPlayer ? unitPlayer.currentValue : this.unitPlayer).replace('&quot;', '');
         if (this.postMessageTarget) {
           this.postMessageTarget.postMessage({
             type: 'vopStartCommand',

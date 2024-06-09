@@ -6,15 +6,16 @@ import { TranslateService, TranslateModule } from '@ngx-translate/core';
 import { MatDialog } from '@angular/material/dialog';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MatButton } from '@angular/material/button';
+import { JsonPipe } from '@angular/common';
 import { EditWorkspaceComponent } from '../../../workspace/edit-workspace/edit-workspace.component';
 import { WrappedIconComponent } from '../../../shared/wrapped-icon/wrapped-icon.component';
-import { WorkspaceInListDto } from '../../../../../api-dto/workspaces/workspace-in-list-dto';
+import { WorkspaceInListDto } from '../../../../../../../api-dto/workspaces/workspace-in-list-dto';
 import {
   ConfirmDialogComponent,
   ConfirmDialogData
 } from '../../../shared/dialogs/confirm-dialog.component';
+// eslint-disable-next-line import/no-cycle
 import { UserAccessRightsDialogComponent } from '../user-access-rights-dialog/user-access-rights-dialog.component';
-import { JsonPipe } from '@angular/common';
 
 @Component({
   selector: 'coding-box-workspaces-menu',
@@ -36,7 +37,6 @@ export class WorkspacesMenuComponent {
     new EventEmitter<{ selection: number[], formData: UntypedFormGroup }>();
 
   @Output() setWorkspaceUsersAccessRight: EventEmitter<number[]> = new EventEmitter<number[]>();
-
 
   constructor(
     private editWorkspaceDialog: MatDialog,

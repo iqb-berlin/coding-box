@@ -16,7 +16,7 @@ describe('UserAccessRightsDialogComponent', () => {
         provide: MAT_DIALOG_DATA,
         useValue: {}
 
-      },{
+      }, {
         provide: 'SERVER_URL',
         useValue: environment.backendUrl
       }

@@ -16,10 +16,10 @@ describe('WorkspaceAccessRightsDialogComponent', () => {
         provide: MAT_DIALOG_DATA,
         useValue: {}
       },
-        {
-          provide: 'SERVER_URL',
-          useValue: environment.backendUrl
-        }
+      {
+        provide: 'SERVER_URL',
+        useValue: environment.backendUrl
+      }
       ],
       imports: [
         HttpClientModule,

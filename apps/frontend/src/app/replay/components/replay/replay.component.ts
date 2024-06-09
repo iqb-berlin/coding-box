@@ -1,3 +1,4 @@
+/* eslint-disable  @typescript-eslint/no-explicit-any */
 import {
   Component, Input, OnChanges, OnDestroy, OnInit, SimpleChanges
 } from '@angular/core';
@@ -42,7 +43,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   async ngOnInit(): Promise<void> {
-      const params = await firstValueFrom(this.route.params);
+    const params = await firstValueFrom(this.route.params);
 
     if (Object.keys(params).length !== 0) {
       const { page, testPerson, unitId } = params;
@@ -66,35 +67,45 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     const unitData = await this.getUnitData();
     this.player = unitData.player[0].data;
     this.unitDef = unitData.unitDef[0].data;
-    this.responses = unitData.response[0] || [];
+    this.responses = unitData.response[0];
   }
 
   async getUnitData() {
     let player = '';
-    const unitDefFile = await firstValueFrom(this.backendService.getUnitDef(this.appService.selectedWorkspaceId, this.unitId).pipe(
-      catchError(error => {
-        throw new Error(error);
-      })
-    ));
+    const unitDefFile = await firstValueFrom(
+      this.backendService.getUnitDef(this.appService.selectedWorkspaceId, this.unitId)
+        .pipe(
+          catchError(error => {
+            throw new Error(error);
+          })
+        ));
 
-    const responsesFile = await firstValueFrom(this.backendService.getResponses(this.appService.selectedWorkspaceId, this.testPerson, this.unitId).pipe(
-      catchError(error => {
-        throw new Error(error);
-      })
-    ));
-    const unitFile = await firstValueFrom(this.backendService.getUnit(this.appService.selectedWorkspaceId, this.testPerson, this.unitId).pipe(
-      catchError(error => {
-        throw new Error(error);
-      })
-    ));
+    const responsesFile = await firstValueFrom(
+      this.backendService.getResponses(this.appService.selectedWorkspaceId, this.testPerson, this.unitId)
+        .pipe(
+          catchError(error => {
+            throw new Error(error);
+          })
+        ));
+    const unitFile = await firstValueFrom(
+      this.backendService.getUnit(this.appService.selectedWorkspaceId, this.testPerson, this.unitId)
+        .pipe(
+          catchError(error => {
+            throw new Error(error);
+          })
+        ));
+
     xml2js.parseString(unitFile[0].data, (err:any, result:any) => {
       player = result?.Unit.DefinitionRef[0].$.player;
     });
-    const playerFile = await firstValueFrom(this.backendService.getPlayer(this.appService.selectedWorkspaceId, player.replace('@', '-')).pipe(
-      catchError(error => {
-        throw new Error(error);
-      })
-    ));
+    const playerFile = await firstValueFrom(
+      this.backendService.getPlayer(
+        this.appService.selectedWorkspaceId, player.replace('@', '-'))
+        .pipe(
+          catchError(error => {
+            throw new Error(error);
+          })
+        ));
     return { player: playerFile, unitDef: unitDefFile, response: responsesFile };
   }
 

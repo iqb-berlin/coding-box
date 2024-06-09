@@ -14,6 +14,11 @@ import { MatInput } from '@angular/material/input';
 import { MatFormField, MatLabel } from '@angular/material/form-field';
 import { JsonPipe } from '@angular/common';
 
+type Data = {
+  newUser:string;
+  username: string;
+  isAdmin: boolean;
+};
 @Component({
   selector: 'coding-box-edit-user',
   templateUrl: './edit-user.component.html',
@@ -26,10 +31,10 @@ import { JsonPipe } from '@angular/common';
 export class EditUserComponent {
   editUserForm: UntypedFormGroup;
   constructor(private fb: UntypedFormBuilder,
-              @Inject(MAT_DIALOG_DATA) public data: any) {
+              @Inject(MAT_DIALOG_DATA) public data: Data) {
     this.editUserForm = this.fb.group({
       username: this.fb.control(this.data.username, [Validators.required]),
-      isAdmin: this.fb.control(this.data.isAdmin, [Validators.required]),
+      isAdmin: this.fb.control(this.data.isAdmin, [Validators.required])
     });
   }
 }

@@ -27,7 +27,7 @@ import { IsAllSelectedPipe } from '../../../shared/pipes/isAllSelected.pipe';
 import { IsSelectedPipe } from '../../../shared/pipes/isSelected.pipe';
 import { IsSelectedIdPipe } from '../../../shared/pipes/isSelectedId.pipe';
 import { SearchFilterComponent } from '../../../shared/search-filter/search-filter.component';
-import { WorkspaceInListDto } from '../../../../../api-dto/workspaces/workspace-in-list-dto';
+import { WorkspaceInListDto } from '../../../../../../../api-dto/workspaces/workspace-in-list-dto';
 import { AppService } from '../../../services/app.service';
 import { BackendService } from '../../../services/backend.service';
 import { WrappedIconComponent } from '../../../shared/wrapped-icon/wrapped-icon.component';

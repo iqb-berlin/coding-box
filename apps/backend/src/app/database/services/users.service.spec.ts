@@ -2,12 +2,9 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { createMock } from '@golevelup/ts-jest';
 import { Repository } from 'typeorm';
-
-import { UsersService } from './users.service';
-
-import User from '../entities/user.entity';
-import { HttpClientModule } from '@angular/common/http';
 import { HttpService } from '@nestjs/axios';
+import { UsersService } from './users.service';
+import User from '../entities/user.entity';
 import WorkspaceUser from '../entities/workspace_user.entity';
 
 describe('UsersService', () => {
