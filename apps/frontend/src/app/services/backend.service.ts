@@ -15,7 +15,6 @@ import { ImportOptions, ServerResponse } from '../ws-admin/test-center-import/te
 import { TestGroupsInListDto } from '../../../../../api-dto/test-groups/testgroups-in-list.dto';
 import { FilesInListDto } from '../../../../../api-dto/files/files-in-list.dto';
 
-const SERVER_URL = 'http://localhost:3333/api/';
 @Injectable({
   providedIn: 'root'
 })
@@ -60,15 +59,9 @@ export class BackendService {
       );
   }
 
-  login(user: CreateUserDto): Observable<string> {
-    return this.http.post<string>(`${SERVER_URL}login`,
-      user,
-      { headers: this.authHeader });
-  }
-
   getAuthData(id:string): Observable<AuthDataDto> {
     return this.http.get<AuthDataDto>(
-      `${SERVER_URL}auth-data?identity=${id}`,
+      `${this.serverUrl}auth-data?identity=${id}`,
       { headers: this.authHeader });
   }
 
@@ -209,7 +202,7 @@ export class BackendService {
         formData.append('files', files[i]);
       }
 
-      this.http.post<never>(`${SERVER_URL}admin/workspace/${workspaceId}/upload`, formData, {
+      this.http.post<never>(`${this.serverUrl}admin/workspace/${workspaceId}/upload`, formData, {
         headers: this.authHeader,
         reportProgress: true,
         observe: 'events'
@@ -236,63 +229,63 @@ export class BackendService {
 
   setUserWorkspaceAccessRight(userId: number, workspaceIds: number[]): Observable<boolean> {
     return this.http.post<boolean>(
-      `${SERVER_URL}admin/users/${userId}/workspaces/`,
+      `${this.serverUrl}admin/users/${userId}/workspaces/`,
       workspaceIds,
       { headers: this.authHeader });
   }
 
   setWorkspaceUsersAccessRight(workspaceId: number, userIds: number[]): Observable<boolean> {
     return this.http.post<boolean>(
-      `${SERVER_URL}admin/workspace/${workspaceId}/users/`,
+      `${this.serverUrl}admin/workspace/${workspaceId}/users/`,
       userIds,
       { headers: this.authHeader });
   }
 
   getFilesList(workspaceId: number): Observable<FilesInListDto[]> {
     return this.http.get<FilesInListDto[]>(
-      `${SERVER_URL}admin/workspace/${workspaceId}/files`,
+      `${this.serverUrl}admin/workspace/${workspaceId}/files`,
       { headers: this.authHeader });
   }
 
   getUnitDef(workspaceId: number, unit: string): Observable<{ data:string }[]> {
     return this.http.get<{ data:string }[]>(
-      `${SERVER_URL}admin/workspace/${workspaceId}/${unit}/unitDef`,
+      `${this.serverUrl}admin/workspace/${workspaceId}/${unit}/unitDef`,
       { headers: this.authHeader });
   }
 
   getPlayer(workspaceId: number, player:string): Observable<{ data:string }[]> {
     return this.http.get<{ data:string }[]>(
-      `${SERVER_URL}admin/workspace/${workspaceId}/player/${player}`,
+      `${this.serverUrl}admin/workspace/${workspaceId}/player/${player}`,
       { headers: this.authHeader });
   }
 
   getResponses(workspaceId: number, testPerson: string, unitId:string): Observable<string[]> {
     return this.http.get<string[]>(
-      `${SERVER_URL}admin/workspace/${workspaceId}/responses/${testPerson}/${unitId}`,
+      `${this.serverUrl}admin/workspace/${workspaceId}/responses/${testPerson}/${unitId}`,
       { headers: this.authHeader });
   }
 
   getUnit(workspaceId: number, testPerson: string, unitId:string): Observable<{ data:string }[]> {
     return this.http.get<{ data:string }[]>(
-      `${SERVER_URL}admin/workspace/${workspaceId}/unit/${testPerson}/${unitId}`,
+      `${this.serverUrl}}admin/workspace/${workspaceId}/unit/${testPerson}/${unitId}`,
       { headers: this.authHeader });
   }
 
   getUnitDefExternal(authToken:string, workspaceId: number, unit: string): Observable<{ data:string }[]> {
     return this.http.get<{ data:string }[]>(
-      `${SERVER_URL}admin/workspace/${workspaceId}/${unit}/unitDef`,
+      `${this.serverUrl}}admin/workspace/${workspaceId}/${unit}/unitDef`,
       { headers: { Authorization: `Bearer ${authToken}` } });
   }
 
   getPlayerExternal(authToken:string, workspaceId: number, player:string): Observable<{ data:string }[]> {
     return this.http.get<{ data:string }[]>(
-      `${SERVER_URL}admin/workspace/${workspaceId}/player/${player}`,
+      `${this.serverUrl}admin/workspace/${workspaceId}/player/${player}`,
       { headers: { Authorization: `Bearer ${authToken}` } });
   }
 
   getResponsesExternal(authToken:string, workspaceId: number, testPerson: string, unitId:string): Observable<string[]> {
     return this.http.get<string[]>(
-      `${SERVER_URL}admin/workspace/${workspaceId}/responses/${testPerson}/${unitId}`,
+      `${this.serverUrl}admin/workspace/${workspaceId}/responses/${testPerson}/${unitId}`,
       { headers: { Authorization: `Bearer ${authToken}` } });
   }
 
@@ -300,31 +293,31 @@ export class BackendService {
                   workspaceId: number,
                   testPerson: string, unitId:string): Observable<{ data:string }[]> {
     return this.http.get<{ data:string }[]>(
-      `${SERVER_URL}admin/workspace/${workspaceId}/unit/${testPerson}/${unitId}`,
+      `${this.serverUrl}admin/workspace/${workspaceId}/unit/${testPerson}/${unitId}`,
       { headers: { Authorization: `Bearer ${authToken}` } });
   }
 
   getTestPersonUnits(workspaceId: number, testPerson: string): Observable<{ unit_id:string }[]> {
     return this.http.get<{ unit_id:string }[]>(
-      `${SERVER_URL}admin/workspace/${workspaceId}/units/${testPerson}`,
+      `${this.serverUrl}admin/workspace/${workspaceId}/units/${testPerson}`,
       { headers: this.authHeader });
   }
 
   getTestGroups(workspaceId: number): Observable<TestGroupsInListDto[]> {
     return this.http.get<TestGroupsInListDto[]>(
-      `${SERVER_URL}admin/workspace/${workspaceId}/test-groups`,
+      `${this.serverUrl}admin/workspace/${workspaceId}/test-groups`,
       { headers: this.authHeader });
   }
 
   getTestPersons(workspaceId: number, testGroup:string): Observable<string[]> {
     return this.http.get<string[]>(
-      `${SERVER_URL}admin/workspace/${workspaceId}/test-groups/${testGroup}`,
+      `${this.serverUrl}admin/workspace/${workspaceId}/test-groups/${testGroup}`,
       { headers: this.authHeader });
   }
 
   authenticate(username:string, password:string, server:string): Observable<ServerResponse > {
     return this.http
-      .post<ServerResponse>(`${SERVER_URL}tc_authentication`, { username, password, server });
+      .post<ServerResponse>(`${this.serverUrl}tc_authentication`, { username, password, server });
   }
 
   importWorkspaceFiles(workspace_id: number,
@@ -337,7 +330,7 @@ export class BackendService {
     } = importOptions;
     return this.http
       // eslint-disable-next-line max-len
-      .get<boolean>(`${SERVER_URL}admin/workspace/${workspace_id}/importWorkspaceFiles?tc_workspace=${testCenterWorkspace}&server=${server}&responses=${responses}&definitions=${definitions}&units=${units}&codings=${codings}&player=${player}&token=${token}`, { headers: this.authHeader })
+      .get<boolean>(`${this.serverUrl}admin/workspace/${workspace_id}/importWorkspaceFiles?tc_workspace=${testCenterWorkspace}&server=${server}&responses=${responses}&definitions=${definitions}&units=${units}&codings=${codings}&player=${player}&token=${token}`, { headers: this.authHeader })
       .pipe(
         catchError(() => of(false))
       );
