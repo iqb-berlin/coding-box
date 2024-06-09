@@ -1,17 +1,15 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { createMock } from '@golevelup/ts-jest';
 import { JwtService } from '@nestjs/jwt';
+import { HttpService } from '@nestjs/axios';
+import { getRepositoryToken } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { TestcenterService } from './testcenter.service';
 import { UsersService } from './users.service';
-import { HttpModule, HttpService } from '@nestjs/axios';
-import { HttpClientModule } from '@angular/common/http';
-import { AuthService } from '../../auth/service/auth.service';
 import { WorkspaceService } from './workspace.service';
-import { getRepositoryToken } from '@nestjs/typeorm';
 import Responses from '../entities/responses.entity';
-import { Repository } from 'typeorm';
 
-describe('TestcenterService', () => {
+describe('TestCenterService', () => {
   let service: TestcenterService;
 
   beforeEach(async () => {
@@ -37,7 +35,7 @@ describe('TestcenterService', () => {
         {
           provide: getRepositoryToken(Responses),
           useValue: createMock<Repository<Responses>>()
-        },
+        }
       ]
     }).compile();
 

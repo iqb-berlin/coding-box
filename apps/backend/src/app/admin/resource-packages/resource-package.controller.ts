@@ -21,7 +21,7 @@ import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { ApiFile } from './api-file.decorator';
 import { fileMimetypeFilter } from './file-mimetype-filter';
 import { ParseFile } from './parse-file-pipe';
-import { ResourcePackageDto } from '../../../../../frontend/api-dto/resource-package/resource-package-dto';
+import { ResourcePackageDto } from '../../../../../../api-dto/resource-package/resource-package-dto';
 
 @Controller('admin/resource-packages')
 export class ResourcePackageController {

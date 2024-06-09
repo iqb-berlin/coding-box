@@ -2,13 +2,12 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Component, Input } from '@angular/core';
 import { TranslateModule } from '@ngx-translate/core';
+import { KeycloakService } from 'keycloak-angular';
 import { UserWorkspacesAreaComponent } from './user-workspaces-area.component';
 import { environment } from '../../../environments/environment';
 import { HomeComponent } from '../../components/home/home.component';
 import { BackendService } from '../../services/backend.service';
-import { KeycloakService } from 'keycloak-angular';
 import { AuthService } from '../../auth/service/auth.service';
-
 
 describe('UserWorkspacesAreaComponent', () => {
   let component: UserWorkspacesAreaComponent;
@@ -16,7 +15,6 @@ describe('UserWorkspacesAreaComponent', () => {
 
   @Component({ selector: 'coding-box-user-menu', template: '' })
   class MockUserMenuComponent {}
-
 
   @Component({ selector: 'coding-box-warning', template: '' })
   class MockWarningComponent {
@@ -43,7 +41,7 @@ describe('UserWorkspacesAreaComponent', () => {
         TranslateModule.forRoot()
       ],
       providers: [
-       KeycloakService,
+        KeycloakService,
         {
           provide: BackendService,
           useValue: MockBackendService

@@ -1,11 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { WorkspaceService } from './workspace.service';
-import { HttpModule, HttpService } from '@nestjs/axios';
-import { HttpClientModule } from '@angular/common/http';
+import { HttpService } from '@nestjs/axios';
 import { createMock } from '@golevelup/ts-jest';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import User from '../entities/user.entity';
 import { Repository } from 'typeorm';
+import User from '../entities/user.entity';
+import { WorkspaceService } from './workspace.service';
 import FileUpload from '../entities/file_upload.entity';
 
 describe('WorkspaceService', () => {
@@ -29,7 +28,7 @@ describe('WorkspaceService', () => {
         {
           provide: getRepositoryToken(User),
           useValue: createMock<Repository<User>>()
-        },
+        }
 
       ]
     }).compile();

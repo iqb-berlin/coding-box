@@ -6,38 +6,35 @@ import {
   HttpInterceptor, HttpHeaders
 } from '@angular/common/http';
 import { finalize, Observable, tap } from 'rxjs';
+import { AppHttpError } from './app-http-error.class';
 import { AppService } from '../services/app.service';
-//import { AppHttpError } from '../models/app-http-error.class';
 
 @Injectable({
   providedIn: 'root'
 })
 export class AuthInterceptor implements HttpInterceptor {
   constructor(
-    @Inject('APP_VERSION') readonly appVersion: string,
+    private appService: AppService,
+    @Inject('APP_VERSION') readonly appVersion: string
   ) {}
 
   intercept(req: HttpRequest<unknown>, next: HttpHandler): Observable<HttpEvent<unknown>> {
-    const idToken = 'ssss';//localStorage.getItem('id_token');
-    const headers =  new HttpHeaders({
-      Authorization: `Bearer ${idToken}`});
-    //let httpErrorInfo: AppHttpError | null = null;
+    const idToken = 'ssss';// localStorage.getItem('id_token');
+    const headers = new HttpHeaders({ Authorization: `Bearer ${idToken}` });
+    let httpErrorInfo: AppHttpError | null = null;
     return next.handle(req.clone({ headers }))
       .pipe(
         tap({
           error: error => {
-            console.log(error);
-           // httpErrorInfo = new AppHttpError(error);
+            httpErrorInfo = new AppHttpError(error);
           }
         }),
         finalize(() => {
-          console.log(req.method);
-
-          //if (httpErrorInfo) {
-            //httpErrorInfo.method = req.method;
-            //httpErrorInfo.urlWithParams = req.urlWithParams;
-            //this.appService.addErrorMessage(httpErrorInfo);
-          //}
+          if (httpErrorInfo) {
+            httpErrorInfo.method = req.method;
+            httpErrorInfo.urlWithParams = req.urlWithParams;
+            this.appService.addErrorMessage(httpErrorInfo);
+          }
         })
       );
   }

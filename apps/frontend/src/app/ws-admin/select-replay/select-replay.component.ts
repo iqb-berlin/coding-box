@@ -13,11 +13,19 @@ import { BackendService } from '../../services/backend.service';
 import { AppService } from '../../services/app.service';
 import { ReplayComponent } from '../../replay/components/replay/replay.component';
 
+export type TestGroups = {
+  test_group: string;
+};
+export type UnitIds = {
+  unit_id: string;
+};
+
 @Component({
   selector: 'coding-box-select-replay',
   templateUrl: './select-replay.component.html',
   styleUrls: ['./select-replay.component.scss'],
   standalone: true,
+  // eslint-disable-next-line max-len
   imports: [MatLabel, MatAnchor, TranslateModule, MatIcon, MatSelect, MatOption, MatButton, MatFormField, MatRadioButton, MatRadioGroup, ReactiveFormsModule, ReplayComponent, MatProgressBar, MatProgressSpinner]
 })
 export class SelectReplayComponent implements OnInit {
@@ -27,12 +35,12 @@ export class SelectReplayComponent implements OnInit {
 
   }
 
-  testPersons = [];
-  testGroups :any[] = [];
-  units = [];
+  testPersons:string[] = [];
+  testGroups :string[] = [];
+  units :string[] = [];
   selectedTestPerson = '';
   selectedUnit = '';
-  selectedPage = '';
+  // selectedPage = '';
   selectedTestGroup = '';
   isLoading = false;
 
@@ -40,14 +48,14 @@ export class SelectReplayComponent implements OnInit {
     this.isLoading = true;
     if (this.appService.workspaceData?.testGroups.length === 0) {
       this.backendService.getTestGroups(this.appService.selectedWorkspaceId)
-        .subscribe(groups => {
+        .subscribe((groups:TestGroups[]) => {
           this.appService.workspaceData.testGroups = groups;
-          this.testGroups = groups.map((g: any) => g.test_group);
+          this.testGroups = groups.map(g => g.test_group);
           this.isLoading = false;
         });
     } else {
       this.testGroups = this.appService.workspaceData.testGroups
-        .map((g: any) => g.test_group);
+        .map((g: TestGroups) => g.test_group);
       this.isLoading = false;
     }
   }
@@ -55,18 +63,18 @@ export class SelectReplayComponent implements OnInit {
   getTestPersons(testGroup:string): void {
     this.selectedTestGroup = testGroup;
     this.backendService.getTestPersons(this.appService.selectedWorkspaceId, testGroup).subscribe(data => {
-      if (data.length > 0) { this.testPersons = data; }
+      if (data.length > 0) { this.testPersons = data as string[]; }
     });
   }
 
   getUnits(testPerson:string): void {
     this.units = [];
     this.selectedTestPerson = testPerson;
-    const formerSelectedUnit = this.selectedUnit;
-    this.selectedUnit = '';
-    this.backendService.getTestpersonUnits(this.appService.selectedWorkspaceId, testPerson).subscribe(data => {
-      this.units = data.map((d:any) => d.unit_id);
-      this.selectedUnit ? this.changedUnit(formerSelectedUnit) : '';
+    // const formerSelectedUnit = this.selectedUnit;
+    // this.selectedUnit = '';
+    this.backendService.getTestPersonUnits(this.appService.selectedWorkspaceId, testPerson).subscribe(data => {
+      this.units = data.map(({ unit_id }:UnitIds) => unit_id);
+      // this.selectedUnit ? this.changedUnit(formerSelectedUnit) : '';
     });
   }
 
@@ -76,12 +84,18 @@ export class SelectReplayComponent implements OnInit {
 
   async replay(): Promise<void> {
     this.selectedUnit = this.selectedUnit.toUpperCase();
-    this.backendService.getToken(this.appService.selectedWorkspaceId, this.appService.userProfile.id || '').subscribe(token => {
-      const queryParams = {
-        auth: token
-      };
-      const url = this.router.serializeUrl(this.router.createUrlTree([`/replay/${this.selectedTestPerson}/${this.selectedUnit}/1`], { queryParams: queryParams }));
-      window.open(url, '_blank');
-    });
+    this.backendService.getToken(this.appService.selectedWorkspaceId, this.appService.userProfile.id || '')
+      .subscribe(token => {
+        const queryParams = {
+          auth: token
+        };
+        const url = this.router
+          .serializeUrl(
+            this.router.createUrlTree(
+              [`/replay/${this.selectedTestPerson}/${this.selectedUnit}/1`],
+              { queryParams: queryParams })
+          );
+        window.open(url, '_blank');
+      });
   }
 }
