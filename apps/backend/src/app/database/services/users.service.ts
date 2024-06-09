@@ -3,8 +3,8 @@ import { MoreThan, Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { HttpService } from '@nestjs/axios';
 import User from '../entities/user.entity';
-import { UserFullDto } from '../../../../../frontend/api-dto/user/user-full-dto';
-import { CreateUserDto } from '../../../../../frontend/api-dto/user/create-user-dto';
+import { UserFullDto } from '../../../../../../api-dto/user/user-full-dto';
+import { CreateUserDto } from '../../../../../../api-dto/user/create-user-dto';
 import WorkspaceUser from '../entities/workspace_user.entity';
 
 @Injectable()
@@ -43,9 +43,13 @@ export class UsersService {
     return false;
   }
 
-  async findUserWorkspaces(userId: number): Promise<any> {
-    const workspaces: any = await this.workspaceUserRepository.find({ where: { userId: userId } });
-    return workspaces.map(workspace => workspace.workspaceId);
+  async findUserWorkspaces(userId: number): Promise<number[]> {
+    const workspaces = await this.workspaceUserRepository.find({ where: { userId: userId } });
+    const workspaceIds = workspaces.map(workspace => workspace.workspaceId);
+    if (workspaceIds) {
+      return workspaceIds;
+    }
+    return [];
   }
 
   async findUserByIdentity(id: string): Promise<UserFullDto> {
@@ -63,20 +67,21 @@ export class UsersService {
     return user;
   }
 
-  async editUser(userId:number, change:any): Promise<UserFullDto[]> {
+  async editUser(userId:number, change:UserFullDto): Promise<UserFullDto[]> {
     this.logger.log(`Editing user with id: ${userId}`);
     await this.usersRepository.save({ id: userId, ...change });
     return [];
   }
 
-  async setUserWorkspaces(userId: number, workspaceIds: number[]): Promise<any> {
+  async setUserWorkspaces(userId: number, workspaceIds: number[]): Promise<boolean> {
     this.logger.log(`Setting workspaces for user with id: ${userId}`);
     const entries = workspaceIds.map(workspace => ({ userId: userId, workspaceId: workspace }));
     const hasRights = this.workspaceUserRepository.find({ where: { userId: userId } });
     if (hasRights) {
       await this.workspaceUserRepository.delete({ userId: userId });
     }
-    await this.workspaceUserRepository.save(entries);
+    const saved = await this.workspaceUserRepository.save(entries);
+    return !!saved;
   }
 
   async hasUsers(): Promise<boolean> {

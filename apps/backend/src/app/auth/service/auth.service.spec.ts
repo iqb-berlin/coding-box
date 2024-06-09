@@ -1,9 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { createMock } from '@golevelup/ts-jest';
 import { JwtService } from '@nestjs/jwt';
+import { HttpService } from '@nestjs/axios';
 import { AuthService } from './auth.service';
 import { UsersService } from '../../database/services/users.service';
-import { HttpService } from '@nestjs/axios';
 
 describe('AuthService', () => {
   let service: AuthService;

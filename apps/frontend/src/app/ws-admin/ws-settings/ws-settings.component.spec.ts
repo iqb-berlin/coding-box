@@ -6,7 +6,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBarModule } from '@angular/material/snack-bar';
 import { HttpClientModule } from '@angular/common/http';
 import {
-  Component, EventEmitter, Input, Output
+  Component, Input
 } from '@angular/core';
 import { MatTableModule } from '@angular/material/table';
 import { MatCheckboxModule } from '@angular/material/checkbox';
@@ -41,7 +41,7 @@ describe('WsSettingsComponent', () => {
         HttpClientModule,
         NoopAnimationsModule,
         TranslateModule.forRoot()
-      ],
+      ]
     }).compileComponents();
 
     fixture = TestBed.createComponent(WsSettingsComponent);

@@ -12,10 +12,10 @@ export function initializer(keycloak: KeycloakService): () => Promise<boolean> {
       loadUserProfileAtStartUp: true,
       initOptions: {
         onLoad: 'check-sso',
+        redirectUri: 'https://iqb-kodierbox.de',
         // onLoad: 'login-required',
         checkLoginIframe: false
-      },
-      bearerExcludedUrls: ['/replay', '/assets']
+      }
     };
 
     return () => keycloak.init(options);
@@ -29,12 +29,11 @@ export function initializer(keycloak: KeycloakService): () => Promise<boolean> {
     loadUserProfileAtStartUp: true,
     initOptions: {
       onLoad: 'check-sso',
-      redirectUri: 'http://localhost:4200/dashboard',
-      //onLoad: 'login-required',
+      // onLoad: 'login-required',
       checkLoginIframe: false
-    },
-    //enableBearerInterceptor: true,
-    //bearerExcludedUrls: ['replay']
+    }
+    // enableBearerInterceptor: true,
+    // bearerExcludedUrls: ['replay']
   };
 
   return () => keycloak.init(options);

@@ -14,9 +14,8 @@ import {
 import { UntypedFormGroup } from '@angular/forms';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { WorkspacesComponent } from './workspaces.component';
-import { WorkspaceInListDto } from '../../../../../api-dto/workspaces/workspace-in-list-dto';
+import { WorkspaceInListDto } from '../../../../../../../api-dto/workspaces/workspace-in-list-dto';
 import { environment } from '../../../../environments/environment';
-
 
 describe('WorkspaceGroupsComponent', () => {
   let component: WorkspacesComponent;

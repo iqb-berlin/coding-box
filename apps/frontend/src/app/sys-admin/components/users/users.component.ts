@@ -29,11 +29,11 @@ import { WorkspacesComponent } from '../workspaces/workspaces.component';
 import { IsSelectedIdPipe } from '../../../shared/pipes/isSelectedId.pipe';
 import { WorkspacesSelectionComponent } from '../workspaces-selection/workspaces-selection.component';
 import { UsersSelectionComponent } from '../users-selection/users-selection.component';
-import { UserFullDto } from '../../../../../api-dto/user/user-full-dto';
-import { WorkspaceInListDto } from '../../../../../api-dto/workspaces/workspace-in-list-dto';
+import { UserFullDto } from '../../../../../../../api-dto/user/user-full-dto';
+import { WorkspaceInListDto } from '../../../../../../../api-dto/workspaces/workspace-in-list-dto';
 import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
-import { CreateUserDto } from '../../../../../api-dto/user/create-user-dto';
+import { CreateUserDto } from '../../../../../../../api-dto/user/create-user-dto';
 import { WrappedIconComponent } from '../../../shared/wrapped-icon/wrapped-icon.component';
 import { SearchFilterComponent } from '../../../shared/search-filter/search-filter.component';
 
@@ -135,7 +135,11 @@ export class UsersComponent implements OnInit {
 
   editUser(value: { selection: UserFullDto[], user: UntypedFormGroup }): void {
     this.appService.dataLoading = true;
-    const changedData: UserFullDto = { id: value.selection[0].id, username: value.user.get('username')?.value, isAdmin: value.user.get('isAdmin')?.value };
+    const changedData: UserFullDto = {
+      id: value.selection[0].id,
+      username: value.user.get('username')?.value,
+      isAdmin: value.user.get('isAdmin')?.value
+    };
     this.backendService.changeUserData(this.appService.authData.userId, changedData).subscribe(
       respOk => {
         this.updateUserList();
@@ -200,7 +204,6 @@ export class UsersComponent implements OnInit {
   createWorkspaceList(): void {
     this.backendService.getAllWorkspacesList().subscribe(workspaces => {
       if (workspaces.length > 0) { this.userWorkspaces = workspaces; }
-      console.log('Workspaces: ', this.userWorkspaces);
     });
   }
 }

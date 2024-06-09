@@ -5,8 +5,8 @@ import {
 
 import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { AuthService } from './auth/service/auth.service';
-import { CreateUserDto } from '../../../frontend/api-dto/user/create-user-dto';
-import { AuthDataDto } from '../../../frontend/api-dto/auth-data-dto';
+import { CreateUserDto } from '../../../../api-dto/user/create-user-dto';
+import { AuthDataDto } from '../../../../api-dto/auth-data-dto';
 import { UsersService } from './database/services/users.service';
 import { WorkspaceService } from './database/services/workspace.service';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
@@ -43,7 +43,7 @@ export class AppController {
   }
 
   @Post('tc_authentication')
-  async authenticate(@Body() credentials: any): Promise<any> {
+  async authenticate(@Body() credentials: { username: string, password: string, server:string }): Promise<string> {
     return this.testCenterService.authenticate(credentials);
   }
 }

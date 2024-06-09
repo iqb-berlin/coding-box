@@ -12,7 +12,7 @@ import {
   WorkspaceAccessRightsDialogComponent
 } from '../workspace-access-rights-dialog/workspace-access-rights-dialog.component';
 import { WrappedIconComponent } from '../../../shared/wrapped-icon/wrapped-icon.component';
-import { UserFullDto } from '../../../../../api-dto/user/user-full-dto';
+import { UserFullDto } from '../../../../../../../api-dto/user/user-full-dto';
 import {
   MessageDialogComponent,
   MessageDialogData, MessageType
@@ -37,6 +37,7 @@ export class UsersMenuComponent {
   @Output() usersDeleted: EventEmitter< UserFullDto[]> = new EventEmitter< UserFullDto[]>();
   @Output() userEdited: EventEmitter<{ selection: UserFullDto[], user: UntypedFormGroup }> =
     new EventEmitter<{ selection: UserFullDto[], user: UntypedFormGroup }>();
+
   @Output() setUserWorkspaceAccessRights: EventEmitter<number[]> = new EventEmitter<number[]>();
 
   constructor(private editUserDialog: MatDialog,
