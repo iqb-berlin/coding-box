@@ -1,23 +1,25 @@
+/* eslint-disable no-restricted-syntax, guard-for-in, no-return-assign, consistent-return */
+
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { ArgumentOutOfRangeError } from 'rxjs';
 import * as cheerio from 'cheerio';
 import AdmZip = require('adm-zip');
 import * as util from 'util';
 import * as fs from 'fs';
 import Workspace from '../entities/workspace.entity';
-import { WorkspaceInListDto } from '../../../../../frontend/api-dto/workspaces/workspace-in-list-dto';
-import { WorkspaceFullDto } from '../../../../../frontend/api-dto/workspaces/workspace-full-dto';
-import { CreateWorkspaceDto } from '../../../../../frontend/api-dto/workspaces/create-workspace-dto';
+import { WorkspaceInListDto } from '../../../../../../api-dto/workspaces/workspace-in-list-dto';
+import { WorkspaceFullDto } from '../../../../../../api-dto/workspaces/workspace-full-dto';
+import { CreateWorkspaceDto } from '../../../../../../api-dto/workspaces/create-workspace-dto';
 import { AdminWorkspaceNotFoundException } from '../../exceptions/admin-workspace-not-found.exception';
 import FileUpload from '../entities/file_upload.entity';
-import { FilesDto } from '../../../../../frontend/api-dto/files/files.dto';
+import { FilesDto } from '../../../../../../api-dto/files/files.dto';
 import Responses from '../entities/responses.entity';
 import WorkspaceUser from '../entities/workspace_user.entity';
 import { FileIo } from '../../admin/test-files/interfaces/file-io.interface';
 import ResourcePackage from '../entities/resource-package.entity';
 import User from '../entities/user.entity';
+import { TestGroupsInListDto } from '../../../../../../api-dto/test-groups/testgroups-in-list.dto';
 
 export type Response = {
   groupname:string,
@@ -27,6 +29,14 @@ export type Response = {
   unitname : string,
   responses : string,
   laststate : string,
+};
+export type File = {
+  filename: string,
+  file_id: string,
+  file_type: string,
+  file_size: number,
+  workspace_id: string,
+  data: string
 };
 
 @Injectable()
@@ -56,7 +66,7 @@ export class WorkspaceService {
   }
 
   async findAllUserWorkspaces(identity: string): Promise<WorkspaceFullDto[]> {
-    console.log('Returning all workspaces for user', identity);
+    this.logger.log('Returning all workspaces for user', identity);
     const user = await this.usersRepository.findOne({ where: { identity: identity } });
     const workspaces = await this.workspaceUsersRepository.find({
       where: { userId: user.id }
@@ -69,36 +79,43 @@ export class WorkspaceService {
     return [];
   }
 
-  async setWorkspaceUsers(workspaceId: number, userIds: number[]): Promise<any> {
+  async setWorkspaceUsers(workspaceId: number, userIds: number[]): Promise<boolean> {
     this.logger.log(`Setting users for workspace with id: ${workspaceId}`);
     const entries = userIds.map(user => ({ userId: user, workspaceId: workspaceId }));
     const hasRights = this.workspaceUsersRepository.find({ where: { workspaceId: workspaceId } });
     if (hasRights) {
       await this.workspaceUsersRepository.delete({ workspaceId: workspaceId });
     }
-    await this.workspaceUsersRepository.save(entries);
+    const saved = await this.workspaceUsersRepository.save(entries);
+    return !!saved;
   }
 
   async findFiles(workspace_id: number): Promise<FilesDto[]> {
     this.logger.log('Returning all test files for workspace ', workspace_id);
     return this.fileUploadRepository
-      .find({ where: { workspace_id: workspace_id }, select: ['id', 'filename', 'file_size', 'file_type', 'created_at'] });
+      .find({
+        where: { workspace_id: workspace_id },
+        select: ['id', 'filename', 'file_size', 'file_type', 'created_at']
+      });
   }
 
-  async deleteTestFiles(workspace_id:number, fileIds: string[]): Promise<any> {
+  async deleteTestFiles(workspace_id:number, fileIds: string[]): Promise<boolean> {
     this.logger.log(`Delete test files for workspace ${workspace_id}`);
-    return this.fileUploadRepository.delete(fileIds);
+    const res = await this.fileUploadRepository.delete(fileIds);
+    return !!res;
   }
 
   async findPlayer(workspace_id: number, playerName:string): Promise<FilesDto[]> {
     this.logger.log(`Returning ${playerName} for workspace`, workspace_id);
-    const files = await this.fileUploadRepository.find({ where: { file_id: playerName.toUpperCase(), workspace_id: workspace_id } });
+    const files = await this.fileUploadRepository
+      .find({ where: { file_id: playerName.toUpperCase(), workspace_id: workspace_id } });
     return files;
   }
 
   async findUnitDef(workspace_id:number, unitId: string): Promise<FilesDto[]> {
     this.logger.log('Returning unit def for unit', unitId);
-    const files = await this.fileUploadRepository.find({ where: { file_id: `${unitId}.VOUD`, workspace_id: workspace_id } });
+    const files = await this.fileUploadRepository
+      .find({ where: { file_id: `${unitId}.VOUD`, workspace_id: workspace_id } });
     return files;
   }
 
@@ -109,44 +126,55 @@ export class WorkspaceService {
     return response;
   }
 
-  async findUnit(workspace_id: number, testPerson:string, unitId:string): Promise<any[]> {
+  async findUnit(workspace_id: number, testPerson:string, unitId:string): Promise<FileUpload[]> {
     this.logger.log('Returning unit for test person', testPerson);
     const response = await this.fileUploadRepository.find(
       { where: { file_id: `${unitId}`, workspace_id: workspace_id } });
     return response;
   }
 
-  async findTestGroups(workspace_id: number): Promise<any> {
+  async findTestGroups(workspace_id: number): Promise<TestGroupsInListDto[]> {
     this.logger.log('Returning all test groups for workspace ', workspace_id);
-    const data = await this.responsesRepository.find({ select: ['test_group', 'created_at'], where: { workspace_id: workspace_id } });
+    const data = await this.responsesRepository
+      .find({ select: ['test_group', 'created_at'], where: { workspace_id: workspace_id } });
     const testGroups = [];
-    let uniqueObject = {};
-    for (let i in data) {
-      let objTitle = data[i]['test_group'];
+    const uniqueObject = {};
+    for (const i in data) {
+      const objTitle = data[i].test_group;
       uniqueObject[objTitle] = data[i];
     }
-    for (let i in uniqueObject) {
+    for (const i in uniqueObject) {
       testGroups.push(uniqueObject[i]);
     }
     return testGroups;
   }
 
-  async deleteTestGroups(testGroupNames: string[]): Promise<any> {
+  async deleteTestGroups(testGroupNames: string[]): Promise<boolean> {
     this.logger.log('Delete test groups for workspace ', testGroupNames);
     const mappedTestGroups = testGroupNames.map(testGroup => ({ test_group: testGroup }));
-    const testGroupResponsesIds = await this.responsesRepository.find({ where: mappedTestGroups, select: ['id'] });
-    await this.responsesRepository.delete(testGroupResponsesIds.map(item => item.id));
+    const testGroupResponsesIds = await this.responsesRepository
+      .find({ where: mappedTestGroups, select: ['id'] });
+    const res = await this.responsesRepository.delete(testGroupResponsesIds.map(item => item.id));
+    return !!res;
   }
 
-  async findTestPersons(id: number, testGroup:string): Promise<any> {
+  async findTestPersons(id: number, testGroup:string): Promise<string[]> {
     this.logger.log('Returning ind all test persons for test group ', testGroup);
-    const response = await this.responsesRepository.find({ select: ['test_person'], where: { test_group: testGroup } });
-    return Array.from(new Set(response.map(item => item.test_person)));
+    const response = await this.responsesRepository
+      .find({ select: ['test_person'], where: { test_group: testGroup } });
+    if (response) {
+      return Array.from(new Set(response.map(item => item.test_person)));
+    }
+    return [];
   }
 
-  async findTestPersonUnits(id: number, testPerson:string): Promise<any> {
+  async findTestPersonUnits(id: number, testPerson:string): Promise<Responses[]> {
     this.logger.log('Returning all unit Ids for testperson ', testPerson);
-    return this.responsesRepository.find({ where: { test_person: testPerson }, select: ['unit_id'] });
+    const res = this.responsesRepository.find({ where: { test_person: testPerson }, select: ['unit_id'] });
+    if (res) {
+      return res;
+    }
+    return [];
   }
 
   async findOne(id: number): Promise<WorkspaceFullDto> {
@@ -181,8 +209,6 @@ export class WorkspaceService {
       if (workspaceData.name) workspaceGroupToUpdate.name = workspaceData.name;
       if (workspaceData.settings) workspaceGroupToUpdate.settings = workspaceData.settings;
       await this.workspaceRepository.save(workspaceGroupToUpdate);
-    } else {
-      throw new ArgumentOutOfRangeError();
     }
   }
 
@@ -198,12 +224,14 @@ export class WorkspaceService {
       .map(item => item.split(splitter));
     return rest.map(item => {
       const object = {};
-      keys.forEach((key, index) => (object[key] = (item.at(index)).replace('""', '"').replace('"', '')));
+      keys.forEach(
+        (key, index) => (object[key] = (item.at(index)).replace('""', '"').replace('"', ''))
+      );
       return object;
     });
   }
 
-  async uploadTestFiles(workspace_id: number, originalFiles: FileIo[]): Promise<any> {
+  async uploadTestFiles(workspace_id: number, originalFiles: FileIo[]): Promise<boolean> {
     const filePromises = [];
     originalFiles.forEach(file => {
       if (file.mimetype === 'text/xml') {
@@ -213,24 +241,37 @@ export class WorkspaceService {
         });
 
         filePromises.push(this.fileUploadRepository.save({
-          filename: file.originalname, workspace_id: workspace_id, file_type: 'Unit', file_size: file.size, data: xmlDocument.html()
+          filename: file.originalname,
+          workspace_id: workspace_id,
+          file_type: 'Unit',
+          file_size: file.size,
+          data: xmlDocument.html()
         }));
       }
       if (file.mimetype === 'text/html') {
         filePromises.push(this.fileUploadRepository.save({
-          filename: file.originalname, workspace_id: workspace_id, file_type: 'Resource', file_size: file.size, data: originalFiles[0].buffer.toString()
+          filename: file.originalname,
+          workspace_id: workspace_id,
+          file_type: 'Resource',
+          file_size: file.size,
+          data: originalFiles[0].buffer.toString()
         }));
       }
       if (file.mimetype === 'application/octet-stream') {
         const json = originalFiles[0].buffer.toString();
         filePromises.push(this.fileUploadRepository.save({
-          filename: file.originalname, workspace_id: workspace_id, file_type: 'Resource', file_size: file.size, data: json
+          filename: file.originalname,
+          workspace_id: workspace_id,
+          file_type: 'Resource',
+          file_size: file.size,
+          data: json
         }));
       }
-      if (file.mimetype === 'application/zip' || file.mimetype === 'application/x-zip-compressed' || file.mimetype === 'application/x-zip') {
+      if (file.mimetype === 'application/zip' ||
+        file.mimetype === 'application/x-zip-compressed' ||
+        file.mimetype === 'application/x-zip') {
         const zip = new AdmZip(file.buffer);
         const packageFiles = zip.getEntries().map(entry => entry.entryName);
-        console.log('packageFiles', packageFiles);
         const resourcePackagesPath = './packages';
         const packageName = 'geogebra';
         const zipExtractAllToAsync = util.promisify(zip.extractAllToAsync);
@@ -259,7 +300,8 @@ export class WorkspaceService {
           const testPerson = `${row.loginname}${row.code}`.replace(/"/g, '');
           const groupName = `${row.groupname}`.replace(/"/g, '');
           const unitId = row.unitname.replace(/"/g, '');
-          const responses = row.responses.replace(/^"|"$/g, '').replace(/""/g, '"');
+          const responses = row.responses
+            .replace(/^"|"$/g, '').replace(/""/g, '"');
 
           return ({
             test_person: testPerson,
@@ -270,13 +312,16 @@ export class WorkspaceService {
           });
         });
         filePromises.push(this.responsesRepository.save(mappedRows));
+        return file;
       }
     });
-    await Promise.all(filePromises);
+    const res = await Promise.all(filePromises);
+    return !!res;
   }
 
-  async testcenterImport(entries:any): Promise<any> {
+  async testCenterImport(entries:FileUpload[]): Promise<boolean> {
     const registry = this.fileUploadRepository.create(entries);
-    await this.fileUploadRepository.save(registry);
+    const res = await this.fileUploadRepository.save(registry);
+    return !!res;
   }
 }

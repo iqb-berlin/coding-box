@@ -11,7 +11,7 @@ import {
   MatTable,
   MatTableDataSource
 } from '@angular/material/table';
-import { Component, OnInit, ViewChild } from '@angular/core';
+import { Component, ViewChild } from '@angular/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatSort, MatSortHeader } from '@angular/material/sort';
 import { FormsModule, UntypedFormGroup } from '@angular/forms';
@@ -25,14 +25,20 @@ import { HasSelectionValuePipe } from '../../../shared/pipes/hasSelectionValue.p
 import { IsAllSelectedPipe } from '../../../shared/pipes/isAllSelected.pipe';
 import { IsSelectedPipe } from '../../../shared/pipes/isSelected.pipe';
 import { IsSelectedIdPipe } from '../../../shared/pipes/isSelectedId.pipe';
+// eslint-disable-next-line import/no-cycle
 import { WorkspacesMenuComponent } from '../workspaces-menu/workspaces-menu.component';
 import { WorkspacesSelectionComponent } from '../workspaces-selection/workspaces-selection.component';
 import { SearchFilterComponent } from '../../../shared/search-filter/search-filter.component';
-import { WorkspaceInListDto } from '../../../../../api-dto/workspaces/workspace-in-list-dto';
+import { WorkspaceInListDto } from '../../../../../../../api-dto/workspaces/workspace-in-list-dto';
 import { AppService } from '../../../services/app.service';
 import { BackendService } from '../../../services/backend.service';
 import { WrappedIconComponent } from '../../../shared/wrapped-icon/wrapped-icon.component';
-import { CreateWorkspaceDto } from '../../../../../api-dto/workspaces/create-workspace-dto';
+import { CreateWorkspaceDto } from '../../../../../../../api-dto/workspaces/create-workspace-dto';
+
+type WorkspaceData = {
+  id: number;
+  name: string;
+};
 
 @Component({
   selector: 'coding-box-workspaces',
@@ -42,7 +48,7 @@ import { CreateWorkspaceDto } from '../../../../../api-dto/workspaces/create-wor
   // eslint-disable-next-line max-len
   imports: [WorkspacesMenuComponent, NgIf, SearchFilterComponent, MatTable, MatSort, MatColumnDef, MatHeaderCellDef, MatHeaderCell, MatCheckbox, MatCellDef, MatCell, MatSortHeader, MatHeaderRowDef, MatHeaderRow, MatRowDef, MatRow, MatButton, MatTooltip, WrappedIconComponent, NgFor, FormsModule, TranslateModule, IsSelectedPipe, IsAllSelectedPipe, HasSelectionValuePipe, IsSelectedIdPipe, WorkspacesSelectionComponent]
 })
-export class WorkspacesComponent implements OnInit {
+export class WorkspacesComponent {
   objectsDatasource = new MatTableDataSource<WorkspaceInListDto>();
   tableSelectionCheckboxes = new SelectionModel<WorkspaceInListDto>(true, []);
   tableSelectionRow = new SelectionModel<WorkspaceInListDto>(false, []);
@@ -60,9 +66,9 @@ export class WorkspacesComponent implements OnInit {
   ) {
   }
 
-  ngOnInit(): void {
-
-  }
+  // ngOnInit(): void {
+  //
+  // }
 
   addWorkspace(result: UntypedFormGroup): void {
     this.appService.dataLoading = true;
@@ -156,11 +162,10 @@ export class WorkspacesComponent implements OnInit {
     this.objectsDatasource.sort = this.sort;
   }
 
-  workspaceSelectionChanged(workspaceData: any): void {
-    this.selectedWorkspaces = workspaceData.map((workspace:any) => workspace.id);
+  workspaceSelectionChanged(workspaceData: WorkspaceData[]): void {
+    this.selectedWorkspaces = workspaceData.map(workspace => workspace.id);
     // this.selectedWorkspaces = workspaceData;
   }
-
 
   setWorkspaceUsersAccessRight(users: number[]): void {
     this.backendService.setWorkspaceUsersAccessRight(this.selectedWorkspaces[0], users).subscribe(

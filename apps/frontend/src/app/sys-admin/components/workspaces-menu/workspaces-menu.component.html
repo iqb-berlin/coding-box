@@ -5,19 +5,19 @@
     <coding-box-wrapped-icon icon="add"></coding-box-wrapped-icon>
   </button>
   <button mat-button
-          [disabled]="selectedWorkspaces?.length < 1"
+          [disabled]="selectedWorkspaces && selectedWorkspaces.length < 1"
           [matTooltip]="'admin.delete-selected-workspaces' | translate"
           (click)="deleteWorkspace()">
     <coding-box-wrapped-icon icon="delete"></coding-box-wrapped-icon>
   </button>
   <button mat-button
-          [disabled]="selectedWorkspaces?.length !== 1"
+          [disabled]="selectedWorkspaces && selectedWorkspaces.length !== 1"
           [matTooltip]="'admin.edit-selected-workspace' | translate"
           (click)="editWorkspace()">
     <coding-box-wrapped-icon icon="edit"></coding-box-wrapped-icon>
   </button>
   <button mat-button
-          [disabled]="selectedWorkspaces?.length !== 1"
+          [disabled]="selectedWorkspaces && selectedWorkspaces.length !== 1"
           [matTooltip]="'admin.edit-selected-workspace' | translate"
           (click)="editUserAccessRightsToWorkspace()">
     <coding-box-wrapped-icon icon="group"></coding-box-wrapped-icon>

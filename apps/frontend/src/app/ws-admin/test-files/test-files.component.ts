@@ -33,7 +33,7 @@ import { IsSelectedPipe } from '../../shared/pipes/isSelected.pipe';
 import { SearchFilterComponent } from '../../shared/search-filter/search-filter.component';
 import { FileSizePipe } from '../../shared/pipes/filesize.pipe';
 import { WrappedIconComponent } from '../../shared/wrapped-icon/wrapped-icon.component';
-import { FilesInListDto } from '../../../../api-dto/files/files-in-list.dto';
+import { FilesInListDto } from '../../../../../../api-dto/files/files-in-list.dto';
 
 @Component({
   selector: 'coding-box-test-files',
@@ -60,7 +60,7 @@ export class TestFilesComponent implements OnInit {
   tableSelectionRow = new SelectionModel<FilesInListDto>(false, []);
   @ViewChild(MatSort) sort = new MatSort();
   displayedColumns: string[] = ['selectCheckbox', 'filename', 'file_size', 'file_type', 'created_at'];
-  dataSource!: MatTableDataSource<any>;
+  dataSource!: MatTableDataSource<FilesInListDto>;
   isLoading = false;
   files = [];
 
@@ -109,7 +109,6 @@ export class TestFilesComponent implements OnInit {
       const inputElement = targetElement as HTMLInputElement;
       if (inputElement.files && inputElement.files.length > 0) {
         this.appService.dataLoading = true;
-        console.log(inputElement, 'inputElement.files', inputElement.files);
         this.uploadSubscription = this.backendService.uploadTestFiles(
           this.appService.selectedWorkspaceId,
           inputElement.files
@@ -130,20 +129,18 @@ export class TestFilesComponent implements OnInit {
 
   createTestFilesList(): void {
     this.isLoading = true;
-    if(this.appService.workspaceData?.testGroups.length === 0) {
+    if (this.appService.workspaceData?.testGroups.length === 0) {
       this.backendService.getFilesList(this.appService.selectedWorkspaceId)
-        .subscribe((files: any[]) => {
+        .subscribe((files: FilesInListDto[]) => {
           this.dataSource = new MatTableDataSource(files || []);
           this.appService.workspaceData.testFiles = files;
           this.isLoading = false;
         });
-    }
-    else{
+    } else {
       this.dataSource = new MatTableDataSource(this.appService.workspaceData.testFiles || []);
       this.isLoading = false;
     }
   }
-
 
   testCenterImport(): void {
     const dialogRef = this.TestCenterImportDialog.open(TestCenterImportComponent, {

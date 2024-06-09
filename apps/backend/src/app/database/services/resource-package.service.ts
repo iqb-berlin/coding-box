@@ -8,7 +8,7 @@ import * as AdmZip from 'adm-zip';
 import * as fs from 'fs';
 import * as util from 'util';
 import ResourcePackage from '../entities/resource-package.entity';
-import { ResourcePackageDto } from '../../../../../frontend/api-dto/resource-package/resource-package-dto';
+import { ResourcePackageDto } from '../../../../../../api-dto/resource-package/resource-package-dto';
 import { ResourcePackageNotFoundException } from '../../exceptions/resource-package-not-found.exception';
 
 @Injectable()

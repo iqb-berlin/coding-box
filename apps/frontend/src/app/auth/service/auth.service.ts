@@ -1,14 +1,10 @@
-import { Inject, Injectable } from '@angular/core';
+import { Injectable } from '@angular/core';
 import { KeycloakService } from 'keycloak-angular';
 import { KeycloakProfile, KeycloakTokenParsed } from 'keycloak-js';
-import {
-  catchError, map, Observable, of
-} from 'rxjs';
-import { HttpClient } from '@angular/common/http';
 
 @Injectable()
 export class AuthService {
-  constructor(private keycloakService: KeycloakService, private http: HttpClient, @Inject('SERVER_URL') private readonly serverUrl: string) {
+  constructor(private keycloakService: KeycloakService) {
   }
 
   getLoggedUser(): KeycloakTokenParsed | undefined {
@@ -43,14 +39,6 @@ export class AuthService {
 
   async redirectToProfile(): Promise<void> {
     await this.keycloakService.getKeycloakInstance().accountManagement();
-  }
-
-  setPassword(new_password:string, token:string): Observable<any> {
-    return this.http
-      .post<any>(`${this.serverUrl}/`, { token: token, new_password: new_password }).pipe(
-      catchError(() => of(false)),
-      map(() => true)
-    );
   }
 
   getRoles(): string[] {

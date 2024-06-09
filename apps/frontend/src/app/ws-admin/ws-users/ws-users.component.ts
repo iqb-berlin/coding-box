@@ -25,10 +25,10 @@ import { MatCheckbox } from '@angular/material/checkbox';
 import { SelectionModel } from '@angular/cdk/collections';
 import { JsonPipe } from '@angular/common';
 import { MatDialog } from '@angular/material/dialog';
-import { WorkspaceInListDto } from '../../../../api-dto/workspaces/workspace-in-list-dto';
+import { WorkspaceInListDto } from '../../../../../../api-dto/workspaces/workspace-in-list-dto';
 import { BackendService } from '../../services/backend.service';
 import { AppService } from '../../services/app.service';
-import { UserFullDto } from '../../../../api-dto/user/user-full-dto';
+import { UserFullDto } from '../../../../../../api-dto/user/user-full-dto';
 import { WrappedIconComponent } from '../../shared/wrapped-icon/wrapped-icon.component';
 import { UsersMenuComponent } from '../../sys-admin/components/users-menu/users-menu.component';
 import { HasSelectionValuePipe } from '../../shared/pipes/hasSelectionValue.pipe';
@@ -177,7 +177,7 @@ export class WsUsersComponent implements OnInit {
       dialogRef.afterClosed().subscribe(result => {
         if (typeof result !== 'undefined') {
           if (result !== false) {
-           // this.userEdited.emit({ selection: selectedRows, user: result as UntypedFormGroup });
+            // this.userEdited.emit({ selection: selectedRows, user: result as UntypedFormGroup });
           }
         }
       });
@@ -214,7 +214,7 @@ export class WsUsersComponent implements OnInit {
 
       dialogRef.afterClosed().subscribe((result: boolean) => {
         if (result) {
-          //this.usersDeleted.emit(selectedRows);
+          // this.usersDeleted.emit(selectedRows);
         }
       });
     }
@@ -235,16 +235,16 @@ export class WsUsersComponent implements OnInit {
         }
       });
     } else {
-      const dialogRef = this.editUserWorkspaceAccessRightDialog.open(WorkspaceAccessRightsDialogComponent, {
+      this.editUserWorkspaceAccessRightDialog.open(WorkspaceAccessRightsDialogComponent, {
         width: '600px',
         minHeight: '600px',
         data: {
           selectedUser: this.selectedRows
         }
       });
-      dialogRef.afterClosed().subscribe((result: number[]) => {
-       // this.setUserWorkspaceAccessRights.emit(result);
-      });
+      // dialogRef.afterClosed().subscribe((result: number[]) => {
+      //   this.setUserWorkspaceAccessRights.emit(result);
+      // });
     }
   }
 }

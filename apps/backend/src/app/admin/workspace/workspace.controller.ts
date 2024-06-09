@@ -9,12 +9,12 @@ import {
   ApiBearerAuth, ApiCreatedResponse, ApiNotFoundResponse, ApiOkResponse, ApiParam, ApiTags
 } from '@nestjs/swagger';
 import { FilesInterceptor } from '@nestjs/platform-express';
-import { WorkspaceInListDto } from '../../../../../frontend/api-dto/workspaces/workspace-in-list-dto';
-import { WorkspaceFullDto } from '../../../../../frontend/api-dto/workspaces/workspace-full-dto';
-import { CreateWorkspaceDto } from '../../../../../frontend/api-dto/workspaces/create-workspace-dto';
+import { WorkspaceInListDto } from '../../../../../../api-dto/workspaces/workspace-in-list-dto';
+import { WorkspaceFullDto } from '../../../../../../api-dto/workspaces/workspace-full-dto';
+import { CreateWorkspaceDto } from '../../../../../../api-dto/workspaces/create-workspace-dto';
 import { WorkspaceService } from '../../database/services/workspace.service';
 import { WorkspaceId } from './workspace.decorator';
-import { FilesDto } from '../../../../../frontend/api-dto/files/files.dto';
+import { FilesDto } from '../../../../../../api-dto/files/files.dto';
 import Responses from '../../database/entities/responses.entity';
 import { TestcenterService } from '../../database/services/testcenter.service';
 import {
@@ -23,6 +23,8 @@ import {
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { AuthService } from '../../auth/service/auth.service';
+import { TestGroupsInListDto } from '../../../../../../api-dto/test-groups/testgroups-in-list.dto';
+import FileUpload from '../../database/entities/file_upload.entity';
 
 @Controller('admin/workspace')
 export class WorkspaceController {
@@ -115,13 +117,13 @@ export class WorkspaceController {
   @Get(':workspace_id/test-groups')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiParam({ name: 'workspace_id', type: Number })
-  async findTestGroups(@Param('workspace_id') workspace_id:number): Promise<Responses[]> {
+  async findTestGroups(@Param('workspace_id') workspace_id:number): Promise<TestGroupsInListDto[]> {
     return this.workspaceService.findTestGroups(workspace_id);
   }
 
   @Delete(':workspace_id/test-groups/:testGroupNames')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
-  async deleteTestGroups(@Param('testGroupNames')testGroupNames:string): Promise<Responses[]> {
+  async deleteTestGroups(@Param('testGroupNames')testGroupNames:string): Promise<boolean> {
     const splittedTestGroupNames = testGroupNames.split(';');
     return this.workspaceService.deleteTestGroups(splittedTestGroupNames);
   }
@@ -129,7 +131,7 @@ export class WorkspaceController {
   @Get(':workspace_id/test-groups/:testGroup')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiParam({ name: 'workspace_id', type: Number })
-  async findTestPersons(@WorkspaceId() id: number, @Param('testGroup') testGroup:string): Promise<Responses[]> {
+  async findTestPersons(@WorkspaceId() id: number, @Param('testGroup') testGroup:string): Promise<string[]> {
     return this.workspaceService.findTestPersons(id, testGroup);
   }
 
@@ -146,7 +148,7 @@ export class WorkspaceController {
   @ApiParam({ name: 'workspace_id', type: Number })
   async findUnit(@WorkspaceId() id: number,
     @Param('testPerson') testPerson:string,
-    @Param('unitId') unitId:string): Promise<Responses[]> {
+    @Param('unitId') unitId:string): Promise<FileUpload[]> {
     return this.workspaceService.findUnit(id, testPerson, unitId);
   }
 
@@ -165,8 +167,9 @@ export class WorkspaceController {
   @ApiParam({ name: 'workspace_id', type: Number })
   @UseInterceptors(FilesInterceptor('files'))
   @ApiTags('workspace')
-  async addTestFiles(@Param('workspace_id') workspace_id:number, @UploadedFiles() files): Promise<any> {
-    return this.workspaceService.uploadTestFiles(workspace_id, files);
+  async addTestFiles(@Param('workspace_id') workspace_id:number, @UploadedFiles() files): Promise<boolean> {
+    const res = await this.workspaceService.uploadTestFiles(workspace_id, files);
+    return res;
   }
 
   @Delete(':ids')

@@ -33,7 +33,7 @@ import { HasSelectionValuePipe } from '../../shared/pipes/hasSelectionValue.pipe
 import { IsAllSelectedPipe } from '../../shared/pipes/isAllSelected.pipe';
 import { IsSelectedPipe } from '../../shared/pipes/isSelected.pipe';
 import { FileSizePipe } from '../../shared/pipes/filesize.pipe';
-import { TestGroupsInListDto } from '../../../../api-dto/test-groups/testgroups-in-list.dto';
+import { TestGroupsInListDto } from '../../../../../../api-dto/test-groups/testgroups-in-list.dto';
 
 @Component({
   selector: 'coding-box-test-groups',
@@ -44,12 +44,12 @@ import { TestGroupsInListDto } from '../../../../api-dto/test-groups/testgroups-
   imports: [MatTable, MatSort, MatColumnDef, MatHeaderCellDef, MatHeaderCell, MatCheckbox, MatCellDef, MatCell, MatSortHeader, MatHeaderRowDef, MatHeaderRow, MatRowDef, MatRow, MatButton, MatTooltip, WrappedIconComponent, FormsModule, TranslateModule, SearchFilterComponent, JsonPipe, HasSelectionValuePipe, IsAllSelectedPipe, IsSelectedPipe, MatProgressSpinner, DatePipe, FileSizePipe, MatAnchor, MatIcon]
 })
 export class TestGroupsComponent implements OnInit {
-  testPersonsObjectsDatasource = new MatTableDataSource<any>();
+  testGroupsObjectsDatasource = new MatTableDataSource<TestGroupsInListDto>();
   displayedColumns = ['selectCheckbox', 'test_group', 'created_at'];
   tableSelectionRow = new SelectionModel<TestGroupsInListDto>(false, []);
   tableSelectionCheckboxes = new SelectionModel<TestGroupsInListDto>(true, []);
-  testGroups :any[] = [];
-  dataSource!: MatTableDataSource<any>;
+  testGroups :TestGroupsInListDto[] = [];
+  dataSource!: MatTableDataSource<TestGroupsInListDto>;
   isLoading = false;
 
   @ViewChild(MatSort) sort = new MatSort();
@@ -71,15 +71,15 @@ export class TestGroupsComponent implements OnInit {
     this.createTestGroupsList();
   }
 
-  private setObjectsDatasource(testGroups: any[]): void {
-    this.testPersonsObjectsDatasource = new MatTableDataSource(testGroups);
-    this.testPersonsObjectsDatasource
-      .filterPredicate = (userList: any, filter) => [
+  private setObjectsDatasource(testGroups: TestGroupsInListDto[]): void {
+    this.testGroupsObjectsDatasource = new MatTableDataSource(testGroups);
+    this.testGroupsObjectsDatasource
+      .filterPredicate = (TestGroupsList: TestGroupsInListDto, filter) => [
         'name'
-      ].some(column => (userList[column as keyof TestGroupsInListDto] as string || '')
+      ].some(column => (TestGroupsList[column as keyof TestGroupsInListDto] as string || '')
         .toLowerCase()
         .includes(filter));
-    this.testPersonsObjectsDatasource.sort = this.sort;
+    this.testGroupsObjectsDatasource.sort = this.sort;
   }
 
   updateTestGroupsList(): void {
@@ -92,22 +92,25 @@ export class TestGroupsComponent implements OnInit {
   deleteTestGroups(): void {
     this.isLoading = true;
     const selectedTestGroups = this.tableSelectionCheckboxes.selected;
-    this.backendService.deleteTestGroups(this.appService.selectedWorkspaceId, selectedTestGroups.map(testGroup => testGroup.test_group)).subscribe(respOk => {
-      if (respOk) {
-        this.snackBar.open(
-          this.translateService.instant('ws-admin.test-group-deleted'),
-          '',
-          { duration: 1000 });
-        this.isLoading = false;
-        this.createTestGroupsList();
-      } else {
-        this.snackBar.open(
-          this.translateService.instant('ws-admin.test-group-not-deleted'),
-          this.translateService.instant('error'),
-          { duration: 1000 });
-        this.isLoading = false;
-      }
-    });
+    this.backendService.deleteTestGroups(
+      this.appService.selectedWorkspaceId,
+      selectedTestGroups.map(testGroup => testGroup.test_group))
+      .subscribe(respOk => {
+        if (respOk) {
+          this.snackBar.open(
+            this.translateService.instant('ws-admin.test-group-deleted'),
+            '',
+            { duration: 1000 });
+          this.isLoading = false;
+          this.createTestGroupsList();
+        } else {
+          this.snackBar.open(
+            this.translateService.instant('ws-admin.test-group-not-deleted'),
+            this.translateService.instant('error'),
+            { duration: 1000 });
+          this.isLoading = false;
+        }
+      });
   }
 
   createCodingTestGroups():void {
@@ -131,15 +134,14 @@ export class TestGroupsComponent implements OnInit {
 
   createTestGroupsList(): void {
     this.isLoading = true;
-    if(this.appService.workspaceData?.testGroups.length === 0) {
+    if (this.appService.workspaceData?.testGroups.length === 0) {
       this.backendService.getTestGroups(this.appService.selectedWorkspaceId)
         .subscribe(groups => {
           this.dataSource = new MatTableDataSource(groups || []);
           this.appService.workspaceData.testGroups = groups;
           this.isLoading = false;
         });
-    }
-    else{
+    } else {
       this.dataSource = new MatTableDataSource(this.appService.workspaceData.testGroups || []);
       this.isLoading = false;
     }

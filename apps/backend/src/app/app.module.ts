@@ -1,10 +1,10 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { HttpModule } from '@nestjs/axios';
 import { AppController } from './app.controller';
 import { AuthModule } from './auth/auth.module';
 import { DatabaseModule } from './database/database.module';
 import { AdminModule } from './admin/admin.module';
-import { HttpModule } from '@nestjs/axios';
 
 @Module({
   imports: [ConfigModule.forRoot({
