@@ -52,30 +52,25 @@ export class AppComponent implements OnInit {
   }
 
   async ngOnInit(): Promise<void> {
-    this.loggedInKeycloak = true;
-    this.appService.isLoggedInKeycloak = true;
-    this.appService.loggedUser = this.authService.getLoggedUser();
-    this.appService.userProfile = await this.authService.loadUserProfile();
-    const isAdmin = this.authService.getRoles().includes('admin');
-    if (this.appService.userProfile.id && this.appService.userProfile.username) {
-      const keycloakUser: CreateUserDto = {
-        issuer: this.appService.loggedUser?.iss || '',
-        identity: this.appService.userProfile.id,
-        username: this.appService.userProfile.username,
-        lastName: this.appService.userProfile.lastName || '',
-        firstName: this.appService.userProfile.firstName || '',
-        email: this.appService.userProfile.email || '',
-        isAdmin: isAdmin
-      };
-      await this.keycloakLogin(keycloakUser);
+    if (this.authService.isLoggedIn()) {
+      this.loggedInKeycloak = true;
+      this.appService.isLoggedInKeycloak = true;
+      this.appService.loggedUser = this.authService.getLoggedUser();
+      this.appService.userProfile = await this.authService.loadUserProfile();
+      const isAdmin = this.authService.getRoles().includes('admin');
+      if (this.appService.userProfile.id && this.appService.userProfile.username) {
+        const keycloakUser: CreateUserDto = {
+          issuer: this.appService.loggedUser?.iss || '',
+          identity: this.appService.userProfile.id,
+          username: this.appService.userProfile.username,
+          lastName: this.appService.userProfile.lastName || '',
+          firstName: this.appService.userProfile.firstName || '',
+          email: this.appService.userProfile.email || '',
+          isAdmin: isAdmin
+        };
+        await this.keycloakLogin(keycloakUser);
+      }
     }
-    // const token = localStorage.getItem('id_token');
-    // if (token) {
-    //   this.backendService.getAuthData(this.appService.userProfile.id || '').subscribe(async authData => {
-    //     this.appService.authData = authData;
-    //   });
-    // }
-
     window.addEventListener('message', event => {
       this.appService.processMessagePost(event);
     }, false);

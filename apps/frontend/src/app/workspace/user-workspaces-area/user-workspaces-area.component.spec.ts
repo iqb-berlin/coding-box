@@ -33,8 +33,6 @@ describe('UserWorkspacesAreaComponent', () => {
 
   class MockBackendService {}
 
-  class MockAuthService {}
-
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [
@@ -46,10 +44,7 @@ describe('UserWorkspacesAreaComponent', () => {
           provide: BackendService,
           useValue: MockBackendService
         },
-        {
-          provide: AuthService,
-          useValue: MockAuthService
-        },
+        AuthService,
         {
           provide: 'SERVER_URL',
           useValue: environment.backendUrl
