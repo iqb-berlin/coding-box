@@ -1,5 +1,5 @@
 <div class="workspaces">
-  @if(this.keycloakService.isLoggedIn()){
+  @if(this.authService.isLoggedIn()){
     @if (workspaces.length === 0) {
       <div>
         <p>{{'home.no-user-workspaces' | translate}}</p>
@@ -25,7 +25,7 @@
       <p>
         Bitte loggen Sie sich ein, um auf Ihre Arbeitsbereiche zuzugreifen.
       </p>
-      <button mat-raised-button color="primary" (click)="this.keycloakService.login()">
+      <button mat-raised-button color="primary" (click)="this.authService.login()">
         Login
       </button>
     </div>
