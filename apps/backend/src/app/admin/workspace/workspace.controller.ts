@@ -51,6 +51,7 @@ export class WorkspaceController {
   }
 
   @Get(':workspace_id/importWorkspaceFiles')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async importWorkspaceFiles(
     @Param('workspace_id') workspace_id: string,
       @Query('server') server: string,
@@ -185,6 +186,7 @@ export class WorkspaceController {
 
   @Patch()
   @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiTags('admin workspaces')
   async patch(@Body() workspaces: WorkspaceFullDto) {
     return this.workspaceService.patch(workspaces);
@@ -204,6 +206,7 @@ export class WorkspaceController {
 
   @Post(':workspaceId/users')
   @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiCreatedResponse({
     description: 'Sends back the id of the new user in database',
     type: Number

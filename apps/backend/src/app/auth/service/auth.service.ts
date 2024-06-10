@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { UsersService } from '../../database/services/users.service';
 import { CreateUserDto } from '../../../../../../api-dto/user/create-user-dto';
@@ -10,17 +10,6 @@ export class AuthService {
     private usersService: UsersService,
     private jwtService: JwtService
   ) {
-  }
-
-  async initLogin(username: string) {
-    if (await this.usersService.hasUsers()) throw new ForbiddenException();
-    const newUserId = await this.usersService.create({
-      isAdmin: true,
-      username: username
-    });
-    this.logger.log(`First User with id '${newUserId}' is logging in.`);
-    const payload = { username: username, sub: 4 };
-    return this.jwtService.sign(payload);
   }
 
   async keycloakLogin(user: CreateUserDto) {
@@ -37,14 +26,16 @@ export class AuthService {
       isAdmin: isAdmin
     });
     this.logger.log(`Keycloak User with id '${userId}' is logging in.`);
-    const payload = { username: username, sub: user, workspace: 4 };
+    const payload = {
+      userId: userId, username: username, sub: user
+    };
     return this.jwtService.sign(payload);
   }
 
   async createToken(identity:string, workspaceId:number): Promise<string> {
     const user = await this.usersService.findUserByIdentity(identity);
     const payload = {
-      username: user.username, sub: user, workspace: workspaceId
+      userId: user.id, username: user.username, sub: user, workspace: workspaceId
     };
     const token = this.jwtService.sign(payload);
     return JSON.stringify(token);
@@ -64,7 +55,9 @@ export class AuthService {
       isAdmin: false
     });
     this.logger.log(`User with id '${userId}' is logging in.`);
-    const payload = { username: username, sub: userId, workspace: 1 };
+    const payload = {
+      userId: userId, username: username, sub: userId
+    };
     return this.jwtService.sign(payload);
   }
 
