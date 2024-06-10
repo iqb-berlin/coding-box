@@ -16,7 +16,7 @@ import FileUpload from '../entities/file_upload.entity';
 import { FilesDto } from '../../../../../../api-dto/files/files.dto';
 import Responses from '../entities/responses.entity';
 import WorkspaceUser from '../entities/workspace_user.entity';
-import { FileIo } from '../../admin/test-files/interfaces/file-io.interface';
+import { FileIo } from '../../admin/workspace/file-io.interface';
 import ResourcePackage from '../entities/resource-package.entity';
 import User from '../entities/user.entity';
 import { TestGroupsInListDto } from '../../../../../../api-dto/test-groups/testgroups-in-list.dto';
