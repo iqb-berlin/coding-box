@@ -107,16 +107,12 @@ export class TestFilesComponent implements OnInit {
     if (targetElement) {
       const inputElement = targetElement as HTMLInputElement;
       if (inputElement.files && inputElement.files.length > 0) {
-        this.appService.dataLoading = true;
-        this.uploadSubscription = this.backendService.uploadTestFiles(
+        this.isLoading = true;
+        this.backendService.uploadTestFiles(
           this.appService.selectedWorkspaceId,
           inputElement.files
-        ).subscribe(uploadStatus => {
-          if (uploadStatus < 0) {
-            this.appService.dataLoading = false;
-          } else {
-            this.appService.dataLoading = uploadStatus;
-          }
+        ).subscribe(() => {
+          this.isLoading = false;
         });
       }
     }
