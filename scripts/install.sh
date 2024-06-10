@@ -247,6 +247,9 @@ customize_settings() {
     sed -i "s#$VAR.*#$VAR=$NEW_ENV_VAR_VALUE#" .env.coding-box
   done
 
+  JWT_SECRET=$(openssl rand -base64 32 | tr -- '+/' '-_')
+  sed -i "s#JWT_SECRET.*#JWT_SECRET=$JWT_SECRET#" .env.coding-box
+
   # Setup makefiles
   sed -i "s#CODING_BOX_BASE_DIR :=.*#CODING_BOX_BASE_DIR := \\$TARGET_DIR#" scripts/make/coding-box.mk
   sed -i "s#scripts/update.sh#scripts/update_${APP_NAME}.sh#" scripts/make/coding-box.mk
