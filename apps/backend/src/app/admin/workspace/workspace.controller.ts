@@ -174,7 +174,7 @@ export class WorkspaceController {
   }
 
   @Delete(':ids')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOkResponse({ description: 'Admin workspaces deleted successfully.' })
   @ApiNotFoundResponse({ description: 'Admin workspace  not found.' }) // TODO: not implemented
@@ -186,14 +186,14 @@ export class WorkspaceController {
 
   @Patch()
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard)
   @ApiTags('admin workspaces')
   async patch(@Body() workspaces: WorkspaceFullDto) {
     return this.workspaceService.patch(workspaces);
   }
 
   @Post()
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiCreatedResponse({
     description: 'Sends back the id of the new workspace in database',
