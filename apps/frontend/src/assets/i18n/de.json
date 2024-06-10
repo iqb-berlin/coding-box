@@ -100,13 +100,15 @@
     "edit-workspace": "Arbeitsbereich ändern",
     "workspace-edited": "Arbeitsbereich geändert",
     "workspace-not-edited": "Arbeitsbereich konnte nicht geändert werden",
-    "delete-workspace": "Soll der Arbeitsbereich \"{{name}}\" gelöscht werden?",
+    "delete-workspace": "Soll der Arbeitsbereich wirklich gelöscht werden?",
     "delete-workspaces": "Sollen {{count}} Arbeitsbereiche gelöscht werden?",
     "delete-workspaces-title": "Löschen von Arbeitsbereichen",
     "workspaces-deleted": "Arbeitsbereich(e) gelöscht",
     "workspaces-not-deleted": "Arbeitsbereich(e) konnten nicht gelöscht werden",
     "workspaces-title": "Admin: Arbeitsbereiche",
-    "edit-workspace-settings": "Arbeitsbereichs Einstellungen"
+    "edit-workspace-settings": "Arbeitsbereichs Einstellungen",
+    "workspace-deleted": "Arbeitsbereich gelöscht",
+    "workspace-access-right-set": "Zugriffsrechte für Arbeitsbereich gesetzt"
   },
   "ws-admin": {
     "name": "Name",
