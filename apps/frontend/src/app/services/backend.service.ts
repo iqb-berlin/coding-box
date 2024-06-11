@@ -247,13 +247,13 @@ export class BackendService {
 
   getUnit(workspaceId: number, testPerson: string, unitId:string): Observable<{ data:string }[]> {
     return this.http.get<{ data:string }[]>(
-      `${this.serverUrl}}admin/workspace/${workspaceId}/unit/${testPerson}/${unitId}`,
+      `${this.serverUrl}admin/workspace/${workspaceId}/unit/${testPerson}/${unitId}`,
       { headers: this.authHeader });
   }
 
   getUnitDefExternal(authToken:string, workspaceId: number, unit: string): Observable<{ data:string }[]> {
     return this.http.get<{ data:string }[]>(
-      `${this.serverUrl}}admin/workspace/${workspaceId}/${unit}/unitDef`,
+      `${this.serverUrl}admin/workspace/${workspaceId}/${unit}/unitDef`,
       { headers: { Authorization: `Bearer ${authToken}` } });
   }
 
