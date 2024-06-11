@@ -100,7 +100,7 @@ export class TestcenterService {
     const headersRequest = {
       Authtoken: authToken
     };
-    if (responses) {
+    if (responses === 'true') {
       const resultsPromise = this.httpService.axiosRef
         .get<TestserverResponse[]>(`http://iqb-testcenter${server}.de/api/workspace/${tc_workspace}/results`, {
         httpsAgent: agent,
@@ -108,18 +108,28 @@ export class TestcenterService {
       });
       const report = await resultsPromise.then(res => res);
       if (report) {
-        const resultGroups = report.data.map(group => group.groupName);
-        // eslint-disable-next-line max-len
-        const unitResponsesPromise = this.httpService.axiosRef
-          .get<Response[]>(`http://iqb-testcenter${server}.de/api/workspace/
-          ${tc_workspace}/report/response?dataIds=${resultGroups.join(',')}`,
-        {
-          httpsAgent: agent,
-          headers: headersRequest
+        const resultGroupNames = report.data.map(group => group.groupName);
+        const createChunks = (a, size) => Array.from(
+          new Array(Math.ceil(a.length / size)),
+          (_, i) => a.slice(i * size, i * size + size)
+        );
+        const chunks = createChunks(resultGroupNames, 25);
+        const unitResponsesPromises = [];
+        chunks.forEach(chunk => {
+          const unitResponsesPromise = this.httpService.axiosRef
+            .get<Response[]>(`http://iqb-testcenter${server}.de/api/workspace/
+          ${tc_workspace}/report/response?dataIds=${chunk.join(',')}`,
+          {
+            httpsAgent: agent,
+            headers: headersRequest
+          });
+          unitResponsesPromises.push(unitResponsesPromise);
         });
-        const unitResponses = await unitResponsesPromise.then(res => res);
+
+        const unitResponses = await Promise.all(unitResponsesPromises).then(res => res);
+        const unitResponsesData = unitResponses.map(unitResponse => unitResponse.data).flat();
         if (unitResponses) {
-          const mappedResponses = unitResponses.data.map(unitResponse => ({
+          const mappedResponses = unitResponsesData.map(unitResponse => ({
             test_person: unitResponse.loginname + unitResponse.code,
             unit_id: unitResponse.unitname,
             responses: JSON.stringify(unitResponse.responses),
@@ -131,7 +141,7 @@ export class TestcenterService {
       }
     }
 
-    if (definitions || player || units || codings) {
+    if (definitions === 'true' || player === 'true' || units === 'true' || codings === 'true') {
       const filesPromise = this.httpService.axiosRef
         .get<ServerFilesResponse>(
         `http://iqb-testcenter${server}.de/api/workspace/${tc_workspace}/files`,

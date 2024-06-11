@@ -149,12 +149,20 @@ export class WorkspaceService {
     return testGroups;
   }
 
-  async deleteTestGroups(testGroupNames: string[]): Promise<boolean> {
-    this.logger.log('Delete test groups for workspace ', testGroupNames);
+  async deleteTestGroups(workspaceId: string, testGroupNames: string[]): Promise<boolean> {
+    this.logger.log('Delete test groups for workspace ', workspaceId);
     const mappedTestGroups = testGroupNames.map(testGroup => ({ test_group: testGroup }));
-    const testGroupResponsesIds = await this.responsesRepository
+    const testGroupResponsesData = await this.responsesRepository
       .find({ where: mappedTestGroups, select: ['id'] });
-    const res = await this.responsesRepository.delete(testGroupResponsesIds.map(item => item.id));
+    const ids = testGroupResponsesData.map(item => item.id);
+    const chunkSize = 10;
+    const deletePromises = [];
+    for (let i = 0; i < ids.length; i += chunkSize) {
+      const chunk = ids.slice(i, i + chunkSize);
+      const deletePromise = this.responsesRepository.delete(chunk);
+      deletePromises.push(deletePromise);
+    }
+    const res = await Promise.all(deletePromises);
     return !!res;
   }
 
