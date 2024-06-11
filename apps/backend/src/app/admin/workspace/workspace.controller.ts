@@ -124,9 +124,11 @@ export class WorkspaceController {
 
   @Delete(':workspace_id/test-groups/:testGroupNames')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
-  async deleteTestGroups(@Param('testGroupNames')testGroupNames:string): Promise<boolean> {
+  async deleteTestGroups(
+    @Param('testGroupNames')testGroupNames:string,
+      @Param('workspace_id')workspaceId:string): Promise<boolean> {
     const splittedTestGroupNames = testGroupNames.split(';');
-    return this.workspaceService.deleteTestGroups(splittedTestGroupNames);
+    return this.workspaceService.deleteTestGroups(workspaceId, splittedTestGroupNames);
   }
 
   @Get(':workspace_id/test-groups/:testGroup')
