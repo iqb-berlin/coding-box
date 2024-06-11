@@ -61,8 +61,8 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         const workspace = decoded?.workspace;
         if (workspace) {
           const unitDataExternal = await this.unitDataExternal(auth, workspace);
-          this.player = unitDataExternal.player[1].data;
-          this.unitDef = unitDataExternal.unitDef[1].data;
+          this.player = unitDataExternal.player[0].data;
+          this.unitDef = unitDataExternal.unitDef[0].data;
           this.responses = unitDataExternal.response[0];
         }
       }
