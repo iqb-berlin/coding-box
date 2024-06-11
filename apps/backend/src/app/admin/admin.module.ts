@@ -4,7 +4,6 @@ import { UsersController } from './users/users.controller';
 import { DatabaseModule } from '../database/database.module';
 import { AuthModule } from '../auth/auth.module';
 import { WorkspaceController } from './workspace/workspace.controller';
-import { TestFilesController } from './test-files/test-files.controller';
 
 @Module({
   imports: [
@@ -13,7 +12,7 @@ import { TestFilesController } from './test-files/test-files.controller';
     HttpModule
   ],
   controllers: [
-    UsersController, WorkspaceController, TestFilesController
+    UsersController, WorkspaceController
   ],
   providers: []
 })

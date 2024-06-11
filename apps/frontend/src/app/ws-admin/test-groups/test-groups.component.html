@@ -12,14 +12,16 @@
   @if (isLoading) {
     <mat-spinner></mat-spinner>
   }
-@if (dataSource && dataSource.data.length) {
-    <coding-box-search-filter
-      [title]="'search-filter.filter-test-groups' | translate"
-      (valueChange)="dataSource.filter = $event.trim().toLowerCase()">
-    </coding-box-search-filter>
-  }
+
 
   @if (!isLoading) {
+
+    @if (dataSource && dataSource.data.length) {
+      <coding-box-search-filter
+        [title]="'search-filter.filter-test-groups' | translate"
+        (valueChange)="dataSource.filter = $event.trim().toLowerCase()">
+      </coding-box-search-filter>
+    }
   <mat-table [dataSource]="dataSource" matSort>
     <ng-container matColumnDef="selectCheckbox">
       <mat-header-cell *matHeaderCellDef class="fx-flex-row-fix-70">
