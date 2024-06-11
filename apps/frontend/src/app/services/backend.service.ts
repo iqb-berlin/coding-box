@@ -1,5 +1,5 @@
 import { Injectable, Inject } from '@angular/core';
-import { HttpClient, HttpEventType } from '@angular/common/http';
+import { HttpClient } from '@angular/common/http';
 import {
   catchError, map, Observable, of, switchMap
 } from 'rxjs';
@@ -196,35 +196,15 @@ export class BackendService {
   }
 
   uploadTestFiles(workspaceId: number, files: FileList | null): Observable<number> {
+    const formData = new FormData();
     if (files) {
-      const formData = new FormData();
       for (let i = 0; i < files.length; i++) {
         formData.append('files', files[i]);
       }
-
-      this.http.post<never>(`${this.serverUrl}admin/workspace/${workspaceId}/upload`, formData, {
-        headers: this.authHeader,
-        reportProgress: true,
-        observe: 'events'
-      }).pipe(
-        map(event => {
-          if (event) {
-            if (event.type === HttpEventType.UploadProgress) {
-              return event.total ? Math.round(100 * (event.loaded / event.total)) : event.loaded;
-            }
-            if (event.type === HttpEventType.Response) {
-              return event.body || {
-                source: 'upload-units',
-                messages: [{ objectKey: '', messageKey: 'upload-units.request-error' }]
-              };
-            }
-            return 0;
-          }
-          return -1;
-        })
-      );
     }
-    return of(-1);
+    return this.http.post<never>(`${this.serverUrl}admin/workspace/${workspaceId}/upload`, formData, {
+      headers: this.authHeader
+    });
   }
 
   setUserWorkspaceAccessRight(userId: number, workspaceIds: number[]): Observable<boolean> {
@@ -267,13 +247,13 @@ export class BackendService {
 
   getUnit(workspaceId: number, testPerson: string, unitId:string): Observable<{ data:string }[]> {
     return this.http.get<{ data:string }[]>(
-      `${this.serverUrl}}admin/workspace/${workspaceId}/unit/${testPerson}/${unitId}`,
+      `${this.serverUrl}admin/workspace/${workspaceId}/unit/${testPerson}/${unitId}`,
       { headers: this.authHeader });
   }
 
   getUnitDefExternal(authToken:string, workspaceId: number, unit: string): Observable<{ data:string }[]> {
     return this.http.get<{ data:string }[]>(
-      `${this.serverUrl}}admin/workspace/${workspaceId}/${unit}/unitDef`,
+      `${this.serverUrl}admin/workspace/${workspaceId}/${unit}/unitDef`,
       { headers: { Authorization: `Bearer ${authToken}` } });
   }
 

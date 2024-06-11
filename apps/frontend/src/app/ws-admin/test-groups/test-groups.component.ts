@@ -102,7 +102,6 @@ export class TestGroupsComponent implements OnInit {
             '',
             { duration: 1000 });
           this.isLoading = false;
-          this.createTestGroupsList();
         } else {
           this.snackBar.open(
             this.translateService.instant('ws-admin.test-group-not-deleted'),
