@@ -8,43 +8,55 @@ TAG := dev
 .build:
 	cd $(CODING_BOX_BASE_DIR) &&\
 		docker build\
+				--progress plain\
 				--pull\
-				-f $(CODING_BOX_BASE_DIR)/database/Postgres.Dockerfile\
 				--no-cache\
 				--rm\
-				-t iqbberlin/coding-box-db:$(TAG)\
-				-t scm.cms.hu-berlin.de:4567/iqb/coding-box/iqbberlin/coding-box-db:$(TAG)\
+				--file $(CODING_BOX_BASE_DIR)/database/Postgres.Dockerfile\
+				--tag iqbberlin/coding-box-db:$(TAG)\
+				--tag scm.cms.hu-berlin.de:4567/iqb/coding-box/iqbberlin/coding-box-db:$(TAG)\
 			.
 	cd $(CODING_BOX_BASE_DIR) &&\
 		docker build\
+				--progress plain\
 				--pull\
-				-f $(CODING_BOX_BASE_DIR)/database/Liquibase.Dockerfile\
 				--no-cache\
 				--rm\
-				-t iqbberlin/coding-box-liquibase:$(TAG)\
-				-t scm.cms.hu-berlin.de:4567/iqb/coding-box/iqbberlin/coding-box-liquibase:$(TAG)\
+				--file $(CODING_BOX_BASE_DIR)/database/Liquibase.Dockerfile\
+				--tag iqbberlin/coding-box-liquibase:$(TAG)\
+				--tag scm.cms.hu-berlin.de:4567/iqb/coding-box/iqbberlin/coding-box-liquibase:$(TAG)\
 			.
 	cd $(CODING_BOX_BASE_DIR) &&\
 		docker build\
+				--progress plain\
 				--pull\
-				-f $(CODING_BOX_BASE_DIR)/apps/backend/Dockerfile\
+				--no-cache\
+				--rm\
+				--tag coding-box-base:$(TAG)\
+			.
+	cd $(CODING_BOX_BASE_DIR) &&\
+		docker build\
+				--progress plain\
+				--no-cache\
+				--rm\
+				--target=prod\
 				--build-arg PROJECT=backend\
-				--target=prod\
-				--no-cache\
-				--rm\
-				-t iqbberlin/coding-box-backend:$(TAG)\
-				-t scm.cms.hu-berlin.de:4567/iqb/coding-box/iqbberlin/coding-box-backend:$(TAG)\
+				--build-arg BASE_IMAGE_NAME=coding-box-base:$(TAG)\
+				--file $(CODING_BOX_BASE_DIR)/apps/backend/Dockerfile\
+				--tag iqbberlin/coding-box-backend:$(TAG)\
+				--tag scm.cms.hu-berlin.de:4567/iqb/coding-box/iqbberlin/coding-box-backend:$(TAG)\
 			.
 	cd $(CODING_BOX_BASE_DIR) &&\
 		docker build\
-				--pull\
-				-f $(CODING_BOX_BASE_DIR)/apps/frontend/Dockerfile\
-				--build-arg PROJECT=frontend\
-				--target=prod\
+				--progress plain\
 				--no-cache\
 				--rm\
-				-t iqbberlin/coding-box-frontend:$(TAG)\
-				-t scm.cms.hu-berlin.de:4567/iqb/coding-box/iqbberlin/coding-box-frontend:$(TAG)\
+				--target=prod\
+				--build-arg PROJECT=frontend\
+				--build-arg BASE_IMAGE_NAME=coding-box-base:$(TAG)\
+				--file $(CODING_BOX_BASE_DIR)/apps/frontend/Dockerfile\
+				--tag iqbberlin/coding-box-frontend:$(TAG)\
+				--tag scm.cms.hu-berlin.de:4567/iqb/coding-box/iqbberlin/coding-box-frontend:$(TAG)\
 			.
 
 ## Push all docker images to 'hub.docker.com'

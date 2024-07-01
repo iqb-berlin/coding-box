@@ -8,6 +8,10 @@ audit-backend:
 audit-frontend:
 	$(MAKE) -f $(MK_FILE_DIR)/audit.mk -C $(MK_FILE_DIR) $@
 
+dev-registry-login:
+	$(MAKE) -f $(MK_FILE_DIR)/dev.mk -C $(MK_FILE_DIR) $@
+dev-registry-logout:
+	$(MAKE) -f $(MK_FILE_DIR)/dev.mk -C $(MK_FILE_DIR) $@
 dev-build:
 	$(MAKE) -f $(MK_FILE_DIR)/dev.mk -C $(MK_FILE_DIR) $@
 dev-up:
@@ -35,6 +39,10 @@ dev-images-clean:
 dev-clean-all:
 	$(MAKE) -f $(MK_FILE_DIR)/dev.mk -C $(MK_FILE_DIR) $@
 
+dev-db-registry-login:
+	$(MAKE) -f $(MK_FILE_DIR)/dev-db.mk -C $(MK_FILE_DIR) $@
+dev-db-registry-logout:
+	$(MAKE) -f $(MK_FILE_DIR)/dev-db.mk -C $(MK_FILE_DIR) $@
 dev-db-build:
 	$(MAKE) -f $(MK_FILE_DIR)/dev-db.mk -C $(MK_FILE_DIR) $@
 dev-db-up:
@@ -68,24 +76,6 @@ dev-test-backend:
 	$(MAKE) -f $(MK_FILE_DIR)/dev-test.mk -C $(MK_FILE_DIR) $@
 dev-test-frontend:
 	$(MAKE) -f $(MK_FILE_DIR)/dev-test.mk -C $(MK_FILE_DIR) $@
-#dev-test-build-e2e:
-#	$(MAKE) -f $(MK_FILE_DIR)/dev-test.mk -C $(MK_FILE_DIR) $@
-#dev-test-e2e:
-#	$(MAKE) -f $(MK_FILE_DIR)/dev-test.mk -C $(MK_FILE_DIR) $@
-#dev-test-e2e-api:
-#	$(MAKE) -f $(MK_FILE_DIR)/dev-test.mk -C $(MK_FILE_DIR) $@
-#dev-test-e2e-ui-chrome:
-#	$(MAKE) -f $(MK_FILE_DIR)/dev-test.mk -C $(MK_FILE_DIR) $@
-#dev-test-e2e-ui-chrome-mobile:
-#	$(MAKE) -f $(MK_FILE_DIR)/dev-test.mk -C $(MK_FILE_DIR) $@
-#dev-test-e2e-ui-firefox:
-#	$(MAKE) -f $(MK_FILE_DIR)/dev-test.mk -C $(MK_FILE_DIR) $@
-#dev-test-e2e-ui-firefox-mobile:
-#	$(MAKE) -f $(MK_FILE_DIR)/dev-test.mk -C $(MK_FILE_DIR) $@
-#dev-test-e2e-ui-edge:
-#	$(MAKE) -f $(MK_FILE_DIR)/dev-test.mk -C $(MK_FILE_DIR) $@
-#dev-test-e2e-ui-edge-mobile:
-#	$(MAKE) -f $(MK_FILE_DIR)/dev-test.mk -C $(MK_FILE_DIR) $@
 
 lint-app:
 	$(MAKE) -f $(MK_FILE_DIR)/lint.mk -C $(MK_FILE_DIR) $@
@@ -135,25 +125,6 @@ coding-box-restore-db-data-only:
 coding-box-update:
 	$(MAKE) -f $(MK_FILE_DIR)/prod.mk -C $(MK_FILE_DIR) $@
 
-#prod-test-build-e2e:
-#	$(MAKE) -f $(MK_FILE_DIR)/prod-test.mk -C $(MK_FILE_DIR) $@
-#prod-test-e2e:
-#	$(MAKE) -f $(MK_FILE_DIR)/prod-test.mk -C $(MK_FILE_DIR) $@
-#prod-test-e2e-api:
-#	$(MAKE) -f $(MK_FILE_DIR)/prod-test.mk -C $(MK_FILE_DIR) $@
-#prod-test-e2e-ui-chrome:
-#	$(MAKE) -f $(MK_FILE_DIR)/prod-test.mk -C $(MK_FILE_DIR) $@
-#prod-test-e2e-ui-chrome-mobile:
-#	$(MAKE) -f $(MK_FILE_DIR)/prod-test.mk -C $(MK_FILE_DIR) $@
-#prod-test-e2e-ui-firefox:
-#	$(MAKE) -f $(MK_FILE_DIR)/prod-test.mk -C $(MK_FILE_DIR) $@
-#prod-test-e2e-ui-firefox-mobile:
-#	$(MAKE) -f $(MK_FILE_DIR)/prod-test.mk -C $(MK_FILE_DIR) $@
-#prod-test-e2e-ui-edge:
-#	$(MAKE) -f $(MK_FILE_DIR)/prod-test.mk -C $(MK_FILE_DIR) $@
-#prod-test-e2e-ui-edge-mobile:
-#	$(MAKE) -f $(MK_FILE_DIR)/prod-test.mk -C $(MK_FILE_DIR) $@
-
 push-dockerhub:
 	$(MAKE) -f $(MK_FILE_DIR)/push.mk -C $(MK_FILE_DIR) $@
 push-iqb-registry:
@@ -169,4 +140,3 @@ scan-backend:
 	$(MAKE) -f $(MK_FILE_DIR)/scan.mk -C $(MK_FILE_DIR) $@
 scan-frontend:
 	$(MAKE) -f $(MK_FILE_DIR)/scan.mk -C $(MK_FILE_DIR) $@
-

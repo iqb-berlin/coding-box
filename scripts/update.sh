@@ -61,6 +61,42 @@ create_backup() {
   mkdir -p ./backup/release/"$SOURCE_TAG"
   tar -cf - --exclude='./backup' . | tar -xf - -C ./backup/release/"$SOURCE_TAG"
   printf -- "- Current release files have been saved at: '%s'\n" "$PWD/backup/release/$SOURCE_TAG"
+
+    # Dump the db completely
+    if test $(docker compose \
+        --file "$PWD"/docker-compose.coding-box.yaml \
+        --file "$PWD"/docker-compose.coding-box.prod.yaml \
+        --env-file "$PWD"/.env.coding-box \
+      ps -q db)
+    then
+      docker compose \
+          --file "$PWD"/docker-compose.coding-box.yaml \
+          --file "$PWD"/docker-compose.coding-box.prod.yaml \
+          --env-file "$PWD"/.env.coding-box \
+        exec -it db \
+          pg_dumpall --username="$POSTGRES_USER" > "$PWD"/backup/database_dump/all.sql
+    else
+      docker compose \
+          --progress quiet \
+          --file "$PWD"/docker-compose.coding-box.yaml \
+          --file "$PWD"/docker-compose.coding-box.prod.yaml \
+          --env-file "$PWD"/.env.coding-box \
+        up -d db
+      sleep 5 ## wait until db startup is completed
+      docker compose \
+          --file "$PWD"/docker-compose.coding-box.yaml \
+          --file "$PWD"/docker-compose.coding-box.prod.yaml \
+          --env-file "$PWD"/.env.coding-box \
+        exec -it db \
+          pg_dumpall --username="$POSTGRES_USER" > "$PWD"/backup/database_dump/all.sql
+      docker compose \
+          --progress quiet \
+          --file "$PWD"/docker-compose.coding-box.yaml \
+          --file "$PWD"/docker-compose.coding-box.prod.yaml \
+          --env-file "$PWD"/.env.coding-box \
+        down
+    fi
+    printf -- "- Current db dump has been saved at: '%s'\n" "$PWD/backup/release/database_dump/all.sql"
   printf "Backup created.\n\n"
 }
 
@@ -89,6 +125,19 @@ run_update_script_in_selected_version() {
     fi
 
     printf "  Current update script will now call the downloaded update script and terminate itself.\n"
+    read -p "  Do you want to continue? [Y/n] " -er -n 1 CALL_UPDATE_SCRIPT
+    if [[ $CALL_UPDATE_SCRIPT =~ ^[nN]$ ]]; then
+      printf "  You can check the the new update script (e.g.: 'less update_%s.sh') or " $APP_NAME
+      printf "compare it with the old one (e.g.: 'diff %s %s').\n\n" \
+        update_$APP_NAME.sh "backup/release/$SOURCE_TAG/update_$APP_NAME.sh"
+
+      printf "  If you want to resume this update process, please type: 'bash update_%s.sh %s'\n\n" \
+        $APP_NAME "$TARGET_TAG"
+
+      printf "'%s' update script finished.\n" $APP_NAME
+      exit 0
+    fi
+
     printf "Update script modification check done.\n\n"
 
     bash update_$APP_NAME.sh "$TARGET_TAG"
