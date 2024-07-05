@@ -7,19 +7,24 @@ include $(CODING_BOX_BASE_DIR)/.env.dev
 .EXPORT_ALL_VARIABLES:
 
 ## prevents collisions of make target names with possible file names
-.PHONY: dev-db-build dev-db-up dev-db-down dev-db-volumes-clean dev-db-images-clean dev-db-update-status\
-	dev-db-update-history dev-db-validate-changelog dev-db-update-display-sql dev-db-update-testing-rollback\
-	dev-db-update dev-db-rollback-lastchangeset dev-db-generate-docs
+.PHONY: dev-db-registry-login dev-db-registry-logout dev-db-build dev-db-up dev-db-down dev-db-volumes-clean\
+	dev-db-images-clean dev-db-update-status dev-db-update-history dev-db-validate-changelog dev-db-update-display-sql\
+	dev-db-update-testing-rollback dev-db-update dev-db-rollback-lastchangeset dev-db-generate-docs
 
 ## disables printing the recipe of a make target before executing it
-.SILENT: dev-db-volumes-clean dev-db-images-clean
+.SILENT: dev-db-registry-login dev-db-registry-logout dev-db-volumes-clean dev-db-images-clean
 
+## Log in to selected registry (see .env.dev file)
+dev-db-registry-login:
+	if test $(REGISTRY_PATH); then printf "Login %s\n" $(REGISTRY_PATH); docker login $(REGISTRY_PATH); fi
+
+## Log out of selected registry (see .env.dev file)
+dev-db-registry-logout:
+	if test $(REGISTRY_PATH); then docker logout $(REGISTRY_PATH); fi
 
 ## Build docker images
 dev-db-build:
-	@if test $(REGISTRY_PATH); then printf "Login %s\n" $(REGISTRY_PATH); docker login $(REGISTRY_PATH); fi
 	docker compose --progress plain --env-file $(CODING_BOX_BASE_DIR)/.env.dev build --pull db liquibase
-	@if test $(REGISTRY_PATH); then docker logout $(REGISTRY_PATH); fi
 
 ## Start db container (e.g. for a localhost dev environment with non containerized frontend and backend servers)
 dev-db-up:
@@ -38,8 +43,8 @@ dev-db-down:
 ## Remove all unused db volumes
 # Be very careful, all data could be lost!!!
 dev-db-volumes-clean:
-	if test "$(shell docker volume ls -f name=db -q)";\
-		then docker volume rm $(shell docker volume ls -f name=db -q);\
+	if test "$(shell docker volume ls -f name=coding-box_db_vol -q)";\
+		then docker volume rm $(shell docker volume ls -f name=coding-box_db_vol -q);\
 	fi
 
 ## Remove all unused (not just dangling) db and liquibase images!

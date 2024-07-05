@@ -76,7 +76,7 @@
     "@iqb/eslint-config": "^2.1.1",
     "@nx/angular": "18.0.4",
     "@nx/cypress": "18.0.4",
-    "@nx/esbuild": "^18.0.4",
+    "@nx/esbuild": "18.0.4",
     "@nx/eslint": "18.0.4",
     "@nx/jest": "18.0.4",
     "@nx/nest": "18.0.4",
@@ -102,7 +102,7 @@
     "karma-coverage": "~2.2.0",
     "karma-jasmine": "~5.1.0",
     "karma-jasmine-html-reporter": "~2.1.0",
-    "nx": "^18.0.4",
+    "nx": "18.0.4",
     "prisma": "^5.10.2",
     "ts-jest": "29.1.1",
     "typescript": "~5.3.2"
