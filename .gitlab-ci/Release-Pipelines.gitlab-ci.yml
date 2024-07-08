@@ -157,12 +157,12 @@ build-main-pr-backend-test-image:
           --progress plain
           --pull
           --target=dev
-          --build-arg PROJECT=api
+          --build-arg PROJECT=backend
           --build-arg REGISTRY_PATH=${DOCKER_HUB_PROXY}
           --build-arg BASE_IMAGE_NAME=${BASE_IMAGE_NAME}:${CI_COMMIT_SHA}
           --build-arg BUILDKIT_INLINE_CACHE=1
           --cache-from ${BACKEND_IMAGE_NAME}:latest
-          -f apps/api/Dockerfile
+          -f apps/backend/Dockerfile
           -t ${BACKEND_IMAGE_NAME}:${CI_COMMIT_SHA}_test
         .
     - docker push -q ${BACKEND_IMAGE_NAME}:${CI_COMMIT_SHA}_test
@@ -339,12 +339,12 @@ build-main-pr-backend-image:
           --progress plain
           --pull
           --target=prod
-          --build-arg PROJECT=api
+          --build-arg PROJECT=backend
           --build-arg REGISTRY_PATH=${DOCKER_HUB_PROXY}
           --build-arg BASE_IMAGE_NAME=${BASE_IMAGE_NAME}:${CI_COMMIT_SHA}
           --build-arg BUILDKIT_INLINE_CACHE=1
           --cache-from ${BACKEND_IMAGE_NAME}:${CI_COMMIT_SHA}_test
-          -f apps/api/Dockerfile
+          -f apps/backend/Dockerfile
           -t ${BACKEND_IMAGE_NAME}:${CI_COMMIT_SHA}
           -t ${BACKEND_IMAGE_NAME}:main
         .
@@ -501,7 +501,7 @@ test-main-pr-backend:
   before_script:
     - docker pull -q ${BACKEND_IMAGE_NAME}:${CI_COMMIT_SHA}_test
   script:
-    - docker run ${BACKEND_IMAGE_NAME}:${CI_COMMIT_SHA}_test test api
+    - docker run ${BACKEND_IMAGE_NAME}:${CI_COMMIT_SHA}_test test backend
 
 test-main-pr-frontend:
   stage: test-units
@@ -879,7 +879,7 @@ lint-main-pr-backend:
   before_script:
     - docker pull -q ${BACKEND_IMAGE_NAME}:${CI_COMMIT_SHA}_test
   script:
-    - docker run ${BACKEND_IMAGE_NAME}:${CI_COMMIT_SHA}_test lint api
+    - docker run ${BACKEND_IMAGE_NAME}:${CI_COMMIT_SHA}_test lint backend
 
 lint-main-pr-frontend:
   stage: lint
@@ -1076,12 +1076,12 @@ build-main-commit-backend-image:
           --progress plain
           --pull
           --target=prod
-          --build-arg PROJECT=api
+          --build-arg PROJECT=backend
           --build-arg REGISTRY_PATH=${DOCKER_HUB_PROXY}
           --build-arg BASE_IMAGE_NAME=${BASE_IMAGE_NAME}:${CI_COMMIT_SHA}
           --build-arg BUILDKIT_INLINE_CACHE=1
           --cache-from ${BACKEND_IMAGE_NAME}:main
-          -f apps/api/Dockerfile
+          -f apps/backend/Dockerfile
           -t ${BACKEND_IMAGE_NAME}:${CI_COMMIT_SHA}
         .
     - docker push ${BACKEND_IMAGE_NAME}:${CI_COMMIT_SHA}
