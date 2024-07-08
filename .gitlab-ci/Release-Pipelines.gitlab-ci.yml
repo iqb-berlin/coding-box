@@ -157,12 +157,12 @@ build-main-pr-backend-test-image:
           --progress plain
           --pull
           --target=dev
-          --build-arg PROJECT=api
+          --build-arg PROJECT=backend
           --build-arg REGISTRY_PATH=${DOCKER_HUB_PROXY}
           --build-arg BASE_IMAGE_NAME=${BASE_IMAGE_NAME}:${CI_COMMIT_SHA}
           --build-arg BUILDKIT_INLINE_CACHE=1
           --cache-from ${BACKEND_IMAGE_NAME}:latest
-          -f apps/api/Dockerfile
+          -f apps/backend/Dockerfile
           -t ${BACKEND_IMAGE_NAME}:${CI_COMMIT_SHA}_test
         .
     - docker push -q ${BACKEND_IMAGE_NAME}:${CI_COMMIT_SHA}_test
@@ -339,12 +339,12 @@ build-main-pr-backend-image:
           --progress plain
           --pull
           --target=prod
-          --build-arg PROJECT=api
+          --build-arg PROJECT=backend
           --build-arg REGISTRY_PATH=${DOCKER_HUB_PROXY}
           --build-arg BASE_IMAGE_NAME=${BASE_IMAGE_NAME}:${CI_COMMIT_SHA}
           --build-arg BUILDKIT_INLINE_CACHE=1
           --cache-from ${BACKEND_IMAGE_NAME}:${CI_COMMIT_SHA}_test
-          -f apps/api/Dockerfile
+          -f apps/backend/Dockerfile
           -t ${BACKEND_IMAGE_NAME}:${CI_COMMIT_SHA}
           -t ${BACKEND_IMAGE_NAME}:main
         .
@@ -409,6 +409,7 @@ test-main-pr-db:
   before_script:
     - sed -i "s/TAG=.*$/TAG=${CI_COMMIT_SHA}/" .env.coding-box.template
     - sed -i "s^REGISTRY_PATH=.*$^REGISTRY_PATH=${CI_REGISTRY_IMAGE}/^" .env.coding-box.template
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u $CI_REGISTRY_USER --password-stdin $CI_REGISTRY
     - docker network create app-net
     - docker compose
           --env-file .env.coding-box.template
@@ -482,6 +483,8 @@ test-main-pr-db:
               --password=${POSTGRES_PASSWORD}
               --classpath=changelog
             history
+  after_script:
+    - docker logout $CI_REGISTRY
 
 test-main-pr-backend:
   stage: test-units
@@ -499,9 +502,12 @@ test-main-pr-backend:
   variables:
     BACKEND_IMAGE_NAME: "${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-backend"
   before_script:
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u $CI_REGISTRY_USER --password-stdin $CI_REGISTRY
     - docker pull -q ${BACKEND_IMAGE_NAME}:${CI_COMMIT_SHA}_test
   script:
-    - docker run ${BACKEND_IMAGE_NAME}:${CI_COMMIT_SHA}_test test api
+    - docker run ${BACKEND_IMAGE_NAME}:${CI_COMMIT_SHA}_test test backend
+  after_script:
+    - docker logout $CI_REGISTRY
 
 test-main-pr-frontend:
   stage: test-units
@@ -519,9 +525,12 @@ test-main-pr-frontend:
   variables:
     FRONTEND_IMAGE_NAME: "${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-frontend"
   before_script:
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u $CI_REGISTRY_USER --password-stdin $CI_REGISTRY
     - docker pull -q ${FRONTEND_IMAGE_NAME}:${CI_COMMIT_SHA}_test
   script:
     - docker run ${FRONTEND_IMAGE_NAME}:${CI_COMMIT_SHA}_test test frontend
+  after_script:
+    - docker logout $CI_REGISTRY
 
 #test-main-pr-e2e:
 #  stage: test-e2e
@@ -877,9 +886,12 @@ lint-main-pr-backend:
   variables:
     BACKEND_IMAGE_NAME: "${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-backend"
   before_script:
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u $CI_REGISTRY_USER --password-stdin $CI_REGISTRY
     - docker pull -q ${BACKEND_IMAGE_NAME}:${CI_COMMIT_SHA}_test
   script:
-    - docker run ${BACKEND_IMAGE_NAME}:${CI_COMMIT_SHA}_test lint api
+    - docker run ${BACKEND_IMAGE_NAME}:${CI_COMMIT_SHA}_test lint backend
+  after_script:
+    - docker logout $CI_REGISTRY
 
 lint-main-pr-frontend:
   stage: lint
@@ -897,9 +909,12 @@ lint-main-pr-frontend:
   variables:
     FRONTEND_IMAGE_NAME: "${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-frontend"
   before_script:
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u $CI_REGISTRY_USER --password-stdin $CI_REGISTRY
     - docker pull -q ${FRONTEND_IMAGE_NAME}:${CI_COMMIT_SHA}_test
   script:
     - docker run ${FRONTEND_IMAGE_NAME}:${CI_COMMIT_SHA}_test lint frontend
+  after_script:
+    - docker logout $CI_REGISTRY
 
 #lint-main-pr-frontend-e2e:
 #  stage: lint
@@ -936,9 +951,12 @@ audit-main-pr-backend:
   variables:
     BACKEND_IMAGE_NAME: "${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-backend"
   before_script:
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u $CI_REGISTRY_USER --password-stdin $CI_REGISTRY
     - docker pull -q ${BACKEND_IMAGE_NAME}:${CI_COMMIT_SHA}_test
   script:
     - docker run --entrypoint npm ${BACKEND_IMAGE_NAME}:${CI_COMMIT_SHA}_test audit --audit-level critical
+  after_script:
+    - docker logout $CI_REGISTRY
 
 audit-main-pr-frontend:
   stage: audit
@@ -955,9 +973,12 @@ audit-main-pr-frontend:
   variables:
     FRONTEND_IMAGE_NAME: "${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-frontend"
   before_script:
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u $CI_REGISTRY_USER --password-stdin $CI_REGISTRY
     - docker pull -q ${FRONTEND_IMAGE_NAME}:${CI_COMMIT_SHA}_test
   script:
     - docker run --entrypoint npm ${FRONTEND_IMAGE_NAME}:${CI_COMMIT_SHA}_test audit --audit-level critical
+  after_script:
+    - docker logout $CI_REGISTRY
 
 build-main-commit-db-image:
   stage: build-images
@@ -1076,12 +1097,12 @@ build-main-commit-backend-image:
           --progress plain
           --pull
           --target=prod
-          --build-arg PROJECT=api
+          --build-arg PROJECT=backend
           --build-arg REGISTRY_PATH=${DOCKER_HUB_PROXY}
           --build-arg BASE_IMAGE_NAME=${BASE_IMAGE_NAME}:${CI_COMMIT_SHA}
           --build-arg BUILDKIT_INLINE_CACHE=1
           --cache-from ${BACKEND_IMAGE_NAME}:main
-          -f apps/api/Dockerfile
+          -f apps/backend/Dockerfile
           -t ${BACKEND_IMAGE_NAME}:${CI_COMMIT_SHA}
         .
     - docker push ${BACKEND_IMAGE_NAME}:${CI_COMMIT_SHA}
