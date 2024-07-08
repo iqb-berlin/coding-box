@@ -1394,6 +1394,7 @@ build-release:
     BACKEND_IMAGE_NAME: "${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-backend"
     FRONTEND_IMAGE_NAME: "${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-frontend"
   before_script:
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u $CI_REGISTRY_USER --password-stdin $CI_REGISTRY
     - echo "$DOCKERHUB_PASSWORD" | docker login -u $DOCKERHUB_USER --password-stdin
     - docker pull -q ${DB_IMAGE_NAME}:${CI_COMMIT_SHA}
     - docker pull -q ${LIQUIBASE_IMAGE_NAME}:${CI_COMMIT_SHA}
@@ -1413,4 +1414,5 @@ build-release:
     - docker push -a -q iqbberlin/coding-box-backend
     - docker push -a -q iqbberlin/coding-box-frontend
   after_script:
+    - docker logout $CI_REGISTRY
     - docker logout
