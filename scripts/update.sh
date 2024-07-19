@@ -495,7 +495,7 @@ customize_settings() {
   sed -i "s#TAG.*#TAG=$TARGET_TAG#" "$PWD"/.env.coding-box
 
   # Setup makefiles
-  sed -i "s#STUDIO_LITE_BASE_DIR :=.*#STUDIO_LITE_BASE_DIR := \\$(pwd)#" "$PWD"/scripts/make/coding-box.mk
+  sed -i "s#CODING_BOX_BASE_DIR :=.*#CODING_BOX_BASE_DIR := \\$(pwd)#" "$PWD"/scripts/make/coding-box.mk
   sed -i "s#scripts/update.sh#scripts/update_${APP_NAME}.sh#" "$PWD"/scripts/make/coding-box.mk
   update_makefile
 }
