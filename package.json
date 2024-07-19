@@ -1,6 +1,6 @@
 {
   "name": "coding-box",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "author": "IQB - Institut zur Qualitätsentwicklung im Bildungswesen",
   "license": "MIT",
   "scripts": {
@@ -30,7 +30,7 @@
     "@angular/platform-browser": "^17.1.0",
     "@angular/platform-browser-dynamic": "^17.1.0",
     "@angular/router": "^17.1.0",
-    "@iqb/responses": "^2.1.5",
+    "@iqb/responses": "^3.0.6",
     "@nestjs/axios": "^3.0.2",
     "@nestjs/common": "^10.3.3",
     "@nestjs/config": "^3.0.0",
