@@ -318,7 +318,7 @@ customize_settings() {
   sed -i "s#JWT_SECRET.*#JWT_SECRET=$jwt_secret#" .env.coding-box
 
   # Setup makefiles
-  sed -i "s#STUDIO_LITE_BASE_DIR :=.*#STUDIO_LITE_BASE_DIR := \\$TARGET_DIR#" scripts/make/coding-box.mk
+  sed -i "s#CODING_BOX_BASE_DIR :=.*#CODING_BOX_BASE_DIR := \\$TARGET_DIR#" scripts/make/coding-box.mk
   sed -i "s#scripts/update.sh#scripts/update_${APP_NAME}.sh#" scripts/make/coding-box.mk
 
   if [ -n "$TRAEFIK_DIR" ] && [ "$TRAEFIK_DIR" != "$TARGET_DIR" ]; then
