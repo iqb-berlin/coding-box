@@ -90,6 +90,6 @@ export class ResourcePackageService {
 
   getZippedResourcePackage(name: string): Buffer {
     this.logger.log('Returning zipped resource package.');
-    return fs.readFileSync(`${this.resourcePackagesPath}/packages/${name}/${name}.itcr.zip`);
+    return fs.readFileSync(`${this.resourcePackagesPath}/${name}/${name}.itcr.zip`);
   }
 }
