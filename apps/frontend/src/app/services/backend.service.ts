@@ -31,9 +31,9 @@ export class BackendService {
     return `${this.serverUrl}packages/`;
   }
 
-  getToken(workspace_id:number, user:string): Observable<string> {
-    return this.http.get<string>(
-      `${this.serverUrl}admin/workspace/${workspace_id}/${user}/token`,
+  createToken(workspace_id:number, user:string, duration: number): Observable<string> {
+    return this.http.get<string>( // TODO push
+      `${this.serverUrl}admin/workspace/${workspace_id}/${user}/token/${duration}`,
       { headers: this.authHeader }
     );
   }

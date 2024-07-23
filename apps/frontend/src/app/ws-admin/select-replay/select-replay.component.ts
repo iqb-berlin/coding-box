@@ -84,7 +84,8 @@ export class SelectReplayComponent implements OnInit {
 
   async replay(): Promise<void> {
     this.selectedUnit = this.selectedUnit.toUpperCase();
-    this.backendService.getToken(this.appService.selectedWorkspaceId, this.appService.userProfile.id || '')
+    this.backendService
+      .createToken(this.appService.selectedWorkspaceId, this.appService.userProfile.id || '', 1)
       .subscribe(token => {
         const queryParams = {
           auth: token
