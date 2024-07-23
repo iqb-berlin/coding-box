@@ -21,9 +21,9 @@ class Responses {
     created_at: number;
 
   @Column({
-    type: 'varchar'
+    type: 'jsonb'
   })
-    responses:string;
+    responses: any;
 }
 
 export default Responses;

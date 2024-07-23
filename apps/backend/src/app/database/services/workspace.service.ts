@@ -225,16 +225,17 @@ export class WorkspaceService {
     await this.workspaceRepository.delete(id);
   }
 
-  static csvToArr(stringVal, splitter) {
-    const [keys, ...rest] = stringVal
+  static csvToArr(stringVal: string) {
+    const rows = stringVal
       .trim()
-      .split('\n')
-      .map(item => item.split(splitter));
-    return rest.map(item => {
+      .split('\n');
+    const headers = rows.shift().split(';');
+
+    return rows.map(item => {
       const object = {};
-      keys.forEach(
-        (key, index) => (object[key] = (item.at(index)).replace('""', '"').replace('"', ''))
-      );
+      const row = item.split('";"');
+      headers
+        .forEach((key, index) => (object[key] = row[index]));
       return object;
     });
   }
@@ -281,7 +282,7 @@ export class WorkspaceService {
         const zip = new AdmZip(file.buffer);
         const packageFiles = zip.getEntries().map(entry => entry.entryName);
         const resourcePackagesPath = './packages';
-        const packageName = 'geogebra';
+        const packageName = 'GeoGebra';
         const zipExtractAllToAsync = util.promisify(zip.extractAllToAsync);
         return zipExtractAllToAsync(`${resourcePackagesPath}/${packageName}`, true, true)
           .then(async () => {
@@ -292,7 +293,7 @@ export class WorkspaceService {
             });
             await this.resourcePackageRepository.save(newResourcePackage);
             fs.writeFileSync(
-              `${resourcePackagesPath}/${packageName}`,
+              `${resourcePackagesPath}/${packageName}/${file.originalname}`,
               file.buffer
             );
             return newResourcePackage.id;
@@ -303,18 +304,18 @@ export class WorkspaceService {
       }
 
       if (file.mimetype === 'text/csv') {
-        const rows = WorkspaceService.csvToArr(file.buffer.toString(), ';');
-        const mappedRows = rows.map((row: Response) => {
-          const testPerson = `${row.loginname}${row.code}`.replace(/"/g, '');
+        const rows = WorkspaceService.csvToArr(file.buffer.toString());
+        const mappedRows: Array<Responses> = rows.map((row: Response) => {
+          const testPerson = `${row.loginname}${row.code}`;
           const groupName = `${row.groupname}`.replace(/"/g, '');
-          const unitId = row.unitname.replace(/"/g, '');
-          const responses = row.responses
-            .replace(/^"|"$/g, '').replace(/""/g, '"');
-
-          return ({
+          const unitId = row.unitname;
+          const responseChunksCleaned = row.responses
+            .replace(/""/g, '"');
+          const responsesChunks = JSON.parse(responseChunksCleaned);
+          return (<Responses>{
             test_person: testPerson,
             unit_id: unitId.toUpperCase(),
-            responses: responses,
+            responses: responsesChunks,
             test_group: groupName,
             workspace_id: workspace_id
           });
