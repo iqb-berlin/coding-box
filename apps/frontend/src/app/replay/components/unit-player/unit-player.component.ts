@@ -29,9 +29,9 @@ export type Progress = 'none' | 'some' | 'complete';
   styleUrl: './unit-player.component.scss'
 })
 export class UnitPlayerComponent implements AfterViewInit, OnChanges {
-  @Input() unitDef!: string;
-  @Input() unitPlayer!: string;
-  @Input() unitResponses!: string;
+  @Input() unitDef: string | undefined;
+  @Input() unitPlayer: string | undefined;
+  @Input() unitResponses: string | undefined;
   @ViewChild('hostingIframe') hostingIframe!: ElementRef;
   private iFrameElement: HTMLIFrameElement | undefined;
   postMessageTarget: Window | undefined;
@@ -69,24 +69,6 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges {
       this.unitDef = parsedJSONUnitDef;
       if (this.iFrameElement) {
         this.iFrameElement.srcdoc = (unitPlayer ? unitPlayer.currentValue : this.unitPlayer).replace('&quot;', '');
-        if (this.postMessageTarget) {
-          this.postMessageTarget.postMessage({
-            type: 'vopStartCommand',
-            sessionId: 3,
-            unitState: {
-              dataParts: this.dataParts,
-              presentationProgress: 'none',
-              responseProgress: 'none'
-            },
-            playerConfig: {
-              stateReportPolicy: 'eager',
-              pagingMode: 'seperate',
-              directDownloadUrl: this.backendService.getDirectDownloadLink()
-
-            },
-            unitDefinition: parsedJSONUnitDef
-          }, '*');
-        }
       }
     }
     this.count += 1;
@@ -237,7 +219,7 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges {
           playerConfig: {
             stateReportPolicy: 'eager',
             pagingMode: 'auto',
-            directDownloadUrl: '',
+            directDownloadUrl: this.backendService.getDirectDownloadLink(),
             startPage: '1'
           },
           unitDefinition: unitDefStringified
