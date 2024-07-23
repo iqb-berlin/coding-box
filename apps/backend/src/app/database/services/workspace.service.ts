@@ -136,7 +136,11 @@ export class WorkspaceService {
   async findTestGroups(workspace_id: number): Promise<TestGroupsInListDto[]> {
     this.logger.log('Returning all test groups for workspace ', workspace_id);
     const data = await this.responsesRepository
-      .find({ select: ['test_group', 'created_at'], where: { workspace_id: workspace_id } });
+      .find({
+        select: ['test_group', 'created_at'],
+        where: { workspace_id: workspace_id },
+        order: { test_group: 'ASC' }
+      });
     const testGroups = [];
     const uniqueObject = {};
     for (const i in data) {
@@ -169,7 +173,11 @@ export class WorkspaceService {
   async findTestPersons(id: number, testGroup:string): Promise<string[]> {
     this.logger.log('Returning ind all test persons for test group ', testGroup);
     const response = await this.responsesRepository
-      .find({ select: ['test_person'], where: { test_group: testGroup } });
+      .find({
+        select: ['test_person'],
+        where: { test_group: testGroup },
+        order: { test_person: 'ASC' }
+      });
     if (response) {
       return Array.from(new Set(response.map(item => item.test_person)));
     }
@@ -178,7 +186,12 @@ export class WorkspaceService {
 
   async findTestPersonUnits(id: number, testPerson:string): Promise<Responses[]> {
     this.logger.log('Returning all unit Ids for testperson ', testPerson);
-    const res = this.responsesRepository.find({ where: { test_person: testPerson }, select: ['unit_id'] });
+    const res = this.responsesRepository
+      .find({
+        select: ['unit_id'],
+        where: { test_person: testPerson },
+        order: { unit_id: 'ASC' }
+      });
     if (res) {
       return res;
     }
