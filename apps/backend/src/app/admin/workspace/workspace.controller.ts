@@ -43,11 +43,15 @@ export class WorkspaceController {
     return this.workspaceService.findAll();
   }
 
-  @Get(':workspace_id/:user_id/token')
+  @Get(':workspace_id/:user_id/token/:duration') // TODO push
   @UseGuards(JwtAuthGuard)
-  async createToken(@Param('user_id') user_id:string, @Param('workspace_id') workspace_id:number):Promise<string> {
-    const token = this.authService.createToken(user_id, workspace_id);
-    return token;
+  async createToken(
+    @Param('user_id')
+      user_id:string,
+      @Param('workspace_id') workspace_id: number,
+      @Param('duration') duration: number
+  ):Promise<string> {
+    return this.authService.createToken(user_id, workspace_id, duration);
   }
 
   @Get(':workspace_id/importWorkspaceFiles')
@@ -171,8 +175,7 @@ export class WorkspaceController {
   @UseInterceptors(FilesInterceptor('files'))
   @ApiTags('workspace')
   async addTestFiles(@Param('workspace_id') workspace_id:number, @UploadedFiles() files): Promise<boolean> {
-    const res = await this.workspaceService.uploadTestFiles(workspace_id, files);
-    return res;
+    return this.workspaceService.uploadTestFiles(workspace_id, files);
   }
 
   @Delete(':ids')

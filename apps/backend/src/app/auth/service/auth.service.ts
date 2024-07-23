@@ -32,12 +32,12 @@ export class AuthService {
     return this.jwtService.sign(payload);
   }
 
-  async createToken(identity:string, workspaceId:number): Promise<string> {
+  async createToken(identity:string, workspaceId:number, duration: number): Promise<string> {
     const user = await this.usersService.findUserByIdentity(identity);
     const payload = {
       userId: user.id, username: user.username, sub: user, workspace: workspaceId
     };
-    const token = this.jwtService.sign(payload);
+    const token = this.jwtService.sign(payload, { expiresIn: `${duration}d` });
     return JSON.stringify(token);
   }
 
