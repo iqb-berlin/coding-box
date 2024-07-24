@@ -9,14 +9,13 @@ import { ReactiveFormsModule } from '@angular/forms';
 import { NgIf } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
 import { ActivatedRoute } from '@angular/router';
-import {
-  catchError, firstValueFrom, Subscription
-} from 'rxjs';
+import { firstValueFrom, Subscription } from 'rxjs';
 import * as xml2js from 'xml2js';
 import { jwtDecode, JwtPayload } from 'jwt-decode';
 import { UnitPlayerComponent } from '../unit-player/unit-player.component';
 import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
+import { Responses } from '../../../app.interfaces';
 
 @Component({
   selector: 'coding-box-replay',
@@ -32,10 +31,9 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   testPerson: string = '';
   page!: string;
   unitId: string = '';
-  responses: string = '';
+  responses: Responses | undefined = undefined;
   auth: string = '';
   @Input() testPersonInput: string | undefined;
-  @Input() pageInput: string | undefined;
   @Input() unitIdInput: string | undefined;
   private routerSubscription: Subscription | null = null;
   constructor(private backendService:BackendService,
@@ -62,6 +60,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
             page, testPerson, unitId
           } = params;
           this.page = page;
+
           this.testPerson = testPerson;
           this.unitId = unitId;
           const { auth } = queryParams;
@@ -77,21 +76,19 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
             }
           }
         } else if (this.testPersonInput && this.unitIdInput) {
-          this.page = '1';
           this.testPerson = this.testPersonInput;
           this.unitId = this.unitIdInput.toUpperCase();
         }
       });
   }
 
-  // eslint-disable-next-line consistent-return
   async ngOnChanges(changes: SimpleChanges): Promise<void> {
     // eslint-disable-next-line @typescript-eslint/dot-notation
     if (typeof changes['unitIdInput']?.currentValue === 'undefined') {
       this.unitId = '';
       this.player = '';
       this.unitDef = '';
-      this.responses = '';
+      this.responses = undefined;
       return Promise.resolve();
     }
     // eslint-disable-next-line @typescript-eslint/dot-notation
@@ -102,25 +99,17 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     this.player = unitData.player[0].data;
     this.unitDef = unitData.unitDef[0].data;
     this.responses = unitData.response[0];
+    return Promise.resolve();
   }
 
   async getUnitData() {
     let player = '';
     const unitDefFile = await firstValueFrom(
-      this.backendService.getUnitDef(this.appService.selectedWorkspaceId, this.unitId)
-        .pipe(
-          catchError(error => {
-            throw new Error(error);
-          })
-        ));
+      this.backendService.getUnitDef(this.appService.selectedWorkspaceId, this.unitId));
 
     const responsesFile = await firstValueFrom(
-      this.backendService.getResponses(this.appService.selectedWorkspaceId, this.testPerson, this.unitId)
-        .pipe(
-          catchError(error => {
-            throw new Error(error);
-          })
-        ));
+      this.backendService.getResponses(this.appService.selectedWorkspaceId, this.testPerson, this.unitId));
+
     const unitFile = await firstValueFrom(
       this.backendService.getUnit(this.appService.selectedWorkspaceId, this.testPerson, this.unitId)
     );
@@ -134,12 +123,8 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
     const playerFile = await firstValueFrom(
       this.backendService.getPlayer(
-        this.appService.selectedWorkspaceId, ReplayComponent.normalizePlayerId(player))
-        .pipe(
-          catchError(error => {
-            throw new Error(error);
-          })
-        ));
+        this.appService.selectedWorkspaceId, ReplayComponent.normalizePlayerId(player)));
+
     return { player: playerFile, unitDef: unitDefFile, response: responsesFile };
   }
 
@@ -163,28 +148,13 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   async unitDataExternal(authToken:string, workspace:string) {
     let player = '';
     const unitDefFile = await firstValueFrom(
-      this.backendService.getUnitDefExternal(authToken, Number(workspace), this.unitId)
-        .pipe(
-          catchError(error => {
-            throw new Error(error);
-          })
-        ));
+      this.backendService.getUnitDefExternal(authToken, Number(workspace), this.unitId));
 
     const responsesFile = await firstValueFrom(
       this.backendService
-        .getResponsesExternal(authToken, Number(workspace), this.testPerson, this.unitId)
-        .pipe(
-          catchError(error => {
-            throw new Error(error);
-          })
-        ));
+        .getResponsesExternal(authToken, Number(workspace), this.testPerson, this.unitId));
     const unitFile = await firstValueFrom(
-      this.backendService.getUnitExternal(authToken, Number(workspace), this.testPerson, this.unitId)
-        .pipe(
-          catchError(error => {
-            throw new Error(error);
-          })
-        ));
+      this.backendService.getUnitExternal(authToken, Number(workspace), this.testPerson, this.unitId));
 
     xml2js.parseString(unitFile[0].data, (err:any, result:any) => {
       player = result?.Unit.DefinitionRef[0].$.player;
@@ -193,11 +163,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       this.backendService.getPlayerExternal(authToken,
         Number(workspace),
         player.replace('@', '-'))
-        .pipe(
-          catchError(error => {
-            throw new Error(error);
-          })
-        ));
+    );
     return { player: playerFile, unitDef: unitDefFile, response: responsesFile };
   }
 }
