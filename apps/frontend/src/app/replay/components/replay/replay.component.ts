@@ -60,7 +60,6 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
             page, testPerson, unitId
           } = params;
           this.page = page;
-
           this.testPerson = testPerson;
           this.unitId = unitId;
           const { auth } = queryParams;
