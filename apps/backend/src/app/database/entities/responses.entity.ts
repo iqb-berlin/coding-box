@@ -20,10 +20,11 @@ class Responses {
   @Column({ type: 'timestamp' })
     created_at: number;
 
-  @Column({
-    type: 'jsonb'
-  })
-    responses: any;
+  @Column({ type: 'jsonb' })
+    responses: object | undefined;
+
+  @Column({ type: 'jsonb' })
+    unit_state: object | undefined;
 }
 
 export default Responses;

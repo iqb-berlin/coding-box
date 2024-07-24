@@ -60,7 +60,6 @@ export type Response = {
 
 @Injectable()
 export class TestcenterService {
-  private readonly logger = new Logger(TestcenterService.name);
   constructor(
     private readonly httpService: HttpService,
     private testFileService: WorkspaceService,
@@ -132,9 +131,10 @@ export class TestcenterService {
           const mappedResponses = unitResponsesData.map(unitResponse => ({
             test_person: unitResponse.loginname + unitResponse.code,
             unit_id: unitResponse.unitname,
-            responses: JSON.stringify(unitResponse.responses),
+            responses: unitResponse.responses,
             test_group: unitResponse.groupname,
-            workspace_id: Number(workspace_id)
+            workspace_id: Number(workspace_id),
+            unit_state: JSON.parse(unitResponse.laststate)
           }));
           await this.responsesRepository.save(mappedResponses, { chunk: 1000 });
         }
