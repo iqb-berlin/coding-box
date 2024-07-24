@@ -35,7 +35,7 @@
     </div>
     <button mat-raised-button color="primary"
             (click)="replay()"
-            [disabled]="!selectedUnit">
+            [disabled]="!selectedUnit && !replayComponent">
       <mat-icon>fullscreen</mat-icon>
       Vollbildansicht
     </button>
@@ -50,7 +50,7 @@
 
 @if (selectedTestPerson && selectedUnit) {
   <div class="replay">
-    <coding-box-replay [testPersonInput]="selectedTestPerson" [unitIdInput]="selectedUnit"></coding-box-replay>
+    <coding-box-replay #replayComponent [testPersonInput]="selectedTestPerson" [unitIdInput]="selectedUnit"></coding-box-replay>
   </div>
 }
 </div>
