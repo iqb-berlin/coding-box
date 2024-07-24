@@ -1,4 +1,6 @@
-import { Component, OnInit } from '@angular/core';
+import {
+  Component, OnInit, ViewChild
+} from '@angular/core';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatAnchor, MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
@@ -32,9 +34,9 @@ export class SelectReplayComponent implements OnInit {
   constructor(public appService:AppService,
               public backendService:BackendService,
               private router: Router) {
-
   }
 
+  @ViewChild('replayComponent') replayComponent!: ReplayComponent;
   testPersons:string[] = [];
   testGroups :string[] = [];
   units :string[] = [];
@@ -90,10 +92,11 @@ export class SelectReplayComponent implements OnInit {
         const queryParams = {
           auth: token
         };
+        const page = this.replayComponent.responses?.unit_state?.CURRENT_PAGE_ID;
         const url = this.router
           .serializeUrl(
             this.router.createUrlTree(
-              [`replay/${this.selectedTestPerson}/${this.selectedUnit}/0`],
+              [`replay/${this.selectedTestPerson}/${this.selectedUnit}/${page}`],
               { queryParams: queryParams })
           );
         window.open(`#/${url}`, '_blank');
