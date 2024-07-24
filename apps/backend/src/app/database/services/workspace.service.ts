@@ -322,6 +322,16 @@ export class WorkspaceService {
           const testPerson = `${row.loginname}${row.code}`;
           const groupName = `${row.groupname}`.replace(/"/g, '');
           const unitId = row.unitname;
+          const lastStateCleaned = row.laststate.length > 1 ? row.laststate
+            .replace(/""/g, '"')
+            .replace(/"$/, '') : '{}';
+          let unitState;
+          try {
+            unitState = JSON.parse(lastStateCleaned);
+          } catch (e) {
+            console.error('error', row.laststate);
+            unitState = {};
+          }
           const responseChunksCleaned = row.responses
             .replace(/""/g, '"');
           const responsesChunks = JSON.parse(responseChunksCleaned);
@@ -330,7 +340,8 @@ export class WorkspaceService {
             unit_id: unitId.toUpperCase(),
             responses: responsesChunks,
             test_group: groupName,
-            workspace_id: workspace_id
+            workspace_id: workspace_id,
+            unit_state: unitState
           });
         });
         filePromises.push(this.responsesRepository.save(mappedRows));
