@@ -46,11 +46,16 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges {
   count: number = 0;
   dataParts!: { stateVariableCodes: string, elementCodes:string };
 
-  ngOnChanges(changes: SimpleChanges) {
+  ngOnChanges(changes: SimpleChanges): void {
+    // eslint-disable-next-line @typescript-eslint/dot-notation
+    if (changes['unitDef'].previousValue && !changes['unitDef']?.currentValue) {
+      if (this.hostingIframe) this.hostingIframe.nativeElement.srcdoc = '';
+      return;
+    }
     if (this.count > 0) {
       const { unitDef, unitPlayer, unitResponses } = changes;
       const parsedJSONUnitDef = JSON.parse(unitDef.currentValue);
-      if (unitResponses.currentValue && (unitResponses.currentValue).responses) {
+      if (unitResponses?.currentValue && (unitResponses.currentValue).responses) {
         let elementCodes: string = '';
         let stateVariableCodes: string = '';
         (unitResponses.currentValue).responses.forEach((response: { id:string, content:string }) => {
