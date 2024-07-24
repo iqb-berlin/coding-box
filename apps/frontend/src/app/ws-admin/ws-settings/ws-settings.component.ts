@@ -36,7 +36,7 @@ import { SearchFilterComponent } from '../../shared/search-filter/search-filter.
 })
 export class WsSettingsComponent {
   authToken: string | null = null;
-  duration = 1;
+  duration = 60;
 
   constructor(
     private backendService: BackendService,
