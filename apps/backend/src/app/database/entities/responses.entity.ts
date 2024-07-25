@@ -1,6 +1,9 @@
-import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Column, Entity, PrimaryGeneratedColumn, Unique
+} from 'typeorm';
 
 @Entity()
+@Unique('response_id', ['test_person', 'unit_id', 'source', 'booklet_id'])
 class Responses {
   @PrimaryGeneratedColumn('increment')
     id: number;
@@ -25,6 +28,12 @@ class Responses {
 
   @Column({ type: 'jsonb' })
     unit_state: object | undefined;
+
+  @Column({ type: 'varchar' })
+    source: string;
+
+  @Column({ type: 'varchar' })
+    booklet_id: string;
 }
 
 export default Responses;

@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import * as https from 'https';
 import { catchError, firstValueFrom } from 'rxjs';
@@ -134,9 +134,13 @@ export class TestcenterService {
             responses: unitResponse.responses,
             test_group: unitResponse.groupname,
             workspace_id: Number(workspace_id),
-            unit_state: JSON.parse(unitResponse.laststate)
+            unit_state: JSON.parse(unitResponse.laststate),
+            source: `server:${server}/${tc_workspace}`,
+            booklet_id: unitResponse.bookletname
           }));
-          await this.responsesRepository.save(mappedResponses, { chunk: 1000 });
+          mappedResponses.map(async response => {
+            await this.responsesRepository.upsert(response, ['test_person', 'unit_id', 'source', 'booklet_id']);
+          });
         }
       }
     }

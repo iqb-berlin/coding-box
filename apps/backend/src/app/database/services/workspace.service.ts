@@ -241,9 +241,8 @@ export class WorkspaceService {
   static csvToArr(stringVal: string) {
     const rows = stringVal
       .trim()
-      .split('\n');
+      .split(/\r\n?|\n/);
     const headers = rows.shift().split(';');
-
     return rows.map(item => {
       const object = {};
       const row = item.split('";"');
@@ -254,50 +253,70 @@ export class WorkspaceService {
   }
 
   async uploadTestFiles(workspace_id: number, originalFiles: FileIo[]): Promise<boolean> {
-    const filePromises = [];
-    originalFiles.forEach(file => {
-      if (file.mimetype === 'text/xml') {
-        const xmlDocument = cheerio.load(file.buffer.toString(), {
-          xmlMode: true,
-          recognizeSelfClosing: true
-        });
+    const filePromises =
+      originalFiles.map(file => this.handleFile(workspace_id, file));
+    const res = await Promise.all(filePromises);
+    return !!res;
+  }
 
-        filePromises.push(this.fileUploadRepository.save({
+  handleFile(workspaceId: number, file: FileIo): Array<Promise<unknown>> {
+    const filePromises: Array<Promise<unknown>> = [];
+
+    if (file.mimetype === 'text/xml') {
+      const xmlDocument = cheerio.load(file.buffer.toString(), {
+        xmlMode: true,
+        recognizeSelfClosing: true
+      });
+
+      const rootTagName = xmlDocument.root().children().first().prop('tagName');
+
+      if (rootTagName === 'UNIT') {
+        const fileId = xmlDocument.root().find('Metadata').find(('Id')).text()
+          .toUpperCase()
+          .trim();
+
+        filePromises.push(this.fileUploadRepository.upsert({
           filename: file.originalname,
-          workspace_id: workspace_id,
+          workspace_id: workspaceId,
           file_type: 'Unit',
           file_size: file.size,
-          data: xmlDocument.html()
-        }));
+          data: file.buffer.toString(),
+          file_id: fileId
+        }, ['file_id']));
       }
-      if (file.mimetype === 'text/html') {
-        filePromises.push(this.fileUploadRepository.save({
-          filename: file.originalname,
-          workspace_id: workspace_id,
-          file_type: 'Resource',
-          file_size: file.size,
-          data: originalFiles[0].buffer.toString()
-        }));
-      }
-      if (file.mimetype === 'application/octet-stream') {
-        const json = originalFiles[0].buffer.toString();
-        filePromises.push(this.fileUploadRepository.save({
-          filename: file.originalname,
-          workspace_id: workspace_id,
-          file_type: 'Resource',
-          file_size: file.size,
-          data: json
-        }));
-      }
-      if (file.mimetype === 'application/zip' ||
-        file.mimetype === 'application/x-zip-compressed' ||
-        file.mimetype === 'application/x-zip') {
-        const zip = new AdmZip(file.buffer);
+    }
+    if (file.mimetype === 'text/html') {
+      const resourceFileId = WorkspaceService.getPlayerId(file);
+      filePromises.push(this.fileUploadRepository.upsert({
+        filename: file.originalname,
+        workspace_id: workspaceId,
+        file_type: 'Resource',
+        file_size: file.size,
+        file_id: resourceFileId,
+        data: file.buffer.toString()
+      }, ['file_id']));
+    }
+    if (file.mimetype === 'application/octet-stream') {
+      filePromises.push(this.fileUploadRepository.upsert({
+        filename: file.originalname,
+        workspace_id: workspaceId,
+        file_id: WorkspaceService.getResourceId(file),
+        file_type: 'Resource',
+        file_size: file.size,
+        data: file.buffer.toString()
+      }, ['file_id']));
+    }
+    if (file.mimetype === 'application/zip' ||
+      file.mimetype === 'application/x-zip-compressed' ||
+      file.mimetype === 'application/x-zip'
+    ) {
+      const zip = new AdmZip(file.buffer);
+      if (file.originalname.endsWith('.itcr.zip')) {
         const packageFiles = zip.getEntries().map(entry => entry.entryName);
         const resourcePackagesPath = './packages';
         const packageName = 'GeoGebra';
         const zipExtractAllToAsync = util.promisify(zip.extractAllToAsync);
-        return zipExtractAllToAsync(`${resourcePackagesPath}/${packageName}`, true, true)
+        filePromises.push(zipExtractAllToAsync(`${resourcePackagesPath}/${packageName}`, true, true)
           .then(async () => {
             const newResourcePackage = this.resourcePackageRepository.create({
               name: packageName,
@@ -311,50 +330,106 @@ export class WorkspaceService {
             );
             return newResourcePackage.id;
           })
-          .catch(error => {
-            throw new Error(error.message);
-          });
-      }
+        );
+      } else {
+        const zipEntries = zip.getEntries();
+        zipEntries.forEach(zipEntry => {
+          const fileContent = zipEntry.getData();
 
-      if (file.mimetype === 'text/csv') {
-        const rows = WorkspaceService.csvToArr(file.buffer.toString());
-        const mappedRows: Array<Responses> = rows.map((row: Response) => {
-          const testPerson = `${row.loginname}${row.code}`;
-          const groupName = `${row.groupname}`.replace(/"/g, '');
-          const unitId = row.unitname;
-          const lastStateCleaned = row.laststate.length > 1 ? row.laststate
-            .replace(/""/g, '"')
-            .replace(/"$/, '') : '{}';
-          let unitState;
-          try {
-            unitState = JSON.parse(lastStateCleaned);
-          } catch (e) {
-            console.error('error', row.laststate);
-            unitState = {};
-          }
-          const responseChunksCleaned = row.responses
-            .replace(/""/g, '"');
-          const responsesChunks = JSON.parse(responseChunksCleaned);
-          return (<Responses>{
-            test_person: testPerson,
-            unit_id: unitId.toUpperCase(),
-            responses: responsesChunks,
-            test_group: groupName,
-            workspace_id: workspace_id,
-            unit_state: unitState
-          });
+          filePromises.push(Promise.all(this.handleFile(workspaceId, <FileIo>{
+            fieldname: file.fieldname,
+            originalname: `${file.originalname}/${zipEntry.entryName}`,
+            encoding: file.encoding,
+            mimetype: WorkspaceService.getMimeType(zipEntry.entryName),
+            buffer: fileContent,
+            size: fileContent.length
+          })));
         });
-        filePromises.push(this.responsesRepository.save(mappedRows));
-        return file;
       }
-    });
-    const res = await Promise.all(filePromises);
-    return !!res;
+    }
+
+    if (file.mimetype === 'text/csv') {
+      const rows = WorkspaceService.csvToArr(file.buffer.toString());
+      const mappedRows: Array<Responses> = rows.map((row: Response) => {
+        const testPerson = `${row.loginname}${row.code}`;
+        const bookletId = row.bookletname;
+        const groupName = `${row.groupname}`.replace(/"/g, '');
+        const unitId = row.unitname;
+        const lastStateCleaned = row.laststate.length > 1 ? row.laststate
+          .replace(/""/g, '"')
+          .replace(/"$/, '') : '{}';
+        let unitState;
+        try {
+          unitState = JSON.parse(lastStateCleaned);
+        } catch (e) {
+          console.error('error', row.laststate);
+          unitState = {};
+        }
+        const responseChunksCleaned = row.responses
+          .replace(/""/g, '"');
+        const responsesChunks = JSON.parse(responseChunksCleaned);
+        return (<Responses>{
+          test_person: testPerson,
+          unit_id: unitId.toUpperCase(),
+          responses: responsesChunks,
+          test_group: groupName,
+          workspace_id: workspaceId,
+          unit_state: unitState,
+          source: `file:${file.originalname}`,
+          booklet_id: bookletId
+        });
+      });
+      filePromises.push(this.responsesRepository
+        .upsert(mappedRows, ['test_person', 'unit_id', 'source', 'booklet_id']));
+    }
+    return filePromises;
   }
 
   async testCenterImport(entries:FileUpload[]): Promise<boolean> {
     const registry = this.fileUploadRepository.create(entries);
-    const res = await this.fileUploadRepository.save(registry);
+    const res = await this.fileUploadRepository.upsert(registry, ['file_id']);
     return !!res;
+  }
+
+  private static getMimeType(fileName: string): string {
+    if (/\.xml$/i.test(fileName)) return 'text/xml';
+    if (/\.html$/i.test(fileName)) return 'text/html';
+    return 'application/octet-stream';
+  }
+
+  private static getPlayerId(file: FileIo): string {
+    try {
+      const playerCode = file.buffer.toString();
+      const playerContent = cheerio.load(playerCode);
+      const metaData = playerContent.root()
+        .find('script[type="application/ld+json"]');
+      const metadata = JSON.parse(metaData.text());
+      return WorkspaceService.normalizePlayerId(`${metadata.id}-${metadata.version}`);
+    } catch (e) {
+      return WorkspaceService.getResourceId(file);
+    }
+  }
+
+  private static getResourceId(file: FileIo): string {
+    const filePathParts = file.originalname.split('/');
+    const fileName = filePathParts.pop();
+    return fileName.toUpperCase();
+  }
+
+  private static normalizePlayerId(name: string): string {
+    const reg = /^(\D+?)[@V-]?((\d+)(\.\d+)?(\.\d+)?(-\S+?)?)?(.\D{3,4})?$/;
+    const matches = name.match(reg);
+    if (matches) {
+      const rawIdParts = {
+        module: matches[1] || '',
+        full: matches[2] || '',
+        major: parseInt(matches[3], 10) || 0,
+        minor: (typeof matches[4] === 'string') ? parseInt(matches[4].substring(1), 10) : 0,
+        patch: (typeof matches[5] === 'string') ? parseInt(matches[5].substring(1), 10) : 0,
+        label: (typeof matches[6] === 'string') ? matches[6].substring(1) : ''
+      };
+      return `${rawIdParts.module}-${rawIdParts.major}.${rawIdParts.minor}`.toUpperCase();
+    }
+    throw new Error('Invalid player name');
   }
 }
