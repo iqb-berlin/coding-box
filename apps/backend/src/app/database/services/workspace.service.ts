@@ -20,6 +20,7 @@ import { FileIo } from '../../admin/workspace/file-io.interface';
 import ResourcePackage from '../entities/resource-package.entity';
 import User from '../entities/user.entity';
 import { TestGroupsInListDto } from '../../../../../../api-dto/test-groups/testgroups-in-list.dto';
+import { ResponseDto } from '../../../../../../api-dto/responses/response-dto';
 
 export type Response = {
   groupname:string,
@@ -119,7 +120,7 @@ export class WorkspaceService {
     return files;
   }
 
-  async findResponse(workspace_id: number, testPerson:string, unitId:string): Promise<Responses[]> {
+  async findResponse(workspace_id: number, testPerson:string, unitId:string): Promise<ResponseDto[]> {
     this.logger.log('Returning response for test person', testPerson);
     const response = await this.responsesRepository.find(
       { where: { test_person: testPerson, unit_id: unitId, workspace_id: workspace_id } });
@@ -184,7 +185,7 @@ export class WorkspaceService {
     return [];
   }
 
-  async findTestPersonUnits(id: number, testPerson:string): Promise<Responses[]> {
+  async findTestPersonUnits(id: number, testPerson:string): Promise<ResponseDto[]> {
     this.logger.log('Returning all unit Ids for testperson ', testPerson);
     const res = this.responsesRepository
       .find({
@@ -350,7 +351,7 @@ export class WorkspaceService {
 
     if (file.mimetype === 'text/csv') {
       const rows = WorkspaceService.csvToArr(file.buffer.toString());
-      const mappedRows: Array<Responses> = rows.map((row: Response) => {
+      const mappedRows: Array<ResponseDto> = rows.map((row: Response) => {
         const testPerson = `${row.loginname}${row.code}`;
         const bookletId = row.bookletname;
         const groupName = `${row.groupname}`.replace(/"/g, '');
@@ -368,7 +369,7 @@ export class WorkspaceService {
         const responseChunksCleaned = row.responses
           .replace(/""/g, '"');
         const responsesChunks = JSON.parse(responseChunksCleaned);
-        return (<Responses>{
+        return (<ResponseDto>{
           test_person: testPerson,
           unit_id: unitId.toUpperCase(),
           responses: responsesChunks,
@@ -376,13 +377,39 @@ export class WorkspaceService {
           workspace_id: workspaceId,
           unit_state: unitState,
           source: `file:${file.originalname}`,
-          booklet_id: bookletId
+          booklet_id: bookletId,
+          id: undefined,
+          created_at: undefined
         });
       });
+      const cleanedRows = WorkspaceService.cleanResponses(mappedRows);
       filePromises.push(this.responsesRepository
-        .upsert(mappedRows, ['test_person', 'unit_id', 'source', 'booklet_id']));
+        .upsert(cleanedRows, ['test_person', 'unit_id', 'source', 'booklet_id']));
     }
     return filePromises;
+  }
+
+  static cleanResponses(rows: ResponseDto[]): ResponseDto[] {
+    console.log('rows', typeof rows, rows === null ? 'null' : ' not null');
+    return Object.values(rows.reduce((agg, response) => {
+      const key = [response.test_group, response.booklet_id, response.test_person].join('@@@@@@');
+      if (agg[key]) {
+        if (!(agg[key].responses.length) && response.responses.length) {
+          agg[key].responses = response.responses;
+          console.log(`added missing responses at ${key}`);
+        }
+        if (
+          !(Object.keys(agg[key].unit_state || {}).length) &&
+          (Object.keys(response.unit_state || {}).length)
+        ) {
+          agg[key].unit_state = response.unit_state;
+          console.log(`added missing state at ${key}`);
+        }
+      } else {
+        agg[key] = response;
+      }
+      return agg;
+    }, <{ [key: string]: ResponseDto }>{}));
   }
 
   async testCenterImport(entries:FileUpload[]): Promise<boolean> {

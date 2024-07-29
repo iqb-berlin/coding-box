@@ -4,13 +4,13 @@ import * as https from 'https';
 import { catchError, firstValueFrom } from 'rxjs';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-// import AdmZip = require('adm-zip');
 import { WorkspaceService } from './workspace.service';
 import Responses from '../entities/responses.entity';
 import {
   ImportOptions
 } from '../../../../../frontend/src/app/ws-admin/test-center-import/test-center-import.component';
 import FileUpload from '../entities/file_upload.entity';
+import { ResponseDto } from '../../../../../../api-dto/responses/response-dto';
 
 const agent = new https.Agent({
   rejectUnauthorized: false
@@ -54,7 +54,7 @@ export type Response = {
   code : string,
   bookletname : string,
   unitname : string,
-  responses : string,
+  responses : Array<{ id: string; content: string; ts: number; responseType: string }>,
   laststate : string,
 };
 
@@ -106,43 +106,44 @@ export class TestcenterService {
         headers: headersRequest
       });
       const report = await resultsPromise.then(res => res);
-      if (report) {
-        const resultGroupNames = report.data.map(group => group.groupName);
-        const createChunks = (a, size) => Array.from(
-          new Array(Math.ceil(a.length / size)),
-          (_, i) => a.slice(i * size, i * size + size)
-        );
-        const chunks = createChunks(resultGroupNames, 25);
-        const unitResponsesPromises = [];
-        chunks.forEach(chunk => {
-          const unitResponsesPromise = this.httpService.axiosRef
-            .get<Response[]>(`http://iqb-testcenter${server}.de/api/workspace/
-          ${tc_workspace}/report/response?dataIds=${chunk.join(',')}`,
-          {
-            httpsAgent: agent,
-            headers: headersRequest
-          });
-          unitResponsesPromises.push(unitResponsesPromise);
-        });
-
-        const unitResponses = await Promise.all(unitResponsesPromises).then(res => res);
-        const unitResponsesData = unitResponses.map(unitResponse => unitResponse.data).flat();
-        if (unitResponses) {
-          const mappedResponses = unitResponsesData.map(unitResponse => ({
-            test_person: unitResponse.loginname + unitResponse.code,
-            unit_id: unitResponse.unitname,
-            responses: unitResponse.responses,
-            test_group: unitResponse.groupname,
-            workspace_id: Number(workspace_id),
-            unit_state: JSON.parse(unitResponse.laststate),
-            source: `server:${server}/${tc_workspace}`,
-            booklet_id: unitResponse.bookletname
-          }));
-          mappedResponses.map(async response => {
-            await this.responsesRepository.upsert(response, ['test_person', 'unit_id', 'source', 'booklet_id']);
-          });
-        }
+      if (!report) {
+        throw new Error('could not obtain information about groups from TC');
       }
+      const resultGroupNames = report.data.map(group => group.groupName);
+      const createChunks = (a, size) => Array.from(
+        new Array(Math.ceil(a.length / size)),
+        (_, i) => a.slice(i * size, i * size + size)
+      );
+
+      const chunks = createChunks(resultGroupNames, 4);
+      const unitResponsesPromises = chunks.map(chunk => {
+        const unitResponsesPromise = this.httpService.axiosRef
+          .get<Response[]>(`http://iqb-testcenter${server}.de/api/workspace/
+        ${tc_workspace}/report/response?dataIds=${chunk.join(',')}`,
+        {
+          httpsAgent: agent,
+          headers: headersRequest
+        });
+        return unitResponsesPromise
+          .then(async callResponse => {
+            const rows: ResponseDto[] = callResponse.data
+              .map((unitResponse: Response) => ({
+                test_person: unitResponse.loginname + unitResponse.code,
+                unit_id: unitResponse.unitname,
+                responses: unitResponse.responses,
+                test_group: unitResponse.groupname,
+                workspace_id: Number(workspace_id),
+                unit_state: JSON.parse(unitResponse.laststate),
+                source: `server:${server}/${tc_workspace}`,
+                booklet_id: unitResponse.bookletname,
+                id: undefined,
+                created_at: undefined
+              }));
+            const cleanedRows = WorkspaceService.cleanResponses(rows);
+            await this.responsesRepository.upsert(cleanedRows, ['test_person', 'unit_id', 'source', 'booklet_id']);
+          });
+      });
+      await Promise.all(unitResponsesPromises);
     }
 
     if (definitions === 'true' || player === 'true' || units === 'true' || codings === 'true') {
@@ -218,9 +219,20 @@ export class TestcenterService {
         httpsAgent: agent,
         headers: headersRequest
       });
-    const fileData = await filePromise.then(res => res.data);
+    try {
+      const fileData = await filePromise.then(res => res.data);
+      return {
+        data: fileData, name: file.name, type: file.type, size: file.size, id: file.id
+      };
+    } catch (error) {
+      console.error('error getting file from TC', file.name);
+    }
     return {
-      data: fileData, name: file.name, type: file.type, size: file.size, id: file.id
+      data: undefined,
+      name: file.name,
+      type: file.type,
+      size: file.size,
+      id: file.id
     };
   }
 

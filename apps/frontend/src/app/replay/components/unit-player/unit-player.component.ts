@@ -11,7 +11,7 @@ import { Subject, takeUntil } from 'rxjs';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { AppService } from '../../../services/app.service';
 import { BackendService } from '../../../services/backend.service';
-import { Responses } from '../../../app.interfaces';
+import { ResponseDto } from '../../../../../../../api-dto/responses/response-dto';
 
 export interface PageData {
   index: number;
@@ -32,7 +32,7 @@ export type Progress = 'none' | 'some' | 'complete';
 export class UnitPlayerComponent implements AfterViewInit, OnChanges {
   @Input() unitDef: string | undefined;
   @Input() unitPlayer: string | undefined;
-  @Input() unitResponses: Responses | undefined;
+  @Input() unitResponses: ResponseDto | undefined;
   @Input() pageId: string | undefined;
   @ViewChild('hostingIframe') hostingIframe!: ElementRef;
   private iFrameElement: HTMLIFrameElement | undefined;

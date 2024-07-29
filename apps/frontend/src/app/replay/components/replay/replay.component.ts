@@ -15,7 +15,7 @@ import { jwtDecode, JwtPayload } from 'jwt-decode';
 import { UnitPlayerComponent } from '../unit-player/unit-player.component';
 import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
-import { Responses } from '../../../app.interfaces';
+import { ResponseDto } from '../../../../../../../api-dto/responses/response-dto';
 
 @Component({
   selector: 'coding-box-replay',
@@ -31,7 +31,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   testPerson: string = '';
   page!: string;
   unitId: string = '';
-  responses: Responses | undefined = undefined;
+  responses: ResponseDto | undefined = undefined;
   auth: string = '';
   @Input() testPersonInput: string | undefined;
   @Input() unitIdInput: string | undefined;

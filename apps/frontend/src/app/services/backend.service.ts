@@ -14,7 +14,7 @@ import { AuthDataDto } from '../../../../../api-dto/auth-data-dto';
 import { ImportOptions, ServerResponse } from '../ws-admin/test-center-import/test-center-import.component';
 import { TestGroupsInListDto } from '../../../../../api-dto/test-groups/testgroups-in-list.dto';
 import { FilesInListDto } from '../../../../../api-dto/files/files-in-list.dto';
-import { Responses } from '../app.interfaces';
+import { ResponseDto } from '../../../../../api-dto/responses/response-dto';
 
 @Injectable({
   providedIn: 'root'
@@ -240,8 +240,8 @@ export class BackendService {
       { headers: this.authHeader });
   }
 
-  getResponses(workspaceId: number, testPerson: string, unitId:string): Observable<Responses[]> {
-    return this.http.get<Responses[]>(
+  getResponses(workspaceId: number, testPerson: string, unitId:string): Observable<ResponseDto[]> {
+    return this.http.get<ResponseDto[]>(
       `${this.serverUrl}admin/workspace/${workspaceId}/responses/${testPerson}/${unitId}`,
       { headers: this.authHeader });
   }
@@ -266,8 +266,8 @@ export class BackendService {
 
   getResponsesExternal(
     authToken:string, workspaceId: number, testPerson: string, unitId:string
-  ): Observable<Responses[]> {
-    return this.http.get<Responses[]>(
+  ): Observable<ResponseDto[]> {
+    return this.http.get<ResponseDto[]>(
       `${this.serverUrl}admin/workspace/${workspaceId}/responses/${testPerson}/${unitId}`,
       { headers: { Authorization: `Bearer ${authToken}` } });
   }
