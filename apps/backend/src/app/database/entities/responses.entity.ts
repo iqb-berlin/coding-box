@@ -21,13 +21,13 @@ class Responses {
     workspace_id!: number;
 
   @Column({ type: 'timestamp' })
-    created_at: number;
+    created_at: Date;
 
   @Column({ type: 'jsonb' })
-    responses: object | undefined;
+    responses: Array<{ id: string; content: string; ts: number; responseType: string }> | undefined;
 
   @Column({ type: 'jsonb' })
-    unit_state: object | undefined;
+    unit_state: unknown | undefined;
 
   @Column({ type: 'varchar' })
     source: string;
