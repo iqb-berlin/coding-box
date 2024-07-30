@@ -15,7 +15,6 @@ import { CreateWorkspaceDto } from '../../../../../../api-dto/workspaces/create-
 import { WorkspaceService } from '../../database/services/workspace.service';
 import { WorkspaceId } from './workspace.decorator';
 import { FilesDto } from '../../../../../../api-dto/files/files.dto';
-import Responses from '../../database/entities/responses.entity';
 import { TestcenterService } from '../../database/services/testcenter.service';
 import {
   ImportOptions
@@ -25,6 +24,7 @@ import { WorkspaceGuard } from './workspace.guard';
 import { AuthService } from '../../auth/service/auth.service';
 import { TestGroupsInListDto } from '../../../../../../api-dto/test-groups/testgroups-in-list.dto';
 import FileUpload from '../../database/entities/file_upload.entity';
+import { ResponseDto } from '../../../../../../api-dto/responses/response-dto';
 
 @Controller('admin/workspace')
 export class WorkspaceController {
@@ -115,7 +115,7 @@ export class WorkspaceController {
   @Get(':workspace_id/units/:testPerson')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiParam({ name: 'workspace_id', type: Number })
-  async findTestPersonUnits(@WorkspaceId() id: number, @Param('testPerson') testPerson:string): Promise<Responses[]> {
+  async findTestPersonUnits(@WorkspaceId() id: number, @Param('testPerson') testPerson:string): Promise<ResponseDto[]> {
     return this.workspaceService.findTestPersonUnits(id, testPerson);
   }
 
@@ -164,7 +164,7 @@ export class WorkspaceController {
   @ApiParam({ name: 'workspace_id', type: Number })
   async findResponse(@WorkspaceId() id: number,
     @Param('testPerson') testPerson:string,
-    @Param('unitId') unitId:string): Promise<Responses[]> {
+    @Param('unitId') unitId:string): Promise<ResponseDto[]> {
     return this.workspaceService.findResponse(id, testPerson, unitId);
   }
 

@@ -390,20 +390,17 @@ export class WorkspaceService {
   }
 
   static cleanResponses(rows: ResponseDto[]): ResponseDto[] {
-    console.log('rows', typeof rows, rows === null ? 'null' : ' not null');
     return Object.values(rows.reduce((agg, response) => {
       const key = [response.test_group, response.booklet_id, response.test_person].join('@@@@@@');
       if (agg[key]) {
         if (!(agg[key].responses.length) && response.responses.length) {
           agg[key].responses = response.responses;
-          console.log(`added missing responses at ${key}`);
         }
         if (
           !(Object.keys(agg[key].unit_state || {}).length) &&
           (Object.keys(response.unit_state || {}).length)
         ) {
           agg[key].unit_state = response.unit_state;
-          console.log(`added missing state at ${key}`);
         }
       } else {
         agg[key] = response;
