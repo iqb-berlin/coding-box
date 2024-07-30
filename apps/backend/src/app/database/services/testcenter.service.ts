@@ -1,16 +1,16 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import * as https from 'https';
 import { catchError, firstValueFrom } from 'rxjs';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-// import AdmZip = require('adm-zip');
 import { WorkspaceService } from './workspace.service';
 import Responses from '../entities/responses.entity';
 import {
   ImportOptions
 } from '../../../../../frontend/src/app/ws-admin/test-center-import/test-center-import.component';
 import FileUpload from '../entities/file_upload.entity';
+import { ResponseDto } from '../../../../../../api-dto/responses/response-dto';
 
 const agent = new https.Agent({
   rejectUnauthorized: false
@@ -48,22 +48,21 @@ type File = {
   data: string
 };
 
-export type Response = {
+export type UnitResponse = {
   groupname:string,
   loginname : string,
   code : string,
   bookletname : string,
   unitname : string,
-  responses : string,
+  responses : Array<{ id: string; content: string; ts: number; responseType: string }>,
   laststate : string,
 };
 
 @Injectable()
 export class TestcenterService {
-  private readonly logger = new Logger(TestcenterService.name);
   constructor(
     private readonly httpService: HttpService,
-    private testFileService: WorkspaceService,
+    private workspaceService: WorkspaceService,
     @InjectRepository(Responses)
     private responsesRepository:Repository<Responses>
 
@@ -107,38 +106,43 @@ export class TestcenterService {
         headers: headersRequest
       });
       const report = await resultsPromise.then(res => res);
-      if (report) {
-        const resultGroupNames = report.data.map(group => group.groupName);
-        const createChunks = (a, size) => Array.from(
-          new Array(Math.ceil(a.length / size)),
-          (_, i) => a.slice(i * size, i * size + size)
-        );
-        const chunks = createChunks(resultGroupNames, 25);
-        const unitResponsesPromises = [];
-        chunks.forEach(chunk => {
-          const unitResponsesPromise = this.httpService.axiosRef
-            .get<Response[]>(`http://iqb-testcenter${server}.de/api/workspace/
-          ${tc_workspace}/report/response?dataIds=${chunk.join(',')}`,
-          {
-            httpsAgent: agent,
-            headers: headersRequest
-          });
-          unitResponsesPromises.push(unitResponsesPromise);
-        });
-
-        const unitResponses = await Promise.all(unitResponsesPromises).then(res => res);
-        const unitResponsesData = unitResponses.map(unitResponse => unitResponse.data).flat();
-        if (unitResponses) {
-          const mappedResponses = unitResponsesData.map(unitResponse => ({
-            test_person: unitResponse.loginname + unitResponse.code,
-            unit_id: unitResponse.unitname,
-            responses: JSON.stringify(unitResponse.responses),
-            test_group: unitResponse.groupname,
-            workspace_id: Number(workspace_id)
-          }));
-          await this.responsesRepository.save(mappedResponses, { chunk: 1000 });
-        }
+      if (!report) {
+        throw new Error('could not obtain information about groups from TC');
       }
+      const resultGroupNames = report.data.map(group => group.groupName);
+      const createChunks = (a, size) => Array.from(
+        new Array(Math.ceil(a.length / size)),
+        (_, i) => a.slice(i * size, i * size + size)
+      );
+
+      const chunks = createChunks(resultGroupNames, 4);
+      const unitResponsesPromises = chunks.map(chunk => {
+        const unitResponsesPromise = this.httpService.axiosRef
+          .get<UnitResponse[]>(`http://iqb-testcenter${server}.de/api/workspace/
+        ${tc_workspace}/report/response?dataIds=${chunk.join(',')}`,
+        {
+          httpsAgent: agent,
+          headers: headersRequest
+        });
+        return unitResponsesPromise
+          .then(callResponse => {
+            const rows: ResponseDto[] = callResponse.data
+              .map((unitResponse: UnitResponse) => ({
+                test_person: TestcenterService.getTestPersonName(unitResponse),
+                unit_id: unitResponse.unitname,
+                responses: unitResponse.responses,
+                test_group: unitResponse.groupname,
+                workspace_id: Number(workspace_id),
+                unit_state: JSON.parse(unitResponse.laststate),
+                booklet_id: unitResponse.bookletname,
+                id: undefined,
+                created_at: undefined
+              }));
+            const cleanedRows = WorkspaceService.cleanResponses(rows);
+            this.responsesRepository.upsert(cleanedRows, ['test_person', 'unit_id']);
+          });
+      });
+      await Promise.all(unitResponsesPromises);
     }
 
     if (definitions === 'true' || player === 'true' || units === 'true' || codings === 'true') {
@@ -161,6 +165,7 @@ export class TestcenterService {
         //   .map(file => this.getPackage(file, server, tc_workspace, authToken));
         // promises = [...promises, ...packagesPromises];
 
+        // TODO: Chunks!
         if (player === 'true' && playerFiles.length > 0) {
           const playerPromises = playerFiles
             .map(file => this.getFile(file, server, tc_workspace, authToken));
@@ -191,7 +196,7 @@ export class TestcenterService {
             workspace_id: workspace_id,
             data: result.data
           }));
-          await this.testFileService.testCenterImport(dbEntries as FileUpload[]);
+          await this.workspaceService.testCenterImport(dbEntries as FileUpload[]);
           return true;
         }
         return false;
@@ -199,6 +204,10 @@ export class TestcenterService {
       return false;
     }
     return true;
+  }
+
+  private static getTestPersonName(unitResponse: UnitResponse): string {
+    return `${unitResponse.loginname}@${unitResponse.code}@${unitResponse.bookletname}`;
   }
 
   async getFile(file:File, server:string, tc_workspace:string, authToken:string):
