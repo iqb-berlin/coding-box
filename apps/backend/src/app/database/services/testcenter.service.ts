@@ -48,7 +48,7 @@ type File = {
   data: string
 };
 
-export type Response = {
+export type UnitResponse = {
   groupname:string,
   loginname : string,
   code : string,
@@ -62,7 +62,7 @@ export type Response = {
 export class TestcenterService {
   constructor(
     private readonly httpService: HttpService,
-    private testFileService: WorkspaceService,
+    private workspaceService: WorkspaceService,
     @InjectRepository(Responses)
     private responsesRepository:Repository<Responses>
 
@@ -118,7 +118,7 @@ export class TestcenterService {
       const chunks = createChunks(resultGroupNames, 4);
       const unitResponsesPromises = chunks.map(chunk => {
         const unitResponsesPromise = this.httpService.axiosRef
-          .get<Response[]>(`http://iqb-testcenter${server}.de/api/workspace/
+          .get<UnitResponse[]>(`http://iqb-testcenter${server}.de/api/workspace/
         ${tc_workspace}/report/response?dataIds=${chunk.join(',')}`,
         {
           httpsAgent: agent,
@@ -127,20 +127,19 @@ export class TestcenterService {
         return unitResponsesPromise
           .then(callResponse => {
             const rows: ResponseDto[] = callResponse.data
-              .map((unitResponse: Response) => ({
-                test_person: unitResponse.loginname + unitResponse.code,
+              .map((unitResponse: UnitResponse) => ({
+                test_person: TestcenterService.getTestPersonName(unitResponse),
                 unit_id: unitResponse.unitname,
                 responses: unitResponse.responses,
                 test_group: unitResponse.groupname,
                 workspace_id: Number(workspace_id),
                 unit_state: JSON.parse(unitResponse.laststate),
-                source: `server:${server}/${tc_workspace}`,
                 booklet_id: unitResponse.bookletname,
                 id: undefined,
                 created_at: undefined
               }));
             const cleanedRows = WorkspaceService.cleanResponses(rows);
-            this.responsesRepository.upsert(cleanedRows, ['test_person', 'unit_id', 'source', 'booklet_id']);
+            this.responsesRepository.upsert(cleanedRows, ['test_person', 'unit_id', 'booklet_id']);
           });
       });
       await Promise.all(unitResponsesPromises);
@@ -166,6 +165,7 @@ export class TestcenterService {
         //   .map(file => this.getPackage(file, server, tc_workspace, authToken));
         // promises = [...promises, ...packagesPromises];
 
+        // TODO: Chunks!
         if (player === 'true' && playerFiles.length > 0) {
           const playerPromises = playerFiles
             .map(file => this.getFile(file, server, tc_workspace, authToken));
@@ -196,7 +196,7 @@ export class TestcenterService {
             workspace_id: workspace_id,
             data: result.data
           }));
-          await this.testFileService.testCenterImport(dbEntries as FileUpload[]);
+          await this.workspaceService.testCenterImport(dbEntries as FileUpload[]);
           return true;
         }
         return false;
@@ -204,6 +204,10 @@ export class TestcenterService {
       return false;
     }
     return true;
+  }
+
+  private static getTestPersonName(unitResponse: UnitResponse): string {
+    return `${unitResponse.loginname}@${unitResponse.code}@${unitResponse.bookletname}`;
   }
 
   async getFile(file:File, server:string, tc_workspace:string, authToken:string):

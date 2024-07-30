@@ -215,6 +215,10 @@ export class WorkspaceService {
     throw new AdminWorkspaceNotFoundException(id, 'GET');
   }
 
+  private static getTestPersonName(unitResponse: Response): string {
+    return `${unitResponse.loginname}@${unitResponse.code}@${unitResponse.bookletname}`;
+  }
+
   async create(workspace: CreateWorkspaceDto): Promise<number> {
     this.logger.log(`Creating workspace with name: ${workspace.name}`);
     const newWorkspace = this.workspaceRepository.create(workspace);
@@ -352,7 +356,7 @@ export class WorkspaceService {
     if (file.mimetype === 'text/csv') {
       const rows = WorkspaceService.csvToArr(file.buffer.toString());
       const mappedRows: Array<ResponseDto> = rows.map((row: Response) => {
-        const testPerson = `${row.loginname}${row.code}`;
+        const testPerson = WorkspaceService.getTestPersonName(row);
         const bookletId = row.bookletname;
         const groupName = `${row.groupname}`.replace(/"/g, '');
         const unitId = row.unitname;
@@ -376,7 +380,6 @@ export class WorkspaceService {
           test_group: groupName,
           workspace_id: workspaceId,
           unit_state: unitState,
-          source: `file:${file.originalname}`,
           booklet_id: bookletId,
           id: undefined,
           created_at: undefined
@@ -384,7 +387,7 @@ export class WorkspaceService {
       });
       const cleanedRows = WorkspaceService.cleanResponses(mappedRows);
       filePromises.push(this.responsesRepository
-        .upsert(cleanedRows, ['test_person', 'unit_id', 'source', 'booklet_id']));
+        .upsert(cleanedRows, ['test_person', 'unit_id', 'booklet_id']));
     }
     return filePromises;
   }

@@ -3,7 +3,7 @@ import {
 } from 'typeorm';
 
 @Entity()
-@Unique('response_id', ['test_person', 'unit_id', 'source', 'booklet_id'])
+@Unique('response_id', ['test_person', 'unit_id', 'booklet_id'])
 class Responses {
   @PrimaryGeneratedColumn('increment')
     id: number;
@@ -28,9 +28,6 @@ class Responses {
 
   @Column({ type: 'jsonb' })
     unit_state: unknown | undefined;
-
-  @Column({ type: 'varchar' })
-    source: string;
 
   @Column({ type: 'varchar' })
     booklet_id: string;

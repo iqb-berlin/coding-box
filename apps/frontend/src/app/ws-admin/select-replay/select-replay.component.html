@@ -11,7 +11,7 @@
           }
         </mat-select>
       </mat-form-field>
-      <mat-form-field>
+      <mat-form-field class="big-select">
         <mat-label>Testperson</mat-label>
         <mat-select [disabled]="!selectedTestGroup" (valueChange)="getUnits($event)">
           @for (testPerson of testPersons; track testPerson) {
