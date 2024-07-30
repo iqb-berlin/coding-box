@@ -14,7 +14,7 @@ async function bootstrap() {
   const port = 3333;
   const globalPrefix = 'api';
 
-  app.useStaticAssets('./packages');
+  app.useStaticAssets('./packages', { prefix: '/api/packages' });
   app.use(json({ limit: '50mb' }));
   app.setGlobalPrefix(globalPrefix);
   app.use(json({ limit: '50mb' }));
