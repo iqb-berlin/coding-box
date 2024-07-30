@@ -26,8 +26,5 @@ export class ResponseDto {
     unit_state?: any | undefined;
 
   @ApiProperty()
-    source!: string;
-
-  @ApiProperty()
     booklet_id!: string;
 }
