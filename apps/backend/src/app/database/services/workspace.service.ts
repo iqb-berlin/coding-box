@@ -373,6 +373,7 @@ export class WorkspaceService {
         const responseChunksCleaned = row.responses
           .replace(/""/g, '"');
         const responsesChunks = JSON.parse(responseChunksCleaned);
+
         return (<ResponseDto>{
           test_person: testPerson,
           unit_id: unitId.toUpperCase(),
@@ -387,7 +388,7 @@ export class WorkspaceService {
       });
       const cleanedRows = WorkspaceService.cleanResponses(mappedRows);
       filePromises.push(this.responsesRepository
-        .upsert(cleanedRows, ['test_person', 'unit_id', 'booklet_id']));
+        .upsert(cleanedRows, ['test_person', 'unit_id']));
     }
     return filePromises;
   }
