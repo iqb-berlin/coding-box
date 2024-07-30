@@ -125,7 +125,7 @@ export class TestcenterService {
           headers: headersRequest
         });
         return unitResponsesPromise
-          .then(async callResponse => {
+          .then(callResponse => {
             const rows: ResponseDto[] = callResponse.data
               .map((unitResponse: Response) => ({
                 test_person: unitResponse.loginname + unitResponse.code,
@@ -140,7 +140,7 @@ export class TestcenterService {
                 created_at: undefined
               }));
             const cleanedRows = WorkspaceService.cleanResponses(rows);
-            await this.responsesRepository.upsert(cleanedRows, ['test_person', 'unit_id', 'source', 'booklet_id']);
+            this.responsesRepository.upsert(cleanedRows, ['test_person', 'unit_id', 'source', 'booklet_id']);
           });
       });
       await Promise.all(unitResponsesPromises);
@@ -219,20 +219,9 @@ export class TestcenterService {
         httpsAgent: agent,
         headers: headersRequest
       });
-    try {
-      const fileData = await filePromise.then(res => res.data);
-      return {
-        data: fileData, name: file.name, type: file.type, size: file.size, id: file.id
-      };
-    } catch (error) {
-      console.error('error getting file from TC', file.name);
-    }
+    const fileData = await filePromise.then(res => res.data);
     return {
-      data: undefined,
-      name: file.name,
-      type: file.type,
-      size: file.size,
-      id: file.id
+      data: fileData, name: file.name, type: file.type, size: file.size, id: file.id
     };
   }
 
