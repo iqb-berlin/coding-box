@@ -1,6 +1,9 @@
-import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Column, Entity, PrimaryGeneratedColumn, Unique
+} from 'typeorm';
 
 @Entity()
+@Unique('response_id', ['test_person', 'unit_id'])
 class Responses {
   @PrimaryGeneratedColumn('increment')
     id: number;
@@ -18,12 +21,16 @@ class Responses {
     workspace_id!: number;
 
   @Column({ type: 'timestamp' })
-    created_at: number;
+    created_at: Date;
 
-  @Column({
-    type: 'varchar'
-  })
-    responses:string;
+  @Column({ type: 'jsonb' })
+    responses: Array<{ id: string; content: string; ts: number; responseType: string }> | undefined;
+
+  @Column({ type: 'jsonb' })
+    unit_state: unknown | undefined;
+
+  @Column({ type: 'varchar' })
+    booklet_id: string;
 }
 
 export default Responses;
