@@ -367,7 +367,7 @@ export class WorkspaceService {
         try {
           unitState = JSON.parse(lastStateCleaned);
         } catch (e) {
-          console.error('error', row.laststate);
+          this.logger.error('Error parsing last state', row.laststate);
           unitState = {};
         }
         const responseChunksCleaned = row.responses
