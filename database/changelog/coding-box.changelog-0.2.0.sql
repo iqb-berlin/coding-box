@@ -15,5 +15,5 @@ alter table responses add column booklet_id varchar(100);
 
 -- changeset jojohoch:4
 alter table responses add constraint response_id
-  unique (unit_id, test_person, booklet_id);
+  unique (unit_id, test_person);
 -- rollback alter table responses drop constraint response_id;

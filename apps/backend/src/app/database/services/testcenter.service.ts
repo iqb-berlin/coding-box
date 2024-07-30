@@ -139,7 +139,7 @@ export class TestcenterService {
                 created_at: undefined
               }));
             const cleanedRows = WorkspaceService.cleanResponses(rows);
-            this.responsesRepository.upsert(cleanedRows, ['test_person', 'unit_id', 'booklet_id']);
+            this.responsesRepository.upsert(cleanedRows, ['test_person', 'unit_id']);
           });
       });
       await Promise.all(unitResponsesPromises);

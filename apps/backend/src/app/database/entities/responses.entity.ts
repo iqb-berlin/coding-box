@@ -3,7 +3,7 @@ import {
 } from 'typeorm';
 
 @Entity()
-@Unique('response_id', ['test_person', 'unit_id', 'booklet_id'])
+@Unique('response_id', ['test_person', 'unit_id'])
 class Responses {
   @PrimaryGeneratedColumn('increment')
     id: number;
