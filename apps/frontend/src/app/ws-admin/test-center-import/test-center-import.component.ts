@@ -94,11 +94,11 @@ export class TestCenterImportComponent {
     });
     this.importFilesForm = this.fb.group({
       workspace: this.fb.control('', [Validators.required]),
-      responses: this.fb.control(true),
-      definitions: this.fb.control(true),
-      units: this.fb.control(true),
-      player: this.fb.control(true),
-      codings: this.fb.control(true)
+      responses: this.fb.control(false),
+      definitions: this.fb.control(false),
+      units: this.fb.control(false),
+      player: this.fb.control(false),
+      codings: this.fb.control(false)
 
     });
   }

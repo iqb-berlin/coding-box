@@ -20,6 +20,7 @@ import { FileIo } from '../../admin/workspace/file-io.interface';
 import ResourcePackage from '../entities/resource-package.entity';
 import User from '../entities/user.entity';
 import { TestGroupsInListDto } from '../../../../../../api-dto/test-groups/testgroups-in-list.dto';
+import { ResponseDto } from '../../../../../../api-dto/responses/response-dto';
 
 export type Response = {
   groupname:string,
@@ -119,7 +120,7 @@ export class WorkspaceService {
     return files;
   }
 
-  async findResponse(workspace_id: number, testPerson:string, unitId:string): Promise<Responses[]> {
+  async findResponse(workspace_id: number, testPerson:string, unitId:string): Promise<ResponseDto[]> {
     this.logger.log('Returning response for test person', testPerson);
     const response = await this.responsesRepository.find(
       { where: { test_person: testPerson, unit_id: unitId, workspace_id: workspace_id } });
@@ -136,7 +137,11 @@ export class WorkspaceService {
   async findTestGroups(workspace_id: number): Promise<TestGroupsInListDto[]> {
     this.logger.log('Returning all test groups for workspace ', workspace_id);
     const data = await this.responsesRepository
-      .find({ select: ['test_group', 'created_at'], where: { workspace_id: workspace_id } });
+      .find({
+        select: ['test_group', 'created_at'],
+        where: { workspace_id: workspace_id },
+        order: { test_group: 'ASC' }
+      });
     const testGroups = [];
     const uniqueObject = {};
     for (const i in data) {
@@ -169,16 +174,25 @@ export class WorkspaceService {
   async findTestPersons(id: number, testGroup:string): Promise<string[]> {
     this.logger.log('Returning ind all test persons for test group ', testGroup);
     const response = await this.responsesRepository
-      .find({ select: ['test_person'], where: { test_group: testGroup } });
+      .find({
+        select: ['test_person'],
+        where: { test_group: testGroup },
+        order: { test_person: 'ASC' }
+      });
     if (response) {
       return Array.from(new Set(response.map(item => item.test_person)));
     }
     return [];
   }
 
-  async findTestPersonUnits(id: number, testPerson:string): Promise<Responses[]> {
+  async findTestPersonUnits(id: number, testPerson:string): Promise<ResponseDto[]> {
     this.logger.log('Returning all unit Ids for testperson ', testPerson);
-    const res = this.responsesRepository.find({ where: { test_person: testPerson }, select: ['unit_id'] });
+    const res = this.responsesRepository
+      .find({
+        select: ['unit_id'],
+        where: { test_person: testPerson },
+        order: { unit_id: 'ASC' }
+      });
     if (res) {
       return res;
     }
@@ -199,6 +213,10 @@ export class WorkspaceService {
       };
     }
     throw new AdminWorkspaceNotFoundException(id, 'GET');
+  }
+
+  private static getTestPersonName(unitResponse: Response): string {
+    return `${unitResponse.loginname}@${unitResponse.code}@${unitResponse.bookletname}`;
   }
 
   async create(workspace: CreateWorkspaceDto): Promise<number> {
@@ -225,65 +243,85 @@ export class WorkspaceService {
     await this.workspaceRepository.delete(id);
   }
 
-  static csvToArr(stringVal, splitter) {
-    const [keys, ...rest] = stringVal
+  static csvToArr(stringVal: string) {
+    const rows = stringVal
       .trim()
-      .split('\n')
-      .map(item => item.split(splitter));
-    return rest.map(item => {
+      .split(/\r\n?|\n/);
+    const headers = rows.shift().split(';');
+    return rows.map(item => {
       const object = {};
-      keys.forEach(
-        (key, index) => (object[key] = (item.at(index)).replace('""', '"').replace('"', ''))
-      );
+      const row = item.split('";"');
+      headers
+        .forEach((key, index) => (object[key] = row[index]));
       return object;
     });
   }
 
   async uploadTestFiles(workspace_id: number, originalFiles: FileIo[]): Promise<boolean> {
-    const filePromises = [];
-    originalFiles.forEach(file => {
-      if (file.mimetype === 'text/xml') {
-        const xmlDocument = cheerio.load(file.buffer.toString(), {
-          xmlMode: true,
-          recognizeSelfClosing: true
-        });
+    const filePromises =
+      originalFiles.map(file => this.handleFile(workspace_id, file));
+    const res = await Promise.all(filePromises);
+    return !!res;
+  }
 
-        filePromises.push(this.fileUploadRepository.save({
+  handleFile(workspaceId: number, file: FileIo): Array<Promise<unknown>> {
+    const filePromises: Array<Promise<unknown>> = [];
+
+    if (file.mimetype === 'text/xml') {
+      const xmlDocument = cheerio.load(file.buffer.toString(), {
+        xmlMode: true,
+        recognizeSelfClosing: true
+      });
+
+      const rootTagName = xmlDocument.root().children().first().prop('tagName');
+
+      if (rootTagName === 'UNIT') {
+        const fileId = xmlDocument.root().find('Metadata').find(('Id')).text()
+          .toUpperCase()
+          .trim();
+
+        filePromises.push(this.fileUploadRepository.upsert({
           filename: file.originalname,
-          workspace_id: workspace_id,
+          workspace_id: workspaceId,
           file_type: 'Unit',
           file_size: file.size,
-          data: xmlDocument.html()
-        }));
+          data: file.buffer.toString(),
+          file_id: fileId
+        }, ['file_id']));
       }
-      if (file.mimetype === 'text/html') {
-        filePromises.push(this.fileUploadRepository.save({
-          filename: file.originalname,
-          workspace_id: workspace_id,
-          file_type: 'Resource',
-          file_size: file.size,
-          data: originalFiles[0].buffer.toString()
-        }));
-      }
-      if (file.mimetype === 'application/octet-stream') {
-        const json = originalFiles[0].buffer.toString();
-        filePromises.push(this.fileUploadRepository.save({
-          filename: file.originalname,
-          workspace_id: workspace_id,
-          file_type: 'Resource',
-          file_size: file.size,
-          data: json
-        }));
-      }
-      if (file.mimetype === 'application/zip' ||
-        file.mimetype === 'application/x-zip-compressed' ||
-        file.mimetype === 'application/x-zip') {
-        const zip = new AdmZip(file.buffer);
+    }
+    if (file.mimetype === 'text/html') {
+      const resourceFileId = WorkspaceService.getPlayerId(file);
+      filePromises.push(this.fileUploadRepository.upsert({
+        filename: file.originalname,
+        workspace_id: workspaceId,
+        file_type: 'Resource',
+        file_size: file.size,
+        file_id: resourceFileId,
+        data: file.buffer.toString()
+      }, ['file_id']));
+    }
+    if (file.mimetype === 'application/octet-stream') {
+      filePromises.push(this.fileUploadRepository.upsert({
+        filename: file.originalname,
+        workspace_id: workspaceId,
+        file_id: WorkspaceService.getResourceId(file),
+        file_type: 'Resource',
+        file_size: file.size,
+        data: file.buffer.toString()
+      }, ['file_id']));
+    }
+    if (file.mimetype === 'application/zip' ||
+      file.mimetype === 'application/x-zip-compressed' ||
+      file.mimetype === 'application/x-zip'
+    ) {
+      const zip = new AdmZip(file.buffer);
+      if (file.originalname.endsWith('.itcr.zip')) {
         const packageFiles = zip.getEntries().map(entry => entry.entryName);
         const resourcePackagesPath = './packages';
-        const packageName = 'geogebra';
+        const packageName = 'GeoGebra';
         const zipExtractAllToAsync = util.promisify(zip.extractAllToAsync);
-        return zipExtractAllToAsync(`${resourcePackagesPath}/${packageName}`, true, true)
+        filePromises.push(zipExtractAllToAsync(`${resourcePackagesPath}/${packageName}`, true, true)
           .then(async () => {
             const newResourcePackage = this.resourcePackageRepository.create({
               name: packageName,
@@ -292,44 +330,134 @@ export class WorkspaceService {
             });
             await this.resourcePackageRepository.save(newResourcePackage);
             fs.writeFileSync(
-              `${resourcePackagesPath}/${packageName}`,
+              `${resourcePackagesPath}/${packageName}/${file.originalname}`,
               file.buffer
             );
             return newResourcePackage.id;
           })
-          .catch(error => {
-            throw new Error(error.message);
-          });
-      }
+        );
+      } else {
+        const zipEntries = zip.getEntries();
+        zipEntries.forEach(zipEntry => {
+          const fileContent = zipEntry.getData();
 
-      if (file.mimetype === 'text/csv') {
-        const rows = WorkspaceService.csvToArr(file.buffer.toString(), ';');
-        const mappedRows = rows.map((row: Response) => {
-          const testPerson = `${row.loginname}${row.code}`.replace(/"/g, '');
-          const groupName = `${row.groupname}`.replace(/"/g, '');
-          const unitId = row.unitname.replace(/"/g, '');
-          const responses = row.responses
-            .replace(/^"|"$/g, '').replace(/""/g, '"');
-
-          return ({
-            test_person: testPerson,
-            unit_id: unitId.toUpperCase(),
-            responses: responses,
-            test_group: groupName,
-            workspace_id: workspace_id
-          });
+          filePromises.push(Promise.all(this.handleFile(workspaceId, <FileIo>{
+            fieldname: file.fieldname,
+            originalname: `${file.originalname}/${zipEntry.entryName}`,
+            encoding: file.encoding,
+            mimetype: WorkspaceService.getMimeType(zipEntry.entryName),
+            buffer: fileContent,
+            size: fileContent.length
+          })));
         });
-        filePromises.push(this.responsesRepository.save(mappedRows));
-        return file;
       }
-    });
-    const res = await Promise.all(filePromises);
-    return !!res;
+    }
+
+    if (file.mimetype === 'text/csv') {
+      const rows = WorkspaceService.csvToArr(file.buffer.toString());
+      const mappedRows: Array<ResponseDto> = rows.map((row: Response) => {
+        const testPerson = WorkspaceService.getTestPersonName(row);
+        const bookletId = row.bookletname;
+        const groupName = `${row.groupname}`.replace(/"/g, '');
+        const unitId = row.unitname;
+        const lastStateCleaned = row.laststate.length > 1 ? row.laststate
+          .replace(/""/g, '"')
+          .replace(/"$/, '') : '{}';
+        let unitState;
+        try {
+          unitState = JSON.parse(lastStateCleaned);
+        } catch (e) {
+          console.error('error', row.laststate);
+          unitState = {};
+        }
+        const responseChunksCleaned = row.responses
+          .replace(/""/g, '"');
+        const responsesChunks = JSON.parse(responseChunksCleaned);
+
+        return (<ResponseDto>{
+          test_person: testPerson,
+          unit_id: unitId.toUpperCase(),
+          responses: responsesChunks,
+          test_group: groupName,
+          workspace_id: workspaceId,
+          unit_state: unitState,
+          booklet_id: bookletId,
+          id: undefined,
+          created_at: undefined
+        });
+      });
+      const cleanedRows = WorkspaceService.cleanResponses(mappedRows);
+      filePromises.push(this.responsesRepository
+        .upsert(cleanedRows, ['test_person', 'unit_id']));
+    }
+    return filePromises;
+  }
+
+  static cleanResponses(rows: ResponseDto[]): ResponseDto[] {
+    return Object.values(rows.reduce((agg, response) => {
+      const key = [response.test_group, response.booklet_id, response.test_person].join('@@@@@@');
+      if (agg[key]) {
+        if (!(agg[key].responses.length) && response.responses.length) {
+          agg[key].responses = response.responses;
+        }
+        if (
+          !(Object.keys(agg[key].unit_state || {}).length) &&
+          (Object.keys(response.unit_state || {}).length)
+        ) {
+          agg[key].unit_state = response.unit_state;
+        }
+      } else {
+        agg[key] = response;
+      }
+      return agg;
+    }, <{ [key: string]: ResponseDto }>{}));
   }
 
   async testCenterImport(entries:FileUpload[]): Promise<boolean> {
     const registry = this.fileUploadRepository.create(entries);
-    const res = await this.fileUploadRepository.save(registry);
+    const res = await this.fileUploadRepository.upsert(registry, ['file_id']);
     return !!res;
+  }
+
+  private static getMimeType(fileName: string): string {
+    if (/\.xml$/i.test(fileName)) return 'text/xml';
+    if (/\.html$/i.test(fileName)) return 'text/html';
+    return 'application/octet-stream';
+  }
+
+  private static getPlayerId(file: FileIo): string {
+    try {
+      const playerCode = file.buffer.toString();
+      const playerContent = cheerio.load(playerCode);
+      const metaData = playerContent.root()
+        .find('script[type="application/ld+json"]');
+      const metadata = JSON.parse(metaData.text());
+      return WorkspaceService.normalizePlayerId(`${metadata.id}-${metadata.version}`);
+    } catch (e) {
+      return WorkspaceService.getResourceId(file);
+    }
+  }
+
+  private static getResourceId(file: FileIo): string {
+    const filePathParts = file.originalname.split('/');
+    const fileName = filePathParts.pop();
+    return fileName.toUpperCase();
+  }
+
+  private static normalizePlayerId(name: string): string {
+    const reg = /^(\D+?)[@V-]?((\d+)(\.\d+)?(\.\d+)?(-\S+?)?)?(.\D{3,4})?$/;
+    const matches = name.match(reg);
+    if (matches) {
+      const rawIdParts = {
+        module: matches[1] || '',
+        full: matches[2] || '',
+        major: parseInt(matches[3], 10) || 0,
+        minor: (typeof matches[4] === 'string') ? parseInt(matches[4].substring(1), 10) : 0,
+        patch: (typeof matches[5] === 'string') ? parseInt(matches[5].substring(1), 10) : 0,
+        label: (typeof matches[6] === 'string') ? matches[6].substring(1) : ''
+      };
+      return `${rawIdParts.module}-${rawIdParts.major}.${rawIdParts.minor}`.toUpperCase();
+    }
+    throw new Error('Invalid player name');
   }
 }

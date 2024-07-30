@@ -11,6 +11,7 @@ import { Subject, takeUntil } from 'rxjs';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { AppService } from '../../../services/app.service';
 import { BackendService } from '../../../services/backend.service';
+import { ResponseDto } from '../../../../../../../api-dto/responses/response-dto';
 
 export interface PageData {
   index: number;
@@ -29,9 +30,10 @@ export type Progress = 'none' | 'some' | 'complete';
   styleUrl: './unit-player.component.scss'
 })
 export class UnitPlayerComponent implements AfterViewInit, OnChanges {
-  @Input() unitDef!: string;
-  @Input() unitPlayer!: string;
-  @Input() unitResponses!: string;
+  @Input() unitDef: string | undefined;
+  @Input() unitPlayer: string | undefined;
+  @Input() unitResponses: ResponseDto | undefined;
+  @Input() pageId: string | undefined;
   @ViewChild('hostingIframe') hostingIframe!: ElementRef;
   private iFrameElement: HTMLIFrameElement | undefined;
   postMessageTarget: Window | undefined;
@@ -45,12 +47,25 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges {
   responses!: Response[] | null;
   count: number = 0;
   dataParts!: { stateVariableCodes: string, elementCodes:string };
+  private firstChangeNotificationReceived: boolean = false;
 
-  ngOnChanges(changes: SimpleChanges) {
-    if (this.count > 0) {
+  ngOnChanges(changes: SimpleChanges): void {
+    // eslint-disable-next-line @typescript-eslint/dot-notation
+    if (changes['unitDef']?.previousValue && !changes['unitDef']?.currentValue) {
+      if (this.hostingIframe) this.hostingIframe.nativeElement.srcdoc = '';
+      return;
+    }
+    // eslint-disable-next-line @typescript-eslint/dot-notation
+    if (changes['pageId']?.currentValue && (changes['pageId']?.previousValue !== changes['pageId']?.currentValue)) {
+      // eslint-disable-next-line @typescript-eslint/dot-notation
+      this.gotoPage({ action: '#goto', index: this.getPageIndex(changes['pageId'].currentValue) });
+      return;
+    }
+    // eslint-disable-next-line @typescript-eslint/dot-notation
+    if (changes['unitDef']?.currentValue && (changes['unitDef']?.previousValue !== changes['unitDef']?.currentValue)) {
       const { unitDef, unitPlayer, unitResponses } = changes;
       const parsedJSONUnitDef = JSON.parse(unitDef.currentValue);
-      if (unitResponses.currentValue && (unitResponses.currentValue).responses) {
+      if (unitResponses?.currentValue && (unitResponses.currentValue).responses) {
         let elementCodes: string = '';
         let stateVariableCodes: string = '';
         (unitResponses.currentValue).responses.forEach((response: { id:string, content:string }) => {
@@ -69,27 +84,8 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges {
       this.unitDef = parsedJSONUnitDef;
       if (this.iFrameElement) {
         this.iFrameElement.srcdoc = (unitPlayer ? unitPlayer.currentValue : this.unitPlayer).replace('&quot;', '');
-        if (this.postMessageTarget) {
-          this.postMessageTarget.postMessage({
-            type: 'vopStartCommand',
-            sessionId: 3,
-            unitState: {
-              dataParts: this.dataParts,
-              presentationProgress: 'none',
-              responseProgress: 'none'
-            },
-            playerConfig: {
-              stateReportPolicy: 'eager',
-              pagingMode: 'seperate',
-              directDownloadUrl: this.backendService.getDirectDownloadLink()
-
-            },
-            unitDefinition: parsedJSONUnitDef
-          }, '*');
-        }
       }
     }
-    this.count += 1;
   }
 
   constructor(
@@ -154,6 +150,11 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges {
                   .map((dp: unknown) => JSON.parse(dp as string));
                 this.setPresentationStatus(msgData.unitState.presentationProgress);
                 this.setResponsesStatus(msgData.unitState.responseProgress);
+                if (!this.firstChangeNotificationReceived) {
+                  const index = this.getStartPageIndex();
+                  this.gotoPage({ action: '#goto', index }); // because START_PAGE parameter is ignored by some players
+                  this.firstChangeNotificationReceived = true;
+                }
               }
               break;
 
@@ -212,11 +213,17 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges {
       });
   }
 
+  private getStartPageIndex(): number {
+    return this.pageList
+      .find(page => page.id === (this.pageId || this.unitResponses?.unit_state?.CURRENT_PAGE_ID))?.index || -1;
+  }
+
   async sendUnitData() {
     this.postUnitDef();
   }
 
   private postUnitDef(): void {
+    this.firstChangeNotificationReceived = false;
     const unitDefStringified = JSON.stringify(this.unitDef);
     if (this.postMessageTarget) {
       if (this.playerApiVersion === 1) {
@@ -236,9 +243,9 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges {
           },
           playerConfig: {
             stateReportPolicy: 'eager',
-            pagingMode: 'auto',
-            directDownloadUrl: '',
-            startPage: '1'
+            pagingMode: 'buttons',
+            directDownloadUrl: this.backendService.getDirectDownloadLink(),
+            startPage: this.pageId || this.unitResponses?.unit_state?.CURRENT_PAGE_ID || ''
           },
           unitDefinition: unitDefStringified
         }, '*');
@@ -376,5 +383,10 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges {
         }, '*');
       }
     }
+  }
+
+  private getPageIndex(pageId: string): number {
+    return this.pageList
+      .find(page => page.id === pageId)?.index || -1;
   }
 }

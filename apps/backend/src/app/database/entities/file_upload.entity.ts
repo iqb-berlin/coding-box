@@ -1,6 +1,9 @@
-import { Column, Entity, PrimaryColumn } from 'typeorm';
+import {
+  Column, Entity, PrimaryColumn, Unique
+} from 'typeorm';
 
 @Entity()
+@Unique('file_upload_id', ['file_id'])
 class FileUpload {
   @PrimaryColumn({ type: 'integer' })
     id: number;
@@ -18,7 +21,7 @@ class FileUpload {
     file_type: string;
 
   @Column({ type: 'varchar' })
-    file_id: string;
+    file_id!: string;
 
   @Column({ type: 'timestamp' })
     created_at: number;
