@@ -25,7 +25,7 @@ async function bootstrap() {
     const config = new DocumentBuilder()
       .setTitle('IQB Coding Box API')
       .setDescription('The Coding Box API description and try-out')
-      .setVersion('0.2.0')
+      .setVersion('0.2.1')
       .addBearerAuth()
       .build();
     const document = SwaggerModule.createDocument(app, config);
