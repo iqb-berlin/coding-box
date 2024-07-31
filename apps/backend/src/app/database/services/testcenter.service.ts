@@ -115,7 +115,7 @@ export class TestcenterService {
         (_, i) => a.slice(i * size, i * size + size)
       );
 
-      const chunks = createChunks(resultGroupNames, 4);
+      const chunks = createChunks(resultGroupNames, 2);
       const unitResponsesPromises = chunks.map(chunk => {
         const unitResponsesPromise = this.httpService.axiosRef
           .get<UnitResponse[]>(`http://iqb-testcenter${server}.de/api/workspace/
