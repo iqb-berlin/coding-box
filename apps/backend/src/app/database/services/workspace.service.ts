@@ -395,7 +395,7 @@ export class WorkspaceService {
 
   static cleanResponses(rows: ResponseDto[]): ResponseDto[] {
     return Object.values(rows.reduce((agg, response) => {
-      const key = [response.test_group, response.booklet_id, response.test_person].join('@@@@@@');
+      const key = [response.test_person, response.unit_id].join('@@@@@@');
       if (agg[key]) {
         if (!(agg[key].responses.length) && response.responses.length) {
           agg[key].responses = response.responses;
