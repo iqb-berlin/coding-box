@@ -360,7 +360,7 @@ export class WorkspaceService {
         const bookletId = row.bookletname;
         const groupName = `${row.groupname}`.replace(/"/g, '');
         const unitId = row.unitname;
-        const lastStateCleaned = row.laststate.length > 1 ? row.laststate
+        const lastStateCleaned = row.laststate && row.laststate.length > 1 ? row.laststate
           .replace(/""/g, '"')
           .replace(/"$/, '') : '{}';
         let unitState;
