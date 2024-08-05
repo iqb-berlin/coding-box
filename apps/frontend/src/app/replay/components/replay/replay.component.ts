@@ -12,6 +12,8 @@ import { ActivatedRoute } from '@angular/router';
 import { firstValueFrom, Subscription } from 'rxjs';
 import * as xml2js from 'xml2js';
 import { jwtDecode, JwtPayload } from 'jwt-decode';
+import { MatSnackBar } from '@angular/material/snack-bar';
+import { HttpErrorResponse } from '@angular/common/http';
 import { UnitPlayerComponent } from '../unit-player/unit-player.component';
 import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
@@ -33,13 +35,18 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   unitId: string = '';
   responses: ResponseDto | undefined = undefined;
   auth: string = '';
+  testPersonError = false;
+  responsesError = false;
+  unitIdError = false;
+  authError = false;
+  unknownError = false;
   @Input() testPersonInput: string | undefined;
   @Input() unitIdInput: string | undefined;
   private routerSubscription: Subscription | null = null;
   constructor(private backendService:BackendService,
               private appService:AppService,
-              private route:ActivatedRoute) {
-
+              private route:ActivatedRoute,
+              private snackBar: MatSnackBar) {
   }
 
   ngOnInit(): void {
@@ -51,9 +58,34 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     this.routerSubscription = null;
   }
 
+  checkErrors(): void {
+    if (this.authError) {
+      this.openSnackBar('Authentisierungproblem: Zugriffs-Token ungültig', 'Schließen');
+    } else if (this.unitIdError) {
+      this.openSnackBar('Unbekannte Unit-Id', 'Schließen');
+    } else if (this.testPersonError) {
+      this.openSnackBar('Ungültige Id für Testperson', 'Schließen');
+    } else if (this.responsesError) {
+      this.openSnackBar(
+        `Keine Antworten für Aufgabe "${this.unitId}" von Testperson "${this.testPerson}" gefunden`,
+        'Schließen'
+      );
+    } else if (this.unknownError) {
+      this.openSnackBar('Unbekannter Fehler', 'Schließen');
+    }
+  }
+
+  openSnackBar(message: string, action: string) {
+    const snackbarRef = this.snackBar
+      .open(message, action, { panelClass: ['snackbar-error'] });
+    snackbarRef.afterDismissed().subscribe(() => this.reset());
+  }
+
   private subscribeRouter(): void {
     this.routerSubscription = this.route.params
       .subscribe(async params => {
+        this.snackBar.dismiss();
+        this.reset();
         const queryParams = await firstValueFrom(this.route.queryParams);
         if (Object.keys(params).length !== 0) {
           const {
@@ -61,24 +93,51 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
           } = params;
           this.page = page;
           this.testPerson = testPerson;
+          this.testPersonError = !ReplayComponent.isTestperson(testPerson);
           this.unitId = unitId;
           const { auth } = queryParams;
           this.auth = auth;
           if (auth.length > 0) {
-            const decoded :JwtPayload & { workspace:string } = jwtDecode(auth);
-            const workspace = decoded?.workspace;
-            if (workspace) {
-              const unitDataExternal = await this.unitDataExternal(auth, workspace);
-              this.player = unitDataExternal.player[0].data;
-              this.unitDef = unitDataExternal.unitDef[0].data;
-              this.responses = unitDataExternal.response[0];
+            let workspace = '';
+            try {
+              const decoded: JwtPayload & { workspace: string } = jwtDecode(auth);
+              workspace = decoded?.workspace;
+            } catch (error) {
+              this.authError = true;
             }
+            if (workspace) {
+              try {
+                const unitDataExternal = await this.unitDataExternal(auth, workspace);
+                this.player = unitDataExternal.player[0].data;
+                this.unitDef = unitDataExternal.unitDef[0].data;
+                this.responses = unitDataExternal.response[0];
+                this.responsesError = !ReplayComponent.hasResponses(this.responses);
+              } catch (error) {
+                this.unitIdError = true;
+              }
+            }
+            this.checkErrors();
           }
         } else if (this.testPersonInput && this.unitIdInput) {
           this.testPerson = this.testPersonInput;
           this.unitId = this.unitIdInput.toUpperCase();
         }
       });
+  }
+
+  private static isTestperson(testperson: string): boolean {
+    const reg = /^.+(@.+){2}$/;
+    return reg.test(testperson);
+  }
+
+  private static hasResponses(response: ResponseDto): boolean {
+    return !!response;
+  }
+
+  private static checkUnitId(unitFile: { data: string }[]): void {
+    if (!unitFile || !unitFile[0]) {
+      throw new Error('unitFile not found');
+    }
   }
 
   async ngOnChanges(changes: SimpleChanges): Promise<void> {
@@ -94,7 +153,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     if (changes['unitIdInput'].currentValue === changes['unitIdInput'].previousValue) return Promise.resolve();
     const { unitIdInput } = changes;
     this.unitId = unitIdInput.currentValue;
-    const unitData = await this.getUnitData();
+    const unitData = await this.getUnitData(); // TODO: Replace with unitDataExternal
     this.player = unitData.player[0].data;
     this.unitDef = unitData.unitDef[0].data;
     this.responses = unitData.response[0];
@@ -112,9 +171,8 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     const unitFile = await firstValueFrom(
       this.backendService.getUnit(this.appService.selectedWorkspaceId, this.testPerson, this.unitId)
     );
-    if (!unitFile || !unitFile[0]) { //  1 pqmz2zse8aux START1
-      throw new Error('unitFile not found');
-    }
+
+    ReplayComponent.checkUnitId(unitFile);
 
     xml2js.parseString(unitFile[0].data, (err:any, result:any) => {
       player = result?.Unit.DefinitionRef[0].$.player;
@@ -144,25 +202,83 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     throw new Error('Invalid player name');
   }
 
+  private async getUnitDefFile(authToken:string, workspace:string): Promise<{ data: string }[]> {
+    let unitDefFile = [{ data: '' }];
+    try {
+      unitDefFile = await firstValueFrom(
+        this.backendService.getUnitDefExternal(authToken, Number(workspace), this.unitId));
+    } catch (error) {
+      this.setHttpError(error as HttpErrorResponse);
+    }
+    return unitDefFile;
+  }
+
+  private async getResponsesFile(authToken:string, workspace:string): Promise<ResponseDto[]> {
+    let responsesFile: ResponseDto[] = [];
+    try {
+      responsesFile = await firstValueFrom(
+        this.backendService
+          .getResponsesExternal(authToken, Number(workspace), this.testPerson, this.unitId));
+    } catch (error) {
+      this.setHttpError(error as HttpErrorResponse);
+    }
+    return responsesFile;
+  }
+
+  private async getUnitFile(authToken:string, workspace:string): Promise<{ data: string }[]> {
+    let unitFile = [{ data: '' }];
+    try {
+      unitFile = await firstValueFrom(
+        this.backendService.getUnitExternal(authToken, Number(workspace), this.testPerson, this.unitId));
+    } catch (error) {
+      this.setHttpError(error as HttpErrorResponse);
+    }
+    return unitFile;
+  }
+
+  private async getPlayerFile(authToken:string, workspace:string, player: string): Promise<{ data: string }[]> {
+    let playerFile = [{ data: '' }];
+    try {
+      playerFile = await firstValueFrom(
+        this.backendService.getPlayerExternal(authToken,
+          Number(workspace),
+          player.replace('@', '-'))
+      );
+    } catch (error) {
+      this.setHttpError(error as HttpErrorResponse);
+    }
+    return playerFile;
+  }
+
   async unitDataExternal(authToken:string, workspace:string) {
     let player = '';
-    const unitDefFile = await firstValueFrom(
-      this.backendService.getUnitDefExternal(authToken, Number(workspace), this.unitId));
+    const unitDefFile = await this.getUnitDefFile(authToken, workspace);
+    const responsesFile = await this.getResponsesFile(authToken, workspace);
+    const unitFile = await this.getUnitFile(authToken, workspace);
 
-    const responsesFile = await firstValueFrom(
-      this.backendService
-        .getResponsesExternal(authToken, Number(workspace), this.testPerson, this.unitId));
-    const unitFile = await firstValueFrom(
-      this.backendService.getUnitExternal(authToken, Number(workspace), this.testPerson, this.unitId));
+    ReplayComponent.checkUnitId(unitFile);
 
     xml2js.parseString(unitFile[0].data, (err:any, result:any) => {
       player = result?.Unit.DefinitionRef[0].$.player;
     });
-    const playerFile = await firstValueFrom(
-      this.backendService.getPlayerExternal(authToken,
-        Number(workspace),
-        player.replace('@', '-'))
-    );
+
+    const playerFile = await this.getPlayerFile(authToken, workspace, player);
     return { player: playerFile, unitDef: unitDefFile, response: responsesFile };
+  }
+
+  private setHttpError(error: HttpErrorResponse): void {
+    if (error.status === 401) {
+      this.authError = true;
+    } else {
+      this.unknownError = true;
+    }
+  }
+
+  private reset() {
+    this.testPersonError = false;
+    this.responsesError = false;
+    this.unitIdError = false;
+    this.authError = false;
+    this.unknownError = false;
   }
 }
