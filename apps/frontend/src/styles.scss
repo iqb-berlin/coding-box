@@ -302,4 +302,12 @@ body { margin: 0; font-family: Roboto, "Helvetica Neue", sans-serif;}
   flex-wrap: wrap;
 }
 
+.snackbar-error {
+  border: 3px double #ff4d4d;
+  background-color: #ff4d4d;
+  .mat-mdc-button.mat-mdc-snack-bar-action:not(:disabled) {
+    color: #ff4d4d !important;
+  }
+}
+
 
