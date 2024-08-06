@@ -46,8 +46,7 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges {
   hasFocus: boolean = false;
   responses!: Response[] | null;
   count: number = 0;
-  dataParts!: { stateVariableCodes: string, elementCodes:string };
-  private firstChangeNotificationReceived: boolean = false;
+  dataParts!: { [key: string]: string };
 
   ngOnChanges(changes: SimpleChanges): void {
     // eslint-disable-next-line @typescript-eslint/dot-notation
@@ -66,20 +65,12 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges {
       const { unitDef, unitPlayer, unitResponses } = changes;
       const parsedJSONUnitDef = JSON.parse(unitDef.currentValue);
       if (unitResponses?.currentValue && (unitResponses.currentValue).responses) {
-        let elementCodes: string = '';
-        let stateVariableCodes: string = '';
-        (unitResponses.currentValue).responses.forEach((response: { id:string, content:string }) => {
-          if (response.id === 'elementCodes') {
-            elementCodes = elementCodes.concat(response.content);
-          }
-          if (response.id === 'stateVariableCodes') {
-            stateVariableCodes = stateVariableCodes.concat(response.content);
-          }
-        });
-        this.dataParts = {
-          stateVariableCodes: stateVariableCodes,
-          elementCodes: elementCodes
-        };
+        this.dataParts = unitResponses.currentValue.responses
+          .reduce((acc: {
+            [key: string]: string }, current: { id: string; content: string; ts: number; responseType: string }) => {
+            acc[current.id] = current.content;
+            return acc;
+          }, {});
       }
       this.unitDef = parsedJSONUnitDef;
       if (this.iFrameElement) {
@@ -150,11 +141,6 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges {
                   .map((dp: unknown) => JSON.parse(dp as string));
                 this.setPresentationStatus(msgData.unitState.presentationProgress);
                 this.setResponsesStatus(msgData.unitState.responseProgress);
-                if (!this.firstChangeNotificationReceived) {
-                  const index = this.getStartPageIndex();
-                  this.gotoPage({ action: '#goto', index }); // because START_PAGE parameter is ignored by some players
-                  this.firstChangeNotificationReceived = true;
-                }
               }
               break;
 
@@ -213,17 +199,11 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges {
       });
   }
 
-  private getStartPageIndex(): number {
-    return this.pageList
-      .find(page => page.id === (this.pageId || this.unitResponses?.unit_state?.CURRENT_PAGE_ID))?.index || -1;
-  }
-
   async sendUnitData() {
     this.postUnitDef();
   }
 
   private postUnitDef(): void {
-    this.firstChangeNotificationReceived = false;
     const unitDefStringified = JSON.stringify(this.unitDef);
     if (this.postMessageTarget) {
       if (this.playerApiVersion === 1) {
