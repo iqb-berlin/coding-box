@@ -31,7 +31,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   player: string = '';
   unitDef: string = '';
   testPerson: string = '';
-  page!: string;
+  page: string | undefined;
   unitId: string = '';
   responses: ResponseDto | undefined = undefined;
   auth: string = '';
@@ -146,6 +146,8 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       this.unitId = '';
       this.player = '';
       this.unitDef = '';
+      this.unitId = '';
+      this.page = undefined;
       this.responses = undefined;
       return Promise.resolve();
     }
@@ -280,5 +282,10 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     this.unitIdError = false;
     this.authError = false;
     this.unknownError = false;
+    this.unitId = '';
+    this.player = '';
+    this.unitDef = '';
+    this.page = undefined;
+    this.responses = undefined;
   }
 }
