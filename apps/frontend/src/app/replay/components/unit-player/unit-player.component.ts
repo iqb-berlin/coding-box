@@ -12,6 +12,7 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { AppService } from '../../../services/app.service';
 import { BackendService } from '../../../services/backend.service';
 import { ResponseDto } from '../../../../../../../api-dto/responses/response-dto';
+import { SpinnerComponent } from '../spinner/spinner.component';
 
 export interface PageData {
   index: number;
@@ -25,7 +26,8 @@ export type Progress = 'none' | 'some' | 'complete';
 @Component({
   selector: 'coding-box-unit-player',
   standalone: true,
-  imports: [MatFormFieldModule, MatInputModule, MatButtonModule, ReactiveFormsModule, TranslateModule],
+  imports: [MatFormFieldModule, MatInputModule, MatButtonModule, ReactiveFormsModule,
+    TranslateModule, SpinnerComponent],
   templateUrl: './unit-player.component.html',
   styleUrl: './unit-player.component.scss'
 })
@@ -47,6 +49,7 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges {
   responses!: Response[] | null;
   count: number = 0;
   dataParts!: { [key: string]: string };
+  isLoaded: Subject<boolean> = new Subject<boolean>();
 
   ngOnChanges(changes: SimpleChanges): void {
     // eslint-disable-next-line @typescript-eslint/dot-notation
@@ -210,6 +213,7 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges {
           unitDefinition: unitDefStringified
         }, '*');
       } else {
+        this.isLoaded.next(true);
         this.postMessageTarget.postMessage({
           type: 'vopStartCommand',
           sessionId: this.sessionId,

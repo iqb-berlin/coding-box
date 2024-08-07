@@ -153,6 +153,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     }
     // eslint-disable-next-line @typescript-eslint/dot-notation
     if (changes['unitIdInput'].currentValue === changes['unitIdInput'].previousValue) return Promise.resolve();
+    this.reset();
     const { unitIdInput } = changes;
     this.unitId = unitIdInput.currentValue;
     const unitData = await this.getUnitData(); // TODO: Replace with unitDataExternal
