@@ -55,12 +55,6 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges {
       return;
     }
     // eslint-disable-next-line @typescript-eslint/dot-notation
-    if (changes['pageId']?.currentValue && (changes['pageId']?.previousValue !== changes['pageId']?.currentValue)) {
-      // eslint-disable-next-line @typescript-eslint/dot-notation
-      this.gotoPage({ action: '#goto', index: this.getPageIndex(changes['pageId'].currentValue) });
-      return;
-    }
-    // eslint-disable-next-line @typescript-eslint/dot-notation
     if (changes['unitDef']?.currentValue && (changes['unitDef']?.previousValue !== changes['unitDef']?.currentValue)) {
       const { unitDef, unitPlayer, unitResponses } = changes;
       const parsedJSONUnitDef = JSON.parse(unitDef.currentValue);
@@ -90,6 +84,9 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges {
 
   ngAfterViewInit(): void {
     this.iFrameElement = this.hostingIframe?.nativeElement;
+    if (this.iFrameElement && this.unitPlayer) {
+      this.iFrameElement.srcdoc = this.unitPlayer.replace('&quot;', '');
+    }
   }
 
   private subscribeForMessages(): void {
@@ -363,10 +360,5 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges {
         }, '*');
       }
     }
-  }
-
-  private getPageIndex(pageId: string): number {
-    return this.pageList
-      .find(page => page.id === pageId)?.index || -1;
   }
 }

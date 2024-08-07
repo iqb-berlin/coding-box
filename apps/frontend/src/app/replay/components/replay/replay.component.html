@@ -1,10 +1,10 @@
 <div class="replay-container">
-  <coding-box-unit-player
-    [unitDef]="unitDef"
-    [unitPlayer]="player"
-    [unitResponses]="responses"
-    [pageId]="page"
-  ></coding-box-unit-player>
+    <coding-box-unit-player *ngIf="!!player && unitDef"
+      [unitDef]="unitDef"
+      [unitPlayer]="player"
+      [unitResponses]="responses"
+      [pageId]="page">
+    </coding-box-unit-player>
 </div>
 
 
