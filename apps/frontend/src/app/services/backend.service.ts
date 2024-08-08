@@ -146,6 +146,7 @@ export class BackendService {
       );
   }
 
+  // Todo: Use queryParams for ids
   deleteWorkspace(ids: number[]): Observable<boolean> {
     return this.http
       .delete(`${this.serverUrl}admin/workspace/${ids.join(';')}`,
@@ -156,6 +157,7 @@ export class BackendService {
       );
   }
 
+  // Todo: Use queryParams for fileIds
   deleteFiles(workspace_id:number, fileIds: number[]): Observable<boolean> {
     return this.http
       .delete(
@@ -167,6 +169,7 @@ export class BackendService {
       );
   }
 
+  // Todo: Use queryParams for testGroups
   deleteTestGroups(workspace_id:number, testGroups: string[]): Observable<boolean> {
     return this.http
       .delete(
@@ -178,6 +181,7 @@ export class BackendService {
       );
   }
 
+  // Todo: Use queryParams for ids
   createCodingTestGroups(ids: TestGroupsInListDto[]): Observable<boolean> {
     return this.http
       .delete(`${this.serverUrl}admin/workspace/${ids.join(';')}`, { headers: this.authHeader })
