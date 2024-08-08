@@ -12,6 +12,7 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { AppService } from '../../../services/app.service';
 import { BackendService } from '../../../services/backend.service';
 import { ResponseDto } from '../../../../../../../api-dto/responses/response-dto';
+import { SpinnerComponent } from '../spinner/spinner.component';
 
 export interface PageData {
   index: number;
@@ -25,7 +26,8 @@ export type Progress = 'none' | 'some' | 'complete';
 @Component({
   selector: 'coding-box-unit-player',
   standalone: true,
-  imports: [MatFormFieldModule, MatInputModule, MatButtonModule, ReactiveFormsModule, TranslateModule],
+  imports: [MatFormFieldModule, MatInputModule, MatButtonModule, ReactiveFormsModule,
+    TranslateModule, SpinnerComponent],
   templateUrl: './unit-player.component.html',
   styleUrl: './unit-player.component.scss'
 })
@@ -47,17 +49,12 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges {
   responses!: Response[] | null;
   count: number = 0;
   dataParts!: { [key: string]: string };
+  isLoaded: Subject<boolean> = new Subject<boolean>();
 
   ngOnChanges(changes: SimpleChanges): void {
     // eslint-disable-next-line @typescript-eslint/dot-notation
     if (changes['unitDef']?.previousValue && !changes['unitDef']?.currentValue) {
       if (this.hostingIframe) this.hostingIframe.nativeElement.srcdoc = '';
-      return;
-    }
-    // eslint-disable-next-line @typescript-eslint/dot-notation
-    if (changes['pageId']?.currentValue && (changes['pageId']?.previousValue !== changes['pageId']?.currentValue)) {
-      // eslint-disable-next-line @typescript-eslint/dot-notation
-      this.gotoPage({ action: '#goto', index: this.getPageIndex(changes['pageId'].currentValue) });
       return;
     }
     // eslint-disable-next-line @typescript-eslint/dot-notation
@@ -90,6 +87,9 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges {
 
   ngAfterViewInit(): void {
     this.iFrameElement = this.hostingIframe?.nativeElement;
+    if (this.iFrameElement && this.unitPlayer) {
+      this.iFrameElement.srcdoc = this.unitPlayer.replace('&quot;', '');
+    }
   }
 
   private subscribeForMessages(): void {
@@ -213,6 +213,7 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges {
           unitDefinition: unitDefStringified
         }, '*');
       } else {
+        this.isLoaded.next(true);
         this.postMessageTarget.postMessage({
           type: 'vopStartCommand',
           sessionId: this.sessionId,
@@ -363,10 +364,5 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges {
         }, '*');
       }
     }
-  }
-
-  private getPageIndex(pageId: string): number {
-    return this.pageList
-      .find(page => page.id === pageId)?.index || -1;
   }
 }
