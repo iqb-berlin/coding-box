@@ -9,7 +9,9 @@ import { ReactiveFormsModule } from '@angular/forms';
 import { NgIf } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
 import { ActivatedRoute } from '@angular/router';
-import { firstValueFrom, Subscription } from 'rxjs';
+import {
+  combineLatest, firstValueFrom, Observable, of, Subscription, switchMap
+} from 'rxjs';
 import * as xml2js from 'xml2js';
 import { jwtDecode, JwtPayload } from 'jwt-decode';
 import { MatSnackBar } from '@angular/material/snack-bar';
@@ -156,6 +158,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     this.reset();
     const { unitIdInput } = changes;
     this.unitId = unitIdInput.currentValue;
+    this.testPerson = this.testPersonInput || '';
     const unitData = await this.getUnitData(); // TODO: Replace with unitDataExternal
     this.player = unitData.player[0].data;
     this.unitDef = unitData.unitDef[0].data;
@@ -165,30 +168,22 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
   // TODO: Replace with unitDataExternal
   async getUnitData() {
-    let player = '';
-
-    // TODO: Use combineLatest
-    const unitDefFile = await firstValueFrom(
-      this.backendService.getUnitDef(this.appService.selectedWorkspaceId, this.unitId));
-
-    const responsesFile = await firstValueFrom(
-      this.backendService.getResponses(this.appService.selectedWorkspaceId, this.testPerson, this.unitId));
-
-    const unitFile = await firstValueFrom(
-      this.backendService.getUnit(this.appService.selectedWorkspaceId, this.testPerson, this.unitId)
-    );
-
-    ReplayComponent.checkUnitId(unitFile);
-
-    xml2js.parseString(unitFile[0].data, (err:any, result:any) => {
-      player = result?.Unit.DefinitionRef[0].$.player;
-    });
-
-    const playerFile = await firstValueFrom(
-      this.backendService.getPlayer(
-        this.appService.selectedWorkspaceId, ReplayComponent.normalizePlayerId(player)));
-
-    return { player: playerFile, unitDef: unitDefFile, response: responsesFile };
+    const unitData = await firstValueFrom(
+      combineLatest([
+        this.backendService.getUnitDef(this.appService.selectedWorkspaceId, this.unitId),
+        this.backendService.getResponses(this.appService.selectedWorkspaceId, this.testPerson, this.unitId),
+        this.backendService.getUnit(this.appService.selectedWorkspaceId, this.testPerson, this.unitId)
+          .pipe(switchMap(unitFile => {
+            ReplayComponent.checkUnitId(unitFile);
+            let player = '';
+            xml2js.parseString(unitFile[0].data, (err:any, result:any) => {
+              player = result?.Unit.DefinitionRef[0].$.player;
+            });
+            return this.backendService.getPlayer(
+              this.appService.selectedWorkspaceId, ReplayComponent.normalizePlayerId(player));
+          }))
+      ]));
+    return { unitDef: unitData[0], response: unitData[1], player: unitData[2] };
   }
 
   private static normalizePlayerId(name: string): string {
@@ -208,69 +203,61 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     throw new Error('Invalid player name');
   }
 
-  private async getUnitDefFile(authToken:string, workspace:string): Promise<{ data: string }[]> {
-    let unitDefFile = [{ data: '' }];
+  private getUnitDefFile(authToken:string, workspace:string): Observable<{ data: string }[]> {
     try {
-      unitDefFile = await firstValueFrom(
-        this.backendService.getUnitDefExternal(authToken, Number(workspace), this.unitId));
+      return this.backendService.getUnitDefExternal(authToken, Number(workspace), this.unitId);
     } catch (error) {
       this.setHttpError(error as HttpErrorResponse);
     }
-    return unitDefFile;
+    return of([{ data: '' }]);
   }
 
-  private async getResponsesFile(authToken:string, workspace:string): Promise<ResponseDto[]> {
-    let responsesFile: ResponseDto[] = [];
+  private getResponsesFile(authToken:string, workspace:string): Observable<ResponseDto[]> {
     try {
-      responsesFile = await firstValueFrom(
-        this.backendService
-          .getResponsesExternal(authToken, Number(workspace), this.testPerson, this.unitId));
+      return this.backendService
+        .getResponsesExternal(authToken, Number(workspace), this.testPerson, this.unitId);
     } catch (error) {
       this.setHttpError(error as HttpErrorResponse);
     }
-    return responsesFile;
+    return of([]);
   }
 
-  private async getUnitFile(authToken:string, workspace:string): Promise<{ data: string }[]> {
-    let unitFile = [{ data: '' }];
+  private getUnitFile(authToken:string, workspace:string): Observable<{ data: string }[]> {
     try {
-      unitFile = await firstValueFrom(
-        this.backendService.getUnitExternal(authToken, Number(workspace), this.testPerson, this.unitId));
+      return this.backendService.getUnitExternal(authToken, Number(workspace), this.testPerson, this.unitId);
     } catch (error) {
       this.setHttpError(error as HttpErrorResponse);
     }
-    return unitFile;
+    return of([{ data: '' }]);
   }
 
-  private async getPlayerFile(authToken:string, workspace:string, player: string): Promise<{ data: string }[]> {
-    let playerFile = [{ data: '' }];
+  private getPlayerFile(authToken:string, workspace:string, player: string): Observable<{ data: string }[]> {
     try {
-      playerFile = await firstValueFrom(
-        this.backendService.getPlayerExternal(authToken,
-          Number(workspace),
-          player.replace('@', '-'))
-      );
+      return this.backendService.getPlayerExternal(authToken,
+        Number(workspace),
+        player.replace('@', '-'));
     } catch (error) {
       this.setHttpError(error as HttpErrorResponse);
     }
-    return playerFile;
+    return of([{ data: '' }]);
   }
 
   async unitDataExternal(authToken:string, workspace:string) {
-    let player = '';
-    // TODO: Use combineLatest (including player and error handling)
-    const unitDefFile = await this.getUnitDefFile(authToken, workspace);
-    const responsesFile = await this.getResponsesFile(authToken, workspace);
-    const unitFile = await this.getUnitFile(authToken, workspace);
-
-    ReplayComponent.checkUnitId(unitFile);
-
-    xml2js.parseString(unitFile[0].data, (err:any, result:any) => {
-      player = result?.Unit.DefinitionRef[0].$.player;
-    });
-
-    const playerFile = await this.getPlayerFile(authToken, workspace, player);
-    return { player: playerFile, unitDef: unitDefFile, response: responsesFile };
+    const unitData = await firstValueFrom(
+      combineLatest([
+        this.getUnitDefFile(authToken, workspace),
+        this.getResponsesFile(authToken, workspace),
+        this.getUnitFile(authToken, workspace)
+          .pipe(switchMap(unitFile => {
+            ReplayComponent.checkUnitId(unitFile);
+            let player = '';
+            xml2js.parseString(unitFile[0].data, (err:any, result:any) => {
+              player = result?.Unit.DefinitionRef[0].$.player;
+            });
+            return this.getPlayerFile(authToken, workspace, ReplayComponent.normalizePlayerId(player));
+          }))
+      ]));
+    return { unitDef: unitData[0], response: unitData[1], player: unitData[2] };
   }
 
   private setHttpError(error: HttpErrorResponse): void {
