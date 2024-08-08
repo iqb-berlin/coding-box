@@ -232,45 +232,21 @@ export class BackendService {
       { headers: this.authHeader });
   }
 
-  getUnitDef(workspaceId: number, unit: string): Observable<{ data:string }[]> {
-    return this.http.get<{ data:string }[]>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/${unit}/unitDef`,
-      { headers: this.authHeader });
-  }
-
-  getPlayer(workspaceId: number, player:string): Observable<{ data:string }[]> {
-    return this.http.get<{ data:string }[]>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/player/${player}`,
-      { headers: this.authHeader });
-  }
-
-  getResponses(workspaceId: number, testPerson: string, unitId:string): Observable<ResponseDto[]> {
-    return this.http.get<ResponseDto[]>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/responses/${testPerson}/${unitId}`,
-      { headers: this.authHeader });
-  }
-
-  getUnit(workspaceId: number, testPerson: string, unitId:string): Observable<{ data:string }[]> {
-    return this.http.get<{ data:string }[]>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/unit/${testPerson}/${unitId}`,
-      { headers: this.authHeader });
-  }
-
-  getUnitDefExternal(workspaceId: number, unit: string, authToken?:string): Observable<{ data:string }[]> {
+  getUnitDef(workspaceId: number, unit: string, authToken?:string): Observable<{ data:string }[]> {
     const headers = authToken ? { Authorization: `Bearer ${authToken}` } : this.authHeader;
     return this.http.get<{ data:string }[]>(
       `${this.serverUrl}admin/workspace/${workspaceId}/${unit}/unitDef`,
       { headers });
   }
 
-  getPlayerExternal(workspaceId: number, player:string, authToken?:string): Observable<{ data:string }[]> {
+  getPlayer(workspaceId: number, player:string, authToken?:string): Observable<{ data:string }[]> {
     const headers = authToken ? { Authorization: `Bearer ${authToken}` } : this.authHeader;
     return this.http.get<{ data:string }[]>(
       `${this.serverUrl}admin/workspace/${workspaceId}/player/${player}`,
       { headers });
   }
 
-  getResponsesExternal(workspaceId: number, testPerson: string, unitId:string, authToken?:string
+  getResponses(workspaceId: number, testPerson: string, unitId:string, authToken?:string
   ): Observable<ResponseDto[]> {
     const headers = authToken ? { Authorization: `Bearer ${authToken}` } : this.authHeader;
     return this.http.get<ResponseDto[]>(
@@ -278,10 +254,10 @@ export class BackendService {
       { headers });
   }
 
-  getUnitExternal(workspaceId: number,
-                  testPerson: string,
-                  unitId:string,
-                  authToken?:string
+  getUnit(workspaceId: number,
+          testPerson: string,
+          unitId:string,
+          authToken?:string
   ): Observable<{ data:string }[]> {
     const headers = authToken ? { Authorization: `Bearer ${authToken}` } : this.authHeader;
     return this.http.get<{ data:string }[]>(
