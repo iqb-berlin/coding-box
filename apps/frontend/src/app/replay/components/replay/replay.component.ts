@@ -109,7 +109,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
             }
             if (workspace) {
               try {
-                const unitDataExternal = await this.unitDataExternal(auth, workspace);
+                const unitDataExternal = await this.unitDataExternal(workspace, auth);
                 this.player = unitDataExternal.player[0].data;
                 this.unitDef = unitDataExternal.unitDef[0].data;
                 this.responses = unitDataExternal.response[0];
@@ -203,58 +203,59 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     throw new Error('Invalid player name');
   }
 
-  private getUnitDefFile(authToken:string, workspace:string): Observable<{ data: string }[]> {
+  private getUnitDefFile(workspace:string, authToken?:string): Observable<{ data: string }[]> {
     try {
-      return this.backendService.getUnitDefExternal(authToken, Number(workspace), this.unitId);
+      return this.backendService.getUnitDefExternal(Number(workspace), this.unitId, authToken);
     } catch (error) {
       this.setHttpError(error as HttpErrorResponse);
     }
     return of([{ data: '' }]);
   }
 
-  private getResponsesFile(authToken:string, workspace:string): Observable<ResponseDto[]> {
+  private getResponsesFile(workspace:string, authToken?:string): Observable<ResponseDto[]> {
     try {
       return this.backendService
-        .getResponsesExternal(authToken, Number(workspace), this.testPerson, this.unitId);
+        .getResponsesExternal(Number(workspace), this.testPerson, this.unitId, authToken);
     } catch (error) {
       this.setHttpError(error as HttpErrorResponse);
     }
     return of([]);
   }
 
-  private getUnitFile(authToken:string, workspace:string): Observable<{ data: string }[]> {
+  private getUnitFile(workspace:string, authToken?:string): Observable<{ data: string }[]> {
     try {
-      return this.backendService.getUnitExternal(authToken, Number(workspace), this.testPerson, this.unitId);
+      return this.backendService.getUnitExternal(Number(workspace), this.testPerson, this.unitId, authToken);
     } catch (error) {
       this.setHttpError(error as HttpErrorResponse);
     }
     return of([{ data: '' }]);
   }
 
-  private getPlayerFile(authToken:string, workspace:string, player: string): Observable<{ data: string }[]> {
+  private getPlayerFile(workspace:string, player: string, authToken?:string): Observable<{ data: string }[]> {
     try {
-      return this.backendService.getPlayerExternal(authToken,
+      return this.backendService.getPlayerExternal(
         Number(workspace),
-        player.replace('@', '-'));
+        player.replace('@', '-'),
+        authToken);
     } catch (error) {
       this.setHttpError(error as HttpErrorResponse);
     }
     return of([{ data: '' }]);
   }
 
-  async unitDataExternal(authToken:string, workspace:string) {
+  async unitDataExternal(workspace:string, authToken:string) {
     const unitData = await firstValueFrom(
       combineLatest([
-        this.getUnitDefFile(authToken, workspace),
-        this.getResponsesFile(authToken, workspace),
-        this.getUnitFile(authToken, workspace)
+        this.getUnitDefFile(workspace, authToken),
+        this.getResponsesFile(workspace, authToken),
+        this.getUnitFile(workspace, authToken)
           .pipe(switchMap(unitFile => {
             ReplayComponent.checkUnitId(unitFile);
             let player = '';
             xml2js.parseString(unitFile[0].data, (err:any, result:any) => {
               player = result?.Unit.DefinitionRef[0].$.player;
             });
-            return this.getPlayerFile(authToken, workspace, ReplayComponent.normalizePlayerId(player));
+            return this.getPlayerFile(workspace, ReplayComponent.normalizePlayerId(player), authToken);
           }))
       ]));
     return { unitDef: unitData[0], response: unitData[1], player: unitData[2] };
