@@ -256,32 +256,37 @@ export class BackendService {
       { headers: this.authHeader });
   }
 
-  getUnitDefExternal(authToken:string, workspaceId: number, unit: string): Observable<{ data:string }[]> {
+  getUnitDefExternal(workspaceId: number, unit: string, authToken?:string): Observable<{ data:string }[]> {
+    const headers = authToken ? { Authorization: `Bearer ${authToken}` } : this.authHeader;
     return this.http.get<{ data:string }[]>(
       `${this.serverUrl}admin/workspace/${workspaceId}/${unit}/unitDef`,
-      { headers: { Authorization: `Bearer ${authToken}` } });
+      { headers });
   }
 
-  getPlayerExternal(authToken:string, workspaceId: number, player:string): Observable<{ data:string }[]> {
+  getPlayerExternal(workspaceId: number, player:string, authToken?:string): Observable<{ data:string }[]> {
+    const headers = authToken ? { Authorization: `Bearer ${authToken}` } : this.authHeader;
     return this.http.get<{ data:string }[]>(
       `${this.serverUrl}admin/workspace/${workspaceId}/player/${player}`,
-      { headers: { Authorization: `Bearer ${authToken}` } });
+      { headers });
   }
 
-  getResponsesExternal(
-    authToken:string, workspaceId: number, testPerson: string, unitId:string
+  getResponsesExternal(workspaceId: number, testPerson: string, unitId:string, authToken?:string
   ): Observable<ResponseDto[]> {
+    const headers = authToken ? { Authorization: `Bearer ${authToken}` } : this.authHeader;
     return this.http.get<ResponseDto[]>(
       `${this.serverUrl}admin/workspace/${workspaceId}/responses/${testPerson}/${unitId}`,
-      { headers: { Authorization: `Bearer ${authToken}` } });
+      { headers });
   }
 
-  getUnitExternal(authToken:string,
-                  workspaceId: number,
-                  testPerson: string, unitId:string): Observable<{ data:string }[]> {
+  getUnitExternal(workspaceId: number,
+                  testPerson: string,
+                  unitId:string,
+                  authToken?:string
+  ): Observable<{ data:string }[]> {
+    const headers = authToken ? { Authorization: `Bearer ${authToken}` } : this.authHeader;
     return this.http.get<{ data:string }[]>(
       `${this.serverUrl}admin/workspace/${workspaceId}/unit/${testPerson}/${unitId}`,
-      { headers: { Authorization: `Bearer ${authToken}` } });
+      { headers });
   }
 
   getTestPersonUnits(workspaceId: number, testPerson: string): Observable<{ unit_id:string }[]> {
