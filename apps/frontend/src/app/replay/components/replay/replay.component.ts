@@ -31,7 +31,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   player: string = '';
   unitDef: string = '';
   testPerson: string = '';
-  page!: string;
+  page: string | undefined;
   unitId: string = '';
   responses: ResponseDto | undefined = undefined;
   auth: string = '';
@@ -146,11 +146,14 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       this.unitId = '';
       this.player = '';
       this.unitDef = '';
+      this.unitId = '';
+      this.page = undefined;
       this.responses = undefined;
       return Promise.resolve();
     }
     // eslint-disable-next-line @typescript-eslint/dot-notation
     if (changes['unitIdInput'].currentValue === changes['unitIdInput'].previousValue) return Promise.resolve();
+    this.reset();
     const { unitIdInput } = changes;
     this.unitId = unitIdInput.currentValue;
     const unitData = await this.getUnitData(); // TODO: Replace with unitDataExternal
@@ -160,8 +163,11 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     return Promise.resolve();
   }
 
+  // TODO: Replace with unitDataExternal
   async getUnitData() {
     let player = '';
+
+    // TODO: Use combineLatest
     const unitDefFile = await firstValueFrom(
       this.backendService.getUnitDef(this.appService.selectedWorkspaceId, this.unitId));
 
@@ -252,6 +258,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
   async unitDataExternal(authToken:string, workspace:string) {
     let player = '';
+    // TODO: Use combineLatest (including player and error handling)
     const unitDefFile = await this.getUnitDefFile(authToken, workspace);
     const responsesFile = await this.getResponsesFile(authToken, workspace);
     const unitFile = await this.getUnitFile(authToken, workspace);
@@ -280,5 +287,10 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     this.unitIdError = false;
     this.authError = false;
     this.unknownError = false;
+    this.unitId = '';
+    this.player = '';
+    this.unitDef = '';
+    this.page = undefined;
+    this.responses = undefined;
   }
 }
