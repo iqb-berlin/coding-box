@@ -54,6 +54,7 @@ export class WorkspaceController {
     return this.authService.createToken(user_id, workspace_id, duration);
   }
 
+  // TODO Don't use boolean query params as strings
   @Get(':workspace_id/importWorkspaceFiles')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async importWorkspaceFiles(
