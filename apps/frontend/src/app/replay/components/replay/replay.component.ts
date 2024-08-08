@@ -163,8 +163,11 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     return Promise.resolve();
   }
 
+  // TODO: Replace with unitDataExternal
   async getUnitData() {
     let player = '';
+
+    // TODO: Use combineLatest
     const unitDefFile = await firstValueFrom(
       this.backendService.getUnitDef(this.appService.selectedWorkspaceId, this.unitId));
 
@@ -255,6 +258,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
   async unitDataExternal(authToken:string, workspace:string) {
     let player = '';
+    // TODO: Use combineLatest (including player and error handling)
     const unitDefFile = await this.getUnitDefFile(authToken, workspace);
     const responsesFile = await this.getResponsesFile(authToken, workspace);
     const unitFile = await this.getUnitFile(authToken, workspace);
