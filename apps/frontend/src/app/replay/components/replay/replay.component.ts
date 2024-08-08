@@ -10,7 +10,7 @@ import { NgIf } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
 import { ActivatedRoute } from '@angular/router';
 import {
-  combineLatest, firstValueFrom, Observable, of, Subscription, switchMap
+  combineLatest, firstValueFrom, Observable, of, Subject, Subscription, switchMap
 } from 'rxjs';
 import * as xml2js from 'xml2js';
 import { jwtDecode, JwtPayload } from 'jwt-decode';
@@ -20,12 +20,13 @@ import { UnitPlayerComponent } from '../unit-player/unit-player.component';
 import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
 import { ResponseDto } from '../../../../../../../api-dto/responses/response-dto';
+import { SpinnerComponent } from '../spinner/spinner.component';
 
 @Component({
   selector: 'coding-box-replay',
   standalone: true,
   // eslint-disable-next-line max-len
-  imports: [MatFormFieldModule, MatInputModule, MatButtonModule, ReactiveFormsModule, NgIf, TranslateModule, UnitPlayerComponent],
+  imports: [MatFormFieldModule, MatInputModule, MatButtonModule, ReactiveFormsModule, NgIf, TranslateModule, UnitPlayerComponent, SpinnerComponent],
   templateUrl: './replay.component.html',
   styleUrl: './replay.component.scss'
 })
@@ -42,6 +43,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   unitIdError = false;
   authError = false;
   unknownError = false;
+  isLoaded: Subject<boolean> = new Subject<boolean>();
   @Input() testPersonInput: string | undefined;
   @Input() unitIdInput: string | undefined;
   private routerSubscription: Subscription | null = null;
@@ -145,12 +147,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   async ngOnChanges(changes: SimpleChanges): Promise<void> {
     // eslint-disable-next-line @typescript-eslint/dot-notation
     if (typeof changes['unitIdInput']?.currentValue === 'undefined') {
-      this.unitId = '';
-      this.player = '';
-      this.unitDef = '';
-      this.unitId = '';
-      this.page = undefined;
-      this.responses = undefined;
+      this.reset();
       return Promise.resolve();
     }
     // eslint-disable-next-line @typescript-eslint/dot-notation
@@ -224,6 +221,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   async getUnitData(workspace: number, authToken?:string) {
+    this.isLoaded.next(false);
     const unitData = await firstValueFrom(
       combineLatest([
         this.getUnitDef(workspace, authToken),
@@ -238,6 +236,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
             return this.getPlayer(workspace, ReplayComponent.normalizePlayerId(player), authToken);
           }))
       ]));
+    this.isLoaded.next(true);
     return { unitDef: unitData[0], response: unitData[1], player: unitData[2] };
   }
 
