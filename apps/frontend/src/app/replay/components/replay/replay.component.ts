@@ -21,6 +21,7 @@ import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
 import { ResponseDto } from '../../../../../../../api-dto/responses/response-dto';
 import { SpinnerComponent } from '../spinner/spinner.component';
+import { FilesDto } from '../../../../../../../api-dto/files/files.dto';
 
 @Component({
   selector: 'coding-box-replay',
@@ -141,7 +142,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     return !!response;
   }
 
-  private static checkUnitId(unitFile: { data: string }[]): void {
+  private static checkUnitId(unitFile: FilesDto[]): void {
     if (!unitFile || !unitFile[0]) {
       throw new Error('unitFile not found');
     }
@@ -166,10 +167,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   private setUnitProperties(
-    unitData: { unitDef: {
-      data: string, file_id: string }[],
-    response: ResponseDto[],
-    player: { data: string, file_id: string }[]
+    unitData: { unitDef: FilesDto[], response: ResponseDto[], player: FilesDto[]
     }) {
     this.cachePlayerData(unitData.player[0]);
     this.cacheUnitDefData(unitData.unitDef[0]);
@@ -178,12 +176,12 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     this.responses = unitData.response[0];
   }
 
-  private cacheUnitDefData(unitDef: { data: string, file_id: string }) {
+  private cacheUnitDefData(unitDef: FilesDto) {
     this.lastUnitDef.data = unitDef.data;
     this.lastUnitDef.id = unitDef.file_id.substring(0, unitDef.file_id.indexOf('.VOUD'));
   }
 
-  private cachePlayerData(playerData: { data: string, file_id: string }) {
+  private cachePlayerData(playerData: FilesDto) {
     this.lastPlayer.data = playerData.data;
     this.lastPlayer.id = playerData.file_id;
   }
@@ -205,7 +203,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     throw new Error('Invalid player name');
   }
 
-  private getUnitDef(workspace: number, authToken?:string): Observable<{ data: string, file_id: string }[]> {
+  private getUnitDef(workspace: number, authToken?:string): Observable<FilesDto[]> {
     if (this.lastUnitDef.id && this.lastUnitDef.data && this.lastUnitDef.id === this.unitId) {
       return of([{
         data: this.lastUnitDef.data,
@@ -230,7 +228,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     return of([]);
   }
 
-  private getUnit(workspace: number, authToken?:string): Observable<{ data: string, file_id: string }[]> {
+  private getUnit(workspace: number, authToken?:string): Observable<FilesDto[]> {
     try {
       return this.backendService.getUnit(workspace, this.testPerson, this.unitId, authToken);
     } catch (error) {
@@ -241,7 +239,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
   private getPlayer(
     workspace: number, player: string, authToken?:string
-  ): Observable<{ data: string, file_id: string }[]> {
+  ): Observable<FilesDto[]> {
     if (this.lastPlayer.id && this.lastPlayer.data && this.lastPlayer.id === player) {
       return of([{ data: this.lastPlayer.data, file_id: this.lastPlayer.id }]);
     }
