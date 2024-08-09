@@ -15,6 +15,7 @@ import { ImportOptions, ServerResponse } from '../ws-admin/test-center-import/te
 import { TestGroupsInListDto } from '../../../../../api-dto/test-groups/testgroups-in-list.dto';
 import { FilesInListDto } from '../../../../../api-dto/files/files-in-list.dto';
 import { ResponseDto } from '../../../../../api-dto/responses/response-dto';
+import { FilesDto } from '../../../../../api-dto/files/files.dto';
 
 @Injectable({
   providedIn: 'root'
@@ -232,16 +233,16 @@ export class BackendService {
       { headers: this.authHeader });
   }
 
-  getUnitDef(workspaceId: number, unit: string, authToken?:string): Observable<{ data:string, file_id: string }[]> {
+  getUnitDef(workspaceId: number, unit: string, authToken?:string): Observable<FilesDto[]> {
     const headers = authToken ? { Authorization: `Bearer ${authToken}` } : this.authHeader;
-    return this.http.get<{ data:string, file_id: string }[]>(
+    return this.http.get<FilesDto[]>(
       `${this.serverUrl}admin/workspace/${workspaceId}/${unit}/unitDef`,
       { headers });
   }
 
-  getPlayer(workspaceId: number, player:string, authToken?:string): Observable<{ data:string, file_id: string }[]> {
+  getPlayer(workspaceId: number, player:string, authToken?:string): Observable<FilesDto[]> {
     const headers = authToken ? { Authorization: `Bearer ${authToken}` } : this.authHeader;
-    return this.http.get<{ data:string, file_id: string }[]>(
+    return this.http.get<FilesDto[]>(
       `${this.serverUrl}admin/workspace/${workspaceId}/player/${player}`,
       { headers });
   }
@@ -258,9 +259,9 @@ export class BackendService {
           testPerson: string,
           unitId:string,
           authToken?:string
-  ): Observable<{ data:string, file_id: string }[]> {
+  ): Observable<FilesDto[]> {
     const headers = authToken ? { Authorization: `Bearer ${authToken}` } : this.authHeader;
-    return this.http.get<{ data:string, file_id: string }[]>(
+    return this.http.get<FilesDto[]>(
       `${this.serverUrl}admin/workspace/${workspaceId}/unit/${testPerson}/${unitId}`,
       { headers });
   }
