@@ -15,6 +15,7 @@ import { ImportOptions, ServerResponse } from '../ws-admin/test-center-import/te
 import { TestGroupsInListDto } from '../../../../../api-dto/test-groups/testgroups-in-list.dto';
 import { FilesInListDto } from '../../../../../api-dto/files/files-in-list.dto';
 import { ResponseDto } from '../../../../../api-dto/responses/response-dto';
+import { FilesDto } from '../../../../../api-dto/files/files.dto';
 
 @Injectable({
   providedIn: 'root'
@@ -232,56 +233,37 @@ export class BackendService {
       { headers: this.authHeader });
   }
 
-  getUnitDef(workspaceId: number, unit: string): Observable<{ data:string }[]> {
-    return this.http.get<{ data:string }[]>(
+  getUnitDef(workspaceId: number, unit: string, authToken?:string): Observable<FilesDto[]> {
+    const headers = authToken ? { Authorization: `Bearer ${authToken}` } : this.authHeader;
+    return this.http.get<FilesDto[]>(
       `${this.serverUrl}admin/workspace/${workspaceId}/${unit}/unitDef`,
-      { headers: this.authHeader });
+      { headers });
   }
 
-  getPlayer(workspaceId: number, player:string): Observable<{ data:string }[]> {
-    return this.http.get<{ data:string }[]>(
+  getPlayer(workspaceId: number, player:string, authToken?:string): Observable<FilesDto[]> {
+    const headers = authToken ? { Authorization: `Bearer ${authToken}` } : this.authHeader;
+    return this.http.get<FilesDto[]>(
       `${this.serverUrl}admin/workspace/${workspaceId}/player/${player}`,
-      { headers: this.authHeader });
+      { headers });
   }
 
-  getResponses(workspaceId: number, testPerson: string, unitId:string): Observable<ResponseDto[]> {
-    return this.http.get<ResponseDto[]>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/responses/${testPerson}/${unitId}`,
-      { headers: this.authHeader });
-  }
-
-  getUnit(workspaceId: number, testPerson: string, unitId:string): Observable<{ data:string }[]> {
-    return this.http.get<{ data:string }[]>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/unit/${testPerson}/${unitId}`,
-      { headers: this.authHeader });
-  }
-
-  getUnitDefExternal(authToken:string, workspaceId: number, unit: string): Observable<{ data:string }[]> {
-    return this.http.get<{ data:string }[]>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/${unit}/unitDef`,
-      { headers: { Authorization: `Bearer ${authToken}` } });
-  }
-
-  getPlayerExternal(authToken:string, workspaceId: number, player:string): Observable<{ data:string }[]> {
-    return this.http.get<{ data:string }[]>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/player/${player}`,
-      { headers: { Authorization: `Bearer ${authToken}` } });
-  }
-
-  getResponsesExternal(
-    authToken:string, workspaceId: number, testPerson: string, unitId:string
+  getResponses(workspaceId: number, testPerson: string, unitId:string, authToken?:string
   ): Observable<ResponseDto[]> {
+    const headers = authToken ? { Authorization: `Bearer ${authToken}` } : this.authHeader;
     return this.http.get<ResponseDto[]>(
       `${this.serverUrl}admin/workspace/${workspaceId}/responses/${testPerson}/${unitId}`,
-      { headers: { Authorization: `Bearer ${authToken}` } });
+      { headers });
   }
 
-  getUnitExternal(authToken:string,
-                  workspaceId: number,
-                  testPerson: string, unitId:string): Observable<{ data:string }[]> {
-    return this.http.get<{ data:string }[]>(
+  getUnit(workspaceId: number,
+          testPerson: string,
+          unitId:string,
+          authToken?:string
+  ): Observable<FilesDto[]> {
+    const headers = authToken ? { Authorization: `Bearer ${authToken}` } : this.authHeader;
+    return this.http.get<FilesDto[]>(
       `${this.serverUrl}admin/workspace/${workspaceId}/unit/${testPerson}/${unitId}`,
-      { headers: { Authorization: `Bearer ${authToken}` } });
+      { headers });
   }
 
   getTestPersonUnits(workspaceId: number, testPerson: string): Observable<{ unit_id:string }[]> {
