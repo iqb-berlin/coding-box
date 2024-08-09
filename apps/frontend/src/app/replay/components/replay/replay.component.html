@@ -1,9 +1,9 @@
-<cb-spinner [isLoaded]="isLoaded"></cb-spinner>
 <div class="replay-container">
-    <coding-box-unit-player *ngIf="!!player && unitDef"
-                            [unitDef]="unitDef"
-                            [unitPlayer]="player"
-                            [unitResponses]="responses"
-                            [pageId]="page">
-    </coding-box-unit-player>
+  <cb-spinner [isLoaded]="isLoaded"></cb-spinner>
+  <coding-box-unit-player *ngIf="!!player && unitDef"
+                          [unitDef]="unitDef"
+                          [unitPlayer]="player"
+                          [unitResponses]="responses"
+                          [pageId]="page">
+  </coding-box-unit-player>
 </div>
