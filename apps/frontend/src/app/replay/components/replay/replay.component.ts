@@ -43,6 +43,8 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   unitIdError = false;
   authError = false;
   unknownError = false;
+  lastPlayer: { id: string, data: string } = { id: '', data: '' };
+  lastUnitDef: { id: string, data: string } = { id: '', data: '' };
   isLoaded: Subject<boolean> = new Subject<boolean>();
   @Input() testPersonInput: string | undefined;
   @Input() unitIdInput: string | undefined;
@@ -82,7 +84,10 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   openSnackBar(message: string, action: string) {
     const snackbarRef = this.snackBar
       .open(message, action, { panelClass: ['snackbar-error'] });
-    snackbarRef.afterDismissed().subscribe(() => this.reset());
+    snackbarRef.afterDismissed().subscribe(() => {
+      this.reset();
+      this.isLoaded.next(true);
+    });
   }
 
   private subscribeRouter(): void {
@@ -111,11 +116,9 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
             }
             if (workspace) {
               try {
-                const unitDataExternal = await this.getUnitData(Number(workspace), auth);
-                this.player = unitDataExternal.player[0].data;
-                this.unitDef = unitDataExternal.unitDef[0].data;
-                this.responses = unitDataExternal.response[0];
-                this.responsesError = !ReplayComponent.hasResponses(this.responses);
+                const unitData = await this.getUnitData(Number(workspace), auth);
+                this.responsesError = !ReplayComponent.hasResponses(unitData.response[0]);
+                this.setUnitProperties(unitData);
               } catch (error) {
                 this.unitIdError = true;
               }
@@ -144,6 +147,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     }
   }
 
+  // TODO: show unit if testperson changes and unit is already loaded
   async ngOnChanges(changes: SimpleChanges): Promise<void> {
     // eslint-disable-next-line @typescript-eslint/dot-notation
     if (typeof changes['unitIdInput']?.currentValue === 'undefined') {
@@ -157,10 +161,31 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     this.unitId = unitIdInput.currentValue;
     this.testPerson = this.testPersonInput || '';
     const unitData = await this.getUnitData(this.appService.selectedWorkspaceId);
+    this.setUnitProperties(unitData);
+    return Promise.resolve();
+  }
+
+  private setUnitProperties(
+    unitData: { unitDef: {
+      data: string, file_id: string }[],
+    response: ResponseDto[],
+    player: { data: string, file_id: string }[]
+    }) {
+    this.cachePlayerData(unitData.player[0]);
+    this.cacheUnitDefData(unitData.unitDef[0]);
     this.player = unitData.player[0].data;
     this.unitDef = unitData.unitDef[0].data;
     this.responses = unitData.response[0];
-    return Promise.resolve();
+  }
+
+  private cacheUnitDefData(unitDef: { data: string, file_id: string }) {
+    this.lastUnitDef.data = unitDef.data;
+    this.lastUnitDef.id = unitDef.file_id.substring(0, unitDef.file_id.indexOf('.VOUD'));
+  }
+
+  private cachePlayerData(playerData: { data: string, file_id: string }) {
+    this.lastPlayer.data = playerData.data;
+    this.lastPlayer.id = playerData.file_id;
   }
 
   private static normalizePlayerId(name: string): string {
@@ -180,13 +205,19 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     throw new Error('Invalid player name');
   }
 
-  private getUnitDef(workspace: number, authToken?:string): Observable<{ data: string }[]> {
+  private getUnitDef(workspace: number, authToken?:string): Observable<{ data: string, file_id: string }[]> {
+    if (this.lastUnitDef.id && this.lastUnitDef.data && this.lastUnitDef.id === this.unitId) {
+      return of([{
+        data: this.lastUnitDef.data,
+        file_id: `${this.lastUnitDef.id}.VOUD`
+      }]);
+    }
     try {
       return this.backendService.getUnitDef(workspace, this.unitId, authToken);
     } catch (error) {
       this.setHttpError(error as HttpErrorResponse);
     }
-    return of([{ data: '' }]);
+    return of([{ data: '', file_id: '' }]);
   }
 
   private getResponses(workspace: number, authToken?:string): Observable<ResponseDto[]> {
@@ -199,16 +230,21 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     return of([]);
   }
 
-  private getUnit(workspace: number, authToken?:string): Observable<{ data: string }[]> {
+  private getUnit(workspace: number, authToken?:string): Observable<{ data: string, file_id: string }[]> {
     try {
       return this.backendService.getUnit(workspace, this.testPerson, this.unitId, authToken);
     } catch (error) {
       this.setHttpError(error as HttpErrorResponse);
     }
-    return of([{ data: '' }]);
+    return of([{ data: '', file_id: '' }]);
   }
 
-  private getPlayer(workspace: number, player: string, authToken?:string): Observable<{ data: string }[]> {
+  private getPlayer(
+    workspace: number, player: string, authToken?:string
+  ): Observable<{ data: string, file_id: string }[]> {
+    if (this.lastPlayer.id && this.lastPlayer.data && this.lastPlayer.id === player) {
+      return of([{ data: this.lastPlayer.data, file_id: this.lastPlayer.id }]);
+    }
     try {
       return this.backendService.getPlayer(
         workspace,
@@ -217,10 +253,10 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     } catch (error) {
       this.setHttpError(error as HttpErrorResponse);
     }
-    return of([{ data: '' }]);
+    return of([{ data: '', file_id: '' }]);
   }
 
-  async getUnitData(workspace: number, authToken?:string) {
+  private async getUnitData(workspace: number, authToken?:string) {
     this.isLoaded.next(false);
     const unitData = await firstValueFrom(
       combineLatest([
