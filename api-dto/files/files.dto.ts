@@ -2,10 +2,10 @@ import { ApiProperty } from '@nestjs/swagger';
 
 export class FilesDto {
   @ApiProperty()
-    filename!: string;
+    file_id!: string;
 
   @ApiProperty()
-    data?: string;
+    data!: string;
 
   @ApiProperty()
     workspace_id?: number;
