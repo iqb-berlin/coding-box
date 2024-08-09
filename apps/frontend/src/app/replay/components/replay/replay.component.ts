@@ -44,8 +44,9 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   unitIdError = false;
   authError = false;
   unknownError = false;
-  lastPlayer: { id: string, data: string } = { id: '', data: '' };
-  lastUnitDef: { id: string, data: string } = { id: '', data: '' };
+  private lastPlayer: { id: string, data: string } = { id: '', data: '' };
+  private lastUnitDef: { id: string, data: string } = { id: '', data: '' };
+  private lastUnit: { id: string, data: string } = { id: '', data: '' };
   isLoaded: Subject<boolean> = new Subject<boolean>();
   @Input() testPersonInput: string | undefined;
   @Input() unitIdInput: string | undefined;
@@ -142,9 +143,11 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     return !!response;
   }
 
-  private static checkUnitId(unitFile: FilesDto[]): void {
+  private checkUnitId(unitFile: FilesDto[]): void {
     if (!unitFile || !unitFile[0]) {
       throw new Error('unitFile not found');
+    } else {
+      this.cacheUnitData(unitFile[0]);
     }
   }
 
@@ -174,6 +177,11 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     this.player = unitData.player[0].data;
     this.unitDef = unitData.unitDef[0].data;
     this.responses = unitData.response[0];
+  }
+
+  private cacheUnitData(unit: FilesDto) {
+    this.lastUnit.data = unit.data;
+    this.lastUnit.id = unit.file_id;
   }
 
   private cacheUnitDefData(unitDef: FilesDto) {
@@ -229,6 +237,12 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   private getUnit(workspace: number, authToken?:string): Observable<FilesDto[]> {
+    if (this.lastUnit.id && this.lastUnit.data && this.lastUnit.id === this.unitId) {
+      return of([{
+        data: this.lastUnit.data,
+        file_id: `${this.lastUnit.id}`
+      }]);
+    }
     try {
       return this.backendService.getUnit(workspace, this.testPerson, this.unitId, authToken);
     } catch (error) {
@@ -262,7 +276,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         this.getResponses(workspace, authToken),
         this.getUnit(workspace, authToken)
           .pipe(switchMap(unitFile => {
-            ReplayComponent.checkUnitId(unitFile);
+            this.checkUnitId(unitFile);
             let player = '';
             xml2js.parseString(unitFile[0].data, (err:any, result:any) => {
               player = result?.Unit.DefinitionRef[0].$.player;
