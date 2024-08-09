@@ -240,7 +240,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     if (this.lastUnit.id && this.lastUnit.data && this.lastUnit.id === this.unitId) {
       return of([{
         data: this.lastUnit.data,
-        file_id: `${this.lastUnit.id}`
+        file_id: this.lastUnit.id
       }]);
     }
     try {
