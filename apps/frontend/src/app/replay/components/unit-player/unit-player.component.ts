@@ -1,13 +1,13 @@
 import {
   AfterViewInit,
-  Component, ElementRef, Input, OnChanges, SimpleChanges, ViewChild
+  Component, ElementRef, EventEmitter, Input, OnChanges, OnDestroy, Output, SimpleChanges, ViewChild
 } from '@angular/core';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
 import { ReactiveFormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { Subject, takeUntil } from 'rxjs';
+import { debounceTime, Subject, takeUntil } from 'rxjs';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { AppService } from '../../../services/app.service';
 import { BackendService } from '../../../services/backend.service';
@@ -31,12 +31,14 @@ export type Progress = 'none' | 'some' | 'complete';
   templateUrl: './unit-player.component.html',
   styleUrl: './unit-player.component.scss'
 })
-export class UnitPlayerComponent implements AfterViewInit, OnChanges {
+export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy {
   @Input() unitDef: string | undefined;
   @Input() unitPlayer: string | undefined;
   @Input() unitResponses: ResponseDto | undefined;
   @Input() pageId: string | undefined;
+  @Output() invalidPage: EventEmitter<boolean> = new EventEmitter();
   @ViewChild('hostingIframe') hostingIframe!: ElementRef;
+  private validPages: Subject<string[]> = new Subject<string[]>();
   private iFrameElement: HTMLIFrameElement | undefined;
   postMessageTarget: Window | undefined;
   ngUnsubscribe = new Subject<void>();
@@ -83,6 +85,7 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges {
     private backendService: BackendService
   ) {
     this.subscribeForMessages();
+    this.subscribeForValidPages();
   }
 
   ngAfterViewInit(): void {
@@ -90,6 +93,17 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges {
     if (this.iFrameElement && this.unitPlayer) {
       this.iFrameElement.srcdoc = this.unitPlayer.replace('&quot;', '');
     }
+  }
+
+  private subscribeForValidPages(): void {
+    this.validPages
+      .pipe(debounceTime(500),
+        takeUntil(this.ngUnsubscribe))
+      .subscribe((pages: string[]) => {
+        if (!this.pageId || !pages.includes(this.pageId)) {
+          this.invalidPage.emit(true);
+        }
+      });
   }
 
   private subscribeForMessages(): void {
@@ -135,6 +149,7 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges {
               if (msgData.playerState) {
                 const pages = msgData.playerState.validPages;
                 this.setPageList(Object.keys(pages), msgData.playerState.currentPage);
+                this.validPages.next(Object.keys(pages));
               }
               if (msgData.unitState) {
                 this.responses = Object.values(msgData.unitState.dataParts)
@@ -364,5 +379,10 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges {
         }, '*');
       }
     }
+  }
+
+  ngOnDestroy() {
+    this.ngUnsubscribe.next();
+    this.ngUnsubscribe.complete();
   }
 }
