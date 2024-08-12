@@ -43,6 +43,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   responsesError = false;
   unitIdError = false;
   authError = false;
+  pageError = false;
   unknownError = false;
   private lastPlayer: { id: string, data: string } = { id: '', data: '' };
   private lastUnitDef: { id: string, data: string } = { id: '', data: '' };
@@ -80,6 +81,8 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       );
     } else if (this.unknownError) {
       this.openSnackBar('Unbekannter Fehler', 'Schließen');
+    } else if (this.pageError) {
+      this.openSnackBar(`Keine valide Seite mit Index "${this.page}" verfügbar`, 'Schließen');
     }
   }
 
@@ -296,12 +299,18 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     }
   }
 
+  checkPageError(isPageError: boolean): void {
+    this.pageError = isPageError;
+    this.checkErrors();
+  }
+
   private reset() {
     this.testPersonError = false;
     this.responsesError = false;
     this.unitIdError = false;
     this.authError = false;
     this.unknownError = false;
+    this.pageError = false;
     this.unitId = '';
     this.player = '';
     this.unitDef = '';
