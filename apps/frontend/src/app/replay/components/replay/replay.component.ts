@@ -39,9 +39,11 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   unitId: string = '';
   responses: ResponseDto | undefined = undefined;
   auth: string = '';
+  paramsError = false;
   testPersonError = false;
   responsesError = false;
   unitIdError = false;
+  queryError = false;
   authError = false;
   pageError = false;
   unknownError = false;
@@ -68,7 +70,11 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   checkErrors(): void {
-    if (this.authError) {
+    if (this.queryError) {
+      this.openSnackBar('Kein Authorisierungs-Token angegeben', 'Schließen');
+    } else if (this.paramsError) {
+      this.openSnackBar('Ungültige Anzahl an Parametern in der URL vorhanden', 'Schließen');
+    } else if (this.authError) {
       this.openSnackBar('Authentisierungproblem: Zugriffs-Token ungültig', 'Schließen');
     } else if (this.unitIdError) {
       this.openSnackBar('Unbekannte Unit-Id', 'Schließen');
@@ -101,7 +107,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         this.snackBar.dismiss();
         this.reset();
         const queryParams = await firstValueFrom(this.route.queryParams);
-        if (Object.keys(params).length !== 0) {
+        if (Object.keys(params).length === 3) {
           const {
             page, testPerson, unitId
           } = params;
@@ -111,33 +117,46 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
           this.unitId = unitId;
           const { auth } = queryParams;
           this.auth = auth;
-          if (auth.length > 0) {
-            let workspace = '';
-            try {
-              const decoded: JwtPayload & { workspace: string } = jwtDecode(auth);
-              workspace = decoded?.workspace;
-            } catch (error) {
-              this.authError = true;
-            }
-            if (workspace) {
-              try {
-                const unitData = await this.getUnitData(Number(workspace), auth);
-                this.responsesError = !ReplayComponent.hasResponses(unitData.response[0]);
-                this.setUnitProperties(unitData);
-              } catch (error) {
-                this.unitIdError = true;
-              }
-            }
+          if (this.auth) {
+            await this.fetchUnitData();
+          } else {
+            this.queryError = true;
+            this.isLoaded.next(true);
             this.checkErrors();
           }
         } else if (this.testPersonInput && this.unitIdInput) {
           this.testPerson = this.testPersonInput;
           this.unitId = this.unitIdInput.toUpperCase();
+        } else if (Object.keys(params).length !== 3) {
+          this.paramsError = true;
+          this.isLoaded.next(true);
+          this.checkErrors();
         }
       });
   }
 
+  private async fetchUnitData(): Promise<void> {
+    let workspace = '';
+    try {
+      const decoded: JwtPayload & { workspace: string } = jwtDecode(this.auth);
+      workspace = decoded?.workspace;
+    } catch (error) {
+      this.authError = true;
+    }
+    if (workspace) {
+      try {
+        const unitData = await this.getUnitData(Number(workspace), this.auth);
+        this.responsesError = !ReplayComponent.hasResponses(unitData.response[0]);
+        this.setUnitProperties(unitData);
+      } catch (error) {
+        this.unitIdError = true;
+      }
+    }
+    this.checkErrors();
+  }
+
   private static isTestperson(testperson: string): boolean {
+    if (testperson.split('@').length !== 3) return false;
     const reg = /^.+(@.+){2}$/;
     return reg.test(testperson);
   }
@@ -305,6 +324,8 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   private reset() {
+    this.queryError = false;
+    this.paramsError = false;
     this.testPersonError = false;
     this.responsesError = false;
     this.unitIdError = false;
