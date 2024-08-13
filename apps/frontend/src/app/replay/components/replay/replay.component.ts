@@ -82,7 +82,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     } else if (this.unknownError) {
       this.openSnackBar('Unbekannter Fehler', 'Schließen');
     } else if (this.pageError) {
-      this.openSnackBar(`Keine valide Seite mit Index "${this.page}" verfügbar`, 'Schließen');
+      this.openSnackBar(`Keine valide Seite mit ID "${this.page}" verfügbar`, 'Schließen');
     }
   }
 
