@@ -147,7 +147,6 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     if (workspace) {
       try {
         const unitData = await this.getUnitData(Number(workspace), this.auth);
-        this.responsesError = !ReplayComponent.hasResponses(unitData.response[0]);
         this.setUnitProperties(unitData);
       } catch (error) {
         if (error as HttpErrorResponse) {
@@ -213,6 +212,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     this.player = unitData.player[0].data;
     this.unitDef = unitData.unitDef[0].data;
     this.responses = unitData.response[0];
+    this.responsesError = !ReplayComponent.hasResponses(unitData.response[0]);
   }
 
   private cacheUnitData(unit: FilesDto) {
