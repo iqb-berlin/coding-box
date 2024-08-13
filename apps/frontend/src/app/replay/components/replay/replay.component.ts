@@ -75,11 +75,11 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     } else if (this.paramsError) {
       this.openSnackBar('Ungültige Anzahl an Parametern in der URL vorhanden', 'Schließen');
     } else if (this.authError) {
-      this.openSnackBar('Authentisierungproblem: Zugriffs-Token ungültig', 'Schließen');
+      this.openSnackBar('Authentisierungs-Token ist ungültig', 'Schließen');
     } else if (this.unitIdError) {
-      this.openSnackBar('Unbekannte Unit-Id', 'Schließen');
+      this.openSnackBar('Unbekannte Unit-ID', 'Schließen');
     } else if (this.testPersonError) {
-      this.openSnackBar('Ungültige Id für Testperson', 'Schließen');
+      this.openSnackBar('Ungültige ID für Testperson', 'Schließen');
     } else if (this.responsesError) {
       this.openSnackBar(
         `Keine Antworten für Aufgabe "${this.unitId}" von Testperson "${this.testPerson}" gefunden`,
@@ -141,6 +141,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       const decoded: JwtPayload & { workspace: string } = jwtDecode(this.auth);
       workspace = decoded?.workspace;
     } catch (error) {
+      this.isLoaded.next(true);
       this.authError = true;
     }
     if (workspace) {
@@ -149,10 +150,23 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         this.responsesError = !ReplayComponent.hasResponses(unitData.response[0]);
         this.setUnitProperties(unitData);
       } catch (error) {
-        this.unitIdError = true;
+        if (error as HttpErrorResponse) {
+          this.isLoaded.next(true);
+          this.setHttpUnitIdError(error as HttpErrorResponse);
+        }
       }
     }
     this.checkErrors();
+  }
+
+  private setHttpUnitIdError(error: HttpErrorResponse): void {
+    if (error.status === 401) {
+      this.authError = true;
+    } else if (error.status) {
+      this.unknownError = true;
+    } else {
+      this.unitIdError = true;
+    }
   }
 
   private static isTestperson(testperson: string): boolean {
