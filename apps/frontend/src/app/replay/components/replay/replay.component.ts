@@ -97,7 +97,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     this.errorSnackbarRef.afterDismissed().subscribe(() => {
       this.errorSnackbarRef = null;
       this.reset();
-      this.isLoaded.next(true);
+      this.setIsLoaded();
     });
   }
 
@@ -127,7 +127,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
             await this.fetchUnitData();
           } else {
             this.queryError = true;
-            this.isLoaded.next(true);
+            this.setIsLoaded();
             this.checkErrors();
           }
         } else if (this.testPersonInput && this.unitIdInput) {
@@ -135,10 +135,14 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
           this.unitId = this.unitIdInput.toUpperCase();
         } else if (Object.keys(params).length !== 3) {
           this.paramsError = true;
-          this.isLoaded.next(true);
+          this.setIsLoaded();
           this.checkErrors();
         }
       });
+  }
+
+  private setIsLoaded(): void {
+    setTimeout(() => this.isLoaded.next(true));
   }
 
   private setUnitParams(params: Params): void {
@@ -157,7 +161,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       const decoded: JwtPayload & { workspace: string } = jwtDecode(this.authToken);
       workspace = decoded?.workspace;
     } catch (error) {
-      this.isLoaded.next(true);
+      this.setIsLoaded();
       this.authError = true;
     }
     if (workspace) {
@@ -166,7 +170,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         this.setUnitProperties(unitData);
       } catch (error) {
         if (error as HttpErrorResponse) {
-          this.isLoaded.next(true);
+          this.setIsLoaded();
           this.setHttpError(error as HttpErrorResponse);
         }
       }
@@ -326,7 +330,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
             return this.getPlayer(workspace, ReplayComponent.normalizePlayerId(player), authToken);
           }))
       ]));
-    this.isLoaded.next(true);
+    this.setIsLoaded();
     return { unitDef: unitData[0], response: unitData[1], player: unitData[2] };
   }
 
