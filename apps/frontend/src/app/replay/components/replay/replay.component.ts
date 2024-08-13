@@ -8,13 +8,13 @@ import { MatButtonModule } from '@angular/material/button';
 import { ReactiveFormsModule } from '@angular/forms';
 import { NgIf } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, Params } from '@angular/router';
 import {
   combineLatest, firstValueFrom, Observable, of, Subject, Subscription, switchMap
 } from 'rxjs';
 import * as xml2js from 'xml2js';
 import { jwtDecode, JwtPayload } from 'jwt-decode';
-import { MatSnackBar } from '@angular/material/snack-bar';
+import { MatSnackBar, MatSnackBarRef, TextOnlySnackBar } from '@angular/material/snack-bar';
 import { HttpErrorResponse } from '@angular/common/http';
 import { UnitPlayerComponent } from '../unit-player/unit-player.component';
 import { BackendService } from '../../../services/backend.service';
@@ -34,30 +34,31 @@ import { FilesDto } from '../../../../../../../api-dto/files/files.dto';
 export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   player: string = '';
   unitDef: string = '';
-  testPerson: string = '';
+  isLoaded: Subject<boolean> = new Subject<boolean>();
   page: string | undefined;
-  unitId: string = '';
   responses: ResponseDto | undefined = undefined;
-  auth: string = '';
-  paramsError = false;
-  testPersonError = false;
-  responsesError = false;
-  unitIdError = false;
-  queryError = false;
-  authError = false;
-  pageError = false;
-  unknownError = false;
+  private testPerson: string = '';
+  private unitId: string = '';
+  private authToken: string = '';
+  private paramsError = false;
+  private testPersonError = false;
+  private responsesError = false;
+  private unitIdError = false;
+  private queryError = false;
+  private authError = false;
+  private unknownError = false;
+  private errorSnackbarRef: MatSnackBarRef<TextOnlySnackBar> | null = null;
   private lastPlayer: { id: string, data: string } = { id: '', data: '' };
   private lastUnitDef: { id: string, data: string } = { id: '', data: '' };
   private lastUnit: { id: string, data: string } = { id: '', data: '' };
-  isLoaded: Subject<boolean> = new Subject<boolean>();
+  private routerSubscription: Subscription | null = null;
   @Input() testPersonInput: string | undefined;
   @Input() unitIdInput: string | undefined;
-  private routerSubscription: Subscription | null = null;
   constructor(private backendService:BackendService,
               private appService:AppService,
               private route:ActivatedRoute,
-              private snackBar: MatSnackBar) {
+              private errorSnackBar: MatSnackBar,
+              private pageErrorSnackBar: MatSnackBar) {
   }
 
   ngOnInit(): void {
@@ -71,53 +72,58 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
   checkErrors(): void {
     if (this.queryError) {
-      this.openSnackBar('Kein Authorisierungs-Token angegeben', 'Schließen');
+      this.openErrorSnackBar('Kein Authorisierungs-Token angegeben', 'Schließen');
     } else if (this.paramsError) {
-      this.openSnackBar('Ungültige Anzahl an Parametern in der URL vorhanden', 'Schließen');
+      this.openErrorSnackBar('Ungültige Anzahl an Parametern in der URL vorhanden', 'Schließen');
     } else if (this.authError) {
-      this.openSnackBar('Authentisierungs-Token ist ungültig', 'Schließen');
+      this.openErrorSnackBar('Authentisierungs-Token ist ungültig', 'Schließen');
     } else if (this.unitIdError) {
-      this.openSnackBar('Unbekannte Unit-ID', 'Schließen');
+      this.openErrorSnackBar('Unbekannte Unit-ID', 'Schließen');
     } else if (this.testPersonError) {
-      this.openSnackBar('Ungültige ID für Testperson', 'Schließen');
+      this.openErrorSnackBar('Ungültige ID für Testperson', 'Schließen');
     } else if (this.responsesError) {
-      this.openSnackBar(
+      this.openErrorSnackBar(
         `Keine Antworten für Aufgabe "${this.unitId}" von Testperson "${this.testPerson}" gefunden`,
         'Schließen'
       );
     } else if (this.unknownError) {
-      this.openSnackBar('Unbekannter Fehler', 'Schließen');
-    } else if (this.pageError) {
-      this.openSnackBar(`Keine valide Seite mit ID "${this.page}" verfügbar`, 'Schließen');
+      this.openErrorSnackBar('Unbekannter Fehler', 'Schließen');
     }
   }
 
-  openSnackBar(message: string, action: string) {
-    const snackbarRef = this.snackBar
+  private openErrorSnackBar(message: string, action: string) {
+    this.errorSnackbarRef = this.errorSnackBar
       .open(message, action, { panelClass: ['snackbar-error'] });
-    snackbarRef.afterDismissed().subscribe(() => {
+    this.errorSnackbarRef.afterDismissed().subscribe(() => {
+      this.errorSnackbarRef = null;
       this.reset();
       this.isLoaded.next(true);
     });
   }
 
+  private openPageErrorSnackBar(message: string, action: string) {
+    if (!this.errorSnackbarRef) {
+      this.pageErrorSnackBar
+        .open(message, action, { panelClass: ['snackbar-error'] });
+    }
+  }
+
+  private async getAuthToken(): Promise<string> {
+    const queryParams = await firstValueFrom(this.route.queryParams);
+    const { auth } = queryParams;
+    return auth;
+  }
+
   private subscribeRouter(): void {
     this.routerSubscription = this.route.params
       .subscribe(async params => {
-        this.snackBar.dismiss();
+        this.errorSnackBar.dismiss();
+        this.pageErrorSnackBar.dismiss();
         this.reset();
-        const queryParams = await firstValueFrom(this.route.queryParams);
         if (Object.keys(params).length === 3) {
-          const {
-            page, testPerson, unitId
-          } = params;
-          this.page = page;
-          this.testPerson = testPerson;
-          this.testPersonError = !ReplayComponent.isTestperson(testPerson);
-          this.unitId = unitId;
-          const { auth } = queryParams;
-          this.auth = auth;
-          if (this.auth) {
+          this.authToken = await this.getAuthToken();
+          this.setUnitParams(params);
+          if (this.authToken) {
             await this.fetchUnitData();
           } else {
             this.queryError = true;
@@ -135,10 +141,20 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       });
   }
 
+  private setUnitParams(params: Params): void {
+    const {
+      page, testPerson, unitId
+    } = params;
+    this.page = page;
+    this.testPerson = testPerson;
+    this.testPersonError = !ReplayComponent.isTestperson(testPerson);
+    this.unitId = unitId;
+  }
+
   private async fetchUnitData(): Promise<void> {
     let workspace = '';
     try {
-      const decoded: JwtPayload & { workspace: string } = jwtDecode(this.auth);
+      const decoded: JwtPayload & { workspace: string } = jwtDecode(this.authToken);
       workspace = decoded?.workspace;
     } catch (error) {
       this.isLoaded.next(true);
@@ -146,7 +162,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     }
     if (workspace) {
       try {
-        const unitData = await this.getUnitData(Number(workspace), this.auth);
+        const unitData = await this.getUnitData(Number(workspace), this.authToken);
         this.setUnitProperties(unitData);
       } catch (error) {
         if (error as HttpErrorResponse) {
@@ -322,9 +338,14 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     }
   }
 
-  checkPageError(isPageError: boolean): void {
-    this.pageError = isPageError;
-    this.checkErrors();
+  checkPageError(pageError: 'notInList' | 'notCurrent' | null): void {
+    if (pageError === 'notInList') {
+      this.openPageErrorSnackBar(`Keine valide Seite mit ID "${this.page}" gefunden`, 'Schließen');
+    } else if (pageError === 'notCurrent') {
+      this.openErrorSnackBar(`Seite mit ID "${this.page}" kann nicht ausgewählt werden`, 'Schließen');
+    } else {
+      this.pageErrorSnackBar.dismiss();
+    }
   }
 
   private reset() {
@@ -335,7 +356,6 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     this.unitIdError = false;
     this.authError = false;
     this.unknownError = false;
-    this.pageError = false;
     this.unitId = '';
     this.player = '';
     this.unitDef = '';
