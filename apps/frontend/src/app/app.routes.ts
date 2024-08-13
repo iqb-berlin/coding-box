@@ -16,6 +16,9 @@ export const routes: Routes = [
   { path: '', redirectTo: 'home', pathMatch: 'full' },
   { path: 'home', component: HomeComponent },
   { path: 'replay/:testPerson/:unitId/:page', component: ReplayComponent },
+  { path: 'replay/:testPerson/:unitId', component: ReplayComponent },
+  { path: 'replay/:testPerson', component: ReplayComponent },
+  { path: 'replay', component: ReplayComponent },
   {
     path: 'admin',
     component: AdminComponent,
