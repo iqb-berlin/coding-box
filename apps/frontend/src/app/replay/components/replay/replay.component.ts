@@ -8,13 +8,13 @@ import { MatButtonModule } from '@angular/material/button';
 import { ReactiveFormsModule } from '@angular/forms';
 import { NgIf } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, Params } from '@angular/router';
 import {
   combineLatest, firstValueFrom, Observable, of, Subject, Subscription, switchMap
 } from 'rxjs';
 import * as xml2js from 'xml2js';
 import { jwtDecode, JwtPayload } from 'jwt-decode';
-import { MatSnackBar } from '@angular/material/snack-bar';
+import { MatSnackBar, MatSnackBarRef, TextOnlySnackBar } from '@angular/material/snack-bar';
 import { HttpErrorResponse } from '@angular/common/http';
 import { UnitPlayerComponent } from '../unit-player/unit-player.component';
 import { BackendService } from '../../../services/backend.service';
@@ -34,27 +34,31 @@ import { FilesDto } from '../../../../../../../api-dto/files/files.dto';
 export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   player: string = '';
   unitDef: string = '';
-  testPerson: string = '';
+  isLoaded: Subject<boolean> = new Subject<boolean>();
   page: string | undefined;
-  unitId: string = '';
   responses: ResponseDto | undefined = undefined;
-  auth: string = '';
-  testPersonError = false;
-  responsesError = false;
-  unitIdError = false;
-  authError = false;
-  unknownError = false;
+  private testPerson: string = '';
+  private unitId: string = '';
+  private authToken: string = '';
+  private paramsError = false;
+  private testPersonError = false;
+  private responsesError = false;
+  private unitIdError = false;
+  private queryError = false;
+  private authError = false;
+  private unknownError = false;
+  private errorSnackbarRef: MatSnackBarRef<TextOnlySnackBar> | null = null;
   private lastPlayer: { id: string, data: string } = { id: '', data: '' };
   private lastUnitDef: { id: string, data: string } = { id: '', data: '' };
   private lastUnit: { id: string, data: string } = { id: '', data: '' };
-  isLoaded: Subject<boolean> = new Subject<boolean>();
+  private routerSubscription: Subscription | null = null;
   @Input() testPersonInput: string | undefined;
   @Input() unitIdInput: string | undefined;
-  private routerSubscription: Subscription | null = null;
   constructor(private backendService:BackendService,
               private appService:AppService,
               private route:ActivatedRoute,
-              private snackBar: MatSnackBar) {
+              private errorSnackBar: MatSnackBar,
+              private pageErrorSnackBar: MatSnackBar) {
   }
 
   ngOnInit(): void {
@@ -67,74 +71,115 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   checkErrors(): void {
-    if (this.authError) {
-      this.openSnackBar('Authentisierungproblem: Zugriffs-Token ungültig', 'Schließen');
+    if (this.queryError) {
+      this.openErrorSnackBar('Kein Authorisierungs-Token angegeben', 'Schließen');
+    } else if (this.paramsError) {
+      this.openErrorSnackBar('Ungültige Anzahl an Parametern in der URL vorhanden', 'Schließen');
+    } else if (this.authError) {
+      this.openErrorSnackBar('Authentisierungs-Token ist ungültig', 'Schließen');
     } else if (this.unitIdError) {
-      this.openSnackBar('Unbekannte Unit-Id', 'Schließen');
+      this.openErrorSnackBar('Unbekannte Unit-ID', 'Schließen');
     } else if (this.testPersonError) {
-      this.openSnackBar('Ungültige Id für Testperson', 'Schließen');
+      this.openErrorSnackBar('Ungültige ID für Testperson', 'Schließen');
     } else if (this.responsesError) {
-      this.openSnackBar(
+      this.openErrorSnackBar(
         `Keine Antworten für Aufgabe "${this.unitId}" von Testperson "${this.testPerson}" gefunden`,
         'Schließen'
       );
     } else if (this.unknownError) {
-      this.openSnackBar('Unbekannter Fehler', 'Schließen');
+      this.openErrorSnackBar('Unbekannter Fehler', 'Schließen');
     }
   }
 
-  openSnackBar(message: string, action: string) {
-    const snackbarRef = this.snackBar
+  private openErrorSnackBar(message: string, action: string) {
+    this.errorSnackbarRef = this.errorSnackBar
       .open(message, action, { panelClass: ['snackbar-error'] });
-    snackbarRef.afterDismissed().subscribe(() => {
+    this.errorSnackbarRef.afterDismissed().subscribe(() => {
+      this.errorSnackbarRef = null;
       this.reset();
-      this.isLoaded.next(true);
+      this.setIsLoaded();
     });
+  }
+
+  private openPageErrorSnackBar(message: string, action: string) {
+    if (!this.errorSnackbarRef) {
+      this.pageErrorSnackBar
+        .open(message, action, { panelClass: ['snackbar-error'] });
+    }
+  }
+
+  private async getAuthToken(): Promise<string> {
+    const queryParams = await firstValueFrom(this.route.queryParams);
+    const { auth } = queryParams;
+    return auth;
   }
 
   private subscribeRouter(): void {
     this.routerSubscription = this.route.params
       .subscribe(async params => {
-        this.snackBar.dismiss();
+        this.errorSnackBar.dismiss();
+        this.pageErrorSnackBar.dismiss();
         this.reset();
-        const queryParams = await firstValueFrom(this.route.queryParams);
-        if (Object.keys(params).length !== 0) {
-          const {
-            page, testPerson, unitId
-          } = params;
-          this.page = page;
-          this.testPerson = testPerson;
-          this.testPersonError = !ReplayComponent.isTestperson(testPerson);
-          this.unitId = unitId;
-          const { auth } = queryParams;
-          this.auth = auth;
-          if (auth.length > 0) {
-            let workspace = '';
-            try {
-              const decoded: JwtPayload & { workspace: string } = jwtDecode(auth);
-              workspace = decoded?.workspace;
-            } catch (error) {
-              this.authError = true;
-            }
-            if (workspace) {
-              try {
-                const unitData = await this.getUnitData(Number(workspace), auth);
-                this.responsesError = !ReplayComponent.hasResponses(unitData.response[0]);
-                this.setUnitProperties(unitData);
-              } catch (error) {
-                this.unitIdError = true;
-              }
-            }
+        if (Object.keys(params).length === 3) {
+          this.authToken = await this.getAuthToken();
+          this.setUnitParams(params);
+          if (this.authToken) {
+            await this.fetchUnitData();
+          } else {
+            this.queryError = true;
+            this.setIsLoaded();
             this.checkErrors();
           }
         } else if (this.testPersonInput && this.unitIdInput) {
           this.testPerson = this.testPersonInput;
           this.unitId = this.unitIdInput.toUpperCase();
+        } else if (Object.keys(params).length !== 3) {
+          this.paramsError = true;
+          this.setIsLoaded();
+          this.checkErrors();
         }
       });
   }
 
+  private setIsLoaded(): void {
+    setTimeout(() => this.isLoaded.next(true));
+  }
+
+  private setUnitParams(params: Params): void {
+    const {
+      page, testPerson, unitId
+    } = params;
+    this.page = page;
+    this.testPerson = testPerson;
+    this.testPersonError = !ReplayComponent.isTestperson(testPerson);
+    this.unitId = unitId;
+  }
+
+  private async fetchUnitData(): Promise<void> {
+    let workspace = '';
+    try {
+      const decoded: JwtPayload & { workspace: string } = jwtDecode(this.authToken);
+      workspace = decoded?.workspace;
+    } catch (error) {
+      this.setIsLoaded();
+      this.authError = true;
+    }
+    if (workspace) {
+      try {
+        const unitData = await this.getUnitData(Number(workspace), this.authToken);
+        this.setUnitProperties(unitData);
+      } catch (error) {
+        if (error as HttpErrorResponse) {
+          this.setIsLoaded();
+          this.setHttpError(error as HttpErrorResponse);
+        }
+      }
+    }
+    this.checkErrors();
+  }
+
   private static isTestperson(testperson: string): boolean {
+    if (testperson.split('@').length !== 3) return false;
     const reg = /^.+(@.+){2}$/;
     return reg.test(testperson);
   }
@@ -145,7 +190,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
   private checkUnitId(unitFile: FilesDto[]): void {
     if (!unitFile || !unitFile[0]) {
-      throw new Error('unitFile not found');
+      this.unitIdError = true;
     } else {
       this.cacheUnitData(unitFile[0]);
     }
@@ -177,6 +222,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     this.player = unitData.player[0].data;
     this.unitDef = unitData.unitDef[0].data;
     this.responses = unitData.response[0];
+    this.responsesError = !ReplayComponent.hasResponses(unitData.response[0]);
   }
 
   private cacheUnitData(unit: FilesDto) {
@@ -284,7 +330,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
             return this.getPlayer(workspace, ReplayComponent.normalizePlayerId(player), authToken);
           }))
       ]));
-    this.isLoaded.next(true);
+    this.setIsLoaded();
     return { unitDef: unitData[0], response: unitData[1], player: unitData[2] };
   }
 
@@ -296,7 +342,19 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     }
   }
 
+  checkPageError(pageError: 'notInList' | 'notCurrent' | null): void {
+    if (pageError === 'notInList') {
+      this.openPageErrorSnackBar(`Keine valide Seite mit ID "${this.page}" gefunden`, 'Schließen');
+    } else if (pageError === 'notCurrent') {
+      this.openErrorSnackBar(`Seite mit ID "${this.page}" kann nicht ausgewählt werden`, 'Schließen');
+    } else {
+      this.pageErrorSnackBar.dismiss();
+    }
+  }
+
   private reset() {
+    this.queryError = false;
+    this.paramsError = false;
     this.testPersonError = false;
     this.responsesError = false;
     this.unitIdError = false;
