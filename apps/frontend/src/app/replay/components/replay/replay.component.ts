@@ -151,21 +151,11 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       } catch (error) {
         if (error as HttpErrorResponse) {
           this.isLoaded.next(true);
-          this.setHttpUnitIdError(error as HttpErrorResponse);
+          this.setHttpError(error as HttpErrorResponse);
         }
       }
     }
     this.checkErrors();
-  }
-
-  private setHttpUnitIdError(error: HttpErrorResponse): void {
-    if (error.status === 401) {
-      this.authError = true;
-    } else if (error.status) {
-      this.unknownError = true;
-    } else {
-      this.unitIdError = true;
-    }
   }
 
   private static isTestperson(testperson: string): boolean {
@@ -180,7 +170,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
   private checkUnitId(unitFile: FilesDto[]): void {
     if (!unitFile || !unitFile[0]) {
-      throw new Error('unitFile not found');
+      this.unitIdError = true;
     } else {
       this.cacheUnitData(unitFile[0]);
     }
