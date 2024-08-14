@@ -178,8 +178,6 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       this.resetSnackBars();
       return Promise.resolve();
     }
-    // eslint-disable-next-line @typescript-eslint/dot-notation
-    if (changes['unitIdInput'].currentValue === changes['unitIdInput'].previousValue) return Promise.resolve();
     this.resetUnitData();
     this.resetSnackBars();
     const { unitIdInput } = changes;
