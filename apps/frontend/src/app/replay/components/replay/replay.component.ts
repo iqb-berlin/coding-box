@@ -23,6 +23,19 @@ import { ResponseDto } from '../../../../../../../api-dto/responses/response-dto
 import { SpinnerComponent } from '../spinner/spinner.component';
 import { FilesDto } from '../../../../../../../api-dto/files/files.dto';
 
+interface ErrorMessages {
+  QueryError: string;
+  ParamsError: string;
+  401: string;
+  UnitIdError: string;
+  TestPersonError: string;
+  PlayerError: string;
+  ResponsesError: string;
+  notInList: string;
+  notCurrent: string;
+  unknown: string;
+}
+
 @Component({
   selector: 'coding-box-replay',
   standalone: true,
@@ -40,13 +53,6 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   private testPerson: string = '';
   private unitId: string = '';
   private authToken: string = '';
-  private paramsError = false;
-  private testPersonError = false;
-  private responsesError = false;
-  private unitIdError = false;
-  private queryError = false;
-  private authError = false;
-  private unknownError = false;
   private errorSnackbarRef: MatSnackBarRef<TextOnlySnackBar> | null = null;
   private pageErrorSnackbarRef: MatSnackBarRef<TextOnlySnackBar> | null = null;
   private lastPlayer: { id: string, data: string } = { id: '', data: '' };
@@ -66,38 +72,12 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     this.subscribeRouter();
   }
 
-  ngOnDestroy(): void {
-    this.routerSubscription?.unsubscribe();
-    this.routerSubscription = null;
-  }
-
-  checkErrors(): void {
-    if (this.queryError) {
-      this.openErrorSnackBar('Kein Authorisierungs-Token angegeben', 'Schließen');
-    } else if (this.paramsError) {
-      this.openErrorSnackBar('Ungültige Anzahl an Parametern in der URL vorhanden', 'Schließen');
-    } else if (this.authError) {
-      this.openErrorSnackBar('Authentisierungs-Token ist ungültig', 'Schließen');
-    } else if (this.unitIdError) {
-      this.openErrorSnackBar('Unbekannte Unit-ID', 'Schließen');
-    } else if (this.testPersonError) {
-      this.openErrorSnackBar('Ungültige ID für Testperson', 'Schließen');
-    } else if (this.responsesError) {
-      this.openErrorSnackBar(
-        `Keine Antworten für Aufgabe "${this.unitId}" von Testperson "${this.testPerson}" gefunden`,
-        'Schließen'
-      );
-    } else if (this.unknownError) {
-      this.openErrorSnackBar('Unbekannter Fehler', 'Schließen');
-    }
-  }
-
   private openErrorSnackBar(message: string, action: string) {
     this.errorSnackbarRef = this.errorSnackBar
       .open(message, action, { panelClass: ['snackbar-error'] });
     this.errorSnackbarRef.afterDismissed().subscribe(() => {
       this.errorSnackbarRef = null;
-      this.reset();
+      this.resetUnitData();
       this.setIsLoaded();
     });
   }
@@ -118,28 +98,37 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   private subscribeRouter(): void {
     this.routerSubscription = this.route.params
       .subscribe(async params => {
-        this.errorSnackBar.dismiss();
-        this.pageErrorSnackBar.dismiss();
-        this.reset();
-        if (Object.keys(params).length === 3) {
-          this.authToken = await this.getAuthToken();
-          this.setUnitParams(params);
-          if (this.authToken) {
-            await this.fetchUnitData();
-          } else {
-            this.queryError = true;
-            this.setIsLoaded();
-            this.checkErrors();
+        this.resetSnackBars();
+        this.resetUnitData();
+        try {
+          if (Object.keys(params).length === 3) {
+            this.authToken = await this.getAuthToken();
+            this.setUnitParams(params);
+            if (this.authToken) {
+              const decoded: JwtPayload & { workspace: string } = jwtDecode(this.authToken);
+              const workspace = decoded?.workspace;
+              if (workspace) {
+                const unitData = await this.getUnitData(Number(workspace), this.authToken);
+                this.setUnitProperties(unitData);
+              }
+            } else {
+              ReplayComponent.throwError('QueryError');
+            }
+          } else if (this.testPersonInput && this.unitIdInput) {
+            this.setTestPerson(this.testPersonInput);
+            this.unitId = this.unitIdInput.toUpperCase();
+          } else if (Object.keys(params).length !== 3) {
+            ReplayComponent.throwError('ParamsError');
           }
-        } else if (this.testPersonInput && this.unitIdInput) {
-          this.testPerson = this.testPersonInput;
-          this.unitId = this.unitIdInput.toUpperCase();
-        } else if (Object.keys(params).length !== 3) {
-          this.paramsError = true;
+        } catch (error) {
           this.setIsLoaded();
-          this.checkErrors();
+          this.catchError(error as HttpErrorResponse);
         }
       });
+  }
+
+  private static throwError(message: string): void {
+    throw new Error(message);
   }
 
   private setIsLoaded(): void {
@@ -151,32 +140,16 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       page, testPerson, unitId
     } = params;
     this.page = page;
-    this.testPerson = testPerson;
-    this.testPersonError = !ReplayComponent.isTestperson(testPerson);
     this.unitId = unitId;
+    this.setTestPerson(testPerson);
   }
 
-  private async fetchUnitData(): Promise<void> {
-    let workspace = '';
-    try {
-      const decoded: JwtPayload & { workspace: string } = jwtDecode(this.authToken);
-      workspace = decoded?.workspace;
-    } catch (error) {
-      this.setIsLoaded();
-      this.authError = true;
+  private setTestPerson(testPerson: string): void {
+    if (!ReplayComponent.isTestperson(testPerson)) {
+      ReplayComponent.throwError('TestPersonError');
+    } else {
+      this.testPerson = testPerson;
     }
-    if (workspace) {
-      try {
-        const unitData = await this.getUnitData(Number(workspace), this.authToken);
-        this.setUnitProperties(unitData);
-      } catch (error) {
-        if (error as HttpErrorResponse) {
-          this.setIsLoaded();
-          this.setHttpError(error as HttpErrorResponse);
-        }
-      }
-    }
-    this.checkErrors();
   }
 
   private static isTestperson(testperson: string): boolean {
@@ -191,7 +164,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
   private checkUnitId(unitFile: FilesDto[]): void {
     if (!unitFile || !unitFile[0]) {
-      this.unitIdError = true;
+      ReplayComponent.throwError('UnitIdError');
     } else {
       this.cacheUnitData(unitFile[0]);
     }
@@ -201,17 +174,24 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   async ngOnChanges(changes: SimpleChanges): Promise<void> {
     // eslint-disable-next-line @typescript-eslint/dot-notation
     if (typeof changes['unitIdInput']?.currentValue === 'undefined') {
-      this.reset();
+      this.resetUnitData();
+      this.resetSnackBars();
       return Promise.resolve();
     }
     // eslint-disable-next-line @typescript-eslint/dot-notation
     if (changes['unitIdInput'].currentValue === changes['unitIdInput'].previousValue) return Promise.resolve();
-    this.reset();
+    this.resetUnitData();
+    this.resetSnackBars();
     const { unitIdInput } = changes;
-    this.unitId = unitIdInput.currentValue;
-    this.testPerson = this.testPersonInput || '';
-    const unitData = await this.getUnitData(this.appService.selectedWorkspaceId);
-    this.setUnitProperties(unitData);
+    try {
+      this.unitId = unitIdInput.currentValue;
+      this.setTestPerson(this.testPersonInput || '');
+      const unitData = await this.getUnitData(this.appService.selectedWorkspaceId);
+      this.setUnitProperties(unitData);
+    } catch (error) {
+      this.setIsLoaded();
+      this.catchError(error as HttpErrorResponse);
+    }
     return Promise.resolve();
   }
 
@@ -222,8 +202,11 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     this.cacheUnitDefData(unitData.unitDef[0]);
     this.player = unitData.player[0].data;
     this.unitDef = unitData.unitDef[0].data;
-    this.responses = unitData.response[0];
-    this.responsesError = !ReplayComponent.hasResponses(unitData.response[0]);
+    if (ReplayComponent.hasResponses(unitData.response[0])) {
+      this.responses = unitData.response[0];
+    } else {
+      ReplayComponent.throwError('ResponsesError');
+    }
   }
 
   private cacheUnitData(unit: FilesDto) {
@@ -241,7 +224,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     this.lastPlayer.id = playerData.file_id;
   }
 
-  private static normalizePlayerId(name: string): string {
+  private static getNormalizedPlayerId(name: string): string {
     const reg = /^(\D+?)[@V-]?((\d+)(\.\d+)?(\.\d+)?(-\S+?)?)?(.\D{3,4})?$/;
     const matches = name.match(reg);
     if (matches) {
@@ -255,7 +238,8 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       };
       return `${rawIdParts.module}-${rawIdParts.major}.${rawIdParts.minor}`.toUpperCase();
     }
-    throw new Error('Invalid player name');
+    ReplayComponent.throwError('PlayerError');
+    return '';
   }
 
   private getUnitDef(workspace: number, authToken?:string): Observable<FilesDto[]> {
@@ -265,22 +249,12 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         file_id: `${this.lastUnitDef.id}.VOUD`
       }]);
     }
-    try {
-      return this.backendService.getUnitDef(workspace, this.unitId, authToken);
-    } catch (error) {
-      this.setHttpError(error as HttpErrorResponse);
-    }
-    return of([{ data: '', file_id: '' }]);
+    return this.backendService.getUnitDef(workspace, this.unitId, authToken);
   }
 
   private getResponses(workspace: number, authToken?:string): Observable<ResponseDto[]> {
-    try {
-      return this.backendService
-        .getResponses(workspace, this.testPerson, this.unitId, authToken);
-    } catch (error) {
-      this.setHttpError(error as HttpErrorResponse);
-    }
-    return of([]);
+    return this.backendService
+      .getResponses(workspace, this.testPerson, this.unitId, authToken);
   }
 
   private getUnit(workspace: number, authToken?:string): Observable<FilesDto[]> {
@@ -290,12 +264,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         file_id: this.lastUnit.id
       }]);
     }
-    try {
-      return this.backendService.getUnit(workspace, this.testPerson, this.unitId, authToken);
-    } catch (error) {
-      this.setHttpError(error as HttpErrorResponse);
-    }
-    return of([{ data: '', file_id: '' }]);
+    return this.backendService.getUnit(workspace, this.testPerson, this.unitId, authToken);
   }
 
   private getPlayer(
@@ -304,15 +273,10 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     if (this.lastPlayer.id && this.lastPlayer.data && this.lastPlayer.id === player) {
       return of([{ data: this.lastPlayer.data, file_id: this.lastPlayer.id }]);
     }
-    try {
-      return this.backendService.getPlayer(
-        workspace,
-        player.replace('@', '-'),
-        authToken);
-    } catch (error) {
-      this.setHttpError(error as HttpErrorResponse);
-    }
-    return of([{ data: '', file_id: '' }]);
+    return this.backendService.getPlayer(
+      workspace,
+      player.replace('@', '-'),
+      authToken);
   }
 
   private async getUnitData(workspace: number, authToken?:string) {
@@ -328,44 +292,59 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
             xml2js.parseString(unitFile[0].data, (err:any, result:any) => {
               player = result?.Unit.DefinitionRef[0].$.player;
             });
-            return this.getPlayer(workspace, ReplayComponent.normalizePlayerId(player), authToken);
+            return this.getPlayer(workspace, ReplayComponent.getNormalizedPlayerId(player), authToken);
           }))
       ]));
     this.setIsLoaded();
     return { unitDef: unitData[0], response: unitData[1], player: unitData[2] };
   }
 
-  private setHttpError(error: HttpErrorResponse): void {
-    if (error.status === 401) {
-      this.authError = true;
-    } else {
-      this.unknownError = true;
-    }
+  private getErrorMessages(): ErrorMessages {
+    return {
+      QueryError: 'Kein Authorisierungs-Token angegeben',
+      ParamsError: 'Ungültige Anzahl an Parametern in der URL vorhanden',
+      401: 'Authentisierungs-Token ist ungültig',
+      UnitIdError: 'Unbekannte Unit-ID',
+      TestPersonError: 'Ungültige ID für Testperson',
+      PlayerError: 'Ungültiger Player-Name',
+      ResponsesError: `Keine Antworten für Aufgabe "${this.unitId}" von Testperson "${this.testPerson}" gefunden`,
+      notInList: `Keine valide Seite mit ID "${this.page}" gefunden`,
+      notCurrent: `Seite mit ID "${this.page}" kann nicht ausgewählt werden`,
+      unknown: 'Unbekannter Fehler'
+    };
+  }
+
+  private catchError(error: HttpErrorResponse): void {
+    const messageKey = error.status === 401 ? '401' : error.message as keyof ErrorMessages;
+    const message = this.getErrorMessages()[messageKey] || this.getErrorMessages().unknown;
+    this.openErrorSnackBar(message, 'Schließen');
   }
 
   checkPageError(pageError: 'notInList' | 'notCurrent' | null): void {
-    if (pageError === 'notInList') {
-      this.openPageErrorSnackBar(`Keine valide Seite mit ID "${this.page}" gefunden`, 'Schließen');
-    } else if (pageError === 'notCurrent') {
-      this.openPageErrorSnackBar(`Seite mit ID "${this.page}" kann nicht ausgewählt werden`, 'Schließen');
+    if (pageError) {
+      this.openPageErrorSnackBar(this.getErrorMessages()[pageError], 'Schließen');
     } else if (this.pageErrorSnackbarRef) {
       this.pageErrorSnackBar.dismiss();
       this.pageErrorSnackbarRef = null;
     }
   }
 
-  private reset() {
-    this.queryError = false;
-    this.paramsError = false;
-    this.testPersonError = false;
-    this.responsesError = false;
-    this.unitIdError = false;
-    this.authError = false;
-    this.unknownError = false;
+  private resetSnackBars(): void {
+    if (this.errorSnackbarRef) this.errorSnackBar.dismiss();
+    if (this.pageErrorSnackbarRef) this.pageErrorSnackBar.dismiss();
+  }
+
+  private resetUnitData() {
     this.unitId = '';
     this.player = '';
     this.unitDef = '';
     this.page = undefined;
     this.responses = undefined;
+  }
+
+  ngOnDestroy(): void {
+    this.routerSubscription?.unsubscribe();
+    this.routerSubscription = null;
+    this.resetSnackBars();
   }
 }
