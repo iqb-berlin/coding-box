@@ -48,6 +48,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   private authError = false;
   private unknownError = false;
   private errorSnackbarRef: MatSnackBarRef<TextOnlySnackBar> | null = null;
+  private pageErrorSnackbarRef: MatSnackBarRef<TextOnlySnackBar> | null = null;
   private lastPlayer: { id: string, data: string } = { id: '', data: '' };
   private lastUnitDef: { id: string, data: string } = { id: '', data: '' };
   private lastUnit: { id: string, data: string } = { id: '', data: '' };
@@ -103,7 +104,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
   private openPageErrorSnackBar(message: string, action: string) {
     if (!this.errorSnackbarRef) {
-      this.pageErrorSnackBar
+      this.pageErrorSnackbarRef = this.pageErrorSnackBar
         .open(message, action, { panelClass: ['snackbar-error'] });
     }
   }
@@ -346,9 +347,10 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     if (pageError === 'notInList') {
       this.openPageErrorSnackBar(`Keine valide Seite mit ID "${this.page}" gefunden`, 'Schließen');
     } else if (pageError === 'notCurrent') {
-      this.openErrorSnackBar(`Seite mit ID "${this.page}" kann nicht ausgewählt werden`, 'Schließen');
-    } else {
+      this.openPageErrorSnackBar(`Seite mit ID "${this.page}" kann nicht ausgewählt werden`, 'Schließen');
+    } else if (this.pageErrorSnackbarRef) {
       this.pageErrorSnackBar.dismiss();
+      this.pageErrorSnackbarRef = null;
     }
   }
 
