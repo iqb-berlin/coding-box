@@ -3,7 +3,9 @@
     <div class="fx-row-start-center fx-gap-5 selection-menu" >
       <mat-form-field>
         <mat-label>Testgruppe</mat-label>
-        <mat-select (valueChange)="getTestPersons($event)">
+        <mat-select
+          [(ngModel)]="selectedTestGroup"
+          (ngModelChange)="getTestPersons($event)">
           @for (testGroup of testGroups; track testGroup) {
             <mat-option [value]="testGroup">
               {{testGroup}}
@@ -13,7 +15,10 @@
       </mat-form-field>
       <mat-form-field class="big-select">
         <mat-label>Testperson</mat-label>
-        <mat-select [disabled]="!selectedTestGroup" (valueChange)="getUnits($event)">
+        <mat-select
+          [(ngModel)]="selectedTestPerson"
+          [disabled]="!selectedTestGroup"
+          (ngModelChange)="getUnits($event)">
           @for (testPerson of testPersons; track testPerson) {
             <mat-option [value]="testPerson">
               {{testPerson}}
@@ -24,7 +29,9 @@
 
       <mat-form-field>
         <mat-label>Aufgabe</mat-label>
-        <mat-select  [disabled]="!selectedTestPerson" (valueChange)="changedUnit($event)">
+        <mat-select
+          [(ngModel)]="selectedUnit"
+          [disabled]="!selectedTestPerson">
           @for (unit of units; track unit) {
             <mat-option [value]="unit">
               {{unit}}
@@ -50,7 +57,10 @@
 
 @if (selectedTestPerson && selectedUnit) {
   <div class="replay">
-    <coding-box-replay #replayComponent [testPersonInput]="selectedTestPerson" [unitIdInput]="selectedUnit"></coding-box-replay>
+    <coding-box-replay #replayComponent
+                       [testPersonInput]="selectedTestPerson"
+                       [unitIdInput]="selectedUnit">
+    </coding-box-replay>
   </div>
 }
 </div>
