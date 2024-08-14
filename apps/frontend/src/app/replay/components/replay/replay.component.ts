@@ -23,6 +23,19 @@ import { ResponseDto } from '../../../../../../../api-dto/responses/response-dto
 import { SpinnerComponent } from '../spinner/spinner.component';
 import { FilesDto } from '../../../../../../../api-dto/files/files.dto';
 
+interface ErrorMessages {
+  QueryError: string;
+  ParamsError: string;
+  401: string;
+  UnitIdError: string;
+  TestPersonError: string;
+  PlayerError: string;
+  ResponsesError: string;
+  notInList: string;
+  notCurrent: string;
+  unknown: string;
+}
+
 @Component({
   selector: 'coding-box-replay',
   standalone: true,
@@ -286,34 +299,30 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     return { unitDef: unitData[0], response: unitData[1], player: unitData[2] };
   }
 
+  private getErrorMessages(): ErrorMessages {
+    return {
+      QueryError: 'Kein Authorisierungs-Token angegeben',
+      ParamsError: 'Ungültige Anzahl an Parametern in der URL vorhanden',
+      401: 'Authentisierungs-Token ist ungültig',
+      UnitIdError: 'Unbekannte Unit-ID',
+      TestPersonError: 'Ungültige ID für Testperson',
+      PlayerError: 'Ungültiger Player-Name',
+      ResponsesError: `Keine Antworten für Aufgabe "${this.unitId}" von Testperson "${this.testPerson}" gefunden`,
+      notInList: `Keine valide Seite mit ID "${this.page}" gefunden`,
+      notCurrent: `Seite mit ID "${this.page}" kann nicht ausgewählt werden`,
+      unknown: 'Unbekannter Fehler'
+    };
+  }
+
   private catchError(error: HttpErrorResponse): void {
-    if (error.message === 'QueryError') {
-      this.openErrorSnackBar('Kein Authorisierungs-Token angegeben', 'Schließen');
-    } else if (error.message === 'ParamsError') {
-      this.openErrorSnackBar('Ungültige Anzahl an Parametern in der URL vorhanden', 'Schließen');
-    } else if (error.status === 401) {
-      this.openErrorSnackBar('Authentisierungs-Token ist ungültig', 'Schließen');
-    } else if (error.message === 'UnitIdError') {
-      this.openErrorSnackBar('Unbekannte Unit-ID', 'Schließen');
-    } else if (error.message === 'TestPersonError') {
-      this.openErrorSnackBar('Ungültige ID für Testperson', 'Schließen');
-    } else if (error.message === 'PlayerError') {
-      this.openErrorSnackBar('Ungültiger Player-Name', 'Schließen');
-    } else if (error.message === 'ResponsesError') {
-      this.openErrorSnackBar(
-        `Keine Antworten für Aufgabe "${this.unitId}" von Testperson "${this.testPerson}" gefunden`,
-        'Schließen'
-      );
-    } else {
-      this.openErrorSnackBar('Unbekannter Fehler', 'Schließen');
-    }
+    const messageKey = error.status === 401 ? '401' : error.message as keyof ErrorMessages;
+    const message = this.getErrorMessages()[messageKey] || this.getErrorMessages().unknown;
+    this.openErrorSnackBar(message, 'Schließen');
   }
 
   checkPageError(pageError: 'notInList' | 'notCurrent' | null): void {
-    if (pageError === 'notInList') {
-      this.openPageErrorSnackBar(`Keine valide Seite mit ID "${this.page}" gefunden`, 'Schließen');
-    } else if (pageError === 'notCurrent') {
-      this.openPageErrorSnackBar(`Seite mit ID "${this.page}" kann nicht ausgewählt werden`, 'Schließen');
+    if (pageError) {
+      this.openPageErrorSnackBar(this.getErrorMessages()[pageError], 'Schließen');
     } else if (this.pageErrorSnackbarRef) {
       this.pageErrorSnackBar.dismiss();
       this.pageErrorSnackbarRef = null;
