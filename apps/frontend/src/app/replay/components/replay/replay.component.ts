@@ -170,7 +170,6 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     }
   }
 
-  // TODO: show unit if testperson changes and unit is already loaded
   async ngOnChanges(changes: SimpleChanges): Promise<void> {
     // eslint-disable-next-line @typescript-eslint/dot-notation
     if (typeof changes['unitIdInput']?.currentValue === 'undefined') {

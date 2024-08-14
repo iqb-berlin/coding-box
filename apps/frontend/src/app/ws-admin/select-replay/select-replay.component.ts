@@ -1,4 +1,5 @@
 import {
+  ChangeDetectorRef,
   Component, OnInit, ViewChild
 } from '@angular/core';
 import { TranslateModule } from '@ngx-translate/core';
@@ -7,7 +8,7 @@ import { MatIcon } from '@angular/material/icon';
 import { MatFormField, MatOption, MatSelect } from '@angular/material/select';
 import { Router } from '@angular/router';
 import { MatRadioButton, MatRadioGroup } from '@angular/material/radio';
-import { ReactiveFormsModule } from '@angular/forms';
+import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { MatLabel } from '@angular/material/form-field';
 import { MatProgressBar } from '@angular/material/progress-bar';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
@@ -27,13 +28,15 @@ export type UnitIds = {
   templateUrl: './select-replay.component.html',
   styleUrls: ['./select-replay.component.scss'],
   standalone: true,
-  // eslint-disable-next-line max-len
-  imports: [MatLabel, MatAnchor, TranslateModule, MatIcon, MatSelect, MatOption, MatButton, MatFormField, MatRadioButton, MatRadioGroup, ReactiveFormsModule, ReplayComponent, MatProgressBar, MatProgressSpinner]
+  imports: [MatLabel, MatAnchor, TranslateModule, MatIcon, MatSelect, MatOption, MatButton,
+    MatFormField, MatRadioButton, MatRadioGroup, ReactiveFormsModule, ReplayComponent,
+    MatProgressBar, MatProgressSpinner, FormsModule]
 })
 export class SelectReplayComponent implements OnInit {
   constructor(public appService:AppService,
               public backendService:BackendService,
-              private router: Router) {
+              private router: Router,
+              private changeDetectorRef: ChangeDetectorRef) {
   }
 
   @ViewChild('replayComponent') replayComponent!: ReplayComponent;
@@ -42,7 +45,6 @@ export class SelectReplayComponent implements OnInit {
   units :string[] = [];
   selectedTestPerson = '';
   selectedUnit = '';
-  // selectedPage = '';
   selectedTestGroup = '';
   isLoading = false;
 
@@ -62,30 +64,27 @@ export class SelectReplayComponent implements OnInit {
     }
   }
 
+  private resetSelectedUnit(): void {
+    this.selectedUnit = '';
+    this.changeDetectorRef.detectChanges();
+  }
+
   getTestPersons(testGroup:string): void {
-    this.selectedTestGroup = testGroup;
+    this.resetSelectedUnit();
     this.backendService.getTestPersons(this.appService.selectedWorkspaceId, testGroup).subscribe(data => {
       if (data.length > 0) { this.testPersons = data as string[]; }
     });
   }
 
   getUnits(testPerson:string): void {
-    this.units = [];
-    this.selectedTestPerson = testPerson;
-    // const formerSelectedUnit = this.selectedUnit;
-    // this.selectedUnit = '';
-    this.backendService.getTestPersonUnits(this.appService.selectedWorkspaceId, testPerson).subscribe(data => {
-      this.units = data.map(({ unit_id }:UnitIds) => unit_id);
-      // this.selectedUnit ? this.changedUnit(formerSelectedUnit) : '';
-    });
-  }
-
-  changedUnit(unit:string): void {
-    this.selectedUnit = unit.toUpperCase();
+    this.resetSelectedUnit();
+    this.backendService.getTestPersonUnits(this.appService.selectedWorkspaceId, testPerson)
+      .subscribe(data => {
+        this.units = data.map(({ unit_id }:UnitIds) => unit_id);
+      });
   }
 
   async replay(): Promise<void> {
-    this.selectedUnit = this.selectedUnit.toUpperCase();
     this.backendService
       .createToken(this.appService.selectedWorkspaceId, this.appService.userProfile.id || '', 1)
       .subscribe(token => {
@@ -96,7 +95,7 @@ export class SelectReplayComponent implements OnInit {
         const url = this.router
           .serializeUrl(
             this.router.createUrlTree(
-              [`replay/${this.selectedTestPerson}/${this.selectedUnit}/${page}`],
+              [`replay/${this.selectedTestPerson}/${this.selectedUnit.toUpperCase()}/${page}`],
               { queryParams: queryParams })
           );
         window.open(`#/${url}`, '_blank');
