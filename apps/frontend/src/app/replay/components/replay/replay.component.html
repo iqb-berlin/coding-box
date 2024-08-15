@@ -4,6 +4,7 @@
                           [unitDef]="unitDef"
                           [unitPlayer]="player"
                           [unitResponses]="responses"
-                          [pageId]="page">
+                          [pageId]="page"
+                          (invalidPage)="checkPageError($event)">
   </coding-box-unit-player>
 </div>
