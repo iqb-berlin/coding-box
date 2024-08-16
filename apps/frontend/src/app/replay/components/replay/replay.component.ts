@@ -140,7 +140,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       page, testPerson, unitId
     } = params;
     this.page = page;
-    this.unitId = unitId;
+    this.unitId = unitId.toUpperCase();
     this.setTestPerson(testPerson);
   }
 
@@ -181,7 +181,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     this.resetSnackBars();
     const { unitIdInput } = changes;
     try {
-      this.unitId = unitIdInput.currentValue;
+      this.unitId = unitIdInput.currentValue.toUpperCase();
       this.setTestPerson(this.testPersonInput || '');
       const unitData = await this.getUnitData(this.appService.selectedWorkspaceId);
       this.setUnitProperties(unitData);
