@@ -116,7 +116,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
             }
           } else if (this.testPersonInput && this.unitIdInput) {
             this.setTestPerson(this.testPersonInput);
-            this.unitId = this.unitIdInput.toUpperCase();
+            this.unitId = this.unitIdInput;
           } else if (Object.keys(params).length !== 3) {
             ReplayComponent.throwError('ParamsError');
           }
@@ -240,7 +240,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   private getUnitDef(workspace: number, authToken?:string): Observable<FilesDto[]> {
-    if (this.lastUnitDef.id && this.lastUnitDef.data && this.lastUnitDef.id === this.unitId) {
+    if (this.lastUnitDef.id && this.lastUnitDef.data && this.lastUnitDef.id === this.unitId.toUpperCase()) {
       return of([{
         data: this.lastUnitDef.data,
         file_id: `${this.lastUnitDef.id}.VOUD`
@@ -255,7 +255,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   private getUnit(workspace: number, authToken?:string): Observable<FilesDto[]> {
-    if (this.lastUnit.id && this.lastUnit.data && this.lastUnit.id === this.unitId) {
+    if (this.lastUnit.id && this.lastUnit.data && this.lastUnit.id === this.unitId.toUpperCase()) {
       return of([{
         data: this.lastUnit.data,
         file_id: this.lastUnit.id
