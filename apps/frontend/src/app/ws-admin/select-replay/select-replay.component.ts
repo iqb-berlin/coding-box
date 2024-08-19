@@ -95,7 +95,7 @@ export class SelectReplayComponent implements OnInit {
         const url = this.router
           .serializeUrl(
             this.router.createUrlTree(
-              [`replay/${this.selectedTestPerson}/${this.selectedUnit.toUpperCase()}/${page}`],
+              [`replay/${this.selectedTestPerson}/${this.selectedUnit}/${page}`],
               { queryParams: queryParams })
           );
         window.open(`#/${url}`, '_blank');
