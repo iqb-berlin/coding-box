@@ -377,7 +377,7 @@ export class WorkspaceService {
 
         return (<ResponseDto>{
           test_person: testPerson,
-          unit_id: unitId.toUpperCase(), // Todo: why? Should be case insensitive
+          unit_id: unitId,
           responses: responsesChunks,
           test_group: groupName,
           workspace_id: workspaceId,
