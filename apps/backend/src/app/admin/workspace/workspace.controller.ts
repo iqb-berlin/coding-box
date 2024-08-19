@@ -96,6 +96,7 @@ export class WorkspaceController {
     return this.workspaceService.findFiles(workspace_id);
   }
 
+  // Todo: use query params
   @Delete(':workspace_id/files/:ids')
   @ApiTags('ws admin test-files')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
@@ -127,6 +128,7 @@ export class WorkspaceController {
     return this.workspaceService.findTestGroups(workspace_id);
   }
 
+  // Todo: use query params
   @Delete(':workspace_id/test-groups/:testGroupNames')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async deleteTestGroups(
@@ -148,7 +150,8 @@ export class WorkspaceController {
   @ApiParam({ name: 'workspace_id', type: Number })
   async findUnitDef(@Param('workspace_id') workspace_id:number,
     @Param('unit') unit:string): Promise<FilesDto[]> {
-    return this.workspaceService.findUnitDef(workspace_id, unit);
+    const unitIdToUpperCase = unit.toUpperCase();
+    return this.workspaceService.findUnitDef(workspace_id, unitIdToUpperCase);
   }
 
   @Get(':workspace_id/unit/:testPerson/:unitId')
@@ -157,7 +160,8 @@ export class WorkspaceController {
   async findUnit(@WorkspaceId() id: number,
     @Param('testPerson') testPerson:string,
     @Param('unitId') unitId:string): Promise<FileUpload[]> {
-    return this.workspaceService.findUnit(id, testPerson, unitId);
+    const unitIdToUpperCase = unitId.toUpperCase();
+    return this.workspaceService.findUnit(id, testPerson, unitIdToUpperCase);
   }
 
   @Get(':workspace_id/responses/:testPerson/:unitId')
@@ -179,6 +183,8 @@ export class WorkspaceController {
     return this.workspaceService.uploadTestFiles(workspace_id, files);
   }
 
+  // TODO: use query params
+  // TODO: use ParseIntPipe
   @Delete(':ids')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
