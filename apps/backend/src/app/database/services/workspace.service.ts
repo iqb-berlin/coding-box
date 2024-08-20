@@ -185,8 +185,7 @@ export class WorkspaceService {
     return [];
   }
 
-  // Todo: This gets unitIds of responses
-  async findTestPersonUnits(id: number, testPerson:string): Promise<ResponseDto[]> {
+  async findTestPersonUnitsFromResponses(id: number, testPerson:string): Promise<ResponseDto[]> {
     this.logger.log('Returning all unit Ids for testperson ', testPerson);
     const res = this.responsesRepository
       .find({
@@ -306,7 +305,7 @@ export class WorkspaceService {
       filePromises.push(this.fileUploadRepository.upsert({
         filename: file.originalname,
         workspace_id: workspaceId,
-        file_id: WorkspaceService.getResourceId(file), // TODO: why? Should be case insensitive
+        file_id: WorkspaceService.getResourceId(file),
         file_type: 'Resource',
         file_size: file.size,
         data: file.buffer.toString()
@@ -360,7 +359,7 @@ export class WorkspaceService {
         const testPerson = WorkspaceService.getTestPersonName(row);
         const bookletId = row.bookletname;
         const groupName = `${row.groupname}`.replace(/"/g, '');
-        const unitId = row.unitname;
+        const unitId = row.unitname; // TODO: toUpperCase()?
         const lastStateCleaned = row.laststate && row.laststate.length > 1 ? row.laststate
           .replace(/""/g, '"')
           .replace(/"$/, '') : '{}';
@@ -377,7 +376,7 @@ export class WorkspaceService {
 
         return (<ResponseDto>{
           test_person: testPerson,
-          unit_id: unitId,
+          unit_id: unitId, // TODO: toUpperCase()?
           responses: responsesChunks,
           test_group: groupName,
           workspace_id: workspaceId,

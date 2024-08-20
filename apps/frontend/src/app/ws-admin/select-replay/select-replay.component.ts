@@ -78,7 +78,7 @@ export class SelectReplayComponent implements OnInit {
 
   getUnits(testPerson:string): void {
     this.resetSelectedUnit();
-    this.backendService.getTestPersonUnits(this.appService.selectedWorkspaceId, testPerson)
+    this.backendService.getTestPersonUnitsFromResponses(this.appService.selectedWorkspaceId, testPerson)
       .subscribe(data => {
         this.units = data.map(({ unit_id }:UnitIds) => unit_id);
       });

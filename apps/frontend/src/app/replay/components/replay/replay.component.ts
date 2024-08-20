@@ -140,7 +140,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       page, testPerson, unitId
     } = params;
     this.page = page;
-    this.unitId = unitId;
+    this.unitId = unitId; // TODO: toUpperCase()?
     this.setTestPerson(testPerson);
   }
 

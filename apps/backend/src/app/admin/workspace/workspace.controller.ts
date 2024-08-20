@@ -117,8 +117,11 @@ export class WorkspaceController {
   @Get(':workspace_id/units/:testPerson')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiParam({ name: 'workspace_id', type: Number })
-  async findTestPersonUnits(@WorkspaceId() id: number, @Param('testPerson') testPerson:string): Promise<ResponseDto[]> {
-    return this.workspaceService.findTestPersonUnits(id, testPerson);
+  async findTestPersonUnitsFromResponses(
+    @WorkspaceId() id: number,
+      @Param('testPerson') testPerson:string
+  ): Promise<ResponseDto[]> {
+    return this.workspaceService.findTestPersonUnitsFromResponses(id, testPerson);
   }
 
   @Get(':workspace_id/test-groups')
