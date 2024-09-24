@@ -22,6 +22,10 @@ import User from '../entities/user.entity';
 import { TestGroupsInListDto } from '../../../../../../api-dto/test-groups/testgroups-in-list.dto';
 import { ResponseDto } from '../../../../../../api-dto/responses/response-dto';
 
+function isValidPath(path: string): boolean {
+  return !path.includes('..');
+}
+
 export type Response = {
   groupname:string,
   loginname : string,
@@ -330,10 +334,14 @@ export class WorkspaceService {
               createdAt: new Date()
             });
             await this.resourcePackageRepository.save(newResourcePackage);
-            fs.writeFileSync(
-              `${resourcePackagesPath}/${packageName}/${file.originalname}`,
-              file.buffer
-            );
+            if (isValidPath(file.originalname)) {
+              fs.writeFileSync(
+                `${resourcePackagesPath}/${packageName}/${file.originalname}`,
+                file.buffer
+              );
+            } else {
+              console.log('skipping bad path', file.originalname);
+            }
             return newResourcePackage.id;
           })
         );
@@ -341,15 +349,18 @@ export class WorkspaceService {
         const zipEntries = zip.getEntries();
         zipEntries.forEach(zipEntry => {
           const fileContent = zipEntry.getData();
-
-          filePromises.push(Promise.all(this.handleFile(workspaceId, <FileIo>{
-            fieldname: file.fieldname,
-            originalname: `${file.originalname}/${zipEntry.entryName}`,
-            encoding: file.encoding,
-            mimetype: WorkspaceService.getMimeType(zipEntry.entryName),
-            buffer: fileContent,
-            size: fileContent.length
-          })));
+          if (isValidPath(zipEntry.entryName)) {
+            filePromises.push(Promise.all(this.handleFile(workspaceId, <FileIo>{
+              fieldname: file.fieldname,
+              originalname: `${file.originalname}/${zipEntry.entryName}`,
+              encoding: file.encoding,
+              mimetype: WorkspaceService.getMimeType(zipEntry.entryName),
+              buffer: fileContent,
+              size: fileContent.length
+            })));
+          } else {
+            console.log('skipping bad path', zipEntry.entryName);
+          }
         });
       }
     }
