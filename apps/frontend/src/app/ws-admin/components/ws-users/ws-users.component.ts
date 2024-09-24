@@ -25,27 +25,28 @@ import { MatCheckbox } from '@angular/material/checkbox';
 import { SelectionModel } from '@angular/cdk/collections';
 import { JsonPipe } from '@angular/common';
 import { MatDialog } from '@angular/material/dialog';
-import { WorkspaceInListDto } from '../../../../../../api-dto/workspaces/workspace-in-list-dto';
-import { BackendService } from '../../services/backend.service';
-import { AppService } from '../../services/app.service';
-import { UserFullDto } from '../../../../../../api-dto/user/user-full-dto';
-import { WrappedIconComponent } from '../../shared/wrapped-icon/wrapped-icon.component';
-import { UsersMenuComponent } from '../../sys-admin/components/users-menu/users-menu.component';
-import { HasSelectionValuePipe } from '../../shared/pipes/hasSelectionValue.pipe';
-import { IsSelectedPipe } from '../../shared/pipes/isSelected.pipe';
-import { IsAllSelectedPipe } from '../../shared/pipes/isAllSelected.pipe';
-import { SearchFilterComponent } from '../../shared/search-filter/search-filter.component';
-import { WorkspacesComponent } from '../../sys-admin/components/workspaces/workspaces.component';
-import { IsSelectedIdPipe } from '../../shared/pipes/isSelectedId.pipe';
+import { WorkspaceInListDto } from '../../../../../../../api-dto/workspaces/workspace-in-list-dto';
+import { BackendService } from '../../../services/backend.service';
+import { AppService } from '../../../services/app.service';
+import { UserFullDto } from '../../../../../../../api-dto/user/user-full-dto';
+import { WrappedIconComponent } from '../../../shared/wrapped-icon/wrapped-icon.component';
+import { UsersMenuComponent } from '../../../sys-admin/components/users-menu/users-menu.component';
+import { HasSelectionValuePipe } from '../../../shared/pipes/hasSelectionValue.pipe';
+import { IsSelectedPipe } from '../../../shared/pipes/isSelected.pipe';
+import { IsAllSelectedPipe } from '../../../shared/pipes/isAllSelected.pipe';
+import { SearchFilterComponent } from '../../../shared/search-filter/search-filter.component';
+import { WorkspacesComponent } from '../../../sys-admin/components/workspaces/workspaces.component';
+import { IsSelectedIdPipe } from '../../../shared/pipes/isSelectedId.pipe';
 import {
   WorkspacesSelectionComponent
-} from '../../sys-admin/components/workspaces-selection/workspaces-selection.component';
-import { MessageDialogComponent, MessageDialogData, MessageType } from '../../shared/dialogs/message-dialog.component';
-import { EditUserComponent } from '../../sys-admin/components/edit-user/edit-user.component';
-import { ConfirmDialogComponent, ConfirmDialogData } from '../../shared/dialogs/confirm-dialog.component';
+} from '../../../sys-admin/components/workspaces-selection/workspaces-selection.component';
+// eslint-disable-next-line max-len
+import { MessageDialogComponent, MessageDialogData, MessageType } from '../../../shared/dialogs/message-dialog.component';
+import { EditUserComponent } from '../../../sys-admin/components/edit-user/edit-user.component';
+import { ConfirmDialogComponent, ConfirmDialogData } from '../../../shared/dialogs/confirm-dialog.component';
 import {
   WorkspaceAccessRightsDialogComponent
-} from '../../sys-admin/components/workspace-access-rights-dialog/workspace-access-rights-dialog.component';
+} from '../../../sys-admin/components/workspace-access-rights-dialog/workspace-access-rights-dialog.component';
 
 @Component({
   selector: 'coding-box-ws-users',

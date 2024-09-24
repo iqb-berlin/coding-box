@@ -8,7 +8,7 @@ import { WorkspaceService } from './workspace.service';
 import Responses from '../entities/responses.entity';
 import {
   ImportOptions
-} from '../../../../../frontend/src/app/ws-admin/test-center-import/test-center-import.component';
+} from '../../../../../frontend/src/app/ws-admin/components/test-center-import/test-center-import.component';
 import FileUpload from '../entities/file_upload.entity';
 import { ResponseDto } from '../../../../../../api-dto/responses/response-dto';
 

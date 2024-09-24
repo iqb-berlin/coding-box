@@ -3,10 +3,10 @@ import { TranslateModule } from '@ngx-translate/core';
 import { MatTooltip } from '@angular/material/tooltip';
 import { RouterLink } from '@angular/router';
 import { MatButton } from '@angular/material/button';
-import { WrappedIconComponent } from '../../shared/wrapped-icon/wrapped-icon.component';
-import { WorkspaceFullDto } from '../../../../../../api-dto/workspaces/workspace-full-dto';
+import { WrappedIconComponent } from '../../../shared/wrapped-icon/wrapped-icon.component';
+import { WorkspaceFullDto } from '../../../../../../../api-dto/workspaces/workspace-full-dto';
 import { UserWorkspacesComponent } from '../user-workspaces/user-workspaces.component';
-import { UserMenuComponent } from '../../sys-admin/components/user-menu/user-menu.component';
+import { UserMenuComponent } from '../../../sys-admin/components/user-menu/user-menu.component';
 
 @Component({
   selector: 'coding-box-user-workspaces-area',

@@ -4,7 +4,7 @@ import {
 } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatTabLink, MatTabNav, MatTabNavPanel } from '@angular/material/tabs';
-import { AppService } from '../../services/app.service';
+import { AppService } from '../../../services/app.service';
 
 @Component({
   selector: 'coding-box-ws-admin',

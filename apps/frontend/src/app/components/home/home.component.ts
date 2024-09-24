@@ -8,7 +8,8 @@ import { TranslateModule } from '@ngx-translate/core';
 import { UnitPlayerComponent } from '../../replay/components/unit-player/unit-player.component';
 import { AppService } from '../../services/app.service';
 import { AppInfoComponent } from '../app-info/app-info.component';
-import { UserWorkspacesAreaComponent } from '../../workspace/user-workspaces-area/user-workspaces-area.component';
+// eslint-disable-next-line max-len
+import { UserWorkspacesAreaComponent } from '../../workspace/components/user-workspaces-area/user-workspaces-area.component';
 
 @Component({
   selector: 'coding-box-home',

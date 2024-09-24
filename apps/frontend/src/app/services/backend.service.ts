@@ -11,7 +11,7 @@ import { WorkspaceInListDto } from '../../../../../api-dto/workspaces/workspace-
 import { CreateWorkspaceDto } from '../../../../../api-dto/workspaces/create-workspace-dto';
 import { AuthDataDto } from '../../../../../api-dto/auth-data-dto';
 // eslint-disable-next-line import/no-cycle
-import { ImportOptions, ServerResponse } from '../ws-admin/test-center-import/test-center-import.component';
+import { ImportOptions, ServerResponse } from '../ws-admin/components/test-center-import/test-center-import.component';
 import { TestGroupsInListDto } from '../../../../../api-dto/test-groups/testgroups-in-list.dto';
 import { FilesInListDto } from '../../../../../api-dto/files/files-in-list.dto';
 import { ResponseDto } from '../../../../../api-dto/responses/response-dto';

@@ -17,8 +17,9 @@ import { MatRadioButton, MatRadioGroup } from '@angular/material/radio';
 import { MatCheckbox } from '@angular/material/checkbox';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 // eslint-disable-next-line import/no-cycle
-import { BackendService } from '../../services/backend.service';
-import { AppService } from '../../services/app.service';
+import { BackendService } from '../../../services/backend.service';
+import { AppService } from '../../../services/app.service';
+import { WorkspaceAdminService } from '../../services/workspace-admin.service';
 
 export type ServerResponse = {
   token: string,
@@ -85,6 +86,7 @@ export class TestCenterImportComponent {
   authenticated: boolean = false;
   isUploadingFiles: boolean = false;
   constructor(private backendService: BackendService,
+              private workspaceAdminService: WorkspaceAdminService,
               private fb: UntypedFormBuilder,
               private appService: AppService) {
     this.loginForm = this.fb.group({
@@ -103,6 +105,13 @@ export class TestCenterImportComponent {
     });
   }
 
+  ngOnInit(): void {
+    if (this.workspaceAdminService.lastAuthToken) {
+      this.authenticated = true;
+      this.authToken = this.workspaceAdminService.lastAuthToken;
+    }
+  }
+
   authenticate(): void {
     const name = this.loginForm.get('name')?.value;
     const pw = this.loginForm.get('pw')?.value;
@@ -115,6 +124,7 @@ export class TestCenterImportComponent {
       this.authenticationError = false;
       this.authenticated = true;
       this.authToken = response.token;
+      this.workspaceAdminService.lastAuthToken = response.token;
       this.workspaces = response.claims.workspaceAdmin;
     });
   }
