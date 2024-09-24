@@ -13,7 +13,7 @@ import FileUpload from '../entities/file_upload.entity';
 import { ResponseDto } from '../../../../../../api-dto/responses/response-dto';
 
 const agent = new https.Agent({
-  rejectUnauthorized: false
+  rejectUnauthorized: true
 });
 
 type ServerFilesResponse = {
