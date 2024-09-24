@@ -11,7 +11,7 @@ import {
 import { MatTableModule } from '@angular/material/table';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
-import { environment } from '../../../environments/environment';
+import { environment } from '../../../../environments/environment';
 import { TestGroupsComponent } from './test-groups.component';
 
 describe('UsersComponent', () => {

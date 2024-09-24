@@ -5,7 +5,6 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { RouterLink } from '@angular/router';
 import { MatAnchor, MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
-import { Subscription } from 'rxjs';
 import { MatDialog } from '@angular/material/dialog';
 import { UntypedFormGroup } from '@angular/forms';
 import { MatSort, MatSortHeader } from '@angular/material/sort';
@@ -25,15 +24,15 @@ import { DatePipe, JsonPipe } from '@angular/common';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { TestCenterImportComponent } from '../test-center-import/test-center-import.component';
-import { AppService } from '../../services/app.service';
-import { BackendService } from '../../services/backend.service';
-import { HasSelectionValuePipe } from '../../shared/pipes/hasSelectionValue.pipe';
-import { IsAllSelectedPipe } from '../../shared/pipes/isAllSelected.pipe';
-import { IsSelectedPipe } from '../../shared/pipes/isSelected.pipe';
-import { SearchFilterComponent } from '../../shared/search-filter/search-filter.component';
-import { FileSizePipe } from '../../shared/pipes/filesize.pipe';
-import { WrappedIconComponent } from '../../shared/wrapped-icon/wrapped-icon.component';
-import { FilesInListDto } from '../../../../../../api-dto/files/files-in-list.dto';
+import { AppService } from '../../../services/app.service';
+import { BackendService } from '../../../services/backend.service';
+import { HasSelectionValuePipe } from '../../../shared/pipes/hasSelectionValue.pipe';
+import { IsAllSelectedPipe } from '../../../shared/pipes/isAllSelected.pipe';
+import { IsSelectedPipe } from '../../../shared/pipes/isSelected.pipe';
+import { SearchFilterComponent } from '../../../shared/search-filter/search-filter.component';
+import { FileSizePipe } from '../../../shared/pipes/filesize.pipe';
+import { WrappedIconComponent } from '../../../shared/wrapped-icon/wrapped-icon.component';
+import { FilesInListDto } from '../../../../../../../api-dto/files/files-in-list.dto';
 
 @Component({
   selector: 'coding-box-test-files',
@@ -44,8 +43,6 @@ import { FilesInListDto } from '../../../../../../api-dto/files/files-in-list.dt
   imports: [MatAnchor, RouterLink, TranslateModule, MatIcon, TestCenterImportComponent, MatProgressSpinner, MatTable, MatColumnDef, MatHeaderCellDef, MatCellDef, MatHeaderRowDef, MatRowDef, MatHeaderCell, MatCell, MatSort, MatHeaderRow, MatRow, HasSelectionValuePipe, IsAllSelectedPipe, IsSelectedPipe, MatCheckbox, SearchFilterComponent, MatSortHeader, DatePipe, FileSizePipe, MatButton, WrappedIconComponent, MatTooltip, JsonPipe]
 })
 export class TestFilesComponent implements OnInit {
-  private uploadSubscription: Subscription | null = null;
-
   constructor(public appService: AppService,
               public backendService: BackendService,
               private TestCenterImportDialog: MatDialog,

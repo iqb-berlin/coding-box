@@ -4,13 +4,13 @@ import { HomeComponent } from './components/home/home.component';
 import { AdminComponent } from './sys-admin/components/admin/admin.component';
 import { UsersComponent } from './sys-admin/components/users/users.component';
 import { WorkspacesComponent } from './sys-admin/components/workspaces/workspaces.component';
-import { WsAdminComponent } from './ws-admin/ws-admin/ws-admin.component';
-import { SelectReplayComponent } from './ws-admin/select-replay/select-replay.component';
-import { TestFilesComponent } from './ws-admin/test-files/test-files.component';
-import { WsSettingsComponent } from './ws-admin/ws-settings/ws-settings.component';
+import { WsAdminComponent } from './ws-admin/components/ws-admin/ws-admin.component';
+import { SelectReplayComponent } from './ws-admin/components/select-replay/select-replay.component';
+import { TestFilesComponent } from './ws-admin/components/test-files/test-files.component';
+import { WsSettingsComponent } from './ws-admin/components/ws-settings/ws-settings.component';
 import { SysAdminSettingsComponent } from './sys-admin/components/sys-admin-settings/sys-admin-settings.component';
-import { TestGroupsComponent } from './ws-admin/test-groups/test-groups.component';
-import { WsUsersComponent } from './ws-admin/ws-users/ws-users.component';
+import { TestGroupsComponent } from './ws-admin/components/test-groups/test-groups.component';
+import { WsUsersComponent } from './ws-admin/components/ws-users/ws-users.component';
 
 export const routes: Routes = [
   { path: '', redirectTo: 'home', pathMatch: 'full' },

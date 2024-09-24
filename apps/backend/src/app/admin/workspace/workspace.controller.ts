@@ -18,7 +18,7 @@ import { FilesDto } from '../../../../../../api-dto/files/files.dto';
 import { TestcenterService } from '../../database/services/testcenter.service';
 import {
   ImportOptions
-} from '../../../../../frontend/src/app/ws-admin/test-center-import/test-center-import.component';
+} from '../../../../../frontend/src/app/ws-admin/components/test-center-import/test-center-import.component';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { AuthService } from '../../auth/service/auth.service';
