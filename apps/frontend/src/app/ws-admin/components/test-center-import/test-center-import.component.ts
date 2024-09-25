@@ -35,7 +35,7 @@ export type ServerResponse = {
   }
 };
 
-type WorkspaceAdmin = {
+export type WorkspaceAdmin = {
   label: string,
   id: string,
   type: string,
@@ -68,6 +68,11 @@ export type ImportOptions = {
   responses:string, definitions:string, units:string, player:string, codings:string
 };
 
+export type Testcenter = {
+  id:number,
+  label:string
+};
+
 @Component({
   selector: 'coding-box-test-center-import',
   templateUrl: 'test-center-import.component.html',
@@ -78,6 +83,26 @@ export type ImportOptions = {
 })
 
 export class TestCenterImportComponent {
+  testCenters: Testcenter[] = [{
+    id: 1,
+    label: 'Testcenter 1'
+  }, {
+    id: 2,
+    label: 'Testcenter 2'
+  },
+  {
+    id: 3,
+    label: 'Testcenter 3'
+  },
+  {
+    id: 4,
+    label: 'Testcenter 4'
+  },
+  {
+    id: 5,
+    label: 'Testcenter 5'
+  }];
+
   authToken: string = '';
   workspaces: WorkspaceAdmin[] = [];
   loginForm: UntypedFormGroup;
@@ -85,6 +110,7 @@ export class TestCenterImportComponent {
   authenticationError: boolean = false;
   authenticated: boolean = false;
   isUploadingFiles: boolean = false;
+  testCenterInstance: Testcenter[] = [];
   constructor(private backendService: BackendService,
               private workspaceAdminService: WorkspaceAdminService,
               private fb: UntypedFormBuilder,
@@ -106,27 +132,42 @@ export class TestCenterImportComponent {
   }
 
   ngOnInit(): void {
-    if (this.workspaceAdminService.lastAuthToken) {
+    if (this.workspaceAdminService.getAuthToken()) {
       this.authenticated = true;
-      this.authToken = this.workspaceAdminService.lastAuthToken;
+      this.authToken = this.workspaceAdminService.getAuthToken();
+      this.workspaces = this.workspaceAdminService.getClaims();
+      this.testCenterInstance = this.workspaceAdminService.getlastTestcenterInstance();
     }
   }
 
   authenticate(): void {
     const name = this.loginForm.get('name')?.value;
     const pw = this.loginForm.get('pw')?.value;
-    const testCenter = this.loginForm.get('testCenter')?.value;
-    this.backendService.authenticate(name, pw, testCenter).subscribe(response => {
+    this.testCenterInstance = this.testCenters.filter(
+      testcenter => testcenter.id === this.loginForm.get('testCenter')?.value);
+    this.backendService.authenticate(name, pw, this.testCenterInstance[0].id.toString()).subscribe(response => {
       if (!response) {
         this.authenticationError = true;
         return;
       }
-      this.authenticationError = false;
-      this.authenticated = true;
       this.authToken = response.token;
-      this.workspaceAdminService.lastAuthToken = response.token;
+      this.authenticationError = false;
+      this.workspaceAdminService.setLastAuthToken(response.token);
+      this.workspaceAdminService.setClaims(response.claims.workspaceAdmin);
+      this.workspaceAdminService.setlastTestcenterInstance(this.testCenterInstance);
       this.workspaces = response.claims.workspaceAdmin;
+      this.authenticated = true;
     });
+  }
+
+  logout(): boolean {
+    this.authenticated = false;
+    this.authToken = '';
+    this.workspaceAdminService.setLastAuthToken('');
+    this.workspaceAdminService.setClaims([]);
+    this.workspaceAdminService.setlastTestcenterInstance([]);
+    this.workspaces = [];
+    return true;
   }
 
   importWorkspaceFiles(): void {

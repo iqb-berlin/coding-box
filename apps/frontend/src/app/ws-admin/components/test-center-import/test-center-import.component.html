@@ -20,12 +20,10 @@
                (keyup.enter)="authenticate()">
       </mat-form-field>
       <mat-form-field>
-        <mat-select formControlName="testCenter">
-          <mat-option value="1">Testcenter 1</mat-option>
-          <mat-option value="2">Testcenter 2</mat-option>
-          <mat-option value="3">Testcenter 3</mat-option>
-          <mat-option value="4">Testcenter 4</mat-option>
-          <mat-option value="5">Testcenter 5</mat-option>
+        <mat-select placeholder='Test Center auswählen' formControlName="testCenter">
+        @for (testCenter of testCenters;track testCenter){
+          <mat-option [value]="testCenter.id">{{ testCenter.label }}</mat-option>
+        }
         </mat-select>
       </mat-form-field>
     </div>
@@ -43,6 +41,10 @@
   </form>
   } @else {
     @if (workspaces){
+  <div class="fx-row-space-between-start loginInfo">
+    <h3>Angemeldet in {{this.testCenterInstance[0].label}}</h3>
+    <button  mat-button color="primary" (click)="this.logout()">Abmelden</button>
+  </div>
     <form class="fx-column-start-stretch"
           [formGroup]="importFilesForm"
           (ngSubmit)="importWorkspaceFiles()">
@@ -77,7 +79,7 @@
         </section>
         <mat-form-field>
 
-          <mat-select formControlName="workspace">
+          <mat-select placeholder='Studie auswählen' formControlName="workspace">
             @for (workspace of workspaces;track workspace){
               <mat-option [value]="workspace.id">{{ workspace.label }}</mat-option>
             }
