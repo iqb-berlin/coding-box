@@ -26,6 +26,13 @@ import { TestGroupsInListDto } from '../../../../../../api-dto/test-groups/testg
 import FileUpload from '../../database/entities/file_upload.entity';
 import { ResponseDto } from '../../../../../../api-dto/responses/response-dto';
 
+export type Result = {
+  success: boolean,
+  testFiles: number,
+  responses: number,
+  logs: number
+};
+
 @Controller('admin/workspace')
 export class WorkspaceController {
   constructor(
@@ -67,7 +74,7 @@ export class WorkspaceController {
       @Query('player') player: string,
       @Query('units') units: string,
       @Query('codings') codings: string)
-      : Promise<boolean> {
+      : Promise<Result> {
     const importOptions:ImportOptions = {
       definitions: definitions,
       responses: responses,

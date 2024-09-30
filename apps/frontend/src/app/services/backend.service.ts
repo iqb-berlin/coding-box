@@ -11,7 +11,11 @@ import { WorkspaceInListDto } from '../../../../../api-dto/workspaces/workspace-
 import { CreateWorkspaceDto } from '../../../../../api-dto/workspaces/create-workspace-dto';
 import { AuthDataDto } from '../../../../../api-dto/auth-data-dto';
 // eslint-disable-next-line import/no-cycle
-import { ImportOptions, ServerResponse } from '../ws-admin/components/test-center-import/test-center-import.component';
+import {
+  ImportOptions,
+  Result,
+  ServerResponse
+} from '../ws-admin/components/test-center-import/test-center-import.component';
 import { TestGroupsInListDto } from '../../../../../api-dto/test-groups/testgroups-in-list.dto';
 import { FilesInListDto } from '../../../../../api-dto/files/files-in-list.dto';
 import { ResponseDto } from '../../../../../api-dto/responses/response-dto';
@@ -294,15 +298,17 @@ export class BackendService {
                        testCenterWorkspace: string,
                        server:string,
                        token:string,
-                       importOptions:ImportOptions): Observable<boolean> {
+                       importOptions:ImportOptions): Observable<Result> {
     const {
       units, responses, definitions, player, codings
     } = importOptions;
     return this.http
       // eslint-disable-next-line max-len
-      .get<boolean>(`${this.serverUrl}admin/workspace/${workspace_id}/importWorkspaceFiles?tc_workspace=${testCenterWorkspace}&server=${server}&responses=${responses}&definitions=${definitions}&units=${units}&codings=${codings}&player=${player}&token=${token}`, { headers: this.authHeader })
+      .get<Result>(`${this.serverUrl}admin/workspace/${workspace_id}/importWorkspaceFiles?tc_workspace=${testCenterWorkspace}&server=${server}&responses=${responses}&definitions=${definitions}&units=${units}&codings=${codings}&player=${player}&token=${token}`, { headers: this.authHeader })
       .pipe(
-        catchError(() => of(false))
+        catchError(() => of({
+          success: false, testFiles: 0, responses: 0, logs: 0
+        }))
       );
   }
 }
