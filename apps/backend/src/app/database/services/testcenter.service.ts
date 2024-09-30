@@ -58,6 +58,13 @@ export type UnitResponse = {
   laststate : string,
 };
 
+export type Result = {
+  success: boolean,
+  testFiles: number,
+  responses: number,
+  logs: number
+};
+
 @Injectable()
 export class TestcenterService {
   constructor(
@@ -91,7 +98,7 @@ export class TestcenterService {
     server:string,
     authToken:string,
     importOptions:ImportOptions
-  ): Promise<boolean> {
+  ): Promise<Result> {
     const {
       units, responses, definitions, player, codings
     } = importOptions;
@@ -99,6 +106,11 @@ export class TestcenterService {
     const headersRequest = {
       Authtoken: authToken
     };
+
+    const result: Result = {
+      success: false, testFiles: 0, responses: 0, logs: 0
+    };
+
     if (responses === 'true') {
       const resultsPromise = this.httpService.axiosRef
         .get<TestserverResponse[]>(`http://iqb-testcenter${server}.de/api/workspace/${tc_workspace}/results`, {
@@ -142,7 +154,12 @@ export class TestcenterService {
             this.responsesRepository.upsert(cleanedRows, ['test_person', 'unit_id']);
           });
       });
-      await Promise.all(unitResponsesPromises);
+      await Promise.all(unitResponsesPromises).then(() => {
+        result.success = true;
+        result.responses = report.data.length;
+      }).catch(() => {
+        result.success = false;
+      });
     }
 
     if (definitions === 'true' || player === 'true' || units === 'true' || codings === 'true') {
@@ -188,22 +205,27 @@ export class TestcenterService {
         }
         const results :File[] = await Promise.all(promises);
         if (results.length > 0) {
-          const dbEntries: unknown = results.map(result => ({
-            filename: result.name || '',
-            file_id: result.id,
-            file_type: result.type,
-            file_size: result.size,
+          const dbEntries: unknown = results.map(res => ({
+            filename: res.name || '',
+            file_id: res.id,
+            file_type: res.type,
+            file_size: res.size,
             workspace_id: workspace_id,
-            data: result.data
+            data: res.data
           }));
           await this.workspaceService.testCenterImport(dbEntries as FileUpload[]);
-          return true;
+          result.success = true;
+          result.testFiles = results.length;
+          return result;
         }
-        return false;
+        result.success = false;
+        return result;
       }
-      return false;
+      result.success = false;
+      return result;
     }
-    return true;
+    result.success = true;
+    return result;
   }
 
   private static getTestPersonName(unitResponse: UnitResponse): string {
