@@ -7,7 +7,7 @@ import { MatIcon } from '@angular/material/icon';
 import {
   MatDialogContent, MatDialogActions, MatDialogClose
 } from '@angular/material/dialog';
-import { MatFormField } from '@angular/material/form-field';
+import { MatError, MatFormField } from '@angular/material/form-field';
 import {
   ReactiveFormsModule, UntypedFormBuilder, UntypedFormGroup, Validators
 } from '@angular/forms';
@@ -79,7 +79,7 @@ export type Testcenter = {
   styleUrls: ['./test-center-import.component.scss'],
   standalone: true,
   // eslint-disable-next-line max-len
-  imports: [MatDialogContent, MatIcon, MatDialogActions, MatButton, MatDialogClose, TranslateModule, MatFormField, ReactiveFormsModule, MatInput, MatSelect, MatOption, MatRadioGroup, MatRadioButton, MatCheckbox, MatProgressSpinner]
+  imports: [MatDialogContent, MatIcon, MatDialogActions, MatButton, MatDialogClose, TranslateModule, MatFormField, ReactiveFormsModule, MatInput, MatSelect, MatOption, MatRadioGroup, MatRadioButton, MatCheckbox, MatProgressSpinner, MatError]
 })
 
 export class TestCenterImportComponent {
@@ -108,6 +108,7 @@ export class TestCenterImportComponent {
   loginForm: UntypedFormGroup;
   importFilesForm: UntypedFormGroup;
   authenticationError: boolean = false;
+  filesSelectionError: boolean = false;
   authenticated: boolean = false;
   isUploadingFiles: boolean = false;
   testCenterInstance: Testcenter[] = [];
@@ -127,7 +128,6 @@ export class TestCenterImportComponent {
       units: this.fb.control(false),
       player: this.fb.control(false),
       codings: this.fb.control(false)
-
     });
   }
 
@@ -186,15 +186,20 @@ export class TestCenterImportComponent {
       player: player,
       codings: codings
     };
-    this.isUploadingFiles = true;
-    this.backendService.importWorkspaceFiles(
-      this.appService.selectedWorkspaceId,
-      workspace,
-      testCenter,
-      this.authToken,
-      importOptions)
-      .subscribe(() => {
-        this.isUploadingFiles = false;
-      });
+    if (definitions || responses || player || codings || units) {
+      this.filesSelectionError = false;
+      this.isUploadingFiles = true;
+      this.backendService.importWorkspaceFiles(
+        this.appService.selectedWorkspaceId,
+        workspace,
+        testCenter,
+        this.authToken,
+        importOptions)
+        .subscribe(() => {
+          this.isUploadingFiles = false;
+        });
+    } else {
+      this.filesSelectionError = true;
+    }
   }
 }
