@@ -32,12 +32,13 @@
             [disabled]="loginForm.invalid"
             color="primary">{{ 'login' | translate }}
     </button>
+      <mat-error>
     @if (authenticationError){
       <div class="warning">
         {{'login-error' | translate}}
       </div>
     }
-
+      </mat-error>
   </form>
   } @else {
     @if (workspaces){
@@ -101,12 +102,27 @@
           <div>Bitte mindestens eine Import Option auswählen</div>
         }
       </mat-error>
+      <mat-error>
       @if (authenticationError){
         <div class="warning">
           {{'login-error' | translate}}
         </div>
       }
-
+      </mat-error>
+      @if(uploadData){
+        @if(uploadData.success){
+          <div class="success">
+            Der Testcenter Import war erfolgreich.
+          </div>
+        }
+        @else{
+          @if(!isUploadingFiles && !filesSelectionError){
+            <div class="warning">
+              {{'Beim Importieren der Dateien ist ein Fehler aufgetreten'}}
+            </div>
+          }
+        }
+      }
     </form>
     } @else{
       <p class="warning">Keine Arbeitsbereiche auswählbar</p>

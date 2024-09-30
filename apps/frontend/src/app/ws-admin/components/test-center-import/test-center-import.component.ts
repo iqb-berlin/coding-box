@@ -17,6 +17,8 @@ import { MatRadioButton, MatRadioGroup } from '@angular/material/radio';
 import { MatCheckbox } from '@angular/material/checkbox';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 // eslint-disable-next-line import/no-cycle
+import { catchError, of } from 'rxjs';
+// eslint-disable-next-line import/no-cycle
 import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
 import { WorkspaceAdminService } from '../../services/workspace-admin.service';
@@ -73,6 +75,13 @@ export type Testcenter = {
   label:string
 };
 
+export type Result = {
+  success: boolean,
+  testFiles: number,
+  responses: number,
+  logs: number
+};
+
 @Component({
   selector: 'coding-box-test-center-import',
   templateUrl: 'test-center-import.component.html',
@@ -111,6 +120,7 @@ export class TestCenterImportComponent {
   filesSelectionError: boolean = false;
   authenticated: boolean = false;
   isUploadingFiles: boolean = false;
+  uploadData!: Result;
   testCenterInstance: Testcenter[] = [];
   constructor(private backendService: BackendService,
               private workspaceAdminService: WorkspaceAdminService,
@@ -145,7 +155,11 @@ export class TestCenterImportComponent {
     const pw = this.loginForm.get('pw')?.value;
     this.testCenterInstance = this.testCenters.filter(
       testcenter => testcenter.id === this.loginForm.get('testCenter')?.value);
-    this.backendService.authenticate(name, pw, this.testCenterInstance[0].id.toString()).subscribe(response => {
+    this.backendService.authenticate(name, pw, this.testCenterInstance[0].id.toString()).pipe(
+      catchError(() => {
+        this.authenticationError = true;
+        return of();
+      })).subscribe(response => {
       if (!response) {
         this.authenticationError = true;
         return;
@@ -186,6 +200,7 @@ export class TestCenterImportComponent {
       player: player,
       codings: codings
     };
+    this.uploadData = {} as Result;
     if (definitions || responses || player || codings || units) {
       this.filesSelectionError = false;
       this.isUploadingFiles = true;
@@ -195,7 +210,8 @@ export class TestCenterImportComponent {
         testCenter,
         this.authToken,
         importOptions)
-        .subscribe(() => {
+        .subscribe(data => {
+          this.uploadData = data;
           this.isUploadingFiles = false;
         });
     } else {
