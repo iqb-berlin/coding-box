@@ -21,10 +21,10 @@ import { JsonPipe } from '@angular/common';
 import { MatFormField, MatLabel } from '@angular/material/form-field';
 import { MatInput } from '@angular/material/input';
 import { CdkTextareaAutosize } from '@angular/cdk/text-field';
-import { BackendService } from '../../services/backend.service';
-import { AppService } from '../../services/app.service';
-import { WrappedIconComponent } from '../../shared/wrapped-icon/wrapped-icon.component';
-import { SearchFilterComponent } from '../../shared/search-filter/search-filter.component';
+import { BackendService } from '../../../services/backend.service';
+import { AppService } from '../../../services/app.service';
+import { WrappedIconComponent } from '../../../shared/wrapped-icon/wrapped-icon.component';
+import { SearchFilterComponent } from '../../../shared/search-filter/search-filter.component';
 
 @Component({
   selector: 'coding-box-test-persons',

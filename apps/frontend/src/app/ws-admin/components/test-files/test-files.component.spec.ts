@@ -3,7 +3,7 @@ import { TranslateModule } from '@ngx-translate/core';
 import { HttpClientModule } from '@angular/common/http';
 import { ActivatedRoute } from '@angular/router';
 import { TestFilesComponent } from './test-files.component';
-import { environment } from '../../../environments/environment';
+import { environment } from '../../../../environments/environment';
 
 describe('TestFilesComponent', () => {
   let component: TestFilesComponent;
