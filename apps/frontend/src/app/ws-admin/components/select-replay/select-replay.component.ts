@@ -12,9 +12,9 @@ import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { MatLabel } from '@angular/material/form-field';
 import { MatProgressBar } from '@angular/material/progress-bar';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
-import { BackendService } from '../../services/backend.service';
-import { AppService } from '../../services/app.service';
-import { ReplayComponent } from '../../replay/components/replay/replay.component';
+import { BackendService } from '../../../services/backend.service';
+import { AppService } from '../../../services/app.service';
+import { ReplayComponent } from '../../../replay/components/replay/replay.component';
 
 export type TestGroups = {
   test_group: string;
@@ -47,8 +47,10 @@ export class SelectReplayComponent implements OnInit {
   selectedUnit = '';
   selectedTestGroup = '';
   isLoading = false;
+  page = 0;
 
   ngOnInit(): void {
+    this.page = this.replayComponent?.responses?.unit_state?.CURRENT_PAGE_ID;
     this.isLoading = true;
     if (this.appService.workspaceData?.testGroups.length === 0) {
       this.backendService.getTestGroups(this.appService.selectedWorkspaceId)

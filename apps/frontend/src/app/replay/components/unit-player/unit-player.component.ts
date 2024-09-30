@@ -124,7 +124,7 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
           switch (msgType) {
             case 'vopReadyNotification':
             case 'player':
-            case 'vo.FromPlayer.ReadyNotification':
+            case 'vo.FromPlayer.ReadyNotification': {
               if (msgType === 'vopReadyNotification' || msgType === 'player') {
                 let majorVersion;
                 if (msgData.metadata) {
@@ -143,10 +143,11 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
               }
               const array = new Uint32Array(1);
               window.crypto.getRandomValues(array);
-              this.sessionId = (array[0] % 20000000 + 10000000).toString();
+              this.sessionId = ((array[0] % 20000000) + 10000000).toString();
               this.postMessageTarget = m.source as Window;
               this.sendUnitData();
               break;
+            }
 
             case 'vo.FromPlayer.StartedNotification':
               this.setPageList(msgData.validPages, msgData.currentPage);

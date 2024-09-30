@@ -25,15 +25,15 @@ import { DatePipe, JsonPipe } from '@angular/common';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { MatIcon } from '@angular/material/icon';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { BackendService } from '../../services/backend.service';
-import { AppService } from '../../services/app.service';
-import { WrappedIconComponent } from '../../shared/wrapped-icon/wrapped-icon.component';
-import { SearchFilterComponent } from '../../shared/search-filter/search-filter.component';
-import { HasSelectionValuePipe } from '../../shared/pipes/hasSelectionValue.pipe';
-import { IsAllSelectedPipe } from '../../shared/pipes/isAllSelected.pipe';
-import { IsSelectedPipe } from '../../shared/pipes/isSelected.pipe';
-import { FileSizePipe } from '../../shared/pipes/filesize.pipe';
-import { TestGroupsInListDto } from '../../../../../../api-dto/test-groups/testgroups-in-list.dto';
+import { BackendService } from '../../../services/backend.service';
+import { AppService } from '../../../services/app.service';
+import { WrappedIconComponent } from '../../../shared/wrapped-icon/wrapped-icon.component';
+import { SearchFilterComponent } from '../../../shared/search-filter/search-filter.component';
+import { HasSelectionValuePipe } from '../../../shared/pipes/hasSelectionValue.pipe';
+import { IsAllSelectedPipe } from '../../../shared/pipes/isAllSelected.pipe';
+import { IsSelectedPipe } from '../../../shared/pipes/isSelected.pipe';
+import { FileSizePipe } from '../../../shared/pipes/filesize.pipe';
+import { TestGroupsInListDto } from '../../../../../../../api-dto/test-groups/testgroups-in-list.dto';
 
 @Component({
   selector: 'coding-box-test-groups',
