@@ -85,6 +85,7 @@
             }
           </mat-select>
         </mat-form-field>
+
       </div>
       @if (isUploadingFiles){
         <mat-spinner></mat-spinner>
@@ -95,6 +96,11 @@
               color="primary">{{ 'files-import' | translate }}
       </button>
       }
+      <mat-error>
+        @if(filesSelectionError){
+          <div>Bitte mindestens eine Import Option auswählen</div>
+        }
+      </mat-error>
       @if (authenticationError){
         <div class="warning">
           {{'login-error' | translate}}
