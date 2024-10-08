@@ -71,6 +71,7 @@ export class WorkspaceController {
       @Query('token') token: string,
       @Query('definitions') definitions: string,
       @Query('responses') responses: string,
+      @Query('logs') logs: string,
       @Query('player') player: string,
       @Query('units') units: string,
       @Query('codings') codings: string)
@@ -80,7 +81,8 @@ export class WorkspaceController {
       responses: responses,
       units: units,
       player: player,
-      codings: codings
+      codings: codings,
+      logs: logs
     };
     return this.testCenterService.importWorkspaceFiles(workspace_id, tc_workspace, server, token, importOptions);
   }

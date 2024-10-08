@@ -67,7 +67,7 @@ export type WorkspaceAdmin = {
 // };
 
 export type ImportOptions = {
-  responses:string, definitions:string, units:string, player:string, codings:string
+  responses:string, definitions:string, units:string, player:string, codings:string, logs:string
 };
 
 export type Testcenter = {
@@ -129,7 +129,7 @@ export class TestCenterImportComponent {
     this.loginForm = this.fb.group({
       name: this.fb.control('', [Validators.required, Validators.minLength(1)]),
       pw: this.fb.control('', [Validators.required, Validators.minLength(1)]),
-      testCenter: this.fb.control('2', [Validators.required])
+      testCenter: this.fb.control('', [Validators.required])
     });
     this.importFilesForm = this.fb.group({
       workspace: this.fb.control('', [Validators.required]),
@@ -137,7 +137,8 @@ export class TestCenterImportComponent {
       definitions: this.fb.control(false),
       units: this.fb.control(false),
       player: this.fb.control(false),
-      codings: this.fb.control(false)
+      codings: this.fb.control(false),
+      logs: this.fb.control(false)
     });
   }
 
@@ -192,16 +193,18 @@ export class TestCenterImportComponent {
     const player = this.importFilesForm.get('player')?.value;
     const units = this.importFilesForm.get('units')?.value;
     const codings = this.importFilesForm.get('codings')?.value;
+    const logs = this.importFilesForm.get('logs')?.value;
 
     const importOptions = {
       definitions: definitions,
       responses: responses,
       units: units,
       player: player,
-      codings: codings
+      codings: codings,
+      logs: logs
     };
     this.uploadData = {} as Result;
-    if (definitions || responses || player || codings || units) {
+    if (definitions || responses || player || codings || units || logs) {
       this.filesSelectionError = false;
       this.isUploadingFiles = true;
       this.backendService.importWorkspaceFiles(
