@@ -300,11 +300,11 @@ export class BackendService {
                        token:string,
                        importOptions:ImportOptions): Observable<Result> {
     const {
-      units, responses, definitions, player, codings
+      units, responses, definitions, player, codings, logs
     } = importOptions;
     return this.http
       // eslint-disable-next-line max-len
-      .get<Result>(`${this.serverUrl}admin/workspace/${workspace_id}/importWorkspaceFiles?tc_workspace=${testCenterWorkspace}&server=${server}&responses=${responses}&definitions=${definitions}&units=${units}&codings=${codings}&player=${player}&token=${token}`, { headers: this.authHeader })
+      .get<Result>(`${this.serverUrl}admin/workspace/${workspace_id}/importWorkspaceFiles?tc_workspace=${testCenterWorkspace}&server=${server}&responses=${responses}&logs=${logs}&definitions=${definitions}&units=${units}&codings=${codings}&player=${player}&token=${token}`, { headers: this.authHeader })
       .pipe(
         catchError(() => of({
           success: false, testFiles: 0, responses: 0, logs: 0
