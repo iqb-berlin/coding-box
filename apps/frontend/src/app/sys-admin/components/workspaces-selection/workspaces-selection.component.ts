@@ -12,7 +12,7 @@ import {
   MatTableDataSource
 } from '@angular/material/table';
 import {
-  Component, EventEmitter, Input, OnInit, Output, ViewChild
+  Component, EventEmitter, Input, OnInit, Output, SimpleChanges, ViewChild
 } from '@angular/core';
 import { MatSort, MatSortHeader } from '@angular/material/sort';
 import { FormsModule } from '@angular/forms';
@@ -28,7 +28,6 @@ import { IsSelectedPipe } from '../../../shared/pipes/isSelected.pipe';
 import { IsSelectedIdPipe } from '../../../shared/pipes/isSelectedId.pipe';
 import { SearchFilterComponent } from '../../../shared/search-filter/search-filter.component';
 import { WorkspaceInListDto } from '../../../../../../../api-dto/workspaces/workspace-in-list-dto';
-import { AppService } from '../../../services/app.service';
 import { BackendService } from '../../../services/backend.service';
 import { WrappedIconComponent } from '../../../shared/wrapped-icon/wrapped-icon.component';
 
@@ -51,27 +50,32 @@ export class WorkspacesSelectionComponent implements OnInit {
   @Input() selectedWorkspacesIds!: number[];
   @Output() workspaceSelectionChanged: EventEmitter<WorkspaceInListDto[]> = new EventEmitter<WorkspaceInListDto[]>();
   @Output() selectionChanged: EventEmitter<WorkspaceInListDto[]> = new EventEmitter<WorkspaceInListDto[]>();
+  @Output() workspacesUpdated = new EventEmitter<boolean>();
+  @Input() workspacesChanged!: boolean;
+
+  ngOnChanges(changes: SimpleChanges) {
+    if (changes) {
+      this.updateWorkspaceList();
+    }
+  }
 
   constructor(
-    private appService: AppService,
     private backendService: BackendService
   ) {
+
   }
 
   ngOnInit(): void {
-    setTimeout(() => {
-      this.updateWorkspaceList();
-    });
+    this.updateWorkspaceList();
   }
 
   private updateWorkspaceList(): void {
     this.selectedWorkspaceId = 0;
-    this.appService.dataLoading = true;
     this.backendService.getAllWorkspacesList().subscribe(workspaces => {
+      this.workspacesUpdated.emit(this.workspacesChanged);
       this.setObjectsDatasource(workspaces);
       this.tableSelectionCheckboxes.clear();
       this.tableSelectionRow.clear();
-      this.appService.dataLoading = false;
       if (this.selectedWorkspacesIds?.length > 0) {
         this.tableSelectionCheckboxes.select(...workspaces
           .filter(workspace => this.selectedWorkspacesIds.includes(workspace.id)));
