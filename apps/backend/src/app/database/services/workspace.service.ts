@@ -22,6 +22,13 @@ import User from '../entities/user.entity';
 import { TestGroupsInListDto } from '../../../../../../api-dto/test-groups/testgroups-in-list.dto';
 import { ResponseDto } from '../../../../../../api-dto/responses/response-dto';
 
+function sanitizePath(filePath: string): string {
+  if (filePath.indexOf('..') !== -1) {
+    throw new Error('Invalid file path');
+  }
+  return filePath;
+}
+
 export type Response = {
   groupname:string,
   loginname : string,
@@ -330,8 +337,9 @@ export class WorkspaceService {
               createdAt: new Date()
             });
             await this.resourcePackageRepository.save(newResourcePackage);
+            const sanitizedFileName = sanitizePath(file.originalname);
             fs.writeFileSync(
-              `${resourcePackagesPath}/${packageName}/${file.originalname}`,
+              `${resourcePackagesPath}/${packageName}/${sanitizedFileName}`,
               file.buffer
             );
             return newResourcePackage.id;
@@ -341,12 +349,13 @@ export class WorkspaceService {
         const zipEntries = zip.getEntries();
         zipEntries.forEach(zipEntry => {
           const fileContent = zipEntry.getData();
+          const sanitizedEntryName = sanitizePath(zipEntry.entryName);
 
           filePromises.push(Promise.all(this.handleFile(workspaceId, <FileIo>{
             fieldname: file.fieldname,
-            originalname: `${zipEntry.entryName}`,
+            originalname: `${sanitizedEntryName}`,
             encoding: file.encoding,
-            mimetype: WorkspaceService.getMimeType(zipEntry.entryName),
+            mimetype: WorkspaceService.getMimeType(sanitizedEntryName),
             buffer: fileContent,
             size: fileContent.length
           })));
