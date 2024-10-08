@@ -8,8 +8,7 @@ import {
   MatHeaderRowDef,
   MatRow,
   MatRowDef,
-  MatTable,
-  MatTableDataSource
+  MatTable
 } from '@angular/material/table';
 import { Component, ViewChild } from '@angular/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
@@ -49,12 +48,12 @@ type WorkspaceData = {
   imports: [WorkspacesMenuComponent, NgIf, SearchFilterComponent, MatTable, MatSort, MatColumnDef, MatHeaderCellDef, MatHeaderCell, MatCheckbox, MatCellDef, MatCell, MatSortHeader, MatHeaderRowDef, MatHeaderRow, MatRowDef, MatRow, MatButton, MatTooltip, WrappedIconComponent, NgFor, FormsModule, TranslateModule, IsSelectedPipe, IsAllSelectedPipe, HasSelectionValuePipe, IsSelectedIdPipe, WorkspacesSelectionComponent]
 })
 export class WorkspacesComponent {
-  objectsDatasource = new MatTableDataSource<WorkspaceInListDto>();
   tableSelectionCheckboxes = new SelectionModel<WorkspaceInListDto>(true, []);
   tableSelectionRow = new SelectionModel<WorkspaceInListDto>(false, []);
   selectedWorkspaceId = 0;
   selectedWorkspaces : number[] = [];
   selectedRows : WorkspaceInListDto[] = [];
+  workspacesChanged: boolean = false;
 
   @ViewChild(MatSort) sort = new MatSort();
 
@@ -66,12 +65,7 @@ export class WorkspacesComponent {
   ) {
   }
 
-  // ngOnInit(): void {
-  //
-  // }
-
   addWorkspace(result: UntypedFormGroup): void {
-    this.appService.dataLoading = true;
     this.backendService.addWorkspace(<CreateWorkspaceDto>{
       name: (<UntypedFormGroup>result).get('name')?.value,
       settings: {}
@@ -82,14 +76,13 @@ export class WorkspacesComponent {
             this.translateService.instant('admin.workspace-created'),
             '',
             { duration: 1000 });
-          this.updateWorkspaceList();
+          this.workspacesChanged = true;
         } else {
           this.snackBar.open(
             this.translateService.instant('admin.workspace-not-created'),
             this.translateService.instant('error'),
             { duration: 3000 });
         }
-        this.appService.dataLoading = false;
       }
     );
   }
@@ -106,7 +99,7 @@ export class WorkspacesComponent {
               this.translateService.instant('admin.workspace-edited'),
               '',
               { duration: 1000 });
-            this.updateWorkspaceList();
+            this.workspacesChanged = true;
           } else {
             this.snackBar.open(
               this.translateService.instant('admin.workspace-not-edited'),
@@ -114,13 +107,11 @@ export class WorkspacesComponent {
               { duration: 3000 }
             );
           }
-          this.appService.dataLoading = false;
         }
       );
   }
 
   deleteWorkspace(workspace_ids:number[]): void {
-    this.appService.dataLoading = true;
     this.backendService.deleteWorkspace(workspace_ids).subscribe(
       respOk => {
         if (respOk) {
@@ -128,43 +119,23 @@ export class WorkspacesComponent {
             this.translateService.instant('admin.workspace-deleted'),
             '',
             { duration: 1000 });
-          this.updateWorkspaceList();
+          this.workspacesChanged = true;
         } else {
           this.snackBar.open(
             this.translateService.instant('admin.workspace-not-deleted'),
             this.translateService.instant('error'),
             { duration: 1000 });
-          this.appService.dataLoading = false;
         }
       }
     );
   }
 
-  private updateWorkspaceList(): void {
-    this.selectedWorkspaceId = 0;
-    this.appService.dataLoading = true;
-    this.backendService.getAllWorkspacesList().subscribe(workspaces => {
-      this.setObjectsDatasource(workspaces);
-      this.tableSelectionCheckboxes.clear();
-      this.tableSelectionRow.clear();
-      this.appService.dataLoading = false;
-    });
-  }
-
-  private setObjectsDatasource(groups: WorkspaceInListDto[]): void {
-    this.objectsDatasource = new MatTableDataSource(groups);
-    this.objectsDatasource
-      .filterPredicate = (groupList: WorkspaceInListDto, filter) => [
-        'name'
-      ].some(column => (groupList[column as keyof WorkspaceInListDto] as string || '')
-        .toLowerCase()
-        .includes(filter));
-    this.objectsDatasource.sort = this.sort;
+  workspacesUpdated(): void {
+    this.workspacesChanged = false;
   }
 
   workspaceSelectionChanged(workspaceData: WorkspaceData[]): void {
     this.selectedWorkspaces = workspaceData.map(workspace => workspace.id);
-    // this.selectedWorkspaces = workspaceData;
   }
 
   setWorkspaceUsersAccessRight(users: number[]): void {
