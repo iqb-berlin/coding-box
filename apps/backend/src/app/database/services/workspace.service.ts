@@ -344,7 +344,7 @@ export class WorkspaceService {
 
           filePromises.push(Promise.all(this.handleFile(workspaceId, <FileIo>{
             fieldname: file.fieldname,
-            originalname: `${file.originalname}/${zipEntry.entryName}`,
+            originalname: `${zipEntry.entryName}`,
             encoding: file.encoding,
             mimetype: WorkspaceService.getMimeType(zipEntry.entryName),
             buffer: fileContent,
