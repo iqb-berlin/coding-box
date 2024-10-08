@@ -270,8 +270,7 @@ export class BackendService {
       { headers });
   }
 
-  // Todo: This gets unitIds of responses
-  getTestPersonUnits(workspaceId: number, testPerson: string): Observable<{ unit_id:string }[]> {
+  getResponsesUnitIds(workspaceId: number, testPerson: string): Observable<{ unit_id:string }[]> {
     return this.http.get<{ unit_id:string }[]>(
       `${this.serverUrl}admin/workspace/${workspaceId}/units/${testPerson}`,
       { headers: this.authHeader });
