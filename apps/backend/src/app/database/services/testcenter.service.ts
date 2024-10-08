@@ -11,6 +11,8 @@ import {
 } from '../../../../../frontend/src/app/ws-admin/components/test-center-import/test-center-import.component';
 import FileUpload from '../entities/file_upload.entity';
 import { ResponseDto } from '../../../../../../api-dto/responses/response-dto';
+import { LogsDto } from '../../../../../../api-dto/logs/logs-dto';
+import Logs from '../entities/logs.entity';
 
 const agent = new https.Agent({
   rejectUnauthorized: true
@@ -58,6 +60,16 @@ export type UnitResponse = {
   laststate : string,
 };
 
+export type Log = {
+  groupname:string,
+  loginname : string,
+  code : string,
+  bookletname : string,
+  unitname : string,
+  timestamp: number,
+  logentry : string,
+};
+
 export type Result = {
   success: boolean,
   testFiles: number,
@@ -71,7 +83,9 @@ export class TestcenterService {
     private readonly httpService: HttpService,
     private workspaceService: WorkspaceService,
     @InjectRepository(Responses)
-    private responsesRepository:Repository<Responses>
+    private responsesRepository:Repository<Responses>,
+    @InjectRepository(Logs)
+    private logsRepository:Repository<Logs>
 
   ) {
   }
@@ -100,7 +114,7 @@ export class TestcenterService {
     importOptions:ImportOptions
   ): Promise<Result> {
     const {
-      units, responses, definitions, player, codings
+      units, responses, definitions, player, codings, logs
     } = importOptions;
 
     const headersRequest = {
@@ -157,6 +171,54 @@ export class TestcenterService {
       await Promise.all(unitResponsesPromises).then(() => {
         result.success = true;
         result.responses = report.data.length;
+      }).catch(() => {
+        result.success = false;
+      });
+    }
+
+    if (logs === 'true') {
+      const resultsPromise = this.httpService.axiosRef
+        .get<TestserverResponse[]>(`http://iqb-testcenter${server}.de/api/workspace/${tc_workspace}/results`, {
+        httpsAgent: agent,
+        headers: headersRequest
+      });
+      const report = await resultsPromise.then(res => res);
+      if (!report) {
+        throw new Error('could not obtain information about groups from TC');
+      }
+      const resultGroupNames = report.data.map(group => group.groupName);
+      const createChunks = (a, size) => Array.from(
+        new Array(Math.ceil(a.length / size)),
+        (_, i) => a.slice(i * size, i * size + size)
+      );
+
+      const chunks = createChunks(resultGroupNames, 2);
+      const logsPromises = chunks.map(chunk => {
+        const logsPromise = this.httpService.axiosRef
+          .get<Log[]>(`http://iqb-testcenter${server}.de/api/workspace/
+        ${tc_workspace}/report/log?dataIds=${chunk.join(',')}`,
+        {
+          httpsAgent: agent,
+          headers: headersRequest
+        });
+        return logsPromise
+          .then(callResponse => {
+            const rows:LogsDto[] = callResponse.data
+              .map((log: Log) => ({
+                unit_id: log.unitname,
+                timestamp: log.timestamp,
+                test_group: log.groupname,
+                workspace_id: Number(workspace_id),
+                log_entry: log.logentry,
+                booklet_id: log.bookletname,
+                id: undefined
+              }));
+            this.logsRepository.save(rows, { chunk: 50000 });
+          });
+      });
+      await Promise.all(logsPromises).then(() => {
+        result.success = true;
+        result.logs = report.data.length;
       }).catch(() => {
         result.success = false;
       });
