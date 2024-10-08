@@ -44,11 +44,8 @@ import { TestGroupsInListDto } from '../../../../../../../api-dto/test-groups/te
   imports: [MatTable, MatSort, MatColumnDef, MatHeaderCellDef, MatHeaderCell, MatCheckbox, MatCellDef, MatCell, MatSortHeader, MatHeaderRowDef, MatHeaderRow, MatRowDef, MatRow, MatButton, MatTooltip, WrappedIconComponent, FormsModule, TranslateModule, SearchFilterComponent, JsonPipe, HasSelectionValuePipe, IsAllSelectedPipe, IsSelectedPipe, MatProgressSpinner, DatePipe, FileSizePipe, MatAnchor, MatIcon]
 })
 export class TestGroupsComponent implements OnInit {
-  testGroupsObjectsDatasource = new MatTableDataSource<TestGroupsInListDto>();
   displayedColumns = ['selectCheckbox', 'test_group', 'created_at'];
-  tableSelectionRow = new SelectionModel<TestGroupsInListDto>(false, []);
   tableSelectionCheckboxes = new SelectionModel<TestGroupsInListDto>(true, []);
-  testGroups :TestGroupsInListDto[] = [];
   dataSource!: MatTableDataSource<TestGroupsInListDto>;
   isLoading = false;
 
@@ -68,22 +65,7 @@ export class TestGroupsComponent implements OnInit {
   }
 
   ngOnInit(): void {
-    this.createTestGroupsList();
-  }
-
-  createTestFilesList(dataChanged:boolean): void {
-    this.isLoading = true;
-    if (this.appService.workspaceData?.testGroups.length === 0 || dataChanged) {
-      this.backendService.getTestGroups(this.appService.selectedWorkspaceId)
-        .subscribe((files: TestGroupsInListDto[]) => {
-          this.dataSource = new MatTableDataSource(files || []);
-          this.appService.workspaceData.testGroups = files;
-          this.isLoading = false;
-        });
-    } else {
-      this.dataSource = new MatTableDataSource(this.appService.workspaceData.testGroups || []);
-      this.isLoading = false;
-    }
+    this.createTestGroupsList(true);
   }
 
   deleteTestGroups(): void {
@@ -94,7 +76,7 @@ export class TestGroupsComponent implements OnInit {
       selectedTestGroups.map(testGroup => testGroup.test_group))
       .subscribe(respOk => {
         if (respOk) {
-          setTimeout(() => this.createTestFilesList(true));
+          setTimeout(() => this.createTestGroupsList(true));
           this.snackBar.open(
             this.translateService.instant('ws-admin.test-group-deleted'),
             '',
@@ -129,9 +111,9 @@ export class TestGroupsComponent implements OnInit {
     return numSelected === numRows;
   }
 
-  createTestGroupsList(): void {
+  createTestGroupsList(changed:boolean): void {
     this.isLoading = true;
-    if (this.appService.workspaceData?.testGroups.length === 0) {
+    if (this.appService.workspaceData?.testGroups.length === 0 || changed) {
       this.backendService.getTestGroups(this.appService.selectedWorkspaceId)
         .subscribe(groups => {
           this.dataSource = new MatTableDataSource(groups || []);
