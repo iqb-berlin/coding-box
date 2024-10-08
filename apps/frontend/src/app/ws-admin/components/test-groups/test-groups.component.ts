@@ -71,22 +71,19 @@ export class TestGroupsComponent implements OnInit {
     this.createTestGroupsList();
   }
 
-  private setObjectsDatasource(testGroups: TestGroupsInListDto[]): void {
-    this.testGroupsObjectsDatasource = new MatTableDataSource(testGroups);
-    this.testGroupsObjectsDatasource
-      .filterPredicate = (TestGroupsList: TestGroupsInListDto, filter) => [
-        'name'
-      ].some(column => (TestGroupsList[column as keyof TestGroupsInListDto] as string || '')
-        .toLowerCase()
-        .includes(filter));
-    this.testGroupsObjectsDatasource.sort = this.sort;
-  }
-
-  updateTestGroupsList(): void {
-    this.setObjectsDatasource(this.testGroups);
-    this.tableSelectionCheckboxes.clear();
-    this.tableSelectionRow.clear();
-    this.appService.dataLoading = false;
+  createTestFilesList(dataChanged:boolean): void {
+    this.isLoading = true;
+    if (this.appService.workspaceData?.testGroups.length === 0 || dataChanged) {
+      this.backendService.getTestGroups(this.appService.selectedWorkspaceId)
+        .subscribe((files: TestGroupsInListDto[]) => {
+          this.dataSource = new MatTableDataSource(files || []);
+          this.appService.workspaceData.testGroups = files;
+          this.isLoading = false;
+        });
+    } else {
+      this.dataSource = new MatTableDataSource(this.appService.workspaceData.testGroups || []);
+      this.isLoading = false;
+    }
   }
 
   deleteTestGroups(): void {
@@ -97,6 +94,7 @@ export class TestGroupsComponent implements OnInit {
       selectedTestGroups.map(testGroup => testGroup.test_group))
       .subscribe(respOk => {
         if (respOk) {
+          setTimeout(() => this.createTestFilesList(true));
           this.snackBar.open(
             this.translateService.instant('ws-admin.test-group-deleted'),
             '',
