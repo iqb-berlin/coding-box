@@ -67,26 +67,8 @@ export class TestFilesComponent implements OnInit {
   }
 
   ngOnInit(): void {
-    this.createTestFilesList();
+    this.createTestFilesList(false);
   }
-
-  // updateTestFilesList(): void {
-  //   this.setObjectsDatasource(this.testGroups);
-  //   this.tableSelectionCheckboxes.clear();
-  //   this.tableSelectionRow.clear();
-  //   this.appService.dataLoading = false;
-  // }
-  //
-  // private setObjectsDatasource(files: FilesInListDto[]): void {
-  //   this.dataSource = new MatTableDataSource(files);
-  //   this.dataSource
-  //     .filterPredicate = (filesList: FilesInListDto, filter) => [
-  //       'name'
-  //     ].some(column => (filesList[column as keyof FilesInListDto] as string || '')
-  //       .toLowerCase()
-  //       .includes(filter));
-  //   this.dataSource.sort = this.sort;
-  // }
 
   private isAllSelected(): boolean {
     const numSelected = this.tableSelectionCheckboxes.selected.length;
@@ -109,16 +91,18 @@ export class TestFilesComponent implements OnInit {
           this.appService.selectedWorkspaceId,
           inputElement.files
         ).subscribe(() => {
-          this.createTestFilesList();
+          setTimeout(() => {
+            this.createTestFilesList(true);
+          }, 1000);
           this.isLoading = false;
         });
       }
     }
   }
 
-  createTestFilesList(): void {
+  createTestFilesList(dataChanged:boolean): void {
     this.isLoading = true;
-    if (this.appService.workspaceData?.testFiles.length === 0) {
+    if (this.appService.workspaceData?.testFiles.length === 0 || dataChanged) {
       this.backendService.getFilesList(this.appService.selectedWorkspaceId)
         .subscribe((files: FilesInListDto[]) => {
           this.dataSource = new MatTableDataSource(files || []);
@@ -139,7 +123,7 @@ export class TestFilesComponent implements OnInit {
     dialogRef.afterClosed().subscribe((result: boolean | UntypedFormGroup) => {
       if (typeof result !== 'undefined') {
         if (result !== false) {
-          this.createTestFilesList();
+          this.createTestFilesList(true);
           return true;
         }
       }
@@ -152,7 +136,8 @@ export class TestFilesComponent implements OnInit {
     this.backendService.deleteFiles(this.appService.selectedWorkspaceId, fileIds).subscribe(
       respOk => {
         if (respOk) {
-          this.createTestFilesList();
+          const dataChanged = true;
+          this.createTestFilesList(dataChanged);
           this.snackBar.open(
             this.translateService.instant('ws-admin.files-deleted'),
             '',

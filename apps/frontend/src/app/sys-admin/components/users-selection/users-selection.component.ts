@@ -13,12 +13,11 @@ import {
   MatTableDataSource
 } from '@angular/material/table';
 import {
-  ViewChild, Component, OnInit, Output, EventEmitter, Input
+  ViewChild, Component, OnInit, Output, EventEmitter, Input, SimpleChanges
 } from '@angular/core';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatSort, MatSortHeader } from '@angular/material/sort';
 import { FormsModule } from '@angular/forms';
-import { TranslateService, TranslateModule } from '@ngx-translate/core';
+import { TranslateModule } from '@ngx-translate/core';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MatButton } from '@angular/material/button';
 import { MatCheckbox } from '@angular/material/checkbox';
@@ -36,7 +35,6 @@ import { WorkspacesSelectionComponent } from '../workspaces-selection/workspaces
 import { UserFullDto } from '../../../../../../../api-dto/user/user-full-dto';
 import { WorkspaceInListDto } from '../../../../../../../api-dto/workspaces/workspace-in-list-dto';
 import { BackendService } from '../../../services/backend.service';
-import { AppService } from '../../../services/app.service';
 import { WrappedIconComponent } from '../../../shared/wrapped-icon/wrapped-icon.component';
 import { SearchFilterComponent } from '../../../shared/search-filter/search-filter.component';
 
@@ -60,19 +58,19 @@ export class UsersSelectionComponent implements OnInit {
   @Output() userSelectionChanged: EventEmitter< UserFullDto[]> = new EventEmitter< UserFullDto[]>();
 
   constructor(
-    private backendService: BackendService,
-    private appService: AppService,
-    private snackBar: MatSnackBar,
-    private translateService: TranslateService
-  ) {}
+    private backendService: BackendService) {}
 
   @Input() selectedUserIds!: number[];
 
+  ngOnChanges(changes: SimpleChanges) {
+    if (changes) {
+      this.setCheckboxes();
+    }
+  }
+
   ngOnInit(): void {
-    setTimeout(() => {
-      this.createWorkspaceList();
-      this.updateUserList();
-    });
+    this.createWorkspaceList();
+    this.updateUserList();
   }
 
   private setObjectsDatasource(users: UserFullDto[]): void {
@@ -87,18 +85,14 @@ export class UsersSelectionComponent implements OnInit {
   }
 
   updateUserList(): void {
-    this.appService.dataLoading = true;
     this.backendService.getUsersFull().subscribe(
       (users: UserFullDto[]) => {
         if (users.length > 0) {
           this.setObjectsDatasource(users);
-          this.tableSelectionCheckboxes.clear();
-          this.tableSelectionRow.clear();
-          this.appService.dataLoading = false;
+          this.setCheckboxes();
         } else {
           this.tableSelectionCheckboxes.clear();
           this.tableSelectionRow.clear();
-          this.appService.dataLoading = false;
         }
       }
     );
@@ -107,6 +101,19 @@ export class UsersSelectionComponent implements OnInit {
   createWorkspaceList(): void {
     this.backendService.getAllWorkspacesList().subscribe(workspaces => {
       if (workspaces.length > 0) { this.userWorkspaces = workspaces; }
+    });
+  }
+
+  setCheckboxes(): void {
+    const foundUserIds:UserFullDto[] = [];
+    this.selectedUserIds?.forEach(userId => {
+      const foundUserId = this.userObjectsDatasource.data.find(user => user.id === userId);
+      if (foundUserId) {
+        foundUserIds.push(foundUserId);
+      }
+      if (foundUserIds) {
+        this.tableSelectionCheckboxes.select(...foundUserIds);
+      }
     });
   }
 

@@ -107,6 +107,14 @@ export class WorkspaceService {
       });
   }
 
+  async findUsers(workspace_id: number): Promise<WorkspaceUser[]> {
+    this.logger.log('Returning all users for workspace ', workspace_id);
+    return this.workspaceUsersRepository
+      .find({
+        where: { workspaceId: workspace_id }
+      });
+  }
+
   async deleteTestFiles(workspace_id:number, fileIds: string[]): Promise<boolean> {
     this.logger.log(`Delete test files for workspace ${workspace_id}`);
     const res = await this.fileUploadRepository.delete(fileIds);
