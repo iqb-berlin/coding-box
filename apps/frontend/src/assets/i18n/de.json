@@ -98,6 +98,7 @@
     "workspace-created": "Arbeitsbereich hinzugefügt",
     "workspace-not-created": "Arbeitsbereich konnte nicht hinzugefügt werden",
     "edit-workspace": "Arbeitsbereich ändern",
+    "edit-user-workspace-access-rights": "Arbeitsbereichs Zugriffsrechte für Nutzer:in ändern",
     "workspace-edited": "Arbeitsbereich geändert",
     "workspace-not-edited": "Arbeitsbereich konnte nicht geändert werden",
     "delete-workspace": "Soll der Arbeitsbereich wirklich gelöscht werden?",

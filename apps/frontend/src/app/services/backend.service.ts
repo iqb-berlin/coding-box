@@ -134,9 +134,9 @@ export class BackendService {
       );
   }
 
-  getUsersByWorkspaceList(workspaceId:number): Observable<number[]> {
+  getWorkspaceUsers(workspaceId:number): Observable<{ userId:number, workspaceId:number }[]> {
     return this.http
-      .get<number[]>(`${this.serverUrl}admin/users/${workspaceId}/workspaces`,
+      .get<{ userId:number, workspaceId:number }[]>(`${this.serverUrl}admin/workspace/${workspaceId}/users`,
       { headers: this.authHeader })
       .pipe(
         catchError(() => of([]))
@@ -270,8 +270,7 @@ export class BackendService {
       { headers });
   }
 
-  // Todo: This gets unitIds of responses
-  getTestPersonUnits(workspaceId: number, testPerson: string): Observable<{ unit_id:string }[]> {
+  getResponsesUnitIds(workspaceId: number, testPerson: string): Observable<{ unit_id:string }[]> {
     return this.http.get<{ unit_id:string }[]>(
       `${this.serverUrl}admin/workspace/${workspaceId}/units/${testPerson}`,
       { headers: this.authHeader });

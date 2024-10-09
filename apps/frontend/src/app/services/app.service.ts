@@ -6,6 +6,7 @@ import { AuthDataDto } from '../../../../../api-dto/auth-data-dto';
 import { AppHttpError } from '../interceptors/app-http-error.class';
 import { TestGroupsInListDto } from '../../../../../api-dto/test-groups/testgroups-in-list.dto';
 import { FilesInListDto } from '../../../../../api-dto/files/files-in-list.dto';
+import { CreateUserDto } from '../../../../../api-dto/user/create-user-dto';
 
 type WorkspaceData = {
   testGroups: TestGroupsInListDto[];
@@ -26,6 +27,7 @@ export class AppService {
     workspaces: []
   };
 
+  kcUser !:CreateUserDto;
   userProfile: KeycloakProfile = {};
   isLoggedInKeycloak = false;
   errorMessagesDisabled = false;

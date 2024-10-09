@@ -38,16 +38,13 @@ export class AppComponent implements OnInit {
   constructor(
     public appService: AppService,
     public authService:AuthService,
-    public keycloakService:KeycloakService,
     public backendService:BackendService,
     public url:LocationStrategy) {}
 
   async keycloakLogin(user: CreateUserDto): Promise<void> {
     this.errorMessage = '';
     this.appService.errorMessagesDisabled = true;
-    // const initLoginMode = !this.appService.appConfig.hasUsers;
     this.backendService.keycloakLogin(user).subscribe(() => {
-      // await this.validLoginCheck(ok, initLoginMode);
     });
   }
 
@@ -68,6 +65,7 @@ export class AppComponent implements OnInit {
           email: this.appService.userProfile.email || '',
           isAdmin: isAdmin
         };
+        this.appService.kcUser = keycloakUser;
         await this.keycloakLogin(keycloakUser);
       }
     }

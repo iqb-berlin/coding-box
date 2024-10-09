@@ -5,12 +5,12 @@ class WorkspaceUser {
   @PrimaryColumn({
     name: 'workspace_id'
   })
-    workspaceId: number;
+    workspaceId!: number;
 
   @PrimaryColumn({
     name: 'user_id'
   })
-    userId: number;
+    userId!: number;
 }
 
 export default WorkspaceUser;
