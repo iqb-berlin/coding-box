@@ -7,6 +7,7 @@ import * as cheerio from 'cheerio';
 import AdmZip = require('adm-zip');
 import * as util from 'util';
 import * as fs from 'fs';
+import * as csv from 'fast-csv';
 import Workspace from '../entities/workspace.entity';
 import { WorkspaceInListDto } from '../../../../../../api-dto/workspaces/workspace-in-list-dto';
 import { WorkspaceFullDto } from '../../../../../../api-dto/workspaces/workspace-full-dto';
@@ -38,6 +39,7 @@ export type Response = {
   responses : string,
   laststate : string,
 };
+
 export type File = {
   filename: string,
   file_id: string,
@@ -372,41 +374,47 @@ export class WorkspaceService {
     }
 
     if (file.mimetype === 'text/csv') {
-      const rows = WorkspaceService.csvToArr(file.buffer.toString());
-      const mappedRows: Array<ResponseDto> = rows.map((row: Response) => {
-        const testPerson = WorkspaceService.getTestPersonName(row);
-        const bookletId = row.bookletname;
-        const groupName = `${row.groupname}`.replace(/"/g, '');
-        const unitId = row.unitname;
-        const lastStateCleaned = row.laststate && row.laststate.length > 1 ? row.laststate
-          .replace(/""/g, '"')
-          .replace(/"$/, '') : '{}';
-        let unitState;
-        try {
-          unitState = JSON.parse(lastStateCleaned);
-        } catch (e) {
-          this.logger.error('Error parsing last state', row.laststate);
-          unitState = {};
+      const rowData: Response[] = [];
+      fs.writeFile('responses.csv', file.buffer, 'binary', err => {
+        if (err) {
+          throw new Error('Failed to write file');
+        } else {
+          const stream = fs.createReadStream('responses.csv');
+          csv.parseStream(stream, { headers: true, delimiter: ';' })
+            .on('error', error => { this.logger.log(error); }).on('data', row => rowData.push(row))
+            .on('end', () => {
+              fs.unlinkSync('responses.csv');
+              const mappedRowData = rowData.map(row => {
+                const responseChunksCleaned = row.responses.replace(/""/g, '"');
+                const responsesChunks = JSON.parse(responseChunksCleaned);
+                const lastStateCleaned = row.laststate && row.laststate.length > 1 ? row.laststate
+                  .replace(/""/g, '"')
+                  .replace(/"$/, '') : '{}';
+                let unitState;
+                try {
+                  unitState = JSON.parse(lastStateCleaned);
+                } catch (e) {
+                  this.logger.error('Error parsing last state', row.laststate);
+                  unitState = {};
+                }
+                return {
+                  test_person: WorkspaceService.getTestPersonName(row),
+                  unit_id: row.unitname,
+                  responses: responsesChunks,
+                  test_group: row.groupname,
+                  workspace_id: workspaceId,
+                  unit_state: unitState,
+                  booklet_id: row.bookletname,
+                  id: undefined,
+                  created_at: undefined
+                };
+              });
+              const cleanedRows = WorkspaceService.cleanResponses(mappedRowData);
+              cleanedRows.forEach(row => filePromises.push(
+                this.responsesRepository.upsert(row, ['test_person', 'unit_id'])));
+            });
         }
-        const responseChunksCleaned = row.responses
-          .replace(/""/g, '"');
-        const responsesChunks = JSON.parse(responseChunksCleaned);
-
-        return (<ResponseDto>{
-          test_person: testPerson,
-          unit_id: unitId,
-          responses: responsesChunks,
-          test_group: groupName,
-          workspace_id: workspaceId,
-          unit_state: unitState,
-          booklet_id: bookletId,
-          id: undefined,
-          created_at: undefined
-        });
       });
-      const cleanedRows = WorkspaceService.cleanResponses(mappedRows);
-      filePromises.push(this.responsesRepository
-        .upsert(cleanedRows, ['test_person', 'unit_id']));
     }
     return filePromises;
   }
