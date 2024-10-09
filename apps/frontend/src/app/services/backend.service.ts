@@ -20,6 +20,7 @@ import { TestGroupsInListDto } from '../../../../../api-dto/test-groups/testgrou
 import { FilesInListDto } from '../../../../../api-dto/files/files-in-list.dto';
 import { ResponseDto } from '../../../../../api-dto/responses/response-dto';
 import { FilesDto } from '../../../../../api-dto/files/files.dto';
+import WorkspaceUser from '../../../../backend/src/app/database/entities/workspace_user.entity';
 
 @Injectable({
   providedIn: 'root'

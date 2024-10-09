@@ -10,6 +10,8 @@ import { AppService } from '../../services/app.service';
 import { AppInfoComponent } from '../app-info/app-info.component';
 // eslint-disable-next-line max-len
 import { UserWorkspacesAreaComponent } from '../../workspace/components/user-workspaces-area/user-workspaces-area.component';
+import { BackendService } from '../../services/backend.service';
+import { WorkspaceFullDto } from '../../../../../../api-dto/workspaces/workspace-full-dto';
 
 @Component({
   selector: 'coding-box-home',
@@ -21,8 +23,21 @@ import { UserWorkspacesAreaComponent } from '../../workspace/components/user-wor
 })
 export class HomeComponent {
   constructor(
-    public appService: AppService
+    public appService: AppService,
+    public backendService: BackendService
   ) {}
+
+  workspaces :WorkspaceFullDto[] = [];
+
+  ngOnInit(): void {
+    setTimeout(() => {
+      if (this.appService.kcUser.identity) {
+        this.backendService.getAuthData(this.appService.kcUser.identity).subscribe(authData => {
+          this.workspaces = authData.workspaces;
+        });
+      }
+    });
+  }
 
   protected readonly Number = Number;
 }
