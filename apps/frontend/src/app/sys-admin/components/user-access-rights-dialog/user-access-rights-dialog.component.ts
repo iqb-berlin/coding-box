@@ -26,10 +26,10 @@ import { UsersSelectionComponent } from '../users-selection/users-selection.comp
 export class UserAccessRightsDialogComponent {
   selectedUserIds!: number[];
   result: number[] = [];
-  constructor(@Inject(MAT_DIALOG_DATA) public data: { selectedWorkspace:number },
+  constructor(@Inject(MAT_DIALOG_DATA) public data: { selectedWorkspace: number[] },
               private backendService: BackendService) {
-    this.backendService.getUsersByWorkspaceList(this.data.selectedWorkspace).subscribe(users => {
-      this.selectedUserIds = users;
+    this.backendService.getWorkspaceUsers(this.data.selectedWorkspace[0]).subscribe(users => {
+      this.selectedUserIds = users.map(user => user.userId);
     });
   }
 

@@ -25,6 +25,7 @@ import { AuthService } from '../../auth/service/auth.service';
 import { TestGroupsInListDto } from '../../../../../../api-dto/test-groups/testgroups-in-list.dto';
 import FileUpload from '../../database/entities/file_upload.entity';
 import { ResponseDto } from '../../../../../../api-dto/responses/response-dto';
+import WorkspaceUser from '../../database/entities/workspace_user.entity';
 
 export type Result = {
   success: boolean,
@@ -103,6 +104,13 @@ export class WorkspaceController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async findFiles(@Param('workspace_id') workspace_id: number): Promise<FilesDto[]> {
     return this.workspaceService.findFiles(workspace_id);
+  }
+
+  @Get(':workspace_id/users')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  async findUsers(@Param('workspace_id') workspace_id: number): Promise<WorkspaceUser[]> {
+    return this.workspaceService.findUsers(workspace_id);
   }
 
   // Todo: use query params
