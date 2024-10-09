@@ -20,7 +20,6 @@ import { TestGroupsInListDto } from '../../../../../api-dto/test-groups/testgrou
 import { FilesInListDto } from '../../../../../api-dto/files/files-in-list.dto';
 import { ResponseDto } from '../../../../../api-dto/responses/response-dto';
 import { FilesDto } from '../../../../../api-dto/files/files.dto';
-import WorkspaceUser from '../../../../backend/src/app/database/entities/workspace_user.entity';
 
 @Injectable({
   providedIn: 'root'
@@ -135,9 +134,9 @@ export class BackendService {
       );
   }
 
-  getWorkspaceUsers(workspaceId:number): Observable<WorkspaceUser[]> {
+  getWorkspaceUsers(workspaceId:number): Observable<{ userId:number, workspaceId:number }[]> {
     return this.http
-      .get<WorkspaceUser[]>(`${this.serverUrl}admin/workspace/${workspaceId}/users`,
+      .get<{ userId:number, workspaceId:number }[]>(`${this.serverUrl}admin/workspace/${workspaceId}/users`,
       { headers: this.authHeader })
       .pipe(
         catchError(() => of([]))
