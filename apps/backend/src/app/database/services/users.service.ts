@@ -1,5 +1,5 @@
 import { Injectable, Logger, MethodNotAllowedException } from '@nestjs/common';
-import { MoreThan, Repository } from 'typeorm';
+import { Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { HttpService } from '@nestjs/axios';
 import User from '../entities/user.entity';
@@ -40,10 +40,15 @@ export class UsersService {
       where: { userId: userId, workspaceId: workspaceId }
     });
     if (wsUser) return true;
+    const user = await this.usersRepository.findOne({
+      where: { id: userId, isAdmin: true }
+    });
+    if (user) return true;
     return false;
   }
 
-  async findUserWorkspaces(userId: number): Promise<number[]> {
+  async findUserWorkspaceIds(userId: number): Promise<number[]> {
+    this.logger.log(`Returning workspaces for user with id: ${userId}`);
     const workspaces = await this.workspaceUserRepository.find({ where: { userId: userId } });
     const workspaceIds = workspaces.map(workspace => workspace.workspaceId);
     if (workspaceIds) {
@@ -82,16 +87,6 @@ export class UsersService {
     }
     const saved = await this.workspaceUserRepository.save(entries);
     return !!saved;
-  }
-
-  async hasUsers(): Promise<boolean> {
-    this.logger.log('Checking hasUsers');
-    const user = await this.usersRepository.findOne({
-      where: { id: MoreThan(0) },
-      select: { id: true }
-    });
-    this.logger.log(user);
-    return !!user;
   }
 
   async create(user: CreateUserDto): Promise<number> {

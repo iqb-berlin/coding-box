@@ -134,9 +134,9 @@ export class BackendService {
       );
   }
 
-  getUsersByWorkspaceList(workspaceId:number): Observable<number[]> {
+  getWorkspaceUsers(workspaceId:number): Observable<WorkspaceUser[]> {
     return this.http
-      .get<number[]>(`${this.serverUrl}admin/users/${workspaceId}/workspaces`,
+      .get<WorkspaceUser[]>(`${this.serverUrl}admin/workspace/${workspaceId}/users`,
       { headers: this.authHeader })
       .pipe(
         catchError(() => of([]))
