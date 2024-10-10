@@ -24,6 +24,9 @@ class Logs {
 
   @Column({ type: 'varchar' })
     log_entry: string;
+
+  @Column({ type: 'varchar' })
+    test_person: string;
 }
 
 export default Logs;

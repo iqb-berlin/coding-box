@@ -22,6 +22,7 @@ import ResourcePackage from '../entities/resource-package.entity';
 import User from '../entities/user.entity';
 import { TestGroupsInListDto } from '../../../../../../api-dto/test-groups/testgroups-in-list.dto';
 import { ResponseDto } from '../../../../../../api-dto/responses/response-dto';
+import Logs from '../entities/logs.entity';
 
 function sanitizePath(filePath: string): string {
   if (filePath.indexOf('..') !== -1) {
@@ -38,6 +39,16 @@ export type Response = {
   unitname : string,
   responses : string,
   laststate : string,
+};
+
+export type Log = {
+  groupname:string,
+  loginname : string,
+  code : string,
+  bookletname : string,
+  unitname : string,
+  timestamp : string,
+  logentry : string,
 };
 
 export type File = {
@@ -60,6 +71,8 @@ export class WorkspaceService {
     private fileUploadRepository: Repository<FileUpload>,
     @InjectRepository(Responses)
     private responsesRepository:Repository<Responses>,
+    @InjectRepository(Logs)
+    private logsRepository:Repository<Logs>,
     @InjectRepository(WorkspaceUser)
     private workspaceUsersRepository:Repository<WorkspaceUser>,
     @InjectRepository(ResourcePackage)
@@ -374,47 +387,74 @@ export class WorkspaceService {
     }
 
     if (file.mimetype === 'text/csv') {
-      const rowData: Response[] = [];
-      fs.writeFile('responses.csv', file.buffer, 'binary', err => {
-        if (err) {
-          throw new Error('Failed to write file');
-        } else {
-          const stream = fs.createReadStream('responses.csv');
-          csv.parseStream(stream, { headers: true, delimiter: ';' })
-            .on('error', error => { this.logger.log(error); }).on('data', row => rowData.push(row))
-            .on('end', () => {
-              fs.unlinkSync('responses.csv');
-              const mappedRowData = rowData.map(row => {
-                const responseChunksCleaned = row.responses.replace(/""/g, '"');
-                const responsesChunks = JSON.parse(responseChunksCleaned);
-                const lastStateCleaned = row.laststate && row.laststate.length > 1 ? row.laststate
-                  .replace(/""/g, '"')
-                  .replace(/"$/, '') : '{}';
-                let unitState;
-                try {
-                  unitState = JSON.parse(lastStateCleaned);
-                } catch (e) {
-                  this.logger.error('Error parsing last state', row.laststate);
-                  unitState = {};
-                }
-                return {
-                  test_person: WorkspaceService.getTestPersonName(row),
+      const rowData: Log[] | Response[] = [];
+      if (file.originalname.includes('logs')) {
+        fs.writeFile('logs.csv', file.buffer, 'binary', err => {
+          if (err) {
+            throw new Error('Failed to write file');
+          } else {
+            const stream = fs.createReadStream('logs.csv');
+            csv.parseStream(stream, { headers: true, delimiter: ';' })
+              .on('error', error => { this.logger.log(error); }).on('data', row => rowData.push(row))
+              .on('end', () => {
+                fs.unlinkSync('logs.csv');
+                const mappedRowData = rowData.map(row => ({
                   unit_id: row.unitname,
-                  responses: responsesChunks,
+                  log_entry: row.logentry,
                   test_group: row.groupname,
                   workspace_id: workspaceId,
-                  unit_state: unitState,
                   booklet_id: row.bookletname,
-                  id: undefined,
-                  created_at: undefined
-                };
+                  timestamp: row.timestamp,
+                  test_person: WorkspaceService.getTestPersonName(row),
+                  id: undefined
+                }));
+                mappedRowData.forEach(row => filePromises.push(
+                  this.logsRepository.insert(row)));
               });
-              const cleanedRows = WorkspaceService.cleanResponses(mappedRowData);
-              cleanedRows.forEach(row => filePromises.push(
-                this.responsesRepository.upsert(row, ['test_person', 'unit_id'])));
-            });
-        }
-      });
+          }
+        });
+      } else {
+        fs.writeFile('responses.csv', file.buffer, 'binary', err => {
+          if (err) {
+            throw new Error('Failed to write file');
+          } else {
+            const stream = fs.createReadStream('responses.csv');
+            csv.parseStream(stream, { headers: true, delimiter: ';' })
+              .on('error', error => { this.logger.log(error); }).on('data', row => rowData.push(row))
+              .on('end', () => {
+                fs.unlinkSync('responses.csv');
+                const mappedRowData = rowData.map(row => {
+                  const responseChunksCleaned = row.responses.replace(/""/g, '"');
+                  const responsesChunks = JSON.parse(responseChunksCleaned);
+                  const lastStateCleaned = row.laststate && row.laststate.length > 1 ? row.laststate
+                    .replace(/""/g, '"')
+                    .replace(/"$/, '') : '{}';
+                  let unitState;
+                  try {
+                    unitState = JSON.parse(lastStateCleaned);
+                  } catch (e) {
+                    this.logger.error('Error parsing last state', row.laststate);
+                    unitState = {};
+                  }
+                  return {
+                    test_person: WorkspaceService.getTestPersonName(row),
+                    unit_id: row.unitname,
+                    responses: responsesChunks,
+                    test_group: row.groupname,
+                    workspace_id: workspaceId,
+                    unit_state: unitState,
+                    booklet_id: row.bookletname,
+                    id: undefined,
+                    created_at: undefined
+                  };
+                });
+                const cleanedRows = WorkspaceService.cleanResponses(mappedRowData);
+                cleanedRows.forEach(row => filePromises.push(
+                  this.responsesRepository.upsert(row, ['test_person', 'unit_id'])));
+              });
+          }
+        });
+      }
     }
     return filePromises;
   }
