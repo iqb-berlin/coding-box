@@ -162,6 +162,13 @@ export class WorkspaceController {
     return this.workspaceService.findTestPersons(id, testGroup);
   }
 
+  @Get(':workspace_id/test-groups/:testGroup/varList')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiParam({ name: 'workspace_id', type: Number })
+  async getTestGroupVarList(@WorkspaceId() id: number, @Param('testGroup') testGroup:string): Promise<{ id:string, value:string, status:string }[]> {
+    return this.workspaceService.getTestGroupVarList(id, testGroup);
+  }
+
   @Get(':workspace_id/:unit/unitDef')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiParam({ name: 'workspace_id', type: Number })

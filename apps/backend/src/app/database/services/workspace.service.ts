@@ -171,6 +171,37 @@ export class WorkspaceService {
     return testGroups;
   }
 
+  async getTestGroupVarList(id, testGroup) {
+    this.logger.log('Returning all test group variables for test group ', testGroup);
+    const varIds = new Set<string>();
+    const response = await this.responsesRepository
+      .find({
+        where: { test_group: testGroup }
+      });
+    response.map(item => {
+      item.responses.forEach(i => {
+        const content:{ id:string, value:string, status:string }[] = JSON.parse(i.content);
+        if (content.length > 0) {
+          content.forEach(contentElement => {
+            if (!varIds.has(contentElement.id)) {
+              varIds.add(contentElement.id);
+              console.log(contentElement);
+              if (contentElement.status === 'VALUE_CHANGED') {
+
+              }
+            }
+          });
+        }
+      });
+      return Array.from(varIds);
+    });
+    if (response) {
+      // console.log(response);
+      return Array.from(varIds);
+    }
+    return [];
+  }
+
   async deleteTestGroups(workspaceId: string, testGroupNames: string[]): Promise<boolean> {
     this.logger.log('Delete test groups for workspace ', workspaceId);
     const mappedTestGroups = testGroupNames.map(testGroup => ({ test_group: testGroup }));
@@ -397,6 +428,7 @@ export class WorkspaceService {
                   this.logger.error('Error parsing last state', row.laststate);
                   unitState = {};
                 }
+                console.log(JSON.parse(responsesChunks[0].content));
                 return {
                   test_person: WorkspaceService.getTestPersonName(row),
                   unit_id: row.unitname,

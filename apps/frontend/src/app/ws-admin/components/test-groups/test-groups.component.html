@@ -34,8 +34,8 @@
     </ng-container>
     <ng-container matColumnDef="test_group">
       <mat-header-cell *matHeaderCellDef mat-sort-header="test_group">{{'test_group.test_group' | translate}}</mat-header-cell>
-      <mat-cell *matCellDef="let element">
-        {{element.test_group}}
+      <mat-cell *matCellDef="let element" (click)="openTestGroup(element.test_group)">
+       {{element.test_group}}
       </mat-cell>
     </ng-container>
     <ng-container matColumnDef="created_at">

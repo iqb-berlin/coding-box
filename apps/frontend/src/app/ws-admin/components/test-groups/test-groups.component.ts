@@ -25,6 +25,7 @@ import { DatePipe, JsonPipe } from '@angular/common';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { MatIcon } from '@angular/material/icon';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { MatDialog } from '@angular/material/dialog';
 import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
 import { WrappedIconComponent } from '../../../shared/wrapped-icon/wrapped-icon.component';
@@ -34,6 +35,7 @@ import { IsAllSelectedPipe } from '../../../shared/pipes/isAllSelected.pipe';
 import { IsSelectedPipe } from '../../../shared/pipes/isSelected.pipe';
 import { FileSizePipe } from '../../../shared/pipes/filesize.pipe';
 import { TestGroupsInListDto } from '../../../../../../../api-dto/test-groups/testgroups-in-list.dto';
+import { TestGroupComponent } from '../test-group/test-group.component';
 
 @Component({
   selector: 'coding-box-test-groups',
@@ -57,6 +59,7 @@ export class TestGroupsComponent implements OnInit {
   }
 
   constructor(
+    public dialog: MatDialog,
     private backendService: BackendService,
     private appService: AppService,
     private snackBar: MatSnackBar,
@@ -96,6 +99,14 @@ export class TestGroupsComponent implements OnInit {
     this.isLoading = true;
     const selectedTestGroups = this.tableSelectionCheckboxes.selected;
     this.backendService.createCodingTestGroups(selectedTestGroups).subscribe(() => {
+    });
+  }
+
+  openTestGroup(testGroup: TestGroupsInListDto): void {
+    const dialogRef = this.dialog.open(TestGroupComponent, {
+      height: '400px',
+      width: '600px',
+      data: testGroup
     });
   }
 

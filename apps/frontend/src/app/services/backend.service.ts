@@ -288,6 +288,12 @@ export class BackendService {
       { headers: this.authHeader });
   }
 
+  getTestGroupVarList(workspaceId: number, testGroup:string): Observable<string[]> {
+    return this.http.get<string[]>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/test-groups/${testGroup}/varList`,
+      { headers: this.authHeader });
+  }
+
   authenticate(username:string, password:string, server:string): Observable<ServerResponse > {
     return this.http
       .post<ServerResponse>(`${this.serverUrl}tc_authentication`, { username, password, server });
