@@ -19,12 +19,19 @@
                [placeholder]="'home.password' | translate"
                (keyup.enter)="authenticate()">
       </mat-form-field>
-      <mat-form-field>
-        <mat-select placeholder='Test Center auswählen' formControlName="testCenter">
+      <mat-form-field >
+        <mat-select placeholder='Test Center auswählen' formControlName="testCenter" (valueChange)="isIndividualTcSelected($event)">
+          <mat-option [value]=6>individuelles Testcenter URL</mat-option>
         @for (testCenter of testCenters;track testCenter){
           <mat-option [value]="testCenter.id">{{ testCenter.label }}</mat-option>
         }
+
         </mat-select>
+
+      </mat-form-field>
+      <mat-form-field>
+        <mat-label>Testcenter Instanz URL verwenden</mat-label>
+        <input formControlName="testCenterIndividual" matInput type="text">
       </mat-form-field>
     </div>
     <button mat-raised-button
@@ -43,7 +50,7 @@
   } @else {
     @if (workspaces){
   <div class="fx-row-space-between-start loginInfo">
-    <h3>Angemeldet in {{this.testCenterInstance[0].label}}</h3>
+    <h3>Angemeldet in {{this.testCenterInstance[0]?.label || this.loginForm.get('testCenterIndividual')?.value }}</h3>
     <button  mat-button color="primary" (click)="this.logout()">Abmelden</button>
   </div>
     <form class="fx-column-start-stretch"

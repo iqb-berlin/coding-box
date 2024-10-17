@@ -68,6 +68,7 @@ export class WorkspaceController {
   async importWorkspaceFiles(
     @Param('workspace_id') workspace_id: string,
       @Query('server') server: string,
+      @Query('url') url: string,
       @Query('tc_workspace') tc_workspace: string,
       @Query('token') token: string,
       @Query('definitions') definitions: string,
@@ -85,7 +86,7 @@ export class WorkspaceController {
       codings: codings,
       logs: logs
     };
-    return this.testCenterService.importWorkspaceFiles(workspace_id, tc_workspace, server, token, importOptions);
+    return this.testCenterService.importWorkspaceFiles(workspace_id, tc_workspace, server, url, token, importOptions);
   }
 
   @Get(':workspace_id')
