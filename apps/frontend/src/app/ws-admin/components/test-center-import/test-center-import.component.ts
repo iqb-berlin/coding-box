@@ -68,7 +68,14 @@ export type WorkspaceAdmin = {
 // };
 
 export type ImportOptions = {
-  responses:string, definitions:string, units:string, player:string, codings:string, logs:string
+  responses:string,
+  definitions:string,
+  units:string,
+  player:string,
+  codings:string,
+  logs:string,
+  testTakers:string,
+  booklets:string
 };
 
 export type Testcenter = {
@@ -131,7 +138,7 @@ export class TestCenterImportComponent {
       name: this.fb.control('', [Validators.required, Validators.minLength(1)]),
       pw: this.fb.control('', [Validators.required, Validators.minLength(1)]),
       testCenter: this.fb.control('', [Validators.required]),
-      testCenterIndividual: this.fb.control({ value: '', disabled: true })
+      testCenterIndividual: this.fb.control({ value: '', disabled: true }, [Validators.required])
 
     });
     this.importFilesForm = this.fb.group({
@@ -141,7 +148,9 @@ export class TestCenterImportComponent {
       units: this.fb.control(false),
       player: this.fb.control(false),
       codings: this.fb.control(false),
-      logs: this.fb.control(false)
+      logs: this.fb.control(false),
+      testTakers: this.fb.control(false),
+      Booklets: this.fb.control(false)
     });
   }
 
@@ -206,6 +215,8 @@ export class TestCenterImportComponent {
     const units = this.importFilesForm.get('units')?.value;
     const codings = this.importFilesForm.get('codings')?.value;
     const logs = this.importFilesForm.get('logs')?.value;
+    const booklets = this.importFilesForm.get('booklets')?.value;
+    const testTakers = this.importFilesForm.get('testTakers')?.value;
 
     const importOptions = {
       definitions: definitions,
@@ -213,10 +224,12 @@ export class TestCenterImportComponent {
       units: units,
       player: player,
       codings: codings,
-      logs: logs
+      logs: logs,
+      testTakers: testTakers,
+      booklets: booklets
     };
     this.uploadData = {} as Result;
-    if (definitions || responses || player || codings || units || logs) {
+    if (definitions || responses || player || codings || units || logs || testTakers || booklets) {
       this.filesSelectionError = false;
       this.isUploadingFiles = true;
       this.backendService.importWorkspaceFiles(
