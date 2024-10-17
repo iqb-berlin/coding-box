@@ -131,7 +131,7 @@ export class TestcenterService {
     importOptions:ImportOptions
   ): Promise<Result> {
     const {
-      units, responses, definitions, player, codings, logs
+      units, responses, definitions, player, codings, logs, testTakers, booklets
     } = importOptions;
 
     const headersRequest = {
@@ -243,7 +243,13 @@ export class TestcenterService {
       });
     }
 
-    if (definitions === 'true' || player === 'true' || units === 'true' || codings === 'true') {
+    if (definitions === 'true' ||
+      player === 'true' ||
+      units === 'true' ||
+      codings === 'true' ||
+      testTakers === 'true' ||
+      booklets === 'true'
+    ) {
       const filesPromise = this.httpService.axiosRef
         .get<ServerFilesResponse>(
         url ? `${url}/api/workspace/${tc_workspace}/files` :
@@ -259,6 +265,8 @@ export class TestcenterService {
         const playerFiles = files.Resource.filter(file => file.name.includes('.html'));
         const codingSchemeFiles = files.Resource.filter(file => file.name.includes('.vocs'));
         const unitFiles = files.Unit;
+        const bookletFiles = files.Booklet;
+        const testTakerFiles = files.Testtakers;
         let promises = [];
         // const zipPromises = zipFiles
         //   .map(file => this.getPackage(file, server, tc_workspace, authToken));
@@ -284,6 +292,16 @@ export class TestcenterService {
           const codingSchemePromises = codingSchemeFiles
             .map(file => this.getFile(file, server, tc_workspace, authToken, url));
           promises = [...promises, ...codingSchemePromises];
+        }
+        if (booklets === 'true' && bookletFiles.length > 0) {
+          const bookletPromises = bookletFiles
+            .map(file => this.getFile(file, server, tc_workspace, authToken, url));
+          promises = [...promises, ...bookletPromises];
+        }
+        if (testTakers === 'true' && testTakerFiles.length > 0) {
+          const testTakersPromises = testTakerFiles
+            .map(file => this.getFile(file, server, tc_workspace, authToken, url));
+          promises = [...promises, ...testTakersPromises];
         }
         const results :File[] = await Promise.all(promises);
         if (results.length > 0) {
