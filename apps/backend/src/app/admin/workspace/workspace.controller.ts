@@ -68,6 +68,7 @@ export class WorkspaceController {
   async importWorkspaceFiles(
     @Param('workspace_id') workspace_id: string,
       @Query('server') server: string,
+      @Query('url') url: string,
       @Query('tc_workspace') tc_workspace: string,
       @Query('token') token: string,
       @Query('definitions') definitions: string,
@@ -75,7 +76,9 @@ export class WorkspaceController {
       @Query('logs') logs: string,
       @Query('player') player: string,
       @Query('units') units: string,
-      @Query('codings') codings: string)
+      @Query('codings') codings: string,
+      @Query('testTakers') testTakers: string,
+      @Query('booklets') booklets: string)
       : Promise<Result> {
     const importOptions:ImportOptions = {
       definitions: definitions,
@@ -83,9 +86,11 @@ export class WorkspaceController {
       units: units,
       player: player,
       codings: codings,
-      logs: logs
+      logs: logs,
+      booklets: booklets,
+      testTakers: testTakers
     };
-    return this.testCenterService.importWorkspaceFiles(workspace_id, tc_workspace, server, token, importOptions);
+    return this.testCenterService.importWorkspaceFiles(workspace_id, tc_workspace, server, url, token, importOptions);
   }
 
   @Get(':workspace_id')

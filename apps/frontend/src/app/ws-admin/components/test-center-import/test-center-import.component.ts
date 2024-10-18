@@ -7,8 +7,9 @@ import { MatIcon } from '@angular/material/icon';
 import {
   MatDialogContent, MatDialogActions, MatDialogClose
 } from '@angular/material/dialog';
-import { MatError, MatFormField } from '@angular/material/form-field';
+import { MatError, MatFormField, MatLabel } from '@angular/material/form-field';
 import {
+  FormsModule,
   ReactiveFormsModule, UntypedFormBuilder, UntypedFormGroup, Validators
 } from '@angular/forms';
 import { MatInput } from '@angular/material/input';
@@ -16,8 +17,8 @@ import { MatOption, MatSelect } from '@angular/material/select';
 import { MatRadioButton, MatRadioGroup } from '@angular/material/radio';
 import { MatCheckbox } from '@angular/material/checkbox';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
-// eslint-disable-next-line import/no-cycle
 import { catchError, of } from 'rxjs';
+
 // eslint-disable-next-line import/no-cycle
 import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
@@ -67,7 +68,14 @@ export type WorkspaceAdmin = {
 // };
 
 export type ImportOptions = {
-  responses:string, definitions:string, units:string, player:string, codings:string, logs:string
+  responses:string,
+  definitions:string,
+  units:string,
+  player:string,
+  codings:string,
+  logs:string,
+  testTakers:string,
+  booklets:string
 };
 
 export type Testcenter = {
@@ -88,7 +96,7 @@ export type Result = {
   styleUrls: ['./test-center-import.component.scss'],
   standalone: true,
   // eslint-disable-next-line max-len
-  imports: [MatDialogContent, MatIcon, MatDialogActions, MatButton, MatDialogClose, TranslateModule, MatFormField, ReactiveFormsModule, MatInput, MatSelect, MatOption, MatRadioGroup, MatRadioButton, MatCheckbox, MatProgressSpinner, MatError]
+  imports: [MatDialogContent, MatLabel, MatIcon, MatDialogActions, MatButton, MatDialogClose, TranslateModule, MatFormField, ReactiveFormsModule, MatInput, MatSelect, MatOption, MatRadioGroup, MatRadioButton, MatCheckbox, MatProgressSpinner, MatError, FormsModule]
 })
 
 export class TestCenterImportComponent {
@@ -129,7 +137,9 @@ export class TestCenterImportComponent {
     this.loginForm = this.fb.group({
       name: this.fb.control('', [Validators.required, Validators.minLength(1)]),
       pw: this.fb.control('', [Validators.required, Validators.minLength(1)]),
-      testCenter: this.fb.control('', [Validators.required])
+      testCenter: this.fb.control('', [Validators.required]),
+      testCenterIndividual: this.fb.control({ value: '', disabled: true }, [Validators.required])
+
     });
     this.importFilesForm = this.fb.group({
       workspace: this.fb.control('', [Validators.required]),
@@ -138,7 +148,9 @@ export class TestCenterImportComponent {
       units: this.fb.control(false),
       player: this.fb.control(false),
       codings: this.fb.control(false),
-      logs: this.fb.control(false)
+      logs: this.fb.control(false),
+      testTakers: this.fb.control(false),
+      Booklets: this.fb.control(false)
     });
   }
 
@@ -154,9 +166,10 @@ export class TestCenterImportComponent {
   authenticate(): void {
     const name = this.loginForm.get('name')?.value;
     const pw = this.loginForm.get('pw')?.value;
+    const url:string = this.loginForm.get('testCenterIndividual')?.value;
     this.testCenterInstance = this.testCenters.filter(
       testcenter => testcenter.id === this.loginForm.get('testCenter')?.value);
-    this.backendService.authenticate(name, pw, this.testCenterInstance[0].id.toString()).pipe(
+    this.backendService.authenticate(name, pw, this.testCenterInstance[0]?.id.toString(), url).pipe(
       catchError(() => {
         this.authenticationError = true;
         return of();
@@ -185,6 +198,14 @@ export class TestCenterImportComponent {
     return true;
   }
 
+  isIndividualTcSelected(value:number): void {
+    if (value !== 6) {
+      this.loginForm.get('testCenterIndividual')?.disable();
+    } else {
+      this.loginForm.get('testCenterIndividual')?.enable();
+    }
+  }
+
   importWorkspaceFiles(): void {
     const testCenter = this.loginForm.get('testCenter')?.value;
     const workspace = this.importFilesForm.get('workspace')?.value;
@@ -194,6 +215,8 @@ export class TestCenterImportComponent {
     const units = this.importFilesForm.get('units')?.value;
     const codings = this.importFilesForm.get('codings')?.value;
     const logs = this.importFilesForm.get('logs')?.value;
+    const booklets = this.importFilesForm.get('booklets')?.value;
+    const testTakers = this.importFilesForm.get('testTakers')?.value;
 
     const importOptions = {
       definitions: definitions,
@@ -201,16 +224,19 @@ export class TestCenterImportComponent {
       units: units,
       player: player,
       codings: codings,
-      logs: logs
+      logs: logs,
+      testTakers: testTakers,
+      booklets: booklets
     };
     this.uploadData = {} as Result;
-    if (definitions || responses || player || codings || units || logs) {
+    if (definitions || responses || player || codings || units || logs || testTakers || booklets) {
       this.filesSelectionError = false;
       this.isUploadingFiles = true;
       this.backendService.importWorkspaceFiles(
         this.appService.selectedWorkspaceId,
         workspace,
         testCenter,
+        this.loginForm.get('testCenterIndividual')?.value || '',
         this.authToken,
         importOptions)
         .subscribe(data => {
