@@ -15,7 +15,7 @@ import { LogsDto } from '../../../../../../api-dto/logs/logs-dto';
 import Logs from '../entities/logs.entity';
 
 const agent = new https.Agent({
-  rejectUnauthorized: true
+  rejectUnauthorized: false
 });
 
 type ServerFilesResponse = {
@@ -90,7 +90,23 @@ export class TestcenterService {
   ) {
   }
 
-  async authenticate(credentials: { username: string, password: string, server:string }): Promise<string> {
+  async authenticate(credentials: { username: string, password: string, server:string, url:string }): Promise<string> {
+    if (!credentials.server && credentials.url !== '') {
+      const { data } = await firstValueFrom(
+        this.httpService.put(`${credentials.url}/api/session/admin`, {
+          name: credentials.username,
+          password: credentials.password
+        }, {
+          httpsAgent: agent
+        }).pipe(
+          catchError(error => {
+            throw new Error(error);
+          })
+        )
+      );
+      return data;
+    }
+
     const { data } = await firstValueFrom(
       this.httpService.put(`http://iqb-testcenter${credentials.server}.de/api/session/admin`, {
         name: credentials.username,
@@ -110,11 +126,12 @@ export class TestcenterService {
     workspace_id:string,
     tc_workspace:string,
     server:string,
+    url:string,
     authToken:string,
     importOptions:ImportOptions
   ): Promise<Result> {
     const {
-      units, responses, definitions, player, codings, logs
+      units, responses, definitions, player, codings, logs, testTakers, booklets
     } = importOptions;
 
     const headersRequest = {
@@ -127,7 +144,8 @@ export class TestcenterService {
 
     if (responses === 'true') {
       const resultsPromise = this.httpService.axiosRef
-        .get<TestserverResponse[]>(`http://iqb-testcenter${server}.de/api/workspace/${tc_workspace}/results`, {
+        .get<TestserverResponse[]>(url ? `${url}/api/workspace/${tc_workspace}/results` :
+        `http://iqb-testcenter${server}.de/api/workspace/${tc_workspace}/results`, {
         httpsAgent: agent,
         headers: headersRequest
       });
@@ -144,8 +162,8 @@ export class TestcenterService {
       const chunks = createChunks(resultGroupNames, 2);
       const unitResponsesPromises = chunks.map(chunk => {
         const unitResponsesPromise = this.httpService.axiosRef
-          .get<UnitResponse[]>(`http://iqb-testcenter${server}.de/api/workspace/
-        ${tc_workspace}/report/response?dataIds=${chunk.join(',')}`,
+          .get<UnitResponse[]>(url ? `${url}/api/workspace/${tc_workspace}/report/response?dataIds=${chunk.join(',')}` :
+          `http://iqb-testcenter${server}.de/api/workspace/${tc_workspace}/report/response?dataIds=${chunk.join(',')}`,
         {
           httpsAgent: agent,
           headers: headersRequest
@@ -178,7 +196,8 @@ export class TestcenterService {
 
     if (logs === 'true') {
       const resultsPromise = this.httpService.axiosRef
-        .get<TestserverResponse[]>(`http://iqb-testcenter${server}.de/api/workspace/${tc_workspace}/results`, {
+        .get<TestserverResponse[]>(url ? `${url}api/workspace/${tc_workspace}/results` :
+        `http://iqb-testcenter${server}.de/api/workspace/${tc_workspace}/results`, {
         httpsAgent: agent,
         headers: headersRequest
       });
@@ -195,8 +214,8 @@ export class TestcenterService {
       const chunks = createChunks(resultGroupNames, 2);
       const logsPromises = chunks.map(chunk => {
         const logsPromise = this.httpService.axiosRef
-          .get<Log[]>(`http://iqb-testcenter${server}.de/api/workspace/
-        ${tc_workspace}/report/log?dataIds=${chunk.join(',')}`,
+          .get<Log[]>(url ? `${url}/api/workspace/${tc_workspace}/report/log?dataIds=${chunk.join(',')}` :
+          `http://iqb-testcenter${server}.de/api/workspace/${tc_workspace}/report/log?dataIds=${chunk.join(',')}`,
         {
           httpsAgent: agent,
           headers: headersRequest
@@ -224,10 +243,17 @@ export class TestcenterService {
       });
     }
 
-    if (definitions === 'true' || player === 'true' || units === 'true' || codings === 'true') {
+    if (definitions === 'true' ||
+      player === 'true' ||
+      units === 'true' ||
+      codings === 'true' ||
+      testTakers === 'true' ||
+      booklets === 'true'
+    ) {
       const filesPromise = this.httpService.axiosRef
         .get<ServerFilesResponse>(
-        `http://iqb-testcenter${server}.de/api/workspace/${tc_workspace}/files`,
+        url ? `${url}/api/workspace/${tc_workspace}/files` :
+          `http://iqb-testcenter${server}.de/api/workspace/${tc_workspace}/files`,
         {
           httpsAgent: agent,
           headers: headersRequest
@@ -239,6 +265,8 @@ export class TestcenterService {
         const playerFiles = files.Resource.filter(file => file.name.includes('.html'));
         const codingSchemeFiles = files.Resource.filter(file => file.name.includes('.vocs'));
         const unitFiles = files.Unit;
+        const bookletFiles = files.Booklet;
+        const testTakerFiles = files.Testtakers;
         let promises = [];
         // const zipPromises = zipFiles
         //   .map(file => this.getPackage(file, server, tc_workspace, authToken));
@@ -247,23 +275,33 @@ export class TestcenterService {
         // TODO: Chunks!
         if (player === 'true' && playerFiles.length > 0) {
           const playerPromises = playerFiles
-            .map(file => this.getFile(file, server, tc_workspace, authToken));
+            .map(file => this.getFile(file, server, tc_workspace, authToken, url));
           promises = [...promises, ...playerPromises];
         }
         if (units === 'true' && unitFiles.length > 0) {
           const unitFilesPromises = unitFiles
-            .map(file => this.getFile(file, server, tc_workspace, authToken));
+            .map(file => this.getFile(file, server, tc_workspace, authToken, url));
           promises = [...promises, ...unitFilesPromises];
         }
         if (definitions === 'true' && unitDefFiles.length > 0) {
           const unitDefPromises = unitDefFiles
-            .map(file => this.getFile(file, server, tc_workspace, authToken));
+            .map(file => this.getFile(file, server, tc_workspace, authToken, url));
           promises = [...promises, ...unitDefPromises];
         }
         if (codings === 'true' && codingSchemeFiles.length > 0) {
           const codingSchemePromises = codingSchemeFiles
-            .map(file => this.getFile(file, server, tc_workspace, authToken));
+            .map(file => this.getFile(file, server, tc_workspace, authToken, url));
           promises = [...promises, ...codingSchemePromises];
+        }
+        if (booklets === 'true' && bookletFiles.length > 0) {
+          const bookletPromises = bookletFiles
+            .map(file => this.getFile(file, server, tc_workspace, authToken, url));
+          promises = [...promises, ...bookletPromises];
+        }
+        if (testTakers === 'true' && testTakerFiles.length > 0) {
+          const testTakersPromises = testTakerFiles
+            .map(file => this.getFile(file, server, tc_workspace, authToken, url));
+          promises = [...promises, ...testTakersPromises];
         }
         const results :File[] = await Promise.all(promises);
         if (results.length > 0) {
@@ -294,7 +332,7 @@ export class TestcenterService {
     return `${unitResponse.loginname}@${unitResponse.code}@${unitResponse.bookletname}`;
   }
 
-  async getFile(file:File, server:string, tc_workspace:string, authToken:string):
+  async getFile(file:File, server:string, tc_workspace:string, authToken:string, url:string):
   Promise<{
     data: File, name: string, type: string, size: number, id: string
   }> {
@@ -302,11 +340,12 @@ export class TestcenterService {
       Authtoken: authToken
     };
     const filePromise = this.httpService.axiosRef
-      .get<File>(`http://iqb-testcenter${server}.de/api/workspace/${tc_workspace}/file/${file.type}/${file.name}`,
-      {
-        httpsAgent: agent,
-        headers: headersRequest
-      });
+      .get<File>(url ? `${url}/api/workspace/${tc_workspace}/file/${file.type}/${file.name}` :
+      `http://iqb-testcenter${server}.de/api/workspace/${tc_workspace}/file/${file.type}/${file.name}`,
+    {
+      httpsAgent: agent,
+      headers: headersRequest
+    });
     const fileData = await filePromise.then(res => res.data);
     return {
       data: fileData, name: file.name, type: file.type, size: file.size, id: file.id
