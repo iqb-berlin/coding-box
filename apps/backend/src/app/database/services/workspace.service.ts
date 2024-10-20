@@ -8,6 +8,7 @@ import AdmZip = require('adm-zip');
 import * as util from 'util';
 import * as fs from 'fs';
 import * as csv from 'fast-csv';
+import * as crypto from 'crypto';
 import Workspace from '../entities/workspace.entity';
 import { WorkspaceInListDto } from '../../../../../../api-dto/workspaces/workspace-in-list-dto';
 import { WorkspaceFullDto } from '../../../../../../api-dto/workspaces/workspace-full-dto';
@@ -23,6 +24,7 @@ import User from '../entities/user.entity';
 import { TestGroupsInListDto } from '../../../../../../api-dto/test-groups/testgroups-in-list.dto';
 import { ResponseDto } from '../../../../../../api-dto/responses/response-dto';
 import Logs from '../entities/logs.entity';
+import Persons from '../entities/persons.entity';
 
 function sanitizePath(filePath: string): string {
   if (filePath.indexOf('..') !== -1) {
@@ -60,6 +62,73 @@ export type File = {
   data: string
 };
 
+export type Person = {
+  group: string,
+  login: string,
+  code: string,
+  booklets: TcMergeBooklet[],
+};
+
+export type TcMergeBooklet = {
+  id:string,
+  logs: TcMergeLog[],
+  units: TcMergeUnit[],
+  sessions: TcMergeSession[]
+};
+
+export type TcMergeLog = {
+  id:string,
+  key:string,
+  parameter:string
+};
+
+export type TcMergeSession = {
+  browser:string,
+  os:string,
+  screen:string,
+  ts:number,
+  loadCompleteMS:number,
+};
+
+export type TcMergeUnit = {
+  id:string,
+  alias:string,
+  laststate: TcMergeLastState[],
+  subforms:TcMergeSubForms[],
+  chunks:TcMergeChunk[],
+  logs:TcMergeLog[],
+};
+
+export type TcMergeChunk = {
+  id:string,
+  type:string,
+  ts:number,
+  variables:string[]
+};
+
+export type Chunk = {
+  id:string,
+  content:string,
+  ts:number,
+  responseType:string
+};
+
+export type TcMergeSubForms = {
+  id:string,
+  responses: TcMergeResponse[],
+};
+
+export type TcMergeResponse = {
+  id:string,
+  status:string,
+  value:string,
+};
+
+export type TcMergeLastState = {
+  key:string,
+  value:string,
+};
+
 @Injectable()
 export class WorkspaceService {
   private readonly logger = new Logger(WorkspaceService.name);
@@ -78,7 +147,10 @@ export class WorkspaceService {
     @InjectRepository(ResourcePackage)
     private resourcePackageRepository:Repository<ResourcePackage>,
     @InjectRepository(User)
-    private usersRepository:Repository<User>
+    private usersRepository:Repository<User>,
+    @InjectRepository(Persons)
+    private personsRepository:Repository<Persons>
+
   ) {
   }
 
@@ -246,7 +318,7 @@ export class WorkspaceService {
     throw new AdminWorkspaceNotFoundException(id, 'GET');
   }
 
-  private static getTestPersonName(unitResponse: Response): string {
+  private static getTestPersonName(unitResponse: Response | Log): string {
     return `${unitResponse.loginname}@${unitResponse.code}@${unitResponse.bookletname}`;
   }
 
@@ -274,21 +346,8 @@ export class WorkspaceService {
     await this.workspaceRepository.delete(id);
   }
 
-  static csvToArr(stringVal: string) {
-    const rows = stringVal
-      .trim()
-      .split(/\r\n?|\n/);
-    const headers = rows.shift().split(';');
-    return rows.map(item => {
-      const object = {};
-      const row = item.split('";"');
-      headers
-        .forEach((key, index) => (object[key] = row[index]));
-      return object;
-    });
-  }
-
   async uploadTestFiles(workspace_id: number, originalFiles: FileIo[]): Promise<boolean> {
+    this.logger.log(`Uploading test files for workspace ${workspace_id}`);
     const filePromises =
       originalFiles.map(file => this.handleFile(workspace_id, file));
     const res = await Promise.all(filePromises);
@@ -387,76 +446,194 @@ export class WorkspaceService {
     }
 
     if (file.mimetype === 'text/csv') {
-      const rowData: Log[] | Response[] = [];
       if (file.originalname.includes('logs')) {
+        const rowData: Log[] = [];
         fs.writeFile('logs.csv', file.buffer, 'binary', err => {
           if (err) {
             throw new Error('Failed to write file');
           } else {
             const stream = fs.createReadStream('logs.csv');
-            csv.parseStream(stream, { headers: true, delimiter: ';' })
+            csv.parseStream(stream, {
+              headers: true, delimiter: ';', quote: null
+            }).transform(
+              (data: Log): Log => ({
+                groupname: data.groupname.replace(/"/g, ''),
+                loginname: data.loginname.replace(/"/g, ''),
+                code: data.code.replace(/"/g, ''),
+                bookletname: data.bookletname.replace(/"/g, ''),
+                unitname: data.unitname.replace(/"/g, ''),
+                timestamp: data.timestamp.replace(/"/g, ''),
+                logentry: data.logentry
+              })
+            )
               .on('error', error => { this.logger.log(error); }).on('data', row => rowData.push(row))
               .on('end', () => {
                 fs.unlinkSync('logs.csv');
-                const mappedRowData = rowData.map(row => ({
-                  unit_id: row.unitname,
-                  log_entry: row.logentry,
-                  test_group: row.groupname,
-                  workspace_id: workspaceId,
-                  booklet_id: row.bookletname,
-                  timestamp: row.timestamp,
-                  test_person: WorkspaceService.getTestPersonName(row),
-                  id: undefined
-                }));
-                mappedRowData.forEach(row => filePromises.push(
-                  this.logsRepository.insert(row)));
+                console.log(rowData[0]);
+                const bookletLogs = [];
+                const unitLogs = [];
+                const groupsList = [];
+                rowData.forEach(row => {
+                  if (row.unitname === '') {
+                    bookletLogs.push(row.groupname);
+                  } else {
+                    unitLogs.push(row.groupname);
+                  }
+                });
+                bookletLogs.forEach(log => {
+                  if (!groupsList.includes(log.groupname === '')) {
+                    groupsList.push(log.groupname);
+                  }
+                });
+                console.log(bookletLogs.length, 'bookletLogs');
+                console.log(unitLogs.length, 'unitLogs');
+
+                // rowData.forEach(row => {
+                //   this.personsRepository.find({ where: { group: row.groupname } }).then(persons => {
+                //
+                //   });
+                // });
               });
           }
         });
       } else {
+        const rowData: Response[] = [];
         fs.writeFile('responses.csv', file.buffer, 'binary', err => {
           if (err) {
             throw new Error('Failed to write file');
           } else {
             const stream = fs.createReadStream('responses.csv');
-            csv.parseStream(stream, { headers: true, delimiter: ';' })
+            csv.parseStream(stream, { headers: true, delimiter: ';', quote: null })
               .on('error', error => { this.logger.log(error); }).on('data', row => rowData.push(row))
               .on('end', () => {
                 fs.unlinkSync('responses.csv');
-                const mappedRowData = rowData.map(row => {
-                  const responseChunksCleaned = row.responses.replace(/""/g, '"');
-                  const responsesChunks = JSON.parse(responseChunksCleaned);
-                  const lastStateCleaned = row.laststate && row.laststate.length > 1 ? row.laststate
-                    .replace(/""/g, '"')
-                    .replace(/"$/, '') : '{}';
-                  let unitState;
-                  try {
-                    unitState = JSON.parse(lastStateCleaned);
-                  } catch (e) {
-                    this.logger.error('Error parsing last state', row.laststate);
-                    unitState = {};
-                  }
-                  return {
-                    test_person: WorkspaceService.getTestPersonName(row),
-                    unit_id: row.unitname,
-                    responses: responsesChunks,
-                    test_group: row.groupname,
-                    workspace_id: workspaceId,
-                    unit_state: unitState,
-                    booklet_id: row.bookletname,
-                    id: undefined,
-                    created_at: undefined
-                  };
-                });
-                const cleanedRows = WorkspaceService.cleanResponses(mappedRowData);
-                cleanedRows.forEach(row => filePromises.push(
-                  this.responsesRepository.upsert(row, ['test_person', 'unit_id'])));
+                console.log(rowData[0]);
+                //  const cleanedRows = WorkspaceService.cleanResponses(mappedRowData);
+                // cleanedRows.forEach(row => filePromises.push(
+                //  this.responsesRepository.upsert(row, ['test_person', 'unit_id'])));
+
+                const personList = this.createPersonList(rowData)
+                  .map(person => this.assignBookletsToPerson(person, rowData))
+                  .map(person => this.assignUnitsToBookletAndPerson(person, rowData)
+                  );
+                this.personsRepository.save(personList);
+                // console.log('RES', JSON.stringify(personList));
               });
           }
         });
       }
     }
     return filePromises;
+  }
+
+  createPersonList(rows: Response[]): Person[] {
+    const personList : Person[] = [];
+    rows.forEach(row => {
+      const person = personList
+        .find(p => p.group === row.groupname && p.login === row.loginname && p.code === row.code);
+      if (!person) {
+        personList.push(
+          {
+            group: row.groupname,
+            login: row.loginname,
+            code: row.code,
+            booklets: []
+          }
+        );
+      }
+    });
+    return personList;
+  }
+
+  assignBookletsToPerson(person: Person, rows: Response[]): Person {
+    const booklets : TcMergeBooklet[] = [];
+    rows.forEach(row => {
+      if (row.groupname === person.group && row.loginname === person.login && row.code === person.code) {
+        if (!booklets.find(b => b.id === row.bookletname)) {
+          booklets.push({
+            id: row.bookletname,
+            logs: [],
+            units: [],
+            sessions: []
+          });
+        }
+      }
+    });
+    person.booklets = booklets;
+    return person;
+  }
+
+  assignUnitsToBookletAndPerson(person: Person, rows: Response[]): Person {
+    rows.forEach(row => {
+      if (row.groupname === person.group &&
+        row.loginname === person.login &&
+        row.code === person.code) {
+        const booklet = person.booklets.find(b => b.id === row.bookletname);
+        // const responseChunksCleaned = row.responses.replace(/""/g, '"');
+        const parsedResponses : Chunk[] = JSON.parse(row.responses);
+        // console.log('elementCode', parsedResponses);
+        const subforms : TcMergeSubForms[] = parsedResponses.filter(chunk => chunk?.id === 'elementCodes').map(chunk => {
+          const chunkContent : TcMergeResponse[] = JSON.parse(chunk.content);
+          // console.log('chunkContent', chunk.content);
+
+          // chunkContent.forEach(cc => {
+          //   try {
+          //     if (cc.value.startsWith('data:application/octet-stream;base64')) {
+          //       console.log('found Geogebra');
+          //       // const writeStream = fs.createWriteStream('/', { encoding: 'base64' });
+          //       const hash = crypto.createHash('sha256', { outputLength: 9 }).update(cc.value).digest('base64');
+          //       fs.writeFile(`GeoGebra/${row.groupname}${row.loginname}${row.code}_${hash}.base64`, cc.value, 'base64', err => {
+          //         console.log('written file');
+          //       });
+          //
+          //       // this.logger.log('hash', hash);
+          //     }
+          //   } catch (e) {
+          //     // console.log('error', e);
+          //   }
+          //   // console.log('response', response);
+          // });
+          return {
+            id: chunk.id,
+            responses: chunkContent
+          };
+        });
+        const variables = new Set<string>();
+        subforms.forEach(subform => {
+          subform.responses.forEach(response => {
+            variables.add(response.id);
+          });
+        });
+
+        const parsedLastState = JSON.parse(row.laststate);
+        // console.log('parsedLastState', parsedLastState);
+        const laststate: TcMergeLastState[] = Object.entries(parsedLastState).map(ls => ({ key: ls[0], value: ls[1] as string }));
+        console.log('laststate', laststate);
+        //
+
+        person.booklets = person.booklets.map(b => {
+          if (b.id === booklet.id) {
+            b.units.push({
+              id: row.unitname,
+              alias: row.unitname,
+              laststate: laststate,
+              subforms: subforms,
+              chunks: [
+                {
+                  id: 'elementCodes',
+                  type: parsedResponses[0]?.responseType,
+                  ts: parsedResponses[0]?.ts,
+                  variables: Array.from(variables)
+                }
+              ],
+              logs: []
+            });
+          }
+          return b;
+        });
+      }
+    });
+    return person;
   }
 
   static cleanResponses(rows: ResponseDto[]): ResponseDto[] {
