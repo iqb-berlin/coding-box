@@ -13,6 +13,7 @@ import WorkspaceUser from './entities/workspace_user.entity';
 import { TestcenterService } from './services/testcenter.service';
 import ResourcePackage from './entities/resource-package.entity';
 import Logs from './entities/logs.entity';
+import Persons from './entities/persons.entity';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import Logs from './entities/logs.entity';
     WorkspaceAdmin,
     FileUpload,
     Responses,
+    Persons,
     ResourcePackage,
     WorkspaceUser,
     HttpModule,
@@ -35,7 +37,7 @@ import Logs from './entities/logs.entity';
         password: configService.get('POSTGRES_PASSWORD'),
         database: configService.get('POSTGRES_DB'),
         entities: [
-          User, Workspace, WorkspaceAdmin, FileUpload, Responses, WorkspaceUser, ResourcePackage, Logs
+          User, Workspace, WorkspaceAdmin, FileUpload, Responses, WorkspaceUser, ResourcePackage, Logs, Persons
         ],
         synchronize: false
       }),
@@ -49,7 +51,8 @@ import Logs from './entities/logs.entity';
       Logs,
       Responses,
       WorkspaceUser,
-      ResourcePackage
+      ResourcePackage,
+      Persons
     ])
   ],
   providers: [UsersService, WorkspaceService, TestcenterService],
@@ -57,6 +60,7 @@ import Logs from './entities/logs.entity';
     User,
     FileUpload,
     Logs,
+    Persons,
     Responses,
     Workspace,
     WorkspaceAdmin,
