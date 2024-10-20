@@ -14,3 +14,15 @@ CREATE TABLE "public"."logs"
 );
 -- rollback DROP TABLE "public"."logs";
 
+-- changeset jurei733:2
+CREATE TABLE public.persons (
+  "id"            SERIAL PRIMARY KEY,
+  "group"         VARCHAR(100) NOT NULL,
+  "login"         VARCHAR(100) NOT NULL,
+  "code"          VARCHAR(100) NOT NULL,
+  "booklets"      JSON DEFAULT [] NOT NULL,
+  "workspace_id"  INTEGER ,
+  "uploaded_at"   TIMESTAMP WITH TIME ZONE DEFAULT now(),
+  "source"        VARCHAR(100)
+);
+-- rollback DROP TABLE "public"."persons";
