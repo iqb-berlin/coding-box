@@ -92,6 +92,24 @@ export class TestGroupsComponent implements OnInit {
       });
   }
 
+  onFileSelected(targetElement: EventTarget | null) {
+    if (targetElement) {
+      const inputElement = targetElement as HTMLInputElement;
+      if (inputElement.files && inputElement.files.length > 0) {
+        this.isLoading = true;
+        this.backendService.uploadTestFiles(
+          this.appService.selectedWorkspaceId,
+          inputElement.files
+        ).subscribe(() => {
+          setTimeout(() => {
+            this.createTestGroupsList(true);
+          }, 1000);
+          this.isLoading = false;
+        });
+      }
+    }
+  }
+
   createCodingTestGroups():void {
     this.isLoading = true;
     const selectedTestGroups = this.tableSelectionCheckboxes.selected;
