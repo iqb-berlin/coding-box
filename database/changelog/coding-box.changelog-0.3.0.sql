@@ -3,8 +3,7 @@
 -- changeset jurei733:1
 CREATE TABLE "public"."logs"
 (
-  "id"          SERIAL
-    PRIMARY KEY,
+  "id"           SERIAL PRIMARY KEY,
   "unit_id"      VARCHAR(50) NOT NULL,
   "test_group"   VARCHAR(100),
   "workspace_id" INTEGER NOT NULL,
@@ -15,13 +14,13 @@ CREATE TABLE "public"."logs"
 -- rollback DROP TABLE "public"."logs";
 
 -- changeset jurei733:2
-CREATE TABLE public.persons (
+CREATE TABLE "public"."persons" (
   "id"            SERIAL PRIMARY KEY,
   "group"         VARCHAR(100) NOT NULL,
   "login"         VARCHAR(100) NOT NULL,
   "code"          VARCHAR(100) NOT NULL,
-  "booklets"      JSON DEFAULT [] NOT NULL,
-  "workspace_id"  INTEGER ,
+  "booklets"      JSONB,
+  "workspace_id"  INTEGER,
   "uploaded_at"   TIMESTAMP WITH TIME ZONE DEFAULT now(),
   "source"        VARCHAR(100)
 );
