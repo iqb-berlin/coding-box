@@ -25,3 +25,8 @@ CREATE TABLE "public"."persons" (
   "source"        VARCHAR(100)
 );
 -- rollback DROP TABLE "public"."persons";
+
+-- changeset jurei733:3
+alter table persons add constraint persons_pk
+  UNIQUE ( group, login, code );
+-- rollback alter table persons drop constraint person_id;
