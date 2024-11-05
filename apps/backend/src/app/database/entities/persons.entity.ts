@@ -1,10 +1,12 @@
 import {
-  Column, Entity, PrimaryGeneratedColumn
+  Column, Entity, PrimaryGeneratedColumn, Unique
 } from 'typeorm';
 
 @Entity()
+@Unique('persons_pk', ['code', 'group', 'login'])
+
 class Persons {
-  @PrimaryGeneratedColumn('increment')
+  @PrimaryGeneratedColumn()
     id: number;
 
   @Column({ type: 'varchar' })

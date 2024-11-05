@@ -97,7 +97,7 @@ export class TestGroupsComponent implements OnInit {
       const inputElement = targetElement as HTMLInputElement;
       if (inputElement.files && inputElement.files.length > 0) {
         this.isLoading = true;
-        this.backendService.uploadTestFiles(
+        this.backendService.uploadTestResults(
           this.appService.selectedWorkspaceId,
           inputElement.files
         ).subscribe(() => {

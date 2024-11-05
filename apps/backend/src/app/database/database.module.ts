@@ -14,6 +14,7 @@ import { TestcenterService } from './services/testcenter.service';
 import ResourcePackage from './entities/resource-package.entity';
 import Logs from './entities/logs.entity';
 import Persons from './entities/persons.entity';
+import { UploadResultsService } from './services/upload-results.service';
 
 @Module({
   imports: [
@@ -55,7 +56,7 @@ import Persons from './entities/persons.entity';
       Persons
     ])
   ],
-  providers: [UsersService, WorkspaceService, TestcenterService],
+  providers: [UsersService, WorkspaceService, TestcenterService, UploadResultsService],
   exports: [
     User,
     FileUpload,
@@ -68,6 +69,7 @@ import Persons from './entities/persons.entity';
     UsersService,
     WorkspaceUser,
     TestcenterService,
+    UploadResultsService,
     ResourcePackage
   ]
 })
