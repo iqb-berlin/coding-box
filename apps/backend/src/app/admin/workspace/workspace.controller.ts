@@ -26,6 +26,7 @@ import { TestGroupsInListDto } from '../../../../../../api-dto/test-groups/testg
 import FileUpload from '../../database/entities/file_upload.entity';
 import { ResponseDto } from '../../../../../../api-dto/responses/response-dto';
 import WorkspaceUser from '../../database/entities/workspace_user.entity';
+import { UploadResultsService } from '../../database/services/upload-results.service';
 
 export type Result = {
   success: boolean,
@@ -39,7 +40,8 @@ export class WorkspaceController {
   constructor(
     private workspaceService: WorkspaceService,
     private testCenterService: TestcenterService,
-    private authService: AuthService
+    private authService: AuthService,
+    private uploadResults: UploadResultsService
   ) {}
 
   @Get()
@@ -203,6 +205,16 @@ export class WorkspaceController {
   @ApiTags('workspace')
   async addTestFiles(@Param('workspace_id') workspace_id:number, @UploadedFiles() files): Promise<boolean> {
     return this.workspaceService.uploadTestFiles(workspace_id, files);
+  }
+
+  @Post(':workspace_id/upload/results')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiBearerAuth()
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @UseInterceptors(FilesInterceptor('files'))
+  @ApiTags('workspace')
+  async addTestResults(@Param('workspace_id') workspace_id:number, @UploadedFiles() files): Promise<boolean> {
+    return this.uploadResults.uploadTestResults(workspace_id, files);
   }
 
   // TODO: use query params

@@ -217,6 +217,18 @@ export class BackendService {
     });
   }
 
+  uploadTestResults(workspaceId: number, files: FileList | null): Observable<number> {
+    const formData = new FormData();
+    if (files) {
+      for (let i = 0; i < files.length; i++) {
+        formData.append('files', files[i]);
+      }
+    }
+    return this.http.post<never>(`${this.serverUrl}admin/workspace/${workspaceId}/upload/results`, formData, {
+      headers: this.authHeader
+    });
+  }
+
   setUserWorkspaceAccessRight(userId: number, workspaceIds: number[]): Observable<boolean> {
     return this.http.post<boolean>(
       `${this.serverUrl}admin/users/${userId}/workspaces/`,
