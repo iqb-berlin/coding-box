@@ -147,7 +147,7 @@ export class TestCenterImportComponent {
       codings: this.fb.control(false),
       logs: this.fb.control(false),
       testTakers: this.fb.control(false),
-      Booklets: this.fb.control(false)
+      booklets: this.fb.control(false)
     });
   }
 
