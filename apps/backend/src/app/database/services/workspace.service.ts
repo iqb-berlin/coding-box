@@ -139,8 +139,6 @@ export class WorkspaceService {
     private fileUploadRepository: Repository<FileUpload>,
     @InjectRepository(Responses)
     private responsesRepository:Repository<Responses>,
-    @InjectRepository(Logs)
-    private logsRepository:Repository<Logs>,
     @InjectRepository(WorkspaceUser)
     private workspaceUsersRepository:Repository<WorkspaceUser>,
     @InjectRepository(ResourcePackage)
