@@ -21,7 +21,7 @@
       </mat-form-field>
       <mat-form-field >
         <mat-select placeholder='Test Center auswählen' formControlName="testCenter" (valueChange)="isIndividualTcSelected($event)">
-          <mat-option [value]=6>individuelles Testcenter URL</mat-option>
+          <mat-option [value]=6>individuelle Testcenter URL</mat-option>
         @for (testCenter of testCenters;track testCenter){
           <mat-option [value]="testCenter.id">{{ testCenter.label }}</mat-option>
         }

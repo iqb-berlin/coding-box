@@ -8,6 +8,7 @@ import AdmZip = require('adm-zip');
 import * as util from 'util';
 import * as fs from 'fs';
 import * as csv from 'fast-csv';
+import * as crypto from 'crypto';
 import Workspace from '../entities/workspace.entity';
 import { WorkspaceInListDto } from '../../../../../../api-dto/workspaces/workspace-in-list-dto';
 import { WorkspaceFullDto } from '../../../../../../api-dto/workspaces/workspace-full-dto';
@@ -22,7 +23,7 @@ import ResourcePackage from '../entities/resource-package.entity';
 import User from '../entities/user.entity';
 import { TestGroupsInListDto } from '../../../../../../api-dto/test-groups/testgroups-in-list.dto';
 import { ResponseDto } from '../../../../../../api-dto/responses/response-dto';
-import Logs from '../entities/logs.entity';
+import Persons from '../entities/persons.entity';
 
 function sanitizePath(filePath: string): string {
   if (filePath.indexOf('..') !== -1) {
@@ -60,6 +61,73 @@ export type File = {
   data: string
 };
 
+export type Person = {
+  group: string,
+  login: string,
+  code: string,
+  booklets: TcMergeBooklet[],
+};
+
+export type TcMergeBooklet = {
+  id:string,
+  logs: TcMergeLog[],
+  units: TcMergeUnit[],
+  sessions: TcMergeSession[]
+};
+
+export type TcMergeLog = {
+  ts:string,
+  key:string,
+  parameter:string
+};
+
+export type TcMergeSession = {
+  browser:string,
+  os:string,
+  screen:string,
+  ts:string,
+  loadCompleteMS:number,
+};
+
+export type TcMergeUnit = {
+  id:string,
+  alias:string,
+  laststate: TcMergeLastState[],
+  subforms:TcMergeSubForms[],
+  chunks:TcMergeChunk[],
+  logs:TcMergeLog[],
+};
+
+export type TcMergeChunk = {
+  id:string,
+  type:string,
+  ts:number,
+  variables:string[]
+};
+
+export type Chunk = {
+  id:string,
+  content:string,
+  ts:number,
+  responseType:string
+};
+
+export type TcMergeSubForms = {
+  id:string,
+  responses: TcMergeResponse[],
+};
+
+export type TcMergeResponse = {
+  id:string,
+  status:string,
+  value:string,
+};
+
+export type TcMergeLastState = {
+  key:string,
+  value:string,
+};
+
 @Injectable()
 export class WorkspaceService {
   private readonly logger = new Logger(WorkspaceService.name);
@@ -71,14 +139,15 @@ export class WorkspaceService {
     private fileUploadRepository: Repository<FileUpload>,
     @InjectRepository(Responses)
     private responsesRepository:Repository<Responses>,
-    @InjectRepository(Logs)
-    private logsRepository:Repository<Logs>,
     @InjectRepository(WorkspaceUser)
     private workspaceUsersRepository:Repository<WorkspaceUser>,
     @InjectRepository(ResourcePackage)
     private resourcePackageRepository:Repository<ResourcePackage>,
     @InjectRepository(User)
-    private usersRepository:Repository<User>
+    private usersRepository:Repository<User>,
+    @InjectRepository(Persons)
+    private personsRepository:Repository<Persons>
+
   ) {
   }
 
@@ -246,7 +315,7 @@ export class WorkspaceService {
     throw new AdminWorkspaceNotFoundException(id, 'GET');
   }
 
-  private static getTestPersonName(unitResponse: Response): string {
+  private static getTestPersonName(unitResponse: Response | Log): string {
     return `${unitResponse.loginname}@${unitResponse.code}@${unitResponse.bookletname}`;
   }
 
@@ -274,21 +343,8 @@ export class WorkspaceService {
     await this.workspaceRepository.delete(id);
   }
 
-  static csvToArr(stringVal: string) {
-    const rows = stringVal
-      .trim()
-      .split(/\r\n?|\n/);
-    const headers = rows.shift().split(';');
-    return rows.map(item => {
-      const object = {};
-      const row = item.split('";"');
-      headers
-        .forEach((key, index) => (object[key] = row[index]));
-      return object;
-    });
-  }
-
   async uploadTestFiles(workspace_id: number, originalFiles: FileIo[]): Promise<boolean> {
+    this.logger.log(`Uploading test files for workspace ${workspace_id}`);
     const filePromises =
       originalFiles.map(file => this.handleFile(workspace_id, file));
     const res = await Promise.all(filePromises);
@@ -382,77 +438,6 @@ export class WorkspaceService {
             buffer: fileContent,
             size: fileContent.length
           })));
-        });
-      }
-    }
-
-    if (file.mimetype === 'text/csv') {
-      const rowData: Log[] | Response[] = [];
-      if (file.originalname.includes('logs')) {
-        fs.writeFile('logs.csv', file.buffer, 'binary', err => {
-          if (err) {
-            throw new Error('Failed to write file');
-          } else {
-            const stream = fs.createReadStream('logs.csv');
-            csv.parseStream(stream, { headers: true, delimiter: ';' })
-              .on('error', error => { this.logger.log(error); }).on('data', row => rowData.push(row))
-              .on('end', () => {
-                fs.unlinkSync('logs.csv');
-                const mappedRowData = rowData.map(row => ({
-                  unit_id: row.unitname,
-                  log_entry: row.logentry,
-                  test_group: row.groupname,
-                  workspace_id: workspaceId,
-                  booklet_id: row.bookletname,
-                  timestamp: row.timestamp,
-                  test_person: WorkspaceService.getTestPersonName(row),
-                  id: undefined
-                }));
-                mappedRowData.forEach(row => filePromises.push(
-                  this.logsRepository.insert(row)));
-              });
-          }
-        });
-      } else {
-        fs.writeFile('responses.csv', file.buffer, 'binary', err => {
-          if (err) {
-            throw new Error('Failed to write file');
-          } else {
-            const stream = fs.createReadStream('responses.csv');
-            csv.parseStream(stream, { headers: true, delimiter: ';' })
-              .on('error', error => { this.logger.log(error); }).on('data', row => rowData.push(row))
-              .on('end', () => {
-                fs.unlinkSync('responses.csv');
-                const mappedRowData = rowData.map(row => {
-                  const responseChunksCleaned = row.responses.replace(/""/g, '"');
-                  const responsesChunks = JSON.parse(responseChunksCleaned);
-                  const lastStateCleaned = row.laststate && row.laststate.length > 1 ? row.laststate
-                    .replace(/""/g, '"')
-                    .replace(/"$/, '') : '{}';
-                  let unitState;
-                  try {
-                    unitState = JSON.parse(lastStateCleaned);
-                  } catch (e) {
-                    this.logger.error('Error parsing last state', row.laststate);
-                    unitState = {};
-                  }
-                  return {
-                    test_person: WorkspaceService.getTestPersonName(row),
-                    unit_id: row.unitname,
-                    responses: responsesChunks,
-                    test_group: row.groupname,
-                    workspace_id: workspaceId,
-                    unit_state: unitState,
-                    booklet_id: row.bookletname,
-                    id: undefined,
-                    created_at: undefined
-                  };
-                });
-                const cleanedRows = WorkspaceService.cleanResponses(mappedRowData);
-                cleanedRows.forEach(row => filePromises.push(
-                  this.responsesRepository.upsert(row, ['test_person', 'unit_id'])));
-              });
-          }
         });
       }
     }
