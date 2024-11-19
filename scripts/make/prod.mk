@@ -230,6 +230,8 @@ coding-box-restore-db: coding-box-down .EXPORT_ALL_VARIABLES
 					--single-transaction\
 					--username=$(POSTGRES_USER)\
 					--dbname=$(POSTGRES_DB)\
+					--clean\
+					--if-exists\
 				/tmp/$(POSTGRES_DB).tar
 	docker compose\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
