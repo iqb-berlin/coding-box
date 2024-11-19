@@ -2,7 +2,6 @@
 
 # custom folders
 /database/changelogDocs
-/backup
 
 # Caches
 .angular
