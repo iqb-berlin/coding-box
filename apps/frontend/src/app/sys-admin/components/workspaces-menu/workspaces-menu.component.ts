@@ -7,7 +7,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MatButton } from '@angular/material/button';
 import { JsonPipe } from '@angular/common';
-import { EditWorkspaceComponent } from '../../../workspace/edit-workspace/edit-workspace.component';
+import { EditWorkspaceComponent } from '../../../workspace/components/edit-workspace/edit-workspace.component';
 import { WrappedIconComponent } from '../../../shared/wrapped-icon/wrapped-icon.component';
 import { WorkspaceInListDto } from '../../../../../../../api-dto/workspaces/workspace-in-list-dto';
 import {

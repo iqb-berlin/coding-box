@@ -12,10 +12,12 @@ import Responses from './entities/responses.entity';
 import WorkspaceUser from './entities/workspace_user.entity';
 import { TestcenterService } from './services/testcenter.service';
 import ResourcePackage from './entities/resource-package.entity';
+import Logs from './entities/logs.entity';
 
 @Module({
   imports: [
     User,
+    Logs,
     Workspace,
     WorkspaceAdmin,
     FileUpload,
@@ -33,18 +35,28 @@ import ResourcePackage from './entities/resource-package.entity';
         password: configService.get('POSTGRES_PASSWORD'),
         database: configService.get('POSTGRES_DB'),
         entities: [
-          User, Workspace, WorkspaceAdmin, FileUpload, Responses, WorkspaceUser, ResourcePackage
+          User, Workspace, WorkspaceAdmin, FileUpload, Responses, WorkspaceUser, ResourcePackage, Logs
         ],
         synchronize: false
       }),
       inject: [ConfigService]
     }),
-    TypeOrmModule.forFeature([User, Workspace, WorkspaceAdmin, FileUpload, Responses, WorkspaceUser, ResourcePackage])
+    TypeOrmModule.forFeature([
+      User,
+      Workspace,
+      WorkspaceAdmin,
+      FileUpload,
+      Logs,
+      Responses,
+      WorkspaceUser,
+      ResourcePackage
+    ])
   ],
   providers: [UsersService, WorkspaceService, TestcenterService],
   exports: [
     User,
     FileUpload,
+    Logs,
     Responses,
     Workspace,
     WorkspaceAdmin,

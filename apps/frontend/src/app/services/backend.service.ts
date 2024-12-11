@@ -11,7 +11,11 @@ import { WorkspaceInListDto } from '../../../../../api-dto/workspaces/workspace-
 import { CreateWorkspaceDto } from '../../../../../api-dto/workspaces/create-workspace-dto';
 import { AuthDataDto } from '../../../../../api-dto/auth-data-dto';
 // eslint-disable-next-line import/no-cycle
-import { ImportOptions, ServerResponse } from '../ws-admin/test-center-import/test-center-import.component';
+import {
+  ImportOptions,
+  Result,
+  ServerResponse
+} from '../ws-admin/components/test-center-import/test-center-import.component';
 import { TestGroupsInListDto } from '../../../../../api-dto/test-groups/testgroups-in-list.dto';
 import { FilesInListDto } from '../../../../../api-dto/files/files-in-list.dto';
 import { ResponseDto } from '../../../../../api-dto/responses/response-dto';
@@ -130,9 +134,9 @@ export class BackendService {
       );
   }
 
-  getUsersByWorkspaceList(workspaceId:number): Observable<number[]> {
+  getWorkspaceUsers(workspaceId:number): Observable<{ userId:number, workspaceId:number }[]> {
     return this.http
-      .get<number[]>(`${this.serverUrl}admin/users/${workspaceId}/workspaces`,
+      .get<{ userId:number, workspaceId:number }[]>(`${this.serverUrl}admin/workspace/${workspaceId}/users`,
       { headers: this.authHeader })
       .pipe(
         catchError(() => of([]))
@@ -266,8 +270,7 @@ export class BackendService {
       { headers });
   }
 
-  // Todo: This gets unitIds of responses
-  getTestPersonUnits(workspaceId: number, testPerson: string): Observable<{ unit_id:string }[]> {
+  getResponsesUnitIds(workspaceId: number, testPerson: string): Observable<{ unit_id:string }[]> {
     return this.http.get<{ unit_id:string }[]>(
       `${this.serverUrl}admin/workspace/${workspaceId}/units/${testPerson}`,
       { headers: this.authHeader });
@@ -285,24 +288,29 @@ export class BackendService {
       { headers: this.authHeader });
   }
 
-  authenticate(username:string, password:string, server:string): Observable<ServerResponse > {
+  authenticate(username:string, password:string, server:string, url:string): Observable<ServerResponse > {
     return this.http
-      .post<ServerResponse>(`${this.serverUrl}tc_authentication`, { username, password, server });
+      .post<ServerResponse>(`${this.serverUrl}tc_authentication`, {
+      username, password, server, url
+    });
   }
 
   importWorkspaceFiles(workspace_id: number,
                        testCenterWorkspace: string,
                        server:string,
+                       url:string,
                        token:string,
-                       importOptions:ImportOptions): Observable<boolean> {
+                       importOptions:ImportOptions): Observable<Result> {
     const {
-      units, responses, definitions, player, codings
+      units, responses, definitions, player, codings, logs, testTakers, booklets
     } = importOptions;
     return this.http
       // eslint-disable-next-line max-len
-      .get<boolean>(`${this.serverUrl}admin/workspace/${workspace_id}/importWorkspaceFiles?tc_workspace=${testCenterWorkspace}&server=${server}&responses=${responses}&definitions=${definitions}&units=${units}&codings=${codings}&player=${player}&token=${token}`, { headers: this.authHeader })
+      .get<Result>(`${this.serverUrl}admin/workspace/${workspace_id}/importWorkspaceFiles?tc_workspace=${testCenterWorkspace}&server=${server}&url=${encodeURIComponent(url)}&responses=${responses}&logs=${logs}&definitions=${definitions}&units=${units}&codings=${codings}&player=${player}&token=${token}&testTakers=${testTakers}&booklets=${booklets}`, { headers: this.authHeader })
       .pipe(
-        catchError(() => of(false))
+        catchError(() => of({
+          success: false, testFiles: 0, responses: 0, logs: 0
+        }))
       );
   }
 }

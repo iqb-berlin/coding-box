@@ -10,28 +10,34 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.backend.entrypoints=websecure"
-      - "traefik.http.routers.backend.tls=true"
       - "traefik.http.routers.backend.rule=(HostRegexp(`www.${SERVER_NAME}`) || Host(`${SERVER_NAME}`)) && PathPrefix(`/api`)"
+      - "traefik.http.routers.backend.tls=true"
+      - "traefik.http.routers.backend.tls.certResolver=iqbresolver"
+      - "traefik.http.routers.backend.tls.domains[0].main=${SERVER_NAME}"
+      - "traefik.http.routers.backend.tls.domains[0].sans=www.${SERVER_NAME}"
       - "traefik.http.routers.backend.middlewares=security-headers"
       - "traefik.http.routers.backend.service=backend"
       - "traefik.http.services.backend.loadbalancer.server.port=3333"
       - "traefik.docker.network=app-net"
     image: ${REGISTRY_PATH}iqbberlin/coding-box-backend:${TAG}
     volumes:
-      - backend_vol:/usr/src/coding-box-backend/packages
+      - "backend_vol:/usr/src/coding-box-backend/packages"
     restart: always
 
   frontend:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.frontend.entrypoints=websecure"
-      - "traefik.http.routers.frontend.tls=true"
       - "traefik.http.routers.frontend.rule=HostRegexp(`www.${SERVER_NAME}`) || Host(`${SERVER_NAME}`)"
+      - "traefik.http.routers.frontend.tls=true"
+      - "traefik.http.routers.frontend.tls.certResolver=iqbresolver"
+      - "traefik.http.routers.frontend.tls.domains[0].main=${SERVER_NAME}"
+      - "traefik.http.routers.frontend.tls.domains[0].sans=www.${SERVER_NAME}"
       - "traefik.http.routers.frontend.middlewares=security-headers"
       - "traefik.http.routers.frontend.service=frontend"
       - "traefik.http.services.frontend.loadbalancer.server.port=8080"
       - "traefik.docker.network=app-net"
     image: ${REGISTRY_PATH}iqbberlin/coding-box-frontend:${TAG}
     volumes:
-      - ./config/frontend/default.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - "./config/frontend/default.conf.template:/etc/nginx/templates/default.conf.template:ro"
     restart: always

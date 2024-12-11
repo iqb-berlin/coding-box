@@ -1,0 +1,75 @@
+
+  <div>
+    <div class="fx-row-start-stretch container">
+      <button mat-button
+              [disabled]="selectedUser.length > 1"
+              [matTooltip]="'admin.edit-user-data' | translate"
+              (click)="editUser()">
+        <coding-box-wrapped-icon icon="edit"></coding-box-wrapped-icon>
+      </button>
+      <button mat-button
+              [disabled]="!selectedUser"
+              [matTooltip]="'admin.delete-selected-users' | translate"
+              (click)="deleteUsers()">
+        <coding-box-wrapped-icon icon="delete"></coding-box-wrapped-icon>
+      </button>
+
+      <button mat-button
+              [disabled]="selectedUser.length > 1"
+              [matTooltip]="'admin.set-user-access-rights' | translate"
+              (click)="setUserWorkspaceAccessRight()">
+        <coding-box-wrapped-icon icon="workspaces"></coding-box-wrapped-icon>
+      </button>
+    </div>
+
+
+    @if (userObjectsDatasource.data.length) {
+    <coding-box-search-filter
+      [title]="'search-filter.filter-users' | translate"
+      (valueChange)="userObjectsDatasource.filter = $event.trim().toLowerCase()">
+    </coding-box-search-filter>
+  }
+
+  <mat-table [dataSource]="userObjectsDatasource"
+             matSort
+             class="scroll-area">
+    <ng-container matColumnDef="selectCheckbox">
+      <mat-header-cell *matHeaderCellDef class="fx-flex-row-fix-70">
+        <mat-checkbox [checked]="(tableSelectionCheckboxes | hasSelectionValue : tableSelectionCheckboxes.selected.length) &&  (tableSelectionCheckboxes.selected.length | isAllSelected : userObjectsDatasource.data.length)"
+                      [indeterminate]="(tableSelectionCheckboxes | hasSelectionValue : tableSelectionCheckboxes.selected.length) && !(tableSelectionCheckboxes.selected.length | isAllSelected : userObjectsDatasource.data.length)"
+                      (change)="$event ? masterToggle() : null">
+        </mat-checkbox>
+      </mat-header-cell>
+      <mat-cell *matCellDef="let row" class="fx-flex-row-fix-70">
+        <mat-checkbox [checked]="tableSelectionCheckboxes | isSelected: row : tableSelectionCheckboxes.selected.length"
+                      (click)="$event.stopPropagation()"
+                      (change)="$event ? checkboxToggle(row) : null">
+        </mat-checkbox>
+      </mat-cell>
+    </ng-container>
+
+    <ng-container matColumnDef="name">
+      <mat-header-cell *matHeaderCellDef
+                       mat-sort-header="name">
+        {{'user.login-name' | translate}}
+      </mat-header-cell>
+      <mat-cell *matCellDef="let element">
+        {{element.name}} {{element.isAdmin ? '*' : ''}}
+      </mat-cell>
+    </ng-container>
+
+    <ng-container matColumnDef="displayName">
+      <mat-header-cell *matHeaderCellDef
+                       mat-sort-header="lastName">
+        {{'user.full-name' | translate}}
+      </mat-header-cell>
+      <mat-cell *matCellDef="let row"
+                class="secondary-cell">
+        {{row.lastName ? row.lastName : row.name}}{{row.firstName ? (', ' + row.firstName) : ''}}
+      </mat-cell>
+    </ng-container>
+
+    <mat-header-row *matHeaderRowDef="displayedUserColumns"></mat-header-row>
+    <mat-row *matRowDef="let row; columns: displayedUserColumns;"></mat-row>
+  </mat-table>
+  </div>

@@ -18,13 +18,21 @@ import { FilesDto } from '../../../../../../api-dto/files/files.dto';
 import { TestcenterService } from '../../database/services/testcenter.service';
 import {
   ImportOptions
-} from '../../../../../frontend/src/app/ws-admin/test-center-import/test-center-import.component';
+} from '../../../../../frontend/src/app/ws-admin/components/test-center-import/test-center-import.component';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { AuthService } from '../../auth/service/auth.service';
 import { TestGroupsInListDto } from '../../../../../../api-dto/test-groups/testgroups-in-list.dto';
 import FileUpload from '../../database/entities/file_upload.entity';
 import { ResponseDto } from '../../../../../../api-dto/responses/response-dto';
+import WorkspaceUser from '../../database/entities/workspace_user.entity';
+
+export type Result = {
+  success: boolean,
+  testFiles: number,
+  responses: number,
+  logs: number
+};
 
 @Controller('admin/workspace')
 export class WorkspaceController {
@@ -60,22 +68,29 @@ export class WorkspaceController {
   async importWorkspaceFiles(
     @Param('workspace_id') workspace_id: string,
       @Query('server') server: string,
+      @Query('url') url: string,
       @Query('tc_workspace') tc_workspace: string,
       @Query('token') token: string,
       @Query('definitions') definitions: string,
       @Query('responses') responses: string,
+      @Query('logs') logs: string,
       @Query('player') player: string,
       @Query('units') units: string,
-      @Query('codings') codings: string)
-      : Promise<boolean> {
+      @Query('codings') codings: string,
+      @Query('testTakers') testTakers: string,
+      @Query('booklets') booklets: string)
+      : Promise<Result> {
     const importOptions:ImportOptions = {
       definitions: definitions,
       responses: responses,
       units: units,
       player: player,
-      codings: codings
+      codings: codings,
+      logs: logs,
+      booklets: booklets,
+      testTakers: testTakers
     };
-    return this.testCenterService.importWorkspaceFiles(workspace_id, tc_workspace, server, token, importOptions);
+    return this.testCenterService.importWorkspaceFiles(workspace_id, tc_workspace, server, url, token, importOptions);
   }
 
   @Get(':workspace_id')
@@ -94,6 +109,13 @@ export class WorkspaceController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async findFiles(@Param('workspace_id') workspace_id: number): Promise<FilesDto[]> {
     return this.workspaceService.findFiles(workspace_id);
+  }
+
+  @Get(':workspace_id/users')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  async findUsers(@Param('workspace_id') workspace_id: number): Promise<WorkspaceUser[]> {
+    return this.workspaceService.findUsers(workspace_id);
   }
 
   // Todo: use query params
