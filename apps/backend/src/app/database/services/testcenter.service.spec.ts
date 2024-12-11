@@ -25,6 +25,10 @@ describe('TestCenterService', () => {
           useValue: createMock<WorkspaceService>()
         },
         {
+          provide: TestcenterService,
+          useValue: createMock<TestcenterService>()
+        },
+        {
           provide: UsersService,
           useValue: createMock<UsersService>()
         },

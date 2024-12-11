@@ -1,0 +1,164 @@
+
+<mat-dialog-content>
+  <h2>Test Center Import</h2>
+  @if(!authenticated)
+  {
+    <form class="fx-column-start-stretch"
+                             [formGroup]="loginForm"
+                             (ngSubmit)="authenticate()">
+    <div class="fx-column-start-stretch">
+      <mat-form-field >
+        <input matInput formControlName="name"
+               [placeholder]="'home.user-name' | translate"
+               (keyup.enter)="pw.focus()">
+      </mat-form-field>
+      <mat-form-field>
+        <input matInput #pw
+               type="password"
+               formControlName="pw"
+               [placeholder]="'home.password' | translate"
+               (keyup.enter)="authenticate()">
+      </mat-form-field>
+      <mat-form-field >
+        <mat-select placeholder='Test Center auswählen' formControlName="testCenter" (valueChange)="isIndividualTcSelected($event)">
+          <mat-option [value]=6>individuelles Testcenter URL</mat-option>
+        @for (testCenter of testCenters;track testCenter){
+          <mat-option [value]="testCenter.id">{{ testCenter.label }}</mat-option>
+        }
+
+        </mat-select>
+
+      </mat-form-field>
+      <mat-form-field>
+        <mat-label>Testcenter Instanz URL verwenden</mat-label>
+        <input formControlName="testCenterIndividual" matInput type="text">
+      </mat-form-field>
+    </div>
+    <button mat-raised-button
+            type="submit"
+            [disabled]="loginForm.invalid"
+            color="primary">{{ 'login' | translate }}
+    </button>
+      <mat-error>
+    @if (authenticationError){
+      <div class="warning">
+        {{'login-error' | translate}}
+      </div>
+    }
+      </mat-error>
+  </form>
+  } @else {
+    @if (workspaces){
+  <div class="fx-row-space-between-start loginInfo">
+    <h3>Angemeldet in {{this.testCenterInstance[0]?.label || this.loginForm.get('testCenterIndividual')?.value }}</h3>
+    <button  mat-button color="primary" (click)="this.logout()">Abmelden</button>
+  </div>
+    <form class="fx-column-start-stretch"
+          [formGroup]="importFilesForm"
+          (ngSubmit)="importWorkspaceFiles()">
+      <div class="fx-column-start-stretch">
+        <section class="fx-column-start-start">
+          <span class="">
+            <mat-checkbox class="" formControlName="responses">
+            Antworten
+            </mat-checkbox>
+          </span>
+          <span class="">
+            <mat-checkbox class="" formControlName="logs">
+            Logs
+            </mat-checkbox>
+          </span>
+          <span class="">
+            <mat-checkbox class="" formControlName="definitions">
+            Aufgabendefinitionen
+            </mat-checkbox>
+          </span>
+          <span class="">
+            <mat-checkbox class="" formControlName="units">
+              Units-XML
+            </mat-checkbox>
+          </span>
+          <span class="">
+            <mat-checkbox class="" formControlName="player">
+            Player
+            </mat-checkbox>
+          </span>
+          <span class="">
+            <mat-checkbox class="" formControlName="codings">
+            Kodierschemata
+            </mat-checkbox>
+          </span>
+          <span class="">
+            <mat-checkbox class="" formControlName="booklets">
+            Booklets
+            </mat-checkbox>
+          </span>
+          <span class="">
+            <mat-checkbox class="" formControlName="testTakers">
+            Test-takers
+            </mat-checkbox>
+          </span>
+
+        </section>
+        <mat-form-field>
+
+          <mat-select placeholder='Studie auswählen' formControlName="workspace">
+            @for (workspace of workspaces;track workspace){
+              <mat-option [value]="workspace.id">{{ workspace.label }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+
+      </div>
+      @if (isUploadingFiles){
+        <mat-spinner></mat-spinner>
+      } @else {
+      <button mat-raised-button
+              type="submit"
+              [disabled]="importFilesForm.invalid"
+              color="primary">{{ 'files-import' | translate }}
+      </button>
+      }
+      <mat-error>
+        @if(filesSelectionError){
+          <div>Bitte mindestens eine Import Option auswählen</div>
+        }
+      </mat-error>
+      <mat-error>
+      @if (authenticationError){
+        <div class="warning">
+          {{'login-error' | translate}}
+        </div>
+      }
+      </mat-error>
+      @if(uploadData){
+        @if(uploadData.success){
+          <div class="success">
+            Der Testcenter Import war erfolgreich.
+          </div>
+        }
+        @else{
+          @if(!isUploadingFiles && !filesSelectionError){
+            <div class="warning">
+              {{'Beim Importieren der Dateien ist ein Fehler aufgetreten'}}
+            </div>
+          }
+        }
+      }
+    </form>
+    } @else{
+      <p class="warning">Keine Arbeitsbereiche auswählbar</p>
+    }
+  }
+
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-raised-button
+          color="primary"
+          type="submit"
+          [disabled]="isUploadingFiles"
+          [mat-dialog-close]="true">
+    {{ 'close' | translate }}
+  </button>
+</mat-dialog-actions>

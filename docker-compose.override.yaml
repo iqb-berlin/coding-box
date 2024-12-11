@@ -16,8 +16,8 @@ services:
       args:
         REGISTRY_PATH: ${REGISTRY_PATH}
     volumes:
-      - ./database/changelog:/liquibase/changelog
-      - ./database/changelogDocs:/liquibase/changelogDocs
+      - "./database/changelog:/liquibase/changelog"
+      - "./database/changelogDocs:/liquibase/changelogDocs"
 
   backend:
     labels:
@@ -38,8 +38,8 @@ services:
       - "${API_PORT}:3333"  # backend
       - "9229:9229"         # default debug port
     volumes:
-      - ./apps/backend/src:/usr/src/coding-box/apps/backend/src
-      - backend_vol:/usr/src/coding-box/packages
+      - "./apps/backend/src:/usr/src/coding-box/apps/backend/src"
+      - "backend_vol:/usr/src/coding-box/packages"
     command:
       - "serve"
       - "backend"
@@ -63,7 +63,7 @@ services:
     ports:
       - "${HTTP_PORT}:8080"
     volumes:
-      - ./apps/frontend/src:/coding-box/apps/frontend/src
+      - "./apps/frontend/src:/coding-box/apps/frontend/src"
     command:
       - "serve"
       - "frontend"

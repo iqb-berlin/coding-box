@@ -43,7 +43,7 @@ export class UsersController {
   })
   @ApiTags('admin users')
   async findUserWorkspaces(@Param('userId') userId:number): Promise<number[]> {
-    return this.usersService.findUserWorkspaces(userId);
+    return this.usersService.findUserWorkspaceIds(userId);
   }
 
   @Delete(':ids')
