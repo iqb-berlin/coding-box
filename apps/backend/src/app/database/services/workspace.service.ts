@@ -157,6 +157,12 @@ export class WorkspaceService {
     return response;
   }
 
+  async findWorkspaceResponses(workspace_id: number): Promise<ResponseDto[]> {
+    this.logger.log('Returning responses for workspace', workspace_id);
+    const responses = await this.responsesRepository.find({ where: { workspace_id: workspace_id } });
+    return responses;
+  }
+
   async findUnit(workspace_id: number, testPerson:string, unitId:string): Promise<FileUpload[]> {
     this.logger.log('Returning unit for test person', testPerson);
     const response = await this.fileUploadRepository.find(
