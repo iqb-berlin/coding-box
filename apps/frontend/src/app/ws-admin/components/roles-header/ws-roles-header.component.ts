@@ -1,0 +1,18 @@
+import { Component } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { MatIcon } from '@angular/material/icon';
+import { TranslateModule } from '@ngx-translate/core';
+import { MatTooltip } from '@angular/material/tooltip';
+import { MatIconButton } from '@angular/material/button';
+import { MatDialog } from '@angular/material/dialog';
+
+@Component({
+  selector: 'coding-box-ws-roles-header',
+  standalone: true,
+  imports: [CommonModule, MatIcon, TranslateModule, MatTooltip, MatIconButton],
+  templateUrl: './ws-roles-header.component.html',
+  styleUrl: './ws-roles-header.component.scss'
+})
+export class WsRolesHeaderComponent {
+  constructor(private roleMatrixDialog: MatDialog) {}
+}
