@@ -11,6 +11,8 @@ import { WsSettingsComponent } from './ws-admin/components/ws-settings/ws-settin
 import { SysAdminSettingsComponent } from './sys-admin/components/sys-admin-settings/sys-admin-settings.component';
 import { TestGroupsComponent } from './ws-admin/components/test-groups/test-groups.component';
 import { WsUsersComponent } from './ws-admin/components/ws-users/ws-users.component';
+import { CodingManagementComponent } from './coding/coding-managment/coding-management.component';
+import { CodingManagementManualComponent } from './coding/coding-management-manual/coding-management-manual.component';
 
 export const routes: Routes = [
   { path: '', redirectTo: 'home', pathMatch: 'full' },
@@ -19,6 +21,7 @@ export const routes: Routes = [
   { path: 'replay/:testPerson/:unitId', component: ReplayComponent },
   { path: 'replay/:testPerson', component: ReplayComponent },
   { path: 'replay', component: ReplayComponent },
+  { path: 'coding-manual', component: CodingManagementManualComponent },
   {
     path: 'admin',
     component: AdminComponent,
@@ -38,6 +41,7 @@ export const routes: Routes = [
       { path: 'test-files', component: TestFilesComponent },
       { path: 'test-groups', component: TestGroupsComponent },
       { path: 'users', component: WsUsersComponent },
+      { path: 'coding', component: CodingManagementComponent },
       { path: 'settings', component: WsSettingsComponent },
       { path: '**', component: SelectReplayComponent }
     ]
