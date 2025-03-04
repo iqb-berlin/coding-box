@@ -20,6 +20,8 @@ import { TestGroupsInListDto } from '../../../../../api-dto/test-groups/testgrou
 import { FilesInListDto } from '../../../../../api-dto/files/files-in-list.dto';
 import { ResponseDto } from '../../../../../api-dto/responses/response-dto';
 import { FilesDto } from '../../../../../api-dto/files/files.dto';
+import { UserInListDto } from '../../../../../api-dto/user/user-in-list-dto';
+import { UserWorkspaceAccessDto } from '../../../../../api-dto/workspaces/user-workspace-access-dto';
 
 @Injectable({
   providedIn: 'root'
@@ -63,6 +65,16 @@ export class BackendService {
           return of(loginToken);
         })
       );
+  }
+
+  getUsers(workspaceId:number): Observable<UserInListDto[]> {
+    return this.http
+      .get<UserInListDto[]>(`${this.serverUrl}admin/users/access/${workspaceId}`, { headers: this.authHeader });
+  }
+
+  saveUsers(workspaceId:number, users:UserWorkspaceAccessDto[]): Observable<UserWorkspaceAccessDto[]> {
+    return this.http
+      .patch<UserWorkspaceAccessDto[]>(`${this.serverUrl}admin/users/access/${workspaceId}`, users, { headers: this.authHeader });
   }
 
   getAuthData(id:string): Observable<AuthDataDto> {

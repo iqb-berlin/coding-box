@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, Input } from '@angular/core';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
@@ -27,16 +27,11 @@ export class HomeComponent {
     public backendService: BackendService
   ) {}
 
-  workspaces :WorkspaceFullDto[] = [];
+  workspaces: WorkspaceFullDto[] = [];
 
   ngOnInit(): void {
-    setTimeout(() => {
-      if (this.appService.kcUser.identity) {
-        this.backendService.getAuthData(this.appService.kcUser.identity).subscribe(authData => {
-          this.workspaces = authData.workspaces;
-        });
-      }
-    });
+    this.workspaces = this.appService.authData.workspaces;
+    setTimeout(() => { this.workspaces = this.appService.authData.workspaces; }, 200);
   }
 
   protected readonly Number = Number;

@@ -151,7 +151,8 @@
     "test-files": "Testdateien",
     "test-persons": "Testpersonen",
     "test-groups": "Testgruppen",
-    "select-unit-play": "Replay"
+    "select-unit-play": "Replay",
+    "coding": "Kodierung"
   },
   "search-filter": {
     "filter-users": "Suche nach Nutzer:innen",
@@ -167,7 +168,12 @@
     "for-user": "Zugriffsrechte für \"{{user}}\"",
     "not-saved": "Zugriffsrechte nicht gespeichert.",
     "changed": "Zugriffsrechte geändert",
-    "not-changed": "Konnte Zugriffsrechte nicht ändern"
+    "not-changed": "Konnte Zugriffsrechte nicht ändern",
+    "access-level-0": "Gast",
+    "access-level-1": "Kodierer:in",
+    "access-level-2": "Kodierung-Manager:in",
+    "access-level-3": "Studienmanager:in",
+    "access-level-4": "Admin"
   },
 
   "file-upload" : {
