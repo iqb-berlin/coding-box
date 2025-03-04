@@ -6,6 +6,9 @@ import User from '../entities/user.entity';
 import { UserFullDto } from '../../../../../../api-dto/user/user-full-dto';
 import { CreateUserDto } from '../../../../../../api-dto/user/create-user-dto';
 import WorkspaceUser from '../entities/workspace_user.entity';
+import { WorkspaceUserInListDto } from '../../../../../../api-dto/user/workspace-user-in-list-dto';
+import { UserWorkspaceAccessDto } from '../../../../../../api-dto/workspaces/user-workspace-access-dto';
+import { UserInListDto } from '../../../../../../api-dto/user/user-in-list-dto';
 
 @Injectable()
 export class UsersService {
@@ -35,6 +38,46 @@ export class UsersService {
     return returnUsers;
   }
 
+  async findAllUsers(workspaceId?: number): Promise<WorkspaceUserInListDto[]> {
+    this.logger.log(`Returning users${workspaceId ? ` for workspaceId: ${workspaceId}` : '.'}`);
+    const validUsers: UserWorkspaceAccessDto[] = [];
+    if (workspaceId) {
+      const workspaceUsers: WorkspaceUser[] = await this.workspaceUserRepository
+        .find({ where: { workspaceId: workspaceId } });
+
+      workspaceUsers.forEach(wsU => validUsers.push(
+        { id: wsU.userId, accessLevel: wsU.accessLevel }
+      ));
+    }
+    const users: User[] = await this.usersRepository
+      .find({ });
+    const returnUsers: WorkspaceUserInListDto[] = [];
+    users.forEach(user => {
+      if (!workspaceId ||
+        (validUsers.find(validUser => validUser.id === user.id))) {
+        returnUsers.push(<WorkspaceUserInListDto>{
+          id: user.id,
+          name: user.username,
+          username: user.username,
+          accessLevel: validUsers
+            .find(validUser => validUser.id === user.id)?.accessLevel || 0,
+          isAdmin: user.isAdmin
+        });
+      }
+    });
+    return returnUsers;
+  }
+
+  async patchAllUsers(workspaceId: number, users: UserInListDto[]): Promise<boolean> {
+    this.logger.log('Patch users access rights');
+    const updatePromises = users
+      .map(user => this.workspaceUserRepository
+        .update({ workspaceId: workspaceId, userId: user.id }, { accessLevel: user.accessLevel })
+      );
+    await Promise.all(updatePromises);
+    return true;
+  }
+
   async canAccessWorkSpace(userId: number, workspaceId: number): Promise<boolean> {
     const wsUser = await this.workspaceUserRepository.findOne({
       where: { userId: userId, workspaceId: workspaceId }
@@ -43,8 +86,7 @@ export class UsersService {
     const user = await this.usersRepository.findOne({
       where: { id: userId, isAdmin: true }
     });
-    if (user) return true;
-    return false;
+    return !!user;
   }
 
   async findUserWorkspaceIds(userId: number): Promise<number[]> {

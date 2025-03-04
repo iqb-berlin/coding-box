@@ -92,13 +92,6 @@ export class TestGroupsComponent implements OnInit {
       });
   }
 
-  createCodingTestGroups():void {
-    this.isLoading = true;
-    const selectedTestGroups = this.tableSelectionCheckboxes.selected;
-    this.backendService.createCodingTestGroups(selectedTestGroups).subscribe(() => {
-    });
-  }
-
   masterToggle(): void {
     this.isAllSelected() || !this.dataSource ?
       this.tableSelectionCheckboxes.clear() :

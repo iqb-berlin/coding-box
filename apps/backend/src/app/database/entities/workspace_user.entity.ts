@@ -1,4 +1,4 @@
-import { Entity, PrimaryColumn } from 'typeorm';
+import { Column, Entity, PrimaryColumn } from 'typeorm';
 
 @Entity()
 class WorkspaceUser {
@@ -11,6 +11,11 @@ class WorkspaceUser {
     name: 'user_id'
   })
     userId!: number;
+
+  @Column({
+    name: 'access_level'
+  })
+    accessLevel!: number;
 }
 
 export default WorkspaceUser;

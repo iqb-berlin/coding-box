@@ -1,19 +1,24 @@
 <div class="page-body">
   <div class="admin-background">
-    <nav mat-tab-nav-bar class="navigation"
-      [tabPanel]="tabPanel">
+    @if(accessLevel === 1) {
+      <coding-box-coding-jobs></coding-box-coding-jobs>
+    } @else if (accessLevel === 2){
+      <coding-box-coding-management-manual></coding-box-coding-management-manual>
+    } @else if (accessLevel > 2){
+      <nav mat-tab-nav-bar class="navigation" [tabPanel]="tabPanel">
       @for (link of navLinks; track link) {
         <a mat-tab-link
-          [routerLink]="link"
-          routerLinkActive="active-link"
-          #rla="routerLinkActive"
-          [active]="rla.isActive">
+           [routerLink]="link"
+           routerLinkActive="active-link"
+           #rla="routerLinkActive"
+           [active]="rla.isActive">
           {{'ws-admin.' + link | translate}}
         </a>
       }
     </nav>
-    <mat-tab-nav-panel #tabPanel>
-      <router-outlet></router-outlet>
-    </mat-tab-nav-panel>
+      <mat-tab-nav-panel #tabPanel>
+        <router-outlet></router-outlet>
+      </mat-tab-nav-panel>
+    }
   </div>
 </div>

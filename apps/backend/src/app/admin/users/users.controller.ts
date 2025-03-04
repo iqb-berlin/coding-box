@@ -9,12 +9,32 @@ import { UsersService } from '../../database/services/users.service';
 import { UserFullDto } from '../../../../../../api-dto/user/user-full-dto';
 import { CreateUserDto } from '../../../../../../api-dto/user/create-user-dto';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
+import { WorkspaceUserInListDto } from '../../../../../../api-dto/user/workspace-user-in-list-dto';
+import { UserInListDto } from '../../../../../../api-dto/user/user-in-list-dto';
 
 @Controller('admin/users')
 export class UsersController {
   constructor(
     private usersService: UsersService
   ) {}
+
+  @Get('access/:workspaceId')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOkResponse({ description: 'Users with access level.' })
+  @ApiTags('users access')
+  async findAll(@Param('workspaceId') workspaceId:number): Promise<WorkspaceUserInListDto[] | UserFullDto[]> {
+    return this.usersService.findAllUsers(workspaceId);
+  }
+
+  @Patch('access/:workspaceId')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOkResponse({ description: 'Group admin users retrieved successfully.' })
+  @ApiTags('users access')
+  async patchAll(@Param('workspaceId') workspaceId:number, @Body() users: UserInListDto[]): Promise<boolean> {
+    return this.usersService.patchAllUsers(workspaceId, users);
+  }
 
   @Get('full')
   @UseGuards(JwtAuthGuard)
