@@ -18,11 +18,4 @@ export class CodingManagementManualComponent {
     private backendService: BackendService
   ) {
   }
-
-  manualCode():void {
-  }
-
-  includeExternalCoding():void {
-
-  }
 }
