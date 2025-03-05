@@ -97,7 +97,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
   private subscribeRouter(): void {
     this.routerSubscription = this.route.params
-      .subscribe(async params => {
+      ?.subscribe(async params => {
         this.resetSnackBars();
         this.resetUnitData();
         try {
