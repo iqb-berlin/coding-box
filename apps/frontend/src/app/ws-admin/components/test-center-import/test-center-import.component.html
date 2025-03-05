@@ -50,7 +50,7 @@
   } @else {
     @if (workspaces){
   <div class="fx-row-space-between-start loginInfo">
-    <h3>Angemeldet in {{this.testCenterInstance[0]?.label || this.loginForm.get('testCenterIndividual')?.value }}</h3>
+    <h3>Angemeldet in {{this.testCenterInstance[0].label || this.loginForm.get('testCenterIndividual')?.value }}</h3>
     <button  mat-button color="primary" (click)="this.logout()">Abmelden</button>
   </div>
     <form class="fx-column-start-stretch"
