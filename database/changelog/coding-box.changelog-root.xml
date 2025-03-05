@@ -8,4 +8,6 @@
   <include file="coding-box.changelog-0.1.0.sql"/>
   <include file="coding-box.changelog-0.2.0.sql"/>
   <include file="coding-box.changelog-0.3.0.sql"/>
+  <include file="coding-box.changelog-0.3.1.sql"/>
+
 </databaseChangeLog>
