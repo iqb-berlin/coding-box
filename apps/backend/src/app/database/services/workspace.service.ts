@@ -305,10 +305,7 @@ export class WorkspaceService {
     const filePromises: Array<Promise<unknown>> = [];
 
     if (file.mimetype === 'text/xml') {
-      const xmlDocument = cheerio.load(file.buffer.toString(), {
-        xmlMode: true,
-        recognizeSelfClosing: true
-      });
+      const xmlDocument = cheerio.load(file.buffer.toString(), { xml: true });
 
       const rootTagName = xmlDocument.root().children().first().prop('tagName');
 
