@@ -43,7 +43,7 @@ export class WsAccessRightsComponent {
   save(): void {
     this.changed = false;
     this.backendService.saveUsers(this.appService.selectedWorkspaceId, this.workspaceUsers.getChecks())
-      .subscribe(res => {
+      .subscribe(() => {
       });
   }
 
