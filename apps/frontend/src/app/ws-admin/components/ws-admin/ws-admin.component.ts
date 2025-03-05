@@ -4,10 +4,8 @@ import {
 } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatTabLink, MatTabNav, MatTabNavPanel } from '@angular/material/tabs';
-import { MatIcon } from '@angular/material/icon';
 import { AppService } from '../../../services/app.service';
 import { CodingJobsComponent } from '../../../coding/coding-jobs/coding-jobs.component';
-import { CodingManagementComponent } from '../../../coding/coding-managment/coding-management.component';
 import { BackendService } from '../../../services/backend.service';
 import {
   CodingManagementManualComponent
@@ -18,7 +16,15 @@ import {
   templateUrl: './ws-admin.component.html',
   styleUrls: ['./ws-admin.component.scss'],
   standalone: true,
-  imports: [MatTabNav, MatTabLink, RouterLinkActive, RouterLink, MatTabNavPanel, RouterOutlet, TranslateModule, CodingJobsComponent, CodingManagementComponent, MatIcon, CodingManagementManualComponent]
+  imports: [MatTabNav,
+    MatTabLink,
+    RouterLinkActive,
+    RouterLink,
+    MatTabNavPanel,
+    RouterOutlet,
+    TranslateModule,
+    CodingJobsComponent,
+    CodingManagementManualComponent]
 })
 export class WsAdminComponent implements OnInit {
   navLinks: string[] = ['select-unit-play', 'test-files', 'test-groups', 'coding', 'settings'];
