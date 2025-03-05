@@ -6,6 +6,22 @@
   "cli": {
     "packageManager": "npm"
   },
+
+  "implicitDependencies": {
+    "package.json": {
+      "dependencies": "*",
+      "devDependencies": "*"
+    },
+    ".eslintrc.json": "*"
+  },
+  "tasksRunnerOptions": {
+    "default": {
+      "runner": "nx/tasks-runners/default",
+      "options": {
+        "cacheableOperations": ["build", "lint", "test", "e2e", "compodoc"]
+      }
+    }
+  },
   "generators": {
     "@nx/angular:application": {
       "style": "scss",
