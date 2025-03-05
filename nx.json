@@ -1,4 +1,5 @@
 {
+  "npmScope": "coding-box",
   "affected": {
     "defaultBase": "main"
   },
@@ -27,6 +28,7 @@
       "dependsOn": [
         "^build"
       ],
+      "cache": true,
       "inputs": [
         "production",
         "^production"
