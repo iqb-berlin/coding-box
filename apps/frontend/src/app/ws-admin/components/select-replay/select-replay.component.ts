@@ -24,13 +24,12 @@ export type UnitIds = {
 };
 
 @Component({
-  selector: 'coding-box-select-replay',
-  templateUrl: './select-replay.component.html',
-  styleUrls: ['./select-replay.component.scss'],
-  standalone: true,
-  imports: [MatLabel, MatAnchor, TranslateModule, MatIcon, MatSelect, MatOption, MatButton,
-    MatFormField, MatRadioButton, MatRadioGroup, ReactiveFormsModule, ReplayComponent,
-    MatProgressBar, MatProgressSpinner, FormsModule]
+    selector: 'coding-box-select-replay',
+    templateUrl: './select-replay.component.html',
+    styleUrls: ['./select-replay.component.scss'],
+    imports: [MatLabel, MatAnchor, TranslateModule, MatIcon, MatSelect, MatOption, MatButton,
+        MatFormField, MatRadioButton, MatRadioGroup, ReactiveFormsModule, ReplayComponent,
+        MatProgressBar, MatProgressSpinner, FormsModule]
 })
 export class SelectReplayComponent implements OnInit {
   constructor(public appService:AppService,

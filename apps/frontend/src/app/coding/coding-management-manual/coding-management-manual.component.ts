@@ -7,11 +7,10 @@ import { BackendService } from '../../services/backend.service';
 import { CodingJobsComponent } from '../coding-jobs/coding-jobs.component';
 
 @Component({
-  selector: 'coding-box-coding-management-manual',
-  templateUrl: './coding-management-manual.component.html',
-  styleUrls: ['./coding-management-manual.component.scss'],
-  standalone: true,
-  imports: [TranslateModule, CoderListComponent, MatAnchor, MatIcon, CodingJobsComponent]
+    selector: 'coding-box-coding-management-manual',
+    templateUrl: './coding-management-manual.component.html',
+    styleUrls: ['./coding-management-manual.component.scss'],
+    imports: [TranslateModule, CoderListComponent, MatAnchor, MatIcon, CodingJobsComponent]
 })
 export class CodingManagementManualComponent {
   constructor(

@@ -4,11 +4,10 @@ import { MatAnchor } from '@angular/material/button';
 import { RouterLink } from '@angular/router';
 
 @Component({
-  selector: 'coding-box-coding-management',
-  templateUrl: './coding-management.component.html',
-  styleUrls: ['./coding-management.component.scss'],
-  standalone: true,
-  imports: [TranslateModule, MatAnchor, RouterLink]
+    selector: 'coding-box-coding-management',
+    templateUrl: './coding-management.component.html',
+    styleUrls: ['./coding-management.component.scss'],
+    imports: [TranslateModule, MatAnchor, RouterLink]
 })
 export class CodingManagementComponent {
 

@@ -40,12 +40,11 @@ type WorkspaceData = {
 };
 
 @Component({
-  selector: 'coding-box-workspaces',
-  templateUrl: './workspaces.component.html',
-  styleUrls: ['./workspaces.component.scss'],
-  standalone: true,
-  // eslint-disable-next-line max-len
-  imports: [WorkspacesMenuComponent, NgIf, SearchFilterComponent, MatTable, MatSort, MatColumnDef, MatHeaderCellDef, MatHeaderCell, MatCheckbox, MatCellDef, MatCell, MatSortHeader, MatHeaderRowDef, MatHeaderRow, MatRowDef, MatRow, MatButton, MatTooltip, WrappedIconComponent, NgFor, FormsModule, TranslateModule, IsSelectedPipe, IsAllSelectedPipe, HasSelectionValuePipe, IsSelectedIdPipe, WorkspacesSelectionComponent]
+    selector: 'coding-box-workspaces',
+    templateUrl: './workspaces.component.html',
+    styleUrls: ['./workspaces.component.scss'],
+    // eslint-disable-next-line max-len
+    imports: [WorkspacesMenuComponent, NgIf, SearchFilterComponent, MatTable, MatSort, MatColumnDef, MatHeaderCellDef, MatHeaderCell, MatCheckbox, MatCellDef, MatCell, MatSortHeader, MatHeaderRowDef, MatHeaderRow, MatRowDef, MatRow, MatButton, MatTooltip, WrappedIconComponent, NgFor, FormsModule, TranslateModule, IsSelectedPipe, IsAllSelectedPipe, HasSelectionValuePipe, IsSelectedIdPipe, WorkspacesSelectionComponent]
 })
 export class WorkspacesComponent {
   tableSelectionCheckboxes = new SelectionModel<WorkspaceInListDto>(true, []);

@@ -35,12 +35,11 @@ import { WrappedIconComponent } from '../../../shared/wrapped-icon/wrapped-icon.
 import { FilesInListDto } from '../../../../../../../api-dto/files/files-in-list.dto';
 
 @Component({
-  selector: 'coding-box-test-files',
-  templateUrl: './test-files.component.html',
-  styleUrls: ['./test-files.component.scss'],
-  standalone: true,
-  // eslint-disable-next-line max-len
-  imports: [MatAnchor, RouterLink, TranslateModule, MatIcon, TestCenterImportComponent, MatProgressSpinner, MatTable, MatColumnDef, MatHeaderCellDef, MatCellDef, MatHeaderRowDef, MatRowDef, MatHeaderCell, MatCell, MatSort, MatHeaderRow, MatRow, HasSelectionValuePipe, IsAllSelectedPipe, IsSelectedPipe, MatCheckbox, SearchFilterComponent, MatSortHeader, DatePipe, FileSizePipe, MatButton, WrappedIconComponent, MatTooltip, JsonPipe]
+    selector: 'coding-box-test-files',
+    templateUrl: './test-files.component.html',
+    styleUrls: ['./test-files.component.scss'],
+    // eslint-disable-next-line max-len
+    imports: [MatAnchor, RouterLink, TranslateModule, MatIcon, TestCenterImportComponent, MatProgressSpinner, MatTable, MatColumnDef, MatHeaderCellDef, MatCellDef, MatHeaderRowDef, MatRowDef, MatHeaderCell, MatCell, MatSort, MatHeaderRow, MatRow, HasSelectionValuePipe, IsAllSelectedPipe, IsSelectedPipe, MatCheckbox, SearchFilterComponent, MatSortHeader, DatePipe, FileSizePipe, MatButton, WrappedIconComponent, MatTooltip, JsonPipe]
 })
 export class TestFilesComponent implements OnInit {
   constructor(public appService: AppService,

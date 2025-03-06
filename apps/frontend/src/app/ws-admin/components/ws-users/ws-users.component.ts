@@ -49,12 +49,11 @@ import {
 } from '../../../sys-admin/components/workspace-access-rights-dialog/workspace-access-rights-dialog.component';
 
 @Component({
-  selector: 'coding-box-ws-users',
-  templateUrl: './ws-users.component.html',
-  styleUrls: ['./ws-users.component.scss'],
-  standalone: true,
-  // eslint-disable-next-line max-len
-  imports: [MatTable, MatSort, MatColumnDef, MatHeaderCellDef, MatHeaderCell, MatCheckbox, MatCellDef, MatCell, MatSortHeader, MatHeaderRowDef, MatHeaderRow, MatRowDef, MatRow, MatButton, MatTooltip, WrappedIconComponent, FormsModule, TranslateModule, UsersMenuComponent, HasSelectionValuePipe, IsSelectedPipe, IsAllSelectedPipe, SearchFilterComponent, JsonPipe, WorkspacesComponent, IsSelectedIdPipe, WorkspacesSelectionComponent]
+    selector: 'coding-box-ws-users',
+    templateUrl: './ws-users.component.html',
+    styleUrls: ['./ws-users.component.scss'],
+    // eslint-disable-next-line max-len
+    imports: [MatTable, MatSort, MatColumnDef, MatHeaderCellDef, MatHeaderCell, MatCheckbox, MatCellDef, MatCell, MatSortHeader, MatHeaderRowDef, MatHeaderRow, MatRowDef, MatRow, MatButton, MatTooltip, WrappedIconComponent, FormsModule, TranslateModule, UsersMenuComponent, HasSelectionValuePipe, IsSelectedPipe, IsAllSelectedPipe, SearchFilterComponent, JsonPipe, WorkspacesComponent, IsSelectedIdPipe, WorkspacesSelectionComponent]
 })
 export class WsUsersComponent implements OnInit {
   selectedUsers : number[] = [];

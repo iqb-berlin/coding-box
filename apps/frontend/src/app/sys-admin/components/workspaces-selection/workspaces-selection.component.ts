@@ -32,12 +32,11 @@ import { BackendService } from '../../../services/backend.service';
 import { WrappedIconComponent } from '../../../shared/wrapped-icon/wrapped-icon.component';
 
 @Component({
-  selector: 'coding-box-workspaces-selection',
-  templateUrl: './workspaces-selection.component.html',
-  styleUrls: ['./workspaces-selection.component.scss'],
-  standalone: true,
-  // eslint-disable-next-line max-len
-  imports: [NgIf, SearchFilterComponent, MatTable, MatSort, MatColumnDef, MatHeaderCellDef, MatHeaderCell, MatCheckbox, MatCellDef, MatCell, MatSortHeader, MatHeaderRowDef, MatHeaderRow, MatRowDef, MatRow, MatButton, MatTooltip, WrappedIconComponent, NgFor, FormsModule, TranslateModule, IsSelectedPipe, IsAllSelectedPipe, HasSelectionValuePipe, IsSelectedIdPipe, JsonPipe]
+    selector: 'coding-box-workspaces-selection',
+    templateUrl: './workspaces-selection.component.html',
+    styleUrls: ['./workspaces-selection.component.scss'],
+    // eslint-disable-next-line max-len
+    imports: [NgIf, SearchFilterComponent, MatTable, MatSort, MatColumnDef, MatHeaderCellDef, MatHeaderCell, MatCheckbox, MatCellDef, MatCell, MatSortHeader, MatHeaderRowDef, MatHeaderRow, MatRowDef, MatRow, MatButton, MatTooltip, WrappedIconComponent, NgFor, FormsModule, TranslateModule, IsSelectedPipe, IsAllSelectedPipe, HasSelectionValuePipe, IsSelectedIdPipe, JsonPipe]
 })
 export class WorkspacesSelectionComponent implements OnInit {
   objectsDatasource = new MatTableDataSource<WorkspaceInListDto>();
