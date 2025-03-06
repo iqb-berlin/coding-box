@@ -1,4 +1,4 @@
-import { APP_INITIALIZER, Component, OnInit } from '@angular/core';
+import { Component, OnInit, inject, provideAppInitializer } from '@angular/core';
 import { RouterLink, RouterOutlet } from '@angular/router';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
@@ -22,12 +22,10 @@ import { UserMenuComponent } from './sys-admin/components/user-menu/user-menu.co
     templateUrl: './app.component.html',
     styleUrl: './app.component.scss',
     providers: [AuthService,
-        {
-            provide: APP_INITIALIZER,
-            useFactory: initializer,
-            multi: true,
-            deps: [KeycloakService]
-        }
+        provideAppInitializer(() => {
+        const initializerFn = (initializer)(inject(KeycloakService));
+        return initializerFn();
+      })
     ]
 })
 export class AppComponent implements OnInit {

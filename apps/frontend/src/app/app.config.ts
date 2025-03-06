@@ -1,4 +1,4 @@
-import { APP_INITIALIZER, ApplicationConfig, importProvidersFrom } from '@angular/core';
+import { ApplicationConfig, importProvidersFrom, inject, provideAppInitializer } from '@angular/core';
 import { provideRouter } from '@angular/router';
 import { TranslateLoader, TranslateModule } from '@ngx-translate/core';
 import { HTTP_INTERCEPTORS, HttpClient, provideHttpClient } from '@angular/common/http';
@@ -41,10 +41,8 @@ export const appConfig: ApplicationConfig = {
     provide: LocationStrategy,
     useClass: HashLocationStrategy
   },
-  {
-    provide: APP_INITIALIZER,
-    useFactory: initializer,
-    multi: true,
-    deps: [KeycloakService]
-  }, provideStore()]
+  provideAppInitializer(() => {
+        const initializerFn = (initializer)(inject(KeycloakService));
+        return initializerFn();
+      }), provideStore()]
 };
