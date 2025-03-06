@@ -9,13 +9,12 @@ import { WrappedIconComponent } from '../../../shared/wrapped-icon/wrapped-icon.
 import { AuthService } from '../../../auth/service/auth.service';
 
 @Component({
-  selector: 'coding-book-user-workspaces',
-  templateUrl: './user-workspaces.component.html',
-  styleUrls: ['./user-workspaces.component.scss'],
-  providers: [KeycloakService],
-  standalone: true,
-  // eslint-disable-next-line max-len
-  imports: [MatAnchor, RouterLink, MatTooltip, WrappedIconComponent, TranslateModule, MatButton]
+    selector: 'coding-book-user-workspaces',
+    templateUrl: './user-workspaces.component.html',
+    styleUrls: ['./user-workspaces.component.scss'],
+    providers: [KeycloakService],
+    // eslint-disable-next-line max-len
+    imports: [MatAnchor, RouterLink, MatTooltip, WrappedIconComponent, TranslateModule, MatButton]
 })
 
 export class UserWorkspacesComponent {

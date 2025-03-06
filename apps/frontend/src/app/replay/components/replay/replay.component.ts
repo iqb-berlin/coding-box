@@ -37,12 +37,11 @@ interface ErrorMessages {
 }
 
 @Component({
-  selector: 'coding-box-replay',
-  standalone: true,
-  // eslint-disable-next-line max-len
-  imports: [MatFormFieldModule, MatInputModule, MatButtonModule, ReactiveFormsModule, NgIf, TranslateModule, UnitPlayerComponent, SpinnerComponent],
-  templateUrl: './replay.component.html',
-  styleUrl: './replay.component.scss'
+    selector: 'coding-box-replay',
+    // eslint-disable-next-line max-len
+    imports: [MatFormFieldModule, MatInputModule, MatButtonModule, ReactiveFormsModule, NgIf, TranslateModule, UnitPlayerComponent, SpinnerComponent],
+    templateUrl: './replay.component.html',
+    styleUrl: './replay.component.scss'
 })
 export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   player: string = '';

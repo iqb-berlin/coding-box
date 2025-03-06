@@ -16,20 +16,19 @@ import { WrappedIconComponent } from './shared/wrapped-icon/wrapped-icon.compone
 import { UserMenuComponent } from './sys-admin/components/user-menu/user-menu.component';
 
 @Component({
-  selector: 'app-root',
-  standalone: true,
-  // eslint-disable-next-line max-len
-  imports: [RouterOutlet, MatSlideToggleModule, MatProgressSpinner, RouterLink, TranslateModule, MatTooltip, MatButton, UserMenuComponent, WrappedIconComponent],
-  templateUrl: './app.component.html',
-  styleUrl: './app.component.scss',
-  providers: [AuthService,
-    {
-      provide: APP_INITIALIZER,
-      useFactory: initializer,
-      multi: true,
-      deps: [KeycloakService]
-    }
-  ]
+    selector: 'app-root',
+    // eslint-disable-next-line max-len
+    imports: [RouterOutlet, MatSlideToggleModule, MatProgressSpinner, RouterLink, TranslateModule, MatTooltip, MatButton, UserMenuComponent, WrappedIconComponent],
+    templateUrl: './app.component.html',
+    styleUrl: './app.component.scss',
+    providers: [AuthService,
+        {
+            provide: APP_INITIALIZER,
+            useFactory: initializer,
+            multi: true,
+            deps: [KeycloakService]
+        }
+    ]
 })
 export class AppComponent implements OnInit {
   title = 'Kodierbox';

@@ -14,12 +14,11 @@ import { BackendService } from '../../services/backend.service';
 import { WorkspaceFullDto } from '../../../../../../api-dto/workspaces/workspace-full-dto';
 
 @Component({
-  selector: 'coding-box-home',
-  standalone: true,
-  // eslint-disable-next-line max-len
-  imports: [MatFormFieldModule, MatInputModule, MatButtonModule, ReactiveFormsModule, NgIf, TranslateModule, UnitPlayerComponent, AppInfoComponent, UserWorkspacesAreaComponent, JsonPipe],
-  templateUrl: './home.component.html',
-  styleUrl: './home.component.scss'
+    selector: 'coding-box-home',
+    // eslint-disable-next-line max-len
+    imports: [MatFormFieldModule, MatInputModule, MatButtonModule, ReactiveFormsModule, NgIf, TranslateModule, UnitPlayerComponent, AppInfoComponent, UserWorkspacesAreaComponent, JsonPipe],
+    templateUrl: './home.component.html',
+    styleUrl: './home.component.scss'
 })
 export class HomeComponent {
   constructor(

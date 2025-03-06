@@ -20,12 +20,11 @@ type Data = {
   isAdmin: boolean;
 };
 @Component({
-  selector: 'coding-box-edit-user',
-  templateUrl: './edit-user.component.html',
-  styleUrls: ['./edit-user.component.scss'],
-  standalone: true,
-  // eslint-disable-next-line max-len
-  imports: [MatDialogTitle, MatDialogContent, FormsModule, ReactiveFormsModule, MatFormField, MatInput, MatIcon, MatLabel, MatCheckbox, MatDialogActions, MatButton, MatDialogClose, TranslateModule, JsonPipe]
+    selector: 'coding-box-edit-user',
+    templateUrl: './edit-user.component.html',
+    styleUrls: ['./edit-user.component.scss'],
+    // eslint-disable-next-line max-len
+    imports: [MatDialogTitle, MatDialogContent, FormsModule, ReactiveFormsModule, MatFormField, MatInput, MatIcon, MatLabel, MatCheckbox, MatDialogActions, MatButton, MatDialogClose, TranslateModule, JsonPipe]
 })
 
 export class EditUserComponent {

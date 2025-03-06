@@ -14,12 +14,11 @@ import { BackendService } from '../../../services/backend.service';
 import { WorkspaceInListDto } from '../../../../../../../api-dto/workspaces/workspace-in-list-dto';
 
 @Component({
-  selector: 'coding-box-workspace-access-rights-dialog',
-  templateUrl: './workspace-access-rights-dialog.component.html',
-  styleUrls: ['./workspace-access-rights-dialog.component.scss'],
-  standalone: true,
-  // eslint-disable-next-line max-len
-  imports: [MatDialogContent, MatIcon, MatDialogActions, MatButton, MatDialogClose, TranslateModule, WorkspacesSelectionComponent, JsonPipe]
+    selector: 'coding-box-workspace-access-rights-dialog',
+    templateUrl: './workspace-access-rights-dialog.component.html',
+    styleUrls: ['./workspace-access-rights-dialog.component.scss'],
+    // eslint-disable-next-line max-len
+    imports: [MatDialogContent, MatIcon, MatDialogActions, MatButton, MatDialogClose, TranslateModule, WorkspacesSelectionComponent, JsonPipe]
 })
 
 export class WorkspaceAccessRightsDialogComponent {
