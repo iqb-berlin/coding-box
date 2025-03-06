@@ -1,8 +1,5 @@
 {
   "npmScope": "coding-box",
-  "affected": {
-    "defaultBase": "main"
-  },
   "cli": {
     "packageManager": "npm"
   },
@@ -17,7 +14,13 @@
     "default": {
       "runner": "nx/tasks-runners/default",
       "options": {
-        "cacheableOperations": ["build", "lint", "test", "e2e", "compodoc"]
+        "cacheableOperations": [
+          "build",
+          "lint",
+          "test",
+          "e2e",
+          "compodoc"
+        ]
       }
     }
   },
@@ -40,14 +43,25 @@
   "$schema": "./node_modules/nx/schemas/nx-schema.json",
   "targetDefaults": {
     "build": {
-      "dependsOn": ["^build"],
+      "dependsOn": [
+        "^build"
+      ],
       "cache": true,
-      "inputs": ["production", "^production"]
+      "inputs": [
+        "production",
+        "^production"
+      ]
     }
   },
   "namedInputs": {
-    "default": ["{projectRoot}/**/*", "sharedGlobals"],
+    "default": [
+      "{projectRoot}/**/*",
+      "sharedGlobals"
+    ],
     "sharedGlobals": [],
-    "production": ["default"]
-  }
+    "production": [
+      "default"
+    ]
+  },
+  "defaultBase": "main"
 }
