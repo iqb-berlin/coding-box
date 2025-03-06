@@ -38,12 +38,11 @@ import { WrappedIconComponent } from '../../../shared/wrapped-icon/wrapped-icon.
 import { SearchFilterComponent } from '../../../shared/search-filter/search-filter.component';
 
 @Component({
-  selector: 'coding-box-users',
-  templateUrl: './users.component.html',
-  styleUrls: ['./users.component.scss'],
-  standalone: true,
-  // eslint-disable-next-line max-len
-  imports: [MatTable, MatSort, MatColumnDef, MatHeaderCellDef, MatHeaderCell, MatCheckbox, MatCellDef, MatCell, MatSortHeader, MatHeaderRowDef, MatHeaderRow, MatRowDef, MatRow, MatButton, MatTooltip, WrappedIconComponent, FormsModule, TranslateModule, UsersMenuComponent, HasSelectionValuePipe, IsSelectedPipe, IsAllSelectedPipe, SearchFilterComponent, JsonPipe, WorkspacesComponent, IsSelectedIdPipe, WorkspacesSelectionComponent, UsersSelectionComponent]
+    selector: 'coding-box-users',
+    templateUrl: './users.component.html',
+    styleUrls: ['./users.component.scss'],
+    // eslint-disable-next-line max-len
+    imports: [MatTable, MatSort, MatColumnDef, MatHeaderCellDef, MatHeaderCell, MatCheckbox, MatCellDef, MatCell, MatSortHeader, MatHeaderRowDef, MatHeaderRow, MatRowDef, MatRow, MatButton, MatTooltip, WrappedIconComponent, FormsModule, TranslateModule, UsersMenuComponent, HasSelectionValuePipe, IsSelectedPipe, IsAllSelectedPipe, SearchFilterComponent, JsonPipe, WorkspacesComponent, IsSelectedIdPipe, WorkspacesSelectionComponent, UsersSelectionComponent]
 })
 export class UsersComponent implements OnInit {
   selectedUsers : number[] = [];

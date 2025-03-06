@@ -9,12 +9,11 @@ import { UserWorkspacesComponent } from '../user-workspaces/user-workspaces.comp
 import { UserMenuComponent } from '../../../sys-admin/components/user-menu/user-menu.component';
 
 @Component({
-  selector: 'coding-box-user-workspaces-area',
-  templateUrl: './user-workspaces-area.component.html',
-  styleUrls: ['./user-workspaces-area.component.scss'],
-  standalone: true,
-  // eslint-disable-next-line max-len
-  imports: [MatButton, RouterLink, MatTooltip, WrappedIconComponent, TranslateModule, WrappedIconComponent, UserMenuComponent, UserWorkspacesComponent]
+    selector: 'coding-box-user-workspaces-area',
+    templateUrl: './user-workspaces-area.component.html',
+    styleUrls: ['./user-workspaces-area.component.scss'],
+    // eslint-disable-next-line max-len
+    imports: [MatButton, RouterLink, MatTooltip, WrappedIconComponent, TranslateModule, WrappedIconComponent, UserMenuComponent, UserWorkspacesComponent]
 })
 export class UserWorkspacesAreaComponent {
   @Input() warning!: string;

@@ -1,7 +1,9 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
 import { ActivatedRoute } from '@angular/router';
+import { provideHttpClient } from '@angular/common/http';
 import { CodingManagementManualComponent } from './coding-management-manual.component';
+import { environment } from '../../../environments/environment';
 
 describe('CodingManagementManualComponent', () => {
   let component: CodingManagementManualComponent;
@@ -17,7 +19,10 @@ describe('CodingManagementManualComponent', () => {
         {
           provide: ActivatedRoute,
           useValue: fakeActivatedRoute
-        }],
+        }, {
+          provide: 'SERVER_URL',
+          useValue: environment.backendUrl
+        }, provideHttpClient()],
       imports: [
         TranslateModule.forRoot()
       ]

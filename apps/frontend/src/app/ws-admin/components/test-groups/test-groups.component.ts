@@ -36,12 +36,11 @@ import { FileSizePipe } from '../../../shared/pipes/filesize.pipe';
 import { TestGroupsInListDto } from '../../../../../../../api-dto/test-groups/testgroups-in-list.dto';
 
 @Component({
-  selector: 'coding-box-test-groups',
-  templateUrl: './test-groups.component.html',
-  styleUrls: ['./test-groups.component.scss'],
-  standalone: true,
-  // eslint-disable-next-line max-len
-  imports: [MatTable, MatSort, MatColumnDef, MatHeaderCellDef, MatHeaderCell, MatCheckbox, MatCellDef, MatCell, MatSortHeader, MatHeaderRowDef, MatHeaderRow, MatRowDef, MatRow, MatButton, MatTooltip, WrappedIconComponent, FormsModule, TranslateModule, SearchFilterComponent, JsonPipe, HasSelectionValuePipe, IsAllSelectedPipe, IsSelectedPipe, MatProgressSpinner, DatePipe, FileSizePipe, MatAnchor, MatIcon]
+    selector: 'coding-box-test-groups',
+    templateUrl: './test-groups.component.html',
+    styleUrls: ['./test-groups.component.scss'],
+    // eslint-disable-next-line max-len
+    imports: [MatTable, MatSort, MatColumnDef, MatHeaderCellDef, MatHeaderCell, MatCheckbox, MatCellDef, MatCell, MatSortHeader, MatHeaderRowDef, MatHeaderRow, MatRowDef, MatRow, MatButton, MatTooltip, WrappedIconComponent, FormsModule, TranslateModule, SearchFilterComponent, JsonPipe, HasSelectionValuePipe, IsAllSelectedPipe, IsSelectedPipe, MatProgressSpinner, DatePipe, FileSizePipe, MatAnchor, MatIcon]
 })
 export class TestGroupsComponent implements OnInit {
   displayedColumns = ['selectCheckbox', 'test_group', 'created_at'];

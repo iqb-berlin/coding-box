@@ -1,9 +1,9 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { HttpClientModule } from '@angular/common/http';
 import { ActivatedRoute } from '@angular/router';
+import { TranslateModule } from '@ngx-translate/core';
 import { ReplayComponent } from './replay.component';
 import { environment } from '../../../../environments/environment';
-import { TranslateModule } from '@ngx-translate/core';
 
 describe('ReplayComponent', () => {
   let component: ReplayComponent;
@@ -22,7 +22,7 @@ describe('ReplayComponent', () => {
         provide: 'SERVER_URL',
         useValue: environment.backendUrl
       }],
-      imports: [ReplayComponent, HttpClientModule,TranslateModule.forRoot()]
+      imports: [ReplayComponent, HttpClientModule, TranslateModule.forRoot()]
     })
       .compileComponents();
 

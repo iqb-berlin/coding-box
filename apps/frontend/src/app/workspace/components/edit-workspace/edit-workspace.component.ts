@@ -20,12 +20,11 @@ type Data = {
 };
 
 @Component({
-  selector: 'coding-box-edit-workspace-group',
-  templateUrl: './edit-workspace.component.html',
-  styleUrls: ['./edit-workspace.component.scss'],
-  standalone: true,
-  // eslint-disable-next-line max-len
-  imports: [MatDialogTitle, MatDialogContent, FormsModule, ReactiveFormsModule, MatFormField, MatInput, MatDialogActions, MatButton, MatDialogClose, TranslateModule]
+    selector: 'coding-box-edit-workspace-group',
+    templateUrl: './edit-workspace.component.html',
+    styleUrls: ['./edit-workspace.component.scss'],
+    // eslint-disable-next-line max-len
+    imports: [MatDialogTitle, MatDialogContent, FormsModule, ReactiveFormsModule, MatFormField, MatInput, MatDialogActions, MatButton, MatDialogClose, TranslateModule]
 })
 export class EditWorkspaceComponent {
   editWorkspaceForm: UntypedFormGroup;

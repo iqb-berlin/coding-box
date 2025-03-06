@@ -5,11 +5,10 @@ import { RouterLink } from '@angular/router';
 import { MatAnchor } from '@angular/material/button';
 
 @Component({
-  selector: 'coding-box-app-info',
-  templateUrl: './app-info.component.html',
-  styleUrls: ['./app-info.component.scss'],
-  standalone: true,
-  imports: [MatAnchor, RouterLink, TranslateModule]
+    selector: 'coding-box-app-info',
+    templateUrl: './app-info.component.html',
+    styleUrls: ['./app-info.component.scss'],
+    imports: [MatAnchor, RouterLink, TranslateModule]
 })
 export class AppInfoComponent {
   @Input() appTitle!: string;

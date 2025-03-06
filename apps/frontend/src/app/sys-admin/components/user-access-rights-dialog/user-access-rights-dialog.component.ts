@@ -15,12 +15,11 @@ import { BackendService } from '../../../services/backend.service';
 import { UsersSelectionComponent } from '../users-selection/users-selection.component';
 
 @Component({
-  selector: 'coding-box-user-access-rights-dialog',
-  templateUrl: './user-access-rights-dialog.component.html',
-  styleUrls: ['./user-access-rights-dialog.component.scss'],
-  standalone: true,
-  // eslint-disable-next-line max-len
-  imports: [MatDialogContent, MatIcon, MatDialogActions, MatButton, MatDialogClose, TranslateModule, WorkspacesSelectionComponent, JsonPipe, UsersSelectionComponent]
+    selector: 'coding-box-user-access-rights-dialog',
+    templateUrl: './user-access-rights-dialog.component.html',
+    styleUrls: ['./user-access-rights-dialog.component.scss'],
+    // eslint-disable-next-line max-len
+    imports: [MatDialogContent, MatIcon, MatDialogActions, MatButton, MatDialogClose, TranslateModule, WorkspacesSelectionComponent, JsonPipe, UsersSelectionComponent]
 })
 
 export class UserAccessRightsDialogComponent {

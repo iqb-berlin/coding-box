@@ -9,12 +9,11 @@ import { AccountActionComponent } from '../account-action/account-action.compone
 import { AuthService } from '../../../auth/service/auth.service';
 
 @Component({
-  selector: 'coding-box-user-menu',
-  templateUrl: './user-menu.component.html',
-  styleUrls: ['./user-menu.component.scss'],
-  standalone: true,
-  // eslint-disable-next-line max-len
-  imports: [MatButton, MatMenuTrigger, MatTooltip, WrappedIconComponent, MatMenu, TranslateModule, MatIcon, AccountActionComponent]
+    selector: 'coding-box-user-menu',
+    templateUrl: './user-menu.component.html',
+    styleUrls: ['./user-menu.component.scss'],
+    // eslint-disable-next-line max-len
+    imports: [MatButton, MatMenuTrigger, MatTooltip, WrappedIconComponent, MatMenu, TranslateModule, MatIcon, AccountActionComponent]
 })
 export class UserMenuComponent {
   constructor(

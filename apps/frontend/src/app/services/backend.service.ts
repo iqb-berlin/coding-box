@@ -74,7 +74,9 @@ export class BackendService {
 
   saveUsers(workspaceId:number, users:UserWorkspaceAccessDto[]): Observable<UserWorkspaceAccessDto[]> {
     return this.http
-      .patch<UserWorkspaceAccessDto[]>(`${this.serverUrl}admin/users/access/${workspaceId}`, users, { headers: this.authHeader });
+      .patch<UserWorkspaceAccessDto[]>(`${this.serverUrl}admin/users/access/${workspaceId}`,
+      users,
+      { headers: this.authHeader });
   }
 
   getAuthData(id:string): Observable<AuthDataDto> {

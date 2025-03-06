@@ -18,11 +18,10 @@ import {
 import { UserAccessRightsDialogComponent } from '../user-access-rights-dialog/user-access-rights-dialog.component';
 
 @Component({
-  selector: 'coding-box-workspaces-menu',
-  templateUrl: './workspaces-menu.component.html',
-  styleUrls: ['./workspaces-menu.component.scss'],
-  standalone: true,
-  imports: [MatButton, MatTooltip, WrappedIconComponent, TranslateModule, JsonPipe]
+    selector: 'coding-box-workspaces-menu',
+    templateUrl: './workspaces-menu.component.html',
+    styleUrls: ['./workspaces-menu.component.scss'],
+    imports: [MatButton, MatTooltip, WrappedIconComponent, TranslateModule, JsonPipe]
 })
 export class WorkspacesMenuComponent {
   @Input() selectedWorkspaces!: number[];
