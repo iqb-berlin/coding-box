@@ -69,7 +69,7 @@
     "@angular-devkit/build-angular": "18.2.9",
     "@angular-devkit/core": "18.2.9",
     "@angular-devkit/schematics": "18.2.9",
-    "@angular/cli": "~18.1.0",
+    "@angular/cli": "~18.2.0",
     "@angular/compiler-cli": "18.2.9",
     "@golevelup/ts-jest": "^0.5.0",
     "@iqb/eslint-config": "^2.1.1",
