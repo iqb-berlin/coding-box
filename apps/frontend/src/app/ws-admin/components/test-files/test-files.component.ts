@@ -2,8 +2,7 @@ import {
   Component, OnInit, ViewChild
 } from '@angular/core';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { RouterLink } from '@angular/router';
-import { MatAnchor, MatButton } from '@angular/material/button';
+import { MatAnchor } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { MatDialog } from '@angular/material/dialog';
 import { UntypedFormGroup } from '@angular/forms';
@@ -20,8 +19,7 @@ import {
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { MatCheckbox } from '@angular/material/checkbox';
 import { SelectionModel } from '@angular/cdk/collections';
-import { DatePipe, JsonPipe } from '@angular/common';
-import { MatTooltip } from '@angular/material/tooltip';
+import { DatePipe } from '@angular/common';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { TestCenterImportComponent } from '../test-center-import/test-center-import.component';
 import { AppService } from '../../../services/app.service';
@@ -31,16 +29,14 @@ import { IsAllSelectedPipe } from '../../../shared/pipes/isAllSelected.pipe';
 import { IsSelectedPipe } from '../../../shared/pipes/isSelected.pipe';
 import { SearchFilterComponent } from '../../../shared/search-filter/search-filter.component';
 import { FileSizePipe } from '../../../shared/pipes/filesize.pipe';
-import { WrappedIconComponent } from '../../../shared/wrapped-icon/wrapped-icon.component';
 import { FilesInListDto } from '../../../../../../../api-dto/files/files-in-list.dto';
 
 @Component({
   selector: 'coding-box-test-files',
   templateUrl: './test-files.component.html',
   styleUrls: ['./test-files.component.scss'],
-  standalone: true,
   // eslint-disable-next-line max-len
-  imports: [MatAnchor, RouterLink, TranslateModule, MatIcon, TestCenterImportComponent, MatProgressSpinner, MatTable, MatColumnDef, MatHeaderCellDef, MatCellDef, MatHeaderRowDef, MatRowDef, MatHeaderCell, MatCell, MatSort, MatHeaderRow, MatRow, HasSelectionValuePipe, IsAllSelectedPipe, IsSelectedPipe, MatCheckbox, SearchFilterComponent, MatSortHeader, DatePipe, FileSizePipe, MatButton, WrappedIconComponent, MatTooltip, JsonPipe]
+  imports: [MatAnchor, TranslateModule, MatIcon, MatProgressSpinner, MatTable, MatColumnDef, MatHeaderCellDef, MatCellDef, MatHeaderRowDef, MatRowDef, MatHeaderCell, MatCell, MatSort, MatHeaderRow, MatRow, HasSelectionValuePipe, IsAllSelectedPipe, IsSelectedPipe, MatCheckbox, SearchFilterComponent, MatSortHeader, DatePipe, FileSizePipe]
 })
 export class TestFilesComponent implements OnInit {
   constructor(public appService: AppService,

@@ -6,7 +6,6 @@ import { TranslateService, TranslateModule } from '@ngx-translate/core';
 import { MatDialog } from '@angular/material/dialog';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MatButton } from '@angular/material/button';
-import { JsonPipe } from '@angular/common';
 import { EditWorkspaceComponent } from '../../../workspace/components/edit-workspace/edit-workspace.component';
 import { WrappedIconComponent } from '../../../shared/wrapped-icon/wrapped-icon.component';
 import { WorkspaceInListDto } from '../../../../../../../api-dto/workspaces/workspace-in-list-dto';
@@ -21,8 +20,7 @@ import { UserAccessRightsDialogComponent } from '../user-access-rights-dialog/us
   selector: 'coding-box-workspaces-menu',
   templateUrl: './workspaces-menu.component.html',
   styleUrls: ['./workspaces-menu.component.scss'],
-  standalone: true,
-  imports: [MatButton, MatTooltip, WrappedIconComponent, TranslateModule, JsonPipe]
+  imports: [MatButton, MatTooltip, WrappedIconComponent, TranslateModule]
 })
 export class WorkspacesMenuComponent {
   @Input() selectedWorkspaces!: number[];

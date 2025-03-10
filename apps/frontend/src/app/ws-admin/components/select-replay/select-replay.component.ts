@@ -3,14 +3,12 @@ import {
   Component, OnInit, ViewChild
 } from '@angular/core';
 import { TranslateModule } from '@ngx-translate/core';
-import { MatAnchor, MatButton } from '@angular/material/button';
+import { MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { MatFormField, MatOption, MatSelect } from '@angular/material/select';
 import { Router } from '@angular/router';
-import { MatRadioButton, MatRadioGroup } from '@angular/material/radio';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { MatLabel } from '@angular/material/form-field';
-import { MatProgressBar } from '@angular/material/progress-bar';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
@@ -27,10 +25,8 @@ export type UnitIds = {
   selector: 'coding-box-select-replay',
   templateUrl: './select-replay.component.html',
   styleUrls: ['./select-replay.component.scss'],
-  standalone: true,
-  imports: [MatLabel, MatAnchor, TranslateModule, MatIcon, MatSelect, MatOption, MatButton,
-    MatFormField, MatRadioButton, MatRadioGroup, ReactiveFormsModule, ReplayComponent,
-    MatProgressBar, MatProgressSpinner, FormsModule]
+  imports: [MatLabel, TranslateModule, MatIcon, MatSelect, MatOption, MatButton,
+    MatFormField, ReactiveFormsModule, ReplayComponent, MatProgressSpinner, FormsModule]
 })
 export class SelectReplayComponent implements OnInit {
   constructor(public appService:AppService,

@@ -4,7 +4,6 @@ import { Component } from '@angular/core';
   selector: 'coding-box-sys-admin-settings',
   templateUrl: './sys-admin-settings.component.html',
   styleUrls: ['./sys-admin-settings.component.scss'],
-  standalone: true,
   // eslint-disable-next-line max-len
   imports: []
 })

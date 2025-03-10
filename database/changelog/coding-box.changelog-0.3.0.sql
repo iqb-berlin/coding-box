@@ -13,3 +13,4 @@ CREATE TABLE "public"."logs"
   "booklet_id"   VARCHAR(100)
 );
 -- rollback DROP TABLE "public"."logs";
+

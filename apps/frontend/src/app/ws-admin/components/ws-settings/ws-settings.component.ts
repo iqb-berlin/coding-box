@@ -13,7 +13,6 @@ import { WsAccessRightsComponent } from '../ws-access-rights/ws-access-rights.co
   selector: 'coding-box-ws-settings',
   templateUrl: './ws-settings.component.html',
   styleUrls: ['./ws-settings.component.scss'],
-  standalone: true,
   // eslint-disable-next-line max-len
   imports: [MatLabel, MatButton, FormsModule, TranslateModule, MatFormField, MatInput, CdkTextareaAutosize, WsAccessRightsComponent, WsAccessRightsComponent]
 })

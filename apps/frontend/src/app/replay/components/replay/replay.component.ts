@@ -38,7 +38,6 @@ interface ErrorMessages {
 
 @Component({
   selector: 'coding-box-replay',
-  standalone: true,
   // eslint-disable-next-line max-len
   imports: [MatFormFieldModule, MatInputModule, MatButtonModule, ReactiveFormsModule, NgIf, TranslateModule, UnitPlayerComponent, SpinnerComponent],
   templateUrl: './replay.component.html',
@@ -97,7 +96,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
   private subscribeRouter(): void {
     this.routerSubscription = this.route.params
-      .subscribe(async params => {
+      ?.subscribe(async params => {
         this.resetSnackBars();
         this.resetUnitData();
         try {
