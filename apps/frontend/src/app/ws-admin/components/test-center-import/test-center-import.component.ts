@@ -3,7 +3,6 @@ import {
 } from '@angular/core';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatButton } from '@angular/material/button';
-import { MatIcon } from '@angular/material/icon';
 import {
   MatDialogContent, MatDialogActions, MatDialogClose
 } from '@angular/material/dialog';
@@ -14,7 +13,6 @@ import {
 } from '@angular/forms';
 import { MatInput } from '@angular/material/input';
 import { MatOption, MatSelect } from '@angular/material/select';
-import { MatRadioButton, MatRadioGroup } from '@angular/material/radio';
 import { MatCheckbox } from '@angular/material/checkbox';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { catchError, of } from 'rxjs';
@@ -91,11 +89,11 @@ export type Result = {
 };
 
 @Component({
-    selector: 'coding-box-test-center-import',
-    templateUrl: 'test-center-import.component.html',
-    styleUrls: ['./test-center-import.component.scss'],
-    // eslint-disable-next-line max-len
-    imports: [MatDialogContent, MatLabel, MatIcon, MatDialogActions, MatButton, MatDialogClose, TranslateModule, MatFormField, ReactiveFormsModule, MatInput, MatSelect, MatOption, MatRadioGroup, MatRadioButton, MatCheckbox, MatProgressSpinner, MatError, FormsModule]
+  selector: 'coding-box-test-center-import',
+  templateUrl: 'test-center-import.component.html',
+  styleUrls: ['./test-center-import.component.scss'],
+  // eslint-disable-next-line max-len
+  imports: [MatDialogContent, MatLabel, MatDialogActions, MatButton, MatDialogClose, TranslateModule, MatFormField, ReactiveFormsModule, MatInput, MatSelect, MatOption, MatCheckbox, MatProgressSpinner, MatError, FormsModule]
 })
 
 export class TestCenterImportComponent {

@@ -27,11 +27,9 @@ import { IsSelectedIdPipe } from '../../../shared/pipes/isSelectedId.pipe';
 // eslint-disable-next-line import/no-cycle
 import { WorkspacesMenuComponent } from '../workspaces-menu/workspaces-menu.component';
 import { WorkspacesSelectionComponent } from '../workspaces-selection/workspaces-selection.component';
-import { SearchFilterComponent } from '../../../shared/search-filter/search-filter.component';
 import { WorkspaceInListDto } from '../../../../../../../api-dto/workspaces/workspace-in-list-dto';
 import { AppService } from '../../../services/app.service';
 import { BackendService } from '../../../services/backend.service';
-import { WrappedIconComponent } from '../../../shared/wrapped-icon/wrapped-icon.component';
 import { CreateWorkspaceDto } from '../../../../../../../api-dto/workspaces/create-workspace-dto';
 
 type WorkspaceData = {
@@ -40,11 +38,11 @@ type WorkspaceData = {
 };
 
 @Component({
-    selector: 'coding-box-workspaces',
-    templateUrl: './workspaces.component.html',
-    styleUrls: ['./workspaces.component.scss'],
-    // eslint-disable-next-line max-len
-    imports: [WorkspacesMenuComponent, NgIf, SearchFilterComponent, MatTable, MatSort, MatColumnDef, MatHeaderCellDef, MatHeaderCell, MatCheckbox, MatCellDef, MatCell, MatSortHeader, MatHeaderRowDef, MatHeaderRow, MatRowDef, MatRow, MatButton, MatTooltip, WrappedIconComponent, NgFor, FormsModule, TranslateModule, IsSelectedPipe, IsAllSelectedPipe, HasSelectionValuePipe, IsSelectedIdPipe, WorkspacesSelectionComponent]
+  selector: 'coding-box-workspaces',
+  templateUrl: './workspaces.component.html',
+  styleUrls: ['./workspaces.component.scss'],
+  // eslint-disable-next-line max-len
+  imports: [WorkspacesMenuComponent, FormsModule, TranslateModule, WorkspacesSelectionComponent]
 })
 export class WorkspacesComponent {
   tableSelectionCheckboxes = new SelectionModel<WorkspaceInListDto>(true, []);

@@ -10,11 +10,11 @@ import { AppService } from '../../../services/app.service';
 import { WsAccessRightsComponent } from '../ws-access-rights/ws-access-rights.component';
 
 @Component({
-    selector: 'coding-box-ws-settings',
-    templateUrl: './ws-settings.component.html',
-    styleUrls: ['./ws-settings.component.scss'],
-    // eslint-disable-next-line max-len
-    imports: [MatLabel, MatButton, FormsModule, TranslateModule, MatFormField, MatInput, CdkTextareaAutosize, WsAccessRightsComponent, WsAccessRightsComponent]
+  selector: 'coding-box-ws-settings',
+  templateUrl: './ws-settings.component.html',
+  styleUrls: ['./ws-settings.component.scss'],
+  // eslint-disable-next-line max-len
+  imports: [MatLabel, MatButton, FormsModule, TranslateModule, MatFormField, MatInput, CdkTextareaAutosize, WsAccessRightsComponent, WsAccessRightsComponent]
 })
 export class WsSettingsComponent {
   authToken: string | null = null;

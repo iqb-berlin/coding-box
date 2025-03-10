@@ -23,10 +23,10 @@ import {
 } from '../../../shared/dialogs/confirm-dialog.component';
 
 @Component({
-    selector: 'coding-box-users-menu',
-    templateUrl: './users-menu.component.html',
-    styleUrls: ['./users-menu.component.scss'],
-    imports: [MatButton, MatTooltip, WrappedIconComponent, TranslateModule, WrappedIconComponent]
+  selector: 'coding-box-users-menu',
+  templateUrl: './users-menu.component.html',
+  styleUrls: ['./users-menu.component.scss'],
+  imports: [MatButton, MatTooltip, WrappedIconComponent, TranslateModule, WrappedIconComponent]
 })
 export class UsersMenuComponent {
   @Input() selectedUser!: number[];
