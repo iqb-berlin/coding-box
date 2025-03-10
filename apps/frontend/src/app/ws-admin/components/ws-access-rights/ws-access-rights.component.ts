@@ -15,7 +15,6 @@ import { WorkspaceUserChecked } from '../../models/workspace-user-checked.class'
   selector: 'coding-box-ws-access-rights',
   templateUrl: './ws-access-rights.component.html',
   styleUrls: ['./ws-access-rights.component.scss'],
-  standalone: true,
   // eslint-disable-next-line max-len
   imports: [MatCheckbox, MatButton, MatTooltip, FormsModule, TranslateModule, MatIcon, WsRolesHeaderComponent]
 })
@@ -43,7 +42,7 @@ export class WsAccessRightsComponent {
   save(): void {
     this.changed = false;
     this.backendService.saveUsers(this.appService.selectedWorkspaceId, this.workspaceUsers.getChecks())
-      .subscribe(res => {
+      .subscribe(() => {
       });
   }
 

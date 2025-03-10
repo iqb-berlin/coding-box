@@ -1,37 +1,15 @@
-import {
-  MatCell,
-  MatCellDef,
-  MatColumnDef,
-  MatHeaderCell,
-  MatHeaderCellDef,
-  MatHeaderRow,
-  MatHeaderRowDef,
-  MatRow,
-  MatRowDef,
-  MatTable
-} from '@angular/material/table';
 import { Component, ViewChild } from '@angular/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { MatSort, MatSortHeader } from '@angular/material/sort';
+import { MatSort } from '@angular/material/sort';
 import { FormsModule, UntypedFormGroup } from '@angular/forms';
 import { SelectionModel } from '@angular/cdk/collections';
-import { NgFor, NgIf } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { MatTooltip } from '@angular/material/tooltip';
-import { MatButton } from '@angular/material/button';
-import { MatCheckbox } from '@angular/material/checkbox';
-import { HasSelectionValuePipe } from '../../../shared/pipes/hasSelectionValue.pipe';
-import { IsAllSelectedPipe } from '../../../shared/pipes/isAllSelected.pipe';
-import { IsSelectedPipe } from '../../../shared/pipes/isSelected.pipe';
-import { IsSelectedIdPipe } from '../../../shared/pipes/isSelectedId.pipe';
 // eslint-disable-next-line import/no-cycle
 import { WorkspacesMenuComponent } from '../workspaces-menu/workspaces-menu.component';
 import { WorkspacesSelectionComponent } from '../workspaces-selection/workspaces-selection.component';
-import { SearchFilterComponent } from '../../../shared/search-filter/search-filter.component';
 import { WorkspaceInListDto } from '../../../../../../../api-dto/workspaces/workspace-in-list-dto';
 import { AppService } from '../../../services/app.service';
 import { BackendService } from '../../../services/backend.service';
-import { WrappedIconComponent } from '../../../shared/wrapped-icon/wrapped-icon.component';
 import { CreateWorkspaceDto } from '../../../../../../../api-dto/workspaces/create-workspace-dto';
 
 type WorkspaceData = {
@@ -43,9 +21,8 @@ type WorkspaceData = {
   selector: 'coding-box-workspaces',
   templateUrl: './workspaces.component.html',
   styleUrls: ['./workspaces.component.scss'],
-  standalone: true,
   // eslint-disable-next-line max-len
-  imports: [WorkspacesMenuComponent, NgIf, SearchFilterComponent, MatTable, MatSort, MatColumnDef, MatHeaderCellDef, MatHeaderCell, MatCheckbox, MatCellDef, MatCell, MatSortHeader, MatHeaderRowDef, MatHeaderRow, MatRowDef, MatRow, MatButton, MatTooltip, WrappedIconComponent, NgFor, FormsModule, TranslateModule, IsSelectedPipe, IsAllSelectedPipe, HasSelectionValuePipe, IsSelectedIdPipe, WorkspacesSelectionComponent]
+  imports: [WorkspacesMenuComponent, FormsModule, TranslateModule, WorkspacesSelectionComponent]
 })
 export class WorkspacesComponent {
   tableSelectionCheckboxes = new SelectionModel<WorkspaceInListDto>(true, []);

@@ -1,15 +1,15 @@
-import { APP_INITIALIZER, Component, OnInit } from '@angular/core';
+import {
+  Component, OnInit
+} from '@angular/core';
 import { RouterLink, RouterOutlet } from '@angular/router';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatTooltip } from '@angular/material/tooltip';
-import { KeycloakService } from 'keycloak-angular';
 import { MatButton } from '@angular/material/button';
 import { LocationStrategy } from '@angular/common';
 import { AppService } from './services/app.service';
 import { AuthService } from './auth/service/auth.service';
-import { initializer } from './auth/keycloak-initializer';
 import { CreateUserDto } from '../../../../api-dto/user/create-user-dto';
 import { BackendService } from './services/backend.service';
 import { WrappedIconComponent } from './shared/wrapped-icon/wrapped-icon.component';
@@ -17,19 +17,11 @@ import { UserMenuComponent } from './sys-admin/components/user-menu/user-menu.co
 
 @Component({
   selector: 'app-root',
-  standalone: true,
   // eslint-disable-next-line max-len
   imports: [RouterOutlet, MatSlideToggleModule, MatProgressSpinner, RouterLink, TranslateModule, MatTooltip, MatButton, UserMenuComponent, WrappedIconComponent],
   templateUrl: './app.component.html',
   styleUrl: './app.component.scss',
-  providers: [AuthService,
-    {
-      provide: APP_INITIALIZER,
-      useFactory: initializer,
-      multi: true,
-      deps: [KeycloakService]
-    }
-  ]
+  providers: [AuthService]
 })
 export class AppComponent implements OnInit {
   title = 'Kodierbox';

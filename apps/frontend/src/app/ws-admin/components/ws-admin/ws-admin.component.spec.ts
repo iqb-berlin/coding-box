@@ -4,6 +4,7 @@ import { TranslateModule } from '@ngx-translate/core';
 import { MatTabsModule } from '@angular/material/tabs';
 import { ActivatedRoute } from '@angular/router';
 import { WsAdminComponent } from './ws-admin.component';
+import { environment } from '../../../../environments/environment';
 
 describe('WsAdminComponent', () => {
   let component: WsAdminComponent;
@@ -18,6 +19,9 @@ describe('WsAdminComponent', () => {
         {
           provide: ActivatedRoute,
           useValue: fakeActivatedRoute
+        }, {
+          provide: 'SERVER_URL',
+          useValue: environment.backendUrl
         }],
       imports: [
         MatTabsModule,

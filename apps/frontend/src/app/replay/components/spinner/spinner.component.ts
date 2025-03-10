@@ -7,14 +7,13 @@ import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { NgIf } from '@angular/common';
 
 @Component({
-  selector: 'cb-spinner',
-  templateUrl: './spinner.component.html',
-  standalone: true,
-  styleUrls: ['./spinner.component.scss'],
-  imports: [
-    MatProgressSpinner,
-    NgIf
-  ]
+    selector: 'cb-spinner',
+    templateUrl: './spinner.component.html',
+    styleUrls: ['./spinner.component.scss'],
+    imports: [
+        MatProgressSpinner,
+        NgIf
+    ]
 })
 export class SpinnerComponent implements OnInit, OnDestroy {
   @Input() isLoaded!: Subject<boolean>;

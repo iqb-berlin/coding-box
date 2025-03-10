@@ -1,47 +1,46 @@
-import { Injectable } from '@angular/core';
-import { KeycloakService } from 'keycloak-angular';
-import { KeycloakProfile, KeycloakTokenParsed } from 'keycloak-js';
+import { inject, Injectable } from '@angular/core';
+import Keycloak, { KeycloakProfile, KeycloakTokenParsed } from 'keycloak-js';
 
 @Injectable()
 export class AuthService {
-  constructor(private keycloakService: KeycloakService) {
-  }
-
+  private readonly keycloak = inject(Keycloak);
   getLoggedUser(): KeycloakTokenParsed | undefined {
     try {
-      return this.keycloakService.getKeycloakInstance()
-        .idTokenParsed;
+      return this.keycloak.idTokenParsed;
     } catch (e) {
       return { message: 'Parsing id token failed', err: e };
     }
   }
 
-  async getToken() {
-    const token = await this.keycloakService.getToken();
+  getToken() {
+    const token = this.keycloak.token;
     return token;
   }
 
-  isLoggedIn(): boolean {
-    return this.keycloakService.isLoggedIn();
+  isLoggedIn(): boolean | undefined {
+    return this.keycloak.authenticated;
   }
 
   loadUserProfile(): Promise<KeycloakProfile> {
-    return this.keycloakService.loadUserProfile();
+    return this.keycloak.loadUserProfile();
   }
 
   async login(): Promise<void> {
-    await this.keycloakService.login();
+    await this.keycloak.login();
   }
 
   async logout(): Promise<void> {
-    await this.keycloakService.logout(window.location.origin);
+    await this.keycloak.logout({ redirectUri: window.location.origin });
   }
 
   async redirectToProfile(): Promise<void> {
-    await this.keycloakService.getKeycloakInstance().accountManagement();
+    await this.keycloak.accountManagement();
   }
 
   getRoles(): string[] {
-    return this.keycloakService.getUserRoles();
+    if (this.keycloak.realmAccess) {
+      return this.keycloak.realmAccess.roles;
+    }
+    return [];
   }
 }

@@ -26,12 +26,11 @@ export interface PageData {
 export type Progress = 'none' | 'some' | 'complete';
 
 @Component({
-  selector: 'coding-box-unit-player',
-  standalone: true,
-  imports: [MatFormFieldModule, MatInputModule, MatButtonModule, ReactiveFormsModule,
-    TranslateModule, SpinnerComponent],
-  templateUrl: './unit-player.component.html',
-  styleUrl: './unit-player.component.scss'
+    selector: 'coding-box-unit-player',
+    imports: [MatFormFieldModule, MatInputModule, MatButtonModule, ReactiveFormsModule,
+        TranslateModule, SpinnerComponent],
+    templateUrl: './unit-player.component.html',
+    styleUrl: './unit-player.component.scss'
 })
 export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy {
   @Input() unitDef: string | undefined;
