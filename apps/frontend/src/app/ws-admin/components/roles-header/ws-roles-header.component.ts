@@ -4,7 +4,6 @@ import { MatIcon } from '@angular/material/icon';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MatIconButton } from '@angular/material/button';
-import { MatDialog } from '@angular/material/dialog';
 
 @Component({
   selector: 'coding-box-ws-roles-header',
@@ -12,6 +11,4 @@ import { MatDialog } from '@angular/material/dialog';
   templateUrl: './ws-roles-header.component.html',
   styleUrl: './ws-roles-header.component.scss'
 })
-export class WsRolesHeaderComponent {
-  constructor(private roleMatrixDialog: MatDialog) {}
-}
+export class WsRolesHeaderComponent {}
