@@ -18,32 +18,23 @@ import {
 import { MatSort, MatSortHeader } from '@angular/material/sort';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
-import { MatTooltip } from '@angular/material/tooltip';
-import { MatButton } from '@angular/material/button';
 import { MatCheckbox } from '@angular/material/checkbox';
 import { SelectionModel } from '@angular/cdk/collections';
-import { JsonPipe } from '@angular/common';
-import { MatIcon } from '@angular/material/icon';
-import { UsersMenuComponent } from '../users-menu/users-menu.component';
 import { HasSelectionValuePipe } from '../../../shared/pipes/hasSelectionValue.pipe';
 import { IsSelectedPipe } from '../../../shared/pipes/isSelected.pipe';
 import { IsAllSelectedPipe } from '../../../shared/pipes/isAllSelected.pipe';
 // eslint-disable-next-line import/no-cycle
-import { WorkspacesComponent } from '../workspaces/workspaces.component';
-import { IsSelectedIdPipe } from '../../../shared/pipes/isSelectedId.pipe';
-import { WorkspacesSelectionComponent } from '../workspaces-selection/workspaces-selection.component';
 import { UserFullDto } from '../../../../../../../api-dto/user/user-full-dto';
 import { WorkspaceInListDto } from '../../../../../../../api-dto/workspaces/workspace-in-list-dto';
 import { BackendService } from '../../../services/backend.service';
-import { WrappedIconComponent } from '../../../shared/wrapped-icon/wrapped-icon.component';
 import { SearchFilterComponent } from '../../../shared/search-filter/search-filter.component';
 
 @Component({
-    selector: 'coding-box-users-selection',
-    templateUrl: './users-selection.component.html',
-    styleUrls: ['./users-selection.component.scss'],
-    // eslint-disable-next-line max-len
-    imports: [MatTable, MatSort, MatColumnDef, MatHeaderCellDef, MatHeaderCell, MatCheckbox, MatCellDef, MatCell, MatSortHeader, MatHeaderRowDef, MatHeaderRow, MatRowDef, MatRow, MatButton, MatTooltip, WrappedIconComponent, FormsModule, TranslateModule, UsersMenuComponent, HasSelectionValuePipe, IsSelectedPipe, IsAllSelectedPipe, SearchFilterComponent, JsonPipe, WorkspacesComponent, IsSelectedIdPipe, WorkspacesSelectionComponent, MatIcon]
+  selector: 'coding-box-users-selection',
+  templateUrl: './users-selection.component.html',
+  styleUrls: ['./users-selection.component.scss'],
+  // eslint-disable-next-line max-len
+  imports: [MatTable, MatSort, MatColumnDef, MatHeaderCellDef, MatHeaderCell, MatCheckbox, MatCellDef, MatCell, MatSortHeader, MatHeaderRowDef, MatHeaderRow, MatRowDef, MatRow, FormsModule, TranslateModule, HasSelectionValuePipe, IsSelectedPipe, IsAllSelectedPipe, SearchFilterComponent]
 })
 export class UsersSelectionComponent implements OnInit {
   userObjectsDatasource = new MatTableDataSource<UserFullDto>();

@@ -12,18 +12,18 @@ import {
 } from '../../../coding/coding-management-manual/coding-management-manual.component';
 
 @Component({
-    selector: 'coding-box-ws-admin',
-    templateUrl: './ws-admin.component.html',
-    styleUrls: ['./ws-admin.component.scss'],
-    imports: [MatTabNav,
-        MatTabLink,
-        RouterLinkActive,
-        RouterLink,
-        MatTabNavPanel,
-        RouterOutlet,
-        TranslateModule,
-        CodingJobsComponent,
-        CodingManagementManualComponent]
+  selector: 'coding-box-ws-admin',
+  templateUrl: './ws-admin.component.html',
+  styleUrls: ['./ws-admin.component.scss'],
+  imports: [MatTabNav,
+    MatTabLink,
+    RouterLinkActive,
+    RouterLink,
+    MatTabNavPanel,
+    RouterOutlet,
+    TranslateModule,
+    CodingJobsComponent,
+    CodingManagementManualComponent]
 })
 export class WsAdminComponent implements OnInit {
   navLinks: string[] = ['select-unit-play', 'test-files', 'test-groups', 'coding', 'settings'];

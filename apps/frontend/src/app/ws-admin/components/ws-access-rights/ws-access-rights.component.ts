@@ -12,11 +12,11 @@ import { WorkspaceUserToCheckCollection } from '../../models/workspace-users-to-
 import { WorkspaceUserChecked } from '../../models/workspace-user-checked.class';
 
 @Component({
-    selector: 'coding-box-ws-access-rights',
-    templateUrl: './ws-access-rights.component.html',
-    styleUrls: ['./ws-access-rights.component.scss'],
-    // eslint-disable-next-line max-len
-    imports: [MatCheckbox, MatButton, MatTooltip, FormsModule, TranslateModule, MatIcon, WsRolesHeaderComponent]
+  selector: 'coding-box-ws-access-rights',
+  templateUrl: './ws-access-rights.component.html',
+  styleUrls: ['./ws-access-rights.component.scss'],
+  // eslint-disable-next-line max-len
+  imports: [MatCheckbox, MatButton, MatTooltip, FormsModule, TranslateModule, MatIcon, WsRolesHeaderComponent]
 })
 export class WsAccessRightsComponent {
   workspaceUsers = new WorkspaceUserToCheckCollection([]);
