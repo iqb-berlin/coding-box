@@ -2,7 +2,6 @@ import { Component } from '@angular/core';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatAnchor } from '@angular/material/button';
 import { CoderListComponent } from '../coder-list/coder-list.component';
-import { BackendService } from '../../services/backend.service';
 import { CodingJobsComponent } from '../coding-jobs/coding-jobs.component';
 
 @Component({
@@ -12,8 +11,4 @@ import { CodingJobsComponent } from '../coding-jobs/coding-jobs.component';
   imports: [TranslateModule, CoderListComponent, MatAnchor, CodingJobsComponent]
 })
 export class CodingManagementManualComponent {
-  constructor(
-    private backendService: BackendService
-  ) {
-  }
 }
