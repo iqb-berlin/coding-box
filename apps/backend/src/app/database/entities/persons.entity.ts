@@ -7,7 +7,7 @@ import {
 
 class Persons {
   @PrimaryGeneratedColumn()
-    id: number;
+    id!: number;
 
   @Column({ type: 'varchar' })
     login!: string;
@@ -22,13 +22,13 @@ class Persons {
     workspace_id!: number;
 
   @Column({ type: 'timestamp' })
-    uploaded_at: Date;
+    uploaded_at!: Date;
 
   @Column({ type: 'jsonb' })
     booklets: unknown;
 
   @Column({ type: 'varchar' })
-    source: string;
+    source!: string;
 }
 
 export default Persons;

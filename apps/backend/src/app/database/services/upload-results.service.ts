@@ -49,7 +49,7 @@ export class UploadResultsService {
       const randomInteger = Math.floor(Math.random() * 10000);
       if (file.originalname.includes('logs')) {
         const rowData: Log[] = [];
-        await fs.writeFile(`logs-${randomInteger}.csv`, file.buffer);
+        await fs.writeFile(`logs-${randomInteger}.csv`, file.buffer, 'utf-8');
         const stream = createReadStream(`logs-${randomInteger}.csv`);
         const csvParserStream = csv.parseStream(stream, {
           headers: true,
@@ -115,7 +115,7 @@ export class UploadResultsService {
                       // })
                       ({
                         ...b,
-                        logs: person.booklets.find(pb => pb.id === b.id).logs
+                        logs: person.booklets.find(pb => pb.id === b.id)?.logs
                       })
                     );
                     mappedBooklets.map(booklet => this.assignUnitLogsToBooklet(booklet, unitLogs));
@@ -137,6 +137,7 @@ export class UploadResultsService {
               { length: Math.ceil(arr.length / size) },
               (v, i) => arr.slice(i * size, i * size + size)
             );
+
             for (let i = 0; i < chunks(res, 10).length; i++) {
               const chunk = chunks(res, 10)[i];
               this.personsRepository
@@ -144,6 +145,7 @@ export class UploadResultsService {
                   console.log('updated');
                 });
             }
+            //await this.upsertRows(this.personsRepository, rowData);
           });
       } else {
         console.log('responses');
@@ -172,6 +174,16 @@ export class UploadResultsService {
             });
           });
       }
+    }
+  }
+
+  async upsertRows(repository: Repository<Persons>, rows: Log[]): Promise<void> {
+    const chunkSize = 1000; // Adjust the chunk size based on your requirements
+    const chunks = Array.from({ length: Math.ceil(rows.length / chunkSize) }, (v, i) => rows.slice(i * chunkSize, i * chunkSize + chunkSize)
+    );
+
+    for (const chunk of chunks) {
+      await repository.upsert(chunk, ['person_id']); // Replace 'uniqueColumn' with your unique constraint column(s)
     }
   }
 
@@ -212,7 +224,7 @@ export class UploadResultsService {
     return person;
   }
 
-  assignBookletLogsToPerson(person: Person, rows: Log[], unitLogs:Log[]): Person {
+  assignBookletLogsToPerson(person: Person, rows: Log[]): Person {
     const booklets : TcMergeBooklet[] = [];
     rows.forEach(row => {
       if (row.groupname === person.group && row.loginname === person.login && row.code === person.code) {

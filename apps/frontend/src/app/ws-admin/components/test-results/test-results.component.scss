@@ -1,0 +1,71 @@
+.scroll-area {
+  height: calc(100% - 35px);
+  overflow-y: auto;
+}
+
+mat-table{
+  max-width:78vh;
+  max-height:78vh;
+  overflow-y: scroll;
+}
+
+coding-box-search-filter {
+  min-width:100%;
+}
+
+.container{
+  margin:20px;
+  max-height: 78vh;
+  min-height: 78vh;
+}
+
+.upload-buttons{
+  margin: 10px;
+}
+
+a{
+  min-width:300px;
+  padding:20px;
+  font-size: 16px;
+}
+
+mat-row:hover {
+  cursor: pointer;
+  background-color: #f5f5f5;
+}
+
+.hoverable {
+  transition: background-color 0.2s ease;
+  cursor: pointer;
+}
+
+.hoverable:hover {
+  background-color: #e0e0e0; /* Eine leichte Hintergrundfarbe für Hover */
+}
+
+.mat-list-item {
+  padding: 16px; /* Zusätzliche Polsterung für die Liste */
+  border-bottom: 1px solid #ddd; /* Optionale Unterkante */
+}
+
+.mat-list-item:active {
+  background-color: #d0d0d0; /* Farbe, wenn das Listenelement aktiv ist */
+}
+
+.square-container {
+  display: flex;
+  flex-wrap: wrap; /* Quadrate umbrechen, falls Platzmangel herrscht */
+}
+
+.square {
+  width: 10px; /* Breite des Quadrats */
+  height: 10px; /* Höhe des Quadrats (Quadratform) */
+  display: flex;
+  justify-content: center; /* Zentrieren des Textes horizontal */
+  align-items: center; /* Zentrieren des Textes vertikal */
+  color: #fff;
+  font-weight: bold;
+  text-transform: capitalize; /* Erster Buchstabe groß */
+  border: 2px solid #ddd; /* Optional Rahmen */
+  border-radius: 8px; /* Runde Ecken, falls benötigt */
+}

@@ -22,6 +22,7 @@ import { ResponseDto } from '../../../../../api-dto/responses/response-dto';
 import { FilesDto } from '../../../../../api-dto/files/files.dto';
 import { UserInListDto } from '../../../../../api-dto/user/user-in-list-dto';
 import { UserWorkspaceAccessDto } from '../../../../../api-dto/workspaces/user-workspace-access-dto';
+import Persons from '../../../../backend/src/app/database/entities/persons.entity';
 
 @Injectable({
   providedIn: 'root'
@@ -311,6 +312,12 @@ export class BackendService {
   getTestPersons(workspaceId: number, testGroup:string): Observable<string[]> {
     return this.http.get<string[]>(
       `${this.serverUrl}admin/workspace/${workspaceId}/test-groups/${testGroup}`,
+      { headers: this.authHeader });
+  }
+
+  getTestResults(workspaceId: number): Observable<Persons[]> {
+    return this.http.get<Persons[]>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/test-results/`,
       { headers: this.authHeader });
   }
 
