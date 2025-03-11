@@ -7,8 +7,6 @@ import * as cheerio from 'cheerio';
 import AdmZip = require('adm-zip');
 import * as util from 'util';
 import * as fs from 'fs';
-import * as csv from 'fast-csv';
-import * as crypto from 'crypto';
 import Workspace from '../entities/workspace.entity';
 import { WorkspaceInListDto } from '../../../../../../api-dto/workspaces/workspace-in-list-dto';
 import { WorkspaceFullDto } from '../../../../../../api-dto/workspaces/workspace-full-dto';
@@ -188,6 +186,13 @@ export class WorkspaceService {
       .find({
         where: { workspace_id: workspace_id },
         select: ['id', 'filename', 'file_size', 'file_type', 'created_at']
+      });
+  }
+
+  async findTestResults(workspace_id: number): Promise<Persons[]> {
+    this.logger.log('Returning all test results for workspace ', workspace_id);
+    return this.personsRepository
+      .find({
       });
   }
 

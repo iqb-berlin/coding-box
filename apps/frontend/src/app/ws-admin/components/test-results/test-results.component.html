@@ -1,0 +1,97 @@
+<div class="fx-column-start-start fx-gap-10  container">
+  @if ( dataSource && dataSource.data.length) {
+    <div class="fx-row-space-between-start">
+      <div>
+        <div>
+          <mat-label>Filter</mat-label>
+          <input matInput (input)="applyFilter($event)" placeholder="Suchtext eingeben">
+        </div>
+        <mat-table [dataSource]="dataSource" matSort>
+          <ng-container matColumnDef="code" >
+            <mat-header-cell *matHeaderCellDef mat-sort-header="code">
+            </mat-header-cell>
+            <mat-cell *matCellDef="let element">
+              {{element.code}}
+            </mat-cell>
+          </ng-container>
+          <ng-container matColumnDef="group">
+            <mat-header-cell *matHeaderCellDef mat-sort-header="group">{{'test_group.test_group' | translate}}</mat-header-cell>
+            <mat-cell *matCellDef="let element">
+              {{element.group}}
+            </mat-cell>
+          </ng-container>
+          <ng-container matColumnDef="login">
+            <mat-header-cell *matHeaderCellDef mat-sort-header="login">Login</mat-header-cell>
+            <mat-cell *matCellDef="let element">
+              {{element.login}}
+            </mat-cell>
+          </ng-container>
+          <ng-container matColumnDef="uploaded_at">
+            <mat-header-cell *matHeaderCellDef mat-sort-header="uploaded_at">Hinzugefügt am</mat-header-cell>
+            <mat-cell *matCellDef="let element">
+              {{element.uploaded_at | date: 'dd.MM.yyyy HH:mm'}}
+            </mat-cell>
+          </ng-container>
+          <mat-header-row *matHeaderRowDef="displayedColumns;sticky: true"></mat-header-row>
+          <mat-row  (click)="onRowClick(row)"
+                    *matRowDef="let row; columns: displayedColumns;"></mat-row>
+        </mat-table>
+        <!-- Paginator -->
+        <mat-paginator
+          [length]="totalRecords"
+          [pageSize]="pageSize"
+          [pageSizeOptions]="[5, 10, 20]"
+          aria-label="Select page">
+        </mat-paginator>
+      </div>
+
+      <mat-accordion>
+        <mat-expansion-panel *ngFor="let item of booklets">
+          <mat-expansion-panel-header>
+            <mat-panel-title>
+              ID: {{ item.id }}
+            </mat-panel-title>
+          </mat-expansion-panel-header>
+              <mat-list>
+                <mat-list-item
+                  *ngFor="let unit of item.units"
+                  (click)="onListItemClick(unit)"
+                  class="hoverable">
+                  <span>{{ unit?.alias }}</span>
+                </mat-list-item>
+              </mat-list>
+        </mat-expansion-panel>
+      </mat-accordion>
+      <mat-list>
+        <mat-list-item
+          *ngFor="let response of this.responses"
+          class="hoverable"
+          [matTooltip]="response.value + ' ' + response.status"
+          matTooltipPosition="right"
+        >
+          <div class="fx-row-start-start">
+            <div
+              [ngStyle]="{ 'background-color': getColor(response.status) }"
+              class="square"
+              >
+            </div>
+            <span >{{ response.id }}</span>
+          </div>
+        </mat-list-item>
+      </mat-list>
+      <h1>Grouped Blocks</h1>
+      <ng-container *ngFor="let logBlock of this.logs; let i = index">
+        <div class="block">
+          <h2>Block {{ i + 1 }}</h2>
+          <ul>
+            <li *ngFor="let log of logBlock">
+              <strong>{{ log.key }}</strong> - {{ log.parameter }}<br />
+              <small>Timestamp: {{ formatTimestamp(log.ts) }}</small>
+            </li>
+          </ul>
+        </div>
+      </ng-container>
+
+      </div>
+  }
+</div>

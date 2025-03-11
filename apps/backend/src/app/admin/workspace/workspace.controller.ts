@@ -27,6 +27,7 @@ import FileUpload from '../../database/entities/file_upload.entity';
 import { ResponseDto } from '../../../../../../api-dto/responses/response-dto';
 import WorkspaceUser from '../../database/entities/workspace_user.entity';
 import { UploadResultsService } from '../../database/services/upload-results.service';
+import Persons from '../../database/entities/persons.entity';
 
 export type Result = {
   success: boolean,
@@ -111,6 +112,13 @@ export class WorkspaceController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async findFiles(@Param('workspace_id') workspace_id: number): Promise<FilesDto[]> {
     return this.workspaceService.findFiles(workspace_id);
+  }
+
+  @Get(':workspace_id/test-results')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  async findTestResults(@Param('workspace_id') workspace_id: number): Promise<Persons[]> {
+    return this.workspaceService.findTestResults(workspace_id);
   }
 
   @Get(':workspace_id/users')
