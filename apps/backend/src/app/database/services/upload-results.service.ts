@@ -6,6 +6,7 @@ import { Repository } from 'typeorm';
 import 'multer';
 import { promises as fs, createReadStream, unlinkSync } from 'fs';
 import * as csv from 'fast-csv';
+import { Readable } from 'stream';
 import { FileIo } from '../../admin/workspace/file-io.interface';
 import {
   Chunk,
@@ -23,7 +24,6 @@ import Logs from '../entities/logs.entity';
 @Injectable()
 export class UploadResultsService {
   private readonly logger = new Logger(UploadResultsService.name);
-
   constructor(
     @InjectRepository(Persons)
     private personsRepository: Repository<Persons>
@@ -48,33 +48,37 @@ export class UploadResultsService {
     if (file.mimetype === 'text/csv') {
       const randomInteger = Math.floor(Math.random() * 10000);
       if (file.originalname.includes('logs')) {
+        console.log('logs');
+        const bufferStream = new Readable();
+        bufferStream.push(file.buffer);
+        bufferStream.push(null); // Signalisiert das Ende der Daten
+        const startTime = performance.now();
         const rowData: Log[] = [];
-        await fs.writeFile(`logs-${randomInteger}.csv`, file.buffer, 'utf-8');
-        const stream = createReadStream(`logs-${randomInteger}.csv`);
-        const csvParserStream = csv.parseStream(stream, {
-          headers: true,
-          delimiter: ';',
-          quote: null
-        });
-        csvParserStream.transform(
-          (data: Log): Log => ({
-            groupname: data.groupname?.replace(/"/g, ''),
-            loginname: data.loginname?.replace(/"/g, ''),
-            code: data.code?.replace(/"/g, ''),
-            bookletname: data.bookletname?.replace(/"/g, ''),
-            unitname: data.unitname?.replace(/"/g, ''),
-            timestamp: data.timestamp?.replace(/"/g, ''),
-            logentry: data.logentry
+        const csvParserStream = csv
+          .parseStream(bufferStream, {
+            headers: true,
+            delimiter: ';',
+            quote: null
           })
+          .transform(
+            (data: Log): Log => ({
+              groupname: data.groupname?.replace(/"/g, ''),
+              loginname: data.loginname?.replace(/"/g, ''),
+              code: data.code?.replace(/"/g, ''),
+              bookletname: data.bookletname?.replace(/"/g, ''),
+              unitname: data.unitname?.replace(/"/g, ''),
+              timestamp: data.timestamp?.replace(/"/g, ''),
+              logentry: data.logentry
+            })
 
-        )
+          )
           .on('error', error => {
-            unlinkSync(`logs-${randomInteger}.csv`);
             this.logger.log(error);
           })
           .on('data', row => rowData.push(row))
           .on('end', async () => {
-            unlinkSync(`logs-${randomInteger}.csv`);
+            const endTime = performance.now();
+            console.log('csv read', `${(endTime - startTime) / 1000}s`);
             const bookletLogs = [];
             const unitLogs = [];
             rowData.forEach(row => {
@@ -85,67 +89,57 @@ export class UploadResultsService {
               }
             });
             this.createPersonList(rowData);
-            const persons = this.persons.map(person => this.assignBookletLogsToPerson(person, bookletLogs, unitLogs));
-            const updateListPromises = [];
-            for (let i = 0; i < persons.length; i++) {
+            const personTime = performance.now();
+            console.log('personTime', `${(personTime - startTime) / 1000}s`);
+
+            const persons = this.persons.map(person => this.assignBookletLogsToPerson(person, bookletLogs));
+            const loggedPersonTime = performance.now();
+            console.log('loggedPersonTime', `${(loggedPersonTime - startTime) / 1000}s`);
+
+            const keys = persons.map(person => ({
+              group: person.group,
+              code: person.code,
+              login: person.login
+            }));
+
+            const existingPersons = await this.personsRepository.find({
+              where: keys
+            });
+
+            existingPersons.forEach((p, i) => {
               const person = persons[i];
-              updateListPromises.push(this.personsRepository.findOneBy(
-                {
-                  group: person.group,
-                  code: person.code,
-                  login: person.login
+              console.log('person', person);
+              if (p !== null) {
+                const booklets: TcMergeBooklet[] = p.booklets as TcMergeBooklet[];
+                const mappedBooklets = booklets.map(b => ({
+                  ...b,
+                  logs: person.booklets.find(pb => pb.id === b.id)?.logs
+                })
+                );
+                for (const booklet of mappedBooklets) {
+                  this.assignUnitLogsToBooklet(booklet, unitLogs);
                 }
-              )
-                .then(p => {
-                  if (p !== null) {
-                    const booklets: TcMergeBooklet[] = p.booklets as TcMergeBooklet[];
-                    const mappedBooklets = booklets.map(b =>
-                      // const mappedUnits = b.units.map(u => {
-                      //   unitLogs.forEach(log => {
-                      //     if (log.unitname === u.id && log.bookletname === b.id) {
-                      //       u.logs.push({
-                      //         ts: log.timestamp,
-                      //         key: log.logentry.split('=')[0]?.trim(),
-                      //         parameter: log.logentry.split('=')[1]?.trim()
-                      //           .replace(/"/g, '')
-                      //       });
-                      //     }
-                      //   });
-                      //   return u;
-                      // })
-                      ({
-                        ...b,
-                        logs: person.booklets.find(pb => pb.id === b.id)?.logs
-                      })
-                    );
-                    mappedBooklets.map(booklet => this.assignUnitLogsToBooklet(booklet, unitLogs));
-                    return {
-                      id: p.id,
-                      ...person,
-                      booklets: mappedBooklets
-                    };
-                  }
+                return {
+                  id: p.id,
+                  ...person,
+                  booklets: mappedBooklets
+                };
+              }
 
-                  console.log('Person not found in responses');
-                }
+              console.log('Person not found in responses');
+            });
 
-                ));
-            }
-            const res = await Promise.all(updateListPromises);
-
-            const chunks = (arr, size) => Array.from(
-              { length: Math.ceil(arr.length / size) },
-              (v, i) => arr.slice(i * size, i * size + size)
+            const res = existingPersons;
+            const resolvePromisesTime = performance.now();
+            console.log('resolvePromisesTime', `${(resolvePromisesTime - startTime) / 1000}s`);
+            const chunks = <T>(arr: T[], size: number): T[][] => Array.from({ length: Math.ceil(arr.length / size) }, (_, i) => arr.slice(i * size, i * size + size));
+            const chunkedData = chunks(res, 10);
+            await Promise.all(
+              chunkedData.map(async chunk => {
+                await this.personsRepository.upsert(chunk, ['group', 'code', 'login']);
+                console.log('updated');
+              })
             );
-
-            for (let i = 0; i < chunks(res, 10).length; i++) {
-              const chunk = chunks(res, 10)[i];
-              this.personsRepository
-                .upsert(chunk, ['group', 'code', 'login']).then(() => {
-                  console.log('updated');
-                });
-            }
-            //await this.upsertRows(this.personsRepository, rowData);
           });
       } else {
         console.log('responses');
@@ -174,16 +168,6 @@ export class UploadResultsService {
             });
           });
       }
-    }
-  }
-
-  async upsertRows(repository: Repository<Persons>, rows: Log[]): Promise<void> {
-    const chunkSize = 1000; // Adjust the chunk size based on your requirements
-    const chunks = Array.from({ length: Math.ceil(rows.length / chunkSize) }, (v, i) => rows.slice(i * chunkSize, i * chunkSize + chunkSize)
-    );
-
-    for (const chunk of chunks) {
-      await repository.upsert(chunk, ['person_id']); // Replace 'uniqueColumn' with your unique constraint column(s)
     }
   }
 
@@ -272,55 +256,38 @@ export class UploadResultsService {
   }
 
   assignUnitLogsToBooklet(booklet: TcMergeBooklet, rows: Log[]): TcMergeBooklet {
-    const units : TcMergeUnit[] = [];
+    // Map für eindeutigen Zugriff auf Units erstellen
+    const unitMap = new Map<string, TcMergeUnit>();
 
-    rows.forEach(row => {
-      if (booklet?.id === row.bookletname) {
-        const existingUnit = units.find(u => u?.id === row.unitname);
-        const existingUnitIndex = units.findIndex(u => u?.id === row.unitname);
-
-        if (existingUnit) {
-          existingUnit.logs = [...existingUnit.logs, {
-            ts: row.timestamp,
-            key: row.logentry.split('=')[0]?.trim(),
-            parameter: row.logentry.split('=')[1]?.trim().replace(/"/g, '')
-          }];
-          units[existingUnitIndex] = existingUnit;
-        } else {
-          const foundUnit = booklet.units.find(u => u?.id === row.unitname);
-          if (foundUnit) {
-            foundUnit.logs.push({
-              ts: row.timestamp,
-              key: row.logentry.split('=')[0]?.trim(),
-              parameter: row.logentry.split('=')[1]?.trim().replace(/"/g, '')
-            });
-          }
-          units.push(foundUnit);
-        }
-      }
-      //
-      // booklet.units.forEach(unit => {
-      //   if (!units.find(u => row.unitname === u.id)) {
-      //     units.push({
-      //       ...unit,
-      //       logs: [{
-      //         ts: row.timestamp,
-      //         key: row.logentry.split('=')[0]?.trim(),
-      //         parameter: row.logentry.split('=')[1]?.trim().replace(/"/g, '')
-      //       }]
-      //     });
-      //   } else {
-      //     const unitIndex = units.findIndex(u => u.id === row.unitname);
-      //     const logEntry = row.logentry.split('=');
-      //     units[unitIndex].logs.push({
-      //       ts: row.timestamp,
-      //       key: logEntry[0]?.trim(),
-      //       parameter: logEntry[1]?.trim().replace(/"/g, '')
-      //     });
-      //   }
-      // });
+    // Direkten Lookup für Units im Booklet vorbereiten
+    booklet.units.forEach(unit => {
+      unitMap.set(unit.id, { ...unit, logs: [...unit.logs] });
     });
-    booklet.units = units;
+
+    // Logs verarbeiten und zu den Units hinzufügen
+    rows.forEach(row => {
+      if (booklet?.id !== row.bookletname) return;
+
+      const logEntryParts = row.logentry.split('='); // Einmal Split durchführen
+      const log = {
+        ts: row.timestamp,
+        key: logEntryParts[0]?.trim(),
+        parameter: logEntryParts[1]?.trim()?.replace(/"/g, '')
+      };
+
+      // Einheit aus der Map holen oder neuen Eintrag hinzufügen
+      const existingUnit = unitMap.get(row.unitname);
+      if (existingUnit) {
+        existingUnit.logs.push(log);
+      } else {
+        // Neue Einheit erstellen und in die Map einfügen
+        const newUnit = { id: row.unitname, logs: [log] } as TcMergeUnit;
+        unitMap.set(row.unitname, newUnit);
+      }
+    });
+
+    // Map wieder in ein Array umwandeln, um dem ursprünglichen Format zu entsprechen
+    booklet.units = Array.from(unitMap.values());
     return booklet;
   }
 
