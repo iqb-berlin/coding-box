@@ -46,16 +46,17 @@
       </div>
 
       <mat-accordion>
-        <mat-expansion-panel *ngFor="let item of booklets">
+        <mat-expansion-panel *ngFor="let booklet of booklets">
           <mat-expansion-panel-header>
-            <mat-panel-title>
-              ID: {{ item.id }}
+            <mat-panel-title (click)="setSelectedBooklet(booklet)">
+              <mat-icon (click)="replayBooklet(booklet)">play_arrow</mat-icon>
+              {{ booklet.id }}
             </mat-panel-title>
           </mat-expansion-panel-header>
               <mat-list>
                 <mat-list-item
-                  *ngFor="let unit of item.units"
-                  (click)="onListItemClick(unit)"
+                  *ngFor="let unit of booklet.units"
+                  (click)="onUnitClick(unit)"
                   class="hoverable">
                   <span>{{ unit?.alias }}</span>
                 </mat-list-item>
@@ -79,19 +80,17 @@
           </div>
         </mat-list-item>
       </mat-list>
-      <h1>Grouped Blocks</h1>
-      <ng-container *ngFor="let logBlock of this.logs; let i = index">
-        <div class="block">
-          <h2>Block {{ i + 1 }}</h2>
-          <ul>
-            <li *ngFor="let log of logBlock">
-              <strong>{{ log.key }}</strong> - {{ log.parameter }}<br />
-              <small>Timestamp: {{ formatTimestamp(log.ts) }}</small>
-            </li>
-          </ul>
-        </div>
-      </ng-container>
-
+      <div class="fx-column-start-start">
+        <mat-icon (click)="replayUnit()">play_arrow</mat-icon>
+      @for ( logBlock of this.logs; track logBlock;) {
+            @for ( log of logBlock; track log;) {
+              <div class="fx-row-start-start">
+                <strong>{{ log.key }}</strong> - {{ log.parameter }}
+                <small>{{    formatTimestamp(log.ts) }}</small>
+              </div>
+            }
+      }
       </div>
+    </div>
   }
 </div>

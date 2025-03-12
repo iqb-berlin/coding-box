@@ -226,9 +226,40 @@ export class WorkspaceService {
 
   async findResponse(workspace_id: number, testPerson:string, unitId:string): Promise<ResponseDto[]> {
     this.logger.log('Returning response for test person', testPerson);
-    const response = await this.responsesRepository.find(
-      { where: { test_person: testPerson, unit_id: unitId, workspace_id: workspace_id } });
-    return response;
+    const [group, code, booklet] = testPerson.split('@');
+
+    const person = await this.personsRepository.find(
+      { where: { group: group, code: code } });
+    if (person) {
+      const booklets : any = person[0].booklets;
+      const foundBooklet = booklets.find((b: any) => b.id === booklet);
+      const unit = foundBooklet.units.find((u: any) => u.id === unitId);
+      const elementCodesChunk = unit.chunks.find((c: any) => c.id === 'elementCodes');
+      const content = JSON.stringify(unit.subforms[0].responses);
+      const response = {
+        id: elementCodesChunk.id,
+        responseType: elementCodesChunk.type,
+        ts: elementCodesChunk.ts,
+        content: content
+      };
+      return [{
+        id: 5,
+        test_person: '',
+        unit_id: '',
+
+        test_group: '',
+
+        workspace_id: 1,
+
+        created_at: new Date(),
+
+        responses:
+          [response],
+
+        booklet_id: ''
+      }];
+    }
+    return [];
   }
 
   async findWorkspaceResponses(workspace_id: number): Promise<ResponseDto[]> {

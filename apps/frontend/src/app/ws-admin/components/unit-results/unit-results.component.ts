@@ -4,14 +4,11 @@ import {
 import { Component, OnInit, ViewChild } from '@angular/core';
 import { MatSort } from '@angular/material/sort';
 import { FormsModule } from '@angular/forms';
-import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { TranslateModule } from '@ngx-translate/core';
 import { MatPaginator, MatPaginatorModule } from '@angular/material/paginator';
 import { SelectionModel } from '@angular/cdk/collections';
-import { MatSnackBar } from '@angular/material/snack-bar';
-
 import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
-
 import { TestGroupsInListDto } from '../../../../../../../api-dto/test-groups/testgroups-in-list.dto';
 
 interface P {
@@ -46,26 +43,19 @@ export class UnitResultsComponent implements OnInit {
 
   constructor(
     private backendService: BackendService,
-    private appService: AppService,
+    private appService: AppService
   ) {
   }
 
   ngOnInit(): void {
     this.createTestResultsList();
-    // Setze Paginator und Sortierung
-
-    console.log(this.displayedColumns);
-    console.log(this.dataSource);
   }
 
   onRowClick(row: P): void {
-    console.log(row);
     const foundPerson = this.data.find((person: { code: string; }) => person.code === row.code);
     if (foundPerson && foundPerson.booklets) {
       this.booklets = foundPerson.booklets;
     }
-
-    // this.router.navigate(['/detail-view', row.code]);
   }
 
   applyFilter(event: Event): void {
@@ -82,7 +72,6 @@ export class UnitResultsComponent implements OnInit {
     this.backendService.getTestResults(this.appService.selectedWorkspaceId)
       .subscribe(results => {
         this.data = results;
-        console.log(results);
         const mappedResults = results.map(result => ({
           code: result.code,
           group: result.group,
@@ -90,13 +79,10 @@ export class UnitResultsComponent implements OnInit {
           uploaded_at: result.uploaded_at
 
         }));
-        // console.log(mappedResults);
         this.dataSource = new MatTableDataSource(mappedResults);
         this.totalRecords = mappedResults.length;
         this.dataSource.paginator = this.paginator;
         this.dataSource.sort = this.sort;
-        console.log(this.dataSource, 'this.dataSource');
-        console.log(this.displayedColumns);
       });
   }
 }
