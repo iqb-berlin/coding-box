@@ -4,7 +4,6 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import 'multer';
-import { promises as fs, createReadStream, unlinkSync } from 'fs';
 import * as csv from 'fast-csv';
 import { Readable } from 'stream';
 import { FileIo } from '../../admin/workspace/file-io.interface';
@@ -78,17 +77,20 @@ export class UploadResultsService {
           .on('data', row => rowData.push(row))
           .on('end', async () => {
             const endTime = performance.now();
-            console.log('csv read', `${(endTime - startTime) / 1000}s`);
-            const bookletLogs = [];
-            const unitLogs = [];
-            rowData.forEach(row => {
-              if (row.unitname === '') {
-                bookletLogs.push(row);
-              } else {
-                unitLogs.push(row);
-              }
-            });
+            console.log('CSV read duration:', `${(endTime - startTime) / 1000}s`);
+
+            // Trennt die Daten direkt mit `reduce`, um die Logs in einem Schritt zu sortieren.
+            const { bookletLogs, unitLogs } = rowData.reduce(
+              (acc, row) => {
+                row.unitname === '' ? acc.bookletLogs.push(row) : acc.unitLogs.push(row);
+                return acc;
+              },
+              { bookletLogs: [], unitLogs: [] }
+            );
+
+            // Erstellen der Personenliste und Zeitmessung.
             this.createPersonList(rowData);
+
             const personTime = performance.now();
             console.log('personTime', `${(personTime - startTime) / 1000}s`);
 
@@ -108,21 +110,19 @@ export class UploadResultsService {
 
             existingPersons.forEach((p, i) => {
               const person = persons[i];
-              console.log('person', person);
-              if (p !== null) {
+              console.log('person', person.code);
+
+              if (p) {
                 const booklets: TcMergeBooklet[] = p.booklets as TcMergeBooklet[];
-                const mappedBooklets = booklets.map(b => ({
-                  ...b,
-                  logs: person.booklets.find(pb => pb.id === b.id)?.logs
-                })
-                );
-                for (const booklet of mappedBooklets) {
-                  this.assignUnitLogsToBooklet(booklet, unitLogs);
-                }
+                const logEnrichedBooklets = booklets.map(b => {
+                  const enriched = this.assignUnitLogsToBooklet(b, unitLogs);
+                  const logs = person.booklets.find(pb => pb.id === b.id)?.logs;
+                  return { enriched, logs };
+                });
                 return {
                   id: p.id,
                   ...person,
-                  booklets: mappedBooklets
+                  booklets: logEnrichedBooklets
                 };
               }
 
@@ -130,71 +130,70 @@ export class UploadResultsService {
             });
 
             const res = existingPersons;
-            const resolvePromisesTime = performance.now();
-            console.log('resolvePromisesTime', `${(resolvePromisesTime - startTime) / 1000}s`);
-            const chunks = <T>(arr: T[], size: number): T[][] => Array.from({ length: Math.ceil(arr.length / size) }, (_, i) => arr.slice(i * size, i * size + size));
-            const chunkedData = chunks(res, 10);
-            await Promise.all(
-              chunkedData.map(async chunk => {
-                await this.personsRepository.upsert(chunk, ['group', 'code', 'login']);
-                console.log('updated');
-              })
-            );
+            const manipulatedPersonsTime = performance.now();
+            console.log('manipulatedPersons', `${(manipulatedPersonsTime - startTime) / 1000}s`);
+            // const chunks = <T>(arr: T[], size: number): T[][] => Array.from({ length: Math.ceil(arr.length / size) }, (_, i) => arr.slice(i * size, i * size + size));
+            // const chunkedData = chunks(res, 10);
+            // await Promise.all(
+            //   chunkedData.map(async chunk => {
+            //     await this.personsRepository.upsert(chunk, ['group', 'code', 'login']);
+            //     console.log('updated');
+            //   })
+            // );
           });
       } else {
-        console.log('responses');
+        console.log('Start to import responses. ');
         const rowData: Response[] = [];
-        await fs.writeFile(`responses-${randomInteger}.csv`, file.buffer, 'binary');
-        const stream = createReadStream(`responses-${randomInteger}.csv`);
-        csv.parseStream(stream, { headers: true, delimiter: ';' })
+        const bufferStream = new Readable();
+        bufferStream.push(file.buffer);
+        bufferStream.push(null); // Signalisiert das Ende der Daten;
+        csv.parseStream(bufferStream, { headers: true, delimiter: ';' })
           .on('error', error => {
             this.logger.log(error);
-            unlinkSync(`responses-${randomInteger}.csv`);
           })
           .on('data', row => rowData.push(row))
           .on('end', () => {
-            unlinkSync(`responses-${randomInteger}.csv`);
-            console.log(rowData[0]);
-            //  const cleanedRows = WorkspaceService.cleanResponses(mappedRowData);
-            // cleanedRows.forEach(row => filePromises.push(
-            //  this.responsesRepository.upsert(row, ['test_person', 'unit_id'])));
-
             this.createPersonList(rowData);
             const personList = this.persons.map(person => this.assignBookletsToPerson(person, rowData))
               .map(person => this.assignUnitsToBookletAndPerson(person, rowData)
               );
             this.personsRepository.upsert(personList, ['group', 'code', 'login']).then(() => {
-              console.log('saved');
+              console.log(`Saved ${personList.length} test persons`);
             });
           });
       }
     }
   }
 
-  createPersonList(rows: Response[] | Log[] | Logs[]) {
-    const personList : Person[] = [];
+  createPersonList(rows: Response[] | Log[] | Logs[]): void {
+    // Verwendung einer Map für eine effizientere Suche.
+    const personMap = new Map<string, Person>();
+
     rows.forEach(row => {
-      const person = personList
-        .find(p => p.group === row.groupname && p.login === row.loginname && p.code === row.code);
-      if (!person) {
-        personList.push(
-          {
-            group: row.groupname,
-            login: row.loginname,
-            code: row.code,
-            booklets: []
-          }
-        );
+      const mapKey = `${row.groupname}-${row.loginname}-${row.code}`;
+      if (!personMap.has(mapKey)) {
+        personMap.set(mapKey, {
+          group: row.groupname,
+          login: row.loginname,
+          code: row.code,
+          booklets: []
+        });
       }
     });
-    this.persons = personList;
+
+    // Konvertiere die Map-Werte in ein Array und weise es zu.
+    this.persons = Array.from(personMap.values());
   }
 
+
   assignBookletsToPerson(person: Person, rows: Response[]): Person {
-    const booklets : TcMergeBooklet[] = [];
+    const bookletIds = new Set<string>(); // Verfolgt eindeutige Booklet-IDs
+    const booklets: TcMergeBooklet[] = [];
+
     rows.forEach(row => {
       if (row.groupname === person.group && row.loginname === person.login && row.code === person.code) {
-        if (!booklets.find(b => b.id === row.bookletname)) {
+        if (!bookletIds.has(row.bookletname)) { // Prüft effizient, ob `bookletname` bereits hinzugefügt wurde
+          bookletIds.add(row.bookletname);
           booklets.push({
             id: row.bookletname,
             logs: [],
@@ -204,56 +203,69 @@ export class UploadResultsService {
         }
       }
     });
+
     person.booklets = booklets;
     return person;
   }
 
+
   assignBookletLogsToPerson(person: Person, rows: Log[]): Person {
-    const booklets : TcMergeBooklet[] = [];
+    const booklets: TcMergeBooklet[] = [];
+    const bookletMap = new Map<string, TcMergeBooklet>(); // Map für schnelles Nachschlagen
+
     rows.forEach(row => {
       if (row.groupname === person.group && row.loginname === person.login && row.code === person.code) {
-        if (!booklets.find(b => b.id === row.bookletname)) {
-          const logEntry = row.logentry.split(':', 2);
-          booklets.push({
-            id: row.bookletname,
-            logs: [{
-              ts: row.timestamp,
-              key: logEntry[0].trim(),
-              parameter: logEntry[1].trim().replace(/"/g, '')
-            }],
+        const { bookletname, timestamp, logentry } = row;
+        const [logEntryKey, logEntryValueRaw] = logentry.split(':', 2);
+        const logEntryValue = logEntryValueRaw?.trim().replace(/"/g, '');
+
+        // Überprüfen, ob das Booklet bereits existiert
+        let booklet = bookletMap.get(bookletname);
+        if (!booklet) {
+          booklet = {
+            id: bookletname,
+            logs: [],
             units: [],
             sessions: []
-          });
-        } else {
-          const bookletIndex = booklets.findIndex(b => b.id === row.bookletname);
-          const logEntryKey = row.logentry.substring(0, row.logentry.indexOf(':'));
-          const logEntryValue = row.logentry.substring(row.logentry.indexOf(':') + 3, row.logentry.length - 1).trim().replace(/""/g, '"');
+          };
+          booklets.push(booklet);
+          bookletMap.set(bookletname, booklet);
+        }
 
-          if (logEntryKey.trim() === 'LOADCOMPLETE') {
-            const parsedJSON = JSON.parse(logEntryValue);
-            const {
-              browserVersion, browserName, osName, screenSizeWidth, screenSizeHeight, loadTime
-            } = parsedJSON;
-            booklets[bookletIndex].sessions.push({
-              browser: `${browserName} ${browserVersion}`,
-              os: `${osName}`,
-              screen: `${screenSizeWidth} ${screenSizeHeight}`,
-              ts: row.timestamp,
-              loadCompleteMS: loadTime
-            });
-          }
-          booklets[bookletIndex].logs.push({
-            ts: row.timestamp,
-            key: logEntryKey.trim(),
-            parameter: logEntryValue.trim().replace(/"/g, '')
+        // "LOADCOMPLETE"-Handling
+        if (logEntryKey.trim() === 'LOADCOMPLETE' && logEntryValue) {
+          const parsedJSON = JSON.parse(logEntryValue);
+          const {
+            browserVersion,
+            browserName,
+            osName,
+            screenSizeWidth,
+            screenSizeHeight,
+            loadTime
+          } = parsedJSON;
+
+          booklet.sessions.push({
+            browser: `${browserName} ${browserVersion}`,
+            os: osName,
+            screen: `${screenSizeWidth} ${screenSizeHeight}`,
+            ts: timestamp,
+            loadCompleteMS: loadTime
           });
         }
+
+        // Log hinzufügen
+        booklet.logs.push({
+          ts: timestamp,
+          key: logEntryKey.trim(),
+          parameter: logEntryValue || ''
+        });
       }
     });
 
     person.booklets = booklets;
     return person;
   }
+
 
   assignUnitLogsToBooklet(booklet: TcMergeBooklet, rows: Log[]): TcMergeBooklet {
     // Map für eindeutigen Zugriff auf Units erstellen
@@ -293,86 +305,80 @@ export class UploadResultsService {
 
   assignUnitsToBookletAndPerson(person: Person, rows: Response[]): Person {
     rows.forEach(row => {
-      if (row.groupname === person.group &&
+      const matchesPerson = row.groupname === person.group &&
         row.loginname === person.login &&
-        row.code === person.code) {
-        const booklet = person.booklets.find(b => b.id === row.bookletname);
-        const responseChunksCleaned = row.responses.replace(/""/g, '"');
-        let parsedResponses : Chunk[] = [];
-        try {
-          parsedResponses = JSON.parse(responseChunksCleaned);
-        } catch (e) {
-          console.log('error', e);
-        }
-        const subforms : TcMergeSubForms[] = parsedResponses.filter(chunk => chunk?.id === 'elementCodes').map(chunk => {
-          let chunkContent : TcMergeResponse[];
+        row.code === person.code;
+
+      if (!matchesPerson) return;
+
+      const booklet = person.booklets.find(b => b.id === row.bookletname);
+      if (!booklet) return;
+
+      // Parse responses
+      const responseChunksCleaned = row.responses.replace(/""/g, '"');
+      let parsedResponses: Chunk[] = [];
+      try {
+        parsedResponses = JSON.parse(responseChunksCleaned);
+      } catch (e) {
+        console.error('Error parsing responses:', e);
+      }
+
+      // Extract and map subforms
+      const subforms: TcMergeSubForms[] = parsedResponses
+        .filter(chunk => chunk?.id === 'elementCodes')
+        .map(chunk => {
+          let chunkContent: TcMergeResponse[] = [];
           try {
             chunkContent = JSON.parse(chunk.content);
           } catch (e) {
-            console.log('error', e);
+            console.error('Error parsing chunk content:', e);
           }
-          // chunkContent.forEach(cc => {
-          //   try {
-          //     if (cc.value.startsWith('data:application/octet-stream;base64')) {
-          //       console.log('found Geogebra');
-          //       // const writeStream = fs.createWriteStream('/', { encoding: 'base64' });
-          //       const hash = crypto.createHash('sha256', { outputLength: 9 }).update(cc.value).digest('base64');
-          //       fs.writeFile(`GeoGebra/${row.groupname}${row.loginname}${row.code}_${hash}.base64`, cc.value, 'base64', err => {
-          //         console.log('written file');
-          //       });
-          //
-          //       // this.logger.log('hash', hash);
-          //     }
-          //   } catch (e) {
-          //     // console.log('error', e);
-          //   }
-          //   // console.log('response', response);
-          // });
-          return {
-            id: chunk.id,
-            responses: chunkContent
-          };
+          return { id: chunk.id, responses: chunkContent };
         });
-        const variables = new Set<string>();
-        subforms.forEach(subform => {
-          subform.responses.forEach(response => {
-            variables.add(response.id);
-          });
-        });
-        let parsedLastState = [];
-        try {
-          parsedLastState = JSON.parse(row.laststate);
-        } catch (e) {
-          console.log('error', e);
-        }
-        let laststate: TcMergeLastState[] = [];
-        if (parsedLastState) {
-          laststate = Object.entries(parsedLastState).map(ls => ({ key: ls[0], value: ls[1] as string }));
-          console.log('laststate', laststate);
-          //
-        }
-        person.booklets = person.booklets.map(b => {
-          if (b.id === booklet.id) {
-            b.units.push({
-              id: row.unitname,
-              alias: row.unitname,
-              laststate: laststate,
-              subforms: subforms,
-              chunks: [
-                {
-                  id: 'elementCodes',
-                  type: parsedResponses[0]?.responseType,
-                  ts: parsedResponses[0]?.ts,
-                  variables: Array.from(variables)
-                }
-              ],
-              logs: []
-            });
-          }
-          return b;
-        });
+
+      // Gather variables from responses
+      const variables = new Set<string>();
+      subforms.forEach(subform =>
+        subform.responses.forEach(response => variables.add(response.id))
+      );
+
+      // Parse laststate
+      let laststate: TcMergeLastState[] = [];
+      try {
+        const parsedLastState = JSON.parse(row.laststate);
+        laststate = Object.entries(parsedLastState).map(([key, value]) => ({
+          key,
+          value: value as string,
+        }));
+      } catch (e) {
+        console.error('Error parsing last state:', e);
       }
+
+      // Map and update booklets
+      person.booklets = person.booklets.map(b => {
+        if (b.id !== booklet.id) return b;
+
+        const newUnit: TcMergeUnit = {
+          id: row.unitname,
+          alias: row.unitname,
+          laststate,
+          subforms,
+          chunks: [
+            {
+              id: 'elementCodes',
+              type: parsedResponses[0]?.responseType || '',
+              ts: parsedResponses[0]?.ts || 0,
+              variables: Array.from(variables),
+            },
+          ],
+          logs: [],
+        };
+
+        b.units.push(newUnit);
+        return b;
+      });
     });
     return person;
   }
+
 }
