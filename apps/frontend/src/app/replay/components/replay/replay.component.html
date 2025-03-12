@@ -1,10 +1,12 @@
 <div class="replay-container">
   <cb-spinner [isLoaded]="isLoaded"></cb-spinner>
-  <coding-box-unit-player *ngIf="!!player && unitDef"
-                          [unitDef]="unitDef"
-                          [unitPlayer]="player"
-                          [unitResponses]="responses"
-                          [pageId]="page"
-                          (invalidPage)="checkPageError($event)">
-  </coding-box-unit-player>
+  @if (!!player && unitDef ){
+    <coding-box-unit-player
+      [unitDef]="unitDef"
+      [unitPlayer]="player"
+      [unitResponses]="responses"
+      [pageId]="page"
+      (invalidPage)="checkPageError($event)">
+    </coding-box-unit-player>
+  }
 </div>

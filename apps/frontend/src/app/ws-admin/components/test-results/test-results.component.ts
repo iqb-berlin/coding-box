@@ -20,10 +20,13 @@ import {
 } from '@angular/material/expansion';
 import { MatList, MatListItem } from '@angular/material/list';
 import { MatTooltip } from '@angular/material/tooltip';
+import { MatInput } from '@angular/material/input';
+import { CommonModule, DatePipe } from '@angular/common';
+import { MatIcon } from '@angular/material/icon';
+import { Router } from '@angular/router';
 import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
 import { TestGroupsInListDto } from '../../../../../../../api-dto/test-groups/testgroups-in-list.dto';
-import { MatInput } from '@angular/material/input';
 
 interface P {
   code: string;
@@ -38,8 +41,9 @@ interface P {
   templateUrl: './test-results.component.html',
   styleUrls: ['./test-results.component.scss'],
   standalone: true,
+  providers: [DatePipe],
   // eslint-disable-next-line max-len
-  imports: [FormsModule, MatExpansionPanelHeader, MatLabel, MatPaginatorModule, TranslateModule, MatTable, MatCellDef, MatHeaderCellDef, MatHeaderRowDef, MatRowDef, MatCell, MatColumnDef, MatHeaderCell, MatHeaderRow, MatRow, MatSort, MatSortHeader, MatAccordion, MatExpansionPanel, MatExpansionPanelTitle, MatList, MatListItem, MatTooltip, MatInput]
+  imports: [CommonModule, FormsModule, MatExpansionPanelHeader, MatLabel, MatPaginatorModule, TranslateModule, MatTable, MatCellDef, MatHeaderCellDef, MatHeaderRowDef, MatRowDef, MatCell, MatColumnDef, MatHeaderCell, MatHeaderRow, MatRow, MatSort, MatSortHeader, MatAccordion, MatExpansionPanel, MatExpansionPanelTitle, MatList, MatListItem, MatTooltip, MatInput, MatIcon]
 })
 export class TestResultsComponent implements OnInit {
   tableSelectionCheckboxes = new SelectionModel<TestGroupsInListDto>(true, []);
@@ -53,31 +57,53 @@ export class TestResultsComponent implements OnInit {
   totalRecords: number = 0; // Gesamtanzahl der Datensätze
   pageSize: number = 10; // Standardanzahl der Seiten
   selectedUnit: any;
+  testPerson: any;
+  selectedBooklet:any;
 
   @ViewChild(MatPaginator) paginator!: MatPaginator;
   @ViewChild(MatSort) sort!: MatSort;
 
   constructor(
     private backendService: BackendService,
-    private appService: AppService
+    private appService: AppService,
+    private router: Router
   ) {
   }
 
   ngOnInit(): void {
     this.createTestResultsList();
-    // Setze Paginator und Sortierung
-    console.log(this.displayedColumns);
-    console.log(this.dataSource);
   }
 
   onRowClick(row: P): void {
-    console.log(row);
     const foundPerson = this.data.find((person: { code: string; }) => person.code === row.code);
     if (foundPerson && foundPerson.booklets) {
       this.booklets = foundPerson.booklets;
+      this.testPerson = foundPerson;
     }
 
     // this.router.navigate(['/detail-view', row.code]);
+  }
+
+  replayBooklet(booklet:any) {
+    this.selectedBooklet = booklet;
+  }
+
+  replayUnit() {
+    this.backendService
+      .createToken(this.appService.selectedWorkspaceId, this.appService.userProfile.id || '', 1)
+      .subscribe(token => {
+        const queryParams = {
+          auth: token
+        };
+        // const page = this.replayComponent.responses?.unit_state?.CURRENT_PAGE_ID;
+        const url = this.router
+          .serializeUrl(
+            this.router.createUrlTree(
+              [`replay/${this.testPerson.group}@${this.testPerson.code}@${this.selectedBooklet?.id}/${this.selectedUnit.alias}/1`],
+              { queryParams: queryParams })
+          );
+        window.open(`#/${url}`, '_blank');
+      });
   }
 
   applyFilter(event: Event): void {
@@ -90,12 +116,14 @@ export class TestResultsComponent implements OnInit {
     }
   }
 
-  onListItemClick(unit: any): void {
-    console.log('Clicked unit:', unit);
+  onUnitClick(unit: any): void {
     this.responses = unit.subforms[0].responses;
     this.logs = this.createUnitHistory(unit);
     this.selectedUnit = unit;
-    // Hier kannst du weitere Logik implementieren
+  }
+
+  setSelectedBooklet(booklet:any) {
+    this.selectedBooklet = booklet;
   }
 
   calculateDetailedTimeDifferences = (data: { ts: string, key: string, parameter: string }[]) => {
@@ -165,7 +193,6 @@ export class TestResultsComponent implements OnInit {
     this.backendService.getTestResults(this.appService.selectedWorkspaceId)
       .subscribe(results => {
         this.data = results;
-        console.log(results);
         const mappedResults = results.map(result => ({
           code: result.code,
           group: result.group,
@@ -173,13 +200,10 @@ export class TestResultsComponent implements OnInit {
           uploaded_at: result.uploaded_at
 
         }));
-        // console.log(mappedResults);
         this.dataSource = new MatTableDataSource(mappedResults);
         this.totalRecords = mappedResults.length;
         this.dataSource.paginator = this.paginator;
         this.dataSource.sort = this.sort;
-        console.log(this.dataSource, 'this.dataSource');
-        console.log(this.displayedColumns);
       });
   }
 }
