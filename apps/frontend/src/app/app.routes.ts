@@ -13,17 +13,30 @@ import { TestGroupsComponent } from './ws-admin/components/test-groups/test-grou
 import { WsUsersComponent } from './ws-admin/components/ws-users/ws-users.component';
 import { CodingManagementComponent } from './coding/coding-managment/coding-management.component';
 import { CodingManagementManualComponent } from './coding/coding-management-manual/coding-management-manual.component';
+import { canActivateAuthRole } from './auth/auth.guard';
 
 export const routes: Routes = [
   { path: '', redirectTo: 'home', pathMatch: 'full' },
-  { path: 'home', component: HomeComponent },
-  { path: 'replay/:testPerson/:unitId/:page', component: ReplayComponent },
-  { path: 'replay/:testPerson/:unitId', component: ReplayComponent },
-  { path: 'replay/:testPerson', component: ReplayComponent },
-  { path: 'replay', component: ReplayComponent },
-  { path: 'coding-manual', component: CodingManagementManualComponent },
+  {
+    path: 'home',
+    component: HomeComponent
+  },
+  {
+    path: 'replay/:testPerson/:unitId/:page',
+    canActivate: [canActivateAuthRole],
+    component: ReplayComponent
+  },
+  {
+    path: 'replay/:testPerson/:unitId',
+    canActivate: [canActivateAuthRole],
+    component: ReplayComponent
+  },
+  { path: 'replay/:testPerson', canActivate: [canActivateAuthRole], component: ReplayComponent },
+  { path: 'replay', canActivate: [canActivateAuthRole], component: ReplayComponent },
+  { path: 'coding-manual', canActivate: [canActivateAuthRole], component: CodingManagementManualComponent },
   {
     path: 'admin',
+    canActivate: [canActivateAuthRole],
     component: AdminComponent,
     children: [
       { path: '', redirectTo: 'users', pathMatch: 'full' },
@@ -34,6 +47,7 @@ export const routes: Routes = [
       { path: '**', component: UsersComponent }]
   }, {
     path: 'workspace-admin/:ws',
+    canActivate: [canActivateAuthRole],
     component: WsAdminComponent,
     children: [
       { path: '', redirectTo: 'select-unit-play', pathMatch: 'full' },
