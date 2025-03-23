@@ -6,43 +6,51 @@
           <mat-label>Filter</mat-label>
           <input matInput (input)="applyFilter($event)" placeholder="Suchtext eingeben">
         </div>
-        <mat-table [dataSource]="dataSource" matSort>
-          <ng-container matColumnDef="code" >
-            <mat-header-cell *matHeaderCellDef mat-sort-header="code">
-            </mat-header-cell>
-            <mat-cell *matCellDef="let element">
-              {{element.code}}
-            </mat-cell>
-          </ng-container>
-          <ng-container matColumnDef="group">
-            <mat-header-cell *matHeaderCellDef mat-sort-header="group">{{'test_group.test_group' | translate}}</mat-header-cell>
-            <mat-cell *matCellDef="let element">
-              {{element.group}}
-            </mat-cell>
-          </ng-container>
-          <ng-container matColumnDef="login">
-            <mat-header-cell *matHeaderCellDef mat-sort-header="login">Login</mat-header-cell>
-            <mat-cell *matCellDef="let element">
-              {{element.login}}
-            </mat-cell>
-          </ng-container>
-          <ng-container matColumnDef="uploaded_at">
-            <mat-header-cell *matHeaderCellDef mat-sort-header="uploaded_at">Hinzugefügt am</mat-header-cell>
-            <mat-cell *matCellDef="let element">
-              {{element.uploaded_at | date: 'dd.MM.yyyy HH:mm'}}
-            </mat-cell>
-          </ng-container>
-          <mat-header-row *matHeaderRowDef="displayedColumns;sticky: true"></mat-header-row>
-          <mat-row  (click)="onRowClick(row)"
-                    *matRowDef="let row; columns: displayedColumns;"></mat-row>
-        </mat-table>
+        <div class="table-container">
+          <mat-spinner *ngIf="isLoading" class="loading-spinner"></mat-spinner>
+          <div *ngIf="!isLoading">
+            <mat-table [dataSource]="dataSource" matSort>
+              <ng-container matColumnDef="code" >
+                <mat-header-cell *matHeaderCellDef mat-sort-header="code">
+                </mat-header-cell>
+                <mat-cell *matCellDef="let element">
+                  {{element.code}}
+                </mat-cell>
+              </ng-container>
+              <ng-container matColumnDef="group">
+                <mat-header-cell *matHeaderCellDef mat-sort-header="group">{{'test_group.test_group' | translate}}</mat-header-cell>
+                <mat-cell *matCellDef="let element">
+                  {{element.group}}
+                </mat-cell>
+              </ng-container>
+              <ng-container matColumnDef="login">
+                <mat-header-cell *matHeaderCellDef mat-sort-header="login">Login</mat-header-cell>
+                <mat-cell *matCellDef="let element">
+                  {{element.login}}
+                </mat-cell>
+              </ng-container>
+              <ng-container matColumnDef="uploaded_at">
+                <mat-header-cell *matHeaderCellDef mat-sort-header="uploaded_at">Hinzugefügt am</mat-header-cell>
+                <mat-cell *matCellDef="let element">
+                  {{element.uploaded_at | date: 'dd.MM.yyyy HH:mm'}}
+                </mat-cell>
+              </ng-container>
+              <mat-header-row *matHeaderRowDef="displayedColumns;sticky: true"></mat-header-row>
+              <mat-row  (click)="onRowClick(row)"
+                        *matRowDef="let row; columns: displayedColumns;"></mat-row>
+            </mat-table>
+          </div>
         <!-- Paginator -->
         <mat-paginator
           [length]="totalRecords"
           [pageSize]="pageSize"
-          [pageSizeOptions]="[5, 10, 20]"
-          aria-label="Select page">
+          [pageIndex]="pageIndex"
+          [pageSizeOptions]="[20, 50, 100]"
+          showFirstLastButtons
+          (page)="onPaginatorChange($event)"
+        >
         </mat-paginator>
+        </div>
       </div>
 
       <mat-accordion>

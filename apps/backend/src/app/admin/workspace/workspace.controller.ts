@@ -116,9 +116,17 @@ export class WorkspaceController {
 
   @Get(':workspace_id/test-results')
   @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiOkResponse({ description: 'Test results retrieved successfully.' })
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
-  async findTestResults(@Param('workspace_id') workspace_id: number): Promise<Persons[]> {
-    return this.workspaceService.findTestResults(workspace_id);
+  async findTestResults(
+    @Param('workspace_id') workspace_id: number,
+                           @Query('page') page: number = 1,
+                           @Query('limit') limit: number = 10
+  ): Promise<{ data: Persons[]; total: number; page: number; limit: number }> {
+    const [data, total] = await this.workspaceService.findTestResults(workspace_id, { page, limit });
+    return {
+      data, total, page, limit
+    };
   }
 
   @Get(':workspace_id/users')

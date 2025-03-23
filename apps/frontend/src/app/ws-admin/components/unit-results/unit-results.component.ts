@@ -68,21 +68,25 @@ export class UnitResultsComponent implements OnInit {
     }
   }
 
-  createTestResultsList(): void {
-    this.backendService.getTestResults(this.appService.selectedWorkspaceId)
-      .subscribe(results => {
-        this.data = results;
-        const mappedResults = results.map(result => ({
+  createTestResultsList(page: number = 0, limit: number = 10): void {
+    this.backendService.getTestResults(this.appService.selectedWorkspaceId, page, limit)
+      .subscribe(response => {
+        // `response` soll die Ergebnisse und die Gesamtanzahl zurückgeben, z. B.:
+        // { data: [], totalRecords: number }.
+        const { data, totalRecords } = response;
+        this.data = data;
+
+        const mappedResults = data.map((result: any) => ({
           code: result.code,
           group: result.group,
           login: result.login,
           uploaded_at: result.uploaded_at
-
         }));
+
         this.dataSource = new MatTableDataSource(mappedResults);
-        this.totalRecords = mappedResults.length;
-        this.dataSource.paginator = this.paginator;
+        this.totalRecords = totalRecords; // Gesamtanzahl der Datensätze vom Backend
         this.dataSource.sort = this.sort;
       });
   }
+
 }
