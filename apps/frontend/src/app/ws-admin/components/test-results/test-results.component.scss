@@ -69,3 +69,13 @@ mat-row:hover {
   border: 2px solid #ddd; /* Optional Rahmen */
   border-radius: 8px; /* Runde Ecken, falls benötigt */
 }
+
+.table-container {
+  max-height: 60%;
+  overflow-x: auto; /* Ermöglicht horizontales Scrollen */
+}
+
+mat-header-cell, mat-cell {
+  white-space: nowrap; /* Verhindert Zeilenumbruch bei langen Inhalten */
+}
+

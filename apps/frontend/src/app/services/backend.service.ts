@@ -315,10 +315,19 @@ export class BackendService {
       { headers: this.authHeader });
   }
 
-  getTestResults(workspaceId: number): Observable<Persons[]> {
+  getTestResults(workspaceId: number, page: number, limit: number): Observable<any> {
+    const params = {
+      page: page.toString(),
+      limit: limit.toString()
+    };
+
     return this.http.get<Persons[]>(
       `${this.serverUrl}admin/workspace/${workspaceId}/test-results/`,
-      { headers: this.authHeader });
+      {
+        headers: this.authHeader,
+        params: params
+      }
+    );
   }
 
   authenticate(username:string, password:string, server:string, url:string): Observable<ServerResponse > {

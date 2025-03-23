@@ -88,7 +88,6 @@ export class UploadResultsService {
               { bookletLogs: [], unitLogs: [] }
             );
 
-            // Erstellen der Personenliste und Zeitmessung.
             this.createPersonList(rowData);
 
             const personTime = performance.now();
@@ -132,14 +131,14 @@ export class UploadResultsService {
             const res = existingPersons;
             const manipulatedPersonsTime = performance.now();
             console.log('manipulatedPersons', `${(manipulatedPersonsTime - startTime) / 1000}s`);
-            // const chunks = <T>(arr: T[], size: number): T[][] => Array.from({ length: Math.ceil(arr.length / size) }, (_, i) => arr.slice(i * size, i * size + size));
-            // const chunkedData = chunks(res, 10);
-            // await Promise.all(
-            //   chunkedData.map(async chunk => {
-            //     await this.personsRepository.upsert(chunk, ['group', 'code', 'login']);
-            //     console.log('updated');
-            //   })
-            // );
+            const chunks = <T>(arr: T[], size: number): T[][] => Array.from({ length: Math.ceil(arr.length / size) }, (_, i) => arr.slice(i * size, i * size + size));
+            const chunkedData = chunks(res, 10);
+            await Promise.all(
+              chunkedData.map(async chunk => {
+                await this.personsRepository.upsert(chunk, ['group', 'code', 'login']);
+                console.log('updated');
+              })
+            );
           });
       } else {
         console.log('Start to import responses. ');
@@ -185,7 +184,6 @@ export class UploadResultsService {
     this.persons = Array.from(personMap.values());
   }
 
-
   assignBookletsToPerson(person: Person, rows: Response[]): Person {
     const bookletIds = new Set<string>(); // Verfolgt eindeutige Booklet-IDs
     const booklets: TcMergeBooklet[] = [];
@@ -207,7 +205,6 @@ export class UploadResultsService {
     person.booklets = booklets;
     return person;
   }
-
 
   assignBookletLogsToPerson(person: Person, rows: Log[]): Person {
     const booklets: TcMergeBooklet[] = [];
@@ -234,7 +231,13 @@ export class UploadResultsService {
 
         // "LOADCOMPLETE"-Handling
         if (logEntryKey.trim() === 'LOADCOMPLETE' && logEntryValue) {
-          const parsedJSON = JSON.parse(logEntryValue);
+          let parsedJSON;
+          try {
+            parsedJSON = JSON.parse(logEntryValue);
+          } catch (e) {
+            console.error('Error parsing JSON:', e);
+            parsedJSON = {};
+          }
           const {
             browserVersion,
             browserName,
@@ -265,7 +268,6 @@ export class UploadResultsService {
     person.booklets = booklets;
     return person;
   }
-
 
   assignUnitLogsToBooklet(booklet: TcMergeBooklet, rows: Log[]): TcMergeBooklet {
     // Map für eindeutigen Zugriff auf Units erstellen
@@ -338,8 +340,7 @@ export class UploadResultsService {
 
       // Gather variables from responses
       const variables = new Set<string>();
-      subforms.forEach(subform =>
-        subform.responses.forEach(response => variables.add(response.id))
+      subforms.forEach(subform => subform.responses.forEach(response => variables.add(response.id))
       );
 
       // Parse laststate
@@ -348,7 +349,7 @@ export class UploadResultsService {
         const parsedLastState = JSON.parse(row.laststate);
         laststate = Object.entries(parsedLastState).map(([key, value]) => ({
           key,
-          value: value as string,
+          value: value as string
         }));
       } catch (e) {
         console.error('Error parsing last state:', e);
@@ -368,10 +369,10 @@ export class UploadResultsService {
               id: 'elementCodes',
               type: parsedResponses[0]?.responseType || '',
               ts: parsedResponses[0]?.ts || 0,
-              variables: Array.from(variables),
-            },
+              variables: Array.from(variables)
+            }
           ],
-          logs: [],
+          logs: []
         };
 
         b.units.push(newUnit);
@@ -380,5 +381,4 @@ export class UploadResultsService {
     });
     return person;
   }
-
 }

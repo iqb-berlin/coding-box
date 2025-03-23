@@ -189,12 +189,32 @@ export class WorkspaceService {
       });
   }
 
-  async findTestResults(workspace_id: number): Promise<Persons[]> {
-    this.logger.log('Returning all test results for workspace ', workspace_id);
-    return this.personsRepository
-      .find({
+  async findTestResults(workspace_id: number, options: { page: number; limit: number }): Promise<[Persons[], number]> {
+    const { page, limit } = options;
+
+    // Validierungen
+    if (!workspace_id || workspace_id <= 0) {
+      throw new Error('Invalid workspace_id provided');
+    }
+
+    const MAX_LIMIT = 100;
+    const validPage = Math.max(1, page); // Minimum 1
+    const validLimit = Math.min(Math.max(1, limit), MAX_LIMIT); // Zwischen 1 und MAX_LIMIT
+
+    try {
+      const [results, total] = await this.personsRepository.findAndCount({
+        // where: { workspace_id: workspace_id },
+        skip: (validPage - 1) * validLimit,
+        take: validLimit
       });
+
+      return [results, total];
+    } catch (error) {
+      this.logger.error(`Failed to fetch test results for workspace_id ${workspace_id}: ${error.message}`, error.stack);
+      throw new Error('An error occurred while fetching test results');
+    }
   }
+
 
   async findUsers(workspace_id: number): Promise<WorkspaceUser[]> {
     this.logger.log('Returning all users for workspace ', workspace_id);

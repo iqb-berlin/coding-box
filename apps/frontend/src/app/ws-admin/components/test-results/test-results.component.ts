@@ -10,7 +10,7 @@ import { Component, OnInit, ViewChild } from '@angular/core';
 import { MatSort, MatSortHeader } from '@angular/material/sort';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
-import { MatPaginator, MatPaginatorModule } from '@angular/material/paginator';
+import { MatPaginator, MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { SelectionModel } from '@angular/cdk/collections';
 import { MatLabel } from '@angular/material/form-field';
 import {
@@ -27,6 +27,7 @@ import { Router } from '@angular/router';
 import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
 import { TestGroupsInListDto } from '../../../../../../../api-dto/test-groups/testgroups-in-list.dto';
+import { MatProgressSpinner } from '@angular/material/progress-spinner';
 
 interface P {
   code: string;
@@ -43,7 +44,7 @@ interface P {
   standalone: true,
   providers: [DatePipe],
   // eslint-disable-next-line max-len
-  imports: [CommonModule, FormsModule, MatExpansionPanelHeader, MatLabel, MatPaginatorModule, TranslateModule, MatTable, MatCellDef, MatHeaderCellDef, MatHeaderRowDef, MatRowDef, MatCell, MatColumnDef, MatHeaderCell, MatHeaderRow, MatRow, MatSort, MatSortHeader, MatAccordion, MatExpansionPanel, MatExpansionPanelTitle, MatList, MatListItem, MatTooltip, MatInput, MatIcon]
+  imports: [CommonModule, FormsModule, MatExpansionPanelHeader, MatLabel, MatPaginatorModule, TranslateModule, MatTable, MatCellDef, MatHeaderCellDef, MatHeaderRowDef, MatRowDef, MatCell, MatColumnDef, MatHeaderCell, MatHeaderRow, MatRow, MatSort, MatSortHeader, MatAccordion, MatExpansionPanel, MatExpansionPanelTitle, MatList, MatListItem, MatTooltip, MatInput, MatIcon, MatProgressSpinner]
 })
 export class TestResultsComponent implements OnInit {
   tableSelectionCheckboxes = new SelectionModel<TestGroupsInListDto>(true, []);
@@ -56,9 +57,12 @@ export class TestResultsComponent implements OnInit {
   logs: any = [];
   totalRecords: number = 0; // Gesamtanzahl der Datensätze
   pageSize: number = 10; // Standardanzahl der Seiten
+  pageIndex: number = 0; // Aktuelle Seite
   selectedUnit: any;
   testPerson: any;
   selectedBooklet:any;
+  isLoading: boolean = true;
+
 
   @ViewChild(MatPaginator) paginator!: MatPaginator;
   @ViewChild(MatSort) sort!: MatSort;
@@ -80,8 +84,6 @@ export class TestResultsComponent implements OnInit {
       this.booklets = foundPerson.booklets;
       this.testPerson = foundPerson;
     }
-
-    // this.router.navigate(['/detail-view', row.code]);
   }
 
   replayBooklet(booklet:any) {
@@ -189,20 +191,29 @@ export class TestResultsComponent implements OnInit {
     }
   }
 
-  createTestResultsList(): void {
-    this.backendService.getTestResults(this.appService.selectedWorkspaceId)
-      .subscribe(results => {
-        this.data = results;
-        const mappedResults = results.map(result => ({
+  onPaginatorChange(event: PageEvent): void {
+    this.pageSize = event.pageSize; // Aktualisiert die Anzahl der Einträge pro Seite
+    this.pageIndex = event.pageIndex; // Aktualisiert die aktuelle Seite
+    this.createTestResultsList(this.pageIndex, this.pageSize); // Läd die Daten neu
+  }
+
+  createTestResultsList(page: number = 0, limit: number = 10): void {
+    // Ensure page is non-negative
+    const validPage = Math.max(0, page);
+    this.backendService.getTestResults(this.appService.selectedWorkspaceId, validPage, limit)
+      .subscribe(response => {
+        this.isLoading = false;
+        const { data, total } = response;
+        this.data = data;
+        const mappedResults = data.map((result: any) => ({
           code: result.code,
           group: result.group,
           login: result.login,
           uploaded_at: result.uploaded_at
-
         }));
+
         this.dataSource = new MatTableDataSource(mappedResults);
-        this.totalRecords = mappedResults.length;
-        this.dataSource.paginator = this.paginator;
+        this.totalRecords = total;
         this.dataSource.sort = this.sort;
       });
   }
