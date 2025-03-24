@@ -29,7 +29,7 @@
       <!-- admin and user area -->
       <div class="admin-section">
         <!-- Admin-Link -->
-        @if (appService.authData.isAdmin || authService.getRoles().includes('admin')) {
+        @if (authData.isAdmin || authService.getRoles().includes('admin')) {
           <button
             mat-button
             class="icon-button-large admin-button"

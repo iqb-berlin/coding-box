@@ -3,7 +3,7 @@ import {
 } from '@angular/material/table';
 import { ViewChild, Component, OnInit } from '@angular/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { MatSort} from '@angular/material/sort';
+import { MatSort } from '@angular/material/sort';
 import { UntypedFormGroup } from '@angular/forms';
 import { TranslateService } from '@ngx-translate/core';
 import { SelectionModel } from '@angular/cdk/collections';
@@ -29,7 +29,6 @@ export class UsersComponent implements OnInit {
   tableSelectionRow = new SelectionModel<UserFullDto>(false, []);
   tableSelectionCheckboxes = new SelectionModel<UserFullDto>(true, []);
   userWorkspaces :WorkspaceInListDto[] = [];
-  filteredUserWorkspaces: WorkspaceInListDto[] = [];
 
   @ViewChild(MatSort) sort = new MatSort();
 
@@ -41,7 +40,13 @@ export class UsersComponent implements OnInit {
   ) {
   }
 
+  authData = AppService.defaultAuthData;
   ngOnInit(): void {
+    this.appService.authData$.subscribe(
+      authData => {
+        this.authData = authData;
+      }
+    );
     setTimeout(() => {
       this.createWorkspaceList();
       this.updateUserList();
@@ -117,7 +122,7 @@ export class UsersComponent implements OnInit {
       username: value.user.get('username')?.value,
       isAdmin: value.user.get('isAdmin')?.value
     };
-    this.backendService.changeUserData(this.appService.authData.userId, changedData).subscribe(
+    this.backendService.changeUserData(this.authData.userId, changedData).subscribe(
       respOk => {
         this.updateUserList();
         if (respOk) {

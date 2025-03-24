@@ -15,6 +15,7 @@ import { CreateUserDto } from '../../../../api-dto/user/create-user-dto';
 import { BackendService } from './services/backend.service';
 import { WrappedIconComponent } from './shared/wrapped-icon/wrapped-icon.component';
 import { UserMenuComponent } from './sys-admin/components/user-menu/user-menu.component';
+import { AuthDataDto } from '../../../../api-dto/auth-data-dto';
 
 @Component({
   selector: 'app-root',
@@ -28,11 +29,17 @@ export class AppComponent implements OnInit {
   title = 'Kodierbox';
   loggedInKeycloak: boolean = false;
   errorMessage = '';
+  authData :AuthDataDto = AppService.defaultAuthData;
+
   constructor(
     public appService: AppService,
     public authService:AuthService,
     public backendService:BackendService,
-    public url:LocationStrategy) {}
+    public url:LocationStrategy) {
+    this.appService.authData$.subscribe(authData => {
+      this.authData = authData;
+    });
+  }
 
   async keycloakLogin(user: CreateUserDto): Promise<void> {
     this.errorMessage = '';
