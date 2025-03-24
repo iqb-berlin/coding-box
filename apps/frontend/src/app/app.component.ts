@@ -8,6 +8,7 @@ import { TranslateModule } from '@ngx-translate/core';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MatButton } from '@angular/material/button';
 import { LocationStrategy } from '@angular/common';
+import { KeycloakProfile } from 'keycloak-js';
 import { AppService } from './services/app.service';
 import { AuthService } from './auth/service/auth.service';
 import { CreateUserDto } from '../../../../api-dto/user/create-user-dto';
@@ -42,27 +43,43 @@ export class AppComponent implements OnInit {
 
   async ngOnInit(): Promise<void> {
     if (this.authService.isLoggedIn()) {
-      this.loggedInKeycloak = true;
-      this.appService.isLoggedInKeycloak = true;
-      this.appService.loggedUser = this.authService.getLoggedUser();
-      this.appService.userProfile = await this.authService.loadUserProfile();
+      this.setAuthState();
+
+      const keycloakUserProfile = await this.authService.loadUserProfile();
       const isAdmin = this.authService.getRoles().includes('admin');
-      if (this.appService.userProfile.id && this.appService.userProfile.username) {
-        const keycloakUser: CreateUserDto = {
-          issuer: this.appService.loggedUser?.iss || '',
-          identity: this.appService.userProfile.id,
-          username: this.appService.userProfile.username,
-          lastName: this.appService.userProfile.lastName || '',
-          firstName: this.appService.userProfile.firstName || '',
-          email: this.appService.userProfile.email || '',
-          isAdmin: isAdmin
-        };
+
+      if (this.isValidUserProfile(keycloakUserProfile)) {
+        const keycloakUser = this.createKeycloakUser(keycloakUserProfile, isAdmin);
         this.appService.kcUser = keycloakUser;
         await this.keycloakLogin(keycloakUser);
       }
     }
+
     window.addEventListener('message', event => {
       this.appService.processMessagePost(event);
     }, false);
+  }
+
+  private setAuthState(): void {
+    this.loggedInKeycloak = true;
+    this.appService.isLoggedInKeycloak = true;
+    this.appService.loggedUser = this.authService.getLoggedUser();
+  }
+
+  // eslint-disable-next-line class-methods-use-this
+  private isValidUserProfile(userProfile: KeycloakProfile): boolean {
+    return !!userProfile?.id && !!userProfile?.username;
+  }
+
+  private createKeycloakUser(userProfile: KeycloakProfile, isAdmin: boolean): CreateUserDto {
+    return {
+      issuer: this.appService.loggedUser?.iss || '',
+      identity: userProfile.id,
+      username: userProfile.username || '',
+      lastName: userProfile.lastName || '',
+      firstName: userProfile.firstName || '',
+      email: userProfile.email || '',
+      isAdmin: isAdmin
+    };
   }
 }
