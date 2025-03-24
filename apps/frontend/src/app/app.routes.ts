@@ -13,7 +13,7 @@ import { TestGroupsComponent } from './ws-admin/components/test-groups/test-grou
 import { WsUsersComponent } from './ws-admin/components/ws-users/ws-users.component';
 import { CodingManagementComponent } from './coding/coding-managment/coding-management.component';
 import { CodingManagementManualComponent } from './coding/coding-management-manual/coding-management-manual.component';
-import { canActivateAuthRole } from './auth/auth.guard';
+import { canActivateAuth } from './auth/auth.guard';
 
 export const routes: Routes = [
   { path: '', redirectTo: 'home', pathMatch: 'full' },
@@ -23,20 +23,20 @@ export const routes: Routes = [
   },
   {
     path: 'replay/:testPerson/:unitId/:page',
-    canActivate: [canActivateAuthRole],
+    canActivate: [canActivateAuth],
     component: ReplayComponent
   },
   {
     path: 'replay/:testPerson/:unitId',
-    canActivate: [canActivateAuthRole],
+    canActivate: [canActivateAuth],
     component: ReplayComponent
   },
-  { path: 'replay/:testPerson', canActivate: [canActivateAuthRole], component: ReplayComponent },
-  { path: 'replay', canActivate: [canActivateAuthRole], component: ReplayComponent },
-  { path: 'coding-manual', canActivate: [canActivateAuthRole], component: CodingManagementManualComponent },
+  { path: 'replay/:testPerson', canActivate: [canActivateAuth], component: ReplayComponent },
+  { path: 'replay', canActivate: [canActivateAuth], component: ReplayComponent },
+  { path: 'coding-manual', canActivate: [canActivateAuth], component: CodingManagementManualComponent },
   {
     path: 'admin',
-    canActivate: [canActivateAuthRole],
+    canActivate: [canActivateAuth],
     component: AdminComponent,
     children: [
       { path: '', redirectTo: 'users', pathMatch: 'full' },
@@ -47,7 +47,7 @@ export const routes: Routes = [
       { path: '**', component: UsersComponent }]
   }, {
     path: 'workspace-admin/:ws',
-    canActivate: [canActivateAuthRole],
+    canActivate: [canActivateAuth],
     component: WsAdminComponent,
     children: [
       { path: '', redirectTo: 'select-unit-play', pathMatch: 'full' },
