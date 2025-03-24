@@ -1,44 +1,55 @@
 <div class="app">
   @if (appService.dataLoading) {
-    <div
-      class="spinner-container fx-column-start-center">
+    <div class="spinner-container fx-column-start-center">
       <mat-spinner class="fx-flex-fix-100"></mat-spinner>
-      <button
-        mat-button
-        class="fx-flex-fill">
-      </button>
+      <button mat-button class="fx-flex-fill"></button>
     </div>
   }
-  @if(!url.path().includes('replay')){
-  <div class="fx-row-space-between-center app-header">
+
+  <!-- header, if URL not contains "replay" -->
+  @if (!url.path().includes('replay')) {
+    <div class="fx-row-space-between-center app-header">
+      <!-- Logo-Link -->
       <a [routerLink]="['/']" [attr.aria-label]="'home.go-home' | translate">
-        <img [src]="appService.appLogo.data"
-             [matTooltip]="appService.appLogo ? appService.appLogo.alt : 'home.home-page' | translate"
-             [alt]="appService.appLogo ? appService.appLogo.alt : 'home.home-page' | translate"/>
+        <img
+          [src]="appService.appLogo?.data"
+          [alt]="appService.appLogo ? appService.appLogo.alt : 'home.home-page' | translate"
+          [matTooltip]="appService.appLogo ? appService.appLogo.alt : 'home.home-page' | translate"
+        />
       </a>
-    <h1 [style]="{color:'lightgrey',
-    fontSize:'30px',
-    marginLeft:this.authService.isLoggedIn() ? '25px': '0px',
-    marginRight:!this.authService.isLoggedIn() ? '100px': '0px'
-    }">Kodierbox</h1>
 
-    <div class="admin">
-      @if(appService.authData.isAdmin || this.authService.getRoles().includes('admin')){
-        <button  [style]="{color:'lightgrey'}" mat-button class="icon-button-large"
-                 [routerLink]="['/admin']"
-                 [matTooltip]="'home.goto-admin' | translate"
-                 matTooltipPosition="above"
-                 data-cy="goto-admin">
-          <coding-box-wrapped-icon icon="settings"></coding-box-wrapped-icon>
-        </button>
-      }
-      @if(this.authService.isLoggedIn()){
-        <coding-box-user-menu></coding-box-user-menu>
-      }
+      <h1
+        class="app-title"
+        [class.margin-logged-in]="authService.isLoggedIn()"
+        [class.margin-logged-out]="!authService.isLoggedIn()">
+        Kodierbox
+      </h1>
+
+
+      <!-- admin and user area -->
+      <div class="admin-section">
+        <!-- Admin-Link -->
+        @if (appService.authData.isAdmin || authService.getRoles().includes('admin')) {
+          <button
+            mat-button
+            class="icon-button-large admin-button"
+            [routerLink]="['/admin']"
+            [style]="{color:'lightgrey'}"
+            [matTooltip]="'home.goto-admin' | translate"
+            matTooltipPosition="above"
+            data-cy="goto-admin"
+          >
+            <coding-box-wrapped-icon icon="settings"></coding-box-wrapped-icon>
+          </button>
+        }
+
+        <!-- user menu -->
+        @if (authService.isLoggedIn()) {
+          <coding-box-user-menu></coding-box-user-menu>
+        }
+      </div>
     </div>
-  </div>
-}
-  <router-outlet />
+  }
+
+  <router-outlet></router-outlet>
 </div>
-
-
