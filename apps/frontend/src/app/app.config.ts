@@ -8,7 +8,11 @@ import { HTTP_INTERCEPTORS, HttpClient, provideHttpClient } from '@angular/commo
 import { TranslateHttpLoader } from '@ngx-translate/http-loader';
 import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
 import {
-  AutoRefreshTokenService, provideKeycloak, UserActivityService, withAutoRefreshToken
+  AutoRefreshTokenService, createInterceptorCondition,
+  INCLUDE_BEARER_TOKEN_INTERCEPTOR_CONFIG, IncludeBearerTokenCondition,
+  provideKeycloak,
+  UserActivityService,
+  withAutoRefreshToken
 } from 'keycloak-angular';
 import { provideStore } from '@ngrx/store';
 import { HashLocationStrategy, LocationStrategy } from '@angular/common';
@@ -19,6 +23,10 @@ import { AuthInterceptor } from './interceptors/auth.interceptor';
 export function createTranslateLoader(http: HttpClient): TranslateHttpLoader {
   return new TranslateHttpLoader(http, './assets/i18n/', '.json');
 }
+
+const allUrlsCondition = createInterceptorCondition<IncludeBearerTokenCondition>({
+  urlPattern: /^(https?:\/\/.*)(\/.*)?$/i // Match all URLs starting with http or https
+});
 
 export const provideKeycloakAngular = () => provideKeycloak({
   config: {
@@ -38,7 +46,13 @@ export const provideKeycloakAngular = () => provideKeycloak({
       sessionTimeout: 60000
     })
   ],
-  providers: [AutoRefreshTokenService, UserActivityService]
+
+  providers: [
+    {
+      provide: INCLUDE_BEARER_TOKEN_INTERCEPTOR_CONFIG,
+      useValue: allUrlsCondition
+    },
+    AutoRefreshTokenService, UserActivityService]
 });
 
 export const appConfig: ApplicationConfig = {
