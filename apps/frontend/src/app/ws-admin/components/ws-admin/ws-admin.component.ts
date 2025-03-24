@@ -28,6 +28,7 @@ import {
 export class WsAdminComponent implements OnInit {
   navLinks: string[] = ['select-unit-play', 'test-files', 'test-groups', 'coding', 'settings'];
   accessLevel:number = 0;
+  authData = AppService.defaultAuthData;
   constructor(
     private route: ActivatedRoute,
     private appService: AppService,
@@ -38,9 +39,12 @@ export class WsAdminComponent implements OnInit {
   ngOnInit() {
     const routeKey = 'ws';
     this.appService.selectedWorkspaceId = Number(this.route.snapshot.params[routeKey]);
+    this.appService.authData$.subscribe(authData => {
+      this.authData = authData;
+    });
     this.backendService.getUsers(this.appService.selectedWorkspaceId).subscribe(users => {
       setTimeout(() => {
-        this.accessLevel = users.filter(user => user.id === this.appService.authData.userId)[0]?.accessLevel;
+        this.accessLevel = users.filter(user => user.id === this.authData.userId)[0]?.accessLevel;
       }, 200);
     });
   }

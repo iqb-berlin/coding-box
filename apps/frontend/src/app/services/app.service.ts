@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { Subject } from 'rxjs';
+import { BehaviorSubject, Subject } from 'rxjs';
 import { KeycloakProfile, KeycloakTokenParsed } from 'keycloak-js';
 import { AppLogoDto } from '../../../../../api-dto/app-logo-dto';
 import { AuthDataDto } from '../../../../../api-dto/auth-data-dto';
@@ -32,7 +32,6 @@ export class AppService {
   isLoggedInKeycloak = false;
   errorMessagesDisabled = false;
   selectedWorkspaceId = 0;
-  authData = AppService.defaultAuthData;
   dataLoading: boolean | number = false;
   appLogo: AppLogoDto = standardLogo;
   postMessage$ = new Subject<MessageEvent>();
@@ -45,6 +44,16 @@ export class AppService {
     settings: {},
     selectUnitPlay: {}
   };
+
+  private authDataSubject = new BehaviorSubject<AuthDataDto>(AppService.defaultAuthData);
+
+  get authData$() {
+    return this.authDataSubject.asObservable();
+  }
+
+  updateAuthData(newAuthData: AuthDataDto): void {
+    this.authDataSubject.next(newAuthData);
+  }
 
   processMessagePost(postData: MessageEvent): void {
     const msgData = postData.data;
@@ -66,18 +75,6 @@ export class AppService {
       }
     }
   }
-
-  // removeErrorMessage(error: AppHttpError) {
-  //   for (let i = 0; i < this.errorMessages.length; i++) {
-  //     if (this.errorMessages[i].id === error.id) {
-  //       this.errorMessages.splice(i, 1);
-  //     }
-  //   }
-  // }
-  //
-  // clearErrorMessages() {
-  //   this.errorMessages = [];
-  // }
 }
 
 export const standardLogo: AppLogoDto = {

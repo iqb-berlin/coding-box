@@ -11,7 +11,5 @@ import { UserWorkspacesComponent } from '../user-workspaces/user-workspaces.comp
   imports: [TranslateModule, UserWorkspacesComponent]
 })
 export class UserWorkspacesAreaComponent {
-  @Input() warning!: string;
-  @Input() isAdmin!: boolean;
   @Input() workspaces!: WorkspaceFullDto[];
 }

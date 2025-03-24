@@ -56,7 +56,7 @@ export class BackendService {
             return this.getAuthData(user.identity || '')
               .pipe(
                 map(authData => {
-                  this.appService.authData = authData;
+                  this.appService.updateAuthData(authData);
                   return true;
                 }),
                 catchError(() => of(false))

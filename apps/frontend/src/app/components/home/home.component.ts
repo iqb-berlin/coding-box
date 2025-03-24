@@ -1,33 +1,51 @@
-import { Component } from '@angular/core';
+import { Component, OnInit, OnDestroy } from '@angular/core';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
 import { ReactiveFormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
+import { Subscription } from 'rxjs';
 import { AppService } from '../../services/app.service';
 import { AppInfoComponent } from '../app-info/app-info.component';
+// eslint-disable-next-line max-len
 import { UserWorkspacesAreaComponent } from '../../workspace/components/user-workspaces-area/user-workspaces-area.component';
-import { BackendService } from '../../services/backend.service';
 import { WorkspaceFullDto } from '../../../../../../api-dto/workspaces/workspace-full-dto';
 
 @Component({
   selector: 'coding-box-home',
-  // eslint-disable-next-line max-len
-  imports: [MatFormFieldModule, MatInputModule, MatButtonModule, ReactiveFormsModule, TranslateModule, AppInfoComponent, UserWorkspacesAreaComponent],
+  standalone: true,
+  imports: [
+    MatFormFieldModule,
+    MatInputModule,
+    MatButtonModule,
+    ReactiveFormsModule,
+    TranslateModule,
+    AppInfoComponent,
+    UserWorkspacesAreaComponent
+  ],
   templateUrl: './home.component.html',
-  styleUrl: './home.component.scss'
+  styleUrls: ['./home.component.scss']
 })
-export class HomeComponent {
+export class HomeComponent implements OnInit, OnDestroy {
+  workspaces: WorkspaceFullDto[] = [];
+  authData = AppService.defaultAuthData;
+
+  private authSubscription?: Subscription;
   constructor(
-    public appService: AppService,
-    public backendService: BackendService
+    readonly appService: AppService
   ) {}
 
-  workspaces: WorkspaceFullDto[] = [];
-
   ngOnInit(): void {
-    this.workspaces = this.appService.authData.workspaces;
-    setTimeout(() => { this.workspaces = this.appService.authData.workspaces; }, 200);
+    // Subscribe to authData and update properties
+    this.authSubscription = this.appService.authData$.subscribe(authData => {
+      this.authData = authData;
+      this.workspaces = authData.workspaces;
+    });
+  }
+
+  ngOnDestroy(): void {
+    // Prevent memory leaks by unsubscribing
+    this.authSubscription?.unsubscribe();
   }
 
   protected readonly Number = Number;
