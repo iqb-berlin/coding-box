@@ -1,7 +1,7 @@
 import { Injectable, Inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import {
-  catchError, map, Observable, of, switchMap
+  catchError, map, Observable, of, switchMap, tap
 } from 'rxjs';
 import { CreateUserDto } from '../../../../../api-dto/user/create-user-dto';
 import { AppService } from './app.service';
@@ -28,6 +28,8 @@ import Persons from '../../../../backend/src/app/database/entities/persons.entit
   providedIn: 'root'
 })
 export class BackendService {
+  private cache = new Map<string, any>(); // Key-Value-Paar für den Cache
+
   constructor(
     @Inject('SERVER_URL') private readonly serverUrl: string,
     private http: HttpClient, public appService: AppService
@@ -316,6 +318,11 @@ export class BackendService {
   }
 
   getTestResults(workspaceId: number, page: number, limit: number): Observable<any> {
+    const cacheKey = `testResults-${workspaceId}-${page}-${limit}`; // unique key for cache data
+    if (this.cache.has(cacheKey)) {
+      return of(this.cache.get(cacheKey));
+    }
+
     const params = {
       page: page.toString(),
       limit: limit.toString()
@@ -327,7 +334,23 @@ export class BackendService {
         headers: this.authHeader,
         params: params
       }
+    ).pipe(
+      tap(data => {
+        this.cache.set(cacheKey, data);
+      }),
+      catchError(error => {
+        console.error('Fehler beim Abrufen der Testdaten:', error);
+        return of(null);
+      })
     );
+  }
+
+  clearCache(key?: string): void {
+    if (key) {
+      this.cache.delete(key);
+    } else {
+      this.cache.clear();
+    }
   }
 
   authenticate(username:string, password:string, server:string, url:string): Observable<ServerResponse > {

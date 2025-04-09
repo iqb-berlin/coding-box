@@ -121,7 +121,7 @@ export class WorkspaceController {
   async findTestResults(
     @Param('workspace_id') workspace_id: number,
                            @Query('page') page: number = 1,
-                           @Query('limit') limit: number = 10
+                           @Query('limit') limit: number = 20
   ): Promise<{ data: Persons[]; total: number; page: number; limit: number }> {
     const [data, total] = await this.workspaceService.findTestResults(workspace_id, { page, limit });
     return {
