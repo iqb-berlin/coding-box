@@ -22,7 +22,7 @@ import { ResponseDto } from '../../../../../api-dto/responses/response-dto';
 import { FilesDto } from '../../../../../api-dto/files/files.dto';
 import { UserInListDto } from '../../../../../api-dto/user/user-in-list-dto';
 import { UserWorkspaceAccessDto } from '../../../../../api-dto/workspaces/user-workspace-access-dto';
-import Persons from '../../../../backend/src/app/database/entities/persons.entity';
+import { Persons } from '../../../../../api-dto/test-results/testgroups-in-list.dto';
 
 @Injectable({
   providedIn: 'root'
