@@ -71,8 +71,6 @@ export class UnitResultsComponent implements OnInit {
   createTestResultsList(page: number = 0, limit: number = 10): void {
     this.backendService.getTestResults(this.appService.selectedWorkspaceId, page, limit)
       .subscribe(response => {
-        // `response` soll die Ergebnisse und die Gesamtanzahl zurückgeben, z. B.:
-        // { data: [], totalRecords: number }.
         const { data, totalRecords } = response;
         this.data = data;
 
@@ -84,9 +82,8 @@ export class UnitResultsComponent implements OnInit {
         }));
 
         this.dataSource = new MatTableDataSource(mappedResults);
-        this.totalRecords = totalRecords; // Gesamtanzahl der Datensätze vom Backend
+        this.totalRecords = totalRecords;
         this.dataSource.sort = this.sort;
       });
   }
-
 }

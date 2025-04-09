@@ -129,6 +129,7 @@ export type TcMergeLastState = {
 @Injectable()
 export class WorkspaceService {
   private readonly logger = new Logger(WorkspaceService.name);
+  private cache: Map<string, { data: [Persons[], number]; expiry: number }> = new Map();
 
   constructor(
     @InjectRepository(Workspace)
@@ -191,8 +192,6 @@ export class WorkspaceService {
 
   async findTestResults(workspace_id: number, options: { page: number; limit: number }): Promise<[Persons[], number]> {
     const { page, limit } = options;
-
-    // Validierungen
     if (!workspace_id || workspace_id <= 0) {
       throw new Error('Invalid workspace_id provided');
     }
@@ -201,6 +200,15 @@ export class WorkspaceService {
     const validPage = Math.max(1, page); // Minimum 1
     const validLimit = Math.min(Math.max(1, limit), MAX_LIMIT); // Zwischen 1 und MAX_LIMIT
 
+    const cacheKey = `${workspace_id}-${validPage}-${validLimit}`;
+    const cacheTTL = 5 * 60 * 1000;
+
+    const cachedData = this.cache.get(cacheKey);
+    if (cachedData && cachedData.expiry > Date.now()) {
+      this.logger.log(`Cache hit for workspace_id=${workspace_id}, page=${validPage}, limit=${validLimit}`);
+      return cachedData.data;
+    }
+
     try {
       const [results, total] = await this.personsRepository.findAndCount({
         // where: { workspace_id: workspace_id },
@@ -208,13 +216,15 @@ export class WorkspaceService {
         take: validLimit
       });
 
+      // save results in cache
+      this.cache.set(cacheKey, { data: [results, total], expiry: Date.now() + cacheTTL });
+
       return [results, total];
     } catch (error) {
       this.logger.error(`Failed to fetch test results for workspace_id ${workspace_id}: ${error.message}`, error.stack);
       throw new Error('An error occurred while fetching test results');
     }
   }
-
 
   async findUsers(workspace_id: number): Promise<WorkspaceUser[]> {
     this.logger.log('Returning all users for workspace ', workspace_id);
