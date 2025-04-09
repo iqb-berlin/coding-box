@@ -7,7 +7,7 @@
           <input matInput (input)="applyFilter($event)" placeholder="Suchtext eingeben">
         </div>
         <div class="table-container">
-          <mat-spinner *ngIf="isLoading" class="loading-spinner"></mat-spinner>
+          <mat-spinner *ngIf="isLoading" class="mat-spinner"></mat-spinner>
           <div *ngIf="!isLoading">
             <mat-table [dataSource]="dataSource" matSort>
               <ng-container matColumnDef="code" >
@@ -53,7 +53,7 @@
         </div>
       </div>
 
-      <mat-accordion>
+      <mat-accordion class="accordion">
         <mat-expansion-panel *ngFor="let booklet of booklets">
           <mat-expansion-panel-header>
             <mat-panel-title (click)="setSelectedBooklet(booklet)">
@@ -61,7 +61,7 @@
               {{ booklet.id }}
             </mat-panel-title>
           </mat-expansion-panel-header>
-              <mat-list>
+              <mat-list class="unit-list">
                 <mat-list-item
                   *ngFor="let unit of booklet.units"
                   (click)="onUnitClick(unit)"
@@ -71,7 +71,7 @@
               </mat-list>
         </mat-expansion-panel>
       </mat-accordion>
-      <mat-list>
+      <mat-list class="var-list">
         <mat-list-item
           *ngFor="let response of this.responses"
           class="hoverable"
@@ -88,7 +88,7 @@
           </div>
         </mat-list-item>
       </mat-list>
-      <div class="fx-column-start-start">
+      <div class="fx-column-start-start log-list">
         <mat-icon (click)="replayUnit()">play_arrow</mat-icon>
       @for ( logBlock of this.logs; track logBlock;) {
             @for ( log of logBlock; track log;) {

@@ -24,10 +24,10 @@ import { MatInput } from '@angular/material/input';
 import { CommonModule, DatePipe } from '@angular/common';
 import { MatIcon } from '@angular/material/icon';
 import { Router } from '@angular/router';
+import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
 import { TestGroupsInListDto } from '../../../../../../../api-dto/test-groups/testgroups-in-list.dto';
-import { MatProgressSpinner } from '@angular/material/progress-spinner';
 
 interface P {
   code: string;
@@ -55,14 +55,15 @@ export class TestResultsComponent implements OnInit {
   results: any = [];
   responses: any = [];
   logs: any = [];
-  totalRecords: number = 0; // Gesamtanzahl der Datensätze
-  pageSize: number = 10; // Standardanzahl der Seiten
-  pageIndex: number = 0; // Aktuelle Seite
+  totalRecords: number = 0;
+  pageSize: number = 10;
+  pageIndex: number = 0;
   selectedUnit: any;
   testPerson: any;
   selectedBooklet:any;
   isLoading: boolean = true;
 
+  private testResultsCache = new Map<number, { data: any[]; total: number }>();
 
   @ViewChild(MatPaginator) paginator!: MatPaginator;
   @ViewChild(MatSort) sort!: MatSort;
@@ -112,7 +113,6 @@ export class TestResultsComponent implements OnInit {
     const filterValue = (event.target as HTMLInputElement).value;
     this.dataSource.filter = filterValue.trim().toLowerCase();
 
-    // Paginator auf die erste Seite zurücksetzen
     if (this.dataSource.paginator) {
       this.dataSource.paginator.firstPage();
     }
@@ -146,22 +146,19 @@ export class TestResultsComponent implements OnInit {
     return results;
   };
 
+  // eslint-disable-next-line class-methods-use-this
   groupByPlayerLoading = (array: any[]) => {
-    const grouped = []; // Array zum Speichern der Blöcke
-    let currentBlock: any[] = []; // Aktueller Block
-
+    const grouped = [];
+    let currentBlock: any[] = [];
     for (const item of array) {
       if (item.key === 'PLAYER' && item.parameter === 'LOADING') {
-        // Wenn ein neuer PLAYER_LOADING gefunden wird
         if (currentBlock.length > 0) {
-          grouped.push(currentBlock); // Aktuellen Block speichern
+          grouped.push(currentBlock);
         }
-        currentBlock = []; // Neuen Block starten
+        currentBlock = [];
       }
-      currentBlock.push(item); // Aktuelles Item hinzufügen
+      currentBlock.push(item);
     }
-
-    // Den letzten Block speichern (falls vorhanden)
     if (currentBlock.length > 0) {
       grouped.push(currentBlock);
     }
@@ -170,16 +167,16 @@ export class TestResultsComponent implements OnInit {
   };
 
   createUnitHistory(unit: { logs: any[]; }): any {
-    // Aufruf der Funktion
     return this.groupByPlayerLoading(unit.logs);
   }
 
-  // Konvertiere Timestamp in lesbares Datum
+  // eslint-disable-next-line class-methods-use-this
   formatTimestamp(timestamp: string): string {
     const date = new Date(Number(timestamp));
-    return date.toLocaleString(); // z.B. "31.12.2023, 23:59:59"
+    return date.toLocaleString();
   }
 
+  // eslint-disable-next-line class-methods-use-this
   getColor(status: string): string {
     switch (status) {
       case 'VALUE_CHANGED':
@@ -192,29 +189,37 @@ export class TestResultsComponent implements OnInit {
   }
 
   onPaginatorChange(event: PageEvent): void {
-    this.pageSize = event.pageSize; // Aktualisiert die Anzahl der Einträge pro Seite
-    this.pageIndex = event.pageIndex; // Aktualisiert die aktuelle Seite
-    this.createTestResultsList(this.pageIndex, this.pageSize); // Läd die Daten neu
+    // Update the number of items displayed per page
+    this.pageSize = event.pageSize;
+
+    // Update the current page index
+    this.pageIndex = event.pageIndex;
+
+    // Reload the test results list based on the new page index and size
+    this.createTestResultsList(this.pageIndex, this.pageSize);
   }
 
-  createTestResultsList(page: number = 0, limit: number = 10): void {
-    // Ensure page is non-negative
+  createTestResultsList(page: number = 0, limit: number = 20): void {
+    // page not negative
     const validPage = Math.max(0, page);
     this.backendService.getTestResults(this.appService.selectedWorkspaceId, validPage, limit)
       .subscribe(response => {
         this.isLoading = false;
         const { data, total } = response;
-        this.data = data;
-        const mappedResults = data.map((result: any) => ({
-          code: result.code,
-          group: result.group,
-          login: result.login,
-          uploaded_at: result.uploaded_at
-        }));
-
-        this.dataSource = new MatTableDataSource(mappedResults);
-        this.totalRecords = total;
-        this.dataSource.sort = this.sort;
+        this.updateTable(data, total);
       });
+  }
+
+  private updateTable(data: any[], total: number): void {
+    this.data = data;
+    const mappedResults = data.map((result: any) => ({
+      code: result.code,
+      group: result.group,
+      login: result.login,
+      uploaded_at: result.uploaded_at
+    }));
+    this.dataSource = new MatTableDataSource(mappedResults);
+    this.totalRecords = total;
+    this.dataSource.sort = this.sort;
   }
 }

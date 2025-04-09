@@ -4,8 +4,8 @@
 }
 
 mat-table{
-  max-width:78vh;
-  max-height:78vh;
+  max-width:60vh;
+  height:60vh;
   overflow-y: scroll;
 }
 
@@ -15,8 +15,28 @@ coding-box-search-filter {
 
 .container{
   margin:20px;
-  max-height: 78vh;
-  min-height: 78vh;
+  max-height: 60vh;
+  min-height: 60vh;
+}
+
+.log-list{
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.accordion{
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.unit-list{
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.var-list{
+  max-height: 60vh;
+  overflow-y: auto;
 }
 
 .upload-buttons{
@@ -40,42 +60,60 @@ mat-row:hover {
 }
 
 .hoverable:hover {
-  background-color: #e0e0e0; /* Eine leichte Hintergrundfarbe für Hover */
+  background-color: #e0e0e0;
 }
 
 .mat-list-item {
-  padding: 16px; /* Zusätzliche Polsterung für die Liste */
-  border-bottom: 1px solid #ddd; /* Optionale Unterkante */
+  padding: 16px;
+  border-bottom: 1px solid #ddd;
 }
 
 .mat-list-item:active {
-  background-color: #d0d0d0; /* Farbe, wenn das Listenelement aktiv ist */
+  background-color: #d0d0d0;
 }
 
 .square-container {
   display: flex;
-  flex-wrap: wrap; /* Quadrate umbrechen, falls Platzmangel herrscht */
+  flex-wrap: wrap;
 }
 
 .square {
-  width: 10px; /* Breite des Quadrats */
-  height: 10px; /* Höhe des Quadrats (Quadratform) */
+  width: 10px;
+  height: 10px;
   display: flex;
-  justify-content: center; /* Zentrieren des Textes horizontal */
-  align-items: center; /* Zentrieren des Textes vertikal */
+  justify-content: center;
+  align-items: center;
   color: #fff;
   font-weight: bold;
-  text-transform: capitalize; /* Erster Buchstabe groß */
-  border: 2px solid #ddd; /* Optional Rahmen */
-  border-radius: 8px; /* Runde Ecken, falls benötigt */
+  text-transform: capitalize;
+  border: 2px solid #ddd;
+  border-radius: 8px;
 }
 
 .table-container {
-  max-height: 60%;
-  overflow-x: auto; /* Ermöglicht horizontales Scrollen */
+  position: relative;
 }
 
 mat-header-cell, mat-cell {
   white-space: nowrap; /* Verhindert Zeilenumbruch bei langen Inhalten */
 }
+
+mat-spinner {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 10;
+}
+
+table:not([loading]) {
+  opacity: 0.5; /* Tabelle kann beim Laden halbtransparent angezeigt werden */
+}
+
+table {
+  width: 100%;
+  opacity: 1;
+  transition: opacity 0.3s ease-in-out;
+}
+
 
