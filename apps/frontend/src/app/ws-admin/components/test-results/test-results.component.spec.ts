@@ -18,16 +18,8 @@ describe('TestResultsComponent', () => {
   let component: TestResultsComponent;
   let fixture: ComponentFixture<TestResultsComponent>;
 
-  @Component({ selector: 'coding-box-search-filter', template: '' })
-  class MockSearchFilterComponent {
-    @Input() title!: string;
-  }
-
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      declarations: [
-        MockSearchFilterComponent
-      ],
       imports: [
         MatSnackBarModule,
         MatCheckboxModule,
