@@ -36,7 +36,6 @@ export class HomeComponent implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit(): void {
-    // Subscribe to authData and update properties
     this.authSubscription = this.appService.authData$.subscribe(authData => {
       this.authData = authData;
       this.workspaces = authData.workspaces;
@@ -44,7 +43,6 @@ export class HomeComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
-    // Prevent memory leaks by unsubscribing
     this.authSubscription?.unsubscribe();
   }
 
