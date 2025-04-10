@@ -493,10 +493,24 @@ export class WorkspaceService {
   async uploadTestFiles(workspace_id: number, originalFiles: FileIo[]): Promise<boolean> {
     this.logger.log(`Uploading test files for workspace ${workspace_id}`);
 
+    // Batch size
+    const MAX_CONCURRENT_UPLOADS = 5;
+    const processInBatches = async (files: FileIo[], batchSize: number): Promise<PromiseSettledResult<void>[]> => {
+      const results: PromiseSettledResult<void>[] = [];
+      const batches = [];
+      for (let i = 0; i < files.length; i += batchSize) {
+        const batch = files.slice(i, i + batchSize);
+        batches.push(
+          Promise.allSettled(batch.flatMap(file => this.handleFile(workspace_id, file)))
+        );
+      }
+      const batchResults = await Promise.all(batches);
+      batchResults.forEach(batch => results.push(...batch as PromiseSettledResult<void>[]));
+      return results;
+    };
+
     try {
-      const results = await Promise.allSettled(
-        originalFiles.map(file => this.handleFile(workspace_id, file))
-      );
+      const results = await processInBatches(originalFiles, MAX_CONCURRENT_UPLOADS);
 
       // Log details of failed uploads for better debugging
       const failedFiles = results
