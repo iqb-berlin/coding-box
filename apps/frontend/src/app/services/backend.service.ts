@@ -1,7 +1,7 @@
 import { Injectable, Inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import {
-  catchError, map, Observable, of, switchMap
+  catchError, map, Observable, of, switchMap, tap
 } from 'rxjs';
 import { CreateUserDto } from '../../../../../api-dto/user/create-user-dto';
 import { AppService } from './app.service';
@@ -22,11 +22,14 @@ import { ResponseDto } from '../../../../../api-dto/responses/response-dto';
 import { FilesDto } from '../../../../../api-dto/files/files.dto';
 import { UserInListDto } from '../../../../../api-dto/user/user-in-list-dto';
 import { UserWorkspaceAccessDto } from '../../../../../api-dto/workspaces/user-workspace-access-dto';
+import { Persons } from '../../../../../api-dto/test-results/testgroups-in-list.dto';
 
 @Injectable({
   providedIn: 'root'
 })
 export class BackendService {
+  private cache = new Map<string, any>(); // Key-Value-Paar für den Cache
+
   constructor(
     @Inject('SERVER_URL') private readonly serverUrl: string,
     private http: HttpClient, public appService: AppService
@@ -231,6 +234,18 @@ export class BackendService {
     });
   }
 
+  uploadTestResults(workspaceId: number, files: FileList | null): Observable<number> {
+    const formData = new FormData();
+    if (files) {
+      for (let i = 0; i < files.length; i++) {
+        formData.append('files', files[i]);
+      }
+    }
+    return this.http.post<never>(`${this.serverUrl}admin/workspace/${workspaceId}/upload/results`, formData, {
+      headers: this.authHeader
+    });
+  }
+
   setUserWorkspaceAccessRight(userId: number, workspaceIds: number[]): Observable<boolean> {
     return this.http.post<boolean>(
       `${this.serverUrl}admin/users/${userId}/workspaces/`,
@@ -300,6 +315,42 @@ export class BackendService {
     return this.http.get<string[]>(
       `${this.serverUrl}admin/workspace/${workspaceId}/test-groups/${testGroup}`,
       { headers: this.authHeader });
+  }
+
+  getTestResults(workspaceId: number, page: number, limit: number): Observable<any> {
+    const cacheKey = `testResults-${workspaceId}-${page}-${limit}`; // unique key for cache data
+    if (this.cache.has(cacheKey)) {
+      return of(this.cache.get(cacheKey));
+    }
+
+    const params = {
+      page: page.toString(),
+      limit: limit.toString()
+    };
+
+    return this.http.get<Persons[]>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/test-results/`,
+      {
+        headers: this.authHeader,
+        params: params
+      }
+    ).pipe(
+      tap(data => {
+        this.cache.set(cacheKey, data);
+      }),
+      catchError(error => {
+        console.error('Fehler beim Abrufen der Testdaten:', error);
+        return of(null);
+      })
+    );
+  }
+
+  clearCache(key?: string): void {
+    if (key) {
+      this.cache.delete(key);
+    } else {
+      this.cache.clear();
+    }
   }
 
   authenticate(username:string, password:string, server:string, url:string): Observable<ServerResponse > {

@@ -1,49 +1,28 @@
 <div class="fx-column-start-start fx-gap-10  container">
   <div class="fx-row-center-center-stretch fx-gap-20 upload-buttons">
+    <a mat-raised-button color="primary" (click)=hiddenFileInput.click()>
+      <mat-icon>upload</mat-icon>
+      Test Ergebnisse hinzufügen
+    </a>
     <a mat-raised-button color="primary" [disabled]="tableSelectionCheckboxes.selected.length === 0" (click)="deleteTestGroups()">
       <mat-icon>delete</mat-icon>
       Test Gruppe(n) löschen
     </a>
+    <a mat-raised-button color="primary" [disabled]="tableSelectionCheckboxes.selected.length === 0" (click)="createCodingTestGroups()">
+      <mat-icon>code</mat-icon>
+      Kodieren
+    </a>
   </div>
+  <input #hiddenFileInput type="file"
+         name="files"
+         accept=".json,.zip,.csv"
+         multiple
+         [hidden]="true"
+         (change)="onFileSelected($event.currentTarget)"/>
   @if (isLoading) {
     <mat-spinner></mat-spinner>
   }
   @if (!isLoading && dataSource && dataSource.data.length) {
-    <coding-box-search-filter
-        [title]="'search-filter.filter-test-groups' | translate"
-        (valueChange)="dataSource.filter = $event.trim().toLowerCase()">
-    </coding-box-search-filter>
-  <mat-table [dataSource]="dataSource" matSort>
-    <ng-container matColumnDef="selectCheckbox">
-      <mat-header-cell *matHeaderCellDef class="fx-flex-row-fix-70">
-        <mat-checkbox [checked]="(tableSelectionCheckboxes | hasSelectionValue : tableSelectionCheckboxes.selected.length) &&  (tableSelectionCheckboxes.selected.length | isAllSelected : dataSource.data.length)"
-                      [indeterminate]="(tableSelectionCheckboxes | hasSelectionValue : tableSelectionCheckboxes.selected.length) && !(tableSelectionCheckboxes.selected.length | isAllSelected : dataSource.data.length)"
-                      (change)="$event ? masterToggle() : null">
-        </mat-checkbox>
-      </mat-header-cell>
-      <mat-cell *matCellDef="let row" class="fx-flex-row-fix-70">
-        <mat-checkbox [checked]="tableSelectionCheckboxes | isSelected: row : tableSelectionCheckboxes.selected.length"
-                      (click)="$event.stopPropagation()"
-                      (change)="$event ? tableSelectionCheckboxes.toggle(row) : null">
-        </mat-checkbox>
-      </mat-cell>
-    </ng-container>
-    <ng-container matColumnDef="test_group">
-      <mat-header-cell *matHeaderCellDef mat-sort-header="test_group">{{'test_group.test_group' | translate}}</mat-header-cell>
-      <mat-cell *matCellDef="let element">
-        {{element.test_group}}
-      </mat-cell>
-    </ng-container>
-    <ng-container matColumnDef="created_at">
-      <mat-header-cell *matHeaderCellDef mat-sort-header="created_at">{{'file-upload.created_at' | translate}}</mat-header-cell>
-      <mat-cell *matCellDef="let element">
-        {{element.created_at | date: 'dd.MM.yyyy HH:mm'}}
-      </mat-cell>
-    </ng-container>
-
-    <mat-header-row *matHeaderRowDef="displayedColumns;sticky: true"></mat-header-row>
-    <mat-row *matRowDef="let row; columns: displayedColumns;"></mat-row>
-
-  </mat-table>
   }
+  <coding-box-test-results></coding-box-test-results>
 </div>

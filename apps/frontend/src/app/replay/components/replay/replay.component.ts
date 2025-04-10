@@ -6,7 +6,6 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
 import { ReactiveFormsModule } from '@angular/forms';
-import { NgIf } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
 import { ActivatedRoute, Params } from '@angular/router';
 import {
@@ -39,7 +38,7 @@ interface ErrorMessages {
 @Component({
   selector: 'coding-box-replay',
   // eslint-disable-next-line max-len
-  imports: [MatFormFieldModule, MatInputModule, MatButtonModule, ReactiveFormsModule, NgIf, TranslateModule, UnitPlayerComponent, SpinnerComponent],
+  imports: [MatFormFieldModule, MatInputModule, MatButtonModule, ReactiveFormsModule, TranslateModule, UnitPlayerComponent, SpinnerComponent],
   templateUrl: './replay.component.html',
   styleUrl: './replay.component.scss'
 })
@@ -249,8 +248,9 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   private getResponses(workspace: number, authToken?:string): Observable<ResponseDto[]> {
-    return this.backendService
+    const responses = this.backendService
       .getResponses(workspace, this.testPerson, this.unitId, authToken);
+    return responses;
   }
 
   private getUnit(workspace: number, authToken?:string): Observable<FilesDto[]> {

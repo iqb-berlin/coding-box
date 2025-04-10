@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -26,6 +27,8 @@ import { TestGroupsInListDto } from '../../../../../../api-dto/test-groups/testg
 import FileUpload from '../../database/entities/file_upload.entity';
 import { ResponseDto } from '../../../../../../api-dto/responses/response-dto';
 import WorkspaceUser from '../../database/entities/workspace_user.entity';
+import { UploadResultsService } from '../../database/services/upload-results.service';
+import Persons from '../../database/entities/persons.entity';
 
 export type Result = {
   success: boolean,
@@ -39,27 +42,44 @@ export class WorkspaceController {
   constructor(
     private workspaceService: WorkspaceService,
     private testCenterService: TestcenterService,
-    private authService: AuthService
+    private authService: AuthService,
+    private uploadResults: UploadResultsService
   ) {}
 
   @Get()
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
-  @ApiOkResponse({ description: 'Admin workspace retrieved successfully.' })
   @ApiTags('admin workspaces')
+  @ApiOkResponse({
+    description: 'List of admin workspaces retrieved successfully.',
+    type: [WorkspaceInListDto] // Spezifiziert, dass ein Array des DTOs zurückgegeben wird
+  })
   async findAll(): Promise<WorkspaceInListDto[]> {
-    return this.workspaceService.findAll();
+    try {
+      return await this.workspaceService.findAll();
+    } catch (error) {
+      throw new BadRequestException('Failed to retrieve admin workspaces. Please try again later.');
+    }
   }
 
-  @Get(':workspace_id/:user_id/token/:duration') // TODO push
-  @UseGuards(JwtAuthGuard)
+  @Get(':workspace_id/:user_id/token/:duration')
+  @ApiBearerAuth()
+  @ApiTags('admin workspace')
+  @ApiParam({ name: 'workspace_id', required: true, description: 'ID of the workspace' })
+  @ApiParam({ name: 'user_id', required: true, description: 'ID of the user' })
+  @ApiParam({ name: 'duration', required: true, description: 'Duration of the token in seconds' })
+  @UseGuards(JwtAuthGuard, WorkspaceGuard) // Sicherstellen, dass die Route geschützt ist
   async createToken(
-    @Param('user_id')
-      user_id:string,
-      @Param('workspace_id') workspace_id: number,
+    @Param('user_id') userId: string,
+      @Param('workspace_id') workspaceId: number,
       @Param('duration') duration: number
-  ):Promise<string> {
-    return this.authService.createToken(user_id, workspace_id, duration);
+  ): Promise<string> {
+    if (!userId || !workspaceId || !duration) {
+      throw new BadRequestException('Invalid input parameters');
+    }
+    console.log(`Generating token for user ${userId} in workspace ${workspaceId} with duration ${duration}s`);
+
+    return this.authService.createToken(userId, workspaceId, duration);
   }
 
   // TODO Don't use boolean query params as strings
@@ -109,6 +129,21 @@ export class WorkspaceController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async findFiles(@Param('workspace_id') workspace_id: number): Promise<FilesDto[]> {
     return this.workspaceService.findFiles(workspace_id);
+  }
+
+  @Get(':workspace_id/test-results')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiOkResponse({ description: 'Test results retrieved successfully.' })
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  async findTestResults(
+    @Param('workspace_id') workspace_id: number,
+                           @Query('page') page: number = 1,
+                           @Query('limit') limit: number = 20
+  ): Promise<{ data: Persons[]; total: number; page: number; limit: number }> {
+    const [data, total] = await this.workspaceService.findTestResults(workspace_id, { page, limit });
+    return {
+      data, total, page, limit
+    };
   }
 
   @Get(':workspace_id/users')
@@ -210,6 +245,16 @@ export class WorkspaceController {
   @ApiTags('workspace')
   async addTestFiles(@Param('workspace_id') workspace_id:number, @UploadedFiles() files): Promise<boolean> {
     return this.workspaceService.uploadTestFiles(workspace_id, files);
+  }
+
+  @Post(':workspace_id/upload/results')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiBearerAuth()
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @UseInterceptors(FilesInterceptor('files'))
+  @ApiTags('workspace')
+  async addTestResults(@Param('workspace_id') workspace_id:number, @UploadedFiles() files): Promise<boolean> {
+    return this.uploadResults.uploadTestResults(workspace_id, files);
   }
 
   // TODO: use query params

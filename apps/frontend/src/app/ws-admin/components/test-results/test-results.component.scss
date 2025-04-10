@@ -1,0 +1,119 @@
+.scroll-area {
+  height: calc(100% - 35px);
+  overflow-y: auto;
+}
+
+mat-table{
+  max-width:60vh;
+  height:60vh;
+  overflow-y: scroll;
+}
+
+coding-box-search-filter {
+  min-width:100%;
+}
+
+.container{
+  margin:20px;
+  max-height: 60vh;
+  min-height: 60vh;
+}
+
+.log-list{
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.accordion{
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.unit-list{
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.var-list{
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.upload-buttons{
+  margin: 10px;
+}
+
+a{
+  min-width:300px;
+  padding:20px;
+  font-size: 16px;
+}
+
+mat-row:hover {
+  cursor: pointer;
+  background-color: #f5f5f5;
+}
+
+.hoverable {
+  transition: background-color 0.2s ease;
+  cursor: pointer;
+}
+
+.hoverable:hover {
+  background-color: #e0e0e0;
+}
+
+.mat-list-item {
+  padding: 16px;
+  border-bottom: 1px solid #ddd;
+}
+
+.mat-list-item:active {
+  background-color: #d0d0d0;
+}
+
+.square-container {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.square {
+  width: 10px;
+  height: 10px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: #fff;
+  font-weight: bold;
+  text-transform: capitalize;
+  border: 2px solid #ddd;
+  border-radius: 8px;
+}
+
+.table-container {
+  position: relative;
+}
+
+mat-header-cell, mat-cell {
+  white-space: nowrap; /* Verhindert Zeilenumbruch bei langen Inhalten */
+}
+
+mat-spinner {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 10;
+}
+
+table:not([loading]) {
+  opacity: 0.5; /* Tabelle kann beim Laden halbtransparent angezeigt werden */
+}
+
+table {
+  width: 100%;
+  opacity: 1;
+  transition: opacity 0.3s ease-in-out;
+}
+
+
