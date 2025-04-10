@@ -51,7 +51,7 @@ export class UsersController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiTags('admin users')
-  async editUser(@Param('userId') userId:number, @Body() change: UserFullDto): Promise<UserFullDto[]> {
+  async editUser(@Param('userId') userId:number, @Body() change: UserFullDto): Promise<UserFullDto> {
     return this.usersService.editUser(userId, change);
   }
 

@@ -4,32 +4,33 @@ import { TranslateModule } from '@ngx-translate/core';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBarModule } from '@angular/material/snack-bar';
+import { HttpClientModule } from '@angular/common/http';
+import {
+  Component, Input
+} from '@angular/core';
 import { MatTableModule } from '@angular/material/table';
 import { MatCheckboxModule } from '@angular/material/checkbox';
-import { MatDialogModule } from '@angular/material/dialog';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
-import { provideHttpClient } from '@angular/common/http';
-import { WorkspacesSelectionComponent } from './workspaces-selection.component';
 import { environment } from '../../../../environments/environment';
+import { TestResultsComponent } from './test-results.component';
 
-describe('WorkspacesSelectionComponent', () => {
-  let component: WorkspacesSelectionComponent;
-  let fixture: ComponentFixture<WorkspacesSelectionComponent>;
+describe('TestResultsComponent', () => {
+  let component: TestResultsComponent;
+  let fixture: ComponentFixture<TestResultsComponent>;
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [
-        MatDialogModule,
         MatSnackBarModule,
         MatCheckboxModule,
         MatTooltipModule,
         MatIconModule,
         MatTableModule,
+        HttpClientModule,
         NoopAnimationsModule,
         TranslateModule.forRoot()
       ],
       providers: [
-        provideHttpClient(),
         {
           provide: 'SERVER_URL',
           useValue: environment.backendUrl
@@ -37,7 +38,7 @@ describe('WorkspacesSelectionComponent', () => {
       ]
     }).compileComponents();
 
-    fixture = TestBed.createComponent(WorkspacesSelectionComponent);
+    fixture = TestBed.createComponent(TestResultsComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
   });

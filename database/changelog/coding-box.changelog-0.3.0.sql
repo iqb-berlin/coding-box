@@ -3,8 +3,7 @@
 -- changeset jurei733:1
 CREATE TABLE "public"."logs"
 (
-  "id"          SERIAL
-    PRIMARY KEY,
+  "id"           SERIAL PRIMARY KEY,
   "unit_id"      VARCHAR(50) NOT NULL,
   "test_group"   VARCHAR(100),
   "workspace_id" INTEGER NOT NULL,
@@ -13,4 +12,3 @@ CREATE TABLE "public"."logs"
   "booklet_id"   VARCHAR(100)
 );
 -- rollback DROP TABLE "public"."logs";
-
