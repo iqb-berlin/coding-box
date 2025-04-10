@@ -276,6 +276,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   private async getUnitData(workspace: number, authToken?:string) {
+    const startTime = performance.now();
     this.isLoaded.next(false);
     const unitData = await firstValueFrom(
       combineLatest([
@@ -291,6 +292,9 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
             return this.getPlayer(workspace, ReplayComponent.getNormalizedPlayerId(player), authToken);
           }))
       ]));
+    const endTime = performance.now();
+    const duration = endTime - startTime;
+    console.log(`Replay-Dauer: ${duration.toFixed(2)}ms`);
     this.setIsLoaded();
     return { unitDef: unitData[0], response: unitData[1], player: unitData[2] };
   }
