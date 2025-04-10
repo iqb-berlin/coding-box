@@ -1,26 +1,13 @@
 import {
   Component, OnInit, ViewChild
 } from '@angular/core';
-import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { MatAnchor } from '@angular/material/button';
-import { MatIcon } from '@angular/material/icon';
+import { TranslateService } from '@ngx-translate/core';
 import { MatDialog } from '@angular/material/dialog';
 import { UntypedFormGroup } from '@angular/forms';
-import { MatSort, MatSortHeader } from '@angular/material/sort';
-import {
-  MatCell,
-  MatCellDef,
-  MatColumnDef, MatHeaderCell,
-  MatHeaderCellDef, MatHeaderRow,
-  MatHeaderRowDef, MatRow,
-  MatRowDef,
-  MatTable, MatTableDataSource
-} from '@angular/material/table';
-import { MatProgressSpinner } from '@angular/material/progress-spinner';
-import { MatCheckbox } from '@angular/material/checkbox';
-import { SelectionModel } from '@angular/cdk/collections';
-import { DatePipe } from '@angular/common';
+import { MatSort } from '@angular/material/sort';
+import { MatTableDataSource } from '@angular/material/table';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { SelectionModel } from '@angular/cdk/collections';
 import { TestCenterImportComponent } from '../test-center-import/test-center-import.component';
 import { AppService } from '../../../services/app.service';
 import { BackendService } from '../../../services/backend.service';
@@ -35,116 +22,139 @@ import { FilesInListDto } from '../../../../../../../api-dto/files/files-in-list
   selector: 'coding-box-test-files',
   templateUrl: './test-files.component.html',
   styleUrls: ['./test-files.component.scss'],
-  // eslint-disable-next-line max-len
-  imports: [MatAnchor, TranslateModule, MatIcon, MatProgressSpinner, MatTable, MatColumnDef, MatHeaderCellDef, MatCellDef, MatHeaderRowDef, MatRowDef, MatHeaderCell, MatCell, MatSort, MatHeaderRow, MatRow, HasSelectionValuePipe, IsAllSelectedPipe, IsSelectedPipe, MatCheckbox, SearchFilterComponent, MatSortHeader, DatePipe, FileSizePipe]
+  imports: [
+    HasSelectionValuePipe,
+    IsAllSelectedPipe,
+    IsSelectedPipe,
+    SearchFilterComponent,
+    FileSizePipe
+  ]
 })
 export class TestFilesComponent implements OnInit {
-  constructor(public appService: AppService,
-              public backendService: BackendService,
-              private TestCenterImportDialog: MatDialog,
-              private snackBar: MatSnackBar,
-              private translateService: TranslateService
-  ) {
-  }
-
-  selectedRows!: FilesInListDto[];
-  tableSelectionCheckboxes = new SelectionModel<FilesInListDto>(true, []);
-  tableSelectionRow = new SelectionModel<FilesInListDto>(false, []);
-  @ViewChild(MatSort) sort = new MatSort();
   displayedColumns: string[] = ['selectCheckbox', 'filename', 'file_size', 'file_type', 'created_at'];
   dataSource!: MatTableDataSource<FilesInListDto>;
+  tableCheckboxSelection = new SelectionModel<FilesInListDto>(true, []);
   isLoading = false;
-  files = [];
 
-  @ViewChild(MatSort) set matSort(sort: MatSort) {
-    if (this.dataSource) {
-      this.dataSource.sort = sort;
-    }
-  }
+  // Sort functionality
+  @ViewChild(MatSort) sort!: MatSort;
+
+  constructor(
+    public appService: AppService,
+    public backendService: BackendService,
+    private dialog: MatDialog,
+    private snackBar: MatSnackBar,
+    private translate: TranslateService // Alias for better clarity
+  ) {}
 
   ngOnInit(): void {
-    this.createTestFilesList(false);
+    // Load the initial test files for the workspace
+    this.loadTestFiles(false);
   }
 
+  /** Getter for setting table sorting */
+  get matSort(): MatSort {
+    if (this.dataSource) {
+      this.dataSource.sort = this.sort;
+    }
+    return this.sort;
+  }
+
+  /** Checks if all rows are selected */
   private isAllSelected(): boolean {
-    const numSelected = this.tableSelectionCheckboxes.selected.length;
-    const numRows = this.dataSource ? this.dataSource.data.length : 0;
+    const numSelected = this.tableCheckboxSelection.selected.length;
+    const numRows = this.dataSource?.data.length || 0;
     return numSelected === numRows;
   }
 
+  /** Toggles the selection of all rows */
   masterToggle(): void {
-    this.isAllSelected() || !this.dataSource ?
-      this.tableSelectionCheckboxes.clear() :
-      this.dataSource.data.forEach(row => this.tableSelectionCheckboxes.select(row));
+    this.isAllSelected() ? this.tableCheckboxSelection.clear() : this.dataSource?.data.forEach(row => this.tableCheckboxSelection.select(row));
   }
 
-  onFileSelected(targetElement: EventTarget | null) {
-    if (targetElement) {
-      const inputElement = targetElement as HTMLInputElement;
-      if (inputElement.files && inputElement.files.length > 0) {
-        this.isLoading = true;
-        this.backendService.uploadTestFiles(
-          this.appService.selectedWorkspaceId,
-          inputElement.files
-        ).subscribe(() => {
-          setTimeout(() => {
-            this.createTestFilesList(true);
-          }, 1000);
-          this.isLoading = false;
-        });
-      }
-    }
-  }
-
-  createTestFilesList(dataChanged:boolean): void {
+  /** Loads test files and updates the data source */
+  loadTestFiles(forceReload: boolean): void {
     this.isLoading = true;
-    if (this.appService.workspaceData?.testFiles.length === 0 || dataChanged) {
+
+    // Check if files need to be reloaded or used from the cached data
+    if (forceReload || !this.appService.workspaceData?.testFiles.length) {
       this.backendService.getFilesList(this.appService.selectedWorkspaceId)
-        .subscribe((files: FilesInListDto[]) => {
-          this.dataSource = new MatTableDataSource(files || []);
-          this.appService.workspaceData.testFiles = files;
-          this.isLoading = false;
+        .subscribe(files => {
+          this.updateTable(files);
         });
     } else {
-      this.dataSource = new MatTableDataSource(this.appService.workspaceData.testFiles || []);
-      this.isLoading = false;
+      // Use cached data if reload is not required
+      this.updateTable(this.appService.workspaceData.testFiles || []);
     }
   }
 
+  /** Updates the table data source and stops spinner */
+  private updateTable(files: FilesInListDto[]): void {
+    this.dataSource = new MatTableDataSource(files);
+    this.isLoading = false;
+  }
+
+  /** Handles file selection for upload */
+  onFileSelected(target: EventTarget | null): void {
+    if (!target) return;
+
+    const inputElement = target as HTMLInputElement;
+    const files = inputElement.files;
+
+    if (files && files.length) {
+      this.isLoading = true;
+
+      this.backendService.uploadTestFiles(this.appService.selectedWorkspaceId, files)
+        .subscribe(() => {
+          this.onUploadSuccess();
+        });
+    }
+  }
+
+  /** Handles the file upload success logic */
+  private onUploadSuccess(): void {
+    setTimeout(() => {
+      this.loadTestFiles(true);
+    }, 1000); // Optional timeout to simulate processing delay
+    this.isLoading = false;
+  }
+
+  /** Opens the Test Center Import dialog */
   testCenterImport(): void {
-    const dialogRef = this.TestCenterImportDialog.open(TestCenterImportComponent, {
+    const dialogRef = this.dialog.open(TestCenterImportComponent, {
       width: '600px',
       minHeight: '600px'
     });
+
     dialogRef.afterClosed().subscribe((result: boolean | UntypedFormGroup) => {
-      if (typeof result !== 'undefined') {
-        if (result !== false) {
-          this.createTestFilesList(true);
-          return true;
-        }
+      // Reload files if dialog returns a positive result
+      if (result instanceof UntypedFormGroup || result) {
+        this.loadTestFiles(true);
       }
-      return false;
     });
   }
 
+  /** Deletes selected files from the server */
   deleteFiles(): void {
-    const fileIds = this.tableSelectionCheckboxes.selected.map(file => file.id);
-    this.backendService.deleteFiles(this.appService.selectedWorkspaceId, fileIds).subscribe(
-      respOk => {
-        if (respOk) {
-          const dataChanged = true;
-          this.createTestFilesList(dataChanged);
-          this.snackBar.open(
-            this.translateService.instant('ws-admin.files-deleted'),
-            '',
-            { duration: 1000 });
-        } else {
-          this.snackBar.open(
-            this.translateService.instant('ws-admin.files-not-deleted'),
-            this.translateService.instant('error'),
-            { duration: 1000 });
-        }
-      }
+    const fileIds = this.tableCheckboxSelection.selected.map(file => file.id);
+
+    this.backendService.deleteFiles(this.appService.selectedWorkspaceId, fileIds)
+      .subscribe(respOk => {
+        this.handleDeleteResponse(respOk);
+      });
+  }
+
+  /** Handles the response from the file delete operation */
+  private handleDeleteResponse(success: boolean): void {
+    // Show appropriate snack bar message based on the result
+    this.snackBar.open(
+      success ? this.translate.instant('ws-admin.files-deleted') : this.translate.instant('ws-admin.files-not-deleted'),
+      success ? '' : this.translate.instant('error'),
+      { duration: 1000 }
     );
+
+    if (success) {
+      this.loadTestFiles(true);
+    }
   }
 }
