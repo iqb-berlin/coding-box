@@ -186,13 +186,13 @@ export class WorkspaceService {
     return !!saved;
   }
 
-  async findFiles(workspace_id: number): Promise<FilesDto[]> {
-    this.logger.log('Returning all test files for workspace ', workspace_id);
-    return this.fileUploadRepository
-      .find({
-        where: { workspace_id: workspace_id },
-        select: ['id', 'filename', 'file_size', 'file_type', 'created_at']
-      });
+  async findFiles(workspaceId: number): Promise<FilesDto[]> {
+    this.logger.log(`Fetching all test files for workspace: ${workspaceId}`);
+
+    return this.fileUploadRepository.find({
+      where: { workspace_id: workspaceId },
+      select: ['id', 'filename', 'file_size', 'file_type', 'created_at']
+    });
   }
 
   async findTestResults(workspace_id: number, options: { page: number; limit: number }): Promise<[Persons[], number]> {
@@ -230,12 +230,19 @@ export class WorkspaceService {
     }
   }
 
-  async findUsers(workspace_id: number): Promise<WorkspaceUser[]> {
-    this.logger.log('Returning all users for workspace ', workspace_id);
-    return this.workspaceUsersRepository
-      .find({
-        where: { workspaceId: workspace_id }
+  async findUsers(workspaceId: number): Promise<WorkspaceUser[]> {
+    this.logger.log(`Retrieving all users for workspace ID: ${workspaceId}`);
+
+    try {
+      const users = await this.workspaceUsersRepository.find({
+        where: { workspaceId }
       });
+      this.logger.log(`Found ${users.length} user(s) for workspace ID: ${workspaceId}`);
+      return users;
+    } catch (error) {
+      this.logger.error(`Failed to retrieve users for workspace ID: ${workspaceId}`, error.stack);
+      throw new Error('Could not retrieve workspace users');
+    }
   }
 
   async deleteTestFiles(workspace_id:number, fileIds: string[]): Promise<boolean> {
@@ -285,11 +292,13 @@ export class WorkspaceService {
     this.logger.log(`Fetching unit definition for unit: ${unitId} in workspace: ${workspaceId}`);
     try {
       const files = await this.fileUploadRepository.find({
+        select: ['file_id', 'filename'], // Nur notwendige Felder auswählen
         where: {
           file_id: `${unitId}.VOUD`,
           workspace_id: workspaceId
         }
       });
+
       if (files.length === 0) {
         this.logger.warn(`No unit definition found for unit: ${unitId} in workspace: ${workspaceId}`);
       } else {
