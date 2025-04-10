@@ -36,6 +36,11 @@ export class UploadResultsService {
     if (!Array.isArray(originalFiles)) {
       originalFiles = [originalFiles];
     }
+    const MAX_FILES_LENGTH = 1000; // Define a reasonable maximum length
+    if (originalFiles.length > MAX_FILES_LENGTH) {
+      this.logger.error(`Too many files to upload: ${originalFiles.length}`);
+      return false;
+    }
     const filePromises = [];
     for (let i = 0; i < originalFiles.length; i++) {
       const file = originalFiles[i];
