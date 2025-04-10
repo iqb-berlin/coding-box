@@ -90,36 +90,30 @@ export class TestcenterService {
   ) {
   }
 
-  async authenticate(credentials: { username: string, password: string, server:string, url:string }): Promise<string> {
-    if (!credentials.server && credentials.url !== '') {
+  async authenticate(credentials: { username: string; password: string; server: string; url: string }): Promise<string> {
+    const endpoint = credentials.url && !credentials.server ?
+      `${credentials.url}/api/session/admin` :
+      `http://iqb-testcenter${credentials.server}.de/api/session/admin`;
+
+    try {
       const { data } = await firstValueFrom(
-        this.httpService.put(`${credentials.url}/api/session/admin`, {
-          name: credentials.username,
-          password: credentials.password
-        }, {
-          httpsAgent: agent
-        }).pipe(
+        this.httpService.put(endpoint,
+          {
+            name: credentials.username,
+            password: credentials.password
+          },
+          {
+            httpsAgent: agent
+          }).pipe(
           catchError(error => {
-            throw new Error(error);
+            throw new Error(`Authentication failed: ${error?.message || error}`);
           })
         )
       );
       return data;
+    } catch (error) {
+      throw new Error(`Authentication error: ${error.message || 'Unknown error'}`);
     }
-
-    const { data } = await firstValueFrom(
-      this.httpService.put(`http://iqb-testcenter${credentials.server}.de/api/session/admin`, {
-        name: credentials.username,
-        password: credentials.password
-      }, {
-        httpsAgent: agent
-      }).pipe(
-        catchError(error => {
-          throw new Error(error);
-        })
-      )
-    );
-    return data;
   }
 
   async importWorkspaceFiles(
@@ -160,87 +154,110 @@ export class TestcenterService {
       );
 
       const chunks = createChunks(resultGroupNames, 2);
-      const unitResponsesPromises = chunks.map(chunk => {
-        const unitResponsesPromise = this.httpService.axiosRef
-          .get<UnitResponse[]>(url ? `${url}/api/workspace/${tc_workspace}/report/response?dataIds=${chunk.join(',')}` :
-          `http://iqb-testcenter${server}.de/api/workspace/${tc_workspace}/report/response?dataIds=${chunk.join(',')}`,
-        {
-          httpsAgent: agent,
-          headers: headersRequest
-        });
-        return unitResponsesPromise
-          .then(callResponse => {
-            const rows: ResponseDto[] = callResponse.data
-              .map((unitResponse: UnitResponse) => ({
-                test_person: TestcenterService.getTestPersonName(unitResponse),
-                unit_id: unitResponse.unitname,
-                responses: unitResponse.responses,
-                test_group: unitResponse.groupname,
-                workspace_id: Number(workspace_id),
-                unit_state: JSON.parse(unitResponse.laststate),
-                booklet_id: unitResponse.bookletname,
-                id: undefined,
-                created_at: undefined
-              }));
-            const cleanedRows = WorkspaceService.cleanResponses(rows);
-            this.responsesRepository.upsert(cleanedRows, ['test_person', 'unit_id']);
+      const unitResponsesPromises = chunks.map(async chunk => {
+        const endpoint = url ?
+          `${url}/api/workspace/${tc_workspace}/report/response?dataIds=${chunk.join(',')}` :
+          `http://iqb-testcenter${server}.de/api/workspace/${tc_workspace}/report/response?dataIds=${chunk.join(',')}`;
+
+        try {
+          const { data: rawResponses } = await this.httpService.axiosRef.get<UnitResponse[]>(endpoint, {
+            httpsAgent: agent,
+            headers: headersRequest
           });
+
+          const rows: ResponseDto[] = rawResponses.map((unitResponse: UnitResponse) => ({
+            test_person: TestcenterService.getTestPersonName(unitResponse),
+            unit_id: unitResponse.unitname,
+            responses: unitResponse.responses,
+            test_group: unitResponse.groupname,
+            workspace_id: Number(workspace_id),
+            unit_state: JSON.parse(unitResponse.laststate),
+            booklet_id: unitResponse.bookletname,
+            id: undefined,
+            created_at: undefined
+          }));
+
+          const cleanedRows = WorkspaceService.cleanResponses(rows);
+          await this.responsesRepository.upsert(cleanedRows, ['test_person', 'unit_id']);
+        } catch (error) {
+          console.error('Error processing chunk:', error.message || error);
+          throw error; // Rethrow to handle it globally
+        }
       });
-      await Promise.all(unitResponsesPromises).then(() => {
+
+      try {
+        await Promise.all(unitResponsesPromises);
         result.success = true;
-        result.responses = report.data.length;
-      }).catch(() => {
+        result.responses = report.data.length; // Assuming `report.data` is accessible here
+      } catch (error) {
         result.success = false;
-      });
+      }
     }
 
     if (logs === 'true') {
-      const resultsPromise = this.httpService.axiosRef
-        .get<TestserverResponse[]>(url ? `${url}api/workspace/${tc_workspace}/results` :
-        `http://iqb-testcenter${server}.de/api/workspace/${tc_workspace}/results`, {
-        httpsAgent: agent,
-        headers: headersRequest
-      });
-      const report = await resultsPromise.then(res => res);
-      if (!report) {
-        throw new Error('could not obtain information about groups from TC');
-      }
-      const resultGroupNames = report.data.map(group => group.groupName);
-      const createChunks = (a, size) => Array.from(
-        new Array(Math.ceil(a.length / size)),
-        (_, i) => a.slice(i * size, i * size + size)
-      );
+      try {
+        const resultsUrl = url ?
+          `${url}api/workspace/${tc_workspace}/results` :
+          `http://iqb-testcenter${server}.de/api/workspace/${tc_workspace}/results`;
 
-      const chunks = createChunks(resultGroupNames, 2);
-      const logsPromises = chunks.map(chunk => {
-        const logsPromise = this.httpService.axiosRef
-          .get<Log[]>(url ? `${url}/api/workspace/${tc_workspace}/report/log?dataIds=${chunk.join(',')}` :
-          `http://iqb-testcenter${server}.de/api/workspace/${tc_workspace}/report/log?dataIds=${chunk.join(',')}`,
-        {
+        const report = await this.httpService.axiosRef.get<TestserverResponse[]>(resultsUrl, {
           httpsAgent: agent,
           headers: headersRequest
         });
-        return logsPromise
-          .then(callResponse => {
-            const rows:LogsDto[] = callResponse.data
-              .map((log: Log) => ({
-                unit_id: log.unitname,
-                timestamp: log.timestamp,
-                test_group: log.groupname,
-                workspace_id: Number(workspace_id),
-                log_entry: log.logentry,
-                booklet_id: log.bookletname,
-                id: undefined
-              }));
-            this.logsRepository.save(rows, { chunk: 50000 });
+
+        if (!report || !report.data) {
+          throw new Error('Could not obtain information about groups from TC');
+        }
+
+        // extract group name
+        const resultGroupNames = report.data.map(group => group.groupName);
+
+        // function to create chuncs
+        const createChunks = <T>(array: T[], size: number): T[][] => Array.from({ length: Math.ceil(array.length / size) }, (_, i) => array.slice(i * size, i * size + size)
+        );
+
+        // Split group names into chunks of 2 elements each
+        const chunks = createChunks(resultGroupNames, 2);
+
+        // Create promises for fetching the logs
+        const fetchLogsForChunks = async (chunk: string[]): Promise<void> => {
+          const logsUrl = url ?
+            `${url}/api/workspace/${tc_workspace}/report/log?dataIds=${chunk.join(',')}` :
+            `http://iqb-testcenter${server}.de/api/workspace/${tc_workspace}/report/log?dataIds=${chunk.join(',')}`;
+
+          const logsResponse = await this.httpService.axiosRef.get<Log[]>(logsUrl, {
+            httpsAgent: agent,
+            headers: headersRequest
           });
-      });
-      await Promise.all(logsPromises).then(() => {
+
+          if (logsResponse && logsResponse.data) {
+            // Convert logs into the desired format
+            const logsToSave: LogsDto[] = logsResponse.data.map((log: Log) => ({
+              unit_id: log.unitname,
+              timestamp: log.timestamp,
+              test_group: log.groupname,
+              workspace_id: Number(workspace_id),
+              log_entry: log.logentry,
+              booklet_id: log.bookletname,
+              id: undefined
+            }));
+
+            // Save logs (chunk-wise processing for large data volumes)
+            await this.logsRepository.save(logsToSave, { chunk: 50000 });
+          }
+        };
+
+        // Retrieve and save all logs for the respective chunks in parallel
+        await Promise.all(chunks.map(fetchLogsForChunks));
+
+        // Record success
         result.success = true;
         result.logs = report.data.length;
-      }).catch(() => {
+      } catch (error) {
+        // handle errors
         result.success = false;
-      });
+        console.error('Error fetching logs:', error.message);
+      }
     }
 
     if (definitions === 'true' ||
@@ -332,42 +349,47 @@ export class TestcenterService {
     return `${unitResponse.loginname}@${unitResponse.code}@${unitResponse.bookletname}`;
   }
 
-  async getFile(file:File, server:string, tc_workspace:string, authToken:string, url:string):
-  Promise<{
-    data: File, name: string, type: string, size: number, id: string
-  }> {
+  async getFile(
+    file: File,
+    server: string,
+    tcWorkspace: string,
+    authToken: string,
+    url?: string
+  ): Promise<{
+      data: File;
+      name: string;
+      type: string;
+      size: number;
+      id: string;
+    }> {
     const headersRequest = {
       Authtoken: authToken
     };
-    const filePromise = this.httpService.axiosRef
-      .get<File>(url ? `${url}/api/workspace/${tc_workspace}/file/${file.type}/${file.name}` :
-      `http://iqb-testcenter${server}.de/api/workspace/${tc_workspace}/file/${file.type}/${file.name}`,
-    {
-      httpsAgent: agent,
-      headers: headersRequest
-    });
-    const fileData = await filePromise.then(res => res.data);
-    return {
-      data: fileData, name: file.name, type: file.type, size: file.size, id: file.id
-    };
-  }
 
-  // async getPackage(res:File, server:string, tc_workspace:string, authToken:string): Promise<any> {
-  //   const headersRequest = {
-  //     Authtoken: authToken
-  //   };
-  //   const filePromise = this.httpService.axiosRef
-  //     .get(`http://iqb-testcenter${server}.de/api/workspace/${tc_workspace}/file/${res.type}/${res.name}`,
-  //       {
-  //         httpsAgent: agent,
-  //         headers: headersRequest
-  //       });
-  //   //const fileData = await filePromise.then(res => res.data);
-  //   //const zip = new AdmZip(Buffer.from(fileData));
-  //   //const packageFiles = zip.getEntries().map(entry => entry.entryName);
-  //
-  //   // return {
-  //   //   data: fileData, name: res.name, type: res.type, size: res.size, id: res.id
-  //   // };
-  // }
+    // Construct the request URL based on the provided url or fallback to the default URL
+    const requestUrl = url ?
+      `${url}/api/workspace/${tcWorkspace}/file/${file.type}/${file.name}` :
+      `http://iqb-testcenter${server}.de/api/workspace/${tcWorkspace}/file/${file.type}/${file.name}`;
+
+    try {
+      const response = await this.httpService.axiosRef.get<File>(requestUrl, {
+        httpsAgent: agent, // Disable SSL validation for HTTPS requests
+        headers: headersRequest // Add the authorization headers
+      });
+
+      const fileData = response.data;
+
+      return {
+        data: fileData,
+        name: file.name,
+        type: file.type,
+        size: file.size,
+        id: file.id
+      };
+    } catch (error) {
+      console.error(`Failed to fetch file: ${file.name}`, error);
+
+      throw new Error('Unable to fetch the file from server.');
+    }
+  }
 }
