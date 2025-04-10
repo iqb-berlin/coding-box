@@ -33,6 +33,9 @@ export class UploadResultsService {
 
   async uploadTestResults(workspace_id: number, originalFiles: FileIo[]): Promise<boolean> {
     this.logger.log(`Uploading test results for workspace ${workspace_id}`);
+    if (!Array.isArray(originalFiles)) {
+      originalFiles = [originalFiles];
+    }
     const filePromises = [];
     for (let i = 0; i < originalFiles.length; i++) {
       const file = originalFiles[i];
