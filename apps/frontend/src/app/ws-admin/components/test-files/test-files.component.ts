@@ -1,13 +1,26 @@
 import {
   Component, OnInit, ViewChild
 } from '@angular/core';
-import { TranslateService } from '@ngx-translate/core';
+import { TranslateService, TranslateModule } from '@ngx-translate/core';
 import { MatDialog } from '@angular/material/dialog';
 import { UntypedFormGroup } from '@angular/forms';
 import { MatSort } from '@angular/material/sort';
-import { MatTableDataSource } from '@angular/material/table';
+import {
+  MatCell, MatCellDef,
+  MatHeaderCell,
+  MatHeaderCellDef,
+  MatHeaderRow, MatHeaderRowDef,
+  MatRow, MatRowDef,
+  MatTable,
+  MatTableDataSource
+} from '@angular/material/table';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { SelectionModel } from '@angular/cdk/collections';
+import { MatIcon } from '@angular/material/icon';
+import { MatProgressSpinner } from '@angular/material/progress-spinner';
+import { MatCheckbox } from '@angular/material/checkbox';
+import { MatAnchor } from '@angular/material/button';
+import { DatePipe } from '@angular/common';
 import { TestCenterImportComponent } from '../test-center-import/test-center-import.component';
 import { AppService } from '../../../services/app.service';
 import { BackendService } from '../../../services/backend.service';
@@ -23,11 +36,26 @@ import { FilesInListDto } from '../../../../../../../api-dto/files/files-in-list
   templateUrl: './test-files.component.html',
   styleUrls: ['./test-files.component.scss'],
   imports: [
+    TranslateModule,
+    DatePipe,
     HasSelectionValuePipe,
     IsAllSelectedPipe,
     IsSelectedPipe,
     SearchFilterComponent,
-    FileSizePipe
+    FileSizePipe,
+    MatIcon,
+    MatHeaderCell,
+    MatCell,
+    MatHeaderRow,
+    MatRow,
+    MatProgressSpinner,
+    MatCheckbox,
+    MatTable,
+    MatAnchor,
+    MatHeaderCellDef,
+    MatCellDef,
+    MatHeaderRowDef,
+    MatRowDef
   ]
 })
 export class TestFilesComponent implements OnInit {
