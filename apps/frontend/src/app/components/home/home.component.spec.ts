@@ -8,6 +8,11 @@ import { HomeComponent } from './home.component';
 import { AuthService } from '../../auth/service/auth.service';
 import { environment } from '../../../environments/environment';
 
+const mockKeycloakService = {
+  idTokenParsed: {} // Mock-Daten
+  // Fügen Sie weitere Methoden oder Eigenschaften hinzu, falls nötig
+};
+
 describe('HomeComponent', () => {
   let component: HomeComponent;
   let fixture: ComponentFixture<HomeComponent>;
@@ -15,17 +20,17 @@ describe('HomeComponent', () => {
   const fakeActivatedRoute = {
     snapshot: { data: { } }
   } as ActivatedRoute;
-  // class MockAuthService {}
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [HomeComponent, TranslateModule.forRoot()],
-      providers: [KeycloakService, AuthService, {
-        provide: ActivatedRoute,
-        useValue: fakeActivatedRoute
-      }, {
-        provide: 'SERVER_URL',
-        useValue: environment.backendUrl
-      }, provideHttpClient()]
+      providers: [{ provide: KeycloakService, useValue: mockKeycloakService },
+        AuthService, {
+          provide: ActivatedRoute,
+          useValue: fakeActivatedRoute
+        }, {
+          provide: 'SERVER_URL',
+          useValue: environment.backendUrl
+        }, provideHttpClient()]
     })
       .compileComponents();
 
