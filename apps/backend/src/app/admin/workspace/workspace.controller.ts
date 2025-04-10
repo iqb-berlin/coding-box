@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -48,21 +49,37 @@ export class WorkspaceController {
   @Get()
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
-  @ApiOkResponse({ description: 'Admin workspace retrieved successfully.' })
   @ApiTags('admin workspaces')
+  @ApiOkResponse({
+    description: 'List of admin workspaces retrieved successfully.',
+    type: [WorkspaceInListDto] // Spezifiziert, dass ein Array des DTOs zurückgegeben wird
+  })
   async findAll(): Promise<WorkspaceInListDto[]> {
-    return this.workspaceService.findAll();
+    try {
+      return await this.workspaceService.findAll();
+    } catch (error) {
+      throw new BadRequestException('Failed to retrieve admin workspaces. Please try again later.');
+    }
   }
 
-  @Get(':workspace_id/:user_id/token/:duration') // TODO push
-  @UseGuards(JwtAuthGuard)
+  @Get(':workspace_id/:user_id/token/:duration')
+  @ApiBearerAuth()
+  @ApiTags('admin workspace')
+  @ApiParam({ name: 'workspace_id', required: true, description: 'ID of the workspace' })
+  @ApiParam({ name: 'user_id', required: true, description: 'ID of the user' })
+  @ApiParam({ name: 'duration', required: true, description: 'Duration of the token in seconds' })
+  @UseGuards(JwtAuthGuard, WorkspaceGuard) // Sicherstellen, dass die Route geschützt ist
   async createToken(
-    @Param('user_id')
-      user_id:string,
-      @Param('workspace_id') workspace_id: number,
+    @Param('user_id') userId: string,
+      @Param('workspace_id') workspaceId: number,
       @Param('duration') duration: number
-  ):Promise<string> {
-    return this.authService.createToken(user_id, workspace_id, duration);
+  ): Promise<string> {
+    if (!userId || !workspaceId || !duration) {
+      throw new BadRequestException('Invalid input parameters');
+    }
+    console.log(`Generating token for user ${userId} in workspace ${workspaceId} with duration ${duration}s`);
+
+    return this.authService.createToken(userId, workspaceId, duration);
   }
 
   // TODO Don't use boolean query params as strings
