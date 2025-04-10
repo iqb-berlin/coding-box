@@ -3,10 +3,11 @@ import {
   Body,
   Controller,
   Delete,
-  Get, Param, Patch,
+  Get, NotFoundException, Param, Patch,
   Post, Query, UploadedFiles, UseGuards, UseInterceptors
 } from '@nestjs/common';
 import {
+  ApiBadRequestResponse,
   ApiBearerAuth, ApiCreatedResponse, ApiNotFoundResponse, ApiOkResponse, ApiParam, ApiTags
 } from '@nestjs/swagger';
 import { FilesInterceptor } from '@nestjs/platform-express';
@@ -115,20 +116,70 @@ export class WorkspaceController {
 
   @Get(':workspace_id')
   @ApiBearerAuth()
-  @ApiOkResponse({ description: 'Admin workspace-group retrieved successfully.' })
-  @ApiNotFoundResponse({ description: 'Admin workspace not found.' })
-  @ApiParam({ name: 'workspace_id', type: Number })
   @ApiTags('admin workspaces')
+  @ApiOkResponse({
+    description: 'Admin workspace retrieved successfully.',
+    type: WorkspaceFullDto
+  })
+  @ApiNotFoundResponse({ description: 'Admin workspace not found.' })
+  @ApiBadRequestResponse({ description: 'Invalid workspace ID.' })
+  @ApiParam({
+    name: 'workspace_id',
+    type: Number,
+    description: 'Unique identifier of the workspace'
+  })
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async findOne(@WorkspaceId() id: number): Promise<WorkspaceFullDto> {
-    return this.workspaceService.findOne(id);
+    if (!id || id <= 0) {
+      throw new BadRequestException('Invalid workspace ID.');
+    }
+    try {
+      const workspace = await this.workspaceService.findOne(id);
+      if (!workspace) {
+        throw new NotFoundException('Admin workspace not found.');
+      }
+      return workspace;
+    } catch (error) {
+      throw new BadRequestException(`Failed to retrieve workspace: ${error.message}`);
+    }
   }
 
   @Get(':workspace_id/files')
-  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiTags('admin workspace')
+  @ApiBearerAuth()
+  @ApiParam({
+    name: 'workspace_id',
+    type: Number,
+    required: true,
+    description: 'The unique ID of the workspace for which the files should be retrieved.'
+  })
+  @ApiOkResponse({
+    description: 'A list of files was successfully retrieved.',
+    type: [FilesDto]
+  })
+  @ApiNotFoundResponse({
+    description: 'The requested workspace could not be found.'
+  })
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async findFiles(@Param('workspace_id') workspace_id: number): Promise<FilesDto[]> {
-    return this.workspaceService.findFiles(workspace_id);
+    if (!workspace_id || workspace_id <= 0) {
+      throw new BadRequestException(
+        'Invalid workspace ID. Please provide a valid ID.'
+      );
+    }
+    try {
+      const files = await this.workspaceService.findFiles(workspace_id);
+      if (!files || files.length === 0) {
+        throw new BadRequestException(
+          `No files found for the workspace with ID ${workspace_id}.`
+        );
+      }
+      return files;
+    } catch (error) {
+      throw new BadRequestException(
+        `An error occurred while fetching files for workspace ${workspace_id}: ${error.message}`
+      );
+    }
   }
 
   @Get(':workspace_id/test-results')
@@ -147,10 +198,39 @@ export class WorkspaceController {
   }
 
   @Get(':workspace_id/users')
-  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiTags('admin workspace users')
+  @ApiBearerAuth()
+  @ApiParam({
+    name: 'workspace_id',
+    type: Number,
+    required: true,
+    description: 'Unique identifier for the workspace'
+  })
+  @ApiOkResponse({
+    description: 'List of users retrieved successfully',
+    type: [WorkspaceUser] // Gibt ein Array vom Typ WorkspaceUser zurück
+  })
+  @ApiNotFoundResponse({
+    description: 'Workspace not found or no users available'
+  })
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
-  async findUsers(@Param('workspace_id') workspace_id: number): Promise<WorkspaceUser[]> {
-    return this.workspaceService.findUsers(workspace_id);
+  async findUsers(
+    @Param('workspace_id') workspaceId: number
+  ): Promise<WorkspaceUser[]> {
+    try {
+      const users = await this.workspaceService.findUsers(workspaceId);
+      if (!users || users.length === 0) {
+        throw new BadRequestException(
+          `No users found for workspace ID ${workspaceId}`
+        );
+      }
+      return users;
+    } catch (error) {
+      console.error(`Error retrieving users for workspace ${workspaceId}`, error);
+      throw new BadRequestException(
+        `Failed to retrieve users for workspace ${workspaceId}. Please try again later.`
+      );
+    }
   }
 
   // Todo: use query params
@@ -240,21 +320,64 @@ export class WorkspaceController {
   @Post(':workspace_id/upload')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiBearerAuth()
-  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
   @UseInterceptors(FilesInterceptor('files'))
   @ApiTags('workspace')
-  async addTestFiles(@Param('workspace_id') workspace_id:number, @UploadedFiles() files): Promise<boolean> {
-    return this.workspaceService.uploadTestFiles(workspace_id, files);
+  async addTestFiles(
+    @Param('workspace_id') workspaceId: number,
+      @UploadedFiles() files: Express.Multer.File[]
+  ): Promise<boolean> {
+    if (!workspaceId) {
+      throw new BadRequestException('Workspace ID is required.');
+    }
+
+    if (!files || files.length === 0) {
+      throw new BadRequestException('At least one file must be uploaded.');
+    }
+
+    try {
+      return await this.workspaceService.uploadTestFiles(workspaceId, files);
+    } catch (error) {
+      console.error('Error uploading test files:', error);
+      throw new BadRequestException('Failed to upload test files. Please try again.');
+    }
   }
 
   @Post(':workspace_id/upload/results')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard) // Securing the endpoint with JWT and workspace-specific guards
   @ApiBearerAuth()
-  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiParam({
+    name: 'workspace_id',
+    type: Number,
+    required: true,
+    description: 'The ID of the workspace to which test results should be uploaded.'
+  })
   @UseInterceptors(FilesInterceptor('files'))
   @ApiTags('workspace')
-  async addTestResults(@Param('workspace_id') workspace_id:number, @UploadedFiles() files): Promise<boolean> {
-    return this.uploadResults.uploadTestResults(workspace_id, files);
+  @ApiOkResponse({
+    description: 'Test results successfully uploaded.'
+  })
+  @ApiBadRequestResponse({
+    description: 'Invalid request. Please check your input data.'
+  })
+  async addTestResults(
+    @Param('workspace_id') workspace_id: number,
+      @UploadedFiles() files: Express.Multer.File[]
+  ): Promise<boolean> {
+    if (!workspace_id || Number.isNaN(workspace_id)) {
+      throw new BadRequestException('Invalid workspace_id.');
+    }
+
+    if (!files || files.length === 0) {
+      throw new BadRequestException('No files were uploaded.');
+    }
+
+    try {
+      return await this.uploadResults.uploadTestResults(workspace_id, files);
+    } catch (error) {
+      console.error('Error uploading test results:', error.message);
+      throw new BadRequestException('Uploading test results failed. Please try again.');
+    }
   }
 
   // TODO: use query params
