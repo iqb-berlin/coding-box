@@ -1,7 +1,7 @@
 import {
   Controller,
   Delete,
-  Get, Header,
+  Get, Header, NotFoundException,
   Param,
   ParseArrayPipe,
   ParseIntPipe,
@@ -30,10 +30,24 @@ export class ResourcePackageController {
   ) {}
 
   @Get()
-  @ApiOkResponse({ description: 'Resource Packages retrieved successfully.' }) // TODO Exception
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOkResponse({
+    description: 'Resource Packages retrieved successfully.',
+    type: [ResourcePackageDto]
+  })
   @ApiTags('admin resource-packages')
+  @ApiNotFoundResponse({
+    description: 'No resource packages found.'
+  })
   async findResourcePackages(): Promise<ResourcePackageDto[]> {
-    return this.resourcePackageService.findResourcePackages();
+    const resourcePackages = await this.resourcePackageService.findResourcePackages();
+
+    if (!resourcePackages || resourcePackages.length === 0) {
+      throw new NotFoundException('No resource packages found.');
+    }
+
+    return resourcePackages;
   }
 
   @Delete(':id')
