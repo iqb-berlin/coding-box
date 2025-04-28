@@ -2,7 +2,7 @@ import { ApiProperty } from '@nestjs/swagger';
 
 export class FilesInListDto {
   @ApiProperty()
-  id!: number;
+    id!: number;
 
   @ApiProperty()
     filename!: string;

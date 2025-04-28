@@ -204,41 +204,47 @@ export class TestCenterImportComponent {
   }
 
   importWorkspaceFiles(): void {
-    const testCenter = this.loginForm.get('testCenter')?.value;
-    const workspace = this.importFilesForm.get('workspace')?.value;
-    const definitions = this.importFilesForm.get('definitions')?.value;
-    const responses = this.importFilesForm.get('responses')?.value;
-    const player = this.importFilesForm.get('player')?.value;
-    const units = this.importFilesForm.get('units')?.value;
-    const codings = this.importFilesForm.get('codings')?.value;
-    const logs = this.importFilesForm.get('logs')?.value;
-    const booklets = this.importFilesForm.get('booklets')?.value;
-    const testTakers = this.importFilesForm.get('testTakers')?.value;
-
-    const importOptions = {
-      definitions: definitions,
-      responses: responses,
-      units: units,
-      player: player,
-      codings: codings,
-      logs: logs,
-      testTakers: testTakers,
-      booklets: booklets
+    const formValues = {
+      testCenter: this.loginForm.get('testCenter')?.value,
+      workspace: this.importFilesForm.get('workspace')?.value,
+      testCenterIndividual: this.loginForm.get('testCenterIndividual')?.value || '',
+      importOptions: {
+        definitions: this.importFilesForm.get('definitions')?.value,
+        responses: this.importFilesForm.get('responses')?.value,
+        units: this.importFilesForm.get('units')?.value,
+        player: this.importFilesForm.get('player')?.value,
+        codings: this.importFilesForm.get('codings')?.value,
+        logs: this.importFilesForm.get('logs')?.value,
+        testTakers: this.importFilesForm.get('testTakers')?.value,
+        booklets: this.importFilesForm.get('booklets')?.value
+      }
     };
+
     this.uploadData = {} as Result;
-    if (definitions || responses || player || codings || units || logs || testTakers || booklets) {
+
+    const hasSelectedFiles = Object.values(formValues.importOptions).some(value => !!value);
+
+    if (hasSelectedFiles) {
       this.filesSelectionError = false;
       this.isUploadingFiles = true;
-      this.backendService.importWorkspaceFiles(
-        this.appService.selectedWorkspaceId,
-        workspace,
-        testCenter,
-        this.loginForm.get('testCenterIndividual')?.value || '',
-        this.authToken,
-        importOptions)
-        .subscribe(data => {
-          this.uploadData = data;
-          this.isUploadingFiles = false;
+
+      this.backendService
+        .importWorkspaceFiles(
+          this.appService.selectedWorkspaceId,
+          formValues.workspace,
+          formValues.testCenter,
+          formValues.testCenterIndividual,
+          this.authToken,
+          formValues.importOptions
+        )
+        .subscribe({
+          next: data => {
+            this.uploadData = data;
+            this.isUploadingFiles = false;
+          },
+          error: () => {
+            this.isUploadingFiles = false;
+          }
         });
     } else {
       this.filesSelectionError = true;
