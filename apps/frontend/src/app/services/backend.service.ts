@@ -23,6 +23,7 @@ import { FilesDto } from '../../../../../api-dto/files/files.dto';
 import { UserInListDto } from '../../../../../api-dto/user/user-in-list-dto';
 import { UserWorkspaceAccessDto } from '../../../../../api-dto/workspaces/user-workspace-access-dto';
 import { Persons } from '../../../../../api-dto/test-results/testgroups-in-list.dto';
+import { FilesValidationDto } from '../../../../../api-dto/files/files-validation.dto';
 
 @Injectable({
   providedIn: 'root'
@@ -188,6 +189,17 @@ export class BackendService {
       .pipe(
         catchError(() => of(false)),
         map(() => true)
+      );
+  }
+
+  validateFiles(workspace_id:number): Observable<boolean | FilesValidationDto> {
+    return this.http
+      .get<FilesValidationDto>(
+      `${this.serverUrl}admin/workspace/${workspace_id}/files/validation`,
+      { headers: this.authHeader })
+      .pipe(
+        catchError(() => of(false)),
+        map(res => res)
       );
   }
 

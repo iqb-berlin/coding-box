@@ -12,6 +12,10 @@
       <mat-icon>delete</mat-icon>
       Test Datei(en) löschen
     </a>
+    <a mat-raised-button color="primary" (click)="validateFiles()">
+      <mat-icon>validate</mat-icon>
+      Validieren
+    </a>
   </div>
   <input #hiddenFileInput type="file"
          name="files"
@@ -30,6 +34,9 @@
 
 
     <mat-table [dataSource]="dataSource" matSort>
+      <mat-header-row *matHeaderRowDef="displayedColumns;sticky: true"></mat-header-row>
+      <mat-row *matRowDef="let row; columns: displayedColumns;"></mat-row>
+
       <ng-container matColumnDef="selectCheckbox">
         <mat-header-cell *matHeaderCellDef class="fx-flex-row-fix-70">
           <mat-checkbox [checked]="(tableCheckboxSelection | hasSelectionValue : tableCheckboxSelection.selected.length) &&  (tableCheckboxSelection.selected.length | isAllSelected : dataSource.data.length)"
@@ -72,10 +79,6 @@
           {{element.created_at | date: 'dd.MM.yyyy HH:mm'}}
         </mat-cell>
       </ng-container>
-
-      <mat-header-row *matHeaderRowDef="displayedColumns;sticky: true"></mat-header-row>
-      <mat-row *matRowDef="let row; columns: displayedColumns;"></mat-row>
-
     </mat-table>
 
   }

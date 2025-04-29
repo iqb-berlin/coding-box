@@ -30,6 +30,7 @@ import { ResponseDto } from '../../../../../../api-dto/responses/response-dto';
 import WorkspaceUser from '../../database/entities/workspace_user.entity';
 import { UploadResultsService } from '../../database/services/upload-results.service';
 import Persons from '../../database/entities/persons.entity';
+import { FilesValidationDto } from '../../../../../../api-dto/files/files-validation.dto';
 
 export type Result = {
   success: boolean,
@@ -241,6 +242,14 @@ export class WorkspaceController {
   @Param('workspace_id') workspace_id: number,
     @Param('ids')ids : string) {
     return this.workspaceService.deleteTestFiles(workspace_id, ids.split(';'));
+  }
+
+  @Get(':workspace_id/files/validation')
+  @ApiTags('test files validation')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  async validateTestFiles(
+    @Param('workspace_id') workspace_id: number):Promise<FilesValidationDto> {
+    return this.workspaceService.validateTestFiles(workspace_id);
   }
 
   @Get(':workspace_id/player/:playerName')

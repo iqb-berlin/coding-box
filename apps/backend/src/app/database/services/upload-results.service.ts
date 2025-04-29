@@ -85,8 +85,6 @@ export class UploadResultsService {
           .on('end', async () => {
             const endTime = performance.now();
             console.log('CSV read duration:', `${(endTime - startTime) / 1000}s`);
-
-            // Trennt die Daten direkt mit `reduce`, um die Logs in einem Schritt zu sortieren.
             const { bookletLogs, unitLogs } = rowData.reduce(
               (acc, row) => {
                 row.unitname === '' ? acc.bookletLogs.push(row) : acc.unitLogs.push(row);
@@ -94,16 +92,13 @@ export class UploadResultsService {
               },
               { bookletLogs: [], unitLogs: [] }
             );
-
             this.createPersonList(rowData);
-
             const personTime = performance.now();
             console.log('personTime', `${(personTime - startTime) / 1000}s`);
-
-            const persons = this.persons.map(person => this.assignBookletLogsToPerson(person, bookletLogs));
+            const persons = this.persons
+              .map(person => this.assignBookletLogsToPerson(person, bookletLogs));
             const loggedPersonTime = performance.now();
             console.log('loggedPersonTime', `${(loggedPersonTime - startTime) / 1000}s`);
-
             const keys = persons.map(person => ({
               group: person.group,
               code: person.code,
@@ -131,7 +126,6 @@ export class UploadResultsService {
                   booklets: logEnrichedBooklets
                 };
               }
-
               console.log('Person not found in responses');
             });
 
@@ -172,7 +166,6 @@ export class UploadResultsService {
   }
 
   createPersonList(rows: Response[] | Log[] | Logs[]): void {
-    // Verwendung einer Map für eine effizientere Suche.
     const personMap = new Map<string, Person>();
 
     rows.forEach(row => {
@@ -187,7 +180,6 @@ export class UploadResultsService {
       }
     });
 
-    // Konvertiere die Map-Werte in ein Array und weise es zu.
     this.persons = Array.from(personMap.values());
   }
 
@@ -276,16 +268,14 @@ export class UploadResultsService {
     return person;
   }
 
+  // eslint-disable-next-line class-methods-use-this
   assignUnitLogsToBooklet(booklet: TcMergeBooklet, rows: Log[]): TcMergeBooklet {
-    // Map für eindeutigen Zugriff auf Units erstellen
     const unitMap = new Map<string, TcMergeUnit>();
 
-    // Direkten Lookup für Units im Booklet vorbereiten
     booklet.units.forEach(unit => {
       unitMap.set(unit.id, { ...unit, logs: [...unit.logs] });
     });
 
-    // Logs verarbeiten und zu den Units hinzufügen
     rows.forEach(row => {
       if (booklet?.id !== row.bookletname) return;
 
@@ -296,18 +286,15 @@ export class UploadResultsService {
         parameter: logEntryParts[1]?.trim()?.replace(/"/g, '')
       };
 
-      // Einheit aus der Map holen oder neuen Eintrag hinzufügen
       const existingUnit = unitMap.get(row.unitname);
       if (existingUnit) {
         existingUnit.logs.push(log);
       } else {
-        // Neue Einheit erstellen und in die Map einfügen
         const newUnit = { id: row.unitname, logs: [log] } as TcMergeUnit;
         unitMap.set(row.unitname, newUnit);
       }
     });
 
-    // Map wieder in ein Array umwandeln, um dem ursprünglichen Format zu entsprechen
     booklet.units = Array.from(unitMap.values());
     return booklet;
   }
