@@ -6,7 +6,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { UntypedFormGroup } from '@angular/forms';
 import { MatSort } from '@angular/material/sort';
 import {
-  MatCell, MatCellDef,
+  MatCell, MatCellDef, MatColumnDef,
   MatHeaderCell,
   MatHeaderCellDef,
   MatHeaderRow, MatHeaderRowDef,
@@ -21,6 +21,7 @@ import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { MatCheckbox } from '@angular/material/checkbox';
 import { MatAnchor } from '@angular/material/button';
 import { DatePipe } from '@angular/common';
+import { FilesValidationDialogComponent } from '../files-validation-result/files-validation.component';
 import { TestCenterImportComponent } from '../test-center-import/test-center-import.component';
 import { AppService } from '../../../services/app.service';
 import { BackendService } from '../../../services/backend.service';
@@ -30,6 +31,7 @@ import { IsSelectedPipe } from '../../../shared/pipes/isSelected.pipe';
 import { SearchFilterComponent } from '../../../shared/search-filter/search-filter.component';
 import { FileSizePipe } from '../../../shared/pipes/filesize.pipe';
 import { FilesInListDto } from '../../../../../../../api-dto/files/files-in-list.dto';
+import { FilesValidationDto } from '../../../../../../../api-dto/files/files-validation.dto';
 
 @Component({
   selector: 'coding-box-test-files',
@@ -55,7 +57,8 @@ import { FilesInListDto } from '../../../../../../../api-dto/files/files-in-list
     MatHeaderCellDef,
     MatCellDef,
     MatHeaderRowDef,
-    MatRowDef
+    MatRowDef,
+    MatColumnDef
   ]
 })
 export class TestFilesComponent implements OnInit {
@@ -72,11 +75,10 @@ export class TestFilesComponent implements OnInit {
     public backendService: BackendService,
     private dialog: MatDialog,
     private snackBar: MatSnackBar,
-    private translate: TranslateService // Alias for better clarity
+    private translate: TranslateService
   ) {}
 
   ngOnInit(): void {
-    // Load the initial test files for the workspace
     this.loadTestFiles(false);
   }
 
@@ -97,7 +99,9 @@ export class TestFilesComponent implements OnInit {
 
   /** Toggles the selection of all rows */
   masterToggle(): void {
-    this.isAllSelected() ? this.tableCheckboxSelection.clear() : this.dataSource?.data.forEach(row => this.tableCheckboxSelection.select(row));
+    this.isAllSelected() ?
+      this.tableCheckboxSelection.clear() :
+      this.dataSource?.data.forEach(row => this.tableCheckboxSelection.select(row));
   }
 
   /** Loads test files and updates the data source */
@@ -172,9 +176,14 @@ export class TestFilesComponent implements OnInit {
       });
   }
 
-  /** Handles the response from the file delete operation */
+  validateFiles(): void {
+    this.backendService.validateFiles(this.appService.selectedWorkspaceId)
+      .subscribe(respOk => {
+        this.handleValidationResponse(respOk);
+      });
+  }
+
   private handleDeleteResponse(success: boolean): void {
-    // Show appropriate snack bar message based on the result
     this.snackBar.open(
       success ? this.translate.instant('ws-admin.files-deleted') : this.translate.instant('ws-admin.files-not-deleted'),
       success ? '' : this.translate.instant('error'),
@@ -183,6 +192,21 @@ export class TestFilesComponent implements OnInit {
 
     if (success) {
       this.loadTestFiles(true);
+    }
+  }
+
+  private handleValidationResponse(res: boolean | FilesValidationDto): void {
+    if (res === false) {
+      this.snackBar.open(
+        this.translate.instant('ws-admin.validation-failed'),
+        this.translate.instant('error'),
+        { duration: 3000 }
+      );
+    } else if (typeof res !== 'boolean') {
+      this.dialog.open(FilesValidationDialogComponent, {
+        width: '600px',
+        data: res
+      });
     }
   }
 }

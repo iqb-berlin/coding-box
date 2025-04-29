@@ -37,6 +37,12 @@ a{
 .mat-column-filename {
   width: 40%;
 }
+
 p{
   font-size: 20px;
+}
+
+mat-row:hover {
+  background-color: #e3f2fd;
+  cursor: pointer;
 }

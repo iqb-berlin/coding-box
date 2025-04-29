@@ -1,0 +1,63 @@
+<h2>Files Validation Status</h2>
+<div *ngIf="data" style="max-height: 400px; overflow-y: auto; border: 1px solid #ddd; padding: 10px;">
+  <!-- Booklets Section -->
+  <div>
+    <h3>Booklets</h3>
+    <p>
+      Status:
+      <span *ngIf="data.booklets.complete">Complete</span>
+      <span *ngIf="!data.booklets.complete">Incomplete</span>
+    </p>
+    <div *ngIf="!data.booklets.complete">
+      <p>Missing Items:</p>
+      <ul>
+        <li *ngFor="let item of data.booklets.missing">{{ item }}</li>
+      </ul>
+    </div>
+  </div>
+  <!-- Units Section -->
+  <div>
+    <h3>Units</h3>
+    <p>
+      Status:
+      <span *ngIf="data.units.complete">Complete</span>
+      <span *ngIf="!data.units.complete">Incomplete</span>
+    </p>
+    <div *ngIf="!data.units.complete">
+      <p>Missing Items:</p>
+      <ul>
+        <li *ngFor="let item of data.units.missing">{{ item }}</li>
+      </ul>
+    </div>
+  </div>
+  <!-- Schemes Section -->
+  <div>
+    <h3>Schemes</h3>
+    <p>
+      Status:
+      <span *ngIf="data.schemes.complete">Complete</span>
+      <span *ngIf="!data.schemes.complete">Incomplete</span>
+    </p>
+    <div *ngIf="!data.schemes.complete">
+      <p>Missing Items:</p>
+      <ul>
+        <li *ngFor="let item of data.schemes.missing">{{ item }}</li>
+      </ul>
+    </div>
+  </div>
+  <!-- Definitions Section -->
+  <div>
+    <h3>Definitions</h3>
+    <p>
+      Status:
+      <span *ngIf="data.definitions.complete">Complete</span>
+      <span *ngIf="!data.definitions.complete">Incomplete</span>
+    </p>
+    <div *ngIf="!data.definitions.complete">
+      <p>Missing Items:</p>
+      <ul>
+        <li *ngFor="let item of data.definitions.missing">{{ item }}</li>
+      </ul>
+    </div>
+  </div>
+</div>

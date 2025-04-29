@@ -2,12 +2,13 @@
 
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import * as cheerio from 'cheerio';
 import AdmZip = require('adm-zip');
 import * as util from 'util';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as libxmljs from 'libxmljs2';
 import Workspace from '../entities/workspace.entity';
 import { WorkspaceInListDto } from '../../../../../../api-dto/workspaces/workspace-in-list-dto';
 import { WorkspaceFullDto } from '../../../../../../api-dto/workspaces/workspace-full-dto';
@@ -128,6 +129,27 @@ export type TcMergeLastState = {
   value:string,
 };
 
+type DataValidation = {
+  complete: boolean;
+  missing: string[];
+};
+
+type ValidationData = {
+  booklets: DataValidation;
+  units: DataValidation;
+  schemes: DataValidation;
+  definitions: DataValidation;
+};
+
+export type ValidationResult = {
+  allUnitsExist: boolean;
+  missingUnits: string[];
+  allCodingSchemesExist: boolean;
+  allCodingDefinitionsExist: boolean;
+  missingCodingSchemeRefs: string[];
+  missingDefinitionRefs: string[];
+};
+
 @Injectable()
 export class WorkspaceService {
   private readonly logger = new Logger(WorkspaceService.name);
@@ -191,7 +213,7 @@ export class WorkspaceService {
 
     return this.fileUploadRepository.find({
       where: { workspace_id: workspaceId },
-      select: ['id', 'filename', 'file_size', 'file_type', 'created_at']
+      select: ['id', 'filename', 'file_id', 'file_size', 'file_type', 'created_at']
     });
   }
 
@@ -356,6 +378,151 @@ export class WorkspaceService {
     this.logger.log('Returning responses for workspace', workspace_id);
     const responses = await this.responsesRepository.find({ where: { workspace_id: workspace_id } });
     return responses;
+  }
+
+  async validateTestFiles(workspaceId: number): Promise<ValidationData> {
+    try {
+      // TestTakers suchen
+      const testTakers = await this.fileUploadRepository.find({
+        where: { workspace_id: workspaceId, file_type: 'TestTakers' }
+      });
+
+      // Wenn keine TestTakers vorhanden sind, ValidationData zurückgeben
+      if (!testTakers || testTakers.length === 0) {
+        this.logger.warn(`No TestTakers found in workspace with ID ${workspaceId}.`);
+        return this.createEmptyValidationData();
+      }
+
+      // TestTakers verarbeiten
+      for (const testTaker of testTakers) {
+        // eslint-disable-next-line no-await-in-loop
+        const validationResult = await this.processTestTaker(testTaker);
+        if (validationResult) {
+          return validationResult;
+        }
+      }
+
+      // Nach Booklets im Workspace suchen, falls keine validen TestTakers gefunden wurden
+      const booklets = await this.fileUploadRepository.find({
+        where: { workspace_id: workspaceId, file_type: 'Booklet' }
+      });
+
+      if (!booklets || booklets.length === 0) {
+        this.logger.warn(`No booklets found in workspace with ID ${workspaceId}.`);
+        return this.createEmptyValidationData();
+      }
+
+      return this.createEmptyValidationData();
+    } catch (error) {
+      this.logger.error(`Error during test file validation for workspace ID ${workspaceId}: ${error.message}`, error.stack);
+      throw error;
+    }
+  }
+
+  // eslint-disable-next-line class-methods-use-this
+  private createEmptyValidationData(): ValidationData {
+    return {
+      booklets: { complete: false, missing: [] },
+      units: { complete: false, missing: [] },
+      schemes: { complete: false, missing: [] },
+      definitions: { complete: false, missing: [] }
+    };
+  }
+
+  private async processTestTaker(testTaker: FileUpload): Promise<ValidationData | null> {
+    const xmlDocument = cheerio.load(testTaker.data, { xmlMode: true, recognizeSelfClosing: true });
+    const bookletTags = xmlDocument('Booklet');
+    const unitTags = xmlDocument('Unit');
+
+    if (bookletTags.length === 0) {
+      this.logger.warn('No <Booklet> elements found in the XML document.');
+      return null;
+    }
+
+    this.logger.log(`Found ${bookletTags.length} <Booklet> elements.`);
+
+    // Sammle einzigartige und referenzierte Daten aus dem XML
+    const {
+      uniqueBooklets
+    } = this.extractXmlData(bookletTags, unitTags);
+
+    // Fehlende Objekte prüfen
+    const { allBookletsExist, missingBooklets } = await this.checkMissingBooklets(Array.from(uniqueBooklets));
+    const {
+      allUnitsExist,
+      missingUnits,
+      missingCodingSchemeRefs,
+      missingDefinitionRefs,
+      allCodingSchemesExist,
+      allCodingDefinitionsExist
+    } = await this.checkMissingUnits();
+
+    // Validierungsdaten zurückgeben
+    return {
+      booklets: {
+        complete: allBookletsExist,
+        missing: missingBooklets
+      },
+      units: {
+        complete: allUnitsExist,
+        missing: missingUnits
+      },
+      schemes: {
+        complete: allCodingSchemesExist,
+        missing: missingCodingSchemeRefs
+      },
+      definitions: {
+        complete: allCodingDefinitionsExist,
+        missing: missingDefinitionRefs
+      }
+    };
+  }
+
+  // eslint-disable-next-line class-methods-use-this
+  private extractXmlData(
+    bookletTags: cheerio.Cheerio<any>,
+    unitTags: cheerio.Cheerio<any>
+  ): {
+      uniqueBooklets: Set<string>;
+      uniqueUnits: Set<string>;
+      codingSchemeRefs: string[];
+      definitionRefs: string[];
+    } {
+    const uniqueBooklets = new Set<string>();
+    const uniqueUnits = new Set<string>();
+    const codingSchemeRefs: string[] = [];
+    const definitionRefs: string[] = [];
+
+    // Booklets extrahieren
+    bookletTags.each((_, booklet) => {
+      const bookletValue = cheerio.load(booklet).text().trim();
+      uniqueBooklets.add(bookletValue);
+    });
+
+    // Units extrahieren
+    unitTags.each((_, unit) => {
+      const $ = cheerio.load(unit);
+
+      // CodingSchemes und DefinitionRefs sammeln
+      $('unit').each((_, codingScheme) => {
+        const value = $(codingScheme).text().trim();
+        if (value) codingSchemeRefs.push(value);
+      });
+
+      $('DefinitionRef').each((_, definition) => {
+        const value = $(definition).text().trim();
+        if (value) definitionRefs.push(value);
+      });
+
+      const unitId = $('unit').attr('id');
+      if (unitId) {
+        uniqueUnits.add(unitId.trim());
+      }
+    });
+
+    return {
+      uniqueBooklets, uniqueUnits, codingSchemeRefs, definitionRefs
+    };
   }
 
   async findUnit(workspace_id: number, testPerson:string, unitId:string): Promise<FileUpload[]> {
@@ -545,6 +712,7 @@ export class WorkspaceService {
 
   handleFile(workspaceId: number, file: FileIo): Array<Promise<unknown>> {
     const filePromises: Array<Promise<unknown>> = [];
+    console.log('file', file);
 
     switch (file.mimetype) {
       case 'text/xml':
@@ -568,29 +736,108 @@ export class WorkspaceService {
     return filePromises;
   }
 
-  private async handleXmlFile(workspaceId: number, file: FileIo): Promise<unknown> {
-    const xmlDocument = cheerio.load(file.buffer.toString(), {
-      xmlMode: true,
-      recognizeSelfClosing: true
-    });
+  private unsupportedFile(message: string): Promise<unknown> {
+    this.logger.warn(message);
+    return Promise.resolve();
+  }
 
-    const rootTagName = xmlDocument.root().children().first().prop('tagName');
+  private async validateXmlAgainstSchema(xml: string, xsdPath: string): Promise<void> {
+    const xsd = fs.readFileSync(xsdPath, 'utf8');
+    const xsdDoc = libxmljs.parseXml(xsd);
 
-    if (rootTagName === 'UNIT') {
-      const fileId = xmlDocument.root().find('Metadata').find('Id').text()
-        .toUpperCase()
-        .trim();
-      return this.fileUploadRepository.upsert({
-        filename: file.originalname,
-        workspace_id: workspaceId,
-        file_type: 'Unit',
-        file_size: file.size,
-        data: file.buffer.toString(),
-        file_id: fileId
-      }, ['file_id']);
+    const xmlDoc = libxmljs.parseXml(xml);
+
+    // Validierung des XML-Dokuments gegen das Schema
+    if (!xmlDoc.validate(xsdDoc)) {
+      const validationErrors = xmlDoc.validationErrors.map(err => err.message).join(', ');
+      throw new Error(`XML-Validierung fehlgeschlagen: ${validationErrors}`);
     }
 
-    return Promise.resolve();
+    this.logger.log('XML-Validierung erfolgreich!');
+  }
+
+  private async handleXmlFile(workspaceId: number, file: FileIo): Promise<unknown> {
+    try {
+      if (!file.buffer || !file.buffer.length) {
+        this.logger.warn('Empty file buffer');
+        return await Promise.resolve();
+      }
+
+      const xmlContent = file.buffer.toString('utf8');
+      const xmlDocument = cheerio.load(file.buffer.toString('utf8'), { xmlMode: true, recognizeSelfClosing: true });
+      const firstChild = xmlDocument.root().children().first();
+      const rootTagName = firstChild ? firstChild.prop('tagName') : null;
+
+      if (!rootTagName) {
+        return await this.unsupportedFile('Invalid XML: No root tag found');
+      }
+
+      this.logger.log(`Root tag detected: ${rootTagName}`);
+
+      const fileTypeMapping: Record<string, string> = {
+        UNIT: 'Unit',
+        BOOKLET: 'Booklet',
+        TESTTAKERS: 'TestTakers'
+      };
+
+      const fileType = fileTypeMapping[rootTagName];
+      if (!fileType) {
+        return await this.unsupportedFile(`Unsupported root tag: ${rootTagName}`);
+      }
+      console.log('Current working directory:', process.cwd(), __dirname);
+
+      const schemaPaths: Record<string, string> = {
+        UNIT: path.resolve(__dirname, './schemas/unit.xsd'),
+        BOOKLET: path.resolve(__dirname, './schemas/booklet.xsd'),
+        TESTTAKERS: path.resolve(__dirname, '.testtakers.xsd')
+      };
+
+      // const xsdPath = schemaPaths[rootTagName];
+      // if (!xsdPath || !fs.existsSync(xsdPath)) {
+      //   return await this.unsupportedFile(`No XSD schema found for root tag: ${rootTagName}`);
+      // }
+
+      // await this.validateXmlAgainstSchema(xmlContent, xsdPath);
+
+      const bookletTags = xmlDocument('Booklet');
+      const unitTags = xmlDocument('Unit');
+
+      const metadata = fileType === 'Testtakers' ? xmlDocument('Metadata') : bookletTags.find('Metadata');
+      if (!metadata || metadata.length === 0) {
+        this.logger.warn('No Metadata element found in XML');
+        return await Promise.resolve();
+      }
+
+      const idElement = metadata.first();
+      const fileId = idElement.length ? idElement.text().toUpperCase().trim() : null;
+      const resolvedFileId = fileType === 'TestTakers' ? fileId || file.originalname : fileId;
+
+      const existingFile = await this.fileUploadRepository.findOne({
+        where: { file_id: resolvedFileId, workspace_id: workspaceId }
+      });
+      if (existingFile) {
+        this.logger.warn(
+          `File with ID ${resolvedFileId} in Workspace ${workspaceId} already exists.`
+        );
+        return {
+          message: `File with ID ${resolvedFileId} already exists`,
+          fileId: resolvedFileId,
+          filename: file.originalname
+        };
+      }
+
+      return await this.fileUploadRepository.upsert({
+        workspace_id: workspaceId,
+        filename: file.originalname,
+        file_type: fileType,
+        file_size: file.size,
+        data: file.buffer.toString(),
+        file_id: resolvedFileId
+      }, ['file_id']);
+    } catch (error) {
+      this.logger.error(`Error processing XML file: ${error.message}`);
+      throw error;
+    }
   }
 
   private async handleHtmlFile(workspaceId: number, file: FileIo): Promise<unknown> {
@@ -667,6 +914,118 @@ export class WorkspaceService {
     }
 
     return filePromises;
+  }
+
+  async checkMissingBooklets(uniqueBookletsArray: string[]): Promise<{ allBookletsExist: boolean, missingBooklets: string[] }> {
+    try {
+      const upperCaseBookletsArray = uniqueBookletsArray
+        .map(booklet => booklet.toUpperCase());
+
+      const existingBooklets = await this.fileUploadRepository.findBy({
+        file_id: In(upperCaseBookletsArray)
+      });
+      const foundBookletIds = existingBooklets.map(booklet => booklet.file_id);
+
+      const missingBooklets = upperCaseBookletsArray.filter(
+        bookletId => !foundBookletIds.includes(bookletId)
+      );
+      const allBookletsExist = missingBooklets.length === 0;
+
+      return { allBookletsExist, missingBooklets };
+    } catch (error) {
+      this.logger.error('Error validating booklets:', error);
+      throw error;
+    }
+  }
+
+  async checkMissingUnits(): Promise< ValidationResult> {
+    try {
+      const existingBooklets = await this.fileUploadRepository.findBy({
+        file_type: 'Booklet'
+      });
+
+      const allUnitIds: string[] = [];
+      const allCodingSchemeRefs: any[] = [];
+      const allDefinitionRefs: any[] = [];
+
+      for (const booklet of existingBooklets) {
+        try {
+          const fileData = booklet.data;
+
+          const $ = cheerio.load(fileData, { xmlMode: true });
+          $('Unit').each((_, element) => {
+            const unitId = $(element).attr('id');
+
+            if (unitId) {
+              const upperUnitId = unitId.toUpperCase();
+              if (!allUnitIds.includes(upperUnitId)) {
+                allUnitIds.push(upperUnitId);
+              }
+            }
+          });
+        } catch (error) {
+          this.logger.error(`Fehler beim Verarbeiten von Unit ${booklet.file_id}:`, error);
+        }
+      }
+
+      const chunkSize = 50;
+      let existingUnits = [];
+      for (let i = 0; i < allUnitIds.length; i += chunkSize) {
+        const chunk = allUnitIds.slice(i, i + chunkSize);
+        const units = await this.fileUploadRepository.find({
+          where: { file_id: In(chunk) }
+        });
+        existingUnits = existingUnits.concat(units);
+      }
+
+      for (const unit of existingUnits) {
+        try {
+          const fileData = unit.data;
+          const $ = cheerio.load(fileData, { xmlMode: true });
+          $('Unit').each((_, element) => {
+            const unitId = $(element).attr('id');
+            const codingSchemeRef = $(element).find('CodingSchemeRef').text();
+            const definitionRef = $(element).find('DefinitionRef').text();
+
+            if (codingSchemeRef && !allCodingSchemeRefs.includes(codingSchemeRef)) {
+              allCodingSchemeRefs.push(codingSchemeRef.toUpperCase());
+            }
+
+            if (definitionRef && !allDefinitionRefs.includes(definitionRef)) {
+              allDefinitionRefs.push(definitionRef.toUpperCase());
+            }
+          });
+        } catch (error) {
+          this.logger.error(`Fehler beim Verarbeiten von Unit ${unit.file_id}:`, error);
+        }
+      }
+
+      const existingResources = await this.fileUploadRepository.findBy({
+        file_type: 'Resource'
+      });
+      // console.log('existingResources', existingResources);
+      const allResourceIds = existingResources.map(resource => resource.file_id);
+      const missingCodingSchemeRefs = allCodingSchemeRefs.filter(ref => !allResourceIds.includes(ref));
+      const missingDefinitionRefs = allDefinitionRefs.filter(ref => !allResourceIds.includes(ref));
+      const allCodingSchemesExist = missingCodingSchemeRefs.length === 0;
+      const allCodingDefinitionsExist = missingDefinitionRefs.length === 0;
+      const foundUnitIds = existingUnits.map(unit => unit.file_id.toUpperCase());
+      const missingUnits = allUnitIds.filter(unitId => !foundUnitIds.includes(unitId.toUpperCase()));
+      const uniqueUnits = Array.from(new Set(missingUnits));
+      const allUnitsExist = missingUnits.length === 0;
+
+      return {
+        allUnitsExist,
+        missingUnits: uniqueUnits,
+        allCodingSchemesExist,
+        allCodingDefinitionsExist,
+        missingCodingSchemeRefs,
+        missingDefinitionRefs
+      };
+    } catch (error) {
+      this.logger.error('Fehler beim Validieren der Units:', error);
+      throw error;
+    }
   }
 
   static cleanResponses(rows: ResponseDto[]): ResponseDto[] {
