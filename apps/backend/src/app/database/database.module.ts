@@ -15,6 +15,16 @@ import ResourcePackage from './entities/resource-package.entity';
 import Logs from './entities/logs.entity';
 import Persons from './entities/persons.entity';
 import { UploadResultsService } from './services/upload-results.service';
+import { BookletLog } from './entities/bookletLog.entity';
+import { Unit } from './entities/unit.entity';
+import { Booklet } from './entities/booklet.entity';
+import { BookletInfo } from './entities/bookletInfo.entity';
+import { Person } from './entities/person.entity';
+import { UnitLog } from './entities/unitLog.entity';
+import { UnitLastState } from './entities/unitLastState.entity';
+import { Chunk } from './entities/chunk.entity';
+import { Response } from './entities/response.entity';
+import { Session } from './entities/session.entity';
 
 @Module({
   imports: [
@@ -37,7 +47,7 @@ import { UploadResultsService } from './services/upload-results.service';
         username: configService.get('POSTGRES_USER'),
         password: configService.get('POSTGRES_PASSWORD'),
         database: configService.get('POSTGRES_DB'),
-        entities: [
+        entities: [Person, BookletInfo, Booklet, Session, BookletLog, Unit, UnitLog, UnitLastState, Chunk, Response,
           User, Workspace, WorkspaceAdmin, FileUpload, Responses, WorkspaceUser, ResourcePackage, Logs, Persons
         ],
         synchronize: false
