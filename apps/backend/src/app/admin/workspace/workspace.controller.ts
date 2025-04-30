@@ -171,9 +171,7 @@ export class WorkspaceController {
     try {
       const files = await this.workspaceService.findFiles(workspace_id);
       if (!files || files.length === 0) {
-        throw new BadRequestException(
-          `No files found for the workspace with ID ${workspace_id}.`
-        );
+        return [];
       }
       return files;
     } catch (error) {
@@ -234,14 +232,12 @@ export class WorkspaceController {
     }
   }
 
-  // Todo: use query params
-  @Delete(':workspace_id/files/:ids')
+  @Delete(':workspace_id/files')
   @ApiTags('ws admin test-files')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
-  async deleteTestFiles(
-  @Param('workspace_id') workspace_id: number,
-    @Param('ids')ids : string) {
-    return this.workspaceService.deleteTestFiles(workspace_id, ids.split(';'));
+  async deleteTestFiles(@Query() query: { fileIds: string },
+    @Param('workspace_id') workspace_id: number) {
+    return this.workspaceService.deleteTestFiles(workspace_id, query.fileIds.split(';'));
   }
 
   @Get(':workspace_id/files/validation')
