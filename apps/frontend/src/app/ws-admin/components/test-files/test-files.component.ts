@@ -143,7 +143,6 @@ export class TestFilesComponent implements OnInit {
     }
   }
 
-  /** Handles the file upload success logic */
   private onUploadSuccess(): void {
     setTimeout(() => {
       this.loadTestFiles(true);
@@ -151,7 +150,6 @@ export class TestFilesComponent implements OnInit {
     this.isLoading = false;
   }
 
-  /** Opens the Test Center Import dialog */
   testCenterImport(): void {
     const dialogRef = this.dialog.open(TestCenterImportComponent, {
       width: '600px',
@@ -166,7 +164,6 @@ export class TestFilesComponent implements OnInit {
     });
   }
 
-  /** Deletes selected files from the server */
   deleteFiles(): void {
     const fileIds = this.tableCheckboxSelection.selected.map(file => file.id);
 

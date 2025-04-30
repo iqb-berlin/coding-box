@@ -180,16 +180,26 @@ export class BackendService {
       );
   }
 
-  // Todo: Use queryParams for fileIds
-  deleteFiles(workspace_id:number, fileIds: number[]): Observable<boolean> {
-    return this.http
-      .delete(
-        `${this.serverUrl}admin/workspace/${workspace_id}/files/${fileIds.join(';')}`,
-        { headers: this.authHeader })
-      .pipe(
-        catchError(() => of(false)),
-        map(() => true)
-      );
+  deleteFiles(workspaceId: number, fileIds: number[]): Observable<boolean> {
+    const batchSize = 100;
+    const batches = [];
+
+    for (let i = 0; i < fileIds.length; i += batchSize) {
+      batches.push(fileIds.slice(i, i + batchSize));
+    }
+
+    return batches.reduce<Observable<boolean>>((acc, batch) => acc.pipe(
+      switchMap(() => this.http
+        .delete(`${this.serverUrl}admin/workspace/${workspaceId}/files`, {
+          headers: this.authHeader,
+          params: { fileIds: batch.join(';') }
+        })
+        .pipe(
+          map(() => true),
+          catchError(() => of(false))
+        )
+      )
+    ), of(true));
   }
 
   validateFiles(workspace_id:number): Observable<boolean | FilesValidationDto> {
