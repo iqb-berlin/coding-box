@@ -244,7 +244,7 @@ export class WorkspaceController {
   @ApiTags('test files validation')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async validateTestFiles(
-    @Param('workspace_id') workspace_id: number):Promise<FilesValidationDto> {
+    @Param('workspace_id') workspace_id: number):Promise<FilesValidationDto[]> {
     return this.workspaceService.validateTestFiles(workspace_id);
   }
 

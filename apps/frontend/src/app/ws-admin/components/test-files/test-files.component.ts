@@ -192,7 +192,7 @@ export class TestFilesComponent implements OnInit {
     }
   }
 
-  private handleValidationResponse(res: boolean | FilesValidationDto): void {
+  private handleValidationResponse(res: boolean | FilesValidationDto[]): void {
     if (res === false) {
       this.snackBar.open(
         this.translate.instant('ws-admin.validation-failed'),

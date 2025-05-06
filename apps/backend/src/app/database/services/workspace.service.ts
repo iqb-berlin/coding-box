@@ -23,6 +23,7 @@ import ResourcePackage from '../entities/resource-package.entity';
 import User from '../entities/user.entity';
 import { TestGroupsInListDto } from '../../../../../../api-dto/test-groups/testgroups-in-list.dto';
 import { ResponseDto } from '../../../../../../api-dto/responses/response-dto';
+// eslint-disable-next-line import/no-cycle
 import Persons from '../entities/persons.entity';
 
 function sanitizePath(filePath: string): string {
@@ -135,10 +136,12 @@ type DataValidation = {
 };
 
 type ValidationData = {
+  testTaker: string;
   booklets: DataValidation;
   units: DataValidation;
   schemes: DataValidation;
   definitions: DataValidation;
+  player: DataValidation;
 };
 
 export type ValidationResult = {
@@ -148,6 +151,8 @@ export type ValidationResult = {
   allCodingDefinitionsExist: boolean;
   missingCodingSchemeRefs: string[];
   missingDefinitionRefs: string[];
+  allPlayerRefsExist: boolean;
+  missingPlayerRefs: string[];
 };
 
 @Injectable()
@@ -380,26 +385,26 @@ export class WorkspaceService {
     return responses;
   }
 
-  async validateTestFiles(workspaceId: number): Promise<ValidationData> {
+  async validateTestFiles(workspaceId: number): Promise<ValidationData[]> {
     try {
-      // TestTakers suchen
       const testTakers = await this.fileUploadRepository.find({
         where: { workspace_id: workspaceId, file_type: 'TestTakers' }
       });
 
-      // Wenn keine TestTakers vorhanden sind, ValidationData zurückgeben
       if (!testTakers || testTakers.length === 0) {
         this.logger.warn(`No TestTakers found in workspace with ID ${workspaceId}.`);
         return this.createEmptyValidationData();
       }
-
-      // TestTakers verarbeiten
+      const validationResults = [];
       for (const testTaker of testTakers) {
         // eslint-disable-next-line no-await-in-loop
         const validationResult = await this.processTestTaker(testTaker);
         if (validationResult) {
-          return validationResult;
+          validationResults.push(validationResult);
         }
+      }
+      if (validationResults.length > 0) {
+        return validationResults;
       }
 
       // Nach Booklets im Workspace suchen, falls keine validen TestTakers gefunden wurden
@@ -420,13 +425,15 @@ export class WorkspaceService {
   }
 
   // eslint-disable-next-line class-methods-use-this
-  private createEmptyValidationData(): ValidationData {
-    return {
+  private createEmptyValidationData(): ValidationData[] {
+    return [{
+      testTaker: '',
       booklets: { complete: false, missing: [] },
       units: { complete: false, missing: [] },
       schemes: { complete: false, missing: [] },
-      definitions: { complete: false, missing: [] }
-    };
+      definitions: { complete: false, missing: [] },
+      player: { complete: false, missing: [] }
+    }];
   }
 
   private async processTestTaker(testTaker: FileUpload): Promise<ValidationData | null> {
@@ -441,24 +448,26 @@ export class WorkspaceService {
 
     this.logger.log(`Found ${bookletTags.length} <Booklet> elements.`);
 
-    // Sammle einzigartige und referenzierte Daten aus dem XML
     const {
       uniqueBooklets
     } = this.extractXmlData(bookletTags, unitTags);
+    console.log('uniqueBooklets', uniqueBooklets);
 
-    // Fehlende Objekte prüfen
     const { allBookletsExist, missingBooklets } = await this.checkMissingBooklets(Array.from(uniqueBooklets));
+    console.log('allBookletsExist', allBookletsExist);
     const {
       allUnitsExist,
       missingUnits,
       missingCodingSchemeRefs,
       missingDefinitionRefs,
       allCodingSchemesExist,
-      allCodingDefinitionsExist
-    } = await this.checkMissingUnits();
+      allCodingDefinitionsExist,
+      allPlayerRefsExist,
+      missingPlayerRefs
+    } = await this.checkMissingUnits(Array.from(uniqueBooklets));
 
-    // Validierungsdaten zurückgeben
     return {
+      testTaker: testTaker.file_id,
       booklets: {
         complete: allBookletsExist,
         missing: missingBooklets
@@ -474,6 +483,10 @@ export class WorkspaceService {
       definitions: {
         complete: allCodingDefinitionsExist,
         missing: missingDefinitionRefs
+      },
+      player: {
+        complete: allPlayerRefsExist,
+        missing: missingPlayerRefs
       }
     };
   }
@@ -493,17 +506,14 @@ export class WorkspaceService {
     const codingSchemeRefs: string[] = [];
     const definitionRefs: string[] = [];
 
-    // Booklets extrahieren
     bookletTags.each((_, booklet) => {
       const bookletValue = cheerio.load(booklet).text().trim();
       uniqueBooklets.add(bookletValue);
     });
 
-    // Units extrahieren
     unitTags.each((_, unit) => {
       const $ = cheerio.load(unit);
 
-      // CodingSchemes und DefinitionRefs sammeln
       $('unit').each((_, codingScheme) => {
         const value = $(codingScheme).text().trim();
         if (value) codingSchemeRefs.push(value);
@@ -519,6 +529,7 @@ export class WorkspaceService {
         uniqueUnits.add(unitId.trim());
       }
     });
+    console.log('uniqueUnits', uniqueUnits);
 
     return {
       uniqueBooklets, uniqueUnits, codingSchemeRefs, definitionRefs
@@ -799,16 +810,8 @@ export class WorkspaceService {
 
       // await this.validateXmlAgainstSchema(xmlContent, xsdPath);
 
-      const bookletTags = xmlDocument('Booklet');
-      const unitTags = xmlDocument('Unit');
-
-      const metadata = fileType === 'Testtakers' ? xmlDocument('Metadata') : bookletTags.find('Metadata');
-      if (!metadata || metadata.length === 0) {
-        this.logger.warn('No Metadata element found in XML');
-        return await Promise.resolve();
-      }
-
-      const idElement = metadata.first();
+      const metadata = xmlDocument('Metadata');
+      const idElement = metadata.find('Id');
       const fileId = idElement.length ? idElement.text().toUpperCase().trim() : null;
       const resolvedFileId = fileType === 'TestTakers' ? fileId || file.originalname : fileId;
 
@@ -938,15 +941,16 @@ export class WorkspaceService {
     }
   }
 
-  async checkMissingUnits(): Promise< ValidationResult> {
+  async checkMissingUnits(bookletNames:string[]): Promise< ValidationResult> {
     try {
       const existingBooklets = await this.fileUploadRepository.findBy({
-        file_type: 'Booklet'
+        file_type: 'Booklet',
+        file_id: In(bookletNames.map(b => b.toUpperCase()))
       });
-
       const allUnitIds: string[] = [];
       const allCodingSchemeRefs: any[] = [];
       const allDefinitionRefs: any[] = [];
+      const allPlayerRefs: any[] = [];
 
       for (const booklet of existingBooklets) {
         try {
@@ -986,6 +990,8 @@ export class WorkspaceService {
             const unitId = $(element).attr('id');
             const codingSchemeRef = $(element).find('CodingSchemeRef').text();
             const definitionRef = $(element).find('DefinitionRef').text();
+            const playerRef = $(element).find('DefinitionRef').attr('player')
+              .replace('@', '-');
 
             if (codingSchemeRef && !allCodingSchemeRefs.includes(codingSchemeRef)) {
               allCodingSchemeRefs.push(codingSchemeRef.toUpperCase());
@@ -993,6 +999,10 @@ export class WorkspaceService {
 
             if (definitionRef && !allDefinitionRefs.includes(definitionRef)) {
               allDefinitionRefs.push(definitionRef.toUpperCase());
+            }
+
+            if (playerRef && !allPlayerRefs.includes(playerRef.toUpperCase())) {
+              allPlayerRefs.push(playerRef.toUpperCase());
             }
           });
         } catch (error) {
@@ -1007,23 +1017,26 @@ export class WorkspaceService {
       const allResourceIds = existingResources.map(resource => resource.file_id);
       const missingCodingSchemeRefs = allCodingSchemeRefs.filter(ref => !allResourceIds.includes(ref));
       const missingDefinitionRefs = allDefinitionRefs.filter(ref => !allResourceIds.includes(ref));
+      const missingPlayerRefs = allPlayerRefs.filter(ref => !allResourceIds.includes(ref));
       const allCodingSchemesExist = missingCodingSchemeRefs.length === 0;
       const allCodingDefinitionsExist = missingDefinitionRefs.length === 0;
+      const allPlayerRefsExist = missingPlayerRefs.length === 0;
       const foundUnitIds = existingUnits.map(unit => unit.file_id.toUpperCase());
       const missingUnits = allUnitIds.filter(unitId => !foundUnitIds.includes(unitId.toUpperCase()));
       const uniqueUnits = Array.from(new Set(missingUnits));
       const allUnitsExist = missingUnits.length === 0;
-
       return {
         allUnitsExist,
         missingUnits: uniqueUnits,
         allCodingSchemesExist,
         allCodingDefinitionsExist,
         missingCodingSchemeRefs,
-        missingDefinitionRefs
+        missingDefinitionRefs,
+        allPlayerRefsExist,
+        missingPlayerRefs
       };
     } catch (error) {
-      this.logger.error('Fehler beim Validieren der Units:', error);
+      this.logger.error('Error validating units', error);
       throw error;
     }
   }

@@ -12,3 +12,13 @@ mat-dialog-actions {
   display: flex;
   justify-content: flex-end;
 }
+
+h4 {
+  font-weight: bold;
+}
+
+.scroll-container {
+  max-height: 600px;
+  overflow-y: auto;
+  padding: 10px;
+}
