@@ -1,6 +1,14 @@
 import { Component, Inject } from '@angular/core';
-import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
+import {
+  MAT_DIALOG_DATA,
+  MatDialogActions,
+  MatDialogClose,
+  MatDialogContent,
+  MatDialogRef
+} from '@angular/material/dialog';
 import { NgForOf, NgIf } from '@angular/common';
+import { MatButton } from '@angular/material/button';
+import { TranslateModule } from '@ngx-translate/core';
 
 type DataValidation = {
   complete: boolean;
@@ -8,10 +16,12 @@ type DataValidation = {
 };
 
 type FilesValidation = {
+  testTaker: string,
   booklets: DataValidation;
   units: DataValidation;
   schemes: DataValidation;
   definitions: DataValidation;
+  player: DataValidation;
 };
 
 @Component({
@@ -19,19 +29,19 @@ type FilesValidation = {
   templateUrl: './files-validation.component.html',
   imports: [
     NgIf,
-    NgForOf
+    NgForOf,
+    MatDialogContent,
+    MatDialogActions,
+    MatButton,
+    TranslateModule,
+    MatDialogClose
   ],
   styleUrls: ['./files-validation.component.scss']
 })
 export class FilesValidationDialogComponent {
   constructor(
     public dialogRef: MatDialogRef<FilesValidationDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: FilesValidation
+    @Inject(MAT_DIALOG_DATA) public data: FilesValidation[]
   ) {
-    console.log('Dialog Data', data);
-  }
-
-  onClose(): void {
-    this.dialogRef.close();
   }
 }

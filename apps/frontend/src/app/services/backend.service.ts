@@ -202,9 +202,9 @@ export class BackendService {
     ), of(true));
   }
 
-  validateFiles(workspace_id:number): Observable<boolean | FilesValidationDto> {
+  validateFiles(workspace_id:number): Observable<boolean | FilesValidationDto[]> {
     return this.http
-      .get<FilesValidationDto>(
+      .get<FilesValidationDto[]>(
       `${this.serverUrl}admin/workspace/${workspace_id}/files/validation`,
       { headers: this.authHeader })
       .pipe(
