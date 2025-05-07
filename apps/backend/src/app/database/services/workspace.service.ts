@@ -25,6 +25,9 @@ import { TestGroupsInListDto } from '../../../../../../api-dto/test-groups/testg
 import { ResponseDto } from '../../../../../../api-dto/responses/response-dto';
 // eslint-disable-next-line import/no-cycle
 import Persons from '../entities/persons.entity';
+import { Unit } from '../entities/unit.entity';
+import { Booklet } from '../entities/booklet.entity';
+import { ResponseEntity } from '../entities/response.entity';
 
 function sanitizePath(filePath: string): string {
   const normalizedPath = path.normalize(filePath); // System-basiertes Normalisieren
@@ -42,6 +45,8 @@ export type Response = {
   unitname : string,
   responses : string,
   laststate : string,
+  originalUnitId: string
+
 };
 
 export type Log = {
@@ -174,8 +179,13 @@ export class WorkspaceService {
     @InjectRepository(User)
     private usersRepository:Repository<User>,
     @InjectRepository(Persons)
-    private personsRepository:Repository<Persons>
-
+    private personsRepository:Repository<Persons>,
+    @InjectRepository(Unit)
+    private unitRepository:Repository<Unit>,
+    @InjectRepository(Booklet)
+    private bookletRepository:Repository<Booklet>,
+    @InjectRepository(ResponseEntity)
+    private responseRepository:Repository<ResponseEntity>
   ) {
   }
 
@@ -279,6 +289,7 @@ export class WorkspaceService {
   }
 
   async findPlayer(workspaceId: number, playerName: string): Promise<FilesDto[]> {
+    console.log('workspaceId', workspaceId);
     if (!workspaceId || typeof workspaceId !== 'number') {
       this.logger.error(`Invalid workspaceId provided: ${workspaceId}`);
       throw new Error('Invalid workspaceId parameter');
@@ -319,7 +330,7 @@ export class WorkspaceService {
     this.logger.log(`Fetching unit definition for unit: ${unitId} in workspace: ${workspaceId}`);
     try {
       const files = await this.fileUploadRepository.find({
-        select: ['file_id', 'filename'], // Nur notwendige Felder auswählen
+        select: ['file_id', 'filename', 'data'],
         where: {
           file_id: `${unitId}.VOUD`,
           workspace_id: workspaceId
@@ -341,42 +352,45 @@ export class WorkspaceService {
     }
   }
 
-  async findResponse(workspace_id: number, testPerson:string, unitId:string): Promise<ResponseDto[]> {
-    this.logger.log('Returning response for test person', testPerson);
-    const [group, code, booklet] = testPerson.split('@');
-
-    const person = await this.personsRepository.find(
-      { where: { group: group, code: code } });
-    if (person) {
-      const booklets : any = person[0].booklets;
-      const foundBooklet = booklets.find((b: any) => b.id === booklet);
-      const unit = foundBooklet.units.find((u: any) => u.id === unitId);
-      const elementCodesChunk = unit.chunks.find((c: any) => c.id === 'elementCodes');
-      const content = JSON.stringify(unit.subforms[0].responses);
-      const response = {
-        id: elementCodesChunk.id,
-        responseType: elementCodesChunk.type,
-        ts: elementCodesChunk.ts,
-        content: content
-      };
-      return [{
-        id: 5,
-        test_person: '',
-        unit_id: '',
-
-        test_group: '',
-
-        workspace_id: 1,
-
-        created_at: new Date(),
-
-        responses:
-          [response],
-
-        booklet_id: ''
-      }];
+  async findUnitResponse(workspaceId:number, connector: string, unitId: string): Promise<any> {
+    const [group, code, rest] = connector.split('@');
+    const person = await this.personsRepository.findOne({ where: { code, group } });
+    if (!person) {
+      throw new Error(`Person mit ID ${person.id} wurde nicht gefunden.`);
     }
-    return [];
+    const booklets = await this.bookletRepository.find({
+      where: { personid: person.id }
+    });
+    if (!booklets || booklets.length === 0) {
+      throw new Error(`Keine Booklets für die Person mit ID ${person.id} gefunden.`);
+    }
+    const unit = await this.unitRepository.findOne({
+      where: {
+        bookletid: In(booklets.map(booklet => booklet.id)),
+        alias: unitId
+      },
+      relations: ['responses']
+    });
+    const mappedResponses = unit.responses// Filter für subform = 'elementCodes'
+      .filter(response => response.subform === 'elementCodes')
+      .map(response => ({
+        id: response.variableid,
+        value: response.value,
+        status: response.status
+      }));
+
+    const uniqueResponses = mappedResponses.filter(
+      (response, index, self) => index === self.findIndex(r => r.id === response.id)
+    );
+
+    console.log('uniqueResponses', uniqueResponses);
+
+    return [{
+      id: 'elementCodes',
+      content: uniqueResponses,
+      ts: 1733839878528,
+      responseType: 'iqb-standard@1.0'
+    }];
   }
 
   async findWorkspaceResponses(workspace_id: number): Promise<ResponseDto[]> {
@@ -862,7 +876,7 @@ export class WorkspaceService {
     return this.fileUploadRepository.upsert({
       filename: file.originalname,
       workspace_id: workspaceId,
-      file_id: resourceId, // TODO: Ensure case insensitivity if required
+      file_id: resourceId.toUpperCase(),
       file_type: 'Resource',
       file_size: file.size,
       data: file.buffer.toString()

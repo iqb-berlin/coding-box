@@ -253,7 +253,7 @@ export class WorkspaceController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async findPlayer(@Param('workspace_id') workspace_id: number,
     @Param('playerName') playerName:string): Promise<FilesDto[]> {
-    return this.workspaceService.findPlayer(workspace_id, playerName);
+    return this.workspaceService.findPlayer(Number(workspace_id), playerName);
   }
 
   @Get(':workspace_id/units/:testPerson')
@@ -312,7 +312,7 @@ export class WorkspaceController {
   async findResponse(@WorkspaceId() id: number,
     @Param('testPerson') testPerson:string,
     @Param('unitId') unitId:string): Promise<ResponseDto[]> {
-    return this.workspaceService.findResponse(id, testPerson, unitId);
+    return this.workspaceService.findUnitResponse(id, testPerson, unitId);
   }
 
   @Get(':workspace_id/responses')

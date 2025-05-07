@@ -93,12 +93,13 @@ export class TestResultsComponent implements OnInit {
 
   replayUnit() {
     this.backendService
-      .createToken(this.appService.selectedWorkspaceId, this.appService.userProfile.id || '', 1)
+      .createToken(this.appService.selectedWorkspaceId, this.appService.loggedUser?.sub || '', 1)
       .subscribe(token => {
         const queryParams = {
           auth: token
         };
-        // const page = this.replayComponent.responses?.unit_state?.CURRENT_PAGE_ID;
+          // const page = this.replayComponent.responses?.unit_state?.CURRENT_PAGE_ID;
+
         const url = this.router
           .serializeUrl(
             this.router.createUrlTree(
@@ -127,24 +128,6 @@ export class TestResultsComponent implements OnInit {
   setSelectedBooklet(booklet:any) {
     this.selectedBooklet = booklet;
   }
-
-  calculateDetailedTimeDifferences = (data: { ts: string, key: string, parameter: string }[]) => {
-    const results = [];
-
-    for (let i = 0; i < data.length - 1; i++) {
-      const currentTs = parseInt(data[i].ts, 10);
-      const nextTs = parseInt(data[i + 1].ts, 10);
-      const differenceInSeconds = (nextTs - currentTs) / 1000;
-
-      results.push({
-        from: data[i].key,
-        to: data[i + 1].key,
-        timeDifferenceInSeconds: differenceInSeconds
-      });
-    }
-
-    return results;
-  };
 
   // eslint-disable-next-line class-methods-use-this
   groupByPlayerLoading = (array: any[]) => {
@@ -200,7 +183,6 @@ export class TestResultsComponent implements OnInit {
   }
 
   createTestResultsList(page: number = 0, limit: number = 20): void {
-    // page not negative
     const validPage = Math.max(0, page);
     this.backendService.getTestResults(this.appService.selectedWorkspaceId, validPage, limit)
       .subscribe(response => {

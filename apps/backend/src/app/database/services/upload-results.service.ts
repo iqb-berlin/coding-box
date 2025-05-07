@@ -6,6 +6,7 @@ import { Repository } from 'typeorm';
 import 'multer';
 import * as csv from 'fast-csv';
 import { Readable } from 'stream';
+import { Booklet } from '../entities/booklet.entity';
 import { FileIo } from '../../admin/workspace/file-io.interface';
 import {
   Chunk,
@@ -18,14 +19,38 @@ import {
   TcMergeUnit
 } from './workspace.service';
 import Persons from '../entities/persons.entity';
+import { Person as PersonEntity } from '../entities/person.entity';
 import Logs from '../entities/logs.entity';
+import { BookletInfo } from '../entities/bookletInfo.entity';
+import { Unit } from '../entities/unit.entity';
+import { UnitLastState } from '../entities/unitLastState.entity';
+import { ResponseEntity } from '../entities/response.entity';
+import { ChunkEntity } from '../entities/chunk.entity';
+
+type PersonWithoutBooklets = Omit<Person, 'booklets'>;
 
 @Injectable()
 export class UploadResultsService {
   private readonly logger = new Logger(UploadResultsService.name);
+  person: PersonWithoutBooklets[] = []; // Typ ohne 'booklets'
+
   constructor(
     @InjectRepository(Persons)
-    private personsRepository: Repository<Persons>
+    private personsRepository: Repository<Persons>,
+    @InjectRepository(PersonEntity)
+    private personRepository: Repository<PersonEntity>,
+    @InjectRepository(Booklet)
+    private bookletRepository: Repository<Booklet>,
+    @InjectRepository(Unit)
+    private unitRepository: Repository<Unit>,
+    @InjectRepository(UnitLastState)
+    private unitLastStateRepository: Repository<UnitLastState>,
+    @InjectRepository(BookletInfo)
+    private bookletInfoRepository: Repository<BookletInfo>,
+    @InjectRepository(ResponseEntity)
+    private responseRepository: Repository<ResponseEntity>,
+    @InjectRepository(ChunkEntity)
+    private chunkRepository: Repository<ChunkEntity>
   ) {
   }
 
@@ -146,28 +171,187 @@ export class UploadResultsService {
         const rowData: Response[] = [];
         const bufferStream = new Readable();
         bufferStream.push(file.buffer);
-        bufferStream.push(null); // Signalisiert das Ende der Daten;
+        bufferStream.push(null);
         csv.parseStream(bufferStream, { headers: true, delimiter: ';' })
           .on('error', error => {
             this.logger.log(error);
           })
           .on('data', row => rowData.push(row))
-          .on('end', () => {
+          .on('end', async () => {
+            console.log('Anzahl der Antworten', rowData.length);
             this.createPersonList(rowData);
-            const personList = this.persons.map(person => this.assignBookletsToPerson(person, rowData))
-              .map(person => this.assignUnitsToBookletAndPerson(person, rowData)
-              );
-            this.personsRepository.upsert(personList, ['group', 'code', 'login']).then(() => {
-              console.log(`Saved ${personList.length} test persons`);
-            });
+            const personList = await Promise.all(
+              this.persons.map(async person => {
+                const personWithBooklets = await this.assignBookletsToPerson(person, rowData);
+                return this.assignUnitsToBookletAndPerson(personWithBooklets, rowData);
+              })
+            );
+
+            await this.personsRepository.upsert(personList, ['group', 'code', 'login']);
+
+            const persons = await this.personsRepository.find();
+            for (const person of persons) {
+              for (const booklet of person.booklets) {
+                // Sicherstellen, dass es ein `booklet` gibt
+                if (!booklet || !booklet.id) {
+                  this.logger.warn(`Skipping booklet for person: ${person.group}-${person.login}-${person.code} because it's invalid`);
+                  continue;
+                }
+
+                // Überprüfen, ob `BookletInfo` bereits existiert
+                let bookletInfo = await this.bookletInfoRepository.findOne({
+                  where: { name: booklet.id } // `name` ist das `id` des Booklets
+                });
+
+                if (!bookletInfo) {
+                  // Wenn es nicht existiert, ein neues erstellen
+                  bookletInfo = this.bookletInfoRepository.create({
+                    name: booklet.id,
+                    size: 0 // Standardwert
+                  });
+                  bookletInfo = await this.bookletInfoRepository.save(bookletInfo);
+                }
+
+                // Prüfen, ob das Booklet mit der Person gespeichert wurde
+                const existingBooklet = await this.bookletRepository.findOne({
+                  where: {
+                    personid: person.id,
+                    infoid: bookletInfo.id
+                  }
+                });
+
+                let savedBooklet;
+                if (!existingBooklet) {
+                  // Neues Booklet erstellen
+                  const newBooklet = this.bookletRepository.create({
+                    personid: person.id,
+                    infoid: bookletInfo.id,
+                    lastts: 0,
+                    firstts: 0
+                  });
+
+                  // Booklet speichern
+                  savedBooklet = await this.bookletRepository.save(newBooklet);
+                } else {
+                  this.logger.log(`Booklet already exists for person ${person.id}`);
+                  savedBooklet = existingBooklet;
+                }
+
+                // **Units speichern**
+                for (const unit of booklet.units) {
+                  if (!unit || !unit.id) {
+                    this.logger.warn(`Skipping unit in booklet ${booklet.id} for person: ${person.group}-${person.login}-${person.code} because it's invalid`);
+                    continue;
+                  }
+
+                  const existingUnit = await this.unitRepository.findOne({
+                    where: {
+                      alias: unit.alias,
+                      name: unit.id,
+                      bookletid: savedBooklet.id
+                    }
+                  });
+
+                  let savedUnit;
+                  if (!existingUnit) {
+                    const newUnit = this.unitRepository.create({
+                      alias: unit.alias,
+                      name: unit.id,
+                      bookletid: savedBooklet.id
+                    });
+
+                    savedUnit = await this.unitRepository.save(newUnit);
+                    this.logger.log(`Saved new unit ${savedUnit.id} for booklet ${booklet.id} and person ${person.id}`);
+                  } else {
+                    this.logger.log(`Unit already exists: ${unit.id} for booklet ${booklet.id} of person ${person.id}`);
+                    savedUnit = existingUnit; // Bereits bestehende Unit verwenden
+                  }
+
+                  if (savedUnit) {
+                    try {
+                      const currentLastState = await this.unitLastStateRepository.find({
+                        where: { unitid: savedUnit.id }
+                      });
+
+                      if (currentLastState.length === 0 && unit.laststate) {
+                        const lastStateEntries = Object.entries(unit.laststate).map(([key, value]) => ({
+                          unitid: savedUnit.id,
+                          key: unit.laststate[key].key,
+                          value: unit.laststate[key].value
+                        }));
+
+                        await this.unitLastStateRepository.insert(lastStateEntries);
+                        this.logger.log(`Saved laststate for unit ${unit.id} of booklet ${booklet.id} for person ${person.id}`);
+                      } else {
+                        this.logger.log(`Laststate already exists for unit ${unit.id} of booklet ${booklet.id} for person ${person.id}`);
+                      }
+                    } catch (error) {
+                      this.logger.error(`Failed to save last state for unit ${unit.id}:`, error.message);
+                    }
+                  }
+                  if (savedUnit) {
+                    try {
+                      const subforms = unit.subforms;
+                      if (subforms && subforms.length > 0) {
+                        await this.saveSubformResponsesForUnit(savedUnit, subforms, person.id);
+                      }
+                      this.logger.log(`Processed subform responses for unit ${unit.id} of booklet ${booklet.id}`);
+                    } catch (error) {
+                      this.logger.error(`Failed to process subform responses for unit: ${unit.id}`, error.message);
+                    }
+                  }
+                  if (savedUnit) {
+                    try {
+                      if (unit.chunks && unit.chunks.length > 0) {
+                        const chunkEntries = unit.chunks.map(chunk => ({
+                          unitid: savedUnit.id,
+                          key: chunk.id,
+                          type: chunk.type,
+                          ts: chunk.ts,
+                          variables: Array.isArray(chunk.variables) ? chunk.variables.join(',') : ''
+                        }));
+                        await this.chunkRepository.insert(chunkEntries); // Annahme: chunkRepository existiert
+                        this.logger.log(`Saved ${chunkEntries.length} chunks for unit ${unit.id} in booklet ${booklet.id}`);
+                      } else {
+                        this.logger.log(`No chunks to save for unit ${unit.id} in booklet ${booklet.id}`);
+                      }
+                    } catch (error) {
+                      this.logger.error(`Failed to save chunks for unit ${unit.id} in booklet ${booklet.id}:`, error.message);
+                    }
+                  }
+                }
+              }
+            }
           });
       }
     }
   }
 
+  async saveSubformResponsesForUnit(savedUnit: TcMergeUnit, subforms: TcMergeSubForms[], personId: number) {
+    try {
+      for (const subform of subforms) {
+        if (subform.responses && subform.responses.length > 0) {
+          const responseEntries = subform.responses.map(response => ({
+            unitid: Number(savedUnit.id),
+            variableid: response.id,
+            status: response.status,
+            value: response.value,
+            subform: subform.id,
+            code: 0,
+            score: 0
+          }));
+
+          await this.responseRepository.insert(responseEntries);
+          this.logger.log(`Saved ${responseEntries.length} responses for unit ${savedUnit.id} and person ${personId}`);
+        }
+      }
+    } catch (error) {
+      this.logger.error(`Failed to save responses for unit: ${savedUnit.id} ->`, error.message);
+    }
+  }
+
   createPersonList(rows: Response[] | Log[] | Logs[]): void {
     const personMap = new Map<string, Person>();
-
     rows.forEach(row => {
       const mapKey = `${row.groupname}-${row.loginname}-${row.code}`;
       if (!personMap.has(mapKey)) {
@@ -179,17 +363,17 @@ export class UploadResultsService {
         });
       }
     });
-
     this.persons = Array.from(personMap.values());
   }
 
-  assignBookletsToPerson(person: Person, rows: Response[]): Person {
-    const bookletIds = new Set<string>(); // Verfolgt eindeutige Booklet-IDs
+  // eslint-disable-next-line class-methods-use-this
+  async assignBookletsToPerson(person: Person, rows: Response[]): Promise<Person> {
+    const bookletIds = new Set<string>();
     const booklets: TcMergeBooklet[] = [];
 
-    rows.forEach(row => {
+    await Promise.all(rows.map(async row => {
       if (row.groupname === person.group && row.loginname === person.login && row.code === person.code) {
-        if (!bookletIds.has(row.bookletname)) { // Prüft effizient, ob `bookletname` bereits hinzugefügt wurde
+        if (!bookletIds.has(row.bookletname)) {
           bookletIds.add(row.bookletname);
           booklets.push({
             id: row.bookletname,
@@ -199,15 +383,16 @@ export class UploadResultsService {
           });
         }
       }
-    });
+    }));
 
     person.booklets = booklets;
     return person;
   }
 
+  // eslint-disable-next-line class-methods-use-this
   assignBookletLogsToPerson(person: Person, rows: Log[]): Person {
     const booklets: TcMergeBooklet[] = [];
-    const bookletMap = new Map<string, TcMergeBooklet>(); // Map für schnelles Nachschlagen
+    const bookletMap = new Map<string, TcMergeBooklet>();
 
     rows.forEach(row => {
       if (row.groupname === person.group && row.loginname === person.login && row.code === person.code) {
@@ -215,7 +400,6 @@ export class UploadResultsService {
         const [logEntryKey, logEntryValueRaw] = logentry.split(':', 2);
         const logEntryValue = logEntryValueRaw?.trim().replace(/"/g, '');
 
-        // Überprüfen, ob das Booklet bereits existiert
         let booklet = bookletMap.get(bookletname);
         if (!booklet) {
           booklet = {
@@ -299,16 +483,17 @@ export class UploadResultsService {
     return booklet;
   }
 
-  assignUnitsToBookletAndPerson(person: Person, rows: Response[]): Person {
-    rows.forEach(row => {
-      const matchesPerson = row.groupname === person.group &&
+  async assignUnitsToBookletAndPerson(person: Person, rows: Response[]): Promise<Person> {
+    for (const row of rows) {
+      const matchesPerson =
+        row.groupname === person.group &&
         row.loginname === person.login &&
         row.code === person.code;
 
-      if (!matchesPerson) return;
+      if (!matchesPerson) continue;
 
       const booklet = person.booklets.find(b => b.id === row.bookletname);
-      if (!booklet) return;
+      if (!booklet) continue;
 
       // Parse responses
       const responseChunksCleaned = row.responses.replace(/""/g, '"');
@@ -372,7 +557,7 @@ export class UploadResultsService {
         b.units.push(newUnit);
         return b;
       });
-    });
+    }
     return person;
   }
 }

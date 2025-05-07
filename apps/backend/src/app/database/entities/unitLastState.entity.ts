@@ -1,16 +1,13 @@
 import {
-  Entity, Column, PrimaryGeneratedColumn, ManyToOne, JoinColumn
+  Entity, Column, ManyToOne, JoinColumn, PrimaryColumn
 } from 'typeorm';
 // eslint-disable-next-line import/no-cycle
 import { Unit } from './unit.entity';
 
-@Entity('unitLastState')
+@Entity('unitlaststate')
 export class UnitLastState {
-  @PrimaryGeneratedColumn()
-    id: number;
-
-  @Column({ type: 'bigint' })
-    unitId: number;
+  @PrimaryColumn({ type: 'bigint' })
+    unitid: number;
 
   @Column({ type: 'text' })
     key: string;
@@ -21,6 +18,6 @@ export class UnitLastState {
   @ManyToOne(() => Unit, unit => unit.unitLastStates, {
     onDelete: 'CASCADE'
   })
-  @JoinColumn({ name: 'unitId' })
+  @JoinColumn({ name: 'unitid' })
     unit: Unit;
 }

@@ -22,28 +22,28 @@ export class Booklet {
     id: number;
 
   @Column({ type: 'bigint' })
-    infoId: number;
+    infoid: number;
 
   @Column({ type: 'bigint' })
-    personId: number;
+    personid: number;
 
   @Column({ type: 'bigint', default: 0 })
-    lastTs: number;
+    lastts: number;
 
   @Column({ type: 'bigint', default: 0 })
-    firstTs: number;
+    firstts: number;
 
   @ManyToOne(() => Person, person => person.booklets, {
     onDelete: 'CASCADE'
   })
-  @JoinColumn({ name: 'personId' })
+  @JoinColumn({ name: 'personid' })
     person: Person;
 
   @ManyToOne(() => BookletInfo, {
     onDelete: 'CASCADE'
   })
-  @JoinColumn({ name: 'infoId' })
-    bookletInfo: BookletInfo;
+  @JoinColumn({ name: 'infoid' })
+    bookletinfo: BookletInfo;
 
   @OneToMany(() => Session, session => session.booklet)
     sessions: Session[];
