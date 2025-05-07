@@ -1,20 +1,20 @@
 import {
-  Entity, Column, PrimaryGeneratedColumn, ManyToOne, JoinColumn
+  Entity, Column, ManyToOne, JoinColumn, PrimaryGeneratedColumn
 } from 'typeorm';
 
 // eslint-disable-next-line import/no-cycle
 import { Unit } from './unit.entity';
 
 @Entity('response')
-export class Response {
+export class ResponseEntity {
   @PrimaryGeneratedColumn()
     id: number;
 
   @Column({ type: 'bigint' })
-    unitId: number;
+    unitid: number;
 
   @Column({ type: 'text' })
-    variableId: string;
+    variableid: string;
 
   @Column({ type: 'text' })
     status: string;
@@ -34,6 +34,6 @@ export class Response {
   @ManyToOne(() => Unit, unit => unit.responses, {
     onDelete: 'CASCADE'
   })
-  @JoinColumn({ name: 'unitId' })
+  @JoinColumn({ name: 'unitid' })
     unit: Unit;
 }

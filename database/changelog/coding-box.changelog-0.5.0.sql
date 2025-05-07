@@ -9,6 +9,7 @@ CREATE TABLE person (
 );
 -- rollback DROP TABLE IF EXISTS person;
 
+-- changeset jurei733:2
 CREATE TABLE bookletInfo (
                            id SERIAL PRIMARY KEY NOT NULL,
                            name TEXT NOT NULL,
@@ -16,6 +17,7 @@ CREATE TABLE bookletInfo (
 );
 -- rollback DROP TABLE IF EXISTS bookletInfo;
 
+-- changeset jurei733:3
 CREATE TABLE booklet (
                        id SERIAL PRIMARY KEY NOT NULL,
                        infoId BIGINT NOT NULL,
@@ -27,6 +29,7 @@ CREATE TABLE booklet (
 );
 -- rollback DROP TABLE IF EXISTS booklet;
 
+-- changeset jurei733:4
 CREATE TABLE session (
                        bookletId BIGINT NOT NULL,
                        browser TEXT NULL,
@@ -38,6 +41,7 @@ CREATE TABLE session (
 );
 -- rollback DROP TABLE IF EXISTS session;
 
+-- changeset jurei733:5
 CREATE TABLE bookletLog (
                           bookletId BIGINT NOT NULL,
                           key TEXT NOT NULL,
@@ -47,6 +51,7 @@ CREATE TABLE bookletLog (
 );
 -- rollback DROP TABLE IF EXISTS bookletLog;
 
+-- changeset jurei733:6
 CREATE TABLE unit (
                     id SERIAL PRIMARY KEY NOT NULL,
                     bookletId BIGINT NOT NULL,
@@ -56,6 +61,7 @@ CREATE TABLE unit (
 );
 -- rollback DROP TABLE IF EXISTS unit;
 
+-- changeset jurei733:7
 CREATE TABLE unitLog (
                        unitId BIGINT NOT NULL,
                        key TEXT NOT NULL,
@@ -65,6 +71,7 @@ CREATE TABLE unitLog (
 );
 -- rollback DROP TABLE IF EXISTS unitLog;
 
+-- changeset jurei733:8
 CREATE TABLE unitLastState (
                              unitId BIGINT NOT NULL,
                              key TEXT NOT NULL,
@@ -73,6 +80,7 @@ CREATE TABLE unitLastState (
 );
 -- rollback DROP TABLE IF EXISTS unitLastState;
 
+-- changeset jurei733:9
 CREATE TABLE chunk (
                      unitId BIGINT NOT NULL,
                      key TEXT NOT NULL,
@@ -83,6 +91,7 @@ CREATE TABLE chunk (
 );
 -- rollback DROP TABLE IF EXISTS chunk;
 
+-- changeset jurei733:10
 CREATE TABLE response (
                         unitId BIGINT NOT NULL,
                         variableId TEXT NOT NULL,
@@ -94,3 +103,17 @@ CREATE TABLE response (
                         CONSTRAINT FK_response_unit FOREIGN KEY (unitId) REFERENCES unit (id) ON DELETE CASCADE ON UPDATE NO ACTION
 );
 -- rollback DROP TABLE IF EXISTS response;
+
+-- changeset jurei733:11
+CREATE UNIQUE INDEX person_unique_idx ON person("group", "code", "login");
+-- rollback DROP INDEX IF EXISTS person_unique_idx;
+
+-- changeset jurei733:12
+ALTER TABLE bookletInfo ADD CONSTRAINT bookletInfoId UNIQUE ("name", "size");
+-- rollback ALTER TABLE bookletInfo DROP CONSTRAINT IF EXISTS bookletInfoId;
+
+-- changeset jurei733:13
+ALTER TABLE response ADD id serial4 NOT NULL;
+ALTER TABLE response ALTER COLUMN id SET STORAGE PLAIN;
+-- rollback ALTER TABLE response DROP COLUMN id;
+
