@@ -53,7 +53,7 @@ export const routes: Routes = [
       { path: '', redirectTo: 'select-unit-play', pathMatch: 'full' },
       { path: 'select-unit-play', component: SelectReplayComponent },
       { path: 'test-files', component: TestFilesComponent },
-      { path: 'test-groups', component: TestGroupsComponent },
+      { path: 'test-results', component: TestGroupsComponent },
       { path: 'users', component: WsUsersComponent },
       { path: 'coding', component: CodingManagementComponent },
       { path: 'settings', component: WsSettingsComponent },

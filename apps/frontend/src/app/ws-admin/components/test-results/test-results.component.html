@@ -58,7 +58,7 @@
           <mat-expansion-panel-header>
             <mat-panel-title (click)="setSelectedBooklet(booklet)">
               <mat-icon (click)="replayBooklet(booklet)">play_arrow</mat-icon>
-              {{ booklet.id }}
+              {{ booklet.name }}
             </mat-panel-title>
           </mat-expansion-panel-header>
               <mat-list class="unit-list">
@@ -84,7 +84,7 @@
               class="square"
               >
             </div>
-            <span >{{ response.id }}</span>
+            <span >{{ response.variableid }}</span>
           </div>
         </mat-list-item>
       </mat-list>

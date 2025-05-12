@@ -26,7 +26,7 @@ import {
     CodingManagementManualComponent]
 })
 export class WsAdminComponent implements OnInit {
-  navLinks: string[] = ['select-unit-play', 'test-files', 'test-groups', 'coding', 'settings'];
+  navLinks: string[] = ['test-files', 'test-results', 'coding', 'settings'];
   accessLevel:number = 0;
   authData = AppService.defaultAuthData;
   constructor(

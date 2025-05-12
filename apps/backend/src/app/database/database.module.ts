@@ -38,7 +38,10 @@ import { Session } from './entities/session.entity';
     Person,
     Unit,
     Responses,
+    BookletLog,
+    Session,
     UnitLastState,
+    UnitLog,
     ResponseEntity,
     ChunkEntity,
     ResourcePackage,
@@ -54,7 +57,7 @@ import { Session } from './entities/session.entity';
         password: configService.get('POSTGRES_PASSWORD'),
         database: configService.get('POSTGRES_DB'),
         entities: [Person, BookletInfo, Booklet, Session, BookletLog, Unit, UnitLog, UnitLastState, ResponseEntity,
-          User, Workspace, WorkspaceAdmin, FileUpload, Responses, WorkspaceUser, ResourcePackage, Logs, Persons, ChunkEntity
+          User, Workspace, WorkspaceAdmin, FileUpload, Responses, WorkspaceUser, ResourcePackage, Logs, Persons, ChunkEntity, BookletLog, Session, UnitLog
         ],
         synchronize: false
       }),
@@ -77,7 +80,10 @@ import { Session } from './entities/session.entity';
       BookletInfo,
       Unit,
       ChunkEntity,
-      UnitLastState
+      BookletLog,
+      UnitLog,
+      UnitLastState,
+      Session
     ])
   ],
   providers: [UsersService, WorkspaceService, TestcenterService, UploadResultsService],

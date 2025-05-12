@@ -30,6 +30,7 @@ import { AppService } from '../../../services/app.service';
 import { TestGroupsInListDto } from '../../../../../../../api-dto/test-groups/testgroups-in-list.dto';
 
 interface P {
+  id: number;
   code: string;
   group: string;
   login: string;
@@ -63,8 +64,6 @@ export class TestResultsComponent implements OnInit {
   selectedBooklet:any;
   isLoading: boolean = true;
 
-  private testResultsCache = new Map<number, { data: any[]; total: number }>();
-
   @ViewChild(MatPaginator) paginator!: MatPaginator;
   @ViewChild(MatSort) sort!: MatSort;
 
@@ -80,11 +79,11 @@ export class TestResultsComponent implements OnInit {
   }
 
   onRowClick(row: P): void {
-    const foundPerson = this.data.find((person: { code: string; }) => person.code === row.code);
-    if (foundPerson && foundPerson.booklets) {
-      this.booklets = foundPerson.booklets;
-      this.testPerson = foundPerson;
-    }
+    this.testPerson = row;
+    this.backendService.getPersonTestResults(this.appService.selectedWorkspaceId, row.id)
+      .subscribe(response => {
+        this.booklets = [response[0].booklet];
+      });
   }
 
   replayBooklet(booklet:any) {
@@ -103,7 +102,7 @@ export class TestResultsComponent implements OnInit {
         const url = this.router
           .serializeUrl(
             this.router.createUrlTree(
-              [`replay/${this.testPerson.group}@${this.testPerson.code}@${this.selectedBooklet?.id}/${this.selectedUnit.alias}/1`],
+              [`replay/${this.testPerson.group}@${this.testPerson.code}@${this.selectedBooklet?.id}/${this.selectedUnit?.alias}/1`],
               { queryParams: queryParams })
           );
         window.open(`#/${url}`, '_blank');
@@ -120,8 +119,8 @@ export class TestResultsComponent implements OnInit {
   }
 
   onUnitClick(unit: any): void {
-    this.responses = unit.subforms[0].responses;
-    this.logs = this.createUnitHistory(unit);
+    this.responses = unit.results;
+    // this.logs = this.createUnitHistory(unit);
     this.selectedUnit = unit;
   }
 
@@ -195,6 +194,7 @@ export class TestResultsComponent implements OnInit {
   private updateTable(data: any[], total: number): void {
     this.data = data;
     const mappedResults = data.map((result: any) => ({
+      id: result.id,
       code: result.code,
       group: result.group,
       login: result.login,
