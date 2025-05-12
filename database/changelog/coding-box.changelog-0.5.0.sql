@@ -117,3 +117,13 @@ ALTER TABLE response ADD id serial4 NOT NULL;
 ALTER TABLE response ALTER COLUMN id SET STORAGE PLAIN;
 -- rollback ALTER TABLE response DROP COLUMN id;
 
+-- changeset jurei733:14
+ALTER TABLE bookletLog ADD id serial4 NOT NULL;
+ALTER TABLE bookletLog ALTER COLUMN id SET STORAGE PLAIN;
+-- rollback ALTER TABLE bookletLog DROP COLUMN id;
+
+-- changeset jurei733:15
+ALTER TABLE session ADD id serial4 NOT NULL;
+ALTER TABLE session ALTER COLUMN id SET STORAGE PLAIN;
+-- rollback ALTER TABLE session DROP COLUMN id;
+

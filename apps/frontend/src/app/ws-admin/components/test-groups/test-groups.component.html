@@ -2,11 +2,15 @@
   <div class="fx-row-center-center-stretch fx-gap-20 upload-buttons">
     <a mat-raised-button color="primary" (click)=hiddenFileInput.click()>
       <mat-icon>upload</mat-icon>
-      Test Ergebnisse hinzufügen
+      Resultate hochladen
+    </a>
+    <a mat-raised-button color="primary" (click)=hiddenFileInput.click()>
+      <mat-icon>upload</mat-icon>
+      Logs hochladen
     </a>
     <a mat-raised-button color="primary" [disabled]="tableSelectionCheckboxes.selected.length === 0" (click)="deleteTestGroups()">
       <mat-icon>delete</mat-icon>
-      Test Gruppe(n) löschen
+      Resultate löschen
     </a>
     <a mat-raised-button color="primary" [disabled]="tableSelectionCheckboxes.selected.length === 0" (click)="createCodingTestGroups()">
       <mat-icon>code</mat-icon>

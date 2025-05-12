@@ -24,6 +24,7 @@ import { UserInListDto } from '../../../../../api-dto/user/user-in-list-dto';
 import { UserWorkspaceAccessDto } from '../../../../../api-dto/workspaces/user-workspace-access-dto';
 import { Persons } from '../../../../../api-dto/test-results/testgroups-in-list.dto';
 import { FilesValidationDto } from '../../../../../api-dto/files/files-validation.dto';
+import { logger } from 'nx/src/utils/logger';
 
 @Injectable({
   providedIn: 'root'
@@ -340,7 +341,7 @@ export class BackendService {
   }
 
   getTestResults(workspaceId: number, page: number, limit: number): Observable<any> {
-    const cacheKey = `testResults-${workspaceId}-${page}-${limit}`; // unique key for cache data
+    const cacheKey = `testResults-${workspaceId}-${page}-${limit}`;
     if (this.cache.has(cacheKey)) {
       return of(this.cache.get(cacheKey));
     }
@@ -360,19 +361,18 @@ export class BackendService {
       tap(data => {
         this.cache.set(cacheKey, data);
       }),
-      catchError(error => {
-        console.error('Fehler beim Abrufen der Testdaten:', error);
+      catchError(() => {
+        logger.error('Fehler beim Abrufen der Testdaten:');
         return of(null);
       })
     );
   }
 
-  clearCache(key?: string): void {
-    if (key) {
-      this.cache.delete(key);
-    } else {
-      this.cache.clear();
-    }
+  getPersonTestResults(workspaceId: number, personId: number): Observable<any> {
+    return this.http.get<any[]>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/test-results/${personId}`,
+      { headers: this.authHeader }
+    );
   }
 
   authenticate(username:string, password:string, server:string, url:string): Observable<ServerResponse > {

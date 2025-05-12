@@ -6,6 +6,7 @@ import { Repository } from 'typeorm';
 import 'multer';
 import * as csv from 'fast-csv';
 import { Readable } from 'stream';
+import { logger } from 'nx/src/utils/logger';
 import { Booklet } from '../entities/booklet.entity';
 import { FileIo } from '../../admin/workspace/file-io.interface';
 import {
@@ -26,13 +27,16 @@ import { Unit } from '../entities/unit.entity';
 import { UnitLastState } from '../entities/unitLastState.entity';
 import { ResponseEntity } from '../entities/response.entity';
 import { ChunkEntity } from '../entities/chunk.entity';
+import { BookletLog } from '../entities/bookletLog.entity';
+import { Session } from '../entities/session.entity';
+import { UnitLog } from '../entities/unitLog.entity';
 
 type PersonWithoutBooklets = Omit<Person, 'booklets'>;
 
 @Injectable()
 export class UploadResultsService {
   private readonly logger = new Logger(UploadResultsService.name);
-  person: PersonWithoutBooklets[] = []; // Typ ohne 'booklets'
+  person: PersonWithoutBooklets[] = [];
 
   constructor(
     @InjectRepository(Persons)
@@ -50,7 +54,13 @@ export class UploadResultsService {
     @InjectRepository(ResponseEntity)
     private responseRepository: Repository<ResponseEntity>,
     @InjectRepository(ChunkEntity)
-    private chunkRepository: Repository<ChunkEntity>
+    private chunkRepository: Repository<ChunkEntity>,
+    @InjectRepository(BookletLog)
+    private bookletLogRepository: Repository<BookletLog>,
+    @InjectRepository(Session)
+    private bookletSessionRepository: Repository<Session>,
+    @InjectRepository(UnitLog)
+    private unitLogRepository: Repository<UnitLog>
   ) {
   }
 
@@ -77,20 +87,17 @@ export class UploadResultsService {
 
   async uploadFile(file:FileIo) {
     if (file.mimetype === 'text/csv') {
-      const randomInteger = Math.floor(Math.random() * 10000);
       if (file.originalname.includes('logs')) {
-        console.log('logs');
         const bufferStream = new Readable();
         bufferStream.push(file.buffer);
         bufferStream.push(null); // Signalisiert das Ende der Daten
         const startTime = performance.now();
         const rowData: Log[] = [];
-        const csvParserStream = csv
-          .parseStream(bufferStream, {
-            headers: true,
-            delimiter: ';',
-            quote: null
-          })
+        csv.parseStream(bufferStream, {
+          headers: true,
+          delimiter: ';',
+          quote: null
+        })
           .transform(
             (data: Log): Log => ({
               groupname: data.groupname?.replace(/"/g, ''),
@@ -109,7 +116,7 @@ export class UploadResultsService {
           .on('data', row => rowData.push(row))
           .on('end', async () => {
             const endTime = performance.now();
-            console.log('CSV read duration:', `${(endTime - startTime) / 1000}s`);
+            logger.log('CSV read duration:', `${(endTime - startTime) / 1000}s`);
             const { bookletLogs, unitLogs } = rowData.reduce(
               (acc, row) => {
                 row.unitname === '' ? acc.bookletLogs.push(row) : acc.unitLogs.push(row);
@@ -118,56 +125,155 @@ export class UploadResultsService {
               { bookletLogs: [], unitLogs: [] }
             );
             this.createPersonList(rowData);
-            const personTime = performance.now();
-            console.log('personTime', `${(personTime - startTime) / 1000}s`);
             const persons = this.persons
               .map(person => this.assignBookletLogsToPerson(person, bookletLogs));
-            const loggedPersonTime = performance.now();
-            console.log('loggedPersonTime', `${(loggedPersonTime - startTime) / 1000}s`);
-            const keys = persons.map(person => ({
-              group: person.group,
-              code: person.code,
-              login: person.login
-            }));
+            for (const person of persons) {
+              for (const booklet of person.booklets) {
+                if (!booklet || !booklet.id) {
+                  this.logger.warn(`Skipping booklet for person: ${person.group}-${person.login}-${person.code} because it's invalid`);
+                  continue;
+                }
 
-            const existingPersons = await this.personsRepository.find({
-              where: keys
-            });
-
-            existingPersons.forEach((p, i) => {
-              const person = persons[i];
-              console.log('person', person.code);
-
-              if (p) {
-                const booklets: TcMergeBooklet[] = p.booklets as TcMergeBooklet[];
-                const logEnrichedBooklets = booklets.map(b => {
-                  const enriched = this.assignUnitLogsToBooklet(b, unitLogs);
-                  const logs = person.booklets.find(pb => pb.id === b.id)?.logs;
-                  return { enriched, logs };
+                const existingPerson = await this.personsRepository.findOne({
+                  where: {
+                    group: person.group,
+                    login: person.login,
+                    code: person.code
+                  }
                 });
-                return {
-                  id: p.id,
-                  ...person,
-                  booklets: logEnrichedBooklets
-                };
-              }
-              console.log('Person not found in responses');
-            });
 
-            const res = existingPersons;
-            const manipulatedPersonsTime = performance.now();
-            console.log('manipulatedPersons', `${(manipulatedPersonsTime - startTime) / 1000}s`);
-            const chunks = <T>(arr: T[], size: number): T[][] => Array.from({ length: Math.ceil(arr.length / size) }, (_, i) => arr.slice(i * size, i * size + size));
-            const chunkedData = chunks(res, 10);
-            await Promise.all(
-              chunkedData.map(async chunk => {
-                await this.personsRepository.upsert(chunk, ['group', 'code', 'login']);
-                console.log('updated');
-              })
-            );
+                if (!existingPerson) {
+                  this.logger.error(`Person not found in database: ${person.group}-${person.login}-${person.code}`);
+                  continue;
+                }
+                const bookletInfo = await this.bookletInfoRepository.findOne({
+                  where: { name: booklet.id.toUpperCase() }
+                });
+
+                if (!bookletInfo || !bookletInfo.id) {
+                  this.logger.warn('BookletInfo ist ungültig oder hat keine ID.');
+                  continue;
+                }
+
+                const existingBooklet = await this.bookletRepository.findOne({
+                  where: {
+                    personid: existingPerson.id,
+                    infoid: bookletInfo.id
+                  }
+                });
+                if (!existingBooklet || !existingBooklet.id) {
+                  continue;
+                }
+                try {
+                  if (existingBooklet && existingBooklet.id) {
+                    const bookletLogEntries = booklet.logs.map(log => ({
+                      key: log.key,
+                      parameter: log.parameter,
+                      bookletid: existingBooklet.id,
+                      ts: log.ts
+                    })) as unknown as BookletLog[];
+
+                    const bookletSessions = booklet.sessions.map(log => ({
+                      browser: log.browser,
+                      os: log.os,
+                      screen: log.screen,
+                      loadcompletems: log.loadCompleteMS,
+                      ts: log.ts,
+                      booklet: existingBooklet
+
+                    }));
+
+                    await this.bookletLogRepository.save(bookletLogEntries as BookletLog[]);
+                    this.logger.log(`Saved booklet log for booklet ${booklet.id} and person ${existingPerson.id}`);
+                    await this.bookletSessionRepository.save(bookletSessions as unknown as Session[]);
+                    this.logger.log(`Saved booklet session for booklet ${booklet.id} and person ${existingPerson.id}`);
+                  }
+                } catch (error) {
+                  this.logger.error(`Failed to save logs for booklet ${booklet.id} and person ${existingPerson.id}:`, error.message);
+                }
+                // console.log('unit', booklet.units);
+
+                for (const unit of booklet.units) {
+                  if (!unit || !unit.id) {
+                    this.logger.warn(`Skipping unit in booklet ${booklet.id} for person: ${person.group}-${person.login}-${person.code} because it's invalid`);
+                    continue;
+                  }
+
+                  const existingUnit = await this.unitRepository.findOne({
+                    where: {
+                      alias: unit.alias,
+                      name: unit.id,
+                      bookletid: existingBooklet.id
+                    }
+                  });
+                  // console.log('existingUnit', existingUnit);
+
+                  if (existingUnit) {
+                    try {
+                      const unitLogEntries = unit.logs.map(log => ({
+                        key: log.key,
+                        parameter: log.parameter,
+                        unitid: existingUnit.id,
+                        ts: log.ts
+                      })) as unknown as UnitLog[];
+
+                      await this.unitLogRepository.insert(unitLogEntries);
+                      this.logger.log(`Saved log for unit ${unit.id} of booklet ${booklet.id} for person ${existingPerson.id}`);
+                    } catch (error) {
+                      this.logger.error(`Failed to save last state for unit ${unit.id}:`, error.message);
+                    }
+                  }
+                }
+              }
+            }
+
+            // const loggedPersonTime = performance.now();
+            // console.log('loggedPersonTime', `${(loggedPersonTime - startTime) / 1000}s`);
+            // const keys = persons.map(person => ({
+            //   group: person.group,
+            //   code: person.code,
+            //   login: person.login
+            // }));
+            //
+            // const existingPersons = await this.personsRepository.find({
+            //   where: keys
+            // });
+
+            // existingPersons.forEach((p, i) => {
+            //   const person = persons[i];
+            //   console.log('person', person.code);
+            //
+            //   if (p) {
+            //     const booklets: TcMergeBooklet[] = p.booklets as TcMergeBooklet[];
+            //     const logEnrichedBooklets = booklets.map(b => {
+            //       const enriched = this.assignUnitLogsToBooklet(b, unitLogs);
+            //       const logs = person.booklets.find(pb => pb.id === b.id)?.logs;
+            //       return { enriched, logs };
+            //     });
+            //     return {
+            //       id: p.id,
+            //       ...person,
+            //       booklets: logEnrichedBooklets
+            //     };
+            //   }
+            //   console.log('Person not found in responses');
+            // });
+
+            // const res = existingPersons;
+            // const manipulatedPersonsTime = performance.now();
+            // console.log('manipulatedPersons', `${(manipulatedPersonsTime - startTime) / 1000}s`);
+            // const chunks = <T>(arr: T[], size: number): T[][] => Array.from({ length: Math.ceil(arr.length / size) }, (_, i) => arr.slice(i * size, i * size + size));
+            // const chunkedData = chunks(res, 10);
+            // await Promise.all(
+            //   chunkedData.map(async chunk => {
+            //     await this.personsRepository.upsert(chunk, ['group', 'code', 'login']);
+            //     console.log('updated');
+            //   })
+            // );
+            // const allPersons = await this.personsRepository.find();
           });
       } else {
-        console.log('Start to import responses. ');
+        logger.log('Start to import responses. ');
         const rowData: Response[] = [];
         const bufferStream = new Readable();
         bufferStream.push(file.buffer);
@@ -178,7 +284,7 @@ export class UploadResultsService {
           })
           .on('data', row => rowData.push(row))
           .on('end', async () => {
-            console.log('Anzahl der Antworten', rowData.length);
+            logger.log('Anzahl der Antworten', rowData.length);
             this.createPersonList(rowData);
             const personList = await Promise.all(
               this.persons.map(async person => {
@@ -192,27 +298,23 @@ export class UploadResultsService {
             const persons = await this.personsRepository.find();
             for (const person of persons) {
               for (const booklet of person.booklets) {
-                // Sicherstellen, dass es ein `booklet` gibt
                 if (!booklet || !booklet.id) {
                   this.logger.warn(`Skipping booklet for person: ${person.group}-${person.login}-${person.code} because it's invalid`);
                   continue;
                 }
 
-                // Überprüfen, ob `BookletInfo` bereits existiert
                 let bookletInfo = await this.bookletInfoRepository.findOne({
                   where: { name: booklet.id } // `name` ist das `id` des Booklets
                 });
 
                 if (!bookletInfo) {
-                  // Wenn es nicht existiert, ein neues erstellen
                   bookletInfo = this.bookletInfoRepository.create({
                     name: booklet.id,
-                    size: 0 // Standardwert
+                    size: 0
                   });
                   bookletInfo = await this.bookletInfoRepository.save(bookletInfo);
                 }
 
-                // Prüfen, ob das Booklet mit der Person gespeichert wurde
                 const existingBooklet = await this.bookletRepository.findOne({
                   where: {
                     personid: person.id,
@@ -222,7 +324,6 @@ export class UploadResultsService {
 
                 let savedBooklet;
                 if (!existingBooklet) {
-                  // Neues Booklet erstellen
                   const newBooklet = this.bookletRepository.create({
                     personid: person.id,
                     infoid: bookletInfo.id,
@@ -230,7 +331,6 @@ export class UploadResultsService {
                     firstts: 0
                   });
 
-                  // Booklet speichern
                   savedBooklet = await this.bookletRepository.save(newBooklet);
                 } else {
                   this.logger.log(`Booklet already exists for person ${person.id}`);
@@ -274,11 +374,12 @@ export class UploadResultsService {
                       });
 
                       if (currentLastState.length === 0 && unit.laststate) {
-                        const lastStateEntries = Object.entries(unit.laststate).map(([key, value]) => ({
-                          unitid: savedUnit.id,
-                          key: unit.laststate[key].key,
-                          value: unit.laststate[key].value
-                        }));
+                        const lastStateEntries = Object.entries(unit.laststate)
+                          .map(([key]) => ({
+                            unitid: savedUnit.id,
+                            key: unit.laststate[key].key,
+                            value: unit.laststate[key].value
+                          }));
 
                         await this.unitLastStateRepository.insert(lastStateEntries);
                         this.logger.log(`Saved laststate for unit ${unit.id} of booklet ${booklet.id} for person ${person.id}`);
@@ -396,8 +497,10 @@ export class UploadResultsService {
 
     rows.forEach(row => {
       if (row.groupname === person.group && row.loginname === person.login && row.code === person.code) {
-        const { bookletname, timestamp, logentry } = row;
-        const [logEntryKey, logEntryValueRaw] = logentry.split(':', 2);
+        const {
+          bookletname, timestamp, logentry
+        } = row;
+        const [logEntryKey, logEntryValueRaw] = logentry.split(' : ');
         const logEntryValue = logEntryValueRaw?.trim().replace(/"/g, '');
 
         let booklet = bookletMap.get(bookletname);
@@ -412,15 +515,14 @@ export class UploadResultsService {
           bookletMap.set(bookletname, booklet);
         }
 
-        // "LOADCOMPLETE"-Handling
         if (logEntryKey.trim() === 'LOADCOMPLETE' && logEntryValue) {
-          let parsedJSON;
-          try {
-            parsedJSON = JSON.parse(logEntryValue);
-          } catch (e) {
-            console.error('Error parsing JSON:', e);
-            parsedJSON = {};
-          }
+          const keyValues = logEntryValue.slice(1, -1).split(',');
+          const parsedResult: { [key: string]: string | number | undefined } = {};
+          keyValues.forEach(pair => {
+            const [key, value] = pair.split(':', 2).map(part => part.trim());
+            parsedResult[key] = Number.isNaN(Number(value)) ? value || undefined : Number(value);
+          });
+
           const {
             browserVersion,
             browserName,
@@ -428,23 +530,25 @@ export class UploadResultsService {
             screenSizeWidth,
             screenSizeHeight,
             loadTime
-          } = parsedJSON;
+          } = parsedResult;
 
           booklet.sessions.push({
             browser: `${browserName} ${browserVersion}`,
-            os: osName,
+            os: osName.toString(),
             screen: `${screenSizeWidth} ${screenSizeHeight}`,
             ts: timestamp,
-            loadCompleteMS: loadTime
+            loadCompleteMS: Number(loadTime)
           });
         }
-
-        // Log hinzufügen
-        booklet.logs.push({
-          ts: timestamp,
-          key: logEntryKey.trim(),
-          parameter: logEntryValue || ''
-        });
+        if (logEntryKey.trim() === 'CONNECTION' ||
+          logEntryKey.trim() === 'CONTROLLER' ||
+          logEntryKey.trim() === 'CURRENT_UNIT_ID') {
+          booklet.logs.push({
+            ts: timestamp,
+            key: logEntryKey.trim(),
+            parameter: logEntryValue || ''
+          });
+        }
       }
     });
 
@@ -495,13 +599,12 @@ export class UploadResultsService {
       const booklet = person.booklets.find(b => b.id === row.bookletname);
       if (!booklet) continue;
 
-      // Parse responses
       const responseChunksCleaned = row.responses.replace(/""/g, '"');
       let parsedResponses: Chunk[] = [];
       try {
         parsedResponses = JSON.parse(responseChunksCleaned);
       } catch (e) {
-        console.error('Error parsing responses:', e);
+        logger.error('Error parsing responses:');
       }
 
       // Extract and map subforms
@@ -512,7 +615,7 @@ export class UploadResultsService {
           try {
             chunkContent = JSON.parse(chunk.content);
           } catch (e) {
-            console.error('Error parsing chunk content:', e);
+            logger.error('Error parsing chunk content:');
           }
           return { id: chunk.id, responses: chunkContent };
         });
@@ -522,7 +625,6 @@ export class UploadResultsService {
       subforms.forEach(subform => subform.responses.forEach(response => variables.add(response.id))
       );
 
-      // Parse laststate
       let laststate: TcMergeLastState[] = [];
       try {
         const parsedLastState = JSON.parse(row.laststate);
@@ -531,7 +633,7 @@ export class UploadResultsService {
           value: value as string
         }));
       } catch (e) {
-        console.error('Error parsing last state:', e);
+        logger.error('Error parsing last state:');
       }
 
       // Map and update booklets

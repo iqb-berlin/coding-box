@@ -28,6 +28,8 @@ import Persons from '../entities/persons.entity';
 import { Unit } from '../entities/unit.entity';
 import { Booklet } from '../entities/booklet.entity';
 import { ResponseEntity } from '../entities/response.entity';
+import { Result } from './testcenter.service';
+import { BookletInfo } from '../entities/bookletInfo.entity';
 
 function sanitizePath(filePath: string): string {
   const normalizedPath = path.normalize(filePath); // System-basiertes Normalisieren
@@ -185,7 +187,9 @@ export class WorkspaceService {
     @InjectRepository(Booklet)
     private bookletRepository:Repository<Booklet>,
     @InjectRepository(ResponseEntity)
-    private responseRepository:Repository<ResponseEntity>
+    private responseRepository:Repository<ResponseEntity>,
+    @InjectRepository(BookletInfo)
+    private bookletInfoRepository:Repository<BookletInfo>
   ) {
   }
 
@@ -232,6 +236,87 @@ export class WorkspaceService {
     });
   }
 
+  async findPersonTestResults(personId: number, workspaceId: number): Promise<any> {
+    if (!personId || !workspaceId) {
+      throw new Error('Both personId and workspaceId are required.');
+    }
+
+    try {
+      this.logger.log(
+        `Fetching booklets, bookletInfo data, units, and test results for personId: ${personId} and workspaceId: ${workspaceId}`
+      );
+
+      const booklets = await this.bookletRepository.find({
+        where: { personid: personId },
+        select: ['id', 'personid', 'infoid']
+      });
+
+      if (!booklets || booklets.length === 0) {
+        this.logger.log(`No booklets found for personId: ${personId}`);
+        return [];
+      }
+
+      const bookletIds = booklets.map(booklet => booklet.id);
+      const bookletInfoIds = booklets.map(booklet => booklet.infoid);
+      const bookletInfoData = await this.bookletInfoRepository.find({
+        where: { id: In(bookletInfoIds) },
+        select: ['id', 'name', 'size']
+      });
+
+      const units = await this.unitRepository.find({
+        where: { bookletid: In(bookletIds) },
+        select: ['id', 'name', 'alias', 'bookletid']
+      });
+
+      const unitIds = units.map(unit => unit.id);
+
+      const responses = await this.responseRepository.find({
+        where: { unitid: In(unitIds) }
+      });
+
+      const uniqueResponses = Array.from(
+        new Map(responses.map(response => [response.id, response])).values()
+      );
+
+      const unitResultMap = new Map<number, { id: number; unitid: number }[]>();
+      for (const response of uniqueResponses) {
+        if (!unitResultMap.has(response.unitid)) {
+          unitResultMap.set(response.unitid, []);
+        }
+        unitResultMap.get(response.unitid)?.push(response);
+      }
+
+      const structuredResults = booklets.map(booklet => {
+        const bookletInfo = bookletInfoData.find(info => info.id === booklet.infoid);
+        return {
+          booklet: {
+            id: booklet.id,
+            personid: booklet.personid,
+            name: bookletInfo.name,
+            size: bookletInfo.size,
+            units: units
+              .filter(unit => unit.bookletid === booklet.id)
+              .map(unit => ({
+                id: unit.id,
+                bookletid: unit.bookletid,
+                name: unit.name,
+                alias: unit.alias,
+                results: unitResultMap.get(unit.id) || []
+              }))
+          }
+        };
+      });
+
+      return structuredResults;
+    } catch (error) {
+      this.logger.error(
+        `Failed to fetch booklets, bookletInfo, units, and results for personId: ${personId} and workspaceId: ${workspaceId}`,
+        error.stack
+      );
+      throw new Error('An error occurred while fetching booklets, their info, units, and test results.');
+    }
+  }
+
   async findTestResults(workspace_id: number, options: { page: number; limit: number }): Promise<[Persons[], number]> {
     const { page, limit } = options;
     if (!workspace_id || workspace_id <= 0) {
@@ -253,11 +338,17 @@ export class WorkspaceService {
     try {
       const [results, total] = await this.personsRepository.findAndCount({
         // where: { workspace_id: workspace_id },
+        select: [
+          'id',
+          'group',
+          'login',
+          'code',
+          'uploaded_at'
+        ],
         skip: (validPage - 1) * validLimit,
         take: validLimit
       });
 
-      // save results in cache
       this.cache.set(cacheKey, { data: [results, total], expiry: Date.now() + cacheTTL });
 
       return [results, total];
@@ -382,15 +473,12 @@ export class WorkspaceService {
     const uniqueResponses = mappedResponses.filter(
       (response, index, self) => index === self.findIndex(r => r.id === response.id)
     );
-
-    console.log('uniqueResponses', uniqueResponses);
-
-    return [{
-      id: 'elementCodes',
-      content: uniqueResponses,
-      ts: 1733839878528,
-      responseType: 'iqb-standard@1.0'
-    }];
+    return {
+      responses: [{
+        id: 'elementCodes',
+        content: uniqueResponses
+      }]
+    };
   }
 
   async findWorkspaceResponses(workspace_id: number): Promise<ResponseDto[]> {
