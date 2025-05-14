@@ -207,7 +207,7 @@ export class WorkspaceController {
   async findPersonTestResults(
     @Param('workspace_id') workspace_id: number,
       @Param('personId') personId: number
-  ): Promise<{ booklet: Booklet & { units: { unit: Unit, results: ResponseEntity[] }[] } }[]> {
+  ): Promise<any> {
     return this.workspaceService.findPersonTestResults(personId, workspace_id);
   }
 
@@ -241,9 +241,6 @@ export class WorkspaceController {
       return users;
     } catch (error) {
       logger.error(`Error retrieving users for workspace ${workspaceId}`);
-      throw new BadRequestException(
-        `Failed to retrieve users for workspace ${workspaceId}. Please try again later.`
-      );
     }
   }
 
@@ -285,14 +282,12 @@ export class WorkspaceController {
     return this.workspaceService.findTestGroups(workspace_id);
   }
 
-  // Todo: use query params
-  @Delete(':workspace_id/test-groups/:testGroupNames')
+  @Delete(':workspace_id/test-results')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async deleteTestGroups(
-    @Param('testGroupNames')testGroupNames:string,
-      @Param('workspace_id')workspaceId:string): Promise<boolean> {
-    const splittedTestGroupNames = testGroupNames.split(';');
-    return this.workspaceService.deleteTestGroups(workspaceId, splittedTestGroupNames);
+    @Query('testPersons')testPersonIds:string,
+      @Param('workspace_id')workspaceId:string): Promise<{ success: boolean; report: { deletedPersons: string[]; deletedBooklets: number[]; deletedUnits: number[]; deletedResponses: number[]; warnings: string[] } }> {
+    return this.workspaceService.deleteTestPersons(workspaceId, testPersonIds);
   }
 
   @Get(':workspace_id/test-groups/:testGroup')

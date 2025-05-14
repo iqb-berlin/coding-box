@@ -1,32 +1,5 @@
-<div class="fx-column-start-start fx-gap-10  container">
-  <div class="fx-row-center-center-stretch fx-gap-20 upload-buttons">
-    <a mat-raised-button color="primary" (click)=hiddenFileInput.click()>
-      <mat-icon>upload</mat-icon>
-      Resultate hochladen
-    </a>
-    <a mat-raised-button color="primary" (click)=hiddenFileInput.click()>
-      <mat-icon>upload</mat-icon>
-      Logs hochladen
-    </a>
-    <a mat-raised-button color="primary" [disabled]="tableSelectionCheckboxes.selected.length === 0" (click)="deleteTestGroups()">
-      <mat-icon>delete</mat-icon>
-      Resultate löschen
-    </a>
-    <a mat-raised-button color="primary" [disabled]="tableSelectionCheckboxes.selected.length === 0" (click)="createCodingTestGroups()">
-      <mat-icon>code</mat-icon>
-      Kodieren
-    </a>
-  </div>
-  <input #hiddenFileInput type="file"
-         name="files"
-         accept=".json,.zip,.csv"
-         multiple
-         [hidden]="true"
-         (change)="onFileSelected($event.currentTarget)"/>
-  @if (isLoading) {
-    <mat-spinner></mat-spinner>
-  }
-  @if (!isLoading && dataSource && dataSource.data.length) {
-  }
+
+
+
   <coding-box-test-results></coding-box-test-results>
-</div>
+

@@ -68,10 +68,7 @@ export class UploadResultsService {
 
   async uploadTestResults(workspace_id: number, originalFiles: FileIo[]): Promise<boolean> {
     this.logger.log(`Uploading test results for workspace ${workspace_id}`);
-    if (!Array.isArray(originalFiles)) {
-      originalFiles = [originalFiles];
-    }
-    const MAX_FILES_LENGTH = 1000; // Define a reasonable maximum length
+    const MAX_FILES_LENGTH = 1000;
     if (originalFiles.length > MAX_FILES_LENGTH) {
       this.logger.error(`Too many files to upload: ${originalFiles.length}`);
       return false;
@@ -79,13 +76,13 @@ export class UploadResultsService {
     const filePromises = [];
     for (let i = 0; i < originalFiles.length; i++) {
       const file = originalFiles[i];
-      filePromises.push(this.uploadFile(file));
+      filePromises.push(this.uploadFile(file, workspace_id));
     }
     await Promise.all(filePromises);
     return true;
   }
 
-  async uploadFile(file:FileIo) {
+  async uploadFile(file:FileIo, workspace_id: number): Promise<void> {
     if (file.mimetype === 'text/csv') {
       if (file.originalname.includes('logs')) {
         const bufferStream = new Readable();
@@ -124,7 +121,7 @@ export class UploadResultsService {
               },
               { bookletLogs: [], unitLogs: [] }
             );
-            this.createPersonList(rowData);
+            this.createPersonList(rowData, workspace_id);
             const persons = this.persons
               .map(person => this.assignBookletLogsToPerson(person, bookletLogs));
             for (const person of persons) {
@@ -285,7 +282,7 @@ export class UploadResultsService {
           .on('data', row => rowData.push(row))
           .on('end', async () => {
             logger.log('Anzahl der Antworten', rowData.length);
-            this.createPersonList(rowData);
+            this.createPersonList(rowData, workspace_id);
             const personList = await Promise.all(
               this.persons.map(async person => {
                 const personWithBooklets = await this.assignBookletsToPerson(person, rowData);
@@ -451,12 +448,13 @@ export class UploadResultsService {
     }
   }
 
-  createPersonList(rows: Response[] | Log[] | Logs[]): void {
+  createPersonList(rows: Response[] | Log[] | Logs[], workspace_id:number): void {
     const personMap = new Map<string, Person>();
     rows.forEach(row => {
       const mapKey = `${row.groupname}-${row.loginname}-${row.code}`;
       if (!personMap.has(mapKey)) {
         personMap.set(mapKey, {
+          workspace_id: workspace_id,
           group: row.groupname,
           login: row.loginname,
           code: row.code,
