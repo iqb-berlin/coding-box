@@ -30,7 +30,7 @@ export class UsersService {
     }
     const users: User[] = await this.usersRepository.find({ order: { username: 'ASC' } });
     return users
-      .filter(user => !workspaceId || validUsers.has(user.id)) // Filter basierend auf der workspaceId, falls vorhanden
+      .filter(user => !workspaceId || validUsers.has(user.id))
       .map(user => ({
         id: user.id,
         username: user.username,

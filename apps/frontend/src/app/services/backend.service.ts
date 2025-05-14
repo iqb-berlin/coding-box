@@ -1,8 +1,9 @@
 import { Injectable, Inject } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import {
-  catchError, map, Observable, of, switchMap, tap
+  catchError, map, Observable, of, switchMap
 } from 'rxjs';
+import { logger } from 'nx/src/utils/logger';
 import { CreateUserDto } from '../../../../../api-dto/user/create-user-dto';
 import { AppService } from './app.service';
 import { UserFullDto } from '../../../../../api-dto/user/user-full-dto';
@@ -22,15 +23,12 @@ import { ResponseDto } from '../../../../../api-dto/responses/response-dto';
 import { FilesDto } from '../../../../../api-dto/files/files.dto';
 import { UserInListDto } from '../../../../../api-dto/user/user-in-list-dto';
 import { UserWorkspaceAccessDto } from '../../../../../api-dto/workspaces/user-workspace-access-dto';
-import { Persons } from '../../../../../api-dto/test-results/testgroups-in-list.dto';
 import { FilesValidationDto } from '../../../../../api-dto/files/files-validation.dto';
 
 @Injectable({
   providedIn: 'root'
 })
 export class BackendService {
-  private cache = new Map<string, any>(); // Key-Value-Paar für den Cache
-
   constructor(
     @Inject('SERVER_URL') private readonly serverUrl: string,
     private http: HttpClient, public appService: AppService
@@ -43,9 +41,9 @@ export class BackendService {
     return `${this.serverUrl}packages/`;
   }
 
-  createToken(workspace_id:number, user:string, duration: number): Observable<string> {
-    return this.http.get<string>( // TODO push
-      `${this.serverUrl}admin/workspace/${workspace_id}/${user}/token/${duration}`,
+  createToken(workspace_id:number, identity:string, duration: number): Observable<string> {
+    return this.http.get<string>(
+      `${this.serverUrl}admin/workspace/${workspace_id}/${identity}/token/${duration}`,
       { headers: this.authHeader }
     );
   }
@@ -213,22 +211,34 @@ export class BackendService {
       );
   }
 
-  // Todo: Use queryParams for testGroups
-  deleteTestGroups(workspace_id:number, testGroups: string[]): Observable<boolean> {
+  deleteTestPersons(workspace_id:number, testPersonIds: number[]): Observable<boolean> {
+    const params = new HttpParams().set('testPersons', testPersonIds.join(','));
     return this.http
       .delete(
-        `${this.serverUrl}admin/workspace/${workspace_id}/test-groups/${testGroups.join(';')}`,
-        { headers: this.authHeader })
+        `${this.serverUrl}admin/workspace/${workspace_id}/test-results`,
+        { headers: this.authHeader, params })
       .pipe(
         catchError(() => of(false)),
         map(() => true)
       );
   }
 
-  // Todo: Use queryParams for ids
-  createCodingTestGroups(ids: TestGroupsInListDto[]): Observable<boolean> {
+  codeTestPersons(workspace_id:number, testPersonIds: number[]): Observable<boolean> {
+    const params = new HttpParams().set('testPersons', testPersonIds.join(','));
     return this.http
-      .delete(`${this.serverUrl}admin/workspace/${ids.join(';')}`, { headers: this.authHeader })
+      .delete(
+        `${this.serverUrl}admin/workspace/${workspace_id}/test-results`,
+        { headers: this.authHeader, params })
+      .pipe(
+        catchError(() => of(false)),
+        map(() => true)
+      );
+  }
+
+  createCodingTestGroups(ids: TestGroupsInListDto[]): Observable<boolean> {
+    const params = new HttpParams().set('testPersons', ids.join(','));
+    return this.http
+      .post(`${this.serverUrl}admin/workspace/test-results/coding`, { headers: this.authHeader, params })
       .pipe(
         catchError(() => of(false)),
         map(() => true)
@@ -340,39 +350,31 @@ export class BackendService {
   }
 
   getTestResults(workspaceId: number, page: number, limit: number): Observable<any> {
-    const cacheKey = `testResults-${workspaceId}-${page}-${limit}`; // unique key for cache data
-    if (this.cache.has(cacheKey)) {
-      return of(this.cache.get(cacheKey));
-    }
-
     const params = {
       page: page.toString(),
       limit: limit.toString()
     };
 
-    return this.http.get<Persons[]>(
+    return this.http.get<any>(
       `${this.serverUrl}admin/workspace/${workspaceId}/test-results/`,
       {
         headers: this.authHeader,
         params: params
       }
     ).pipe(
-      tap(data => {
-        this.cache.set(cacheKey, data);
+      catchError(() => {
+        logger.error('Fehler beim Abrufen der Testdaten:');
+        return of({ results: [], total: 0 });
       }),
-      catchError(error => {
-        console.error('Fehler beim Abrufen der Testdaten:', error);
-        return of(null);
-      })
+      map(result => result || { results: [], total: 0 })
     );
   }
 
-  clearCache(key?: string): void {
-    if (key) {
-      this.cache.delete(key);
-    } else {
-      this.cache.clear();
-    }
+  getPersonTestResults(workspaceId: number, personId: number): Observable<any> {
+    return this.http.get<any[]>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/test-results/${personId}`,
+      { headers: this.authHeader }
+    );
   }
 
   authenticate(username:string, password:string, server:string, url:string): Observable<ServerResponse > {

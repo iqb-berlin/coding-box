@@ -23,11 +23,11 @@ export class Session {
     ts: number;
 
   @Column({ type: 'bigint', nullable: true })
-    loadCompleteMS: number;
+    loadcompletems: number;
 
   @ManyToOne(() => Booklet, booklet => booklet.sessions, {
     onDelete: 'CASCADE'
   })
-  @JoinColumn({ name: 'bookletId' })
+  @JoinColumn({ name: 'bookletid' })
     booklet: Booklet;
 }

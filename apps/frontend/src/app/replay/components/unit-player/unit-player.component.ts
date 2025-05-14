@@ -93,27 +93,22 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
     unitResponsesChange?: SimpleChange
   ): void {
     try {
-      const parsedUnitDef = JSON.parse(newUnitDef);
-      this.unitDef = parsedUnitDef;
+      this.unitDef = JSON.parse(newUnitDef);
 
-      // process data from `unitResponses`
       if (unitResponsesChange?.currentValue?.responses) {
         this.dataParts = unitResponsesChange.currentValue.responses.reduce(
           (acc: { [key: string]: string }, response: { id: string; content: string }) => {
-            acc[response.id] = response.content;
+            acc[response.id] = JSON.stringify(response.content);
             return acc;
           }, {}
         );
       }
 
-      // Set iframe content
       if (this.iFrameElement) {
         const unitPlayerContent = unitPlayerChange?.currentValue || this.unitPlayer || '';
         this.updateIframeContent(unitPlayerContent.replace(/&quot;/g, ''));
       }
-    } catch (error) {
-      console.error('Error while processing unitDef\n:', error);
-    }
+    } catch (error) { /* empty */ }
   }
 
   constructor(
@@ -152,9 +147,8 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
             this.cleanupValidPagesSubscription();
           }
         },
-        error: err => {
-          console.error('Error in validPages subscription:', err);
-          this.invalidPage.emit('notInList'); // Fallback bei Fehler
+        error: () => {
+          this.invalidPage.emit('notInList');
         }
       });
   }
@@ -285,7 +279,7 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
     }
 
     const unitDefStringified = JSON.stringify(this.unitDef);
-    const postMessageData: any = {
+    const postMessageData: { sessionId: string; unitDefinition: string; type?: string; unitState?: object; playerConfig?: object } = {
       sessionId: this.sessionId,
       unitDefinition: unitDefStringified
     };

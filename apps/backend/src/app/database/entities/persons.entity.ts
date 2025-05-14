@@ -1,6 +1,8 @@
 import {
   Column, Entity, PrimaryGeneratedColumn, Unique
 } from 'typeorm';
+// eslint-disable-next-line import/no-cycle
+import { TcMergeBooklet } from '../services/workspace.service';
 
 @Entity()
 @Unique('persons_pk', ['code', 'group', 'login'])
@@ -25,7 +27,7 @@ class Persons {
     uploaded_at!: Date;
 
   @Column({ type: 'jsonb' })
-    booklets: unknown;
+    booklets: TcMergeBooklet[];
 
   @Column({ type: 'varchar' })
     source!: string;

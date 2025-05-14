@@ -15,6 +15,7 @@ import * as xml2js from 'xml2js';
 import { jwtDecode, JwtPayload } from 'jwt-decode';
 import { MatSnackBar, MatSnackBarRef, TextOnlySnackBar } from '@angular/material/snack-bar';
 import { HttpErrorResponse } from '@angular/common/http';
+import { logger } from 'nx/src/utils/logger';
 import { UnitPlayerComponent } from '../unit-player/unit-player.component';
 import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
@@ -47,7 +48,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   unitDef: string = '';
   isLoaded: Subject<boolean> = new Subject<boolean>();
   page: string | undefined;
-  responses: ResponseDto | undefined = undefined;
+  responses: any | undefined = undefined;
   private testPerson: string = '';
   private unitId: string = '';
   private authToken: string = '';
@@ -156,10 +157,6 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     return reg.test(testperson);
   }
 
-  private static hasResponses(response: ResponseDto): boolean {
-    return !!response;
-  }
-
   private checkUnitId(unitFile: FilesDto[]): void {
     if (!unitFile || !unitFile[0]) {
       ReplayComponent.throwError('UnitIdError');
@@ -197,11 +194,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     this.cacheUnitDefData(unitData.unitDef[0]);
     this.player = unitData.player[0].data;
     this.unitDef = unitData.unitDef[0].data;
-    if (ReplayComponent.hasResponses(unitData.response[0])) {
-      this.responses = unitData.response[0];
-    } else {
-      ReplayComponent.throwError('ResponsesError');
-    }
+    this.responses = unitData.response;
   }
 
   private cacheUnitData(unit: FilesDto) {
@@ -248,9 +241,8 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   private getResponses(workspace: number, authToken?:string): Observable<ResponseDto[]> {
-    const responses = this.backendService
+    return this.backendService
       .getResponses(workspace, this.testPerson, this.unitId, authToken);
-    return responses;
   }
 
   private getUnit(workspace: number, authToken?:string): Observable<FilesDto[]> {
@@ -294,7 +286,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       ]));
     const endTime = performance.now();
     const duration = endTime - startTime;
-    console.log(`Replay-Dauer: ${duration.toFixed(2)}ms`);
+    logger.log(`Replay-Dauer: ${duration.toFixed(2)}ms`);
     this.setIsLoaded();
     return { unitDef: unitData[0], response: unitData[1], player: unitData[2] };
   }
