@@ -26,7 +26,7 @@ import { AuthDataDto } from '../../../../api-dto/auth-data-dto';
   providers: [AuthService]
 })
 export class AppComponent implements OnInit {
-  title = 'Kodierbox';
+  title = 'IQB-Kodierbox';
   loggedInKeycloak: boolean = false;
   errorMessage = '';
   authData :AuthDataDto = AppService.defaultAuthData;
