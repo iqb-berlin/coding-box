@@ -147,7 +147,7 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
             this.cleanupValidPagesSubscription();
           }
         },
-        error: err => {
+        error: () => {
           this.invalidPage.emit('notInList');
         }
       });

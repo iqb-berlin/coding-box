@@ -8,8 +8,8 @@ import {
 } from '@angular/material/table';
 import { Component, OnInit, ViewChild } from '@angular/core';
 import { MatSort, MatSortHeader } from '@angular/material/sort';
-import { FormsModule } from '@angular/forms';
-import { TranslateModule } from '@ngx-translate/core';
+import { FormsModule, UntypedFormGroup } from '@angular/forms';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { MatPaginator, MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { SelectionModel } from '@angular/cdk/collections';
 import { MatLabel } from '@angular/material/form-field';
@@ -25,9 +25,14 @@ import { CommonModule, DatePipe } from '@angular/common';
 import { MatIcon } from '@angular/material/icon';
 import { Router } from '@angular/router';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
+import { MatCheckbox } from '@angular/material/checkbox';
+import { MatAnchor, MatButton } from '@angular/material/button';
+import { MatDialog } from '@angular/material/dialog';
+import { MatSnackBar } from '@angular/material/snack-bar';
 import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
 import { TestGroupsInListDto } from '../../../../../../../api-dto/test-groups/testgroups-in-list.dto';
+import { TestCenterImportComponent } from '../test-center-import/test-center-import.component';
 
 interface P {
   id: number;
@@ -44,34 +49,66 @@ interface P {
   styleUrls: ['./test-results.component.scss'],
   standalone: true,
   providers: [DatePipe],
-  // eslint-disable-next-line max-len
-  imports: [CommonModule, FormsModule, MatExpansionPanelHeader, MatLabel, MatPaginatorModule, TranslateModule, MatTable, MatCellDef, MatHeaderCellDef, MatHeaderRowDef, MatRowDef, MatCell, MatColumnDef, MatHeaderCell, MatHeaderRow, MatRow, MatSort, MatSortHeader, MatAccordion, MatExpansionPanel, MatExpansionPanelTitle, MatList, MatListItem, MatTooltip, MatInput, MatIcon, MatProgressSpinner]
+  imports: [CommonModule,
+    FormsModule,
+    MatExpansionPanelHeader,
+    MatLabel, MatPaginatorModule,
+    TranslateModule,
+    MatTable,
+    MatCellDef,
+    MatHeaderCellDef,
+    MatHeaderRowDef,
+    MatRowDef,
+    MatCell,
+    MatColumnDef,
+    MatHeaderCell,
+    MatHeaderRow,
+    MatRow,
+    MatSort,
+    MatSortHeader,
+    MatAccordion,
+    MatExpansionPanel,
+    MatExpansionPanelTitle,
+    MatList,
+    MatListItem,
+    MatTooltip,
+    MatInput,
+    MatIcon,
+    MatProgressSpinner,
+    MatCheckbox,
+    MatAnchor,
+    MatButton]
 })
 export class TestResultsComponent implements OnInit {
+  selection = new SelectionModel<P>(true, []);
   tableSelectionCheckboxes = new SelectionModel<TestGroupsInListDto>(true, []);
   dataSource !: MatTableDataSource<P>;
-  displayedColumns: string[] = ['code', 'group', 'login', 'uploaded_at'];
-  data: any = [];
-  booklets: any = [];
-  results: any = [];
+  displayedColumns: string[] = ['select', 'code', 'group', 'login', 'uploaded_at'];
+  data: P[] = [];
+  booklets: { id: number; title: string, name:string, units:any }[] = [];
+  results: { [key: string]: any }[] = [];
   responses: any = [];
   logs: any = [];
   totalRecords: number = 0;
-  pageSize: number = 10;
+  pageSize: number = 50;
   pageIndex: number = 0;
-  selectedUnit: any;
-  testPerson: any;
-  selectedBooklet:any;
+  selectedUnit: { alias: string; [key: string]: unknown } | undefined;
+  testPerson!: P;
+  selectedBooklet: { id: number; title: string; name: string; units: unknown } | undefined;
   isLoading: boolean = true;
 
   @ViewChild(MatPaginator) paginator!: MatPaginator;
   @ViewChild(MatSort) sort!: MatSort;
 
   constructor(
+    private dialog: MatDialog,
     private backendService: BackendService,
     private appService: AppService,
-    private router: Router
+    private router: Router,
+    private snackBar: MatSnackBar,
+    private translateService: TranslateService
   ) {
+    this.selectedBooklet = undefined;
   }
 
   ngOnInit(): void {
@@ -102,7 +139,7 @@ export class TestResultsComponent implements OnInit {
         const url = this.router
           .serializeUrl(
             this.router.createUrlTree(
-              [`replay/${this.testPerson.group}@${this.testPerson.code}@${this.selectedBooklet?.id}/${this.selectedUnit?.alias}/1`],
+              [`replay/${this.testPerson.group}@${this.testPerson.code}@${this.selectedBooklet?.id}/${this.selectedUnit?.alias}/0`],
               { queryParams: queryParams })
           );
         window.open(`#/${url}`, '_blank');
@@ -128,7 +165,6 @@ export class TestResultsComponent implements OnInit {
     this.selectedBooklet = booklet;
   }
 
-  // eslint-disable-next-line class-methods-use-this
   groupByPlayerLoading = (array: any[]) => {
     const grouped = [];
     let currentBlock: any[] = [];
@@ -152,13 +188,11 @@ export class TestResultsComponent implements OnInit {
     return this.groupByPlayerLoading(unit.logs);
   }
 
-  // eslint-disable-next-line class-methods-use-this
   formatTimestamp(timestamp: string): string {
     const date = new Date(Number(timestamp));
     return date.toLocaleString();
   }
 
-  // eslint-disable-next-line class-methods-use-this
   getColor(status: string): string {
     switch (status) {
       case 'VALUE_CHANGED':
@@ -181,7 +215,7 @@ export class TestResultsComponent implements OnInit {
     this.createTestResultsList(this.pageIndex, this.pageSize);
   }
 
-  createTestResultsList(page: number = 0, limit: number = 20): void {
+  createTestResultsList(page: number = 0, limit: number = 50): void {
     const validPage = Math.max(0, page);
     this.backendService.getTestResults(this.appService.selectedWorkspaceId, validPage, limit)
       .subscribe(response => {
@@ -189,6 +223,24 @@ export class TestResultsComponent implements OnInit {
         const { data, total } = response;
         this.updateTable(data, total);
       });
+  }
+
+  isAllSelected(): boolean {
+    const numSelected = this.selection.selected.length;
+    const numRows = this.dataSource?.data.length ?? 0;
+    return numSelected === numRows;
+  }
+
+  masterToggle(): void {
+    if (this.isAllSelected()) {
+      this.selection.clear();
+    } else {
+      this.dataSource?.data.forEach(row => this.selection.select(row));
+    }
+  }
+
+  toggleRowSelection(row: P): void {
+    this.selection.toggle(row);
   }
 
   private updateTable(data: any[], total: number): void {
@@ -203,5 +255,88 @@ export class TestResultsComponent implements OnInit {
     this.dataSource = new MatTableDataSource(mappedResults);
     this.totalRecords = total;
     this.dataSource.sort = this.sort;
+  }
+
+  testCenterImport(): void {
+    const dialogRef = this.dialog.open(TestCenterImportComponent, {
+      width: '600px',
+      minHeight: '600px'
+    });
+
+    dialogRef.afterClosed().subscribe((result: boolean | UntypedFormGroup) => {
+      if (result instanceof UntypedFormGroup || result) {
+        this.createTestResultsList(this.pageIndex, this.pageSize);
+      }
+    });
+  }
+
+  onFileSelected(targetElement: EventTarget | null) {
+    if (targetElement) {
+      const inputElement = targetElement as HTMLInputElement;
+      if (inputElement.files && inputElement.files.length > 0) {
+        this.isLoading = true;
+        this.backendService.uploadTestResults(
+          this.appService.selectedWorkspaceId,
+          inputElement.files
+        ).subscribe(() => {
+          setTimeout(() => {
+            this.createTestResultsList(this.pageIndex, this.pageSize);
+          }, 1000);
+          this.isLoading = false;
+        });
+      }
+    }
+  }
+
+  deleteSelectedPersons(): void {
+    this.isLoading = true;
+    const selectedTestPersons = this.selection.selected;
+    this.backendService.deleteTestPersons(
+      this.appService.selectedWorkspaceId,
+      selectedTestPersons.map(person => person.id)
+    ).subscribe(respOk => {
+      if (respOk) {
+        this.snackBar.open(
+          this.translateService.instant('ws-admin.test-group-deleted'),
+          '',
+          { duration: 1000 }
+        );
+        this.createTestResultsList(this.pageIndex, this.pageSize);
+      } else {
+        this.snackBar.open(
+          this.translateService.instant('ws-admin.test-group-not-deleted'),
+          this.translateService.instant('error'),
+          { duration: 1000 }
+        );
+      }
+      this.isLoading = false;
+      this.selection.clear();
+    });
+  }
+
+  codeSelectedPersons(): void {
+    this.isLoading = true;
+    const selectedTestPersons = this.selection.selected;
+    this.backendService.deleteTestPersons(
+      this.appService.selectedWorkspaceId,
+      selectedTestPersons.map(person => person.id)
+    ).subscribe(respOk => {
+      if (respOk) {
+        this.snackBar.open(
+          this.translateService.instant('ws-admin.test-group-deleted'),
+          '',
+          { duration: 1000 }
+        );
+        this.createTestResultsList(this.pageIndex, this.pageSize);
+      } else {
+        this.snackBar.open(
+          this.translateService.instant('ws-admin.test-group-not-deleted'),
+          this.translateService.instant('error'),
+          { duration: 1000 }
+        );
+      }
+      this.isLoading = false;
+      this.selection.clear();
+    });
   }
 }

@@ -28,6 +28,7 @@ import Persons from '../entities/persons.entity';
 import { Unit } from '../entities/unit.entity';
 import { Booklet } from '../entities/booklet.entity';
 import { ResponseEntity } from '../entities/response.entity';
+// eslint-disable-next-line import/no-cycle
 import { Result } from './testcenter.service';
 import { BookletInfo } from '../entities/bookletInfo.entity';
 
@@ -71,6 +72,7 @@ export type File = {
 };
 
 export type Person = {
+  workspace_id: number,
   group: string,
   login: string,
   code: string,
@@ -165,7 +167,6 @@ export type ValidationResult = {
 @Injectable()
 export class WorkspaceService {
   private readonly logger = new Logger(WorkspaceService.name);
-  private cache: Map<string, { data: [Persons[], number]; expiry: number }> = new Map();
 
   constructor(
     @InjectRepository(Workspace)
@@ -236,7 +237,21 @@ export class WorkspaceService {
     });
   }
 
-  async findPersonTestResults(personId: number, workspaceId: number): Promise<any> {
+  async findPersonTestResults(personId: number, workspaceId: number): Promise<{
+    booklet: {
+      id: number;
+      personid: number;
+      name: string;
+      size: number;
+      units: {
+        id: number;
+        bookletid: number;
+        name: string;
+        alias: string | null;
+        results: { id: number; unitid: number }[];
+      }[];
+    };
+  }[]> {
     if (!personId || !workspaceId) {
       throw new Error('Both personId and workspaceId are required.');
     }
@@ -319,25 +334,18 @@ export class WorkspaceService {
 
   async findTestResults(workspace_id: number, options: { page: number; limit: number }): Promise<[Persons[], number]> {
     const { page, limit } = options;
+
     if (!workspace_id || workspace_id <= 0) {
       throw new Error('Invalid workspace_id provided');
     }
-    const MAX_LIMIT = 100;
-    const validPage = Math.max(1, page); // Minimum 1
-    const validLimit = Math.min(Math.max(1, limit), MAX_LIMIT); // Zwischen 1 und MAX_LIMIT
 
-    const cacheKey = `${workspace_id}-${validPage}-${validLimit}`;
-    const cacheTTL = 5 * 60 * 1000;
-
-    const cachedData = this.cache.get(cacheKey);
-    if (cachedData && cachedData.expiry > Date.now()) {
-      this.logger.log(`Cache hit for workspace_id=${workspace_id}, page=${validPage}, limit=${validLimit}`);
-      return cachedData.data;
-    }
+    const MAX_LIMIT = 500;
+    const validPage = Math.max(1, page); // minimum 1
+    const validLimit = Math.min(Math.max(1, limit), MAX_LIMIT); // Between 1 and MAX_LIMIT
 
     try {
       const [results, total] = await this.personsRepository.findAndCount({
-        // where: { workspace_id: workspace_id },
+        where: { workspace_id: workspace_id },
         select: [
           'id',
           'group',
@@ -346,10 +354,9 @@ export class WorkspaceService {
           'uploaded_at'
         ],
         skip: (validPage - 1) * validLimit,
-        take: validLimit
+        take: validLimit,
+        order: { code: 'ASC' }
       });
-
-      this.cache.set(cacheKey, { data: [results, total], expiry: Date.now() + cacheTTL });
 
       return [results, total];
     } catch (error) {
@@ -380,7 +387,6 @@ export class WorkspaceService {
   }
 
   async findPlayer(workspaceId: number, playerName: string): Promise<FilesDto[]> {
-    console.log('workspaceId', workspaceId);
     if (!workspaceId || typeof workspaceId !== 'number') {
       this.logger.error(`Invalid workspaceId provided: ${workspaceId}`);
       throw new Error('Invalid workspaceId parameter');
@@ -665,21 +671,52 @@ export class WorkspaceService {
     return testGroups;
   }
 
-  async deleteTestGroups(workspaceId: string, testGroupNames: string[]): Promise<boolean> {
-    this.logger.log('Delete test groups for workspace ', workspaceId);
-    const mappedTestGroups = testGroupNames.map(testGroup => ({ test_group: testGroup }));
-    const testGroupResponsesData = await this.responsesRepository
-      .find({ where: mappedTestGroups, select: ['id'] });
-    const ids = testGroupResponsesData.map(item => item.id);
-    const chunkSize = 10;
-    const deletePromises = [];
-    for (let i = 0; i < ids.length; i += chunkSize) {
-      const chunk = ids.slice(i, i + chunkSize);
-      const deletePromise = this.responsesRepository.delete(chunk);
-      deletePromises.push(deletePromise);
+  async deleteTestPersons(workspaceId: string, testPersonIds: string): Promise<{ success: boolean; report: { deletedPersons: string[]; deletedBooklets: number[]; deletedUnits: number[]; deletedResponses: number[]; warnings: string[] } }> {
+    this.logger.log('Delete tes person for workspaces ', workspaceId);
+
+    const ids = testPersonIds.split(',');
+    const report = {
+      deletedPersons: [],
+      deletedBooklets: [],
+      deletedUnits: [],
+      deletedResponses: [],
+      warnings: []
+    };
+
+    const booklets = await this.bookletRepository.find({
+      where: { personid: In(ids) }
+    });
+    if (!booklets.length) {
+      this.logger.warn(`Keine Booklets gefunden für Testpersonen ${testPersonIds}`);
+      report.warnings.push(`Keine Booklets gefunden für Testpersonen ${testPersonIds}`);
+      return { success: false, report };
     }
-    const res = await Promise.all(deletePromises);
-    return !!res;
+
+    const bookletIds = booklets.map(booklet => booklet.id);
+    report.deletedBooklets = bookletIds;
+
+    const units = await this.unitRepository.find({
+      where: { bookletid: In(bookletIds) },
+      select: ['id']
+    });
+    const unitIds = units.map(unit => unit.id);
+    report.deletedUnits = unitIds;
+
+    const deletedResponses = await this.responseRepository.delete({ unitid: In(unitIds) });
+    this.logger.log('Successfully deleted responses.');
+    report.deletedResponses = [deletedResponses.affected];
+
+    await this.unitRepository.delete({ id: In(unitIds) });
+    this.logger.log('Successfully deleted units.');
+
+    await this.bookletRepository.delete({ id: In(bookletIds) });
+    this.logger.log('Successfully deleted booklets.');
+
+    await this.personsRepository.delete({ id: In(ids) });
+    this.logger.log('Successfully deleted test persons.');
+    report.deletedPersons = ids;
+
+    return { success: true, report };
   }
 
   async findTestPersons(id: number, testGroup:string): Promise<string[]> {
@@ -825,7 +862,6 @@ export class WorkspaceService {
 
   handleFile(workspaceId: number, file: FileIo): Array<Promise<unknown>> {
     const filePromises: Array<Promise<unknown>> = [];
-    console.log('file', file);
 
     switch (file.mimetype) {
       case 'text/xml':

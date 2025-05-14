@@ -39,8 +39,18 @@ coding-box-search-filter {
   overflow-y: auto;
 }
 
-.upload-buttons{
-  margin: 10px;
+.upload-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+}
+
+.upload-buttons a[mat-raised-button] {
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 a{
@@ -48,6 +58,7 @@ a{
   padding:20px;
   font-size: 16px;
 }
+
 
 mat-row:hover {
   cursor: pointer;
