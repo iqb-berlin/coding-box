@@ -22,8 +22,8 @@ import { BookletInfo } from './entities/bookletInfo.entity';
 import { Person } from './entities/person.entity';
 import { UnitLog } from './entities/unitLog.entity';
 import { UnitLastState } from './entities/unitLastState.entity';
-import { Chunk } from './entities/chunk.entity';
-import { Response } from './entities/response.entity';
+import { ChunkEntity } from './entities/chunk.entity';
+import { ResponseEntity } from './entities/response.entity';
 import { Session } from './entities/session.entity';
 
 @Module({
@@ -35,6 +35,15 @@ import { Session } from './entities/session.entity';
     FileUpload,
     Responses,
     Persons,
+    Person,
+    Unit,
+    Responses,
+    BookletLog,
+    Session,
+    UnitLastState,
+    UnitLog,
+    ResponseEntity,
+    ChunkEntity,
     ResourcePackage,
     WorkspaceUser,
     HttpModule,
@@ -47,8 +56,8 @@ import { Session } from './entities/session.entity';
         username: configService.get('POSTGRES_USER'),
         password: configService.get('POSTGRES_PASSWORD'),
         database: configService.get('POSTGRES_DB'),
-        entities: [Person, BookletInfo, Booklet, Session, BookletLog, Unit, UnitLog, UnitLastState, Chunk, Response,
-          User, Workspace, WorkspaceAdmin, FileUpload, Responses, WorkspaceUser, ResourcePackage, Logs, Persons
+        entities: [Person, BookletInfo, Booklet, Session, BookletLog, Unit, UnitLog, UnitLastState, ResponseEntity,
+          User, Workspace, WorkspaceAdmin, FileUpload, Responses, WorkspaceUser, ResourcePackage, Logs, Persons, ChunkEntity, BookletLog, Session, UnitLog
         ],
         synchronize: false
       }),
@@ -61,9 +70,20 @@ import { Session } from './entities/session.entity';
       FileUpload,
       Logs,
       Responses,
+      ResponseEntity,
       WorkspaceUser,
       ResourcePackage,
-      Persons
+      Persons,
+      Person,
+      Responses,
+      Booklet,
+      BookletInfo,
+      Unit,
+      ChunkEntity,
+      BookletLog,
+      UnitLog,
+      UnitLastState,
+      Session
     ])
   ],
   providers: [UsersService, WorkspaceService, TestcenterService, UploadResultsService],

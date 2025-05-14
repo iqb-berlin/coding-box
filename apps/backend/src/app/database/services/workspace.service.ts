@@ -25,6 +25,12 @@ import { TestGroupsInListDto } from '../../../../../../api-dto/test-groups/testg
 import { ResponseDto } from '../../../../../../api-dto/responses/response-dto';
 // eslint-disable-next-line import/no-cycle
 import Persons from '../entities/persons.entity';
+import { Unit } from '../entities/unit.entity';
+import { Booklet } from '../entities/booklet.entity';
+import { ResponseEntity } from '../entities/response.entity';
+// eslint-disable-next-line import/no-cycle
+import { Result } from './testcenter.service';
+import { BookletInfo } from '../entities/bookletInfo.entity';
 
 function sanitizePath(filePath: string): string {
   const normalizedPath = path.normalize(filePath); // System-basiertes Normalisieren
@@ -42,6 +48,8 @@ export type Response = {
   unitname : string,
   responses : string,
   laststate : string,
+  originalUnitId: string
+
 };
 
 export type Log = {
@@ -64,6 +72,7 @@ export type File = {
 };
 
 export type Person = {
+  workspace_id: number,
   group: string,
   login: string,
   code: string,
@@ -158,7 +167,6 @@ export type ValidationResult = {
 @Injectable()
 export class WorkspaceService {
   private readonly logger = new Logger(WorkspaceService.name);
-  private cache: Map<string, { data: [Persons[], number]; expiry: number }> = new Map();
 
   constructor(
     @InjectRepository(Workspace)
@@ -174,8 +182,15 @@ export class WorkspaceService {
     @InjectRepository(User)
     private usersRepository:Repository<User>,
     @InjectRepository(Persons)
-    private personsRepository:Repository<Persons>
-
+    private personsRepository:Repository<Persons>,
+    @InjectRepository(Unit)
+    private unitRepository:Repository<Unit>,
+    @InjectRepository(Booklet)
+    private bookletRepository:Repository<Booklet>,
+    @InjectRepository(ResponseEntity)
+    private responseRepository:Repository<ResponseEntity>,
+    @InjectRepository(BookletInfo)
+    private bookletInfoRepository:Repository<BookletInfo>
   ) {
   }
 
@@ -222,33 +237,126 @@ export class WorkspaceService {
     });
   }
 
-  async findTestResults(workspace_id: number, options: { page: number; limit: number }): Promise<[Persons[], number]> {
-    const { page, limit } = options;
-    if (!workspace_id || workspace_id <= 0) {
-      throw new Error('Invalid workspace_id provided');
-    }
-    const MAX_LIMIT = 100;
-    const validPage = Math.max(1, page); // Minimum 1
-    const validLimit = Math.min(Math.max(1, limit), MAX_LIMIT); // Zwischen 1 und MAX_LIMIT
-
-    const cacheKey = `${workspace_id}-${validPage}-${validLimit}`;
-    const cacheTTL = 5 * 60 * 1000;
-
-    const cachedData = this.cache.get(cacheKey);
-    if (cachedData && cachedData.expiry > Date.now()) {
-      this.logger.log(`Cache hit for workspace_id=${workspace_id}, page=${validPage}, limit=${validLimit}`);
-      return cachedData.data;
+  async findPersonTestResults(personId: number, workspaceId: number): Promise<{
+    booklet: {
+      id: number;
+      personid: number;
+      name: string;
+      size: number;
+      units: {
+        id: number;
+        bookletid: number;
+        name: string;
+        alias: string | null;
+        results: { id: number; unitid: number }[];
+      }[];
+    };
+  }[]> {
+    if (!personId || !workspaceId) {
+      throw new Error('Both personId and workspaceId are required.');
     }
 
     try {
-      const [results, total] = await this.personsRepository.findAndCount({
-        // where: { workspace_id: workspace_id },
-        skip: (validPage - 1) * validLimit,
-        take: validLimit
+      this.logger.log(
+        `Fetching booklets, bookletInfo data, units, and test results for personId: ${personId} and workspaceId: ${workspaceId}`
+      );
+
+      const booklets = await this.bookletRepository.find({
+        where: { personid: personId },
+        select: ['id', 'personid', 'infoid']
       });
 
-      // save results in cache
-      this.cache.set(cacheKey, { data: [results, total], expiry: Date.now() + cacheTTL });
+      if (!booklets || booklets.length === 0) {
+        this.logger.log(`No booklets found for personId: ${personId}`);
+        return [];
+      }
+
+      const bookletIds = booklets.map(booklet => booklet.id);
+      const bookletInfoIds = booklets.map(booklet => booklet.infoid);
+      const bookletInfoData = await this.bookletInfoRepository.find({
+        where: { id: In(bookletInfoIds) },
+        select: ['id', 'name', 'size']
+      });
+
+      const units = await this.unitRepository.find({
+        where: { bookletid: In(bookletIds) },
+        select: ['id', 'name', 'alias', 'bookletid']
+      });
+
+      const unitIds = units.map(unit => unit.id);
+
+      const responses = await this.responseRepository.find({
+        where: { unitid: In(unitIds) }
+      });
+
+      const uniqueResponses = Array.from(
+        new Map(responses.map(response => [response.id, response])).values()
+      );
+
+      const unitResultMap = new Map<number, { id: number; unitid: number }[]>();
+      for (const response of uniqueResponses) {
+        if (!unitResultMap.has(response.unitid)) {
+          unitResultMap.set(response.unitid, []);
+        }
+        unitResultMap.get(response.unitid)?.push(response);
+      }
+
+      const structuredResults = booklets.map(booklet => {
+        const bookletInfo = bookletInfoData.find(info => info.id === booklet.infoid);
+        return {
+          booklet: {
+            id: booklet.id,
+            personid: booklet.personid,
+            name: bookletInfo.name,
+            size: bookletInfo.size,
+            units: units
+              .filter(unit => unit.bookletid === booklet.id)
+              .map(unit => ({
+                id: unit.id,
+                bookletid: unit.bookletid,
+                name: unit.name,
+                alias: unit.alias,
+                results: unitResultMap.get(unit.id) || []
+              }))
+          }
+        };
+      });
+
+      return structuredResults;
+    } catch (error) {
+      this.logger.error(
+        `Failed to fetch booklets, bookletInfo, units, and results for personId: ${personId} and workspaceId: ${workspaceId}`,
+        error.stack
+      );
+      throw new Error('An error occurred while fetching booklets, their info, units, and test results.');
+    }
+  }
+
+  async findTestResults(workspace_id: number, options: { page: number; limit: number }): Promise<[Persons[], number]> {
+    const { page, limit } = options;
+
+    if (!workspace_id || workspace_id <= 0) {
+      throw new Error('Invalid workspace_id provided');
+    }
+
+    const MAX_LIMIT = 500;
+    const validPage = Math.max(1, page); // minimum 1
+    const validLimit = Math.min(Math.max(1, limit), MAX_LIMIT); // Between 1 and MAX_LIMIT
+
+    try {
+      const [results, total] = await this.personsRepository.findAndCount({
+        where: { workspace_id: workspace_id },
+        select: [
+          'id',
+          'group',
+          'login',
+          'code',
+          'uploaded_at'
+        ],
+        skip: (validPage - 1) * validLimit,
+        take: validLimit,
+        order: { code: 'ASC' }
+      });
 
       return [results, total];
     } catch (error) {
@@ -319,7 +427,7 @@ export class WorkspaceService {
     this.logger.log(`Fetching unit definition for unit: ${unitId} in workspace: ${workspaceId}`);
     try {
       const files = await this.fileUploadRepository.find({
-        select: ['file_id', 'filename'], // Nur notwendige Felder auswählen
+        select: ['file_id', 'filename', 'data'],
         where: {
           file_id: `${unitId}.VOUD`,
           workspace_id: workspaceId
@@ -341,42 +449,42 @@ export class WorkspaceService {
     }
   }
 
-  async findResponse(workspace_id: number, testPerson:string, unitId:string): Promise<ResponseDto[]> {
-    this.logger.log('Returning response for test person', testPerson);
-    const [group, code, booklet] = testPerson.split('@');
-
-    const person = await this.personsRepository.find(
-      { where: { group: group, code: code } });
-    if (person) {
-      const booklets : any = person[0].booklets;
-      const foundBooklet = booklets.find((b: any) => b.id === booklet);
-      const unit = foundBooklet.units.find((u: any) => u.id === unitId);
-      const elementCodesChunk = unit.chunks.find((c: any) => c.id === 'elementCodes');
-      const content = JSON.stringify(unit.subforms[0].responses);
-      const response = {
-        id: elementCodesChunk.id,
-        responseType: elementCodesChunk.type,
-        ts: elementCodesChunk.ts,
-        content: content
-      };
-      return [{
-        id: 5,
-        test_person: '',
-        unit_id: '',
-
-        test_group: '',
-
-        workspace_id: 1,
-
-        created_at: new Date(),
-
-        responses:
-          [response],
-
-        booklet_id: ''
-      }];
+  async findUnitResponse(workspaceId:number, connector: string, unitId: string): Promise<any> {
+    const [group, code, rest] = connector.split('@');
+    const person = await this.personsRepository.findOne({ where: { code, group } });
+    if (!person) {
+      throw new Error(`Person mit ID ${person.id} wurde nicht gefunden.`);
     }
-    return [];
+    const booklets = await this.bookletRepository.find({
+      where: { personid: person.id }
+    });
+    if (!booklets || booklets.length === 0) {
+      throw new Error(`Keine Booklets für die Person mit ID ${person.id} gefunden.`);
+    }
+    const unit = await this.unitRepository.findOne({
+      where: {
+        bookletid: In(booklets.map(booklet => booklet.id)),
+        alias: unitId
+      },
+      relations: ['responses']
+    });
+    const mappedResponses = unit.responses// Filter für subform = 'elementCodes'
+      .filter(response => response.subform === 'elementCodes')
+      .map(response => ({
+        id: response.variableid,
+        value: response.value,
+        status: response.status
+      }));
+
+    const uniqueResponses = mappedResponses.filter(
+      (response, index, self) => index === self.findIndex(r => r.id === response.id)
+    );
+    return {
+      responses: [{
+        id: 'elementCodes',
+        content: uniqueResponses
+      }]
+    };
   }
 
   async findWorkspaceResponses(workspace_id: number): Promise<ResponseDto[]> {
@@ -563,21 +671,52 @@ export class WorkspaceService {
     return testGroups;
   }
 
-  async deleteTestGroups(workspaceId: string, testGroupNames: string[]): Promise<boolean> {
-    this.logger.log('Delete test groups for workspace ', workspaceId);
-    const mappedTestGroups = testGroupNames.map(testGroup => ({ test_group: testGroup }));
-    const testGroupResponsesData = await this.responsesRepository
-      .find({ where: mappedTestGroups, select: ['id'] });
-    const ids = testGroupResponsesData.map(item => item.id);
-    const chunkSize = 10;
-    const deletePromises = [];
-    for (let i = 0; i < ids.length; i += chunkSize) {
-      const chunk = ids.slice(i, i + chunkSize);
-      const deletePromise = this.responsesRepository.delete(chunk);
-      deletePromises.push(deletePromise);
+  async deleteTestPersons(workspaceId: string, testPersonIds: string): Promise<{ success: boolean; report: { deletedPersons: string[]; deletedBooklets: number[]; deletedUnits: number[]; deletedResponses: number[]; warnings: string[] } }> {
+    this.logger.log('Delete tes person for workspaces ', workspaceId);
+
+    const ids = testPersonIds.split(',');
+    const report = {
+      deletedPersons: [],
+      deletedBooklets: [],
+      deletedUnits: [],
+      deletedResponses: [],
+      warnings: []
+    };
+
+    const booklets = await this.bookletRepository.find({
+      where: { personid: In(ids) }
+    });
+    if (!booklets.length) {
+      this.logger.warn(`Keine Booklets gefunden für Testpersonen ${testPersonIds}`);
+      report.warnings.push(`Keine Booklets gefunden für Testpersonen ${testPersonIds}`);
+      return { success: false, report };
     }
-    const res = await Promise.all(deletePromises);
-    return !!res;
+
+    const bookletIds = booklets.map(booklet => booklet.id);
+    report.deletedBooklets = bookletIds;
+
+    const units = await this.unitRepository.find({
+      where: { bookletid: In(bookletIds) },
+      select: ['id']
+    });
+    const unitIds = units.map(unit => unit.id);
+    report.deletedUnits = unitIds;
+
+    const deletedResponses = await this.responseRepository.delete({ unitid: In(unitIds) });
+    this.logger.log('Successfully deleted responses.');
+    report.deletedResponses = [deletedResponses.affected];
+
+    await this.unitRepository.delete({ id: In(unitIds) });
+    this.logger.log('Successfully deleted units.');
+
+    await this.bookletRepository.delete({ id: In(bookletIds) });
+    this.logger.log('Successfully deleted booklets.');
+
+    await this.personsRepository.delete({ id: In(ids) });
+    this.logger.log('Successfully deleted test persons.');
+    report.deletedPersons = ids;
+
+    return { success: true, report };
   }
 
   async findTestPersons(id: number, testGroup:string): Promise<string[]> {
@@ -723,7 +862,6 @@ export class WorkspaceService {
 
   handleFile(workspaceId: number, file: FileIo): Array<Promise<unknown>> {
     const filePromises: Array<Promise<unknown>> = [];
-    console.log('file', file);
 
     switch (file.mimetype) {
       case 'text/xml':
@@ -862,7 +1000,7 @@ export class WorkspaceService {
     return this.fileUploadRepository.upsert({
       filename: file.originalname,
       workspace_id: workspaceId,
-      file_id: resourceId, // TODO: Ensure case insensitivity if required
+      file_id: resourceId.toUpperCase(),
       file_type: 'Resource',
       file_size: file.size,
       data: file.buffer.toString()

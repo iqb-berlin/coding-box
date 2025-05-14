@@ -13,9 +13,9 @@ import { UnitLog } from './unitLog.entity';
 // eslint-disable-next-line import/no-cycle
 import { UnitLastState } from './unitLastState.entity';
 // eslint-disable-next-line import/no-cycle
-import { Chunk } from './chunk.entity';
+import { ChunkEntity } from './chunk.entity';
 // eslint-disable-next-line import/no-cycle
-import { Response } from './response.entity';
+import { ResponseEntity } from './response.entity';
 
 @Entity('unit')
 export class Unit {
@@ -23,7 +23,7 @@ export class Unit {
     id: number;
 
   @Column({ type: 'bigint' })
-    bookletId: number;
+    bookletid: number;
 
   @Column({ type: 'text' })
     name: string;
@@ -34,7 +34,7 @@ export class Unit {
   @ManyToOne(() => Booklet, booklet => booklet.units, {
     onDelete: 'CASCADE'
   })
-  @JoinColumn({ name: 'bookletId' })
+  @JoinColumn({ name: 'bookletid' })
     booklet: Booklet;
 
   @OneToMany(() => UnitLog, unitLog => unitLog.unit)
@@ -43,9 +43,9 @@ export class Unit {
   @OneToMany(() => UnitLastState, unitLastState => unitLastState.unit)
     unitLastStates: UnitLastState[];
 
-  @OneToMany(() => Chunk, chunk => chunk.unit)
-    chunks: Chunk[];
+  @OneToMany(() => ChunkEntity, chunk => chunk.unit)
+    chunks: ChunkEntity[];
 
-  @OneToMany(() => Response, response => response.unit)
-    responses: Response[];
+  @OneToMany(() => ResponseEntity, response => response.unit)
+    responses: ResponseEntity[];
 }

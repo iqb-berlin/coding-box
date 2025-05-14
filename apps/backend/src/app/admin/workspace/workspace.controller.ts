@@ -3,7 +3,7 @@ import {
   Body,
   Controller,
   Delete,
-  Get, NotFoundException, Param, Patch,
+  Get, Param, Patch,
   Post, Query, UploadedFiles, UseGuards, UseInterceptors
 } from '@nestjs/common';
 import {
@@ -11,6 +11,7 @@ import {
   ApiBearerAuth, ApiCreatedResponse, ApiNotFoundResponse, ApiOkResponse, ApiParam, ApiTags
 } from '@nestjs/swagger';
 import { FilesInterceptor } from '@nestjs/platform-express';
+import { logger } from 'nx/src/utils/logger';
 import { WorkspaceInListDto } from '../../../../../../api-dto/workspaces/workspace-in-list-dto';
 import { WorkspaceFullDto } from '../../../../../../api-dto/workspaces/workspace-full-dto';
 import { CreateWorkspaceDto } from '../../../../../../api-dto/workspaces/create-workspace-dto';
@@ -31,6 +32,9 @@ import WorkspaceUser from '../../database/entities/workspace_user.entity';
 import { UploadResultsService } from '../../database/services/upload-results.service';
 import Persons from '../../database/entities/persons.entity';
 import { FilesValidationDto } from '../../../../../../api-dto/files/files-validation.dto';
+import { Booklet } from '../../database/entities/booklet.entity';
+import { Unit } from '../../database/entities/unit.entity';
+import { ResponseEntity } from '../../database/entities/response.entity';
 
 export type Result = {
   success: boolean,
@@ -79,7 +83,7 @@ export class WorkspaceController {
     if (!userId || !workspaceId || !duration) {
       throw new BadRequestException('Invalid input parameters');
     }
-    console.log(`Generating token for user ${userId} in workspace ${workspaceId} with duration ${duration}s`);
+    logger.log(`Generating token for user ${userId} in workspace ${workspaceId} with duration ${duration}s`);
 
     return this.authService.createToken(userId, workspaceId, duration);
   }
@@ -137,7 +141,7 @@ export class WorkspaceController {
     try {
       const workspace = await this.workspaceService.findOne(id);
       if (!workspace) {
-        throw new NotFoundException('Admin workspace not found.');
+        logger.error('Admin workspace not found.');
       }
       return workspace;
     } catch (error) {
@@ -196,6 +200,17 @@ export class WorkspaceController {
     };
   }
 
+  @Get(':workspace_id/test-results/:personId')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiOkResponse({ description: 'Test results retrieved successfully.' })
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  async findPersonTestResults(
+    @Param('workspace_id') workspace_id: number,
+      @Param('personId') personId: number
+  ): Promise<any> {
+    return this.workspaceService.findPersonTestResults(personId, workspace_id);
+  }
+
   @Get(':workspace_id/users')
   @ApiTags('admin workspace users')
   @ApiBearerAuth()
@@ -225,10 +240,7 @@ export class WorkspaceController {
       }
       return users;
     } catch (error) {
-      console.error(`Error retrieving users for workspace ${workspaceId}`, error);
-      throw new BadRequestException(
-        `Failed to retrieve users for workspace ${workspaceId}. Please try again later.`
-      );
+      logger.error(`Error retrieving users for workspace ${workspaceId}`);
     }
   }
 
@@ -253,7 +265,7 @@ export class WorkspaceController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async findPlayer(@Param('workspace_id') workspace_id: number,
     @Param('playerName') playerName:string): Promise<FilesDto[]> {
-    return this.workspaceService.findPlayer(workspace_id, playerName);
+    return this.workspaceService.findPlayer(Number(workspace_id), playerName);
   }
 
   @Get(':workspace_id/units/:testPerson')
@@ -270,14 +282,12 @@ export class WorkspaceController {
     return this.workspaceService.findTestGroups(workspace_id);
   }
 
-  // Todo: use query params
-  @Delete(':workspace_id/test-groups/:testGroupNames')
+  @Delete(':workspace_id/test-results')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async deleteTestGroups(
-    @Param('testGroupNames')testGroupNames:string,
-      @Param('workspace_id')workspaceId:string): Promise<boolean> {
-    const splittedTestGroupNames = testGroupNames.split(';');
-    return this.workspaceService.deleteTestGroups(workspaceId, splittedTestGroupNames);
+    @Query('testPersons')testPersonIds:string,
+      @Param('workspace_id')workspaceId:string): Promise<{ success: boolean; report: { deletedPersons: string[]; deletedBooklets: number[]; deletedUnits: number[]; deletedResponses: number[]; warnings: string[] } }> {
+    return this.workspaceService.deleteTestPersons(workspaceId, testPersonIds);
   }
 
   @Get(':workspace_id/test-groups/:testGroup')
@@ -312,7 +322,7 @@ export class WorkspaceController {
   async findResponse(@WorkspaceId() id: number,
     @Param('testPerson') testPerson:string,
     @Param('unitId') unitId:string): Promise<ResponseDto[]> {
-    return this.workspaceService.findResponse(id, testPerson, unitId);
+    return this.workspaceService.findUnitResponse(id, testPerson, unitId);
   }
 
   @Get(':workspace_id/responses')
@@ -343,7 +353,7 @@ export class WorkspaceController {
     try {
       return await this.workspaceService.uploadTestFiles(workspaceId, files);
     } catch (error) {
-      console.error('Error uploading test files:', error);
+      logger.error('Error uploading test files:');
       throw new BadRequestException('Failed to upload test files. Please try again.');
     }
   }
@@ -380,7 +390,7 @@ export class WorkspaceController {
     try {
       return await this.uploadResults.uploadTestResults(workspace_id, files);
     } catch (error) {
-      console.error('Error uploading test results:', error.message);
+      logger.error('Error uploading test results!');
       throw new BadRequestException('Uploading test results failed. Please try again.');
     }
   }

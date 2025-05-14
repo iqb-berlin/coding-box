@@ -1,6 +1,10 @@
-import { Entity, Column, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Entity, Column, PrimaryGeneratedColumn, Unique
+} from 'typeorm';
 
-@Entity('bookletInfo')
+@Entity('bookletinfo')
+@Unique('bookletinfo_pk', ['name'])
+
 export class BookletInfo {
   @PrimaryGeneratedColumn()
     id: number;
