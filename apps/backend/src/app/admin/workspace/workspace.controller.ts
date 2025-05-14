@@ -359,6 +359,13 @@ export class WorkspaceController {
     return this.workspaceService.findWorkspaceResponses(id);
   }
 
+  @Get(':workspace_id/coding')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiParam({ name: 'workspace_id', type: Number })
+  async codeTestPersons(@Query('testPersons') testPersons: string, @WorkspaceId() workspace_id: number): Promise<boolean> {
+    return this.workspaceService.codeTestPersons(workspace_id, testPersons);
+  }
+
   @Post(':workspace_id/upload')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiBearerAuth()
