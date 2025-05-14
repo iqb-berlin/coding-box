@@ -1,4 +1,5 @@
-/* eslint-disable no-restricted-syntax, guard-for-in, no-return-assign, consistent-return */
+/* eslint-disable guard-for-in, no-return-assign, consistent-return */
+import * as Autocoder from '@iqb/responses';
 
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -136,6 +137,9 @@ export type TcMergeResponse = {
   id:string,
   status:string,
   value:string,
+  subform?:string,
+  code?:string,
+  score?:string,
 };
 
 export type TcMergeLastState = {
@@ -416,6 +420,117 @@ export class WorkspaceService {
     this.logger.log(`Delete test files for workspace ${workspace_id}`);
     const res = await this.fileUploadRepository.delete(fileIds);
     return !!res;
+  }
+
+  async codeTestPersons(workspace_id: number, testPersonIds: string): Promise<boolean> {
+    const ids = testPersonIds.split(',');
+    this.logger.log(`Verarbeite Personen ${testPersonIds} für Workspace ${workspace_id}`);
+
+    try {
+      const persons = await this.personsRepository.find({
+        where: { workspace_id, id: In(ids) }
+      });
+
+      if (!persons || persons.length === 0) {
+        this.logger.warn('Keine Personen gefunden mit den angegebenen IDs.');
+        return false;
+      }
+
+      for (const person of persons) {
+        this.logger.log(`Person gefunden: ${person.id}. Verarbeite Booklets...`);
+
+        const booklets = await this.bookletRepository.find({
+          where: { personid: person.id }
+        });
+
+        if (!booklets || booklets.length === 0) {
+          this.logger.log(`Keine Booklets für Person ${person.id} gefunden.`);
+          continue;
+        }
+
+        for (const booklet of booklets) {
+          this.logger.log(`- Booklet gefunden: ${booklet.id}. Verarbeite Einheiten...`);
+
+          const units = await this.unitRepository.find({
+            where: { bookletid: booklet.id }
+          });
+
+          if (!units || units.length === 0) {
+            this.logger.log(`Keine Einheiten für Booklet ${booklet.id} gefunden.`);
+            continue;
+          }
+
+          for (const unit of units) {
+            this.logger.log(`-- Einheit gefunden: ${unit.id}. Verarbeite Antworten...`);
+            const testFile = await this.fileUploadRepository
+              .findOne({ where: { file_id: unit.alias.toUpperCase() } });
+
+            if (!testFile) {
+              this.logger.log(`--- Keine Testdatei für Einheit ${unit.id} gefunden.`);
+              continue;
+            }
+
+            this.logger.log(`-- Testdatei ${testFile.filename} für Einheit ${unit.id} gefunden.`);
+            let scheme = new Autocoder.CodingScheme({});
+
+            try {
+              const $ = cheerio.load(testFile.data);
+              const codingSchemeRefText = $('codingSchemeRef').text();
+              if (codingSchemeRefText) {
+                const fileRecord = await this.fileUploadRepository.findOne({
+                  where: { file_id: codingSchemeRefText.toUpperCase() },
+                  select: ['data', 'filename']
+                });
+                if (fileRecord) {
+                  scheme = new Autocoder.CodingScheme(JSON.parse(JSON.stringify(fileRecord?.data)));
+                }
+
+                this.logger.log('--- CodingSchemeRef gefunden: ');
+              } else {
+                this.logger.log('--- Kein CodingSchemeRef-Tag gefunden.');
+              }
+            } catch (error) {
+              this.logger.error(`--- Fehler beim Verarbeiten der Datei ${testFile.filename}: ${error.message}`);
+            }
+
+            const responses = await this.responseRepository.find({
+              where: { unitid: unit.id }, select: ['variableid', 'value', 'status']
+            });
+            const mappedResponses = responses.map(response => ({
+              id: response.variableid,
+              value: response.value,
+              status: response.status
+            }));
+            console.log(scheme.variableCodings[0]?.codes);
+
+            const codedResponses = scheme.code(mappedResponses as Autocoder.Response[])
+              .map(res => ({
+                value: res.value,
+                status: res.status,
+                variableid: res.id,
+                unitid: unit.id,
+                code: res.code,
+                score: res.score
+              }));
+            console.log(codedResponses);
+            await this.responseRepository.save(
+              codedResponses.map(res => this.responseRepository.create(res as ResponseEntity))
+            );
+
+            if (responses && responses.length > 0) {
+              this.logger.log(`--- ${responses.length} Antworten für Einheit ${unit.id} gefunden`);
+            } else {
+              this.logger.log(`--- Keine Antworten für Einheit ${unit.id} gefunden.`);
+            }
+          }
+        }
+      }
+
+      return true;
+    } catch (error) {
+      this.logger.error('Fehler beim Verarbeiten der Personen:', error);
+      return false;
+    }
   }
 
   async findPlayer(workspaceId: number, playerName: string): Promise<FilesDto[]> {

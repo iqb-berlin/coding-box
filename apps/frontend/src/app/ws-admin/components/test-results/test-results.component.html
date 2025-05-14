@@ -16,7 +16,7 @@
       <mat-icon>delete</mat-icon>
       Testperson löschen
     </a>
-    <a mat-raised-button color="primary" [disabled]="selection.selected.length === 0" >
+    <a mat-raised-button color="primary" [disabled]="selection.selected.length === 0" (click)="codeSelectedPersons()">
       <mat-icon>code</mat-icon>
       Kodieren
     </a>
@@ -141,7 +141,7 @@
         <mat-list-item
           *ngFor="let response of this.responses"
           class="hoverable"
-          [matTooltip]="response.value + ' ' + response.status"
+          [matTooltip]="response.value + ' ' + response.status + ' ' + response.code + ' ' + response.score"
           matTooltipPosition="right"
         >
           <div class="fx-row-start-start">
