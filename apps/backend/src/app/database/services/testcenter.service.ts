@@ -181,14 +181,13 @@ export class TestcenterService {
           await this.responsesRepository.upsert(cleanedRows, ['test_person', 'unit_id']);
         } catch (error) {
           console.error('Error processing chunk:', error.message || error);
-          throw error; // Rethrow to handle it globally
         }
       });
 
       try {
         await Promise.all(unitResponsesPromises);
         result.success = true;
-        result.responses = report.data.length; // Assuming `report.data` is accessible here
+        result.responses = report.data.length;
       } catch (error) {
         result.success = false;
       }
@@ -231,7 +230,6 @@ export class TestcenterService {
           });
 
           if (logsResponse && logsResponse.data) {
-            // Convert logs into the desired format
             const logsToSave: LogsDto[] = logsResponse.data.map((log: Log) => ({
               unit_id: log.unitname,
               timestamp: log.timestamp,
@@ -242,7 +240,6 @@ export class TestcenterService {
               id: undefined
             }));
 
-            // Save logs (chunk-wise processing for large data volumes)
             await this.logsRepository.save(logsToSave, { chunk: 50000 });
           }
         };
@@ -250,11 +247,9 @@ export class TestcenterService {
         // Retrieve and save all logs for the respective chunks in parallel
         await Promise.all(chunks.map(fetchLogsForChunks));
 
-        // Record success
         result.success = true;
         result.logs = report.data.length;
       } catch (error) {
-        // handle errors
         result.success = false;
         console.error('Error fetching logs:', error.message);
       }
@@ -289,7 +284,6 @@ export class TestcenterService {
         //   .map(file => this.getPackage(file, server, tc_workspace, authToken));
         // promises = [...promises, ...packagesPromises];
 
-        // TODO: Chunks!
         if (player === 'true' && playerFiles.length > 0) {
           const playerPromises = playerFiles
             .map(file => this.getFile(file, server, tc_workspace, authToken, url));
@@ -366,7 +360,6 @@ export class TestcenterService {
       Authtoken: authToken
     };
 
-    // Construct the request URL based on the provided url or fallback to the default URL
     const requestUrl = url ?
       `${url}/api/workspace/${tcWorkspace}/file/${file.type}/${file.name}` :
       `http://iqb-testcenter${server}.de/api/workspace/${tcWorkspace}/file/${file.type}/${file.name}`;
