@@ -1,7 +1,5 @@
 # CodingBox
 
-CodingBox is a versatile project composed of a frontend, backend, and various supporting resources. This project was developed to create and manage modern, scalable applications with a focus on testing, linting, and web development best practices.
-
 ## Project Structure
 
 The project structure is organized in a way that ensures easy development and maintenance. The main folders and files include:
@@ -82,17 +80,6 @@ For production environments, you can use the file `docker-compose.coding-box.pro
 
 ## Key Features
 
-- **Role and Workspace Protection**  
-  The frontend and backend include security measures. For example, the `WorkspaceGuard` implemented in the backend ensures that users can only access specific workspaces if they have the required permissions.
-
-- **Automated Testing**  
-  This project includes robust unit and integration tests with Jest to ensure code stability.
-
-- **Modularity**  
-  Thanks to the modular structure of Angular and NestJS, the project is easily scalable and extensible.
-
-- **Database Integration**  
-  Supports relational databases via TypeORM.
 
 ---
 

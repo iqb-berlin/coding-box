@@ -31,6 +31,7 @@ import { ResponseEntity } from '../entities/response.entity';
 // eslint-disable-next-line import/no-cycle
 import { Result } from './testcenter.service';
 import { BookletInfo } from '../entities/bookletInfo.entity';
+import { FileDownloadDto } from '../../../../../../api-dto/files/file-download.dto';
 
 function sanitizePath(filePath: string): string {
   const normalizedPath = path.normalize(filePath); // System-basiertes Normalisieren
@@ -496,7 +497,7 @@ export class WorkspaceService {
   async validateTestFiles(workspaceId: number): Promise<ValidationData[]> {
     try {
       const testTakers = await this.fileUploadRepository.find({
-        where: { workspace_id: workspaceId, file_type: 'TestTakers' }
+        where: { workspace_id: workspaceId, file_type: In(['TestTakers', 'Testtakers']) }
       });
 
       if (!testTakers || testTakers.length === 0) {
@@ -505,7 +506,6 @@ export class WorkspaceService {
       }
       const validationResults = [];
       for (const testTaker of testTakers) {
-        // eslint-disable-next-line no-await-in-loop
         const validationResult = await this.processTestTaker(testTaker);
         if (validationResult) {
           validationResults.push(validationResult);
@@ -532,7 +532,6 @@ export class WorkspaceService {
     }
   }
 
-  // eslint-disable-next-line class-methods-use-this
   private createEmptyValidationData(): ValidationData[] {
     return [{
       testTaker: '',
@@ -599,7 +598,6 @@ export class WorkspaceService {
     };
   }
 
-  // eslint-disable-next-line class-methods-use-this
   private extractXmlData(
     bookletTags: cheerio.Cheerio<any>,
     unitTags: cheerio.Cheerio<any>
@@ -851,13 +849,32 @@ export class WorkspaceService {
         failedFiles.forEach(({ file, reason }) => this.logger.warn(`File: ${JSON.stringify(file)}, Reason: ${reason}`)
         );
       }
-
-      // Return 'true' only if all files were uploaded successfully
       return failedFiles.length === 0;
     } catch (error) {
       this.logger.error(`Unexpected error while uploading files for workspace ${workspace_id}:`, error);
-      throw error; // Re-throw the error to propagate it further
     }
+  }
+
+  async downloadTestFile(workspace_id: number, fileId: number): Promise<FileDownloadDto> {
+    this.logger.log(`Downloading file with ID ${fileId} for workspace ${workspace_id}`);
+
+    const file = await this.fileUploadRepository.findOne({
+      where: { id: fileId, workspace_id: workspace_id }
+    });
+
+    if (!file) {
+      this.logger.warn(`File with ID ${fileId} not found in workspace ${workspace_id}`);
+      throw new Error('File not found');
+    }
+    this.logger.log(`File ${file.filename} found. Preparing to convert to Base64.`);
+    const base64Data = Buffer.from(file.data, 'binary').toString('base64');
+    this.logger.log(`File ${file.filename} successfully converted to Base64.`);
+
+    return {
+      filename: file.filename,
+      base64Data,
+      mimeType: 'application/xml'
+    };
   }
 
   handleFile(workspaceId: number, file: FileIo): Array<Promise<unknown>> {
@@ -1086,9 +1103,9 @@ export class WorkspaceService {
         file_id: In(bookletNames.map(b => b.toUpperCase()))
       });
       const allUnitIds: string[] = [];
-      const allCodingSchemeRefs: any[] = [];
-      const allDefinitionRefs: any[] = [];
-      const allPlayerRefs: any[] = [];
+      const allCodingSchemeRefs: string[] = [];
+      const allDefinitionRefs: string[] = [];
+      const allPlayerRefs: string[] = [];
 
       for (const booklet of existingBooklets) {
         try {
@@ -1125,7 +1142,6 @@ export class WorkspaceService {
           const fileData = unit.data;
           const $ = cheerio.load(fileData, { xmlMode: true });
           $('Unit').each((_, element) => {
-            const unitId = $(element).attr('id');
             const codingSchemeRef = $(element).find('CodingSchemeRef').text();
             const definitionRef = $(element).find('DefinitionRef').text();
             const playerRef = $(element).find('DefinitionRef').attr('player')
@@ -1151,7 +1167,6 @@ export class WorkspaceService {
       const existingResources = await this.fileUploadRepository.findBy({
         file_type: 'Resource'
       });
-      // console.log('existingResources', existingResources);
       const allResourceIds = existingResources.map(resource => resource.file_id);
       const missingCodingSchemeRefs = allCodingSchemeRefs.filter(ref => !allResourceIds.includes(ref));
       const missingDefinitionRefs = allDefinitionRefs.filter(ref => !allResourceIds.includes(ref));

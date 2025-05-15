@@ -32,9 +32,7 @@ import WorkspaceUser from '../../database/entities/workspace_user.entity';
 import { UploadResultsService } from '../../database/services/upload-results.service';
 import Persons from '../../database/entities/persons.entity';
 import { FilesValidationDto } from '../../../../../../api-dto/files/files-validation.dto';
-import { Booklet } from '../../database/entities/booklet.entity';
-import { Unit } from '../../database/entities/unit.entity';
-import { ResponseEntity } from '../../database/entities/response.entity';
+import { FileDownloadDto } from '../../../../../../api-dto/files/file-download.dto';
 
 export type Result = {
   success: boolean,
@@ -207,7 +205,21 @@ export class WorkspaceController {
   async findPersonTestResults(
     @Param('workspace_id') workspace_id: number,
       @Param('personId') personId: number
-  ): Promise<any> {
+  ): Promise<{
+        booklet: {
+          id: number;
+          personid: number;
+          name: string;
+          size: number;
+          units: {
+            id: number;
+            bookletid: number;
+            name: string;
+            alias: string | null;
+            results: { id: number; unitid: number }[];
+          }[];
+        };
+      }[]> {
     return this.workspaceService.findPersonTestResults(personId, workspace_id);
   }
 
@@ -234,13 +246,14 @@ export class WorkspaceController {
     try {
       const users = await this.workspaceService.findUsers(workspaceId);
       if (!users || users.length === 0) {
-        throw new BadRequestException(
+        logger.log(
           `No users found for workspace ID ${workspaceId}`
         );
       }
       return users;
     } catch (error) {
       logger.error(`Error retrieving users for workspace ${workspaceId}`);
+      return [];
     }
   }
 
@@ -354,7 +367,25 @@ export class WorkspaceController {
       return await this.workspaceService.uploadTestFiles(workspaceId, files);
     } catch (error) {
       logger.error('Error uploading test files:');
-      throw new BadRequestException('Failed to upload test files. Please try again.');
+      return false;
+    }
+  }
+
+  @Get(':workspace_id/files/:fileId/download')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiBearerAuth()
+  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
+  @ApiTags('workspace')
+  async downloadFile(
+    @Param('workspace_id') workspaceId: number, @Param('fileId') fileId: number
+  ): Promise<FileDownloadDto> {
+    if (!workspaceId) {
+      logger.error('Workspace ID is required.');
+    }
+    try {
+      return await this.workspaceService.downloadTestFile(workspaceId, fileId);
+    } catch (error) {
+      logger.error('Error downloading test file:');
     }
   }
 
