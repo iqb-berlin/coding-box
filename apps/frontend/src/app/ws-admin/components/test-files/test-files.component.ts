@@ -32,6 +32,7 @@ import { SearchFilterComponent } from '../../../shared/search-filter/search-filt
 import { FileSizePipe } from '../../../shared/pipes/filesize.pipe';
 import { FilesInListDto } from '../../../../../../../api-dto/files/files-in-list.dto';
 import { FilesValidationDto } from '../../../../../../../api-dto/files/files-validation.dto';
+import { FileDownloadDto } from '../../../../../../../api-dto/files/file-download.dto';
 
 @Component({
   selector: 'coding-box-test-files',
@@ -173,7 +174,31 @@ export class TestFilesComponent implements OnInit {
       });
   }
 
+  downloadFile(row: FilesInListDto): void {
+    this.backendService.downloadFile(this.appService.selectedWorkspaceId, row.id).subscribe({
+      next: (res: FileDownloadDto) => {
+        const decodedString = atob(res.base64Data);
+        const blob = new Blob([decodedString], { type: 'application/xml' });
+        const url = window.URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = row.filename || 'download';
+        document.body.appendChild(anchor);
+        anchor.click();
+        document.body.removeChild(anchor);
+        window.URL.revokeObjectURL(url);
+      },
+      error: error => {
+        console.error('Download failed', error);
+      },
+      complete: () => {
+        console.log('File download completed.');
+      }
+    });
+  }
+
   validateFiles(): void {
+    this.isLoading = true;
     this.backendService.validateFiles(this.appService.selectedWorkspaceId)
       .subscribe(respOk => {
         this.handleValidationResponse(respOk);
@@ -193,6 +218,7 @@ export class TestFilesComponent implements OnInit {
   }
 
   private handleValidationResponse(res: boolean | FilesValidationDto[]): void {
+    this.isLoading = false;
     if (res === false) {
       this.snackBar.open(
         this.translate.instant('ws-admin.validation-failed'),
