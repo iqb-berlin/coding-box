@@ -4,7 +4,7 @@ import {
   Controller,
   Delete,
   Get, Param, Patch,
-  Post, Query, UploadedFiles, UseGuards, UseInterceptors, ValidationPipe
+  Post, Query, UploadedFiles, UseGuards, UseInterceptors
 } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
@@ -32,10 +32,7 @@ import WorkspaceUser from '../../database/entities/workspace_user.entity';
 import { UploadResultsService } from '../../database/services/upload-results.service';
 import Persons from '../../database/entities/persons.entity';
 import { FilesValidationDto } from '../../../../../../api-dto/files/files-validation.dto';
-import { Booklet } from '../../database/entities/booklet.entity';
-import { Unit } from '../../database/entities/unit.entity';
-import { ResponseEntity } from '../../database/entities/response.entity';
-import { ImportWorkspaceFilesDto } from '../../../../../../api-dto/files/import-workspace-files.dto';
+import { FileDownloadDto } from '../../../../../../api-dto/files/file-download.dto';
 
 export type Result = {
   success: boolean,
@@ -89,23 +86,35 @@ export class WorkspaceController {
     return this.authService.createToken(userId, workspaceId, duration);
   }
 
+  // TODO Don't use boolean query params as strings
   @Get(':workspace_id/importWorkspaceFiles')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async importWorkspaceFiles(
     @Param('workspace_id') workspace_id: string,
-      @Query(new ValidationPipe({ transform: true })) query: ImportWorkspaceFilesDto): Promise<Result> {
-    const importOptions: ImportOptions = {
-      definitions: query.definitions,
-      responses: query.responses,
-      units: query.units,
-      player: query.player,
-      codings: query.codings,
-      logs: query.logs,
-      booklets: query.booklets,
-      testTakers: query.testTakers
+      @Query('server') server: string,
+      @Query('url') url: string,
+      @Query('tc_workspace') tc_workspace: string,
+      @Query('token') token: string,
+      @Query('definitions') definitions: string,
+      @Query('responses') responses: string,
+      @Query('logs') logs: string,
+      @Query('player') player: string,
+      @Query('units') units: string,
+      @Query('codings') codings: string,
+      @Query('testTakers') testTakers: string,
+      @Query('booklets') booklets: string)
+      : Promise<Result> {
+    const importOptions:ImportOptions = {
+      definitions: definitions,
+      responses: responses,
+      units: units,
+      player: player,
+      codings: codings,
+      logs: logs,
+      booklets: booklets,
+      testTakers: testTakers
     };
-
-    return this.testCenterService.importWorkspaceFiles(workspace_id, query.tc_workspace, query.server, query.url, query.token, importOptions);
+    return this.testCenterService.importWorkspaceFiles(workspace_id, tc_workspace, server, url, token, importOptions);
   }
 
   @Get(':workspace_id')
@@ -196,7 +205,21 @@ export class WorkspaceController {
   async findPersonTestResults(
     @Param('workspace_id') workspace_id: number,
       @Param('personId') personId: number
-  ): Promise<any> {
+  ): Promise<{
+        booklet: {
+          id: number;
+          personid: number;
+          name: string;
+          size: number;
+          units: {
+            id: number;
+            bookletid: number;
+            name: string;
+            alias: string | null;
+            results: { id: number; unitid: number }[];
+          }[];
+        };
+      }[]> {
     return this.workspaceService.findPersonTestResults(personId, workspace_id);
   }
 
@@ -223,13 +246,14 @@ export class WorkspaceController {
     try {
       const users = await this.workspaceService.findUsers(workspaceId);
       if (!users || users.length === 0) {
-        throw new BadRequestException(
+        logger.log(
           `No users found for workspace ID ${workspaceId}`
         );
       }
       return users;
     } catch (error) {
       logger.error(`Error retrieving users for workspace ${workspaceId}`);
+      return [];
     }
   }
 
@@ -343,7 +367,25 @@ export class WorkspaceController {
       return await this.workspaceService.uploadTestFiles(workspaceId, files);
     } catch (error) {
       logger.error('Error uploading test files:');
-      throw new BadRequestException('Failed to upload test files. Please try again.');
+      return false;
+    }
+  }
+
+  @Get(':workspace_id/files/:fileId/download')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiBearerAuth()
+  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
+  @ApiTags('workspace')
+  async downloadFile(
+    @Param('workspace_id') workspaceId: number, @Param('fileId') fileId: number
+  ): Promise<FileDownloadDto> {
+    if (!workspaceId) {
+      logger.error('Workspace ID is required.');
+    }
+    try {
+      return await this.workspaceService.downloadTestFile(workspaceId, fileId);
+    } catch (error) {
+      logger.error('Error downloading test file:');
     }
   }
 
