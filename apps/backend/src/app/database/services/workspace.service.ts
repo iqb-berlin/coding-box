@@ -546,7 +546,6 @@ export class WorkspaceService {
         return validationResults;
       }
 
-      // Nach Booklets im Workspace suchen, falls keine validen TestTakers gefunden wurden
       const booklets = await this.fileUploadRepository.find({
         where: { workspace_id: workspaceId, file_type: 'Booklet' }
       });
@@ -664,7 +663,6 @@ export class WorkspaceService {
         uniqueUnits.add(unitId.trim());
       }
     });
-    console.log('uniqueUnits', uniqueUnits);
 
     return {
       uniqueBooklets, uniqueUnits, codingSchemeRefs, definitionRefs
@@ -1017,17 +1015,17 @@ export class WorkspaceService {
       console.log('Current working directory:', process.cwd(), __dirname);
 
       const schemaPaths: Record<string, string> = {
-        UNIT: path.resolve(__dirname, './schemas/unit.xsd'),
-        BOOKLET: path.resolve(__dirname, './schemas/booklet.xsd'),
-        TESTTAKERS: path.resolve(__dirname, '.testtakers.xsd')
+        UNIT: path.resolve(__dirname, 'schemas/unit.xsd'),
+        BOOKLET: path.resolve(__dirname, 'schemas/booklet.xsd'),
+        TESTTAKERS: path.resolve(__dirname, 'schemas/testtakers.xsd')
       };
+      const xsdPath = schemaPaths[rootTagName];
+      console.log('xsdPath', xsdPath);
+      if (!xsdPath || !fs.existsSync(xsdPath)) {
+        return await this.unsupportedFile(`No XSD schema found for root tag: ${rootTagName}`);
+      }
 
-      // const xsdPath = schemaPaths[rootTagName];
-      // if (!xsdPath || !fs.existsSync(xsdPath)) {
-      //   return await this.unsupportedFile(`No XSD schema found for root tag: ${rootTagName}`);
-      // }
-
-      // await this.validateXmlAgainstSchema(xmlContent, xsdPath);
+      await this.validateXmlAgainstSchema(xmlContent, xsdPath);
 
       const metadata = xmlDocument('Metadata');
       const idElement = metadata.find('Id');
