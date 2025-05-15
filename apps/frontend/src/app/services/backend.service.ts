@@ -393,9 +393,23 @@ export class BackendService {
     const {
       units, responses, definitions, player, codings, logs, testTakers, booklets
     } = importOptions;
+
+    const params = new HttpParams()
+      .set('tc_workspace', testCenterWorkspace)
+      .set('server', server)
+      .set('url', encodeURIComponent(url))
+      .set('responses', String(responses))
+      .set('logs', String(logs))
+      .set('definitions', String(definitions))
+      .set('units', String(units))
+      .set('codings', String(codings))
+      .set('player', String(player))
+      .set('token', token)
+      .set('testTakers', String(testTakers))
+      .set('booklets', String(booklets));
+
     return this.http
-      // eslint-disable-next-line max-len
-      .get<Result>(`${this.serverUrl}admin/workspace/${workspace_id}/importWorkspaceFiles?tc_workspace=${testCenterWorkspace}&server=${server}&url=${encodeURIComponent(url)}&responses=${responses}&logs=${logs}&definitions=${definitions}&units=${units}&codings=${codings}&player=${player}&token=${token}&testTakers=${testTakers}&booklets=${booklets}`, { headers: this.authHeader })
+      .get<Result>(`${this.serverUrl}admin/workspace/${workspace_id}/importWorkspaceFiles`, { headers: this.authHeader, params })
       .pipe(
         catchError(() => of({
           success: false, testFiles: 0, responses: 0, logs: 0

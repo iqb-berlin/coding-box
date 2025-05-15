@@ -45,26 +45,6 @@ export type WorkspaceAdmin = {
   }
 };
 
-// type ServerFilesResponse = {
-//   Booklet:[],
-//   Ressource:Ressource[],
-//   Unit:[],
-//   Testtakers:[],
-// };
-
-// type Ressource = {
-//   name: string,
-//   size: number,
-//   modificationTime: number,
-//   type: string,
-//   id: string,
-//   report: [],
-//   info: {
-//     label: string,
-//     description: string
-//   }
-// };
-
 export type ImportOptions = {
   responses:string,
   definitions:string,
