@@ -24,6 +24,7 @@ import { FilesDto } from '../../../../../api-dto/files/files.dto';
 import { UserInListDto } from '../../../../../api-dto/user/user-in-list-dto';
 import { UserWorkspaceAccessDto } from '../../../../../api-dto/workspaces/user-workspace-access-dto';
 import { FilesValidationDto } from '../../../../../api-dto/files/files-validation.dto';
+import { FileDownloadDto } from '../../../../../api-dto/files/file-download.dto';
 
 @Injectable({
   providedIn: 'root'
@@ -198,6 +199,11 @@ export class BackendService {
         )
       )
     ), of(true));
+  }
+
+  downloadFile(workspaceId: number, fileId: number): Observable<FileDownloadDto> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/files/${fileId}/download`;
+    return this.http.get<FileDownloadDto>(url, { headers: this.authHeader });
   }
 
   validateFiles(workspace_id:number): Observable<boolean | FilesValidationDto[]> {
