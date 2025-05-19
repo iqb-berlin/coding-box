@@ -2,7 +2,7 @@
 
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { Connection, In, Repository } from 'typeorm';
 import * as cheerio from 'cheerio';
 import AdmZip = require('adm-zip');
 import * as util from 'util';
@@ -32,6 +32,8 @@ import { ResponseEntity } from '../entities/response.entity';
 import { Result } from './testcenter.service';
 import { BookletInfo } from '../entities/bookletInfo.entity';
 import { FileDownloadDto } from '../../../../../../api-dto/files/file-download.dto';
+import { BookletLog } from '../entities/bookletLog.entity';
+import { UnitLog } from '../entities/unitLog.entity';
 
 function sanitizePath(filePath: string): string {
   const normalizedPath = path.normalize(filePath); // System-basiertes Normalisieren
@@ -47,9 +49,9 @@ export type Response = {
   code : string,
   bookletname : string,
   unitname : string,
-  responses : string,
-  laststate : string,
   originalUnitId: string
+  responses : any,
+  laststate : string,
 
 };
 
@@ -59,6 +61,7 @@ export type Log = {
   code : string,
   bookletname : string,
   unitname : string,
+  originalUnitId:string,
   timestamp : string,
   logentry : string,
 };
@@ -191,7 +194,13 @@ export class WorkspaceService {
     @InjectRepository(ResponseEntity)
     private responseRepository:Repository<ResponseEntity>,
     @InjectRepository(BookletInfo)
-    private bookletInfoRepository:Repository<BookletInfo>
+    private bookletInfoRepository:Repository<BookletInfo>,
+    @InjectRepository(BookletLog)
+    private bookletLogRepository:Repository<BookletLog>,
+    @InjectRepository(UnitLog)
+    private unitLogRepository:Repository<UnitLog>,
+    private readonly connection: Connection
+
   ) {
   }
 
@@ -239,19 +248,19 @@ export class WorkspaceService {
   }
 
   async findPersonTestResults(personId: number, workspaceId: number): Promise<{
-    booklet: {
+    id: number;
+    personid: number;
+    name: string;
+    size: number;
+    logs: { id: number; bookletid: number; ts: string; parameter: string, key: string }[];
+    units: {
       id: number;
-      personid: number;
+      bookletid: number;
       name: string;
-      size: number;
-      units: {
-        id: number;
-        bookletid: number;
-        name: string;
-        alias: string | null;
-        results: { id: number; unitid: number }[];
-      }[];
-    };
+      alias: string | null;
+      results: { id: number; unitid: number }[];
+      logs: { id: number; unitid: number; ts: string; key: string; parameter: string }[];
+    }[];
   }[]> {
     if (!personId || !workspaceId) {
       throw new Error('Both personId and workspaceId are required.');
@@ -266,7 +275,6 @@ export class WorkspaceService {
         where: { personid: personId },
         select: ['id', 'personid', 'infoid']
       });
-
       if (!booklets || booklets.length === 0) {
         this.logger.log(`No booklets found for personId: ${personId}`);
         return [];
@@ -302,27 +310,50 @@ export class WorkspaceService {
         unitResultMap.get(response.unitid)?.push(response);
       }
 
+      const bookletLogs = await this.bookletLogRepository.find({
+        where: { bookletid: In(bookletIds) },
+        select: ['id', 'bookletid', 'ts', 'parameter', 'key']
+      });
+
+      const unitLogs = await this.unitLogRepository.find({
+        where: { unitid: In(unitIds) },
+        select: ['id', 'unitid', 'ts', 'key', 'parameter']
+      });
+
       const structuredResults = booklets.map(booklet => {
         const bookletInfo = bookletInfoData.find(info => info.id === booklet.infoid);
         return {
-          booklet: {
-            id: booklet.id,
-            personid: booklet.personid,
-            name: bookletInfo.name,
-            size: bookletInfo.size,
-            units: units
-              .filter(unit => unit.bookletid === booklet.id)
-              .map(unit => ({
-                id: unit.id,
-                bookletid: unit.bookletid,
-                name: unit.name,
-                alias: unit.alias,
-                results: unitResultMap.get(unit.id) || []
+          id: booklet.id,
+          personid: booklet.personid,
+          name: bookletInfo.name,
+          size: bookletInfo.size,
+          logs: bookletLogs.filter(log => log.bookletid === booklet.id).map(log => ({
+            id: log.id,
+            bookletid: log.bookletid,
+            ts: log.ts.toString(),
+            key: log.key,
+            parameter: log.parameter
+          })),
+
+          units: units
+            .filter(unit => unit.bookletid === booklet.id)
+            .map(unit => ({
+              id: unit.id,
+              bookletid: unit.bookletid,
+              name: unit.name,
+              alias: unit.alias,
+              results: unitResultMap.get(unit.id) || [],
+              logs: unitLogs.filter(log => log.unitid === unit.id).map(log => ({
+                id: log.id,
+                unitid: log.unitid,
+                ts: log.ts.toString(),
+                key: log.key,
+                parameter: log.parameter
               }))
-          }
+
+            }))
         };
       });
-
       return structuredResults;
     } catch (error) {
       this.logger.error(
@@ -558,10 +589,8 @@ export class WorkspaceService {
     const {
       uniqueBooklets
     } = this.extractXmlData(bookletTags, unitTags);
-    console.log('uniqueBooklets', uniqueBooklets);
 
     const { allBookletsExist, missingBooklets } = await this.checkMissingBooklets(Array.from(uniqueBooklets));
-    console.log('allBookletsExist', allBookletsExist);
     const {
       allUnitsExist,
       missingUnits,
@@ -669,52 +698,87 @@ export class WorkspaceService {
     return testGroups;
   }
 
-  async deleteTestPersons(workspaceId: string, testPersonIds: string): Promise<{ success: boolean; report: { deletedPersons: string[]; deletedBooklets: number[]; deletedUnits: number[]; deletedResponses: number[]; warnings: string[] } }> {
-    this.logger.log('Delete tes person for workspaces ', workspaceId);
+  async deleteTestPersons(
+    workspaceId: string,
+    testPersonIds: string
+  ): Promise<{
+      success: boolean;
+      report: {
+        deletedPersons: string[];
+        deletedBooklets: number[];
+        deletedUnits: number[];
+        deletedResponses: number[];
+        warnings: string[];
+      };
+    }> {
+    return this.connection.transaction(async manager => {
+      const ids = testPersonIds.split(',');
+      const report = {
+        deletedPersons: [],
+        deletedBooklets: [],
+        deletedUnits: [],
+        deletedResponses: [],
+        warnings: []
+      };
 
-    const ids = testPersonIds.split(',');
-    const report = {
-      deletedPersons: [],
-      deletedBooklets: [],
-      deletedUnits: [],
-      deletedResponses: [],
-      warnings: []
-    };
+      const booklets = await manager
+        .createQueryBuilder(Booklet, 'booklet')
+        .select('booklet.id')
+        .where('booklet.personid IN (:...ids)', { ids })
+        .getMany();
 
-    const booklets = await this.bookletRepository.find({
-      where: { personid: In(ids) }
+      if (!booklets.length) {
+        this.logger.warn(`Keine Booklets gefunden für Testpersonen ${testPersonIds}`);
+        report.warnings.push(`Keine Booklets gefunden für Testpersonen ${testPersonIds}`);
+        return { success: false, report };
+      }
+
+      const bookletIds = booklets.map(b => b.id);
+      report.deletedBooklets = bookletIds;
+
+      const unitIds = await manager
+        .createQueryBuilder(Unit, 'unit')
+        .select('unit.id')
+        .where('unit.bookletid IN (:...bookletIds)', { bookletIds })
+        .getMany()
+        .then(units => units.map(unit => unit.id));
+
+      report.deletedUnits = unitIds;
+
+      const [deletedResponses] = await Promise.all([
+        manager
+          .createQueryBuilder()
+          .delete()
+          .from(ResponseEntity)
+          .where('unitid IN (:...unitIds)', { unitIds })
+          .execute(),
+        manager
+          .createQueryBuilder()
+          .delete()
+          .from(Unit)
+          .where('id IN (:...unitIds)', { unitIds })
+          .execute(),
+        manager
+          .createQueryBuilder()
+          .delete()
+          .from(Booklet)
+          .where('id IN (:...bookletIds)', { bookletIds })
+          .execute()
+      ]);
+
+      report.deletedResponses = [deletedResponses.affected || 0];
+
+      await manager
+        .createQueryBuilder()
+        .delete()
+        .from(Persons)
+        .where('id IN (:...ids)', { ids })
+        .execute();
+
+      report.deletedPersons = ids;
+
+      return { success: true, report };
     });
-    if (!booklets.length) {
-      this.logger.warn(`Keine Booklets gefunden für Testpersonen ${testPersonIds}`);
-      report.warnings.push(`Keine Booklets gefunden für Testpersonen ${testPersonIds}`);
-      return { success: false, report };
-    }
-
-    const bookletIds = booklets.map(booklet => booklet.id);
-    report.deletedBooklets = bookletIds;
-
-    const units = await this.unitRepository.find({
-      where: { bookletid: In(bookletIds) },
-      select: ['id']
-    });
-    const unitIds = units.map(unit => unit.id);
-    report.deletedUnits = unitIds;
-
-    const deletedResponses = await this.responseRepository.delete({ unitid: In(unitIds) });
-    this.logger.log('Successfully deleted responses.');
-    report.deletedResponses = [deletedResponses.affected];
-
-    await this.unitRepository.delete({ id: In(unitIds) });
-    this.logger.log('Successfully deleted units.');
-
-    await this.bookletRepository.delete({ id: In(bookletIds) });
-    this.logger.log('Successfully deleted booklets.');
-
-    await this.personsRepository.delete({ id: In(ids) });
-    this.logger.log('Successfully deleted test persons.');
-    report.deletedPersons = ids;
-
-    return { success: true, report };
   }
 
   async findTestPersons(id: number, testGroup:string): Promise<string[]> {
@@ -1214,7 +1278,7 @@ export class WorkspaceService {
     }, <{ [key: string]: ResponseDto }>{}));
   }
 
-  async testCenterImport(entries: FileUpload[]): Promise<boolean> {
+  async testCenterImport(entries: any[]): Promise<boolean> {
     try {
       const registry = this.fileUploadRepository.create(entries);
       await this.fileUploadRepository.upsert(registry, ['file_id']);
