@@ -127,3 +127,12 @@ ALTER TABLE session ADD id serial4 NOT NULL;
 ALTER TABLE session ALTER COLUMN id SET STORAGE PLAIN;
 -- rollback ALTER TABLE session DROP COLUMN id;
 
+-- changeset jurei733:16
+ALTER TABLE unitLog ADD id serial4 NOT NULL;
+ALTER TABLE unitLog ALTER COLUMN id SET STORAGE PLAIN;
+-- rollback ALTER TABLE unitLog DROP COLUMN id;
+
+-- changeset jurei733:17
+ALTER TABLE unitLastState ADD id serial4 NOT NULL;
+ALTER TABLE unitLastState ALTER COLUMN id SET STORAGE PLAIN;
+-- rollback ALTER TABLE unitLastState DROP COLUMN id;

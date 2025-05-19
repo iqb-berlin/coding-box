@@ -33,6 +33,7 @@ import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
 import { TestGroupsInListDto } from '../../../../../../../api-dto/test-groups/testgroups-in-list.dto';
 import { TestCenterImportComponent } from '../test-center-import/test-center-import.component';
+import { LogDialogComponent } from '../booklet-log-dialog/log-dialog.component';
 
 interface P {
   id: number;
@@ -89,6 +90,7 @@ export class TestResultsComponent implements OnInit {
   results: { [key: string]: any }[] = [];
   responses: any = [];
   logs: any = [];
+  bookletLogs: any = [];
   totalRecords: number = 0;
   pageSize: number = 50;
   pageIndex: number = 0;
@@ -96,6 +98,7 @@ export class TestResultsComponent implements OnInit {
   testPerson!: P;
   selectedBooklet: { id: number; title: string; name: string; units: unknown } | undefined;
   isLoading: boolean = true;
+  isUploadingResults: boolean = false;
 
   @ViewChild(MatPaginator) paginator!: MatPaginator;
   @ViewChild(MatSort) sort!: MatSort;
@@ -118,8 +121,8 @@ export class TestResultsComponent implements OnInit {
   onRowClick(row: P): void {
     this.testPerson = row;
     this.backendService.getPersonTestResults(this.appService.selectedWorkspaceId, row.id)
-      .subscribe(response => {
-        this.booklets = [response[0].booklet];
+      .subscribe(booklets => {
+        this.booklets = booklets;
       });
   }
 
@@ -155,10 +158,24 @@ export class TestResultsComponent implements OnInit {
     }
   }
 
+  openBookletLogsDialog(booklet:any) {
+    this.dialog.open(LogDialogComponent, {
+      width: '700px',
+      data: { logs: booklet.logs }
+    });
+  }
+
   onUnitClick(unit: any): void {
     this.responses = unit.results;
+    this.logs = unit.logs;
     // this.logs = this.createUnitHistory(unit);
     this.selectedUnit = unit;
+  }
+
+  onBookletClick(booklet: any): void {
+    this.bookletLogs = booklet.logs;
+    // this.logs = this.createUnitHistory(unit);
+    this.selectedUnit = booklet;
   }
 
   setSelectedBooklet(booklet:any) {
@@ -259,8 +276,11 @@ export class TestResultsComponent implements OnInit {
 
   testCenterImport(): void {
     const dialogRef = this.dialog.open(TestCenterImportComponent, {
-      width: '600px',
-      minHeight: '600px'
+      width: '800px',
+      minHeight: '800px',
+      data: {
+        importType: 'testResults'
+      }
     });
 
     dialogRef.afterClosed().subscribe((result: boolean | UntypedFormGroup) => {
@@ -270,19 +290,22 @@ export class TestResultsComponent implements OnInit {
     });
   }
 
-  onFileSelected(targetElement: EventTarget | null) {
+  onFileSelected(targetElement: EventTarget | null, resultType:'logs' | 'responses') {
     if (targetElement) {
       const inputElement = targetElement as HTMLInputElement;
       if (inputElement.files && inputElement.files.length > 0) {
         this.isLoading = true;
+        this.isUploadingResults = true;
         this.backendService.uploadTestResults(
           this.appService.selectedWorkspaceId,
-          inputElement.files
+          inputElement.files,
+          resultType
         ).subscribe(() => {
           setTimeout(() => {
             this.createTestResultsList(this.pageIndex, this.pageSize);
           }, 1000);
           this.isLoading = false;
+          this.isUploadingResults = false;
         });
       }
     }

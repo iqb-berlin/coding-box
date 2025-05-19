@@ -25,6 +25,7 @@ import { UnitLastState } from './entities/unitLastState.entity';
 import { ChunkEntity } from './entities/chunk.entity';
 import { ResponseEntity } from './entities/response.entity';
 import { Session } from './entities/session.entity';
+import { PersonService } from './services/person.service';
 
 @Module({
   imports: [
@@ -86,7 +87,7 @@ import { Session } from './entities/session.entity';
       Session
     ])
   ],
-  providers: [UsersService, WorkspaceService, TestcenterService, UploadResultsService],
+  providers: [UsersService, WorkspaceService, TestcenterService, UploadResultsService, PersonService],
   exports: [
     User,
     FileUpload,
@@ -100,7 +101,8 @@ import { Session } from './entities/session.entity';
     WorkspaceUser,
     TestcenterService,
     UploadResultsService,
-    ResourcePackage
+    ResourcePackage,
+    PersonService
   ]
 })
 export class DatabaseModule {}
