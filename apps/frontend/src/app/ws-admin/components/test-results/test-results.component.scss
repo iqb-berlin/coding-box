@@ -127,4 +127,27 @@ table {
   transition: opacity 0.3s ease-in-out;
 }
 
+.log-list {
+  gap: 10px;
+}
+
+.log-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.log-key {
+  font-weight: bold;
+  color: #000;
+}
+
+.log-parameter {
+  color: #555;
+}
+
+.log-timestamp {
+  font-size: 0.9em;
+  color: #999;
+}
 

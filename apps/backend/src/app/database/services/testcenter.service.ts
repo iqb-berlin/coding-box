@@ -4,15 +4,16 @@ import * as https from 'https';
 import { catchError, firstValueFrom } from 'rxjs';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { WorkspaceService } from './workspace.service';
-import Responses from '../entities/responses.entity';
+import { logger } from 'nx/src/utils/logger';
+// eslint-disable-next-line import/no-cycle
+import { Person, Response, WorkspaceService } from './workspace.service';
 import {
   ImportOptions
 } from '../../../../../frontend/src/app/ws-admin/components/test-center-import/test-center-import.component';
-import FileUpload from '../entities/file_upload.entity';
-import { ResponseDto } from '../../../../../../api-dto/responses/response-dto';
-import { LogsDto } from '../../../../../../api-dto/logs/logs-dto';
+
 import Logs from '../entities/logs.entity';
+import { TestGroupsInfoDto } from '../../../../../../api-dto/files/test-groups-info.dto';
+import { PersonService } from './person.service';
 
 const agent = new https.Agent({
   rejectUnauthorized: false
@@ -23,17 +24,6 @@ type ServerFilesResponse = {
   Resource:File[],
   Unit:File[],
   Testtakers:[],
-};
-
-type TestserverResponse = {
-  groupName: string,
-  groupLabel: string,
-  bookletsStarted: number,
-  numUnitsMin: number,
-  numUnitsMax: number,
-  numUnitsTotal: number,
-  numUnitsAvg: number,
-  lastChange: number,
 };
 
 type File = {
@@ -48,16 +38,6 @@ type File = {
     description: string
   },
   data: string
-};
-
-export type UnitResponse = {
-  groupname:string,
-  loginname : string,
-  code : string,
-  bookletname : string,
-  unitname : string,
-  responses : Array<{ id: string; content: string; ts: number; responseType: string }>,
-  laststate : string,
 };
 
 export type Log = {
@@ -80,20 +60,22 @@ export type Result = {
 @Injectable()
 export class TestcenterService {
   constructor(
+    private readonly personService: PersonService,
     private readonly httpService: HttpService,
     private workspaceService: WorkspaceService,
-    @InjectRepository(Responses)
-    private responsesRepository:Repository<Responses>,
     @InjectRepository(Logs)
     private logsRepository:Repository<Logs>
 
   ) {
   }
 
-  async authenticate(credentials: { username: string; password: string; server: string; url: string }): Promise<string> {
+  persons: Person[] = [];
+
+  async authenticate(credentials: { username: string; password: string; server: string; url: string }): Promise<any> {
     const endpoint = credentials.url && !credentials.server ?
       `${credentials.url}/api/session/admin` :
       `http://iqb-testcenter${credentials.server}.de/api/session/admin`;
+    console.log(endpoint);
 
     try {
       const { data } = await firstValueFrom(
@@ -116,13 +98,41 @@ export class TestcenterService {
     }
   }
 
+  async getTestgroups(
+    workspace_id: string,
+    tc_workspace: string,
+    server: string,
+    url: string,
+    authToken: string
+  ): Promise<TestGroupsInfoDto[]> {
+    const headersRequest = {
+      Authtoken: authToken
+    };
+    try {
+      const response = await this.httpService.axiosRef.get<TestGroupsInfoDto[]>(
+        url ?
+          `${url}/api/workspace/${tc_workspace}/results` :
+          `https://iqb-testcenter${server}.de/api/workspace/${tc_workspace}/results`,
+        {
+          httpsAgent: agent,
+          headers: headersRequest
+        }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching test groups:', error.message);
+      return [];
+    }
+  }
+
   async importWorkspaceFiles(
-    workspace_id:string,
-    tc_workspace:string,
-    server:string,
-    url:string,
-    authToken:string,
-    importOptions:ImportOptions
+    workspace_id: string,
+    tc_workspace: string,
+    server: string,
+    url: string,
+    authToken: string,
+    importOptions: ImportOptions,
+    testGroups: string
   ): Promise<Result> {
     const {
       units, responses, definitions, player, codings, logs, testTakers, booklets
@@ -133,214 +143,150 @@ export class TestcenterService {
     };
 
     const result: Result = {
-      success: false, testFiles: 0, responses: 0, logs: 0
+      success: false,
+      testFiles: 0,
+      responses: 0,
+      logs: 0
     };
 
-    if (responses === 'true') {
-      const resultsPromise = this.httpService.axiosRef
-        .get<TestserverResponse[]>(url ? `${url}/api/workspace/${tc_workspace}/results` :
-        `http://iqb-testcenter${server}.de/api/workspace/${tc_workspace}/results`, {
-        httpsAgent: agent,
-        headers: headersRequest
-      });
-      const report = await resultsPromise.then(res => res);
-      if (!report) {
-        throw new Error('could not obtain information about groups from TC');
-      }
-      const resultGroupNames = report.data.map(group => group.groupName);
-      const createChunks = (a, size) => Array.from(
-        new Array(Math.ceil(a.length / size)),
-        (_, i) => a.slice(i * size, i * size + size)
-      );
+    const promises: Promise<void>[] = [];
 
-      const chunks = createChunks(resultGroupNames, 2);
-      const unitResponsesPromises = chunks.map(async chunk => {
-        const endpoint = url ?
-          `${url}/api/workspace/${tc_workspace}/report/response?dataIds=${chunk.join(',')}` :
-          `http://iqb-testcenter${server}.de/api/workspace/${tc_workspace}/report/response?dataIds=${chunk.join(',')}`;
+    const createChunks = <T>(array: T[], size: number): T[][] => Array.from({ length: Math.ceil(array.length / size) }, (_, i) => array.slice(i * size, i * size + size));
 
-        try {
-          const { data: rawResponses } = await this.httpService.axiosRef.get<UnitResponse[]>(endpoint, {
-            httpsAgent: agent,
-            headers: headersRequest
-          });
+    try {
+      // === Import Responses ===
+      if (responses === 'true') {
+        logger.log('Import response data from TC');
+        const chunks = createChunks(testGroups.split(','), 2);
 
-          const rows: ResponseDto[] = rawResponses.map((unitResponse: UnitResponse) => ({
-            test_person: TestcenterService.getTestPersonName(unitResponse),
-            unit_id: unitResponse.unitname,
-            responses: unitResponse.responses,
-            test_group: unitResponse.groupname,
-            workspace_id: Number(workspace_id),
-            unit_state: JSON.parse(unitResponse.laststate),
-            booklet_id: unitResponse.bookletname,
-            id: undefined,
-            created_at: undefined
-          }));
+        const responsePromises = chunks.map(async chunk => {
+          const endpoint = url ?
+            `${url}/api/workspace/${tc_workspace}/report/response?dataIds=${chunk.join(',')}` :
+            `https://www.iqb-testcenter${server}/api/workspace/${tc_workspace}/report/response?dataIds=${chunk.join(',')}`;
 
-          const cleanedRows = WorkspaceService.cleanResponses(rows);
-          await this.responsesRepository.upsert(cleanedRows, ['test_person', 'unit_id']);
-        } catch (error) {
-          console.error('Error processing chunk:', error.message || error);
-        }
-      });
+          try {
+            const { data: rawResponses } = await this.httpService.axiosRef.get<Response[]>(endpoint, {
+              httpsAgent: agent,
+              headers: headersRequest
+            });
 
-      try {
-        await Promise.all(unitResponsesPromises);
-        result.success = true;
-        result.responses = report.data.length;
-      } catch (error) {
-        result.success = false;
-      }
-    }
+            this.persons = await this.personService.createPersonList(rawResponses, Number(workspace_id));
 
-    if (logs === 'true') {
-      try {
-        const resultsUrl = url ?
-          `${url}api/workspace/${tc_workspace}/results` :
-          `http://iqb-testcenter${server}.de/api/workspace/${tc_workspace}/results`;
-
-        const report = await this.httpService.axiosRef.get<TestserverResponse[]>(resultsUrl, {
-          httpsAgent: agent,
-          headers: headersRequest
+            const personList = await Promise.all(
+              this.persons.map(async person => {
+                const personWithBooklets = await this.personService.assignBookletsToPerson(person, rawResponses);
+                return this.personService.assignUnitsToBookletAndPerson(personWithBooklets, rawResponses);
+              })
+            );
+            await this.personService.processPersonBooklets(personList, Number(workspace_id));
+          } catch (error) {
+            logger.error('Error processing response chunk:');
+            throw error;
+          }
         });
 
-        if (!report || !report.data) {
-          throw new Error('Could not obtain information about groups from TC');
-        }
+        promises.push(...responsePromises);
+      }
 
-        // extract group name
-        const resultGroupNames = report.data.map(group => group.groupName);
+      // === Import Logs ===
+      if (logs === 'true') {
+        logger.log('Import logs data from TC');
+        const logsChunks = createChunks(testGroups.split(','), 2);
 
-        // function to create chuncs
-        const createChunks = <T>(array: T[], size: number): T[][] => Array.from({ length: Math.ceil(array.length / size) }, (_, i) => array.slice(i * size, i * size + size)
-        );
-
-        // Split group names into chunks of 2 elements each
-        const chunks = createChunks(resultGroupNames, 2);
-
-        // Create promises for fetching the logs
-        const fetchLogsForChunks = async (chunk: string[]): Promise<void> => {
+        const logsPromises = logsChunks.map(async chunk => {
           const logsUrl = url ?
             `${url}/api/workspace/${tc_workspace}/report/log?dataIds=${chunk.join(',')}` :
-            `http://iqb-testcenter${server}.de/api/workspace/${tc_workspace}/report/log?dataIds=${chunk.join(',')}`;
+            `https://iqb-testcenter${server}.de/api/workspace/${tc_workspace}/report/log?dataIds=${chunk.join(',')}`;
+          try {
+            const { data: logData } = await this.httpService.axiosRef.get<Log[]>(logsUrl, {
+              httpsAgent: agent,
+              headers: headersRequest
+            });
+            const { bookletLogs, unitLogs } = logData.reduce(
+              (acc, row) => {
+                row.unitname === '' ? acc.bookletLogs.push(row) : acc.unitLogs.push(row);
+                return acc;
+              },
+              { bookletLogs: [], unitLogs: [] }
+            );
 
-          const logsResponse = await this.httpService.axiosRef.get<Log[]>(logsUrl, {
+            const persons = await this.personService.createPersonList(logData, Number(workspace_id));
+            await this.personService.processPersonLogs(persons, unitLogs, bookletLogs);
+          } catch (error) {
+            logger.error('Error processing logs:');
+            throw error;
+          }
+        });
+
+        promises.push(...logsPromises);
+      }
+
+      // === Import Files ===
+      if (definitions === 'true' || player === 'true' || units === 'true' ||
+        codings === 'true' || testTakers === 'true' || booklets === 'true') {
+        const filesEndpoint = url ?
+          `${url}/api/workspace/2/files` :
+          `http://iqb-testcenter${server}.de/api/workspace/${tc_workspace}/files`;
+
+        try {
+          const { data: files } = await this.httpService.axiosRef.get<ServerFilesResponse>(filesEndpoint, {
             httpsAgent: agent,
             headers: headersRequest
           });
 
-          if (logsResponse && logsResponse.data) {
-            const logsToSave: LogsDto[] = logsResponse.data.map((log: Log) => ({
-              unit_id: log.unitname,
-              timestamp: log.timestamp,
-              test_group: log.groupname,
-              workspace_id: Number(workspace_id),
-              log_entry: log.logentry,
-              booklet_id: log.bookletname,
-              id: undefined
-            }));
+          const filePromises: Promise<File>[] = [];
 
-            await this.logsRepository.save(logsToSave, { chunk: 50000 });
+          if (player === 'true') {
+            filePromises.push(...files.Resource.filter(f => f.name.includes('.html')).map(file => Promise.resolve(file)));
           }
-        };
+          if (units === 'true') {
+            filePromises.push(...files.Unit.map(file => Promise.resolve(file)));
+          }
+          if (definitions === 'true') {
+            filePromises.push(...files.Resource.filter(f => f.name.includes('.voud')).map(file => Promise.resolve(file)));
+          }
+          if (codings === 'true') {
+            filePromises.push(...files.Resource.filter(f => f.name.includes('.vocs')).map(file => Promise.resolve(file)));
+          }
+          if (booklets === 'true') {
+            filePromises.push(...files.Booklet.map(file => Promise.resolve(file)));
+          }
+          if (testTakers === 'true') {
+            filePromises.push(...files.Testtakers.map(file => Promise.resolve(file)));
+          }
 
-        // Retrieve and save all logs for the respective chunks in parallel
-        await Promise.all(chunks.map(fetchLogsForChunks));
+          const fetchedFiles = await Promise.all(filePromises.map(async filePromise => {
+            const file = await filePromise;
+            return this.getFile(file, server, tc_workspace, authToken, url);
+          }));
 
-        result.success = true;
-        result.logs = report.data.length;
-      } catch (error) {
-        result.success = false;
-        console.error('Error fetching logs:', error.message);
-      }
-    }
-
-    if (definitions === 'true' ||
-      player === 'true' ||
-      units === 'true' ||
-      codings === 'true' ||
-      testTakers === 'true' ||
-      booklets === 'true'
-    ) {
-      const filesPromise = this.httpService.axiosRef
-        .get<ServerFilesResponse>(
-        url ? `${url}/api/workspace/${tc_workspace}/files` :
-          `http://iqb-testcenter${server}.de/api/workspace/${tc_workspace}/files`,
-        {
-          httpsAgent: agent,
-          headers: headersRequest
-        });
-      const files = await filesPromise.then(res => res.data);
-      if (files) {
-        // const zipFiles = files.Resource.filter(file => file.name.includes('.zip'));
-        const unitDefFiles = files.Resource.filter(file => file.name.includes('.voud'));
-        const playerFiles = files.Resource.filter(file => file.name.includes('.html'));
-        const codingSchemeFiles = files.Resource.filter(file => file.name.includes('.vocs'));
-        const unitFiles = files.Unit;
-        const bookletFiles = files.Booklet;
-        const testTakerFiles = files.Testtakers;
-        let promises = [];
-        // const zipPromises = zipFiles
-        //   .map(file => this.getPackage(file, server, tc_workspace, authToken));
-        // promises = [...promises, ...packagesPromises];
-
-        if (player === 'true' && playerFiles.length > 0) {
-          const playerPromises = playerFiles
-            .map(file => this.getFile(file, server, tc_workspace, authToken, url));
-          promises = [...promises, ...playerPromises];
-        }
-        if (units === 'true' && unitFiles.length > 0) {
-          const unitFilesPromises = unitFiles
-            .map(file => this.getFile(file, server, tc_workspace, authToken, url));
-          promises = [...promises, ...unitFilesPromises];
-        }
-        if (definitions === 'true' && unitDefFiles.length > 0) {
-          const unitDefPromises = unitDefFiles
-            .map(file => this.getFile(file, server, tc_workspace, authToken, url));
-          promises = [...promises, ...unitDefPromises];
-        }
-        if (codings === 'true' && codingSchemeFiles.length > 0) {
-          const codingSchemePromises = codingSchemeFiles
-            .map(file => this.getFile(file, server, tc_workspace, authToken, url));
-          promises = [...promises, ...codingSchemePromises];
-        }
-        if (booklets === 'true' && bookletFiles.length > 0) {
-          const bookletPromises = bookletFiles
-            .map(file => this.getFile(file, server, tc_workspace, authToken, url));
-          promises = [...promises, ...bookletPromises];
-        }
-        if (testTakers === 'true' && testTakerFiles.length > 0) {
-          const testTakersPromises = testTakerFiles
-            .map(file => this.getFile(file, server, tc_workspace, authToken, url));
-          promises = [...promises, ...testTakersPromises];
-        }
-        const results :File[] = await Promise.all(promises);
-        if (results.length > 0) {
-          const dbEntries: unknown = results.map(res => ({
-            filename: res.name || '',
+          const dbEntries = fetchedFiles.map(res => ({
+            filename: res.name,
             file_id: res.id,
             file_type: res.type,
             file_size: res.size,
             workspace_id: workspace_id,
             data: res.data
           }));
-          await this.workspaceService.testCenterImport(dbEntries as FileUpload[]);
-          result.success = true;
-          result.testFiles = results.length;
-          return result;
+
+          await this.workspaceService.testCenterImport(dbEntries);
+          result.testFiles = fetchedFiles.length;
+          if (fetchedFiles.length > 0) {
+            result.success = true;
+          }
+        } catch (error) {
+          logger.error('Error fetching files:');
         }
-        result.success = false;
-        return result;
       }
+
+      await Promise.all(promises);
+      result.success = true;
+      return result;
+    } catch (error) {
+      logger.error('Error during importWorkspaceFiles:');
       result.success = false;
       return result;
     }
-    result.success = true;
-    return result;
-  }
-
-  private static getTestPersonName(unitResponse: UnitResponse): string {
-    return `${unitResponse.loginname}@${unitResponse.code}@${unitResponse.bookletname}`;
   }
 
   async getFile(

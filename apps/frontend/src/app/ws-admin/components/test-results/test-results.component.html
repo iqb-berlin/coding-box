@@ -4,29 +4,37 @@
       <mat-icon>upload</mat-icon>
       Testcenter Import
     </a>
-    <a mat-raised-button color="primary" (click)=hiddenFileInput.click()>
+    <a mat-raised-button color="primary" (click)=hiddenResponsesFileInput.click()>
       <mat-icon>upload</mat-icon>
-      Resultate hochladen
+      Antworten hochladen
     </a>
-    <a mat-raised-button color="primary" (click)=hiddenFileInput.click()>
+    <a mat-raised-button color="primary" (click)=hiddenLogsFileInput.click()>
       <mat-icon>upload</mat-icon>
       Logs hochladen
     </a>
     <a mat-raised-button color="primary" [disabled]="selection.selected.length === 0" (click)="deleteSelectedPersons()">
       <mat-icon>delete</mat-icon>
-      Resultate löschen
+      Testperson löschen
     </a>
     <a mat-raised-button color="primary" [disabled]="selection.selected.length === 0" >
       <mat-icon>code</mat-icon>
       Kodieren
     </a>
   </div>
-  <input #hiddenFileInput type="file"
+  <input #hiddenResponsesFileInput type="file"
          name="files"
          accept=".json,.zip,.csv"
          multiple
          [hidden]="true"
-         (change)="onFileSelected($event.currentTarget)"/>
+         (change)="onFileSelected($event.currentTarget, 'responses')"/>
+  <input #hiddenLogsFileInput type="file"
+         name="files"
+         accept=".json,.zip,.csv"
+         multiple
+         [hidden]="true"
+         (change)="onFileSelected($event.currentTarget, 'logs')"/>
+  <mat-spinner *ngIf="isUploadingResults" class="mat-spinner"></mat-spinner>
+@if(!isUploadingResults){
   @if ( dataSource && dataSource.data.length) {
     <div class="fx-row-space-between-start">
       <mat-spinner *ngIf="isLoading" class="mat-spinner"></mat-spinner>
@@ -85,15 +93,15 @@
                         *matRowDef="let row; columns: displayedColumns;"></mat-row>
             </mat-table>
           </div>
-        <mat-paginator
-          [length]="totalRecords"
-          [pageSize]="pageSize"
-          [pageIndex]="pageIndex"
-          [pageSizeOptions]="[50, 100, 200, 500]"
-          showFirstLastButtons
-          (page)="onPaginatorChange($event)"
-        >
-        </mat-paginator>
+          <mat-paginator
+            [length]="totalRecords"
+            [pageSize]="pageSize"
+            [pageIndex]="pageIndex"
+            [pageSizeOptions]="[50, 100, 200, 500]"
+            showFirstLastButtons
+            (page)="onPaginatorChange($event)"
+          >
+          </mat-paginator>
         </div>
       </div>
 
@@ -104,22 +112,25 @@
               {{ booklet.name }}
             </mat-panel-title>
           </mat-expansion-panel-header>
-              <mat-list class="unit-list">
-                <button mat-button (click)="replayBooklet(booklet)">
-                  <mat-icon>play_arrow</mat-icon>
-                  Replay
-                </button>
-                <button mat-button (click)="replayBooklet(booklet)">
-                  <mat-icon>menu</mat-icon>
-                  Logs
-                </button>
-                <mat-list-item
-                  *ngFor="let unit of booklet.units"
-                  (click)="onUnitClick(unit)"
-                  class="hoverable">
-                  <span>{{ unit?.alias }}</span>
-                </mat-list-item>
-              </mat-list>
+          <mat-list class="unit-list">
+            <button mat-button (click)="replayBooklet(booklet)">
+              <mat-icon>play_arrow</mat-icon>
+              Replay
+            </button>
+            <button mat-button (click)="replayBooklet(booklet)">
+              <mat-icon>menu</mat-icon>
+              <button mat-button (click)="openBookletLogsDialog(booklet)">
+                <mat-icon>list</mat-icon>
+                Logs
+              </button>
+            </button>
+            <mat-list-item
+              *ngFor="let unit of booklet.units"
+              (click)="onUnitClick(unit)"
+              class="hoverable">
+              <span>{{ unit?.alias }}</span>
+            </mat-list-item>
+          </mat-list>
         </mat-expansion-panel>
       </mat-accordion>
       <mat-list class="var-list">
@@ -137,23 +148,26 @@
             <div
               [ngStyle]="{ 'background-color': getColor(response.status) }"
               class="square"
-              >
+            >
             </div>
             <span >{{ response.variableid }}</span>
           </div>
         </mat-list-item>
       </mat-list>
       <div class="fx-column-start-start log-list">
-
-      @for ( logBlock of this.logs; track logBlock;) {
-            @for ( log of logBlock; track log;) {
-              <div class="fx-row-start-start">
-                <strong>{{ log.key }}</strong> - {{ log.parameter }}
-                <small>{{    formatTimestamp(log.ts) }}</small>
-              </div>
-            }
-      }
+        @for (log of this.logs; track log;) {
+          <div class="fx-row-start-start log-item">
+            <strong class="log-key">{{ log.key }}</strong>
+            <span class="log-parameter">- {{ log.parameter }}</span>
+            <small class="log-timestamp">{{ formatTimestamp(log.ts) }}</small>
+          </div>
+        }
       </div>
+
     </div>
+  } @else {
+    <p>Es sind keine Testergebnisse vorhanden.</p>
   }
+}
+
 </div>
