@@ -25,6 +25,7 @@ import { UserInListDto } from '../../../../../api-dto/user/user-in-list-dto';
 import { UserWorkspaceAccessDto } from '../../../../../api-dto/workspaces/user-workspace-access-dto';
 import { FilesValidationDto } from '../../../../../api-dto/files/files-validation.dto';
 import { FileDownloadDto } from '../../../../../api-dto/files/file-download.dto';
+import { TestGroupsInfoDto } from '../../../../../api-dto/files/test-groups-info.dto';
 
 @Injectable({
   providedIn: 'root'
@@ -272,14 +273,14 @@ export class BackendService {
     });
   }
 
-  uploadTestResults(workspaceId: number, files: FileList | null): Observable<number> {
+  uploadTestResults(workspaceId: number, files: FileList | null, resultType: 'logs' | 'responses'): Observable<number> {
     const formData = new FormData();
     if (files) {
       for (let i = 0; i < files.length; i++) {
         formData.append('files', files[i]);
       }
     }
-    return this.http.post<never>(`${this.serverUrl}admin/workspace/${workspaceId}/upload/results`, formData, {
+    return this.http.post<never>(`${this.serverUrl}admin/workspace/${workspaceId}/upload/results/${resultType}`, formData, {
       headers: this.authHeader
     });
   }
@@ -377,7 +378,21 @@ export class BackendService {
   }
 
   getPersonTestResults(workspaceId: number, personId: number): Observable<any> {
-    return this.http.get<any[]>(
+    return this.http.get<Promise<{
+      id: number;
+      personid: number;
+      name: string;
+      size: number;
+      logs: { id: number; bookletid: number; ts: string; parameter: string, key: string }[];
+      units: {
+        id: number;
+        bookletid: number;
+        name: string;
+        alias: string | null;
+        results: { id: number; unitid: number }[];
+        logs: { id: number; unitid: number; ts: string; key: string; parameter: string }[];
+      }[];
+    }[]>[]>(
       `${this.serverUrl}admin/workspace/${workspaceId}/test-results/${personId}`,
       { headers: this.authHeader }
     );
@@ -395,17 +410,53 @@ export class BackendService {
                        server:string,
                        url:string,
                        token:string,
-                       importOptions:ImportOptions): Observable<Result> {
+                       importOptions:ImportOptions,
+                       testGroups: string[]
+  ): Observable<Result> {
     const {
       units, responses, definitions, player, codings, logs, testTakers, booklets
     } = importOptions;
+
+    const params = new HttpParams()
+      .set('tc_workspace', testCenterWorkspace)
+      .set('server', server)
+      .set('url', encodeURIComponent(url))
+      .set('responses', String(responses))
+      .set('logs', String(logs))
+      .set('definitions', String(definitions))
+      .set('units', String(units))
+      .set('codings', String(codings))
+      .set('player', String(player))
+      .set('token', token)
+      .set('testTakers', String(testTakers))
+      .set('booklets', String(booklets))
+      .set('testGroups', String(testGroups.join(',')));
+
     return this.http
-      // eslint-disable-next-line max-len
-      .get<Result>(`${this.serverUrl}admin/workspace/${workspace_id}/importWorkspaceFiles?tc_workspace=${testCenterWorkspace}&server=${server}&url=${encodeURIComponent(url)}&responses=${responses}&logs=${logs}&definitions=${definitions}&units=${units}&codings=${codings}&player=${player}&token=${token}&testTakers=${testTakers}&booklets=${booklets}`, { headers: this.authHeader })
+      .get<Result>(`${this.serverUrl}admin/workspace/${workspace_id}/importWorkspaceFiles`, { headers: this.authHeader, params })
       .pipe(
         catchError(() => of({
           success: false, testFiles: 0, responses: 0, logs: 0
         }))
+      );
+  }
+
+  importTestcenterGroups(workspace_id: number,
+                         testCenterWorkspace: string,
+                         server:string,
+                         url:string,
+                         authToken:string
+  ): Observable<TestGroupsInfoDto[]> {
+    const params = new HttpParams()
+      .set('tc_workspace', testCenterWorkspace)
+      .set('server', server)
+      .set('url', encodeURIComponent(url))
+      .set('token', authToken);
+
+    return this.http
+      .get<TestGroupsInfoDto[]>(`${this.serverUrl}admin/workspace/${workspace_id}/importWorkspaceFiles/testGroups`, { headers: this.authHeader, params })
+      .pipe(
+        catchError(() => of([]))
       );
   }
 }

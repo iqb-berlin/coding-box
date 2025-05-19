@@ -33,6 +33,7 @@ import { UploadResultsService } from '../../database/services/upload-results.ser
 import Persons from '../../database/entities/persons.entity';
 import { FilesValidationDto } from '../../../../../../api-dto/files/files-validation.dto';
 import { FileDownloadDto } from '../../../../../../api-dto/files/file-download.dto';
+import { TestGroupsInfoDto } from '../../../../../../api-dto/files/test-groups-info.dto';
 
 export type Result = {
   success: boolean,
@@ -86,7 +87,6 @@ export class WorkspaceController {
     return this.authService.createToken(userId, workspaceId, duration);
   }
 
-  // TODO Don't use boolean query params as strings
   @Get(':workspace_id/importWorkspaceFiles')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async importWorkspaceFiles(
@@ -102,6 +102,7 @@ export class WorkspaceController {
       @Query('units') units: string,
       @Query('codings') codings: string,
       @Query('testTakers') testTakers: string,
+      @Query('testGroups') testGroups: string,
       @Query('booklets') booklets: string)
       : Promise<Result> {
     const importOptions:ImportOptions = {
@@ -114,7 +115,20 @@ export class WorkspaceController {
       booklets: booklets,
       testTakers: testTakers
     };
-    return this.testCenterService.importWorkspaceFiles(workspace_id, tc_workspace, server, url, token, importOptions);
+
+    return this.testCenterService.importWorkspaceFiles(workspace_id, tc_workspace, server, decodeURIComponent(url), token, importOptions, testGroups);
+  }
+
+  @Get(':workspace_id/importWorkspaceFiles/testGroups')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  async getImportTestcenterGroups(
+    @Param('workspace_id') workspace_id: string,
+      @Query('server') server: string,
+      @Query('url') url: string,
+      @Query('tc_workspace') tc_workspace: string,
+      @Query('token') token: string)
+      : Promise<TestGroupsInfoDto[]> {
+    return this.testCenterService.getTestgroups(workspace_id, tc_workspace, server, decodeURIComponent(url), token);
   }
 
   @Get(':workspace_id')
@@ -206,19 +220,19 @@ export class WorkspaceController {
     @Param('workspace_id') workspace_id: number,
       @Param('personId') personId: number
   ): Promise<{
-        booklet: {
+        id: number;
+        personid: number;
+        name: string;
+        size: number;
+        logs: { id: number; bookletid: number; ts: string; parameter: string, key: string }[];
+        units: {
           id: number;
-          personid: number;
+          bookletid: number;
           name: string;
-          size: number;
-          units: {
-            id: number;
-            bookletid: number;
-            name: string;
-            alias: string | null;
-            results: { id: number; unitid: number }[];
-          }[];
-        };
+          alias: string | null;
+          results: { id: number; unitid: number }[];
+          logs: { id: number; unitid: number; ts: string; key: string; parameter: string }[];
+        }[];
       }[]> {
     return this.workspaceService.findPersonTestResults(personId, workspace_id);
   }
@@ -389,8 +403,8 @@ export class WorkspaceController {
     }
   }
 
-  @Post(':workspace_id/upload/results')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard) // Securing the endpoint with JWT and workspace-specific guards
+  @Post(':workspace_id/upload/results/:resultType')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiBearerAuth()
   @ApiParam({
     name: 'workspace_id',
@@ -408,6 +422,7 @@ export class WorkspaceController {
   })
   async addTestResults(
     @Param('workspace_id') workspace_id: number,
+      @Param('resultType') resultType: 'logs' | 'responses',
       @UploadedFiles() files: Express.Multer.File[]
   ): Promise<boolean> {
     if (!workspace_id || Number.isNaN(workspace_id)) {
@@ -419,7 +434,7 @@ export class WorkspaceController {
     }
 
     try {
-      return await this.uploadResults.uploadTestResults(workspace_id, files);
+      return await this.uploadResults.uploadTestResults(workspace_id, files, resultType);
     } catch (error) {
       logger.error('Error uploading test results!');
       throw new BadRequestException('Uploading test results failed. Please try again.');

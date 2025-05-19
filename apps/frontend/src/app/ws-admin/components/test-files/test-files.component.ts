@@ -153,8 +153,12 @@ export class TestFilesComponent implements OnInit {
 
   testCenterImport(): void {
     const dialogRef = this.dialog.open(TestCenterImportComponent, {
-      width: '600px',
-      minHeight: '600px'
+      width: '800px',
+      minHeight: '800px',
+      data: {
+        importType: 'testFiles'
+      }
+
     });
 
     dialogRef.afterClosed().subscribe((result: boolean | UntypedFormGroup) => {
@@ -187,12 +191,6 @@ export class TestFilesComponent implements OnInit {
         anchor.click();
         document.body.removeChild(anchor);
         window.URL.revokeObjectURL(url);
-      },
-      error: error => {
-        console.error('Download failed', error);
-      },
-      complete: () => {
-        console.log('File download completed.');
       }
     });
   }

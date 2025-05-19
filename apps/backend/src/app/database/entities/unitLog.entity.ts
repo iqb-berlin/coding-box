@@ -4,13 +4,13 @@ import {
 // eslint-disable-next-line import/no-cycle
 import { Unit } from './unit.entity';
 
-@Entity('unitLog')
+@Entity('unitlog')
 export class UnitLog {
   @PrimaryGeneratedColumn()
     id: number;
 
   @Column({ type: 'bigint' })
-    unitId: number;
+    unitid: number;
 
   @Column({ type: 'text' })
     key: string;
@@ -24,6 +24,6 @@ export class UnitLog {
   @ManyToOne(() => Unit, unit => unit.unitLogs, {
     onDelete: 'CASCADE'
   })
-  @JoinColumn({ name: 'unitId' })
+  @JoinColumn({ name: 'unitid' })
     unit: Unit;
 }
