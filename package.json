@@ -79,6 +79,7 @@
     "@nx/cypress": "20.4.6",
     "@nx/esbuild": "20.4.6",
     "@nx/eslint": "20.4.6",
+    "@nx/linter": "19.8.4",
     "@nx/jest": "20.4.6",
     "@nx/nest": "20.4.6",
     "@nx/node": "20.4.6",
