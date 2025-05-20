@@ -79,22 +79,19 @@ export class UploadResultsService {
   ): Promise<void> {
     return new Promise((resolve, reject) => {
       const rowData: T[] = [];
+      this.logger.log(`Processing CSV stream for ${resultType}`);
 
       csv.parseStream(bufferStream, { headers: true, delimiter: ';', quote: resultType === 'logs' ? null : '"' })
-        .transform(
-          (data: Record<string, string | undefined>): Partial<Log & Response> => ({
-            groupname: data.groupname?.replace(/"/g, ''),
-            loginname: data.loginname?.replace(/"/g, ''),
-            code: data.code?.replace(/"/g, ''),
-            bookletname: data.bookletname?.replace(/"/g, ''),
-            unitname: data.unitname?.replace(/"/g, ''),
-            timestamp: data.timestamp?.replace(/"/g, ''),
-            logentry: data.logentry,
-            originalUnitId: data.originalUnitId?.replace(/"/g, ''),
-            responses: data.responses?.replace(/"/g, ''),
-            laststate: data.laststate?.replace(/"/g, '')
-          })
-        )
+        .transform((row: T) => {
+          if (resultType === 'logs') {
+            Object.keys(row).forEach(key => {
+              if (typeof row[key] === 'string') {
+                row[key] = row[key].replace(/"/g, '');
+              }
+            });
+          }
+          return row;
+        })
         .on('data', (row: T) => { rowData.push(row); })
         .on('error', error => {
           this.logger.error(`CSV Parsing Error: ${error.message}`);
