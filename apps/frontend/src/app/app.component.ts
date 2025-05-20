@@ -19,7 +19,6 @@ import { AuthDataDto } from '../../../../api-dto/auth-data-dto';
 
 @Component({
   selector: 'app-root',
-  // eslint-disable-next-line max-len
   imports: [RouterOutlet, MatSlideToggleModule, MatProgressSpinner, RouterLink, TranslateModule, MatTooltip, MatButton, UserMenuComponent, WrappedIconComponent],
   templateUrl: './app.component.html',
   styleUrl: './app.component.scss',
@@ -73,7 +72,6 @@ export class AppComponent implements OnInit {
     this.appService.loggedUser = this.authService.getLoggedUser();
   }
 
-  // eslint-disable-next-line class-methods-use-this
   private isValidUserProfile(userProfile: KeycloakProfile): boolean {
     return !!userProfile?.id && !!userProfile?.username;
   }

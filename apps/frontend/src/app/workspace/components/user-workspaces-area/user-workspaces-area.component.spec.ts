@@ -1,7 +1,6 @@
 // eslint-disable-next-line max-classes-per-file
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
-import { KeycloakService } from 'keycloak-angular';
 import { UserWorkspacesAreaComponent } from './user-workspaces-area.component';
 import { environment } from '../../../../environments/environment';
 import { AuthService } from '../../../auth/service/auth.service';
@@ -16,7 +15,6 @@ describe('UserWorkspacesAreaComponent', () => {
         TranslateModule.forRoot()
       ],
       providers: [
-        KeycloakService,
         AuthService,
         {
           provide: 'SERVER_URL',

@@ -9,10 +9,10 @@ describe('AuthService', () => {
   beforeEach(() => {
     TestBed.configureTestingModule({
       imports: [
-        TranslateModule.forRoot(),
-        provideHttpClient()
+        TranslateModule.forRoot()
       ],
       providers: [
+        provideHttpClient(),
         {
           provide: AuthService,
           useValue: true
