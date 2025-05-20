@@ -242,6 +242,18 @@ export class BackendService {
       );
   }
 
+  getManualCoding(workspace_id:number, testPersonIds: number[]): Observable<boolean> {
+    const params = new HttpParams().set('testPersons', testPersonIds.join(','));
+    return this.http
+      .get<boolean>(
+      `${this.serverUrl}admin/workspace/${workspace_id}/coding/manual`,
+      { headers: this.authHeader, params })
+      .pipe(
+        catchError(() => of(false)),
+        map(() => true)
+      );
+  }
+
   changeWorkspace(workspaceData: WorkspaceFullDto): Observable<boolean> {
     return this.http
       .patch<boolean>(`${this.serverUrl}admin/workspace`, workspaceData, { headers: this.authHeader })

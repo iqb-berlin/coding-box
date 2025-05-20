@@ -313,8 +313,14 @@ export class WorkspaceController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async deleteTestGroups(
     @Query('testPersons')testPersonIds:string,
-      @Param('workspace_id')workspaceId:string): Promise<{ success: boolean; report: { deletedPersons: string[]; deletedBooklets: number[]; deletedUnits: number[]; deletedResponses: number[]; warnings: string[] } }> {
-    return this.workspaceService.deleteTestPersons(workspaceId, testPersonIds);
+      @Param('workspace_id')workspaceId:string): Promise<{
+        success: boolean;
+        report: {
+          deletedPersons: string[];
+          warnings: string[];
+        };
+      }> {
+    return this.workspaceService.deleteTestPersons(Number(workspaceId), testPersonIds);
   }
 
   @Get(':workspace_id/test-groups/:testGroup')
@@ -363,6 +369,13 @@ export class WorkspaceController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiParam({ name: 'workspace_id', type: Number })
   async codeTestPersons(@Query('testPersons') testPersons: string, @WorkspaceId() workspace_id: number): Promise<boolean> {
+    return this.workspaceService.codeTestPersons(workspace_id, testPersons);
+  }
+
+  @Get(':workspace_id/coding/manual')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiParam({ name: 'workspace_id', type: Number })
+  async getManualCoding(@Query('testPersons') testPersons: string, @WorkspaceId() workspace_id: number): Promise<boolean> {
     return this.workspaceService.codeTestPersons(workspace_id, testPersons);
   }
 

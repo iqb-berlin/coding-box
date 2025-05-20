@@ -48,7 +48,6 @@ export class UploadResultsService {
       if (resultType === 'logs') {
         await this.handleCsvStream<Log>(bufferStream, resultType, async rowData => {
           const startTime = performance.now();
-
           const { bookletLogs, unitLogs } = rowData.reduce(
             (acc, row) => {
               row.unitname === '' ? acc.bookletLogs.push(row) : acc.unitLogs.push(row);
@@ -56,12 +55,7 @@ export class UploadResultsService {
             },
             { bookletLogs: [], unitLogs: [] }
           );
-
           const persons = await this.personService.createPersonList(rowData, workspace_id);
-
-          const loggedPersonTime = performance.now();
-          this.logger.log('loggedPersonTime', `${(loggedPersonTime - startTime) / 1000}s`);
-
           await this.personService.processPersonLogs(persons, unitLogs, bookletLogs);
           const endTime = performance.now();
           this.logger.log(`CSV read and process duration: ${(endTime - startTime) / 1000}s`);
@@ -69,7 +63,6 @@ export class UploadResultsService {
       } else if (resultType === 'responses') {
         await this.handleCsvStream<Response>(bufferStream, resultType, async rowData => {
           this.logger.log(`Number of responses: ${rowData.length}`);
-
           const persons = await this.personService.createPersonList(rowData, workspace_id);
           const personList = await Promise.all(
             persons.map(async person => {
@@ -90,22 +83,19 @@ export class UploadResultsService {
   ): Promise<void> {
     return new Promise((resolve, reject) => {
       const rowData: T[] = [];
+      this.logger.log(`Processing CSV stream for ${resultType}`);
 
       csv.parseStream(bufferStream, { headers: true, delimiter: ';', quote: resultType === 'logs' ? null : '"' })
-        .transform(
-          (data: any): any => ({
-            groupname: data.groupname?.replace(/"/g, ''),
-            loginname: data.loginname?.replace(/"/g, ''),
-            code: data.code?.replace(/"/g, ''),
-            bookletname: data.bookletname?.replace(/"/g, ''),
-            unitname: data.unitname?.replace(/"/g, ''),
-            timestamp: data.timestamp?.replace(/"/g, ''),
-            logentry: data.logentry,
-            originalUnitId: data.originalUnitId?.replace(/"/g, ''),
-            responses: data.responses?.replace(/"/g, ''),
-            laststate: data.laststate?.replace(/"/g, '')
-          })
-        )
+        .transform((row: T) => {
+          if (resultType === 'logs') {
+            Object.keys(row).forEach(key => {
+              if (typeof row[key] === 'string') {
+                row[key] = row[key].replace(/"/g, ''); // Entfernt alle Anführungszeichen
+              }
+            });
+          }
+          return row;
+        })
         .on('data', (row: T) => { rowData.push(row); })
         .on('error', error => {
           this.logger.error(`CSV Parsing Error: ${error.message}`);
