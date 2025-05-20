@@ -225,7 +225,7 @@ export class TestcenterService {
       if (definitions === 'true' || player === 'true' || units === 'true' ||
         codings === 'true' || testTakers === 'true' || booklets === 'true') {
         const filesEndpoint = url ?
-          `${url}/api/workspace/2/files` :
+          `${url}/api/workspace/${tc_workspace}/files` :
           `http://iqb-testcenter${server}.de/api/workspace/${tc_workspace}/files`;
 
         try {
