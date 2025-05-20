@@ -340,20 +340,20 @@ export class TestResultsComponent implements OnInit {
   codeSelectedPersons(): void {
     this.isLoading = true;
     const selectedTestPersons = this.selection.selected;
-    this.backendService.deleteTestPersons(
+    this.backendService.codeTestPersons(
       this.appService.selectedWorkspaceId,
       selectedTestPersons.map(person => person.id)
     ).subscribe(respOk => {
       if (respOk) {
         this.snackBar.open(
-          this.translateService.instant('ws-admin.test-group-deleted'),
+          this.translateService.instant('ws-admin.test-group-coded'),
           '',
           { duration: 1000 }
         );
         this.createTestResultsList(this.pageIndex, this.pageSize);
       } else {
         this.snackBar.open(
-          this.translateService.instant('ws-admin.test-group-not-deleted'),
+          this.translateService.instant('ws-admin.test-group-not-coded'),
           this.translateService.instant('error'),
           { duration: 1000 }
         );
