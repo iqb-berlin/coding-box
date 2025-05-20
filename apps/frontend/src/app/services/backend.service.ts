@@ -233,19 +233,21 @@ export class BackendService {
   codeTestPersons(workspace_id:number, testPersonIds: number[]): Observable<boolean> {
     const params = new HttpParams().set('testPersons', testPersonIds.join(','));
     return this.http
-      .delete(
-        `${this.serverUrl}admin/workspace/${workspace_id}/test-results`,
-        { headers: this.authHeader, params })
+      .get<boolean>(
+      `${this.serverUrl}admin/workspace/${workspace_id}/coding`,
+      { headers: this.authHeader, params })
       .pipe(
         catchError(() => of(false)),
         map(() => true)
       );
   }
 
-  createCodingTestGroups(ids: TestGroupsInListDto[]): Observable<boolean> {
-    const params = new HttpParams().set('testPersons', ids.join(','));
+  getManualCoding(workspace_id:number, testPersonIds: number[]): Observable<boolean> {
+    const params = new HttpParams().set('testPersons', testPersonIds.join(','));
     return this.http
-      .post(`${this.serverUrl}admin/workspace/test-results/coding`, { headers: this.authHeader, params })
+      .get<boolean>(
+      `${this.serverUrl}admin/workspace/${workspace_id}/coding/manual`,
+      { headers: this.authHeader, params })
       .pipe(
         catchError(() => of(false)),
         map(() => true)
