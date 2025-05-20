@@ -50,6 +50,7 @@ export type Response = {
   bookletname : string,
   unitname : string,
   originalUnitId: string
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   responses : any,
   laststate : string,
 
@@ -728,7 +729,9 @@ export class WorkspaceService {
   }
 
   private extractXmlData(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     bookletTags: cheerio.Cheerio<any>,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     unitTags: cheerio.Cheerio<any>
   ): {
       uniqueBooklets: Set<string>;
@@ -749,12 +752,12 @@ export class WorkspaceService {
     unitTags.each((_, unit) => {
       const $ = cheerio.load(unit);
 
-      $('unit').each((_, codingScheme) => {
+      $('unit').each((__, codingScheme) => {
         const value = $(codingScheme).text().trim();
         if (value) codingSchemeRefs.push(value);
       });
 
-      $('DefinitionRef').each((_, definition) => {
+      $('DefinitionRef').each((__, definition) => {
         const value = $(definition).text().trim();
         if (value) definitionRefs.push(value);
       });

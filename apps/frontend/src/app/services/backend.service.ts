@@ -358,12 +358,13 @@ export class BackendService {
       { headers: this.authHeader });
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   getTestResults(workspaceId: number, page: number, limit: number): Observable<any> {
     const params = {
       page: page.toString(),
       limit: limit.toString()
     };
-
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return this.http.get<any>(
       `${this.serverUrl}admin/workspace/${workspaceId}/test-results/`,
       {
@@ -372,13 +373,14 @@ export class BackendService {
       }
     ).pipe(
       catchError(() => {
-        logger.error('Fehler beim Abrufen der Testdaten:');
+        logger.error('Error fetching test data');
         return of({ results: [], total: 0 });
       }),
       map(result => result || { results: [], total: 0 })
     );
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   getPersonTestResults(workspaceId: number, personId: number): Observable<any> {
     return this.http.get<Promise<{
       id: number;

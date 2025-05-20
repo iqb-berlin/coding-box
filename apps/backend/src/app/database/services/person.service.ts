@@ -45,7 +45,7 @@ export class PersonService {
   }
 
   logger = new Logger(PersonService.name);
-  async createPersonList(rows: any[], workspace_id: number): Promise<Person[]> {
+  async createPersonList(rows: Array<{ groupname: string; loginname: string; code: string }>, workspace_id: number): Promise<Person[]> {
     if (!Array.isArray(rows)) {
       this.logger.error('Invalid input: rows must be an array');
     }
@@ -428,7 +428,7 @@ export class PersonService {
                     await Promise.all([
                       this.saveUnitLastState(unit, savedUnit, booklet, person),
                       this.processSubforms(unit, savedUnit, booklet, person),
-                      this.processChunks(unit, savedUnit, booklet, person)
+                      this.processChunks(unit, savedUnit, booklet)
                     ]);
                   }
                 } catch (unitError) {
@@ -452,7 +452,7 @@ export class PersonService {
     }
   }
 
-  private async saveUnitLastState(unit: any, savedUnit: any, booklet: any, person: any): Promise<void> {
+  private async saveUnitLastState(unit: TcMergeUnit, savedUnit: Unit, booklet: TcMergeBooklet, person: Persons): Promise<void> {
     try {
       const currentLastState = await this.unitLastStateRepository.find({
         where: { unitid: savedUnit.id }
@@ -474,7 +474,7 @@ export class PersonService {
     }
   }
 
-  private async processSubforms(unit: any, savedUnit: any, booklet: any, person: any): Promise<void> {
+  private async processSubforms(unit: TcMergeUnit, savedUnit: Unit, booklet: TcMergeBooklet, person: Persons): Promise<void> {
     try {
       const subforms = unit.subforms;
       if (subforms && subforms.length > 0) {
@@ -486,7 +486,7 @@ export class PersonService {
     }
   }
 
-  private async processChunks(unit: any, savedUnit: any, booklet: any, person: any): Promise<void> {
+  private async processChunks(unit: TcMergeUnit, savedUnit: Unit, booklet: TcMergeBooklet): Promise<void> {
     try {
       if (unit.chunks && unit.chunks.length > 0) {
         const chunkEntries = unit.chunks.map(chunk => ({
@@ -506,7 +506,7 @@ export class PersonService {
     }
   }
 
-  async saveSubformResponsesForUnit(savedUnit: TcMergeUnit, subforms: TcMergeSubForms[], personId: number) {
+  async saveSubformResponsesForUnit(savedUnit: Unit, subforms: TcMergeSubForms[], personId: number) {
     try {
       for (const subform of subforms) {
         if (subform.responses && subform.responses.length > 0) {
@@ -581,7 +581,7 @@ export class PersonService {
           unitMap.set(row.unitname, newUnit);
         }
       } catch (error) {
-        console.error(`Error processing row at index ${index}: ${error.message}`, row);
+        this.logger.error(`Error processing row at index ${index}: ${error.message}`, row);
       }
     });
 
@@ -783,7 +783,6 @@ export class PersonService {
         this.logger.warn(
           `Unit not found for alias: ${unit.alias}, name: ${unit.id} ${booklet.id} ${existingBooklet.id} ID${unit.id} ALIAS${unit.alias}`
         );
-        continue;
       }
 
       // await this.saveUnitLogs(unit, existingUnit);

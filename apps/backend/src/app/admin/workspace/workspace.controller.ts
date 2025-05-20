@@ -3,7 +3,7 @@ import {
   Body,
   Controller,
   Delete,
-  Get, Param, Patch,
+  Get, InternalServerErrorException, Param, Patch,
   Post, Query, UploadedFiles, UseGuards, UseInterceptors
 } from '@nestjs/common';
 import {
@@ -415,11 +415,13 @@ export class WorkspaceController {
   ): Promise<FileDownloadDto> {
     if (!workspaceId) {
       logger.error('Workspace ID is required.');
+      throw new BadRequestException('Workspace ID is required.');
     }
     try {
       return await this.workspaceService.downloadTestFile(workspaceId, fileId);
     } catch (error) {
-      logger.error('Error downloading test file:');
+      logger.error(`'Error downloading test file:' ${error}`);
+      throw new InternalServerErrorException('Unable to download the file. Please try again later.');
     }
   }
 
