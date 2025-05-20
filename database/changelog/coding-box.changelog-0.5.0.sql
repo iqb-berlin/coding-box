@@ -24,7 +24,7 @@ CREATE TABLE booklet (
                        personId BIGINT NOT NULL,
                        lastTs BIGINT DEFAULT 0 NOT NULL,
                        firstTs BIGINT DEFAULT 0 NOT NULL,
-                       CONSTRAINT FK_booklet_person FOREIGN KEY (personId) REFERENCES persons (id) ON DELETE CASCADE ON UPDATE NO ACTION,
+                       CONSTRAINT FK_booklet_person FOREIGN KEY (personId) REFERENCES person (id) ON DELETE CASCADE ON UPDATE NO ACTION,
                        CONSTRAINT FK_booklet_info FOREIGN KEY (infoId) REFERENCES bookletInfo (id) ON DELETE CASCADE ON UPDATE NO ACTION
 );
 -- rollback DROP TABLE IF EXISTS booklet;
@@ -136,3 +136,9 @@ ALTER TABLE unitLog ALTER COLUMN id SET STORAGE PLAIN;
 ALTER TABLE unitLastState ADD id serial4 NOT NULL;
 ALTER TABLE unitLastState ALTER COLUMN id SET STORAGE PLAIN;
 -- rollback ALTER TABLE unitLastState DROP COLUMN id;
+
+
+-- changeset jurei733:18
+ALTER TABLE booklet DROP CONSTRAINT FK_booklet_person;
+ALTER TABLE booklet ADD CONSTRAINT FK_booklet_person FOREIGN KEY (personId) REFERENCES persons (id) ON DELETE CASCADE ON UPDATE NO ACTION;
+-- rollback ALTER TABLE booklet DROP CONSTRAINT FK_booklet_person;
