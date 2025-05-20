@@ -29,8 +29,6 @@ import Persons from '../entities/persons.entity';
 import { Unit } from '../entities/unit.entity';
 import { Booklet } from '../entities/booklet.entity';
 import { ResponseEntity } from '../entities/response.entity';
-// eslint-disable-next-line import/no-cycle
-import { Result } from './testcenter.service';
 import { BookletInfo } from '../entities/bookletInfo.entity';
 import { FileDownloadDto } from '../../../../../../api-dto/files/file-download.dto';
 import { BookletLog } from '../entities/bookletLog.entity';
@@ -222,8 +220,7 @@ export class WorkspaceService {
     });
     if (workspaces.length > 0) {
       const mappedWorkspaces = workspaces.map(workspace => ({ id: workspace.workspaceId }));
-      const ws = await this.workspaceRepository.find({ where: mappedWorkspaces });
-      return ws;
+      return this.workspaceRepository.find({ where: mappedWorkspaces });
     }
     return [];
   }
@@ -321,7 +318,7 @@ export class WorkspaceService {
         select: ['id', 'unitid', 'ts', 'key', 'parameter']
       });
 
-      const structuredResults = booklets.map(booklet => {
+      return booklets.map(booklet => {
         const bookletInfo = bookletInfoData.find(info => info.id === booklet.infoid);
         return {
           id: booklet.id,
@@ -355,7 +352,6 @@ export class WorkspaceService {
             }))
         };
       });
-      return structuredResults;
     } catch (error) {
       this.logger.error(
         `Failed to fetch booklets, bookletInfo, units, and results for personId: ${personId} and workspaceId: ${workspaceId}`,
@@ -482,8 +478,8 @@ export class WorkspaceService {
     }
   }
 
-  async findUnitResponse(workspaceId:number, connector: string, unitId: string): Promise<any> {
-    const [group, code, rest] = connector.split('@');
+  async findUnitResponse(workspaceId:number, connector: string, unitId: string): Promise<{ responses: { id: string, content: { id: string; value: string; status: string }[] }[] }> {
+    const [group, code] = connector.split('@');
     const person = await this.personsRepository.findOne({ where: { code, group } });
     if (!person) {
       throw new Error(`Person mit ID ${person.id} wurde nicht gefunden.`);
@@ -522,8 +518,7 @@ export class WorkspaceService {
 
   async findWorkspaceResponses(workspace_id: number): Promise<ResponseDto[]> {
     this.logger.log('Returning responses for workspace', workspace_id);
-    const responses = await this.responsesRepository.find({ where: { workspace_id: workspace_id } });
-    return responses;
+    return this.responsesRepository.find({ where: { workspace_id: workspace_id } });
   }
 
   async validateTestFiles(workspaceId: number): Promise<ValidationData[]> {
@@ -672,9 +667,8 @@ export class WorkspaceService {
 
   async findUnit(workspace_id: number, testPerson:string, unitId:string): Promise<FileUpload[]> {
     this.logger.log('Returning unit for test person', testPerson);
-    const response = await this.fileUploadRepository.find(
+    return this.fileUploadRepository.find(
       { where: { file_id: `${unitId}`, workspace_id: workspace_id } });
-    return response;
   }
 
   async findTestGroups(workspace_id: number): Promise<TestGroupsInListDto[]> {
@@ -823,10 +817,6 @@ export class WorkspaceService {
       };
     }
     throw new AdminWorkspaceNotFoundException(id, 'GET');
-  }
-
-  private static getTestPersonName(unitResponse: Response | Log): string {
-    return `${unitResponse.loginname}@${unitResponse.code}@${unitResponse.bookletname}`;
   }
 
   async create(workspace: CreateWorkspaceDto): Promise<number> {
@@ -1074,12 +1064,12 @@ export class WorkspaceService {
         const parsedData = JSON.parse(file.buffer.toString());
         const schemaPath = './schemas/coding-scheme.schema.json';
         const schemaContent = fs.readFileSync(schemaPath, 'utf-8');
-        const schema: JSONSchemaType<any> = JSON.parse(schemaContent);
+        const schema: JSONSchemaType<unknown> = JSON.parse(schemaContent);
         const ajv = new Ajv();
         const validate = ajv.compile(schema);
         const isValid = validate(parsedData);
         if (!isValid) {
-          throw new Error(`JSON validation failed: ${JSON.stringify(validate.errors)}`);
+          this.logger.error(`JSON validation failed: ${JSON.stringify(validate.errors)}`);
         }
 
         return await this.fileUploadRepository.upsert({
@@ -1091,7 +1081,7 @@ export class WorkspaceService {
           data: file.buffer.toString()
         }, ['file_id']);
       } catch (error) {
-        console.error('Error parsing or validating JSON:', error);
+        this.logger.error('Error parsing or validating JSON:', error);
         throw new Error('Invalid JSON file or failed validation');
       }
     }
@@ -1295,7 +1285,7 @@ export class WorkspaceService {
     }, <{ [key: string]: ResponseDto }>{}));
   }
 
-  async testCenterImport(entries: any[]): Promise<boolean> {
+  async testCenterImport(entries: Record<string, unknown>[]): Promise<boolean> {
     try {
       const registry = this.fileUploadRepository.create(entries);
       await this.fileUploadRepository.upsert(registry, ['file_id']);
@@ -1331,8 +1321,6 @@ export class WorkspaceService {
 
       return WorkspaceService.normalizePlayerId(`${metadata.id}-${metadata.version}`);
     } catch (error) {
-      console.error('Error in getPlayerId:', error.message);
-
       return WorkspaceService.getResourceId(file);
     }
   }
@@ -1359,14 +1347,13 @@ export class WorkspaceService {
       throw new Error(`Invalid player name: ${name}`);
     }
 
-    const [, module = '', full = '', major = '', minorDot = '', patchDot = '', labelWithDash = ''] = matches;
+    const [, module = '', , major = '', minorDot = ''] = matches;
 
     const majorVersion = parseInt(major, 10) || 0;
     const minorVersion = minorDot ? parseInt(minorDot.substring(1), 10) : 0;
-    const patchVersion = patchDot ? parseInt(patchDot.substring(1), 10) : 0;
-    const label = labelWithDash ? labelWithDash.substring(1) : '';
+    // const patchVersion = patchDot ? parseInt(patchDot.substring(1), 10) : 0;
+    // const label = labelWithDash ? labelWithDash.substring(1) : '';
 
-    const normalizedId = `${module}-${majorVersion}.${minorVersion}`.toUpperCase();
-    return normalizedId;
+    return `${module}-${majorVersion}.${minorVersion}`.toUpperCase();
   }
 }
