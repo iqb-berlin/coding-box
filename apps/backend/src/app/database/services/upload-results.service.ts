@@ -47,7 +47,6 @@ export class UploadResultsService {
       bufferStream.push(null);
       if (resultType === 'logs') {
         await this.handleCsvStream<Log>(bufferStream, resultType, async rowData => {
-          const startTime = performance.now();
           const { bookletLogs, unitLogs } = rowData.reduce(
             (acc, row) => {
               row.unitname === '' ? acc.bookletLogs.push(row) : acc.unitLogs.push(row);
@@ -57,7 +56,6 @@ export class UploadResultsService {
           );
           const persons = await this.personService.createPersonList(rowData, workspace_id);
           await this.personService.processPersonLogs(persons, unitLogs, bookletLogs);
-          const endTime = performance.now();
         });
       } else if (resultType === 'responses') {
         await this.handleCsvStream<Response>(bufferStream, resultType, async rowData => {
@@ -84,7 +82,7 @@ export class UploadResultsService {
 
       csv.parseStream(bufferStream, { headers: true, delimiter: ';', quote: resultType === 'logs' ? null : '"' })
         .transform(
-          (data: any): any => ({
+          (data: Record<string, string | undefined>): Partial<Log & Response> => ({
             groupname: data.groupname?.replace(/"/g, ''),
             loginname: data.loginname?.replace(/"/g, ''),
             code: data.code?.replace(/"/g, ''),

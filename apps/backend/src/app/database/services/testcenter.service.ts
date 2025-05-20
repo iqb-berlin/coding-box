@@ -71,11 +71,10 @@ export class TestcenterService {
 
   persons: Person[] = [];
 
-  async authenticate(credentials: { username: string; password: string; server: string; url: string }): Promise<any> {
+  async authenticate(credentials: { username: string; password: string; server: string; url: string }): Promise<Record<string, unknown>> {
     const endpoint = credentials.url && !credentials.server ?
       `${credentials.url}/api/session/admin` :
       `http://iqb-testcenter${credentials.server}.de/api/session/admin`;
-    console.log(endpoint);
 
     try {
       const { data } = await firstValueFrom(
@@ -120,7 +119,7 @@ export class TestcenterService {
       );
       return response.data;
     } catch (error) {
-      console.error('Error fetching test groups:', error.message);
+      logger.error(`Error fetching test groups: ${error.message}`);
       return [];
     }
   }
@@ -326,7 +325,7 @@ export class TestcenterService {
         id: file.id
       };
     } catch (error) {
-      console.error(`Failed to fetch file: ${file.name}`, error);
+      logger.error(`Failed to fetch file: ${file.name} ${error}`);
 
       throw new Error('Unable to fetch the file from server.');
     }

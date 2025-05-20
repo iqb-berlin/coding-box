@@ -348,7 +348,7 @@ export class WorkspaceController {
   @ApiParam({ name: 'workspace_id', type: Number })
   async findResponse(@WorkspaceId() id: number,
     @Param('testPerson') testPerson:string,
-    @Param('unitId') unitId:string): Promise<ResponseDto[]> {
+    @Param('unitId') unitId:string): Promise<{ responses: { id: string, content: { id: string; value: string; status: string }[] }[] }> {
     return this.workspaceService.findUnitResponse(id, testPerson, unitId);
   }
 
