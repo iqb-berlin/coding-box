@@ -46,6 +46,7 @@
     "@ngx-translate/http-loader": "^8.0.0",
     "@types/adm-zip": "^0.5.0",
     "adm-zip": "^0.5.9",
+    "ajv": "^8.17.1",
     "cheerio": "^1.0.0-rc.12",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
@@ -53,6 +54,7 @@
     "jwt-decode": "^4.0.0",
     "keycloak-angular": "19.0.2",
     "keycloak-js": "^23.0.6",
+    "libxmljs2": "^0.35.0",
     "multer": "^1.4.5-lts.1",
     "passport-jwt": "^4.0.1",
     "passport-local": "^1.0.0",
@@ -63,7 +65,6 @@
     "tslib": "^2.3.0",
     "typeorm": "^0.3.20",
     "xml2js": "^0.6.2",
-    "libxmljs2": "^0.35.0",
     "zone.js": "0.15.0"
   },
   "devDependencies": {
@@ -78,6 +79,7 @@
     "@nx/cypress": "20.4.6",
     "@nx/esbuild": "20.4.6",
     "@nx/eslint": "20.4.6",
+    "@nx/linter": "19.8.4",
     "@nx/jest": "20.4.6",
     "@nx/nest": "20.4.6",
     "@nx/node": "20.4.6",

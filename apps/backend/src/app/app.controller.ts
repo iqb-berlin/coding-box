@@ -45,7 +45,7 @@ export class AppController {
   @Post('tc_authentication')
   async authenticate(
     @Body() credentials: { username: string, password: string, server:string, url:string }
-  ): Promise<string> {
+  ): Promise<Record<string, unknown>> {
     return this.testCenterService.authenticate(credentials);
   }
 }
