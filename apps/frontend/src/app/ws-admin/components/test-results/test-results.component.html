@@ -14,7 +14,7 @@
     </a>
     <a mat-raised-button color="primary" [disabled]="selection.selected.length === 0" (click)="deleteSelectedPersons()">
       <mat-icon>delete</mat-icon>
-      Testperson löschen
+      Testperson(en) löschen
     </a>
     <a mat-raised-button color="primary" [disabled]="selection.selected.length === 0" (click)="codeSelectedPersons()">
       <mat-icon>code</mat-icon>
@@ -106,7 +106,7 @@
       </div>
 
       <mat-accordion class="accordion">
-        <mat-expansion-panel *ngFor="let booklet of booklets">
+        <mat-expansion-panel [expanded]="booklets.length === 1" *ngFor="let booklet of booklets" >
           <mat-expansion-panel-header>
             <mat-panel-title (click)="setSelectedBooklet(booklet)">
               {{ booklet.name }}
@@ -118,7 +118,6 @@
               Replay
             </button>
             <button mat-button (click)="replayBooklet(booklet)">
-              <mat-icon>menu</mat-icon>
               <button mat-button (click)="openBookletLogsDialog(booklet)">
                 <mat-icon>list</mat-icon>
                 Logs
@@ -141,7 +140,10 @@
         <mat-list-item
           *ngFor="let response of this.responses"
           class="hoverable"
-          [matTooltip]="response.value + ' ' + response.status + ' ' + response.code + ' ' + response.score"
+          [matTooltip]="response.status +
+              (response.code ? ' ' + response.code : '') +
+              (response.score ? ' ' + response.score : '') +
+              ' ' + response.value"
           matTooltipPosition="right"
         >
           <div class="fx-row-start-start">

@@ -437,8 +437,6 @@ export class WorkspaceService {
       }
 
       for (const person of persons) {
-        this.logger.log(`Person gefunden: ${person.id}. Verarbeite Booklets...`);
-
         const booklets = await this.bookletRepository.find({
           where: { personid: person.id }
         });
@@ -449,8 +447,6 @@ export class WorkspaceService {
         }
 
         for (const booklet of booklets) {
-          this.logger.log(`- Booklet gefunden: ${booklet.id}. Verarbeite Einheiten...`);
-
           const units = await this.unitRepository.find({
             where: { bookletid: booklet.id }
           });
@@ -461,7 +457,6 @@ export class WorkspaceService {
           }
 
           for (const unit of units) {
-            this.logger.log(`-- Einheit gefunden: ${unit.id}. Verarbeite Antworten...`);
             const testFile = await this.fileUploadRepository
               .findOne({ where: { file_id: unit.alias.toUpperCase() } });
 
@@ -469,8 +464,6 @@ export class WorkspaceService {
               this.logger.log(`--- Keine Testdatei für Einheit ${unit.id} gefunden.`);
               continue;
             }
-
-            this.logger.log(`-- Testdatei ${testFile.filename} für Einheit ${unit.id} gefunden.`);
             let scheme = new Autocoder.CodingScheme({});
 
             try {
@@ -484,8 +477,6 @@ export class WorkspaceService {
                 if (fileRecord) {
                   scheme = new Autocoder.CodingScheme(JSON.parse(JSON.stringify(fileRecord?.data)));
                 }
-
-                this.logger.log('--- CodingSchemeRef gefunden: ');
               } else {
                 this.logger.log('--- Kein CodingSchemeRef-Tag gefunden.');
               }
@@ -501,7 +492,6 @@ export class WorkspaceService {
               value: response.value,
               status: response.status
             }));
-            console.log(scheme.variableCodings[0]?.codes);
 
             const codedResponses = scheme.code(mappedResponses as Autocoder.Response[])
               .map(res => ({
@@ -509,10 +499,10 @@ export class WorkspaceService {
                 status: res.status,
                 variableid: res.id,
                 unitid: unit.id,
+                subform: res.subform,
                 code: res.code,
                 score: res.score
               }));
-            console.log(codedResponses);
             await this.responseRepository.save(
               codedResponses.map(res => this.responseRepository.create(res as ResponseEntity))
             );
@@ -814,83 +804,45 @@ export class WorkspaceService {
   }
 
   async deleteTestPersons(
-    workspaceId: string,
+    workspaceId: number,
     testPersonIds: string
   ): Promise<{
       success: boolean;
       report: {
         deletedPersons: string[];
-        deletedBooklets: number[];
-        deletedUnits: number[];
-        deletedResponses: number[];
         warnings: string[];
       };
     }> {
     return this.connection.transaction(async manager => {
-      const ids = testPersonIds.split(',');
+      const ids = testPersonIds.split(',').map(id => id.trim());
       const report = {
         deletedPersons: [],
-        deletedBooklets: [],
-        deletedUnits: [],
-        deletedResponses: [],
         warnings: []
       };
 
-      const booklets = await manager
-        .createQueryBuilder(Booklet, 'booklet')
-        .select('booklet.id')
-        .where('booklet.personid IN (:...ids)', { ids })
+      const existingPersons = await manager
+        .createQueryBuilder(Persons, 'persons')
+        .select('persons.id')
+        .where('persons.id IN (:...ids)', { ids })
         .getMany();
 
-      if (!booklets.length) {
-        this.logger.warn(`Keine Booklets gefunden für Testpersonen ${testPersonIds}`);
-        report.warnings.push(`Keine Booklets gefunden für Testpersonen ${testPersonIds}`);
+      if (!existingPersons.length) {
+        const warningMessage = `Keine Personen gefunden für die angegebenen IDs: ${testPersonIds}`;
+        this.logger.warn(warningMessage);
+        report.warnings.push(warningMessage);
         return { success: false, report };
       }
 
-      const bookletIds = booklets.map(b => b.id);
-      report.deletedBooklets = bookletIds;
-
-      const unitIds = await manager
-        .createQueryBuilder(Unit, 'unit')
-        .select('unit.id')
-        .where('unit.bookletid IN (:...bookletIds)', { bookletIds })
-        .getMany()
-        .then(units => units.map(unit => unit.id));
-
-      report.deletedUnits = unitIds;
-
-      const [deletedResponses] = await Promise.all([
-        manager
-          .createQueryBuilder()
-          .delete()
-          .from(ResponseEntity)
-          .where('unitid IN (:...unitIds)', { unitIds })
-          .execute(),
-        manager
-          .createQueryBuilder()
-          .delete()
-          .from(Unit)
-          .where('id IN (:...unitIds)', { unitIds })
-          .execute(),
-        manager
-          .createQueryBuilder()
-          .delete()
-          .from(Booklet)
-          .where('id IN (:...bookletIds)', { bookletIds })
-          .execute()
-      ]);
-
-      report.deletedResponses = [deletedResponses.affected || 0];
+      const existingIds = existingPersons.map(person => person.id);
 
       await manager
         .createQueryBuilder()
         .delete()
         .from(Persons)
-        .where('id IN (:...ids)', { ids })
+        .where('id IN (:...ids)', { ids: existingIds })
         .execute();
 
-      report.deletedPersons = ids;
+      report.deletedPersons = existingIds;
 
       return { success: true, report };
     });
@@ -996,7 +948,6 @@ export class WorkspaceService {
   async uploadTestFiles(workspace_id: number, originalFiles: FileIo[]): Promise<boolean> {
     this.logger.log(`Uploading test files for workspace ${workspace_id}`);
 
-    // Batch size
     const MAX_CONCURRENT_UPLOADS = 5;
     const processInBatches = async (files: FileIo[], batchSize: number): Promise<PromiseSettledResult<void>[]> => {
       const results: PromiseSettledResult<void>[] = [];
@@ -1015,7 +966,6 @@ export class WorkspaceService {
     try {
       const results = await processInBatches(originalFiles, MAX_CONCURRENT_UPLOADS);
 
-      // Log details of failed uploads for better debugging
       const failedFiles = results
         .filter(result => result.status === 'rejected')
         .map((result, index) => ({
@@ -1092,7 +1042,6 @@ export class WorkspaceService {
 
     const xmlDoc = libxmljs.parseXml(xml);
 
-    // Validierung des XML-Dokuments gegen das Schema
     if (!xmlDoc.validate(xsdDoc)) {
       const validationErrors = xmlDoc.validationErrors.map(err => err.message).join(', ');
       throw new Error(`XML-Validierung fehlgeschlagen: ${validationErrors}`);
