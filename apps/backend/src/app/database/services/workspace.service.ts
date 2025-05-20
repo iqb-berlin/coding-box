@@ -3,6 +3,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Connection, In, Repository } from 'typeorm';
+import Ajv, { JSONSchemaType } from 'ajv';
 import * as cheerio from 'cheerio';
 import AdmZip = require('adm-zip');
 import * as util from 'util';
@@ -879,7 +880,6 @@ export class WorkspaceService {
   async uploadTestFiles(workspace_id: number, originalFiles: FileIo[]): Promise<boolean> {
     this.logger.log(`Uploading test files for workspace ${workspace_id}`);
 
-    // Batch size
     const MAX_CONCURRENT_UPLOADS = 5;
     const processInBatches = async (files: FileIo[], batchSize: number): Promise<PromiseSettledResult<void>[]> => {
       const results: PromiseSettledResult<void>[] = [];
@@ -897,8 +897,6 @@ export class WorkspaceService {
 
     try {
       const results = await processInBatches(originalFiles, MAX_CONCURRENT_UPLOADS);
-
-      // Log details of failed uploads for better debugging
       const failedFiles = results
         .filter(result => result.status === 'rejected')
         .map((result, index) => ({
@@ -975,7 +973,6 @@ export class WorkspaceService {
 
     const xmlDoc = libxmljs.parseXml(xml);
 
-    // Validierung des XML-Dokuments gegen das Schema
     if (!xmlDoc.validate(xsdDoc)) {
       const validationErrors = xmlDoc.validationErrors.map(err => err.message).join(', ');
       throw new Error(`XML-Validierung fehlgeschlagen: ${validationErrors}`);
@@ -1000,8 +997,6 @@ export class WorkspaceService {
         return await this.unsupportedFile('Invalid XML: No root tag found');
       }
 
-      this.logger.log(`Root tag detected: ${rootTagName}`);
-
       const fileTypeMapping: Record<string, string> = {
         UNIT: 'Unit',
         BOOKLET: 'Booklet',
@@ -1012,7 +1007,6 @@ export class WorkspaceService {
       if (!fileType) {
         return await this.unsupportedFile(`Unsupported root tag: ${rootTagName}`);
       }
-      console.log('Current working directory:', process.cwd(), __dirname);
 
       const schemaPaths: Record<string, string> = {
         UNIT: path.resolve(__dirname, 'schemas/unit.xsd'),
@@ -1020,7 +1014,6 @@ export class WorkspaceService {
         TESTTAKERS: path.resolve(__dirname, 'schemas/testtakers.xsd')
       };
       const xsdPath = schemaPaths[rootTagName];
-      console.log('xsdPath', xsdPath);
       if (!xsdPath || !fs.existsSync(xsdPath)) {
         return await this.unsupportedFile(`No XSD schema found for root tag: ${rootTagName}`);
       }
@@ -1076,6 +1069,33 @@ export class WorkspaceService {
   private async handleOctetStreamFile(workspaceId: number, file: FileIo): Promise<unknown> {
     const resourceId = WorkspaceService.getResourceId(file);
 
+    if (file.originalname.endsWith('.vocs')) {
+      try {
+        const parsedData = JSON.parse(file.buffer.toString());
+        const schemaPath = './schemas/coding-scheme.schema.json';
+        const schemaContent = fs.readFileSync(schemaPath, 'utf-8');
+        const schema: JSONSchemaType<any> = JSON.parse(schemaContent);
+        const ajv = new Ajv();
+        const validate = ajv.compile(schema);
+        const isValid = validate(parsedData);
+        if (!isValid) {
+          throw new Error(`JSON validation failed: ${JSON.stringify(validate.errors)}`);
+        }
+
+        return await this.fileUploadRepository.upsert({
+          filename: file.originalname,
+          workspace_id: workspaceId,
+          file_id: resourceId.toUpperCase(),
+          file_type: 'Resource',
+          file_size: file.size,
+          data: file.buffer.toString()
+        }, ['file_id']);
+      } catch (error) {
+        console.error('Error parsing or validating JSON:', error);
+        throw new Error('Invalid JSON file or failed validation');
+      }
+    }
+
     return this.fileUploadRepository.upsert({
       filename: file.originalname,
       workspace_id: workspaceId,
@@ -1116,7 +1136,6 @@ export class WorkspaceService {
         const sanitizedEntry = sanitizePath(zipEntry.entryName);
 
         if (zipEntry.isDirectory) {
-          // Skip directories as they do not contain data-related content
           this.logger.debug(`Skipping directory entry: ${sanitizedEntry}`);
           return;
         }
@@ -1297,7 +1316,6 @@ export class WorkspaceService {
     try {
       const playerCode = file.buffer.toString();
 
-      // Load the string into Cheerio for HTML parsing.
       const playerContent = cheerio.load(playerCode);
 
       // Search for JSON+LD <script> tags in the parsed DOM.
@@ -1306,13 +1324,11 @@ export class WorkspaceService {
         throw new Error('Meta-data <script> tag not found');
       }
 
-      // Parse JSON data from the <script> tag content.
       const metadata = JSON.parse(metaDataElement.text());
       if (!metadata.id || !metadata.version) {
         throw new Error('Invalid metadata structure: Missing id or version');
       }
 
-      // Normalize and return the player ID using metadata.
       return WorkspaceService.normalizePlayerId(`${metadata.id}-${metadata.version}`);
     } catch (error) {
       console.error('Error in getPlayerId:', error.message);
@@ -1327,7 +1343,6 @@ export class WorkspaceService {
     }
     const filePathParts = file.originalname.split('/')
       .map(part => part.trim());
-    // Extract the file name from the last part of the path
     const fileName = filePathParts.pop();
     if (!fileName) {
       throw new Error('Invalid file: Could not determine the file name.');
@@ -1336,16 +1351,6 @@ export class WorkspaceService {
   }
 
   private static normalizePlayerId(name: string): string {
-    // Regular expression explanation:
-    // 1. Module prefix: (\D+?) - Matches non-digits (at least once, as few as possible).
-    // 2. Optional separator + version detail:
-    //    [@V-]?((\d+)(\.\d+)?(\.\d+)?(-\S+?)?)?
-    //    - [@V-]: Optional separator.
-    //    - (\d+): Major version (digits).
-    //    - (\.\d+)?: Optional minor version (preceded by a dot).
-    //    - (\.\d+)?: Optional patch version (preceded by a dot).
-    //    - (-\S+?)?: Optional label starting with a dash.
-    // 3. Optional suffix: (.\D{3,4})? - Matches a single character followed by 3-4 letters.
     const reg = /^(\D+?)[@V-]?((\d+)(\.\d+)?(\.\d+)?(-\S+?)?)?(.\D{3,4})?$/;
 
     const matches = name.match(reg);
@@ -1356,13 +1361,11 @@ export class WorkspaceService {
 
     const [, module = '', full = '', major = '', minorDot = '', patchDot = '', labelWithDash = ''] = matches;
 
-    // Parse numeric values and remove prefixes where necessary.
     const majorVersion = parseInt(major, 10) || 0;
-    const minorVersion = minorDot ? parseInt(minorDot.substring(1), 10) : 0; // Remove leading dot.
-    const patchVersion = patchDot ? parseInt(patchDot.substring(1), 10) : 0; // Remove leading dot.
-    const label = labelWithDash ? labelWithDash.substring(1) : ''; // Remove leading dash.
+    const minorVersion = minorDot ? parseInt(minorDot.substring(1), 10) : 0;
+    const patchVersion = patchDot ? parseInt(patchDot.substring(1), 10) : 0;
+    const label = labelWithDash ? labelWithDash.substring(1) : '';
 
-    // Construct normalized player ID.
     const normalizedId = `${module}-${majorVersion}.${minorVersion}`.toUpperCase();
     return normalizedId;
   }

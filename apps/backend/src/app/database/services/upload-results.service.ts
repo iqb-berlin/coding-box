@@ -48,7 +48,6 @@ export class UploadResultsService {
       if (resultType === 'logs') {
         await this.handleCsvStream<Log>(bufferStream, resultType, async rowData => {
           const startTime = performance.now();
-
           const { bookletLogs, unitLogs } = rowData.reduce(
             (acc, row) => {
               row.unitname === '' ? acc.bookletLogs.push(row) : acc.unitLogs.push(row);
@@ -56,20 +55,12 @@ export class UploadResultsService {
             },
             { bookletLogs: [], unitLogs: [] }
           );
-
           const persons = await this.personService.createPersonList(rowData, workspace_id);
-
-          const loggedPersonTime = performance.now();
-          this.logger.log('loggedPersonTime', `${(loggedPersonTime - startTime) / 1000}s`);
-
           await this.personService.processPersonLogs(persons, unitLogs, bookletLogs);
           const endTime = performance.now();
-          this.logger.log(`CSV read and process duration: ${(endTime - startTime) / 1000}s`);
         });
       } else if (resultType === 'responses') {
         await this.handleCsvStream<Response>(bufferStream, resultType, async rowData => {
-          this.logger.log(`Number of responses: ${rowData.length}`);
-
           const persons = await this.personService.createPersonList(rowData, workspace_id);
           const personList = await Promise.all(
             persons.map(async person => {
