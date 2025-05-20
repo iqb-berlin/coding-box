@@ -47,7 +47,6 @@ export class UploadResultsService {
       bufferStream.push(null);
       if (resultType === 'logs') {
         await this.handleCsvStream<Log>(bufferStream, resultType, async rowData => {
-          const startTime = performance.now();
           const { bookletLogs, unitLogs } = rowData.reduce(
             (acc, row) => {
               row.unitname === '' ? acc.bookletLogs.push(row) : acc.unitLogs.push(row);
@@ -57,12 +56,9 @@ export class UploadResultsService {
           );
           const persons = await this.personService.createPersonList(rowData, workspace_id);
           await this.personService.processPersonLogs(persons, unitLogs, bookletLogs);
-          const endTime = performance.now();
-          this.logger.log(`CSV read and process duration: ${(endTime - startTime) / 1000}s`);
         });
       } else if (resultType === 'responses') {
         await this.handleCsvStream<Response>(bufferStream, resultType, async rowData => {
-          this.logger.log(`Number of responses: ${rowData.length}`);
           const persons = await this.personService.createPersonList(rowData, workspace_id);
           const personList = await Promise.all(
             persons.map(async person => {
@@ -90,7 +86,7 @@ export class UploadResultsService {
           if (resultType === 'logs') {
             Object.keys(row).forEach(key => {
               if (typeof row[key] === 'string') {
-                row[key] = row[key].replace(/"/g, ''); // Entfernt alle Anführungszeichen
+                row[key] = row[key].replace(/"/g, '');
               }
             });
           }
