@@ -7,9 +7,9 @@ import { MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTableModule } from '@angular/material/table';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
+import { provideHttpClient } from '@angular/common/http';
 import { WsUsersComponent } from './ws-users.component';
 import { environment } from '../../../../environments/environment';
-import { provideHttpClient } from '@angular/common/http';
 
 describe('WsUsersComponent', () => {
   let component: WsUsersComponent;
