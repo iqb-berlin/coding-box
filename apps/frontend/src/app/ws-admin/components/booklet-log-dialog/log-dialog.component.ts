@@ -73,6 +73,7 @@ import { MatButton } from '@angular/material/button';
 export class LogDialogComponent implements OnInit {
   constructor(
     public dialogRef: MatDialogRef<LogDialogComponent>,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     @Inject(MAT_DIALOG_DATA) public data: { logs: any[] }
   ) { }
 

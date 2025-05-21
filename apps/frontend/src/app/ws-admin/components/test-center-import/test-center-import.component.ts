@@ -177,7 +177,7 @@ export class TestCenterImportComponent {
     }
   }
 
-  toggleRow(group: any): void {
+  toggleRow(group: TestGroupsInfoDto): void {
     const index = this.selectedRows.indexOf(group);
     if (index === -1) {
       this.selectedRows.push(group);
@@ -190,7 +190,7 @@ export class TestCenterImportComponent {
     return this.selectedRows.length === this.testGroups.length;
   }
 
-  toggleAllRows(event: any): void {
+  toggleAllRows(event: { checked: boolean }): void {
     if (event.checked) {
       this.selectedRows = [...this.testGroups];
     } else {

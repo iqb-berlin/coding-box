@@ -86,11 +86,15 @@ export class TestResultsComponent implements OnInit {
   dataSource !: MatTableDataSource<P>;
   displayedColumns: string[] = ['select', 'code', 'group', 'login', 'uploaded_at'];
   data: P[] = [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   booklets: { id: number; title: string, name:string, units:any }[] = [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   results: { [key: string]: any }[] = [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   responses: any = [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   logs: any = [];
-  bookletLogs: any = [];
+  bookletLogs: { [key: string]: unknown }[] = [];
   totalRecords: number = 0;
   pageSize: number = 50;
   pageIndex: number = 0;
@@ -126,7 +130,7 @@ export class TestResultsComponent implements OnInit {
       });
   }
 
-  replayBooklet(booklet:any) {
+  replayBooklet(booklet: { id: number; title: string; name: string; units: unknown }) {
     this.selectedBooklet = booklet;
   }
 
@@ -158,13 +162,15 @@ export class TestResultsComponent implements OnInit {
     }
   }
 
-  openBookletLogsDialog(booklet:any) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  openBookletLogsDialog(booklet: any) {
     this.dialog.open(LogDialogComponent, {
       width: '700px',
       data: { logs: booklet.logs }
     });
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   onUnitClick(unit: any): void {
     this.responses = unit.results;
     this.logs = unit.logs;
@@ -172,37 +178,16 @@ export class TestResultsComponent implements OnInit {
     this.selectedUnit = unit;
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   onBookletClick(booklet: any): void {
     this.bookletLogs = booklet.logs;
     // this.logs = this.createUnitHistory(unit);
     this.selectedUnit = booklet;
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   setSelectedBooklet(booklet:any) {
     this.selectedBooklet = booklet;
-  }
-
-  groupByPlayerLoading = (array: any[]) => {
-    const grouped = [];
-    let currentBlock: any[] = [];
-    for (const item of array) {
-      if (item.key === 'PLAYER' && item.parameter === 'LOADING') {
-        if (currentBlock.length > 0) {
-          grouped.push(currentBlock);
-        }
-        currentBlock = [];
-      }
-      currentBlock.push(item);
-    }
-    if (currentBlock.length > 0) {
-      grouped.push(currentBlock);
-    }
-
-    return grouped;
-  };
-
-  createUnitHistory(unit: { logs: any[]; }): any {
-    return this.groupByPlayerLoading(unit.logs);
   }
 
   formatTimestamp(timestamp: string): string {
@@ -260,8 +245,10 @@ export class TestResultsComponent implements OnInit {
     this.selection.toggle(row);
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private updateTable(data: any[], total: number): void {
     this.data = data;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const mappedResults = data.map((result: any) => ({
       id: result.id,
       code: result.code,

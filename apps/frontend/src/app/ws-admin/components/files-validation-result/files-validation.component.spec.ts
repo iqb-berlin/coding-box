@@ -1,5 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
+import { MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
 import { FilesValidationDialogComponent } from './files-validation.component';
 
 describe('FilesValidationComponent', () => {
@@ -11,6 +12,17 @@ describe('FilesValidationComponent', () => {
       imports: [
         FilesValidationDialogComponent,
         TranslateModule.forRoot()
+      ],
+      providers: [
+        {
+          provide: MatDialogRef,
+          useValue: []
+        },
+        {
+          provide: MAT_DIALOG_DATA,
+          useValue: []
+
+        }
       ]
     }).compileComponents();
 
