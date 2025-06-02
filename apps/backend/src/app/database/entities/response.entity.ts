@@ -1,5 +1,5 @@
 import {
-  Entity, Column, ManyToOne, JoinColumn, PrimaryGeneratedColumn
+  Entity, Column, ManyToOne, JoinColumn, PrimaryGeneratedColumn, Index
 } from 'typeorm';
 
 // eslint-disable-next-line import/no-cycle
@@ -10,9 +10,11 @@ export class ResponseEntity {
   @PrimaryGeneratedColumn()
     id: number;
 
+  @Index()
   @Column({ type: 'bigint' })
     unitid: number;
 
+  @Index()
   @Column({ type: 'text' })
     variableid: string;
 

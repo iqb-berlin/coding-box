@@ -1,5 +1,5 @@
 import {
-  Entity, Column, PrimaryGeneratedColumn, ManyToOne, JoinColumn
+  Entity, Column, PrimaryGeneratedColumn, ManyToOne, JoinColumn, Index
 } from 'typeorm';
 
 // eslint-disable-next-line import/no-cycle
@@ -25,6 +25,7 @@ export class Session {
   @Column({ type: 'bigint', nullable: true })
     loadcompletems: number;
 
+  @Index()
   @ManyToOne(() => Booklet, booklet => booklet.sessions, {
     onDelete: 'CASCADE'
   })

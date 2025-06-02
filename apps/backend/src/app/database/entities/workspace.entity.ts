@@ -1,10 +1,16 @@
-import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Column,
+  Entity,
+  Index,
+  PrimaryGeneratedColumn
+} from 'typeorm';
 
 @Entity()
 class Workspace {
   @PrimaryGeneratedColumn({ type: 'int' })
     id: number = 0;
 
+  @Index()
   @Column({ type: 'varchar' })
     name: string = '';
 

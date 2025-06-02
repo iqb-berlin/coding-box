@@ -4,7 +4,8 @@ import {
   PrimaryGeneratedColumn,
   ManyToOne,
   JoinColumn,
-  OneToMany
+  OneToMany,
+  Index
 } from 'typeorm';
 // eslint-disable-next-line import/no-cycle
 import { Booklet } from './booklet.entity';
@@ -22,12 +23,15 @@ export class Unit {
   @PrimaryGeneratedColumn()
     id: number;
 
+  @Index()
   @Column({ type: 'bigint' })
     bookletid: number;
 
+  @Index()
   @Column({ type: 'text' })
     name: string;
 
+  @Index()
   @Column({ type: 'text', nullable: true })
     alias: string;
 
