@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { HttpModule } from '@nestjs/axios';
+import { JwtService } from '@nestjs/jwt';
 import User from './entities/user.entity';
 import { UsersService } from './services/users.service';
 import { WorkspaceService } from './services/workspace.service';
@@ -19,13 +20,13 @@ import { BookletLog } from './entities/bookletLog.entity';
 import { Unit } from './entities/unit.entity';
 import { Booklet } from './entities/booklet.entity';
 import { BookletInfo } from './entities/bookletInfo.entity';
-import { Person } from './entities/person.entity';
 import { UnitLog } from './entities/unitLog.entity';
 import { UnitLastState } from './entities/unitLastState.entity';
 import { ChunkEntity } from './entities/chunk.entity';
 import { ResponseEntity } from './entities/response.entity';
 import { Session } from './entities/session.entity';
 import { PersonService } from './services/person.service';
+import { AuthService } from '../auth/service/auth.service';
 
 @Module({
   imports: [
@@ -36,7 +37,6 @@ import { PersonService } from './services/person.service';
     FileUpload,
     Responses,
     Persons,
-    Person,
     Unit,
     Responses,
     BookletLog,
@@ -57,7 +57,7 @@ import { PersonService } from './services/person.service';
         username: configService.get('POSTGRES_USER'),
         password: configService.get('POSTGRES_PASSWORD'),
         database: configService.get('POSTGRES_DB'),
-        entities: [Person, BookletInfo, Booklet, Session, BookletLog, Unit, UnitLog, UnitLastState, ResponseEntity,
+        entities: [BookletInfo, Booklet, Session, BookletLog, Unit, UnitLog, UnitLastState, ResponseEntity,
           User, Workspace, WorkspaceAdmin, FileUpload, Responses, WorkspaceUser, ResourcePackage, Logs, Persons, ChunkEntity, BookletLog, Session, UnitLog
         ],
         synchronize: false
@@ -75,7 +75,6 @@ import { PersonService } from './services/person.service';
       WorkspaceUser,
       ResourcePackage,
       Persons,
-      Person,
       Responses,
       Booklet,
       BookletInfo,
@@ -87,7 +86,7 @@ import { PersonService } from './services/person.service';
       Session
     ])
   ],
-  providers: [UsersService, WorkspaceService, TestcenterService, UploadResultsService, PersonService],
+  providers: [UsersService, WorkspaceService, TestcenterService, UploadResultsService, PersonService, AuthService, JwtService],
   exports: [
     User,
     FileUpload,
@@ -102,7 +101,8 @@ import { PersonService } from './services/person.service';
     TestcenterService,
     UploadResultsService,
     ResourcePackage,
-    PersonService
+    PersonService,
+    AuthService
   ]
 })
 export class DatabaseModule {}
