@@ -435,7 +435,7 @@ export class WorkspaceController {
   @Get(':workspace_id/test-groups')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiParam({ name: 'workspace_id', type: Number })
-  async findTestPersons(@WorkspaceId() id: number, @Param('testGroup') testPersons:string): Promise<number[]> {
+  async findTestPersons(@WorkspaceId() id: number): Promise<number[]> {
     return this.workspaceService.findTestPersons(id);
   }
 
@@ -498,8 +498,27 @@ export class WorkspaceController {
   @Get(':workspace_id/coding/manual')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiParam({ name: 'workspace_id', type: Number })
-  async getManualTestPersons(@Query('testPersons') testPersons: string, @WorkspaceId() workspace_id: number): Promise<any> {
+  async getManualTestPersons(@Query('testPersons') testPersons: string, @WorkspaceId() workspace_id: number): Promise<unknown> {
     return this.workspaceService.getManualTestPersons(workspace_id, testPersons);
+  }
+
+  @Get(':workspace_id/coding/coding-list')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiOkResponse({
+    description: 'List of incomplete coding items retrieved successfully.'
+  })
+  async getCodingList(): Promise<{
+    unit_key: string;
+    unit_alias: string;
+    login_name: string;
+    login_code: string;
+    booklet_id: string;
+    variable_id: string;
+    variable_page: string;
+    variable_anchor: string;
+  }[]> {
+    return this.workspaceService.getCodingList();
   }
 
   @Post(':workspace_id/upload')

@@ -100,8 +100,7 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
   ) {}
 
   ngOnInit(): void {
-    // Load data automatically when component initializes
-    this.fetchCodingList();
+    this.fetchCodeManual();
 
     this.filterTextChanged
       .pipe(
@@ -162,7 +161,7 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
     });
   }
 
-  fetchCodingList(): void {
+  fetchCodeManual(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     this.isLoading = true;
 
@@ -228,5 +227,55 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
             }
           });
       });
+  }
+
+  fetchCodingList(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    this.backendService.getCodingList(workspaceId)
+      .pipe(
+        catchError(() => {
+          this.snackBar.open('Fehler beim Abrufen der Kodierliste', 'Schließen', {
+            duration: 5000,
+            panelClass: ['error-snackbar']
+          });
+          return of([]);
+        }),
+        finalize(() => {
+        })
+      ).subscribe(data => {
+        this.downloadCodingListAsJson(data);
+      });
+  }
+
+  downloadCodingListAsJson(data: Success[]): void {
+    if (this.data.length === 0) {
+      this.snackBar.open('Keine Daten zum Herunterladen verfügbar', 'Schließen', {
+        duration: 3000
+      });
+      return;
+    }
+
+    try {
+      const jsonData = JSON.stringify(data, null, 2);
+      const blob = new Blob([jsonData], { type: 'application/json' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'kodierliste.json';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+
+      this.snackBar.open('Kodierliste erfolgreich heruntergeladen', 'Schließen', {
+        duration: 3000
+      });
+    } catch (error) {
+      console.error('Fehler beim Herunterladen der Kodierliste:', error);
+      this.snackBar.open('Fehler beim Herunterladen der Kodierliste', 'Schließen', {
+        duration: 5000,
+        panelClass: ['error-snackbar']
+      });
+    }
   }
 }

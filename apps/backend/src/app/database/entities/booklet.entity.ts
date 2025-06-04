@@ -7,8 +7,7 @@ import {
   OneToMany,
   Index
 } from 'typeorm';
-// eslint-disable-next-line import/no-cycle
-import { Person } from './person.entity';
+
 import { BookletInfo } from './bookletInfo.entity';
 // eslint-disable-next-line import/no-cycle
 import { BookletLog } from './bookletLog.entity';
@@ -16,6 +15,8 @@ import { BookletLog } from './bookletLog.entity';
 import { Unit } from './unit.entity';
 // eslint-disable-next-line import/no-cycle
 import { Session } from './session.entity';
+// eslint-disable-next-line import/no-cycle
+import Persons from './persons.entity';
 
 @Entity('booklet')
 export class Booklet {
@@ -36,11 +37,11 @@ export class Booklet {
   @Column({ type: 'bigint', default: 0 })
     firstts: number;
 
-  @ManyToOne(() => Person, person => person.booklets, {
+  @ManyToOne(() => Persons, person => person.booklets, {
     onDelete: 'CASCADE'
   })
   @JoinColumn({ name: 'personid' })
-    person: Person;
+    person: Persons;
 
   @ManyToOne(() => BookletInfo, {
     onDelete: 'CASCADE'

@@ -27,6 +27,7 @@ import { FilesValidationDto } from '../../../../../api-dto/files/files-validatio
 import { FileDownloadDto } from '../../../../../api-dto/files/file-download.dto';
 import { TestGroupsInfoDto } from '../../../../../api-dto/files/test-groups-info.dto';
 
+
 @Injectable({
   providedIn: 'root'
 })
@@ -250,7 +251,18 @@ export class BackendService {
       { headers: this.authHeader, params })
       .pipe(
         catchError(() => of(false)),
-        map((res) => res)
+        map(res => res)
+      );
+  }
+
+  getCodingList(workspace_id:number): Observable<any> {
+    return this.http
+      .get<any>(
+      `${this.serverUrl}admin/workspace/${workspace_id}/coding/coding-list`,
+      { headers: this.authHeader })
+      .pipe(
+        catchError(() => of([])),
+        map(res => res)
       );
   }
 

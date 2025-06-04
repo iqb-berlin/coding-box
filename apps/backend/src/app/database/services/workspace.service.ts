@@ -518,7 +518,7 @@ export class WorkspaceService {
     }
   }
 
-  async getManualTestPersons(workspace_id: number, personIds?: string): Promise<any> {
+  async getManualTestPersons(workspace_id: number, personIds?: string): Promise<unknown> {
     this.logger.log(
       `Fetching responses for workspace_id = ${workspace_id} ${
         personIds ? `and personIds = ${personIds}` : ''
@@ -702,6 +702,59 @@ export class WorkspaceService {
   async findWorkspaceResponses(workspace_id: number): Promise<ResponseDto[]> {
     this.logger.log('Returning responses for workspace', workspace_id);
     return this.responsesRepository.find({ where: { workspace_id: workspace_id } });
+  }
+
+  async getCodingList(): Promise<{
+    unit_key: string;
+    unit_alias: string;
+    login_name: string;
+    login_code: string;
+    booklet_id: string;
+    variable_id: string;
+    variable_page: string;
+    variable_anchor: string;
+    url: string;
+  }[]> {
+    try {
+      const responses = await this.responseRepository.find({
+        where: { codedstatus: 'CODING_INCOMPLETE' },
+        relations: ['unit', 'unit.booklet', 'unit.booklet.person', 'unit.booklet.bookletinfo']
+      });
+
+      const result = responses.map(response => {
+        const unit = response.unit;
+        const booklet = unit?.booklet;
+        const person = booklet?.person;
+        const bookletInfo = booklet?.bookletinfo;
+        const token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjEsInVzZXJuYW1lIjoicmVpY2hsZWpAZ214LmRlIiwic3ViIjp7ImlkIjoxLCJ1c2VybmFtZSI6InJlaWNobGVqQGdteC5kZSIsImlzQWRtaW4iOnRydWV9LCJ3b3Jrc3BhY2UiOiIzNCIsImlhdCI6MTc0OTAzNzUzMywiZXhwIjoxNzU0MjIxNTMzfQ.4FVfq10u_SbhXCCNXb2edh_SYupW-LZPj09Opb08CS4";
+
+        const loginName = person?.login || '';
+        const loginCode = person?.code || '';
+        const bookletId = bookletInfo?.name || '';
+        const unitKey = unit?.name || '';
+        const variablePage = '0';
+
+        // Generate URL in the format: https://www.iqb-kodierbox.de/#/replay/{login_name}@{login_code}@{booklet_id}/{unit_key}/{variable_page}?auth={token}
+        const url = `https://www.iqb-kodierbox.de/#/replay/${loginName}@${loginCode}@${bookletId}/${unitKey}/${variablePage}?auth=${token}`;
+
+        return {
+          unit_key: unitKey,
+          unit_alias: unit?.alias || '',
+          login_name: loginName,
+          login_code: loginCode,
+          booklet_id: bookletId,
+          variable_id: response.variableid || '',
+          variable_page: variablePage,
+          variable_anchor: '',
+          url
+        };
+      });
+
+      return result;
+    } catch (error) {
+      this.logger.error(`Error fetching coding list: ${error.message}`);
+      return [];
+    }
   }
 
   async validateTestFiles(workspaceId: number): Promise<ValidationData[]> {
