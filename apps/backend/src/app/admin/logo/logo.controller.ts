@@ -1,9 +1,12 @@
 import {
   BadRequestException,
+  Body,
   Controller,
   Delete,
+  Get,
   InternalServerErrorException,
   Post,
+  Put,
   UploadedFile,
   UseGuards,
   UseInterceptors
@@ -22,6 +25,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { AdminGuard } from '../admin.guard';
+import { AppLogoDto } from '../../../../../../api-dto/app-logo-dto';
 
 @Controller('admin/logo')
 @ApiTags('admin')
@@ -114,9 +118,62 @@ export class LogoController {
         }
       }
 
+      // Delete logo settings file if it exists
+      const settingsPath = path.join(process.cwd(), 'apps', 'frontend', 'src', 'assets', 'logo-settings.json');
+      if (fs.existsSync(settingsPath)) {
+        fs.unlinkSync(settingsPath);
+      }
+
       return { success: deleted };
     } catch (error) {
       throw new InternalServerErrorException('Failed to delete logo');
+    }
+  }
+
+  @Put('settings')
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Save logo settings', description: 'Saves logo settings like background color' })
+  @ApiBody({ type: AppLogoDto })
+  @ApiOkResponse({ description: 'Logo settings saved successfully', type: Boolean })
+  async saveLogoSettings(@Body() logoSettings: AppLogoDto): Promise<{ success: boolean }> {
+    try {
+      const settingsPath = path.join(process.cwd(), 'apps', 'frontend', 'src', 'assets', 'logo-settings.json');
+
+      // Save the settings to a file
+      fs.writeFileSync(settingsPath, JSON.stringify(logoSettings, null, 2));
+
+      return { success: true };
+    } catch (error) {
+      throw new InternalServerErrorException('Failed to save logo settings');
+    }
+  }
+
+  @Get('settings')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get logo settings', description: 'Gets logo settings like background color' })
+  @ApiOkResponse({ description: 'Logo settings retrieved successfully', type: AppLogoDto })
+  async getLogoSettings(): Promise<AppLogoDto> {
+    try {
+      const settingsPath = path.join(process.cwd(), 'apps', 'frontend', 'src', 'assets', 'logo-settings.json');
+
+      // Check if settings file exists
+      if (fs.existsSync(settingsPath)) {
+        // Read the settings from the file
+        const settingsJson = fs.readFileSync(settingsPath, 'utf8');
+        return JSON.parse(settingsJson);
+      }
+
+      // Return default settings if file doesn't exist
+      return {
+        data: 'assets/IQB-LogoA.png',
+        alt: 'Zur Startseite',
+        bodyBackground: 'linear-gradient(180deg, rgba(7,70,94,1) 0%, rgba(6,112,123,1) 24%, rgba(1,192,229,1) 85%)',
+        boxBackground: 'lightgray'
+      };
+    } catch (error) {
+      throw new InternalServerErrorException('Failed to get logo settings');
     }
   }
 }

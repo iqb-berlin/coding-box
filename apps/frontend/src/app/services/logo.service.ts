@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { AppLogoDto } from '../../../../../api-dto/app-logo-dto';
 
 @Injectable({
   providedIn: 'root'
@@ -29,5 +30,22 @@ export class LogoService {
    */
   deleteLogo(): Observable<{ success: boolean }> {
     return this.http.delete<{ success: boolean }>(`${this.serverUrl}/admin/logo`, { headers: this.authHeader });
+  }
+
+  /**
+   * Saves logo settings to the server
+   * @param logoSettings The logo settings to save
+   * @returns An Observable with the success status
+   */
+  saveLogoSettings(logoSettings: AppLogoDto): Observable<{ success: boolean }> {
+    return this.http.put<{ success: boolean }>(`${this.serverUrl}/admin/logo/settings`, logoSettings, { headers: this.authHeader });
+  }
+
+  /**
+   * Gets logo settings from the server
+   * @returns An Observable with the logo settings
+   */
+  getLogoSettings(): Observable<AppLogoDto> {
+    return this.http.get<AppLogoDto>(`${this.serverUrl}/admin/logo/settings`, { headers: this.authHeader });
   }
 }
