@@ -1,8 +1,134 @@
-.token {
-  min-width:600px;
-  min-height:200px;
+.wrapper {
+  width: 100%;
+  padding: 0;
 }
 
-.wrapper{
-  margin:50px;
+.scroll-area {
+  max-height: 400px;
+  overflow-y: auto;
+  margin-top: 20px;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  background-color: white;
+}
+
+.access-rights-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.access-rights-table th,
+.access-rights-table td {
+  padding: 12px 16px;
+  text-align: center;
+  vertical-align: middle;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.access-rights-table th {
+  font-weight: 500;
+  color: #07465e;
+  background-color: #f9f9f9;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.access-rights-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.access-rights-table tbody tr:hover {
+  background-color: #f5f5f5;
+}
+
+.user-column {
+  width: 70%;
+  text-align: left;
+}
+
+.access-level-column {
+  width: 10%;
+  text-align: center;
+}
+
+.fx-row-space-between-start {
+  margin-bottom: 20px;
+}
+
+h1 {
+  font-size: 20px;
+  color: #07465e;
+  margin: 0;
+}
+
+mat-checkbox {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto;
+}
+
+/* Ensure the icons inside checkboxes are aligned */
+::ng-deep .mat-mdc-checkbox .mdc-checkbox {
+  display: flex;
+  align-items: center;
+}
+
+/* Align the checkbox label with the checkbox */
+::ng-deep .mat-mdc-checkbox .mdc-form-field {
+  display: flex;
+  align-items: center;
+}
+
+/* Responsive styles */
+@media (max-width: 768px) {
+  .scroll-area {
+    max-height: 300px;
+  }
+
+  .access-rights-table th,
+  .access-rights-table td {
+    padding: 10px 12px;
+  }
+
+  h1 {
+    font-size: 18px;
+  }
+
+  .user-column {
+    width: 60%;
+  }
+
+  .access-level-column {
+    width: 13.33%;
+  }
+}
+
+@media (max-width: 480px) {
+  .scroll-area {
+    max-height: 250px;
+  }
+
+  .access-rights-table th,
+  .access-rights-table td {
+    padding: 8px 10px;
+  }
+
+  .access-rights-table {
+    font-size: 14px;
+  }
+
+  h1 {
+    font-size: 16px;
+  }
+
+  .user-column {
+    width: 50%;
+  }
+
+  .access-level-column {
+    width: 16.67%;
+  }
 }

@@ -1,8 +1,146 @@
-.token {
-  min-width:600px;
-  min-height:200px;
+.wrapper {
+  margin: 20px auto;
+  max-width: 1200px;
+  padding: 0 20px;
+  width: 100%;
+  display: flex;
+  flex-direction: row;
+  gap: 30px;
 }
 
-.token-settings{
-  margin:50px;
+.token-settings-card,
+.access-rights-card {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  border-radius: 8px;
+  overflow: hidden;
+  flex: 1;
+  min-width: 0; /* Prevents flex items from overflowing */
+}
+
+mat-card-header {
+  background-color: #f5f5f5;
+  padding: 16px 24px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+mat-card-title {
+  color: #07465e;
+  font-size: 20px;
+  margin: 0;
+}
+
+mat-card-content {
+  padding: 24px;
+}
+
+.token-container {
+  background-color: #f9f9f9;
+  border-radius: 6px;
+  padding: 20px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+h3 {
+  font-size: 18px;
+  margin-bottom: 15px;
+  color: #07465e;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+h4 {
+  font-size: 16px;
+  margin-bottom: 12px;
+  color: #555;
+}
+
+.token-description {
+  margin-bottom: 20px;
+  color: #666;
+  line-height: 1.5;
+}
+
+.full-width {
+  width: 100%;
+}
+
+.token-actions {
+  display: flex;
+  margin-top: 20px;
+  margin-bottom: 30px;
+}
+
+.token-result {
+  margin-top: 30px;
+  padding: 20px;
+  border: 1px dashed #07465e;
+  border-radius: 8px;
+  background-color: rgba(7, 70, 94, 0.05);
+  box-shadow: inset 0 0 8px rgba(7, 70, 94, 0.1);
+}
+
+.token-field {
+  margin-bottom: 10px;
+}
+
+.token-field textarea {
+  min-height: 100px;
+  font-family: monospace;
+  font-size: 14px;
+  padding: 10px;
+  background-color: #f5f5f5;
+}
+
+.token-copy-action {
+  display: flex;
+  justify-content: flex-end;
+}
+
+button mat-icon {
+  margin-right: 5px;
+}
+
+/* Responsive styles */
+@media (max-width: 992px) {
+  .wrapper {
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .token-settings-card,
+  .access-rights-card {
+    margin-bottom: 20px;
+  }
+}
+
+@media (max-width: 768px) {
+  .wrapper {
+    padding: 0 10px;
+  }
+
+  mat-card-content {
+    padding: 16px;
+  }
+
+  .token-container {
+    padding: 15px;
+  }
+}
+
+@media (max-width: 480px) {
+  .token-actions,
+  .token-copy-action {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  button[mat-raised-button],
+  button[mat-button] {
+    width: 100%;
+    margin-bottom: 10px;
+  }
+
+  .token-result {
+    padding: 15px;
+  }
 }
