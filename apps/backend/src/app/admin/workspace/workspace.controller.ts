@@ -8,7 +8,8 @@ import {
 } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
-  ApiBearerAuth, ApiCreatedResponse, ApiNotFoundResponse, ApiOkResponse, ApiParam, ApiTags
+  ApiBearerAuth, ApiBody, ApiConsumes, ApiCreatedResponse, ApiNotFoundResponse, ApiOkResponse, ApiOperation,
+  ApiParam, ApiQuery, ApiTags
 } from '@nestjs/swagger';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { logger } from 'nx/src/utils/logger';
@@ -42,6 +43,7 @@ export type Result = {
   logs: number
 };
 
+@ApiTags('Admin Workspace')
 @Controller('admin/workspace')
 export class WorkspaceController {
   constructor(
@@ -55,10 +57,12 @@ export class WorkspaceController {
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   @ApiTags('admin workspaces')
+  @ApiOperation({ summary: 'Get all workspaces', description: 'Retrieves a list of all admin workspaces' })
   @ApiOkResponse({
     description: 'List of admin workspaces retrieved successfully.',
-    type: [WorkspaceInListDto] // Spezifiziert, dass ein Array des DTOs zurückgegeben wird
+    type: [WorkspaceInListDto]
   })
+  @ApiBadRequestResponse({ description: 'Failed to retrieve admin workspaces' })
   async findAll(): Promise<WorkspaceInListDto[]> {
     try {
       return await this.workspaceService.findAll();
@@ -70,10 +74,13 @@ export class WorkspaceController {
   @Get(':workspace_id/:user_id/token/:duration')
   @ApiBearerAuth()
   @ApiTags('admin workspace')
+  @ApiOperation({ summary: 'Create authentication token', description: 'Creates a JWT token for a user in a specific workspace with a specified duration' })
   @ApiParam({ name: 'workspace_id', required: true, description: 'ID of the workspace' })
   @ApiParam({ name: 'user_id', required: true, description: 'ID of the user' })
   @ApiParam({ name: 'duration', required: true, description: 'Duration of the token in seconds' })
-  @UseGuards(JwtAuthGuard, WorkspaceGuard) // Sicherstellen, dass die Route geschützt ist
+  @ApiOkResponse({ description: 'Token created successfully', type: String })
+  @ApiBadRequestResponse({ description: 'Invalid input parameters' })
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async createToken(
     @Param('user_id') userId: string,
       @Param('workspace_id') workspaceId: number,
@@ -89,6 +96,23 @@ export class WorkspaceController {
 
   @Get(':workspace_id/importWorkspaceFiles')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiOperation({ summary: 'Import workspace files', description: 'Imports files from a test center into the workspace' })
+  @ApiParam({ name: 'workspace_id', required: true, description: 'ID of the workspace' })
+  @ApiQuery({ name: 'server', required: true, description: 'Server address' })
+  @ApiQuery({ name: 'url', required: true, description: 'URL of the test center' })
+  @ApiQuery({ name: 'tc_workspace', required: true, description: 'Test center workspace ID' })
+  @ApiQuery({ name: 'token', required: true, description: 'Authentication token' })
+  @ApiQuery({ name: 'definitions', required: false, description: 'Include definitions' })
+  @ApiQuery({ name: 'responses', required: false, description: 'Include responses' })
+  @ApiQuery({ name: 'logs', required: false, description: 'Include logs' })
+  @ApiQuery({ name: 'player', required: false, description: 'Include player' })
+  @ApiQuery({ name: 'units', required: false, description: 'Include units' })
+  @ApiQuery({ name: 'codings', required: false, description: 'Include codings' })
+  @ApiQuery({ name: 'testTakers', required: false, description: 'Include test takers' })
+  @ApiQuery({ name: 'testGroups', required: false, description: 'Include test groups' })
+  @ApiQuery({ name: 'booklets', required: false, description: 'Include booklets' })
+  @ApiOkResponse({ description: 'Files imported successfully', type: Object })
+  @ApiBadRequestResponse({ description: 'Failed to import files' })
   async importWorkspaceFiles(
     @Param('workspace_id') workspace_id: string,
       @Query('server') server: string,
@@ -121,6 +145,14 @@ export class WorkspaceController {
 
   @Get(':workspace_id/importWorkspaceFiles/testGroups')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiOperation({ summary: 'Get test groups for import', description: 'Retrieves test groups from a test center for import' })
+  @ApiParam({ name: 'workspace_id', required: true, description: 'ID of the workspace' })
+  @ApiQuery({ name: 'server', required: true, description: 'Server address' })
+  @ApiQuery({ name: 'url', required: true, description: 'URL of the test center' })
+  @ApiQuery({ name: 'tc_workspace', required: true, description: 'Test center workspace ID' })
+  @ApiQuery({ name: 'token', required: true, description: 'Authentication token' })
+  @ApiOkResponse({ description: 'Test groups retrieved successfully', type: [TestGroupsInfoDto] })
+  @ApiBadRequestResponse({ description: 'Failed to retrieve test groups' })
   async getImportTestcenterGroups(
     @Param('workspace_id') workspace_id: string,
       @Query('server') server: string,
@@ -164,6 +196,7 @@ export class WorkspaceController {
   @Get(':workspace_id/files')
   @ApiTags('admin workspace')
   @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get workspace files', description: 'Retrieves all files associated with a workspace' })
   @ApiParam({
     name: 'workspace_id',
     type: Number,
@@ -176,6 +209,9 @@ export class WorkspaceController {
   })
   @ApiNotFoundResponse({
     description: 'The requested workspace could not be found.'
+  })
+  @ApiBadRequestResponse({
+    description: 'Invalid workspace ID or error fetching files.'
   })
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async findFiles(@Param('workspace_id') workspace_id: number): Promise<FilesDto[]> {
@@ -198,8 +234,33 @@ export class WorkspaceController {
   }
 
   @Get(':workspace_id/test-results')
-  @ApiParam({ name: 'workspace_id', type: Number })
-  @ApiOkResponse({ description: 'Test results retrieved successfully.' })
+  @ApiOperation({ summary: 'Get test results', description: 'Retrieves paginated test results for a workspace' })
+  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    description: 'Page number for pagination',
+    type: Number
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    description: 'Number of items per page',
+    type: Number
+  })
+  @ApiOkResponse({
+    description: 'Test results retrieved successfully.',
+    schema: {
+      type: 'object',
+      properties: {
+        data: { type: 'array', items: { type: 'object' } },
+        total: { type: 'number' },
+        page: { type: 'number' },
+        limit: { type: 'number' }
+      }
+    }
+  })
+  @ApiBadRequestResponse({ description: 'Failed to retrieve test results' })
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async findTestResults(
     @Param('workspace_id') workspace_id: number,
@@ -213,8 +274,78 @@ export class WorkspaceController {
   }
 
   @Get(':workspace_id/test-results/:personId')
-  @ApiParam({ name: 'workspace_id', type: Number })
-  @ApiOkResponse({ description: 'Test results retrieved successfully.' })
+  @ApiOperation({
+    summary: 'Get test results for a specific person',
+    description: 'Retrieves detailed test results for a specific person in a workspace'
+  })
+  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
+  @ApiParam({ name: 'personId', type: Number, description: 'ID of the person' })
+  @ApiOkResponse({
+    description: 'Test results retrieved successfully.',
+    schema: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'number', description: 'ID of the test result' },
+          personid: { type: 'number', description: 'ID of the person' },
+          name: { type: 'string', description: 'Name of the person' },
+          size: { type: 'number', description: 'Size of the test results' },
+          logs: {
+            type: 'array',
+            description: 'Logs associated with the test',
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'number' },
+                bookletid: { type: 'number' },
+                ts: { type: 'string', description: 'Timestamp' },
+                parameter: { type: 'string' },
+                key: { type: 'string' }
+              }
+            }
+          },
+          units: {
+            type: 'array',
+            description: 'Units associated with the test',
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'number' },
+                bookletid: { type: 'number' },
+                name: { type: 'string' },
+                alias: { type: 'string', nullable: true },
+                results: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      id: { type: 'number' },
+                      unitid: { type: 'number' }
+                    }
+                  }
+                },
+                logs: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      id: { type: 'number' },
+                      unitid: { type: 'number' },
+                      ts: { type: 'string', description: 'Timestamp' },
+                      key: { type: 'string' },
+                      parameter: { type: 'string' }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  })
+  @ApiBadRequestResponse({ description: 'Failed to retrieve test results' })
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async findPersonTestResults(
     @Param('workspace_id') workspace_id: number,
@@ -382,8 +513,26 @@ export class WorkspaceController {
   @Post(':workspace_id/upload')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiBearerAuth()
+  @ApiOperation({ summary: 'Upload test files', description: 'Uploads test files to a workspace' })
   @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
   @UseInterceptors(FilesInterceptor('files'))
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        files: {
+          type: 'array',
+          items: {
+            type: 'string',
+            format: 'binary'
+          }
+        }
+      }
+    }
+  })
+  @ApiOkResponse({ description: 'Files uploaded successfully', type: Boolean })
+  @ApiBadRequestResponse({ description: 'Invalid workspace ID or no files uploaded' })
   @ApiTags('workspace')
   async addTestFiles(
     @Param('workspace_id') workspaceId: number,
@@ -408,7 +557,15 @@ export class WorkspaceController {
   @Get(':workspace_id/files/:fileId/download')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiBearerAuth()
+  @ApiOperation({ summary: 'Download a file', description: 'Downloads a specific file from a workspace' })
   @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
+  @ApiParam({ name: 'fileId', type: Number, description: 'ID of the file to download' })
+  @ApiOkResponse({
+    description: 'File downloaded successfully',
+    type: FileDownloadDto
+  })
+  @ApiBadRequestResponse({ description: 'Invalid workspace ID or file ID' })
+  @ApiNotFoundResponse({ description: 'File not found' })
   @ApiTags('workspace')
   async downloadFile(
     @Param('workspace_id') workspaceId: number, @Param('fileId') fileId: number
@@ -428,16 +585,43 @@ export class WorkspaceController {
   @Post(':workspace_id/upload/results/:resultType')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Upload test results',
+    description: 'Uploads test results (logs or responses) to a workspace'
+  })
   @ApiParam({
     name: 'workspace_id',
     type: Number,
     required: true,
     description: 'The ID of the workspace to which test results should be uploaded.'
   })
+  @ApiParam({
+    name: 'resultType',
+    enum: ['logs', 'responses'],
+    required: true,
+    description: 'Type of results to upload (logs or responses)'
+  })
   @UseInterceptors(FilesInterceptor('files'))
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        files: {
+          type: 'array',
+          items: {
+            type: 'string',
+            format: 'binary'
+          },
+          description: 'Result files to upload'
+        }
+      }
+    }
+  })
   @ApiTags('workspace')
   @ApiOkResponse({
-    description: 'Test results successfully uploaded.'
+    description: 'Test results successfully uploaded.',
+    type: Boolean
   })
   @ApiBadRequestResponse({
     description: 'Invalid request. Please check your input data.'
@@ -468,8 +652,19 @@ export class WorkspaceController {
   @Delete(':ids')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Delete workspaces',
+    description: 'Deletes one or more workspaces by their IDs (separated by semicolons)'
+  })
+  @ApiParam({
+    name: 'ids',
+    description: 'Semicolon-separated list of workspace IDs to delete',
+    example: '1;2;3',
+    type: String
+  })
   @ApiOkResponse({ description: 'Admin workspaces deleted successfully.' })
-  @ApiNotFoundResponse({ description: 'Admin workspace  not found.' }) // TODO: not implemented
+  @ApiNotFoundResponse({ description: 'Admin workspace not found.' })
+  @ApiBadRequestResponse({ description: 'Invalid workspace IDs' })
   @ApiTags('admin workspaces')
   async remove(@Param('ids') ids: string): Promise<void> {
     const idsAsNumberArray: number[] = ids.split(';').map(idString => parseInt(idString, 10));
@@ -479,6 +674,17 @@ export class WorkspaceController {
   @Patch()
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
+  @ApiOperation({
+    summary: 'Update workspace',
+    description: 'Updates an existing workspace with the provided data'
+  })
+  @ApiBody({
+    type: WorkspaceFullDto,
+    description: 'Updated workspace data'
+  })
+  @ApiOkResponse({ description: 'Workspace updated successfully' })
+  @ApiBadRequestResponse({ description: 'Invalid workspace data' })
+  @ApiNotFoundResponse({ description: 'Workspace not found' })
   @ApiTags('admin workspaces')
   async patch(@Body() workspaces: WorkspaceFullDto) {
     return this.workspaceService.patch(workspaces);
@@ -487,10 +693,16 @@ export class WorkspaceController {
   @Post()
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
+  @ApiOperation({ summary: 'Create a new workspace', description: 'Creates a new workspace with the provided data' })
+  @ApiBody({
+    type: CreateWorkspaceDto,
+    description: 'Workspace data to create'
+  })
   @ApiCreatedResponse({
     description: 'Sends back the id of the new workspace in database',
     type: Number
   })
+  @ApiBadRequestResponse({ description: 'Invalid workspace data' })
   @ApiTags('admin workspaces')
   async create(@Body() createWorkspaceDto: CreateWorkspaceDto) {
     return this.workspaceService.create(createWorkspaceDto);
@@ -499,10 +711,22 @@ export class WorkspaceController {
   @Post(':workspaceId/users')
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiOperation({ summary: 'Set workspace users', description: 'Assigns users to a workspace' })
+  @ApiParam({ name: 'workspaceId', type: Number, description: 'ID of the workspace' })
+  @ApiBody({
+    schema: {
+      type: 'array',
+      items: {
+        type: 'number'
+      },
+      description: 'Array of user IDs to assign to the workspace'
+    }
+  })
   @ApiCreatedResponse({
     description: 'Sends back the id of the new user in database',
     type: Number
   })
+  @ApiBadRequestResponse({ description: 'Invalid user IDs or workspace ID' })
   @ApiTags('admin users')
   async setWorkspaceUsers(@Body() userIds: number[],
     @Param('workspaceId') workspaceId: number) {

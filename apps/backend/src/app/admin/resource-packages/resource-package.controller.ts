@@ -12,7 +12,8 @@ import {
   UseGuards
 } from '@nestjs/common';
 import {
-  ApiBearerAuth, ApiCreatedResponse, ApiNotFoundResponse, ApiOkResponse, ApiQuery, ApiTags
+  ApiBadRequestResponse, ApiBearerAuth, ApiConsumes, ApiCreatedResponse, ApiNotFoundResponse,
+  ApiOkResponse, ApiOperation, ApiParam, ApiQuery, ApiTags
 } from '@nestjs/swagger';
 import { Express } from 'express';
 import 'multer';
@@ -23,6 +24,7 @@ import { fileMimetypeFilter } from './file-mimetype-filter';
 import { ParseFile } from './parse-file-pipe';
 import { ResourcePackageDto } from '../../../../../../api-dto/resource-package/resource-package-dto';
 
+@ApiTags('Admin Resource Packages')
 @Controller('admin/resource-packages')
 export class ResourcePackageController {
   constructor(
@@ -32,14 +34,18 @@ export class ResourcePackageController {
   @Get()
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get all resource packages',
+    description: 'Retrieves a list of all resource packages'
+  })
   @ApiOkResponse({
     description: 'Resource Packages retrieved successfully.',
     type: [ResourcePackageDto]
   })
-  @ApiTags('admin resource-packages')
   @ApiNotFoundResponse({
     description: 'No resource packages found.'
   })
+  @ApiBadRequestResponse({ description: 'Failed to retrieve resource packages' })
   async findResourcePackages(): Promise<ResourcePackageDto[]> {
     const resourcePackages = await this.resourcePackageService.findResourcePackages();
 
