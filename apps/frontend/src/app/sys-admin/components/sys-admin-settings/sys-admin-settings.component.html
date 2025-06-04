@@ -1,4 +1,70 @@
 <div class="wrapper">
-<p>Es sind keine Systemeinstellungen verfügbar</p>
-</div>
+  <h2>Systemeinstellungen</h2>
 
+  <mat-card class="logo-settings-card">
+    <mat-card-header>
+      <mat-card-title>Logo-Einstellungen</mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      <div class="logo-preview-container">
+        <h3>Aktuelles Logo</h3>
+        <div class="current-logo">
+          <img [src]="appService.appLogo.data" alt="Aktuelles Logo" class="logo-preview">
+          <p *ngIf="isDefaultLogo" class="default-logo-text">Standard-Logo</p>
+          <p *ngIf="!isDefaultLogo" class="custom-logo-text">Benutzerdefiniertes Logo</p>
+        </div>
+      </div>
+
+      <div class="logo-alt-text-container">
+        <h3>Alternativtext für das Logo</h3>
+        <mat-form-field class="full-width">
+          <mat-label>Alternativtext</mat-label>
+          <input matInput [(ngModel)]="logoAltText" placeholder="Alternativtext für das Logo eingeben">
+          <mat-hint>Dieser Text wird angezeigt, wenn das Logo nicht geladen werden kann oder für Screenreader</mat-hint>
+        </mat-form-field>
+        <div class="alt-text-actions">
+          <button mat-raised-button color="primary" (click)="saveAltText()">
+            <mat-icon>save</mat-icon> Alternativtext speichern
+          </button>
+        </div>
+      </div>
+
+      <div class="logo-upload-container">
+        <h3>Logo ändern</h3>
+        <div class="file-input-container">
+          <input
+            type="file"
+            id="logo-upload"
+            accept=".jpg,.jpeg,.png,.gif,.svg,.webp,image/jpeg,image/png,image/gif,image/svg+xml,image/webp"
+            (change)="onFileSelected($event)"
+            class="file-input">
+          <label for="logo-upload" class="file-input-label">
+            <mat-icon>cloud_upload</mat-icon>
+            Datei auswählen
+          </label>
+          <span *ngIf="selectedFile" class="file-name">{{ selectedFile.name }}</span>
+          <p class="file-hint">Erlaubte Dateitypen: JPEG, PNG, GIF, SVG, WebP. Maximale Größe: 4MB.</p>
+        </div>
+
+        <div *ngIf="previewUrl" class="preview-container">
+          <h4>Vorschau</h4>
+          <img [src]="previewUrl" alt="Logo Vorschau" class="logo-preview">
+          <div class="preview-actions">
+            <button mat-raised-button color="primary" (click)="uploadLogo()">
+              <mat-icon>save</mat-icon> Logo speichern
+            </button>
+            <button mat-button (click)="resetFileInput()">
+              <mat-icon>cancel</mat-icon> Abbrechen
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="reset-container" *ngIf="!isDefaultLogo">
+        <button mat-raised-button color="warn" (click)="resetToDefaultLogo()">
+          <mat-icon>restore</mat-icon> Zum Standard-Logo zurücksetzen
+        </button>
+      </div>
+    </mat-card-content>
+  </mat-card>
+</div>

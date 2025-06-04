@@ -1,11 +1,151 @@
-mat-form-field{
-  min-width:600px;
-  min-height:200px;
+.wrapper {
+  margin: 50px auto;
+  max-width: 800px;
+  padding: 0 20px;
 }
 
-.wrapper{
-  margin-top:50px;
+h2 {
+  font-size: 24px;
+  margin-bottom: 20px;
+  color: #07465e;
 }
-p{
+
+.logo-settings-card {
+  margin-bottom: 30px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+mat-card-title {
+  color: #07465e;
   font-size: 20px;
+}
+
+mat-card-content {
+  padding: 20px;
+}
+
+.logo-preview-container,
+.logo-upload-container {
+  margin-bottom: 30px;
+}
+
+h3 {
+  font-size: 18px;
+  margin-bottom: 15px;
+  color: #333;
+}
+
+h4 {
+  font-size: 16px;
+  margin-bottom: 10px;
+  color: #555;
+}
+
+.current-logo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.logo-preview {
+  max-width: 200px;
+  max-height: 100px;
+  margin-bottom: 10px;
+  border: 1px solid #ddd;
+  padding: 10px;
+  background-color: white;
+}
+
+.default-logo-text {
+  color: #666;
+  font-style: italic;
+}
+
+.custom-logo-text {
+  color: #07465e;
+  font-weight: bold;
+}
+
+.file-input-container {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  margin-bottom: 20px;
+}
+
+.file-input {
+  display: none;
+}
+
+.file-input-label {
+  display: flex;
+  align-items: center;
+  padding: 8px 16px;
+  background-color: #07465e;
+  color: white;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.file-input-label:hover {
+  background-color: #06707b;
+}
+
+.file-input-label mat-icon {
+  margin-right: 8px;
+}
+
+.file-name {
+  margin-left: 15px;
+  font-size: 14px;
+  color: #555;
+}
+
+.file-hint {
+  font-size: 12px;
+  color: #666;
+  margin-top: 5px;
+  margin-bottom: 0;
+  font-style: italic;
+}
+
+.preview-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 20px;
+  padding: 15px;
+  border: 1px dashed #ccc;
+  border-radius: 4px;
+  background-color: #f9f9f9;
+}
+
+.preview-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 15px;
+}
+
+.reset-container {
+  margin-top: 30px;
+  display: flex;
+  justify-content: center;
+}
+
+button mat-icon {
+  margin-right: 5px;
+}
+
+.full-width {
+  width: 100%;
+}
+
+.logo-alt-text-container {
+  margin-bottom: 30px;
+}
+
+.alt-text-actions {
+  display: flex;
+  margin-top: 15px;
 }
