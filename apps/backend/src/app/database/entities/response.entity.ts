@@ -33,6 +33,9 @@ export class ResponseEntity {
   @Column({ type: 'bigint', default: 0 })
     score: number;
 
+  @Column({ type: 'text' })
+    codedstatus: string;
+
   @ManyToOne(() => Unit, unit => unit.responses, {
     onDelete: 'CASCADE'
   })

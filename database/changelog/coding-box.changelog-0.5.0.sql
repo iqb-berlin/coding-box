@@ -144,4 +144,8 @@ ALTER TABLE booklet
     REFERENCES persons (id) ON DELETE CASCADE ON UPDATE NO ACTION;
 -- rollback ALTER TABLE booklet DROP CONSTRAINT FK_booklet_person;
 
+-- changeset jurei733:19
+ALTER TABLE response ADD COLUMN codedStatus TEXT;
+-- rollback ALTER TABLE response DROP COLUMN codedStatus;
+
 

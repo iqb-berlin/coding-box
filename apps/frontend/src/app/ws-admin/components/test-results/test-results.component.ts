@@ -201,19 +201,18 @@ export class TestResultsComponent implements OnInit {
         return 'green';
       case 'NOT_REACHED':
         return 'blue';
+      case 'CODING_INCOMPLETE':
+        return 'red';
+      case 'CODING_COMPLETE':
+        return 'violet';
       default:
         return 'lightgrey';
     }
   }
 
   onPaginatorChange(event: PageEvent): void {
-    // Update the number of items displayed per page
     this.pageSize = event.pageSize;
-
-    // Update the current page index
     this.pageIndex = event.pageIndex;
-
-    // Reload the test results list based on the new page index and size
     this.createTestResultsList(this.pageIndex, this.pageSize);
   }
 

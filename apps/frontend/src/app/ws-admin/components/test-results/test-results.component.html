@@ -141,9 +141,9 @@
           *ngFor="let response of this.responses"
           class="hoverable"
           [matTooltip]="response.status +
-              (response.code ? ' ' + response.code : '') +
-              (response.score ? ' ' + response.score : '') +
-              ' ' + response.value"
+              (response.code ? ' CODE: ' + response.code : ' | ') +
+              (response.score ? 'SCORE ' + response.score : ' | ') +
+              (response.codedstatus ? ' KodierStatus ' + response.codedstatus : ' | ') + response.value "
           matTooltipPosition="right"
         >
           <div class="fx-row-start-start">
@@ -173,3 +173,6 @@
 }
 
 </div>
+
+
+
