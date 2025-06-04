@@ -31,6 +31,7 @@ export class SysAdminSettingsComponent {
   previewUrl: string | null = null;
   isDefaultLogo = true;
   logoAltText = '';
+  backgroundColorValue = '';
   private readonly ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/svg+xml', 'image/webp'];
 
   constructor(
@@ -42,6 +43,8 @@ export class SysAdminSettingsComponent {
     this.isDefaultLogo = this.appService.appLogo.data === standardLogo.data;
     // Initialize alt text with current value
     this.logoAltText = this.appService.appLogo.alt;
+    // Initialize background color with current value
+    this.backgroundColorValue = this.appService.appLogo.bodyBackground || '';
   }
 
   /**
@@ -107,14 +110,30 @@ export class SysAdminSettingsComponent {
         const newLogo: AppLogoDto = {
           data: response.path,
           alt: this.logoAltText,
-          bodyBackground: this.appService.appLogo.bodyBackground,
+          bodyBackground: this.backgroundColorValue,
           boxBackground: this.appService.appLogo.boxBackground
         };
 
+        // Update the appLogo property in the AppService
         this.appService.appLogo = newLogo;
         this.isDefaultLogo = false;
-        this.snackBar.open('Logo erfolgreich aktualisiert', 'Schließen', { duration: 3000 });
-        this.resetFileInput();
+
+        // Save the logo settings to the server
+        this.logoService.saveLogoSettings(newLogo).subscribe({
+          next: settingsResponse => {
+            if (settingsResponse.success) {
+              this.snackBar.open('Logo erfolgreich aktualisiert', 'Schließen', { duration: 3000 });
+            } else {
+              this.snackBar.open('Logo aktualisiert, aber Fehler beim Speichern der Einstellungen', 'Schließen', { duration: 3000 });
+            }
+            this.resetFileInput();
+          },
+          error: settingsError => {
+            console.error('Error saving logo settings:', settingsError);
+            this.snackBar.open('Logo aktualisiert, aber Fehler beim Speichern der Einstellungen', 'Schließen', { duration: 3000 });
+            this.resetFileInput();
+          }
+        });
       },
       error: error => {
         console.error('Error uploading logo:', error);
@@ -133,6 +152,7 @@ export class SysAdminSettingsComponent {
           this.appService.appLogo = standardLogo;
           this.isDefaultLogo = true;
           this.logoAltText = standardLogo.alt;
+          this.backgroundColorValue = standardLogo.bodyBackground || '';
           this.snackBar.open('Standard-Logo wiederhergestellt', 'Schließen', { duration: 3000 });
         } else {
           this.snackBar.open('Fehler beim Zurücksetzen des Logos', 'Schließen', { duration: 3000 });
@@ -154,7 +174,91 @@ export class SysAdminSettingsComponent {
       ...this.appService.appLogo,
       alt: this.logoAltText
     };
+
+    // Update the appLogo property in the AppService
     this.appService.appLogo = updatedLogo;
-    this.snackBar.open('Alternativtext erfolgreich gespeichert', 'Schließen', { duration: 3000 });
+
+    // Save the logo settings to the server
+    this.logoService.saveLogoSettings(updatedLogo).subscribe({
+      next: response => {
+        if (response.success) {
+          this.snackBar.open('Alternativtext erfolgreich gespeichert', 'Schließen', { duration: 3000 });
+        } else {
+          this.snackBar.open('Fehler beim Speichern des Alternativtexts', 'Schließen', { duration: 3000 });
+        }
+      },
+      error: error => {
+        console.error('Error saving alt text:', error);
+        this.snackBar.open('Fehler beim Speichern des Alternativtexts', 'Schließen', { duration: 3000 });
+      }
+    });
+  }
+
+  /**
+   * Updates the background color preview when the input changes
+   */
+  updateBackgroundPreview(): void {
+    // The preview is automatically updated through data binding
+    // This method is called when the input changes
+  }
+
+  /**
+   * Saves the background color for the application
+   */
+  saveBackgroundColor(): void {
+    const updatedLogo = {
+      ...this.appService.appLogo,
+      bodyBackground: this.backgroundColorValue
+    };
+
+    // Update the appLogo property in the AppService
+    this.appService.appLogo = updatedLogo;
+
+    // Save the logo settings to the server
+    this.logoService.saveLogoSettings(updatedLogo).subscribe({
+      next: response => {
+        if (response.success) {
+          this.snackBar.open('Hintergrundfarbe erfolgreich gespeichert', 'Schließen', { duration: 3000 });
+        } else {
+          this.snackBar.open('Fehler beim Speichern der Hintergrundfarbe', 'Schließen', { duration: 3000 });
+        }
+      },
+      error: error => {
+        console.error('Error saving background color:', error);
+        this.snackBar.open('Fehler beim Speichern der Hintergrundfarbe', 'Schließen', { duration: 3000 });
+      }
+    });
+  }
+
+  /**
+   * Resets the background color to the standard linear gradient
+   */
+  resetToDefaultBackground(): void {
+    // Set the background color value to the standard gradient from standardLogo
+    this.backgroundColorValue = standardLogo.bodyBackground || '';
+
+    // Create updated logo object with default background
+    const updatedLogo = {
+      ...this.appService.appLogo,
+      bodyBackground: this.backgroundColorValue
+    };
+
+    // Update the appLogo property in the AppService
+    this.appService.appLogo = updatedLogo;
+
+    // Save the logo settings to the server
+    this.logoService.saveLogoSettings(updatedLogo).subscribe({
+      next: response => {
+        if (response.success) {
+          this.snackBar.open('Hintergrundfarbe auf Standard zurückgesetzt', 'Schließen', { duration: 3000 });
+        } else {
+          this.snackBar.open('Fehler beim Zurücksetzen der Hintergrundfarbe', 'Schließen', { duration: 3000 });
+        }
+      },
+      error: error => {
+        console.error('Error resetting background color:', error);
+        this.snackBar.open('Fehler beim Zurücksetzen der Hintergrundfarbe', 'Schließen', { duration: 3000 });
+      }
+    });
   }
 }

@@ -7,6 +7,7 @@ import { AppHttpError } from '../interceptors/app-http-error.class';
 import { TestGroupsInListDto } from '../../../../../api-dto/test-groups/testgroups-in-list.dto';
 import { FilesInListDto } from '../../../../../api-dto/files/files-in-list.dto';
 import { CreateUserDto } from '../../../../../api-dto/user/create-user-dto';
+import { LogoService } from './logo.service';
 
 type WorkspaceData = {
   testGroups: TestGroupsInListDto[];
@@ -44,6 +45,28 @@ export class AppService {
     settings: {},
     selectUnitPlay: {}
   };
+
+  constructor(private logoService: LogoService) {
+    // Load saved logo settings when the application starts
+    this.loadLogoSettings();
+  }
+
+  /**
+   * Loads saved logo settings from the server
+   */
+  private loadLogoSettings(): void {
+    this.logoService.getLogoSettings().subscribe({
+      next: settings => {
+        if (settings) {
+          this.appLogo = settings;
+        }
+      },
+      error: error => {
+        console.error('Error loading logo settings:', error);
+        this.appLogo = standardLogo;
+      }
+    });
+  }
 
   private authDataSubject = new BehaviorSubject<AuthDataDto>(AppService.defaultAuthData);
 

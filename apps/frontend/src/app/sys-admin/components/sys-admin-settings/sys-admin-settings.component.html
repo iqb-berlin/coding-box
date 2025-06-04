@@ -1,6 +1,4 @@
 <div class="wrapper">
-  <h2>Systemeinstellungen</h2>
-
   <mat-card class="logo-settings-card">
     <mat-card-header>
       <mat-card-title>Logo-Einstellungen</mat-card-title>
@@ -15,19 +13,6 @@
         </div>
       </div>
 
-      <div class="logo-alt-text-container">
-        <h3>Alternativtext für das Logo</h3>
-        <mat-form-field class="full-width">
-          <mat-label>Alternativtext</mat-label>
-          <input matInput [(ngModel)]="logoAltText" placeholder="Alternativtext für das Logo eingeben">
-          <mat-hint>Dieser Text wird angezeigt, wenn das Logo nicht geladen werden kann oder für Screenreader</mat-hint>
-        </mat-form-field>
-        <div class="alt-text-actions">
-          <button mat-raised-button color="primary" (click)="saveAltText()">
-            <mat-icon>save</mat-icon> Alternativtext speichern
-          </button>
-        </div>
-      </div>
 
       <div class="logo-upload-container">
         <h3>Logo ändern</h3>
@@ -59,11 +44,46 @@
           </div>
         </div>
       </div>
-
+      <div class="logo-alt-text-container">
+        <h3>Alternativtext für das Logo</h3>
+        <mat-form-field class="full-width">
+          <mat-label>Alternativtext</mat-label>
+          <input matInput [(ngModel)]="logoAltText" placeholder="Alternativtext für das Logo eingeben">
+          <mat-hint>Dieser Text wird angezeigt, wenn das Logo nicht geladen werden kann oder für Screenreader</mat-hint>
+        </mat-form-field>
+        <div class="alt-text-actions">
+          <button mat-raised-button color="primary" (click)="saveAltText()">
+            <mat-icon>save</mat-icon> Alternativtext speichern
+          </button>
+        </div>
+      </div>
       <div class="reset-container" *ngIf="!isDefaultLogo">
         <button mat-raised-button color="warn" (click)="resetToDefaultLogo()">
           <mat-icon>restore</mat-icon> Zum Standard-Logo zurücksetzen
         </button>
+      </div>
+    </mat-card-content>
+  </mat-card>
+
+  <mat-card class="background-settings-card">
+    <mat-card-header>
+      <mat-card-title>Hintergrund-Einstellungen</mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      <div class="background-color-container">
+        <mat-form-field class="full-width">
+          <mat-label>Hintergrundfarbe</mat-label>
+          <input matInput [(ngModel)]="backgroundColorValue" (input)="updateBackgroundPreview()" placeholder="z.B. #ff0000, rgb(255,0,0), oder linear-gradient(...)">
+          <mat-hint>Geben Sie eine Farbe oder einen Farbverlauf im CSS-Format ein</mat-hint>
+        </mat-form-field>
+        <div class="background-color-actions">
+          <button mat-raised-button color="primary" (click)="saveBackgroundColor()">
+            <mat-icon>save</mat-icon> Hintergrundfarbe speichern
+          </button>
+          <button mat-raised-button color="accent" (click)="resetToDefaultBackground()" class="reset-background-button">
+            <mat-icon>restore</mat-icon> Standard-Farbverlauf wiederherstellen
+          </button>
+        </div>
       </div>
     </mat-card-content>
   </mat-card>
