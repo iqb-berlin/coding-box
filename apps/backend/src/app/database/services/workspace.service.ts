@@ -35,6 +35,13 @@ import { FileDownloadDto } from '../../../../../../api-dto/files/file-download.d
 import { BookletLog } from '../entities/bookletLog.entity';
 import { UnitLog } from '../entities/unitLog.entity';
 
+export interface CodingStatistics {
+  totalResponses: number;
+  statusCounts: {
+    [key: string]: number;
+  };
+}
+
 function sanitizePath(filePath: string): string {
   const normalizedPath = path.normalize(filePath); // System-basiertes Normalisieren
   if (normalizedPath.startsWith('..')) {
@@ -420,9 +427,14 @@ export class WorkspaceService {
     return !!res;
   }
 
-  async codeTestPersons(workspace_id: number, testPersonIds: string): Promise<boolean> {
+  async codeTestPersons(workspace_id: number, testPersonIds: string): Promise<CodingStatistics> {
     const ids = testPersonIds.split(',');
     this.logger.log(`Verarbeite Personen ${testPersonIds} für Workspace ${workspace_id}`);
+
+    const statistics: CodingStatistics = {
+      totalResponses: 0,
+      statusCounts: {}
+    };
 
     try {
       const persons = await this.personsRepository.find({
@@ -431,7 +443,7 @@ export class WorkspaceService {
 
       if (!persons || persons.length === 0) {
         this.logger.warn('Keine Personen gefunden mit den angegebenen IDs.');
-        return false;
+        return statistics;
       }
 
       for (const person of persons) {
@@ -485,6 +497,9 @@ export class WorkspaceService {
             const responses = await this.responseRepository.find({
               where: { unitid: unit.id, status: In(['VALUE_CHANGED']) }
             });
+
+            statistics.totalResponses += responses.length;
+
             const codedResponses = responses.map(response => {
               const codedResult = scheme.code([{
                 id: response.variableid,
@@ -492,10 +507,16 @@ export class WorkspaceService {
                 status: response.status as ResponseStatusType
               }]);
 
+              const codedStatus = codedResult[0]?.status || 'UNKNOWN';
+              if (!statistics.statusCounts[codedStatus]) {
+                statistics.statusCounts[codedStatus] = 0;
+              }
+              statistics.statusCounts[codedStatus] += 1;
+
               return {
                 ...response,
                 code: codedResult[0]?.code,
-                codedstatus: codedResult[0]?.status,
+                codedstatus: codedStatus,
                 score: codedResult[0]?.score
               };
             });
@@ -511,10 +532,10 @@ export class WorkspaceService {
         }
       }
 
-      return true;
+      return statistics;
     } catch (error) {
       this.logger.error('Fehler beim Verarbeiten der Personen:', error);
-      return false;
+      return statistics;
     }
   }
 
@@ -726,7 +747,7 @@ export class WorkspaceService {
         const booklet = unit?.booklet;
         const person = booklet?.person;
         const bookletInfo = booklet?.bookletinfo;
-        const token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjEsInVzZXJuYW1lIjoicmVpY2hsZWpAZ214LmRlIiwic3ViIjp7ImlkIjoxLCJ1c2VybmFtZSI6InJlaWNobGVqQGdteC5kZSIsImlzQWRtaW4iOnRydWV9LCJ3b3Jrc3BhY2UiOiIzNCIsImlhdCI6MTc0OTAzNzUzMywiZXhwIjoxNzU0MjIxNTMzfQ.4FVfq10u_SbhXCCNXb2edh_SYupW-LZPj09Opb08CS4";
+        const token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjEsInVzZXJuYW1lIjoicmVpY2hsZWpAZ214LmRlIiwic3ViIjp7ImlkIjoxLCJ1c2VybmFtZSI6InJlaWNobGVqQGdteC5kZSIsImlzQWRtaW4iOnRydWV9LCJ3b3Jrc3BhY2UiOiIzNCIsImlhdCI6MTc0OTAzNzUzMywiZXhwIjoxNzU0MjIxNTMzfQ.4FVfq10u_SbhXCCNXb2edh_SYupW-LZPj09Opb08CS4';
 
         const loginName = person?.login || '';
         const loginCode = person?.code || '';

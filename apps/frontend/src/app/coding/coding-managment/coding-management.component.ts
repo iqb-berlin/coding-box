@@ -140,25 +140,57 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
 
   onAutoCode(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
-    this.backendService.getTestPersons(workspaceId).subscribe({
-      next: testPersons => {
-        this.backendService.codeTestPersons(workspaceId, testPersons).subscribe({
-          next: success => {
-            if (success) {
-              console.log('Testpersonen erfolgreich kodiert.');
-            } else {
-              console.error('Fehler beim Kodieren der Testpersonen.');
-            }
-          },
-          error: error => {
-            console.error('Fehler beim Kodieren der Testpersonen:', error);
-          }
-        });
-      },
-      error: error => {
-        console.error('Fehler beim Abrufen der Testgruppen:', error);
-      }
-    });
+    this.isLoading = true;
+
+    this.backendService.getTestPersons(workspaceId)
+      .pipe(
+        catchError(error => {
+          this.isLoading = false;
+          this.snackBar.open('Fehler beim Abrufen der Testgruppen', 'Schließen', {
+            duration: 5000,
+            panelClass: ['error-snackbar']
+          });
+          console.error('Fehler beim Abrufen der Testgruppen:', error);
+          return of([]);
+        })
+      )
+      .subscribe(testPersons => {
+        if (testPersons.length === 0) {
+          this.isLoading = false;
+          return;
+        }
+
+        this.backendService.codeTestPersons(workspaceId, testPersons)
+          .pipe(
+            catchError(error => {
+              this.snackBar.open('Fehler beim Kodieren der Testpersonen', 'Schließen', {
+                duration: 5000,
+                panelClass: ['error-snackbar']
+              });
+              console.error('Fehler beim Kodieren der Testpersonen:', error);
+              return of({ totalResponses: 0, statusCounts: {} });
+            }),
+            finalize(() => {
+              this.isLoading = false;
+            })
+          )
+          .subscribe(stats => {
+            // Create a report message
+            let reportMessage = `Insgesamt wurden ${stats.totalResponses} Antworten verarbeitet.\n\n`;
+            reportMessage += 'Verteilung der Kodier-Status:\n';
+
+            Object.entries(stats.statusCounts).forEach(([status, count]) => {
+              reportMessage += `${status}: ${count} (${Math.round((count / stats.totalResponses) * 100)}%)\n`;
+            });
+
+            this.snackBar.open(reportMessage, 'Schließen', {
+              duration: 15000, // Show for 10 seconds
+              panelClass: ['success-snackbar']
+            });
+
+            console.log('Kodier-Statistik:', stats);
+          });
+      });
   }
 
   fetchCodeManual(): void {

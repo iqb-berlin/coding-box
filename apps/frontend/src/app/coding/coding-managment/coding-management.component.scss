@@ -143,3 +143,13 @@
     color: white;
   }
 }
+
+::ng-deep .success-snackbar {
+  background-color: #4caf50;
+  color: white;
+  white-space: pre-line;
+
+  .mat-simple-snackbar-action {
+    color: white;
+  }
+}
