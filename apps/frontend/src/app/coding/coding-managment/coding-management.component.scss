@@ -1,0 +1,145 @@
+.coding-container {
+  padding: 20px;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+}
+
+.action-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.action-buttons a[mat-raised-button] {
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 200px;
+  padding: 8px 16px;
+  font-size: 14px;
+}
+
+.action-buttons mat-icon {
+  margin-right: 8px;
+}
+
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 200px;
+  margin-top: 20px;
+
+  p {
+    margin-top: 10px;
+    font-size: 16px;
+    color: #666;
+  }
+}
+
+.filter-container {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  width: 100%;
+  background-color: white;
+  padding: 10px 0;
+  border-bottom: 1px solid #e0e0e0;
+  margin-top: 20px;
+
+  .filter-row {
+    display: flex;
+    align-items: center;
+    width: 100%;
+  }
+
+  .filter-field {
+    flex: 1;
+    margin-bottom: 0;
+
+    input {
+      font-size: 14px;
+    }
+  }
+
+  .filter-spinner {
+    margin-left: 10px;
+    display: flex;
+    align-items: center;
+  }
+}
+
+.table-container {
+  width: 100%;
+  overflow-x: auto;
+  max-height: 70vh;
+  overflow-y: auto;
+  margin-top: 10px;
+
+  mat-paginator {
+    margin-top: 10px;
+    background-color: #f9f9f9;
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    border-top: 1px solid #e0e0e0;
+  }
+}
+
+.coding-table {
+  width: 100%;
+  min-width: 600px; /* Ensures table doesn't get too narrow */
+
+  th, td {
+    padding: 12px 8px;
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 200px; /* Prevents cells from getting too wide */
+  }
+
+  th {
+    background-color: #f4f4f4;
+    font-weight: bold;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+  }
+
+  tr:nth-child(even) {
+    background-color: #f9f9f9;
+  }
+
+  tr:hover {
+    background-color: #f1f1f1;
+  }
+
+  .mat-column-unitname, .mat-column-variableid {
+    min-width: 120px;
+  }
+
+  .mat-column-status, .mat-column-codedstatus {
+    min-width: 100px;
+  }
+
+  .mat-column-value {
+    min-width: 150px;
+  }
+}
+
+// Add this at the end of the file
+::ng-deep .error-snackbar {
+  background-color: #f44336;
+  color: white;
+
+  .mat-simple-snackbar-action {
+    color: white;
+  }
+}

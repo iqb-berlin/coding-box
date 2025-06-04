@@ -242,15 +242,15 @@ export class BackendService {
       );
   }
 
-  getManualCoding(workspace_id:number, testPersonIds: number[]): Observable<boolean> {
+  getManualCodingList(workspace_id:number, testPersonIds: number[]): Observable<any> {
     const params = new HttpParams().set('testPersons', testPersonIds.join(','));
     return this.http
-      .get<boolean>(
+      .get<any>(
       `${this.serverUrl}admin/workspace/${workspace_id}/coding/manual`,
       { headers: this.authHeader, params })
       .pipe(
         catchError(() => of(false)),
-        map(() => true)
+        map((res) => res)
       );
   }
 
@@ -352,9 +352,9 @@ export class BackendService {
       { headers: this.authHeader });
   }
 
-  getTestPersons(workspaceId: number, testGroup:string): Observable<string[]> {
-    return this.http.get<string[]>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/test-groups/${testGroup}`,
+  getTestPersons(workspaceId: number): Observable<number[]> {
+    return this.http.get<number[]>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/test-groups`,
       { headers: this.authHeader });
   }
 

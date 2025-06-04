@@ -1,6 +1,5 @@
 /* eslint-disable guard-for-in, no-return-assign, consistent-return */
 import * as Autocoder from '@iqb/responses';
-
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Connection, In, Repository } from 'typeorm';
@@ -11,6 +10,7 @@ import * as util from 'util';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as libxmljs from 'libxmljs2';
+import { ResponseStatusType } from '@iqb/responses';
 import Workspace from '../entities/workspace.entity';
 import { WorkspaceInListDto } from '../../../../../../api-dto/workspaces/workspace-in-list-dto';
 import { WorkspaceFullDto } from '../../../../../../api-dto/workspaces/workspace-full-dto';
@@ -483,32 +483,29 @@ export class WorkspaceService {
             }
 
             const responses = await this.responseRepository.find({
-              where: { unitid: unit.id }, select: ['variableid', 'value', 'status']
+              where: { unitid: unit.id, status: In(['VALUE_CHANGED']) }
             });
-            const mappedResponses = responses.map(response => ({
-              id: response.variableid,
-              value: response.value,
-              status: response.status
-            }));
+            const codedResponses = responses.map(response => {
+              const codedResult = scheme.code([{
+                id: response.variableid,
+                value: response.value,
+                status: response.status as ResponseStatusType
+              }]);
 
-            const codedResponses = scheme.code(mappedResponses as Autocoder.Response[])
-              .map(res => ({
-                value: res.value,
-                status: res.status,
-                variableid: res.id,
-                unitid: unit.id,
-                subform: res.subform,
-                code: res.code,
-                score: res.score
-              }));
-            await this.responseRepository.save(
-              codedResponses.map(res => this.responseRepository.create(res as ResponseEntity))
-            );
+              return {
+                ...response,
+                code: codedResult[0]?.code,
+                codedstatus: codedResult[0]?.status,
+                score: codedResult[0]?.score
+              };
+            });
 
-            if (responses && responses.length > 0) {
-              this.logger.log(`--- ${responses.length} Antworten für Einheit ${unit.id} gefunden`);
-            } else {
-              this.logger.log(`--- Keine Antworten für Einheit ${unit.id} gefunden.`);
+            try {
+              await this.responseRepository.save(codedResponses);
+              this.logger.log('Die Responses wurden erfolgreich aktualisiert.');
+            } catch (error) {
+              this.logger.error('Fehler beim Aktualisieren der Responses:', error);
+              throw new Error('Fehler beim Speichern der codierten Responses in der Datenbank.');
             }
           }
         }
@@ -518,6 +515,86 @@ export class WorkspaceService {
     } catch (error) {
       this.logger.error('Fehler beim Verarbeiten der Personen:', error);
       return false;
+    }
+  }
+
+  async getManualTestPersons(workspace_id: number, personIds?: string): Promise<any> {
+    this.logger.log(
+      `Fetching responses for workspace_id = ${workspace_id} ${
+        personIds ? `and personIds = ${personIds}` : ''
+      }.`
+    );
+
+    try {
+      const persons = await this.personsRepository.find({
+        where: { workspace_id: workspace_id }
+      });
+
+      if (!persons.length) {
+        this.logger.log(`No persons found for workspace_id = ${workspace_id}.`);
+        return [];
+      }
+
+      const filteredPersons = personIds ?
+        persons.filter(person => personIds.split(',').includes(String(person.id))) :
+        persons;
+
+      if (!filteredPersons.length) {
+        this.logger.log(`No persons match the personIds in workspace_id = ${workspace_id}.`);
+        return [];
+      }
+
+      const personIdsArray = filteredPersons.map(person => person.id);
+
+      const booklets = await this.bookletRepository.find({
+        where: { personid: In(personIdsArray) },
+        select: ['id']
+      });
+
+      const bookletIds = booklets.map(booklet => booklet.id);
+
+      if (!bookletIds.length) {
+        this.logger.log(
+          `No booklets found for persons = [${personIdsArray.join(', ')}] in workspace_id = ${workspace_id}.`
+        );
+        return [];
+      }
+
+      const units = await this.unitRepository.find({
+        where: { bookletid: In(bookletIds) },
+        select: ['id', 'name']
+      });
+
+      const unitIdToNameMap = new Map(units.map(unit => [unit.id, unit.name]));
+      const unitIds = Array.from(unitIdToNameMap.keys());
+
+      if (!unitIds.length) {
+        this.logger.log(
+          `No units found for booklets = [${bookletIds.join(', ')}] in workspace_id = ${workspace_id}.`
+        );
+        return [];
+      }
+
+      const responses = await this.responseRepository.find({
+        where: {
+          unitid: In(unitIds),
+          codedstatus: In(['CODING_INCOMPLETE', 'INTENDED_INCOMPLETE', 'CODE_SELECTION_PENDING'])
+        }
+      });
+
+      const enrichedResponses = responses.map(response => ({
+        ...response,
+        unitname: unitIdToNameMap.get(response.unitid) || 'Unknown Unit'
+      }));
+
+      this.logger.log(
+        `Fetched ${responses.length} responses for the given criteria in workspace_id = ${workspace_id}.`
+      );
+
+      return enrichedResponses;
+    } catch (error) {
+      this.logger.error(`Failed to fetch responses: ${error.message}`, error.stack);
+      throw new Error('Could not retrieve responses. Please check the database connection or query.');
     }
   }
 
@@ -844,21 +921,18 @@ export class WorkspaceService {
     });
   }
 
-  async findTestPersons(id: number, testGroup:string): Promise<string[]> {
-    this.logger.log('Returning ind all test persons for test group ', testGroup);
-    const response = await this.responsesRepository
+  async findTestPersons(id: number): Promise<number[]> {
+    this.logger.log('Returning all test persons for workspace ', id);
+    const persons = await this.personsRepository
       .find({
-        select: ['test_person'],
-        where: { test_group: testGroup },
-        order: { test_person: 'ASC' }
+        select: ['id'],
+        where: { workspace_id: id },
+        order: { id: 'ASC' }
       });
-    if (response) {
-      return Array.from(new Set(response.map(item => item.test_person)));
-    }
-    return [];
+
+    return persons.map(person => person.id);
   }
 
-  // Todo: This gets unitIds of responses
   async findTestPersonUnits(id: number, testPerson:string): Promise<ResponseDto[]> {
     this.logger.log('Returning all unit Ids for testperson ', testPerson);
     const res = this.responsesRepository

@@ -26,7 +26,6 @@ import {
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { AuthService } from '../../auth/service/auth.service';
-import { TestGroupsInListDto } from '../../../../../../api-dto/test-groups/testgroups-in-list.dto';
 import FileUpload from '../../database/entities/file_upload.entity';
 import { ResponseDto } from '../../../../../../api-dto/responses/response-dto';
 import WorkspaceUser from '../../database/entities/workspace_user.entity';
@@ -436,8 +435,8 @@ export class WorkspaceController {
   @Get(':workspace_id/test-groups')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiParam({ name: 'workspace_id', type: Number })
-  async findTestGroups(@Param('workspace_id') workspace_id:number): Promise<TestGroupsInListDto[]> {
-    return this.workspaceService.findTestGroups(workspace_id);
+  async findTestPersons(@WorkspaceId() id: number, @Param('testGroup') testPersons:string): Promise<number[]> {
+    return this.workspaceService.findTestPersons(id);
   }
 
   @Delete(':workspace_id/test-results')
@@ -452,13 +451,6 @@ export class WorkspaceController {
         };
       }> {
     return this.workspaceService.deleteTestPersons(Number(workspaceId), testPersonIds);
-  }
-
-  @Get(':workspace_id/test-groups/:testGroup')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
-  @ApiParam({ name: 'workspace_id', type: Number })
-  async findTestPersons(@WorkspaceId() id: number, @Param('testGroup') testGroup:string): Promise<string[]> {
-    return this.workspaceService.findTestPersons(id, testGroup);
   }
 
   @Get(':workspace_id/:unit/unitDef')
@@ -506,8 +498,8 @@ export class WorkspaceController {
   @Get(':workspace_id/coding/manual')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiParam({ name: 'workspace_id', type: Number })
-  async getManualCoding(@Query('testPersons') testPersons: string, @WorkspaceId() workspace_id: number): Promise<boolean> {
-    return this.workspaceService.codeTestPersons(workspace_id, testPersons);
+  async getManualTestPersons(@Query('testPersons') testPersons: string, @WorkspaceId() workspace_id: number): Promise<any> {
+    return this.workspaceService.getManualTestPersons(workspace_id, testPersons);
   }
 
   @Post(':workspace_id/upload')

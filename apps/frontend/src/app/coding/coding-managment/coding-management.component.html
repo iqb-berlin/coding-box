@@ -1,10 +1,63 @@
-<div class="fx-column-start-start fx-gap-5">
+<div class="fx-column-start-start fx-gap-5 coding-container">
   <h2>Kodiermanagement</h2>
-  <a mat-raised-button color="primary">
-    Automatisch Kodieren
-  </a>
-  <a mat-raised-button color="primary"
-     [routerLink]="['/coding-manual']">
-    Manuell Kodieren
-  </a>
+  <div class="fx-row-center-center-stretch fx-gap-20 action-buttons">
+    <a mat-raised-button color="primary" (click)="onAutoCode()">
+      <mat-icon>auto_fix_high</mat-icon>
+      Automatisch Kodieren
+    </a>
+    <a mat-raised-button color="primary" [routerLink]="['/coding-manual']">
+      <mat-icon>edit</mat-icon>
+      Manuell Kodieren
+    </a>
+    <a mat-raised-button color="primary" (click)="fetchCodingList()">
+      <mat-icon>refresh</mat-icon>
+      Daten aktualisieren
+    </a>
+  </div>
+
+  <div class="loading-container" *ngIf="isLoading">
+    <mat-spinner diameter="40"></mat-spinner>
+    <p>Daten werden geladen...</p>
+  </div>
+
+  <div class="filter-container" *ngIf="!isLoading">
+    <div class="filter-row">
+      <mat-form-field class="filter-field">
+        <mat-label>Filter</mat-label>
+        <input matInput (input)="filterTextChanged.next($event)" placeholder="Nach unitname oder variableid filtern" #input>
+      </mat-form-field>
+      <div class="filter-spinner" *ngIf="isFilterLoading">
+        <mat-spinner diameter="24"></mat-spinner>
+      </div>
+    </div>
+  </div>
+
+  <div class="table-container" *ngIf="!isLoading">
+
+    <table mat-table [dataSource]="dataSource" matSort class="mat-elevation-z8 coding-table">
+      <ng-container *ngFor="let column of displayedColumns">
+        <ng-container matColumnDef="{{ column }}">
+          <th mat-header-cell *matHeaderCellDef mat-sort-header> {{ column | titlecase }} </th>
+          <td mat-cell *matCellDef="let element" [attr.colspan]="element.id === 0 ? displayedColumns.length : null">
+            <ng-container *ngIf="element.id === 0" class="group-header">
+              <strong>{{ element.unitname || element.variableid }}</strong>
+            </ng-container>
+            <ng-container *ngIf="element.id !== 0">
+              {{ element[column] }}
+            </ng-container>
+          </td>
+        </ng-container>
+      </ng-container>
+
+      <tr mat-header-row *matHeaderRowDef="displayedColumns; sticky: true"></tr>
+      <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+    </table>
+
+    <mat-paginator
+      [pageSizeOptions]="pageSizeOptions"
+      [pageSize]="pageSize"
+      showFirstLastButtons
+      aria-label="Seiten auswählen">
+    </mat-paginator>
+  </div>
 </div>
