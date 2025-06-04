@@ -12,7 +12,7 @@
     }
   </ul>
   <div class="fx-row-center-center impressum" >
-    <a mat-raised-button color="primary"  [routerLink]="['/about']">
+    <a mat-raised-button color="primary" (click)="openImpressumDialog()">
       {{'home.imprint' | translate}}
     </a>
   </div>
