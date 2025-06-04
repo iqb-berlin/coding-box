@@ -5,9 +5,9 @@ import { MatTooltip } from '@angular/material/tooltip';
 import { MatButton } from '@angular/material/button';
 import { MatCheckbox } from '@angular/material/checkbox';
 import { MatIcon } from '@angular/material/icon';
+import { MatSnackBar } from '@angular/material/snack-bar';
 import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
-import { WsRolesHeaderComponent } from '../roles-header/ws-roles-header.component';
 import { WorkspaceUserToCheckCollection } from '../../models/workspace-users-to-check-collection.class';
 import { WorkspaceUserChecked } from '../../models/workspace-user-checked.class';
 
@@ -15,16 +15,15 @@ import { WorkspaceUserChecked } from '../../models/workspace-user-checked.class'
   selector: 'coding-box-ws-access-rights',
   templateUrl: './ws-access-rights.component.html',
   styleUrls: ['./ws-access-rights.component.scss'],
-  // eslint-disable-next-line max-len
-  imports: [MatCheckbox, MatButton, MatTooltip, FormsModule, TranslateModule, MatIcon, WsRolesHeaderComponent]
+  imports: [MatCheckbox, MatButton, MatTooltip, FormsModule, TranslateModule, MatIcon]
 })
 export class WsAccessRightsComponent {
   workspaceUsers = new WorkspaceUserToCheckCollection([]);
-  changed = false;
 
   constructor(
     private backendService: BackendService,
-    public appService: AppService
+    public appService: AppService,
+    private snackBar: MatSnackBar
   ) {
     this.createUserList();
   }
@@ -40,14 +39,14 @@ export class WsAccessRightsComponent {
   }
 
   save(): void {
-    this.changed = false;
     this.backendService.saveUsers(this.appService.selectedWorkspaceId, this.workspaceUsers.getChecks())
       .subscribe(() => {
+        this.snackBar.open('Zugriffsrechte erfolgreich gespeichert', 'Schließen', { duration: 3000 });
+        this.workspaceUsers.setHasChangedFalse();
       });
   }
 
   changeAccessLevel(checked: boolean, user: WorkspaceUserChecked, level: number): void {
-    this.changed = true;
     if (checked) {
       user.accessLevel = level;
       user.isChecked = true;
