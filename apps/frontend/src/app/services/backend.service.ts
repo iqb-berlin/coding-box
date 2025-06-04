@@ -27,6 +27,13 @@ import { FilesValidationDto } from '../../../../../api-dto/files/files-validatio
 import { FileDownloadDto } from '../../../../../api-dto/files/file-download.dto';
 import { TestGroupsInfoDto } from '../../../../../api-dto/files/test-groups-info.dto';
 
+// Interface for coding statistics
+export interface CodingStatistics {
+  totalResponses: number;
+  statusCounts: {
+    [key: string]: number;
+  };
+}
 
 @Injectable({
   providedIn: 'root'
@@ -231,15 +238,25 @@ export class BackendService {
       );
   }
 
-  codeTestPersons(workspace_id:number, testPersonIds: number[]): Observable<boolean> {
+  codeTestPersons(workspace_id:number, testPersonIds: number[]): Observable<{
+    totalResponses: number;
+    statusCounts: {
+      [key: string]: number;
+    };
+  }> {
     const params = new HttpParams().set('testPersons', testPersonIds.join(','));
     return this.http
-      .get<boolean>(
+      .get<{
+      totalResponses: number;
+      statusCounts: {
+        [key: string]: number;
+      };
+    }>(
       `${this.serverUrl}admin/workspace/${workspace_id}/coding`,
       { headers: this.authHeader, params })
       .pipe(
-        catchError(() => of(false)),
-        map(() => true)
+        catchError(() => of({ totalResponses: 0, statusCounts: {} })),
+        map(res => res)
       );
   }
 

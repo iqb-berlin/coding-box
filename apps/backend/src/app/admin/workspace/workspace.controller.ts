@@ -16,7 +16,7 @@ import { logger } from 'nx/src/utils/logger';
 import { WorkspaceInListDto } from '../../../../../../api-dto/workspaces/workspace-in-list-dto';
 import { WorkspaceFullDto } from '../../../../../../api-dto/workspaces/workspace-full-dto';
 import { CreateWorkspaceDto } from '../../../../../../api-dto/workspaces/create-workspace-dto';
-import { WorkspaceService } from '../../database/services/workspace.service';
+import { WorkspaceService, CodingStatistics } from '../../database/services/workspace.service';
 import { WorkspaceId } from './workspace.decorator';
 import { FilesDto } from '../../../../../../api-dto/files/files.dto';
 import { TestcenterService } from '../../database/services/testcenter.service';
@@ -491,7 +491,10 @@ export class WorkspaceController {
   @Get(':workspace_id/coding')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiParam({ name: 'workspace_id', type: Number })
-  async codeTestPersons(@Query('testPersons') testPersons: string, @WorkspaceId() workspace_id: number): Promise<boolean> {
+  @ApiOkResponse({
+    description: 'Coding statistics retrieved successfully.'
+  })
+  async codeTestPersons(@Query('testPersons') testPersons: string, @WorkspaceId() workspace_id: number): Promise<CodingStatistics> {
     return this.workspaceService.codeTestPersons(workspace_id, testPersons);
   }
 
