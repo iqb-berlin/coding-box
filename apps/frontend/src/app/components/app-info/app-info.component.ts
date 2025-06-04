@@ -1,14 +1,16 @@
 import { Component, Input } from '@angular/core';
 import { SafeUrl } from '@angular/platform-browser';
 import { TranslateModule } from '@ngx-translate/core';
-import { RouterLink } from '@angular/router';
 import { MatAnchor } from '@angular/material/button';
+import { MatDialog } from '@angular/material/dialog';
+import { ImpressumDialogComponent } from '../../shared/dialogs/impressum-dialog.component';
 
 @Component({
   selector: 'coding-box-app-info',
   templateUrl: './app-info.component.html',
   styleUrls: ['./app-info.component.scss'],
-  imports: [MatAnchor, RouterLink, TranslateModule]
+  standalone: true,
+  imports: [MatAnchor, TranslateModule]
 })
 export class AppInfoComponent {
   @Input() appTitle!: string;
@@ -19,4 +21,16 @@ export class AppInfoComponent {
   @Input() userLongName!: string | undefined;
   @Input() isUserLoggedIn!: boolean;
   @Input() isAdmin!: boolean;
+
+  constructor(private dialog: MatDialog) {}
+
+  /**
+   * Opens the Impressum/Datenschutz dialog
+   */
+  openImpressumDialog(): void {
+    this.dialog.open(ImpressumDialogComponent, {
+      width: '600px',
+      maxHeight: '90vh'
+    });
+  }
 }
