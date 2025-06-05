@@ -5,13 +5,13 @@
       <mat-icon>auto_fix_high</mat-icon>
       Automatisch Kodieren
     </a>
-    <a mat-raised-button color="primary" [routerLink]="['/coding-manual']">
+    <a disabled mat-raised-button color="primary" [routerLink]="['/coding-manual']">
       <mat-icon>edit</mat-icon>
       Manuell Kodieren
     </a>
     <a mat-raised-button color="primary" (click)="fetchCodeManual()">
       <mat-icon>refresh</mat-icon>
-      Daten aktualisieren
+      Manuelle zu kodierende Fälle
     </a>
     <a mat-raised-button color="primary" (click)="fetchCodingList()">
       <mat-icon>list</mat-icon>
@@ -21,10 +21,10 @@
 
   <div class="loading-container" *ngIf="isLoading">
     <mat-spinner diameter="40"></mat-spinner>
-    <p>Daten werden geladen...</p>
+    <p>in Bearbeitung...</p>
   </div>
 
-  <div class="filter-container" *ngIf="!isLoading">
+  <div class="filter-container" *ngIf="!isLoading && this.data.length > 0">
     <div class="filter-row">
       <mat-form-field class="filter-field">
         <mat-label>Filter</mat-label>
@@ -36,8 +36,7 @@
     </div>
   </div>
 
-  <div class="table-container" *ngIf="!isLoading">
-
+  <div class="table-container" *ngIf="!isLoading && this.data.length > 0">
     <table mat-table [dataSource]="dataSource" matSort class="mat-elevation-z8 coding-table">
       <ng-container *ngFor="let column of displayedColumns">
         <ng-container matColumnDef="{{ column }}">

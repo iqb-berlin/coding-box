@@ -84,7 +84,7 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
 
   data: Success[] = [];
   dataSource = new MatTableDataSource<Success>(this.data);
-  displayedColumns: string[] = ['unitname', 'variableid', 'status', 'value', 'codedstatus'];
+  displayedColumns: string[] = ['unitname', 'variableid', 'value', 'codedstatus'];
   isLoading = false;
   isFilterLoading = false;
 
@@ -100,7 +100,7 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
   ) {}
 
   ngOnInit(): void {
-    this.fetchCodeManual();
+    //this.fetchCodeManual();
 
     this.filterTextChanged
       .pipe(
@@ -210,7 +210,10 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
         })
       )
       .subscribe(testPersons => {
-        if (testPersons.length === 0) return;
+        if (testPersons.length === 0) {
+          this.isLoading = false;
+          return;
+        }
         this.backendService.getManualCodingList(workspaceId, testPersons)
           .pipe(
             catchError(error => {
@@ -231,7 +234,6 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
               this.dataSource = new MatTableDataSource<Success>(this.data);
               this.dataSource.sort = this.sort;
               this.dataSource.paginator = this.paginator;
-
               this.dataSource.filterPredicate = (data: Success, filter: string) => {
                 const searchTerms = filter.toLowerCase().split(' ');
                 return searchTerms.every(term => {
