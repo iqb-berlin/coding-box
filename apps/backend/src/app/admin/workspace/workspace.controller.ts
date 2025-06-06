@@ -34,6 +34,7 @@ import Persons from '../../database/entities/persons.entity';
 import { FilesValidationDto } from '../../../../../../api-dto/files/files-validation.dto';
 import { FileDownloadDto } from '../../../../../../api-dto/files/file-download.dto';
 import { TestGroupsInfoDto } from '../../../../../../api-dto/files/test-groups-info.dto';
+import { ResponseEntity } from '../../database/entities/response.entity';
 
 export type Result = {
   success: boolean,
@@ -522,6 +523,32 @@ export class WorkspaceController {
     variable_anchor: string;
   }[]> {
     return this.workspaceService.getCodingList();
+  }
+
+  @Get(':workspace_id/coding/statistics')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiOkResponse({
+    description: 'Coding statistics retrieved successfully.'
+  })
+  async getCodingStatistics(@WorkspaceId() workspace_id: number): Promise<CodingStatistics> {
+    return this.workspaceService.getCodingStatistics(workspace_id);
+  }
+
+  @Get(':workspace_id/coding/responses/:status')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiParam({ name: 'status', type: String })
+  @ApiOkResponse({
+    description: 'Responses with the specified status retrieved successfully.'
+  })
+  async getResponsesByStatus(
+    @WorkspaceId() workspace_id: number,
+      @Param('status') status: string
+  ): Promise<ResponseEntity[]> {
+    return this.workspaceService.getResponsesByStatus(workspace_id, status);
   }
 
   @Post(':workspace_id/upload')

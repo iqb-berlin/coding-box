@@ -795,6 +795,72 @@ export class WorkspaceService {
     }
   }
 
+  async getCodingStatistics(workspace_id: number): Promise<CodingStatistics> {
+    this.logger.log(`Getting coding statistics for workspace ${workspace_id}`);
+
+    const statistics: CodingStatistics = {
+      totalResponses: 0,
+      statusCounts: {}
+    };
+
+    try {
+      const responses = await this.responseRepository.find({
+        where: {
+          status: 'VALUE_CHANGED',
+          unit: {
+            booklet: {
+              person: {
+                workspace_id
+              }
+            }
+          }
+        },
+        relations: ['unit', 'unit.booklet', 'unit.booklet.person']
+      });
+
+      statistics.totalResponses = responses.length;
+
+      responses.forEach(response => {
+        const status = response.codedstatus || 'UNKNOWN';
+        if (!statistics.statusCounts[status]) {
+          statistics.statusCounts[status] = 0;
+        }
+        statistics.statusCounts[status] += 1;
+      });
+
+      return statistics;
+    } catch (error) {
+      this.logger.error(`Error getting coding statistics: ${error.message}`);
+      return statistics;
+    }
+  }
+
+  async getResponsesByStatus(workspace_id: number, status: string): Promise<ResponseEntity[]> {
+    this.logger.log(`Getting responses with status ${status} for workspace ${workspace_id}`);
+
+    try {
+      const responses = await this.responseRepository.find({
+        where: {
+          status: 'VALUE_CHANGED',
+          codedstatus: status,
+          unit: {
+            booklet: {
+              person: {
+                workspace_id
+              }
+            }
+          }
+        },
+        relations: ['unit', 'unit.booklet', 'unit.booklet.person', 'unit.booklet.bookletinfo']
+      });
+
+      return responses;
+    } catch (error) {
+      this.logger.error(`Error getting responses by status: ${error.message}`);
+      return [];
+    }
+  }
+
   async validateTestFiles(workspaceId: number): Promise<ValidationData[]> {
     try {
       const testTakers = await this.fileUploadRepository.find({
