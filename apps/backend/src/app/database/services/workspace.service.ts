@@ -34,6 +34,7 @@ import { BookletInfo } from '../entities/bookletInfo.entity';
 import { FileDownloadDto } from '../../../../../../api-dto/files/file-download.dto';
 import { BookletLog } from '../entities/bookletLog.entity';
 import { UnitLog } from '../entities/unitLog.entity';
+import { Session } from '../entities/session.entity';
 
 export interface CodingStatistics {
   totalResponses: number;
@@ -210,6 +211,8 @@ export class WorkspaceService {
     private bookletLogRepository:Repository<BookletLog>,
     @InjectRepository(UnitLog)
     private unitLogRepository:Repository<UnitLog>,
+    @InjectRepository(Session)
+    private sessionRepository:Repository<Session>,
     private readonly connection: Connection
 
   ) {
@@ -263,6 +266,7 @@ export class WorkspaceService {
     name: string;
     size: number;
     logs: { id: number; bookletid: number; ts: string; parameter: string, key: string }[];
+    sessions: { id: number; browser: string; os: string; screen: string; ts: string }[];
     units: {
       id: number;
       bookletid: number;
@@ -325,6 +329,12 @@ export class WorkspaceService {
         select: ['id', 'bookletid', 'ts', 'parameter', 'key']
       });
 
+      const sessions = await this.sessionRepository.find({
+        where: { booklet: { id: In(bookletIds) } },
+        relations: ['booklet'],
+        select: ['id', 'browser', 'os', 'screen', 'ts']
+      });
+
       const unitLogs = await this.unitLogRepository.find({
         where: { unitid: In(unitIds) },
         select: ['id', 'unitid', 'ts', 'key', 'parameter']
@@ -343,6 +353,13 @@ export class WorkspaceService {
             ts: log.ts.toString(),
             key: log.key,
             parameter: log.parameter
+          })),
+          sessions: sessions.filter(session => session.booklet?.id === booklet.id).map(session => ({
+            id: session.id,
+            browser: session.browser,
+            os: session.os,
+            screen: session.screen,
+            ts: session.ts?.toString()
           })),
 
           units: units
