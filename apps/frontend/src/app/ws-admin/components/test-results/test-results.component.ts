@@ -166,7 +166,10 @@ export class TestResultsComponent implements OnInit {
   openBookletLogsDialog(booklet: any) {
     this.dialog.open(LogDialogComponent, {
       width: '700px',
-      data: { logs: booklet.logs }
+      data: {
+        logs: booklet.logs,
+        sessions: booklet.sessions
+      }
     });
   }
 

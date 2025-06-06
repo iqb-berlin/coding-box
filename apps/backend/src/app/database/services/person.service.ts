@@ -174,7 +174,7 @@ export class PersonService {
               booklet.sessions.push({
                 browser: `${browserName} ${browserVersion}`.trim(),
                 os: osName.toString(),
-                screen: `${screenSizeWidth} ${screenSizeHeight}`,
+                screen: `${screenSizeWidth} x ${screenSizeHeight}`,
                 ts: timestamp,
                 loadCompleteMS: Number(loadTime) || 0
               });
