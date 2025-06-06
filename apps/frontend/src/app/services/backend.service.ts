@@ -26,14 +26,9 @@ import { UserWorkspaceAccessDto } from '../../../../../api-dto/workspaces/user-w
 import { FilesValidationDto } from '../../../../../api-dto/files/files-validation.dto';
 import { FileDownloadDto } from '../../../../../api-dto/files/file-download.dto';
 import { TestGroupsInfoDto } from '../../../../../api-dto/files/test-groups-info.dto';
+import { CodingStatistics } from '../../../../../api-dto/coding/coding-statistics';
 
-// Interface for coding statistics
-export interface CodingStatistics {
-  totalResponses: number;
-  statusCounts: {
-    [key: string]: number;
-  };
-}
+// Using CodingStatistics interface from api-dto/coding/coding-statistics
 
 @Injectable({
   providedIn: 'root'
@@ -276,6 +271,28 @@ export class BackendService {
     return this.http
       .get<any>(
       `${this.serverUrl}admin/workspace/${workspace_id}/coding/coding-list`,
+      { headers: this.authHeader })
+      .pipe(
+        catchError(() => of([])),
+        map(res => res)
+      );
+  }
+
+  getCodingStatistics(workspace_id:number): Observable<CodingStatistics> {
+    return this.http
+      .get<CodingStatistics>(
+      `${this.serverUrl}admin/workspace/${workspace_id}/coding/statistics`,
+      { headers: this.authHeader })
+      .pipe(
+        catchError(() => of({ totalResponses: 0, statusCounts: {} })),
+        map(res => res)
+      );
+  }
+
+  getResponsesByStatus(workspace_id:number, status: string): Observable<any> {
+    return this.http
+      .get<any>(
+      `${this.serverUrl}admin/workspace/${workspace_id}/coding/responses/${status}`,
       { headers: this.authHeader })
       .pipe(
         catchError(() => of([])),
