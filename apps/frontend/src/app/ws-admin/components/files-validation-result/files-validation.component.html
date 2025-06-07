@@ -1,78 +1,141 @@
 <mat-dialog-content>
   <div *ngIf="data" class="scroll-container">
     @for(val of data; track data){
-      <h4>{{val.testTaker}}</h4>
-      <div *ngIf="data">
+      <h4>
+        <mat-icon class="test-taker-icon">person</mat-icon>
+        {{val.testTaker}}
+      </h4>
+      <div *ngIf="data" class="validation-container">
         <!-- Booklets Section -->
-        <div>
-          <h3>Booklets</h3>
-          <p>
+        <div class="validation-card">
+          <h3>
+            <mat-icon class="section-icon">book</mat-icon>
+            Booklets
+          </h3>
+          <p class="status-row">
             Status:
-            <span *ngIf="val.booklets.complete">Complete</span>
-            <span *ngIf="!val.booklets.complete">Incomplete</span>
+            <span *ngIf="val.booklets.complete" class="status-complete">
+              <mat-icon class="status-icon">check_circle</mat-icon>
+              Complete
+            </span>
+            <span *ngIf="!val.booklets.complete" class="status-incomplete">
+              <mat-icon class="status-icon">error</mat-icon>
+              Incomplete
+            </span>
           </p>
-          <div *ngIf="!val.booklets.complete">
-            <p>Missing Items:</p>
+          <div *ngIf="!val.booklets.complete" class="missing-items">
+            <p>
+              <mat-icon class="missing-icon">warning</mat-icon>
+              Missing Items:
+            </p>
             <ul>
               <li *ngFor="let item of val.booklets.missing">{{ item }}</li>
             </ul>
           </div>
         </div>
         <!-- Units Section -->
-        <div>
-          <h3>Units</h3>
-          <p>
+        <div class="validation-card">
+          <h3>
+            <mat-icon class="section-icon">view_module</mat-icon>
+            Units
+          </h3>
+          <p class="status-row">
             Status:
-            <span *ngIf="val.units.complete">Complete</span>
-            <span *ngIf="!val.units.complete">Incomplete</span>
+            <span *ngIf="val.units.complete" class="status-complete">
+              <mat-icon class="status-icon">check_circle</mat-icon>
+              Complete
+            </span>
+            <span *ngIf="!val.units.complete" class="status-incomplete">
+              <mat-icon class="status-icon">error</mat-icon>
+              Incomplete
+            </span>
           </p>
-          <div *ngIf="!val.units.complete">
-            <p>Missing Items:</p>
+          <div *ngIf="!val.units.complete" class="missing-items">
+            <p>
+              <mat-icon class="missing-icon">warning</mat-icon>
+              Missing Items:
+            </p>
             <ul>
               <li *ngFor="let item of val.units.missing">{{ item }}</li>
             </ul>
           </div>
         </div>
         <!-- Schemes Section -->
-        <div>
-          <h3>Schemes</h3>
-          <p>
+        <div class="validation-card">
+          <h3>
+            <mat-icon class="section-icon">schema</mat-icon>
+            Schemes
+          </h3>
+          <p class="status-row">
             Status:
-            <span *ngIf="val.schemes.complete">Complete</span>
-            <span *ngIf="!val.schemes.complete">Incomplete</span>
+            <span *ngIf="val.schemes.complete" class="status-complete">
+              <mat-icon class="status-icon">check_circle</mat-icon>
+              Complete
+            </span>
+            <span *ngIf="!val.schemes.complete" class="status-incomplete">
+              <mat-icon class="status-icon">error</mat-icon>
+              Incomplete
+            </span>
           </p>
-          <div *ngIf="!val.schemes.complete">
-            <p>Missing Items:</p>
+          <div *ngIf="!val.schemes.complete" class="missing-items">
+            <p>
+              <mat-icon class="missing-icon">warning</mat-icon>
+              Missing Items:
+            </p>
             <ul>
               <li *ngFor="let item of val.schemes.missing">{{ item }}</li>
             </ul>
           </div>
         </div>
         <!-- Definitions Section -->
-        <div>
-          <h3>Definitions</h3>
-          <p>
+        <div class="validation-card">
+          <h3>
+            <mat-icon class="section-icon">description</mat-icon>
+            Definitions
+          </h3>
+          <p class="status-row">
             Status:
-            <span *ngIf="val.definitions.complete">Complete</span>
-            <span *ngIf="!val.definitions.complete">Incomplete</span>
+            <span *ngIf="val.definitions.complete" class="status-complete">
+              <mat-icon class="status-icon">check_circle</mat-icon>
+              Complete
+            </span>
+            <span *ngIf="!val.definitions.complete" class="status-incomplete">
+              <mat-icon class="status-icon">error</mat-icon>
+              Incomplete
+            </span>
           </p>
-          <div *ngIf="!val.definitions.complete">
-            <p>Missing Items:</p>
+          <div *ngIf="!val.definitions.complete" class="missing-items">
+            <p>
+              <mat-icon class="missing-icon">warning</mat-icon>
+              Missing Items:
+            </p>
             <ul>
               <li *ngFor="let item of val.definitions.missing">{{ item }}</li>
             </ul>
           </div>
         </div>
-        <!-- player Section -->
-        <div>
-          <h3>Player</h3>
-          <p>
+        <!-- Player Section -->
+        <div class="validation-card">
+          <h3>
+            <mat-icon class="section-icon">play_circle</mat-icon>
+            Player
+          </h3>
+          <p class="status-row">
             Status:
-            <span *ngIf="val.player.complete">Complete</span>
-            <span *ngIf="!val.player.complete">Incomplete</span>
+            <span *ngIf="val.player.complete" class="status-complete">
+              <mat-icon class="status-icon">check_circle</mat-icon>
+              Complete
+            </span>
+            <span *ngIf="!val.player.complete" class="status-incomplete">
+              <mat-icon class="status-icon">error</mat-icon>
+              Incomplete
+            </span>
           </p>
-          <div *ngIf="!val.player.complete">
-            <p>Missing Items:</p>
+          <div *ngIf="!val.player.complete" class="missing-items">
+            <p>
+              <mat-icon class="missing-icon">warning</mat-icon>
+              Missing Items:
+            </p>
             <ul>
               <li *ngFor="let item of val.player.missing">{{ item }}</li>
             </ul>
@@ -90,4 +153,3 @@
     {{ 'close' | translate }}
   </button>
 </mat-dialog-actions>
-
