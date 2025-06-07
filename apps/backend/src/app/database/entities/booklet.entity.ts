@@ -19,6 +19,7 @@ import { Session } from './session.entity';
 import Persons from './persons.entity';
 
 @Entity('booklet')
+@Index(['personid', 'infoid']) // Composite index for common query patterns
 export class Booklet {
   @PrimaryGeneratedColumn()
     id: number;
@@ -38,13 +39,17 @@ export class Booklet {
     firstts: number;
 
   @ManyToOne(() => Persons, person => person.booklets, {
-    onDelete: 'CASCADE'
+    onDelete: 'CASCADE',
+    // Eager loading for person as it's frequently accessed with booklet
+    eager: true
   })
   @JoinColumn({ name: 'personid' })
     person: Persons;
 
   @ManyToOne(() => BookletInfo, {
-    onDelete: 'CASCADE'
+    onDelete: 'CASCADE',
+    // Eager loading for bookletinfo as it's frequently accessed with booklet
+    eager: true
   })
   @JoinColumn({ name: 'infoid' })
     bookletinfo: BookletInfo;
@@ -55,6 +60,9 @@ export class Booklet {
   @OneToMany(() => BookletLog, bookletLog => bookletLog.booklet)
     bookletLogs: BookletLog[];
 
-  @OneToMany(() => Unit, unit => unit.booklet)
+  @OneToMany(() => Unit, unit => unit.booklet, {
+    // Cascade operations to units when booklet is modified
+    cascade: true
+  })
     units: Unit[];
 }
