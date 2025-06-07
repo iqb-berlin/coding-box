@@ -19,6 +19,7 @@ import { ChunkEntity } from './chunk.entity';
 import { ResponseEntity } from './response.entity';
 
 @Entity('unit')
+@Index(['bookletid', 'alias']) // Composite index for common query patterns
 export class Unit {
   @PrimaryGeneratedColumn()
     id: number;
@@ -37,19 +38,32 @@ export class Unit {
 
   @ManyToOne(() => Booklet, booklet => booklet.units, {
     onDelete: 'CASCADE'
+    // Not using eager loading here to avoid circular eager loading with Booklet
   })
   @JoinColumn({ name: 'bookletid' })
     booklet: Booklet;
 
-  @OneToMany(() => UnitLog, unitLog => unitLog.unit)
+  @OneToMany(() => UnitLog, unitLog => unitLog.unit, {
+    // Cascade operations to unit logs when unit is modified
+    cascade: true
+  })
     unitLogs: UnitLog[];
 
-  @OneToMany(() => UnitLastState, unitLastState => unitLastState.unit)
+  @OneToMany(() => UnitLastState, unitLastState => unitLastState.unit, {
+    // Cascade operations to unit last states when unit is modified
+    cascade: true
+  })
     unitLastStates: UnitLastState[];
 
-  @OneToMany(() => ChunkEntity, chunk => chunk.unit)
+  @OneToMany(() => ChunkEntity, chunk => chunk.unit, {
+    // Cascade operations to chunks when unit is modified
+    cascade: true
+  })
     chunks: ChunkEntity[];
 
-  @OneToMany(() => ResponseEntity, response => response.unit)
+  @OneToMany(() => ResponseEntity, response => response.unit, {
+    // Cascade operations to responses when unit is modified
+    cascade: true
+  })
     responses: ResponseEntity[];
 }

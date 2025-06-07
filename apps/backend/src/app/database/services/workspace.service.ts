@@ -863,6 +863,7 @@ export class WorkspaceService {
 
   async validateTestFiles(workspaceId: number): Promise<ValidationData[]> {
     try {
+      // Get all test takers in a single query
       const testTakers = await this.fileUploadRepository.find({
         where: { workspace_id: workspaceId, file_type: In(['TestTakers', 'Testtakers']) }
       });
@@ -871,17 +872,16 @@ export class WorkspaceService {
         this.logger.warn(`No TestTakers found in workspace with ID ${workspaceId}.`);
         return this.createEmptyValidationData();
       }
-      const validationResults = [];
-      for (const testTaker of testTakers) {
-        const validationResult = await this.processTestTaker(testTaker);
-        if (validationResult) {
-          validationResults.push(validationResult);
-        }
-      }
+
+      // Process all test takers in parallel using Promise.all
+      const validationResultsPromises = testTakers.map(testTaker => this.processTestTaker(testTaker));
+      const validationResults = (await Promise.all(validationResultsPromises)).filter(Boolean);
+
       if (validationResults.length > 0) {
         return validationResults;
       }
 
+      // If no validation results from test takers, check booklets
       const booklets = await this.fileUploadRepository.find({
         where: { workspace_id: workspaceId, file_type: 'Booklet' }
       });
@@ -1468,88 +1468,126 @@ export class WorkspaceService {
     }
   }
 
-  async checkMissingUnits(bookletNames:string[]): Promise< ValidationResult> {
+  async checkMissingUnits(bookletNames:string[]): Promise<ValidationResult> {
     try {
+      // Get all booklets in a single query with uppercase file_id
       const existingBooklets = await this.fileUploadRepository.findBy({
         file_type: 'Booklet',
         file_id: In(bookletNames.map(b => b.toUpperCase()))
       });
-      const allUnitIds: string[] = [];
-      const allCodingSchemeRefs: string[] = [];
-      const allDefinitionRefs: string[] = [];
-      const allPlayerRefs: string[] = [];
 
-      for (const booklet of existingBooklets) {
+      // Extract unit IDs from all booklets in parallel
+      const unitIdsPromises = existingBooklets.map(async booklet => {
         try {
           const fileData = booklet.data;
-
           const $ = cheerio.load(fileData, { xmlMode: true });
+          const unitIds: string[] = [];
+
           $('Unit').each((_, element) => {
             const unitId = $(element).attr('id');
-
             if (unitId) {
-              const upperUnitId = unitId.toUpperCase();
-              if (!allUnitIds.includes(upperUnitId)) {
-                allUnitIds.push(upperUnitId);
-              }
+              unitIds.push(unitId.toUpperCase());
             }
           });
+
+          return unitIds;
         } catch (error) {
           this.logger.error(`Fehler beim Verarbeiten von Unit ${booklet.file_id}:`, error);
+          return [];
         }
-      }
+      });
 
+      // Wait for all promises to resolve and flatten the array
+      const allUnitIdsArrays = await Promise.all(unitIdsPromises);
+      // Use Set to remove duplicates, then convert back to array
+      const allUnitIds = Array.from(new Set(allUnitIdsArrays.flat()));
+
+      // Get all units in batches to avoid query size limitations
       const chunkSize = 50;
-      let existingUnits = [];
+      const unitBatches = [];
+
       for (let i = 0; i < allUnitIds.length; i += chunkSize) {
         const chunk = allUnitIds.slice(i, i + chunkSize);
-        const units = await this.fileUploadRepository.find({
-          where: { file_id: In(chunk) }
-        });
-        existingUnits = existingUnits.concat(units);
+        unitBatches.push(chunk);
       }
 
-      for (const unit of existingUnits) {
+      // Execute all batch queries in parallel
+      const unitBatchPromises = unitBatches.map(batch => this.fileUploadRepository.find({
+        where: { file_id: In(batch) }
+      }));
+
+      const unitBatchResults = await Promise.all(unitBatchPromises);
+      const existingUnits = unitBatchResults.flat();
+
+      // Extract references from all units in parallel
+      const refsPromises = existingUnits.map(async unit => {
         try {
           const fileData = unit.data;
           const $ = cheerio.load(fileData, { xmlMode: true });
+          const refs = {
+            codingSchemeRefs: [] as string[],
+            definitionRefs: [] as string[],
+            playerRefs: [] as string[]
+          };
+
           $('Unit').each((_, element) => {
             const codingSchemeRef = $(element).find('CodingSchemeRef').text();
             const definitionRef = $(element).find('DefinitionRef').text();
-            const playerRef = $(element).find('DefinitionRef').attr('player')
-              .replace('@', '-');
+            const playerRefAttr = $(element).find('DefinitionRef').attr('player');
+            const playerRef = playerRefAttr ? playerRefAttr.replace('@', '-') : '';
 
-            if (codingSchemeRef && !allCodingSchemeRefs.includes(codingSchemeRef)) {
-              allCodingSchemeRefs.push(codingSchemeRef.toUpperCase());
+            if (codingSchemeRef) {
+              refs.codingSchemeRefs.push(codingSchemeRef.toUpperCase());
             }
 
-            if (definitionRef && !allDefinitionRefs.includes(definitionRef)) {
-              allDefinitionRefs.push(definitionRef.toUpperCase());
+            if (definitionRef) {
+              refs.definitionRefs.push(definitionRef.toUpperCase());
             }
 
-            if (playerRef && !allPlayerRefs.includes(playerRef.toUpperCase())) {
-              allPlayerRefs.push(playerRef.toUpperCase());
+            if (playerRef) {
+              refs.playerRefs.push(playerRef.toUpperCase());
             }
           });
+
+          return refs;
         } catch (error) {
           this.logger.error(`Fehler beim Verarbeiten von Unit ${unit.file_id}:`, error);
+          return { codingSchemeRefs: [], definitionRefs: [], playerRefs: [] };
         }
-      }
+      });
 
+      // Wait for all promises to resolve
+      const allRefs = await Promise.all(refsPromises);
+
+      // Combine all references using Sets to remove duplicates
+      const allCodingSchemeRefs = Array.from(new Set(allRefs.flatMap(ref => ref.codingSchemeRefs)));
+      const allDefinitionRefs = Array.from(new Set(allRefs.flatMap(ref => ref.definitionRefs)));
+      const allPlayerRefs = Array.from(new Set(allRefs.flatMap(ref => ref.playerRefs)));
+
+      // Get all resources in a single query
       const existingResources = await this.fileUploadRepository.findBy({
         file_type: 'Resource'
       });
+
       const allResourceIds = existingResources.map(resource => resource.file_id);
+
+      // Find missing references
       const missingCodingSchemeRefs = allCodingSchemeRefs.filter(ref => !allResourceIds.includes(ref));
       const missingDefinitionRefs = allDefinitionRefs.filter(ref => !allResourceIds.includes(ref));
       const missingPlayerRefs = allPlayerRefs.filter(ref => !allResourceIds.includes(ref));
+
+      // Check if all references exist
       const allCodingSchemesExist = missingCodingSchemeRefs.length === 0;
       const allCodingDefinitionsExist = missingDefinitionRefs.length === 0;
       const allPlayerRefsExist = missingPlayerRefs.length === 0;
+
+      // Find missing units
       const foundUnitIds = existingUnits.map(unit => unit.file_id.toUpperCase());
-      const missingUnits = allUnitIds.filter(unitId => !foundUnitIds.includes(unitId.toUpperCase()));
+      const missingUnits = allUnitIds.filter(unitId => !foundUnitIds.includes(unitId));
       const uniqueUnits = Array.from(new Set(missingUnits));
+
       const allUnitsExist = missingUnits.length === 0;
+
       return {
         allUnitsExist,
         missingUnits: uniqueUnits,

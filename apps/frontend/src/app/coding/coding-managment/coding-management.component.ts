@@ -123,7 +123,7 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
 
   ngOnInit(): void {
     // this.fetchCodeManual();
-    this.fetchCodingStatistics();
+    //this.fetchCodingStatistics();
 
     this.filterTextChanged
       .pipe(
