@@ -174,11 +174,13 @@ export class TestFilesComponent implements OnInit {
       // Parse the filter string to get individual filters
       const filterObj = JSON.parse(filter || '{}');
 
-      // Text filter
-      const textMatch = !filterObj.text ||
-        data.filename.toLowerCase().includes(filterObj.text) ||
-        (data.file_type && data.file_type.toLowerCase().includes(filterObj.text)) ||
-        (data.file_size && data.file_size.toLowerCase().includes(filterObj.text));
+      // Text filter - check if any of the fields contain the search text
+      const textMatch = !filterObj.text || (
+        (data.filename && data.filename.toLowerCase().includes(filterObj.text.toLowerCase())) ||
+        (data.file_type && data.file_type.toLowerCase().includes(filterObj.text.toLowerCase())) ||
+        (data.file_size && data.file_size.toLowerCase().includes(filterObj.text.toLowerCase())) ||
+        (data.created_at && new Date(data.created_at).toLocaleDateString().includes(filterObj.text.toLowerCase()))
+      );
 
       // File type filter
       const typeMatch = !filterObj.fileType ||
@@ -187,6 +189,7 @@ export class TestFilesComponent implements OnInit {
       // File size filter
       const sizeMatch = !filterObj.fileSize ||
         this.isFileSizeInRange(data.file_size, filterObj.fileSize);
+
       return (textMatch && typeMatch && sizeMatch) as boolean;
     };
   }
@@ -254,7 +257,7 @@ export class TestFilesComponent implements OnInit {
 
   /** Handles text filter changes */
   onTextFilterChange(value: string): void {
-    this.textFilterValue = value.trim().toLowerCase();
+    this.textFilterValue = value.trim();
     this.applyFilters();
   }
 

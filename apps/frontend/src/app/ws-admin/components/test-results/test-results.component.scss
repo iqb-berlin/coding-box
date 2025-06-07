@@ -104,9 +104,15 @@
     .booklets-card {
       flex: 0 0 45%;
       margin-right: 20px;
+      display: flex;
+      flex-direction: column;
+      max-height: calc(100vh - 200px); /* Adjust based on your layout */
+      overflow: hidden; /* Hide overflow at the card level */
 
       .accordion {
         max-height: 500px; /* Taller height for side-by-side layout */
+        overflow-y: auto; /* Enable vertical scrolling */
+        flex: 1; /* Take remaining space */
 
         @media (min-height: 1024px) {
           max-height: 600px; /* Even taller for large screens */
@@ -423,12 +429,24 @@
     max-height: 400px; /* Larger screens */
   }
 
+  /* Ensure accordion scrolls properly */
+
   .booklet-panel {
     margin-bottom: 12px;
     border-radius: 8px;
-    overflow: hidden;
+    overflow: visible; /* Allow content to be visible outside the panel */
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
     border: 1px solid rgba(0, 0, 0, 0.05);
+
+    &.mat-expanded {
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Make the content of the expanded panel scrollable */
+    ::ng-deep .mat-expansion-panel-content {
+      overflow: auto !important;
+    }
 
     ::ng-deep .mat-expansion-panel-header {
       padding: 0 24px;
@@ -495,6 +513,7 @@
     overflow-y: auto;
     max-height: 300px; /* Default max height for smaller screens */
     border: 1px solid rgba(0, 0, 0, 0.05);
+    flex: 1; /* Take remaining space in flex container */
 
     /* Custom scrollbar styling */
     &::-webkit-scrollbar {

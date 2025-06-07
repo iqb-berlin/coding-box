@@ -124,6 +124,11 @@ export class TestResultsComponent implements OnInit {
 
   onRowClick(row: P): void {
     this.testPerson = row;
+    this.responses = [];
+    this.logs = [];
+    this.bookletLogs = [];
+    this.selectedUnit = undefined;
+    this.selectedBooklet = undefined;
     this.backendService.getPersonTestResults(this.appService.selectedWorkspaceId, row.id)
       .subscribe(booklets => {
         this.booklets = booklets;
@@ -181,6 +186,21 @@ export class TestResultsComponent implements OnInit {
       ...response,
       expanded: false
     }));
+
+    // Sort responses: first by status (VALUE_CHANGED first), then alphabetically by variableid
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    this.responses.sort((a: any, b: any) => {
+      // First prioritize VALUE_CHANGED status
+      if (a.status === 'VALUE_CHANGED' && b.status !== 'VALUE_CHANGED') {
+        return -1;
+      }
+      if (a.status !== 'VALUE_CHANGED' && b.status === 'VALUE_CHANGED') {
+        return 1;
+      }
+      // Then sort alphabetically by variableid
+      return a.variableid.localeCompare(b.variableid);
+    });
+
     this.logs = unit.logs;
     // this.logs = this.createUnitHistory(unit);
     this.selectedUnit = unit;
