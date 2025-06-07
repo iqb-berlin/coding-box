@@ -16,6 +16,7 @@ import { MatInput } from '@angular/material/input';
 import { MatOption, MatSelect } from '@angular/material/select';
 import { MatCheckbox } from '@angular/material/checkbox';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
+import { MatIcon } from '@angular/material/icon';
 import { catchError, of } from 'rxjs';
 
 // eslint-disable-next-line import/no-cycle
@@ -94,6 +95,7 @@ export type Result = {
     MatCheckbox,
     MatProgressSpinner,
     MatError,
+    MatIcon,
     FormsModule, DatePipe, MatTable, MatHeaderCellDef, MatCellDef, MatHeaderRowDef, MatRowDef, MatColumnDef, MatHeaderCell, MatCell, MatHeaderRow, MatRow, NgIf]
 })
 
