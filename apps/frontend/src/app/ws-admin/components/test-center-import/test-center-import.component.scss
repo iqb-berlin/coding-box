@@ -251,6 +251,12 @@
   .section-header {
     margin-bottom: 16px;
 
+    .section-header-content {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
     .section-title {
       font-size: 18px;
       font-weight: 500;
@@ -262,6 +268,20 @@
       mat-icon {
         margin-right: 8px;
         color: #1976d2;
+      }
+    }
+
+    .back-button {
+      border-radius: 18px;
+      transition: all 0.2s ease;
+
+      &:hover {
+        background-color: rgba(25, 118, 210, 0.08);
+        transform: translateY(-1px);
+      }
+
+      mat-icon {
+        margin-right: 8px;
       }
     }
   }
@@ -399,7 +419,6 @@
 // Message styles
 .error-message, .success-message {
   display: flex;
-  align-items: center;
   gap: 12px;
   padding: 16px;
   border-radius: 8px;
@@ -431,9 +450,53 @@
   background-color: #e8f5e9;
   border: 1px solid #c8e6c9;
   color: #2e7d32;
+  flex-direction: column;
+  align-items: flex-start;
 
   mat-icon {
     color: #2e7d32;
+  }
+
+  .success-actions {
+    display: flex;
+    justify-content: flex-end;
+    width: 100%;
+    margin-top: 12px;
+    gap: 12px;
+
+    button {
+      border-radius: 18px;
+      padding: 4px 16px;
+      transition: all 0.2s ease;
+
+      &:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+      }
+
+      mat-icon {
+        margin-right: 8px;
+      }
+    }
+
+    .back-to-groups-button {
+      &:hover {
+        background-color: rgba(25, 118, 210, 0.08);
+      }
+    }
+
+    .new-import-button {
+      background-color: #2e7d32;
+      color: white;
+
+      &:hover {
+        background-color: #1b5e20;
+      }
+
+      mat-icon {
+        color: white;
+      }
+    }
   }
 }
 
