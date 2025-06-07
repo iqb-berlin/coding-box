@@ -161,7 +161,7 @@ export class TestcenterService {
         const responsePromises = chunks.map(async chunk => {
           const endpoint = url ?
             `${url}/api/workspace/${tc_workspace}/report/response?dataIds=${chunk.join(',')}` :
-            `https://www.iqb-testcenter${server}/api/workspace/${tc_workspace}/report/response?dataIds=${chunk.join(',')}`;
+            `https://www.iqb-testcenter${server}.de/api/workspace/${tc_workspace}/report/response?dataIds=${chunk.join(',')}`;
 
           try {
             const { data: rawResponses } = await this.httpService.axiosRef.get<Response[]>(endpoint, {
