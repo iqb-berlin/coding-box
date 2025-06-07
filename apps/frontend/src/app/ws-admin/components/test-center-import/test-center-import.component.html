@@ -76,7 +76,7 @@
           Abmelden
         </button>
       </div>
-      @if ((testGroups && testGroups.length === 0) || data.importType === 'testFiles'){
+      @if (data.importType === 'testFiles' || (data.importType === 'testResults' && !showTestGroups)){
         <div class="import-section">
           <form class="import-form"
                 [formGroup]="importFilesForm"
@@ -197,18 +197,34 @@
               <div class="success-message">
                 <mat-icon>check_circle</mat-icon>
                 <span>Der Testcenter Import war erfolgreich.</span>
+                <div class="success-actions">
+                  <button mat-stroked-button color="primary" (click)="goBackToTestGroups()" class="back-to-groups-button">
+                    <mat-icon>groups</mat-icon>
+                    Weitere Testgruppen auswählen
+                  </button>
+                  <button mat-raised-button color="primary" (click)="startNewImport()" class="new-import-button">
+                    <mat-icon>refresh</mat-icon>
+                    Neuen Import starten
+                  </button>
+                </div>
               </div>
             }
           </form>
         </div>
       }
-      @else{
+      @if (data.importType === 'testResults' && showTestGroups){
         <div class="testgroups-section">
           <div class="section-header">
-            <h3 class="section-title">
-              <mat-icon>groups</mat-icon>
-              Verfügbare Testgruppen
-            </h3>
+            <div class="section-header-content">
+              <h3 class="section-title">
+                <mat-icon>groups</mat-icon>
+                Verfügbare Testgruppen
+              </h3>
+              <button mat-stroked-button color="primary" (click)="goBackToOptions()" class="back-button">
+                <mat-icon>arrow_back</mat-icon>
+                Zurück zu Optionen
+              </button>
+            </div>
           </div>
 
           <div class="loading-container" *ngIf="isUploadingTestResults">

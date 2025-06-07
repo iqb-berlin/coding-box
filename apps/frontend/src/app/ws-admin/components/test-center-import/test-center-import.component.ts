@@ -144,6 +144,7 @@ export class TestCenterImportComponent {
   isUploadingTestResults: boolean = false;
   uploadData!: Result;
   testCenterInstance: Testcenter[] = [];
+  showTestGroups: boolean = false;
   constructor(private backendService: BackendService,
               @Inject(MAT_DIALOG_DATA) public data: { importType: string },
               private workspaceAdminService: WorkspaceAdminService,
@@ -263,7 +264,32 @@ export class TestCenterImportComponent {
         this.isUploadingTestResults = false;
         this.workspaceAdminService.setTestGroups(response);
         this.testGroups = response;
+        this.showTestGroups = true;
       });
+  }
+
+  goBackToOptions(): void {
+    this.showTestGroups = false;
+    this.selectedRows = []; // Clear selected rows when going back
+  }
+
+  startNewImport(): void {
+    // Reset state to allow for a new import
+    this.uploadData = {} as Result;
+    this.showTestGroups = false;
+    this.selectedRows = [];
+
+    // If we're importing test results, go back to test groups selection
+    if (this.data.importType === 'testResults') {
+      this.getTestGroups();
+    }
+  }
+
+  goBackToTestGroups(): void {
+    // Reset upload data and selected rows, but keep test groups
+    this.uploadData = {} as Result;
+    this.selectedRows = [];
+    this.showTestGroups = true;
   }
 
   getTestData(): void {
@@ -302,6 +328,8 @@ export class TestCenterImportComponent {
           this.uploadData = data;
           this.isUploadingTestFiles = false;
           this.isUploadingTestResults = false;
+          // Reset selected rows to allow for another import
+          this.selectedRows = [];
         },
         error: () => {
           this.isUploadingTestFiles = false;
