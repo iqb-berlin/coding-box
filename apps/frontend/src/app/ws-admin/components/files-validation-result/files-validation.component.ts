@@ -8,6 +8,7 @@ import {
 } from '@angular/material/dialog';
 import { NgForOf, NgIf } from '@angular/common';
 import { MatButton } from '@angular/material/button';
+import { MatIcon } from '@angular/material/icon';
 import { TranslateModule } from '@ngx-translate/core';
 
 type DataValidation = {
@@ -34,7 +35,8 @@ type FilesValidation = {
     MatDialogActions,
     MatButton,
     TranslateModule,
-    MatDialogClose
+    MatDialogClose,
+    MatIcon
   ],
   styleUrls: ['./files-validation.component.scss']
 })

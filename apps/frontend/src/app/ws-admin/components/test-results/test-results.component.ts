@@ -12,23 +12,22 @@ import { FormsModule, UntypedFormGroup } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { MatPaginator, MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { SelectionModel } from '@angular/cdk/collections';
-import { MatLabel } from '@angular/material/form-field';
 import {
   MatAccordion,
   MatExpansionPanel, MatExpansionPanelHeader,
   MatExpansionPanelTitle
 } from '@angular/material/expansion';
 import { MatList, MatListItem } from '@angular/material/list';
-import { MatTooltip } from '@angular/material/tooltip';
 import { MatInput } from '@angular/material/input';
 import { CommonModule, DatePipe } from '@angular/common';
 import { MatIcon } from '@angular/material/icon';
 import { Router } from '@angular/router';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { MatCheckbox } from '@angular/material/checkbox';
-import { MatAnchor, MatButton } from '@angular/material/button';
+import { MatAnchor, MatButton, MatIconButton } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { MatDivider } from '@angular/material/divider';
 import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
 import { TestGroupsInListDto } from '../../../../../../../api-dto/test-groups/testgroups-in-list.dto';
@@ -53,7 +52,7 @@ interface P {
   imports: [CommonModule,
     FormsModule,
     MatExpansionPanelHeader,
-    MatLabel, MatPaginatorModule,
+    MatPaginatorModule,
     TranslateModule,
     MatTable,
     MatCellDef,
@@ -72,13 +71,14 @@ interface P {
     MatExpansionPanelTitle,
     MatList,
     MatListItem,
-    MatTooltip,
     MatInput,
     MatIcon,
     MatProgressSpinner,
     MatCheckbox,
     MatAnchor,
-    MatButton]
+    MatButton,
+    MatIconButton,
+    MatDivider]
 })
 export class TestResultsComponent implements OnInit {
   selection = new SelectionModel<P>(true, []);
@@ -175,7 +175,12 @@ export class TestResultsComponent implements OnInit {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   onUnitClick(unit: any): void {
-    this.responses = unit.results;
+    // Initialize responses with expanded property set to false
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    this.responses = unit.results.map((response: any) => ({
+      ...response,
+      expanded: false
+    }));
     this.logs = unit.logs;
     // this.logs = this.createUnitHistory(unit);
     this.selectedUnit = unit;

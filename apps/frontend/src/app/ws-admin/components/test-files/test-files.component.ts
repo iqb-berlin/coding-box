@@ -3,7 +3,7 @@ import {
 } from '@angular/core';
 import { TranslateService, TranslateModule } from '@ngx-translate/core';
 import { MatDialog } from '@angular/material/dialog';
-import { UntypedFormGroup } from '@angular/forms';
+import { UntypedFormGroup, FormsModule } from '@angular/forms';
 import { MatSort } from '@angular/material/sort';
 import {
   MatCell, MatCellDef, MatColumnDef,
@@ -19,8 +19,10 @@ import { SelectionModel } from '@angular/cdk/collections';
 import { MatIcon } from '@angular/material/icon';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { MatCheckbox } from '@angular/material/checkbox';
-import { MatAnchor } from '@angular/material/button';
-import { DatePipe } from '@angular/common';
+import { MatAnchor, MatButton } from '@angular/material/button';
+import { DatePipe, NgIf, NgFor } from '@angular/common';
+import { MatFormField, MatLabel } from '@angular/material/form-field';
+import { MatOption, MatSelect } from '@angular/material/select';
 import { FilesValidationDialogComponent } from '../files-validation-result/files-validation.component';
 import { TestCenterImportComponent } from '../test-center-import/test-center-import.component';
 import { AppService } from '../../../services/app.service';
@@ -55,11 +57,19 @@ import { FileDownloadDto } from '../../../../../../../api-dto/files/file-downloa
     MatCheckbox,
     MatTable,
     MatAnchor,
+    MatButton,
     MatHeaderCellDef,
     MatCellDef,
     MatHeaderRowDef,
     MatRowDef,
-    MatColumnDef
+    MatColumnDef,
+    NgIf,
+    NgFor,
+    FormsModule,
+    MatFormField,
+    MatLabel,
+    MatSelect,
+    MatOption
   ]
 })
 export class TestFilesComponent implements OnInit {
@@ -67,6 +77,22 @@ export class TestFilesComponent implements OnInit {
   dataSource!: MatTableDataSource<FilesInListDto>;
   tableCheckboxSelection = new SelectionModel<FilesInListDto>(true, []);
   isLoading = false;
+
+  // Filter properties
+  selectedFileType: string = '';
+  selectedFileSize: string = '';
+  fileTypes: string[] = [];
+  fileSizeRanges: { value: string, display: string }[] = [
+    { value: '', display: 'Alle Größen' },
+    { value: '0-10KB', display: '< 10KB' },
+    { value: '10KB-100KB', display: '10KB - 100KB' },
+    { value: '100KB-1MB', display: '100KB - 1MB' },
+    { value: '1MB-10MB', display: '1MB - 10MB' },
+    { value: '10MB+', display: '> 10MB' }
+  ];
+
+  // Original filter value for text search
+  textFilterValue: string = '';
 
   // Sort functionality
   @ViewChild(MatSort) sort!: MatSort;
@@ -124,7 +150,120 @@ export class TestFilesComponent implements OnInit {
   /** Updates the table data source and stops spinner */
   private updateTable(files: FilesInListDto[]): void {
     this.dataSource = new MatTableDataSource(files);
+    this.extractFileTypes(files);
+    this.setupFilterPredicate();
     this.isLoading = false;
+  }
+
+  /** Extracts unique file types from the data */
+  private extractFileTypes(files: FilesInListDto[]): void {
+    const types = new Set<string>();
+    files.forEach(file => {
+      if (file.file_type) {
+        types.add(file.file_type);
+      }
+    });
+    this.fileTypes = Array.from(types).sort();
+    // Add 'All' option at the beginning
+    this.fileTypes.unshift('');
+  }
+
+  /** Sets up custom filter predicate for the data source */
+  private setupFilterPredicate(): void {
+    this.dataSource.filterPredicate = (data: FilesInListDto, filter: string) => {
+      // Parse the filter string to get individual filters
+      const filterObj = JSON.parse(filter || '{}');
+
+      // Text filter
+      const textMatch = !filterObj.text ||
+        data.filename.toLowerCase().includes(filterObj.text) ||
+        (data.file_type && data.file_type.toLowerCase().includes(filterObj.text)) ||
+        (data.file_size && data.file_size.toLowerCase().includes(filterObj.text));
+
+      // File type filter
+      const typeMatch = !filterObj.fileType ||
+        (data.file_type && data.file_type === filterObj.fileType);
+
+      // File size filter
+      const sizeMatch = !filterObj.fileSize ||
+        this.isFileSizeInRange(data.file_size, filterObj.fileSize);
+      return (textMatch && typeMatch && sizeMatch) as boolean;
+    };
+  }
+
+  /** Checks if a file size is within the selected range */
+  private isFileSizeInRange(fileSize: string | undefined, range: string): boolean {
+    if (!fileSize || !range) return true;
+
+    // Convert file size to KB for easier comparison
+    const sizeInKB = this.convertToKB(fileSize);
+    if (sizeInKB === null) return true; // If conversion fails, don't filter out
+
+    // Check against the selected range
+    switch (range) {
+      case '0-10KB':
+        return sizeInKB < 10;
+      case '10KB-100KB':
+        return sizeInKB >= 10 && sizeInKB < 100;
+      case '100KB-1MB':
+        return sizeInKB >= 100 && sizeInKB < 1024;
+      case '1MB-10MB':
+        return sizeInKB >= 1024 && sizeInKB < 10240;
+      case '10MB+':
+        return sizeInKB >= 10240;
+      default:
+        return true;
+    }
+  }
+
+  /** Converts file size string to KB */
+  private convertToKB(fileSizeStr: string): number | null {
+    try {
+      const sizeStr = fileSizeStr.toLowerCase();
+      if (sizeStr.includes('kb')) {
+        return parseFloat(sizeStr);
+      }
+      if (sizeStr.includes('mb')) {
+        return parseFloat(sizeStr) * 1024;
+      }
+      if (sizeStr.includes('gb')) {
+        return parseFloat(sizeStr) * 1024 * 1024;
+      }
+      if (sizeStr.includes('b')) {
+        return parseFloat(sizeStr) / 1024;
+      }
+      return parseFloat(sizeStr); // Assume KB if no unit
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /** Applies all filters */
+  applyFilters(): void {
+    const filterObj = {
+      text: this.textFilterValue,
+      fileType: this.selectedFileType,
+      fileSize: this.selectedFileSize
+    };
+    this.dataSource.filter = JSON.stringify(filterObj);
+
+    if (this.dataSource.paginator) {
+      this.dataSource.paginator.firstPage();
+    }
+  }
+
+  /** Handles text filter changes */
+  onTextFilterChange(value: string): void {
+    this.textFilterValue = value.trim().toLowerCase();
+    this.applyFilters();
+  }
+
+  /** Clears all filters */
+  clearFilters(): void {
+    this.textFilterValue = '';
+    this.selectedFileType = '';
+    this.selectedFileSize = '';
+    this.applyFilters();
   }
 
   /** Handles file selection for upload */
@@ -229,5 +368,29 @@ export class TestFilesComponent implements OnInit {
         data: res
       });
     }
+  }
+
+  /**
+   * Returns the appropriate icon based on file type
+   */
+  getFileIcon(fileType: string): string {
+    const type = fileType.toLowerCase();
+
+    if (type.includes('xml')) {
+      return 'code';
+    }
+    if (type.includes('zip')) {
+      return 'folder_zip';
+    }
+    if (type.includes('html')) {
+      return 'html';
+    }
+    if (type.includes('csv')) {
+      return 'table_chart';
+    }
+    if (type.includes('voud') || type.includes('vocs')) {
+      return 'description';
+    }
+    return 'insert_drive_file';
   }
 }
