@@ -7,7 +7,7 @@ import {
   MatDialogContent, MatDialogActions, MatDialogClose,
   MAT_DIALOG_DATA
 } from '@angular/material/dialog';
-import { MatError, MatFormField, MatLabel } from '@angular/material/form-field';
+import { MatFormField, MatLabel } from '@angular/material/form-field';
 import {
   FormsModule,
   ReactiveFormsModule, UntypedFormBuilder, UntypedFormGroup, Validators
@@ -94,7 +94,6 @@ export type Result = {
     MatOption,
     MatCheckbox,
     MatProgressSpinner,
-    MatError,
     MatIcon,
     FormsModule, DatePipe, MatTable, MatHeaderCellDef, MatCellDef, MatHeaderRowDef, MatRowDef, MatColumnDef, MatHeaderCell, MatCell, MatHeaderRow, MatRow, NgIf]
 })
