@@ -35,7 +35,7 @@ import { IsSelectedPipe } from '../../../shared/pipes/isSelected.pipe';
 import { SearchFilterComponent } from '../../../shared/search-filter/search-filter.component';
 import { FileSizePipe } from '../../../shared/pipes/filesize.pipe';
 import { FilesInListDto } from '../../../../../../../api-dto/files/files-in-list.dto';
-import { FilesValidationDto } from '../../../../../../../api-dto/files/files-validation.dto';
+import { FileValidationResultDto } from '../../../../../../../api-dto/files/file-validation-result.dto';
 import { FileDownloadDto } from '../../../../../../../api-dto/files/file-download.dto';
 
 @Component({
@@ -394,7 +394,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
     }
   }
 
-  private handleValidationResponse(res: boolean | FilesValidationDto[]): void {
+  private handleValidationResponse(res: boolean | FileValidationResultDto): void {
     this.isLoading = false;
     this.isValidating = false;
     if (res === false) {
@@ -404,10 +404,18 @@ export class TestFilesComponent implements OnInit, OnDestroy {
         { duration: 3000 }
       );
     } else if (typeof res !== 'boolean') {
-      this.dialog.open(FilesValidationDialogComponent, {
-        width: '600px',
-        data: res
-      });
+      if (!res.testTakersFound) {
+        this.snackBar.open(
+          'Keine Testtaker gefunden. Validierung nicht möglich.',
+          this.translate.instant('error'),
+          { duration: 5000 }
+        );
+      } else {
+        this.dialog.open(FilesValidationDialogComponent, {
+          width: '600px',
+          data: res.validationResults
+        });
+      }
     }
   }
 

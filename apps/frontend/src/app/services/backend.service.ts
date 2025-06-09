@@ -22,7 +22,7 @@ import { ResponseDto } from '../../../../../api-dto/responses/response-dto';
 import { FilesDto } from '../../../../../api-dto/files/files.dto';
 import { UserInListDto } from '../../../../../api-dto/user/user-in-list-dto';
 import { UserWorkspaceAccessDto } from '../../../../../api-dto/workspaces/user-workspace-access-dto';
-import { FilesValidationDto } from '../../../../../api-dto/files/files-validation.dto';
+import { FileValidationResultDto } from '../../../../../api-dto/files/file-validation-result.dto';
 import { FileDownloadDto } from '../../../../../api-dto/files/file-download.dto';
 import { TestGroupsInfoDto } from '../../../../../api-dto/files/test-groups-info.dto';
 import { CodingStatistics } from '../../../../../api-dto/coding/coding-statistics';
@@ -261,9 +261,9 @@ export class BackendService {
     return this.http.get<FileDownloadDto>(url, { headers: this.authHeader });
   }
 
-  validateFiles(workspace_id:number): Observable<boolean | FilesValidationDto[]> {
+  validateFiles(workspace_id:number): Observable<boolean | FileValidationResultDto> {
     return this.http
-      .get<FilesValidationDto[]>(
+      .get<FileValidationResultDto>(
       `${this.serverUrl}admin/workspace/${workspace_id}/files/validation`,
       { headers: this.authHeader })
       .pipe(
@@ -306,10 +306,10 @@ export class BackendService {
       );
   }
 
-  getManualCodingList(workspace_id:number, testPersonIds: number[]): Observable<any> {
+  getManualCodingList(workspace_id:number, testPersonIds: number[]): Observable<unknown> {
     const params = new HttpParams().set('testPersons', testPersonIds.join(','));
     return this.http
-      .get<any>(
+      .get<unknown>(
       `${this.serverUrl}admin/workspace/${workspace_id}/coding/manual`,
       { headers: this.authHeader, params })
       .pipe(

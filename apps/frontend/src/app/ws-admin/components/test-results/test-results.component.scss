@@ -750,6 +750,90 @@
   }
 }
 
+// Empty state styles
+.empty-state-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background-color: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  padding: 48px 24px;
+  margin: 20px 0;
+  width: 100%;
+  max-width: 600px;
+  margin-left: auto;
+  margin-right: auto;
+  text-align: center;
+  animation: fadeIn 0.3s ease-in-out;
+  border: 1px solid rgba(0, 0, 0, 0.03);
+
+  .empty-state-icon {
+    font-size: 64px;
+    height: 64px;
+    width: 64px;
+    color: #1976d2;
+    opacity: 0.8;
+    margin-bottom: 24px;
+  }
+
+  .empty-state-title {
+    font-size: 24px;
+    font-weight: 500;
+    color: #1976d2;
+    margin: 0 0 16px 0;
+    letter-spacing: -0.3px;
+  }
+
+  .empty-state-description {
+    font-size: 16px;
+    color: #666;
+    margin: 0 0 32px 0;
+    line-height: 1.5;
+    max-width: 400px;
+  }
+
+  .empty-state-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    justify-content: center;
+
+    a[mat-raised-button] {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      padding: 0 20px;
+      height: 44px;
+      line-height: 44px;
+      border-radius: 22px;
+      font-weight: 500;
+      letter-spacing: 0.3px;
+      box-shadow: 0 3px 8px rgba(0, 0, 0, 0.12);
+      transition: all 0.2s ease;
+
+      &:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+      }
+
+      &:active {
+        transform: translateY(0);
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+      }
+
+      mat-icon {
+        margin-right: 10px;
+        font-size: 20px;
+        height: 20px;
+        width: 20px;
+        vertical-align: middle;
+      }
+    }
+  }
+}
+
 // Logs card styles
 .logs-card {
   .log-list {
