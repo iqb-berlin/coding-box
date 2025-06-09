@@ -228,7 +228,8 @@ export class TestResultsComponent implements OnInit {
       width: '700px',
       data: {
         logs: booklet.logs,
-        sessions: booklet.sessions
+        sessions: booklet.sessions,
+        units: booklet.units
       }
     });
   }

@@ -126,7 +126,7 @@
       <div class="results-section">
         <div class="booklets-card">
           <h2 class="section-title">Booklets</h2>
-          <p class="section-description">Wählen Sie ein Booklet aus, um dessen Units anzuzeigen</p>
+          <p class="section-description">Wählen Sie ein Booklet aus, um dessen Aufgaben anzuzeigen</p>
           <mat-divider></mat-divider>
 
           <mat-accordion class="accordion">
@@ -150,7 +150,7 @@
 
               <mat-divider class="section-divider"></mat-divider>
 
-              <h3 class="units-title">Einheiten</h3>
+              <h3 class="units-title">Aufgaben</h3>
               <mat-list class="unit-list">
                 <mat-list-item
                   *ngFor="let unit of booklet.units"
@@ -172,7 +172,7 @@
 
         <div class="responses-card" *ngIf="responses.length > 0">
           <h2 class="section-title">Antworten</h2>
-          <p class="section-description">Antworten für die ausgewählte Unit</p>
+          <p class="section-description">Antworten für die ausgewählte Aufgabe</p>
           <mat-divider></mat-divider>
 
           <div class="response-actions">
