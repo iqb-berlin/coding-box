@@ -163,7 +163,6 @@ export class TestFilesComponent implements OnInit, OnDestroy {
     if (forceReload || !this.appService.workspaceData?.testFiles.data.length) {
       this.backendService.getFilesList(this.appService.selectedWorkspaceId)
         .subscribe(files => {
-          console.log(files);
           this.updateTable(files);
         });
     } else {
@@ -195,7 +194,6 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   private setupFilterPredicate(): void {
     this.dataSource.filterPredicate = (data: FilesInListDto, filter: string) => {
       const filterObj = JSON.parse(filter || '{}');
-      console.log(data.filename);
       // Text filter - check if any of the fields contain the search text
       const textMatch = !filterObj.text || (
         (data.filename && data.filename.toLowerCase().includes(filterObj.text.toLowerCase())) ||
@@ -256,28 +254,6 @@ export class TestFilesComponent implements OnInit, OnDestroy {
         return sizeInBytes >= 10 * MB;
       default: // No range selected or unknown range, so it matches
         return true;
-    }
-  }
-
-  /** Converts file size string to KB (Original function, now unused by isFileSizeInRange) */
-  private convertToKB(fileSizeStr: string): number | null {
-    try {
-      const sizeStr = fileSizeStr.toLowerCase();
-      if (sizeStr.includes('kb')) {
-        return parseFloat(sizeStr);
-      }
-      if (sizeStr.includes('mb')) {
-        return parseFloat(sizeStr) * 1024;
-      }
-      if (sizeStr.includes('gb')) {
-        return parseFloat(sizeStr) * 1024 * 1024;
-      }
-      if (sizeStr.includes('b')) {
-        return parseFloat(sizeStr) / 1024;
-      }
-      return parseFloat(sizeStr); // Assume KB if no unit
-    } catch (e) {
-      return null;
     }
   }
 

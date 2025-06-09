@@ -28,11 +28,16 @@ import { MatAnchor, MatButton, MatIconButton } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDivider } from '@angular/material/divider';
+import { MatFormField, MatLabel } from '@angular/material/form-field';
+import { MatTooltip } from '@angular/material/tooltip';
 import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
 import { TestGroupsInListDto } from '../../../../../../../api-dto/test-groups/testgroups-in-list.dto';
 import { TestCenterImportComponent } from '../test-center-import/test-center-import.component';
 import { LogDialogComponent } from '../booklet-log-dialog/log-dialog.component';
+import { UnitTagDto } from '../../../../../../../api-dto/unit-tags/unit-tag.dto';
+import { CreateUnitTagDto } from '../../../../../../../api-dto/unit-tags/create-unit-tag.dto';
+import { UpdateUnitTagDto } from '../../../../../../../api-dto/unit-tags/update-unit-tag.dto';
 
 interface P {
   id: number;
@@ -78,7 +83,10 @@ interface P {
     MatAnchor,
     MatButton,
     MatIconButton,
-    MatDivider]
+    MatDivider,
+    MatFormField,
+    MatLabel,
+    MatTooltip]
 })
 export class TestResultsComponent implements OnInit {
   selection = new SelectionModel<P>(true, []);
@@ -103,6 +111,10 @@ export class TestResultsComponent implements OnInit {
   selectedBooklet: { id: number; title: string; name: string; units: unknown } | undefined;
   isLoading: boolean = true;
   isUploadingResults: boolean = false;
+  unitTags: UnitTagDto[] = [];
+  newTagText: string = '';
+  // Map to store tags for each unit
+  unitTagsMap: Map<number, UnitTagDto[]> = new Map();
 
   @ViewChild(MatPaginator) paginator!: MatPaginator;
   @ViewChild(MatSort) sort!: MatSort;
@@ -129,10 +141,53 @@ export class TestResultsComponent implements OnInit {
     this.bookletLogs = [];
     this.selectedUnit = undefined;
     this.selectedBooklet = undefined;
+    this.unitTagsMap.clear(); // Clear the unit tags map
     this.backendService.getPersonTestResults(this.appService.selectedWorkspaceId, row.id)
       .subscribe(booklets => {
         this.booklets = booklets;
+        this.loadAllUnitTags(); // Load tags for all units
       });
+  }
+
+  /**
+   * Get tags for a specific unit
+   * @param unitId The ID of the unit
+   * @returns An array of tags for the unit, or an empty array if no tags are found
+   */
+  getUnitTags(unitId: number): UnitTagDto[] {
+    return this.unitTagsMap.get(unitId) || [];
+  }
+
+  /**
+   * Load tags for all units in all booklets
+   */
+  loadAllUnitTags(): void {
+    if (!this.booklets || this.booklets.length === 0) {
+      return;
+    }
+
+    // Collect all unit IDs
+    const unitIds: number[] = [];
+    this.booklets.forEach(booklet => {
+      if (booklet.units && Array.isArray(booklet.units)) {
+        booklet.units.forEach(unit => {
+          if (unit.id) {
+            unitIds.push(unit.id);
+          }
+        });
+      }
+    });
+
+    unitIds.forEach(unitId => {
+      this.backendService.getUnitTags(
+        this.appService.selectedWorkspaceId,
+        unitId
+      ).subscribe({
+        next: tags => {
+          this.unitTagsMap.set(unitId, tags);
+        },
+      });
+    });
   }
 
   replayBooklet(booklet: { id: number; title: string; name: string; units: unknown }) {
@@ -178,6 +233,28 @@ export class TestResultsComponent implements OnInit {
     });
   }
 
+  /**
+   * Opens a dialog to display unit logs
+   */
+  openUnitLogsDialog() {
+    if (!this.selectedUnit || !this.logs || this.logs.length === 0) {
+      this.snackBar.open(
+        'Keine Logs für diese Unit vorhanden',
+        'Info',
+        { duration: 3000 }
+      );
+      return;
+    }
+
+    this.dialog.open(LogDialogComponent, {
+      width: '700px',
+      data: {
+        logs: this.logs,
+        title: `Logs für Unit: ${this.selectedUnit.alias || 'Unbenannte Einheit'}`
+      }
+    });
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   onUnitClick(unit: any): void {
     // Initialize responses with expanded property set to false
@@ -204,6 +281,209 @@ export class TestResultsComponent implements OnInit {
     this.logs = unit.logs;
     // this.logs = this.createUnitHistory(unit);
     this.selectedUnit = unit;
+
+    // Load tags for the selected unit
+    this.loadUnitTags();
+  }
+
+  /**
+   * Load tags for the selected unit
+   */
+  loadUnitTags(): void {
+    if (this.selectedUnit && this.selectedUnit['id']) {
+      this.backendService.getUnitTags(
+        this.appService.selectedWorkspaceId,
+        this.selectedUnit['id'] as number
+      ).subscribe({
+        next: tags => {
+          this.unitTags = tags;
+
+          // Update the unitTagsMap
+          // @ts-expect-error - Property 'id' may not exist on type '{ alias: string; }'
+          this.unitTagsMap.set(this.selectedUnit.id as number, tags);
+        },
+        error: () => {
+          this.snackBar.open(
+            'Fehler beim Laden der Tags',
+            'Fehler',
+            { duration: 3000 }
+          );
+        }
+      });
+    } else {
+      this.unitTags = [];
+    }
+  }
+
+  /**
+   * Add a new tag to the selected unit
+   */
+  addUnitTag(): void {
+    if (!this.newTagText.trim()) {
+      this.snackBar.open(
+        'Bitte geben Sie einen Tag-Text ein',
+        'Fehler',
+        { duration: 3000 }
+      );
+      return;
+    }
+
+    if (this.selectedUnit && this.selectedUnit['id']) {
+      this.addTagToUnit(this.selectedUnit['id'] as number, this.newTagText.trim());
+      this.newTagText = ''; // Clear the input field
+    }
+  }
+
+  /**
+   * Add a new tag to a specific unit
+   * @param unitId The ID of the unit
+   * @param tagText The text for the new tag
+   */
+  addTagToUnit(unitId: number, tagText: string): void {
+    if (!tagText.trim()) {
+      this.snackBar.open(
+        'Bitte geben Sie einen Tag-Text ein',
+        'Fehler',
+        { duration: 3000 }
+      );
+      return;
+    }
+
+    const createTagDto: CreateUnitTagDto = {
+      unitId: unitId,
+      tag: tagText.trim()
+    };
+
+    this.backendService.createUnitTag(
+      this.appService.selectedWorkspaceId,
+      createTagDto
+    ).subscribe({
+      next: tag => {
+        // If this is the selected unit, update the unitTags array
+        if (this.selectedUnit && this.selectedUnit['id'] === unitId) {
+          this.unitTags.push(tag);
+        }
+
+        // Update the unitTagsMap
+        const tags = this.unitTagsMap.get(unitId) || [];
+        tags.push(tag);
+        this.unitTagsMap.set(unitId, tags);
+
+        this.snackBar.open(
+          'Tag erfolgreich hinzugefügt',
+          'Erfolg',
+          { duration: 3000 }
+        );
+      },
+      error: () => {
+        this.snackBar.open(
+          'Fehler beim Hinzufügen des Tags',
+          'Fehler',
+          { duration: 3000 }
+        );
+      }
+    });
+  }
+
+  /**
+   * Update an existing tag
+   * @param tagId The ID of the tag to update
+   * @param newText The new text for the tag
+   */
+  updateUnitTag(tagId: number, newText: string): void {
+    if (!newText.trim()) {
+      this.snackBar.open(
+        'Bitte geben Sie einen Tag-Text ein',
+        'Fehler',
+        { duration: 3000 }
+      );
+      return;
+    }
+
+    const updateTagDto: UpdateUnitTagDto = {
+      tag: newText.trim()
+    };
+
+    this.backendService.updateUnitTag(
+      this.appService.selectedWorkspaceId,
+      tagId,
+      updateTagDto
+    ).subscribe({
+      next: updatedTag => {
+        // Update the tag in the array
+        const index = this.unitTags.findIndex(tag => tag.id === tagId);
+        if (index !== -1) {
+          this.unitTags[index] = updatedTag;
+        }
+
+        this.snackBar.open(
+          'Tag erfolgreich aktualisiert',
+          'Erfolg',
+          { duration: 3000 }
+        );
+      },
+      error: () => {
+        this.snackBar.open(
+          'Fehler beim Aktualisieren des Tags',
+          'Fehler',
+          { duration: 3000 }
+        );
+      }
+    });
+  }
+
+  /**
+   * Delete a tag from the selected unit
+   * @param tagId The ID of the tag to delete
+   */
+  deleteUnitTag(tagId: number): void {
+    if (this.selectedUnit && this.selectedUnit['id']) {
+      this.deleteTagFromUnit(tagId, this.selectedUnit['id'] as number);
+    }
+  }
+
+  /**
+   * Delete a tag from a specific unit
+   * @param tagId The ID of the tag to delete
+   * @param unitId The ID of the unit the tag belongs to
+   */
+  deleteTagFromUnit(tagId: number, unitId: number): void {
+    this.backendService.deleteUnitTag(
+      this.appService.selectedWorkspaceId,
+      tagId
+    ).subscribe({
+      next: success => {
+        if (success) {
+          // If this is the selected unit, update the unitTags array
+          if (this.selectedUnit && this.selectedUnit['id'] === unitId) {
+            this.unitTags = this.unitTags.filter(tag => tag.id !== tagId);
+          }
+
+          // Update the unitTagsMap
+          const tags = this.unitTagsMap.get(unitId) || [];
+          this.unitTagsMap.set(unitId, tags.filter(tag => tag.id !== tagId));
+
+          this.snackBar.open(
+            'Tag erfolgreich gelöscht',
+            'Erfolg',
+            { duration: 3000 }
+          );
+        } else {
+          this.snackBar.open(
+            'Fehler beim Löschen des Tags',
+            'Fehler',
+            { duration: 3000 }
+          );
+        }
+      },
+      error: () => {
+        this.snackBar.open(
+          'Fehler beim Löschen des Tags',
+          'Fehler',
+          { duration: 3000 }
+        );
+      }
+    });
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -232,6 +512,64 @@ export class TestResultsComponent implements OnInit {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return unit.results.some((response:any) => response.value && typeof response.value === 'string' && response.value.startsWith('UEsD'));
+  }
+
+  /**
+   * Determines the appropriate text color (black or white) based on the background color
+   * @param backgroundColor The background color in any valid CSS format (hex, rgb, etc.)
+   * @returns Either 'black' or 'white' depending on the background brightness
+   */
+  getContrastColor(backgroundColor?: string): string {
+    // If no color is provided, return black (for default light backgrounds)
+    if (!backgroundColor) {
+      return '#000000';
+    }
+
+    // Convert the color to RGB
+    let r = 0;
+    let g = 0;
+    let b = 0;
+
+    // Handle hex colors
+    if (backgroundColor.startsWith('#')) {
+      const hex = backgroundColor.slice(1);
+
+      // Handle shorthand hex (#RGB)
+      if (hex.length === 3) {
+        r = parseInt(hex[0] + hex[0], 16);
+        g = parseInt(hex[1] + hex[1], 16);
+        b = parseInt(hex[2] + hex[2], 16);
+      } else if (hex.length === 6) {
+        // Handle full hex (#RRGGBB)
+        r = parseInt(hex.slice(0, 2), 16);
+        g = parseInt(hex.slice(2, 4), 16);
+        b = parseInt(hex.slice(4, 6), 16);
+      } else {
+        // Invalid hex, return black
+        return '#000000';
+      }
+    } else if (backgroundColor.startsWith('rgb')) {
+      // Handle rgb/rgba colors
+      const rgbMatch = backgroundColor.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*[\d.]+)?\)/);
+      if (rgbMatch) {
+        r = parseInt(rgbMatch[1], 10);
+        g = parseInt(rgbMatch[2], 10);
+        b = parseInt(rgbMatch[3], 10);
+      } else {
+        // Invalid rgb format, return black
+        return '#000000';
+      }
+    } else {
+      // Unsupported color format, return black
+      return '#000000';
+    }
+
+    // Calculate brightness using the YIQ formula
+    // This formula gives more weight to colors that the human eye is more sensitive to
+    const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+
+    // Return white for dark backgrounds, black for light backgrounds
+    return brightness >= 128 ? '#000000' : '#ffffff';
   }
 
   getColor(status: string): string {

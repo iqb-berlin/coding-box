@@ -576,6 +576,84 @@
         border-radius: 12px;
         margin-left: 8px;
       }
+
+      .unit-tags-container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        margin-left: 8px;
+        align-items: center;
+      }
+
+      .unit-tag-item {
+        display: flex;
+        align-items: center;
+        background-color: #e3f2fd;
+        border-radius: 10px;
+        padding: 0 0 0 6px;
+        border: 1px solid rgba(25, 118, 210, 0.2);
+        margin-right: 4px;
+        transition: all 0.2s ease;
+
+        &:hover {
+          background-color: #bbdefb;
+        }
+      }
+
+      .unit-tag {
+        font-size: 11px;
+        font-weight: 500;
+        color: #1976d2;
+      }
+
+      .tag-delete-button {
+        width: 20px;
+        height: 20px;
+        line-height: 20px;
+        margin-left: 2px;
+
+        mat-icon {
+          font-size: 12px;
+          height: 12px;
+          width: 12px;
+          color: #1976d2;
+        }
+      }
+
+      .unit-add-tag {
+        display: flex;
+        align-items: center;
+        margin-left: 4px;
+      }
+
+      .unit-tag-input {
+        width: 80px;
+        height: 24px;
+        font-size: 11px;
+        padding: 0 8px;
+        border: 1px solid rgba(25, 118, 210, 0.2);
+        border-radius: 10px;
+        outline: none;
+
+        &:focus {
+          border-color: #1976d2;
+          box-shadow: 0 0 0 2px rgba(25, 118, 210, 0.1);
+        }
+      }
+
+      .tag-add-button {
+        width: 20px;
+        height: 20px;
+        line-height: 20px;
+        margin-left: 2px;
+
+        mat-icon {
+          font-size: 12px;
+          height: 12px;
+          width: 12px;
+          color: #1976d2;
+        }
+      }
     }
   }
 }
@@ -601,6 +679,101 @@
         height: 18px;
         width: 18px;
         vertical-align: middle;
+      }
+    }
+  }
+
+  // Unit Tags Section
+  .unit-tags-section {
+    margin: 20px 0;
+    padding: 15px;
+    background-color: #f5f9ff;
+    border-radius: 8px;
+    border: 1px solid rgba(25, 118, 210, 0.1);
+
+    .tags-title {
+      font-size: 16px;
+      font-weight: 500;
+      color: #1976d2;
+      margin: 0 0 12px 0;
+    }
+
+    .tags-container {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+    }
+
+    .tags-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      min-height: 40px;
+
+      .tag-item {
+        display: flex;
+        align-items: center;
+        background-color: #e3f2fd;
+        border-radius: 16px;
+        padding: 4px 8px 4px 12px;
+        border: 1px solid rgba(25, 118, 210, 0.2);
+        transition: all 0.2s ease;
+
+        &:hover {
+          background-color: #bbdefb;
+          transform: translateY(-1px);
+        }
+
+        .tag-text {
+          font-size: 14px;
+          color: #1976d2;
+          font-weight: 500;
+        }
+
+        .tag-actions {
+          display: flex;
+          align-items: center;
+
+          .tag-action-button {
+            width: 24px;
+            height: 24px;
+            line-height: 24px;
+
+            mat-icon {
+              font-size: 16px;
+              height: 16px;
+              width: 16px;
+              color: #1976d2;
+            }
+          }
+        }
+      }
+    }
+
+    .add-tag-form {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+
+      .tag-input {
+        flex: 1;
+        margin-bottom: 0;
+
+        ::ng-deep .mat-mdc-form-field-subscript-wrapper {
+          display: none;
+        }
+      }
+
+      .add-tag-button {
+        height: 36px;
+        padding: 0 12px;
+
+        mat-icon {
+          margin-right: 4px;
+          font-size: 18px;
+          height: 18px;
+          width: 18px;
+        }
       }
     }
   }

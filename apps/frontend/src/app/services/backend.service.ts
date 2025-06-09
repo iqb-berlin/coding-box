@@ -27,6 +27,9 @@ import { FileDownloadDto } from '../../../../../api-dto/files/file-download.dto'
 import { TestGroupsInfoDto } from '../../../../../api-dto/files/test-groups-info.dto';
 import { CodingStatistics } from '../../../../../api-dto/coding/coding-statistics';
 import { PaginatedWorkspacesDto } from '../../../../../api-dto/workspaces/paginated-workspaces-dto';
+import { UnitTagDto } from '../../../../../api-dto/unit-tags/unit-tag.dto';
+import { CreateUnitTagDto } from '../../../../../api-dto/unit-tags/create-unit-tag.dto';
+import { UpdateUnitTagDto } from '../../../../../api-dto/unit-tags/update-unit-tag.dto';
 
 interface PaginatedResponse<T> {
   data: T[];
@@ -185,7 +188,6 @@ export class BackendService {
       { headers: this.authHeader })
       .pipe(
         catchError(error => {
-          console.error('Fehler beim Abrufen der Workspaces:', error);
           const defaultResponse: PaginatedWorkspacesDto = {
             data: [],
             total: 0,
@@ -408,6 +410,40 @@ export class BackendService {
     return this.http.post<boolean>(
       `${this.serverUrl}admin/users/${userId}/workspaces/`,
       workspaceIds,
+      { headers: this.authHeader });
+  }
+
+  // Unit Tags API methods
+
+  createUnitTag(workspaceId: number, createUnitTagDto: CreateUnitTagDto): Observable<UnitTagDto> {
+    return this.http.post<UnitTagDto>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/unit-tags`,
+      createUnitTagDto,
+      { headers: this.authHeader });
+  }
+
+  getUnitTags(workspaceId: number, unitId: number): Observable<UnitTagDto[]> {
+    return this.http.get<UnitTagDto[]>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/unit-tags/unit/${unitId}`,
+      { headers: this.authHeader });
+  }
+
+  getUnitTag(workspaceId: number, tagId: number): Observable<UnitTagDto> {
+    return this.http.get<UnitTagDto>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/unit-tags/${tagId}`,
+      { headers: this.authHeader });
+  }
+
+  updateUnitTag(workspaceId: number, tagId: number, updateUnitTagDto: UpdateUnitTagDto): Observable<UnitTagDto> {
+    return this.http.patch<UnitTagDto>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/unit-tags/${tagId}`,
+      updateUnitTagDto,
+      { headers: this.authHeader });
+  }
+
+  deleteUnitTag(workspaceId: number, tagId: number): Observable<boolean> {
+    return this.http.delete<boolean>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/unit-tags/${tagId}`,
       { headers: this.authHeader });
   }
 
