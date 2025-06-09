@@ -7,7 +7,7 @@ import {
   MatDialogTitle
 } from '@angular/material/dialog';
 import { MatList, MatListItem } from '@angular/material/list';
-import { NgForOf, NgIf } from '@angular/common';
+import { NgForOf, NgIf, NgClass } from '@angular/common';
 import { MatButton } from '@angular/material/button';
 
 @Component({
@@ -15,7 +15,19 @@ import { MatButton } from '@angular/material/button';
   template: `
     <div class="dialog-header">
       <h1 mat-dialog-title>Booklet Logs</h1>
-      <span class="log-count">{{ data.logs.length }} Einträge</span>
+      <div class="header-info">
+        <span class="log-count">{{ data.logs.length }} Einträge</span>
+        <span class="processing-duration" *ngIf="processingDuration">
+          <span class="duration-label">Bearbeitungsdauer:</span>
+          <span class="duration-value">{{ processingDuration }}</span>
+        </span>
+        <span class="unit-progress" *ngIf="data.units && data.units.length > 0">
+          <span class="progress-label">Unit-Fortschritt:</span>
+          <span class="progress-value" [ngClass]="{'complete': unitProgressComplete, 'incomplete': !unitProgressComplete}">
+            {{ unitProgressComplete ? 'Vollständig' : 'Unvollständig' }}
+          </span>
+        </span>
+      </div>
     </div>
 
     <div mat-dialog-content>
@@ -94,6 +106,13 @@ import { MatButton } from '@angular/material/button';
     color: #1976d2;
   }
 
+  .header-info {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+  }
+
   .log-count {
     background-color: #e3f2fd;
     color: #1976d2;
@@ -101,6 +120,52 @@ import { MatButton } from '@angular/material/button';
     border-radius: 16px;
     font-size: 14px;
     font-weight: 500;
+  }
+
+  .processing-duration {
+    background-color: #e8f5e9;
+    color: #2e7d32;
+    padding: 4px 8px;
+    border-radius: 16px;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .duration-label {
+    font-weight: 500;
+  }
+
+  .duration-value {
+    font-weight: 600;
+  }
+
+  .unit-progress {
+    background-color: #f5f5f5;
+    color: #333;
+    padding: 4px 8px;
+    border-radius: 16px;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .progress-label {
+    font-weight: 500;
+  }
+
+  .progress-value {
+    font-weight: 600;
+  }
+
+  .progress-value.complete {
+    color: #2e7d32; /* Green color for complete */
+  }
+
+  .progress-value.incomplete {
+    color: #f44336; /* Red color for incomplete */
   }
 
   /* Section Headers */
@@ -288,7 +353,8 @@ import { MatButton } from '@angular/material/button';
     MatDialogTitle,
     MatDialogActions,
     MatButton,
-    NgIf
+    NgIf,
+    NgClass
   ],
   standalone: true
 })
@@ -300,6 +366,11 @@ export class LogDialogComponent implements OnInit {
     key: string;
     parameter: string;
   }[] = [];
+
+  processingDuration: string | null = null;
+
+  // Track if all units have been visited (have CURRENT_UNIT_ID log entries)
+  unitProgressComplete: boolean = false;
 
   constructor(
     public dialogRef: MatDialogRef<LogDialogComponent>,
@@ -317,6 +388,14 @@ export class LogDialogComponent implements OnInit {
         os: string;
         screen: string;
         ts: string;
+      }[],
+      units?: {
+        id: number;
+        bookletid: number;
+        name: string;
+        alias: string | null;
+        results: { id: number; unitid: number }[];
+        logs: { id: number; unitid: number; ts: string; key: string; parameter: string }[];
       }[]
     }
   ) { }
@@ -327,6 +406,70 @@ export class LogDialogComponent implements OnInit {
 
     // Sort logs by timestamp (newest first)
     this.sortLogsByTimestamp();
+
+    // Calculate processing duration
+    this.calculateProcessingDuration();
+
+    // Check if all units have been visited
+    this.checkUnitProgress();
+  }
+
+  /**
+   * Checks if all units in the booklet have corresponding log entries with log-key CURRENT_UNIT_ID
+   */
+  private checkUnitProgress(): void {
+    // If no units data is provided, we can't check unit progress
+    if (!this.data.units || this.data.units.length === 0) {
+      return;
+    }
+
+    // Get all log entries with key CURRENT_UNIT_ID
+    const unitIdLogs = this.data.logs.filter(log => log.key === 'CURRENT_UNIT_ID');
+
+    // Get all unit aliases
+    const unitAliases = this.data.units.map(unit => unit.alias).filter(alias => alias !== null) as string[];
+
+    // Check if each unit alias has a corresponding log entry
+    const allUnitsVisited = unitAliases.every(alias => unitIdLogs.some(log => log.parameter === alias));
+
+    this.unitProgressComplete = allUnitsVisited && unitAliases.length > 0;
+  }
+
+  /**
+   * Calculates the time difference between CONTROLLER/POLLING and CONTROLLER/TERMINATED events
+   */
+  private calculateProcessingDuration(): void {
+    const pollingLog = this.data.logs.find(log => log.key === 'CONTROLLER' && log.parameter === 'RUNNING');
+    const terminatedLog = this.data.logs.find(log => log.key === 'CONTROLLER' && log.parameter === 'TERMINATED');
+    if (pollingLog && terminatedLog) {
+      const pollingTime = Number(pollingLog.ts);
+      const terminatedTime = Number(terminatedLog.ts);
+
+      if (!Number.isNaN(pollingTime) && !Number.isNaN(terminatedTime)) {
+        // Calculate the difference in milliseconds
+        const durationMs = terminatedTime - pollingTime;
+
+        // Store the duration for display
+        this.processingDuration = this.formatDuration(durationMs);
+      }
+    }
+  }
+
+  /**
+   * Formats a duration in milliseconds to a readable format (minutes:seconds)
+   */
+  private formatDuration(durationMs: number): string {
+    if (durationMs < 0) return '00:00';
+
+    // Convert to seconds
+    const totalSeconds = Math.floor(durationMs / 1000);
+
+    // Calculate minutes and remaining seconds
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+
+    // Format as MM:SS
+    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
   }
 
   /**
