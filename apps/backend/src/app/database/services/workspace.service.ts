@@ -218,13 +218,29 @@ export class WorkspaceService {
   ) {
   }
 
-  async findAll(): Promise<WorkspaceInListDto[]> {
+  async findAll(options?: { page: number; limit: number }): Promise<[WorkspaceInListDto[], number]> {
     this.logger.log('Fetching all workspaces from the repository.');
+
+    if (options) {
+      const { page, limit } = options;
+      const MAX_LIMIT = 10000;
+      const validPage = Math.max(1, page);
+      const validLimit = Math.min(Math.max(1, limit), MAX_LIMIT);
+      const [workspaces, total] = await this.workspaceRepository.findAndCount({
+        select: ['id', 'name'],
+        skip: (validPage - 1) * validLimit,
+        take: validLimit
+      });
+
+      this.logger.log(`Found ${workspaces.length} workspaces (page ${validPage}, limit ${validLimit}, total ${total}).`);
+      return [workspaces.map(({ id, name }) => ({ id, name })), total];
+    }
+
     const workspaces = await this.workspaceRepository.find({
       select: ['id', 'name']
     });
     this.logger.log(`Found ${workspaces.length} workspaces.`);
-    return workspaces.map(({ id, name }) => ({ id, name }));
+    return [workspaces.map(({ id, name }) => ({ id, name })), workspaces.length];
   }
 
   async findAllUserWorkspaces(identity: string): Promise<WorkspaceFullDto[]> {
@@ -251,13 +267,35 @@ export class WorkspaceService {
     return !!saved;
   }
 
-  async findFiles(workspaceId: number): Promise<FilesDto[]> {
-    this.logger.log(`Fetching all test files for workspace: ${workspaceId}`);
+  async findFiles(workspaceId: number, options?: { page: number; limit: number }): Promise<[FilesDto[], number]> {
+    this.logger.log(`Fetching test files for workspace: ${workspaceId}`);
 
-    return this.fileUploadRepository.find({
+    if (options) {
+      const { page, limit } = options;
+      const MAX_LIMIT = 10000;
+      const validPage = Math.max(1, page);
+      const validLimit = Math.min(Math.max(1, limit), MAX_LIMIT);
+
+      const [files, total] = await this.fileUploadRepository.findAndCount({
+        where: { workspace_id: workspaceId },
+        select: ['id', 'filename', 'file_id', 'file_size', 'file_type', 'created_at'],
+        skip: (validPage - 1) * validLimit,
+        take: validLimit,
+        order: { created_at: 'DESC' }
+      });
+
+      this.logger.log(`Found ${files.length} files (page ${validPage}, limit ${validLimit}, total ${total}).`);
+      return [files, total];
+    }
+
+    const files = await this.fileUploadRepository.find({
       where: { workspace_id: workspaceId },
-      select: ['id', 'filename', 'file_id', 'file_size', 'file_type', 'created_at']
+      select: ['id', 'filename', 'file_id', 'file_size', 'file_type', 'created_at'],
+      order: { created_at: 'DESC' }
     });
+
+    this.logger.log(`Found ${files.length} files.`);
+    return [files, files.length];
   }
 
   async findPersonTestResults(personId: number, workspaceId: number): Promise<{
@@ -423,15 +461,34 @@ export class WorkspaceService {
     }
   }
 
-  async findUsers(workspaceId: number): Promise<WorkspaceUser[]> {
-    this.logger.log(`Retrieving all users for workspace ID: ${workspaceId}`);
+  async findUsers(workspaceId: number, options?: { page: number; limit: number }): Promise<[WorkspaceUser[], number]> {
+    this.logger.log(`Retrieving users for workspace ID: ${workspaceId}`);
 
     try {
+      if (options) {
+        const { page, limit } = options;
+        const MAX_LIMIT = 500;
+        const validPage = Math.max(1, page); // minimum 1
+        const validLimit = Math.min(Math.max(1, limit), MAX_LIMIT); // Between 1 and MAX_LIMIT
+
+        const [users, total] = await this.workspaceUsersRepository.findAndCount({
+          where: { workspaceId },
+          skip: (validPage - 1) * validLimit,
+          take: validLimit,
+          order: { userId: 'ASC' }
+        });
+
+        this.logger.log(`Found ${users.length} user(s) (page ${validPage}, limit ${validLimit}, total ${total}) for workspace ID: ${workspaceId}`);
+        return [users, total];
+      }
+
       const users = await this.workspaceUsersRepository.find({
-        where: { workspaceId }
+        where: { workspaceId },
+        order: { userId: 'ASC' }
       });
+
       this.logger.log(`Found ${users.length} user(s) for workspace ID: ${workspaceId}`);
-      return users;
+      return [users, users.length];
     } catch (error) {
       this.logger.error(`Failed to retrieve users for workspace ID: ${workspaceId}`, error.stack);
       throw new Error('Could not retrieve workspace users');
@@ -455,7 +512,7 @@ export class WorkspaceService {
 
     try {
       const persons = await this.personsRepository.find({
-        where: { workspace_id, id: In(ids) }
+        where: { workspace_id, id: In(ids) }, select: ['id', 'group', 'login', 'code', 'uploaded_at']
       });
 
       if (!persons || persons.length === 0) {
@@ -463,89 +520,164 @@ export class WorkspaceService {
         return statistics;
       }
 
-      for (const person of persons) {
-        const booklets = await this.bookletRepository.find({
-          where: { personid: person.id }
-        });
+      const personIds = persons.map(person => person.id);
 
-        if (!booklets || booklets.length === 0) {
-          this.logger.log(`Keine Booklets für Person ${person.id} gefunden.`);
-          continue;
+      const booklets = await this.bookletRepository.find({
+        where: { personid: In(personIds) }
+      });
+
+      if (!booklets || booklets.length === 0) {
+        this.logger.log('Keine Booklets für die angegebenen Personen gefunden.');
+        return statistics;
+      }
+
+      const bookletIds = booklets.map(booklet => booklet.id);
+
+      const units = await this.unitRepository.find({
+        where: { bookletid: In(bookletIds) }
+      });
+
+      if (!units || units.length === 0) {
+        this.logger.log('Keine Einheiten für die angegebenen Booklets gefunden.');
+        return statistics;
+      }
+
+      const bookletToUnitsMap = new Map();
+      units.forEach(unit => {
+        if (!bookletToUnitsMap.has(unit.bookletid)) {
+          bookletToUnitsMap.set(unit.bookletid, []);
+        }
+        bookletToUnitsMap.get(unit.bookletid).push(unit);
+      });
+
+      const unitIds = units.map(unit => unit.id);
+      const unitAliases = units.map(unit => unit.alias.toUpperCase());
+
+      const allResponses = await this.responseRepository.find({
+        where: { unitid: In(unitIds), status: In(['VALUE_CHANGED']) }
+      });
+
+      const unitToResponsesMap = new Map();
+      allResponses.forEach(response => {
+        if (!unitToResponsesMap.has(response.unitid)) {
+          unitToResponsesMap.set(response.unitid, []);
+        }
+        unitToResponsesMap.get(response.unitid).push(response);
+      });
+      const testFiles = await this.fileUploadRepository.find({
+        where: { workspace_id: workspace_id, file_id: In(unitAliases) }
+      });
+
+      const fileIdToTestFileMap = new Map();
+      testFiles.forEach(file => {
+        fileIdToTestFileMap.set(file.file_id, file);
+      });
+
+      const codingSchemeRefs = new Set<string>();
+      const unitToCodingSchemeRefMap = new Map();
+      for (const unit of units) {
+        const testFile = fileIdToTestFileMap.get(unit.alias.toUpperCase());
+        if (!testFile) continue;
+
+        try {
+          const $ = cheerio.load(testFile.data);
+          const codingSchemeRefText = $('codingSchemeRef').text();
+          if (codingSchemeRefText) {
+            codingSchemeRefs.add(codingSchemeRefText.toUpperCase());
+            unitToCodingSchemeRefMap.set(unit.id, codingSchemeRefText.toUpperCase());
+          }
+        } catch (error) {
+          this.logger.error(`--- Fehler beim Verarbeiten der Datei ${testFile.filename}: ${error.message}`);
+        }
+      }
+      const codingSchemeFiles = await this.fileUploadRepository.find({
+        where: { file_id: In([...codingSchemeRefs]) },
+        select: ['file_id', 'data', 'filename']
+      });
+
+      const fileIdToCodingSchemeMap = new Map();
+      codingSchemeFiles.forEach(file => {
+        try {
+          const scheme = new Autocoder.CodingScheme(JSON.parse(JSON.stringify(file.data)));
+          fileIdToCodingSchemeMap.set(file.file_id, scheme);
+        } catch (error) {
+          this.logger.error(`--- Fehler beim Verarbeiten des Kodierschemas ${file.filename}: ${error.message}`);
+        }
+      });
+
+      const allCodedResponses = [];
+
+      for (const unit of units) {
+        const responses = unitToResponsesMap.get(unit.id) || [];
+        if (responses.length === 0) continue;
+
+        statistics.totalResponses += responses.length;
+
+        let scheme = new Autocoder.CodingScheme({});
+        const codingSchemeRef = unitToCodingSchemeRefMap.get(unit.id);
+        if (codingSchemeRef) {
+          scheme = fileIdToCodingSchemeMap.get(codingSchemeRef) || scheme;
         }
 
-        for (const booklet of booklets) {
-          const units = await this.unitRepository.find({
-            where: { bookletid: booklet.id }
+        const codedResponses = responses.map(response => {
+          const codedResult = scheme.code([{
+            id: response.variableid,
+            value: response.value,
+            status: response.status as ResponseStatusType
+          }]);
+
+          const codedStatus = codedResult[0]?.status || 'UNKNOWN';
+          if (!statistics.statusCounts[codedStatus]) {
+            statistics.statusCounts[codedStatus] = 0;
+          }
+          statistics.statusCounts[codedStatus] += 1;
+
+          return {
+            ...response, // Enthält die ursprüngliche 'id' und andere Felder der Response
+            code: codedResult[0]?.code,
+            codedstatus: codedStatus,
+            score: codedResult[0]?.score
+          };
+        });
+
+        allCodedResponses.push(...codedResponses);
+      }
+      if (allCodedResponses.length > 0) {
+        try {
+          const batchSize = 10000;
+          const batches = [];
+          for (let i = 0; i < allCodedResponses.length; i += batchSize) {
+            batches.push(allCodedResponses.slice(i, i + batchSize));
+          }
+
+          this.logger.log(`Starte die Aktualisierung von ${allCodedResponses.length} Responses in ${batches.length} Batches (concurrent).`);
+
+          const updateBatchPromises = batches.map(async (batch, index) => {
+            this.logger.log(`Starte Aktualisierung für Batch #${index + 1} (Größe: ${batch.length}).`);
+            const individualUpdatePromises = batch.map(codedResponse => this.responseRepository.update(
+              codedResponse.id,
+              {
+                code: codedResponse.code,
+                codedstatus: codedResponse.codedstatus,
+                score: codedResponse.score
+              }
+            )
+            );
+            try {
+              await Promise.all(individualUpdatePromises);
+              this.logger.log(`Batch #${index + 1} (Größe: ${batch.length}) erfolgreich aktualisiert.`);
+            } catch (error) {
+              this.logger.error(`Fehler beim Aktualisieren von Batch #${index + 1} (Größe: ${batch.length}):`, error.message);
+              throw error;
+            }
           });
 
-          if (!units || units.length === 0) {
-            this.logger.log(`Keine Einheiten für Booklet ${booklet.id} gefunden.`);
-            continue;
-          }
+          await Promise.all(updateBatchPromises);
 
-          for (const unit of units) {
-            const testFile = await this.fileUploadRepository
-              .findOne({ where: { file_id: unit.alias.toUpperCase() } });
-
-            if (!testFile) {
-              this.logger.log(`--- Keine Testdatei für Einheit ${unit.id} gefunden.`);
-              continue;
-            }
-            let scheme = new Autocoder.CodingScheme({});
-
-            try {
-              const $ = cheerio.load(testFile.data);
-              const codingSchemeRefText = $('codingSchemeRef').text();
-              if (codingSchemeRefText) {
-                const fileRecord = await this.fileUploadRepository.findOne({
-                  where: { file_id: codingSchemeRefText.toUpperCase() },
-                  select: ['data', 'filename']
-                });
-                if (fileRecord) {
-                  scheme = new Autocoder.CodingScheme(JSON.parse(JSON.stringify(fileRecord?.data)));
-                }
-              } else {
-                this.logger.log('--- Kein CodingSchemeRef-Tag gefunden.');
-              }
-            } catch (error) {
-              this.logger.error(`--- Fehler beim Verarbeiten der Datei ${testFile.filename}: ${error.message}`);
-            }
-
-            const responses = await this.responseRepository.find({
-              where: { unitid: unit.id, status: In(['VALUE_CHANGED']) }
-            });
-
-            statistics.totalResponses += responses.length;
-
-            const codedResponses = responses.map(response => {
-              const codedResult = scheme.code([{
-                id: response.variableid,
-                value: response.value,
-                status: response.status as ResponseStatusType
-              }]);
-
-              const codedStatus = codedResult[0]?.status || 'UNKNOWN';
-              if (!statistics.statusCounts[codedStatus]) {
-                statistics.statusCounts[codedStatus] = 0;
-              }
-              statistics.statusCounts[codedStatus] += 1;
-
-              return {
-                ...response,
-                code: codedResult[0]?.code,
-                codedstatus: codedStatus,
-                score: codedResult[0]?.score
-              };
-            });
-
-            try {
-              await this.responseRepository.save(codedResponses);
-              this.logger.log('Die Responses wurden erfolgreich aktualisiert.');
-            } catch (error) {
-              this.logger.error('Fehler beim Aktualisieren der Responses:', error);
-              throw new Error('Fehler beim Speichern der codierten Responses in der Datenbank.');
-            }
-          }
+          this.logger.log(`${allCodedResponses.length} Responses wurden erfolgreich aktualisiert.`);
+        } catch (error) {
+          this.logger.error('Fehler beim Aktualisieren der Responses:', error.message);
+          throw new Error('Fehler beim Speichern der codierten Responses in der Datenbank.');
         }
       }
 
@@ -737,12 +869,36 @@ export class WorkspaceService {
     };
   }
 
-  async findWorkspaceResponses(workspace_id: number): Promise<ResponseDto[]> {
+  async findWorkspaceResponses(workspace_id: number, options?: { page: number; limit: number }): Promise<[ResponseDto[], number]> {
     this.logger.log('Returning responses for workspace', workspace_id);
-    return this.responsesRepository.find({ where: { workspace_id: workspace_id } });
+
+    if (options) {
+      const { page, limit } = options;
+      const MAX_LIMIT = 500;
+      const validPage = Math.max(1, page);
+      const validLimit = Math.min(Math.max(1, limit), MAX_LIMIT);
+
+      const [responses, total] = await this.responsesRepository.findAndCount({
+        where: { workspace_id: workspace_id },
+        skip: (validPage - 1) * validLimit,
+        take: validLimit,
+        order: { id: 'ASC' }
+      });
+
+      this.logger.log(`Found ${responses.length} responses (page ${validPage}, limit ${validLimit}, total ${total}) for workspace ${workspace_id}`);
+      return [responses, total];
+    }
+
+    const responses = await this.responsesRepository.find({
+      where: { workspace_id: workspace_id },
+      order: { id: 'ASC' }
+    });
+
+    this.logger.log(`Found ${responses.length} responses for workspace ${workspace_id}`);
+    return [responses, responses.length];
   }
 
-  async getCodingList(): Promise<{
+  async getCodingList(options?: { page: number; limit: number }): Promise<[{
     unit_key: string;
     unit_alias: string;
     login_name: string;
@@ -752,11 +908,63 @@ export class WorkspaceService {
     variable_page: string;
     variable_anchor: string;
     url: string;
-  }[]> {
+  }[], number]> {
     try {
+      if (options) {
+        const { page, limit } = options;
+        const MAX_LIMIT = 500;
+        const validPage = Math.max(1, page); // minimum 1
+        const validLimit = Math.min(Math.max(1, limit), MAX_LIMIT); // Between 1 and MAX_LIMIT
+
+        const queryBuilder = this.responseRepository.createQueryBuilder('response')
+          .leftJoinAndSelect('response.unit', 'unit')
+          .leftJoinAndSelect('unit.booklet', 'booklet')
+          .leftJoinAndSelect('booklet.person', 'person')
+          .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
+          .where('response.codedStatus = :status', { status: 'CODING_INCOMPLETE' })
+          .skip((validPage - 1) * validLimit)
+          .take(validLimit)
+          .orderBy('response.id', 'ASC');
+
+        const [responses, total] = await queryBuilder.getManyAndCount();
+
+        const result = responses.map(response => {
+          const unit = response.unit;
+          const booklet = unit?.booklet;
+          const person = booklet?.person;
+          const bookletInfo = booklet?.bookletinfo;
+          const token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjEsInVzZXJuYW1lIjoicmVpY2hsZWpAZ214LmRlIiwic3ViIjp7ImlkIjoxLCJ1c2VybmFtZSI6InJlaWNobGVqQGdteC5kZSIsImlzQWRtaW4iOnRydWV9LCJ3b3Jrc3BhY2UiOiIzNCIsImlhdCI6MTc0OTAzNzUzMywiZXhwIjoxNzU0MjIxNTMzfQ.4FVfq10u_SbhXCCNXb2edh_SYupW-LZPj09Opb08CS4';
+
+          const loginName = person?.login || '';
+          const loginCode = person?.code || '';
+          const bookletId = bookletInfo?.name || '';
+          const unitKey = unit?.name || '';
+          const variablePage = '0';
+
+          // Generate URL in the format: https://www.iqb-kodierbox.de/#/replay/{login_name}@{login_code}@{booklet_id}/{unit_key}/{variable_page}?auth={token}
+          const url = `https://www.iqb-kodierbox.de/#/replay/${loginName}@${loginCode}@${bookletId}/${unitKey}/${variablePage}?auth=${token}`;
+
+          return {
+            unit_key: unitKey,
+            unit_alias: unit?.alias || '',
+            login_name: loginName,
+            login_code: loginCode,
+            booklet_id: bookletId,
+            variable_id: response.variableid || '',
+            variable_page: variablePage,
+            variable_anchor: '',
+            url
+          };
+        });
+
+        this.logger.log(`Found ${result.length} coding items (page ${validPage}, limit ${validLimit}, total ${total})`);
+        return [result, total];
+      }
+
       const responses = await this.responseRepository.find({
         where: { codedstatus: 'CODING_INCOMPLETE' },
-        relations: ['unit', 'unit.booklet', 'unit.booklet.person', 'unit.booklet.bookletinfo']
+        relations: ['unit', 'unit.booklet', 'unit.booklet.person', 'unit.booklet.bookletinfo'],
+        order: { id: 'ASC' }
       });
 
       const result = responses.map(response => {
@@ -788,10 +996,11 @@ export class WorkspaceService {
         };
       });
 
-      return result;
+      this.logger.log(`Found ${result.length} coding items`);
+      return [result, result.length];
     } catch (error) {
       this.logger.error(`Error fetching coding list: ${error.message}`);
-      return [];
+      return [[], 0];
     }
   }
 
@@ -813,12 +1022,6 @@ export class WorkspaceService {
 
       statistics.totalResponses = await queryBuilder.getCount();
 
-      responses.forEach(response => {
-        const status = response.codedstatus || 'UNKNOWN';
-        if (!statistics.statusCounts[status]) {
-          statistics.statusCounts[status] = 0;
-        }
-        statistics.statusCounts[status] += 1;
       const statusCountResults = await queryBuilder
         .select("COALESCE(response.codedstatus, 'UNKNOWN')", 'statusValue')
         .addSelect('COUNT(response.id)', 'count')
@@ -837,35 +1040,46 @@ export class WorkspaceService {
     }
   }
 
-  async getResponsesByStatus(workspace_id: number, status: string): Promise<ResponseEntity[]> {
+  async getResponsesByStatus(workspace_id: number, status: string, options?: { page: number; limit: number }): Promise<[ResponseEntity[], number]> {
     this.logger.log(`Getting responses with status ${status} for workspace ${workspace_id}`);
-
     try {
-      const responses = await this.responseRepository.find({
-        where: {
-          status: 'VALUE_CHANGED',
-          codedstatus: status,
-          unit: {
-            booklet: {
-              person: {
-                workspace_id
-              }
-            }
-          }
-        },
-        relations: ['unit', 'unit.booklet', 'unit.booklet.person', 'unit.booklet.bookletinfo']
-      });
+      const queryBuilder = this.responseRepository.createQueryBuilder('response')
+        .leftJoinAndSelect('response.unit', 'unit')
+        .leftJoinAndSelect('unit.booklet', 'booklet')
+        .leftJoinAndSelect('booklet.person', 'person')
+        .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo') // Diese Relation wird geladen, wie im Originalcode
+        .where('response.status = :constStatus', { constStatus: 'VALUE_CHANGED' })
+        .andWhere('response.codedStatus = :statusParam', { statusParam: status })
+        .andWhere('person.workspace_id = :workspace_id_param', { workspace_id_param: workspace_id })
+        .orderBy('response.id', 'ASC');
 
-      return responses;
+      if (options) {
+        const { page, limit } = options;
+        const MAX_LIMIT = 500;
+        const validPage = Math.max(1, page); // minimum 1
+        const validLimit = Math.min(Math.max(1, limit), MAX_LIMIT); // Between 1 and MAX_LIMIT
+
+        queryBuilder
+          .skip((validPage - 1) * validLimit)
+          .take(validLimit);
+
+        const [responses, total] = await queryBuilder.getManyAndCount();
+        this.logger.log(`Found ${responses.length} responses with status ${status} (page ${validPage}, limit ${validLimit}, total ${total}) for workspace ${workspace_id}`);
+        return [responses, total];
+      }
+
+      const responses = await queryBuilder.getMany();
+      const total = await queryBuilder.getCount();
+      this.logger.log(`Found ${responses.length} responses with status ${status} for workspace ${workspace_id}`);
+      return [responses, total];
     } catch (error) {
       this.logger.error(`Error getting responses by status: ${error.message}`);
-      return [];
+      return [[], 0];
     }
   }
 
   async validateTestFiles(workspaceId: number): Promise<ValidationData[]> {
     try {
-      // Get all test takers in a single query
       const testTakers = await this.fileUploadRepository.find({
         where: { workspace_id: workspaceId, file_type: In(['TestTakers', 'Testtakers']) }
       });
@@ -875,7 +1089,6 @@ export class WorkspaceService {
         return this.createEmptyValidationData();
       }
 
-      // Process all test takers in parallel using Promise.all
       const validationResultsPromises = testTakers.map(testTaker => this.processTestTaker(testTaker));
       const validationResults = (await Promise.all(validationResultsPromises)).filter(Boolean);
 
@@ -883,7 +1096,6 @@ export class WorkspaceService {
         return validationResults;
       }
 
-      // If no validation results from test takers, check booklets
       const booklets = await this.fileUploadRepository.find({
         where: { workspace_id: workspaceId, file_type: 'Booklet' }
       });

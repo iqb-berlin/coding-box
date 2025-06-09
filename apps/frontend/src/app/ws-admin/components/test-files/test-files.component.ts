@@ -148,9 +148,9 @@ export class TestFilesComponent implements OnInit {
   }
 
   /** Updates the table data source and stops spinner */
-  private updateTable(files: FilesInListDto[]): void {
-    this.dataSource = new MatTableDataSource(files);
-    this.extractFileTypes(files);
+  private updateTable(files: any): void {
+    this.dataSource = new MatTableDataSource(files.data);
+    this.extractFileTypes(files.data);
     this.setupFilterPredicate();
     this.isLoading = false;
   }
@@ -171,7 +171,6 @@ export class TestFilesComponent implements OnInit {
   /** Sets up custom filter predicate for the data source */
   private setupFilterPredicate(): void {
     this.dataSource.filterPredicate = (data: FilesInListDto, filter: string) => {
-      // Parse the filter string to get individual filters
       const filterObj = JSON.parse(filter || '{}');
 
       // Text filter - check if any of the fields contain the search text
