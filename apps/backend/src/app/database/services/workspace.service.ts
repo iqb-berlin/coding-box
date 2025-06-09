@@ -804,21 +804,14 @@ export class WorkspaceService {
     };
 
     try {
-      const responses = await this.responseRepository.find({
-        where: {
-          status: 'VALUE_CHANGED',
-          unit: {
-            booklet: {
-              person: {
-                workspace_id
-              }
-            }
-          }
-        },
-        relations: ['unit', 'unit.booklet', 'unit.booklet.person']
-      });
+      const queryBuilder = this.responseRepository.createQueryBuilder('response')
+        .innerJoin('response.unit', 'unit')
+        .innerJoin('unit.booklet', 'booklet')
+        .innerJoin('booklet.person', 'person')
+        .where('response.status = :status', { status: 'VALUE_CHANGED' })
+        .andWhere('person.workspace_id = :workspace_id', { workspace_id });
 
-      statistics.totalResponses = responses.length;
+      statistics.totalResponses = await queryBuilder.getCount();
 
       responses.forEach(response => {
         const status = response.codedstatus || 'UNKNOWN';
@@ -826,11 +819,20 @@ export class WorkspaceService {
           statistics.statusCounts[status] = 0;
         }
         statistics.statusCounts[status] += 1;
+      const statusCountResults = await queryBuilder
+        .select("COALESCE(response.codedstatus, 'UNKNOWN')", 'statusValue')
+        .addSelect('COUNT(response.id)', 'count')
+        .groupBy("COALESCE(response.codedstatus, 'UNKNOWN')") // Gruppieren nach dem Ausdruck selbst für bessere Kompatibilität
+        .getRawMany();
+
+      statusCountResults.forEach(result => {
+        statistics.statusCounts[result.statusValue] = parseInt(result.count, 10);
       });
 
       return statistics;
     } catch (error) {
       this.logger.error(`Error getting coding statistics: ${error.message}`);
+
       return statistics;
     }
   }
