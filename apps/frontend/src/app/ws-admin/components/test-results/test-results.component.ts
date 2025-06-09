@@ -223,6 +223,17 @@ export class TestResultsComponent implements OnInit {
     return date.toLocaleString();
   }
 
+  // Check if any response value for a unit starts with "UEsD"
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  hasGeogebraResponse(unit: any): boolean {
+    if (!unit || !unit.results || !Array.isArray(unit.results)) {
+      return false;
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return unit.results.some((response:any) => response.value && typeof response.value === 'string' && response.value.startsWith('UEsD'));
+  }
+
   getColor(status: string): string {
     switch (status) {
       case 'VALUE_CHANGED':
