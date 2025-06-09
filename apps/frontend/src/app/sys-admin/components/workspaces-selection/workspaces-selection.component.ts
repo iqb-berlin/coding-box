@@ -68,11 +68,11 @@ export class WorkspacesSelectionComponent implements OnInit {
     this.selectedWorkspaceId = 0;
     this.backendService.getAllWorkspacesList().subscribe(workspaces => {
       this.workspacesUpdated.emit(this.workspacesChanged);
-      this.setObjectsDatasource(workspaces);
+      this.setObjectsDatasource(workspaces.data);
       this.tableSelectionCheckboxes.clear();
       this.tableSelectionRow.clear();
       if (this.selectedWorkspacesIds?.length > 0) {
-        this.tableSelectionCheckboxes.select(...workspaces
+        this.tableSelectionCheckboxes.select(...workspaces.data
           .filter(workspace => this.selectedWorkspacesIds.includes(workspace.id)));
         this.workspaceSelectionChanged.emit(this.tableSelectionCheckboxes.selected);
       }

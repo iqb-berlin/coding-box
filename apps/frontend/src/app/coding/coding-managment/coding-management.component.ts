@@ -28,7 +28,7 @@ import {
   MatTableDataSource
 } from '@angular/material/table';
 import { MatSort, MatSortModule, MatSortHeader } from '@angular/material/sort';
-import { MatPaginator, MatPaginatorModule } from '@angular/material/paginator';
+import { MatPaginator, MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
@@ -38,7 +38,7 @@ import { MatAnchor, MatIconButton } from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { ScrollingModule } from '@angular/cdk/scrolling';
 import { MatDivider } from '@angular/material/divider';
-import { BackendService } from '../../services/backend.service';
+import { BackendService, CodingListItem } from '../../services/backend.service';
 import { AppService } from '../../services/app.service';
 import { CodingStatistics } from '../../../../../../api-dto/coding/coding-statistics';
 
@@ -97,8 +97,8 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
   @ViewChild(MatSort) sort!: MatSort;
   @ViewChild(MatPaginator) paginator!: MatPaginator;
 
-  data: Success[] = [];
-  dataSource = new MatTableDataSource<Success>(this.data);
+  data: any[] = [];
+  dataSource = new MatTableDataSource<CodingListItem>(this.data);
   displayedColumns: string[] = ['unitname', 'variableid', 'value', 'codedstatus', 'actions'];
   isLoading = false;
   isFilterLoading = false;
@@ -107,6 +107,8 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
 
   pageSizeOptions = [100, 200, 500];
   pageSize = 100;
+  totalRecords = 0;
+  pageIndex = 0;
 
   filterTextChanged = new Subject<Event>();
 
@@ -123,7 +125,7 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
 
   ngOnInit(): void {
     // this.fetchCodeManual();
-    //this.fetchCodingStatistics();
+    this.fetchCodingStatistics();
 
     this.filterTextChanged
       .pipe(
@@ -176,46 +178,50 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
   /**
    * Fetches responses with the specified status
    */
-  fetchResponsesByStatus(status: string): void {
+  fetchResponsesByStatus(status: string, page: number = 1, limit: number = this.pageSize): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     this.isLoading = true;
     this.currentStatusFilter = status;
 
-    this.backendService.getResponsesByStatus(workspaceId, status)
+    this.backendService.getResponsesByStatus(workspaceId, status, page, limit)
       .pipe(
-        catchError(error => {
+        catchError(() => {
           this.isLoading = false;
           this.snackBar.open(`Fehler beim Abrufen der Antworten mit Status ${status}`, 'Schließen', {
             duration: 5000,
             panelClass: ['error-snackbar']
           });
-          console.error(`Fehler beim Abrufen der Antworten mit Status ${status}:`, error);
-          return of([]);
+          return of({
+            data: [], total: 0, page, limit
+          });
         }),
         finalize(() => {
           this.isLoading = false;
         })
       )
-      .subscribe(responses => {
+      .subscribe(response => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        this.data = responses.map((response: any) => ({
-          id: response.id,
-          unitid: response.unitid,
-          variableid: response.variableid || '',
-          status: response.status || '',
-          value: response.value || '',
-          subform: response.subform || '',
-          code: response.code,
-          score: response.score,
-          codedstatus: response.codedstatus || '',
-          unitname: response.unit?.name || '',
+        this.data = response.data.map((item: any) => ({
+          id: item.id,
+          unitid: item.unitId,
+          variableid: item.variableid || '',
+          status: item.status || '',
+          value: item.value || '',
+          subform: item.subform || '',
+          code: item.code,
+          score: item.score,
+          codedstatus: item.codedstatus || '',
+          unitname: item.unit?.name || '',
           // Extract information for replay URL
-          login_name: response.unit?.booklet?.person?.login || '',
-          login_code: response.unit?.booklet?.person?.code || '',
-          booklet_id: response.unit?.booklet?.bookletinfo?.name || ''
+          login_name: item.unit?.booklet?.person?.login || '',
+          login_code: item.unit?.booklet?.person?.code || '',
+          booklet_id: item.unit?.booklet?.bookletinfo?.name || ''
         }));
-        console.log(responses, 'Fetched responses with status:', status);
+
         this.dataSource.data = this.data;
+        this.totalRecords = response.total;
+
+        console.log(`Fetched ${response.data.length} responses with status: ${status} (total: ${response.total})`);
 
         if (this.data.length === 0) {
           this.snackBar.open(`Keine Antworten mit Status ${status} gefunden.`, 'Schließen', {
@@ -245,6 +251,17 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
   ngAfterViewInit(): void {
     this.dataSource.sort = this.sort;
     this.dataSource.paginator = this.paginator;
+  }
+
+  onPaginatorChange(event: PageEvent): void {
+    this.pageSize = event.pageSize;
+    this.pageIndex = event.pageIndex;
+
+    if (this.currentStatusFilter) {
+      this.fetchResponsesByStatus(this.currentStatusFilter, this.pageIndex + 1, this.pageSize);
+    } else {
+      this.fetchCodingList(this.pageIndex + 1, this.pageSize);
+    }
   }
 
   /**
@@ -386,22 +403,34 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
       });
   }
 
-  fetchCodingList(): void {
+  fetchCodingList(page: number = 1, limit: number = this.pageSize): void {
     const workspaceId = this.appService.selectedWorkspaceId;
-    this.backendService.getCodingList(workspaceId)
+    this.isLoading = true;
+
+    this.backendService.getCodingList(workspaceId, page, limit)
       .pipe(
         catchError(error => {
+          this.isLoading = false;
           this.snackBar.open('Fehler beim Abrufen der Kodierliste', 'Schließen', {
             duration: 5000,
             panelClass: ['error-snackbar']
           });
           console.error('Fehler beim Abrufen der Kodierliste:', error);
-          return of([]);
+          return of({
+            data: [], total: 0, page, limit
+          });
+        }),
+        finalize(() => {
+          this.isLoading = false;
         })
       )
       .subscribe(result => {
-        if (result && result.length > 0) {
-          this.snackBar.open(`Kodierliste mit ${result.length} Einträgen wurde erfolgreich abgerufen.`, 'Schließen', {
+        if (result && result.data.length > 0) {
+          this.data = result.data;
+          this.dataSource.data = this.data;
+          this.totalRecords = result.total;
+
+          this.snackBar.open(`Kodierliste mit ${result.total} Einträgen wurde erfolgreich abgerufen.`, 'Schließen', {
             duration: 5000,
             panelClass: ['success-snackbar']
           });

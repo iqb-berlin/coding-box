@@ -8,7 +8,6 @@ import { CreateUserDto } from '../../../../../api-dto/user/create-user-dto';
 import { AppService } from './app.service';
 import { UserFullDto } from '../../../../../api-dto/user/user-full-dto';
 import { WorkspaceFullDto } from '../../../../../api-dto/workspaces/workspace-full-dto';
-import { WorkspaceInListDto } from '../../../../../api-dto/workspaces/workspace-in-list-dto';
 import { CreateWorkspaceDto } from '../../../../../api-dto/workspaces/create-workspace-dto';
 import { AuthDataDto } from '../../../../../api-dto/auth-data-dto';
 // eslint-disable-next-line import/no-cycle
@@ -27,8 +26,51 @@ import { FilesValidationDto } from '../../../../../api-dto/files/files-validatio
 import { FileDownloadDto } from '../../../../../api-dto/files/file-download.dto';
 import { TestGroupsInfoDto } from '../../../../../api-dto/files/test-groups-info.dto';
 import { CodingStatistics } from '../../../../../api-dto/coding/coding-statistics';
+import { PaginatedWorkspacesDto } from '../../../../../api-dto/workspaces/paginated-workspaces-dto';
 
-// Using CodingStatistics interface from api-dto/coding/coding-statistics
+interface PaginatedResponse<T> {
+  data: T[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export interface CodingListItem {
+  unit_key: string;
+  unit_alias: string;
+  login_name: string;
+  login_code: string;
+  booklet_id: string;
+  variable_id: string;
+  variable_page: string;
+  variable_anchor: string;
+  url: string;
+}
+
+interface ResponseEntity {
+  id: number;
+  unitId: number;
+  variableId: string;
+  status: string;
+  value: string;
+  subform: string;
+  code: number;
+  score: number;
+  codedStatus: string;
+  unit?: {
+    name: string;
+    alias: string;
+    booklet?: {
+      person?: {
+        login: string;
+        code: string;
+      };
+      bookletinfo?: {
+        name: string;
+      };
+    };
+  };
+}
 
 @Injectable({
   providedIn: 'root'
@@ -137,12 +179,21 @@ export class BackendService {
       );
   }
 
-  getAllWorkspacesList(): Observable<WorkspaceInListDto[]> {
+  getAllWorkspacesList(): Observable<PaginatedWorkspacesDto> {
     return this.http
-      .get<WorkspaceInListDto[]>(`${this.serverUrl}admin/workspace`,
+      .get<PaginatedWorkspacesDto>(`${this.serverUrl}admin/workspace`,
       { headers: this.authHeader })
       .pipe(
-        catchError(() => of([]))
+        catchError(error => {
+          console.error('Fehler beim Abrufen der Workspaces:', error);
+          const defaultResponse: PaginatedWorkspacesDto = {
+            data: [],
+            total: 0,
+            page: 0,
+            limit: 0
+          };
+          return of(defaultResponse);
+        })
       );
   }
 
@@ -267,13 +318,23 @@ export class BackendService {
       );
   }
 
-  getCodingList(workspace_id:number): Observable<any> {
+  getCodingList(workspace_id:number, page: number = 1, limit: number = 100): Observable<PaginatedResponse<CodingListItem>> {
+    const params = new HttpParams()
+      .set('page', page.toString())
+      .set('limit', limit.toString());
+
     return this.http
-      .get<any>(
+      .get<PaginatedResponse<CodingListItem>>(
       `${this.serverUrl}admin/workspace/${workspace_id}/coding/coding-list`,
-      { headers: this.authHeader })
+      { headers: this.authHeader, params }
+    )
       .pipe(
-        catchError(() => of([])),
+        catchError(() => of({
+          data: [],
+          total: 0,
+          page,
+          limit
+        })),
         map(res => res)
       );
   }
@@ -289,13 +350,23 @@ export class BackendService {
       );
   }
 
-  getResponsesByStatus(workspace_id:number, status: string): Observable<any> {
+  getResponsesByStatus(workspace_id:number, status: string, page: number = 1, limit: number = 100): Observable<PaginatedResponse<ResponseEntity>> {
+    const params = new HttpParams()
+      .set('page', page.toString())
+      .set('limit', limit.toString());
+
     return this.http
-      .get<any>(
+      .get<PaginatedResponse<ResponseEntity>>(
       `${this.serverUrl}admin/workspace/${workspace_id}/coding/responses/${status}`,
-      { headers: this.authHeader })
+      { headers: this.authHeader, params }
+    )
       .pipe(
-        catchError(() => of([])),
+        catchError(() => of({
+          data: [],
+          total: 0,
+          page,
+          limit
+        })),
         map(res => res)
       );
   }
@@ -347,10 +418,15 @@ export class BackendService {
       { headers: this.authHeader });
   }
 
-  getFilesList(workspaceId: number): Observable<FilesInListDto[]> {
-    return this.http.get<FilesInListDto[]>(
+  getFilesList(workspaceId: number, page: number = 1, limit: number = 10000): Observable<PaginatedResponse<FilesInListDto>> {
+    const params = new HttpParams()
+      .set('page', page.toString())
+      .set('limit', limit.toString());
+
+    return this.http.get<PaginatedResponse<FilesInListDto>>(
       `${this.serverUrl}admin/workspace/${workspaceId}/files`,
-      { headers: this.authHeader });
+      { headers: this.authHeader, params }
+    );
   }
 
   getUnitDef(workspaceId: number, unit: string, authToken?:string): Observable<FilesDto[]> {
