@@ -79,6 +79,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   dataSource!: MatTableDataSource<FilesInListDto>;
   tableCheckboxSelection = new SelectionModel<FilesInListDto>(true, []);
   isLoading = false;
+  isValidating = false;
   selectedFileType: string = '';
   selectedFileSize: string = '';
   fileTypes: string[] = [];
@@ -158,7 +159,8 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   /** Loads test files and updates the data source */
   loadTestFiles(forceReload: boolean): void {
     this.isLoading = true;
-    if (forceReload || !this.appService.workspaceData?.testFiles.length) {
+    this.isValidating = false;
+    if (forceReload || !this.appService.workspaceData?.testFiles.data.length) {
       this.backendService.getFilesList(this.appService.selectedWorkspaceId)
         .subscribe(files => {
           console.log(files);
@@ -170,7 +172,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   }
 
   /** Updates the table data source and stops spinner */
-  private updateTable(files: any): void {
+  private updateTable(files: { data: FilesInListDto[] }): void {
     this.dataSource = new MatTableDataSource(files.data);
     this.extractFileTypes(files.data);
     this.setupFilterPredicate();
@@ -328,6 +330,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
       this.loadTestFiles(true);
     }, 1000); // Optional timeout to simulate processing delay
     this.isLoading = false;
+    this.isValidating = false;
   }
 
   testCenterImport(): void {
@@ -373,6 +376,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
 
   validateFiles(): void {
     this.isLoading = true;
+    this.isValidating = true;
     this.backendService.validateFiles(this.appService.selectedWorkspaceId)
       .subscribe(respOk => {
         this.handleValidationResponse(respOk);
@@ -392,6 +396,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
 
   private handleValidationResponse(res: boolean | FilesValidationDto[]): void {
     this.isLoading = false;
+    this.isValidating = false;
     if (res === false) {
       this.snackBar.open(
         this.translate.instant('ws-admin.validation-failed'),
