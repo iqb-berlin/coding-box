@@ -5,6 +5,7 @@ import { DatabaseModule } from '../database/database.module';
 import { AuthModule } from '../auth/auth.module';
 import { WorkspaceController } from './workspace/workspace.controller';
 import { LogoController } from './logo/logo.controller';
+import { UnitTagsController } from './unit-tags/unit-tags.controller';
 
 @Module({
   imports: [
@@ -13,7 +14,7 @@ import { LogoController } from './logo/logo.controller';
     HttpModule
   ],
   controllers: [
-    UsersController, WorkspaceController, LogoController
+    UsersController, WorkspaceController, LogoController, UnitTagsController
   ],
   providers: []
 })

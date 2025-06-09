@@ -17,6 +17,8 @@ import { UnitLastState } from './unitLastState.entity';
 import { ChunkEntity } from './chunk.entity';
 // eslint-disable-next-line import/no-cycle
 import { ResponseEntity } from './response.entity';
+// eslint-disable-next-line import/no-cycle
+import { UnitTag } from './unitTag.entity';
 
 @Entity('unit')
 @Index(['bookletid', 'alias']) // Composite index for common query patterns
@@ -66,4 +68,10 @@ export class Unit {
     cascade: true
   })
     responses: ResponseEntity[];
+
+  @OneToMany(() => UnitTag, unitTag => unitTag.unit, {
+    // Cascade operations to unit tags when unit is modified
+    cascade: true
+  })
+    tags: UnitTag[];
 }

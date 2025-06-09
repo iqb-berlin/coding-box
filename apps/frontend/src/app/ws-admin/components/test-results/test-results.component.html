@@ -126,7 +126,7 @@
       <div class="results-section">
         <div class="booklets-card">
           <h2 class="section-title">Booklets</h2>
-          <p class="section-description">Wählen Sie ein Booklet aus, um dessen Einheiten anzuzeigen</p>
+          <p class="section-description">Wählen Sie ein Booklet aus, um dessen Units anzuzeigen</p>
           <mat-divider></mat-divider>
 
           <mat-accordion class="accordion">
@@ -159,6 +159,11 @@
                   <mat-icon class="unit-icon">assignment</mat-icon>
                   <span class="unit-name">{{ unit?.alias || 'Unbenannte Einheit' }}</span>
                   <span *ngIf="hasGeogebraResponse(unit)" class="geogebra-tag">Geogebra</span>
+                  <div class="unit-tags-container" *ngIf="unit.id">
+                    <div *ngFor="let tag of getUnitTags(unit.id)" class="unit-tag-item">
+                      <span class="unit-tag">{{ tag.tag }}</span>
+                    </div>
+                  </div>
                 </mat-list-item>
               </mat-list>
             </mat-expansion-panel>
@@ -167,7 +172,7 @@
 
         <div class="responses-card" *ngIf="responses.length > 0">
           <h2 class="section-title">Antworten</h2>
-          <p class="section-description">Antworten für die ausgewählte Einheit</p>
+          <p class="section-description">Antworten für die ausgewählte Unit</p>
           <mat-divider></mat-divider>
 
           <div class="response-actions">
@@ -175,6 +180,37 @@
               <mat-icon>play_arrow</mat-icon>
               Replay
             </button>
+            <button mat-stroked-button color="primary" (click)="openUnitLogsDialog()" class="action-button">
+              <mat-icon>list</mat-icon>
+              Logs anzeigen
+            </button>
+          </div>
+
+          <!-- Unit Tags Section -->
+          <div class="unit-tags-section">
+            <h3 class="tags-title">Tags</h3>
+            <div class="tags-container">
+              <div class="tags-list">
+                <div *ngFor="let tag of unitTags" class="tag-item" [ngStyle]="{'background-color': tag.color || '#e3f2fd'}">
+                  <span class="tag-text" [ngStyle]="{'color': getContrastColor(tag.color)}">{{ tag.tag }}</span>
+                  <div class="tag-actions">
+                    <button mat-icon-button (click)="deleteUnitTag(tag.id)" class="tag-action-button" matTooltip="Tag löschen">
+                      <mat-icon [ngStyle]="{'color': getContrastColor(tag.color)}">close</mat-icon>
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div class="add-tag-form">
+                <mat-form-field appearance="outline" class="tag-input">
+                  <mat-label>Neuer Tag</mat-label>
+                  <input matInput [(ngModel)]="newTagText" placeholder="Tag eingeben">
+                </mat-form-field>
+                <button mat-raised-button color="primary" (click)="addUnitTag()" class="add-tag-button">
+                  <mat-icon>add</mat-icon>
+                  Hinzufügen
+                </button>
+              </div>
+            </div>
           </div>
 
           <div class="var-list">
@@ -221,7 +257,7 @@
 
         <div class="logs-card" *ngIf="logs.length > 0">
           <h2 class="section-title">Logs</h2>
-          <p class="section-description">Protokolleinträge für die ausgewählte Einheit</p>
+          <p class="section-description">Protokolleinträge für die ausgewählte Unit</p>
           <mat-divider></mat-divider>
 
           <div class="log-list">

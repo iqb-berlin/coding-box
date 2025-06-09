@@ -688,7 +688,6 @@ export class WorkspaceService {
           this.logger.log(`${allCodedResponses.length} Responses wurden erfolgreich aktualisiert.`);
         } catch (error) {
           this.logger.error('Fehler beim Aktualisieren der Responses:', error.message);
-          console.error('Fehler beim Speichern der codierten Responses in der Datenbank.');
         }
       }
 
