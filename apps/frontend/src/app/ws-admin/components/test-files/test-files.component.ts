@@ -1,5 +1,5 @@
 import {
-  Component, OnInit, ViewChild
+  Component, OnDestroy, OnInit, ViewChild
 } from '@angular/core';
 import { TranslateService, TranslateModule } from '@ngx-translate/core';
 import { MatDialog } from '@angular/material/dialog';
@@ -23,6 +23,8 @@ import { MatAnchor, MatButton } from '@angular/material/button';
 import { DatePipe, NgIf, NgFor } from '@angular/common';
 import { MatFormField, MatLabel } from '@angular/material/form-field';
 import { MatOption, MatSelect } from '@angular/material/select';
+import { Subject, Subscription } from 'rxjs';
+import { debounceTime } from 'rxjs/operators';
 import { FilesValidationDialogComponent } from '../files-validation-result/files-validation.component';
 import { TestCenterImportComponent } from '../test-center-import/test-center-import.component';
 import { AppService } from '../../../services/app.service';
@@ -72,13 +74,11 @@ import { FileDownloadDto } from '../../../../../../../api-dto/files/file-downloa
     MatOption
   ]
 })
-export class TestFilesComponent implements OnInit {
+export class TestFilesComponent implements OnInit, OnDestroy {
   displayedColumns: string[] = ['selectCheckbox', 'filename', 'file_size', 'file_type', 'created_at'];
   dataSource!: MatTableDataSource<FilesInListDto>;
   tableCheckboxSelection = new SelectionModel<FilesInListDto>(true, []);
   isLoading = false;
-
-  // Filter properties
   selectedFileType: string = '';
   selectedFileSize: string = '';
   fileTypes: string[] = [];
@@ -91,11 +91,24 @@ export class TestFilesComponent implements OnInit {
     { value: '10MB+', display: '> 10MB' }
   ];
 
-  // Original filter value for text search
   textFilterValue: string = '';
-
-  // Sort functionality
   @ViewChild(MatSort) sort!: MatSort;
+
+  private textFilterChanged: Subject<string> = new Subject<string>();
+  private textFilterSubscription: Subscription | undefined;
+  // Definition der Größeneinheiten und ihrer Multiplikatoren in Bytes
+  private readonly SIZES_UNITS = {
+    bytes: 1,
+    b: 1,
+    kb: 1024,
+    kib: 1024,
+    mb: 1024 ** 2,
+    mib: 1024 ** 2,
+    gb: 1024 ** 3,
+    gib: 1024 ** 3,
+    tb: 1024 ** 4,
+    tib: 1024 ** 4
+  };
 
   constructor(
     public appService: AppService,
@@ -107,6 +120,17 @@ export class TestFilesComponent implements OnInit {
 
   ngOnInit(): void {
     this.loadTestFiles(false);
+    this.textFilterSubscription = this.textFilterChanged
+      .pipe(debounceTime(300)) // Debounce für 300ms
+      .subscribe(() => {
+        this.applyFilters();
+      });
+  }
+
+  ngOnDestroy(): void {
+    if (this.textFilterSubscription) {
+      this.textFilterSubscription.unsubscribe();
+    }
   }
 
   /** Getter for setting table sorting */
@@ -134,15 +158,13 @@ export class TestFilesComponent implements OnInit {
   /** Loads test files and updates the data source */
   loadTestFiles(forceReload: boolean): void {
     this.isLoading = true;
-
-    // Check if files need to be reloaded or used from the cached data
     if (forceReload || !this.appService.workspaceData?.testFiles.length) {
       this.backendService.getFilesList(this.appService.selectedWorkspaceId)
         .subscribe(files => {
+          console.log(files);
           this.updateTable(files);
         });
     } else {
-      // Use cached data if reload is not required
       this.updateTable(this.appService.workspaceData.testFiles || []);
     }
   }
@@ -164,7 +186,6 @@ export class TestFilesComponent implements OnInit {
       }
     });
     this.fileTypes = Array.from(types).sort();
-    // Add 'All' option at the beginning
     this.fileTypes.unshift('');
   }
 
@@ -172,53 +193,71 @@ export class TestFilesComponent implements OnInit {
   private setupFilterPredicate(): void {
     this.dataSource.filterPredicate = (data: FilesInListDto, filter: string) => {
       const filterObj = JSON.parse(filter || '{}');
-
+      console.log(data.filename);
       // Text filter - check if any of the fields contain the search text
       const textMatch = !filterObj.text || (
         (data.filename && data.filename.toLowerCase().includes(filterObj.text.toLowerCase())) ||
         (data.file_type && data.file_type.toLowerCase().includes(filterObj.text.toLowerCase())) ||
-        (data.file_size && data.file_size.toLowerCase().includes(filterObj.text.toLowerCase())) ||
         (data.created_at && new Date(data.created_at).toLocaleDateString().includes(filterObj.text.toLowerCase()))
       );
-
       // File type filter
       const typeMatch = !filterObj.fileType ||
         (data.file_type && data.file_type === filterObj.fileType);
-
       // File size filter
-      const sizeMatch = !filterObj.fileSize ||
-        this.isFileSizeInRange(data.file_size, filterObj.fileSize);
-
+      const sizeMatch = this.isFileSizeInRange(data.file_size, filterObj.fileSize);
       return (textMatch && typeMatch && sizeMatch) as boolean;
     };
   }
 
+  /** Parses a file size string (e.g., "10 KB", "1.5 MB") into bytes */
+  private parseFileSizeToBytes(fileSizeStr: string | undefined | null): number | null {
+    if (!fileSizeStr) return 0; // Interpret empty or null as 0 Bytes
+    const str = String(fileSizeStr).trim().toLowerCase();
+    if (str === '0' || str === '0 bytes' || str === '0b') return 0;
+    const match = str.match(/^([\d.]+)\s*([a-z]+)?$/);
+    if (match) {
+      const value = parseFloat(match[1]);
+      const unit = match[2] || 'bytes';
+      if (Number.isNaN(value)) return null; // Invalid number part
+      const multiplier = this.SIZES_UNITS[unit as keyof typeof this.SIZES_UNITS];
+      if (multiplier !== undefined) {
+        return value * multiplier;
+      }
+      if (match[2]) return null;
+      return value; // Value is in bytes
+    }
+    const numericValue = parseFloat(str);
+    if (!Number.isNaN(numericValue) && /^[\d.]+$/.test(str)) {
+      return numericValue;
+    }
+    return null; // Unable to parse
+  }
+
   /** Checks if a file size is within the selected range */
   private isFileSizeInRange(fileSize: string | undefined, range: string): boolean {
-    if (!fileSize || !range) return true;
-
-    // Convert file size to KB for easier comparison
-    const sizeInKB = this.convertToKB(fileSize);
-    if (sizeInKB === null) return true; // If conversion fails, don't filter out
-
-    // Check against the selected range
+    const sizeInBytes = this.parseFileSizeToBytes(fileSize);
+    if (sizeInBytes === null) {
+      return range === '' || range === undefined;
+    }
+    const KB = 1024;
+    const MB = 1024 * KB;
     switch (range) {
-      case '0-10KB':
-        return sizeInKB < 10;
-      case '10KB-100KB':
-        return sizeInKB >= 10 && sizeInKB < 100;
-      case '100KB-1MB':
-        return sizeInKB >= 100 && sizeInKB < 1024;
-      case '1MB-10MB':
-        return sizeInKB >= 1024 && sizeInKB < 10240;
-      case '10MB+':
-        return sizeInKB >= 10240;
-      default:
+      case '0-10KB': // Less than 10KB
+        return sizeInBytes < 10 * KB;
+      case '10KB-100KB': // 10KB to 100KB (exclusive of 100KB)
+        return sizeInBytes >= 10 * KB && sizeInBytes < 100 * KB;
+      case '100KB-1MB': // 100KB to 1MB (exclusive of 1MB)
+        return sizeInBytes >= 100 * KB && sizeInBytes < 1 * MB;
+      case '1MB-10MB': // 1MB to 10MB (exclusive of 10MB)
+        return sizeInBytes >= 1 * MB && sizeInBytes < 10 * MB;
+      case '10MB+': // 10MB or more
+        return sizeInBytes >= 10 * MB;
+      default: // No range selected or unknown range, so it matches
         return true;
     }
   }
 
-  /** Converts file size string to KB */
+  /** Converts file size string to KB (Original function, now unused by isFileSizeInRange) */
   private convertToKB(fileSizeStr: string): number | null {
     try {
       const sizeStr = fileSizeStr.toLowerCase();
@@ -248,7 +287,6 @@ export class TestFilesComponent implements OnInit {
       fileSize: this.selectedFileSize
     };
     this.dataSource.filter = JSON.stringify(filterObj);
-
     if (this.dataSource.paginator) {
       this.dataSource.paginator.firstPage();
     }
@@ -257,7 +295,7 @@ export class TestFilesComponent implements OnInit {
   /** Handles text filter changes */
   onTextFilterChange(value: string): void {
     this.textFilterValue = value.trim();
-    this.applyFilters();
+    this.textFilterChanged.next(this.textFilterValue);
   }
 
   /** Clears all filters */
@@ -265,19 +303,19 @@ export class TestFilesComponent implements OnInit {
     this.textFilterValue = '';
     this.selectedFileType = '';
     this.selectedFileSize = '';
+    // Direkt applyFilters aufrufen oder auch über den Subject, je nach gewünschtem Verhalten
     this.applyFilters();
+    // Wenn clearFilters auch debounced werden soll:
+    // this.textFilterChanged.next(this.textFilterValue);
   }
 
   /** Handles file selection for upload */
   onFileSelected(target: EventTarget | null): void {
     if (!target) return;
-
     const inputElement = target as HTMLInputElement;
     const files = inputElement.files;
-
     if (files && files.length) {
       this.isLoading = true;
-
       this.backendService.uploadTestFiles(this.appService.selectedWorkspaceId, files)
         .subscribe(() => {
           this.onUploadSuccess();
@@ -299,9 +337,7 @@ export class TestFilesComponent implements OnInit {
       data: {
         importType: 'testFiles'
       }
-
     });
-
     dialogRef.afterClosed().subscribe((result: boolean | UntypedFormGroup) => {
       // Reload files if dialog returns a positive result
       if (result instanceof UntypedFormGroup || result) {
@@ -312,7 +348,6 @@ export class TestFilesComponent implements OnInit {
 
   deleteFiles(): void {
     const fileIds = this.tableCheckboxSelection.selected.map(file => file.id);
-
     this.backendService.deleteFiles(this.appService.selectedWorkspaceId, fileIds)
       .subscribe(respOk => {
         this.handleDeleteResponse(respOk);
@@ -350,7 +385,6 @@ export class TestFilesComponent implements OnInit {
       success ? '' : this.translate.instant('error'),
       { duration: 1000 }
     );
-
     if (success) {
       this.loadTestFiles(true);
     }
@@ -377,7 +411,6 @@ export class TestFilesComponent implements OnInit {
    */
   getFileIcon(fileType: string): string {
     const type = fileType.toLowerCase();
-
     if (type.includes('xml')) {
       return 'code';
     }
