@@ -11,7 +11,7 @@ import { LogoService } from './logo.service';
 
 type WorkspaceData = {
   testGroups: TestGroupsInListDto[];
-  testFiles: FilesInListDto[];
+  testFiles: { data:FilesInListDto[] };
   settings: unknown;
   selectUnitPlay: unknown;
 };
@@ -41,7 +41,7 @@ export class AppService {
   errorMessageCounter = 0;
   workspaceData : WorkspaceData = {
     testGroups: [],
-    testFiles: [],
+    testFiles: { data: [] },
     settings: {},
     selectUnitPlay: {}
   };
