@@ -677,7 +677,7 @@ export class WorkspaceService {
           this.logger.log(`${allCodedResponses.length} Responses wurden erfolgreich aktualisiert.`);
         } catch (error) {
           this.logger.error('Fehler beim Aktualisieren der Responses:', error.message);
-          throw new Error('Fehler beim Speichern der codierten Responses in der Datenbank.');
+          console.error('Fehler beim Speichern der codierten Responses in der Datenbank.');
         }
       }
 
@@ -1864,12 +1864,12 @@ export class WorkspaceService {
       // Search for JSON+LD <script> tags in the parsed DOM.
       const metaDataElement = playerContent('script[type="application/ld+json"]');
       if (!metaDataElement.length) {
-        throw new Error('Meta-data <script> tag not found');
+        console.error('Meta-data <script> tag not found');
       }
 
       const metadata = JSON.parse(metaDataElement.text());
       if (!metadata.id || !metadata.version) {
-        throw new Error('Invalid metadata structure: Missing id or version');
+        console.error('Invalid metadata structure: Missing id or version');
       }
 
       return WorkspaceService.normalizePlayerId(`${metadata.id}-${metadata.version}`);

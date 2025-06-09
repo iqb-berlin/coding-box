@@ -153,7 +153,6 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
             duration: 5000,
             panelClass: ['error-snackbar']
           });
-          console.error('Fehler beim Abrufen der Kodierstatistiken:', error);
           return of({ totalResponses: 0, statusCounts: {} });
         }),
         finalize(() => {
@@ -161,7 +160,6 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
         })
       )
       .subscribe(statistics => {
-        console.log('Kodierstatistiken:', statistics);
         this.codingStatistics = statistics;
       });
   }
@@ -221,8 +219,6 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
         this.dataSource.data = this.data;
         this.totalRecords = response.total;
 
-        console.log(`Fetched ${response.data.length} responses with status: ${status} (total: ${response.total})`);
-
         if (this.data.length === 0) {
           this.snackBar.open(`Keine Antworten mit Status ${status} gefunden.`, 'Schließen', {
             duration: 5000
@@ -269,7 +265,6 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
    * Format: /replay/{login_name}@{login_code}@{booklet_id}/{unit_key}/{page}
    */
   openReplay(response: Success): void {
-    console.log('Replay', response);
     // For now, we'll use a hardcoded token and page number
     // In a real implementation, these would be retrieved from the backend
     const token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjEsInVzZXJuYW1lIjoicmVpY2hsZWpAZ214LmRlIiwic3ViIjp7ImlkIjoxLCJ1c2VybmFtZSI6InJlaWNobGVqQGdteC5kZSIsImlzQWRtaW4iOnRydWV9LCJ3b3Jrc3BhY2UiOiIzNCIsImlhdCI6MTc0OTAzNzUzMywiZXhwIjoxNzU0MjIxNTMzfQ.4FVfq10u_SbhXCCNXb2edh_SYupW-LZPj09Opb08CS4';
@@ -303,7 +298,6 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
             duration: 5000,
             panelClass: ['error-snackbar']
           });
-          console.error('Fehler beim Abrufen der Testgruppen:', error);
           return of([]);
         })
       )
@@ -320,7 +314,6 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
                 duration: 5000,
                 panelClass: ['error-snackbar']
               });
-              console.error('Fehler beim Kodieren der Testpersonen:', error);
               return of({ totalResponses: 0, statusCounts: {} });
             }),
             finalize(() => {
@@ -344,7 +337,6 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
               panelClass: ['success-snackbar']
             });
 
-            console.log('Kodier-Statistik:', stats);
           });
       });
   }
@@ -361,7 +353,6 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
             duration: 5000,
             panelClass: ['error-snackbar']
           });
-          console.error('Fehler beim Abrufen der Testgruppen:', error);
           return of([]);
         })
       )
@@ -379,7 +370,6 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
                 duration: 5000,
                 panelClass: ['error-snackbar']
               });
-              console.error('Fehler beim Abrufen der manuell zu kodierenden Fälle:', error);
               return of(false);
             }),
             finalize(() => {
@@ -397,7 +387,6 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
                 duration: 5000,
                 panelClass: ['error-snackbar']
               });
-              console.error('Fehler beim Kodieren der Testpersonen.');
             }
           });
       });
@@ -415,7 +404,6 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
             duration: 5000,
             panelClass: ['error-snackbar']
           });
-          console.error('Fehler beim Abrufen der Kodierliste:', error);
           return of({
             data: [], total: 0, page, limit
           });
