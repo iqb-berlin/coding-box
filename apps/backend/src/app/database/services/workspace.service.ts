@@ -25,6 +25,7 @@ import ResourcePackage from '../entities/resource-package.entity';
 import User from '../entities/user.entity';
 import { TestGroupsInListDto } from '../../../../../../api-dto/test-groups/testgroups-in-list.dto';
 import { ResponseDto } from '../../../../../../api-dto/responses/response-dto';
+import { FileValidationResultDto } from '../../../../../../api-dto/files/file-validation-result.dto';
 // eslint-disable-next-line import/no-cycle
 import Persons from '../entities/persons.entity';
 import { Unit } from '../entities/unit.entity';
@@ -155,9 +156,15 @@ export type TcMergeLastState = {
   value:string,
 };
 
+type FileStatus = {
+  filename: string;
+  exists: boolean;
+};
+
 type DataValidation = {
   complete: boolean;
   missing: string[];
+  files: FileStatus[];
 };
 
 type ValidationData = {
@@ -172,12 +179,16 @@ type ValidationData = {
 export type ValidationResult = {
   allUnitsExist: boolean;
   missingUnits: string[];
+  unitFiles: FileStatus[];
   allCodingSchemesExist: boolean;
   allCodingDefinitionsExist: boolean;
   missingCodingSchemeRefs: string[];
   missingDefinitionRefs: string[];
+  schemeFiles: FileStatus[];
+  definitionFiles: FileStatus[];
   allPlayerRefsExist: boolean;
   missingPlayerRefs: string[];
+  playerFiles: FileStatus[];
 };
 
 @Injectable()
@@ -626,7 +637,7 @@ export class WorkspaceService {
             status: response.status as ResponseStatusType
           }]);
 
-          const codedStatus = codedResult[0]?.status || 'UNKNOWN';
+          const codedStatus = codedResult[0]?.status;
           if (!statistics.statusCounts[codedStatus]) {
             statistics.statusCounts[codedStatus] = 0;
           }
@@ -1078,7 +1089,7 @@ export class WorkspaceService {
     }
   }
 
-  async validateTestFiles(workspaceId: number): Promise<ValidationData[]> {
+  async validateTestFiles(workspaceId: number): Promise<FileValidationResultDto> {
     try {
       const testTakers = await this.fileUploadRepository.find({
         where: { workspace_id: workspaceId, file_type: In(['TestTakers', 'Testtakers']) }
@@ -1086,14 +1097,20 @@ export class WorkspaceService {
 
       if (!testTakers || testTakers.length === 0) {
         this.logger.warn(`No TestTakers found in workspace with ID ${workspaceId}.`);
-        return this.createEmptyValidationData();
+        return {
+          testTakersFound: false,
+          validationResults: this.createEmptyValidationData()
+        };
       }
 
       const validationResultsPromises = testTakers.map(testTaker => this.processTestTaker(testTaker));
       const validationResults = (await Promise.all(validationResultsPromises)).filter(Boolean);
 
       if (validationResults.length > 0) {
-        return validationResults;
+        return {
+          testTakersFound: true,
+          validationResults
+        };
       }
 
       const booklets = await this.fileUploadRepository.find({
@@ -1102,10 +1119,16 @@ export class WorkspaceService {
 
       if (!booklets || booklets.length === 0) {
         this.logger.warn(`No booklets found in workspace with ID ${workspaceId}.`);
-        return this.createEmptyValidationData();
+        return {
+          testTakersFound: true,
+          validationResults: this.createEmptyValidationData()
+        };
       }
 
-      return this.createEmptyValidationData();
+      return {
+        testTakersFound: true,
+        validationResults: this.createEmptyValidationData()
+      };
     } catch (error) {
       this.logger.error(`Error during test file validation for workspace ID ${workspaceId}: ${error.message}`, error.stack);
       throw error;
@@ -1115,11 +1138,11 @@ export class WorkspaceService {
   private createEmptyValidationData(): ValidationData[] {
     return [{
       testTaker: '',
-      booklets: { complete: false, missing: [] },
-      units: { complete: false, missing: [] },
-      schemes: { complete: false, missing: [] },
-      definitions: { complete: false, missing: [] },
-      player: { complete: false, missing: [] }
+      booklets: { complete: false, missing: [], files: [] },
+      units: { complete: false, missing: [], files: [] },
+      schemes: { complete: false, missing: [], files: [] },
+      definitions: { complete: false, missing: [], files: [] },
+      player: { complete: false, missing: [], files: [] }
     }];
   }
 
@@ -1139,39 +1162,54 @@ export class WorkspaceService {
       uniqueBooklets
     } = this.extractXmlData(bookletTags, unitTags);
 
-    const { allBookletsExist, missingBooklets } = await this.checkMissingBooklets(Array.from(uniqueBooklets));
+    const { allBookletsExist, missingBooklets, bookletFiles } = await this.checkMissingBooklets(Array.from(uniqueBooklets));
     const {
       allUnitsExist,
       missingUnits,
+      unitFiles,
       missingCodingSchemeRefs,
       missingDefinitionRefs,
+      schemeFiles,
+      definitionFiles,
       allCodingSchemesExist,
       allCodingDefinitionsExist,
       allPlayerRefsExist,
-      missingPlayerRefs
+      missingPlayerRefs,
+      playerFiles
     } = await this.checkMissingUnits(Array.from(uniqueBooklets));
+
+    // If booklets are incomplete, all other categories should also be marked as incomplete
+    const bookletComplete = allBookletsExist;
+
+    // If units are incomplete, coding schemes, definitions, and player should also be marked as incomplete
+    const unitComplete = bookletComplete && allUnitsExist;
 
     return {
       testTaker: testTaker.file_id,
       booklets: {
-        complete: allBookletsExist,
-        missing: missingBooklets
+        complete: bookletComplete,
+        missing: missingBooklets,
+        files: bookletFiles
       },
       units: {
-        complete: allUnitsExist,
-        missing: missingUnits
+        complete: bookletComplete ? allUnitsExist : false,
+        missing: missingUnits,
+        files: unitFiles
       },
       schemes: {
-        complete: allCodingSchemesExist,
-        missing: missingCodingSchemeRefs
+        complete: unitComplete ? allCodingSchemesExist : false,
+        missing: missingCodingSchemeRefs,
+        files: schemeFiles
       },
       definitions: {
-        complete: allCodingDefinitionsExist,
-        missing: missingDefinitionRefs
+        complete: unitComplete ? allCodingDefinitionsExist : false,
+        missing: missingDefinitionRefs,
+        files: definitionFiles
       },
       player: {
-        complete: allPlayerRefsExist,
-        missing: missingPlayerRefs
+        complete: unitComplete ? allPlayerRefsExist : false,
+        missing: missingPlayerRefs,
+        files: playerFiles
       }
     };
   }
@@ -1660,7 +1698,11 @@ export class WorkspaceService {
     return filePromises;
   }
 
-  async checkMissingBooklets(uniqueBookletsArray: string[]): Promise<{ allBookletsExist: boolean, missingBooklets: string[] }> {
+  async checkMissingBooklets(uniqueBookletsArray: string[]): Promise<{
+    allBookletsExist: boolean,
+    missingBooklets: string[],
+    bookletFiles: FileStatus[]
+  }> {
     try {
       const upperCaseBookletsArray = uniqueBookletsArray
         .map(booklet => booklet.toUpperCase());
@@ -1675,7 +1717,13 @@ export class WorkspaceService {
       );
       const allBookletsExist = missingBooklets.length === 0;
 
-      return { allBookletsExist, missingBooklets };
+      // Create a list of all booklets with their match status
+      const bookletFiles: FileStatus[] = upperCaseBookletsArray.map(bookletId => ({
+        filename: bookletId,
+        exists: foundBookletIds.includes(bookletId)
+      }));
+
+      return { allBookletsExist, missingBooklets, bookletFiles };
     } catch (error) {
       this.logger.error('Error validating booklets:', error);
       throw error;
@@ -1802,15 +1850,40 @@ export class WorkspaceService {
 
       const allUnitsExist = missingUnits.length === 0;
 
+      // Create lists of all files with their match status
+      const unitFiles: FileStatus[] = allUnitIds.map(unitId => ({
+        filename: unitId,
+        exists: foundUnitIds.includes(unitId)
+      }));
+
+      const schemeFiles: FileStatus[] = allCodingSchemeRefs.map(ref => ({
+        filename: ref,
+        exists: allResourceIds.includes(ref)
+      }));
+
+      const definitionFiles: FileStatus[] = allDefinitionRefs.map(ref => ({
+        filename: ref,
+        exists: allResourceIds.includes(ref)
+      }));
+
+      const playerFiles: FileStatus[] = allPlayerRefs.map(ref => ({
+        filename: ref,
+        exists: allResourceIds.includes(ref)
+      }));
+
       return {
         allUnitsExist,
         missingUnits: uniqueUnits,
+        unitFiles,
         allCodingSchemesExist,
         allCodingDefinitionsExist,
         missingCodingSchemeRefs,
         missingDefinitionRefs,
+        schemeFiles,
+        definitionFiles,
         allPlayerRefsExist,
-        missingPlayerRefs
+        missingPlayerRefs,
+        playerFiles
       };
     } catch (error) {
       this.logger.error('Error validating units', error);

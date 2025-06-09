@@ -31,9 +31,9 @@ import { ResponseDto } from '../../../../../../api-dto/responses/response-dto';
 import WorkspaceUser from '../../database/entities/workspace_user.entity';
 import { UploadResultsService } from '../../database/services/upload-results.service';
 import Persons from '../../database/entities/persons.entity';
-import { FilesValidationDto } from '../../../../../../api-dto/files/files-validation.dto';
 import { FileDownloadDto } from '../../../../../../api-dto/files/file-download.dto';
 import { TestGroupsInfoDto } from '../../../../../../api-dto/files/test-groups-info.dto';
+import { FileValidationResultDto } from '../../../../../../api-dto/files/file-validation-result.dto';
 import { ResponseEntity } from '../../database/entities/response.entity';
 
 export type Result = {
@@ -495,8 +495,14 @@ export class WorkspaceController {
   @Get(':workspace_id/files/validation')
   @ApiTags('test files validation')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiOperation({ summary: 'Validate test files', description: 'Validates test files and returns a hierarchical view of expected files and their status' })
+  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
+  @ApiOkResponse({
+    description: 'Files validation result',
+    type: FileValidationResultDto
+  })
   async validateTestFiles(
-    @Param('workspace_id') workspace_id: number):Promise<FilesValidationDto[]> {
+    @Param('workspace_id') workspace_id: number): Promise<FileValidationResultDto> {
     return this.workspaceService.validateTestFiles(workspace_id);
   }
 
