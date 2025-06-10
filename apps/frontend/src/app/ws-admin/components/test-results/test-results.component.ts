@@ -145,8 +145,29 @@ export class TestResultsComponent implements OnInit {
     this.backendService.getPersonTestResults(this.appService.selectedWorkspaceId, row.id)
       .subscribe(booklets => {
         this.booklets = booklets;
+        this.sortBookletUnits(); // Sort units alphabetically
         this.loadAllUnitTags(); // Load tags for all units
       });
+  }
+
+  /**
+   * Sort units in each booklet alphabetically by alias
+   */
+  sortBookletUnits(): void {
+    if (!this.booklets || this.booklets.length === 0) {
+      return;
+    }
+
+    this.booklets.forEach(booklet => {
+      if (booklet.units && Array.isArray(booklet.units)) {
+        // Sort units by alias (or name if alias is not available)
+        booklet.units.sort((a, b) => {
+          const aliasA = a.alias || a.name || '';
+          const aliasB = b.alias || b.name || '';
+          return aliasA.localeCompare(aliasB);
+        });
+      }
+    });
   }
 
   /**
@@ -185,7 +206,7 @@ export class TestResultsComponent implements OnInit {
       ).subscribe({
         next: tags => {
           this.unitTagsMap.set(unitId, tags);
-        },
+        }
       });
     });
   }

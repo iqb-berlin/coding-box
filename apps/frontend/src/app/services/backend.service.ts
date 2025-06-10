@@ -187,7 +187,7 @@ export class BackendService {
       .get<PaginatedWorkspacesDto>(`${this.serverUrl}admin/workspace`,
       { headers: this.authHeader })
       .pipe(
-        catchError(error => {
+        catchError(() => {
           const defaultResponse: PaginatedWorkspacesDto = {
             data: [],
             total: 0,
