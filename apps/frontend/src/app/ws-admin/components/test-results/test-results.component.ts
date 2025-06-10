@@ -34,9 +34,11 @@ import { TestGroupsInListDto } from '../../../../../../../api-dto/test-groups/te
 import { TestCenterImportComponent } from '../test-center-import/test-center-import.component';
 import { LogDialogComponent } from '../booklet-log-dialog/log-dialog.component';
 import { TagDialogComponent } from '../tag-dialog/tag-dialog.component';
+import { NoteDialogComponent } from '../note-dialog/note-dialog.component';
 import { UnitTagDto } from '../../../../../../../api-dto/unit-tags/unit-tag.dto';
 import { CreateUnitTagDto } from '../../../../../../../api-dto/unit-tags/create-unit-tag.dto';
 import { UpdateUnitTagDto } from '../../../../../../../api-dto/unit-tags/update-unit-tag.dto';
+import { UnitNoteDto } from '../../../../../../../api-dto/unit-notes/unit-note.dto';
 
 interface P {
   id: number;
@@ -111,6 +113,11 @@ export class TestResultsComponent implements OnInit {
   newTagText: string = '';
   // Map to store tags for each unit
   unitTagsMap: Map<number, UnitTagDto[]> = new Map();
+
+  // Unit notes
+  unitNotes: UnitNoteDto[] = [];
+  // Map to store notes for each unit
+  unitNotesMap: Map<number, UnitNoteDto[]> = new Map();
 
   @ViewChild(MatPaginator) paginator!: MatPaginator;
   @ViewChild(MatSort) sort!: MatSort;
@@ -306,6 +313,39 @@ export class TestResultsComponent implements OnInit {
     });
   }
 
+  /**
+   * Opens a dialog to display and manage unit notes
+   */
+  openNotesDialog() {
+    if (!this.selectedUnit || !this.selectedUnit['id']) {
+      this.snackBar.open(
+        'Keine Unit ausgewählt',
+        'Info',
+        { duration: 3000 }
+      );
+      return;
+    }
+
+    const dialogRef = this.dialog.open(NoteDialogComponent, {
+      width: '600px',
+      data: {
+        unitId: this.selectedUnit['id'] as number,
+        notes: this.unitNotes,
+        title: `Notizen für Unit: ${this.selectedUnit.alias || 'Unbenannte Einheit'}`
+      }
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result) {
+        // Update the notes with the result from the dialog
+        this.unitNotes = result;
+
+        // Update the unitNotesMap
+        this.unitNotesMap.set(this.selectedUnit?.['id'] as number, result);
+      }
+    });
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   onUnitClick(unit: any): void {
     // Initialize responses with expanded property set to false
@@ -333,8 +373,9 @@ export class TestResultsComponent implements OnInit {
     // this.logs = this.createUnitHistory(unit);
     this.selectedUnit = unit;
 
-    // Load tags for the selected unit
+    // Load tags and notes for the selected unit
     this.loadUnitTags();
+    this.loadUnitNotes();
   }
 
   /**
@@ -363,6 +404,35 @@ export class TestResultsComponent implements OnInit {
       });
     } else {
       this.unitTags = [];
+    }
+  }
+
+  /**
+   * Load notes for the selected unit
+   */
+  loadUnitNotes(): void {
+    if (this.selectedUnit && this.selectedUnit['id']) {
+      this.backendService.getUnitNotes(
+        this.appService.selectedWorkspaceId,
+        this.selectedUnit['id'] as number
+      ).subscribe({
+        next: notes => {
+          this.unitNotes = notes;
+
+          // Update the unitNotesMap
+          // @ts-expect-error - Property 'id' may not exist on type '{ alias: string; }'
+          this.unitNotesMap.set(this.selectedUnit.id as number, notes);
+        },
+        error: () => {
+          this.snackBar.open(
+            'Fehler beim Laden der Notizen',
+            'Fehler',
+            { duration: 3000 }
+          );
+        }
+      });
+    } else {
+      this.unitNotes = [];
     }
   }
 
