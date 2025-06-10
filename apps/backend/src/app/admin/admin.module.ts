@@ -6,6 +6,7 @@ import { AuthModule } from '../auth/auth.module';
 import { WorkspaceController } from './workspace/workspace.controller';
 import { LogoController } from './logo/logo.controller';
 import { UnitTagsController } from './unit-tags/unit-tags.controller';
+import { UnitNotesController } from './unit-notes/unit-notes.controller';
 
 @Module({
   imports: [
@@ -14,7 +15,7 @@ import { UnitTagsController } from './unit-tags/unit-tags.controller';
     HttpModule
   ],
   controllers: [
-    UsersController, WorkspaceController, LogoController, UnitTagsController
+    UsersController, WorkspaceController, LogoController, UnitTagsController, UnitNotesController
   ],
   providers: []
 })
