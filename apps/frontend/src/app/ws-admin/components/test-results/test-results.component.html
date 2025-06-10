@@ -134,6 +134,7 @@
               <mat-expansion-panel-header>
                 <mat-panel-title (click)="setSelectedBooklet(booklet)" class="booklet-title">
                   {{ booklet.name }}
+
                 </mat-panel-title>
               </mat-expansion-panel-header>
 
@@ -147,10 +148,22 @@
                   Logs anzeigen
                 </button>
               </div>
-
+              <div class="booklet-warnings" *ngIf="hasShortProcessingTime(booklet) || !isBookletComplete(booklet)">
+                <mat-icon *ngIf="hasShortProcessingTime(booklet)"
+                          class="warning-icon short-time-warning"
+                          matTooltip="Kurze Bearbeitungszeit (weniger als 1 Minute)">
+                  timer
+                </mat-icon>
+                <mat-icon *ngIf="!isBookletComplete(booklet)"
+                          class="warning-icon incomplete-warning"
+                          matTooltip="Nicht vollständig bearbeitet">
+                  warning
+                </mat-icon>
+              </div>
               <mat-divider class="section-divider"></mat-divider>
 
               <h3 class="units-title">Aufgaben</h3>
+
               <mat-list class="unit-list">
                 <mat-list-item
                   *ngFor="let unit of booklet.units"
@@ -188,10 +201,10 @@
               <mat-icon>label</mat-icon>
               Tags
             </button>
-            <button mat-stroked-button color="primary" (click)="openNotesDialog()" class="action-button">
-              <mat-icon>note</mat-icon>
-              Notizen
-            </button>
+<!--            <button mat-stroked-button color="primary" (click)="openNotesDialog()" class="action-button">-->
+<!--              <mat-icon>note</mat-icon>-->
+<!--              Notizen-->
+<!--            </button>-->
           </div>
 
           <div class="var-list">

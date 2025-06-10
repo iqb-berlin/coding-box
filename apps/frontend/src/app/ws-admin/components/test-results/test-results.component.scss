@@ -461,6 +461,28 @@
       color: #1976d2;
       font-size: 16px;
       letter-spacing: 0.2px;
+      display: flex;
+      align-items: center;
+
+      .booklet-warnings {
+        display: flex;
+        margin-left: 10px;
+
+        .warning-icon {
+          font-size: 18px;
+          height: 18px;
+          width: 18px;
+          margin-left: 5px;
+
+          &.short-time-warning {
+            color: #ff9800; // Orange for time warning
+          }
+
+          &.incomplete-warning {
+            color: #f44336; // Red for incomplete warning
+          }
+        }
+      }
     }
   }
 
