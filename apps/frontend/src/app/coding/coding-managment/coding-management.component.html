@@ -29,7 +29,7 @@
 
     <div class="statistics-content">
       <div class="statistic-item">
-        <span class="statistic-label">Gesamtanzahl der Antworten mit Status VALUE_CHANGED:</span>
+        <span class="statistic-label">Gesamtanzahl der gegebenen Antworten:</span>
         <span class="statistic-value">{{ codingStatistics.totalResponses }}</span>
       </div>
 
@@ -102,7 +102,6 @@
   <div class="data-card" *ngIf="!isLoading && this.data.length > 0">
     <div class="card-header">
       <h2 class="section-title">Kodierdaten</h2>
-      <p class="section-description">Liste der zu kodierenden Antworten und deren Status</p>
       <div class="current-status" *ngIf="currentStatusFilter">
         <h3>Antworten mit Status: <span class="status-badge">{{ currentStatusFilter }}</span></h3>
       </div>
@@ -173,8 +172,8 @@
 
   <div class="empty-state" *ngIf="!isLoading && this.data.length === 0">
     <mat-icon class="empty-icon">code</mat-icon>
-    <h3>Keine Kodierdaten vorhanden</h3>
-    <p class="empty-text">Klicken Sie auf "Manuelle zu kodierende Fälle", um Daten zu laden.</p>
+    <h3>Noch keine Kodierdaten angezeigt</h3>
+    <p class="empty-text">Klicken Sie auf "Anzeigen" um Daten zu laden.</p>
   </div>
 </div>
 </div>

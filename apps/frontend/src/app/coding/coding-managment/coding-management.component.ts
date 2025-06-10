@@ -292,7 +292,7 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
 
     this.backendService.getTestPersons(workspaceId)
       .pipe(
-        catchError(error => {
+        catchError(() => {
           this.isLoading = false;
           this.snackBar.open('Fehler beim Abrufen der Testgruppen', 'Schließen', {
             duration: 5000,
@@ -309,7 +309,7 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
 
         this.backendService.codeTestPersons(workspaceId, testPersons)
           .pipe(
-            catchError(error => {
+            catchError(() => {
               this.snackBar.open('Fehler beim Kodieren der Testpersonen', 'Schließen', {
                 duration: 5000,
                 panelClass: ['error-snackbar']
@@ -331,12 +331,10 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
               }
             }
 
-            // Show the report in a snackbar
             this.snackBar.open(reportMessage, 'Schließen', {
               duration: 10000,
               panelClass: ['success-snackbar']
             });
-
           });
       });
   }
@@ -347,7 +345,7 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
 
     this.backendService.getTestPersons(workspaceId)
       .pipe(
-        catchError(error => {
+        catchError(() => {
           this.isLoading = false;
           this.snackBar.open('Fehler beim Abrufen der Testgruppen', 'Schließen', {
             duration: 5000,
@@ -364,7 +362,7 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
 
         this.backendService.getManualCodingList(workspaceId, testPersons)
           .pipe(
-            catchError(error => {
+            catchError(() => {
               this.isLoading = false;
               this.snackBar.open('Fehler beim Abrufen der manuell zu kodierenden Fälle', 'Schließen', {
                 duration: 5000,
@@ -398,7 +396,7 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
 
     this.backendService.getCodingList(workspaceId, page, limit)
       .pipe(
-        catchError(error => {
+        catchError(() => {
           this.isLoading = false;
           this.snackBar.open('Fehler beim Abrufen der Kodierliste', 'Schließen', {
             duration: 5000,

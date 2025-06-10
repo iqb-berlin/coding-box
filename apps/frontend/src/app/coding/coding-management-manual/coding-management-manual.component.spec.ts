@@ -1,7 +1,9 @@
+
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
 import { ActivatedRoute } from '@angular/router';
 import { provideHttpClient } from '@angular/common/http';
+import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { CodingManagementManualComponent } from './coding-management-manual.component';
 import { environment } from '../../../environments/environment';
 
@@ -16,6 +18,7 @@ describe('CodingManagementManualComponent', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       providers: [
+        provideNoopAnimations(),
         {
           provide: ActivatedRoute,
           useValue: fakeActivatedRoute
@@ -24,7 +27,8 @@ describe('CodingManagementManualComponent', () => {
           useValue: environment.backendUrl
         }, provideHttpClient()],
       imports: [
-        TranslateModule.forRoot()
+        TranslateModule.forRoot(),
+        CodingManagementManualComponent
       ]
     }).compileComponents();
 

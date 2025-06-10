@@ -2,6 +2,8 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
 import { ActivatedRoute } from '@angular/router';
 import { CodingManagementComponent } from './coding-management.component';
+import { environment } from '../../../environments/environment';
+import { provideHttpClient } from '@angular/common/http';
 
 describe('CodingManagementComponent', () => {
   let component: CodingManagementComponent;
@@ -14,6 +16,11 @@ describe('CodingManagementComponent', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       providers: [
+        provideHttpClient(),
+        {
+          provide: 'SERVER_URL',
+          useValue: environment.backendUrl
+        },
         {
           provide: ActivatedRoute,
           useValue: fakeActivatedRoute
