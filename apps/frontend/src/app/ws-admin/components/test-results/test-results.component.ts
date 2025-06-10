@@ -28,13 +28,12 @@ import { MatAnchor, MatButton, MatIconButton } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDivider } from '@angular/material/divider';
-import { MatFormField, MatLabel } from '@angular/material/form-field';
-import { MatTooltip } from '@angular/material/tooltip';
 import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
 import { TestGroupsInListDto } from '../../../../../../../api-dto/test-groups/testgroups-in-list.dto';
 import { TestCenterImportComponent } from '../test-center-import/test-center-import.component';
 import { LogDialogComponent } from '../booklet-log-dialog/log-dialog.component';
+import { TagDialogComponent } from '../tag-dialog/tag-dialog.component';
 import { UnitTagDto } from '../../../../../../../api-dto/unit-tags/unit-tag.dto';
 import { CreateUnitTagDto } from '../../../../../../../api-dto/unit-tags/create-unit-tag.dto';
 import { UpdateUnitTagDto } from '../../../../../../../api-dto/unit-tags/update-unit-tag.dto';
@@ -83,10 +82,7 @@ interface P {
     MatAnchor,
     MatButton,
     MatIconButton,
-    MatDivider,
-    MatFormField,
-    MatLabel,
-    MatTooltip]
+    MatDivider]
 })
 export class TestResultsComponent implements OnInit {
   selection = new SelectionModel<P>(true, []);
@@ -145,8 +141,29 @@ export class TestResultsComponent implements OnInit {
     this.backendService.getPersonTestResults(this.appService.selectedWorkspaceId, row.id)
       .subscribe(booklets => {
         this.booklets = booklets;
+        this.sortBookletUnits(); // Sort units alphabetically
         this.loadAllUnitTags(); // Load tags for all units
       });
+  }
+
+  /**
+   * Sort units in each booklet alphabetically by alias
+   */
+  sortBookletUnits(): void {
+    if (!this.booklets || this.booklets.length === 0) {
+      return;
+    }
+
+    this.booklets.forEach(booklet => {
+      if (booklet.units && Array.isArray(booklet.units)) {
+        // Sort units by alias (or name if alias is not available)
+        booklet.units.sort((a, b) => {
+          const aliasA = a.alias || a.name || '';
+          const aliasB = b.alias || b.name || '';
+          return aliasA.localeCompare(aliasB);
+        });
+      }
+    });
   }
 
   /**
@@ -185,7 +202,7 @@ export class TestResultsComponent implements OnInit {
       ).subscribe({
         next: tags => {
           this.unitTagsMap.set(unitId, tags);
-        },
+        }
       });
     });
   }
@@ -252,6 +269,39 @@ export class TestResultsComponent implements OnInit {
       data: {
         logs: this.logs,
         title: `Logs für Unit: ${this.selectedUnit.alias || 'Unbenannte Einheit'}`
+      }
+    });
+  }
+
+  /**
+   * Opens a dialog to display and manage unit tags
+   */
+  openTagsDialog() {
+    if (!this.selectedUnit || !this.selectedUnit['id']) {
+      this.snackBar.open(
+        'Keine Unit ausgewählt',
+        'Info',
+        { duration: 3000 }
+      );
+      return;
+    }
+
+    const dialogRef = this.dialog.open(TagDialogComponent, {
+      width: '500px',
+      data: {
+        unitId: this.selectedUnit['id'] as number,
+        tags: this.unitTags,
+        title: `Tags für Unit: ${this.selectedUnit.alias || 'Unbenannte Einheit'}`
+      }
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result) {
+        // Update the tags with the result from the dialog
+        this.unitTags = result;
+
+        // Update the unitTagsMap
+        this.unitTagsMap.set(this.selectedUnit?.['id'] as number, result);
       }
     });
   }
