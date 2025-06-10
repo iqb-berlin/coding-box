@@ -7,7 +7,7 @@ import {
   MatDialogContent, MatDialogActions, MatDialogClose,
   MAT_DIALOG_DATA
 } from '@angular/material/dialog';
-import { MatError, MatFormField, MatLabel } from '@angular/material/form-field';
+import { MatFormField, MatLabel } from '@angular/material/form-field';
 import {
   FormsModule,
   ReactiveFormsModule, UntypedFormBuilder, UntypedFormGroup, Validators
@@ -16,6 +16,7 @@ import { MatInput } from '@angular/material/input';
 import { MatOption, MatSelect } from '@angular/material/select';
 import { MatCheckbox } from '@angular/material/checkbox';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
+import { MatIcon } from '@angular/material/icon';
 import { catchError, of } from 'rxjs';
 
 // eslint-disable-next-line import/no-cycle
@@ -93,7 +94,7 @@ export type Result = {
     MatOption,
     MatCheckbox,
     MatProgressSpinner,
-    MatError,
+    MatIcon,
     FormsModule, DatePipe, MatTable, MatHeaderCellDef, MatCellDef, MatHeaderRowDef, MatRowDef, MatColumnDef, MatHeaderCell, MatCell, MatHeaderRow, MatRow, NgIf]
 })
 
@@ -142,6 +143,7 @@ export class TestCenterImportComponent {
   isUploadingTestResults: boolean = false;
   uploadData!: Result;
   testCenterInstance: Testcenter[] = [];
+  showTestGroups: boolean = false;
   constructor(private backendService: BackendService,
               @Inject(MAT_DIALOG_DATA) public data: { importType: string },
               private workspaceAdminService: WorkspaceAdminService,
@@ -261,7 +263,32 @@ export class TestCenterImportComponent {
         this.isUploadingTestResults = false;
         this.workspaceAdminService.setTestGroups(response);
         this.testGroups = response;
+        this.showTestGroups = true;
       });
+  }
+
+  goBackToOptions(): void {
+    this.showTestGroups = false;
+    this.selectedRows = []; // Clear selected rows when going back
+  }
+
+  startNewImport(): void {
+    // Reset state to allow for a new import
+    this.uploadData = {} as Result;
+    this.showTestGroups = false;
+    this.selectedRows = [];
+
+    // If we're importing test results, go back to test groups selection
+    if (this.data.importType === 'testResults') {
+      this.getTestGroups();
+    }
+  }
+
+  goBackToTestGroups(): void {
+    // Reset upload data and selected rows, but keep test groups
+    this.uploadData = {} as Result;
+    this.selectedRows = [];
+    this.showTestGroups = true;
   }
 
   getTestData(): void {
@@ -300,6 +327,8 @@ export class TestCenterImportComponent {
           this.uploadData = data;
           this.isUploadingTestFiles = false;
           this.isUploadingTestResults = false;
+          // Reset selected rows to allow for another import
+          this.selectedRows = [];
         },
         error: () => {
           this.isUploadingTestFiles = false;

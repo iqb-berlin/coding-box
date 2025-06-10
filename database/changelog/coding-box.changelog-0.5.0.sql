@@ -141,11 +141,35 @@ ALTER TABLE unitLastState ALTER COLUMN id SET STORAGE PLAIN;
 ALTER TABLE booklet DROP CONSTRAINT FK_booklet_person;
 ALTER TABLE booklet
   ADD CONSTRAINT FK_booklet_person FOREIGN KEY (personId)
-    REFERENCES persons (id) ON DELETE CASCADE ON UPDATE NO ACTION;
+    REFERENCES person (id) ON DELETE CASCADE ON UPDATE NO ACTION;
 -- rollback ALTER TABLE booklet DROP CONSTRAINT FK_booklet_person;
 
 -- changeset jurei733:19
 ALTER TABLE response ADD COLUMN codedStatus TEXT;
 -- rollback ALTER TABLE response DROP COLUMN codedStatus;
 
+-- changeset jurei733:20
+CREATE TABLE unit_tag (
+                       id SERIAL PRIMARY KEY NOT NULL,
+                       "unitId" BIGINT NOT NULL,
+                       tag TEXT NOT NULL,
+                       "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                       CONSTRAINT FK_unit_tag_unit FOREIGN KEY ("unitId") REFERENCES unit (id) ON DELETE CASCADE ON UPDATE NO ACTION
+);
+-- rollback DROP TABLE IF EXISTS unit_tag;
 
+-- changeset jurei733:21
+CREATE INDEX unit_tag_unitId_idx ON unit_tag("unitId");
+-- rollback DROP INDEX IF EXISTS unit_tag_unitId_idx;
+
+-- changeset jurei733:22
+CREATE INDEX unit_tag_tag_idx ON unit_tag(tag);
+-- rollback DROP INDEX IF EXISTS unit_tag_tag_idx;
+
+-- changeset jurei733:23
+CREATE INDEX unit_tag_unitId_tag_idx ON unit_tag("unitId", tag);
+-- rollback DROP INDEX IF EXISTS unit_tag_unitId_tag_idx;
+
+-- changeset jurei733:24
+ALTER TABLE unit_tag ADD COLUMN color TEXT NULL;
+-- rollback ALTER TABLE unit_tag DROP COLUMN color;

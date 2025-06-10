@@ -90,7 +90,7 @@ export class UsersSelectionComponent implements OnInit {
 
   createWorkspaceList(): void {
     this.backendService.getAllWorkspacesList().subscribe(workspaces => {
-      if (workspaces.length > 0) { this.userWorkspaces = workspaces; }
+      if (workspaces.data.length > 0) { this.userWorkspaces = workspaces.data; }
     });
   }
 

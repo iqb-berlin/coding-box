@@ -1,233 +1,317 @@
 
-<mat-dialog-content>
-  <h2>Test Center Import</h2>
+<mat-dialog-content class="dialog-content">
+  <div class="dialog-header">
+    <h2 class="dialog-title">Test Center Import</h2>
+    <p class="dialog-description">Importieren Sie Daten aus einem Test Center in Ihren Workspace</p>
+  </div>
+
   @if(!authenticated)
   {
-    <form class="fx-column-start-stretch"
+    <div class="auth-section">
+      <form class="auth-form"
                              [formGroup]="loginForm"
                              (ngSubmit)="authenticate()">
-    <div class="fx-column-start-stretch">
-      <mat-form-field >
-        <input matInput formControlName="name"
-               [placeholder]="'home.user-name' | translate"
-               (keyup.enter)="pw.focus()">
-      </mat-form-field>
-      <mat-form-field>
-        <input matInput #pw
-               type="password"
-               formControlName="pw"
-               [placeholder]="'home.password' | translate"
-               (keyup.enter)="authenticate()">
-      </mat-form-field>
-      <mat-form-field >
-        <mat-select placeholder='Test Center auswählen' formControlName="testCenter" (valueChange)="isIndividualTcSelected($event)">
-          <mat-option [value]=6>individuelle Testcenter URL</mat-option>
-        @for (testCenter of testCenters;track testCenter){
-          <mat-option [value]="testCenter.id">{{ testCenter.label }}</mat-option>
-        }
+        <div class="form-fields">
+          <mat-form-field appearance="outline">
+            <mat-label>{{'home.user-name' | translate}}</mat-label>
+            <input matInput formControlName="name"
+                  (keyup.enter)="pw.focus()">
+            <mat-icon matSuffix>person</mat-icon>
+          </mat-form-field>
 
-        </mat-select>
+          <mat-form-field appearance="outline">
+            <mat-label>{{'home.password' | translate}}</mat-label>
+            <input matInput #pw
+                  type="password"
+                  formControlName="pw"
+                  (keyup.enter)="authenticate()">
+            <mat-icon matSuffix>lock</mat-icon>
+          </mat-form-field>
 
-      </mat-form-field>
-      <mat-form-field>
-        <mat-label>Testcenter Instanz URL verwenden</mat-label>
-        <input  formControlName="testCenterIndividual" matInput type="text">
-      </mat-form-field>
-    </div>
-    <button mat-raised-button
-            type="submit"
-            [disabled]="loginForm.invalid"
-            color="primary">{{ 'login' | translate }}
-    </button>
-      <mat-error>
-    @if (authenticationError){
-      <div class="warning">
-        {{'login-error' | translate}}
-      </div>
-    }
-      </mat-error>
-  </form>
-  } @else {
-    @if (workspaces){
-      <div class="fx-row-space-between-start loginInfo">
-        <h3>Angemeldet in {{this.testCenterInstance[0]?.label || this.loginForm.get('testCenterIndividual')?.value }}</h3>
-        <button  mat-button color="primary" (click)="this.logout()">Abmelden</button>
-      </div>
-      @if ((testGroups && testGroups.length === 0) || data.importType === 'testFiles'){
-        <form class="fx-column-start-stretch"
-              [formGroup]="importFilesForm"
-              (ngSubmit)="data.importType === 'testResults' ? getTestGroups(): getTestData()">
-          <div class="fx-column-start-stretch">
-            <section class="fx-column-start-start">
-              @if (data.importType === 'testResults'){
-                <span class="">
-                  <mat-checkbox class="" formControlName="responses">
-                  Antworten
-                  </mat-checkbox>
-                </span>
-                <span class="">
-                  <mat-checkbox class="" formControlName="logs">
-                  Logs
-                  </mat-checkbox>
-                </span>
+          <mat-form-field appearance="outline">
+            <mat-label>Test Center auswählen</mat-label>
+            <mat-select formControlName="testCenter" (valueChange)="isIndividualTcSelected($event)">
+              <mat-option [value]=6>individuelle Testcenter URL</mat-option>
+              @for (testCenter of testCenters;track testCenter){
+                <mat-option [value]="testCenter.id">{{ testCenter.label }}</mat-option>
               }
-              @if (data.importType === 'testFiles'){
-                <span class="">
-                <mat-checkbox class="" formControlName="definitions">
-                Aufgabendefinitionen
-                </mat-checkbox>
-              </span>
-                <span class="">
-                <mat-checkbox class="" formControlName="units">
-                  Units-XML
-                </mat-checkbox>
-              </span>
-                <span class="">
-                <mat-checkbox class="" formControlName="player">
-                Player
-                </mat-checkbox>
-              </span>
-                <span class="">
-                <mat-checkbox class="" formControlName="codings">
-                Kodierschemata
-                </mat-checkbox>
-              </span>
-                <span class="">
-                <mat-checkbox class="" formControlName="booklets">
-                Booklets
-                </mat-checkbox>
-              </span>
-                <span class="">
-                <mat-checkbox class="" formControlName="testTakers">
-                Test-takers
-                </mat-checkbox>
-              </span>
-              }
+            </mat-select>
+            <mat-icon matSuffix>cloud</mat-icon>
+          </mat-form-field>
 
+          <mat-form-field appearance="outline">
+            <mat-label>Testcenter Instanz URL verwenden</mat-label>
+            <input formControlName="testCenterIndividual" matInput type="text">
+            <mat-icon matSuffix>link</mat-icon>
+          </mat-form-field>
+        </div>
 
-            </section>
-            <mat-form-field>
-              <mat-select placeholder='Studie auswählen' formControlName="workspace">
-                @for (workspace of workspaces;track workspace){
-                  <mat-option [value]="workspace.id">{{ workspace.label }}</mat-option>
-                }
-              </mat-select>
-            </mat-form-field>
-
-          </div>
-          @if (isUploadingTestResults){
-            <mat-spinner></mat-spinner>
-            Verfügbare Testgruppen im Arbeitsbereich werden abgerufen...
-          } @else if (isUploadingTestFiles){
-            <mat-spinner></mat-spinner>
-            Testdateien werden hochgeladen...
-          }
-          @else {
+        <div class="form-actions">
           <button mat-raised-button
                   type="submit"
-                  *ngIf="data.importType === 'testResults'"
-                  [disabled]="importFilesForm.invalid"
-                  color="primary">Weiter
+                  [disabled]="loginForm.invalid"
+                  color="primary">
+            <mat-icon>login</mat-icon>
+            {{ 'login' | translate }}
           </button>
-            <button mat-raised-button
-                    type="submit"
-                    *ngIf="data.importType === 'testFiles'"
-                    [disabled]="importFilesForm.invalid"
-                    color="primary">Dateien importieren
-            </button>
-          }
-          <mat-error>
-            @if(filesSelectionError){
-              <div>Bitte mindestens eine Import Option auswählen</div>
-            }
-          </mat-error>
-          <mat-error>
-          @if (authenticationError){
-            <div class="warning">
-              {{'login-error' | translate}}
+        </div>
+
+        @if (authenticationError){
+          <div class="error-message">
+            <mat-icon>error</mat-icon>
+            <span>{{'login-error' | translate}}</span>
+          </div>
+        }
+      </form>
+    </div>
+  } @else {
+    @if (workspaces){
+      <div class="session-info">
+        <div class="user-info">
+          <mat-icon>account_circle</mat-icon>
+          <h3>Angemeldet in {{this.testCenterInstance[0]?.label || this.loginForm.get('testCenterIndividual')?.value }}</h3>
+        </div>
+        <button mat-stroked-button color="primary" (click)="this.logout()">
+          <mat-icon>logout</mat-icon>
+          Abmelden
+        </button>
+      </div>
+      @if (data.importType === 'testFiles' || (data.importType === 'testResults' && !showTestGroups)){
+        <div class="import-section">
+          <form class="import-form"
+                [formGroup]="importFilesForm"
+                (ngSubmit)="data.importType === 'testResults' ? getTestGroups(): getTestData()">
+
+            <div class="form-content">
+              <div class="options-section">
+                <h3 class="section-title">
+                  <mat-icon>settings</mat-icon>
+                  Import Optionen
+                </h3>
+
+                <div class="checkbox-grid">
+                  @if (data.importType === 'testResults'){
+                    <div class="checkbox-item">
+                      <mat-checkbox formControlName="responses">
+                        <span class="checkbox-label">Antworten</span>
+                      </mat-checkbox>
+                    </div>
+                    <div class="checkbox-item">
+                      <mat-checkbox formControlName="logs">
+                        <span class="checkbox-label">Logs</span>
+                      </mat-checkbox>
+                    </div>
+                  }
+                  @if (data.importType === 'testFiles'){
+                    <div class="checkbox-item">
+                      <mat-checkbox formControlName="definitions">
+                        <span class="checkbox-label">Aufgabendefinitionen</span>
+                      </mat-checkbox>
+                    </div>
+                    <div class="checkbox-item">
+                      <mat-checkbox formControlName="units">
+                        <span class="checkbox-label">Units-XML</span>
+                      </mat-checkbox>
+                    </div>
+                    <div class="checkbox-item">
+                      <mat-checkbox formControlName="player">
+                        <span class="checkbox-label">Player</span>
+                      </mat-checkbox>
+                    </div>
+                    <div class="checkbox-item">
+                      <mat-checkbox formControlName="codings">
+                        <span class="checkbox-label">Kodierschemata</span>
+                      </mat-checkbox>
+                    </div>
+                    <div class="checkbox-item">
+                      <mat-checkbox formControlName="booklets">
+                        <span class="checkbox-label">Booklets</span>
+                      </mat-checkbox>
+                    </div>
+                    <div class="checkbox-item">
+                      <mat-checkbox formControlName="testTakers">
+                        <span class="checkbox-label">Test-takers</span>
+                      </mat-checkbox>
+                    </div>
+                  }
+                </div>
+              </div>
+
+              <div class="workspace-section">
+                <mat-form-field appearance="outline">
+                  <mat-label>Studie auswählen</mat-label>
+                  <mat-select formControlName="workspace">
+                    @for (workspace of workspaces;track workspace){
+                      <mat-option [value]="workspace.id">{{ workspace.label }}</mat-option>
+                    }
+                  </mat-select>
+                  <mat-icon matSuffix>folder</mat-icon>
+                </mat-form-field>
+              </div>
             </div>
-          }
-          </mat-error>
-          @if(uploadData){
-            @if(uploadData.success){
-              <div class="success">
-                Der Testcenter Import war erfolgreich.
+
+            <div class="loading-container" *ngIf="isUploadingTestResults || isUploadingTestFiles">
+              <mat-spinner diameter="40"></mat-spinner>
+              <p class="loading-text" *ngIf="isUploadingTestResults">
+                Verfügbare Testgruppen im Arbeitsbereich werden abgerufen...
+              </p>
+              <p class="loading-text" *ngIf="isUploadingTestFiles">
+                Testdateien werden hochgeladen...
+              </p>
+            </div>
+
+            <div class="form-actions" *ngIf="!isUploadingTestResults && !isUploadingTestFiles">
+              <button mat-raised-button
+                      type="submit"
+                      *ngIf="data.importType === 'testResults'"
+                      [disabled]="importFilesForm.invalid"
+                      color="primary">
+                <mat-icon>arrow_forward</mat-icon>
+                Weiter
+              </button>
+              <button mat-raised-button
+                      type="submit"
+                      *ngIf="data.importType === 'testFiles'"
+                      [disabled]="importFilesForm.invalid"
+                      color="primary">
+                <mat-icon>cloud_upload</mat-icon>
+                Dateien importieren
+              </button>
+            </div>
+
+            @if(filesSelectionError){
+              <div class="error-message">
+                <mat-icon>error</mat-icon>
+                <span>Bitte mindestens eine Import Option auswählen</span>
               </div>
             }
-          }
-        </form>
+
+            @if (authenticationError){
+              <div class="error-message">
+                <mat-icon>error</mat-icon>
+                <span>{{'login-error' | translate}}</span>
+              </div>
+            }
+
+            @if(uploadData && uploadData.success){
+              <div class="success-message">
+                <mat-icon>check_circle</mat-icon>
+                <span>Der Testcenter Import war erfolgreich.</span>
+                <div class="success-actions">
+                  <button mat-stroked-button color="primary" (click)="goBackToTestGroups()" class="back-to-groups-button">
+                    <mat-icon>groups</mat-icon>
+                    Weitere Testgruppen auswählen
+                  </button>
+                  <button mat-raised-button color="primary" (click)="startNewImport()" class="new-import-button">
+                    <mat-icon>refresh</mat-icon>
+                    Neuen Import starten
+                  </button>
+                </div>
+              </div>
+            }
+          </form>
+        </div>
       }
-      @else{
-        <div class="testgroup-section mat-elevation-z8">
-          <h3>Verfügbare Testgruppen:</h3>
-          @if (isUploadingTestResults){
-            <mat-spinner></mat-spinner>
-            Testresultate werden hochgeladen...
-          }
-          <table mat-table [dataSource]="testGroups" class="mat-table">
-            <ng-container matColumnDef="select">
-              <th mat-header-cell *matHeaderCellDef>
-                <mat-checkbox
-                  (change)="toggleAllRows($event)"
-                  [checked]="isAllSelected()"
-                ></mat-checkbox>
-              </th>
-              <td mat-cell *matCellDef="let group">
-                <mat-checkbox
-                  (change)="toggleRow(group)"
-                  [checked]="selectedRows.includes(group)"
-                ></mat-checkbox>
-              </td>
-            </ng-container>
+      @if (data.importType === 'testResults' && showTestGroups){
+        <div class="testgroups-section">
+          <div class="section-header">
+            <div class="section-header-content">
+              <h3 class="section-title">
+                <mat-icon>groups</mat-icon>
+                Verfügbare Testgruppen
+              </h3>
+              <button mat-stroked-button color="primary" (click)="goBackToOptions()" class="back-button">
+                <mat-icon>arrow_back</mat-icon>
+                Zurück zu Optionen
+              </button>
+            </div>
+          </div>
 
-            <ng-container matColumnDef="groupName">
-              <th mat-header-cell *matHeaderCellDef> Gruppenname </th>
-              <td mat-cell *matCellDef="let group"> {{ group.groupName }} </td>
-            </ng-container>
+          <div class="loading-container" *ngIf="isUploadingTestResults">
+            <mat-spinner diameter="40"></mat-spinner>
+            <p class="loading-text">Testresultate werden hochgeladen...</p>
+          </div>
 
-            <ng-container matColumnDef="groupLabel">
-              <th mat-header-cell *matHeaderCellDef> Gruppenlabel </th>
-              <td mat-cell *matCellDef="let group"> {{ group.groupLabel }} </td>
-            </ng-container>
+          <div class="table-container" *ngIf="!isUploadingTestResults">
+            <table mat-table [dataSource]="testGroups" class="testgroups-table">
+              <ng-container matColumnDef="select">
+                <th mat-header-cell *matHeaderCellDef>
+                  <mat-checkbox
+                    (change)="toggleAllRows($event)"
+                    [checked]="isAllSelected()"
+                    color="primary"
+                  ></mat-checkbox>
+                </th>
+                <td mat-cell *matCellDef="let group">
+                  <mat-checkbox
+                    (change)="toggleRow(group)"
+                    [checked]="selectedRows.includes(group)"
+                    color="primary"
+                  ></mat-checkbox>
+                </td>
+              </ng-container>
 
-            <ng-container matColumnDef="bookletsStarted">
-              <th mat-header-cell *matHeaderCellDef> Gestartete Booklets </th>
-              <td mat-cell *matCellDef="let group"> {{ group.bookletsStarted }} </td>
-            </ng-container>
+              <ng-container matColumnDef="groupName">
+                <th mat-header-cell *matHeaderCellDef> Gruppenname </th>
+                <td mat-cell *matCellDef="let group"> {{ group.groupName }} </td>
+              </ng-container>
 
-            <ng-container matColumnDef="numUnitsMin">
-              <th mat-header-cell *matHeaderCellDef> Min. Einheiten </th>
-              <td mat-cell *matCellDef="let group"> {{ group.numUnitsMin }} </td>
-            </ng-container>
+              <ng-container matColumnDef="groupLabel">
+                <th mat-header-cell *matHeaderCellDef> Gruppenlabel </th>
+                <td mat-cell *matCellDef="let group"> {{ group.groupLabel }} </td>
+              </ng-container>
 
-            <ng-container matColumnDef="numUnitsMax">
-              <th mat-header-cell *matHeaderCellDef> Max. Einheiten </th>
-              <td mat-cell *matCellDef="let group"> {{ group.numUnitsMax }} </td>
-            </ng-container>
+              <ng-container matColumnDef="bookletsStarted">
+                <th mat-header-cell *matHeaderCellDef> Gestartete Booklets </th>
+                <td mat-cell *matCellDef="let group">
+                  <span class="count-badge">{{ group.bookletsStarted }}</span>
+                </td>
+              </ng-container>
 
-            <ng-container matColumnDef="numUnitsAvg">
-              <th mat-header-cell *matHeaderCellDef> Durchschnittliche Einheiten </th>
-              <td mat-cell *matCellDef="let group"> {{ group.numUnitsAvg }} </td>
-            </ng-container>
+              <ng-container matColumnDef="numUnitsMin">
+                <th mat-header-cell *matHeaderCellDef> Min. Einheiten </th>
+                <td mat-cell *matCellDef="let group"> {{ group.numUnitsMin }} </td>
+              </ng-container>
 
-            <ng-container matColumnDef="numUnitsTotal">
-              <th mat-header-cell *matHeaderCellDef> Gesamte Einheiten </th>
-              <td mat-cell *matCellDef="let group"> {{ group.numUnitsTotal }} </td>
-            </ng-container>
+              <ng-container matColumnDef="numUnitsMax">
+                <th mat-header-cell *matHeaderCellDef> Max. Einheiten </th>
+                <td mat-cell *matCellDef="let group"> {{ group.numUnitsMax }} </td>
+              </ng-container>
 
-            <ng-container matColumnDef="lastChange">
-              <th mat-header-cell *matHeaderCellDef> Letzte Änderung </th>
-              <td mat-cell *matCellDef="let group"> {{ group.lastChange | date:'dd.MM.yyyy HH:mm' }} </td>
-            </ng-container>
+              <ng-container matColumnDef="numUnitsAvg">
+                <th mat-header-cell *matHeaderCellDef> Durchschnittliche Einheiten </th>
+                <td mat-cell *matCellDef="let group"> {{ group.numUnitsAvg }} </td>
+              </ng-container>
 
-            <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
-            <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
-          </table>
+              <ng-container matColumnDef="numUnitsTotal">
+                <th mat-header-cell *matHeaderCellDef> Gesamte Einheiten </th>
+                <td mat-cell *matCellDef="let group">
+                  <span class="count-badge total">{{ group.numUnitsTotal }}</span>
+                </td>
+              </ng-container>
+
+              <ng-container matColumnDef="lastChange">
+                <th mat-header-cell *matHeaderCellDef> Letzte Änderung </th>
+                <td mat-cell *matCellDef="let group"> {{ group.lastChange | date:'dd.MM.yyyy HH:mm' }} </td>
+              </ng-container>
+
+              <tr mat-header-row *matHeaderRowDef="displayedColumns; sticky: true"></tr>
+              <tr mat-row *matRowDef="let row; columns: displayedColumns;" class="clickable-row"></tr>
+            </table>
+          </div>
+
+          <div class="selection-summary" *ngIf="selectedRows.length > 0">
+            <mat-icon>info</mat-icon>
+            <span>{{ selectedRows.length }} Testgruppe(n) ausgewählt</span>
+          </div>
         </div>
       }
     }
     @else{
-      <p class="warning">Keine Arbeitsbereiche auswählbar</p>
+      <div class="error-message">
+        <mat-icon>error</mat-icon>
+        <span>Keine Arbeitsbereiche auswählbar</span>
+      </div>
     }
   }
 
@@ -238,13 +322,11 @@
           [disabled]="this.selectedRows.length === 0"
           *ngIf="testGroups && testGroups.length > 0"
           (click)="this.getTestData()"
-          color="primary"
-          type="submit">
-   Importieren
+          color="primary">
+    <mat-icon>cloud_download</mat-icon>
+    Importieren
   </button>
-  <button mat-raised-button
-          color="primary"
-          type="submit"
+  <button mat-stroked-button
           [disabled]="isUploadingTestFiles || isUploadingTestResults"
           [mat-dialog-close]="true">
     {{ 'close' | translate }}

@@ -6,6 +6,9 @@ import {
 import { Unit } from './unit.entity';
 
 @Entity('response')
+@Index(['unitid', 'variableid']) // Composite index for common query patterns
+@Index(['unitid', 'status']) // Composite index for filtering by status
+@Index(['codedstatus']) // Index for filtering by coded status
 export class ResponseEntity {
   @PrimaryGeneratedColumn()
     id: number;
@@ -38,6 +41,7 @@ export class ResponseEntity {
 
   @ManyToOne(() => Unit, unit => unit.responses, {
     onDelete: 'CASCADE'
+    // Not using eager loading here to avoid performance issues with large result sets
   })
   @JoinColumn({ name: 'unitid' })
     unit: Unit;

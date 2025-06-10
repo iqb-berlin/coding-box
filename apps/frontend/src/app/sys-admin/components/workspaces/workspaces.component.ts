@@ -21,7 +21,6 @@ type WorkspaceData = {
   selector: 'coding-box-workspaces',
   templateUrl: './workspaces.component.html',
   styleUrls: ['./workspaces.component.scss'],
-  // eslint-disable-next-line max-len
   imports: [WorkspacesMenuComponent, FormsModule, TranslateModule, WorkspacesSelectionComponent]
 })
 export class WorkspacesComponent {
@@ -29,7 +28,6 @@ export class WorkspacesComponent {
   tableSelectionRow = new SelectionModel<WorkspaceInListDto>(false, []);
   selectedWorkspaceId = 0;
   selectedWorkspaces : number[] = [];
-  selectedRows : WorkspaceInListDto[] = [];
   workspacesChanged: boolean = false;
 
   @ViewChild(MatSort) sort = new MatSort();
