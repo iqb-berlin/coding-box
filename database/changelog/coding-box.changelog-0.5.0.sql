@@ -175,11 +175,6 @@ ALTER TABLE unit_tag ADD COLUMN color TEXT NULL;
 -- rollback ALTER TABLE unit_tag DROP COLUMN color;
 
 -- changeset jurei733:25
-ALTER TABLE booklet DROP CONSTRAINT IF EXISTS FK_booklet_person;
-ALTER TABLE booklet ADD CONSTRAINT FK_booklet_person FOREIGN KEY (personId) REFERENCES person (id) ON DELETE CASCADE ON UPDATE NO ACTION;
--- rollback ALTER TABLE booklet DROP CONSTRAINT IF EXISTS FK_booklet_person;
-
--- changeset jurei733:26
 ALTER TABLE response
   ALTER COLUMN code TYPE BIGINT,
   ALTER COLUMN code SET DEFAULT 0,
@@ -188,8 +183,4 @@ ALTER TABLE response
   ALTER COLUMN score SET DEFAULT 0,
   ALTER COLUMN score SET NOT NULL;
 -- rollback ALTER TABLE response ALTER COLUMN code TYPE INTEGER, ALTER COLUMN code DROP DEFAULT, ALTER COLUMN code DROP NOT NULL, ALTER COLUMN score TYPE INTEGER, ALTER COLUMN score DROP DEFAULT, ALTER COLUMN score DROP NOT NULL;
-
--- changeset jurei733:27
-CREATE UNIQUE INDEX person_unique_idx ON person("group", "code", "login");
--- rollback DROP INDEX IF EXISTS person_unique_idx;
 
