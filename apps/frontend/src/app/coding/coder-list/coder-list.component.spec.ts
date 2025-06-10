@@ -1,6 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
 import { ActivatedRoute } from '@angular/router';
+import { NoopAnimationsModule } from '@angular/platform-browser/animations'; // Importiere NoopAnimationsModule
 import { CoderListComponent } from './coder-list.component';
 
 describe('CoderListComponent', () => {
@@ -17,9 +18,11 @@ describe('CoderListComponent', () => {
         {
           provide: ActivatedRoute,
           useValue: fakeActivatedRoute
-        }],
+        }
+      ],
       imports: [
-        TranslateModule.forRoot()
+        TranslateModule.forRoot(),
+        NoopAnimationsModule // Füge NoopAnimationsModule hier hinzu
       ]
     }).compileComponents();
 

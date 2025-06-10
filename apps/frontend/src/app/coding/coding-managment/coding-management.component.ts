@@ -6,7 +6,12 @@ import {
   OnDestroy
 } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { NgForOf, NgIf, TitleCasePipe } from '@angular/common';
+import {
+  NgForOf,
+  NgIf,
+  NgClass,
+  TitleCasePipe
+} from '@angular/common';
 import {
   catchError,
   finalize,
@@ -23,16 +28,19 @@ import {
   MatTableDataSource
 } from '@angular/material/table';
 import { MatSort, MatSortModule, MatSortHeader } from '@angular/material/sort';
-import { MatPaginator, MatPaginatorModule } from '@angular/material/paginator';
+import { MatPaginator, MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatIcon } from '@angular/material/icon';
-import { MatAnchor } from '@angular/material/button';
+import { MatAnchor, MatIconButton } from '@angular/material/button';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { ScrollingModule } from '@angular/cdk/scrolling';
-import { BackendService } from '../../services/backend.service';
+import { MatDivider } from '@angular/material/divider';
+import { BackendService, CodingListItem } from '../../services/backend.service';
 import { AppService } from '../../services/app.service';
+import { CodingStatistics } from '../../../../../../api-dto/coding/coding-statistics';
 
 interface Success {
   id: number;
@@ -45,6 +53,9 @@ interface Success {
   score: string | null;
   codedstatus: string;
   unitname: string;
+  login_name?: string;
+  login_code?: string;
+  booklet_id?: string;
 }
 
 @Component({
@@ -54,6 +65,7 @@ interface Success {
     RouterLink,
     NgForOf,
     NgIf,
+    NgClass,
     MatTable,
     MatColumnDef,
     MatHeaderCell,
@@ -74,7 +86,10 @@ interface Success {
     MatInputModule,
     MatSnackBarModule,
     MatIcon,
-    MatAnchor
+    MatAnchor,
+    MatIconButton,
+    MatTooltipModule,
+    MatDivider
   ],
   styleUrls: ['./coding-management.component.scss']
 })
@@ -82,16 +97,25 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
   @ViewChild(MatSort) sort!: MatSort;
   @ViewChild(MatPaginator) paginator!: MatPaginator;
 
-  data: Success[] = [];
-  dataSource = new MatTableDataSource<Success>(this.data);
-  displayedColumns: string[] = ['unitname', 'variableid', 'value', 'codedstatus'];
+  data: any[] = [];
+  dataSource = new MatTableDataSource<CodingListItem>(this.data);
+  displayedColumns: string[] = ['unitname', 'variableid', 'value', 'codedstatus', 'actions'];
   isLoading = false;
   isFilterLoading = false;
+  isLoadingStatistics = false;
+  currentStatusFilter: string | null = null;
 
   pageSizeOptions = [100, 200, 500];
   pageSize = 100;
+  totalRecords = 0;
+  pageIndex = 0;
 
   filterTextChanged = new Subject<Event>();
+
+  codingStatistics: CodingStatistics = {
+    totalResponses: 0,
+    statusCounts: {}
+  };
 
   constructor(
     private backendService: BackendService,
@@ -100,7 +124,8 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
   ) {}
 
   ngOnInit(): void {
-    //this.fetchCodeManual();
+    // this.fetchCodeManual();
+    this.fetchCodingStatistics();
 
     this.filterTextChanged
       .pipe(
@@ -113,6 +138,92 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
           this.isFilterLoading = true;
         }
         this.applyFilter(event);
+      });
+  }
+
+  fetchCodingStatistics(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    this.isLoadingStatistics = true;
+
+    this.backendService.getCodingStatistics(workspaceId)
+      .pipe(
+        catchError(error => {
+          this.isLoadingStatistics = false;
+          this.snackBar.open('Fehler beim Abrufen der Kodierstatistiken', 'Schließen', {
+            duration: 5000,
+            panelClass: ['error-snackbar']
+          });
+          return of({ totalResponses: 0, statusCounts: {} });
+        }),
+        finalize(() => {
+          this.isLoadingStatistics = false;
+        })
+      )
+      .subscribe(statistics => {
+        this.codingStatistics = statistics;
+      });
+  }
+
+  /**
+   * Returns all status types except the ones that are displayed separately
+   */
+  getOtherStatuses(): string[] {
+    const excludedStatuses = ['INVALID', 'CODING_INCOMPLETE', 'NOT_REACHED', 'INTENDED_INCOMPLETE'];
+    return Object.keys(this.codingStatistics.statusCounts)
+      .filter(status => !excludedStatuses.includes(status));
+  }
+
+  /**
+   * Fetches responses with the specified status
+   */
+  fetchResponsesByStatus(status: string, page: number = 1, limit: number = this.pageSize): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    this.isLoading = true;
+    this.currentStatusFilter = status;
+
+    this.backendService.getResponsesByStatus(workspaceId, status, page, limit)
+      .pipe(
+        catchError(() => {
+          this.isLoading = false;
+          this.snackBar.open(`Fehler beim Abrufen der Antworten mit Status ${status}`, 'Schließen', {
+            duration: 5000,
+            panelClass: ['error-snackbar']
+          });
+          return of({
+            data: [], total: 0, page, limit
+          });
+        }),
+        finalize(() => {
+          this.isLoading = false;
+        })
+      )
+      .subscribe(response => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        this.data = response.data.map((item: any) => ({
+          id: item.id,
+          unitid: item.unitId,
+          variableid: item.variableid || '',
+          status: item.status || '',
+          value: item.value || '',
+          subform: item.subform || '',
+          code: item.code,
+          score: item.score,
+          codedstatus: item.codedstatus || '',
+          unitname: item.unit?.name || '',
+          // Extract information for replay URL
+          login_name: item.unit?.booklet?.person?.login || '',
+          login_code: item.unit?.booklet?.person?.code || '',
+          booklet_id: item.unit?.booklet?.bookletinfo?.name || ''
+        }));
+
+        this.dataSource.data = this.data;
+        this.totalRecords = response.total;
+
+        if (this.data.length === 0) {
+          this.snackBar.open(`Keine Antworten mit Status ${status} gefunden.`, 'Schließen', {
+            duration: 5000
+          });
+        }
       });
   }
 
@@ -138,19 +249,55 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
     this.dataSource.paginator = this.paginator;
   }
 
+  onPaginatorChange(event: PageEvent): void {
+    this.pageSize = event.pageSize;
+    this.pageIndex = event.pageIndex;
+
+    if (this.currentStatusFilter) {
+      this.fetchResponsesByStatus(this.currentStatusFilter, this.pageIndex + 1, this.pageSize);
+    } else {
+      this.fetchCodingList(this.pageIndex + 1, this.pageSize);
+    }
+  }
+
+  /**
+   * Generates a replay URL for a response and opens it in a new tab
+   * Format: /replay/{login_name}@{login_code}@{booklet_id}/{unit_key}/{page}
+   */
+  openReplay(response: Success): void {
+    // For now, we'll use a hardcoded token and page number
+    // In a real implementation, these would be retrieved from the backend
+    const token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjEsInVzZXJuYW1lIjoicmVpY2hsZWpAZ214LmRlIiwic3ViIjp7ImlkIjoxLCJ1c2VybmFtZSI6InJlaWNobGVqQGdteC5kZSIsImlzQWRtaW4iOnRydWV9LCJ3b3Jrc3BhY2UiOiIzNCIsImlhdCI6MTc0OTAzNzUzMywiZXhwIjoxNzU0MjIxNTMzfQ.4FVfq10u_SbhXCCNXb2edh_SYupW-LZPj09Opb08CS4';
+    const page = '0';
+
+    // Check if we have all the necessary information for the replay URL
+    if (!response.login_name || !response.login_code || !response.booklet_id) {
+      this.snackBar.open('Fehlende Informationen für Replay', 'Schließen', {
+        duration: 5000,
+        panelClass: ['error-snackbar']
+      });
+      return;
+    }
+
+    // Construct the replay URL
+    const url = `${window.location.origin}/#/replay/${response.login_name}@${response.login_code}@${response.booklet_id}/${response.unitname}/${page}?auth=${token}`;
+
+    // Open the URL in a new tab
+    window.open(url, '_blank');
+  }
+
   onAutoCode(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     this.isLoading = true;
 
     this.backendService.getTestPersons(workspaceId)
       .pipe(
-        catchError(error => {
+        catchError(() => {
           this.isLoading = false;
           this.snackBar.open('Fehler beim Abrufen der Testgruppen', 'Schließen', {
             duration: 5000,
             panelClass: ['error-snackbar']
           });
-          console.error('Fehler beim Abrufen der Testgruppen:', error);
           return of([]);
         })
       )
@@ -162,12 +309,11 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
 
         this.backendService.codeTestPersons(workspaceId, testPersons)
           .pipe(
-            catchError(error => {
+            catchError(() => {
               this.snackBar.open('Fehler beim Kodieren der Testpersonen', 'Schließen', {
                 duration: 5000,
                 panelClass: ['error-snackbar']
               });
-              console.error('Fehler beim Kodieren der Testpersonen:', error);
               return of({ totalResponses: 0, statusCounts: {} });
             }),
             finalize(() => {
@@ -178,17 +324,17 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
             // Create a report message
             let reportMessage = `Insgesamt wurden ${stats.totalResponses} Antworten verarbeitet.\n\n`;
             reportMessage += 'Verteilung der Kodier-Status:\n';
-
-            Object.entries(stats.statusCounts).forEach(([status, count]) => {
-              reportMessage += `${status}: ${count} (${Math.round((count / stats.totalResponses) * 100)}%)\n`;
-            });
+            for (const status in stats.statusCounts) {
+              if (Object.prototype.hasOwnProperty.call(stats.statusCounts, status)) {
+                // @ts-expect-error - Index access on statusCounts object
+                reportMessage += `${status}: ${stats.statusCounts[status]}\n`;
+              }
+            }
 
             this.snackBar.open(reportMessage, 'Schließen', {
-              duration: 15000, // Show for 10 seconds
+              duration: 10000,
               panelClass: ['success-snackbar']
             });
-
-            console.log('Kodier-Statistik:', stats);
           });
       });
   }
@@ -199,13 +345,12 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
 
     this.backendService.getTestPersons(workspaceId)
       .pipe(
-        catchError(error => {
+        catchError(() => {
           this.isLoading = false;
           this.snackBar.open('Fehler beim Abrufen der Testgruppen', 'Schließen', {
             duration: 5000,
             panelClass: ['error-snackbar']
           });
-          console.error('Fehler beim Abrufen der Testgruppen:', error);
           return of([]);
         })
       )
@@ -214,102 +359,72 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
           this.isLoading = false;
           return;
         }
+
         this.backendService.getManualCodingList(workspaceId, testPersons)
           .pipe(
-            catchError(error => {
-              this.snackBar.open('Fehler beim Abrufen der Kodierliste', 'Schließen', {
+            catchError(() => {
+              this.isLoading = false;
+              this.snackBar.open('Fehler beim Abrufen der manuell zu kodierenden Fälle', 'Schließen', {
                 duration: 5000,
                 panelClass: ['error-snackbar']
               });
-              console.error('Fehler beim Kodieren der Testpersonen:', error);
-              return of(null);
+              return of(false);
             }),
             finalize(() => {
               this.isLoading = false;
             })
           )
-          .subscribe(success => {
-            if (success) {
-              this.data = success;
-              this.dataSource = new MatTableDataSource<Success>(this.data);
-              this.dataSource.sort = this.sort;
-              this.dataSource.paginator = this.paginator;
-              this.dataSource.filterPredicate = (data: Success, filter: string) => {
-                const searchTerms = filter.toLowerCase().split(' ');
-                return searchTerms.every(term => {
-                  const unitnameValue = data.unitname;
-                  const variableidValue = data.variableid;
-
-                  return (unitnameValue && unitnameValue.toString().toLowerCase().includes(term)) ||
-                         (variableidValue && variableidValue.toString().toLowerCase().includes(term));
-                });
-              };
-
-              console.log(success, 'Successfully fetched manual coding list.');
-
-              if (this.data.length === 0) {
-                this.snackBar.open('Keine Daten gefunden', 'Schließen', {
-                  duration: 3000
-                });
-              }
+          .subscribe(result => {
+            if (result) {
+              this.snackBar.open('Manuelle zu kodierende Fälle wurden erfolgreich abgerufen.', 'Schließen', {
+                duration: 5000,
+                panelClass: ['success-snackbar']
+              });
             } else {
-              this.snackBar.open('Fehler beim Laden der Kodierliste', 'Schließen', {
+              this.snackBar.open('Fehler beim Abrufen der manuell zu kodierenden Fälle.', 'Schließen', {
                 duration: 5000,
                 panelClass: ['error-snackbar']
               });
-              console.error('Fehler beim Kodieren der Testpersonen.');
             }
           });
       });
   }
 
-  fetchCodingList(): void {
+  fetchCodingList(page: number = 1, limit: number = this.pageSize): void {
     const workspaceId = this.appService.selectedWorkspaceId;
-    this.backendService.getCodingList(workspaceId)
+    this.isLoading = true;
+
+    this.backendService.getCodingList(workspaceId, page, limit)
       .pipe(
         catchError(() => {
+          this.isLoading = false;
           this.snackBar.open('Fehler beim Abrufen der Kodierliste', 'Schließen', {
             duration: 5000,
             panelClass: ['error-snackbar']
           });
-          return of([]);
+          return of({
+            data: [], total: 0, page, limit
+          });
         }),
         finalize(() => {
+          this.isLoading = false;
         })
-      ).subscribe(data => {
-        this.downloadCodingListAsJson(data);
-      });
-  }
+      )
+      .subscribe(result => {
+        if (result && result.data.length > 0) {
+          this.data = result.data;
+          this.dataSource.data = this.data;
+          this.totalRecords = result.total;
 
-  downloadCodingListAsJson(data: Success[]): void {
-    if (this.data.length === 0) {
-      this.snackBar.open('Keine Daten zum Herunterladen verfügbar', 'Schließen', {
-        duration: 3000
+          this.snackBar.open(`Kodierliste mit ${result.total} Einträgen wurde erfolgreich abgerufen.`, 'Schließen', {
+            duration: 5000,
+            panelClass: ['success-snackbar']
+          });
+        } else {
+          this.snackBar.open('Keine Einträge in der Kodierliste gefunden.', 'Schließen', {
+            duration: 5000
+          });
+        }
       });
-      return;
-    }
-
-    try {
-      const jsonData = JSON.stringify(data, null, 2);
-      const blob = new Blob([jsonData], { type: 'application/json' });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'kodierliste.json';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
-
-      this.snackBar.open('Kodierliste erfolgreich heruntergeladen', 'Schließen', {
-        duration: 3000
-      });
-    } catch (error) {
-      console.error('Fehler beim Herunterladen der Kodierliste:', error);
-      this.snackBar.open('Fehler beim Herunterladen der Kodierliste', 'Schließen', {
-        duration: 5000,
-        panelClass: ['error-snackbar']
-      });
-    }
   }
 }

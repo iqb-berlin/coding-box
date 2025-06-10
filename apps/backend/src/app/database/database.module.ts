@@ -25,8 +25,12 @@ import { UnitLastState } from './entities/unitLastState.entity';
 import { ChunkEntity } from './entities/chunk.entity';
 import { ResponseEntity } from './entities/response.entity';
 import { Session } from './entities/session.entity';
+import { UnitTag } from './entities/unitTag.entity';
+import { UnitNote } from './entities/unitNote.entity';
 import { PersonService } from './services/person.service';
 import { AuthService } from '../auth/service/auth.service';
+import { UnitTagService } from './services/unit-tag.service';
+import { UnitNoteService } from './services/unit-note.service';
 
 @Module({
   imports: [
@@ -58,7 +62,7 @@ import { AuthService } from '../auth/service/auth.service';
         password: configService.get('POSTGRES_PASSWORD'),
         database: configService.get('POSTGRES_DB'),
         entities: [BookletInfo, Booklet, Session, BookletLog, Unit, UnitLog, UnitLastState, ResponseEntity,
-          User, Workspace, WorkspaceAdmin, FileUpload, Responses, WorkspaceUser, ResourcePackage, Logs, Persons, ChunkEntity, BookletLog, Session, UnitLog
+          User, Workspace, WorkspaceAdmin, FileUpload, Responses, WorkspaceUser, ResourcePackage, Logs, Persons, ChunkEntity, BookletLog, Session, UnitLog, UnitTag, UnitNote
         ],
         synchronize: false
       }),
@@ -83,10 +87,12 @@ import { AuthService } from '../auth/service/auth.service';
       BookletLog,
       UnitLog,
       UnitLastState,
-      Session
+      Session,
+      UnitTag,
+      UnitNote
     ])
   ],
-  providers: [UsersService, WorkspaceService, TestcenterService, UploadResultsService, PersonService, AuthService, JwtService],
+  providers: [UsersService, WorkspaceService, TestcenterService, UploadResultsService, PersonService, AuthService, JwtService, UnitTagService, UnitNoteService],
   exports: [
     User,
     FileUpload,
@@ -102,7 +108,9 @@ import { AuthService } from '../auth/service/auth.service';
     UploadResultsService,
     ResourcePackage,
     PersonService,
-    AuthService
+    AuthService,
+    UnitTagService,
+    UnitNoteService
   ]
 })
 export class DatabaseModule {}

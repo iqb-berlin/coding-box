@@ -31,9 +31,10 @@ import { ResponseDto } from '../../../../../../api-dto/responses/response-dto';
 import WorkspaceUser from '../../database/entities/workspace_user.entity';
 import { UploadResultsService } from '../../database/services/upload-results.service';
 import Persons from '../../database/entities/persons.entity';
-import { FilesValidationDto } from '../../../../../../api-dto/files/files-validation.dto';
 import { FileDownloadDto } from '../../../../../../api-dto/files/file-download.dto';
 import { TestGroupsInfoDto } from '../../../../../../api-dto/files/test-groups-info.dto';
+import { FileValidationResultDto } from '../../../../../../api-dto/files/file-validation-result.dto';
+import { ResponseEntity } from '../../database/entities/response.entity';
 
 export type Result = {
   success: boolean,
@@ -56,15 +57,44 @@ export class WorkspaceController {
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   @ApiTags('admin workspaces')
-  @ApiOperation({ summary: 'Get all workspaces', description: 'Retrieves a list of all admin workspaces' })
+  @ApiOperation({ summary: 'Get all workspaces', description: 'Retrieves a paginated list of all admin workspaces' })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    description: 'Page number for pagination',
+    type: Number
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    description: 'Number of items per page',
+    type: Number
+  })
   @ApiOkResponse({
     description: 'List of admin workspaces retrieved successfully.',
-    type: [WorkspaceInListDto]
+    schema: {
+      type: 'object',
+      properties: {
+        data: { type: 'array', items: { $ref: '#/components/schemas/WorkspaceInListDto' } },
+        total: { type: 'number' },
+        page: { type: 'number' },
+        limit: { type: 'number' }
+      }
+    }
   })
   @ApiBadRequestResponse({ description: 'Failed to retrieve admin workspaces' })
-  async findAll(): Promise<WorkspaceInListDto[]> {
+  async findAll(
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 20
+  ): Promise<{ data: WorkspaceInListDto[]; total: number; page: number; limit: number }> {
     try {
-      return await this.workspaceService.findAll();
+      const [workspaces, total] = await this.workspaceService.findAll({ page, limit });
+      return {
+        data: workspaces,
+        total,
+        page,
+        limit
+      };
     } catch (error) {
       throw new BadRequestException('Failed to retrieve admin workspaces. Please try again later.');
     }
@@ -195,16 +225,36 @@ export class WorkspaceController {
   @Get(':workspace_id/files')
   @ApiTags('admin workspace')
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get workspace files', description: 'Retrieves all files associated with a workspace' })
+  @ApiOperation({ summary: 'Get workspace files', description: 'Retrieves paginated files associated with a workspace' })
   @ApiParam({
     name: 'workspace_id',
     type: Number,
     required: true,
     description: 'The unique ID of the workspace for which the files should be retrieved.'
   })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    description: 'Page number for pagination',
+    type: Number
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    description: 'Number of items per page',
+    type: Number
+  })
   @ApiOkResponse({
-    description: 'A list of files was successfully retrieved.',
-    type: [FilesDto]
+    description: 'Files retrieved successfully.',
+    schema: {
+      type: 'object',
+      properties: {
+        data: { type: 'array', items: { $ref: '#/components/schemas/FilesDto' } },
+        total: { type: 'number' },
+        page: { type: 'number' },
+        limit: { type: 'number' }
+      }
+    }
   })
   @ApiNotFoundResponse({
     description: 'The requested workspace could not be found.'
@@ -213,18 +263,24 @@ export class WorkspaceController {
     description: 'Invalid workspace ID or error fetching files.'
   })
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
-  async findFiles(@Param('workspace_id') workspace_id: number): Promise<FilesDto[]> {
+  async findFiles(
+    @Param('workspace_id') workspace_id: number,
+                           @Query('page') page: number = 1,
+                           @Query('limit') limit: number = 20
+  ): Promise<{ data: FilesDto[]; total: number; page: number; limit: number }> {
     if (!workspace_id || workspace_id <= 0) {
       throw new BadRequestException(
         'Invalid workspace ID. Please provide a valid ID.'
       );
     }
     try {
-      const files = await this.workspaceService.findFiles(workspace_id);
-      if (!files || files.length === 0) {
-        return [];
-      }
-      return files;
+      const [files, total] = await this.workspaceService.findFiles(workspace_id, { page, limit });
+      return {
+        data: files,
+        total,
+        page,
+        limit
+      };
     } catch (error) {
       throw new BadRequestException(
         `An error occurred while fetching files for workspace ${workspace_id}: ${error.message}`
@@ -376,28 +432,55 @@ export class WorkspaceController {
     required: true,
     description: 'Unique identifier for the workspace'
   })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    description: 'Page number for pagination',
+    type: Number
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    description: 'Number of items per page',
+    type: Number
+  })
   @ApiOkResponse({
     description: 'List of users retrieved successfully',
-    type: [WorkspaceUser] // Gibt ein Array vom Typ WorkspaceUser zurück
+    schema: {
+      type: 'object',
+      properties: {
+        data: { type: 'array', items: { $ref: '#/components/schemas/WorkspaceUser' } },
+        total: { type: 'number' },
+        page: { type: 'number' },
+        limit: { type: 'number' }
+      }
+    }
   })
   @ApiNotFoundResponse({
     description: 'Workspace not found or no users available'
   })
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async findUsers(
-    @Param('workspace_id') workspaceId: number
-  ): Promise<WorkspaceUser[]> {
+    @Param('workspace_id') workspaceId: number,
+                           @Query('page') page: number = 1,
+                           @Query('limit') limit: number = 20
+  ): Promise<{ data: WorkspaceUser[]; total: number; page: number; limit: number }> {
     try {
-      const users = await this.workspaceService.findUsers(workspaceId);
-      if (!users || users.length === 0) {
-        logger.log(
-          `No users found for workspace ID ${workspaceId}`
-        );
-      }
-      return users;
+      const [users, total] = await this.workspaceService.findUsers(workspaceId, { page, limit });
+      return {
+        data: users,
+        total,
+        page,
+        limit
+      };
     } catch (error) {
       logger.error(`Error retrieving users for workspace ${workspaceId}`);
-      return [];
+      return {
+        data: [],
+        total: 0,
+        page,
+        limit
+      };
     }
   }
 
@@ -412,8 +495,14 @@ export class WorkspaceController {
   @Get(':workspace_id/files/validation')
   @ApiTags('test files validation')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiOperation({ summary: 'Validate test files', description: 'Validates test files and returns a hierarchical view of expected files and their status' })
+  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
+  @ApiOkResponse({
+    description: 'Files validation result',
+    type: FileValidationResultDto
+  })
   async validateTestFiles(
-    @Param('workspace_id') workspace_id: number):Promise<FilesValidationDto[]> {
+    @Param('workspace_id') workspace_id: number): Promise<FileValidationResultDto> {
     return this.workspaceService.validateTestFiles(workspace_id);
   }
 
@@ -484,8 +573,38 @@ export class WorkspaceController {
   @Get(':workspace_id/responses')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiParam({ name: 'workspace_id', type: Number })
-  async findWorkspaceResponse(@WorkspaceId() id: number): Promise<ResponseDto[]> {
-    return this.workspaceService.findWorkspaceResponses(id);
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    description: 'Page number for pagination',
+    type: Number
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    description: 'Number of items per page',
+    type: Number
+  })
+  @ApiOkResponse({
+    description: 'Responses retrieved successfully.',
+    schema: {
+      type: 'object',
+      properties: {
+        data: { type: 'array', items: { $ref: '#/components/schemas/ResponseDto' } },
+        total: { type: 'number' },
+        page: { type: 'number' },
+        limit: { type: 'number' }
+      }
+    }
+  })
+  async findWorkspaceResponse(@WorkspaceId() id: number, @Query('page') page: number = 1, @Query('limit') limit: number = 20): Promise<{ data: ResponseDto[]; total: number; page: number; limit: number }> {
+    const [responses, total] = await this.workspaceService.findWorkspaceResponses(id, { page, limit });
+    return {
+      data: responses,
+      total,
+      page,
+      limit
+    };
   }
 
   @Get(':workspace_id/coding')
@@ -508,20 +627,119 @@ export class WorkspaceController {
   @Get(':workspace_id/coding/coding-list')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiTags('coding')
-  @ApiOkResponse({
-    description: 'List of incomplete coding items retrieved successfully.'
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    description: 'Page number for pagination',
+    type: Number
   })
-  async getCodingList(): Promise<{
-    unit_key: string;
-    unit_alias: string;
-    login_name: string;
-    login_code: string;
-    booklet_id: string;
-    variable_id: string;
-    variable_page: string;
-    variable_anchor: string;
-  }[]> {
-    return this.workspaceService.getCodingList();
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    description: 'Number of items per page',
+    type: Number
+  })
+  @ApiOkResponse({
+    description: 'List of incomplete coding items retrieved successfully.',
+    schema: {
+      type: 'object',
+      properties: {
+        data: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              unit_key: { type: 'string' },
+              unit_alias: { type: 'string' },
+              login_name: { type: 'string' },
+              login_code: { type: 'string' },
+              booklet_id: { type: 'string' },
+              variable_id: { type: 'string' },
+              variable_page: { type: 'string' },
+              variable_anchor: { type: 'string' },
+              url: { type: 'string' }
+            }
+          }
+        },
+        total: { type: 'number' },
+        page: { type: 'number' },
+        limit: { type: 'number' }
+      }
+    }
+  })
+  async getCodingList(@Query('page') page: number = 1, @Query('limit') limit: number = 20): Promise<{
+    data: {
+      unit_key: string;
+      unit_alias: string;
+      login_name: string;
+      login_code: string;
+      booklet_id: string;
+      variable_id: string;
+      variable_page: string;
+      variable_anchor: string;
+      url: string;
+    }[];
+    total: number;
+    page: number;
+    limit: number;
+  }> {
+    const [items, total] = await this.workspaceService.getCodingList({ page, limit });
+    return {
+      data: items,
+      total,
+      page,
+      limit
+    };
+  }
+
+  @Get(':workspace_id/coding/statistics')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiOkResponse({
+    description: 'Coding statistics retrieved successfully.'
+  })
+  async getCodingStatistics(@WorkspaceId() workspace_id: number): Promise<CodingStatistics> {
+    return this.workspaceService.getCodingStatistics(workspace_id);
+  }
+
+  @Get(':workspace_id/coding/responses/:status')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiParam({ name: 'status', type: String })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    description: 'Page number for pagination',
+    type: Number
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    description: 'Number of items per page',
+    type: Number
+  })
+  @ApiOkResponse({
+    description: 'Responses with the specified status retrieved successfully.',
+    schema: {
+      type: 'object',
+      properties: {
+        data: { type: 'array', items: { $ref: '#/components/schemas/ResponseEntity' } },
+        total: { type: 'number' },
+        page: { type: 'number' },
+        limit: { type: 'number' }
+      }
+    }
+  })
+  async getResponsesByStatus(@WorkspaceId() workspace_id: number, @Param('status') status: string, @Query('page') page: number = 1, @Query('limit') limit: number = 20): Promise<{ data: ResponseEntity[]; total: number; page: number; limit: number }> {
+    const [responses, total] = await this.workspaceService.getResponsesByStatus(workspace_id, status, { page, limit });
+    return {
+      data: responses,
+      total,
+      page,
+      limit
+    };
   }
 
   @Post(':workspace_id/upload')

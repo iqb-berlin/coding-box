@@ -6,7 +6,7 @@ import { MatButton } from '@angular/material/button';
 
 @Component({
   template: `
-    <h1 mat-dialog-title>IQB-Studio - Impressum/Datenschutz</h1>
+    <h1 mat-dialog-title>IQB-Kodierbox - Impressum/Datenschutz</h1>
     <mat-dialog-content>
       <p>
         Das Institut zur Qualitätsentwicklung im Bildungswesen betreibt auf diesen Seiten eine Anwendung für das Erstellen von Seiten und Aufgaben für das computerbasierte Leistungstesten von Schülerinnen und Schülern. Die Arbeit mit diesem System erfordert einen persönlichen Account. Der hierzu erforderlichen Speicherung und Verwendung von Daten stimmen die Beteiligten in einem gesonderten Vorgang zu. Zugriffe ohne Account werden weder protokolliert noch in irgendeiner Art gepeichert.
