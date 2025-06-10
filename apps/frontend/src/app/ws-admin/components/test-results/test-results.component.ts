@@ -28,16 +28,18 @@ import { MatAnchor, MatButton, MatIconButton } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDivider } from '@angular/material/divider';
-import { MatFormField, MatLabel } from '@angular/material/form-field';
-import { MatTooltip } from '@angular/material/tooltip';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
 import { TestGroupsInListDto } from '../../../../../../../api-dto/test-groups/testgroups-in-list.dto';
 import { TestCenterImportComponent } from '../test-center-import/test-center-import.component';
 import { LogDialogComponent } from '../booklet-log-dialog/log-dialog.component';
+import { TagDialogComponent } from '../tag-dialog/tag-dialog.component';
+import { NoteDialogComponent } from '../note-dialog/note-dialog.component';
 import { UnitTagDto } from '../../../../../../../api-dto/unit-tags/unit-tag.dto';
 import { CreateUnitTagDto } from '../../../../../../../api-dto/unit-tags/create-unit-tag.dto';
 import { UpdateUnitTagDto } from '../../../../../../../api-dto/unit-tags/update-unit-tag.dto';
+import { UnitNoteDto } from '../../../../../../../api-dto/unit-notes/unit-note.dto';
 
 interface P {
   id: number;
@@ -84,9 +86,7 @@ interface P {
     MatButton,
     MatIconButton,
     MatDivider,
-    MatFormField,
-    MatLabel,
-    MatTooltip]
+    MatTooltipModule]
 })
 export class TestResultsComponent implements OnInit {
   selection = new SelectionModel<P>(true, []);
@@ -95,7 +95,7 @@ export class TestResultsComponent implements OnInit {
   displayedColumns: string[] = ['select', 'code', 'group', 'login', 'uploaded_at'];
   data: P[] = [];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  booklets: { id: number; title: string, name:string, units:any }[] = [];
+  booklets: { id: number; title: string, name:string, units:any, logs?: any[], sessions?: any[] }[] = [];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   results: { [key: string]: any }[] = [];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -113,8 +113,10 @@ export class TestResultsComponent implements OnInit {
   isUploadingResults: boolean = false;
   unitTags: UnitTagDto[] = [];
   newTagText: string = '';
-  // Map to store tags for each unit
   unitTagsMap: Map<number, UnitTagDto[]> = new Map();
+  unitNotes: UnitNoteDto[] = [];
+  unitNotesMap: Map<number, UnitNoteDto[]> = new Map();
+  readonly SHORT_PROCESSING_TIME_THRESHOLD_MS: number = 60000; // 1 minute in milliseconds
 
   @ViewChild(MatPaginator) paginator!: MatPaginator;
   @ViewChild(MatSort) sort!: MatSort;
@@ -255,9 +257,6 @@ export class TestResultsComponent implements OnInit {
     });
   }
 
-  /**
-   * Opens a dialog to display unit logs
-   */
   openUnitLogsDialog() {
     if (!this.selectedUnit || !this.logs || this.logs.length === 0) {
       this.snackBar.open(
@@ -273,6 +272,60 @@ export class TestResultsComponent implements OnInit {
       data: {
         logs: this.logs,
         title: `Logs für Unit: ${this.selectedUnit.alias || 'Unbenannte Einheit'}`
+      }
+    });
+  }
+
+  openTagsDialog() {
+    if (!this.selectedUnit || !this.selectedUnit.id) {
+      this.snackBar.open(
+        'Keine Unit ausgewählt',
+        'Info',
+        { duration: 3000 }
+      );
+      return;
+    }
+
+    const dialogRef = this.dialog.open(TagDialogComponent, {
+      width: '500px',
+      data: {
+        unitId: this.selectedUnit.id as number,
+        tags: this.unitTags,
+        title: `Tags für Unit: ${this.selectedUnit.alias || 'Unbenannte Einheit'}`
+      }
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result) {
+        this.unitTags = result;
+        this.unitTagsMap.set(this.selectedUnit?.id as number, result);
+      }
+    });
+  }
+
+  openNotesDialog() {
+    if (!this.selectedUnit || !this.selectedUnit.id) {
+      this.snackBar.open(
+        'Keine Unit ausgewählt',
+        'Info',
+        { duration: 3000 }
+      );
+      return;
+    }
+
+    const dialogRef = this.dialog.open(NoteDialogComponent, {
+      width: '600px',
+      data: {
+        unitId: this.selectedUnit.id as number,
+        notes: this.unitNotes,
+        title: `Notizen für Unit: ${this.selectedUnit.alias || 'Unbenannte Einheit'}`
+      }
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result) {
+        this.unitNotes = result;
+        this.unitNotesMap.set(this.selectedUnit?.id as number, result);
       }
     });
   }
@@ -304,18 +357,18 @@ export class TestResultsComponent implements OnInit {
     // this.logs = this.createUnitHistory(unit);
     this.selectedUnit = unit;
 
-    // Load tags for the selected unit
     this.loadUnitTags();
+    // this.loadUnitNotes();
   }
 
   /**
    * Load tags for the selected unit
    */
   loadUnitTags(): void {
-    if (this.selectedUnit && this.selectedUnit['id']) {
+    if (this.selectedUnit && this.selectedUnit.id) {
       this.backendService.getUnitTags(
         this.appService.selectedWorkspaceId,
-        this.selectedUnit['id'] as number
+        this.selectedUnit.id as number
       ).subscribe({
         next: tags => {
           this.unitTags = tags;
@@ -338,6 +391,35 @@ export class TestResultsComponent implements OnInit {
   }
 
   /**
+   * Load notes for the selected unit
+   */
+  loadUnitNotes(): void {
+    if (this.selectedUnit && this.selectedUnit.id) {
+      this.backendService.getUnitNotes(
+        this.appService.selectedWorkspaceId,
+        this.selectedUnit.id as number
+      ).subscribe({
+        next: notes => {
+          this.unitNotes = notes;
+
+          // Update the unitNotesMap
+          // @ts-expect-error - Property 'id' may not exist on type '{ alias: string; }'
+          this.unitNotesMap.set(this.selectedUnit.id as number, notes);
+        },
+        error: () => {
+          this.snackBar.open(
+            'Fehler beim Laden der Notizen',
+            'Fehler',
+            { duration: 3000 }
+          );
+        }
+      });
+    } else {
+      this.unitNotes = [];
+    }
+  }
+
+  /**
    * Add a new tag to the selected unit
    */
   addUnitTag(): void {
@@ -350,8 +432,8 @@ export class TestResultsComponent implements OnInit {
       return;
     }
 
-    if (this.selectedUnit && this.selectedUnit['id']) {
-      this.addTagToUnit(this.selectedUnit['id'] as number, this.newTagText.trim());
+    if (this.selectedUnit && this.selectedUnit.id) {
+      this.addTagToUnit(this.selectedUnit.id as number, this.newTagText.trim());
       this.newTagText = ''; // Clear the input field
     }
   }
@@ -382,7 +464,7 @@ export class TestResultsComponent implements OnInit {
     ).subscribe({
       next: tag => {
         // If this is the selected unit, update the unitTags array
-        if (this.selectedUnit && this.selectedUnit['id'] === unitId) {
+        if (this.selectedUnit && this.selectedUnit.id === unitId) {
           this.unitTags.push(tag);
         }
 
@@ -459,8 +541,8 @@ export class TestResultsComponent implements OnInit {
    * @param tagId The ID of the tag to delete
    */
   deleteUnitTag(tagId: number): void {
-    if (this.selectedUnit && this.selectedUnit['id']) {
-      this.deleteTagFromUnit(tagId, this.selectedUnit['id'] as number);
+    if (this.selectedUnit && this.selectedUnit.id) {
+      this.deleteTagFromUnit(tagId, this.selectedUnit.id as number);
     }
   }
 
@@ -477,7 +559,7 @@ export class TestResultsComponent implements OnInit {
       next: success => {
         if (success) {
           // If this is the selected unit, update the unitTags array
-          if (this.selectedUnit && this.selectedUnit['id'] === unitId) {
+          if (this.selectedUnit && this.selectedUnit.id === unitId) {
             this.unitTags = this.unitTags.filter(tag => tag.id !== tagId);
           }
 
@@ -525,6 +607,88 @@ export class TestResultsComponent implements OnInit {
     return date.toLocaleString();
   }
 
+  /**
+   * Calculates the processing time for a booklet based on its logs
+   * @param booklet The booklet to calculate processing time for
+   * @returns The processing time in milliseconds, or null if it cannot be calculated
+   */
+  calculateBookletProcessingTime(booklet: any): number | null {
+    if (!booklet.logs || !Array.isArray(booklet.logs) || booklet.logs.length === 0) {
+      return null;
+    }
+
+    const pollingLog = booklet.logs.find((log: any) => log.key === 'CONTROLLER' && log.parameter === 'RUNNING');
+    const terminatedLog = booklet.logs.find((log: any) => log.key === 'CONTROLLER' && log.parameter === 'TERMINATED');
+    if (pollingLog && terminatedLog) {
+      const pollingTime = Number(pollingLog.ts);
+      const terminatedTime = Number(terminatedLog.ts);
+
+      if (!Number.isNaN(pollingTime) && !Number.isNaN(terminatedTime)) {
+        console.log(terminatedLog, pollingLog);
+        return terminatedTime - pollingTime;
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Formats a duration in milliseconds to a readable format (minutes:seconds)
+   * @param durationMs The duration in milliseconds
+   * @returns A formatted string in the format MM:SS
+   */
+  formatDuration(durationMs: number | null): string {
+    if (durationMs === null || durationMs < 0) return '00:00';
+
+    // Convert to seconds
+    const totalSeconds = Math.floor(durationMs / 1000);
+
+    // Calculate minutes and remaining seconds
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+
+    // Format as MM:SS
+    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  }
+
+  /**
+   * Checks if all units in a booklet have been visited
+   * @param booklet The booklet to check
+   * @returns True if all units have been visited, false otherwise
+   */
+  isBookletComplete(booklet: any): boolean {
+    if (!booklet.logs || !Array.isArray(booklet.logs) || booklet.logs.length === 0 ||
+        !booklet.units || !Array.isArray(booklet.units) || booklet.units.length === 0) {
+      return false;
+    }
+
+    // Get all log entries with key CURRENT_UNIT_ID
+    const unitIdLogs = booklet.logs.filter((log: any) => log.key === 'CURRENT_UNIT_ID');
+
+    // Get all unit aliases
+    const unitAliases = booklet.units
+      .map((unit: any) => unit.alias)
+      .filter((alias: string | null) => alias !== null) as string[];
+
+    // Check if each unit alias has a corresponding log entry
+    const allUnitsVisited = unitAliases.every(
+      (alias: string) => unitIdLogs.some((log: any) => log.parameter === alias)
+    );
+
+    return allUnitsVisited && unitAliases.length > 0;
+  }
+
+  /**
+   * Checks if a booklet has a short processing time (less than the threshold)
+   * @param booklet The booklet to check
+   * @returns True if the processing time is short, false otherwise
+   */
+  hasShortProcessingTime(booklet: any): boolean {
+    const processingTime = this.calculateBookletProcessingTime(booklet);
+    console.log(processingTime, 'processingTime');
+    return processingTime === null || processingTime < this.SHORT_PROCESSING_TIME_THRESHOLD_MS;
+  }
+
   // Check if any response value for a unit starts with "UEsD"
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   hasGeogebraResponse(unit: any): boolean {
@@ -534,64 +698,6 @@ export class TestResultsComponent implements OnInit {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return unit.results.some((response:any) => response.value && typeof response.value === 'string' && response.value.startsWith('UEsD'));
-  }
-
-  /**
-   * Determines the appropriate text color (black or white) based on the background color
-   * @param backgroundColor The background color in any valid CSS format (hex, rgb, etc.)
-   * @returns Either 'black' or 'white' depending on the background brightness
-   */
-  getContrastColor(backgroundColor?: string): string {
-    // If no color is provided, return black (for default light backgrounds)
-    if (!backgroundColor) {
-      return '#000000';
-    }
-
-    // Convert the color to RGB
-    let r = 0;
-    let g = 0;
-    let b = 0;
-
-    // Handle hex colors
-    if (backgroundColor.startsWith('#')) {
-      const hex = backgroundColor.slice(1);
-
-      // Handle shorthand hex (#RGB)
-      if (hex.length === 3) {
-        r = parseInt(hex[0] + hex[0], 16);
-        g = parseInt(hex[1] + hex[1], 16);
-        b = parseInt(hex[2] + hex[2], 16);
-      } else if (hex.length === 6) {
-        // Handle full hex (#RRGGBB)
-        r = parseInt(hex.slice(0, 2), 16);
-        g = parseInt(hex.slice(2, 4), 16);
-        b = parseInt(hex.slice(4, 6), 16);
-      } else {
-        // Invalid hex, return black
-        return '#000000';
-      }
-    } else if (backgroundColor.startsWith('rgb')) {
-      // Handle rgb/rgba colors
-      const rgbMatch = backgroundColor.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*[\d.]+)?\)/);
-      if (rgbMatch) {
-        r = parseInt(rgbMatch[1], 10);
-        g = parseInt(rgbMatch[2], 10);
-        b = parseInt(rgbMatch[3], 10);
-      } else {
-        // Invalid rgb format, return black
-        return '#000000';
-      }
-    } else {
-      // Unsupported color format, return black
-      return '#000000';
-    }
-
-    // Calculate brightness using the YIQ formula
-    // This formula gives more weight to colors that the human eye is more sensitive to
-    const brightness = (r * 299 + g * 587 + b * 114) / 1000;
-
-    // Return white for dark backgrounds, black for light backgrounds
-    return brightness >= 128 ? '#000000' : '#ffffff';
   }
 
   getColor(status: string): string {

@@ -134,6 +134,7 @@
               <mat-expansion-panel-header>
                 <mat-panel-title (click)="setSelectedBooklet(booklet)" class="booklet-title">
                   {{ booklet.name }}
+
                 </mat-panel-title>
               </mat-expansion-panel-header>
 
@@ -147,10 +148,22 @@
                   Logs anzeigen
                 </button>
               </div>
-
+              <div class="booklet-warnings" *ngIf="hasShortProcessingTime(booklet) || !isBookletComplete(booklet)">
+                <mat-icon *ngIf="hasShortProcessingTime(booklet)"
+                          class="warning-icon short-time-warning"
+                          matTooltip="Kurze Bearbeitungszeit (weniger als 1 Minute)">
+                  timer
+                </mat-icon>
+                <mat-icon *ngIf="!isBookletComplete(booklet)"
+                          class="warning-icon incomplete-warning"
+                          matTooltip="Nicht vollständig bearbeitet">
+                  warning
+                </mat-icon>
+              </div>
               <mat-divider class="section-divider"></mat-divider>
 
               <h3 class="units-title">Aufgaben</h3>
+
               <mat-list class="unit-list">
                 <mat-list-item
                   *ngFor="let unit of booklet.units"
@@ -182,35 +195,16 @@
             </button>
             <button mat-stroked-button color="primary" (click)="openUnitLogsDialog()" class="action-button">
               <mat-icon>list</mat-icon>
-              Logs anzeigen
+              Logs
             </button>
-          </div>
-
-          <!-- Unit Tags Section -->
-          <div class="unit-tags-section">
-            <h3 class="tags-title">Tags</h3>
-            <div class="tags-container">
-              <div class="tags-list">
-                <div *ngFor="let tag of unitTags" class="tag-item" [ngStyle]="{'background-color': tag.color || '#e3f2fd'}">
-                  <span class="tag-text" [ngStyle]="{'color': getContrastColor(tag.color)}">{{ tag.tag }}</span>
-                  <div class="tag-actions">
-                    <button mat-icon-button (click)="deleteUnitTag(tag.id)" class="tag-action-button" matTooltip="Tag löschen">
-                      <mat-icon [ngStyle]="{'color': getContrastColor(tag.color)}">close</mat-icon>
-                    </button>
-                  </div>
-                </div>
-              </div>
-              <div class="add-tag-form">
-                <mat-form-field appearance="outline" class="tag-input">
-                  <mat-label>Neuer Tag</mat-label>
-                  <input matInput [(ngModel)]="newTagText" placeholder="Tag eingeben">
-                </mat-form-field>
-                <button mat-raised-button color="primary" (click)="addUnitTag()" class="add-tag-button">
-                  <mat-icon>add</mat-icon>
-                  Hinzufügen
-                </button>
-              </div>
-            </div>
+            <button mat-stroked-button color="primary" (click)="openTagsDialog()" class="action-button">
+              <mat-icon>label</mat-icon>
+              Tags
+            </button>
+<!--            <button mat-stroked-button color="primary" (click)="openNotesDialog()" class="action-button">-->
+<!--              <mat-icon>note</mat-icon>-->
+<!--              Notizen-->
+<!--            </button>-->
           </div>
 
           <div class="var-list">
@@ -248,14 +242,14 @@
                 </div>
                 <div class="detail-row">
                   <span class="detail-label">Value:</span>
-                  <span class="detail-value">{{ response.value | slice:0:1000 }}{{ response.value.length > 1000 ? '...' : '' }}</span>
+                  <span class="detail-value">{{ response.value | slice:0:1000 }}{{ response.value?.length > 1000 ? '...' : '' }}</span>
                 </div>
               </div>
             </div>
           </div>
         </div>
 
-        <div class="logs-card" *ngIf="logs.length > 0">
+        <div class="logs-card" *ngIf="logs?.length > 0">
           <h2 class="section-title">Logs</h2>
           <p class="section-description">Protokolleinträge für die ausgewählte Unit</p>
           <mat-divider></mat-divider>

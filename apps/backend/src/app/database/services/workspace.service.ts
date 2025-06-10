@@ -1033,9 +1033,9 @@ export class WorkspaceService {
       statistics.totalResponses = await queryBuilder.getCount();
 
       const statusCountResults = await queryBuilder
-        .select("COALESCE(response.codedstatus, 'UNKNOWN')", 'statusValue')
+        .select('COALESCE(response.codedstatus, null)', 'statusValue')
         .addSelect('COUNT(response.id)', 'count')
-        .groupBy("COALESCE(response.codedstatus, 'UNKNOWN')") // Gruppieren nach dem Ausdruck selbst für bessere Kompatibilität
+        .groupBy('COALESCE(response.codedstatus, null)')
         .getRawMany();
 
       statusCountResults.forEach(result => {
