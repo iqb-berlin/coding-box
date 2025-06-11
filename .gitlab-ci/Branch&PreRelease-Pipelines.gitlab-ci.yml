@@ -233,6 +233,8 @@ build-cicd-base-image:
   image: $DOCKER_IMAGE
   services:
     - name: $DOCKER_SERVICE
+      variables:
+        HEALTHCHECK_TCP_PORT: "2375"
       entrypoint: [ "sh", "-c", "dockerd-entrypoint.sh $DOCKER_DAEMON_OPTIONS" ]
       alias: docker
   before_script:
@@ -269,6 +271,8 @@ build-cicd-base-image:
 #  image: $DOCKER_IMAGE
 #  services:
 #    - name: $DOCKER_SERVICE
+#      variables:
+#        HEALTHCHECK_TCP_PORT: "2375"
 #      entrypoint: [ "sh", "-c", "dockerd-entrypoint.sh $DOCKER_DAEMON_OPTIONS" ]
 #      alias: docker
 #  before_script:
@@ -311,6 +315,8 @@ build-db-image:
   image: $DOCKER_IMAGE
   services:
     - name: $DOCKER_SERVICE
+      variables:
+        HEALTHCHECK_TCP_PORT: "2375"
       entrypoint: [ "sh", "-c", "dockerd-entrypoint.sh $DOCKER_DAEMON_OPTIONS" ]
       alias: docker
   variables:
@@ -344,6 +350,8 @@ build-liquibase-image:
   image: $DOCKER_IMAGE
   services:
     - name: $DOCKER_SERVICE
+      variables:
+        HEALTHCHECK_TCP_PORT: "2375"
       entrypoint: [ "sh", "-c", "dockerd-entrypoint.sh $DOCKER_DAEMON_OPTIONS" ]
       alias: docker
   variables:
@@ -393,6 +401,8 @@ test-db:
   image: $DOCKER_IMAGE
   services:
     - name: $DOCKER_SERVICE
+      variables:
+        HEALTHCHECK_TCP_PORT: "2375"
       entrypoint: [ "sh", "-c", "dockerd-entrypoint.sh $DOCKER_DAEMON_OPTIONS" ]
       alias: docker
   before_script:
@@ -494,6 +504,8 @@ test-app:
 #  image: ${CI_REGISTRY_IMAGE}/${E2E_BASE_IMAGE}
 #  services:
 #    - name: $DOCKER_SERVICE
+#      variables:
+#        HEALTHCHECK_TCP_PORT: "2375"
 #      entrypoint: [ "sh", "-c", "dockerd-entrypoint.sh $DOCKER_DAEMON_OPTIONS" ]
 #      alias: docker
 #  before_script:
@@ -536,6 +548,8 @@ test-app:
 #  image: ${CI_REGISTRY_IMAGE}/${E2E_BASE_IMAGE}
 #  services:
 #    - name: $DOCKER_SERVICE
+#      variables:
+#        HEALTHCHECK_TCP_PORT: "2375"
 #      entrypoint: [ "sh", "-c", "dockerd-entrypoint.sh $DOCKER_DAEMON_OPTIONS" ]
 #      alias: docker
 #  before_script:
@@ -571,6 +585,8 @@ test-app:
 #  image: ${CI_REGISTRY_IMAGE}/${E2E_BASE_IMAGE}
 #  services:
 #    - name: $DOCKER_SERVICE
+#      variables:
+#        HEALTHCHECK_TCP_PORT: "2375"
 #      entrypoint: [ "sh", "-c", "dockerd-entrypoint.sh $DOCKER_DAEMON_OPTIONS" ]
 #      alias: docker
 #  before_script:
@@ -606,6 +622,8 @@ test-app:
 #  image: ${CI_REGISTRY_IMAGE}/${E2E_BASE_IMAGE}
 #  services:
 #    - name: $DOCKER_SERVICE
+#      variables:
+#        HEALTHCHECK_TCP_PORT: "2375"
 #      entrypoint: [ "sh", "-c", "dockerd-entrypoint.sh $DOCKER_DAEMON_OPTIONS" ]
 #      alias: docker
 #  before_script:
@@ -642,6 +660,8 @@ test-app:
 #  image: ${CI_REGISTRY_IMAGE}/${E2E_BASE_IMAGE}
 #  services:
 #    - name: $DOCKER_SERVICE
+#      variables:
+#        HEALTHCHECK_TCP_PORT: "2375"
 #      entrypoint: [ "sh", "-c", "dockerd-entrypoint.sh $DOCKER_DAEMON_OPTIONS" ]
 #      alias: docker
 #  before_script:
@@ -677,6 +697,8 @@ test-app:
 #  image: ${CI_REGISTRY_IMAGE}/${E2E_BASE_IMAGE}
 #  services:
 #    - name: $DOCKER_SERVICE
+#      variables:
+#        HEALTHCHECK_TCP_PORT: "2375"
 #      entrypoint: [ "sh", "-c", "dockerd-entrypoint.sh $DOCKER_DAEMON_OPTIONS" ]
 #      alias: docker
 #  before_script:
@@ -713,6 +735,8 @@ test-app:
 #  image: ${CI_REGISTRY_IMAGE}/${E2E_BASE_IMAGE}
 #  services:
 #    - name: $DOCKER_SERVICE
+#      variables:
+#        HEALTHCHECK_TCP_PORT: "2375"
 #      entrypoint: [ "sh", "-c", "dockerd-entrypoint.sh $DOCKER_DAEMON_OPTIONS" ]
 #      alias: docker
 #  before_script:
@@ -748,6 +772,8 @@ test-app:
 #  image: ${CI_REGISTRY_IMAGE}/${E2E_BASE_IMAGE}
 #  services:
 #    - name: $DOCKER_SERVICE
+#      variables:
+#        HEALTHCHECK_TCP_PORT: "2375"
 #      entrypoint: [ "sh", "-c", "dockerd-entrypoint.sh $DOCKER_DAEMON_OPTIONS" ]
 #      alias: docker
 #  before_script:
@@ -803,6 +829,8 @@ build-develop-commit-db-image:
   image: $DOCKER_IMAGE
   services:
     - name: $DOCKER_SERVICE
+      variables:
+        HEALTHCHECK_TCP_PORT: "2375"
       entrypoint: [ "sh", "-c", "dockerd-entrypoint.sh $DOCKER_DAEMON_OPTIONS" ]
       alias: docker
   variables:
@@ -835,6 +863,8 @@ build-develop-commit-liquibase-image:
   image: $DOCKER_IMAGE
   services:
     - name: $DOCKER_SERVICE
+      variables:
+        HEALTHCHECK_TCP_PORT: "2375"
       entrypoint: [ "sh", "-c", "dockerd-entrypoint.sh $DOCKER_DAEMON_OPTIONS" ]
       alias: docker
   variables:
@@ -867,6 +897,8 @@ build-develop-commit-base-image:
   image: $DOCKER_IMAGE
   services:
     - name: $DOCKER_SERVICE
+      variables:
+        HEALTHCHECK_TCP_PORT: "2375"
       entrypoint: [ "sh", "-c", "dockerd-entrypoint.sh $DOCKER_DAEMON_OPTIONS" ]
       alias: docker
   variables:
@@ -898,6 +930,8 @@ build-develop-commit-backend-image:
   image: $DOCKER_IMAGE
   services:
     - name: $DOCKER_SERVICE
+      variables:
+        HEALTHCHECK_TCP_PORT: "2375"
       entrypoint: [ "sh", "-c", "dockerd-entrypoint.sh $DOCKER_DAEMON_OPTIONS" ]
       alias: docker
   variables:
@@ -936,6 +970,8 @@ build-develop-commit-frontend-image:
   image: $DOCKER_IMAGE
   services:
     - name: $DOCKER_SERVICE
+      variables:
+        HEALTHCHECK_TCP_PORT: "2375"
       entrypoint: [ "sh", "-c", "dockerd-entrypoint.sh $DOCKER_DAEMON_OPTIONS" ]
       alias: docker
   variables:
@@ -1204,6 +1240,8 @@ build-pre-release:
   image: $DOCKER_IMAGE
   services:
     - name: $DOCKER_SERVICE
+      variables:
+        HEALTHCHECK_TCP_PORT: "2375"
       entrypoint: [ "sh", "-c", "dockerd-entrypoint.sh $DOCKER_DAEMON_OPTIONS" ]
       alias: docker
   variables:
