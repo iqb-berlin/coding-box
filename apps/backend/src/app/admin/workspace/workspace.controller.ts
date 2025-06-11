@@ -667,7 +667,7 @@ export class WorkspaceController {
       }
     }
   })
-  async getCodingList(@Query('page') page: number = 1, @Query('limit') limit: number = 20): Promise<{
+  async getCodingList(@WorkspaceId() workspace_id: number, @Query('page') page: number = 1, @Query('limit') limit: number = 20): Promise<{
     data: {
       unit_key: string;
       unit_alias: string;
@@ -683,7 +683,7 @@ export class WorkspaceController {
     page: number;
     limit: number;
   }> {
-    const [items, total] = await this.workspaceService.getCodingList({ page, limit });
+    const [items, total] = await this.workspaceService.getCodingList(workspace_id, { page, limit });
     return {
       data: items,
       total,
