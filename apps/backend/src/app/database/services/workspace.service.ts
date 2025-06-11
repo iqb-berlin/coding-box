@@ -36,6 +36,7 @@ import { FileDownloadDto } from '../../../../../../api-dto/files/file-download.d
 import { BookletLog } from '../entities/bookletLog.entity';
 import { UnitLog } from '../entities/unitLog.entity';
 import { Session } from '../entities/session.entity';
+import { AuthService } from '../../auth/service/auth.service';
 
 export interface CodingStatistics {
   totalResponses: number;
@@ -224,8 +225,8 @@ export class WorkspaceService {
     private unitLogRepository:Repository<UnitLog>,
     @InjectRepository(Session)
     private sessionRepository:Repository<Session>,
-    private readonly connection: Connection
-
+    private readonly connection: Connection,
+    private readonly authService: AuthService
   ) {
   }
 
@@ -847,9 +848,11 @@ export class WorkspaceService {
     if (!person) {
       throw new Error(`Person mit ID ${person.id} wurde nicht gefunden.`);
     }
+
     const booklets = await this.bookletRepository.find({
       where: { personid: person.id }
     });
+
     if (!booklets || booklets.length === 0) {
       throw new Error(`Keine Booklets für die Person mit ID ${person.id} gefunden.`);
     }
@@ -908,7 +911,7 @@ export class WorkspaceService {
     return [responses, responses.length];
   }
 
-  async getCodingList(options?: { page: number; limit: number }): Promise<[{
+  async getCodingList(workspace_id: number, options?: { page: number; limit: number }): Promise<[{
     unit_key: string;
     unit_alias: string;
     login_name: string;
@@ -920,6 +923,8 @@ export class WorkspaceService {
     url: string;
   }[], number]> {
     try {
+      const tokenStr = await this.authService.createToken('admin', workspace_id, 1);
+      const realToken = JSON.parse(tokenStr);
       if (options) {
         const { page, limit } = options;
         const MAX_LIMIT = 500;
@@ -943,8 +948,6 @@ export class WorkspaceService {
           const booklet = unit?.booklet;
           const person = booklet?.person;
           const bookletInfo = booklet?.bookletinfo;
-          const token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjEsInVzZXJuYW1lIjoicmVpY2hsZWpAZ214LmRlIiwic3ViIjp7ImlkIjoxLCJ1c2VybmFtZSI6InJlaWNobGVqQGdteC5kZSIsImlzQWRtaW4iOnRydWV9LCJ3b3Jrc3BhY2UiOiIzNCIsImlhdCI6MTc0OTAzNzUzMywiZXhwIjoxNzU0MjIxNTMzfQ.4FVfq10u_SbhXCCNXb2edh_SYupW-LZPj09Opb08CS4';
-
           const loginName = person?.login || '';
           const loginCode = person?.code || '';
           const bookletId = bookletInfo?.name || '';
@@ -952,7 +955,7 @@ export class WorkspaceService {
           const variablePage = '0';
 
           // Generate URL in the format: https://www.iqb-kodierbox.de/#/replay/{login_name}@{login_code}@{booklet_id}/{unit_key}/{variable_page}?auth={token}
-          const url = `https://www.iqb-kodierbox.de/#/replay/${loginName}@${loginCode}@${bookletId}/${unitKey}/${variablePage}?auth=${token}`;
+          const url = `https://www.iqb-kodierbox.de/#/replay/${loginName}@${loginCode}@${bookletId}/${unitKey}/${variablePage}?auth=${realToken}`;
 
           return {
             unit_key: unitKey,
@@ -982,7 +985,6 @@ export class WorkspaceService {
         const booklet = unit?.booklet;
         const person = booklet?.person;
         const bookletInfo = booklet?.bookletinfo;
-        const token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjEsInVzZXJuYW1lIjoicmVpY2hsZWpAZ214LmRlIiwic3ViIjp7ImlkIjoxLCJ1c2VybmFtZSI6InJlaWNobGVqQGdteC5kZSIsImlzQWRtaW4iOnRydWV9LCJ3b3Jrc3BhY2UiOiIzNCIsImlhdCI6MTc0OTAzNzUzMywiZXhwIjoxNzU0MjIxNTMzfQ.4FVfq10u_SbhXCCNXb2edh_SYupW-LZPj09Opb08CS4';
 
         const loginName = person?.login || '';
         const loginCode = person?.code || '';
@@ -991,7 +993,7 @@ export class WorkspaceService {
         const variablePage = '0';
 
         // Generate URL in the format: https://www.iqb-kodierbox.de/#/replay/{login_name}@{login_code}@{booklet_id}/{unit_key}/{variable_page}?auth={token}
-        const url = `https://www.iqb-kodierbox.de/#/replay/${loginName}@${loginCode}@${bookletId}/${unitKey}/${variablePage}?auth=${token}`;
+        const url = `https://www.iqb-kodierbox.de/#/replay/${loginName}@${loginCode}@${bookletId}/${unitKey}/${variablePage}?auth=${realToken}`;
 
         return {
           unit_key: unitKey,
