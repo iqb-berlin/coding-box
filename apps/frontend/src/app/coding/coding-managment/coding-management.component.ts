@@ -98,7 +98,7 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
   @ViewChild(MatSort) sort!: MatSort;
   @ViewChild(MatPaginator) paginator!: MatPaginator;
 
-  data: any = [];
+  data: any[] = [];
   dataSource = new MatTableDataSource<CodingListItem>(this.data);
   displayedColumns: string[] = ['unitname', 'variableid', 'value', 'codedstatus', 'actions'];
   isLoading = false;
@@ -171,6 +171,37 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
     const excludedStatuses = ['INVALID', 'CODING_INCOMPLETE', 'NOT_REACHED', 'INTENDED_INCOMPLETE'];
     return Object.keys(this.codingStatistics.statusCounts)
       .filter(status => !excludedStatuses.includes(status));
+  }
+
+  getStatusPercentage(status: string): number {
+    if (!this.codingStatistics.totalResponses || !this.codingStatistics.statusCounts[status]) {
+      return 0;
+    }
+    return Math.round((this.codingStatistics.statusCounts[status] / this.codingStatistics.totalResponses) * 100);
+  }
+
+  getStatusColor(status: string): string {
+    const colorMap: { [key: string]: string } = {
+      CODING_COMPLETE: '#4CAF50', // Green
+      CODING_INCOMPLETE: '#FFC107', // Amber
+      NOT_REACHED: '#9E9E9E', // Grey
+      INVALID: '#F44336', // Red
+      INTENDED_INCOMPLETE: '#2196F3' // Blue
+    };
+    return colorMap[status] || '#9C27B0'; // Default to purple for unknown statuses
+  }
+
+  getChartData(): { status: string; count: number; percentage: number; color: string }[] {
+    if (!this.codingStatistics.totalResponses) {
+      return [];
+    }
+
+    return Object.keys(this.codingStatistics.statusCounts).map(status => ({
+      status,
+      count: this.codingStatistics.statusCounts[status],
+      percentage: this.getStatusPercentage(status),
+      color: this.getStatusColor(status)
+    }));
   }
 
   fetchResponsesByStatus(status: string, page: number = 1, limit: number = this.pageSize): void {
@@ -343,7 +374,6 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
           });
       });
   }
-
 
   fetchCodingList(page: number = 1, limit: number = this.pageSize): void {
     const workspaceId = this.appService.selectedWorkspaceId;
