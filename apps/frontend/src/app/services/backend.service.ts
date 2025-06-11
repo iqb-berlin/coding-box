@@ -311,18 +311,6 @@ export class BackendService {
       );
   }
 
-  getManualCodingList(workspace_id:number, testPersonIds: number[]): Observable<unknown> {
-    const params = new HttpParams().set('testPersons', testPersonIds.join(','));
-    return this.http
-      .get<unknown>(
-      `${this.serverUrl}admin/workspace/${workspace_id}/coding/manual`,
-      { headers: this.authHeader, params })
-      .pipe(
-        catchError(() => of(false)),
-        map(res => res)
-      );
-  }
-
   getCodingList(workspace_id:number, page: number = 1, limit: number = 100): Observable<PaginatedResponse<CodingListItem>> {
     const params = new HttpParams()
       .set('page', page.toString())
