@@ -10,7 +10,7 @@
         <mat-icon>edit</mat-icon>
         Manuell Kodieren
       </a>
-      <a mat-raised-button color="primary" (click)="fetchCodeManual()">
+      <a mat-raised-button color="primary" (click)="fetchResponsesByStatus('CODING_INCOMPLETE')">
         <mat-icon>refresh</mat-icon>
         Manuelle zu kodierende Fälle
       </a>
@@ -94,7 +94,12 @@
 
 
 
-  <div class="loading-container" *ngIf="isLoading">
+  <div class="loading-container" *ngIf="isAutoCoding">
+    <mat-spinner diameter="40"></mat-spinner>
+    <p class="loading-text">Antworten werden kodiert...</p>
+  </div>
+
+  <div class="loading-container" *ngIf="isLoading && !isAutoCoding">
     <mat-spinner diameter="40"></mat-spinner>
     <p class="loading-text">Daten werden verarbeitet...</p>
   </div>

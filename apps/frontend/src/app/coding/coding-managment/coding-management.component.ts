@@ -339,56 +339,6 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
       });
   }
 
-  fetchCodeManual(): void {
-    const workspaceId = this.appService.selectedWorkspaceId;
-    this.isLoading = true;
-
-    this.backendService.getTestPersons(workspaceId)
-      .pipe(
-        catchError(() => {
-          this.isLoading = false;
-          this.snackBar.open('Fehler beim Abrufen der Testgruppen', 'Schließen', {
-            duration: 5000,
-            panelClass: ['error-snackbar']
-          });
-          return of([]);
-        })
-      )
-      .subscribe(testPersons => {
-        if (testPersons.length === 0) {
-          this.isLoading = false;
-          return;
-        }
-
-        this.backendService.getManualCodingList(workspaceId, testPersons)
-          .pipe(
-            catchError(() => {
-              this.isLoading = false;
-              this.snackBar.open('Fehler beim Abrufen der manuell zu kodierenden Fälle', 'Schließen', {
-                duration: 5000,
-                panelClass: ['error-snackbar']
-              });
-              return of(false);
-            }),
-            finalize(() => {
-              this.isLoading = false;
-            })
-          )
-          .subscribe(result => {
-            if (result) {
-              this.snackBar.open('Manuelle zu kodierende Fälle wurden erfolgreich abgerufen.', 'Schließen', {
-                duration: 5000,
-                panelClass: ['success-snackbar']
-              });
-            } else {
-              this.snackBar.open('Fehler beim Abrufen der manuell zu kodierenden Fälle.', 'Schließen', {
-                duration: 5000,
-                panelClass: ['error-snackbar']
-              });
-            }
-          });
-      });
-  }
 
   fetchCodingList(page: number = 1, limit: number = this.pageSize): void {
     const workspaceId = this.appService.selectedWorkspaceId;
@@ -411,11 +361,8 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
         })
       )
       .subscribe(result => {
+        this.downloadCodingListAsJson(result.data);
         if (result && result.data.length > 0) {
-          this.data = result.data;
-          this.dataSource.data = this.data;
-          this.totalRecords = result.total;
-
           this.snackBar.open(`Kodierliste mit ${result.total} Einträgen wurde erfolgreich abgerufen.`, 'Schließen', {
             duration: 5000,
             panelClass: ['success-snackbar']
@@ -426,5 +373,33 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
           });
         }
       });
+  }
+
+  downloadCodingListAsJson(data: never[] | CodingListItem[]): void {
+    if (data.length === 0) {
+      this.snackBar.open('Keine Daten zum Herunterladen verfügbar. Bitte zuerst die Kodierliste abrufen.', 'Schließen', {
+        duration: 5000,
+        panelClass: ['error-snackbar']
+      });
+      return;
+    }
+
+    const jsonData = JSON.stringify(data, null, 2);
+    const blob = new Blob([jsonData], { type: 'application/json' });
+    const url = window.URL.createObjectURL(blob);
+
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `coding-list-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+
+    this.snackBar.open('Kodierliste wurde als JSON heruntergeladen.', 'Schließen', {
+      duration: 5000,
+      panelClass: ['success-snackbar']
+    });
   }
 }
