@@ -1,8 +1,7 @@
 import {
   Column, Entity, Index, PrimaryGeneratedColumn, Unique, OneToMany
 } from 'typeorm';
-// eslint-disable-next-line import/no-cycle
-import { TcMergeBooklet } from '../services/workspace.service';
+import { TcMergeBooklet } from '../services/shared-types';
 // eslint-disable-next-line import/no-cycle
 import { Booklet } from './booklet.entity';
 

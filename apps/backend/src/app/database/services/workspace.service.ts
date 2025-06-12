@@ -26,7 +26,6 @@ import User from '../entities/user.entity';
 import { TestGroupsInListDto } from '../../../../../../api-dto/test-groups/testgroups-in-list.dto';
 import { ResponseDto } from '../../../../../../api-dto/responses/response-dto';
 import { FileValidationResultDto } from '../../../../../../api-dto/files/file-validation-result.dto';
-// eslint-disable-next-line import/no-cycle
 import Persons from '../entities/persons.entity';
 import { Unit } from '../entities/unit.entity';
 import { Booklet } from '../entities/booklet.entity';
@@ -37,13 +36,7 @@ import { BookletLog } from '../entities/bookletLog.entity';
 import { UnitLog } from '../entities/unitLog.entity';
 import { Session } from '../entities/session.entity';
 import { AuthService } from '../../auth/service/auth.service';
-
-export interface CodingStatistics {
-  totalResponses: number;
-  statusCounts: {
-    [key: string]: number;
-  };
-}
+import { CodingStatistics } from './shared-types';
 
 function sanitizePath(filePath: string): string {
   const normalizedPath = path.normalize(filePath); // System-basiertes Normalisieren
@@ -52,110 +45,6 @@ function sanitizePath(filePath: string): string {
   }
   return normalizedPath.replace(/\\/g, '/'); // Einheitliche Darstellung für Pfade
 }
-
-export type Response = {
-  groupname:string,
-  loginname : string,
-  code : string,
-  bookletname : string,
-  unitname : string,
-  originalUnitId: string
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  responses : any,
-  laststate : string,
-
-};
-
-export type Log = {
-  groupname:string,
-  loginname : string,
-  code : string,
-  bookletname : string,
-  unitname : string,
-  originalUnitId:string,
-  timestamp : string,
-  logentry : string,
-};
-
-export type File = {
-  filename: string,
-  file_id: string,
-  file_type: string,
-  file_size: number,
-  workspace_id: string,
-  data: string
-};
-
-export type Person = {
-  workspace_id: number,
-  group: string,
-  login: string,
-  code: string,
-  booklets: TcMergeBooklet[],
-};
-
-export type TcMergeBooklet = {
-  id:string,
-  logs: TcMergeLog[],
-  units: TcMergeUnit[],
-  sessions: TcMergeSession[]
-};
-
-export type TcMergeLog = {
-  ts:string,
-  key:string,
-  parameter:string
-};
-
-export type TcMergeSession = {
-  browser:string,
-  os:string,
-  screen:string,
-  ts:string,
-  loadCompleteMS:number,
-};
-
-export type TcMergeUnit = {
-  id:string,
-  alias:string,
-  laststate: TcMergeLastState[],
-  subforms:TcMergeSubForms[],
-  chunks:TcMergeChunk[],
-  logs:TcMergeLog[],
-};
-
-export type TcMergeChunk = {
-  id:string,
-  type:string,
-  ts:number,
-  variables:string[]
-};
-
-export type Chunk = {
-  id:string,
-  content:string,
-  ts:number,
-  responseType:string
-};
-
-export type TcMergeSubForms = {
-  id:string,
-  responses: TcMergeResponse[],
-};
-
-export type TcMergeResponse = {
-  id:string,
-  status:string,
-  value:string,
-  subform?:string,
-  code?:string,
-  score?:string,
-};
-
-export type TcMergeLastState = {
-  key:string,
-  value:string,
-};
 
 type FileStatus = {
   filename: string;
