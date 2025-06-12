@@ -79,6 +79,15 @@ interface ResponseEntity {
   };
 }
 
+export interface ResponseValidationResult {
+  valid: boolean;
+  totalResponses: number;
+  validResponses: number;
+  invalidResponses: number;
+  invalidGroups: string[];
+  details: { group: string; exists: boolean; count: number }[];
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -245,6 +254,26 @@ export class BackendService {
       { headers: this.authHeader })
       .pipe(
         catchError(() => of(false)),
+        map(res => res)
+      );
+  }
+
+  validateResponsesAgainstTesttakers(workspace_id:number): Observable<ResponseValidationResult> {
+    return this.http
+      .get<ResponseValidationResult>(
+      `${this.serverUrl}admin/workspace/${workspace_id}/responses/validation`,
+      { headers: this.authHeader })
+      .pipe(
+        catchError(() => {
+          return of({
+            valid: false,
+            totalResponses: 0,
+            validResponses: 0,
+            invalidResponses: 0,
+            invalidGroups: [],
+            details: []
+          });
+        }),
         map(res => res)
       );
   }
@@ -675,5 +704,18 @@ export class BackendService {
     ).pipe(
       catchError(() => of(-1))
     );
+  }
+
+  getBaseVariables(): Observable<{ id: string; type: string; format: string; nullable: string }[]> {
+    return this.http
+      .get<{ id: string; type: string; format: string; nullable: string }[]>(
+      `${this.serverUrl}admin/unit-xml-parser/base-variables`,
+      { headers: this.authHeader }
+    )
+      .pipe(
+        catchError(() => {
+          return of([]);
+        })
+      );
   }
 }
