@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { HttpModule } from '@nestjs/axios';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { UsersController } from './users/users.controller';
 import { DatabaseModule } from '../database/database.module';
 import { AuthModule } from '../auth/auth.module';
@@ -14,12 +15,16 @@ import { LogoController } from './logo/logo.controller';
 import { UnitTagsController } from './unit-tags/unit-tags.controller';
 import { UnitNotesController } from './unit-notes/unit-notes.controller';
 import { ResourcePackageController } from './resource-packages/resource-package.controller';
+import { UnitXmlParserController } from './unit-xml-parser/unit-xml-parser.controller';
+import { UnitXmlParserService } from '../database/services/unit-xml-parser.service';
+import FileUpload from '../database/entities/file_upload.entity';
 
 @Module({
   imports: [
     DatabaseModule,
     AuthModule,
-    HttpModule
+    HttpModule,
+    TypeOrmModule.forFeature([FileUpload])
   ],
   controllers: [
     UsersController,
@@ -33,8 +38,10 @@ import { ResourcePackageController } from './resource-packages/resource-package.
     LogoController,
     UnitTagsController,
     UnitNotesController,
-    ResourcePackageController
+    ResourcePackageController,
+    UsersController, WorkspaceController, LogoController, UnitTagsController, UnitNotesController,
+    UnitXmlParserController
   ],
-  providers: []
+  providers: [UnitXmlParserService]
 })
 export class AdminModule {}

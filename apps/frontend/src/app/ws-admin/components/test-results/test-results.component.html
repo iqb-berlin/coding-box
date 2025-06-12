@@ -21,6 +21,14 @@
         <mat-icon>code</mat-icon>
         Kodieren
       </a>
+      <a mat-raised-button color="primary" (click)="fetchBaseVariables()">
+        <mat-icon>list</mat-icon>
+        Basisvariablen anzeigen
+      </a>
+      <a mat-raised-button color="primary" (click)="validateResponses()">
+        <mat-icon>verified</mat-icon>
+        Validierung
+      </a>
     </div>
   </div>
   <input #hiddenResponsesFileInput type="file"
@@ -301,4 +309,119 @@
   }
 }
 
+</div>
+
+<!-- Validation Results Section -->
+<div class="validation-results-section" *ngIf="showValidationResults">
+  <div class="data-card">
+    <h2 class="section-title">Validierungsergebnisse</h2>
+    <p class="section-description">Überprüfung der Antworten gegen Testtaker XML Dateien</p>
+    <mat-divider></mat-divider>
+
+    <div class="loading-container" *ngIf="isValidatingResponses">
+      <mat-spinner class="mat-spinner"></mat-spinner>
+      <p class="loading-text">Antworten werden validiert...</p>
+    </div>
+
+    <div *ngIf="!isValidatingResponses && validationResult" class="validation-results-container">
+      <div class="validation-summary">
+        <div class="summary-item" [ngClass]="{'valid': validationResult.valid, 'invalid': !validationResult.valid}">
+          <mat-icon>{{ validationResult.valid ? 'check_circle' : 'error' }}</mat-icon>
+          <span>Status: {{ validationResult.valid ? 'Gültig' : 'Ungültig' }}</span>
+        </div>
+        <div class="summary-item">
+          <span>Gesamtanzahl der Antworten: {{ validationResult.totalResponses }}</span>
+        </div>
+        <div class="summary-item">
+          <span>Gültige Antworten: {{ validationResult.validResponses }}</span>
+        </div>
+        <div class="summary-item">
+          <span>Ungültige Antworten: {{ validationResult.invalidResponses }}</span>
+        </div>
+      </div>
+
+      <div *ngIf="validationResult.invalidGroups.length > 0" class="invalid-groups">
+        <h3>Ungültige Gruppen:</h3>
+        <div class="invalid-group-list">
+          <div class="invalid-group-item" *ngFor="let group of validationResult.invalidGroups">
+            {{ group }}
+          </div>
+        </div>
+      </div>
+
+      <h3 class="details-title">Details:</h3>
+      <div class="validation-details-header">
+        <div class="detail-group">Gruppe</div>
+        <div class="detail-exists">Existiert in Testtaker XML</div>
+        <div class="detail-count">Anzahl der Antworten</div>
+      </div>
+
+      <div class="validation-details-list">
+        <div class="validation-detail-item" *ngFor="let detail of validationResult.details" [ngClass]="{'invalid-detail': !detail.exists}">
+          <div class="detail-group">{{ detail.group }}</div>
+          <div class="detail-exists">
+            <mat-icon class="status-icon">{{ detail.exists ? 'check_circle' : 'cancel' }}</mat-icon>
+            {{ detail.exists ? 'Ja' : 'Nein' }}
+          </div>
+          <div class="detail-count">{{ detail.count }}</div>
+        </div>
+      </div>
+
+      <div class="validation-actions">
+        <button mat-raised-button color="primary" (click)="showValidationResults = false">
+          <mat-icon>close</mat-icon>
+          Schließen
+        </button>
+      </div>
+    </div>
+
+    <div *ngIf="!isValidatingResponses && !validationResult" class="empty-state">
+      <mat-icon>info</mat-icon>
+      <p>Keine Validierungsergebnisse verfügbar</p>
+    </div>
+  </div>
+</div>
+
+<!-- Base Variables Section -->
+<div class="base-variables-section" *ngIf="showBaseVariables">
+  <div class="data-card">
+    <h2 class="section-title">Basisvariablen</h2>
+    <p class="section-description">Liste aller Basisvariablen aus den Unit XML Dateien</p>
+    <mat-divider></mat-divider>
+
+    <div class="loading-container" *ngIf="isLoadingBaseVariables">
+      <mat-spinner class="mat-spinner"></mat-spinner>
+      <p class="loading-text">Basisvariablen werden geladen...</p>
+    </div>
+
+    <div *ngIf="!isLoadingBaseVariables" class="base-variables-container">
+      <div class="base-variables-header">
+        <div class="base-variable-id">ID</div>
+        <div class="base-variable-type">Typ</div>
+        <div class="base-variable-format">Format</div>
+        <div class="base-variable-nullable">Nullable</div>
+      </div>
+
+      <div class="base-variables-list">
+        <div class="base-variable-item" *ngFor="let variable of baseVariables">
+          <div class="base-variable-id">{{ variable.id }}</div>
+          <div class="base-variable-type">{{ variable.type }}</div>
+          <div class="base-variable-format">{{ variable.format || '-' }}</div>
+          <div class="base-variable-nullable">{{ variable.nullable }}</div>
+        </div>
+      </div>
+
+      <div class="empty-state" *ngIf="baseVariables.length === 0">
+        <mat-icon>info</mat-icon>
+        <p>Keine Basisvariablen gefunden</p>
+      </div>
+
+      <div class="base-variables-actions">
+        <button mat-raised-button color="primary" (click)="showBaseVariables = false">
+          <mat-icon>close</mat-icon>
+          Schließen
+        </button>
+      </div>
+    </div>
+  </div>
 </div>
