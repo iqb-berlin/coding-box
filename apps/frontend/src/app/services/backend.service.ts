@@ -312,24 +312,35 @@ export class BackendService {
   }
 
   getCodingList(workspace_id:number, page: number = 1, limit: number = 100): Observable<PaginatedResponse<CodingListItem>> {
-    const params = new HttpParams()
-      .set('page', page.toString())
-      .set('limit', limit.toString());
-
-    return this.http
-      .get<PaginatedResponse<CodingListItem>>(
-      `${this.serverUrl}admin/workspace/${workspace_id}/coding/coding-list`,
-      { headers: this.authHeader, params }
-    )
-      .pipe(
-        catchError(() => of({
-          data: [],
-          total: 0,
-          page,
-          limit
-        })),
-        map(res => res)
-      );
+    const identity = this.appService.loggedUser?.sub || '';
+    return this.createToken(workspace_id, identity, 1).pipe(
+      catchError(error => {
+        console.error('Error creating token for coding list:', error);
+        return of('');
+      }),
+      switchMap(token => {
+        const params = new HttpParams()
+          .set('page', page.toString())
+          .set('limit', limit.toString())
+          .set('identity', identity)
+          .set('authToken', token)
+          .set('serverUrl', window.location.origin);
+        return this.http
+          .get<PaginatedResponse<CodingListItem>>(
+          `${this.serverUrl}admin/workspace/${workspace_id}/coding/coding-list`,
+          { headers: this.authHeader, params }
+        )
+          .pipe(
+            catchError(() => of({
+              data: [],
+              total: 0,
+              page,
+              limit
+            })),
+            map(res => res)
+          );
+      })
+    );
   }
 
   getCodingStatistics(workspace_id:number): Observable<CodingStatistics> {
@@ -437,7 +448,6 @@ export class BackendService {
       `${this.serverUrl}admin/workspace/${workspaceId}/unit-tags/${tagId}`,
       { headers: this.authHeader });
   }
-
 
   createUnitNote(workspaceId: number, createUnitNoteDto: CreateUnitNoteDto): Observable<UnitNoteDto> {
     return this.http.post<UnitNoteDto>(
