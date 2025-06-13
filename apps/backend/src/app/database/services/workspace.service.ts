@@ -40,7 +40,6 @@ import { FileDownloadDto } from '../../../../../../api-dto/files/file-download.d
 import { BookletLog } from '../entities/bookletLog.entity';
 import { UnitLog } from '../entities/unitLog.entity';
 import { Session } from '../entities/session.entity';
-import { AuthService } from '../../auth/service/auth.service';
 import { CodingStatistics } from './shared-types';
 import { prepareDefinition } from '../../utils/voud/transform';
 

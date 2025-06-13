@@ -209,19 +209,8 @@ if (isRunningDirectly) {
 
     try {
       // Process the definition
-      const result = prepareDefinition(respDefinition);
-
-      // Output a success message instead of the full result to avoid buffer overflow
-      console.log('Result generated successfully. Size of variablePages array:', result.variablePages.length);
-
-      console.log('Successfully processed sample.voud');
+      prepareDefinition(respDefinition);
     } catch (parseError) {
-      console.error('Error parsing JSON from sample.voud:', parseError);
-
-      // Try to fix common JSON issues and retry
-      console.log('Attempting to fix JSON and retry...');
-
-      // Replace control characters that might be causing issues
       // eslint-disable-next-line no-control-regex
       const cleanedContent = sampleContent.replace(/[\u0000-\u001F\u007F-\u009F]/g, '');
 
@@ -230,17 +219,12 @@ if (isRunningDirectly) {
           definition: cleanedContent
         };
 
-        const result = prepareDefinition(fixedRespDefinition);
-        console.log(result);
-        console.log('Result generated successfully after fixing JSON. Size of variablePages array:', result.variablePages.length);
-        console.log('Successfully processed sample.voud after fixing JSON');
+        prepareDefinition(fixedRespDefinition);
       } catch (retryError) {
-        console.error('Failed to process even after fixing JSON:', retryError);
         process.exit(1);
       }
     }
   } catch (error) {
-    console.error('Error reading sample.voud file:', error);
     process.exit(1);
   }
 }
