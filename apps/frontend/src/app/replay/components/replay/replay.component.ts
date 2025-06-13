@@ -1,11 +1,11 @@
 /* eslint-disable  @typescript-eslint/no-explicit-any */
 import {
-  Component, Input, OnChanges, OnDestroy, OnInit, SimpleChanges
+  Component, Input, OnChanges, OnDestroy, OnInit, SimpleChanges, ViewChild
 } from '@angular/core';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
-import { ReactiveFormsModule } from '@angular/forms';
+import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 import { ActivatedRoute, Params } from '@angular/router';
 import {
@@ -38,8 +38,7 @@ interface ErrorMessages {
 
 @Component({
   selector: 'coding-box-replay',
-  // eslint-disable-next-line max-len
-  imports: [MatFormFieldModule, MatInputModule, MatButtonModule, ReactiveFormsModule, TranslateModule, UnitPlayerComponent, SpinnerComponent],
+  imports: [MatFormFieldModule, MatInputModule, MatButtonModule, ReactiveFormsModule, TranslateModule, UnitPlayerComponent, SpinnerComponent, FormsModule],
   templateUrl: './replay.component.html',
   styleUrl: './replay.component.scss'
 })
@@ -48,6 +47,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   unitDef: string = '';
   isLoaded: Subject<boolean> = new Subject<boolean>();
   page: string | undefined;
+  anchor: string | undefined;
   responses: any | undefined = undefined;
   dataElementAliases: string[] = [];
   private testPerson: string = '';
@@ -61,6 +61,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   private routerSubscription: Subscription | null = null;
   @Input() testPersonInput: string | undefined;
   @Input() unitIdInput: string | undefined;
+  @ViewChild(UnitPlayerComponent) unitPlayerComponent: UnitPlayerComponent | undefined;
   constructor(private backendService:BackendService,
               private appService:AppService,
               private route:ActivatedRoute,
@@ -101,7 +102,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         this.resetSnackBars();
         this.resetUnitData();
         try {
-          if (Object.keys(params).length === 3) {
+          if (Object.keys(params).length === 4) {
             this.authToken = await this.getAuthToken();
             this.setUnitParams(params);
             if (this.authToken) {
@@ -110,6 +111,8 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
               if (workspace) {
                 const unitData = await this.getUnitData(Number(workspace), this.authToken);
                 this.setUnitProperties(unitData);
+                setTimeout(() => this.scrollToElementByAlias(this.anchor || ''), 1000
+                );
               }
             } else {
               ReplayComponent.throwError('QueryError');
@@ -117,7 +120,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
           } else if (this.testPersonInput && this.unitIdInput) {
             this.setTestPerson(this.testPersonInput);
             this.unitId = this.unitIdInput;
-          } else if (Object.keys(params).length !== 3) {
+          } else if (Object.keys(params).length !== 4) {
             ReplayComponent.throwError('ParamsError');
           }
         } catch (error) {
@@ -137,9 +140,10 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
   private setUnitParams(params: Params): void {
     const {
-      page, testPerson, unitId
+      page, testPerson, unitId, anchor
     } = params;
     this.page = page;
+    this.anchor = anchor;
     this.unitId = unitId;
     this.setTestPerson(testPerson);
   }
@@ -339,5 +343,114 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     this.routerSubscription?.unsubscribe();
     this.routerSubscription = null;
     this.resetSnackBars();
+  }
+
+  /**
+   * Searches for div elements with data-element-alias attribute in the player's HTML
+   * and returns an object mapping the aliases to their corresponding elements.
+   *
+   * @returns {Record<string, HTMLElement>} An object mapping data-element-alias values to their HTML elements
+   */
+  findElementsByDataAlias(): Record<string, HTMLElement> {
+    const result: Record<string, HTMLElement> = {};
+
+    try {
+      // Access the iframe's content document through the UnitPlayerComponent
+      if (this.unitPlayerComponent && this.unitPlayerComponent.hostingIframe) {
+        const iframe = this.unitPlayerComponent.hostingIframe.nativeElement as HTMLIFrameElement;
+
+        // Check if the iframe has loaded content
+        if (iframe.contentDocument) {
+          // Query for all div elements with data-element-alias attribute
+          const elements = iframe.contentDocument.querySelectorAll('div[data-element-alias]');
+
+          // Create a mapping of aliases to elements
+          elements.forEach((element: Element) => {
+            const alias = element.getAttribute('data-element-alias');
+            if (alias) {
+              result[alias] = element as HTMLElement;
+            }
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error searching for elements with data-element-alias:', error);
+    }
+
+    return result;
+  }
+
+  /**
+   * Returns the values of the data-element-alias attributes found in the player's HTML.
+   *
+   * @returns {string[]} An array of data-element-alias values
+   */
+  getDataElementAliases(): string[] {
+    try {
+      // Access the iframe's content document through the UnitPlayerComponent
+      if (this.unitPlayerComponent && this.unitPlayerComponent.hostingIframe) {
+        const iframe = this.unitPlayerComponent.hostingIframe.nativeElement as HTMLIFrameElement;
+
+        // Check if the iframe has loaded content
+        if (iframe.contentDocument) {
+          // Query for all div elements with data-element-alias attribute
+          const elements = iframe.contentDocument.querySelectorAll('div[data-element-alias]');
+
+          // Extract and return the alias values
+          return Array.from(elements)
+            .map(element => element.getAttribute('data-element-alias'))
+            .filter((alias): alias is string => alias !== null);
+        }
+      }
+    } catch (error) {
+      console.error('Error getting data-element-alias values:', error);
+    }
+
+    return [];
+  }
+
+  /**
+   * Scrolls to a div element with the specified data-element-alias in the player's HTML.
+   *
+   * @param {string} alias - The data-element-alias value of the element to scroll to
+   * @param {ScrollIntoViewOptions} [options] - Optional scroll behavior options
+   * @returns {boolean} True if the element was found and scrolled to, false otherwise
+   */
+  scrollToElementByAlias(alias: string, options?: ScrollIntoViewOptions): boolean {
+    try {
+      const elements = this.findElementsByDataAlias();
+      console.log(elements);
+      const element = elements[alias];
+      console.log(element);
+
+      if (element) {
+        // Use scrollIntoView with smooth behavior by default
+        element.scrollIntoView(options || { behavior: 'smooth', block: 'center' });
+        return true;
+      }
+    } catch (error) {
+      console.error(`Error scrolling to element with alias "${alias}":`, error);
+    }
+
+    return false;
+  }
+
+  /**
+   * Updates the dataElementAliases array with the values of data-element-alias attributes
+   * found in the player's HTML and automatically scrolls to each element.
+   */
+  updateDataElementAliases(): void {
+    this.dataElementAliases = this.getDataElementAliases();
+    console.log('Updated dataElementAliases:', this.dataElementAliases);
+
+    // Automatically scroll to each element with data-element-alias
+    if (this.dataElementAliases.length > 0) {
+      // Scroll to each element with a small delay between each scroll
+      this.dataElementAliases.forEach((alias, index) => {
+        setTimeout(() => {
+          this.scrollToElementByAlias(alias, { behavior: 'smooth', block: 'center' });
+        }, index); // 1 second delay between each scroll
+      });
+    }
   }
 }

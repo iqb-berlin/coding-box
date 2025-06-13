@@ -229,7 +229,7 @@ export class TestResultsComponent implements OnInit {
         const url = this.router
           .serializeUrl(
             this.router.createUrlTree(
-              [`replay/${this.testPerson.group}@${this.testPerson.code}@${this.selectedBooklet?.id}/${this.selectedUnit?.alias}/0`],
+              [`replay/${this.testPerson.group}@${this.testPerson.code}@${this.selectedBooklet?.id}/${this.selectedUnit?.alias}/0/0`],
               { queryParams: queryParams })
           );
         window.open(`#/${url}`, '_blank');
@@ -685,7 +685,6 @@ export class TestResultsComponent implements OnInit {
    */
   hasShortProcessingTime(booklet: any): boolean {
     const processingTime = this.calculateBookletProcessingTime(booklet);
-    console.log(processingTime, 'processingTime');
     return processingTime === null || processingTime < this.SHORT_PROCESSING_TIME_THRESHOLD_MS;
   }
 
