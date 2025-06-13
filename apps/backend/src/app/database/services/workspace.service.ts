@@ -2,7 +2,12 @@
 import * as Autocoder from '@iqb/responses';
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Connection, In, Repository } from 'typeorm';
+import {
+  Connection,
+  In,
+  Like,
+  Repository
+} from 'typeorm';
 import Ajv, { JSONSchemaType } from 'ajv';
 import * as cheerio from 'cheerio';
 import AdmZip = require('adm-zip');
@@ -37,6 +42,7 @@ import { UnitLog } from '../entities/unitLog.entity';
 import { Session } from '../entities/session.entity';
 import { AuthService } from '../../auth/service/auth.service';
 import { CodingStatistics } from './shared-types';
+import { prepareDefinition } from '../../utils/voud/transform';
 
 function sanitizePath(filePath: string): string {
   const normalizedPath = path.normalize(filePath); // System-basiertes Normalisieren
@@ -114,8 +120,7 @@ export class WorkspaceService {
     private unitLogRepository:Repository<UnitLog>,
     @InjectRepository(Session)
     private sessionRepository:Repository<Session>,
-    private readonly connection: Connection,
-    private readonly authService: AuthService
+    private readonly connection: Connection
   ) {
   }
 
@@ -800,7 +805,7 @@ export class WorkspaceService {
     return [responses, responses.length];
   }
 
-  async getCodingList(workspace_id: number, options?: { page: number; limit: number }): Promise<[{
+  async getCodingList(workspace_id: number, authToken: string, serverUrl?: string, options?: { page: number; limit: number }): Promise<[{
     unit_key: string;
     unit_alias: string;
     login_name: string;
@@ -812,14 +817,28 @@ export class WorkspaceService {
     url: string;
   }[], number]> {
     try {
-      const tokenStr = await this.authService.createToken('admin', workspace_id, 1);
-      const realToken = JSON.parse(tokenStr);
+      const server = serverUrl;
+
+      const voudFiles = await this.fileUploadRepository.find({
+        where: {
+          workspace_id: workspace_id,
+          file_type: 'Resource',
+          filename: Like('%.voud')
+        }
+      });
+
+      this.logger.log(`Found ${voudFiles.length} VOUD files for workspace ${workspace_id}`);
+
+      const voudFileMap = new Map<string, FileUpload>();
+      voudFiles.forEach(file => {
+        voudFileMap.set(file.file_id, file);
+      });
+
       if (options) {
         const { page, limit } = options;
         const MAX_LIMIT = 500;
-        const validPage = Math.max(1, page); // minimum 1
-        const validLimit = Math.min(Math.max(1, limit), MAX_LIMIT); // Between 1 and MAX_LIMIT
-
+        const validPage = Math.max(1, page);
+        const validLimit = Math.min(Math.max(1, limit), MAX_LIMIT);
         const queryBuilder = this.responseRepository.createQueryBuilder('response')
           .leftJoinAndSelect('response.unit', 'unit')
           .leftJoinAndSelect('unit.booklet', 'booklet')
@@ -832,32 +851,56 @@ export class WorkspaceService {
 
         const [responses, total] = await queryBuilder.getManyAndCount();
 
-        const result = responses.map(response => {
+        const result = await Promise.all(responses.map(async response => {
           const unit = response.unit;
           const booklet = unit?.booklet;
           const person = booklet?.person;
           const bookletInfo = booklet?.bookletinfo;
           const loginName = person?.login || '';
           const loginCode = person?.code || '';
+          const loginGroup = person?.group || '';
           const bookletId = bookletInfo?.name || '';
           const unitKey = unit?.name || '';
-          const variablePage = '0';
+          const unitAlias = unit?.alias || '';
+          let variablePage = '0';
 
-          // Generate URL in the format: https://www.iqb-kodierbox.de/#/replay/{login_name}@{login_code}@{booklet_id}/{unit_key}/{variable_page}?auth={token}
-          const url = `https://www.iqb-kodierbox.de/#/replay/${loginName}@${loginCode}@${bookletId}/${unitKey}/${variablePage}?auth=${realToken}`;
+          const voudFile = voudFileMap.get(`${unitKey}.VOUD`);
+          if (voudFile) {
+            try {
+              const respDefinition = {
+                definition: voudFile.data
+              };
+              const transformResult = prepareDefinition(respDefinition);
+              const variablePageInfo = transformResult.variablePages.find(
+                pageInfo => pageInfo.variable_ref === response.variableid
+              );
+
+              if (variablePageInfo) {
+                variablePage = variablePageInfo.variable_page.toString();
+              }
+
+              this.logger.log(`Processed VOUD file for unit ${unitKey}, variable ${response.variableid}, page ${variablePage}`);
+            } catch (error) {
+              this.logger.error(`Error processing VOUD file for unit ${unitKey}: ${error.message}`);
+            }
+          } else {
+            this.logger.warn(`VOUD file not found for unit ${unitKey}`);
+          }
+
+          const url = `${server}/#/replay/${loginGroup}@${loginCode}@${bookletId}/${unitKey}/${variablePage}?auth=${authToken}`;
 
           return {
             unit_key: unitKey,
-            unit_alias: unit?.alias || '',
+            unit_alias: unitAlias,
             login_name: loginName,
             login_code: loginCode,
             booklet_id: bookletId,
             variable_id: response.variableid || '',
             variable_page: variablePage,
-            variable_anchor: '',
+            variable_anchor: response.variableid || '',
             url
           };
-        });
+        }));
 
         this.logger.log(`Found ${result.length} coding items (page ${validPage}, limit ${validLimit}, total ${total})`);
         return [result, total];
@@ -869,33 +912,56 @@ export class WorkspaceService {
         order: { id: 'ASC' }
       });
 
-      const result = responses.map(response => {
+      const result = await Promise.all(responses.map(async response => {
         const unit = response.unit;
         const booklet = unit?.booklet;
         const person = booklet?.person;
         const bookletInfo = booklet?.bookletinfo;
-
         const loginName = person?.login || '';
         const loginCode = person?.code || '';
+        const loginGroup = person?.group || '';
         const bookletId = bookletInfo?.name || '';
         const unitKey = unit?.name || '';
-        const variablePage = '0';
+        const unitAlias = unit?.alias || '';
+        let variablePage = '0';
+        const voudFile = voudFileMap.get(`${unitKey}.VOUD`);
 
-        // Generate URL in the format: https://www.iqb-kodierbox.de/#/replay/{login_name}@{login_code}@{booklet_id}/{unit_key}/{variable_page}?auth={token}
-        const url = `https://www.iqb-kodierbox.de/#/replay/${loginName}@${loginCode}@${bookletId}/${unitKey}/${variablePage}?auth=${realToken}`;
+        if (voudFile) {
+          try {
+            const respDefinition = {
+              definition: voudFile.data
+            };
+            const transformResult = prepareDefinition(respDefinition);
 
+            const variablePageInfo = transformResult.variablePages.find(
+              pageInfo => pageInfo.variable_ref === response.variableid
+            );
+
+            if (variablePageInfo) {
+              variablePage = variablePageInfo.variable_page.toString();
+            }
+
+            this.logger.log(`Processed VOUD file for unit ${unitKey}, variable ${response.variableid}, page ${variablePage}`);
+          } catch (error) {
+            this.logger.error(`Error processing VOUD file for unit ${unitKey}: ${error.message}`);
+          }
+        } else {
+          this.logger.warn(`VOUD file not found for unit ${unitKey}`);
+        }
+
+        const url = `${server}/#/replay/${loginGroup}@${loginCode}@${bookletId}/${unitKey}/${variablePage}?auth=${authToken}`;
         return {
           unit_key: unitKey,
-          unit_alias: unit?.alias || '',
+          unit_alias: unitAlias,
           login_name: loginName,
           login_code: loginCode,
           booklet_id: bookletId,
           variable_id: response.variableid || '',
           variable_page: variablePage,
-          variable_anchor: '',
+          variable_anchor: response.variableid || '',
           url
         };
-      });
+      }));
 
       this.logger.log(`Found ${result.length} coding items`);
       return [result, result.length];

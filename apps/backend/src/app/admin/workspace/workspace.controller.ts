@@ -629,6 +629,18 @@ export class WorkspaceController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiTags('coding')
   @ApiQuery({
+    name: 'identity',
+    required: false,
+    description: 'User identity for token generation',
+    type: String
+  })
+  @ApiQuery({
+    name: 'serverUrl',
+    required: false,
+    description: 'Server URL to use for generating links',
+    type: String
+  })
+  @ApiQuery({
     name: 'page',
     required: false,
     description: 'Page number for pagination',
@@ -668,7 +680,7 @@ export class WorkspaceController {
       }
     }
   })
-  async getCodingList(@WorkspaceId() workspace_id: number, @Query('page') page: number = 1, @Query('limit') limit: number = 20): Promise<{
+  async getCodingList(@WorkspaceId() workspace_id: number, @Query('authToken') authToken: string, @Query('serverUrl') serverUrl: string, @Query('page') page: number = 1, @Query('limit') limit: number = 20): Promise<{
     data: {
       unit_key: string;
       unit_alias: string;
@@ -684,7 +696,7 @@ export class WorkspaceController {
     page: number;
     limit: number;
   }> {
-    const [items, total] = await this.workspaceService.getCodingList(workspace_id, { page, limit });
+    const [items, total] = await this.workspaceService.getCodingList(workspace_id, authToken, serverUrl, { page, limit });
     return {
       data: items,
       total,

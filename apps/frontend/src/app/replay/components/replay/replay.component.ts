@@ -49,6 +49,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   isLoaded: Subject<boolean> = new Subject<boolean>();
   page: string | undefined;
   responses: any | undefined = undefined;
+  dataElementAliases: string[] = [];
   private testPerson: string = '';
   private unitId: string = '';
   private authToken: string = '';
