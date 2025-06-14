@@ -218,7 +218,7 @@ export class TestResultsComponent implements OnInit {
   }
 
   replayUnit() {
-    this.backendService
+    this.appService
       .createToken(this.appService.selectedWorkspaceId, this.appService.loggedUser?.sub || '', 1)
       .subscribe(token => {
         const queryParams = {

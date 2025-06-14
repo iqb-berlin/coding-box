@@ -108,14 +108,11 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
   isLoadingStatistics = false;
   isAutoCoding = false;
   currentStatusFilter: string | null = null;
-
   pageSizeOptions = [100, 200, 500];
   pageSize = 100;
   totalRecords = 0;
   pageIndex = 0;
-
   filterTextChanged = new Subject<Event>();
-
   codingStatistics: CodingStatistics = {
     totalResponses: 0,
     statusCounts: {}
@@ -303,7 +300,7 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
       });
       return;
     }
-    this.backendService.createToken(workspaceId, this.appService.loggedUser?.sub || '', 3600)
+    this.appService.createToken(workspaceId, this.appService.loggedUser?.sub || '', 3600)
       .pipe(
         catchError(() => {
           this.snackBar.open('Fehler beim Abrufen des Tokens für Replay', 'Schließen', {

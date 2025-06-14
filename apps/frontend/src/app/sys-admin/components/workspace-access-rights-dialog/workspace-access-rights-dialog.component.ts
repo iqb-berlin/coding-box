@@ -24,14 +24,18 @@ export class WorkspaceAccessRightsDialogComponent {
   result: number[] = [];
   constructor(@Inject(MAT_DIALOG_DATA) public data: { selectedUser:UserFullDto[] },
               private backendService: BackendService) {
-    if (this.data.selectedUser && this.data.selectedUser.length > 0) {
+    if (this.data && this.data.selectedUser && Array.isArray(this.data.selectedUser) && this.data.selectedUser.length > 0) {
       this.backendService.getWorkspacesByUserList(this.data.selectedUser[0].id).subscribe(workspaces => {
-        this.selectedWorkspacesIds = workspaces;
+        this.selectedWorkspacesIds = workspaces || [];
       });
     }
   }
 
   setWorkspacesSelection(result: WorkspaceInListDto[]): void {
-    this.result = result.map(workspace => workspace.id);
+    if (result && Array.isArray(result)) {
+      this.result = result.map(workspace => workspace.id);
+    } else {
+      this.result = [];
+    }
   }
 }
