@@ -16,6 +16,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as libxmljs from 'libxmljs2';
 import { ResponseStatusType } from '@iqb/responses';
+import * as fastCsv from 'fast-csv';
 import Workspace from '../entities/workspace.entity';
 import { WorkspaceInListDto } from '../../../../../../api-dto/workspaces/workspace-in-list-dto';
 import { WorkspaceFullDto } from '../../../../../../api-dto/workspaces/workspace-full-dto';
@@ -28,7 +29,6 @@ import WorkspaceUser from '../entities/workspace_user.entity';
 import { FileIo } from '../../admin/workspace/file-io.interface';
 import ResourcePackage from '../entities/resource-package.entity';
 import User from '../entities/user.entity';
-import { TestGroupsInListDto } from '../../../../../../api-dto/test-groups/testgroups-in-list.dto';
 import { ResponseDto } from '../../../../../../api-dto/responses/response-dto';
 import { FileValidationResultDto } from '../../../../../../api-dto/files/file-validation-result.dto';
 import Persons from '../entities/persons.entity';
@@ -844,6 +844,7 @@ export class WorkspaceService {
           .leftJoinAndSelect('booklet.person', 'person')
           .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
           .where('response.codedStatus = :status', { status: 'CODING_INCOMPLETE' })
+          .andWhere('person.workspace_id = :workspace_id', { workspace_id })
           .skip((validPage - 1) * validLimit)
           .take(validLimit)
           .orderBy('response.id', 'ASC');
@@ -901,15 +902,29 @@ export class WorkspaceService {
           };
         }));
 
-        this.logger.log(`Found ${result.length} coding items (page ${validPage}, limit ${validLimit}, total ${total})`);
-        return [result, total];
+        const sortedResult = result.sort((a, b) => {
+          const unitKeyComparison = a.unit_key.localeCompare(b.unit_key);
+          if (unitKeyComparison !== 0) {
+            return unitKeyComparison;
+          }
+          // If unit_key is the same, sort by variable_id
+          return a.variable_id.localeCompare(b.variable_id);
+        });
+
+        this.logger.log(`Found ${sortedResult.length} coding items (page ${validPage}, limit ${validLimit}, total ${total})`);
+        return [sortedResult, total];
       }
 
-      const responses = await this.responseRepository.find({
-        where: { codedstatus: 'CODING_INCOMPLETE' },
-        relations: ['unit', 'unit.booklet', 'unit.booklet.person', 'unit.booklet.bookletinfo'],
-        order: { id: 'ASC' }
-      });
+      const queryBuilder = this.responseRepository.createQueryBuilder('response')
+        .leftJoinAndSelect('response.unit', 'unit')
+        .leftJoinAndSelect('unit.booklet', 'booklet')
+        .leftJoinAndSelect('booklet.person', 'person')
+        .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
+        .where('response.codedStatus = :status', { status: 'CODING_INCOMPLETE' })
+        .andWhere('person.workspace_id = :workspace_id', { workspace_id })
+        .orderBy('response.id', 'ASC');
+
+      const responses = await queryBuilder.getMany();
 
       const result = await Promise.all(responses.map(async response => {
         const unit = response.unit;
@@ -962,8 +977,17 @@ export class WorkspaceService {
         };
       }));
 
-      this.logger.log(`Found ${result.length} coding items`);
-      return [result, result.length];
+      const sortedResult = result.sort((a, b) => {
+        const unitKeyComparison = a.unit_key.localeCompare(b.unit_key);
+        if (unitKeyComparison !== 0) {
+          return unitKeyComparison;
+        }
+        // If unit_key is the same, sort by variable_id
+        return a.variable_id.localeCompare(b.variable_id);
+      });
+
+      this.logger.log(`Found ${sortedResult.length} coding items`);
+      return [sortedResult, sortedResult.length];
     } catch (error) {
       this.logger.error(`Error fetching coding list: ${error.message}`);
       return [[], 0];
@@ -1004,6 +1028,57 @@ export class WorkspaceService {
 
       return statistics;
     }
+  }
+
+  async getCodingListAsCsv(workspace_id: number): Promise<Buffer> {
+    this.logger.log(`Generating CSV export for workspace ${workspace_id}`);
+    const [items] = await this.getCodingList(workspace_id, '', '');
+
+    if (!items || items.length === 0) {
+      this.logger.warn('No coding list items found for CSV export');
+      return Buffer.from('No data available');
+    }
+
+    const csvStream = fastCsv.format({ headers: true });
+    const chunks: Buffer[] = [];
+
+    return new Promise<Buffer>((resolve, reject) => {
+      csvStream.on('data', chunk => {
+        chunks.push(Buffer.from(chunk));
+      });
+
+      csvStream.on('end', () => {
+        const csvBuffer = Buffer.concat(chunks);
+        this.logger.log(`CSV export generated successfully with ${items.length} items`);
+        resolve(csvBuffer);
+      });
+
+      csvStream.on('error', error => {
+        this.logger.error(`Error generating CSV export: ${error.message}`);
+        reject(error);
+      });
+
+      items.forEach(item => {
+        csvStream.write({
+          unit_key: item.unit_key,
+          unit_alias: item.unit_alias,
+          login_name: item.login_name,
+          login_code: item.login_code,
+          booklet_id: item.booklet_id,
+          variable_id: item.variable_id,
+          variable_page: item.variable_page,
+          variable_anchor: item.variable_anchor
+        });
+      });
+
+      csvStream.end();
+    });
+  }
+
+  async getCodingListAsExcel(workspace_id: number): Promise<Buffer> {
+    this.logger.log(`Generating Excel export for workspace ${workspace_id}`);
+    const csvData = await this.getCodingListAsCsv(workspace_id);
+    return csvData;
   }
 
   async getResponsesByStatus(workspace_id: number, status: string, options?: { page: number; limit: number }): Promise<[ResponseEntity[], number]> {
@@ -1218,26 +1293,6 @@ export class WorkspaceService {
     this.logger.log('Returning unit for test person', testPerson);
     return this.fileUploadRepository.find(
       { where: { file_id: `${unitId}`, workspace_id: workspace_id } });
-  }
-
-  async findTestGroups(workspace_id: number): Promise<TestGroupsInListDto[]> {
-    this.logger.log('Returning all test groups for workspace ', workspace_id);
-    const data = await this.responsesRepository
-      .find({
-        select: ['test_group', 'created_at'],
-        where: { workspace_id: workspace_id },
-        order: { test_group: 'ASC' }
-      });
-    const testGroups = [];
-    const uniqueObject = {};
-    for (const i in data) {
-      const objTitle = data[i].test_group;
-      uniqueObject[objTitle] = data[i];
-    }
-    for (const i in uniqueObject) {
-      testGroups.push(uniqueObject[i]);
-    }
-    return testGroups;
   }
 
   async deleteTestPersons(

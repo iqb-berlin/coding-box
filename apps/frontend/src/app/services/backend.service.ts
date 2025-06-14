@@ -343,6 +343,26 @@ export class BackendService {
     );
   }
 
+  getCodingListAsCsv(workspace_id: number): Observable<ArrayBuffer> {
+    return this.http.get(
+      `${this.serverUrl}admin/workspace/${workspace_id}/coding/coding-list/csv`,
+      {
+        headers: this.authHeader,
+        responseType: 'arraybuffer'
+      }
+    );
+  }
+
+  getCodingListAsExcel(workspace_id: number): Observable<ArrayBuffer> {
+    return this.http.get(
+      `${this.serverUrl}admin/workspace/${workspace_id}/coding/coding-list/excel`,
+      {
+        headers: this.authHeader,
+        responseType: 'arraybuffer'
+      }
+    );
+  }
+
   getCodingStatistics(workspace_id:number): Observable<CodingStatistics> {
     return this.http
       .get<CodingStatistics>(
