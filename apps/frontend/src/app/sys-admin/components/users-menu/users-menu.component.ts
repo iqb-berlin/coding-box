@@ -137,7 +137,9 @@ export class UsersMenuComponent {
         }
       });
       dialogRef.afterClosed().subscribe((result: number[]) => {
-        this.setUserWorkspaceAccessRights.emit(result);
+        if (result) {
+          this.setUserWorkspaceAccessRights.emit(result);
+        }
       });
     }
   }
