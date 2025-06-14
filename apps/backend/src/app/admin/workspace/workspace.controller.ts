@@ -4,8 +4,9 @@ import {
   Controller,
   Delete,
   Get, InternalServerErrorException, Param, Patch,
-  Post, Query, UploadedFiles, UseGuards, UseInterceptors
+  Post, Query, Res, UploadedFiles, UseGuards, UseInterceptors
 } from '@nestjs/common';
+import { Response } from 'express';
 import {
   ApiBadRequestResponse,
   ApiBearerAuth, ApiBody, ApiConsumes, ApiCreatedResponse, ApiNotFoundResponse, ApiOkResponse, ApiOperation,
@@ -703,6 +704,52 @@ export class WorkspaceController {
       page,
       limit
     };
+  }
+
+  @Get(':workspace_id/coding/coding-list/csv')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiOkResponse({
+    description: 'Coding list exported as CSV',
+    content: {
+      'text/csv': {
+        schema: {
+          type: 'string',
+          format: 'binary'
+        }
+      }
+    }
+  })
+  async getCodingListAsCsv(@WorkspaceId() workspace_id: number, @Res() res: Response): Promise<void> {
+    const csvData = await this.workspaceService.getCodingListAsCsv(workspace_id);
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="coding-list-${new Date().toISOString().slice(0, 10)}.csv"`);
+    res.send(csvData);
+  }
+
+  @Get(':workspace_id/coding/coding-list/excel')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiOkResponse({
+    description: 'Coding list exported as Excel',
+    content: {
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': {
+        schema: {
+          type: 'string',
+          format: 'binary'
+        }
+      }
+    }
+  })
+  async getCodingListAsExcel(@WorkspaceId() workspace_id: number, @Res() res: Response): Promise<void> {
+    const excelData = await this.workspaceService.getCodingListAsExcel(workspace_id);
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="coding-list-${new Date().toISOString().slice(0, 10)}.xlsx"`);
+    res.send(excelData);
   }
 
   @Get(':workspace_id/coding/statistics')

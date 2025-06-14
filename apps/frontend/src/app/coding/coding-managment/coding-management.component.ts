@@ -38,9 +38,11 @@ import { MatAnchor, MatIconButton } from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { ScrollingModule } from '@angular/cdk/scrolling';
 import { MatDivider } from '@angular/material/divider';
+import { MatDialog } from '@angular/material/dialog';
 import { BackendService, CodingListItem } from '../../services/backend.service';
 import { AppService } from '../../services/app.service';
 import { CodingStatistics } from '../../../../../../api-dto/coding/coding-statistics';
+import { ExportDialogComponent, ExportFormat } from '../export-dialog/export-dialog.component';
 
 interface Success {
   id: number;
@@ -122,7 +124,8 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
   constructor(
     private backendService: BackendService,
     private appService: AppService,
-    private snackBar: MatSnackBar
+    private snackBar: MatSnackBar,
+    private dialog: MatDialog
   ) {
     this.isAutoCoding = false;
   }
@@ -376,38 +379,65 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
   }
 
   fetchCodingList(page: number = 1, limit: number = this.pageSize): void {
-    const workspaceId = this.appService.selectedWorkspaceId;
-    this.isLoading = true;
+    const dialogRef = this.dialog.open(ExportDialogComponent, {
+      width: '500px'
+    });
 
-    this.backendService.getCodingList(workspaceId, page, limit)
-      .pipe(
-        catchError(() => {
-          this.isLoading = false;
-          this.snackBar.open('Fehler beim Abrufen der Kodierliste', 'Schließen', {
-            duration: 5000,
-            panelClass: ['error-snackbar']
-          });
-          return of({
-            data: [], total: 0, page, limit
-          });
-        }),
-        finalize(() => {
-          this.isLoading = false;
-        })
-      )
-      .subscribe(result => {
-        this.downloadCodingListAsJson(result.data);
-        if (result && result.data.length > 0) {
-          this.snackBar.open(`Kodierliste mit ${result.total} Einträgen wurde erfolgreich abgerufen.`, 'Schließen', {
-            duration: 5000,
-            panelClass: ['success-snackbar']
-          });
-        } else {
-          this.snackBar.open('Keine Einträge in der Kodierliste gefunden.', 'Schließen', {
-            duration: 5000
-          });
-        }
-      });
+    dialogRef.afterClosed().subscribe((format: ExportFormat | undefined) => {
+      if (!format) {
+        return;
+      }
+
+      const workspaceId = this.appService.selectedWorkspaceId;
+      this.isLoading = true;
+
+      this.backendService.getCodingList(workspaceId, page, limit)
+        .pipe(
+          catchError(() => {
+            this.isLoading = false;
+            this.snackBar.open('Fehler beim Abrufen der Kodierliste', 'Schließen', {
+              duration: 5000,
+              panelClass: ['error-snackbar']
+            });
+            return of({
+              data: [], total: 0, page, limit
+            });
+          }),
+          finalize(() => {
+            this.isLoading = false;
+          })
+        )
+        .subscribe(result => {
+          if (result && result.data.length > 0) {
+            switch (format) {
+              case 'json':
+                this.downloadCodingListAsJson(result.data);
+                break;
+              case 'csv':
+                this.downloadCodingListAsCsv(workspaceId);
+                break;
+              case 'excel':
+                this.downloadCodingListAsExcel(workspaceId);
+                break;
+              default:
+                this.snackBar.open(`Unbekanntes Format: ${format}`, 'Schließen', {
+                  duration: 5000,
+                  panelClass: ['error-snackbar']
+                });
+                break;
+            }
+
+            this.snackBar.open(`Kodierliste mit ${result.total} Einträgen wurde erfolgreich abgerufen.`, 'Schließen', {
+              duration: 5000,
+              panelClass: ['success-snackbar']
+            });
+          } else {
+            this.snackBar.open('Keine Einträge in der Kodierliste gefunden.', 'Schließen', {
+              duration: 5000
+            });
+          }
+        });
+    });
   }
 
   downloadCodingListAsJson(data: never[] | CodingListItem[]): void {
@@ -436,5 +466,84 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
       duration: 5000,
       panelClass: ['success-snackbar']
     });
+  }
+
+  downloadCodingListAsCsv(workspaceId: number): void {
+    this.isLoading = true;
+    this.backendService.getCodingListAsCsv(workspaceId)
+      .pipe(
+        catchError(() => {
+          this.isLoading = false;
+          this.snackBar.open('Fehler beim Herunterladen der Kodierliste als CSV', 'Schließen', {
+            duration: 5000,
+            panelClass: ['error-snackbar']
+          });
+          return of(null);
+        }),
+        finalize(() => {
+          this.isLoading = false;
+        })
+      )
+      .subscribe(response => {
+        if (!response) {
+          return;
+        }
+        const blob = new Blob([response], { type: 'text/csv' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `coding-list-${new Date().toISOString().slice(0, 10)}.csv`;
+        document.body.appendChild(a);
+        a.click();
+
+        // Clean up
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+
+        this.snackBar.open('Kodierliste wurde als CSV heruntergeladen.', 'Schließen', {
+          duration: 5000,
+          panelClass: ['success-snackbar']
+        });
+      });
+  }
+
+  downloadCodingListAsExcel(workspaceId: number): void {
+    this.isLoading = true;
+    this.backendService.getCodingListAsExcel(workspaceId)
+      .pipe(
+        catchError(() => {
+          this.isLoading = false;
+          this.snackBar.open('Fehler beim Herunterladen der Kodierliste als Excel', 'Schließen', {
+            duration: 5000,
+            panelClass: ['error-snackbar']
+          });
+          return of(null);
+        }),
+        finalize(() => {
+          this.isLoading = false;
+        })
+      )
+      .subscribe(response => {
+        if (!response) {
+          return;
+        }
+
+        const blob = new Blob([response], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `coding-list-${new Date().toISOString().slice(0, 10)}.xlsx`;
+        document.body.appendChild(a);
+        a.click();
+
+        // Clean up
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+
+        this.snackBar.open('Kodierliste wurde als Excel heruntergeladen.', 'Schließen', {
+          duration: 5000,
+          panelClass: ['success-snackbar']
+        });
+      });
   }
 }
