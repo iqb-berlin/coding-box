@@ -314,10 +314,7 @@ export class BackendService {
   getCodingList(workspace_id:number, page: number = 1, limit: number = 100): Observable<PaginatedResponse<CodingListItem>> {
     const identity = this.appService.loggedUser?.sub || '';
     return this.createToken(workspace_id, identity, 1).pipe(
-      catchError(error => {
-        console.error('Error creating token for coding list:', error);
-        return of('');
-      }),
+      catchError(() => of('')),
       switchMap(token => {
         const params = new HttpParams()
           .set('page', page.toString())
