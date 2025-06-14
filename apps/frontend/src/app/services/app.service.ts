@@ -146,7 +146,7 @@ export class AppService {
           this.appLogo = settings;
         }
       },
-      error: error => {
+      error: () => {
         this.appLogo = standardLogo;
       }
     });
