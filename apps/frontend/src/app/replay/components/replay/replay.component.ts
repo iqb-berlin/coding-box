@@ -419,10 +419,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   scrollToElementByAlias(alias: string, options?: ScrollIntoViewOptions): boolean {
     try {
       const elements = this.findElementsByDataAlias();
-      console.log(elements);
       const element = elements[alias];
-      console.log(element);
-
       if (element) {
         // Use scrollIntoView with smooth behavior by default
         element.scrollIntoView(options || { behavior: 'smooth', block: 'center' });
@@ -441,7 +438,6 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
    */
   updateDataElementAliases(): void {
     this.dataElementAliases = this.getDataElementAliases();
-    console.log('Updated dataElementAliases:', this.dataElementAliases);
 
     // Automatically scroll to each element with data-element-alias
     if (this.dataElementAliases.length > 0) {
