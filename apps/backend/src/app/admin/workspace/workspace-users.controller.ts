@@ -10,17 +10,17 @@ import {
   ApiParam, ApiQuery, ApiTags
 } from '@nestjs/swagger';
 import { logger } from 'nx/src/utils/logger';
-import { WorkspaceService } from '../../database/services/workspace.service';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { AuthService } from '../../auth/service/auth.service';
 import WorkspaceUser from '../../database/entities/workspace_user.entity';
+import { WorkspaceUsersService } from '../../database/services/workspace-users.service';
 
 @ApiTags('Admin Workspace Users')
 @Controller('admin/workspace')
 export class WorkspaceUsersController {
   constructor(
-    private workspaceService: WorkspaceService,
+    private workspaceUsersService: WorkspaceUsersService,
     private authService: AuthService
   ) {}
 
@@ -90,7 +90,7 @@ export class WorkspaceUsersController {
                            @Query('limit') limit: number = 20
   ): Promise<{ data: WorkspaceUser[]; total: number; page: number; limit: number }> {
     try {
-      const [users, total] = await this.workspaceService.findUsers(workspaceId, { page, limit });
+      const [users, total] = await this.workspaceUsersService.findUsers(workspaceId, { page, limit });
       return {
         data: users,
         total,
@@ -130,6 +130,6 @@ export class WorkspaceUsersController {
   @ApiTags('admin users')
   async setWorkspaceUsers(@Body() userIds: number[],
     @Param('workspaceId') workspaceId: number) {
-    return this.workspaceService.setWorkspaceUsers(workspaceId, userIds);
+    return this.workspaceUsersService.setWorkspaceUsers(workspaceId, userIds);
   }
 }

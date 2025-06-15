@@ -2,16 +2,12 @@ import { Injectable } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import * as https from 'https';
 import { catchError, firstValueFrom } from 'rxjs';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
 import { logger } from 'nx/src/utils/logger';
 import { Person, Response } from './shared-types';
 import { WorkspaceService } from './workspace.service';
 import {
   ImportOptions
 } from '../../../../../frontend/src/app/ws-admin/components/test-center-import/test-center-import.component';
-
-import Logs from '../entities/logs.entity';
 import { TestGroupsInfoDto } from '../../../../../../api-dto/files/test-groups-info.dto';
 import { PersonService } from './person.service';
 
@@ -62,10 +58,7 @@ export class TestcenterService {
   constructor(
     private readonly personService: PersonService,
     private readonly httpService: HttpService,
-    private workspaceService: WorkspaceService,
-    @InjectRepository(Logs)
-    private logsRepository:Repository<Logs>
-
+    private workspaceService: WorkspaceService
   ) {
   }
 

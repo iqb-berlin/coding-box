@@ -15,7 +15,7 @@ import { logger } from 'nx/src/utils/logger';
 import { WorkspaceInListDto } from '../../../../../../api-dto/workspaces/workspace-in-list-dto';
 import { WorkspaceFullDto } from '../../../../../../api-dto/workspaces/workspace-full-dto';
 import { CreateWorkspaceDto } from '../../../../../../api-dto/workspaces/create-workspace-dto';
-import { WorkspaceService } from '../../database/services/workspace.service';
+import { WorkspaceCoreService } from '../../database/services/workspace-core.service';
 import { WorkspaceId } from './workspace.decorator';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
@@ -24,7 +24,7 @@ import { WorkspaceGuard } from './workspace.guard';
 @Controller('admin/workspace')
 export class WorkspaceController {
   constructor(
-    private workspaceService: WorkspaceService
+    private workspaceCoreService: WorkspaceCoreService
   ) {}
 
   @Get()
@@ -62,7 +62,7 @@ export class WorkspaceController {
     @Query('limit') limit: number = 20
   ): Promise<{ data: WorkspaceInListDto[]; total: number; page: number; limit: number }> {
     try {
-      const [workspaces, total] = await this.workspaceService.findAll({ page, limit });
+      const [workspaces, total] = await this.workspaceCoreService.findAll({ page, limit });
       return {
         data: workspaces,
         total,
@@ -94,7 +94,7 @@ export class WorkspaceController {
       throw new BadRequestException('Invalid workspace ID.');
     }
     try {
-      const workspace = await this.workspaceService.findOne(id);
+      const workspace = await this.workspaceCoreService.findOne(id);
       if (!workspace) {
         logger.error('Admin workspace not found.');
       }
@@ -125,7 +125,7 @@ export class WorkspaceController {
   @ApiTags('admin workspaces')
   async remove(@Param('ids') ids: string): Promise<void> {
     const idsAsNumberArray: number[] = ids.split(';').map(idString => parseInt(idString, 10));
-    return this.workspaceService.remove(idsAsNumberArray);
+    return this.workspaceCoreService.remove(idsAsNumberArray);
   }
 
   @Patch()
@@ -144,7 +144,7 @@ export class WorkspaceController {
   @ApiNotFoundResponse({ description: 'Workspace not found' })
   @ApiTags('admin workspaces')
   async patch(@Body() workspaces: WorkspaceFullDto) {
-    return this.workspaceService.patch(workspaces);
+    return this.workspaceCoreService.patch(workspaces);
   }
 
   @Post()
@@ -162,6 +162,6 @@ export class WorkspaceController {
   @ApiBadRequestResponse({ description: 'Invalid workspace data' })
   @ApiTags('admin workspaces')
   async create(@Body() createWorkspaceDto: CreateWorkspaceDto) {
-    return this.workspaceService.create(createWorkspaceDto);
+    return this.workspaceCoreService.create(createWorkspaceDto);
   }
 }

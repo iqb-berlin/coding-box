@@ -11,18 +11,18 @@ import {
 } from '@nestjs/swagger';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { logger } from 'nx/src/utils/logger';
-import { WorkspaceService } from '../../database/services/workspace.service';
 import { FilesDto } from '../../../../../../api-dto/files/files.dto';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { FileDownloadDto } from '../../../../../../api-dto/files/file-download.dto';
 import { FileValidationResultDto } from '../../../../../../api-dto/files/file-validation-result.dto';
+import { WorkspaceFilesService } from '../../database/services/workspace-files.service';
 
 @ApiTags('Admin Workspace Files')
 @Controller('admin/workspace')
 export class WorkspaceFilesController {
   constructor(
-    private workspaceService: WorkspaceService
+    private workspaceFilesService: WorkspaceFilesService
   ) {}
 
   @Get(':workspace_id/files')
@@ -77,7 +77,7 @@ export class WorkspaceFilesController {
       );
     }
     try {
-      const [files, total] = await this.workspaceService.findFiles(workspace_id, { page, limit });
+      const [files, total] = await this.workspaceFilesService.findFiles(workspace_id, { page, limit });
       return {
         data: files,
         total,
@@ -96,7 +96,7 @@ export class WorkspaceFilesController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async deleteTestFiles(@Query() query: { fileIds: string },
     @Param('workspace_id') workspace_id: number) {
-    return this.workspaceService.deleteTestFiles(workspace_id, query.fileIds.split(';'));
+    return this.workspaceFilesService.deleteTestFiles(workspace_id, query.fileIds.split(';'));
   }
 
   @Get(':workspace_id/files/validation')
@@ -110,7 +110,7 @@ export class WorkspaceFilesController {
   })
   async validateTestFiles(
     @Param('workspace_id') workspace_id: number): Promise<FileValidationResultDto> {
-    return this.workspaceService.validateTestFiles(workspace_id);
+    return this.workspaceFilesService.validateTestFiles(workspace_id);
   }
 
   @Post(':workspace_id/upload')
@@ -150,7 +150,7 @@ export class WorkspaceFilesController {
     }
 
     try {
-      return await this.workspaceService.uploadTestFiles(workspaceId, files);
+      return await this.workspaceFilesService.uploadTestFiles(workspaceId, files);
     } catch (error) {
       logger.error('Error uploading test files:');
       return false;
@@ -178,7 +178,7 @@ export class WorkspaceFilesController {
       throw new BadRequestException('Workspace ID is required.');
     }
     try {
-      return await this.workspaceService.downloadTestFile(workspaceId, fileId);
+      return await this.workspaceFilesService.downloadTestFile(workspaceId, fileId);
     } catch (error) {
       logger.error(`'Error downloading test file:' ${error}`);
       throw new InternalServerErrorException('Unable to download the file. Please try again later.');
