@@ -11,7 +11,6 @@ import {
 import Ajv, { JSONSchemaType } from 'ajv';
 import * as cheerio from 'cheerio';
 import AdmZip = require('adm-zip');
-import * as util from 'util';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as libxmljs from 'libxmljs2';
@@ -1664,25 +1663,25 @@ export class WorkspaceService {
     const zip = new AdmZip(file.buffer);
 
     if (file.originalname.endsWith('.itcr.zip')) {
-      const packageFiles = zip.getEntries().map(entry => entry.entryName);
-      const resourcePackagesPath = './packages';
-      const packageName = 'GeoGebra';
-      const zipExtractAllToAsync = util.promisify(zip.extractAllToAsync);
-
-      filePromises.push(zipExtractAllToAsync(`${resourcePackagesPath}/${packageName}`, true, true)
-        .then(async () => {
-          const newResourcePackage = this.resourcePackageRepository.create({
-            name: packageName,
-            elements: packageFiles,
-            createdAt: new Date()
-          });
-          await this.resourcePackageRepository.save(newResourcePackage);
-
-          const sanitizedFileName = sanitizePath(file.originalname);
-          fs.writeFileSync(`${resourcePackagesPath}/${packageName}/${sanitizedFileName}`, file.buffer);
-
-          return newResourcePackage.id;
-        }));
+      // const packageFiles = zip.getEntries().map(entry => entry.entryName);
+      // const resourcePackagesPath = './packages';
+      // const packageName = 'GeoGebra';
+      // const zipExtractAllToAsync = util.promisify(zip.extractAllToAsync);
+      //
+      // filePromises.push(zipExtractAllToAsync(`${resourcePackagesPath}/${packageName}`, true, true)
+      //   .then(async () => {
+      //     const newResourcePackage = this.resourcePackageRepository.create({
+      //       name: packageName,
+      //       elements: packageFiles,
+      //       createdAt: new Date()
+      //     });
+      //     await this.resourcePackageRepository.save(newResourcePackage);
+      //
+      //     const sanitizedFileName = sanitizePath(file.originalname);
+      //     fs.writeFileSync(`${resourcePackagesPath}/${packageName}/${sanitizedFileName}`, file.buffer);
+      //
+      //     return newResourcePackage.id;
+      //   }));
     } else {
       const zipEntries = zip.getEntries();
       zipEntries.forEach(zipEntry => {
