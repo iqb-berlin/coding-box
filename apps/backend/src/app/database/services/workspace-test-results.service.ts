@@ -9,8 +9,6 @@ import { BookletInfo } from '../entities/bookletInfo.entity';
 import { BookletLog } from '../entities/bookletLog.entity';
 import { UnitLog } from '../entities/unitLog.entity';
 import { Session } from '../entities/session.entity';
-import { ResponseDto } from '../../../../../../api-dto/responses/response-dto';
-import Responses from '../entities/responses.entity';
 
 @Injectable()
 export class WorkspaceTestResultsService {
@@ -33,8 +31,6 @@ export class WorkspaceTestResultsService {
     private unitLogRepository: Repository<UnitLog>,
     @InjectRepository(Session)
     private sessionRepository: Repository<Session>,
-    @InjectRepository(Responses)
-    private responsesRepository: Repository<Responses>,
     private readonly connection: Connection
   ) {}
 
@@ -199,7 +195,7 @@ export class WorkspaceTestResultsService {
     }
   }
 
-  async findWorkspaceResponses(workspace_id: number, options?: { page: number; limit: number }): Promise<[ResponseDto[], number]> {
+  async findWorkspaceResponses(workspace_id: number, options?: { page: number; limit: number }): Promise<[ResponseEntity[], number]> {
     this.logger.log('Returning responses for workspace', workspace_id);
 
     if (options) {
@@ -208,8 +204,7 @@ export class WorkspaceTestResultsService {
       const validPage = Math.max(1, page);
       const validLimit = Math.min(Math.max(1, limit), MAX_LIMIT);
 
-      const [responses, total] = await this.responsesRepository.findAndCount({
-        where: { workspace_id: workspace_id },
+      const [responses, total] = await this.responseRepository.findAndCount({
         skip: (validPage - 1) * validLimit,
         take: validLimit,
         order: { id: 'ASC' }
@@ -219,8 +214,7 @@ export class WorkspaceTestResultsService {
       return [responses, total];
     }
 
-    const responses = await this.responsesRepository.find({
-      where: { workspace_id: workspace_id },
+    const responses = await this.responseRepository.find({
       order: { id: 'ASC' }
     });
 
@@ -304,32 +298,6 @@ export class WorkspaceTestResultsService {
       this.logger.error(`Error getting responses by status: ${error.message}`);
       return [[], 0];
     }
-  }
-
-  async findTestPersons(id: number): Promise<number[]> {
-    this.logger.log('Returning all test persons for workspace ', id);
-    const persons = await this.personsRepository
-      .find({
-        select: ['id'],
-        where: { workspace_id: id },
-        order: { id: 'ASC' }
-      });
-
-    return persons.map(person => person.id);
-  }
-
-  async findTestPersonUnits(id: number, testPerson: string): Promise<ResponseDto[]> {
-    this.logger.log('Returning all unit Ids for testperson ', testPerson);
-    const res = this.responsesRepository
-      .find({
-        select: ['unit_id'],
-        where: { test_person: testPerson },
-        order: { unit_id: 'ASC' }
-      });
-    if (res) {
-      return res;
-    }
-    return [];
   }
 
   async deleteTestPersons(

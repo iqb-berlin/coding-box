@@ -13,7 +13,6 @@ import * as libxmljs from 'libxmljs2';
 import Workspace from '../entities/workspace.entity';
 import { WorkspaceFullDto } from '../../../../../../api-dto/workspaces/workspace-full-dto';
 import FileUpload from '../entities/file_upload.entity';
-import Responses from '../entities/responses.entity';
 import WorkspaceUser from '../entities/workspace_user.entity';
 import { FileIo } from '../../admin/workspace/file-io.interface';
 import User from '../entities/user.entity';
@@ -36,7 +35,7 @@ export class WorkspaceService {
     private workspaceRepository: Repository<Workspace>,
     @InjectRepository(FileUpload)
     private fileUploadRepository: Repository<FileUpload>,
-    @InjectRepository(Responses)
+    @InjectRepository(WorkspaceUser)
     private workspaceUsersRepository:Repository<WorkspaceUser>,
     @InjectRepository(User)
     private usersRepository:Repository<User>

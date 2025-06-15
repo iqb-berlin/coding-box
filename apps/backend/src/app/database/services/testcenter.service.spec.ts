@@ -2,12 +2,9 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { createMock } from '@golevelup/ts-jest';
 import { JwtService } from '@nestjs/jwt';
 import { HttpService } from '@nestjs/axios';
-import { getRepositoryToken } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
 import { TestcenterService } from './testcenter.service';
 import { UsersService } from './users.service';
 import { WorkspaceService } from './workspace.service';
-import Responses from '../entities/responses.entity';
 
 describe('TestCenterService', () => {
   let service: TestcenterService;
@@ -36,10 +33,6 @@ describe('TestCenterService', () => {
           provide: JwtService,
           useValue: createMock<JwtService>()
         },
-        {
-          provide: getRepositoryToken(Responses),
-          useValue: createMock<Repository<Responses>>()
-        }
       ]
     }).compile();
 
