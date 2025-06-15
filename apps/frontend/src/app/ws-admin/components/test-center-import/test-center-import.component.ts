@@ -310,7 +310,8 @@ export class TestCenterImportComponent {
 
     this.uploadData = {} as Result;
     this.isUploadingTestFiles = true;
-    this.isUploadingTestResults = true;
+    // Only set isUploadingTestResults to true when importing test results
+    this.isUploadingTestResults = this.data.importType === 'testResults';
 
     this.backendService
       .importWorkspaceFiles(

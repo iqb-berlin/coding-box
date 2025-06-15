@@ -38,9 +38,11 @@ import { MatAnchor, MatIconButton } from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { ScrollingModule } from '@angular/cdk/scrolling';
 import { MatDivider } from '@angular/material/divider';
+import { MatDialog } from '@angular/material/dialog';
 import { BackendService, CodingListItem } from '../../services/backend.service';
 import { AppService } from '../../services/app.service';
 import { CodingStatistics } from '../../../../../../api-dto/coding/coding-statistics';
+import { ExportDialogComponent, ExportFormat } from '../export-dialog/export-dialog.component';
 
 interface Success {
   id: number;
@@ -55,6 +57,7 @@ interface Success {
   unitname: string;
   login_name?: string;
   login_code?: string;
+  login_group?: string;
   booklet_id?: string;
 }
 
@@ -103,15 +106,13 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
   isLoading = false;
   isFilterLoading = false;
   isLoadingStatistics = false;
+  isAutoCoding = false;
   currentStatusFilter: string | null = null;
-
   pageSizeOptions = [100, 200, 500];
   pageSize = 100;
   totalRecords = 0;
   pageIndex = 0;
-
   filterTextChanged = new Subject<Event>();
-
   codingStatistics: CodingStatistics = {
     totalResponses: 0,
     statusCounts: {}
@@ -120,11 +121,13 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
   constructor(
     private backendService: BackendService,
     private appService: AppService,
-    private snackBar: MatSnackBar
-  ) {}
+    private snackBar: MatSnackBar,
+    private dialog: MatDialog
+  ) {
+    this.isAutoCoding = false;
+  }
 
   ngOnInit(): void {
-    // this.fetchCodeManual();
     this.fetchCodingStatistics();
 
     this.filterTextChanged
@@ -147,7 +150,7 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
 
     this.backendService.getCodingStatistics(workspaceId)
       .pipe(
-        catchError(error => {
+        catchError(() => {
           this.isLoadingStatistics = false;
           this.snackBar.open('Fehler beim Abrufen der Kodierstatistiken', 'Schließen', {
             duration: 5000,
@@ -164,18 +167,43 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
       });
   }
 
-  /**
-   * Returns all status types except the ones that are displayed separately
-   */
   getOtherStatuses(): string[] {
     const excludedStatuses = ['INVALID', 'CODING_INCOMPLETE', 'NOT_REACHED', 'INTENDED_INCOMPLETE'];
     return Object.keys(this.codingStatistics.statusCounts)
       .filter(status => !excludedStatuses.includes(status));
   }
 
-  /**
-   * Fetches responses with the specified status
-   */
+  getStatusPercentage(status: string): number {
+    if (!this.codingStatistics.totalResponses || !this.codingStatistics.statusCounts[status]) {
+      return 0;
+    }
+    return Math.round((this.codingStatistics.statusCounts[status] / this.codingStatistics.totalResponses) * 100);
+  }
+
+  getStatusColor(status: string): string {
+    const colorMap: { [key: string]: string } = {
+      CODING_COMPLETE: '#4CAF50', // Green
+      CODING_INCOMPLETE: '#FFC107', // Amber
+      NOT_REACHED: '#9E9E9E', // Grey
+      INVALID: '#F44336', // Red
+      INTENDED_INCOMPLETE: '#2196F3' // Blue
+    };
+    return colorMap[status] || '#9C27B0'; // Default to purple for unknown statuses
+  }
+
+  getChartData(): { status: string; count: number; percentage: number; color: string }[] {
+    if (!this.codingStatistics.totalResponses) {
+      return [];
+    }
+
+    return Object.keys(this.codingStatistics.statusCounts).map(status => ({
+      status,
+      count: this.codingStatistics.statusCounts[status],
+      percentage: this.getStatusPercentage(status),
+      color: this.getStatusColor(status)
+    }));
+  }
+
   fetchResponsesByStatus(status: string, page: number = 1, limit: number = this.pageSize): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     this.isLoading = true;
@@ -212,6 +240,7 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
           unitname: item.unit?.name || '',
           // Extract information for replay URL
           login_name: item.unit?.booklet?.person?.login || '',
+          login_group: item.unit?.booklet?.person?.group || '',
           login_code: item.unit?.booklet?.person?.code || '',
           booklet_id: item.unit?.booklet?.bookletinfo?.name || ''
         }));
@@ -260,17 +289,10 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
     }
   }
 
-  /**
-   * Generates a replay URL for a response and opens it in a new tab
-   * Format: /replay/{login_name}@{login_code}@{booklet_id}/{unit_key}/{page}
-   */
   openReplay(response: Success): void {
-    // For now, we'll use a hardcoded token and page number
-    // In a real implementation, these would be retrieved from the backend
-    const token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjEsInVzZXJuYW1lIjoicmVpY2hsZWpAZ214LmRlIiwic3ViIjp7ImlkIjoxLCJ1c2VybmFtZSI6InJlaWNobGVqQGdteC5kZSIsImlzQWRtaW4iOnRydWV9LCJ3b3Jrc3BhY2UiOiIzNCIsImlhdCI6MTc0OTAzNzUzMywiZXhwIjoxNzU0MjIxNTMzfQ.4FVfq10u_SbhXCCNXb2edh_SYupW-LZPj09Opb08CS4';
     const page = '0';
+    const workspaceId = this.appService.selectedWorkspaceId;
 
-    // Check if we have all the necessary information for the replay URL
     if (!response.login_name || !response.login_code || !response.booklet_id) {
       this.snackBar.open('Fehlende Informationen für Replay', 'Schließen', {
         duration: 5000,
@@ -278,22 +300,34 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
       });
       return;
     }
-
-    // Construct the replay URL
-    const url = `${window.location.origin}/#/replay/${response.login_name}@${response.login_code}@${response.booklet_id}/${response.unitname}/${page}?auth=${token}`;
-
-    // Open the URL in a new tab
-    window.open(url, '_blank');
+    this.appService.createToken(workspaceId, this.appService.loggedUser?.sub || '', 3600)
+      .pipe(
+        catchError(() => {
+          this.snackBar.open('Fehler beim Abrufen des Tokens für Replay', 'Schließen', {
+            duration: 5000,
+            panelClass: ['error-snackbar']
+          });
+          return of('');
+        })
+      )
+      .subscribe(token => {
+        if (!token) {
+          return;
+        }
+        const url = `${window.location.origin}/#/replay/${response.login_group}@${response.login_code}@${response.login_group}/${response.unitname}/${page}/${response.variableid}?auth=${token}`;
+        window.open(url, '_blank');
+      }
+      );
   }
 
   onAutoCode(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
-    this.isLoading = true;
+    this.isAutoCoding = true;
 
     this.backendService.getTestPersons(workspaceId)
       .pipe(
         catchError(() => {
-          this.isLoading = false;
+          this.isAutoCoding = false;
           this.snackBar.open('Fehler beim Abrufen der Testgruppen', 'Schließen', {
             duration: 5000,
             panelClass: ['error-snackbar']
@@ -303,21 +337,23 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
       )
       .subscribe(testPersons => {
         if (testPersons.length === 0) {
-          this.isLoading = false;
+          this.isAutoCoding = false;
           return;
         }
 
         this.backendService.codeTestPersons(workspaceId, testPersons)
           .pipe(
             catchError(() => {
+              this.isAutoCoding = false;
               this.snackBar.open('Fehler beim Kodieren der Testpersonen', 'Schließen', {
                 duration: 5000,
                 panelClass: ['error-snackbar']
               });
               return of({ totalResponses: 0, statusCounts: {} });
             }),
-            finalize(() => {
-              this.isLoading = false;
+            finalize(async () => {
+              this.isAutoCoding = false;
+              this.fetchCodingStatistics();
             })
           )
           .subscribe(stats => {
@@ -339,92 +375,172 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
       });
   }
 
-  fetchCodeManual(): void {
-    const workspaceId = this.appService.selectedWorkspaceId;
-    this.isLoading = true;
+  fetchCodingList(page: number = 1, limit: number = this.pageSize): void {
+    const dialogRef = this.dialog.open(ExportDialogComponent, {
+      width: '500px'
+    });
 
-    this.backendService.getTestPersons(workspaceId)
-      .pipe(
-        catchError(() => {
-          this.isLoading = false;
-          this.snackBar.open('Fehler beim Abrufen der Testgruppen', 'Schließen', {
-            duration: 5000,
-            panelClass: ['error-snackbar']
-          });
-          return of([]);
-        })
-      )
-      .subscribe(testPersons => {
-        if (testPersons.length === 0) {
-          this.isLoading = false;
-          return;
-        }
+    dialogRef.afterClosed().subscribe((format: ExportFormat | undefined) => {
+      if (!format) {
+        return;
+      }
 
-        this.backendService.getManualCodingList(workspaceId, testPersons)
-          .pipe(
-            catchError(() => {
-              this.isLoading = false;
-              this.snackBar.open('Fehler beim Abrufen der manuell zu kodierenden Fälle', 'Schließen', {
-                duration: 5000,
-                panelClass: ['error-snackbar']
-              });
-              return of(false);
-            }),
-            finalize(() => {
-              this.isLoading = false;
-            })
-          )
-          .subscribe(result => {
-            if (result) {
-              this.snackBar.open('Manuelle zu kodierende Fälle wurden erfolgreich abgerufen.', 'Schließen', {
-                duration: 5000,
-                panelClass: ['success-snackbar']
-              });
-            } else {
-              this.snackBar.open('Fehler beim Abrufen der manuell zu kodierenden Fälle.', 'Schließen', {
-                duration: 5000,
-                panelClass: ['error-snackbar']
-              });
+      const workspaceId = this.appService.selectedWorkspaceId;
+      this.isLoading = true;
+
+      this.backendService.getCodingList(workspaceId, page, limit)
+        .pipe(
+          catchError(() => {
+            this.isLoading = false;
+            this.snackBar.open('Fehler beim Abrufen der Kodierliste', 'Schließen', {
+              duration: 5000,
+              panelClass: ['error-snackbar']
+            });
+            return of({
+              data: [], total: 0, page, limit
+            });
+          }),
+          finalize(() => {
+            this.isLoading = false;
+          })
+        )
+        .subscribe(result => {
+          if (result && result.data.length > 0) {
+            switch (format) {
+              case 'json':
+                this.downloadCodingListAsJson(result.data);
+                break;
+              case 'csv':
+                this.downloadCodingListAsCsv(workspaceId);
+                break;
+              case 'excel':
+                this.downloadCodingListAsExcel(workspaceId);
+                break;
+              default:
+                this.snackBar.open(`Unbekanntes Format: ${format}`, 'Schließen', {
+                  duration: 5000,
+                  panelClass: ['error-snackbar']
+                });
+                break;
             }
-          });
-      });
+
+            this.snackBar.open(`Kodierliste mit ${result.total} Einträgen wurde erfolgreich abgerufen.`, 'Schließen', {
+              duration: 5000,
+              panelClass: ['success-snackbar']
+            });
+          } else {
+            this.snackBar.open('Keine Einträge in der Kodierliste gefunden.', 'Schließen', {
+              duration: 5000
+            });
+          }
+        });
+    });
   }
 
-  fetchCodingList(page: number = 1, limit: number = this.pageSize): void {
-    const workspaceId = this.appService.selectedWorkspaceId;
-    this.isLoading = true;
+  downloadCodingListAsJson(data: never[] | CodingListItem[]): void {
+    if (data.length === 0) {
+      this.snackBar.open('Keine Daten zum Herunterladen verfügbar. Bitte zuerst die Kodierliste abrufen.', 'Schließen', {
+        duration: 5000,
+        panelClass: ['error-snackbar']
+      });
+      return;
+    }
 
-    this.backendService.getCodingList(workspaceId, page, limit)
+    const jsonData = JSON.stringify(data, null, 2);
+    const blob = new Blob([jsonData], { type: 'application/json' });
+    const url = window.URL.createObjectURL(blob);
+
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `coding-list-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+
+    this.snackBar.open('Kodierliste wurde als JSON heruntergeladen.', 'Schließen', {
+      duration: 5000,
+      panelClass: ['success-snackbar']
+    });
+  }
+
+  downloadCodingListAsCsv(workspaceId: number): void {
+    this.isLoading = true;
+    this.backendService.getCodingListAsCsv(workspaceId)
       .pipe(
         catchError(() => {
           this.isLoading = false;
-          this.snackBar.open('Fehler beim Abrufen der Kodierliste', 'Schließen', {
+          this.snackBar.open('Fehler beim Herunterladen der Kodierliste als CSV', 'Schließen', {
             duration: 5000,
             panelClass: ['error-snackbar']
           });
-          return of({
-            data: [], total: 0, page, limit
-          });
+          return of(null);
         }),
         finalize(() => {
           this.isLoading = false;
         })
       )
-      .subscribe(result => {
-        if (result && result.data.length > 0) {
-          this.data = result.data;
-          this.dataSource.data = this.data;
-          this.totalRecords = result.total;
-
-          this.snackBar.open(`Kodierliste mit ${result.total} Einträgen wurde erfolgreich abgerufen.`, 'Schließen', {
-            duration: 5000,
-            panelClass: ['success-snackbar']
-          });
-        } else {
-          this.snackBar.open('Keine Einträge in der Kodierliste gefunden.', 'Schließen', {
-            duration: 5000
-          });
+      .subscribe(response => {
+        if (!response) {
+          return;
         }
+        const blob = new Blob([response], { type: 'text/csv' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `coding-list-${new Date().toISOString().slice(0, 10)}.csv`;
+        document.body.appendChild(a);
+        a.click();
+
+        // Clean up
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+
+        this.snackBar.open('Kodierliste wurde als CSV heruntergeladen.', 'Schließen', {
+          duration: 5000,
+          panelClass: ['success-snackbar']
+        });
+      });
+  }
+
+  downloadCodingListAsExcel(workspaceId: number): void {
+    this.isLoading = true;
+    this.backendService.getCodingListAsExcel(workspaceId)
+      .pipe(
+        catchError(() => {
+          this.isLoading = false;
+          this.snackBar.open('Fehler beim Herunterladen der Kodierliste als Excel', 'Schließen', {
+            duration: 5000,
+            panelClass: ['error-snackbar']
+          });
+          return of(null);
+        }),
+        finalize(() => {
+          this.isLoading = false;
+        })
+      )
+      .subscribe(response => {
+        if (!response) {
+          return;
+        }
+
+        const blob = new Blob([response], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `coding-list-${new Date().toISOString().slice(0, 10)}.xlsx`;
+        document.body.appendChild(a);
+        a.click();
+
+        // Clean up
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+
+        this.snackBar.open('Kodierliste wurde als Excel heruntergeladen.', 'Schließen', {
+          duration: 5000,
+          panelClass: ['success-snackbar']
+        });
       });
   }
 }

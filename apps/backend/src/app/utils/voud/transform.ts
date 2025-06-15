@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-const fs = require('fs');
-const path = require('path');
+import * as fs from 'fs';
+import * as path from 'path';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/naming-convention */
@@ -124,7 +124,7 @@ function prepareDefinition(respDefinition: RespDefinition): PrepareDefinitionOut
     const variable_ref = listSimplify(rawRef);
 
     return {
-      variable_page: i, // Use 0-based index from TypeScript's map
+      variable_page: i,
       variable_ref,
       variable_page_always_visible
     };
@@ -183,13 +183,20 @@ function prepareDefinition(respDefinition: RespDefinition): PrepareDefinitionOut
 }
 
 // Export the prepareDefinition function for use in other modules
-module.exports = { prepareDefinition };
+export { prepareDefinition };
 
 // Main execution when run as a script
-if (require.main === module) {
+// Check if this file is being run directly
+// This is a simpler approach that works with CommonJS and ES modules
+const isRunningDirectly = typeof process !== 'undefined' &&
+  require.main === module;
+
+if (isRunningDirectly) {
   try {
     // Get the directory of the current script
-    const scriptDir = __dirname;
+    // Using a technique that works in TypeScript without import.meta
+    // This assumes the script is in the same directory as sample.voud
+    const scriptDir = path.join(process.cwd(), 'apps/backend/src/app/utils/voud');
 
     // Read the sample.voud file
     const sampleFilePath = path.join(scriptDir, 'sample.voud');
@@ -202,19 +209,9 @@ if (require.main === module) {
 
     try {
       // Process the definition
-      const result = prepareDefinition(respDefinition);
-
-      // Output a success message instead of the full result to avoid buffer overflow
-      console.log('Result generated successfully. Size of variablePages array:', result.variablePages.length);
-
-      console.log('Successfully processed sample.voud');
+      prepareDefinition(respDefinition);
     } catch (parseError) {
-      console.error('Error parsing JSON from sample.voud:', parseError);
-
-      // Try to fix common JSON issues and retry
-      console.log('Attempting to fix JSON and retry...');
-
-      // Replace control characters that might be causing issues
+      // eslint-disable-next-line no-control-regex
       const cleanedContent = sampleContent.replace(/[\u0000-\u001F\u007F-\u009F]/g, '');
 
       try {
@@ -222,17 +219,12 @@ if (require.main === module) {
           definition: cleanedContent
         };
 
-        const result = prepareDefinition(fixedRespDefinition);
-        console.log(result);
-        console.log('Result generated successfully after fixing JSON. Size of variablePages array:', result.variablePages.length);
-        console.log('Successfully processed sample.voud after fixing JSON');
+        prepareDefinition(fixedRespDefinition);
       } catch (retryError) {
-        console.error('Failed to process even after fixing JSON:', retryError);
         process.exit(1);
       }
     }
   } catch (error) {
-    console.error('Error reading sample.voud file:', error);
     process.exit(1);
   }
 }

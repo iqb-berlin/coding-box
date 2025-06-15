@@ -1,12 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
-// eslint-disable-next-line import/no-cycle
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-// eslint-disable-next-line import/no-cycle
-import {
-  Chunk,
-  Log, Person, Response, TcMergeBooklet, TcMergeLastState, TcMergeResponse, TcMergeSubForms, TcMergeUnit
-} from './workspace.service';
 import Persons from '../entities/persons.entity';
 import { Booklet } from '../entities/booklet.entity';
 import { Unit } from '../entities/unit.entity';
@@ -17,6 +11,16 @@ import { ChunkEntity } from '../entities/chunk.entity';
 import { BookletLog } from '../entities/bookletLog.entity';
 import { Session } from '../entities/session.entity';
 import { UnitLog } from '../entities/unitLog.entity';
+import {
+  Chunk,
+  Log,
+  Person,
+  TcMergeBooklet,
+  TcMergeLastState,
+  TcMergeResponse,
+  TcMergeSubForms,
+  TcMergeUnit, Response
+} from './shared-types';
 
 @Injectable()
 export class PersonService {
@@ -277,7 +281,7 @@ export class PersonService {
       });
   }
 
-  private extractVariablesFromSubforms(subforms: TcMergeSubForms[]): Set<string> {
+  private extractVariablesFromSubforms(subforms: any[]): Set<string> {
     const variables = new Set<string>();
     subforms.forEach(subform => subform.responses.forEach(response => variables.add(response.id))
     );
@@ -506,7 +510,7 @@ export class PersonService {
     }
   }
 
-  async saveSubformResponsesForUnit(savedUnit: Unit, subforms: TcMergeSubForms[], personId: number) {
+  async saveSubformResponsesForUnit(savedUnit: Unit, subforms: any[], personId: number) {
     try {
       for (const subform of subforms) {
         if (subform.responses && subform.responses.length > 0) {

@@ -1,5 +1,14 @@
-import { Injectable } from '@angular/core';
-import { BehaviorSubject, Subject } from 'rxjs';
+import { Injectable, Inject } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import {
+  BehaviorSubject,
+  Observable,
+  Subject,
+  catchError,
+  map,
+  of,
+  switchMap
+} from 'rxjs';
 import { KeycloakProfile, KeycloakTokenParsed } from 'keycloak-js';
 import { AppLogoDto } from '../../../../../api-dto/app-logo-dto';
 import { AuthDataDto } from '../../../../../api-dto/auth-data-dto';
@@ -46,9 +55,85 @@ export class AppService {
     selectUnitPlay: {}
   };
 
-  constructor(private logoService: LogoService) {
+  authHeader = { Authorization: `Bearer ${localStorage.getItem('id_token')}` };
+
+  constructor(
+    @Inject('SERVER_URL') private readonly serverUrl: string,
+    private http: HttpClient,
+    private logoService: LogoService
+  ) {
     // Load saved logo settings when the application starts
     this.loadLogoSettings();
+  }
+
+  /**
+   * Creates a token for the specified workspace, identity, and duration
+   * @param workspace_id The ID of the workspace
+   * @param identity The identity to create the token for
+   * @param duration The duration of the token in seconds
+   * @returns An Observable of the token string
+   */
+  createToken(workspace_id: number, identity: string, duration: number): Observable<string> {
+    return this.http.get<string>(
+      `${this.serverUrl}admin/workspace/${workspace_id}/${identity}/token/${duration}`,
+      { headers: this.authHeader }
+    );
+  }
+
+  /**
+   * Logs in using Keycloak
+   * @param user The user to log in
+   * @returns An Observable of whether the login was successful
+   */
+  keycloakLogin(user: CreateUserDto): Observable<boolean | null> {
+    return this.http.post<string>(`${this.serverUrl}keycloak-login`, user)
+      .pipe(
+        catchError(() => of(false)),
+        map(loginToken => {
+          if (typeof loginToken === 'string') {
+            localStorage.setItem('id_token', loginToken);
+            this.authHeader = { Authorization: `Bearer ${loginToken}` };
+            return this.getAuthData(user.identity || '')
+              .pipe(
+                map(authData => {
+                  this.updateAuthData(authData);
+                  return true;
+                }),
+                catchError(() => of(false))
+              );
+          }
+          return of(false);
+        }),
+        switchMap(result => {
+          if (result instanceof Observable) {
+            return result;
+          }
+          return of(result);
+        })
+      );
+  }
+
+  /**
+   * Gets authentication data for the specified identity
+   * @param id The identity to get auth data for
+   * @returns An Observable of the auth data
+   */
+  getAuthData(id: string): Observable<AuthDataDto> {
+    return this.http.get<AuthDataDto>(
+      `${this.serverUrl}auth-data?identity=${id}`,
+      { headers: this.authHeader }
+    );
+  }
+
+  /**
+   * Refreshes the auth data by fetching it from the backend
+   */
+  refreshAuthData(): void {
+    if (this.loggedUser?.sub) {
+      this.getAuthData(this.loggedUser.sub).subscribe(authData => {
+        this.updateAuthData(authData);
+      });
+    }
   }
 
   /**
@@ -61,8 +146,7 @@ export class AppService {
           this.appLogo = settings;
         }
       },
-      error: error => {
-        console.error('Error loading logo settings:', error);
+      error: () => {
         this.appLogo = standardLogo;
       }
     });
@@ -103,7 +187,6 @@ export class AppService {
 export const standardLogo: AppLogoDto = {
   data: 'assets/IQB-LogoA.png',
   alt: 'Zur Startseite',
-  // eslint-disable-next-line max-len
   bodyBackground: 'linear-gradient(180deg, rgba(7,70,94,1) 0%, rgba(6,112,123,1) 24%, rgba(1,192,229,1) 85%)',
   boxBackground: 'lightgray'
 };

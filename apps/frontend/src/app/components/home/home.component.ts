@@ -36,6 +36,7 @@ export class HomeComponent implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit(): void {
+    this.appService.refreshAuthData();
     this.authSubscription = this.appService.authData$.subscribe(authData => {
       this.authData = authData;
       this.workspaces = authData.workspaces;

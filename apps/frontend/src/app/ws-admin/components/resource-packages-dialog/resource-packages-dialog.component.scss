@@ -1,73 +1,21 @@
-
-// Main container styles
-.container {
-  margin: 20px;
-  width: 100%;
-  max-width: 1600px;
-  height: auto;
-  min-height: 60vh;
-  animation: fadeIn 0.3s ease-in-out;
+.dialog-container {
+  min-width: 800px;
+  max-width: 1200px;
+  width: 90vw;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
 }
 
-// Section header styles
-.section-header {
-  margin: 20px 0 10px;
-  padding-bottom: 10px;
-  border-bottom: 2px solid rgba(25, 118, 210, 0.1);
-  width: 100%;
-
-  &.resource-packages-header {
-    margin-top: 40px;
-  }
-
-  .section-title {
-    font-size: 24px;
-    font-weight: 500;
-    color: #1976d2;
-    margin: 0;
-    letter-spacing: -0.3px;
-  }
+h2 {
+  margin: 0 0 16px 0;
+  color: #1976d2;
+  font-weight: 500;
 }
 
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-// Card styles
-.action-card, .data-card {
-  background-color: white;
-  border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  padding: 24px;
-  margin-bottom: 24px;
-  width: 100%;
-  transition: box-shadow 0.3s ease, transform 0.2s ease;
-  border: 1px solid rgba(0, 0, 0, 0.03);
-
-  &:hover {
-    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1);
-  }
-
-  .section-title {
-    font-size: 22px;
-    font-weight: 500;
-    color: #1976d2;
-    margin: 0 0 10px 0;
-    letter-spacing: -0.3px;
-  }
-
-  .section-description {
-    font-size: 14px;
-    color: #666;
-    margin: 0 0 20px 0;
-    line-height: 1.5;
-  }
-
-  mat-divider {
-    margin-bottom: 20px;
-    opacity: 0.7;
-  }
+.mat-mdc-dialog-content {
+  max-height: 70vh;
+  overflow-y: auto;
 }
 
 // Loading container styles
@@ -120,16 +68,6 @@
       align-items: stretch;
     }
 
-    .filter-select {
-      min-width: 200px;
-      max-width: 300px;
-
-      @media (max-width: 768px) {
-        min-width: 100%;
-        max-width: 100%;
-      }
-    }
-
     .clear-filters-btn {
       height: 56px;
       border-radius: 28px;
@@ -159,7 +97,7 @@
   position: relative;
   overflow-x: auto;
   overflow-y: auto;
-  max-height: 400px; /* Default max height for smaller screens */
+  max-height: 400px;
   border-radius: 8px;
   border: 1px solid rgba(0, 0, 0, 0.08);
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
@@ -185,19 +123,10 @@
   &::-webkit-scrollbar-thumb:hover {
     background: #a3c0e0;
   }
-
-  /* Responsive max-height adjustments */
-  @media (min-height: 768px) {
-    max-height: 500px; /* Medium screens */
-  }
-
-  @media (min-height: 1024px) {
-    max-height: 600px; /* Larger screens */
-  }
 }
 
 // Table styles
-.files-table, .resource-packages-table {
+.resource-packages-table {
   width: 100%;
 
   mat-header-cell, mat-cell {
@@ -248,18 +177,9 @@
     min-height: 54px;
     position: sticky;
     top: 0;
-    z-index: 100; /* Ensure header stays above table content when scrolling */
-    background-color: #f5f9ff; /* Match the header cell background color */
+    z-index: 100;
+    background-color: #f5f9ff;
   }
-}
-
-// Column width styles
-.mat-column-file_size, .mat-column-file_type, .mat-column-created_at {
-  width: 20%;
-}
-
-.mat-column-filename {
-  width: 40%;
 }
 
 // File info styles
@@ -274,30 +194,6 @@
   }
 }
 
-// File type badge styles
-.file-type-badge {
-  background-color: #f0f7ff;
-  color: #1976d2;
-  padding: 4px 10px;
-  border-radius: 12px;
-  font-size: 12px;
-  font-weight: 500;
-  border: 1px solid rgba(25, 118, 210, 0.1);
-}
-
-// File size styles
-.file-size {
-  font-family: monospace;
-  font-size: 13px;
-  color: #555;
-}
-
-// Date time styles
-.date-time {
-  color: #666;
-  font-size: 13px;
-}
-
 // Elements count styles
 .elements-count {
   color: #555;
@@ -309,9 +205,10 @@
   border: 1px solid rgba(25, 118, 210, 0.1);
 }
 
-// Resource packages card styles
-.resource-packages-card {
-  margin-top: 20px;
+// Date time styles
+.date-time {
+  color: #666;
+  font-size: 13px;
 }
 
 // Upload buttons styles
@@ -320,7 +217,7 @@
   flex-wrap: wrap;
   gap: 16px;
   justify-content: flex-start;
-  margin: 20px 0 10px;
+  margin: 20px 0;
 
   a[mat-raised-button] {
     white-space: nowrap;
@@ -387,5 +284,21 @@
     color: #666;
     max-width: 400px;
     line-height: 1.5;
+  }
+}
+
+// Card styles
+.data-card {
+  background-color: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  padding: 24px;
+  margin-bottom: 24px;
+  width: 100%;
+  transition: box-shadow 0.3s ease, transform 0.2s ease;
+  border: 1px solid rgba(0, 0, 0, 0.03);
+
+  &:hover {
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1);
   }
 }

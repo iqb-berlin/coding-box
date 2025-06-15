@@ -189,6 +189,101 @@
   .statistics-content {
     margin: 20px 0;
 
+    // Chart container styles
+    .chart-container {
+      margin: 20px 0 30px;
+      padding: 20px;
+      background-color: #f9fafc;
+      border-radius: 12px;
+      border: 1px solid rgba(0, 0, 0, 0.05);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+
+      .chart-title {
+        font-size: 18px;
+        font-weight: 500;
+        color: #1976d2;
+        margin: 0 0 20px 0;
+        text-align: center;
+      }
+
+      .chart {
+        .chart-bars {
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+          margin-bottom: 20px;
+
+          .chart-bar {
+            height: 36px;
+            border-radius: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            padding: 0 16px;
+            color: white;
+            font-weight: 500;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+            min-width: 60px;
+            position: relative;
+
+            &:hover {
+              transform: translateX(4px);
+              box-shadow: 0 3px 6px rgba(0, 0, 0, 0.15);
+            }
+
+            .chart-bar-label {
+              white-space: nowrap;
+              position: absolute;
+              left: 16px;
+              z-index: 1;
+              background-color: rgba(0, 0, 0, 0.7);
+              padding: 2px 8px;
+              border-radius: 10px;
+              font-size: 12px;
+              color: white;
+            }
+
+            .chart-bar-value {
+              font-weight: 600;
+              margin-left: 10px;
+            }
+          }
+        }
+
+        .chart-legend {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 12px;
+          margin-top: 20px;
+          justify-content: center;
+
+          .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 12px;
+            background-color: white;
+            border-radius: 20px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+            border: 1px solid rgba(0, 0, 0, 0.05);
+
+            .legend-color {
+              width: 16px;
+              height: 16px;
+              border-radius: 50%;
+            }
+
+            .legend-text {
+              font-size: 13px;
+              color: #555;
+              font-weight: 500;
+            }
+          }
+        }
+      }
+    }
+
     .statistic-item {
       display: flex;
       justify-content: flex-start;
@@ -224,6 +319,15 @@
         text-align: center;
         border: 1px solid rgba(25, 118, 210, 0.1);
         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+
+        .percentage {
+          font-size: 13px;
+          color: #555;
+          font-weight: 500;
+        }
       }
 
       .view-button {

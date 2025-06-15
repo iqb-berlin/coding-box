@@ -24,7 +24,7 @@ CREATE TABLE booklet (
                        personId BIGINT NOT NULL,
                        lastTs BIGINT DEFAULT 0 NOT NULL,
                        firstTs BIGINT DEFAULT 0 NOT NULL,
-                       CONSTRAINT FK_booklet_person FOREIGN KEY (personId) REFERENCES person (id) ON DELETE CASCADE ON UPDATE NO ACTION,
+                       CONSTRAINT FK_booklet_person FOREIGN KEY (personId) REFERENCES persons (id) ON DELETE CASCADE ON UPDATE NO ACTION,
                        CONSTRAINT FK_booklet_info FOREIGN KEY (infoId) REFERENCES bookletInfo (id) ON DELETE CASCADE ON UPDATE NO ACTION
 );
 -- rollback DROP TABLE IF EXISTS booklet;
@@ -98,15 +98,15 @@ CREATE TABLE response (
                         status TEXT NOT NULL,
                         value TEXT NULL,
                         subform TEXT NULL,
-                        code BIGINT DEFAULT (0) NOT NULL,
-                        score BIGINT DEFAULT (0) NOT NULL,
+                        code BIGINT NULL,
+                        score BIGINT NULL,
                         CONSTRAINT FK_response_unit FOREIGN KEY (unitId) REFERENCES unit (id) ON DELETE CASCADE ON UPDATE NO ACTION
 );
 -- rollback DROP TABLE IF EXISTS response;
 
 -- changeset jurei733:11
-CREATE UNIQUE INDEX person_unique_idx ON person("group", "code", "login");
--- rollback DROP INDEX IF EXISTS person_unique_idx;
+CREATE UNIQUE INDEX person_unique_idx ON persons("group", "code", "login");
+-- rollback DROP INDEX IF EXISTS persons_unique_idx;
 
 -- changeset jurei733:12
 ALTER TABLE bookletInfo ADD CONSTRAINT bookletInfoId UNIQUE ("name", "size");
@@ -138,17 +138,10 @@ ALTER TABLE unitLastState ALTER COLUMN id SET STORAGE PLAIN;
 -- rollback ALTER TABLE unitLastState DROP COLUMN id;
 
 -- changeset jurei733:18
-ALTER TABLE booklet DROP CONSTRAINT FK_booklet_person;
-ALTER TABLE booklet
-  ADD CONSTRAINT FK_booklet_person FOREIGN KEY (personId)
-    REFERENCES person (id) ON DELETE CASCADE ON UPDATE NO ACTION;
--- rollback ALTER TABLE booklet DROP CONSTRAINT FK_booklet_person;
-
--- changeset jurei733:19
 ALTER TABLE response ADD COLUMN codedStatus TEXT;
 -- rollback ALTER TABLE response DROP COLUMN codedStatus;
 
--- changeset jurei733:20
+-- changeset jurei733:19
 CREATE TABLE unit_tag (
                        id SERIAL PRIMARY KEY NOT NULL,
                        "unitId" BIGINT NOT NULL,
@@ -158,18 +151,36 @@ CREATE TABLE unit_tag (
 );
 -- rollback DROP TABLE IF EXISTS unit_tag;
 
--- changeset jurei733:21
+-- changeset jurei733:20
 CREATE INDEX unit_tag_unitId_idx ON unit_tag("unitId");
 -- rollback DROP INDEX IF EXISTS unit_tag_unitId_idx;
 
--- changeset jurei733:22
+-- changeset jurei733:21
 CREATE INDEX unit_tag_tag_idx ON unit_tag(tag);
 -- rollback DROP INDEX IF EXISTS unit_tag_tag_idx;
 
--- changeset jurei733:23
+-- changeset jurei733:22
 CREATE INDEX unit_tag_unitId_tag_idx ON unit_tag("unitId", tag);
 -- rollback DROP INDEX IF EXISTS unit_tag_unitId_tag_idx;
 
--- changeset jurei733:24
+-- changeset jurei733:23
 ALTER TABLE unit_tag ADD COLUMN color TEXT NULL;
 -- rollback ALTER TABLE unit_tag DROP COLUMN color;
+
+-- changeset jurei733:24
+ALTER TABLE response
+  ALTER COLUMN code TYPE BIGINT,
+  ALTER COLUMN code SET DEFAULT 0,
+  ALTER COLUMN code SET NOT NULL,
+  ALTER COLUMN score TYPE BIGINT,
+  ALTER COLUMN score SET DEFAULT 0,
+  ALTER COLUMN score SET NOT NULL;
+-- rollback ALTER TABLE response ALTER COLUMN code TYPE INTEGER, ALTER COLUMN code DROP DEFAULT, ALTER COLUMN code DROP NOT NULL, ALTER COLUMN score TYPE INTEGER, ALTER COLUMN score DROP DEFAULT, ALTER COLUMN score DROP NOT NULL;
+
+-- changeset jurei733:25
+ALTER TABLE "public"."resource_package" ADD COLUMN "workspaceId" INTEGER NOT NULL default 0;
+-- rollback ALTER TABLE "public"."resource_package" DROP COLUMN "workspace_id";
+
+-- changeset jurei733:26
+ALTER TABLE "public"."resource_package" ADD COLUMN "package_size" BIGINT DEFAULT 0 NOT NULL;
+-- rollback ALTER TABLE "public"."resource_package" DROP COLUMN "package_size";
