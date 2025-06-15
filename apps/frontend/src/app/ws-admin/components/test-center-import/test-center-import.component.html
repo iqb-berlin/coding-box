@@ -198,7 +198,7 @@
                 <mat-icon>check_circle</mat-icon>
                 <span>Der Testcenter Import war erfolgreich.</span>
                 <div class="success-actions">
-                  <button mat-stroked-button color="primary" (click)="goBackToTestGroups()" class="back-to-groups-button">
+                  <button mat-stroked-button color="primary" (click)="goBackToTestGroups()" class="back-to-groups-button" *ngIf="data.importType === 'testResults'">
                     <mat-icon>groups</mat-icon>
                     Weitere Testgruppen auswählen
                   </button>

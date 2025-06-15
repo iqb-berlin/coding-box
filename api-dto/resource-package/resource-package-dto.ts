@@ -14,5 +14,8 @@ export class ResourcePackageDto {
     elements!: string[];
 
   @ApiProperty()
+    packageSize?: number;
+
+  @ApiProperty()
     createdAt?: Date;
 }

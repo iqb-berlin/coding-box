@@ -9,6 +9,26 @@
   animation: fadeIn 0.3s ease-in-out;
 }
 
+// Section header styles
+.section-header {
+  margin: 20px 0 10px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid rgba(25, 118, 210, 0.1);
+  width: 100%;
+
+  &.resource-packages-header {
+    margin-top: 40px;
+  }
+
+  .section-title {
+    font-size: 24px;
+    font-weight: 500;
+    color: #1976d2;
+    margin: 0;
+    letter-spacing: -0.3px;
+  }
+}
+
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
@@ -177,7 +197,7 @@
 }
 
 // Table styles
-.files-table {
+.files-table, .resource-packages-table {
   width: 100%;
 
   mat-header-cell, mat-cell {
@@ -276,6 +296,22 @@
 .date-time {
   color: #666;
   font-size: 13px;
+}
+
+// Elements count styles
+.elements-count {
+  color: #555;
+  font-size: 13px;
+  background-color: #f0f7ff;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-weight: 500;
+  border: 1px solid rgba(25, 118, 210, 0.1);
+}
+
+// Resource packages card styles
+.resource-packages-card {
+  margin-top: 20px;
 }
 
 // Upload buttons styles

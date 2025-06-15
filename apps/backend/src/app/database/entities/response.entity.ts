@@ -30,11 +30,11 @@ export class ResponseEntity {
   @Column({ type: 'text', nullable: true })
     subform: string;
 
-  @Column({ type: 'bigint', default: 0 })
-    code: number;
+  @Column({ type: 'bigint', nullable: true })
+    code: number | null;
 
-  @Column({ type: 'bigint', default: 0 })
-    score: number;
+  @Column({ type: 'bigint', nullable: true })
+    score: number | null;
 
   @Column({ type: 'text' })
     codedstatus: string;

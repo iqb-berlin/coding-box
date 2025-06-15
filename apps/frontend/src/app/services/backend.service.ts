@@ -1,22 +1,21 @@
-import { Injectable, Inject } from '@angular/core';
+import { Injectable, Inject, forwardRef } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import {
   catchError, map, Observable, of, switchMap
 } from 'rxjs';
 import { logger } from 'nx/src/utils/logger';
 import { CreateUserDto } from '../../../../../api-dto/user/create-user-dto';
+// eslint-disable-next-line import/no-cycle
 import { AppService } from './app.service';
 import { UserFullDto } from '../../../../../api-dto/user/user-full-dto';
 import { WorkspaceFullDto } from '../../../../../api-dto/workspaces/workspace-full-dto';
 import { CreateWorkspaceDto } from '../../../../../api-dto/workspaces/create-workspace-dto';
-import { AuthDataDto } from '../../../../../api-dto/auth-data-dto';
 // eslint-disable-next-line import/no-cycle
 import {
   ImportOptions,
   Result,
   ServerResponse
 } from '../ws-admin/components/test-center-import/test-center-import.component';
-import { TestGroupsInListDto } from '../../../../../api-dto/test-groups/testgroups-in-list.dto';
 import { FilesInListDto } from '../../../../../api-dto/files/files-in-list.dto';
 import { ResponseDto } from '../../../../../api-dto/responses/response-dto';
 import { FilesDto } from '../../../../../api-dto/files/files.dto';
@@ -33,6 +32,7 @@ import { UpdateUnitTagDto } from '../../../../../api-dto/unit-tags/update-unit-t
 import { UnitNoteDto } from '../../../../../api-dto/unit-notes/unit-note.dto';
 import { CreateUnitNoteDto } from '../../../../../api-dto/unit-notes/create-unit-note.dto';
 import { UpdateUnitNoteDto } from '../../../../../api-dto/unit-notes/update-unit-note.dto';
+import { ResourcePackageDto } from '../../../../../api-dto/resource-package/resource-package-dto';
 
 interface PaginatedResponse<T> {
   data: T[];
@@ -84,7 +84,8 @@ interface ResponseEntity {
 export class BackendService {
   constructor(
     @Inject('SERVER_URL') private readonly serverUrl: string,
-    private http: HttpClient, public appService: AppService
+    private http: HttpClient,
+    @Inject(forwardRef(() => AppService)) public appService: AppService
   ) {
   }
 
@@ -92,34 +93,6 @@ export class BackendService {
 
   getDirectDownloadLink(): string {
     return `${this.serverUrl}packages/`;
-  }
-
-  createToken(workspace_id:number, identity:string, duration: number): Observable<string> {
-    return this.http.get<string>(
-      `${this.serverUrl}admin/workspace/${workspace_id}/${identity}/token/${duration}`,
-      { headers: this.authHeader }
-    );
-  }
-
-  keycloakLogin(user: CreateUserDto): Observable<boolean> {
-    return this.http.post<string>(`${this.serverUrl}keycloak-login`, user)
-      .pipe(
-        catchError(() => of(false)),
-        switchMap(loginToken => {
-          if (typeof loginToken === 'string') {
-            localStorage.setItem('id_token', loginToken);
-            return this.getAuthData(user.identity || '')
-              .pipe(
-                map(authData => {
-                  this.appService.updateAuthData(authData);
-                  return true;
-                }),
-                catchError(() => of(false))
-              );
-          }
-          return of(loginToken);
-        })
-      );
   }
 
   getUsers(workspaceId:number): Observable<UserInListDto[]> {
@@ -131,12 +104,6 @@ export class BackendService {
     return this.http
       .patch<UserWorkspaceAccessDto[]>(`${this.serverUrl}admin/users/access/${workspaceId}`,
       users,
-      { headers: this.authHeader });
-  }
-
-  getAuthData(id:string): Observable<AuthDataDto> {
-    return this.http.get<AuthDataDto>(
-      `${this.serverUrl}auth-data?identity=${id}`,
       { headers: this.authHeader });
   }
 
@@ -311,37 +278,53 @@ export class BackendService {
       );
   }
 
-  getManualCodingList(workspace_id:number, testPersonIds: number[]): Observable<unknown> {
-    const params = new HttpParams().set('testPersons', testPersonIds.join(','));
-    return this.http
-      .get<unknown>(
-      `${this.serverUrl}admin/workspace/${workspace_id}/coding/manual`,
-      { headers: this.authHeader, params })
-      .pipe(
-        catchError(() => of(false)),
-        map(res => res)
-      );
+  getCodingList(workspace_id:number, page: number = 1, limit: number = 100): Observable<PaginatedResponse<CodingListItem>> {
+    const identity = this.appService.loggedUser?.sub || '';
+    return this.appService.createToken(workspace_id, identity, 1).pipe(
+      catchError(() => of('')),
+      switchMap(token => {
+        const params = new HttpParams()
+          .set('page', page.toString())
+          .set('limit', limit.toString())
+          .set('identity', identity)
+          .set('authToken', token)
+          .set('serverUrl', window.location.origin);
+        return this.http
+          .get<PaginatedResponse<CodingListItem>>(
+          `${this.serverUrl}admin/workspace/${workspace_id}/coding/coding-list`,
+          { headers: this.authHeader, params }
+        )
+          .pipe(
+            catchError(() => of({
+              data: [],
+              total: 0,
+              page,
+              limit
+            })),
+            map(res => res)
+          );
+      })
+    );
   }
 
-  getCodingList(workspace_id:number, page: number = 1, limit: number = 100): Observable<PaginatedResponse<CodingListItem>> {
-    const params = new HttpParams()
-      .set('page', page.toString())
-      .set('limit', limit.toString());
+  getCodingListAsCsv(workspace_id: number): Observable<ArrayBuffer> {
+    return this.http.get(
+      `${this.serverUrl}admin/workspace/${workspace_id}/coding/coding-list/csv`,
+      {
+        headers: this.authHeader,
+        responseType: 'arraybuffer'
+      }
+    );
+  }
 
-    return this.http
-      .get<PaginatedResponse<CodingListItem>>(
-      `${this.serverUrl}admin/workspace/${workspace_id}/coding/coding-list`,
-      { headers: this.authHeader, params }
-    )
-      .pipe(
-        catchError(() => of({
-          data: [],
-          total: 0,
-          page,
-          limit
-        })),
-        map(res => res)
-      );
+  getCodingListAsExcel(workspace_id: number): Observable<ArrayBuffer> {
+    return this.http.get(
+      `${this.serverUrl}admin/workspace/${workspace_id}/coding/coding-list/excel`,
+      {
+        headers: this.authHeader,
+        responseType: 'arraybuffer'
+      }
+    );
   }
 
   getCodingStatistics(workspace_id:number): Observable<CodingStatistics> {
@@ -450,7 +433,6 @@ export class BackendService {
       { headers: this.authHeader });
   }
 
-
   createUnitNote(workspaceId: number, createUnitNoteDto: CreateUnitNoteDto): Observable<UnitNoteDto> {
     return this.http.post<UnitNoteDto>(
       `${this.serverUrl}admin/workspace/${workspaceId}/unit-notes`,
@@ -532,18 +514,6 @@ export class BackendService {
     return this.http.get<FilesDto[]>(
       `${this.serverUrl}admin/workspace/${workspaceId}/unit/${testPerson}/${unitId}`,
       { headers });
-  }
-
-  getResponsesUnitIds(workspaceId: number, testPerson: string): Observable<{ unit_id:string }[]> {
-    return this.http.get<{ unit_id:string }[]>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/units/${testPerson}`,
-      { headers: this.authHeader });
-  }
-
-  getTestGroups(workspaceId: number): Observable<TestGroupsInListDto[]> {
-    return this.http.get<TestGroupsInListDto[]>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/test-groups`,
-      { headers: this.authHeader });
   }
 
   getTestPersons(workspaceId: number): Observable<number[]> {
@@ -656,5 +626,49 @@ export class BackendService {
       .pipe(
         catchError(() => of([]))
       );
+  }
+
+  getResourcePackages(workspaceId:number): Observable<ResourcePackageDto[]> {
+    return this.http.get<ResourcePackageDto[]>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/resource-packages`,
+      { headers: this.authHeader }
+    ).pipe(
+      catchError(() => of([]))
+    );
+  }
+
+  deleteResourcePackages(workspaceId:number, ids: number[]): Observable<boolean> {
+    const params = new HttpParams()
+      .set('id', ids.join(','))
+      .set('workspaceId', workspaceId);
+    return this.http.delete(
+      `${this.serverUrl}admin/workspace/${workspaceId}/resource-packages`,
+      { headers: this.authHeader, params }
+    ).pipe(
+      catchError(() => of(false)),
+      map(() => true)
+    );
+  }
+
+  downloadResourcePackage(workspaceId:number, name: string): Observable<Blob> {
+    return this.http.get(
+      `${this.serverUrl}admin/workspace/${workspaceId}/resource-packages/${name}`,
+      { headers: this.authHeader, responseType: 'blob' }
+    ).pipe(
+      catchError(() => of(new Blob([])))
+    );
+  }
+
+  uploadResourcePackage(workspaceId:number, file: File): Observable<number> {
+    const formData = new FormData();
+    formData.append('resourcePackage', file);
+
+    return this.http.post<number>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/resource-packages`,
+      formData,
+      { headers: this.authHeader }
+    ).pipe(
+      catchError(() => of(-1))
+    );
   }
 }

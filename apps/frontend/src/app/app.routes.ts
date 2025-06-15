@@ -21,6 +21,11 @@ export const routes: Routes = [
     component: HomeComponent
   },
   {
+    path: 'replay/:testPerson/:unitId/:page/:anchor',
+    canActivate: [canActivateAuth],
+    component: ReplayComponent
+  },
+  {
     path: 'replay/:testPerson/:unitId/:page',
     canActivate: [canActivateAuth],
     component: ReplayComponent

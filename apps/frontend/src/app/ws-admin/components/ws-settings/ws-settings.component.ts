@@ -10,7 +10,6 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { CdkTextareaAutosize } from '@angular/cdk/text-field';
 import { Clipboard } from '@angular/cdk/clipboard';
 import { NgIf } from '@angular/common';
-import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
 import { WsAccessRightsComponent } from '../ws-access-rights/ws-access-rights.component';
 
@@ -36,7 +35,6 @@ export class WsSettingsComponent {
   duration = 60;
 
   constructor(
-    private backendService: BackendService,
     private appService: AppService,
     private clipboard: Clipboard,
     private snackBar: MatSnackBar
@@ -44,7 +42,7 @@ export class WsSettingsComponent {
   }
 
   createToken(): void {
-    this.backendService
+    this.appService
       .createToken(this.appService.selectedWorkspaceId, this.appService.loggedUser?.sub || '', this.duration)
       .subscribe(authToken => {
         this.authToken = authToken;

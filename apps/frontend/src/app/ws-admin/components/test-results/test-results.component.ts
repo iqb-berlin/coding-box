@@ -218,18 +218,16 @@ export class TestResultsComponent implements OnInit {
   }
 
   replayUnit() {
-    this.backendService
+    this.appService
       .createToken(this.appService.selectedWorkspaceId, this.appService.loggedUser?.sub || '', 1)
       .subscribe(token => {
         const queryParams = {
           auth: token
         };
-          // const page = this.replayComponent.responses?.unit_state?.CURRENT_PAGE_ID;
-
         const url = this.router
           .serializeUrl(
             this.router.createUrlTree(
-              [`replay/${this.testPerson.group}@${this.testPerson.code}@${this.selectedBooklet?.id}/${this.selectedUnit?.alias}/0`],
+              [`replay/${this.testPerson.group}@${this.testPerson.code}@${this.selectedBooklet?.id}/${this.selectedUnit?.alias}/0/0`],
               { queryParams: queryParams })
           );
         window.open(`#/${url}`, '_blank');
@@ -624,7 +622,6 @@ export class TestResultsComponent implements OnInit {
       const terminatedTime = Number(terminatedLog.ts);
 
       if (!Number.isNaN(pollingTime) && !Number.isNaN(terminatedTime)) {
-        console.log(terminatedLog, pollingLog);
         return terminatedTime - pollingTime;
       }
     }
@@ -651,26 +648,19 @@ export class TestResultsComponent implements OnInit {
     return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
   }
 
-  /**
-   * Checks if all units in a booklet have been visited
-   * @param booklet The booklet to check
-   * @returns True if all units have been visited, false otherwise
-   */
   isBookletComplete(booklet: any): boolean {
-    if (!booklet.logs || !Array.isArray(booklet.logs) || booklet.logs.length === 0 ||
-        !booklet.units || !Array.isArray(booklet.units) || booklet.units.length === 0) {
-      return false;
+    if (!booklet.logs || !Array.isArray(booklet.logs) || booklet.logs.length === 0) {
+      return true;
     }
 
-    // Get all log entries with key CURRENT_UNIT_ID
+    if (!booklet.units || !Array.isArray(booklet.units) || booklet.units.length === 0) {
+      return false;
+    }
     const unitIdLogs = booklet.logs.filter((log: any) => log.key === 'CURRENT_UNIT_ID');
-
-    // Get all unit aliases
     const unitAliases = booklet.units
       .map((unit: any) => unit.alias)
       .filter((alias: string | null) => alias !== null) as string[];
 
-    // Check if each unit alias has a corresponding log entry
     const allUnitsVisited = unitAliases.every(
       (alias: string) => unitIdLogs.some((log: any) => log.parameter === alias)
     );
@@ -678,14 +668,12 @@ export class TestResultsComponent implements OnInit {
     return allUnitsVisited && unitAliases.length > 0;
   }
 
-  /**
-   * Checks if a booklet has a short processing time (less than the threshold)
-   * @param booklet The booklet to check
-   * @returns True if the processing time is short, false otherwise
-   */
   hasShortProcessingTime(booklet: any): boolean {
+    if (!booklet.logs || !Array.isArray(booklet.logs) || booklet.logs.length === 0) {
+      return false;
+    }
+
     const processingTime = this.calculateBookletProcessingTime(booklet);
-    console.log(processingTime, 'processingTime');
     return processingTime === null || processingTime < this.SHORT_PROCESSING_TIME_THRESHOLD_MS;
   }
 
