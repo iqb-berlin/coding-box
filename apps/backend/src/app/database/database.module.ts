@@ -31,6 +31,7 @@ import { PersonService } from './services/person.service';
 import { AuthService } from '../auth/service/auth.service';
 import { UnitTagService } from './services/unit-tag.service';
 import { UnitNoteService } from './services/unit-note.service';
+import { ResourcePackageService } from './services/resource-package.service';
 
 @Module({
   imports: [
@@ -92,7 +93,7 @@ import { UnitNoteService } from './services/unit-note.service';
       UnitNote
     ])
   ],
-  providers: [UsersService, WorkspaceService, TestcenterService, UploadResultsService, PersonService, AuthService, JwtService, UnitTagService, UnitNoteService],
+  providers: [UsersService, WorkspaceService, TestcenterService, UploadResultsService, PersonService, AuthService, JwtService, UnitTagService, UnitNoteService, ResourcePackageService],
   exports: [
     User,
     FileUpload,
@@ -106,6 +107,7 @@ import { UnitNoteService } from './services/unit-note.service';
     WorkspaceUser,
     TestcenterService,
     UploadResultsService,
+    ResourcePackageService,
     ResourcePackage,
     PersonService,
     AuthService,

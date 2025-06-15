@@ -27,6 +27,7 @@ import { Subject, Subscription } from 'rxjs';
 import { debounceTime } from 'rxjs/operators';
 import { FilesValidationDialogComponent } from '../files-validation-result/files-validation.component';
 import { TestCenterImportComponent } from '../test-center-import/test-center-import.component';
+import { ResourcePackagesDialogComponent } from '../resource-packages-dialog/resource-packages-dialog.component';
 import { AppService } from '../../../services/app.service';
 import { BackendService } from '../../../services/backend.service';
 import { HasSelectionValuePipe } from '../../../shared/pipes/hasSelectionValue.pipe';
@@ -91,6 +92,9 @@ export class TestFilesComponent implements OnInit, OnDestroy {
     { value: '1MB-10MB', display: '1MB - 10MB' },
     { value: '10MB+', display: '> 10MB' }
   ];
+
+  // Flag to track if resource packages have been modified
+  resourcePackagesModified = false;
 
   textFilterValue: string = '';
   @ViewChild(MatSort) sort!: MatSort;
@@ -416,5 +420,29 @@ export class TestFilesComponent implements OnInit, OnDestroy {
       return 'description';
     }
     return 'insert_drive_file';
+  }
+
+  // Resource Packages methods
+
+  /**
+   * Opens the resource packages dialog
+   */
+  openResourcePackagesDialog(): void {
+    const dialogRef = this.dialog.open(ResourcePackagesDialogComponent, {
+      width: '90%',
+      maxWidth: '1200px',
+      data: {
+        workspaceId: this.appService.selectedWorkspaceId
+      }
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      // If result is true, resource packages were modified (uploaded or deleted)
+      if (result === true) {
+        this.resourcePackagesModified = true;
+        // Optionally reload test files if they include resource packages
+        // this.loadTestFiles(true);
+      }
+    });
   }
 }

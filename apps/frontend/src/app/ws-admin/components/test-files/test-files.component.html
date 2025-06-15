@@ -1,21 +1,25 @@
 <div class="fx-column-start-start fx-gap-10 container">
-    <div class="fx-row-center-center-stretch fx-gap-20 upload-buttons">
-      <a mat-raised-button color="primary" (click)="testCenterImport()">
-        <mat-icon>upload</mat-icon>
-        Testcenter Import
-      </a>
-      <a mat-raised-button color="primary" (click)="hiddenFileInput.click()">
-        <mat-icon>upload</mat-icon>
-        Test Dateien hochladen
-      </a>
-      <a mat-raised-button color="primary" [disabled]="tableCheckboxSelection.selected.length === 0" (click)="deleteFiles()">
-        <mat-icon>delete</mat-icon>
-        Test Datei(en) löschen
-      </a>
-      <a mat-raised-button color="primary" (click)="validateFiles()">
-        <mat-icon>fact_check</mat-icon>
-        Validieren
-      </a>
+  <div class="fx-row-center-center-stretch fx-gap-20 upload-buttons">
+    <a mat-raised-button color="primary" (click)="testCenterImport()">
+      <mat-icon>upload</mat-icon>
+      Testcenter Import
+    </a>
+    <a mat-raised-button color="primary" (click)="hiddenFileInput.click()">
+      <mat-icon>upload</mat-icon>
+      Test Dateien hochladen
+    </a>
+    <a mat-raised-button color="primary" [disabled]="tableCheckboxSelection.selected.length === 0" (click)="deleteFiles()">
+      <mat-icon>delete</mat-icon>
+      Test Datei(en) löschen
+    </a>
+    <a mat-raised-button color="primary" (click)="validateFiles()">
+      <mat-icon>fact_check</mat-icon>
+      Validieren
+    </a>
+    <a mat-raised-button color="primary" (click)="openResourcePackagesDialog()">
+      <mat-icon>archive</mat-icon>
+      Pakete
+    </a>
   </div>
 
   <input #hiddenFileInput type="file"
@@ -30,6 +34,7 @@
     <p class="loading-text" *ngIf="isValidating">Validierung wird durchgeführt...</p>
     <p class="loading-text" *ngIf="!isValidating">Dateiliste wird geladen...</p>
   </div>
+
 
   @if (!isLoading) {
     <div class="data-card">
@@ -128,4 +133,5 @@
       </div>
     </div>
   }
+
 </div>
