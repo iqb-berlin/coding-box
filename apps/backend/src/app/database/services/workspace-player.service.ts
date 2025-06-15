@@ -3,11 +3,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import FileUpload from '../entities/file_upload.entity';
 import { FilesDto } from '../../../../../../api-dto/files/files.dto';
-import { Unit } from '../entities/unit.entity';
-import { Booklet } from '../entities/booklet.entity';
 import Persons from '../entities/persons.entity';
-import { ResponseDto } from '../../../../../../api-dto/responses/response-dto';
-import Responses from '../entities/responses.entity';
+import { ResponseEntity } from '../entities/response.entity';
 
 @Injectable()
 export class WorkspacePlayerService {
@@ -16,14 +13,11 @@ export class WorkspacePlayerService {
   constructor(
     @InjectRepository(FileUpload)
     private fileUploadRepository: Repository<FileUpload>,
-    @InjectRepository(Unit)
-    private unitRepository: Repository<Unit>,
-    @InjectRepository(Booklet)
-    private bookletRepository: Repository<Booklet>,
     @InjectRepository(Persons)
     private personsRepository: Repository<Persons>,
-    @InjectRepository(Responses)
-    private responsesRepository: Repository<Responses>
+    @InjectRepository(ResponseEntity)
+    private responseRepository: Repository<ResponseEntity>
+
   ) {}
 
   async findPlayer(workspaceId: number, playerName: string): Promise<FilesDto[]> {
@@ -107,13 +101,13 @@ export class WorkspacePlayerService {
     return persons.map(person => person.id);
   }
 
-  async findTestPersonUnits(id: number, testPerson: string): Promise<ResponseDto[]> {
+  async findTestPersonUnits(id: number, testPerson: string): Promise<ResponseEntity[]> {
     this.logger.log('Returning all unit Ids for testperson ', testPerson);
-    const res = this.responsesRepository
+    const res = this.responseRepository
       .find({
-        select: ['unit_id'],
-        where: { test_person: testPerson },
-        order: { unit_id: 'ASC' }
+        select: ['unitid'],
+        //where: { testPerson: testPerson },
+        order: { unitid: 'ASC' }
       });
     if (res) {
       return res;

@@ -15,7 +15,6 @@ import { WorkspacePlayerService } from './services/workspace-player.service';
 import Workspace from './entities/workspace.entity';
 import WorkspaceAdmin from './entities/workspace-admin.entity';
 import FileUpload from './entities/file_upload.entity';
-import Responses from './entities/responses.entity';
 import WorkspaceUser from './entities/workspace_user.entity';
 import { TestcenterService } from './services/testcenter.service';
 import ResourcePackage from './entities/resource-package.entity';
@@ -46,10 +45,8 @@ import { ResourcePackageService } from './services/resource-package.service';
     Workspace,
     WorkspaceAdmin,
     FileUpload,
-    Responses,
     Persons,
     Unit,
-    Responses,
     BookletLog,
     Session,
     UnitLastState,
@@ -69,7 +66,7 @@ import { ResourcePackageService } from './services/resource-package.service';
         password: configService.get('POSTGRES_PASSWORD'),
         database: configService.get('POSTGRES_DB'),
         entities: [BookletInfo, Booklet, Session, BookletLog, Unit, UnitLog, UnitLastState, ResponseEntity,
-          User, Workspace, WorkspaceAdmin, FileUpload, Responses, WorkspaceUser, ResourcePackage, Logs, Persons, ChunkEntity, BookletLog, Session, UnitLog, UnitTag, UnitNote
+          User, Workspace, WorkspaceAdmin, FileUpload, WorkspaceUser, ResourcePackage, Logs, Persons, ChunkEntity, BookletLog, Session, UnitLog, UnitTag, UnitNote
         ],
         synchronize: false
       }),
@@ -81,12 +78,10 @@ import { ResourcePackageService } from './services/resource-package.service';
       WorkspaceAdmin,
       FileUpload,
       Logs,
-      Responses,
       ResponseEntity,
       WorkspaceUser,
       ResourcePackage,
       Persons,
-      Responses,
       Booklet,
       BookletInfo,
       Unit,
@@ -122,7 +117,6 @@ import { ResourcePackageService } from './services/resource-package.service';
     FileUpload,
     Logs,
     Persons,
-    Responses,
     Workspace,
     WorkspaceAdmin,
     WorkspaceService,

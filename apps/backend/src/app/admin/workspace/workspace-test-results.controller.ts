@@ -14,7 +14,6 @@ import { logger } from 'nx/src/utils/logger';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
-import { ResponseDto } from '../../../../../../api-dto/responses/response-dto';
 import { UploadResultsService } from '../../database/services/upload-results.service';
 import Persons from '../../database/entities/persons.entity';
 import { ResponseEntity } from '../../database/entities/response.entity';
@@ -204,7 +203,7 @@ export class WorkspaceTestResultsController {
       }
     }
   })
-  async findWorkspaceResponse(@WorkspaceId() id: number, @Query('page') page: number = 1, @Query('limit') limit: number = 20): Promise<{ data: ResponseDto[]; total: number; page: number; limit: number }> {
+  async findWorkspaceResponse(@WorkspaceId() id: number, @Query('page') page: number = 1, @Query('limit') limit: number = 20): Promise<{ data: ResponseEntity[]; total: number; page: number; limit: number }> {
     const [responses, total] = await this.workspaceTestResultsService.findWorkspaceResponses(id, { page, limit });
     return {
       data: responses,
