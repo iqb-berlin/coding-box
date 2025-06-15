@@ -179,7 +179,7 @@ ALTER TABLE response
 
 -- changeset jurei733:25
 ALTER TABLE "public"."resource_package" ADD COLUMN "workspaceId" INTEGER NOT NULL default 0;
--- rollback ALTER TABLE "public"."resource_package" DROP COLUMN "workspace_id";
+-- rollback ALTER TABLE "public"."resource_package" DROP COLUMN "workspaceId";
 
 -- changeset jurei733:26
 ALTER TABLE "public"."resource_package" ADD COLUMN "package_size" BIGINT DEFAULT 0 NOT NULL;
