@@ -177,3 +177,10 @@ ALTER TABLE response
   ALTER COLUMN score SET NOT NULL;
 -- rollback ALTER TABLE response ALTER COLUMN code TYPE INTEGER, ALTER COLUMN code DROP DEFAULT, ALTER COLUMN code DROP NOT NULL, ALTER COLUMN score TYPE INTEGER, ALTER COLUMN score DROP DEFAULT, ALTER COLUMN score DROP NOT NULL;
 
+-- changeset jurei733:25
+ALTER TABLE "public"."resource_package" ADD COLUMN "workspaceId" INTEGER NOT NULL;
+-- rollback ALTER TABLE "public"."resource_package" DROP COLUMN "workspace_id";
+
+-- changeset jurei733:26
+ALTER TABLE "public"."resource_package" ADD COLUMN "package_size" BIGINT DEFAULT 0 NOT NULL;
+-- rollback ALTER TABLE "public"."resource_package" DROP COLUMN "package_size";

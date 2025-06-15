@@ -32,6 +32,7 @@ import { UpdateUnitTagDto } from '../../../../../api-dto/unit-tags/update-unit-t
 import { UnitNoteDto } from '../../../../../api-dto/unit-notes/unit-note.dto';
 import { CreateUnitNoteDto } from '../../../../../api-dto/unit-notes/create-unit-note.dto';
 import { UpdateUnitNoteDto } from '../../../../../api-dto/unit-notes/update-unit-note.dto';
+import { ResourcePackageDto } from '../../../../../api-dto/resource-package/resource-package-dto';
 
 interface PaginatedResponse<T> {
   data: T[];
@@ -625,5 +626,49 @@ export class BackendService {
       .pipe(
         catchError(() => of([]))
       );
+  }
+
+  getResourcePackages(workspaceId:number): Observable<ResourcePackageDto[]> {
+    return this.http.get<ResourcePackageDto[]>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/resource-packages`,
+      { headers: this.authHeader }
+    ).pipe(
+      catchError(() => of([]))
+    );
+  }
+
+  deleteResourcePackages(workspaceId:number, ids: number[]): Observable<boolean> {
+    const params = new HttpParams()
+      .set('id', ids.join(','))
+      .set('workspaceId', workspaceId);
+    return this.http.delete(
+      `${this.serverUrl}admin/workspace/${workspaceId}/resource-packages`,
+      { headers: this.authHeader, params }
+    ).pipe(
+      catchError(() => of(false)),
+      map(() => true)
+    );
+  }
+
+  downloadResourcePackage(workspaceId:number, name: string): Observable<Blob> {
+    return this.http.get(
+      `${this.serverUrl}admin/workspace/${workspaceId}/resource-packages/${name}`,
+      { headers: this.authHeader, responseType: 'blob' }
+    ).pipe(
+      catchError(() => of(new Blob([])))
+    );
+  }
+
+  uploadResourcePackage(workspaceId:number, file: File): Observable<number> {
+    const formData = new FormData();
+    formData.append('resourcePackage', file);
+
+    return this.http.post<number>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/resource-packages`,
+      formData,
+      { headers: this.authHeader }
+    ).pipe(
+      catchError(() => of(-1))
+    );
   }
 }

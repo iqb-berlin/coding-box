@@ -22,23 +22,24 @@ export class ResourcePackageService {
   ) {
   }
 
-  async findResourcePackages(): Promise<ResourcePackageDto[]> {
-    this.logger.log('Returning resource packages.');
+  async findResourcePackages(workspaceId: number): Promise<ResourcePackageDto[]> {
+    this.logger.log(`Returning resource packages for workspace ${workspaceId}.`);
     return this.resourcePackageRepository
       .find({
+        where: { workspaceId },
         order: { createdAt: 'DESC' }
       });
   }
 
-  async removeResourcePackages(ids: number[]): Promise<void> {
-    await Promise.all(ids.map(async id => this.removeResourcePackage(id)));
+  async removeResourcePackages(workspaceId: number, ids: number[]): Promise<void> {
+    await Promise.all(ids.map(async id => this.removeResourcePackage(workspaceId, id)));
   }
 
-  async removeResourcePackage(id: number): Promise<void> {
-    this.logger.log(`Deleting resource package with id ${id}.`);
+  async removeResourcePackage(workspaceId: number, id: number): Promise<void> {
+    this.logger.log(`Deleting resource package with id ${id} from workspace ${workspaceId}.`);
     const resourcePackage = await this.resourcePackageRepository
       .findOne({
-        where: { id: id }
+        where: { id: id, workspaceId: workspaceId }
       });
     if (resourcePackage) {
       const elementPath = `${this.resourcePackagesPath}/${resourcePackage.name}`;
@@ -51,15 +52,15 @@ export class ResourcePackageService {
     }
   }
 
-  async create(zippedResourcePackage: Express.Multer.File): Promise<number> {
-    this.logger.log('Creating resource package.');
+  async create(workspaceId: number, zippedResourcePackage: Express.Multer.File): Promise<number> {
+    this.logger.log(`Creating resource package for workspace ${workspaceId}.`);
     const zip = new AdmZip(zippedResourcePackage.buffer);
     const packageNameArray = zippedResourcePackage.originalname.split('.itcr.zip');
     if (packageNameArray.length === 2) {
       const packageName = packageNameArray[0];
       const resourcePackage = await this.resourcePackageRepository
         .findOne({
-          where: { name: packageName }
+          where: { name: packageName, workspaceId }
         });
       if (!resourcePackage) {
         const packageFiles = zip.getEntries()
@@ -67,9 +68,12 @@ export class ResourcePackageService {
         const zipExtractAllToAsync = util.promisify(zip.extractAllToAsync);
         return zipExtractAllToAsync(`${this.resourcePackagesPath}/${packageName}`, true, true)
           .then(async () => {
+            const packageSize = zippedResourcePackage.buffer.length;
             const newResourcePackage = this.resourcePackageRepository.create({
+              workspaceId,
               name: packageName,
               elements: packageFiles,
+              packageSize,
               createdAt: new Date()
             });
             await this.resourcePackageRepository.save(newResourcePackage);
@@ -88,8 +92,18 @@ export class ResourcePackageService {
     throw new Error('No Resource Package');
   }
 
-  getZippedResourcePackage(name: string): Buffer {
-    this.logger.log('Returning zipped resource package.');
-    return fs.readFileSync(`${this.resourcePackagesPath}/${name}/${name}.itcr.zip`);
+  async getZippedResourcePackage(workspaceId: number, name: string): Promise<Buffer> {
+    this.logger.log(`Returning zipped resource package ${name} for workspace ${workspaceId}.`);
+
+    // Check if the resource package exists for the given workspace
+    const resourcePackage = await this.resourcePackageRepository.findOne({
+      where: { name, workspaceId }
+    });
+
+    if (!resourcePackage) {
+      throw new ResourcePackageNotFoundException(0, 'GET', `Resource package ${name} not found in workspace ${workspaceId}`);
+    }
+
+    return fs.readFileSync(`${this.resourcePackagesPath}/${name}/${name}.itcs.zip`);
   }
 }

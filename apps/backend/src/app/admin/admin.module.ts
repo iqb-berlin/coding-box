@@ -7,6 +7,7 @@ import { WorkspaceController } from './workspace/workspace.controller';
 import { LogoController } from './logo/logo.controller';
 import { UnitTagsController } from './unit-tags/unit-tags.controller';
 import { UnitNotesController } from './unit-notes/unit-notes.controller';
+import { ResourcePackageController } from './resource-packages/resource-package.controller';
 
 @Module({
   imports: [
@@ -15,7 +16,7 @@ import { UnitNotesController } from './unit-notes/unit-notes.controller';
     HttpModule
   ],
   controllers: [
-    UsersController, WorkspaceController, LogoController, UnitTagsController, UnitNotesController
+    UsersController, WorkspaceController, LogoController, UnitTagsController, UnitNotesController, ResourcePackageController
   ],
   providers: []
 })
