@@ -6,6 +6,12 @@ import { JwtService } from '@nestjs/jwt';
 import User from './entities/user.entity';
 import { UsersService } from './services/users.service';
 import { WorkspaceService } from './services/workspace.service';
+import { WorkspaceCoreService } from './services/workspace-core.service';
+import { WorkspaceFilesService } from './services/workspace-files.service';
+import { WorkspaceTestResultsService } from './services/workspace-test-results.service';
+import { WorkspaceUsersService } from './services/workspace-users.service';
+import { WorkspaceCodingService } from './services/workspace-coding.service';
+import { WorkspacePlayerService } from './services/workspace-player.service';
 import Workspace from './entities/workspace.entity';
 import WorkspaceAdmin from './entities/workspace-admin.entity';
 import FileUpload from './entities/file_upload.entity';
@@ -93,7 +99,24 @@ import { ResourcePackageService } from './services/resource-package.service';
       UnitNote
     ])
   ],
-  providers: [UsersService, WorkspaceService, TestcenterService, UploadResultsService, PersonService, AuthService, JwtService, UnitTagService, UnitNoteService, ResourcePackageService],
+  providers: [
+    UsersService,
+    WorkspaceService,
+    WorkspaceCoreService,
+    WorkspaceFilesService,
+    WorkspaceTestResultsService,
+    WorkspaceUsersService,
+    WorkspaceCodingService,
+    WorkspacePlayerService,
+    TestcenterService,
+    UploadResultsService,
+    PersonService,
+    AuthService,
+    JwtService,
+    UnitTagService,
+    UnitNoteService,
+    ResourcePackageService
+  ],
   exports: [
     User,
     FileUpload,
@@ -103,6 +126,12 @@ import { ResourcePackageService } from './services/resource-package.service';
     Workspace,
     WorkspaceAdmin,
     WorkspaceService,
+    WorkspaceCoreService,
+    WorkspaceFilesService,
+    WorkspaceTestResultsService,
+    WorkspaceUsersService,
+    WorkspaceCodingService,
+    WorkspacePlayerService,
     UsersService,
     WorkspaceUser,
     TestcenterService,

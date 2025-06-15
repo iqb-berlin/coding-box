@@ -7,17 +7,17 @@ import {
   ApiParam, ApiQuery, ApiTags
 } from '@nestjs/swagger';
 import { Response } from 'express';
-import { WorkspaceService } from '../../database/services/workspace.service';
 import { CodingStatistics } from '../../database/services/shared-types';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
+import { WorkspaceCodingService } from '../../database/services/workspace-coding.service';
 
 @ApiTags('Admin Workspace Coding')
 @Controller('admin/workspace')
 export class WorkspaceCodingController {
   constructor(
-    private workspaceService: WorkspaceService
+    private workspaceCodingService: WorkspaceCodingService
   ) {}
 
   @Get(':workspace_id/coding')
@@ -27,14 +27,14 @@ export class WorkspaceCodingController {
     description: 'Coding statistics retrieved successfully.'
   })
   async codeTestPersons(@Query('testPersons') testPersons: string, @WorkspaceId() workspace_id: number): Promise<CodingStatistics> {
-    return this.workspaceService.codeTestPersons(workspace_id, testPersons);
+    return this.workspaceCodingService.codeTestPersons(workspace_id, testPersons);
   }
 
   @Get(':workspace_id/coding/manual')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiParam({ name: 'workspace_id', type: Number })
   async getManualTestPersons(@Query('testPersons') testPersons: string, @WorkspaceId() workspace_id: number): Promise<unknown> {
-    return this.workspaceService.getManualTestPersons(workspace_id, testPersons);
+    return this.workspaceCodingService.getManualTestPersons(workspace_id, testPersons);
   }
 
   @Get(':workspace_id/coding/coding-list')
@@ -108,7 +108,7 @@ export class WorkspaceCodingController {
     page: number;
     limit: number;
   }> {
-    const [items, total] = await this.workspaceService.getCodingList(workspace_id, authToken, serverUrl, { page, limit });
+    const [items, total] = await this.workspaceCodingService.getCodingList(workspace_id, authToken, serverUrl, { page, limit });
     return {
       data: items,
       total,
@@ -133,7 +133,7 @@ export class WorkspaceCodingController {
     }
   })
   async getCodingListAsCsv(@WorkspaceId() workspace_id: number, @Res() res: Response): Promise<void> {
-    const csvData = await this.workspaceService.getCodingListAsCsv(workspace_id);
+    const csvData = await this.workspaceCodingService.getCodingListAsCsv(workspace_id);
 
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', `attachment; filename="coding-list-${new Date().toISOString().slice(0, 10)}.csv"`);
@@ -156,7 +156,7 @@ export class WorkspaceCodingController {
     }
   })
   async getCodingListAsExcel(@WorkspaceId() workspace_id: number, @Res() res: Response): Promise<void> {
-    const excelData = await this.workspaceService.getCodingListAsExcel(workspace_id);
+    const excelData = await this.workspaceCodingService.getCodingListAsExcel(workspace_id);
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="coding-list-${new Date().toISOString().slice(0, 10)}.xlsx"`);
@@ -171,6 +171,6 @@ export class WorkspaceCodingController {
     description: 'Coding statistics retrieved successfully.'
   })
   async getCodingStatistics(@WorkspaceId() workspace_id: number): Promise<CodingStatistics> {
-    return this.workspaceService.getCodingStatistics(workspace_id);
+    return this.workspaceCodingService.getCodingStatistics(workspace_id);
   }
 }

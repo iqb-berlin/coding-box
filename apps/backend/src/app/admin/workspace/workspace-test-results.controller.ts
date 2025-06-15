@@ -11,7 +11,6 @@ import {
 } from '@nestjs/swagger';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { logger } from 'nx/src/utils/logger';
-import { WorkspaceService } from '../../database/services/workspace.service';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
@@ -19,12 +18,13 @@ import { ResponseDto } from '../../../../../../api-dto/responses/response-dto';
 import { UploadResultsService } from '../../database/services/upload-results.service';
 import Persons from '../../database/entities/persons.entity';
 import { ResponseEntity } from '../../database/entities/response.entity';
+import { WorkspaceTestResultsService } from '../../database/services/workspace-test-results.service';
 
 @ApiTags('Admin Workspace Test Results')
 @Controller('admin/workspace')
 export class WorkspaceTestResultsController {
   constructor(
-    private workspaceService: WorkspaceService,
+    private workspaceTestResultsService: WorkspaceTestResultsService,
     private uploadResults: UploadResultsService
   ) {}
 
@@ -62,7 +62,7 @@ export class WorkspaceTestResultsController {
                            @Query('page') page: number = 1,
                            @Query('limit') limit: number = 20
   ): Promise<{ data: Persons[]; total: number; page: number; limit: number }> {
-    const [data, total] = await this.workspaceService.findTestResults(workspace_id, { page, limit });
+    const [data, total] = await this.workspaceTestResultsService.findTestResults(workspace_id, { page, limit });
     return {
       data, total, page, limit
     };
@@ -160,7 +160,7 @@ export class WorkspaceTestResultsController {
           logs: { id: number; unitid: number; ts: string; key: string; parameter: string }[];
         }[];
       }[]> {
-    return this.workspaceService.findPersonTestResults(personId, workspace_id);
+    return this.workspaceTestResultsService.findPersonTestResults(personId, workspace_id);
   }
 
   @Delete(':workspace_id/test-results')
@@ -174,7 +174,7 @@ export class WorkspaceTestResultsController {
           warnings: string[];
         };
       }> {
-    return this.workspaceService.deleteTestPersons(Number(workspaceId), testPersonIds);
+    return this.workspaceTestResultsService.deleteTestPersons(Number(workspaceId), testPersonIds);
   }
 
   @Get(':workspace_id/responses')
@@ -205,7 +205,7 @@ export class WorkspaceTestResultsController {
     }
   })
   async findWorkspaceResponse(@WorkspaceId() id: number, @Query('page') page: number = 1, @Query('limit') limit: number = 20): Promise<{ data: ResponseDto[]; total: number; page: number; limit: number }> {
-    const [responses, total] = await this.workspaceService.findWorkspaceResponses(id, { page, limit });
+    const [responses, total] = await this.workspaceTestResultsService.findWorkspaceResponses(id, { page, limit });
     return {
       data: responses,
       total,
@@ -220,7 +220,7 @@ export class WorkspaceTestResultsController {
   async findResponse(@WorkspaceId() id: number,
     @Param('testPerson') testPerson:string,
     @Param('unitId') unitId:string): Promise<{ responses: { id: string, content: { id: string; value: string; status: string }[] }[] }> {
-    return this.workspaceService.findUnitResponse(id, testPerson, unitId);
+    return this.workspaceTestResultsService.findUnitResponse(id, testPerson, unitId);
   }
 
   @Get(':workspace_id/coding/responses/:status')
@@ -253,7 +253,7 @@ export class WorkspaceTestResultsController {
     }
   })
   async getResponsesByStatus(@WorkspaceId() workspace_id: number, @Param('status') status: string, @Query('page') page: number = 1, @Query('limit') limit: number = 20): Promise<{ data: ResponseEntity[]; total: number; page: number; limit: number }> {
-    const [responses, total] = await this.workspaceService.getResponsesByStatus(workspace_id, status, { page, limit });
+    const [responses, total] = await this.workspaceTestResultsService.getResponsesByStatus(workspace_id, status, { page, limit });
     return {
       data: responses,
       total,
