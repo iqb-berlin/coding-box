@@ -1,6 +1,7 @@
 import {
-  Component, EventEmitter, Output, inject,
-  input
+  Component, inject,
+  input,
+  output
 } from '@angular/core';
 import { UntypedFormGroup } from '@angular/forms';
 import { TranslateService, TranslateModule } from '@ngx-translate/core';
@@ -31,15 +32,17 @@ export class WorkspacesMenuComponent {
   readonly selectedWorkspaces = input.required<number[]>();
   readonly selectedRows = input.required<WorkspaceInListDto[]>();
   readonly checkedRows = input.required<WorkspaceInListDto[]>();
-  @Output() downloadWorkspacesReport: EventEmitter<boolean> = new EventEmitter<boolean>();
-  @Output() workspaceAdded: EventEmitter<UntypedFormGroup> = new EventEmitter<UntypedFormGroup>();
-  @Output() workspaceDeleted: EventEmitter< number[]> = new EventEmitter< number[]>();
-  @Output() workspaceSettingsEdited = new EventEmitter();
-  @Output() workspaceAccessRightsChanged = new EventEmitter();
-  @Output() workspaceEdited: EventEmitter<{ selection: number[], formData: UntypedFormGroup }> =
-    new EventEmitter<{ selection: number[], formData: UntypedFormGroup }>();
+  readonly downloadWorkspacesReport = output<boolean>();
+  readonly workspaceAdded = output<UntypedFormGroup>();
+  readonly workspaceDeleted = output<number[]>();
+  readonly workspaceSettingsEdited = output();
+  readonly workspaceAccessRightsChanged = output();
+  readonly workspaceEdited = output<{
+    selection: number[];
+    formData: UntypedFormGroup;
+  }>();
 
-  @Output() setWorkspaceUsersAccessRight: EventEmitter<number[]> = new EventEmitter<number[]>();
+  readonly setWorkspaceUsersAccessRight = output<number[]>();
 
   addWorkspace(): void {
     const dialogRef = this.editWorkspaceDialog.open(EditWorkspaceComponent, {

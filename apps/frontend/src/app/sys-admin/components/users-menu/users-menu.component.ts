@@ -1,6 +1,7 @@
 import {
-  Component, EventEmitter, Output, inject,
-  input
+  Component, inject,
+  input,
+  output
 } from '@angular/core';
 import { UntypedFormGroup } from '@angular/forms';
 import { MatDialog } from '@angular/material/dialog';
@@ -39,12 +40,14 @@ export class UsersMenuComponent {
   readonly selectedUser = input.required<number[]>();
   readonly selectedRows = input.required<UserFullDto[]>();
   readonly checkedRows = input.required<UserFullDto[]>();
-  @Output() userAdded: EventEmitter<UntypedFormGroup> = new EventEmitter<UntypedFormGroup>();
-  @Output() usersDeleted: EventEmitter< UserFullDto[]> = new EventEmitter< UserFullDto[]>();
-  @Output() userEdited: EventEmitter<{ selection: UserFullDto[], user: UntypedFormGroup }> =
-    new EventEmitter<{ selection: UserFullDto[], user: UntypedFormGroup }>();
+  readonly userAdded = output<UntypedFormGroup>();
+  readonly usersDeleted = output<UserFullDto[]>();
+  readonly userEdited = output<{
+    selection: UserFullDto[];
+    user: UntypedFormGroup;
+  }>();
 
-  @Output() setUserWorkspaceAccessRights: EventEmitter<number[]> = new EventEmitter<number[]>();
+  readonly setUserWorkspaceAccessRights = output<number[]>();
 
   editUser(): void {
     let selectedRows = this.selectedRows();

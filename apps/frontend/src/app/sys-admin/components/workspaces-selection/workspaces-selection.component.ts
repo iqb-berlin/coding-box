@@ -12,8 +12,9 @@ import {
   MatTableDataSource
 } from '@angular/material/table';
 import {
-  Component, EventEmitter, OnInit, Output, SimpleChanges, ViewChild, inject,
-  input
+  Component, OnInit, SimpleChanges, ViewChild, inject,
+  input,
+  output
 } from '@angular/core';
 import { MatSort, MatSortHeader } from '@angular/material/sort';
 import { FormsModule } from '@angular/forms';
@@ -46,9 +47,9 @@ export class WorkspacesSelectionComponent implements OnInit {
 
   @ViewChild(MatSort) sort = new MatSort();
   readonly selectedWorkspacesIds = input.required<number[]>();
-  @Output() workspaceSelectionChanged: EventEmitter<WorkspaceInListDto[]> = new EventEmitter<WorkspaceInListDto[]>();
-  @Output() selectionChanged: EventEmitter<WorkspaceInListDto[]> = new EventEmitter<WorkspaceInListDto[]>();
-  @Output() workspacesUpdated = new EventEmitter<boolean>();
+  readonly workspaceSelectionChanged = output<WorkspaceInListDto[]>();
+  readonly selectionChanged = output<WorkspaceInListDto[]>();
+  readonly workspacesUpdated = output<boolean>();
   readonly workspacesChanged = input.required<boolean>();
 
   ngOnChanges(changes: SimpleChanges) {
