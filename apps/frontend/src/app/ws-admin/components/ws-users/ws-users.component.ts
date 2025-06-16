@@ -12,9 +12,9 @@ import {
   MatTableDataSource
 } from '@angular/material/table';
 import {
-  ViewChild, Component, OnInit, Output, EventEmitter, inject
+  ViewChild, Component, OnInit, inject,
+  output
 } from '@angular/core';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatSort, MatSortHeader } from '@angular/material/sort';
 import { FormsModule } from '@angular/forms';
 import { TranslateService, TranslateModule } from '@ngx-translate/core';
@@ -43,13 +43,11 @@ import {
   selector: 'coding-box-ws-users',
   templateUrl: './ws-users.component.html',
   styleUrls: ['./ws-users.component.scss'],
-  // eslint-disable-next-line max-len
   imports: [MatTable, MatSort, MatColumnDef, MatHeaderCellDef, MatHeaderCell, MatCheckbox, MatCellDef, MatCell, MatSortHeader, MatHeaderRowDef, MatHeaderRow, MatRowDef, MatRow, MatButton, MatTooltip, WrappedIconComponent, FormsModule, TranslateModule, HasSelectionValuePipe, IsSelectedPipe, IsAllSelectedPipe, SearchFilterComponent]
 })
 export class WsUsersComponent implements OnInit {
   private backendService = inject(BackendService);
   private appService = inject(AppService);
-  private snackBar = inject(MatSnackBar);
   private editUserDialog = inject(MatDialog);
   private messageDialog = inject(MatDialog);
   private editUserWorkspaceAccessRightDialog = inject(MatDialog);
@@ -63,12 +61,11 @@ export class WsUsersComponent implements OnInit {
   tableSelectionCheckboxes = new SelectionModel<UserFullDto>(true, []);
   userWorkspaces :WorkspaceInListDto[] = [];
   filteredUserWorkspaces: WorkspaceInListDto[] = [];
-
   selectedUser: number[] = [];
   selectedRows!: UserFullDto[];
   checkedRows!: UserFullDto[];
   @ViewChild(MatSort) sort = new MatSort();
-  @Output() userSelectionChanged: EventEmitter< UserFullDto[]> = new EventEmitter< UserFullDto[]>();
+  readonly userSelectionChanged = output<UserFullDto[]>();
 
   ngOnInit(): void {
     setTimeout(() => {

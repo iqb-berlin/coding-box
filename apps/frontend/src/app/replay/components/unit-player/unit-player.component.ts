@@ -1,6 +1,7 @@
 import {
-  AfterViewInit, Component, ElementRef, EventEmitter, Input, OnChanges, OnDestroy, Output, SimpleChange, SimpleChanges, ViewChild, inject,
-  input
+  AfterViewInit, Component, ElementRef, Input, OnChanges, OnDestroy, SimpleChange, SimpleChanges, ViewChild, inject,
+  input,
+  output
 } from '@angular/core';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
@@ -42,7 +43,7 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
   readonly unitPlayer = input<string>();
   readonly unitResponses = input<ResponseDto>();
   readonly pageId = input<string>();
-  @Output() invalidPage: EventEmitter<'notInList' | 'notCurrent' | null> = new EventEmitter();
+  readonly invalidPage = output<'notInList' | 'notCurrent' | null>();
   @ViewChild('hostingIframe') hostingIframe!: ElementRef;
   private validPages: Subject<{ pages: string[], current: string }> = new Subject();
   private iFrameElement: HTMLIFrameElement | undefined;

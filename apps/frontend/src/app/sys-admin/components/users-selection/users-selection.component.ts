@@ -13,8 +13,9 @@ import {
   MatTableDataSource
 } from '@angular/material/table';
 import {
-  ViewChild, Component, OnInit, Output, EventEmitter, SimpleChanges, inject,
-  input
+  ViewChild, Component, OnInit, SimpleChanges, inject,
+  input,
+  output
 } from '@angular/core';
 import { MatSort, MatSortHeader } from '@angular/material/sort';
 import { FormsModule } from '@angular/forms';
@@ -33,7 +34,6 @@ import { SearchFilterComponent } from '../../../shared/search-filter/search-filt
   selector: 'coding-box-users-selection',
   templateUrl: './users-selection.component.html',
   styleUrls: ['./users-selection.component.scss'],
-  // eslint-disable-next-line max-len
   imports: [MatTable, MatSort, MatColumnDef, MatHeaderCellDef, MatHeaderCell, MatCheckbox, MatCellDef, MatCell, MatSortHeader, MatHeaderRowDef, MatHeaderRow, MatRowDef, MatRow, FormsModule, TranslateModule, HasSelectionValuePipe, IsSelectedPipe, IsAllSelectedPipe, SearchFilterComponent]
 })
 export class UsersSelectionComponent implements OnInit {
@@ -47,7 +47,7 @@ export class UsersSelectionComponent implements OnInit {
   filteredUserWorkspaces: WorkspaceInListDto[] = [];
 
   @ViewChild(MatSort) sort = new MatSort();
-  @Output() userSelectionChanged: EventEmitter< UserFullDto[]> = new EventEmitter< UserFullDto[]>();
+  readonly userSelectionChanged = output<UserFullDto[]>();
   readonly selectedUserIds = input.required<number[]>();
 
   ngOnChanges(changes: SimpleChanges) {
