@@ -69,7 +69,7 @@
       <div class="session-info">
         <div class="user-info">
           <mat-icon>account_circle</mat-icon>
-          <h3>Angemeldet in {{this.testCenterInstance[0]?.label || this.loginForm.get('testCenterIndividual')?.value }}</h3>
+          <h3>Angemeldet in {{this.testCenterInstance[0].label || this.loginForm.get('testCenterIndividual')?.value }}</h3>
         </div>
         <button mat-stroked-button color="primary" (click)="this.logout()">
           <mat-icon>logout</mat-icon>

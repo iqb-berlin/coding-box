@@ -1,6 +1,7 @@
-import { Component, OnInit, ViewChild, AfterViewInit, inject } from '@angular/core';
-import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { MatDialog } from '@angular/material/dialog';
+import {
+  Component, OnInit, ViewChild, AfterViewInit, inject
+} from '@angular/core';
+import { TranslateModule } from '@ngx-translate/core';
 import { MatSort, MatSortModule } from '@angular/material/sort';
 import {
   MatCell, MatCellDef, MatColumnDef,
@@ -16,7 +17,7 @@ import { SelectionModel } from '@angular/cdk/collections';
 import { MatIcon } from '@angular/material/icon';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { MatCheckbox } from '@angular/material/checkbox';
-import { MatAnchor } from '@angular/material/button';
+import { MatAnchor, MatButton } from '@angular/material/button';
 import {
   FormBuilder,
   FormGroup,
@@ -50,14 +51,13 @@ import { Coder } from '../models/coder.model';
     MatRowDef,
     MatColumnDef,
     MatSortModule,
-    ReactiveFormsModule
+    ReactiveFormsModule,
+    MatButton
   ]
 })
 export class CoderListComponent implements OnInit, AfterViewInit {
   private coderService = inject(CoderService);
-  private dialog = inject(MatDialog);
   private snackBar = inject(MatSnackBar);
-  private translate = inject(TranslateService);
   private fb = inject(FormBuilder);
 
   displayedColumns: string[] = ['selectCheckbox', 'name', 'displayName', 'email', 'assignedJobs'];
