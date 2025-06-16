@@ -20,7 +20,7 @@ import { MatIcon } from '@angular/material/icon';
 import { catchError, of } from 'rxjs';
 
 // eslint-disable-next-line import/no-cycle
-import { DatePipe, NgIf } from '@angular/common';
+import { DatePipe } from '@angular/common';
 import {
   MatCell,
   MatCellDef, MatColumnDef, MatHeaderCell, MatHeaderCellDef, MatHeaderRow, MatHeaderRowDef, MatRow, MatRowDef, MatTable
@@ -81,21 +81,7 @@ export type Result = {
   selector: 'coding-box-test-center-import',
   templateUrl: 'test-center-import.component.html',
   styleUrls: ['./test-center-import.component.scss'],
-  imports: [MatDialogContent,
-    MatLabel,
-    MatDialogActions,
-    MatButton,
-    MatDialogClose,
-    TranslateModule,
-    MatFormField,
-    ReactiveFormsModule,
-    MatInput,
-    MatSelect,
-    MatOption,
-    MatCheckbox,
-    MatProgressSpinner,
-    MatIcon,
-    FormsModule, DatePipe, MatTable, MatHeaderCellDef, MatCellDef, MatHeaderRowDef, MatRowDef, MatColumnDef, MatHeaderCell, MatCell, MatHeaderRow, MatRow, NgIf]
+  imports: [MatDialogContent, MatLabel, MatDialogActions, MatButton, MatDialogClose, TranslateModule, MatFormField, ReactiveFormsModule, MatInput, MatSelect, MatOption, MatCheckbox, MatProgressSpinner, MatIcon, FormsModule, DatePipe, MatTable, MatHeaderCellDef, MatCellDef, MatHeaderRowDef, MatRowDef, MatColumnDef, MatHeaderCell, MatCell, MatHeaderRow, MatRow]
 })
 
 export class TestCenterImportComponent {

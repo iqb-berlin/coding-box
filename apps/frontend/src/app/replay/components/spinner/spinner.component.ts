@@ -4,16 +4,15 @@ import {
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
-import { NgIf } from '@angular/common';
+
 
 @Component({
   selector: 'cb-spinner',
   templateUrl: './spinner.component.html',
   styleUrls: ['./spinner.component.scss'],
   imports: [
-    MatProgressSpinner,
-    NgIf
-  ]
+    MatProgressSpinner
+]
 })
 export class SpinnerComponent implements OnInit, OnDestroy {
   @Input() isLoaded!: Subject<boolean>;

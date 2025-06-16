@@ -7,7 +7,7 @@ import {
   MatDialogTitle
 } from '@angular/material/dialog';
 import { MatList, MatListItem } from '@angular/material/list';
-import { NgForOf, NgIf, NgClass } from '@angular/common';
+import { NgClass } from '@angular/common';
 import { MatButton } from '@angular/material/button';
 
 @Component({
@@ -17,52 +17,59 @@ import { MatButton } from '@angular/material/button';
       <h1 mat-dialog-title>Booklet Logs</h1>
       <div class="header-info">
         <span class="log-count">{{ data.logs.length }} Einträge</span>
-        <span class="processing-duration" *ngIf="processingDuration">
-          <span class="duration-label">Bearbeitungsdauer:</span>
-          <span class="duration-value">{{ processingDuration }}</span>
-        </span>
-        <span class="unit-progress" *ngIf="data.units && data.units.length > 0">
-          <span class="progress-label">Unit-Fortschritt:</span>
-          <span class="progress-value" [ngClass]="{'complete': unitProgressComplete, 'incomplete': !unitProgressComplete}">
-            {{ unitProgressComplete ? 'Vollständig' : 'Unvollständig' }}
+        @if (processingDuration) {
+          <span class="processing-duration">
+            <span class="duration-label">Bearbeitungsdauer:</span>
+            <span class="duration-value">{{ processingDuration }}</span>
           </span>
-        </span>
+        }
+        @if (data.units && data.units.length > 0) {
+          <span class="unit-progress">
+            <span class="progress-label">Unit-Fortschritt:</span>
+            <span class="progress-value" [ngClass]="{'complete': unitProgressComplete, 'incomplete': !unitProgressComplete}">
+              {{ unitProgressComplete ? 'Vollständig' : 'Unvollständig' }}
+            </span>
+          </span>
+        }
       </div>
     </div>
-
+    
     <div mat-dialog-content>
       <!-- Session Information Section -->
-      <div *ngIf="data.sessions && data.sessions.length > 0" class="session-section">
-        <div class="section-header">
-          <h2>Session Information</h2>
-          <span class="session-count">{{ data.sessions.length }} Sessions</span>
-        </div>
-
-        <div class="session-list">
-          <div *ngFor="let session of data.sessions" class="session-item">
-            <div class="session-header">
-              <span class="session-timestamp">
-                {{ formatTimestamp(session.ts) }}
-              </span>
-            </div>
-            <div class="session-details">
-              <div class="detail-item">
-                <span class="detail-label">Browser:</span>
-                <span class="detail-value">{{ session.browser || 'Unknown' }}</span>
+      @if (data.sessions && data.sessions.length > 0) {
+        <div class="session-section">
+          <div class="section-header">
+            <h2>Session Information</h2>
+            <span class="session-count">{{ data.sessions.length }} Sessions</span>
+          </div>
+          <div class="session-list">
+            @for (session of data.sessions; track session) {
+              <div class="session-item">
+                <div class="session-header">
+                  <span class="session-timestamp">
+                    {{ formatTimestamp(session.ts) }}
+                  </span>
+                </div>
+                <div class="session-details">
+                  <div class="detail-item">
+                    <span class="detail-label">Browser:</span>
+                    <span class="detail-value">{{ session.browser || 'Unknown' }}</span>
+                  </div>
+                  <div class="detail-item">
+                    <span class="detail-label">OS:</span>
+                    <span class="detail-value">{{ session.os || 'Unknown' }}</span>
+                  </div>
+                  <div class="detail-item">
+                    <span class="detail-label">Screen:</span>
+                    <span class="detail-value">{{ session.screen || 'Unknown' }}</span>
+                  </div>
+                </div>
               </div>
-              <div class="detail-item">
-                <span class="detail-label">OS:</span>
-                <span class="detail-value">{{ session.os || 'Unknown' }}</span>
-              </div>
-              <div class="detail-item">
-                <span class="detail-label">Screen:</span>
-                <span class="detail-value">{{ session.screen || 'Unknown' }}</span>
-              </div>
-            </div>
+            }
           </div>
         </div>
-      </div>
-
+      }
+    
       <!-- Logs Section -->
       <div class="logs-section">
         <div class="section-header">
@@ -71,25 +78,27 @@ import { MatButton } from '@angular/material/button';
             <input type="text" placeholder="Suchen..." (input)="filterLogs($event)">
           </div>
         </div>
-
+    
         <mat-list class="logs-list">
-          <mat-list-item *ngFor="let log of filteredLogs" class="log-item">
-            <div class="log-content">
-              <div class="log-header">
-                <span class="log-key">{{ log.key }}</span>
-                <span class="log-timestamp">{{ formatTimestamp(log.ts) }}</span>
+          @for (log of filteredLogs; track log) {
+            <mat-list-item class="log-item">
+              <div class="log-content">
+                <div class="log-header">
+                  <span class="log-key">{{ log.key }}</span>
+                  <span class="log-timestamp">{{ formatTimestamp(log.ts) }}</span>
+                </div>
+                <div class="log-parameter">{{ log.parameter }}</div>
               </div>
-              <div class="log-parameter">{{ log.parameter }}</div>
-            </div>
-          </mat-list-item>
+            </mat-list-item>
+          }
         </mat-list>
       </div>
     </div>
-
+    
     <div mat-dialog-actions align="end">
       <button mat-stroked-button (click)="closeDialog()">Schließen</button>
     </div>
-  `,
+    `,
   styles: [`
   /* Dialog Header */
   .dialog-header {
@@ -348,14 +357,12 @@ import { MatButton } from '@angular/material/button';
   imports: [
     MatListItem,
     MatList,
-    NgForOf,
     MatDialogContent,
     MatDialogTitle,
     MatDialogActions,
     MatButton,
-    NgIf,
     NgClass
-  ],
+],
   standalone: true
 })
 export class LogDialogComponent implements OnInit {

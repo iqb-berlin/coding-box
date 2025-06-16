@@ -14,15 +14,17 @@
     </div>
 
     <input #resourcePackageInput type="file"
-           name="resourcePackage"
-           accept=".zip"
-           [hidden]="true"
-           (change)="onResourcePackageSelected($event.currentTarget)"/>
+      name="resourcePackage"
+      accept=".zip"
+      [hidden]="true"
+      (change)="onResourcePackageSelected($event.currentTarget)"/>
 
-    <div class="loading-container" *ngIf="isLoadingResourcePackages">
-      <mat-spinner class="mat-spinner"></mat-spinner>
-      <p class="loading-text">Resource Packages werden geladen...</p>
-    </div>
+    @if (isLoadingResourcePackages) {
+      <div class="loading-container">
+        <mat-spinner class="mat-spinner"></mat-spinner>
+        <p class="loading-text">Resource Packages werden geladen...</p>
+      </div>
+    }
 
     <!-- Resource Packages Table -->
     @if (!isLoadingResourcePackages) {
@@ -52,14 +54,14 @@
             <ng-container matColumnDef="selectCheckbox">
               <mat-header-cell *matHeaderCellDef class="fx-flex-row-fix-70">
                 <mat-checkbox [checked]="isAllResourcePackagesSelected()"
-                              [indeterminate]="resourcePackageSelection.selected.length > 0 && !isAllResourcePackagesSelected()"
-                              (change)="$event ? masterToggleResourcePackages() : null">
+                  [indeterminate]="resourcePackageSelection.selected.length > 0 && !isAllResourcePackagesSelected()"
+                  (change)="$event ? masterToggleResourcePackages() : null">
                 </mat-checkbox>
               </mat-header-cell>
               <mat-cell *matCellDef="let row" class="fx-flex-row-fix-70">
                 <mat-checkbox [checked]="resourcePackageSelection.isSelected(row)"
-                              (click)="$event.stopPropagation()"
-                              (change)="$event ? resourcePackageSelection.toggle(row) : null">
+                  (click)="$event.stopPropagation()"
+                  (change)="$event ? resourcePackageSelection.toggle(row) : null">
                 </mat-checkbox>
               </mat-cell>
             </ng-container>
@@ -86,8 +88,8 @@
               <mat-cell *matCellDef="let element">
                 <span class="package-size">
                   {{element.packageSize > 1024 * 1024 ?
-                    (element.packageSize / (1024 * 1024) | number:'1.2-2') + ' MB' :
-                    (element.packageSize / 1024 | number:'1.2-2') + ' KB'}}
+                  (element.packageSize / (1024 * 1024) | number:'1.2-2') + ' MB' :
+                  (element.packageSize / 1024 | number:'1.2-2') + ' KB'}}
                 </span>
               </mat-cell>
             </ng-container>
@@ -101,10 +103,12 @@
           </mat-table>
         </div>
 
-        <div class="empty-state" *ngIf="resourcePackageDataSource?.data?.length === 0">
-          <mat-icon class="empty-icon">folder_zip</mat-icon>
-          <p class="empty-text">Keine Pakete vorhanden. Laden Sie Pakete hoch, um zu beginnen.</p>
-        </div>
+        @if (resourcePackageDataSource?.data?.length === 0) {
+          <div class="empty-state">
+            <mat-icon class="empty-icon">folder_zip</mat-icon>
+            <p class="empty-text">Keine Pakete vorhanden. Laden Sie Pakete hoch, um zu beginnen.</p>
+          </div>
+        }
       </div>
     }
   </div>

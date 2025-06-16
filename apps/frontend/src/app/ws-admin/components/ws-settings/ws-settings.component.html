@@ -20,19 +20,21 @@
           </button>
         </div>
 
-        <div *ngIf="authToken" class="token-result">
-          <h4>Generiertes Token</h4>
-          <mat-form-field class="full-width token-field">
-            <mat-label>Autorisierungs Token</mat-label>
-            <textarea matInput cdkTextareaAutosize [value]="authToken" readonly placeholder="Autorisierungs Token">{{authToken}}</textarea>
-            <mat-hint>Dieses Token kann für den API-Zugriff verwendet werden</mat-hint>
-          </mat-form-field>
-          <div class="token-copy-action">
-            <button mat-button color="primary" (click)="copyToken()">
-              <mat-icon>content_copy</mat-icon> In Zwischenablage kopieren
-            </button>
+        @if (authToken) {
+          <div class="token-result">
+            <h4>Generiertes Token</h4>
+            <mat-form-field class="full-width token-field">
+              <mat-label>Autorisierungs Token</mat-label>
+              <textarea matInput cdkTextareaAutosize [value]="authToken" readonly placeholder="Autorisierungs Token">{{authToken}}</textarea>
+              <mat-hint>Dieses Token kann für den API-Zugriff verwendet werden</mat-hint>
+            </mat-form-field>
+            <div class="token-copy-action">
+              <button mat-button color="primary" (click)="copyToken()">
+                <mat-icon>content_copy</mat-icon> In Zwischenablage kopieren
+              </button>
+            </div>
           </div>
-        </div>
+        }
       </div>
     </mat-card-content>
   </mat-card>

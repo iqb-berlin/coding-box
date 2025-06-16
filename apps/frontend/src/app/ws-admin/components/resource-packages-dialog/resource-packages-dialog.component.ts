@@ -18,7 +18,7 @@ import { MatIcon } from '@angular/material/icon';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { MatCheckbox } from '@angular/material/checkbox';
 import { MatAnchor, MatButton } from '@angular/material/button';
-import { DatePipe, NgIf, DecimalPipe } from '@angular/common';
+import { DatePipe, DecimalPipe } from '@angular/common';
 import { Subject, Subscription } from 'rxjs';
 import { debounceTime } from 'rxjs/operators';
 import { SearchFilterComponent } from '../../../shared/search-filter/search-filter.component';
@@ -56,9 +56,8 @@ export interface ResourcePackagesDialogData {
     MatHeaderRowDef,
     MatRowDef,
     MatColumnDef,
-    NgIf,
     MatDialogModule
-  ]
+]
 })
 export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
   // Resource packages

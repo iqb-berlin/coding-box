@@ -3,7 +3,7 @@ import { MatDialogRef, MatDialogModule } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { MatRadioModule } from '@angular/material/radio';
 import { FormsModule } from '@angular/forms';
-import { CommonModule } from '@angular/common';
+
 
 export type ExportFormat = 'json' | 'csv' | 'excel';
 
@@ -13,12 +13,11 @@ export type ExportFormat = 'json' | 'csv' | 'excel';
   styleUrls: ['./export-dialog.component.scss'],
   standalone: true,
   imports: [
-    CommonModule,
     FormsModule,
     MatDialogModule,
     MatButtonModule,
     MatRadioModule
-  ]
+]
 })
 export class ExportDialogComponent {
   selectedFormat: ExportFormat = 'json';
