@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, inject } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -23,9 +23,13 @@ import { AppLogoDto } from '../../../../../../../api-dto/app-logo-dto';
     MatFormFieldModule,
     MatIconModule,
     MatInputModule
-]
+  ]
 })
 export class SysAdminSettingsComponent {
+  appService = inject(AppService);
+  private logoService = inject(LogoService);
+  private snackBar = inject(MatSnackBar);
+
   selectedFile: File | null = null;
   previewUrl: string | null = null;
   isDefaultLogo = true;
@@ -33,16 +37,9 @@ export class SysAdminSettingsComponent {
   backgroundColorValue = '';
   private readonly ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/svg+xml', 'image/webp'];
 
-  constructor(
-    public appService: AppService,
-    private logoService: LogoService,
-    private snackBar: MatSnackBar
-  ) {
-    // Check if current logo is the default one
+  constructor() {
     this.isDefaultLogo = this.appService.appLogo.data === standardLogo.data;
-    // Initialize alt text with current value
     this.logoAltText = this.appService.appLogo.alt;
-    // Initialize background color with current value
     this.backgroundColorValue = this.appService.appLogo.bodyBackground || '';
   }
 

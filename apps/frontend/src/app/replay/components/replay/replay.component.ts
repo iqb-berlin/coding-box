@@ -1,6 +1,6 @@
 /* eslint-disable  @typescript-eslint/no-explicit-any */
 import {
-  Component, Input, OnChanges, OnDestroy, OnInit, SimpleChanges, ViewChild
+  Component, Input, OnChanges, OnDestroy, OnInit, SimpleChanges, ViewChild, inject
 } from '@angular/core';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
@@ -43,6 +43,12 @@ interface ErrorMessages {
   styleUrl: './replay.component.scss'
 })
 export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
+  private backendService = inject(BackendService);
+  private appService = inject(AppService);
+  private route = inject(ActivatedRoute);
+  private errorSnackBar = inject(MatSnackBar);
+  private pageErrorSnackBar = inject(MatSnackBar);
+
   player: string = '';
   unitDef: string = '';
   isLoaded: Subject<boolean> = new Subject<boolean>();
@@ -62,12 +68,6 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   @Input() testPersonInput: string | undefined;
   @Input() unitIdInput: string | undefined;
   @ViewChild(UnitPlayerComponent) unitPlayerComponent: UnitPlayerComponent | undefined;
-  constructor(private backendService:BackendService,
-              private appService:AppService,
-              private route:ActivatedRoute,
-              private errorSnackBar: MatSnackBar,
-              private pageErrorSnackBar: MatSnackBar) {
-  }
 
   ngOnInit(): void {
     this.subscribeRouter();

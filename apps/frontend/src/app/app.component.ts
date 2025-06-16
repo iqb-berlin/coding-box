@@ -1,6 +1,4 @@
-import {
-  Component, OnInit
-} from '@angular/core';
+import { Component, OnInit, inject } from '@angular/core';
 import { RouterLink, RouterOutlet } from '@angular/router';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
@@ -25,16 +23,17 @@ import { AuthDataDto } from '../../../../api-dto/auth-data-dto';
   providers: [AuthService]
 })
 export class AppComponent implements OnInit {
+  appService = inject(AppService);
+  authService = inject(AuthService);
+  backendService = inject(BackendService);
+  url = inject(LocationStrategy);
+
   title = 'IQB-Kodierbox';
   loggedInKeycloak: boolean = false;
   errorMessage = '';
   authData :AuthDataDto = AppService.defaultAuthData;
 
-  constructor(
-    public appService: AppService,
-    public authService:AuthService,
-    public backendService:BackendService,
-    public url:LocationStrategy) {
+  constructor() {
     this.appService.authData$.subscribe(authData => {
       this.authData = authData;
     });

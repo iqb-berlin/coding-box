@@ -1,4 +1,4 @@
-import { Component, Input } from '@angular/core';
+import { Component, Input, inject } from '@angular/core';
 import { TranslateModule } from '@ngx-translate/core';
 import { RouterLink } from '@angular/router';
 import { MatAnchor, MatButton } from '@angular/material/button';
@@ -13,6 +13,6 @@ import { AuthService } from '../../../auth/service/auth.service';
 })
 
 export class UserWorkspacesComponent {
-  constructor(public authService:AuthService) {}
+  authService = inject(AuthService);
   @Input() workspaces!: WorkspaceFullDto[];
 }

@@ -1,5 +1,4 @@
 import {
-  // eslint-disable-next-line max-len
   MatTable,
   MatColumnDef,
   MatHeaderCellDef,
@@ -13,7 +12,7 @@ import {
   MatTableDataSource
 } from '@angular/material/table';
 import {
-  ViewChild, Component, OnInit, Output, EventEmitter
+  ViewChild, Component, OnInit, Output, EventEmitter, inject
 } from '@angular/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatSort, MatSortHeader } from '@angular/material/sort';
@@ -48,6 +47,15 @@ import {
   imports: [MatTable, MatSort, MatColumnDef, MatHeaderCellDef, MatHeaderCell, MatCheckbox, MatCellDef, MatCell, MatSortHeader, MatHeaderRowDef, MatHeaderRow, MatRowDef, MatRow, MatButton, MatTooltip, WrappedIconComponent, FormsModule, TranslateModule, HasSelectionValuePipe, IsSelectedPipe, IsAllSelectedPipe, SearchFilterComponent]
 })
 export class WsUsersComponent implements OnInit {
+  private backendService = inject(BackendService);
+  private appService = inject(AppService);
+  private snackBar = inject(MatSnackBar);
+  private editUserDialog = inject(MatDialog);
+  private messageDialog = inject(MatDialog);
+  private editUserWorkspaceAccessRightDialog = inject(MatDialog);
+  private deleteConfirmDialog = inject(MatDialog);
+  private translateService = inject(TranslateService);
+
   selectedUsers : number[] = [];
   userObjectsDatasource = new MatTableDataSource<UserFullDto>();
   displayedUserColumns = ['selectCheckbox', 'name', 'displayName'];
@@ -61,18 +69,6 @@ export class WsUsersComponent implements OnInit {
   checkedRows!: UserFullDto[];
   @ViewChild(MatSort) sort = new MatSort();
   @Output() userSelectionChanged: EventEmitter< UserFullDto[]> = new EventEmitter< UserFullDto[]>();
-
-  constructor(
-    private backendService: BackendService,
-    private appService: AppService,
-    private snackBar: MatSnackBar,
-    private editUserDialog: MatDialog,
-    private messageDialog: MatDialog,
-    private editUserWorkspaceAccessRightDialog: MatDialog,
-    private deleteConfirmDialog: MatDialog,
-    private translateService: TranslateService
-  ) {
-  }
 
   ngOnInit(): void {
     setTimeout(() => {

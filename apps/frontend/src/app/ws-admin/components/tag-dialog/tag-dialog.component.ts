@@ -1,4 +1,4 @@
-import { Component, Inject, OnInit } from '@angular/core';
+import { Component, OnInit, inject } from '@angular/core';
 import {
   MAT_DIALOG_DATA,
   MatDialogActions,
@@ -28,13 +28,13 @@ import { CreateUnitTagDto } from '../../../../../../../api-dto/unit-tags/create-
         <span class="tag-count">{{ tags.length }} Tags</span>
       </div>
     </div>
-    
+
     <div mat-dialog-content>
       <div class="tags-section">
         <div class="section-header">
           <h2>Tags</h2>
         </div>
-    
+
         <div class="tags-container">
           <div class="tags-list">
             @for (tag of tags; track tag) {
@@ -61,7 +61,7 @@ import { CreateUnitTagDto } from '../../../../../../../api-dto/unit-tags/create-
         </div>
       </div>
     </div>
-    
+
     <div mat-dialog-actions align="end">
       <button mat-stroked-button (click)="closeDialog()">Schließen</button>
     </div>
@@ -208,24 +208,23 @@ import { CreateUnitTagDto } from '../../../../../../../api-dto/unit-tags/create-
     MatInput,
     FormsModule,
     MatTooltip
-],
+  ],
   standalone: true
 })
 export class TagDialogComponent implements OnInit {
+  dialogRef = inject<MatDialogRef<TagDialogComponent>>(MatDialogRef);
+  data = inject<{
+    unitId: number;
+    tags: UnitTagDto[];
+    title?: string;
+  }>(MAT_DIALOG_DATA);
+
+  private backendService = inject(BackendService);
+  private appService = inject(AppService);
+  private snackBar = inject(MatSnackBar);
+
   tags: UnitTagDto[] = [];
   newTagText: string = '';
-
-  constructor(
-    public dialogRef: MatDialogRef<TagDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: {
-      unitId: number;
-      tags: UnitTagDto[];
-      title?: string;
-    },
-    private backendService: BackendService,
-    private appService: AppService,
-    private snackBar: MatSnackBar
-  ) { }
 
   ngOnInit(): void {
     this.tags = [...this.data.tags];

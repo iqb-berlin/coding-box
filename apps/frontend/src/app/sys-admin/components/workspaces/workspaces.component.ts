@@ -1,10 +1,9 @@
-import { Component, ViewChild } from '@angular/core';
+import { Component, ViewChild, inject } from '@angular/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatSort } from '@angular/material/sort';
 import { FormsModule, UntypedFormGroup } from '@angular/forms';
 import { SelectionModel } from '@angular/cdk/collections';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-// eslint-disable-next-line import/no-cycle
 import { WorkspacesMenuComponent } from '../workspaces-menu/workspaces-menu.component';
 import { WorkspacesSelectionComponent } from '../workspaces-selection/workspaces-selection.component';
 import { WorkspaceInListDto } from '../../../../../../../api-dto/workspaces/workspace-in-list-dto';
@@ -24,6 +23,11 @@ type WorkspaceData = {
   imports: [WorkspacesMenuComponent, FormsModule, TranslateModule, WorkspacesSelectionComponent]
 })
 export class WorkspacesComponent {
+  private appService = inject(AppService);
+  private backendService = inject(BackendService);
+  private snackBar = inject(MatSnackBar);
+  private translateService = inject(TranslateService);
+
   tableSelectionCheckboxes = new SelectionModel<WorkspaceInListDto>(true, []);
   tableSelectionRow = new SelectionModel<WorkspaceInListDto>(false, []);
   selectedWorkspaceId = 0;
@@ -31,14 +35,6 @@ export class WorkspacesComponent {
   workspacesChanged: boolean = false;
 
   @ViewChild(MatSort) sort = new MatSort();
-
-  constructor(
-    private appService: AppService,
-    private backendService: BackendService,
-    private snackBar: MatSnackBar,
-    private translateService: TranslateService
-  ) {
-  }
 
   addWorkspace(result: UntypedFormGroup): void {
     this.backendService.addWorkspace(<CreateWorkspaceDto>{

@@ -1,8 +1,5 @@
 import {
-  Component,
-  OnInit,
-  ViewChild,
-  AfterViewInit
+  Component, OnInit, ViewChild, AfterViewInit, inject
 } from '@angular/core';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { MatDialog } from '@angular/material/dialog';
@@ -61,9 +58,15 @@ interface CodingJob {
     MatRowDef,
     MatColumnDef,
     MatSortModule
-]
+  ]
 })
 export class CodingJobsComponent implements OnInit, AfterViewInit {
+  appService = inject(AppService);
+  backendService = inject(BackendService);
+  private dialog = inject(MatDialog);
+  private snackBar = inject(MatSnackBar);
+  private translate = inject(TranslateService);
+
   displayedColumns: string[] = ['selectCheckbox', 'name', 'description', 'status', 'created_at', 'updated_at'];
   dataSource = new MatTableDataSource<CodingJob>([]);
   selection = new SelectionModel<CodingJob>(true, []);
@@ -98,14 +101,6 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
   ];
 
   @ViewChild(MatSort) sort!: MatSort;
-
-  constructor(
-    public appService: AppService,
-    public backendService: BackendService,
-    private dialog: MatDialog,
-    private snackBar: MatSnackBar,
-    private translate: TranslateService
-  ) {}
 
   ngOnInit(): void {
     this.loadCodingJobs();
@@ -146,7 +141,6 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
     }
   }
 
-
   selectRow(row: CodingJob): void {
     this.selection.toggle(row);
   }
@@ -161,7 +155,6 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
       this.snackBar.open(`Bearbeiten von Kodierjob "${selectedJob.name}" noch nicht implementiert`, 'Schließen', { duration: 3000 });
     }
   }
-
 
   deleteCodingJobs(): void {
     if (this.selection.selected.length > 0) {

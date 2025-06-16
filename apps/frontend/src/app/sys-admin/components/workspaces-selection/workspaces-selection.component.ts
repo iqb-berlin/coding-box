@@ -12,7 +12,7 @@ import {
   MatTableDataSource
 } from '@angular/material/table';
 import {
-  Component, EventEmitter, Input, OnInit, Output, SimpleChanges, ViewChild
+  Component, EventEmitter, Input, OnInit, Output, SimpleChanges, ViewChild, inject
 } from '@angular/core';
 import { MatSort, MatSortHeader } from '@angular/material/sort';
 import { FormsModule } from '@angular/forms';
@@ -35,6 +35,8 @@ import { BackendService } from '../../../services/backend.service';
   imports: [SearchFilterComponent, MatTable, MatSort, MatColumnDef, MatHeaderCellDef, MatHeaderCell, MatCheckbox, MatCellDef, MatCell, MatSortHeader, MatHeaderRowDef, MatHeaderRow, MatRowDef, MatRow, FormsModule, TranslateModule, IsSelectedPipe, IsAllSelectedPipe, HasSelectionValuePipe, IsSelectedIdPipe]
 })
 export class WorkspacesSelectionComponent implements OnInit {
+  private backendService = inject(BackendService);
+
   objectsDatasource = new MatTableDataSource<WorkspaceInListDto>();
   displayedColumns = ['selectCheckbox', 'name'];
   tableSelectionCheckboxes = new SelectionModel<WorkspaceInListDto>(true, []);
@@ -52,12 +54,6 @@ export class WorkspacesSelectionComponent implements OnInit {
     if (changes) {
       this.updateWorkspaceList();
     }
-  }
-
-  constructor(
-    private backendService: BackendService
-  ) {
-
   }
 
   ngOnInit(): void {

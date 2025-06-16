@@ -1,4 +1,4 @@
-import { Component, Inject, OnInit } from '@angular/core';
+import { Component, OnInit, inject } from '@angular/core';
 import {
   MAT_DIALOG_DATA,
   MatDialogActions,
@@ -33,7 +33,7 @@ import { MatButton } from '@angular/material/button';
         }
       </div>
     </div>
-    
+
     <div mat-dialog-content>
       <!-- Session Information Section -->
       @if (data.sessions && data.sessions.length > 0) {
@@ -69,7 +69,7 @@ import { MatButton } from '@angular/material/button';
           </div>
         </div>
       }
-    
+
       <!-- Logs Section -->
       <div class="logs-section">
         <div class="section-header">
@@ -78,7 +78,7 @@ import { MatButton } from '@angular/material/button';
             <input type="text" placeholder="Suchen..." (input)="filterLogs($event)">
           </div>
         </div>
-    
+
         <mat-list class="logs-list">
           @for (log of filteredLogs; track log) {
             <mat-list-item class="log-item">
@@ -94,7 +94,7 @@ import { MatButton } from '@angular/material/button';
         </mat-list>
       </div>
     </div>
-    
+
     <div mat-dialog-actions align="end">
       <button mat-stroked-button (click)="closeDialog()">Schließen</button>
     </div>
@@ -362,10 +362,45 @@ import { MatButton } from '@angular/material/button';
     MatDialogActions,
     MatButton,
     NgClass
-],
+  ],
   standalone: true
 })
 export class LogDialogComponent implements OnInit {
+  dialogRef = inject<MatDialogRef<LogDialogComponent>>(MatDialogRef);
+  data = inject<{
+    logs: {
+      id: number;
+      bookletid: number;
+      ts: string;
+      key: string;
+      parameter: string;
+    }[];
+    sessions?: {
+      id: number;
+      browser: string;
+      os: string;
+      screen: string;
+      ts: string;
+    }[];
+    units?: {
+      id: number;
+      bookletid: number;
+      name: string;
+      alias: string | null;
+      results: {
+        id: number;
+        unitid: number;
+      }[];
+      logs: {
+        id: number;
+        unitid: number;
+        ts: string;
+        key: string;
+        parameter: string;
+      }[];
+    }[];
+  }>(MAT_DIALOG_DATA);
+
   filteredLogs: {
     id: number;
     bookletid: number;
@@ -376,48 +411,12 @@ export class LogDialogComponent implements OnInit {
 
   processingDuration: string | null = null;
 
-  // Track if all units have been visited (have CURRENT_UNIT_ID log entries)
   unitProgressComplete: boolean = false;
 
-  constructor(
-    public dialogRef: MatDialogRef<LogDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: {
-      logs: {
-        id: number;
-        bookletid: number;
-        ts: string;
-        key: string;
-        parameter: string;
-      }[],
-      sessions?: {
-        id: number;
-        browser: string;
-        os: string;
-        screen: string;
-        ts: string;
-      }[],
-      units?: {
-        id: number;
-        bookletid: number;
-        name: string;
-        alias: string | null;
-        results: { id: number; unitid: number }[];
-        logs: { id: number; unitid: number; ts: string; key: string; parameter: string }[];
-      }[]
-    }
-  ) { }
-
   ngOnInit(): void {
-    // Initialize filtered logs with all logs
     this.filteredLogs = [...this.data.logs];
-
-    // Sort logs by timestamp (newest first)
     this.sortLogsByTimestamp();
-
-    // Calculate processing duration
     this.calculateProcessingDuration();
-
-    // Check if all units have been visited
     this.checkUnitProgress();
   }
 

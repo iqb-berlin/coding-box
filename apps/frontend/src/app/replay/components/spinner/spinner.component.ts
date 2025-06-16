@@ -1,10 +1,9 @@
 import {
-  ChangeDetectorRef, Component, Input, OnDestroy, OnInit
+  ChangeDetectorRef, Component, Input, OnDestroy, OnInit, inject
 } from '@angular/core';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
-
 
 @Component({
   selector: 'cb-spinner',
@@ -12,14 +11,14 @@ import { MatProgressSpinner } from '@angular/material/progress-spinner';
   styleUrls: ['./spinner.component.scss'],
   imports: [
     MatProgressSpinner
-]
+  ]
 })
 export class SpinnerComponent implements OnInit, OnDestroy {
+  private changeDetectionRef = inject(ChangeDetectorRef);
+
   @Input() isLoaded!: Subject<boolean>;
   isLoading: boolean = true;
   private ngUnsubscribe = new Subject<void>();
-
-  constructor(private changeDetectionRef: ChangeDetectorRef) {}
 
   ngOnInit(): void {
     this.isLoaded
