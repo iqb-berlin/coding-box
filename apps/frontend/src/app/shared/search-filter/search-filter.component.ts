@@ -1,5 +1,6 @@
 import {
-  Component, EventEmitter, Input, Output
+  Component, EventEmitter, Output,
+  input
 } from '@angular/core';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatTooltip } from '@angular/material/tooltip';
@@ -17,6 +18,6 @@ import { WrappedIconComponent } from '../wrapped-icon/wrapped-icon.component';
 })
 export class SearchFilterComponent {
   value: string = '';
-  @Input() title!: string;
+  readonly title = input.required<string>();
   @Output() valueChange: EventEmitter<string> = new EventEmitter<string>();
 }

@@ -1,6 +1,7 @@
 <mat-dialog-content>
   <h2>Nutzer Zugriffs Rechte für Arbeitsbereich(e) </h2>
-<coding-box-workspaces-selection (workspaceSelectionChanged)="setWorkspacesSelection($event)" [selectedWorkspacesIds] = selectedWorkspacesIds></coding-box-workspaces-selection>
+<coding-box-workspaces-selection (workspaceSelectionChanged)="setWorkspacesSelection($event)" [selectedWorkspacesIds] = selectedWorkspacesIds
+                                 [workspacesChanged]=true></coding-box-workspaces-selection>
 </mat-dialog-content>
 
 <mat-dialog-actions align="end">

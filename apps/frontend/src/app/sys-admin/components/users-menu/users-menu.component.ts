@@ -1,5 +1,6 @@
 import {
-  Component, EventEmitter, Input, Output, inject
+  Component, EventEmitter, Output, inject,
+  input
 } from '@angular/core';
 import { UntypedFormGroup } from '@angular/forms';
 import { MatDialog } from '@angular/material/dialog';
@@ -35,9 +36,9 @@ export class UsersMenuComponent {
   private deleteConfirmDialog = inject(MatDialog);
   private translateService = inject(TranslateService);
 
-  @Input() selectedUser!: number[];
-  @Input() selectedRows!: UserFullDto[];
-  @Input() checkedRows!: UserFullDto[];
+  readonly selectedUser = input.required<number[]>();
+  readonly selectedRows = input.required<UserFullDto[]>();
+  readonly checkedRows = input.required<UserFullDto[]>();
   @Output() userAdded: EventEmitter<UntypedFormGroup> = new EventEmitter<UntypedFormGroup>();
   @Output() usersDeleted: EventEmitter< UserFullDto[]> = new EventEmitter< UserFullDto[]>();
   @Output() userEdited: EventEmitter<{ selection: UserFullDto[], user: UntypedFormGroup }> =
@@ -46,9 +47,9 @@ export class UsersMenuComponent {
   @Output() setUserWorkspaceAccessRights: EventEmitter<number[]> = new EventEmitter<number[]>();
 
   editUser(): void {
-    let selectedRows = this.selectedRows;
+    let selectedRows = this.selectedRows();
     if (!selectedRows.length) {
-      selectedRows = this.checkedRows;
+      selectedRows = this.checkedRows();
     }
     if (!selectedRows?.length) {
       this.messageDialog.open(MessageDialogComponent, {
@@ -79,9 +80,9 @@ export class UsersMenuComponent {
   }
 
   deleteUsers(): void {
-    let selectedRows = this.selectedRows;
+    let selectedRows = this.selectedRows();
     if (!selectedRows.length) {
-      selectedRows = this.checkedRows;
+      selectedRows = this.checkedRows();
     }
     if (!selectedRows.length) {
       this.messageDialog.open(MessageDialogComponent, {
@@ -115,9 +116,9 @@ export class UsersMenuComponent {
   }
 
   setUserWorkspaceAccessRight(): void {
-    let selectedRows = this.selectedRows;
+    let selectedRows = this.selectedRows();
     if (!selectedRows.length) {
-      selectedRows = this.checkedRows;
+      selectedRows = this.checkedRows();
     }
     if (!selectedRows.length) {
       this.messageDialog.open(MessageDialogComponent, {
@@ -133,7 +134,7 @@ export class UsersMenuComponent {
         width: '600px',
         minHeight: '600px',
         data: {
-          selectedUser: this.selectedRows
+          selectedUser: this.selectedRows()
         }
       });
       dialogRef.afterClosed().subscribe((result: number[]) => {
