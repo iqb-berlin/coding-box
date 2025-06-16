@@ -4,7 +4,6 @@ import { JwtService } from '@nestjs/jwt';
 import { HttpService } from '@nestjs/axios';
 import { TestcenterService } from './testcenter.service';
 import { UsersService } from './users.service';
-import { WorkspaceService } from './workspace.service';
 
 describe('TestCenterService', () => {
   let service: TestcenterService;
@@ -18,10 +17,6 @@ describe('TestCenterService', () => {
           useValue: createMock<HttpService>()
         },
         {
-          provide: WorkspaceService,
-          useValue: createMock<WorkspaceService>()
-        },
-        {
           provide: TestcenterService,
           useValue: createMock<TestcenterService>()
         },
@@ -32,7 +27,7 @@ describe('TestCenterService', () => {
         {
           provide: JwtService,
           useValue: createMock<JwtService>()
-        },
+        }
       ]
     }).compile();
 

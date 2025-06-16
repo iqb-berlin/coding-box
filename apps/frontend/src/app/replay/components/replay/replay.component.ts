@@ -268,7 +268,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     }
     return this.backendService.getPlayer(
       workspace,
-      player.replace('@', '-'),
+      player,
       authToken);
   }
 

@@ -2,7 +2,6 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { createMock } from '@golevelup/ts-jest';
 import { WorkspaceController } from './workspace.controller';
 import { AuthService } from '../../auth/service/auth.service';
-import { WorkspaceService } from '../../database/services/workspace.service';
 import { UsersService } from '../../database/services/users.service';
 import { TestcenterService } from '../../database/services/testcenter.service';
 import { UploadResultsService } from '../../database/services/upload-results.service'; // ggf. anpassen, falls anderer Pfad
@@ -21,10 +20,6 @@ describe('WorkspaceController', () => {
         {
           provide: TestcenterService,
           useValue: createMock<TestcenterService>()
-        },
-        {
-          provide: WorkspaceService,
-          useValue: createMock<WorkspaceService>()
         },
         {
           provide: UsersService,

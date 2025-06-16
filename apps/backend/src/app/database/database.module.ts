@@ -5,7 +5,6 @@ import { HttpModule } from '@nestjs/axios';
 import { JwtService } from '@nestjs/jwt';
 import User from './entities/user.entity';
 import { UsersService } from './services/users.service';
-import { WorkspaceService } from './services/workspace.service';
 import { WorkspaceCoreService } from './services/workspace-core.service';
 import { WorkspaceFilesService } from './services/workspace-files.service';
 import { WorkspaceTestResultsService } from './services/workspace-test-results.service';
@@ -96,7 +95,6 @@ import { ResourcePackageService } from './services/resource-package.service';
   ],
   providers: [
     UsersService,
-    WorkspaceService,
     WorkspaceCoreService,
     WorkspaceFilesService,
     WorkspaceTestResultsService,
@@ -119,7 +117,6 @@ import { ResourcePackageService } from './services/resource-package.service';
     Persons,
     Workspace,
     WorkspaceAdmin,
-    WorkspaceService,
     WorkspaceCoreService,
     WorkspaceFilesService,
     WorkspaceTestResultsService,
