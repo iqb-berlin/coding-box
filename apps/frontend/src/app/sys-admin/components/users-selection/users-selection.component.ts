@@ -13,7 +13,8 @@ import {
   MatTableDataSource
 } from '@angular/material/table';
 import {
-  ViewChild, Component, OnInit, Output, EventEmitter, Input, SimpleChanges, inject
+  ViewChild, Component, OnInit, Output, EventEmitter, SimpleChanges, inject,
+  input
 } from '@angular/core';
 import { MatSort, MatSortHeader } from '@angular/material/sort';
 import { FormsModule } from '@angular/forms';
@@ -47,7 +48,7 @@ export class UsersSelectionComponent implements OnInit {
 
   @ViewChild(MatSort) sort = new MatSort();
   @Output() userSelectionChanged: EventEmitter< UserFullDto[]> = new EventEmitter< UserFullDto[]>();
-  @Input() selectedUserIds!: number[];
+  readonly selectedUserIds = input.required<number[]>();
 
   ngOnChanges(changes: SimpleChanges) {
     if (changes) {
@@ -93,7 +94,7 @@ export class UsersSelectionComponent implements OnInit {
 
   setCheckboxes(): void {
     const foundUserIds:UserFullDto[] = [];
-    this.selectedUserIds?.forEach(userId => {
+    this.selectedUserIds()?.forEach(userId => {
       const foundUserId = this.userObjectsDatasource.data.find(user => user.id === userId);
       if (foundUserId) {
         foundUserIds.push(foundUserId);

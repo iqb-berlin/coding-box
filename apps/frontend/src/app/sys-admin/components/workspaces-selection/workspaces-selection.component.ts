@@ -12,7 +12,8 @@ import {
   MatTableDataSource
 } from '@angular/material/table';
 import {
-  Component, EventEmitter, Input, OnInit, Output, SimpleChanges, ViewChild, inject
+  Component, EventEmitter, OnInit, Output, SimpleChanges, ViewChild, inject,
+  input
 } from '@angular/core';
 import { MatSort, MatSortHeader } from '@angular/material/sort';
 import { FormsModule } from '@angular/forms';
@@ -44,11 +45,11 @@ export class WorkspacesSelectionComponent implements OnInit {
   selectedWorkspaceId = 0;
 
   @ViewChild(MatSort) sort = new MatSort();
-  @Input() selectedWorkspacesIds!: number[];
+  readonly selectedWorkspacesIds = input.required<number[]>();
   @Output() workspaceSelectionChanged: EventEmitter<WorkspaceInListDto[]> = new EventEmitter<WorkspaceInListDto[]>();
   @Output() selectionChanged: EventEmitter<WorkspaceInListDto[]> = new EventEmitter<WorkspaceInListDto[]>();
   @Output() workspacesUpdated = new EventEmitter<boolean>();
-  @Input() workspacesChanged!: boolean;
+  readonly workspacesChanged = input.required<boolean>();
 
   ngOnChanges(changes: SimpleChanges) {
     if (changes) {
@@ -63,13 +64,13 @@ export class WorkspacesSelectionComponent implements OnInit {
   private updateWorkspaceList(): void {
     this.selectedWorkspaceId = 0;
     this.backendService.getAllWorkspacesList().subscribe(workspaces => {
-      this.workspacesUpdated.emit(this.workspacesChanged);
+      this.workspacesUpdated.emit(this.workspacesChanged());
       this.setObjectsDatasource(workspaces.data);
       this.tableSelectionCheckboxes.clear();
       this.tableSelectionRow.clear();
-      if (this.selectedWorkspacesIds?.length > 0) {
+      if (this.selectedWorkspacesIds()?.length > 0) {
         this.tableSelectionCheckboxes.select(...workspaces.data
-          .filter(workspace => this.selectedWorkspacesIds.includes(workspace.id)));
+          .filter(workspace => this.selectedWorkspacesIds().includes(workspace.id)));
         this.workspaceSelectionChanged.emit(this.tableSelectionCheckboxes.selected);
       }
     });

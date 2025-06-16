@@ -4,18 +4,22 @@ import { MatButton } from '@angular/material/button';
 import {
   MatDialogContent, MatDialogActions, MatDialogClose, MAT_DIALOG_DATA
 } from '@angular/material/dialog';
-
 import { UserFullDto } from '../../../../../../../api-dto/user/user-full-dto';
 import { BackendService } from '../../../services/backend.service';
-// eslint-disable-next-line import/no-cycle
 import { UsersSelectionComponent } from '../users-selection/users-selection.component';
 
 @Component({
   selector: 'coding-box-user-access-rights-dialog',
   templateUrl: './user-access-rights-dialog.component.html',
   styleUrls: ['./user-access-rights-dialog.component.scss'],
-  // eslint-disable-next-line max-len
-  imports: [MatDialogContent, MatDialogActions, MatButton, MatDialogClose, TranslateModule, UsersSelectionComponent]
+  imports: [
+    MatDialogContent,
+    MatDialogActions,
+    MatButton,
+    MatDialogClose,
+    TranslateModule,
+    UsersSelectionComponent
+  ]
 })
 
 export class UserAccessRightsDialogComponent {
@@ -31,7 +35,9 @@ export class UserAccessRightsDialogComponent {
     if (this.data.selectedWorkspace?.length > 0) {
       this.backendService.getWorkspaceUsers(this.data.selectedWorkspace[0])
         .subscribe(users => {
-          this.selectedUserIds = users.map(user => user.userId);
+          if (Array.isArray(users.data)) {
+            this.selectedUserIds = users.data.map(user => user.userId);
+          }
         });
     }
   }

@@ -1,5 +1,6 @@
 import {
-  AfterViewInit, Component, ElementRef, EventEmitter, Input, OnChanges, OnDestroy, Output, SimpleChange, SimpleChanges, ViewChild, inject
+  AfterViewInit, Component, ElementRef, EventEmitter, Input, OnChanges, OnDestroy, Output, SimpleChange, SimpleChanges, ViewChild, inject,
+  input
 } from '@angular/core';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
@@ -38,9 +39,9 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
   private backendService = inject(BackendService);
 
   @Input() unitDef: string | undefined;
-  @Input() unitPlayer: string | undefined;
-  @Input() unitResponses: ResponseDto | undefined;
-  @Input() pageId: string | undefined;
+  readonly unitPlayer = input<string>();
+  readonly unitResponses = input<ResponseDto>();
+  readonly pageId = input<string>();
   @Output() invalidPage: EventEmitter<'notInList' | 'notCurrent' | null> = new EventEmitter();
   @ViewChild('hostingIframe') hostingIframe!: ElementRef;
   private validPages: Subject<{ pages: string[], current: string }> = new Subject();
@@ -109,7 +110,7 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
       }
 
       if (this.iFrameElement) {
-        const unitPlayerContent = unitPlayerChange?.currentValue || this.unitPlayer || '';
+        const unitPlayerContent = unitPlayerChange?.currentValue || this.unitPlayer() || '';
         this.updateIframeContent(unitPlayerContent.replace(/&quot;/g, ''));
       }
     } catch (error) { /* empty */ }
@@ -122,8 +123,9 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
 
   ngAfterViewInit(): void {
     this.iFrameElement = this.hostingIframe?.nativeElement;
-    if (this.iFrameElement && this.unitPlayer) {
-      this.updateIframeContent(this.unitPlayer.replace('&quot;', ''));
+    const unitPlayer = this.unitPlayer();
+    if (this.iFrameElement && unitPlayer) {
+      this.updateIframeContent(unitPlayer.replace('&quot;', ''));
     }
   }
 
@@ -132,14 +134,15 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
       .pipe(debounceTime(2000))
       .subscribe({
         next: validPages => {
-          if (!this.pageId) {
+          const pageId = this.pageId();
+          if (!pageId) {
             this.invalidPage.emit('notInList');
             return;
           }
 
-          if (!validPages.pages.includes(this.pageId)) {
+          if (!validPages.pages.includes(pageId)) {
             this.invalidPage.emit('notInList');
-          } else if (validPages.current !== this.pageId) {
+          } else if (validPages.current !== pageId) {
             this.invalidPage.emit('notCurrent');
           } else {
             this.invalidPage.emit(null);
@@ -298,7 +301,7 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
           stateReportPolicy: 'eager',
           pagingMode: 'buttons',
           directDownloadUrl: this.backendService.getDirectDownloadLink(),
-          startPage: this.pageId || this.unitResponses?.unit_state?.CURRENT_PAGE_ID || ''
+          startPage: this.pageId() || this.unitResponses()?.unit_state?.CURRENT_PAGE_ID || ''
         }
       });
     }

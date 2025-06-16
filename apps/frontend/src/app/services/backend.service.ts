@@ -33,6 +33,7 @@ import { UnitNoteDto } from '../../../../../api-dto/unit-notes/unit-note.dto';
 import { CreateUnitNoteDto } from '../../../../../api-dto/unit-notes/create-unit-note.dto';
 import { UpdateUnitNoteDto } from '../../../../../api-dto/unit-notes/update-unit-note.dto';
 import { ResourcePackageDto } from '../../../../../api-dto/resource-package/resource-package-dto';
+import { PaginatedWorkspaceUserDto } from '../../../../../api-dto/workspaces/paginated-workspace-user-dto';
 
 interface PaginatedResponse<T> {
   data: T[];
@@ -175,12 +176,17 @@ export class BackendService {
       );
   }
 
-  getWorkspaceUsers(workspaceId:number): Observable<{ userId:number, workspaceId:number }[]> {
+  getWorkspaceUsers(workspaceId:number): Observable<PaginatedWorkspaceUserDto> {
     return this.http
-      .get<{ userId:number, workspaceId:number }[]>(`${this.serverUrl}admin/workspace/${workspaceId}/users`,
+      .get<PaginatedWorkspaceUserDto>(`${this.serverUrl}admin/workspace/${workspaceId}/users`,
       { headers: this.authHeader })
       .pipe(
-        catchError(() => of([]))
+        catchError(() => of({
+          data: [],
+          total: 0,
+          page: 0,
+          limit: 0
+        }))
       );
   }
 

@@ -1,6 +1,7 @@
 /* eslint-disable  @typescript-eslint/no-explicit-any */
 import {
-  Component, Input, OnChanges, OnDestroy, OnInit, SimpleChanges, ViewChild, inject
+  Component, OnChanges, OnDestroy, OnInit, SimpleChanges, ViewChild, inject,
+  input
 } from '@angular/core';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
@@ -65,8 +66,8 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   private lastUnitDef: { id: string, data: string } = { id: '', data: '' };
   private lastUnit: { id: string, data: string } = { id: '', data: '' };
   private routerSubscription: Subscription | null = null;
-  @Input() testPersonInput: string | undefined;
-  @Input() unitIdInput: string | undefined;
+  readonly testPersonInput = input<string>();
+  readonly unitIdInput = input<string>();
   @ViewChild(UnitPlayerComponent) unitPlayerComponent: UnitPlayerComponent | undefined;
 
   ngOnInit(): void {
@@ -102,6 +103,8 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         this.resetSnackBars();
         this.resetUnitData();
         try {
+          const testPersonInput = this.testPersonInput();
+          const unitIdInput = this.unitIdInput();
           if (Object.keys(params).length === 4) {
             this.authToken = await this.getAuthToken();
             this.setUnitParams(params);
@@ -117,9 +120,9 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
             } else {
               ReplayComponent.throwError('QueryError');
             }
-          } else if (this.testPersonInput && this.unitIdInput) {
-            this.setTestPerson(this.testPersonInput);
-            this.unitId = this.unitIdInput;
+          } else if (testPersonInput && unitIdInput) {
+            this.setTestPerson(testPersonInput);
+            this.unitId = unitIdInput;
           } else if (Object.keys(params).length !== 4) {
             ReplayComponent.throwError('ParamsError');
           }
@@ -182,7 +185,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     const { unitIdInput } = changes;
     try {
       this.unitId = unitIdInput.currentValue;
-      this.setTestPerson(this.testPersonInput || '');
+      this.setTestPerson(this.testPersonInput() || '');
       const unitData = await this.getUnitData(this.appService.selectedWorkspaceId);
       this.setUnitProperties(unitData);
     } catch (error) {
