@@ -1,8 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import WorkspaceUser from '../entities/workspace_user.entity';
 import User from '../entities/user.entity';
+import Workspace from '../entities/workspace.entity';
+import { WorkspaceFullDto } from '../../../../../../api-dto/workspaces/workspace-full-dto';
+import { WorkspaceSettingsDto } from '../../../../../../api-dto/workspaces/workspace-settings-dto';
 
 @Injectable()
 export class WorkspaceUsersService {
@@ -12,19 +15,39 @@ export class WorkspaceUsersService {
     @InjectRepository(WorkspaceUser)
     private workspaceUsersRepository: Repository<WorkspaceUser>,
     @InjectRepository(User)
-    private usersRepository: Repository<User>
+    private usersRepository: Repository<User>,
+    @InjectRepository(Workspace)
+    private workspacesRepository: Repository<Workspace>
   ) {}
 
-  async findAllUserWorkspaces(identity: string): Promise<number[]> {
+  async findAllUserWorkspaces(identity: string): Promise<WorkspaceFullDto[]> {
     this.logger.log('Returning all workspaces for user', identity);
     const user = await this.usersRepository.findOne({ where: { identity: identity } });
-    const workspaces = await this.workspaceUsersRepository.find({
+
+    if (!user) {
+      this.logger.warn(`User with identity ${identity} not found.`);
+      return [];
+    }
+
+    const userWorkspaces = await this.workspaceUsersRepository.find({
       where: { userId: user.id }
     });
-    if (workspaces.length > 0) {
-      return workspaces.map(workspace => workspace.workspaceId);
+
+    if (userWorkspaces.length === 0) {
+      this.logger.log(`No workspaces found for user ${identity} (ID: ${user.id}).`);
+      return [];
     }
-    return [];
+
+    const workspaceIds = userWorkspaces.map(uw => uw.workspaceId);
+    const workspaces = await this.workspacesRepository.find({
+      where: { id: In(workspaceIds) }
+    });
+
+    return workspaces.map(workspace => ({
+      id: workspace.id,
+      name: workspace.name,
+      settings: workspace.settings as WorkspaceSettingsDto
+    }));
   }
 
   async setWorkspaceUsers(workspaceId: number, userIds: number[]): Promise<boolean> {

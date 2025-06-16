@@ -7,7 +7,6 @@ import { UserWorkspacesComponent } from '../user-workspaces/user-workspaces.comp
   selector: 'coding-box-user-workspaces-area',
   templateUrl: './user-workspaces-area.component.html',
   styleUrls: ['./user-workspaces-area.component.scss'],
-  // eslint-disable-next-line max-len
   imports: [TranslateModule, UserWorkspacesComponent]
 })
 export class UserWorkspacesAreaComponent {
