@@ -1,8 +1,7 @@
 import {
   Component, OnInit, ViewChild, AfterViewInit, inject
 } from '@angular/core';
-import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { MatDialog } from '@angular/material/dialog';
+import { TranslateModule } from '@ngx-translate/core';
 import { MatSort, MatSortModule } from '@angular/material/sort';
 import {
   MatCell, MatCellDef, MatColumnDef,
@@ -18,7 +17,7 @@ import { SelectionModel } from '@angular/cdk/collections';
 import { MatIcon } from '@angular/material/icon';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { MatCheckbox } from '@angular/material/checkbox';
-import { MatAnchor } from '@angular/material/button';
+import { MatAnchor, MatButton } from '@angular/material/button';
 import { DatePipe, NgClass } from '@angular/common';
 import { AppService } from '../../services/app.service';
 import { BackendService } from '../../services/backend.service';
@@ -57,15 +56,14 @@ interface CodingJob {
     MatHeaderRowDef,
     MatRowDef,
     MatColumnDef,
-    MatSortModule
+    MatSortModule,
+    MatButton
   ]
 })
 export class CodingJobsComponent implements OnInit, AfterViewInit {
   appService = inject(AppService);
   backendService = inject(BackendService);
-  private dialog = inject(MatDialog);
   private snackBar = inject(MatSnackBar);
-  private translate = inject(TranslateService);
 
   displayedColumns: string[] = ['selectCheckbox', 'name', 'description', 'status', 'created_at', 'updated_at'];
   dataSource = new MatTableDataSource<CodingJob>([]);

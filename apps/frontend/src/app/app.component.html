@@ -1,4 +1,4 @@
-<div class="app" [style.background]="appService.appLogo?.bodyBackground">
+<div class="app" [style.background]="appService.appLogo.bodyBackground">
   @if (appService.dataLoading) {
     <div class="spinner-container fx-column-start-center">
       <mat-spinner class="fx-flex-fix-100"></mat-spinner>
@@ -12,7 +12,7 @@
       <!-- Logo-Link -->
       <a [routerLink]="['/']" [attr.aria-label]="'home.go-home' | translate">
         <img
-          [src]="appService.appLogo?.data"
+          [src]="appService.appLogo.data"
           [alt]="appService.appLogo ? appService.appLogo.alt : 'home.home-page' | translate"
           [matTooltip]="appService.appLogo ? appService.appLogo.alt : 'home.home-page' | translate"
         />

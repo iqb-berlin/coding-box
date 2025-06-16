@@ -16,8 +16,6 @@ import { MatCheckbox } from '@angular/material/checkbox';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { MatIcon } from '@angular/material/icon';
 import { catchError, of } from 'rxjs';
-
-// eslint-disable-next-line import/no-cycle
 import { DatePipe } from '@angular/common';
 import {
   MatCell,
