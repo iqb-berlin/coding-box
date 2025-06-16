@@ -4,12 +4,12 @@ import * as https from 'https';
 import { catchError, firstValueFrom } from 'rxjs';
 import { logger } from 'nx/src/utils/logger';
 import { Person, Response } from './shared-types';
-import { WorkspaceService } from './workspace.service';
 import {
   ImportOptions
 } from '../../../../../frontend/src/app/ws-admin/components/test-center-import/test-center-import.component';
 import { TestGroupsInfoDto } from '../../../../../../api-dto/files/test-groups-info.dto';
 import { PersonService } from './person.service';
+import { WorkspaceFilesService } from './workspace-files.service';
 
 const agent = new https.Agent({
   rejectUnauthorized: false
@@ -58,7 +58,7 @@ export class TestcenterService {
   constructor(
     private readonly personService: PersonService,
     private readonly httpService: HttpService,
-    private workspaceService: WorkspaceService
+    private workspaceFilesService: WorkspaceFilesService
   ) {
   }
 
@@ -140,7 +140,7 @@ export class TestcenterService {
     const headersRequest = this.createHeaders(authToken);
     const chunks = this.createChunks(testGroups.split(','), 2);
 
-    const responsePromises = chunks.map(async chunk => {
+    return chunks.map(async chunk => {
       const endpoint = url ?
         `${url}/api/workspace/${tc_workspace}/report/response?dataIds=${chunk.join(',')}` :
         `https://www.iqb-testcenter${server}.de/api/workspace/${tc_workspace}/report/response?dataIds=${chunk.join(',')}`;
@@ -165,8 +165,6 @@ export class TestcenterService {
         throw error;
       }
     });
-
-    return responsePromises;
   }
 
   private async importLogs(
@@ -242,7 +240,7 @@ export class TestcenterService {
 
       const dbEntries = this.createDatabaseEntries(fetchedFiles, workspace_id);
 
-      await this.workspaceService.testCenterImport(dbEntries);
+      await this.workspaceFilesService.testCenterImport(dbEntries);
       return {
         success: fetchedFiles.length > 0,
         testFiles: fetchedFiles.length

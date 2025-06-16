@@ -11,6 +11,7 @@ import { FilesDto } from '../../../../../../api-dto/files/files.dto';
 import { FileIo } from '../../admin/workspace/file-io.interface';
 import { FileDownloadDto } from '../../../../../../api-dto/files/file-download.dto';
 import { FileValidationResultDto } from '../../../../../../api-dto/files/file-validation-result.dto';
+import { ResponseDto } from '../../../../../../api-dto/responses/response-dto';
 
 function sanitizePath(filePath: string): string {
   const normalizedPath = path.normalize(filePath);
@@ -372,73 +373,89 @@ export class WorkspaceFilesService {
     }
   }
 
-  private async handleXmlFile(workspaceId: number, file: FileIo): Promise<void> {
-    this.logger.log(`Processing XML file: ${file.originalname} for workspace ${workspaceId}`);
+  private async handleXmlFile(workspaceId: number, file: FileIo): Promise<unknown> {
     try {
-      const fileContent = file.buffer.toString('utf8');
-      const $ = cheerio.load(fileContent, { xmlMode: true });
-
-      let fileType = 'Resource';
-      let fileId = file.originalname.toUpperCase();
-
-      if ($('Testtakers').length > 0) {
-        fileType = 'TestTakers';
-        fileId = 'TESTTAKERS.XML';
-      } else if ($('Booklet').length > 0) {
-        fileType = 'Booklet';
-        const bookletId = $('Booklet').attr('id');
-        if (bookletId) {
-          fileId = bookletId.toUpperCase();
-        }
-      } else if ($('Unit').length > 0) {
-        fileType = 'Unit';
-        const unitId = $('Unit').attr('id');
-        if (unitId) {
-          fileId = unitId.toUpperCase();
-        }
-      } else if ($('SysCheck').length > 0) {
-        fileType = 'SysCheck';
-        const sysCheckId = $('SysCheck').attr('id');
-        if (sysCheckId) {
-          fileId = sysCheckId.toUpperCase();
-        }
+      if (!file.buffer || !file.buffer.length) {
+        this.logger.warn('Empty file buffer');
+        return await Promise.resolve();
       }
 
-      const fileUpload = this.fileUploadRepository.create({
+      const xmlContent = file.buffer.toString('utf8');
+      const xmlDocument = cheerio.load(file.buffer.toString('utf8'), { xmlMode: true, recognizeSelfClosing: true });
+      const firstChild = xmlDocument.root().children().first();
+      const rootTagName = firstChild ? firstChild.prop('tagName') : null;
+
+      if (!rootTagName) {
+        return this.unsupportedFile('Invalid XML: No root tag found');
+      }
+
+      const fileTypeMapping: Record<string, string> = {
+        UNIT: 'Unit',
+        BOOKLET: 'Booklet',
+        TESTTAKERS: 'TestTakers'
+      };
+
+      const fileType = fileTypeMapping[rootTagName];
+      if (!fileType) {
+        return this.unsupportedFile(`Unsupported root tag: ${rootTagName}`);
+      }
+
+      const schemaPaths: Record<string, string> = {
+        UNIT: path.resolve(__dirname, 'schemas/unit.xsd'),
+        BOOKLET: path.resolve(__dirname, 'schemas/booklet.xsd'),
+        TESTTAKERS: path.resolve(__dirname, 'schemas/testtakers.xsd')
+      };
+      const xsdPath = schemaPaths[rootTagName];
+      if (!xsdPath || !fs.existsSync(xsdPath)) {
+        return this.unsupportedFile(`No XSD schema found for root tag: ${rootTagName}`);
+      }
+
+      await this.validateXmlAgainstSchema(xmlContent, xsdPath);
+
+      const metadata = xmlDocument('Metadata');
+      const idElement = metadata.find('Id');
+      const fileId = idElement.length ? idElement.text().toUpperCase().trim() : null;
+      const resolvedFileId = fileType === 'TestTakers' ? fileId || file.originalname : fileId;
+
+      const existingFile = await this.fileUploadRepository.findOne({
+        where: { file_id: resolvedFileId, workspace_id: workspaceId }
+      });
+      if (existingFile) {
+        this.logger.warn(
+          `File with ID ${resolvedFileId} in Workspace ${workspaceId} already exists.`
+        );
+        return {
+          message: `File with ID ${resolvedFileId} already exists`,
+          fileId: resolvedFileId,
+          filename: file.originalname
+        };
+      }
+
+      return await this.fileUploadRepository.upsert({
         workspace_id: workspaceId,
         filename: file.originalname,
-        file_id: fileId,
         file_type: fileType,
         file_size: file.size,
-        data: fileContent
-      });
-
-      await this.fileUploadRepository.save(fileUpload);
-      this.logger.log(`Successfully processed XML file: ${file.originalname} as ${fileType} with ID ${fileId}`);
+        data: file.buffer.toString(),
+        file_id: resolvedFileId
+      }, ['file_id']);
     } catch (error) {
-      this.logger.error(`Error processing XML file ${file.originalname}: ${error.message}`, error.stack);
+      this.logger.error(`Error processing XML file: ${error.message}`);
       throw error;
     }
   }
 
-  private async handleHtmlFile(workspaceId: number, file: FileIo): Promise<void> {
-    this.logger.log(`Processing HTML file: ${file.originalname} for workspace ${workspaceId}`);
-    try {
-      const fileUpload = this.fileUploadRepository.create({
-        workspace_id: workspaceId,
-        filename: file.originalname,
-        file_id: file.originalname.toUpperCase(),
-        file_type: 'Resource',
-        file_size: file.size,
-        data: file.buffer.toString('utf8')
-      });
+  private async handleHtmlFile(workspaceId: number, file: FileIo): Promise<unknown> {
+    const resourceFileId = WorkspaceFilesService.getPlayerId(file);
 
-      await this.fileUploadRepository.save(fileUpload);
-      this.logger.log(`Successfully processed HTML file: ${file.originalname}`);
-    } catch (error) {
-      this.logger.error(`Error processing HTML file ${file.originalname}: ${error.message}`, error.stack);
-      throw error;
-    }
+    return this.fileUploadRepository.upsert({
+      filename: file.originalname,
+      workspace_id: workspaceId,
+      file_type: 'Resource',
+      file_size: file.size,
+      file_id: resourceFileId,
+      data: file.buffer.toString()
+    }, ['file_id']);
   }
 
   private async handleOctetStreamFile(workspaceId: number, file: FileIo): Promise<void> {
@@ -567,184 +584,156 @@ export class WorkspaceFilesService {
     return { allBookletsExist, missingBooklets, bookletFiles };
   }
 
-  private async checkMissingUnits(bookletNames: string[]): Promise<ValidationResult> {
-    this.logger.log(`Checking for missing units in ${bookletNames.length} booklets`);
-
-    const unitRefs = new Set<string>();
-    const playerRefs = new Set<string>();
-    const codingSchemeRefs = new Set<string>();
-    const definitionRefs = new Set<string>();
-
-    // Get all booklet files
-    const booklets = await this.fileUploadRepository.find({
-      where: { file_id: In(bookletNames.map(b => b.toUpperCase())), file_type: 'Booklet' }
-    });
-
-    // Extract unit references from booklets
-    for (const booklet of booklets) {
-      try {
-        const $ = cheerio.load(booklet.data, { xmlMode: true });
-        $('Unit').each((_, element) => {
-          const unitId = $(element).text().trim();
-          if (unitId) {
-            unitRefs.add(unitId.toUpperCase());
-          }
-
-          const playerIdAttr = $(element).attr('player');
-          if (playerIdAttr) {
-            playerRefs.add(playerIdAttr.toUpperCase());
-          }
-        });
-      } catch (error) {
-        this.logger.error(`Error parsing booklet ${booklet.file_id}: ${error.message}`);
-      }
-    }
-
-    // Process in batches to avoid excessive memory usage
-    const unitRefsArray = Array.from(unitRefs);
-    const batchSize = 100;
-    const unitBatches = [];
-
-    for (let i = 0; i < unitRefsArray.length; i += batchSize) {
-      unitBatches.push(unitRefsArray.slice(i, i + batchSize));
-    }
-
-    // Get all unit files and extract coding scheme and definition references
-    for (const batch of unitBatches) {
-      const units = await this.fileUploadRepository.find({
-        where: { file_id: In(batch.map(unit => unit.toUpperCase())), file_type: 'Unit' }
+  async checkMissingUnits(bookletNames:string[]): Promise<ValidationResult> {
+    try {
+      const existingBooklets = await this.fileUploadRepository.findBy({
+        file_type: 'Booklet',
+        file_id: In(bookletNames.map(b => b.toUpperCase()))
       });
 
-      for (const unit of units) {
+      const unitIdsPromises = existingBooklets.map(async booklet => {
         try {
-          const $ = cheerio.load(unit.data, { xmlMode: true });
-          $('CodingSchemeRef').each((_, element) => {
-            const schemeRef = $(element).text().trim();
-            if (schemeRef) {
-              codingSchemeRefs.add(schemeRef.toUpperCase());
-            }
+          const fileData = booklet.data;
+          const $ = cheerio.load(fileData, { xmlMode: true });
+          const unitIds: string[] = [];
 
-            // Check for player references in unit files
-            const playerIdAttr = $(element).attr('player');
-            if (playerIdAttr) {
-              playerRefs.add(playerIdAttr.toUpperCase());
+          $('Unit').each((_, element) => {
+            const unitId = $(element).attr('id');
+            if (unitId) {
+              unitIds.push(unitId.toUpperCase());
             }
           });
 
-          $('DefinitionRef').each((_, element) => {
-            const defRef = $(element).text().trim();
-            if (defRef) {
-              definitionRefs.add(defRef.toUpperCase());
-            }
-
-            // Check for player references in unit files
-            const playerIdAttr = $(element).attr('player');
-            if (playerIdAttr) {
-              playerRefs.add(playerIdAttr.toUpperCase());
-            }
-          });
-
-          // Check for player references directly on Unit element
-          const playerIdAttr = $('Unit').attr('player');
-          if (playerIdAttr) {
-            playerRefs.add(playerIdAttr.toUpperCase());
-          }
+          return unitIds;
         } catch (error) {
-          this.logger.error(`Error parsing unit ${unit.file_id}: ${error.message}`);
+          this.logger.error(`Fehler beim Verarbeiten von Unit ${booklet.file_id}:`, error);
+          return [];
         }
-      }
-    }
-
-    // Check which units exist
-    const unitFiles: FileStatus[] = [];
-    const missingUnits: string[] = [];
-
-    for (const unitId of unitRefs) {
-      const existingUnit = await this.fileUploadRepository.findOne({
-        where: { file_id: unitId, file_type: 'Unit' }
       });
 
-      unitFiles.push({
+      const allUnitIdsArrays = await Promise.all(unitIdsPromises);
+      const allUnitIds = Array.from(new Set(allUnitIdsArrays.flat()));
+      const chunkSize = 50;
+      const unitBatches = [];
+
+      for (let i = 0; i < allUnitIds.length; i += chunkSize) {
+        const chunk = allUnitIds.slice(i, i + chunkSize);
+        unitBatches.push(chunk);
+      }
+
+      const unitBatchPromises = unitBatches.map(batch => this.fileUploadRepository.find({
+        where: { file_id: In(batch) }
+      }));
+
+      const unitBatchResults = await Promise.all(unitBatchPromises);
+      const existingUnits = unitBatchResults.flat();
+
+      const refsPromises = existingUnits.map(async unit => {
+        try {
+          const fileData = unit.data;
+          const $ = cheerio.load(fileData, { xmlMode: true });
+          const refs = {
+            codingSchemeRefs: [] as string[],
+            definitionRefs: [] as string[],
+            playerRefs: [] as string[]
+          };
+
+          $('Unit').each((_, element) => {
+            const codingSchemeRef = $(element).find('CodingSchemeRef').text();
+            const definitionRef = $(element).find('DefinitionRef').text();
+            const playerRefAttr = $(element).find('DefinitionRef').attr('player');
+            const playerRef = playerRefAttr ? playerRefAttr.replace('@', '-') : '';
+
+            if (codingSchemeRef) {
+              refs.codingSchemeRefs.push(codingSchemeRef.toUpperCase());
+            }
+
+            if (definitionRef) {
+              refs.definitionRefs.push(definitionRef.toUpperCase());
+            }
+
+            if (playerRef) {
+              refs.playerRefs.push(playerRef.toUpperCase());
+            }
+          });
+
+          return refs;
+        } catch (error) {
+          this.logger.error(`Fehler beim Verarbeiten von Unit ${unit.file_id}:`, error);
+          return { codingSchemeRefs: [], definitionRefs: [], playerRefs: [] };
+        }
+      });
+
+      const allRefs = await Promise.all(refsPromises);
+
+      // Combine all references using Sets to remove duplicates
+      const allCodingSchemeRefs = Array.from(new Set(allRefs.flatMap(ref => ref.codingSchemeRefs)));
+      const allDefinitionRefs = Array.from(new Set(allRefs.flatMap(ref => ref.definitionRefs)));
+      const allPlayerRefs = Array.from(new Set(allRefs.flatMap(ref => ref.playerRefs)));
+
+      // Get all resources in a single query
+      const existingResources = await this.fileUploadRepository.findBy({
+        file_type: 'Resource'
+      });
+
+      const allResourceIds = existingResources.map(resource => resource.file_id);
+
+      // Find missing references
+      const missingCodingSchemeRefs = allCodingSchemeRefs.filter(ref => !allResourceIds.includes(ref));
+      const missingDefinitionRefs = allDefinitionRefs.filter(ref => !allResourceIds.includes(ref));
+      const missingPlayerRefs = allPlayerRefs.filter(ref => !allResourceIds.includes(ref));
+
+      // Check if all references exist
+      const allCodingSchemesExist = missingCodingSchemeRefs.length === 0;
+      const allCodingDefinitionsExist = missingDefinitionRefs.length === 0;
+      const allPlayerRefsExist = missingPlayerRefs.length === 0;
+
+      // Find missing units
+      const foundUnitIds = existingUnits.map(unit => unit.file_id.toUpperCase());
+      const missingUnits = allUnitIds.filter(unitId => !foundUnitIds.includes(unitId));
+      const uniqueUnits = Array.from(new Set(missingUnits));
+
+      const allUnitsExist = missingUnits.length === 0;
+
+      // Create lists of all files with their match status
+      const unitFiles: FileStatus[] = allUnitIds.map(unitId => ({
         filename: unitId,
-        exists: !!existingUnit
-      });
+        exists: foundUnitIds.includes(unitId)
+      }));
 
-      if (!existingUnit) {
-        missingUnits.push(unitId);
-      }
-    }
-
-    // Check which coding schemes exist
-    const schemeFiles: FileStatus[] = [];
-    const missingCodingSchemeRefs: string[] = [];
-
-    for (const ref of codingSchemeRefs) {
-      const existingScheme = await this.fileUploadRepository.findOne({
-        where: { file_id: ref }
-      });
-
-      schemeFiles.push({
+      const schemeFiles: FileStatus[] = allCodingSchemeRefs.map(ref => ({
         filename: ref,
-        exists: !!existingScheme
-      });
+        exists: allResourceIds.includes(ref)
+      }));
 
-      if (!existingScheme) {
-        missingCodingSchemeRefs.push(ref);
-      }
-    }
-
-    // Check which definitions exist
-    const definitionFiles: FileStatus[] = [];
-    const missingDefinitionRefs: string[] = [];
-
-    for (const ref of definitionRefs) {
-      const existingDefinition = await this.fileUploadRepository.findOne({
-        where: { file_id: ref }
-      });
-
-      definitionFiles.push({
+      const definitionFiles: FileStatus[] = allDefinitionRefs.map(ref => ({
         filename: ref,
-        exists: !!existingDefinition
-      });
+        exists: allResourceIds.includes(ref)
+      }));
 
-      if (!existingDefinition) {
-        missingDefinitionRefs.push(ref);
-      }
-    }
-
-    // Check which players exist
-    const playerFiles: FileStatus[] = [];
-    const missingPlayerRefs: string[] = [];
-
-    for (const ref of playerRefs) {
-      const existingPlayer = await this.fileUploadRepository.findOne({
-        where: { file_id: ref }
-      });
-
-      playerFiles.push({
+      const playerFiles: FileStatus[] = allPlayerRefs.map(ref => ({
         filename: ref,
-        exists: !!existingPlayer
-      });
+        exists: allResourceIds.includes(ref)
+      }));
 
-      if (!existingPlayer) {
-        missingPlayerRefs.push(ref);
-      }
+      return {
+        allUnitsExist,
+        missingUnits: uniqueUnits,
+        unitFiles,
+        allCodingSchemesExist,
+        allCodingDefinitionsExist,
+        missingCodingSchemeRefs,
+        missingDefinitionRefs,
+        schemeFiles,
+        definitionFiles,
+        allPlayerRefsExist,
+        missingPlayerRefs,
+        playerFiles
+      };
+    } catch (error) {
+      this.logger.error('Error validating units', error);
+      throw error;
     }
-
-    return {
-      allUnitsExist: missingUnits.length === 0,
-      missingUnits,
-      unitFiles,
-      allCodingSchemesExist: missingCodingSchemeRefs.length === 0,
-      allCodingDefinitionsExist: missingDefinitionRefs.length === 0,
-      missingCodingSchemeRefs,
-      missingDefinitionRefs,
-      schemeFiles,
-      definitionFiles,
-      allPlayerRefsExist: missingPlayerRefs.length === 0,
-      missingPlayerRefs,
-      playerFiles
-    };
   }
 
   private getMimeType(fileName: string): string {
@@ -756,5 +745,91 @@ export class WorkspaceFilesService {
       '.zip': 'application/zip'
     };
     return mimeTypes[extension] || 'application/octet-stream';
+  }
+
+  static cleanResponses(rows: ResponseDto[]): ResponseDto[] {
+    return Object.values(rows.reduce((agg, response) => {
+      const key = [response.test_person, response.unit_id].join('@@@@@@');
+      if (agg[key]) {
+        if (!(agg[key].responses.length) && response.responses.length) {
+          agg[key].responses = response.responses;
+        }
+        if (
+          !(Object.keys(agg[key].unit_state || {}).length) &&
+          (Object.keys(response.unit_state || {}).length)
+        ) {
+          agg[key].unit_state = response.unit_state;
+        }
+      } else {
+        agg[key] = response;
+      }
+      return agg;
+    }, <{ [key: string]: ResponseDto }>{}));
+  }
+
+  async testCenterImport(entries: Record<string, unknown>[]): Promise<boolean> {
+    try {
+      const registry = this.fileUploadRepository.create(entries);
+      await this.fileUploadRepository.upsert(registry, ['file_id']);
+      return true;
+    } catch (error) {
+      this.logger.error('Error during test center import', error);
+      return false;
+    }
+  }
+
+  private static getPlayerId(file: FileIo): string {
+    try {
+      const playerCode = file.buffer.toString();
+
+      const playerContent = cheerio.load(playerCode);
+
+      // Search for JSON+LD <script> tags in the parsed DOM.
+      const metaDataElement = playerContent('script[type="application/ld+json"]');
+      if (!metaDataElement.length) {
+        console.error('Meta-data <script> tag not found');
+      }
+
+      const metadata = JSON.parse(metaDataElement.text());
+      if (!metadata.id || !metadata.version) {
+        console.error('Invalid metadata structure: Missing id or version');
+      }
+
+      return WorkspaceFilesService.normalizePlayerId(`${metadata.id}-${metadata.version}`);
+    } catch (error) {
+      return WorkspaceFilesService.getResourceId(file);
+    }
+  }
+
+  private static getResourceId(file: FileIo): string {
+    if (!file?.originalname) {
+      throw new Error('Invalid file: originalname is required.');
+    }
+    const filePathParts = file.originalname.split('/')
+      .map(part => part.trim());
+    const fileName = filePathParts.pop();
+    if (!fileName) {
+      throw new Error('Invalid file: Could not determine the file name.');
+    }
+    return fileName.toUpperCase();
+  }
+
+  private static normalizePlayerId(name: string): string {
+    const reg = /^(\D+?)[@V-]?((\d+)(\.\d+)?(\.\d+)?(-\S+?)?)?(.\D{3,4})?$/;
+
+    const matches = name.match(reg);
+
+    if (!matches) {
+      throw new Error(`Invalid player name: ${name}`);
+    }
+
+    const [, module = '', , major = '', minorDot = ''] = matches;
+
+    const majorVersion = parseInt(major, 10) || 0;
+    const minorVersion = minorDot ? parseInt(minorDot.substring(1), 10) : 0;
+    // const patchVersion = patchDot ? parseInt(patchDot.substring(1), 10) : 0;
+    // const label = labelWithDash ? labelWithDash.substring(1) : '';
+
+    return `${module}-${majorVersion}.${minorVersion}`.toUpperCase();
   }
 }
