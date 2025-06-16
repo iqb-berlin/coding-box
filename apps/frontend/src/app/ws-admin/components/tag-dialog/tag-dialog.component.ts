@@ -6,7 +6,7 @@ import {
   MatDialogRef,
   MatDialogTitle
 } from '@angular/material/dialog';
-import { NgForOf, NgStyle } from '@angular/common';
+import { NgStyle } from '@angular/common';
 import { MatButton, MatIconButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { MatFormField, MatLabel } from '@angular/material/form-field';
@@ -28,23 +28,25 @@ import { CreateUnitTagDto } from '../../../../../../../api-dto/unit-tags/create-
         <span class="tag-count">{{ tags.length }} Tags</span>
       </div>
     </div>
-
+    
     <div mat-dialog-content>
       <div class="tags-section">
         <div class="section-header">
           <h2>Tags</h2>
         </div>
-
+    
         <div class="tags-container">
           <div class="tags-list">
-            <div *ngFor="let tag of tags" class="tag-item" [ngStyle]="{'background-color': tag.color || '#e3f2fd'}">
-              <span class="tag-text" [ngStyle]="{'color': getContrastColor(tag.color)}">{{ tag.tag }}</span>
-              <div class="tag-actions">
-                <button mat-icon-button (click)="deleteTag(tag.id)" class="tag-action-button" matTooltip="Tag löschen">
-                  <mat-icon [ngStyle]="{'color': getContrastColor(tag.color)}">close</mat-icon>
-                </button>
+            @for (tag of tags; track tag) {
+              <div class="tag-item" [ngStyle]="{'background-color': tag.color || '#e3f2fd'}">
+                <span class="tag-text" [ngStyle]="{'color': getContrastColor(tag.color)}">{{ tag.tag }}</span>
+                <div class="tag-actions">
+                  <button mat-icon-button (click)="deleteTag(tag.id)" class="tag-action-button" matTooltip="Tag löschen">
+                    <mat-icon [ngStyle]="{'color': getContrastColor(tag.color)}">close</mat-icon>
+                  </button>
+                </div>
               </div>
-            </div>
+            }
           </div>
           <div class="add-tag-form">
             <mat-form-field appearance="outline" class="tag-input">
@@ -59,11 +61,11 @@ import { CreateUnitTagDto } from '../../../../../../../api-dto/unit-tags/create-
         </div>
       </div>
     </div>
-
+    
     <div mat-dialog-actions align="end">
       <button mat-stroked-button (click)="closeDialog()">Schließen</button>
     </div>
-  `,
+    `,
   styles: [`
     /* Dialog Header */
     .dialog-header {
@@ -194,7 +196,6 @@ import { CreateUnitTagDto } from '../../../../../../../api-dto/unit-tags/create-
     }
   `],
   imports: [
-    NgForOf,
     MatDialogContent,
     MatDialogTitle,
     MatDialogActions,
@@ -207,7 +208,7 @@ import { CreateUnitTagDto } from '../../../../../../../api-dto/unit-tags/create-
     MatInput,
     FormsModule,
     MatTooltip
-  ],
+],
   standalone: true
 })
 export class TagDialogComponent implements OnInit {

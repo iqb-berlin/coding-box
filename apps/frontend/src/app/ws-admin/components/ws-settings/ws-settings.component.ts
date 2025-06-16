@@ -9,7 +9,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { CdkTextareaAutosize } from '@angular/cdk/text-field';
 import { Clipboard } from '@angular/cdk/clipboard';
-import { NgIf } from '@angular/common';
+
 import { AppService } from '../../../services/app.service';
 import { WsAccessRightsComponent } from '../ws-access-rights/ws-access-rights.component';
 
@@ -26,9 +26,8 @@ import { WsAccessRightsComponent } from '../ws-access-rights/ws-access-rights.co
     MatCardModule,
     MatIconModule,
     CdkTextareaAutosize,
-    WsAccessRightsComponent,
-    NgIf
-  ]
+    WsAccessRightsComponent
+]
 })
 export class WsSettingsComponent {
   authToken: string | null = null;

@@ -23,17 +23,23 @@
   </div>
 
   <input #hiddenFileInput type="file"
-         name="files"
-         accept=".xml,.voud,.vocs,.zip,.html,.csv"
-         multiple
-         [hidden]="true"
-         (change)="onFileSelected($event.currentTarget)"/>
+    name="files"
+    accept=".xml,.voud,.vocs,.zip,.html,.csv"
+    multiple
+    [hidden]="true"
+    (change)="onFileSelected($event.currentTarget)"/>
 
-  <div class="loading-container" *ngIf="isLoading">
-    <mat-spinner class="mat-spinner"></mat-spinner>
-    <p class="loading-text" *ngIf="isValidating">Validierung wird durchgeführt...</p>
-    <p class="loading-text" *ngIf="!isValidating">Dateiliste wird geladen...</p>
-  </div>
+  @if (isLoading) {
+    <div class="loading-container">
+      <mat-spinner class="mat-spinner"></mat-spinner>
+      @if (isValidating) {
+        <p class="loading-text">Validierung wird durchgeführt...</p>
+      }
+      @if (!isValidating) {
+        <p class="loading-text">Dateiliste wird geladen...</p>
+      }
+    </div>
+  }
 
 
   @if (!isLoading) {
@@ -50,18 +56,22 @@
               <mat-label>{{'file-upload.file_type' | translate}}</mat-label>
               <mat-select [(ngModel)]="selectedFileType" (selectionChange)="applyFilters()">
                 <mat-option value="">Alle Dateitypen</mat-option>
-                <mat-option *ngFor="let type of fileTypes" [value]="type">
-                  {{type}}
-                </mat-option>
+                @for (type of fileTypes; track type) {
+                  <mat-option [value]="type">
+                    {{type}}
+                  </mat-option>
+                }
               </mat-select>
             </mat-form-field>
 
             <mat-form-field appearance="outline" class="filter-select">
               <mat-label>{{'file-upload.file_size' | translate}}</mat-label>
               <mat-select [(ngModel)]="selectedFileSize" (selectionChange)="applyFilters()">
-                <mat-option *ngFor="let range of fileSizeRanges" [value]="range.value">
-                  {{range.display}}
-                </mat-option>
+                @for (range of fileSizeRanges; track range) {
+                  <mat-option [value]="range.value">
+                    {{range.display}}
+                  </mat-option>
+                }
               </mat-select>
             </mat-form-field>
 
@@ -82,14 +92,14 @@
           <ng-container matColumnDef="selectCheckbox">
             <mat-header-cell *matHeaderCellDef class="fx-flex-row-fix-70">
               <mat-checkbox [checked]="(tableCheckboxSelection | hasSelectionValue : tableCheckboxSelection.selected.length) &&  (tableCheckboxSelection.selected.length | isAllSelected : dataSource.data.length)"
-                            [indeterminate]="(tableCheckboxSelection | hasSelectionValue : tableCheckboxSelection.selected.length) && !(tableCheckboxSelection.selected.length | isAllSelected : dataSource.data.length)"
-                            (change)="$event ? masterToggle() : null">
+                [indeterminate]="(tableCheckboxSelection | hasSelectionValue : tableCheckboxSelection.selected.length) && !(tableCheckboxSelection.selected.length | isAllSelected : dataSource.data.length)"
+                (change)="$event ? masterToggle() : null">
               </mat-checkbox>
             </mat-header-cell>
             <mat-cell *matCellDef="let row" class="fx-flex-row-fix-70">
               <mat-checkbox [checked]="tableCheckboxSelection | isSelected: row : tableCheckboxSelection.selected.length"
-                            (click)="$event.stopPropagation()"
-                            (change)="$event ? tableCheckboxSelection.toggle(row) : null">
+                (click)="$event.stopPropagation()"
+                (change)="$event ? tableCheckboxSelection.toggle(row) : null">
               </mat-checkbox>
             </mat-cell>
           </ng-container>
@@ -127,10 +137,12 @@
         </mat-table>
       </div>
 
-      <div class="empty-state" *ngIf="dataSource?.data?.length === 0">
-        <mat-icon class="empty-icon">folder_open</mat-icon>
-        <p class="empty-text">Keine Test-Dateien vorhanden. Laden Sie Dateien hoch, um zu beginnen.</p>
-      </div>
+      @if (dataSource?.data?.length === 0) {
+        <div class="empty-state">
+          <mat-icon class="empty-icon">folder_open</mat-icon>
+          <p class="empty-text">Keine Test-Dateien vorhanden. Laden Sie Dateien hoch, um zu beginnen.</p>
+        </div>
+      }
     </div>
   }
 

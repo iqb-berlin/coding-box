@@ -20,7 +20,7 @@ import { MatIcon } from '@angular/material/icon';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { MatCheckbox } from '@angular/material/checkbox';
 import { MatAnchor, MatButton } from '@angular/material/button';
-import { DatePipe, NgIf, NgFor } from '@angular/common';
+import { DatePipe } from '@angular/common';
 import { MatFormField, MatLabel } from '@angular/material/form-field';
 import { MatOption, MatSelect } from '@angular/material/select';
 import { Subject, Subscription } from 'rxjs';
@@ -66,14 +66,12 @@ import { FileDownloadDto } from '../../../../../../../api-dto/files/file-downloa
     MatHeaderRowDef,
     MatRowDef,
     MatColumnDef,
-    NgIf,
-    NgFor,
     FormsModule,
     MatFormField,
     MatLabel,
     MatSelect,
     MatOption
-  ]
+]
 })
 export class TestFilesComponent implements OnInit, OnDestroy {
   displayedColumns: string[] = ['selectCheckbox', 'filename', 'file_size', 'file_type', 'created_at'];

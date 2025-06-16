@@ -6,12 +6,7 @@ import {
   OnDestroy
 } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import {
-  NgForOf,
-  NgIf,
-  NgClass,
-  TitleCasePipe
-} from '@angular/common';
+import { NgClass, TitleCasePipe } from '@angular/common';
 import {
   catchError,
   finalize,
@@ -66,8 +61,6 @@ interface Success {
   templateUrl: './coding-management.component.html',
   imports: [
     RouterLink,
-    NgForOf,
-    NgIf,
     NgClass,
     MatTable,
     MatColumnDef,
@@ -93,7 +86,7 @@ interface Success {
     MatIconButton,
     MatTooltipModule,
     MatDivider
-  ],
+],
   styleUrls: ['./coding-management.component.scss']
 })
 export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestroy {

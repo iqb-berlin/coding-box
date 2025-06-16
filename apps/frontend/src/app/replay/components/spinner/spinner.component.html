@@ -1,1 +1,3 @@
-<mat-spinner class="spinner" *ngIf="isLoading"></mat-spinner>
+@if (isLoading) {
+  <mat-spinner class="spinner"></mat-spinner>
+}

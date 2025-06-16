@@ -22,7 +22,7 @@ import { MatIcon } from '@angular/material/icon';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { MatCheckbox } from '@angular/material/checkbox';
 import { MatAnchor } from '@angular/material/button';
-import { DatePipe, NgClass, NgIf } from '@angular/common';
+import { DatePipe, NgClass } from '@angular/common';
 import { AppService } from '../../services/app.service';
 import { BackendService } from '../../services/backend.service';
 import { SearchFilterComponent } from '../../shared/search-filter/search-filter.component';
@@ -44,7 +44,6 @@ interface CodingJob {
   imports: [
     TranslateModule,
     DatePipe,
-    NgIf,
     NgClass,
     SearchFilterComponent,
     MatIcon,
@@ -62,7 +61,7 @@ interface CodingJob {
     MatRowDef,
     MatColumnDef,
     MatSortModule
-  ]
+]
 })
 export class CodingJobsComponent implements OnInit, AfterViewInit {
   displayedColumns: string[] = ['selectCheckbox', 'name', 'description', 'status', 'created_at', 'updated_at'];

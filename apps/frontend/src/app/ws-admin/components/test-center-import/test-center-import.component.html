@@ -6,25 +6,25 @@
   </div>
 
   @if(!authenticated)
-  {
+    {
     <div class="auth-section">
       <form class="auth-form"
-                             [formGroup]="loginForm"
-                             (ngSubmit)="authenticate()">
+        [formGroup]="loginForm"
+        (ngSubmit)="authenticate()">
         <div class="form-fields">
           <mat-form-field appearance="outline">
             <mat-label>{{'home.user-name' | translate}}</mat-label>
             <input matInput formControlName="name"
-                  (keyup.enter)="pw.focus()">
+              (keyup.enter)="pw.focus()">
             <mat-icon matSuffix>person</mat-icon>
           </mat-form-field>
 
           <mat-form-field appearance="outline">
             <mat-label>{{'home.password' | translate}}</mat-label>
             <input matInput #pw
-                  type="password"
-                  formControlName="pw"
-                  (keyup.enter)="authenticate()">
+              type="password"
+              formControlName="pw"
+              (keyup.enter)="authenticate()">
             <mat-icon matSuffix>lock</mat-icon>
           </mat-form-field>
 
@@ -48,9 +48,9 @@
 
         <div class="form-actions">
           <button mat-raised-button
-                  type="submit"
-                  [disabled]="loginForm.invalid"
-                  color="primary">
+            type="submit"
+            [disabled]="loginForm.invalid"
+            color="primary">
             <mat-icon>login</mat-icon>
             {{ 'login' | translate }}
           </button>
@@ -79,8 +79,8 @@
       @if (data.importType === 'testFiles' || (data.importType === 'testResults' && !showTestGroups)){
         <div class="import-section">
           <form class="import-form"
-                [formGroup]="importFilesForm"
-                (ngSubmit)="data.importType === 'testResults' ? getTestGroups(): getTestData()">
+            [formGroup]="importFilesForm"
+            (ngSubmit)="data.importType === 'testResults' ? getTestGroups(): getTestData()">
 
             <div class="form-content">
               <div class="options-section">
@@ -150,34 +150,44 @@
               </div>
             </div>
 
-            <div class="loading-container" *ngIf="isUploadingTestResults || isUploadingTestFiles">
-              <mat-spinner diameter="40"></mat-spinner>
-              <p class="loading-text" *ngIf="isUploadingTestResults">
-                Verfügbare Testgruppen im Arbeitsbereich werden abgerufen...
-              </p>
-              <p class="loading-text" *ngIf="isUploadingTestFiles">
-                Testdateien werden hochgeladen...
-              </p>
-            </div>
+            @if (isUploadingTestResults || isUploadingTestFiles) {
+              <div class="loading-container">
+                <mat-spinner diameter="40"></mat-spinner>
+                @if (isUploadingTestResults) {
+                  <p class="loading-text">
+                    Verfügbare Testgruppen im Arbeitsbereich werden abgerufen...
+                  </p>
+                }
+                @if (isUploadingTestFiles) {
+                  <p class="loading-text">
+                    Testdateien werden hochgeladen...
+                  </p>
+                }
+              </div>
+            }
 
-            <div class="form-actions" *ngIf="!isUploadingTestResults && !isUploadingTestFiles">
-              <button mat-raised-button
-                      type="submit"
-                      *ngIf="data.importType === 'testResults'"
-                      [disabled]="importFilesForm.invalid"
-                      color="primary">
-                <mat-icon>arrow_forward</mat-icon>
-                Weiter
-              </button>
-              <button mat-raised-button
-                      type="submit"
-                      *ngIf="data.importType === 'testFiles'"
-                      [disabled]="importFilesForm.invalid"
-                      color="primary">
-                <mat-icon>cloud_upload</mat-icon>
-                Dateien importieren
-              </button>
-            </div>
+            @if (!isUploadingTestResults && !isUploadingTestFiles) {
+              <div class="form-actions">
+                @if (data.importType === 'testResults') {
+                  <button mat-raised-button
+                    type="submit"
+                    [disabled]="importFilesForm.invalid"
+                    color="primary">
+                    <mat-icon>arrow_forward</mat-icon>
+                    Weiter
+                  </button>
+                }
+                @if (data.importType === 'testFiles') {
+                  <button mat-raised-button
+                    type="submit"
+                    [disabled]="importFilesForm.invalid"
+                    color="primary">
+                    <mat-icon>cloud_upload</mat-icon>
+                    Dateien importieren
+                  </button>
+                }
+              </div>
+            }
 
             @if(filesSelectionError){
               <div class="error-message">
@@ -198,10 +208,12 @@
                 <mat-icon>check_circle</mat-icon>
                 <span>Der Testcenter Import war erfolgreich.</span>
                 <div class="success-actions">
-                  <button mat-stroked-button color="primary" (click)="goBackToTestGroups()" class="back-to-groups-button" *ngIf="data.importType === 'testResults'">
-                    <mat-icon>groups</mat-icon>
-                    Weitere Testgruppen auswählen
-                  </button>
+                  @if (data.importType === 'testResults') {
+                    <button mat-stroked-button color="primary" (click)="goBackToTestGroups()" class="back-to-groups-button">
+                      <mat-icon>groups</mat-icon>
+                      Weitere Testgruppen auswählen
+                    </button>
+                  }
                   <button mat-raised-button color="primary" (click)="startNewImport()" class="new-import-button">
                     <mat-icon>refresh</mat-icon>
                     Neuen Import starten
@@ -227,108 +239,106 @@
             </div>
           </div>
 
-          <div class="loading-container" *ngIf="isUploadingTestResults">
-            <mat-spinner diameter="40"></mat-spinner>
-            <p class="loading-text">Testresultate werden hochgeladen...</p>
-          </div>
+          @if (isUploadingTestResults) {
+            <div class="loading-container">
+              <mat-spinner diameter="40"></mat-spinner>
+              <p class="loading-text">Testresultate werden hochgeladen...</p>
+            </div>
+          }
 
-          <div class="table-container" *ngIf="!isUploadingTestResults">
-            <table mat-table [dataSource]="testGroups" class="testgroups-table">
-              <ng-container matColumnDef="select">
-                <th mat-header-cell *matHeaderCellDef>
-                  <mat-checkbox
-                    (change)="toggleAllRows($event)"
-                    [checked]="isAllSelected()"
-                    color="primary"
-                  ></mat-checkbox>
-                </th>
-                <td mat-cell *matCellDef="let group">
-                  <mat-checkbox
-                    (change)="toggleRow(group)"
-                    [checked]="selectedRows.includes(group)"
-                    color="primary"
-                  ></mat-checkbox>
-                </td>
-              </ng-container>
+          @if (!isUploadingTestResults) {
+            <div class="table-container">
+              <table mat-table [dataSource]="testGroups" class="testgroups-table">
+                <ng-container matColumnDef="select">
+                  <th mat-header-cell *matHeaderCellDef>
+                    <mat-checkbox
+                      (change)="toggleAllRows($event)"
+                      [checked]="isAllSelected()"
+                      color="primary"
+                    ></mat-checkbox>
+                  </th>
+                  <td mat-cell *matCellDef="let group">
+                    <mat-checkbox
+                      (change)="toggleRow(group)"
+                      [checked]="selectedRows.includes(group)"
+                      color="primary"
+                    ></mat-checkbox>
+                  </td>
+                </ng-container>
+                <ng-container matColumnDef="groupName">
+                  <th mat-header-cell *matHeaderCellDef> Gruppenname </th>
+                  <td mat-cell *matCellDef="let group"> {{ group.groupName }} </td>
+                </ng-container>
+                <ng-container matColumnDef="groupLabel">
+                  <th mat-header-cell *matHeaderCellDef> Gruppenlabel </th>
+                  <td mat-cell *matCellDef="let group"> {{ group.groupLabel }} </td>
+                </ng-container>
+                <ng-container matColumnDef="bookletsStarted">
+                  <th mat-header-cell *matHeaderCellDef> Gestartete Booklets </th>
+                  <td mat-cell *matCellDef="let group">
+                    <span class="count-badge">{{ group.bookletsStarted }}</span>
+                  </td>
+                </ng-container>
+                <ng-container matColumnDef="numUnitsMin">
+                  <th mat-header-cell *matHeaderCellDef> Min. Einheiten </th>
+                  <td mat-cell *matCellDef="let group"> {{ group.numUnitsMin }} </td>
+                </ng-container>
+                <ng-container matColumnDef="numUnitsMax">
+                  <th mat-header-cell *matHeaderCellDef> Max. Einheiten </th>
+                  <td mat-cell *matCellDef="let group"> {{ group.numUnitsMax }} </td>
+                </ng-container>
+                <ng-container matColumnDef="numUnitsAvg">
+                  <th mat-header-cell *matHeaderCellDef> Durchschnittliche Einheiten </th>
+                  <td mat-cell *matCellDef="let group"> {{ group.numUnitsAvg }} </td>
+                </ng-container>
+                <ng-container matColumnDef="numUnitsTotal">
+                  <th mat-header-cell *matHeaderCellDef> Gesamte Einheiten </th>
+                  <td mat-cell *matCellDef="let group">
+                    <span class="count-badge total">{{ group.numUnitsTotal }}</span>
+                  </td>
+                </ng-container>
+                <ng-container matColumnDef="lastChange">
+                  <th mat-header-cell *matHeaderCellDef> Letzte Änderung </th>
+                  <td mat-cell *matCellDef="let group"> {{ group.lastChange | date:'dd.MM.yyyy HH:mm' }} </td>
+                </ng-container>
+                <tr mat-header-row *matHeaderRowDef="displayedColumns; sticky: true"></tr>
+                <tr mat-row *matRowDef="let row; columns: displayedColumns;" class="clickable-row"></tr>
+              </table>
+            </div>
+          }
 
-              <ng-container matColumnDef="groupName">
-                <th mat-header-cell *matHeaderCellDef> Gruppenname </th>
-                <td mat-cell *matCellDef="let group"> {{ group.groupName }} </td>
-              </ng-container>
-
-              <ng-container matColumnDef="groupLabel">
-                <th mat-header-cell *matHeaderCellDef> Gruppenlabel </th>
-                <td mat-cell *matCellDef="let group"> {{ group.groupLabel }} </td>
-              </ng-container>
-
-              <ng-container matColumnDef="bookletsStarted">
-                <th mat-header-cell *matHeaderCellDef> Gestartete Booklets </th>
-                <td mat-cell *matCellDef="let group">
-                  <span class="count-badge">{{ group.bookletsStarted }}</span>
-                </td>
-              </ng-container>
-
-              <ng-container matColumnDef="numUnitsMin">
-                <th mat-header-cell *matHeaderCellDef> Min. Einheiten </th>
-                <td mat-cell *matCellDef="let group"> {{ group.numUnitsMin }} </td>
-              </ng-container>
-
-              <ng-container matColumnDef="numUnitsMax">
-                <th mat-header-cell *matHeaderCellDef> Max. Einheiten </th>
-                <td mat-cell *matCellDef="let group"> {{ group.numUnitsMax }} </td>
-              </ng-container>
-
-              <ng-container matColumnDef="numUnitsAvg">
-                <th mat-header-cell *matHeaderCellDef> Durchschnittliche Einheiten </th>
-                <td mat-cell *matCellDef="let group"> {{ group.numUnitsAvg }} </td>
-              </ng-container>
-
-              <ng-container matColumnDef="numUnitsTotal">
-                <th mat-header-cell *matHeaderCellDef> Gesamte Einheiten </th>
-                <td mat-cell *matCellDef="let group">
-                  <span class="count-badge total">{{ group.numUnitsTotal }}</span>
-                </td>
-              </ng-container>
-
-              <ng-container matColumnDef="lastChange">
-                <th mat-header-cell *matHeaderCellDef> Letzte Änderung </th>
-                <td mat-cell *matCellDef="let group"> {{ group.lastChange | date:'dd.MM.yyyy HH:mm' }} </td>
-              </ng-container>
-
-              <tr mat-header-row *matHeaderRowDef="displayedColumns; sticky: true"></tr>
-              <tr mat-row *matRowDef="let row; columns: displayedColumns;" class="clickable-row"></tr>
-            </table>
-          </div>
-
-          <div class="selection-summary" *ngIf="selectedRows.length > 0">
-            <mat-icon>info</mat-icon>
-            <span>{{ selectedRows.length }} Testgruppe(n) ausgewählt</span>
-          </div>
+          @if (selectedRows.length > 0) {
+            <div class="selection-summary">
+              <mat-icon>info</mat-icon>
+              <span>{{ selectedRows.length }} Testgruppe(n) ausgewählt</span>
+            </div>
+          }
         </div>
       }
     }
     @else{
-      <div class="error-message">
-        <mat-icon>error</mat-icon>
-        <span>Keine Arbeitsbereiche auswählbar</span>
-      </div>
-    }
+    <div class="error-message">
+      <mat-icon>error</mat-icon>
+      <span>Keine Arbeitsbereiche auswählbar</span>
+    </div>
   }
+}
 
 </mat-dialog-content>
 
 <mat-dialog-actions align="end">
-  <button mat-raised-button
-          [disabled]="this.selectedRows.length === 0"
-          *ngIf="testGroups && testGroups.length > 0"
-          (click)="this.getTestData()"
-          color="primary">
-    <mat-icon>cloud_download</mat-icon>
-    Importieren
-  </button>
+  @if (testGroups && testGroups.length > 0) {
+    <button mat-raised-button
+      [disabled]="this.selectedRows.length === 0"
+      (click)="this.getTestData()"
+      color="primary">
+      <mat-icon>cloud_download</mat-icon>
+      Importieren
+    </button>
+  }
   <button mat-stroked-button
-          [disabled]="isUploadingTestFiles || isUploadingTestResults"
-          [mat-dialog-close]="true">
+    [disabled]="isUploadingTestFiles || isUploadingTestResults"
+    [mat-dialog-close]="true">
     {{ 'close' | translate }}
   </button>
 </mat-dialog-actions>
