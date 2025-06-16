@@ -14,7 +14,6 @@ import {
   UserActivityService,
   withAutoRefreshToken
 } from 'keycloak-angular';
-import { provideStore } from '@ngrx/store';
 import { HashLocationStrategy, LocationStrategy } from '@angular/common';
 import { routes } from './app.routes';
 import { environment } from '../environments/environment';
@@ -81,5 +80,5 @@ export const appConfig: ApplicationConfig = {
     useClass: HashLocationStrategy
   },
   provideAppInitializer(() => {
-  }), provideStore()]
+  })]
 };
