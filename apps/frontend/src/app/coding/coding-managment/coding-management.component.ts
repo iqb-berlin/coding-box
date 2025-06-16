@@ -1,9 +1,5 @@
 import {
-  Component,
-  ViewChild,
-  AfterViewInit,
-  OnInit,
-  OnDestroy
+  Component, ViewChild, AfterViewInit, OnInit, OnDestroy, inject
 } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { NgClass, TitleCasePipe } from '@angular/common';
@@ -86,10 +82,15 @@ interface Success {
     MatIconButton,
     MatTooltipModule,
     MatDivider
-],
+  ],
   styleUrls: ['./coding-management.component.scss']
 })
 export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestroy {
+  private backendService = inject(BackendService);
+  private appService = inject(AppService);
+  private snackBar = inject(MatSnackBar);
+  private dialog = inject(MatDialog);
+
   @ViewChild(MatSort) sort!: MatSort;
   @ViewChild(MatPaginator) paginator!: MatPaginator;
 
@@ -111,12 +112,7 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
     statusCounts: {}
   };
 
-  constructor(
-    private backendService: BackendService,
-    private appService: AppService,
-    private snackBar: MatSnackBar,
-    private dialog: MatDialog
-  ) {
+  constructor() {
     this.isAutoCoding = false;
   }
 

@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatButtonModule } from '@angular/material/button';
@@ -27,18 +27,15 @@ import { WsAccessRightsComponent } from '../ws-access-rights/ws-access-rights.co
     MatIconModule,
     CdkTextareaAutosize,
     WsAccessRightsComponent
-]
+  ]
 })
 export class WsSettingsComponent {
+  private appService = inject(AppService);
+  private clipboard = inject(Clipboard);
+  private snackBar = inject(MatSnackBar);
+
   authToken: string | null = null;
   duration = 60;
-
-  constructor(
-    private appService: AppService,
-    private clipboard: Clipboard,
-    private snackBar: MatSnackBar
-  ) {
-  }
 
   createToken(): void {
     this.appService

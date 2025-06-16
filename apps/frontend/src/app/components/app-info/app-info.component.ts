@@ -1,4 +1,4 @@
-import { Component, Input } from '@angular/core';
+import { Component, Input, inject } from '@angular/core';
 import { SafeUrl } from '@angular/platform-browser';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatAnchor } from '@angular/material/button';
@@ -13,6 +13,8 @@ import { ImpressumDialogComponent } from '../../shared/dialogs/impressum-dialog.
   imports: [MatAnchor, TranslateModule]
 })
 export class AppInfoComponent {
+  private dialog = inject(MatDialog);
+
   @Input() appTitle!: string;
   @Input() introHtml!: SafeUrl | undefined;
   @Input() appName!: string;
@@ -21,12 +23,6 @@ export class AppInfoComponent {
   @Input() userLongName!: string | undefined;
   @Input() isUserLoggedIn!: boolean;
   @Input() isAdmin!: boolean;
-
-  constructor(private dialog: MatDialog) {}
-
-  /**
-   * Opens the Impressum/Datenschutz dialog
-   */
   openImpressumDialog(): void {
     this.dialog.open(ImpressumDialogComponent, {
       width: '600px',

@@ -1,4 +1,4 @@
-import { Component, Inject } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import {
   MAT_DIALOG_DATA,
   MatDialogActions,
@@ -51,20 +51,18 @@ interface ExpandedFilesLists {
     TranslateModule,
     MatDialogClose,
     MatIcon
-],
+  ],
   styleUrls: ['./files-validation.component.scss']
 })
 export class FilesValidationDialogComponent {
-  // Track expanded state for each test taker's file lists
+  dialogRef = inject<MatDialogRef<FilesValidationDialogComponent>>(MatDialogRef);
+  data = inject(MAT_DIALOG_DATA);
   expandedFilesLists: Map<string, ExpandedFilesLists> = new Map();
 
-  constructor(
-    public dialogRef: MatDialogRef<FilesValidationDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: FilesValidation[]
-  ) {
-    // Initialize all file lists as collapsed by default
+  constructor() {
+    const data = this.data;
     if (data) {
-      data.forEach(val => {
+      data.forEach((val:any) => {
         this.expandedFilesLists.set(val.testTaker, {
           booklets: false,
           units: false,

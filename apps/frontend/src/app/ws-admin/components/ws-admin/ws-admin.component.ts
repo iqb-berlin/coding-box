@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, inject } from '@angular/core';
 import {
   ActivatedRoute, RouterLink, RouterLinkActive, RouterOutlet
 } from '@angular/router';
@@ -26,15 +26,13 @@ import {
     CodingManagementManualComponent]
 })
 export class WsAdminComponent implements OnInit {
+  private route = inject(ActivatedRoute);
+  private appService = inject(AppService);
+  private backendService = inject(BackendService);
+
   navLinks: string[] = ['test-files', 'test-results', 'coding', 'settings'];
   accessLevel:number = 0;
   authData = AppService.defaultAuthData;
-  constructor(
-    private route: ActivatedRoute,
-    private appService: AppService,
-    private backendService: BackendService
-  ) {
-  }
 
   ngOnInit() {
     const routeKey = 'ws';

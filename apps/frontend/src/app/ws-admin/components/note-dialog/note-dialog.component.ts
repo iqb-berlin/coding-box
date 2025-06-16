@@ -1,4 +1,4 @@
-import { Component, Inject, OnInit } from '@angular/core';
+import { Component, OnInit, inject } from '@angular/core';
 import {
   MAT_DIALOG_DATA,
   MatDialogActions,
@@ -28,13 +28,13 @@ import { CreateUnitNoteDto } from '../../../../../../../api-dto/unit-notes/creat
         <span class="note-count">{{ notes.length }} Notes</span>
       </div>
     </div>
-    
+
     <div mat-dialog-content>
       <div class="notes-section">
         <div class="section-header">
           <h2>Notes</h2>
         </div>
-    
+
         <div class="notes-container">
           <div class="notes-list">
             @for (note of notes; track note) {
@@ -66,7 +66,7 @@ import { CreateUnitNoteDto } from '../../../../../../../api-dto/unit-notes/creat
         </div>
       </div>
     </div>
-    
+
     <div mat-dialog-actions align="end">
       <button mat-stroked-button (click)="closeDialog()">Schließen</button>
     </div>
@@ -231,24 +231,23 @@ import { CreateUnitNoteDto } from '../../../../../../../api-dto/unit-notes/creat
     MatInput,
     FormsModule,
     MatTooltip
-],
+  ],
   standalone: true
 })
 export class NoteDialogComponent implements OnInit {
+  dialogRef = inject<MatDialogRef<NoteDialogComponent>>(MatDialogRef);
+  data = inject<{
+    unitId: number;
+    notes: UnitNoteDto[];
+    title?: string;
+  }>(MAT_DIALOG_DATA);
+
+  private backendService = inject(BackendService);
+  private appService = inject(AppService);
+  private snackBar = inject(MatSnackBar);
+
   notes: UnitNoteDto[] = [];
   newNoteText: string = '';
-
-  constructor(
-    public dialogRef: MatDialogRef<NoteDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: {
-      unitId: number;
-      notes: UnitNoteDto[];
-      title?: string;
-    },
-    private backendService: BackendService,
-    private appService: AppService,
-    private snackBar: MatSnackBar
-  ) { }
 
   ngOnInit(): void {
     this.notes = [...this.data.notes];

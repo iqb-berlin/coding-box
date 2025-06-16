@@ -1,4 +1,4 @@
-import { Injectable, Inject, forwardRef } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import {
   catchError, map, Observable, of, switchMap
@@ -82,12 +82,9 @@ interface ResponseEntity {
   providedIn: 'root'
 })
 export class BackendService {
-  constructor(
-    @Inject('SERVER_URL') private readonly serverUrl: string,
-    private http: HttpClient,
-    @Inject(forwardRef(() => AppService)) public appService: AppService
-  ) {
-  }
+  private readonly serverUrl = inject<string>('SERVER_URL' as any);
+  private http = inject(HttpClient);
+  appService = inject(AppService);
 
   authHeader = { Authorization: `Bearer ${localStorage.getItem('id_token')}` };
 

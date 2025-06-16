@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
 import {
   HttpRequest, HttpHandler, HttpEvent, HttpInterceptor, HttpHeaders
 } from '@angular/common/http';
@@ -10,11 +10,8 @@ import { AppService } from '../services/app.service';
   providedIn: 'root'
 })
 export class AuthInterceptor implements HttpInterceptor {
-  constructor(
-    private appService: AppService,
-    @Inject('APP_VERSION') readonly appVersion: string
-  ) {}
-
+  private appService = inject(AppService);
+  readonly appVersion = inject<string>('APP_VERSION' as any);
   intercept(req: HttpRequest<unknown>, next: HttpHandler): Observable<HttpEvent<unknown>> {
     const idToken = 'ssss';// localStorage.getItem('id_token');
     const headers = new HttpHeaders({ Authorization: `Bearer ${idToken}` });

@@ -1,5 +1,5 @@
 import {
-  Component, EventEmitter, Input, Output
+  Component, EventEmitter, Input, Output, inject
 } from '@angular/core';
 import { UntypedFormGroup } from '@angular/forms';
 import { MatDialog } from '@angular/material/dialog';
@@ -29,6 +29,12 @@ import {
   imports: [MatButton, MatTooltip, WrappedIconComponent, TranslateModule, WrappedIconComponent]
 })
 export class UsersMenuComponent {
+  private editUserDialog = inject(MatDialog);
+  private messageDialog = inject(MatDialog);
+  private editUserAccessRightsDialog = inject(MatDialog);
+  private deleteConfirmDialog = inject(MatDialog);
+  private translateService = inject(TranslateService);
+
   @Input() selectedUser!: number[];
   @Input() selectedRows!: UserFullDto[];
   @Input() checkedRows!: UserFullDto[];
@@ -38,12 +44,6 @@ export class UsersMenuComponent {
     new EventEmitter<{ selection: UserFullDto[], user: UntypedFormGroup }>();
 
   @Output() setUserWorkspaceAccessRights: EventEmitter<number[]> = new EventEmitter<number[]>();
-
-  constructor(private editUserDialog: MatDialog,
-              private messageDialog: MatDialog,
-              private editUserAccessRightsDialog: MatDialog,
-              private deleteConfirmDialog: MatDialog,
-              private translateService: TranslateService) {}
 
   editUser(): void {
     let selectedRows = this.selectedRows;

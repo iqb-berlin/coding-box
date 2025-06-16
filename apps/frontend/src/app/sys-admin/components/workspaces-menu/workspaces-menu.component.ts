@@ -1,5 +1,5 @@
 import {
-  Component, EventEmitter, Input, Output
+  Component, EventEmitter, Input, Output, inject
 } from '@angular/core';
 import { UntypedFormGroup } from '@angular/forms';
 import { TranslateService, TranslateModule } from '@ngx-translate/core';
@@ -13,7 +13,6 @@ import {
   ConfirmDialogComponent,
   ConfirmDialogData
 } from '../../../shared/dialogs/confirm-dialog.component';
-// eslint-disable-next-line import/no-cycle
 import { UserAccessRightsDialogComponent } from '../user-access-rights-dialog/user-access-rights-dialog.component';
 
 @Component({
@@ -23,6 +22,11 @@ import { UserAccessRightsDialogComponent } from '../user-access-rights-dialog/us
   imports: [MatButton, MatTooltip, WrappedIconComponent, TranslateModule]
 })
 export class WorkspacesMenuComponent {
+  private editWorkspaceDialog = inject(MatDialog);
+  private UserAccessRightsToWorkspaceDialog = inject(MatDialog);
+  private deleteConfirmDialog = inject(MatDialog);
+  private translateService = inject(TranslateService);
+
   @Input() selectedWorkspaces!: number[];
   @Input() selectedRows!: WorkspaceInListDto[];
   @Input() checkedRows!: WorkspaceInListDto[];
@@ -35,12 +39,6 @@ export class WorkspacesMenuComponent {
     new EventEmitter<{ selection: number[], formData: UntypedFormGroup }>();
 
   @Output() setWorkspaceUsersAccessRight: EventEmitter<number[]> = new EventEmitter<number[]>();
-
-  constructor(
-    private editWorkspaceDialog: MatDialog,
-    private UserAccessRightsToWorkspaceDialog: MatDialog,
-    private deleteConfirmDialog: MatDialog,
-    private translateService: TranslateService) {}
 
   addWorkspace(): void {
     const dialogRef = this.editWorkspaceDialog.open(EditWorkspaceComponent, {

@@ -1,5 +1,5 @@
 import {
-  Component, OnDestroy, OnInit, ViewChild
+  Component, OnDestroy, OnInit, ViewChild, inject
 } from '@angular/core';
 import { TranslateService, TranslateModule } from '@ngx-translate/core';
 import { MatDialog } from '@angular/material/dialog';
@@ -71,9 +71,15 @@ import { FileDownloadDto } from '../../../../../../../api-dto/files/file-downloa
     MatLabel,
     MatSelect,
     MatOption
-]
+  ]
 })
 export class TestFilesComponent implements OnInit, OnDestroy {
+  appService = inject(AppService);
+  backendService = inject(BackendService);
+  private dialog = inject(MatDialog);
+  private snackBar = inject(MatSnackBar);
+  private translate = inject(TranslateService);
+
   displayedColumns: string[] = ['selectCheckbox', 'filename', 'file_size', 'file_type', 'created_at'];
   dataSource!: MatTableDataSource<FilesInListDto>;
   tableCheckboxSelection = new SelectionModel<FilesInListDto>(true, []);
@@ -112,14 +118,6 @@ export class TestFilesComponent implements OnInit, OnDestroy {
     tb: 1024 ** 4,
     tib: 1024 ** 4
   };
-
-  constructor(
-    public appService: AppService,
-    public backendService: BackendService,
-    private dialog: MatDialog,
-    private snackBar: MatSnackBar,
-    private translate: TranslateService
-  ) {}
 
   ngOnInit(): void {
     this.loadTestFiles(false);

@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MatMenu, MatMenuTrigger } from '@angular/material/menu';
@@ -11,14 +11,18 @@ import { AuthService } from '../../../auth/service/auth.service';
   selector: 'coding-box-user-menu',
   templateUrl: './user-menu.component.html',
   styleUrls: ['./user-menu.component.scss'],
-  // eslint-disable-next-line max-len
-  imports: [MatButton, MatMenuTrigger, MatTooltip, WrappedIconComponent, MatMenu, TranslateModule, AccountActionComponent]
+  imports: [
+    MatButton,
+    MatMenuTrigger,
+    MatTooltip,
+    WrappedIconComponent,
+    MatMenu,
+    TranslateModule,
+    AccountActionComponent
+  ]
 })
 export class UserMenuComponent {
-  constructor(
-    private authService: AuthService
-  ) {
-  }
+  private authService = inject(AuthService);
 
   async logout() {
     await this.authService.logout();

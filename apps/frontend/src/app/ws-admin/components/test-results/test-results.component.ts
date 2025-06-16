@@ -6,7 +6,9 @@ import {
   MatRowDef,
   MatTableDataSource, MatCell, MatColumnDef, MatHeaderCell, MatHeaderRow, MatRow
 } from '@angular/material/table';
-import { Component, OnInit, ViewChild } from '@angular/core';
+import {
+  Component, OnInit, ViewChild, inject
+} from '@angular/core';
 import { MatSort, MatSortHeader } from '@angular/material/sort';
 import { FormsModule, UntypedFormGroup } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -89,6 +91,13 @@ interface P {
     MatTooltipModule]
 })
 export class TestResultsComponent implements OnInit {
+  private dialog = inject(MatDialog);
+  private backendService = inject(BackendService);
+  private appService = inject(AppService);
+  private router = inject(Router);
+  private snackBar = inject(MatSnackBar);
+  private translateService = inject(TranslateService);
+
   selection = new SelectionModel<P>(true, []);
   tableSelectionCheckboxes = new SelectionModel<TestGroupsInListDto>(true, []);
   dataSource !: MatTableDataSource<P>;
@@ -129,6 +138,8 @@ export class TestResultsComponent implements OnInit {
     private snackBar: MatSnackBar,
     private translateService: TranslateService
   ) {
+  constructor() {
+    this.selectedBooklet = undefined;
   }
 
   ngOnInit(): void {

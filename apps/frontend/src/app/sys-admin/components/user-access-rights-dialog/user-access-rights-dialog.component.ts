@@ -1,6 +1,4 @@
-import {
-  Component, Inject
-} from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatButton } from '@angular/material/button';
 import {
@@ -21,10 +19,15 @@ import { UsersSelectionComponent } from '../users-selection/users-selection.comp
 })
 
 export class UserAccessRightsDialogComponent {
+  data = inject<{
+    selectedWorkspace: number[];
+  }>(MAT_DIALOG_DATA);
+
+  private backendService = inject(BackendService);
+
   selectedUserIds!: number[];
   result: number[] = [];
-  constructor(@Inject(MAT_DIALOG_DATA) public data: { selectedWorkspace: number[] },
-              private backendService: BackendService) {
+  constructor() {
     if (this.data.selectedWorkspace?.length > 0) {
       this.backendService.getWorkspaceUsers(this.data.selectedWorkspace[0])
         .subscribe(users => {

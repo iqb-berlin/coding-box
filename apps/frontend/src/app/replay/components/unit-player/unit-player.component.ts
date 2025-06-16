@@ -1,6 +1,5 @@
 import {
-  AfterViewInit,
-  Component, ElementRef, EventEmitter, Input, OnChanges, OnDestroy, Output, SimpleChange, SimpleChanges, ViewChild
+  AfterViewInit, Component, ElementRef, EventEmitter, Input, OnChanges, OnDestroy, Output, SimpleChange, SimpleChanges, ViewChild, inject
 } from '@angular/core';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
@@ -33,6 +32,11 @@ export type Progress = 'none' | 'some' | 'complete';
   styleUrl: './unit-player.component.scss'
 })
 export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy {
+  private appService = inject(AppService);
+  private snackBar = inject(MatSnackBar);
+  private translateService = inject(TranslateService);
+  private backendService = inject(BackendService);
+
   @Input() unitDef: string | undefined;
   @Input() unitPlayer: string | undefined;
   @Input() unitResponses: ResponseDto | undefined;
@@ -111,12 +115,7 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
     } catch (error) { /* empty */ }
   }
 
-  constructor(
-    private appService: AppService,
-    private snackBar: MatSnackBar,
-    private translateService: TranslateService,
-    private backendService: BackendService
-  ) {
+  constructor() {
     this.subscribeForMessages();
     this.subscribeForValidPages();
   }
