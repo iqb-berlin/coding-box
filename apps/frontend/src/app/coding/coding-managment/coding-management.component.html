@@ -128,21 +128,21 @@
     </div>
     <mat-divider></mat-divider>
 
-    <div class="filter-container">
-      <div class="filter-row">
-        <mat-form-field class="filter-field" appearance="outline">
-          <mat-label>Filter</mat-label>
-          <input matInput (input)="filterTextChanged.next($event)" placeholder="Nach unitname oder variableid filtern" #input>
-          <mat-icon matSuffix>search</mat-icon>
-          <button *ngIf="input.value" matSuffix mat-icon-button aria-label="Clear" (click)="input.value=''; filterTextChanged.next($event)">
-            <mat-icon>close</mat-icon>
-          </button>
-        </mat-form-field>
-        <div class="filter-spinner" *ngIf="isFilterLoading">
-          <mat-spinner diameter="24"></mat-spinner>
-        </div>
-      </div>
-    </div>
+<!--    <div class="filter-container">-->
+<!--      <div class="filter-row">-->
+<!--        <mat-form-field class="filter-field" appearance="outline">-->
+<!--          <mat-label>Filter</mat-label>-->
+<!--          <input matInput (input)="filterTextChanged.next($event)" placeholder="Nach unitname oder variableid filtern" #input>-->
+<!--          <mat-icon matSuffix>search</mat-icon>-->
+<!--          <button *ngIf="input.value" matSuffix mat-icon-button aria-label="Clear" (click)="input.value=''; filterTextChanged.next($event)">-->
+<!--            <mat-icon>close</mat-icon>-->
+<!--          </button>-->
+<!--        </mat-form-field>-->
+<!--        <div class="filter-spinner" *ngIf="isFilterLoading">-->
+<!--          <mat-spinner diameter="24"></mat-spinner>-->
+<!--        </div>-->
+<!--      </div>-->
+<!--    </div>-->
 
     <div class="table-container">
       <table mat-table [dataSource]="dataSource" matSort class="coding-table">

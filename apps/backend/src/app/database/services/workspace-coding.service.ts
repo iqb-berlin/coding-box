@@ -324,10 +324,9 @@ export class WorkspaceCodingService {
       voudFiles.forEach(file => {
         voudFileMap.set(file.file_id, file);
       });
-
       if (options) {
         const { page, limit } = options;
-        const MAX_LIMIT = 500;
+        const MAX_LIMIT = 10000000;
         const validPage = Math.max(1, page);
         const validLimit = Math.min(Math.max(1, limit), MAX_LIMIT);
         const queryBuilder = this.responseRepository.createQueryBuilder('response')
@@ -338,7 +337,7 @@ export class WorkspaceCodingService {
           .where('response.codedStatus = :status', { status: 'CODING_INCOMPLETE' })
           .andWhere('person.workspace_id = :workspace_id', { workspace_id })
           .skip((validPage - 1) * validLimit)
-          .take(validLimit)
+          .take(MAX_LIMIT) // Set a very high limit to fetch all items
           .orderBy('response.id', 'ASC');
 
         const [responses, total] = await queryBuilder.getManyAndCount();
@@ -355,7 +354,7 @@ export class WorkspaceCodingService {
           const unitKey = unit?.name || '';
           const unitAlias = unit?.alias || '';
           let variablePage = '0';
-
+          const variableAnchor = response.variableid || 0;
           const voudFile = voudFileMap.get(`${unitKey}.VOUD`);
           if (voudFile) {
             try {
@@ -379,7 +378,7 @@ export class WorkspaceCodingService {
             this.logger.warn(`VOUD file not found for unit ${unitKey}`);
           }
 
-          const url = `${server}/#/replay/${loginGroup}@${loginCode}@${bookletId}/${unitKey}/${variablePage}?auth=${authToken}`;
+          const url = `${server}/#/replay/${loginGroup}@${loginCode}@${bookletId}/${unitKey}/${variablePage}/${variableAnchor}?auth=${authToken}`;
 
           return {
             unit_key: unitKey,
@@ -399,7 +398,6 @@ export class WorkspaceCodingService {
           if (unitKeyComparison !== 0) {
             return unitKeyComparison;
           }
-          // If unit_key is the same, sort by variable_id
           return a.variable_id.localeCompare(b.variable_id);
         });
 
@@ -430,6 +428,7 @@ export class WorkspaceCodingService {
         const unitKey = unit?.name || '';
         const unitAlias = unit?.alias || '';
         let variablePage = '0';
+        const variableAnchor = response.variableid || 0;
         const voudFile = voudFileMap.get(`${unitKey}.VOUD`);
 
         if (voudFile) {
@@ -455,7 +454,7 @@ export class WorkspaceCodingService {
           this.logger.warn(`VOUD file not found for unit ${unitKey}`);
         }
 
-        const url = `${server}/#/replay/${loginGroup}@${loginCode}@${bookletId}/${unitKey}/${variablePage}?auth=${authToken}`;
+        const url = `${server}/#/replay/${loginGroup}@${loginCode}@${bookletId}/${unitKey}/${variablePage}/${variableAnchor}?auth=${authToken}`;
         return {
           unit_key: unitKey,
           unit_alias: unitAlias,
@@ -569,7 +568,6 @@ export class WorkspaceCodingService {
 
   async getCodingListAsExcel(workspace_id: number): Promise<Buffer> {
     this.logger.log(`Generating Excel export for workspace ${workspace_id}`);
-    const csvData = await this.getCodingListAsCsv(workspace_id);
-    return csvData;
+    return this.getCodingListAsCsv(workspace_id);
   }
 }

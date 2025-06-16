@@ -1,6 +1,7 @@
 .export-dialog-container {
   min-width: 400px;
   max-width: 600px;
+  padding: 10px;
 }
 
 .format-options {
@@ -9,7 +10,7 @@
 
 .format-option {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   margin-bottom: 16px;
 }
 
@@ -22,3 +23,4 @@
 mat-dialog-actions {
   padding: 16px 0;
 }
+
