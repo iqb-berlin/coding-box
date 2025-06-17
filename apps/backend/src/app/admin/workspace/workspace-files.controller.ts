@@ -139,7 +139,7 @@ export class WorkspaceFilesController {
   @Post(':workspace_id/upload')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Upload test files', description: 'Uploads test files to a workspace' })
+  @ApiOperation({ summary: 'Upload test files', description: 'Uploads test files to a workspace and returns validation results' })
   @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
   @UseInterceptors(FilesInterceptor('files'))
   @ApiConsumes('multipart/form-data')
@@ -157,13 +157,13 @@ export class WorkspaceFilesController {
       }
     }
   })
-  @ApiOkResponse({ description: 'Files uploaded successfully', type: Boolean })
-  @ApiBadRequestResponse({ description: 'Invalid workspace ID or no files uploaded' })
+  @ApiOkResponse({ description: 'Files uploaded and validated successfully', type: FileValidationResultDto })
+  @ApiBadRequestResponse({ description: 'Invalid workspace ID, no files uploaded, or upload/validation failed' })
   @ApiTags('workspace')
   async addTestFiles(
     @Param('workspace_id') workspaceId: number,
       @UploadedFiles() files: Express.Multer.File[]
-  ): Promise<boolean> {
+  ): Promise<FileValidationResultDto | boolean> { // Return type updated
     if (!workspaceId) {
       throw new BadRequestException('Workspace ID is required.');
     }
@@ -173,10 +173,10 @@ export class WorkspaceFilesController {
     }
 
     try {
+      // The service method now returns FileValidationResultDto or boolean
       return await this.workspaceFilesService.uploadTestFiles(workspaceId, files);
     } catch (error) {
-      logger.error('Error uploading test files:');
-      return false;
+      throw new InternalServerErrorException('Error uploading or validating test files.');
     }
   }
 

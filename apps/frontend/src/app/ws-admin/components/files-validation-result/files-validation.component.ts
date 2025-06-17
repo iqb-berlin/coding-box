@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { Component, Inject } from '@angular/core';
 import {
   MAT_DIALOG_DATA,
   MatDialogActions,
@@ -6,34 +6,14 @@ import {
   MatDialogContent,
   MatDialogRef
 } from '@angular/material/dialog';
-import { NgClass } from '@angular/common';
+import { NgForOf, NgIf, NgClass } from '@angular/common';
 import { MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { TranslateModule } from '@ngx-translate/core';
 
-type FileStatus = {
-  filename: string;
-  exists: boolean;
-};
-
-type DataValidation = {
-  complete: boolean;
-  missing: string[];
-  files: FileStatus[];
-};
-
-type FilesValidation = {
-  testTaker: string,
-  booklets: DataValidation;
-  units: DataValidation;
-  schemes: DataValidation;
-  definitions: DataValidation;
-  player: DataValidation;
-};
-
-// Interface to track expanded state of file lists
-interface ExpandedFilesLists {
-  booklets: boolean;
+// Local type for managing expanded state of sections within each booklet validation entry
+interface ExpandedBookletSectionsState {
+  bookletSelfStatus: boolean; // Though bookletSelfStatus might not be expandable, kept for structure
   units: boolean;
   schemes: boolean;
   definitions: boolean;
@@ -44,6 +24,8 @@ interface ExpandedFilesLists {
   selector: 'files-validation-dialog',
   templateUrl: './files-validation.component.html',
   imports: [
+    NgIf,
+    NgForOf,
     NgClass,
     MatDialogContent,
     MatDialogActions,
@@ -55,16 +37,22 @@ interface ExpandedFilesLists {
   styleUrls: ['./files-validation.component.scss']
 })
 export class FilesValidationDialogComponent {
-  dialogRef = inject<MatDialogRef<FilesValidationDialogComponent>>(MatDialogRef);
-  data = inject(MAT_DIALOG_DATA);
-  expandedFilesLists: Map<string, ExpandedFilesLists> = new Map();
+  // Stores the validation results for all booklets
+  bookletValidationResults: any[] = [];
 
-  constructor() {
-    const data = this.data;
-    if (data) {
-      data.forEach((val:any) => {
-        this.expandedFilesLists.set(val.testTaker, {
-          booklets: false,
+  // Manages the expanded state for each section of each booklet
+  expandedStates: Map<string, ExpandedBookletSectionsState> = new Map();
+
+  constructor(
+    public dialogRef: MatDialogRef<FilesValidationDialogComponent>,
+    @Inject(MAT_DIALOG_DATA) public data: any
+  ) {
+    if (data && data.bookletValidationResults) {
+      this.bookletValidationResults = data.bookletValidationResults;
+      // Initialize expanded states for each booklet
+      this.bookletValidationResults.forEach(bookletResult => {
+        this.expandedStates.set(bookletResult.bookletId, {
+          bookletSelfStatus: false, // Typically not an expandable list
           units: false,
           schemes: false,
           definitions: false,
@@ -75,25 +63,44 @@ export class FilesValidationDialogComponent {
   }
 
   /**
-   * Toggle the expanded state of a file list
-   * @param testTaker The test taker identifier
-   * @param section The section to toggle
+   * Toggles the expanded state of a specific section for a given booklet.
+   * @param bookletId The ID of the booklet.
+   * @param sectionKey The key of the section to toggle (e.g., 'units', 'schemes').
    */
-  toggleFilesList(testTaker: string, section: keyof ExpandedFilesLists): void {
-    const sections = this.expandedFilesLists.get(testTaker);
-    if (sections) {
-      sections[section] = !sections[section];
+  toggleFilesList(bookletId: string, sectionKey: keyof ExpandedBookletSectionsState): void {
+    const bookletStates = this.expandedStates.get(bookletId);
+    if (bookletStates) {
+      bookletStates[sectionKey] = !bookletStates[sectionKey];
     }
   }
 
   /**
-   * Check if a file list is expanded
-   * @param testTaker The test taker identifier
-   * @param section The section to check
-   * @returns True if the file list is expanded, false otherwise
+   * Checks if a specific section for a given booklet is expanded.
+   * @param bookletId The ID of the booklet.
+   * @param sectionKey The key of the section to check.
+   * @returns True if the section is expanded, false otherwise.
    */
-  isFilesListExpanded(testTaker: string, section: keyof ExpandedFilesLists): boolean {
-    const sections = this.expandedFilesLists.get(testTaker);
-    return sections ? sections[section] : false;
+  isFilesListExpanded(bookletId: string, sectionKey: keyof ExpandedBookletSectionsState): boolean {
+    const bookletStates = this.expandedStates.get(bookletId);
+    return bookletStates ? bookletStates[sectionKey] : false;
+  }
+
+  // Helper to get the keys of DataValidation sections for iteration in the template
+  getDataValidationSectionKeys(details: any | undefined): any {
+    if (!details) return [];
+    // Exclude bookletSelfStatus if it's not meant to be displayed as an expandable list in the same way
+    return Object.keys(details).filter(key => key !== 'bookletSelfStatus') as (keyof any)[];
+  }
+
+  // Helper to get a display name for a section key
+  getSectionDisplayName(sectionKey: string): string {
+    switch (sectionKey) {
+      case 'units': return 'Units';
+      case 'schemes': return 'Kodierschemata';
+      case 'definitions': return 'Aufgabendefinitionen';
+      case 'player': return 'Player';
+      case 'bookletSelfStatus': return 'Booklet Datei';
+      default: return sectionKey;
+    }
   }
 }

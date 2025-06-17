@@ -153,7 +153,22 @@
     "test-groups": "Testgruppen",
     "test-results": "Testergebnisse",
     "select-unit-play": "Replay",
-    "coding": "Kodierung"
+    "coding": "Kodierung",
+    "validation-orphaned-units": "Verwaiste Units",
+    "validation-complete": "Vollständig",
+    "validation-incomplete": "Unvollständig",
+    "validation-orphaned-units-message": "Die folgenden Units sind im Arbeitsbereich vorhanden, aber in keinem Booklet referenziert. Sie werden bei der Verarbeitung ignoriert und aus der Datenbank entfernt:",
+    "validation-orphaned-units-clear": "Alle im Arbeitsbereich vorhandenen Units sind Booklets zugeordnet.",
+    "validation-no-data": "Keine Validierungsdaten verfügbar.",
+    "validation-no-booklets-to-display": "Keine Booklets zur Validierung vorhanden.",
+    "validation-no-booklets": "Keine Booklets gefunden",
+    "validation-all-units-have-player": "Prüfung: Alle Units haben einen Player",
+    "validation-units-missing-player": "Folgende Units haben keinen Player zugewiesen",
+    "validation-all-units-have-player-clear": "Alle im Arbeitsbereich vorhandenen Units haben einen Player zugewiesen.",
+    "upload-test-takers": "TestTakers hochladen",
+    "validation-booklets-in-testtakers": "Prüfung: Booklets in TestTakers referenziert",
+    "validation-booklets-missing-testtakers": "Folgende Booklets werden in keiner TestTakers-Datei verwendet",
+    "validation-booklets-in-testtakers-clear": "Alle Booklets sind in mindestens einer TestTakers-Datei referenziert."
   },
   "search-filter": {
     "filter-users": "Suche nach Nutzer:innen",
