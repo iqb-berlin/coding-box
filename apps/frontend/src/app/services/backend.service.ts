@@ -264,16 +264,14 @@ export class BackendService {
       `${this.serverUrl}admin/workspace/${workspace_id}/responses/validation`,
       { headers: this.authHeader })
       .pipe(
-        catchError(() => {
-          return of({
-            valid: false,
-            totalResponses: 0,
-            validResponses: 0,
-            invalidResponses: 0,
-            invalidGroups: [],
-            details: []
-          });
-        }),
+        catchError(() => of({
+          valid: false,
+          totalResponses: 0,
+          validResponses: 0,
+          invalidResponses: 0,
+          invalidGroups: [],
+          details: []
+        })),
         map(res => res)
       );
   }
@@ -402,16 +400,22 @@ export class BackendService {
       );
   }
 
-  uploadTestFiles(workspaceId: number, files: FileList | null): Observable<number> {
+  uploadTestFiles(workspaceId: number, files: FileList | null): Observable<FileValidationResultDto | boolean> {
     const formData = new FormData();
     if (files) {
       for (let i = 0; i < files.length; i++) {
         formData.append('files', files[i]);
       }
     }
-    return this.http.post<never>(`${this.serverUrl}admin/workspace/${workspaceId}/upload`, formData, {
-      headers: this.authHeader
-    });
+    return this.http.post<FileValidationResultDto | boolean>( // Return type updated in post
+      `${this.serverUrl}admin/workspace/${workspaceId}/upload`,
+      formData,
+      {
+        headers: this.authHeader
+      }
+    ).pipe(
+      catchError(() => of(false))
+    );
   }
 
   uploadTestResults(workspaceId: number, files: FileList | null, resultType: 'logs' | 'responses'): Observable<number> {
@@ -713,9 +717,7 @@ export class BackendService {
       { headers: this.authHeader }
     )
       .pipe(
-        catchError(() => {
-          return of([]);
-        })
+        catchError(() => of([]))
       );
   }
 }

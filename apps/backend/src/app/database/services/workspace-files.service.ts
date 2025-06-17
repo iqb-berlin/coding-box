@@ -6,12 +6,17 @@ import AdmZip = require('adm-zip');
 import * as fs from 'fs';
 import * as path from 'path';
 import * as libxmljs from 'libxmljs2';
+import { ResponseDto } from 'api-dto/responses/response-dto';
 import FileUpload from '../entities/file_upload.entity';
 import { FilesDto } from '../../../../../../api-dto/files/files.dto';
 import { FileIo } from '../../admin/workspace/file-io.interface';
 import { FileDownloadDto } from '../../../../../../api-dto/files/file-download.dto';
-import { FileValidationResultDto } from '../../../../../../api-dto/files/file-validation-result.dto';
-import { ResponseDto } from '../../../../../../api-dto/responses/response-dto';
+import {
+  FileValidationResultDto,
+  BookletValidationResultEntryDto,
+  BookletContentValidationDetails,
+  SimpleDataValidationDto
+} from '../../../../../../api-dto/files/file-validation-result.dto';
 
 function sanitizePath(filePath: string): string {
   const normalizedPath = path.normalize(filePath);
@@ -32,16 +37,7 @@ type DataValidation = {
   files: FileStatus[];
 };
 
-type ValidationData = {
-  testTaker: string;
-  booklets: DataValidation;
-  units: DataValidation;
-  schemes: DataValidation;
-  definitions: DataValidation;
-  player: DataValidation;
-};
-
-export type ValidationResult = {
+export type ValidationResult = { // This type is used by checkUnitsAndDependenciesForBooklet
   allUnitsExist: boolean;
   missingUnits: string[];
   unitFiles: FileStatus[];
@@ -103,174 +99,356 @@ export class WorkspaceFilesService {
   }
 
   async validateTestFiles(workspaceId: number): Promise<FileValidationResultDto> {
-    try {
-      const testTakers = await this.fileUploadRepository.find({
-        where: { workspace_id: workspaceId, file_type: In(['TestTakers', 'Testtakers']) }
+    this.logger.log(`Starting file validation for workspace ID: ${workspaceId}`);
+
+    const bookletFileEntities = await this.fileUploadRepository.find({
+      where: { workspace_id: workspaceId, file_type: 'Booklet' }
+    });
+
+    const allReferencedUnitIds = new Set<string>();
+    const bookletValidationResults: BookletValidationResultEntryDto[] = [];
+
+    if (bookletFileEntities && bookletFileEntities.length > 0) {
+      const bookletProcessingPromises = bookletFileEntities.map(async bookletEntity => {
+        const result = await this.processSingleBookletValidation(bookletEntity, workspaceId);
+        if (result && result.validationDetails.units.files) {
+          // Collect all unit IDs that are referenced and exist or are missing but referenced
+          result.validationDetails.units.files.forEach(unitFile => {
+            allReferencedUnitIds.add(unitFile.filename.toUpperCase());
+          });
+        }
+        return result;
       });
-
-      if (!testTakers || testTakers.length === 0) {
-        this.logger.warn(`No TestTakers found in workspace with ID ${workspaceId}.`);
-        return {
-          testTakersFound: false,
-          validationResults: this.createEmptyValidationData()
-        };
-      }
-
-      const validationResultsPromises = testTakers.map(testTaker => this.processTestTaker(testTaker));
-      const validationResults = (await Promise.all(validationResultsPromises)).filter(Boolean);
-
-      if (validationResults.length > 0) {
-        return {
-          testTakersFound: true,
-          validationResults
-        };
-      }
-
-      const booklets = await this.fileUploadRepository.find({
-        where: { workspace_id: workspaceId, file_type: 'Booklet' }
-      });
-
-      if (!booklets || booklets.length === 0) {
-        this.logger.warn(`No booklets found in workspace with ID ${workspaceId}.`);
-        return {
-          testTakersFound: true,
-          validationResults: this.createEmptyValidationData()
-        };
-      }
-
-      return {
-        testTakersFound: true,
-        validationResults: this.createEmptyValidationData()
-      };
-    } catch (error) {
-      this.logger.error(`Error during test file validation for workspace ID ${workspaceId}: ${error.message}`, error.stack);
-      throw error;
+      const results = await Promise.all(bookletProcessingPromises);
+      bookletValidationResults.push(...results.filter(r => r !== null) as BookletValidationResultEntryDto[]);
+    } else {
+      this.logger.warn(`No booklets found in workspace ${workspaceId}. All units will be considered orphaned.`);
+      // If no booklets, all units are technically orphaned if we proceed with deletion.
+      // For now, let's report them as orphaned. The deletion logic below will handle them.
     }
+
+    // Identify orphaned units
+    const allWorkspaceUnits = await this.fileUploadRepository.find({
+      where: { workspace_id: workspaceId, file_type: 'Unit' },
+      select: ['file_id', 'id'] // Select 'id' for deletion
+    });
+
+    const orphanedUnitEntities = allWorkspaceUnits.filter(unitEntity => !allReferencedUnitIds.has((unitEntity.file_id || '').toUpperCase())
+    );
+
+    const orphanedUnitIdsToDelete = orphanedUnitEntities.map(unit => unit.file_id);
+    const orphanedUnitPrimaryIdsToDelete = orphanedUnitEntities.map(unit => unit.id);
+
+    const orphanedUnitsValidation: SimpleDataValidationDto = {
+      complete: orphanedUnitIdsToDelete.length === 0,
+      missing: orphanedUnitIdsToDelete
+    };
+
+    if (orphanedUnitPrimaryIdsToDelete.length > 0) {
+      this.logger.log(`Deleting ${orphanedUnitPrimaryIdsToDelete.length} orphaned units from workspace ${workspaceId}: ${orphanedUnitIdsToDelete.join(', ')}`);
+      await this.fileUploadRepository.delete({ id: In(orphanedUnitPrimaryIdsToDelete) });
+      this.logger.log(`Successfully deleted ${orphanedUnitPrimaryIdsToDelete.length} orphaned units.`);
+    } else {
+      this.logger.log(`No orphaned units found to delete in workspace ${workspaceId}.`);
+    }
+
+    // Global check: Ensure every remaining unit has a player
+    const remainingUnitsAfterOrphanDeletion = await this.fileUploadRepository.find({
+      where: { workspace_id: workspaceId, file_type: 'Unit' },
+      select: ['file_id', 'data'] // Need data to parse for player refs
+    });
+
+    const unitsWithoutPlayer: string[] = [];
+    for (const unitEntity of remainingUnitsAfterOrphanDeletion) {
+      if (!unitEntity.file_id || !unitEntity.data) continue;
+      try {
+        const $unit = cheerio.load(unitEntity.data, { xmlMode: true, recognizeSelfClosing: true });
+        let hasPlayerRef = false;
+        $unit('DefinitionRef').each((_, el) => {
+          if ($unit(el).attr('player')) {
+            hasPlayerRef = true;
+            return false; // Exit .each loop early
+          }
+        });
+        if (!hasPlayerRef) {
+          unitsWithoutPlayer.push(unitEntity.file_id);
+        }
+      } catch (error) {
+        this.logger.error(`Error parsing unit ${unitEntity.file_id} for player check: ${error}`);
+        unitsWithoutPlayer.push(unitEntity.file_id); // Consider it missing a player if parsing fails
+      }
+    }
+
+    const allUnitsHavePlayerValidation: SimpleDataValidationDto = {
+      complete: unitsWithoutPlayer.length === 0,
+      missing: unitsWithoutPlayer
+    };
+
+    if (unitsWithoutPlayer.length > 0) {
+      this.logger.warn(`Found ${unitsWithoutPlayer.length} units without player references in workspace ${workspaceId}: ${unitsWithoutPlayer.join(', ')}`);
+    } else {
+      this.logger.log(`All units in workspace ${workspaceId} have player references.`);
+    }
+
+    // Global check: Ensure every booklet is referenced in at least one TestTakers file
+    const allBookletEntities = await this.fileUploadRepository.find({
+      where: { workspace_id: workspaceId, file_type: 'Booklet' },
+      select: ['file_id']
+    });
+    const allBookletIds = allBookletEntities.map(b => b.file_id.toUpperCase());
+    const referencedBookletIdsInTestTakers = new Set<string>();
+
+    if (allBookletIds.length > 0) {
+      const testTakersFiles = await this.fileUploadRepository.find({
+        where: { workspace_id: workspaceId, file_type: 'TestTakers' },
+        select: ['data', 'file_id']
+      });
+
+      for (const ttFile of testTakersFiles) {
+        if (!ttFile.data) continue;
+        try {
+          const $tt = cheerio.load(ttFile.data, { xmlMode: true, recognizeSelfClosing: true });
+          $tt('Booklet').each((_, bookletElement) => {
+            const bookletIdFromTestTaker = $tt(bookletElement).text().trim().toUpperCase();
+            if (bookletIdFromTestTaker) {
+              referencedBookletIdsInTestTakers.add(bookletIdFromTestTaker);
+            }
+          });
+        } catch (error) {
+          this.logger.error(`Error parsing TestTakers file ${ttFile.file_id}: ${error}`);
+        }
+      }
+    }
+
+    const bookletsNotReferencedInTestTakers = allBookletIds.filter(bId => !referencedBookletIdsInTestTakers.has(bId));
+
+    const bookletsInTestTakersValidation: SimpleDataValidationDto = {
+      complete: bookletsNotReferencedInTestTakers.length === 0,
+      missing: bookletsNotReferencedInTestTakers
+    };
+
+    if (bookletsNotReferencedInTestTakers.length > 0) {
+      this.logger.warn(`Found ${bookletsNotReferencedInTestTakers.length} booklets not referenced in any TestTakers file in workspace ${workspaceId}: ${bookletsNotReferencedInTestTakers.join(', ')}`);
+    } else if (allBookletIds.length > 0) {
+      this.logger.log(`All booklets in workspace ${workspaceId} are referenced in at least one TestTakers file.`);
+    } else {
+      this.logger.log(`No booklets in workspace ${workspaceId} to check for TestTakers references.`);
+    }
+
+    return {
+      bookletValidationResults: bookletValidationResults,
+      orphanedUnitsValidation: orphanedUnitsValidation,
+      allUnitsHavePlayerValidation: allUnitsHavePlayerValidation,
+      bookletsInTestTakersValidation: bookletsInTestTakersValidation
+    };
   }
 
-  private createEmptyValidationData(): ValidationData[] {
-    return [{
-      testTaker: '',
-      booklets: { complete: false, missing: [], files: [] },
-      units: { complete: false, missing: [], files: [] },
-      schemes: { complete: false, missing: [], files: [] },
-      definitions: { complete: false, missing: [], files: [] },
-      player: { complete: false, missing: [], files: [] }
-    }];
-  }
-
-  private async processTestTaker(testTaker: FileUpload): Promise<ValidationData | null> {
-    const xmlDocument = cheerio.load(testTaker.data, { xmlMode: true, recognizeSelfClosing: true });
-    const bookletTags = xmlDocument('Booklet');
-    const unitTags = xmlDocument('Unit');
-
-    if (bookletTags.length === 0) {
-      this.logger.warn('No <Booklet> elements found in the XML document.');
+  private async processSingleBookletValidation(
+    bookletEntity: FileUpload,
+    workspaceId: number
+  ): Promise<BookletValidationResultEntryDto | null> {
+    const bookletId = bookletEntity.file_id || bookletEntity.filename;
+    if (!bookletId) {
+      this.logger.warn(`Booklet entity (ID: ${bookletEntity.id}) has no file_id or filename. Skipping.`);
       return null;
     }
+    this.logger.log(`Processing validation for booklet: ${bookletId}`);
 
-    this.logger.log(`Found ${bookletTags.length} <Booklet> elements.`);
+    const bookletSelfStatus: DataValidation = {
+      complete: true, // The booklet file itself exists as we are processing it
+      missing: [],
+      files: [{ filename: bookletId, exists: true }]
+    };
 
-    const {
-      uniqueBooklets
-    } = this.extractXmlData(bookletTags, unitTags);
+    // Extract unit IDs referenced ONLY by this booklet
+    const $booklet = cheerio.load(bookletEntity.data, { xmlMode: true, recognizeSelfClosing: true });
+    const unitIdsReferencedByThisBooklet: string[] = [];
+    $booklet('Unit').each((_, element) => {
+      const unitId = $booklet(element).attr('id');
+      if (unitId) {
+        unitIdsReferencedByThisBooklet.push(unitId.toUpperCase().trim());
+      }
+    });
+    // Add these to the global set of referenced units for orphaned check later (alternative to parsing files again)
+    // unitIdsReferencedByThisBooklet.forEach(id => allReferencedUnitIds.add(id)); // This line is moved to the caller
 
-    const { allBookletsExist, missingBooklets, bookletFiles } = await this.checkMissingBooklets(Array.from(uniqueBooklets));
-    const {
+    if (unitIdsReferencedByThisBooklet.length === 0) {
+      this.logger.log(`Booklet ${bookletId} does not reference any units.`);
+      // Return validation indicating no units, and therefore no further dependencies.
+      const emptyDataValidation = { complete: true, missing: [], files: [] };
+      return {
+        bookletId: bookletId,
+        validationDetails: {
+          bookletSelfStatus,
+          units: emptyDataValidation,
+          schemes: emptyDataValidation,
+          definitions: emptyDataValidation,
+          player: emptyDataValidation
+        }
+      };
+    }
+
+    const dependencyValidationResult = await this.checkUnitsAndDependencies(
+      unitIdsReferencedByThisBooklet, // Only units from this booklet
+      workspaceId
+    );
+
+    const validationDetails: BookletContentValidationDetails = {
+      bookletSelfStatus,
+      units: {
+        complete: dependencyValidationResult.allUnitsExist,
+        missing: dependencyValidationResult.missingUnits,
+        files: dependencyValidationResult.unitFiles
+      },
+      schemes: {
+        complete: dependencyValidationResult.allCodingSchemesExist,
+        missing: dependencyValidationResult.missingCodingSchemeRefs,
+        files: dependencyValidationResult.schemeFiles
+      },
+      definitions: {
+        complete: dependencyValidationResult.allCodingDefinitionsExist,
+        missing: dependencyValidationResult.missingDefinitionRefs,
+        files: dependencyValidationResult.definitionFiles
+      },
+      player: {
+        complete: dependencyValidationResult.allPlayerRefsExist,
+        missing: dependencyValidationResult.missingPlayerRefs,
+        files: dependencyValidationResult.playerFiles
+      }
+    };
+
+    return { bookletId, validationDetails };
+  }
+
+  // Renamed and refactored from checkMissingUnits to be more generic for dependency checking
+  // Takes a list of unit IDs and checks their existence and their dependencies.
+  private async checkUnitsAndDependencies(
+    unitIdsToValidate: string[],
+    workspaceId: number
+  ): Promise<ValidationResult> {
+    if (!unitIdsToValidate || unitIdsToValidate.length === 0) {
+      return this.createEmptyValidationResult();
+    }
+
+    this.logger.log(`Checking ${unitIdsToValidate.length} unit(s) and their dependencies for workspace ${workspaceId}. Units: ${unitIdsToValidate.join(', ')}`);
+
+    const chunkSize = 50; // Database query chunk size
+    const unitBatches = [];
+    for (let i = 0; i < unitIdsToValidate.length; i += chunkSize) {
+      unitBatches.push(unitIdsToValidate.slice(i, i + chunkSize));
+    }
+
+    const unitBatchPromises = unitBatches.map(batch => this.fileUploadRepository.find({
+      where: { file_id: In(batch), file_type: 'Unit', workspace_id: workspaceId } // Ensure type and workspace
+    })
+    );
+    const existingUnitsFlat = (await Promise.all(unitBatchPromises)).flat();
+    const foundUnitIds = existingUnitsFlat.map(unit => (unit.file_id || '').toUpperCase());
+
+    const missingUnits = unitIdsToValidate.filter(id => !foundUnitIds.includes(id));
+    const allUnitsExist = missingUnits.length === 0;
+    const unitFiles: FileStatus[] = unitIdsToValidate.map(id => ({
+      filename: id,
+      exists: foundUnitIds.includes(id)
+    }));
+
+    if (existingUnitsFlat.length === 0) {
+      this.logger.log('No existing units found from the provided list. No further dependencies to check.');
+      return {
+        allUnitsExist,
+        missingUnits,
+        unitFiles,
+        ...this.createEmptyValidationResult(true) // Keep unit validation, but empty for dependencies
+      };
+    }
+
+    const refsPromises = existingUnitsFlat.map(async unit => {
+      try {
+        const $unit = cheerio.load(unit.data, { xmlMode: true, recognizeSelfClosing: true });
+        const refs = { codingSchemeRefs: new Set<string>(), definitionRefs: new Set<string>(), playerRefs: new Set<string>() };
+        // Assuming 'Unit' is the root or a relevant tag containing these references
+        $unit('Unit').each((_, unitElement) => { // Or the correct selector for unit content
+          $unit(unitElement).find('CodingSchemeRef').each((_, el) => {
+            const ref = $unit(el).text().trim().toUpperCase();
+            if (ref) refs.codingSchemeRefs.add(ref);
+          });
+          $unit(unitElement).find('DefinitionRef').each((_, el) => {
+            const ref = $unit(el).text().trim().toUpperCase();
+            if (ref) refs.definitionRefs.add(ref);
+            const playerRefAttr = $unit(el).attr('player');
+            if (playerRefAttr) {
+              const playerRef = playerRefAttr.replace('@', '-').toUpperCase().trim();
+              if (playerRef) refs.playerRefs.add(playerRef);
+            }
+          });
+        });
+        return refs;
+      } catch (error) {
+        this.logger.error(`Error parsing unit ${unit.file_id}: ${error}`);
+        return { codingSchemeRefs: new Set<string>(), definitionRefs: new Set<string>(), playerRefs: new Set<string>() };
+      }
+    });
+
+    const allRefsCollected = await Promise.all(refsPromises);
+    const aggregatedCodingSchemeRefs = Array.from(new Set(allRefsCollected.flatMap(r => Array.from(r.codingSchemeRefs))));
+    const aggregatedDefinitionRefs = Array.from(new Set(allRefsCollected.flatMap(r => Array.from(r.definitionRefs))));
+    const aggregatedPlayerRefs = Array.from(new Set(allRefsCollected.flatMap(r => Array.from(r.playerRefs))));
+
+    const allResourceFileIds = new Set<string>();
+    if ([...aggregatedCodingSchemeRefs, ...aggregatedDefinitionRefs, ...aggregatedPlayerRefs].some(refList => refList.length > 0)) {
+      const resourceFiles = await this.fileUploadRepository.find({
+        where: { file_type: 'Resource', workspace_id: workspaceId, file_id: In([...aggregatedCodingSchemeRefs, ...aggregatedDefinitionRefs, ...aggregatedPlayerRefs].filter(id => id)) },
+        select: ['file_id']
+      });
+      resourceFiles.forEach(rf => allResourceFileIds.add((rf.file_id || '').toUpperCase()));
+    }
+
+    const missingCodingSchemeRefs = aggregatedCodingSchemeRefs.filter(ref => !allResourceFileIds.has(ref));
+    const schemeFiles: FileStatus[] = aggregatedCodingSchemeRefs.map(ref => ({ filename: ref, exists: allResourceFileIds.has(ref) }));
+
+    const missingDefinitionRefs = aggregatedDefinitionRefs.filter(ref => !allResourceFileIds.has(ref));
+    const definitionFiles: FileStatus[] = aggregatedDefinitionRefs.map(ref => ({ filename: ref, exists: allResourceFileIds.has(ref) }));
+
+    const missingPlayerRefs = aggregatedPlayerRefs.filter(ref => !allResourceFileIds.has(ref));
+    const playerFiles: FileStatus[] = aggregatedPlayerRefs.map(ref => ({ filename: ref, exists: allResourceFileIds.has(ref) }));
+
+    return {
       allUnitsExist,
       missingUnits,
       unitFiles,
+      allCodingSchemesExist: missingCodingSchemeRefs.length === 0,
       missingCodingSchemeRefs,
-      missingDefinitionRefs,
       schemeFiles,
+      allCodingDefinitionsExist: missingDefinitionRefs.length === 0,
+      missingDefinitionRefs,
       definitionFiles,
-      allCodingSchemesExist,
-      allCodingDefinitionsExist,
-      allPlayerRefsExist,
+      allPlayerRefsExist: missingPlayerRefs.length === 0,
       missingPlayerRefs,
       playerFiles
-    } = await this.checkMissingUnits(Array.from(uniqueBooklets));
-
-    // If booklets are incomplete, all other categories should also be marked as incomplete
-    const bookletComplete = allBookletsExist;
-
-    // If units are incomplete, coding schemes, definitions, and player should also be marked as incomplete
-    const unitComplete = bookletComplete && allUnitsExist;
-
-    return {
-      testTaker: testTaker.file_id,
-      booklets: {
-        complete: bookletComplete,
-        missing: missingBooklets,
-        files: bookletFiles
-      },
-      units: {
-        complete: bookletComplete ? allUnitsExist : false,
-        missing: missingUnits,
-        files: unitFiles
-      },
-      schemes: {
-        complete: unitComplete ? allCodingSchemesExist : false,
-        missing: missingCodingSchemeRefs,
-        files: schemeFiles
-      },
-      definitions: {
-        complete: unitComplete ? allCodingDefinitionsExist : false,
-        missing: missingDefinitionRefs,
-        files: definitionFiles
-      },
-      player: {
-        complete: unitComplete ? allPlayerRefsExist : false,
-        missing: missingPlayerRefs,
-        files: playerFiles
-      }
     };
   }
 
-  private extractXmlData(
-    bookletTags: cheerio.Cheerio<cheerio.Element>,
-    unitTags: cheerio.Cheerio<cheerio.Element>
-  ): {
-      uniqueBooklets: Set<string>;
-      uniqueUnits: Set<string>;
-      codingSchemeRefs: string[];
-      definitionRefs: string[];
-    } {
-    const uniqueBooklets = new Set<string>();
-    const uniqueUnits = new Set<string>();
-    const codingSchemeRefs: string[] = [];
-    const definitionRefs: string[] = [];
-
-    bookletTags.each((_, booklet) => {
-      const bookletValue = cheerio.load(booklet).text().trim();
-      uniqueBooklets.add(bookletValue);
-    });
-
-    unitTags.each((_, unit) => {
-      const $ = cheerio.load(unit);
-
-      $('unit').each((__, codingScheme) => {
-        const value = $(codingScheme).text().trim();
-        if (value) codingSchemeRefs.push(value);
-      });
-
-      $('DefinitionRef').each((__, definition) => {
-        const value = $(definition).text().trim();
-        if (value) definitionRefs.push(value);
-      });
-
-      const unitId = $('unit').attr('id');
-      if (unitId) {
-        uniqueUnits.add(unitId.trim());
-      }
-    });
-
-    return {
-      uniqueBooklets, uniqueUnits, codingSchemeRefs, definitionRefs
+  private createEmptyValidationResult(skipUnitPartials: boolean = false): ValidationResult {
+    const unitPartials = skipUnitPartials ? {} : {
+      allUnitsExist: true,
+      missingUnits: [],
+      unitFiles: []
     };
+    return {
+      ...unitPartials,
+      allCodingSchemesExist: true,
+      missingCodingSchemeRefs: [],
+      schemeFiles: [],
+      allCodingDefinitionsExist: true,
+      missingDefinitionRefs: [],
+      definitionFiles: [],
+      allPlayerRefsExist: true,
+      missingPlayerRefs: [],
+      playerFiles: []
+    } as ValidationResult;
   }
 
-  async uploadTestFiles(workspace_id: number, originalFiles: FileIo[]): Promise<boolean> {
+  async uploadTestFiles(workspace_id: number, originalFiles: FileIo[]): Promise<FileValidationResultDto | boolean> {
     this.logger.log(`Uploading test files for workspace ${workspace_id}`);
 
     const MAX_CONCURRENT_UPLOADS = 5;
@@ -301,11 +479,15 @@ export class WorkspaceFilesService {
         this.logger.warn(`Some files failed to upload for workspace ${workspace_id}:`);
         failedFiles.forEach(({ file, reason }) => this.logger.warn(`File: ${JSON.stringify(file)}, Reason: ${reason}`)
         );
+        return false; // Indicate that some files failed to upload
       }
-      return failedFiles.length === 0;
+
+      // If all files uploaded successfully, proceed to validation
+      this.logger.log(`All files uploaded successfully for workspace ${workspace_id}. Starting validation.`);
+      return await this.validateTestFiles(workspace_id);
     } catch (error) {
       this.logger.error(`Unexpected error while uploading files for workspace ${workspace_id}:`, error);
-      return false;
+      return false; // Indicate a general error during upload or validation trigger
     }
   }
 
@@ -546,42 +728,6 @@ export class WorkspaceFilesService {
       this.logger.error(`Error processing ZIP file ${file.originalname}: ${error.message}`, error.stack);
       return [Promise.reject(error)];
     }
-  }
-
-  private async checkMissingBooklets(uniqueBookletsArray: string[]): Promise<{
-    allBookletsExist: boolean;
-    missingBooklets: string[];
-    bookletFiles: FileStatus[];
-  }> {
-    this.logger.log(`Checking for missing booklets among ${uniqueBookletsArray.length} unique booklet IDs`);
-
-    const bookletFiles: FileStatus[] = [];
-    const missingBooklets: string[] = [];
-
-    for (const booklet of uniqueBookletsArray) {
-      const bookletId = booklet.trim();
-      if (!bookletId) continue;
-
-      const existingBooklet = await this.fileUploadRepository.findOne({
-        where: { file_id: bookletId.toUpperCase(), file_type: 'Booklet' }
-      });
-
-      const fileStatus: FileStatus = {
-        filename: bookletId,
-        exists: !!existingBooklet
-      };
-
-      bookletFiles.push(fileStatus);
-
-      if (!existingBooklet) {
-        missingBooklets.push(bookletId);
-      }
-    }
-
-    const allBookletsExist = missingBooklets.length === 0;
-    this.logger.log(`Found ${missingBooklets.length} missing booklets out of ${uniqueBookletsArray.length} total`);
-
-    return { allBookletsExist, missingBooklets, bookletFiles };
   }
 
   async checkMissingUnits(bookletNames:string[]): Promise<ValidationResult> {

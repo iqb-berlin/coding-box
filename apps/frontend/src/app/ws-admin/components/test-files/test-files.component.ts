@@ -288,25 +288,45 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   }
 
   /** Handles file selection for upload */
-  onFileSelected(target: EventTarget | null): void {
+  onFileSelected(target: EventTarget | null, uploadType: string): void { // Added uploadType parameter
     if (!target) return;
     const inputElement = target as HTMLInputElement;
     const files = inputElement.files;
     if (files && files.length) {
       this.isLoading = true;
+      this.isValidating = true; // This is used to show "Validierung wird durchgeführt..."
+
+      // The backend service might be generic enough, or you might want specific endpoints later.
+      // For now, assuming uploadTestFiles can handle different XMLs by their content.
       this.backendService.uploadTestFiles(this.appService.selectedWorkspaceId, files)
-        .subscribe(() => {
-          this.onUploadSuccess();
+        .subscribe(response => {
+          this.isLoading = false;
+          this.isValidating = false;
+          if (typeof response === 'boolean' && response === false) {
+            this.snackBar.open(
+              this.translate.instant('ws-admin.upload-or-validation-failed'),
+              this.translate.instant('error'),
+              { duration: 3000 }
+            );
+            this.loadTestFiles(true);
+          } else if (typeof response === 'object' && response !== null && 'validationDetails' in response) {
+            this.dialog.open(FilesValidationDialogComponent, {
+              width: '600px',
+              data: response as FileValidationResultDto
+            });
+            this.loadTestFiles(true);
+          } else {
+            this.snackBar.open(
+              this.translate.instant('ws-admin.unexpected-server-response'),
+              this.translate.instant('error'),
+              { duration: 3000 }
+            );
+            this.loadTestFiles(true);
+          }
+          // Reset the file input to allow re-uploading the same file if needed
+          inputElement.value = '';
         });
     }
-  }
-
-  private onUploadSuccess(): void {
-    setTimeout(() => {
-      this.loadTestFiles(true);
-    }, 1000); // Optional timeout to simulate processing delay
-    this.isLoading = false;
-    this.isValidating = false;
   }
 
   testCenterImport(): void {
@@ -355,7 +375,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
     this.isValidating = true;
     this.backendService.validateFiles(this.appService.selectedWorkspaceId)
       .subscribe(respOk => {
-        this.handleValidationResponse(respOk);
+        this.handleValidationResponse(respOk as FileValidationResultDto | false); // Added type assertion for clarity
       });
   }
 
@@ -370,7 +390,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
     }
   }
 
-  private handleValidationResponse(res: boolean | FileValidationResultDto): void {
+  private handleValidationResponse(res: FileValidationResultDto | false): void {
     this.isLoading = false;
     this.isValidating = false;
     if (res === false) {
@@ -379,19 +399,11 @@ export class TestFilesComponent implements OnInit, OnDestroy {
         this.translate.instant('error'),
         { duration: 3000 }
       );
-    } else if (typeof res !== 'boolean') {
-      if (!res.testTakersFound) {
-        this.snackBar.open(
-          'Keine Testtaker gefunden. Validierung nicht möglich.',
-          this.translate.instant('error'),
-          { duration: 5000 }
-        );
-      } else {
-        this.dialog.open(FilesValidationDialogComponent, {
-          width: '600px',
-          data: res.validationResults
-        });
-      }
+    } else {
+      this.dialog.open(FilesValidationDialogComponent, {
+        width: '600px',
+        data: res // Pass the whole FileValidationResultDto object
+      });
     }
   }
 
