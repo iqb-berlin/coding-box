@@ -1,4 +1,4 @@
-import { Component, Input } from '@angular/core';
+import { Component, input } from '@angular/core';
 import { TranslateModule } from '@ngx-translate/core';
 import { WorkspaceFullDto } from '../../../../../../../api-dto/workspaces/workspace-full-dto';
 import { UserWorkspacesComponent } from '../user-workspaces/user-workspaces.component';
@@ -10,5 +10,5 @@ import { UserWorkspacesComponent } from '../user-workspaces/user-workspaces.comp
   imports: [TranslateModule, UserWorkspacesComponent]
 })
 export class UserWorkspacesAreaComponent {
-  @Input() workspaces!: WorkspaceFullDto[];
+  readonly workspaces = input.required<WorkspaceFullDto[]>();
 }

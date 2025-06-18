@@ -1,4 +1,4 @@
-import { Component, Inject, OnInit } from '@angular/core';
+import { Component, OnInit, inject } from '@angular/core';
 import {
   MAT_DIALOG_DATA,
   MatDialogActions,
@@ -6,7 +6,7 @@ import {
   MatDialogRef,
   MatDialogTitle
 } from '@angular/material/dialog';
-import { NgForOf } from '@angular/common';
+
 import { MatButton, MatIconButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { MatFormField, MatLabel } from '@angular/material/form-field';
@@ -37,19 +37,21 @@ import { CreateUnitNoteDto } from '../../../../../../../api-dto/unit-notes/creat
 
         <div class="notes-container">
           <div class="notes-list">
-            <div *ngFor="let note of notes" class="note-item">
-              <div class="note-header">
-                <span class="note-date">{{ formatDate(note.updatedAt) }}</span>
-                <div class="note-actions">
-                  <button mat-icon-button (click)="deleteNote(note.id)" class="note-action-button" matTooltip="Note löschen">
-                    <mat-icon>delete</mat-icon>
-                  </button>
+            @for (note of notes; track note) {
+              <div class="note-item">
+                <div class="note-header">
+                  <span class="note-date">{{ formatDate(note.updatedAt) }}</span>
+                  <div class="note-actions">
+                    <button mat-icon-button (click)="deleteNote(note.id)" class="note-action-button" matTooltip="Note löschen">
+                      <mat-icon>delete</mat-icon>
+                    </button>
+                  </div>
+                </div>
+                <div class="note-content">
+                  {{ note.note }}
                 </div>
               </div>
-              <div class="note-content">
-                {{ note.note }}
-              </div>
-            </div>
+            }
           </div>
           <div class="add-note-form">
             <mat-form-field appearance="outline" class="note-input">
@@ -68,7 +70,7 @@ import { CreateUnitNoteDto } from '../../../../../../../api-dto/unit-notes/creat
     <div mat-dialog-actions align="end">
       <button mat-stroked-button (click)="closeDialog()">Schließen</button>
     </div>
-  `,
+    `,
   styles: [`
     /* Dialog Header */
     .dialog-header {
@@ -218,7 +220,6 @@ import { CreateUnitNoteDto } from '../../../../../../../api-dto/unit-notes/creat
     }
   `],
   imports: [
-    NgForOf,
     MatDialogContent,
     MatDialogTitle,
     MatDialogActions,
@@ -234,20 +235,19 @@ import { CreateUnitNoteDto } from '../../../../../../../api-dto/unit-notes/creat
   standalone: true
 })
 export class NoteDialogComponent implements OnInit {
+  dialogRef = inject<MatDialogRef<NoteDialogComponent>>(MatDialogRef);
+  data = inject<{
+    unitId: number;
+    notes: UnitNoteDto[];
+    title?: string;
+  }>(MAT_DIALOG_DATA);
+
+  private backendService = inject(BackendService);
+  private appService = inject(AppService);
+  private snackBar = inject(MatSnackBar);
+
   notes: UnitNoteDto[] = [];
   newNoteText: string = '';
-
-  constructor(
-    public dialogRef: MatDialogRef<NoteDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: {
-      unitId: number;
-      notes: UnitNoteDto[];
-      title?: string;
-    },
-    private backendService: BackendService,
-    private appService: AppService,
-    private snackBar: MatSnackBar
-  ) { }
 
   ngOnInit(): void {
     this.notes = [...this.data.notes];

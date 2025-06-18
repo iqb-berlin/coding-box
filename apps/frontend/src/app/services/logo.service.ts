@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { AppLogoDto } from '../../../../../api-dto/app-logo-dto';
@@ -7,8 +7,8 @@ import { AppLogoDto } from '../../../../../api-dto/app-logo-dto';
   providedIn: 'root'
 })
 export class LogoService {
-  constructor(private http: HttpClient, @Inject('SERVER_URL') private readonly serverUrl: string
-  ) {}
+  private http = inject(HttpClient);
+  private readonly serverUrl = inject<string>('SERVER_URL' as any);
 
   authHeader = { Authorization: `Bearer ${localStorage.getItem('id_token')}` };
 

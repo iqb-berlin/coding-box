@@ -1,4 +1,4 @@
-import { Injectable, Inject } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import {
   BehaviorSubject,
@@ -28,6 +28,10 @@ type WorkspaceData = {
   providedIn: 'root'
 })
 export class AppService {
+  private readonly serverUrl = inject<string>('SERVER_URL' as any);
+  private http = inject(HttpClient);
+  private logoService = inject(LogoService);
+
   static defaultAuthData = <AuthDataDto>{
     userId: 0,
     userName: '',
@@ -56,13 +60,7 @@ export class AppService {
   };
 
   authHeader = { Authorization: `Bearer ${localStorage.getItem('id_token')}` };
-
-  constructor(
-    @Inject('SERVER_URL') private readonly serverUrl: string,
-    private http: HttpClient,
-    private logoService: LogoService
-  ) {
-    // Load saved logo settings when the application starts
+  constructor() {
     this.loadLogoSettings();
   }
 

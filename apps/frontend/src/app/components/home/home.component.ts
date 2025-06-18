@@ -1,4 +1,6 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import {
+  Component, OnInit, OnDestroy, inject
+} from '@angular/core';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
@@ -27,13 +29,12 @@ import { WorkspaceFullDto } from '../../../../../../api-dto/workspaces/workspace
   styleUrls: ['./home.component.scss']
 })
 export class HomeComponent implements OnInit, OnDestroy {
+  readonly appService = inject(AppService);
+
   workspaces: WorkspaceFullDto[] = [];
   authData = AppService.defaultAuthData;
 
   private authSubscription?: Subscription;
-  constructor(
-    readonly appService: AppService
-  ) {}
 
   ngOnInit(): void {
     this.appService.refreshAuthData();

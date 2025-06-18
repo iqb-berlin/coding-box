@@ -1,4 +1,4 @@
-import { Component, Inject, OnInit } from '@angular/core';
+import { Component, OnInit, inject } from '@angular/core';
 import {
   MAT_DIALOG_DATA,
   MatDialogActions,
@@ -6,7 +6,7 @@ import {
   MatDialogRef,
   MatDialogTitle
 } from '@angular/material/dialog';
-import { NgForOf, NgStyle } from '@angular/common';
+import { NgStyle } from '@angular/common';
 import { MatButton, MatIconButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { MatFormField, MatLabel } from '@angular/material/form-field';
@@ -37,14 +37,16 @@ import { CreateUnitTagDto } from '../../../../../../../api-dto/unit-tags/create-
 
         <div class="tags-container">
           <div class="tags-list">
-            <div *ngFor="let tag of tags" class="tag-item" [ngStyle]="{'background-color': tag.color || '#e3f2fd'}">
-              <span class="tag-text" [ngStyle]="{'color': getContrastColor(tag.color)}">{{ tag.tag }}</span>
-              <div class="tag-actions">
-                <button mat-icon-button (click)="deleteTag(tag.id)" class="tag-action-button" matTooltip="Tag löschen">
-                  <mat-icon [ngStyle]="{'color': getContrastColor(tag.color)}">close</mat-icon>
-                </button>
+            @for (tag of tags; track tag) {
+              <div class="tag-item" [ngStyle]="{'background-color': tag.color || '#e3f2fd'}">
+                <span class="tag-text" [ngStyle]="{'color': getContrastColor(tag.color)}">{{ tag.tag }}</span>
+                <div class="tag-actions">
+                  <button mat-icon-button (click)="deleteTag(tag.id)" class="tag-action-button" matTooltip="Tag löschen">
+                    <mat-icon [ngStyle]="{'color': getContrastColor(tag.color)}">close</mat-icon>
+                  </button>
+                </div>
               </div>
-            </div>
+            }
           </div>
           <div class="add-tag-form">
             <mat-form-field appearance="outline" class="tag-input">
@@ -63,7 +65,7 @@ import { CreateUnitTagDto } from '../../../../../../../api-dto/unit-tags/create-
     <div mat-dialog-actions align="end">
       <button mat-stroked-button (click)="closeDialog()">Schließen</button>
     </div>
-  `,
+    `,
   styles: [`
     /* Dialog Header */
     .dialog-header {
@@ -194,7 +196,6 @@ import { CreateUnitTagDto } from '../../../../../../../api-dto/unit-tags/create-
     }
   `],
   imports: [
-    NgForOf,
     MatDialogContent,
     MatDialogTitle,
     MatDialogActions,
@@ -211,20 +212,19 @@ import { CreateUnitTagDto } from '../../../../../../../api-dto/unit-tags/create-
   standalone: true
 })
 export class TagDialogComponent implements OnInit {
+  dialogRef = inject<MatDialogRef<TagDialogComponent>>(MatDialogRef);
+  data = inject<{
+    unitId: number;
+    tags: UnitTagDto[];
+    title?: string;
+  }>(MAT_DIALOG_DATA);
+
+  private backendService = inject(BackendService);
+  private appService = inject(AppService);
+  private snackBar = inject(MatSnackBar);
+
   tags: UnitTagDto[] = [];
   newTagText: string = '';
-
-  constructor(
-    public dialogRef: MatDialogRef<TagDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: {
-      unitId: number;
-      tags: UnitTagDto[];
-      title?: string;
-    },
-    private backendService: BackendService,
-    private appService: AppService,
-    private snackBar: MatSnackBar
-  ) { }
 
   ngOnInit(): void {
     this.tags = [...this.data.tags];

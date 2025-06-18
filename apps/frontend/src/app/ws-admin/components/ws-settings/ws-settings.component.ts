@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatButtonModule } from '@angular/material/button';
@@ -9,7 +9,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { CdkTextareaAutosize } from '@angular/cdk/text-field';
 import { Clipboard } from '@angular/cdk/clipboard';
-import { NgIf } from '@angular/common';
+
 import { AppService } from '../../../services/app.service';
 import { WsAccessRightsComponent } from '../ws-access-rights/ws-access-rights.component';
 
@@ -26,20 +26,16 @@ import { WsAccessRightsComponent } from '../ws-access-rights/ws-access-rights.co
     MatCardModule,
     MatIconModule,
     CdkTextareaAutosize,
-    WsAccessRightsComponent,
-    NgIf
+    WsAccessRightsComponent
   ]
 })
 export class WsSettingsComponent {
+  private appService = inject(AppService);
+  private clipboard = inject(Clipboard);
+  private snackBar = inject(MatSnackBar);
+
   authToken: string | null = null;
   duration = 60;
-
-  constructor(
-    private appService: AppService,
-    private clipboard: Clipboard,
-    private snackBar: MatSnackBar
-  ) {
-  }
 
   createToken(): void {
     this.appService

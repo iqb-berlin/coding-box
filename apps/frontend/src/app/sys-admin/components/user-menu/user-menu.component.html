@@ -5,16 +5,12 @@
   <coding-box-wrapped-icon icon="account_box"></coding-box-wrapped-icon>
 </button>
 <mat-menu #menuUser="matMenu">
-  <coding-box-account-action
-    [type]="'editMyData'"
+  <coding-box-account-action [type]="'editMyData'"
     [iconName]="'edit'"
     (click)="editAccount()"
-  >
-  </coding-box-account-action>
-  <coding-box-account-action
-    [type]="'logout'"
+   />
+  <coding-box-account-action [type]="'logout'"
     [iconName]="'logout'"
     (click)="logout()"
-  >
-  </coding-box-account-action>
+   />
 </mat-menu>
