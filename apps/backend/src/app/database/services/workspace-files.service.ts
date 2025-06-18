@@ -129,6 +129,7 @@ export class WorkspaceFilesService {
         'response.id as "testResultId"',
         'response.variableid as "variableId"',
         'response.value as "value"',
+        'response.status as "status"',
         'unit.name as "unitName"',
         'person.id as "personId"'
       ])
@@ -136,9 +137,18 @@ export class WorkspaceFilesService {
       .stream();
 
     const validationErrors: TestResultValidationDto[] = [];
+    const validStatuses = ['DISPLAYED', 'NOT_REACHED', 'VALUE_CHANGED', 'PARTLY_DISPLAYED'];
 
     for await (const response of responseStream) {
       if (!response.unitName || !response.personId) continue;
+
+      if (!validStatuses.includes(response.status)) {
+        validationErrors.push({
+          ...response,
+          error: `Invalid status: '${response.status}'.`
+        });
+        continue;
+      }
 
       const unitDef = unitDefinitions.get(response.unitName.toUpperCase());
       if (!unitDef) {
