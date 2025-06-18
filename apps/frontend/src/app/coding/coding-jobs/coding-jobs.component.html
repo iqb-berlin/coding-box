@@ -1,3 +1,92 @@
-<div>
-  Kodierjobs
+<div class="fx-column-start-start fx-gap-10 container">
+  <div class="fx-row-center-center-stretch fx-gap-20 action-buttons">
+    <a mat-raised-button color="primary" (click)="createCodingJob()">
+      <mat-icon>add</mat-icon>
+      Kodierjob erstellen
+    </a>
+    <a mat-raised-button color="primary" (click)="editCodingJob()" [disabled]="selection.selected.length !== 1">
+      <mat-icon>edit</mat-icon>
+      Kodierjob bearbeiten
+    </a>
+    <a mat-raised-button color="primary" [disabled]="selection.selected.length === 0" (click)="deleteCodingJobs()">
+      <mat-icon>delete</mat-icon>
+      Kodierjob(s) löschen
+    </a>
+    <a mat-raised-button color="primary" [disabled]="selection.selected.length !== 1" (click)="startCodingJob()">
+      <mat-icon>play_arrow</mat-icon>
+      Kodierjob starten
+    </a>
+  </div>
+
+  @if (isLoading) {
+    <mat-spinner></mat-spinner>
+  }
+  @if (!isLoading) {
+    <coding-box-search-filter
+      [title]="'Kodierjobs filtern'"
+      (valueChange)="applyFilter($event)">
+    </coding-box-search-filter>
+
+    <mat-table [dataSource]="dataSource" matSort class="coding-jobs-table">
+      <mat-header-row *matHeaderRowDef="displayedColumns; sticky: true"></mat-header-row>
+      <mat-row *matRowDef="let row; columns: displayedColumns;" (click)="selectRow(row)">
+      </mat-row>
+
+      <ng-container matColumnDef="selectCheckbox">
+        <mat-header-cell *matHeaderCellDef class="fx-flex-row-fix-70">
+          <mat-checkbox [checked]="isAllSelected()"
+                      [indeterminate]="isIndeterminate()"
+                      (change)="$event ? masterToggle() : null">
+          </mat-checkbox>
+        </mat-header-cell>
+        <mat-cell *matCellDef="let row" class="fx-flex-row-fix-70">
+          <mat-checkbox [checked]="selection.isSelected(row)"
+                      (click)="$event.stopPropagation()"
+                      (change)="$event ? selection.toggle(row) : null">
+          </mat-checkbox>
+        </mat-cell>
+      </ng-container>
+
+      <ng-container matColumnDef="name">
+        <mat-header-cell *matHeaderCellDef mat-sort-header>Name</mat-header-cell>
+        <mat-cell *matCellDef="let element">
+          {{element.name}}
+        </mat-cell>
+      </ng-container>
+
+      <ng-container matColumnDef="description">
+        <mat-header-cell *matHeaderCellDef mat-sort-header>Beschreibung</mat-header-cell>
+        <mat-cell *matCellDef="let element">
+          {{element.description}}
+        </mat-cell>
+      </ng-container>
+
+      <ng-container matColumnDef="status">
+        <mat-header-cell *matHeaderCellDef mat-sort-header>Status</mat-header-cell>
+        <mat-cell *matCellDef="let element">
+          <span [ngClass]="getStatusClass(element.status)">{{getStatusText(element.status)}}</span>
+        </mat-cell>
+      </ng-container>
+
+      <ng-container matColumnDef="created_at">
+        <mat-header-cell *matHeaderCellDef mat-sort-header>Erstellt am</mat-header-cell>
+        <mat-cell *matCellDef="let element">
+          {{element.created_at | date: 'dd.MM.yyyy HH:mm'}}
+        </mat-cell>
+      </ng-container>
+
+      <ng-container matColumnDef="updated_at">
+        <mat-header-cell *matHeaderCellDef mat-sort-header>Aktualisiert am</mat-header-cell>
+        <mat-cell *matCellDef="let element">
+          {{element.updated_at | date: 'dd.MM.yyyy HH:mm'}}
+        </mat-cell>
+      </ng-container>
+    </mat-table>
+
+    @if (dataSource.data.length === 0) {
+      <div class="no-data-message">
+        <p>Keine Kodierjobs vorhanden. Erstellen Sie einen neuen Kodierjob mit dem Button oben.</p>
+      </div>
+    }
+  }
 </div>

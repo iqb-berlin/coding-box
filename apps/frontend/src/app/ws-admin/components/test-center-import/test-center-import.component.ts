@@ -1,12 +1,11 @@
-import {
-  Component
-} from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatButton } from '@angular/material/button';
 import {
-  MatDialogContent, MatDialogActions, MatDialogClose
+  MatDialogContent, MatDialogActions, MatDialogClose,
+  MAT_DIALOG_DATA
 } from '@angular/material/dialog';
-import { MatError, MatFormField, MatLabel } from '@angular/material/form-field';
+import { MatFormField, MatLabel } from '@angular/material/form-field';
 import {
   FormsModule,
   ReactiveFormsModule, UntypedFormBuilder, UntypedFormGroup, Validators
@@ -15,12 +14,18 @@ import { MatInput } from '@angular/material/input';
 import { MatOption, MatSelect } from '@angular/material/select';
 import { MatCheckbox } from '@angular/material/checkbox';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
+import { MatIcon } from '@angular/material/icon';
 import { catchError, of } from 'rxjs';
-
+import { DatePipe } from '@angular/common';
+import {
+  MatCell,
+  MatCellDef, MatColumnDef, MatHeaderCell, MatHeaderCellDef, MatHeaderRow, MatHeaderRowDef, MatRow, MatRowDef, MatTable
+} from '@angular/material/table';
 // eslint-disable-next-line import/no-cycle
 import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
 import { WorkspaceAdminService } from '../../services/workspace-admin.service';
+import { TestGroupsInfoDto } from '../../../../../../../api-dto/files/test-groups-info.dto';
 
 export type ServerResponse = {
   token: string,
@@ -44,26 +49,6 @@ export type WorkspaceAdmin = {
     mode: string
   }
 };
-
-// type ServerFilesResponse = {
-//   Booklet:[],
-//   Ressource:Ressource[],
-//   Unit:[],
-//   Testtakers:[],
-// };
-
-// type Ressource = {
-//   name: string,
-//   size: number,
-//   modificationTime: number,
-//   type: string,
-//   id: string,
-//   report: [],
-//   info: {
-//     label: string,
-//     description: string
-//   }
-// };
 
 export type ImportOptions = {
   responses:string,
@@ -92,11 +77,19 @@ export type Result = {
   selector: 'coding-box-test-center-import',
   templateUrl: 'test-center-import.component.html',
   styleUrls: ['./test-center-import.component.scss'],
-  // eslint-disable-next-line max-len
-  imports: [MatDialogContent, MatLabel, MatDialogActions, MatButton, MatDialogClose, TranslateModule, MatFormField, ReactiveFormsModule, MatInput, MatSelect, MatOption, MatCheckbox, MatProgressSpinner, MatError, FormsModule]
+  imports: [MatDialogContent, MatLabel, MatDialogActions, MatButton, MatDialogClose, TranslateModule, MatFormField, ReactiveFormsModule, MatInput, MatSelect, MatOption, MatCheckbox, MatProgressSpinner, MatIcon, FormsModule, DatePipe, MatTable, MatHeaderCellDef, MatCellDef, MatHeaderRowDef, MatRowDef, MatColumnDef, MatHeaderCell, MatCell, MatHeaderRow, MatRow]
 })
 
 export class TestCenterImportComponent {
+  private backendService = inject(BackendService);
+  data = inject<{
+    importType: string;
+  }>(MAT_DIALOG_DATA);
+
+  private workspaceAdminService = inject(WorkspaceAdminService);
+  private fb = inject(UntypedFormBuilder);
+  private appService = inject(AppService);
+
   testCenters: Testcenter[] = [{
     id: 1,
     label: 'Testcenter 1'
@@ -118,19 +111,31 @@ export class TestCenterImportComponent {
   }];
 
   authToken: string = '';
+  displayedColumns: string[] = [
+    'select',
+    'groupName',
+    'groupLabel',
+    'bookletsStarted',
+    'numUnitsMin',
+    'numUnitsMax',
+    'numUnitsAvg',
+    'numUnitsTotal'
+  ];
+
+  selectedRows: TestGroupsInfoDto[] = [];
+  testGroups: TestGroupsInfoDto[] = [];
   workspaces: WorkspaceAdmin[] = [];
   loginForm: UntypedFormGroup;
   importFilesForm: UntypedFormGroup;
   authenticationError: boolean = false;
   filesSelectionError: boolean = false;
   authenticated: boolean = false;
-  isUploadingFiles: boolean = false;
+  isUploadingTestFiles: boolean = false;
+  isUploadingTestResults: boolean = false;
   uploadData!: Result;
   testCenterInstance: Testcenter[] = [];
-  constructor(private backendService: BackendService,
-              private workspaceAdminService: WorkspaceAdminService,
-              private fb: UntypedFormBuilder,
-              private appService: AppService) {
+  showTestGroups: boolean = false;
+  constructor() {
     this.loginForm = this.fb.group({
       name: this.fb.control('', [Validators.required, Validators.minLength(1)]),
       pw: this.fb.control('', [Validators.required, Validators.minLength(1)]),
@@ -147,7 +152,7 @@ export class TestCenterImportComponent {
       codings: this.fb.control(false),
       logs: this.fb.control(false),
       testTakers: this.fb.control(false),
-      Booklets: this.fb.control(false)
+      booklets: this.fb.control(false)
     });
   }
 
@@ -157,6 +162,28 @@ export class TestCenterImportComponent {
       this.authToken = this.workspaceAdminService.getAuthToken();
       this.workspaces = this.workspaceAdminService.getClaims();
       this.testCenterInstance = this.workspaceAdminService.getlastTestcenterInstance();
+      this.testGroups = this.workspaceAdminService.getTestGroups();
+    }
+  }
+
+  toggleRow(group: TestGroupsInfoDto): void {
+    const index = this.selectedRows.indexOf(group);
+    if (index === -1) {
+      this.selectedRows.push(group);
+    } else {
+      this.selectedRows.splice(index, 1);
+    }
+  }
+
+  isAllSelected(): boolean {
+    return this.selectedRows.length === this.testGroups.length;
+  }
+
+  toggleAllRows(event: { checked: boolean }): void {
+    if (event.checked) {
+      this.selectedRows = [...this.testGroups];
+    } else {
+      this.selectedRows = [];
     }
   }
 
@@ -203,45 +230,98 @@ export class TestCenterImportComponent {
     }
   }
 
-  importWorkspaceFiles(): void {
-    const testCenter = this.loginForm.get('testCenter')?.value;
-    const workspace = this.importFilesForm.get('workspace')?.value;
-    const definitions = this.importFilesForm.get('definitions')?.value;
-    const responses = this.importFilesForm.get('responses')?.value;
-    const player = this.importFilesForm.get('player')?.value;
-    const units = this.importFilesForm.get('units')?.value;
-    const codings = this.importFilesForm.get('codings')?.value;
-    const logs = this.importFilesForm.get('logs')?.value;
-    const booklets = this.importFilesForm.get('booklets')?.value;
-    const testTakers = this.importFilesForm.get('testTakers')?.value;
+  getTestGroups(): void {
+    const formValues = {
+      testCenter: this.loginForm.get('testCenter')?.value,
+      workspace: this.importFilesForm.get('workspace')?.value,
+      testCenterIndividual: this.loginForm.get('testCenterIndividual')?.value || ''
 
-    const importOptions = {
-      definitions: definitions,
-      responses: responses,
-      units: units,
-      player: player,
-      codings: codings,
-      logs: logs,
-      testTakers: testTakers,
-      booklets: booklets
     };
-    this.uploadData = {} as Result;
-    if (definitions || responses || player || codings || units || logs || testTakers || booklets) {
-      this.filesSelectionError = false;
-      this.isUploadingFiles = true;
-      this.backendService.importWorkspaceFiles(
+    this.isUploadingTestResults = true;
+    this.backendService
+      .importTestcenterGroups(
         this.appService.selectedWorkspaceId,
-        workspace,
-        testCenter,
-        this.loginForm.get('testCenterIndividual')?.value || '',
-        this.authToken,
-        importOptions)
-        .subscribe(data => {
-          this.uploadData = data;
-          this.isUploadingFiles = false;
-        });
-    } else {
-      this.filesSelectionError = true;
+        formValues.workspace,
+        formValues.testCenter,
+        formValues.testCenterIndividual,
+        this.authToken
+      )
+      .subscribe(response => {
+        this.isUploadingTestResults = false;
+        this.workspaceAdminService.setTestGroups(response);
+        this.testGroups = response;
+        this.showTestGroups = true;
+      });
+  }
+
+  goBackToOptions(): void {
+    this.showTestGroups = false;
+    this.selectedRows = []; // Clear selected rows when going back
+  }
+
+  startNewImport(): void {
+    // Reset state to allow for a new import
+    this.uploadData = {} as Result;
+    this.showTestGroups = false;
+    this.selectedRows = [];
+
+    // If we're importing test results, go back to test groups selection
+    if (this.data.importType === 'testResults') {
+      this.getTestGroups();
     }
+  }
+
+  goBackToTestGroups(): void {
+    // Reset upload data and selected rows, but keep test groups
+    this.uploadData = {} as Result;
+    this.selectedRows = [];
+    this.showTestGroups = true;
+  }
+
+  getTestData(): void {
+    const formValues = {
+      testCenter: this.loginForm.get('testCenter')?.value,
+      workspace: this.importFilesForm.get('workspace')?.value,
+      testCenterIndividual: this.loginForm.get('testCenterIndividual')?.value || '',
+      importOptions: {
+        definitions: this.importFilesForm.get('definitions')?.value,
+        responses: this.importFilesForm.get('responses')?.value,
+        units: this.importFilesForm.get('units')?.value,
+        player: this.importFilesForm.get('player')?.value,
+        codings: this.importFilesForm.get('codings')?.value,
+        logs: this.importFilesForm.get('logs')?.value,
+        testTakers: this.importFilesForm.get('testTakers')?.value,
+        booklets: this.importFilesForm.get('booklets')?.value
+      }
+    };
+
+    this.uploadData = {} as Result;
+    this.isUploadingTestFiles = true;
+    // Only set isUploadingTestResults to true when importing test results
+    this.isUploadingTestResults = this.data.importType === 'testResults';
+
+    this.backendService
+      .importWorkspaceFiles(
+        this.appService.selectedWorkspaceId,
+        formValues.workspace,
+        formValues.testCenter,
+        formValues.testCenterIndividual,
+        this.authToken,
+        formValues.importOptions,
+        this.selectedRows.map(group => group.groupName)
+      )
+      .subscribe({
+        next: data => {
+          this.uploadData = data;
+          this.isUploadingTestFiles = false;
+          this.isUploadingTestResults = false;
+          // Reset selected rows to allow for another import
+          this.selectedRows = [];
+        },
+        error: () => {
+          this.isUploadingTestFiles = false;
+          this.isUploadingTestResults = false;
+        }
+      });
   }
 }

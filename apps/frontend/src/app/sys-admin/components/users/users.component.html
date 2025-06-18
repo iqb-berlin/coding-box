@@ -11,7 +11,7 @@
     <div class="fx-column-start-start">
       <coding-box-users-selection class="fx-flex-row-50 object-list"
                                   (userSelectionChanged)="userSelectionChanged($event)"
-      ></coding-box-users-selection>
+                                  [selectedUserIds]="selectedUsers"></coding-box-users-selection>
     </div>
   </div>
 </div>

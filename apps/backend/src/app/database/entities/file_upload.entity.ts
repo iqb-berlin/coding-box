@@ -1,5 +1,5 @@
 import {
-  Column, Entity, PrimaryColumn, Unique
+  Column, Entity, Index, PrimaryColumn, Unique
 } from 'typeorm';
 
 @Entity()
@@ -11,12 +11,14 @@ class FileUpload {
   @Column({ type: 'varchar' })
     filename: string;
 
+  @Index()
   @Column({ type: 'integer' })
     workspace_id: number;
 
   @Column({ type: 'integer' })
     file_size: number;
 
+  @Index()
   @Column({ type: 'varchar' })
     file_type: string;
 

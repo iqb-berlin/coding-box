@@ -12,7 +12,9 @@ import {
   MatTableDataSource
 } from '@angular/material/table';
 import {
-  Component, EventEmitter, Input, OnInit, Output, SimpleChanges, ViewChild
+  Component, OnInit, SimpleChanges, ViewChild, inject,
+  input,
+  output
 } from '@angular/core';
 import { MatSort, MatSortHeader } from '@angular/material/sort';
 import { FormsModule } from '@angular/forms';
@@ -35,6 +37,8 @@ import { BackendService } from '../../../services/backend.service';
   imports: [SearchFilterComponent, MatTable, MatSort, MatColumnDef, MatHeaderCellDef, MatHeaderCell, MatCheckbox, MatCellDef, MatCell, MatSortHeader, MatHeaderRowDef, MatHeaderRow, MatRowDef, MatRow, FormsModule, TranslateModule, IsSelectedPipe, IsAllSelectedPipe, HasSelectionValuePipe, IsSelectedIdPipe]
 })
 export class WorkspacesSelectionComponent implements OnInit {
+  private backendService = inject(BackendService);
+
   objectsDatasource = new MatTableDataSource<WorkspaceInListDto>();
   displayedColumns = ['selectCheckbox', 'name'];
   tableSelectionCheckboxes = new SelectionModel<WorkspaceInListDto>(true, []);
@@ -42,22 +46,16 @@ export class WorkspacesSelectionComponent implements OnInit {
   selectedWorkspaceId = 0;
 
   @ViewChild(MatSort) sort = new MatSort();
-  @Input() selectedWorkspacesIds!: number[];
-  @Output() workspaceSelectionChanged: EventEmitter<WorkspaceInListDto[]> = new EventEmitter<WorkspaceInListDto[]>();
-  @Output() selectionChanged: EventEmitter<WorkspaceInListDto[]> = new EventEmitter<WorkspaceInListDto[]>();
-  @Output() workspacesUpdated = new EventEmitter<boolean>();
-  @Input() workspacesChanged!: boolean;
+  readonly selectedWorkspacesIds = input.required<number[]>();
+  readonly workspaceSelectionChanged = output<WorkspaceInListDto[]>();
+  readonly selectionChanged = output<WorkspaceInListDto[]>();
+  readonly workspacesUpdated = output<boolean>();
+  readonly workspacesChanged = input.required<boolean>();
 
   ngOnChanges(changes: SimpleChanges) {
     if (changes) {
       this.updateWorkspaceList();
     }
-  }
-
-  constructor(
-    private backendService: BackendService
-  ) {
-
   }
 
   ngOnInit(): void {
@@ -67,13 +65,13 @@ export class WorkspacesSelectionComponent implements OnInit {
   private updateWorkspaceList(): void {
     this.selectedWorkspaceId = 0;
     this.backendService.getAllWorkspacesList().subscribe(workspaces => {
-      this.workspacesUpdated.emit(this.workspacesChanged);
-      this.setObjectsDatasource(workspaces);
+      this.workspacesUpdated.emit(this.workspacesChanged());
+      this.setObjectsDatasource(workspaces.data);
       this.tableSelectionCheckboxes.clear();
       this.tableSelectionRow.clear();
-      if (this.selectedWorkspacesIds?.length > 0) {
-        this.tableSelectionCheckboxes.select(...workspaces
-          .filter(workspace => this.selectedWorkspacesIds.includes(workspace.id)));
+      if (this.selectedWorkspacesIds()?.length > 0) {
+        this.tableSelectionCheckboxes.select(...workspaces.data
+          .filter(workspace => this.selectedWorkspacesIds().includes(workspace.id)));
         this.workspaceSelectionChanged.emit(this.tableSelectionCheckboxes.selected);
       }
     });

@@ -1,18 +1,18 @@
 <div class="app-info">
   <p>Das <a href="https://www.iqb.hu-berlin.de/" target="_blank">Institut zur Qualitätsentwicklung im Bildungswesen (IQB)</a> betreibt auf diesen Seiten eine Anwendung für die Kodierung von Antworten aus Testungen. </p>
   <ul>
-    <li>Version {{'home.appVersion' | translate: {version: appVersion} }}</li>
-    @if (isUserLoggedIn) {
+    <li>Version {{'home.appVersion' | translate: {version: appVersion()} }}</li>
+    @if (isUserLoggedIn()) {
       <li>
-          {{'Angemeldet als: ' + userName }}
+          {{'Angemeldet als: ' + userName() }}
       </li>
     }
-    @if (isAdmin) {
+    @if (isAdmin()) {
       <li>{{'home.isAdminMessage' | translate}}</li>
     }
   </ul>
   <div class="fx-row-center-center impressum" >
-    <a mat-raised-button color="primary"  [routerLink]="['/about']">
+    <a mat-raised-button color="primary" (click)="openImpressumDialog()">
       {{'home.imprint' | translate}}
     </a>
   </div>

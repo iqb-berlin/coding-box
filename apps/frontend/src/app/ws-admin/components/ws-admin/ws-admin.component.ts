@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, inject } from '@angular/core';
 import {
   ActivatedRoute, RouterLink, RouterLinkActive, RouterOutlet
 } from '@angular/router';
@@ -26,21 +26,23 @@ import {
     CodingManagementManualComponent]
 })
 export class WsAdminComponent implements OnInit {
-  navLinks: string[] = ['select-unit-play', 'test-files', 'test-groups', 'coding', 'settings'];
+  private route = inject(ActivatedRoute);
+  private appService = inject(AppService);
+  private backendService = inject(BackendService);
+
+  navLinks: string[] = ['test-files', 'test-results', 'coding', 'settings'];
   accessLevel:number = 0;
-  constructor(
-    private route: ActivatedRoute,
-    private appService: AppService,
-    private backendService: BackendService
-  ) {
-  }
+  authData = AppService.defaultAuthData;
 
   ngOnInit() {
     const routeKey = 'ws';
     this.appService.selectedWorkspaceId = Number(this.route.snapshot.params[routeKey]);
+    this.appService.authData$.subscribe(authData => {
+      this.authData = authData;
+    });
     this.backendService.getUsers(this.appService.selectedWorkspaceId).subscribe(users => {
       setTimeout(() => {
-        this.accessLevel = users.filter(user => user.id === this.appService.authData.userId)[0]?.accessLevel;
+        this.accessLevel = users.filter(user => user.id === this.authData.userId)[0]?.accessLevel;
       }, 200);
     });
   }

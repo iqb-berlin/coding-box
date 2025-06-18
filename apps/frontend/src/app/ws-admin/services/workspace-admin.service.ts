@@ -1,4 +1,5 @@
 import { Injectable } from '@angular/core';
+import { TestGroupsInfoDto } from '../../../../../../api-dto/files/test-groups-info.dto';
 
 export type WorkspaceAdmin = {
   label: string,
@@ -20,6 +21,7 @@ export class WorkspaceAdminService {
   private lastAuthToken: string = '';
   private lastTestcenterInstance!: Testcenter[];
   private claims!: WorkspaceAdmin[];
+  private testGroups!: TestGroupsInfoDto[];
 
   getAuthToken() : string {
     return this.lastAuthToken;
@@ -43,5 +45,13 @@ export class WorkspaceAdminService {
 
   getlastTestcenterInstance() {
     return this.lastTestcenterInstance;
+  }
+
+  getTestGroups() {
+    return this.testGroups;
+  }
+
+  setTestGroups(testGroups: TestGroupsInfoDto[]) {
+    this.testGroups = testGroups;
   }
 }

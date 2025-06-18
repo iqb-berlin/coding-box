@@ -4,7 +4,7 @@
       <coding-box-coding-jobs></coding-box-coding-jobs>
     } @else if (accessLevel === 2){
       <coding-box-coding-management-manual></coding-box-coding-management-manual>
-    } @else if (accessLevel > 2){
+    } @else if (accessLevel > 2 || authData.isAdmin){
       <nav mat-tab-nav-bar class="navigation" [tabPanel]="tabPanel">
       @for (link of navLinks; track link) {
         <a mat-tab-link

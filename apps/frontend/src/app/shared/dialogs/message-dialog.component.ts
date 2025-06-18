@@ -1,7 +1,7 @@
 import {
   MAT_DIALOG_DATA, MatDialogTitle, MatDialogContent, MatDialogActions, MatDialogClose
 } from '@angular/material/dialog';
-import { Component, OnInit, Inject } from '@angular/core';
+import { Component, OnInit, inject } from '@angular/core';
 import { MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 
@@ -12,7 +12,7 @@ export enum MessageType {
 }
 
 @Component({
-    template: `
+  template: `
     <h1 mat-dialog-title>
       @if (messageData.type === 0) {
         <mat-icon>error</mat-icon>
@@ -32,12 +32,11 @@ export enum MessageType {
       <button mat-raised-button color="primary" [mat-dialog-close]="false">{{ messageData.closeButtonLabel }}</button>
     </mat-dialog-actions>
     `,
-    styles: ['mat-dialog-content { padding-bottom: 30px;}'],
-    imports: [MatDialogTitle, MatIcon, MatDialogContent, MatDialogActions, MatButton, MatDialogClose]
+  styles: ['mat-dialog-content { padding-bottom: 30px;}'],
+  imports: [MatDialogTitle, MatIcon, MatDialogContent, MatDialogActions, MatButton, MatDialogClose]
 })
 export class MessageDialogComponent implements OnInit {
-  constructor(@Inject(MAT_DIALOG_DATA) public messageData: MessageDialogData) { }
-
+  messageData = inject<MessageDialogData>(MAT_DIALOG_DATA);
   ngOnInit(): void {
     if ((typeof this.messageData.title === 'undefined') || (this.messageData.title.length === 0)) {
       switch (this.messageData.type) {

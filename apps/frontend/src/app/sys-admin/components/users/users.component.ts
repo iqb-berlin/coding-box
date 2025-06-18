@@ -1,9 +1,11 @@
 import {
   MatTableDataSource
 } from '@angular/material/table';
-import { ViewChild, Component, OnInit } from '@angular/core';
+import {
+  ViewChild, Component, OnInit, inject
+} from '@angular/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { MatSort} from '@angular/material/sort';
+import { MatSort } from '@angular/material/sort';
 import { UntypedFormGroup } from '@angular/forms';
 import { TranslateService } from '@ngx-translate/core';
 import { SelectionModel } from '@angular/cdk/collections';
@@ -19,29 +21,30 @@ import { UsersMenuComponent } from '../users-menu/users-menu.component';
   selector: 'coding-box-users',
   templateUrl: './users.component.html',
   styleUrls: ['./users.component.scss'],
-  // eslint-disable-next-line max-len
   imports: [UsersSelectionComponent, UsersMenuComponent]
 })
 export class UsersComponent implements OnInit {
+  private backendService = inject(BackendService);
+  private appService = inject(AppService);
+  private snackBar = inject(MatSnackBar);
+  private translateService = inject(TranslateService);
+
   selectedUsers : number[] = [];
   selectedRows : UserFullDto[] = [];
   userObjectsDatasource = new MatTableDataSource<UserFullDto>();
   tableSelectionRow = new SelectionModel<UserFullDto>(false, []);
   tableSelectionCheckboxes = new SelectionModel<UserFullDto>(true, []);
   userWorkspaces :WorkspaceInListDto[] = [];
-  filteredUserWorkspaces: WorkspaceInListDto[] = [];
 
   @ViewChild(MatSort) sort = new MatSort();
 
-  constructor(
-    private backendService: BackendService,
-    private appService: AppService,
-    private snackBar: MatSnackBar,
-    private translateService: TranslateService
-  ) {
-  }
-
+  authData = AppService.defaultAuthData;
   ngOnInit(): void {
+    this.appService.authData$.subscribe(
+      authData => {
+        this.authData = authData;
+      }
+    );
     setTimeout(() => {
       this.createWorkspaceList();
       this.updateUserList();
@@ -117,7 +120,7 @@ export class UsersComponent implements OnInit {
       username: value.user.get('username')?.value,
       isAdmin: value.user.get('isAdmin')?.value
     };
-    this.backendService.changeUserData(this.appService.authData.userId, changedData).subscribe(
+    this.backendService.changeUserData(this.authData.userId, changedData).subscribe(
       respOk => {
         this.updateUserList();
         if (respOk) {
@@ -180,7 +183,7 @@ export class UsersComponent implements OnInit {
 
   createWorkspaceList(): void {
     this.backendService.getAllWorkspacesList().subscribe(workspaces => {
-      if (workspaces.length > 0) { this.userWorkspaces = workspaces; }
+      if (workspaces.data.length > 0) { this.userWorkspaces = workspaces.data; }
     });
   }
 }
