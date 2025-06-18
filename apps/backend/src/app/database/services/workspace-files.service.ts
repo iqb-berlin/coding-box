@@ -195,6 +195,24 @@ export class WorkspaceFilesService {
     return validationErrors;
   }
 
+  async deleteTestResults(ids: number[]): Promise<boolean> {
+    this.logger.log(`Attempting to delete ${ids.length} test results by IDs.`);
+    if (!ids || ids.length === 0) {
+      this.logger.log('No test result IDs provided for deletion.');
+      return true;
+    }
+    try {
+      console.log(`Deleting test results with IDs: ${ids.join(', ')}`);
+      const result = await this.responseRepository.delete(ids);
+      const affectedCount = result.affected || 0;
+      this.logger.log(`Successfully deleted ${affectedCount} test results.`);
+      return affectedCount > 0;
+    } catch (e) {
+      this.logger.error(`Error deleting test results with IDs: ${ids.join(', ')}`, e);
+      return false;
+    }
+  }
+
   async findFiles(workspaceId: number, options?: { page: number; limit: number }): Promise<[FilesDto[], number]> {
     this.logger.log(`Fetching test files for workspace: ${workspaceId}`);
 

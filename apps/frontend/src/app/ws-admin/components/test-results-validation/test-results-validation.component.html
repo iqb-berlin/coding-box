@@ -1,5 +1,8 @@
 <h1 mat-dialog-title>Validierung der Testergebnisse</h1>
 <div mat-dialog-content>
+  <p *ngIf="validationResults.length > 0">
+    Anzahl der fehlerhaften Antworten: {{ validationResults.length }}
+  </p>
   <p *ngIf="validationResults.length === 0">Keine Validierungsfehler gefunden.</p>
   <table mat-table [dataSource]="validationResults" *ngIf="validationResults.length > 0">
 
@@ -32,6 +35,6 @@
   </table>
 </div>
 <div mat-dialog-actions>
+  <button mat-button color="warn" (click)="deleteInvalidResponses()" [disabled]="validationResults.length === 0">Fehlerhafte löschen</button>
   <button mat-button (click)="close()">Schließen</button>
 </div>
-
