@@ -1,16 +1,50 @@
-<div class="fx-row-space-between-start">
-  <div class="token-settings">
-    <h1>Zugangstoken</h1>
-    <div class="fx-column-start-start">
-      <mat-form-field>
-        <mat-label>Laufzeit in Tagen</mat-label>
-        <input matInput [(ngModel)]="duration" type="number" placeholder="Laufzeit in Tagen"/>
-      </mat-form-field>
-      <mat-form-field class="token">
-        <textarea matInput cdkTextareaAutosize [value]="authToken" placeholder="Autorisierungs Token">{{authToken}}</textarea>
-      </mat-form-field>
-      <button mat-raised-button color="primary" [disabled]="!duration || duration < 0" (click)="createToken()">Zugangstoken generieren</button>
-    </div>
-  </div>
-    <coding-box-ws-access-rights></coding-box-ws-access-rights>
+<div class="wrapper">
+  <mat-card class="token-settings-card">
+    <mat-card-header>
+      <mat-card-title>Zugangstoken</mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      <div class="token-container">
+        <h3>Token generieren</h3>
+        <p class="token-description">Generieren Sie ein Zugangstoken für den Zugriff auf diesen Arbeitsbereich.</p>
+
+        <mat-form-field class="full-width">
+          <mat-label>Laufzeit in Tagen</mat-label>
+          <input matInput [(ngModel)]="duration" type="number" min="1" placeholder="Laufzeit in Tagen"/>
+          <mat-hint>Geben Sie die Anzahl der Tage ein, für die das Token gültig sein soll</mat-hint>
+        </mat-form-field>
+
+        <div class="token-actions">
+          <button mat-raised-button color="primary" [disabled]="!duration || duration < 0" (click)="createToken()">
+            <mat-icon>vpn_key</mat-icon> Zugangstoken generieren
+          </button>
+        </div>
+
+        @if (authToken) {
+          <div class="token-result">
+            <h4>Generiertes Token</h4>
+            <mat-form-field class="full-width token-field">
+              <mat-label>Autorisierungs Token</mat-label>
+              <textarea matInput cdkTextareaAutosize [value]="authToken" readonly placeholder="Autorisierungs Token">{{authToken}}</textarea>
+              <mat-hint>Dieses Token kann für den API-Zugriff verwendet werden</mat-hint>
+            </mat-form-field>
+            <div class="token-copy-action">
+              <button mat-button color="primary" (click)="copyToken()">
+                <mat-icon>content_copy</mat-icon> In Zwischenablage kopieren
+              </button>
+            </div>
+          </div>
+        }
+      </div>
+    </mat-card-content>
+  </mat-card>
+
+  <mat-card class="access-rights-card">
+    <mat-card-header>
+      <mat-card-title>Nutzerrechte</mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      <coding-box-ws-access-rights></coding-box-ws-access-rights>
+    </mat-card-content>
+  </mat-card>
 </div>

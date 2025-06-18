@@ -1,12 +1,12 @@
 /* eslint-disable  @typescript-eslint/no-explicit-any */
 import {
-  Component, Input, OnChanges, OnDestroy, OnInit, SimpleChanges
+  Component, OnChanges, OnDestroy, OnInit, SimpleChanges, ViewChild, inject,
+  input
 } from '@angular/core';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
-import { ReactiveFormsModule } from '@angular/forms';
-import { NgIf } from '@angular/common';
+import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 import { ActivatedRoute, Params } from '@angular/router';
 import {
@@ -16,6 +16,7 @@ import * as xml2js from 'xml2js';
 import { jwtDecode, JwtPayload } from 'jwt-decode';
 import { MatSnackBar, MatSnackBarRef, TextOnlySnackBar } from '@angular/material/snack-bar';
 import { HttpErrorResponse } from '@angular/common/http';
+import { logger } from 'nx/src/utils/logger';
 import { UnitPlayerComponent } from '../unit-player/unit-player.component';
 import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
@@ -38,17 +39,24 @@ interface ErrorMessages {
 
 @Component({
   selector: 'coding-box-replay',
-  // eslint-disable-next-line max-len
-  imports: [MatFormFieldModule, MatInputModule, MatButtonModule, ReactiveFormsModule, NgIf, TranslateModule, UnitPlayerComponent, SpinnerComponent],
+  imports: [MatFormFieldModule, MatInputModule, MatButtonModule, ReactiveFormsModule, TranslateModule, UnitPlayerComponent, SpinnerComponent, FormsModule],
   templateUrl: './replay.component.html',
   styleUrl: './replay.component.scss'
 })
 export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
+  private backendService = inject(BackendService);
+  private appService = inject(AppService);
+  private route = inject(ActivatedRoute);
+  private errorSnackBar = inject(MatSnackBar);
+  private pageErrorSnackBar = inject(MatSnackBar);
+
   player: string = '';
   unitDef: string = '';
   isLoaded: Subject<boolean> = new Subject<boolean>();
   page: string | undefined;
-  responses: ResponseDto | undefined = undefined;
+  anchor: string | undefined;
+  responses: any | undefined = undefined;
+  dataElementAliases: string[] = [];
   private testPerson: string = '';
   private unitId: string = '';
   private authToken: string = '';
@@ -58,14 +66,9 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   private lastUnitDef: { id: string, data: string } = { id: '', data: '' };
   private lastUnit: { id: string, data: string } = { id: '', data: '' };
   private routerSubscription: Subscription | null = null;
-  @Input() testPersonInput: string | undefined;
-  @Input() unitIdInput: string | undefined;
-  constructor(private backendService:BackendService,
-              private appService:AppService,
-              private route:ActivatedRoute,
-              private errorSnackBar: MatSnackBar,
-              private pageErrorSnackBar: MatSnackBar) {
-  }
+  readonly testPersonInput = input<string>();
+  readonly unitIdInput = input<string>();
+  @ViewChild(UnitPlayerComponent) unitPlayerComponent: UnitPlayerComponent | undefined;
 
   ngOnInit(): void {
     this.subscribeRouter();
@@ -100,7 +103,9 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         this.resetSnackBars();
         this.resetUnitData();
         try {
-          if (Object.keys(params).length === 3) {
+          const testPersonInput = this.testPersonInput();
+          const unitIdInput = this.unitIdInput();
+          if (Object.keys(params).length === 4) {
             this.authToken = await this.getAuthToken();
             this.setUnitParams(params);
             if (this.authToken) {
@@ -109,14 +114,16 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
               if (workspace) {
                 const unitData = await this.getUnitData(Number(workspace), this.authToken);
                 this.setUnitProperties(unitData);
+                setTimeout(() => this.scrollToElementByAlias(this.anchor || ''), 1000
+                );
               }
             } else {
               ReplayComponent.throwError('QueryError');
             }
-          } else if (this.testPersonInput && this.unitIdInput) {
-            this.setTestPerson(this.testPersonInput);
-            this.unitId = this.unitIdInput;
-          } else if (Object.keys(params).length !== 3) {
+          } else if (testPersonInput && unitIdInput) {
+            this.setTestPerson(testPersonInput);
+            this.unitId = unitIdInput;
+          } else if (Object.keys(params).length !== 4) {
             ReplayComponent.throwError('ParamsError');
           }
         } catch (error) {
@@ -136,9 +143,10 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
   private setUnitParams(params: Params): void {
     const {
-      page, testPerson, unitId
+      page, testPerson, unitId, anchor
     } = params;
     this.page = page;
+    this.anchor = anchor;
     this.unitId = unitId;
     this.setTestPerson(testPerson);
   }
@@ -155,10 +163,6 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     if (testperson.split('@').length !== 3) return false;
     const reg = /^.+(@.+){2}$/;
     return reg.test(testperson);
-  }
-
-  private static hasResponses(response: ResponseDto): boolean {
-    return !!response;
   }
 
   private checkUnitId(unitFile: FilesDto[]): void {
@@ -181,7 +185,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     const { unitIdInput } = changes;
     try {
       this.unitId = unitIdInput.currentValue;
-      this.setTestPerson(this.testPersonInput || '');
+      this.setTestPerson(this.testPersonInput() || '');
       const unitData = await this.getUnitData(this.appService.selectedWorkspaceId);
       this.setUnitProperties(unitData);
     } catch (error) {
@@ -198,11 +202,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     this.cacheUnitDefData(unitData.unitDef[0]);
     this.player = unitData.player[0].data;
     this.unitDef = unitData.unitDef[0].data;
-    if (ReplayComponent.hasResponses(unitData.response[0])) {
-      this.responses = unitData.response[0];
-    } else {
-      ReplayComponent.throwError('ResponsesError');
-    }
+    this.responses = unitData.response;
   }
 
   private cacheUnitData(unit: FilesDto) {
@@ -271,11 +271,12 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     }
     return this.backendService.getPlayer(
       workspace,
-      player.replace('@', '-'),
+      player,
       authToken);
   }
 
   private async getUnitData(workspace: number, authToken?:string) {
+    const startTime = performance.now();
     this.isLoaded.next(false);
     const unitData = await firstValueFrom(
       combineLatest([
@@ -291,6 +292,9 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
             return this.getPlayer(workspace, ReplayComponent.getNormalizedPlayerId(player), authToken);
           }))
       ]));
+    const endTime = performance.now();
+    const duration = endTime - startTime;
+    logger.log(`Replay-Dauer: ${duration.toFixed(2)}ms`);
     this.setIsLoaded();
     return { unitDef: unitData[0], response: unitData[1], player: unitData[2] };
   }
@@ -342,5 +346,110 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     this.routerSubscription?.unsubscribe();
     this.routerSubscription = null;
     this.resetSnackBars();
+  }
+
+  /**
+   * Searches for div elements with data-element-alias attribute in the player's HTML
+   * and returns an object mapping the aliases to their corresponding elements.
+   *
+   * @returns {Record<string, HTMLElement>} An object mapping data-element-alias values to their HTML elements
+   */
+  findElementsByDataAlias(): Record<string, HTMLElement> {
+    const result: Record<string, HTMLElement> = {};
+
+    try {
+      // Access the iframe's content document through the UnitPlayerComponent
+      if (this.unitPlayerComponent && this.unitPlayerComponent.hostingIframe) {
+        const iframe = this.unitPlayerComponent.hostingIframe.nativeElement as HTMLIFrameElement;
+
+        // Check if the iframe has loaded content
+        if (iframe.contentDocument) {
+          // Query for all div elements with data-element-alias attribute
+          const elements = iframe.contentDocument.querySelectorAll('div[data-element-alias]');
+
+          // Create a mapping of aliases to elements
+          elements.forEach((element: Element) => {
+            const alias = element.getAttribute('data-element-alias');
+            if (alias) {
+              result[alias] = element as HTMLElement;
+            }
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error searching for elements with data-element-alias:', error);
+    }
+
+    return result;
+  }
+
+  /**
+   * Returns the values of the data-element-alias attributes found in the player's HTML.
+   *
+   * @returns {string[]} An array of data-element-alias values
+   */
+  getDataElementAliases(): string[] {
+    try {
+      // Access the iframe's content document through the UnitPlayerComponent
+      if (this.unitPlayerComponent && this.unitPlayerComponent.hostingIframe) {
+        const iframe = this.unitPlayerComponent.hostingIframe.nativeElement as HTMLIFrameElement;
+
+        // Check if the iframe has loaded content
+        if (iframe.contentDocument) {
+          // Query for all div elements with data-element-alias attribute
+          const elements = iframe.contentDocument.querySelectorAll('div[data-element-alias]');
+
+          // Extract and return the alias values
+          return Array.from(elements)
+            .map(element => element.getAttribute('data-element-alias'))
+            .filter((alias): alias is string => alias !== null);
+        }
+      }
+    } catch (error) {
+      console.error('Error getting data-element-alias values:', error);
+    }
+
+    return [];
+  }
+
+  /**
+   * Scrolls to a div element with the specified data-element-alias in the player's HTML.
+   *
+   * @param {string} alias - The data-element-alias value of the element to scroll to
+   * @param {ScrollIntoViewOptions} [options] - Optional scroll behavior options
+   * @returns {boolean} True if the element was found and scrolled to, false otherwise
+   */
+  scrollToElementByAlias(alias: string, options?: ScrollIntoViewOptions): boolean {
+    try {
+      const elements = this.findElementsByDataAlias();
+      const element = elements[alias];
+      if (element) {
+        // Use scrollIntoView with smooth behavior by default
+        element.scrollIntoView(options || { behavior: 'smooth', block: 'center' });
+        return true;
+      }
+    } catch (error) {
+      console.error(`Error scrolling to element with alias "${alias}":`, error);
+    }
+
+    return false;
+  }
+
+  /**
+   * Updates the dataElementAliases array with the values of data-element-alias attributes
+   * found in the player's HTML and automatically scrolls to each element.
+   */
+  updateDataElementAliases(): void {
+    this.dataElementAliases = this.getDataElementAliases();
+
+    // Automatically scroll to each element with data-element-alias
+    if (this.dataElementAliases.length > 0) {
+      // Scroll to each element with a small delay between each scroll
+      this.dataElementAliases.forEach((alias, index) => {
+        setTimeout(() => {
+          this.scrollToElementByAlias(alias, { behavior: 'smooth', block: 'center' });
+        }, index); // 1 second delay between each scroll
+      });
+    }
   }
 }

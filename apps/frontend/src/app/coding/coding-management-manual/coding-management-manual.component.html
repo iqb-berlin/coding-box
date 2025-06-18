@@ -1,18 +1,38 @@
-<div>
-  <div class="fx-column-start-start fx-gap-5">
-    <h2>Kodiermanagement Manuell</h2>
-    <a mat-raised-button color="primary">
-      Externe Kodierung einbinden
-    </a>
-    <h2>Schulung</h2>
-    <a mat-raised-button color="primary">
-      Schulung starten
-    </a>
-
-    <h2>Manuelle Kodierung planen</h2>
+<div class="coding-management-container">
+  <div class="header-section">
+    <h1 class="page-title">Manuelle Kodierung</h1>
+    <p class="page-description">Verwalten Sie Kodierer und Kodierjobs für die manuelle Kodierung von Antworten.</p>
   </div>
-  <div class="fx-row-start-stretch fx-gap-5">
-    <coding-box-coder-list></coding-box-coder-list>
-    <coding-box-coding-jobs></coding-box-coding-jobs>
-  </div>>
+
+  <div class="actions-section">
+    <mat-card>
+      <mat-card-header>
+        <mat-card-title>Organisation für manuelle Kodierungen</mat-card-title>
+      </mat-card-header>
+      <mat-card-content>
+        <div class="action-buttons">
+          <a mat-raised-button color="primary">
+            <mat-icon>link</mat-icon>
+            Externe Kodierung einbinden
+          </a>
+          <a mat-raised-button color="primary">
+            <mat-icon>school</mat-icon>
+            Schulung starten
+          </a>
+        </div>
+      </mat-card-content>
+    </mat-card>
+  </div>
+
+  <div class="planning-section">
+    <h2 class="section-title">Manuelle Kodierung planen</h2>
+    <div class="planning-content">
+      <div class="coder-list-container">
+        <coding-box-coder-list></coding-box-coder-list>
+      </div>
+      <div class="coding-jobs-container">
+        <coding-box-coding-jobs></coding-box-coding-jobs>
+      </div>
+    </div>
+  </div>
 </div>

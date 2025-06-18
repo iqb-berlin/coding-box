@@ -2,17 +2,40 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { HttpModule } from '@nestjs/axios';
+import { JwtService } from '@nestjs/jwt';
 import User from './entities/user.entity';
 import { UsersService } from './services/users.service';
-import { WorkspaceService } from './services/workspace.service';
+import { WorkspaceCoreService } from './services/workspace-core.service';
+import { WorkspaceFilesService } from './services/workspace-files.service';
+import { WorkspaceTestResultsService } from './services/workspace-test-results.service';
+import { WorkspaceUsersService } from './services/workspace-users.service';
+import { WorkspaceCodingService } from './services/workspace-coding.service';
+import { WorkspacePlayerService } from './services/workspace-player.service';
 import Workspace from './entities/workspace.entity';
 import WorkspaceAdmin from './entities/workspace-admin.entity';
 import FileUpload from './entities/file_upload.entity';
-import Responses from './entities/responses.entity';
 import WorkspaceUser from './entities/workspace_user.entity';
 import { TestcenterService } from './services/testcenter.service';
 import ResourcePackage from './entities/resource-package.entity';
 import Logs from './entities/logs.entity';
+import Persons from './entities/persons.entity';
+import { UploadResultsService } from './services/upload-results.service';
+import { BookletLog } from './entities/bookletLog.entity';
+import { Unit } from './entities/unit.entity';
+import { Booklet } from './entities/booklet.entity';
+import { BookletInfo } from './entities/bookletInfo.entity';
+import { UnitLog } from './entities/unitLog.entity';
+import { UnitLastState } from './entities/unitLastState.entity';
+import { ChunkEntity } from './entities/chunk.entity';
+import { ResponseEntity } from './entities/response.entity';
+import { Session } from './entities/session.entity';
+import { UnitTag } from './entities/unitTag.entity';
+import { UnitNote } from './entities/unitNote.entity';
+import { PersonService } from './services/person.service';
+import { AuthService } from '../auth/service/auth.service';
+import { UnitTagService } from './services/unit-tag.service';
+import { UnitNoteService } from './services/unit-note.service';
+import { ResourcePackageService } from './services/resource-package.service';
 
 @Module({
   imports: [
@@ -21,7 +44,14 @@ import Logs from './entities/logs.entity';
     Workspace,
     WorkspaceAdmin,
     FileUpload,
-    Responses,
+    Persons,
+    Unit,
+    BookletLog,
+    Session,
+    UnitLastState,
+    UnitLog,
+    ResponseEntity,
+    ChunkEntity,
     ResourcePackage,
     WorkspaceUser,
     HttpModule,
@@ -34,8 +64,8 @@ import Logs from './entities/logs.entity';
         username: configService.get('POSTGRES_USER'),
         password: configService.get('POSTGRES_PASSWORD'),
         database: configService.get('POSTGRES_DB'),
-        entities: [
-          User, Workspace, WorkspaceAdmin, FileUpload, Responses, WorkspaceUser, ResourcePackage, Logs
+        entities: [BookletInfo, Booklet, Session, BookletLog, Unit, UnitLog, UnitLastState, ResponseEntity,
+          User, Workspace, WorkspaceAdmin, FileUpload, WorkspaceUser, ResourcePackage, Logs, Persons, ChunkEntity, BookletLog, Session, UnitLog, UnitTag, UnitNote
         ],
         synchronize: false
       }),
@@ -47,24 +77,62 @@ import Logs from './entities/logs.entity';
       WorkspaceAdmin,
       FileUpload,
       Logs,
-      Responses,
+      ResponseEntity,
       WorkspaceUser,
-      ResourcePackage
+      ResourcePackage,
+      Persons,
+      Booklet,
+      BookletInfo,
+      Unit,
+      ChunkEntity,
+      BookletLog,
+      UnitLog,
+      UnitLastState,
+      Session,
+      UnitTag,
+      UnitNote
     ])
   ],
-  providers: [UsersService, WorkspaceService, TestcenterService],
+  providers: [
+    UsersService,
+    WorkspaceCoreService,
+    WorkspaceFilesService,
+    WorkspaceTestResultsService,
+    WorkspaceUsersService,
+    WorkspaceCodingService,
+    WorkspacePlayerService,
+    TestcenterService,
+    UploadResultsService,
+    PersonService,
+    AuthService,
+    JwtService,
+    UnitTagService,
+    UnitNoteService,
+    ResourcePackageService
+  ],
   exports: [
     User,
     FileUpload,
     Logs,
-    Responses,
+    Persons,
     Workspace,
     WorkspaceAdmin,
-    WorkspaceService,
+    WorkspaceCoreService,
+    WorkspaceFilesService,
+    WorkspaceTestResultsService,
+    WorkspaceUsersService,
+    WorkspaceCodingService,
+    WorkspacePlayerService,
     UsersService,
     WorkspaceUser,
     TestcenterService,
-    ResourcePackage
+    UploadResultsService,
+    ResourcePackageService,
+    ResourcePackage,
+    PersonService,
+    AuthService,
+    UnitTagService,
+    UnitNoteService
   ]
 })
 export class DatabaseModule {}

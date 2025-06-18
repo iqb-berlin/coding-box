@@ -8,16 +8,16 @@ import { AuthService } from './auth/service/auth.service';
 import { CreateUserDto } from '../../../../api-dto/user/create-user-dto';
 import { AuthDataDto } from '../../../../api-dto/auth-data-dto';
 import { UsersService } from './database/services/users.service';
-import { WorkspaceService } from './database/services/workspace.service';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { TestcenterService } from './database/services/testcenter.service';
+import { WorkspaceUsersService } from './database/services/workspace-users.service';
 
 @Controller()
 export class AppController {
   constructor(private authService:AuthService,
               private usersService: UsersService,
               private testCenterService: TestcenterService,
-              private workspaceService:WorkspaceService) {}
+              private workspaceUsersService: WorkspaceUsersService) {}
 
   @Get('auth-data')
   @UseGuards(JwtAuthGuard)
@@ -25,7 +25,7 @@ export class AppController {
   @ApiTags('auth')
   async findCanDos(@Query('identity')identity:string): Promise<AuthDataDto> {
     const user = await this.usersService.findUserByIdentity(identity);
-    const workspaces = await this.workspaceService.findAllUserWorkspaces(identity);
+    const workspaces = await this.workspaceUsersService.findAllUserWorkspaces(identity);
     return <AuthDataDto><unknown>{
       userId: user.id,
       userName: user.username,
@@ -45,7 +45,7 @@ export class AppController {
   @Post('tc_authentication')
   async authenticate(
     @Body() credentials: { username: string, password: string, server:string, url:string }
-  ): Promise<string> {
+  ): Promise<Record<string, unknown>> {
     return this.testCenterService.authenticate(credentials);
   }
 }

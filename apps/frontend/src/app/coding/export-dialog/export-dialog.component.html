@@ -1,0 +1,27 @@
+<div class="export-dialog-container">
+  <h2 mat-dialog-title>Export Format wählen</h2>
+  <mat-dialog-content>
+    <p>Bitte wählen Sie das gewünschte Format für den Export der Kodierliste:</p>
+    <div class="format-options">
+      <mat-radio-group [(ngModel)]="selectedFormat">
+        <div class="format-option">
+          <mat-radio-button value="json">JSON</mat-radio-button>
+          <span class="format-description">Standard-Format mit allen Details</span>
+        </div>
+        <div class="format-option">
+          <mat-radio-button value="csv">CSV</mat-radio-button>
+          <span class="format-description">Komma-getrennte Werte, für Excel und andere Tabellenkalkulationen</span>
+        </div>
+        <div class="format-option">
+          <mat-radio-button value="excel">Excel</mat-radio-button>
+          <span class="format-description">Direktes Excel-Format (.xlsx)</span>
+        </div>
+      </mat-radio-group>
+    </div>
+  </mat-dialog-content>
+  <mat-dialog-actions align="end">
+    <button mat-button (click)="onCancel()">Abbrechen</button>
+    <button mat-raised-button color="primary" (click)="onExport()">Exportieren</button>
+  </mat-dialog-actions>
+</div>
+

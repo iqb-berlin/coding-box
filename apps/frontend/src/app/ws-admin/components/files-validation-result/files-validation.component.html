@@ -1,0 +1,271 @@
+<mat-dialog-content>
+  @if (data) {
+    <div class="scroll-container">
+      @for(val of data; track data){
+        <h4>
+          <mat-icon class="test-taker-icon">person</mat-icon>
+          {{val.testTaker}}
+        </h4>
+        @if (data) {
+          <div class="validation-container">
+            <!-- Booklets Section -->
+            <div class="validation-card">
+              <h3>
+                <mat-icon class="section-icon">book</mat-icon>
+                Booklets
+              </h3>
+              <p class="status-row">
+                Status:
+                @if (val.booklets.complete) {
+                  <span class="status-complete">
+                    <mat-icon class="status-icon">check_circle</mat-icon>
+                    Vollständig
+                  </span>
+                }
+                @if (!val.booklets.complete) {
+                  <span class="status-incomplete">
+                    <mat-icon class="status-icon">error</mat-icon>
+                    Unvollständig
+                  </span>
+                }
+              </p>
+              <div class="files-list-container">
+                <p class="files-header" (click)="toggleFilesList(val.testTaker, 'booklets')">
+                  <mat-icon class="files-icon">list</mat-icon>
+                  <span>Alle Dateien:</span>
+                  <mat-icon class="toggle-icon">{{ isFilesListExpanded(val.testTaker, 'booklets') ? 'expand_less' : 'expand_more' }}</mat-icon>
+                </p>
+                <div class="files-list" [ngClass]="{'expanded': isFilesListExpanded(val.testTaker, 'booklets')}">
+                  <ul>
+                    @for (file of val.booklets.files; track file) {
+                      <li [ngClass]="{'file-exists': file.exists, 'file-missing': !file.exists}">
+                        <mat-icon class="file-status-icon">{{ file.exists ? 'check_circle' : 'error' }}</mat-icon>
+                        {{ file.filename }}
+                      </li>
+                    }
+                  </ul>
+                </div>
+              </div>
+            </div>
+            <!-- Units Section -->
+            <div class="validation-card">
+              <h3>
+                <mat-icon class="section-icon">view_module</mat-icon>
+                Units
+              </h3>
+              <p class="status-row">
+                Status:
+                @if (val.units.complete) {
+                  <span class="status-complete">
+                    <mat-icon class="status-icon">check_circle</mat-icon>
+                    Vollständig
+                  </span>
+                }
+                @if (!val.units.complete) {
+                  <span class="status-incomplete">
+                    <mat-icon class="status-icon">error</mat-icon>
+                    Unvollständig
+                  </span>
+                }
+              </p>
+              @if (!val.units.complete) {
+                <div class="missing-items">
+                  <p>
+                    <mat-icon class="missing-icon">warning</mat-icon>
+                    Fehlende Dateien:
+                  </p>
+                  <ul>
+                    @for (item of val.units.missing; track item) {
+                      <li>{{ item }}</li>
+                    }
+                  </ul>
+                </div>
+              }
+              <div class="files-list-container">
+                <p class="files-header" (click)="toggleFilesList(val.testTaker, 'units')">
+                  <mat-icon class="files-icon">list</mat-icon>
+                  <span>Alle Dateien:</span>
+                  <mat-icon class="toggle-icon">{{ isFilesListExpanded(val.testTaker, 'units') ? 'expand_less' : 'expand_more' }}</mat-icon>
+                </p>
+                <div class="files-list" [ngClass]="{'expanded': isFilesListExpanded(val.testTaker, 'units')}">
+                  <ul>
+                    @for (file of val.units.files; track file) {
+                      <li [ngClass]="{'file-exists': file.exists, 'file-missing': !file.exists}">
+                        <mat-icon class="file-status-icon">{{ file.exists ? 'check_circle' : 'error' }}</mat-icon>
+                        {{ file.filename }}
+                      </li>
+                    }
+                  </ul>
+                </div>
+              </div>
+            </div>
+            <!-- Schemes Section -->
+            <div class="validation-card">
+              <h3>
+                <mat-icon class="section-icon">schema</mat-icon>
+                Kodierschemata
+              </h3>
+              <p class="status-row">
+                Status:
+                @if (val.schemes.complete) {
+                  <span class="status-complete">
+                    <mat-icon class="status-icon">check_circle</mat-icon>
+                    Vollständig
+                  </span>
+                }
+                @if (!val.schemes.complete) {
+                  <span class="status-incomplete">
+                    <mat-icon class="status-icon">error</mat-icon>
+                    Unvollständig
+                  </span>
+                }
+              </p>
+              @if (!val.schemes.complete) {
+                <div class="missing-items">
+                  <p>
+                    <mat-icon class="missing-icon">warning</mat-icon>
+                    Fehlende Dateien:
+                  </p>
+                  <ul>
+                    @for (item of val.schemes.missing; track item) {
+                      <li>{{ item }}</li>
+                    }
+                  </ul>
+                </div>
+              }
+              <div class="files-list-container">
+                <p class="files-header" (click)="toggleFilesList(val.testTaker, 'schemes')">
+                  <mat-icon class="files-icon">list</mat-icon>
+                  <span>Alle Dateien:</span>
+                  <mat-icon class="toggle-icon">{{ isFilesListExpanded(val.testTaker, 'schemes') ? 'expand_less' : 'expand_more' }}</mat-icon>
+                </p>
+                <div class="files-list" [ngClass]="{'expanded': isFilesListExpanded(val.testTaker, 'schemes')}">
+                  <ul>
+                    @for (file of val.schemes.files; track file) {
+                      <li [ngClass]="{'file-exists': file.exists, 'file-missing': !file.exists}">
+                        <mat-icon class="file-status-icon">{{ file.exists ? 'check_circle' : 'error' }}</mat-icon>
+                        {{ file.filename }}
+                      </li>
+                    }
+                  </ul>
+                </div>
+              </div>
+            </div>
+            <!-- Definitions Section -->
+            <div class="validation-card">
+              <h3>
+                <mat-icon class="section-icon">description</mat-icon>
+                Aufgabendefinitionen
+              </h3>
+              <p class="status-row">
+                Status:
+                @if (val.definitions.complete) {
+                  <span class="status-complete">
+                    <mat-icon class="status-icon">check_circle</mat-icon>
+                    Vollständig
+                  </span>
+                }
+                @if (!val.definitions.complete) {
+                  <span class="status-incomplete">
+                    <mat-icon class="status-icon">error</mat-icon>
+                    Unvollständig
+                  </span>
+                }
+              </p>
+              @if (!val.definitions.complete) {
+                <div class="missing-items">
+                  <p>
+                    <mat-icon class="missing-icon">warning</mat-icon>
+                    Fehlende Dateien:
+                  </p>
+                  <ul>
+                    @for (item of val.definitions.missing; track item) {
+                      <li>{{ item }}</li>
+                    }
+                  </ul>
+                </div>
+              }
+              <div class="files-list-container">
+                <p class="files-header" (click)="toggleFilesList(val.testTaker, 'definitions')">
+                  <mat-icon class="files-icon">list</mat-icon>
+                  <span>Alle Dateien:</span>
+                  <mat-icon class="toggle-icon">{{ isFilesListExpanded(val.testTaker, 'definitions') ? 'expand_less' : 'expand_more' }}</mat-icon>
+                </p>
+                <div class="files-list" [ngClass]="{'expanded': isFilesListExpanded(val.testTaker, 'definitions')}">
+                  <ul>
+                    @for (file of val.definitions.files; track file) {
+                      <li [ngClass]="{'file-exists': file.exists, 'file-missing': !file.exists}">
+                        <mat-icon class="file-status-icon">{{ file.exists ? 'check_circle' : 'error' }}</mat-icon>
+                        {{ file.filename }}
+                      </li>
+                    }
+                  </ul>
+                </div>
+              </div>
+            </div>
+            <!-- Player Section -->
+            <div class="validation-card">
+              <h3>
+                <mat-icon class="section-icon">play_circle</mat-icon>
+                Player
+              </h3>
+              <p class="status-row">
+                Status:
+                @if (val.player.complete) {
+                  <span class="status-complete">
+                    <mat-icon class="status-icon">check_circle</mat-icon>
+                    Vollständig
+                  </span>
+                }
+                @if (!val.player.complete) {
+                  <span class="status-incomplete">
+                    <mat-icon class="status-icon">error</mat-icon>
+                    Unvollständig
+                  </span>
+                }
+              </p>
+              @if (!val.player.complete) {
+                <div class="missing-items">
+                  <p>
+                    <mat-icon class="missing-icon">warning</mat-icon>
+                    Fehlende Dateien:
+                  </p>
+                  <ul>
+                    @for (item of val.player.missing; track item) {
+                      <li>{{ item }}</li>
+                    }
+                  </ul>
+                </div>
+              }
+              <div class="files-list-container">
+                <p class="files-header" (click)="toggleFilesList(val.testTaker, 'player')">
+                  <mat-icon class="files-icon">list</mat-icon>
+                  <span>Alle Dateien:</span>
+                  <mat-icon class="toggle-icon">{{ isFilesListExpanded(val.testTaker, 'player') ? 'expand_less' : 'expand_more' }}</mat-icon>
+                </p>
+                <div class="files-list" [ngClass]="{'expanded': isFilesListExpanded(val.testTaker, 'player')}">
+                  <ul>
+                    @for (file of val.player.files; track file) {
+                      <li [ngClass]="{'file-exists': file.exists, 'file-missing': !file.exists}">
+                        <mat-icon class="file-status-icon">{{ file.exists ? 'check_circle' : 'error' }}</mat-icon>
+                        {{ file.filename }}
+                      </li>
+                    }
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+        }
+      }
+    </div>
+  }
+</mat-dialog-content>
+<mat-dialog-actions align="end">
+  <button mat-raised-button
+    color="primary"
+    type="submit"
+    [mat-dialog-close]="true">
+    {{ 'close' | translate }}
+  </button>
+</mat-dialog-actions>

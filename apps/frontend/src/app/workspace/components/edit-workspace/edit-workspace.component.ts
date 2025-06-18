@@ -1,4 +1,4 @@
-import { Component, Inject } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import {
   UntypedFormBuilder, UntypedFormGroup, Validators, FormsModule, ReactiveFormsModule
 } from '@angular/forms';
@@ -23,14 +23,15 @@ type Data = {
   selector: 'coding-box-edit-workspace-group',
   templateUrl: './edit-workspace.component.html',
   styleUrls: ['./edit-workspace.component.scss'],
-  // eslint-disable-next-line max-len
   imports: [MatDialogTitle, MatDialogContent, FormsModule, ReactiveFormsModule, MatFormField, MatInput, MatDialogActions, MatButton, MatDialogClose, TranslateModule]
 })
 export class EditWorkspaceComponent {
+  private fb = inject(UntypedFormBuilder);
+  data = inject<Data>(MAT_DIALOG_DATA);
+
   editWorkspaceForm: UntypedFormGroup;
   name = this.data.ws?.name;
-  constructor(private fb: UntypedFormBuilder,
-              @Inject(MAT_DIALOG_DATA) public data: Data) {
+  constructor() {
     this.editWorkspaceForm = this.fb.group({
       name: this.fb.control(this.name, [Validators.required, Validators.minLength(3)])
     });

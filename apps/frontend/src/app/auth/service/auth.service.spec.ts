@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
-import { HttpClientModule } from '@angular/common/http';
+import { provideHttpClient } from '@angular/common/http';
 import { AuthService } from './auth.service';
 
 describe('AuthService', () => {
@@ -9,10 +9,10 @@ describe('AuthService', () => {
   beforeEach(() => {
     TestBed.configureTestingModule({
       imports: [
-        TranslateModule.forRoot(),
-        HttpClientModule
+        TranslateModule.forRoot()
       ],
       providers: [
+        provideHttpClient(),
         {
           provide: AuthService,
           useValue: true

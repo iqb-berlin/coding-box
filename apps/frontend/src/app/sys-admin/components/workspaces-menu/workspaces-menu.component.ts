@@ -1,5 +1,7 @@
 import {
-  Component, EventEmitter, Input, Output
+  Component, inject,
+  input,
+  output
 } from '@angular/core';
 import { UntypedFormGroup } from '@angular/forms';
 import { TranslateService, TranslateModule } from '@ngx-translate/core';
@@ -13,7 +15,6 @@ import {
   ConfirmDialogComponent,
   ConfirmDialogData
 } from '../../../shared/dialogs/confirm-dialog.component';
-// eslint-disable-next-line import/no-cycle
 import { UserAccessRightsDialogComponent } from '../user-access-rights-dialog/user-access-rights-dialog.component';
 
 @Component({
@@ -23,24 +24,25 @@ import { UserAccessRightsDialogComponent } from '../user-access-rights-dialog/us
   imports: [MatButton, MatTooltip, WrappedIconComponent, TranslateModule]
 })
 export class WorkspacesMenuComponent {
-  @Input() selectedWorkspaces!: number[];
-  @Input() selectedRows!: WorkspaceInListDto[];
-  @Input() checkedRows!: WorkspaceInListDto[];
-  @Output() downloadWorkspacesReport: EventEmitter<boolean> = new EventEmitter<boolean>();
-  @Output() workspaceAdded: EventEmitter<UntypedFormGroup> = new EventEmitter<UntypedFormGroup>();
-  @Output() workspaceDeleted: EventEmitter< number[]> = new EventEmitter< number[]>();
-  @Output() workspaceSettingsEdited = new EventEmitter();
-  @Output() workspaceAccessRightsChanged = new EventEmitter();
-  @Output() workspaceEdited: EventEmitter<{ selection: number[], formData: UntypedFormGroup }> =
-    new EventEmitter<{ selection: number[], formData: UntypedFormGroup }>();
+  private editWorkspaceDialog = inject(MatDialog);
+  private UserAccessRightsToWorkspaceDialog = inject(MatDialog);
+  private deleteConfirmDialog = inject(MatDialog);
+  private translateService = inject(TranslateService);
 
-  @Output() setWorkspaceUsersAccessRight: EventEmitter<number[]> = new EventEmitter<number[]>();
+  readonly selectedWorkspaces = input.required<number[]>();
+  readonly selectedRows = input.required<WorkspaceInListDto[]>();
+  readonly checkedRows = input.required<WorkspaceInListDto[]>();
+  readonly downloadWorkspacesReport = output<boolean>();
+  readonly workspaceAdded = output<UntypedFormGroup>();
+  readonly workspaceDeleted = output<number[]>();
+  readonly workspaceSettingsEdited = output();
+  readonly workspaceAccessRightsChanged = output();
+  readonly workspaceEdited = output<{
+    selection: number[];
+    formData: UntypedFormGroup;
+  }>();
 
-  constructor(
-    private editWorkspaceDialog: MatDialog,
-    private UserAccessRightsToWorkspaceDialog: MatDialog,
-    private deleteConfirmDialog: MatDialog,
-    private translateService: TranslateService) {}
+  readonly setWorkspaceUsersAccessRight = output<number[]>();
 
   addWorkspace(): void {
     const dialogRef = this.editWorkspaceDialog.open(EditWorkspaceComponent, {
@@ -64,11 +66,12 @@ export class WorkspacesMenuComponent {
   }
 
   editWorkspace(): void {
-    if (this.selectedWorkspaces.length) {
+    const selectedWorkspaces = this.selectedWorkspaces();
+    if (selectedWorkspaces.length) {
       const dialogRef = this.editWorkspaceDialog.open(EditWorkspaceComponent, {
         width: '600px',
         data: {
-          ws: this.selectedWorkspaces[0],
+          ws: selectedWorkspaces[0],
           title: this.translateService.instant('admin.edit-workspace'),
           saveButtonLabel: this.translateService.instant('save')
 
@@ -77,7 +80,7 @@ export class WorkspacesMenuComponent {
       dialogRef.afterClosed().subscribe(result => {
         if (typeof result !== 'undefined') {
           if (result !== false) {
-            this.workspaceEdited.emit({ selection: this.selectedWorkspaces, formData: result });
+            this.workspaceEdited.emit({ selection: this.selectedWorkspaces(), formData: result });
           }
         }
       });
@@ -85,10 +88,11 @@ export class WorkspacesMenuComponent {
   }
 
   deleteWorkspace(): void {
-    if (this.selectedWorkspaces.length) {
-      const content = (this.selectedWorkspaces.length === 1) ?
+    const selectedWorkspaces = this.selectedWorkspaces();
+    if (selectedWorkspaces.length) {
+      const content = (selectedWorkspaces.length === 1) ?
         this.translateService.instant('admin.delete-workspace') :
-        this.translateService.instant('admin.delete-workspaces', { count: this.selectedWorkspaces.length });
+        this.translateService.instant('admin.delete-workspaces', { count: selectedWorkspaces.length });
       const dialogRef = this.deleteConfirmDialog.open(ConfirmDialogComponent, {
         width: '400px',
         data: <ConfirmDialogData>{
@@ -101,7 +105,7 @@ export class WorkspacesMenuComponent {
 
       dialogRef.afterClosed().subscribe(result => {
         if (result === true) {
-          this.workspaceDeleted.emit(this.selectedWorkspaces);
+          this.workspaceDeleted.emit(this.selectedWorkspaces());
         }
       });
     }
@@ -112,7 +116,7 @@ export class WorkspacesMenuComponent {
       width: '600px',
       minHeight: '600px',
       data: {
-        selectedWorkspace: this.selectedWorkspaces
+        selectedWorkspace: this.selectedWorkspaces()
       }
     });
 

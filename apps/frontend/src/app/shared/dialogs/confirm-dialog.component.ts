@@ -1,4 +1,4 @@
-import { Component, OnInit, Inject } from '@angular/core';
+import { Component, OnInit, inject } from '@angular/core';
 import {
   MAT_DIALOG_DATA, MatDialogTitle, MatDialogContent, MatDialogActions, MatDialogClose
 } from '@angular/material/dialog';
@@ -7,8 +7,8 @@ import { TranslateService, TranslateModule } from '@ngx-translate/core';
 import { MatButton } from '@angular/material/button';
 
 @Component({
-    selector: 'tc-confirm-dialog',
-    template: `
+  selector: 'tc-confirm-dialog',
+  template: `
     <h1 mat-dialog-title>{{ confirmData.title }}</h1>
 
     <mat-dialog-content>
@@ -28,14 +28,13 @@ import { MatButton } from '@angular/material/button';
       }
     </mat-dialog-actions>
     `,
-    imports: [MatDialogTitle, MatDialogContent, MatDialogActions, MatButton, MatDialogClose, TranslateModule]
+  imports: [MatDialogTitle, MatDialogContent, MatDialogActions, MatButton, MatDialogClose, TranslateModule]
 })
 export class ConfirmDialogComponent implements OnInit {
+  confirmData = inject<ConfirmDialogData>(MAT_DIALOG_DATA);
+  private translateService = inject(TranslateService);
+
   showCancel = true;
-
-  constructor(@Inject(MAT_DIALOG_DATA) public confirmData: ConfirmDialogData,
-              private translateService: TranslateService) {}
-
   ngOnInit(): void {
     if ((typeof this.confirmData.title === 'undefined') || (this.confirmData.title.length === 0)) {
       this.confirmData.title = this.translateService.instant('workspace.please-confirm!');

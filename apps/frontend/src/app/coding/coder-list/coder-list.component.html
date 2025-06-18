@@ -1,3 +1,82 @@
-<div>
-  Liste aller Kodierer
+<div class="fx-column-start-start fx-gap-10 container">
+  <div class="fx-row-center-center-stretch fx-gap-20 action-buttons">
+    <a mat-raised-button color="primary" (click)="createCoder()">
+      <mat-icon>add</mat-icon>
+      Kodierer erstellen
+    </a>
+    <a mat-raised-button color="primary" (click)="startEditCoder(selection.selected[0])" [disabled]="selection.selected.length !== 1">
+      <mat-icon>edit</mat-icon>
+      Kodierer bearbeiten
+    </a>
+    <a mat-raised-button color="primary" [disabled]="selection.selected.length === 0" (click)="deleteCoders()">
+      <mat-icon>delete</mat-icon>
+      Kodierer löschen
+    </a>
+  </div>
+
+
+  @if (isLoading) {
+    <mat-spinner></mat-spinner>
+  }
+  @if (!isLoading) {
+    <coding-box-search-filter
+      [title]="'Kodierer filtern'"
+      (valueChange)="applyFilter($event)">
+    </coding-box-search-filter>
+
+    <mat-table [dataSource]="dataSource" matSort class="coders-table">
+      <mat-header-row *matHeaderRowDef="displayedColumns; sticky: true"></mat-header-row>
+      <mat-row *matRowDef="let row; columns: displayedColumns;" (click)="selectRow(row)">
+      </mat-row>
+
+      <ng-container matColumnDef="selectCheckbox">
+        <mat-header-cell *matHeaderCellDef class="fx-flex-row-fix-70">
+          <mat-checkbox [checked]="isAllSelected()"
+                      [indeterminate]="isIndeterminate()"
+                      (change)="$event ? masterToggle() : null">
+          </mat-checkbox>
+        </mat-header-cell>
+        <mat-cell *matCellDef="let row" class="fx-flex-row-fix-70">
+          <mat-checkbox [checked]="selection.isSelected(row)"
+                      (click)="$event.stopPropagation()"
+                      (change)="$event ? selection.toggle(row) : null">
+          </mat-checkbox>
+        </mat-cell>
+      </ng-container>
+
+      <ng-container matColumnDef="name">
+        <mat-header-cell *matHeaderCellDef mat-sort-header>Name</mat-header-cell>
+        <mat-cell *matCellDef="let element">
+          {{element.name}}
+        </mat-cell>
+      </ng-container>
+
+      <ng-container matColumnDef="displayName">
+        <mat-header-cell *matHeaderCellDef mat-sort-header>Anzeigename</mat-header-cell>
+        <mat-cell *matCellDef="let element">
+          {{element.displayName || '-'}}
+        </mat-cell>
+      </ng-container>
+
+      <ng-container matColumnDef="email">
+        <mat-header-cell *matHeaderCellDef mat-sort-header>E-Mail</mat-header-cell>
+        <mat-cell *matCellDef="let element">
+          {{element.email || '-'}}
+        </mat-cell>
+      </ng-container>
+
+      <ng-container matColumnDef="assignedJobs">
+        <mat-header-cell *matHeaderCellDef>Zugewiesene Jobs</mat-header-cell>
+        <mat-cell *matCellDef="let element">
+          {{getAssignedJobsText(element)}}
+        </mat-cell>
+      </ng-container>
+    </mat-table>
+
+    @if (dataSource.data.length === 0) {
+      <div class="no-data-message">
+        <p>Keine Kodierer vorhanden. Erstellen Sie einen neuen Kodierer mit dem Button oben.</p>
+      </div>
+    }
+  }
 </div>

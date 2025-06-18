@@ -1,5 +1,14 @@
-import { Injectable } from '@angular/core';
-import { Subject } from 'rxjs';
+import { Injectable, inject } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import {
+  BehaviorSubject,
+  Observable,
+  Subject,
+  catchError,
+  map,
+  of,
+  switchMap
+} from 'rxjs';
 import { KeycloakProfile, KeycloakTokenParsed } from 'keycloak-js';
 import { AppLogoDto } from '../../../../../api-dto/app-logo-dto';
 import { AuthDataDto } from '../../../../../api-dto/auth-data-dto';
@@ -7,10 +16,11 @@ import { AppHttpError } from '../interceptors/app-http-error.class';
 import { TestGroupsInListDto } from '../../../../../api-dto/test-groups/testgroups-in-list.dto';
 import { FilesInListDto } from '../../../../../api-dto/files/files-in-list.dto';
 import { CreateUserDto } from '../../../../../api-dto/user/create-user-dto';
+import { LogoService } from './logo.service';
 
 type WorkspaceData = {
   testGroups: TestGroupsInListDto[];
-  testFiles: FilesInListDto[];
+  testFiles: { data:FilesInListDto[] };
   settings: unknown;
   selectUnitPlay: unknown;
 };
@@ -18,6 +28,10 @@ type WorkspaceData = {
   providedIn: 'root'
 })
 export class AppService {
+  private readonly serverUrl = inject<string>('SERVER_URL' as any);
+  private http = inject(HttpClient);
+  private logoService = inject(LogoService);
+
   static defaultAuthData = <AuthDataDto>{
     userId: 0,
     userName: '',
@@ -32,7 +46,6 @@ export class AppService {
   isLoggedInKeycloak = false;
   errorMessagesDisabled = false;
   selectedWorkspaceId = 0;
-  authData = AppService.defaultAuthData;
   dataLoading: boolean | number = false;
   appLogo: AppLogoDto = standardLogo;
   postMessage$ = new Subject<MessageEvent>();
@@ -41,10 +54,111 @@ export class AppService {
   errorMessageCounter = 0;
   workspaceData : WorkspaceData = {
     testGroups: [],
-    testFiles: [],
+    testFiles: { data: [] },
     settings: {},
     selectUnitPlay: {}
   };
+
+  authHeader = { Authorization: `Bearer ${localStorage.getItem('id_token')}` };
+  constructor() {
+    this.loadLogoSettings();
+  }
+
+  /**
+   * Creates a token for the specified workspace, identity, and duration
+   * @param workspace_id The ID of the workspace
+   * @param identity The identity to create the token for
+   * @param duration The duration of the token in seconds
+   * @returns An Observable of the token string
+   */
+  createToken(workspace_id: number, identity: string, duration: number): Observable<string> {
+    return this.http.get<string>(
+      `${this.serverUrl}admin/workspace/${workspace_id}/${identity}/token/${duration}`,
+      { headers: this.authHeader }
+    );
+  }
+
+  /**
+   * Logs in using Keycloak
+   * @param user The user to log in
+   * @returns An Observable of whether the login was successful
+   */
+  keycloakLogin(user: CreateUserDto): Observable<boolean | null> {
+    return this.http.post<string>(`${this.serverUrl}keycloak-login`, user)
+      .pipe(
+        catchError(() => of(false)),
+        map(loginToken => {
+          if (typeof loginToken === 'string') {
+            localStorage.setItem('id_token', loginToken);
+            this.authHeader = { Authorization: `Bearer ${loginToken}` };
+            return this.getAuthData(user.identity || '')
+              .pipe(
+                map(authData => {
+                  this.updateAuthData(authData);
+                  return true;
+                }),
+                catchError(() => of(false))
+              );
+          }
+          return of(false);
+        }),
+        switchMap(result => {
+          if (result instanceof Observable) {
+            return result;
+          }
+          return of(result);
+        })
+      );
+  }
+
+  /**
+   * Gets authentication data for the specified identity
+   * @param id The identity to get auth data for
+   * @returns An Observable of the auth data
+   */
+  getAuthData(id: string): Observable<AuthDataDto> {
+    return this.http.get<AuthDataDto>(
+      `${this.serverUrl}auth-data?identity=${id}`,
+      { headers: this.authHeader }
+    );
+  }
+
+  /**
+   * Refreshes the auth data by fetching it from the backend
+   */
+  refreshAuthData(): void {
+    if (this.loggedUser?.sub) {
+      this.getAuthData(this.loggedUser.sub).subscribe(authData => {
+        this.updateAuthData(authData);
+      });
+    }
+  }
+
+  /**
+   * Loads saved logo settings from the server
+   */
+  private loadLogoSettings(): void {
+    this.logoService.getLogoSettings().subscribe({
+      next: settings => {
+        if (settings) {
+          this.appLogo = settings;
+        }
+      },
+      error: () => {
+        this.appLogo = standardLogo;
+      }
+    });
+  }
+
+  private authDataSubject = new BehaviorSubject<AuthDataDto>(AppService.defaultAuthData);
+
+  get authData$() {
+    return this.authDataSubject.asObservable();
+  }
+
+  updateAuthData(newAuthData: AuthDataDto): void {
+    this.authDataSubject.next(newAuthData);
+  }
 
   processMessagePost(postData: MessageEvent): void {
     const msgData = postData.data;
@@ -66,24 +180,11 @@ export class AppService {
       }
     }
   }
-
-  // removeErrorMessage(error: AppHttpError) {
-  //   for (let i = 0; i < this.errorMessages.length; i++) {
-  //     if (this.errorMessages[i].id === error.id) {
-  //       this.errorMessages.splice(i, 1);
-  //     }
-  //   }
-  // }
-  //
-  // clearErrorMessages() {
-  //   this.errorMessages = [];
-  // }
 }
 
 export const standardLogo: AppLogoDto = {
   data: 'assets/IQB-LogoA.png',
   alt: 'Zur Startseite',
-  // eslint-disable-next-line max-len
   bodyBackground: 'linear-gradient(180deg, rgba(7,70,94,1) 0%, rgba(6,112,123,1) 24%, rgba(1,192,229,1) 85%)',
   boxBackground: 'lightgray'
 };

@@ -27,3 +27,20 @@ img{
 .app-header{
   padding:10px;
 }
+
+.app-title {
+  color: lightgrey ;
+  text-align: center;
+  margin: 0 auto;
+
+
+  &.margin-logged-in {
+    margin-left: 25px;
+    margin-right: 0;
+  }
+
+  &.margin-logged-out {
+    margin-left: 0;
+    margin-right: 100px;
+  }
+}
