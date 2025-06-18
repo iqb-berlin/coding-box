@@ -1,5 +1,5 @@
 import {
-  Component, OnDestroy, OnInit, ViewChild
+  Component, OnDestroy, OnInit, ViewChild, inject
 } from '@angular/core';
 import { TranslateService, TranslateModule } from '@ngx-translate/core';
 import { MatDialog } from '@angular/material/dialog';
@@ -20,7 +20,7 @@ import { MatIcon } from '@angular/material/icon';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { MatCheckbox } from '@angular/material/checkbox';
 import { MatAnchor, MatButton } from '@angular/material/button';
-import { DatePipe, NgIf, NgFor } from '@angular/common';
+import { DatePipe } from '@angular/common';
 import { MatFormField, MatLabel } from '@angular/material/form-field';
 import { MatOption, MatSelect } from '@angular/material/select';
 import { Subject, Subscription } from 'rxjs';
@@ -66,8 +66,6 @@ import { FileDownloadDto } from '../../../../../../../api-dto/files/file-downloa
     MatHeaderRowDef,
     MatRowDef,
     MatColumnDef,
-    NgIf,
-    NgFor,
     FormsModule,
     MatFormField,
     MatLabel,
@@ -76,6 +74,12 @@ import { FileDownloadDto } from '../../../../../../../api-dto/files/file-downloa
   ]
 })
 export class TestFilesComponent implements OnInit, OnDestroy {
+  appService = inject(AppService);
+  backendService = inject(BackendService);
+  private dialog = inject(MatDialog);
+  private snackBar = inject(MatSnackBar);
+  private translate = inject(TranslateService);
+
   displayedColumns: string[] = ['selectCheckbox', 'filename', 'file_size', 'file_type', 'created_at'];
   dataSource!: MatTableDataSource<FilesInListDto>;
   tableCheckboxSelection = new SelectionModel<FilesInListDto>(true, []);
@@ -114,14 +118,6 @@ export class TestFilesComponent implements OnInit, OnDestroy {
     tb: 1024 ** 4,
     tib: 1024 ** 4
   };
-
-  constructor(
-    public appService: AppService,
-    public backendService: BackendService,
-    private dialog: MatDialog,
-    private snackBar: MatSnackBar,
-    private translate: TranslateService
-  ) {}
 
   ngOnInit(): void {
     this.loadTestFiles(false);

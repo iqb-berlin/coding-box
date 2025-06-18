@@ -1,17 +1,8 @@
 import {
-  Component,
-  ViewChild,
-  AfterViewInit,
-  OnInit,
-  OnDestroy
+  Component, ViewChild, AfterViewInit, OnInit, OnDestroy, inject
 } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import {
-  NgForOf,
-  NgIf,
-  NgClass,
-  TitleCasePipe
-} from '@angular/common';
+import { NgClass, TitleCasePipe } from '@angular/common';
 import {
   catchError,
   finalize,
@@ -66,8 +57,6 @@ interface Success {
   templateUrl: './coding-management.component.html',
   imports: [
     RouterLink,
-    NgForOf,
-    NgIf,
     NgClass,
     MatTable,
     MatColumnDef,
@@ -97,6 +86,11 @@ interface Success {
   styleUrls: ['./coding-management.component.scss']
 })
 export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestroy {
+  private backendService = inject(BackendService);
+  private appService = inject(AppService);
+  private snackBar = inject(MatSnackBar);
+  private dialog = inject(MatDialog);
+
   @ViewChild(MatSort) sort!: MatSort;
   @ViewChild(MatPaginator) paginator!: MatPaginator;
 
@@ -118,12 +112,7 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
     statusCounts: {}
   };
 
-  constructor(
-    private backendService: BackendService,
-    private appService: AppService,
-    private snackBar: MatSnackBar,
-    private dialog: MatDialog
-  ) {
+  constructor() {
     this.isAutoCoding = false;
   }
 
@@ -314,7 +303,7 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
         if (!token) {
           return;
         }
-        const url = `${window.location.origin}/#/replay/${response.login_group}@${response.login_code}@${response.login_group}/${response.unitname}/${page}/${response.variableid}?auth=${token}`;
+        const url = `${window.location.origin}/#/replay/${response.login_name}@${response.login_code}@${response.login_group}/${response.unitname}/${page}/${response.variableid}?auth=${token}`;
         window.open(url, '_blank');
       }
       );

@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatTooltip } from '@angular/material/tooltip';
@@ -18,13 +18,12 @@ import { WorkspaceUserChecked } from '../../models/workspace-user-checked.class'
   imports: [MatCheckbox, MatButton, MatTooltip, FormsModule, TranslateModule, MatIcon]
 })
 export class WsAccessRightsComponent {
+  private backendService = inject(BackendService);
+  appService = inject(AppService);
+  private snackBar = inject(MatSnackBar);
   workspaceUsers = new WorkspaceUserToCheckCollection([]);
 
-  constructor(
-    private backendService: BackendService,
-    public appService: AppService,
-    private snackBar: MatSnackBar
-  ) {
+  constructor() {
     this.createUserList();
   }
 

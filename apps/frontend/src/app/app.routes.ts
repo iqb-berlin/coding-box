@@ -1,67 +1,55 @@
 import { Routes } from '@angular/router';
-import { ReplayComponent } from './replay/components/replay/replay.component';
-import { HomeComponent } from './components/home/home.component';
-import { AdminComponent } from './sys-admin/components/admin/admin.component';
-import { UsersComponent } from './sys-admin/components/users/users.component';
-import { WorkspacesComponent } from './sys-admin/components/workspaces/workspaces.component';
-import { WsAdminComponent } from './ws-admin/components/ws-admin/ws-admin.component';
-import { TestFilesComponent } from './ws-admin/components/test-files/test-files.component';
-import { WsSettingsComponent } from './ws-admin/components/ws-settings/ws-settings.component';
-import { SysAdminSettingsComponent } from './sys-admin/components/sys-admin-settings/sys-admin-settings.component';
-import { TestGroupsComponent } from './ws-admin/components/test-groups/test-groups.component';
-import { WsUsersComponent } from './ws-admin/components/ws-users/ws-users.component';
-import { CodingManagementComponent } from './coding/coding-managment/coding-management.component';
-import { CodingManagementManualComponent } from './coding/coding-management-manual/coding-management-manual.component';
+
 import { canActivateAuth } from './auth/auth.guard';
 
 export const routes: Routes = [
   { path: '', redirectTo: 'home', pathMatch: 'full' },
   {
     path: 'home',
-    component: HomeComponent
+    loadComponent: () => import('./components/home/home.component').then(m => m.HomeComponent)
   },
   {
     path: 'replay/:testPerson/:unitId/:page/:anchor',
     canActivate: [canActivateAuth],
-    component: ReplayComponent
+    loadComponent: () => import('./replay/components/replay/replay.component').then(m => m.ReplayComponent)
   },
   {
     path: 'replay/:testPerson/:unitId/:page',
     canActivate: [canActivateAuth],
-    component: ReplayComponent
+    loadComponent: () => import('./replay/components/replay/replay.component').then(m => m.ReplayComponent)
   },
   {
     path: 'replay/:testPerson/:unitId',
     canActivate: [canActivateAuth],
-    component: ReplayComponent
+    loadComponent: () => import('./replay/components/replay/replay.component').then(m => m.ReplayComponent)
   },
-  { path: 'replay/:testPerson', canActivate: [canActivateAuth], component: ReplayComponent },
-  { path: 'replay', canActivate: [canActivateAuth], component: ReplayComponent },
-  { path: 'coding-manual', canActivate: [canActivateAuth], component: CodingManagementManualComponent },
+  { path: 'replay/:testPerson', canActivate: [canActivateAuth], loadComponent: () => import('./replay/components/replay/replay.component').then(m => m.ReplayComponent) },
+  { path: 'replay', canActivate: [canActivateAuth], loadComponent: () => import('./replay/components/replay/replay.component').then(m => m.ReplayComponent) },
+  { path: 'coding-manual', canActivate: [canActivateAuth], loadComponent: () => import('./coding/coding-management-manual/coding-management-manual.component').then(m => m.CodingManagementManualComponent) },
   {
     path: 'admin',
     canActivate: [canActivateAuth],
-    component: AdminComponent,
+    loadComponent: () => import('./sys-admin/components/admin/admin.component').then(m => m.AdminComponent),
     children: [
       { path: '', redirectTo: 'users', pathMatch: 'full' },
-      { path: 'users', component: UsersComponent },
-      { path: 'settings', component: SysAdminSettingsComponent },
-      { path: 'workspaces', component: WorkspacesComponent },
-      { path: 'workspace/:ws', component: WorkspacesComponent },
-      { path: '**', component: UsersComponent }]
+      { path: 'users', loadComponent: () => import('./sys-admin/components/users/users.component').then(m => m.UsersComponent) },
+      { path: 'settings', loadComponent: () => import('./sys-admin/components/sys-admin-settings/sys-admin-settings.component').then(m => m.SysAdminSettingsComponent) },
+      { path: 'workspaces', loadComponent: () => import('./sys-admin/components/workspaces/workspaces.component').then(m => m.WorkspacesComponent) },
+      { path: 'workspace/:ws', loadComponent: () => import('./sys-admin/components/workspaces/workspaces.component').then(m => m.WorkspacesComponent) },
+      { path: '**', loadComponent: () => import('./sys-admin/components/users/users.component').then(m => m.UsersComponent) }]
   }, {
     path: 'workspace-admin/:ws',
     canActivate: [canActivateAuth],
-    component: WsAdminComponent,
+    loadComponent: () => import('./ws-admin/components/ws-admin/ws-admin.component').then(m => m.WsAdminComponent),
     children: [
       { path: '', redirectTo: 'test-files', pathMatch: 'full' },
-      { path: 'test-files', component: TestFilesComponent },
-      { path: 'test-results', component: TestGroupsComponent },
-      { path: 'users', component: WsUsersComponent },
-      { path: 'coding', component: CodingManagementComponent },
-      { path: 'settings', component: WsSettingsComponent },
-      { path: '**', component: TestFilesComponent }
+      { path: 'test-files', loadComponent: () => import('./ws-admin/components/test-files/test-files.component').then(m => m.TestFilesComponent) },
+      { path: 'test-results', loadComponent: () => import('./ws-admin/components/test-groups/test-groups.component').then(m => m.TestGroupsComponent) },
+      { path: 'users', loadComponent: () => import('./ws-admin/components/ws-users/ws-users.component').then(m => m.WsUsersComponent) },
+      { path: 'coding', loadComponent: () => import('./coding/coding-managment/coding-management.component').then(m => m.CodingManagementComponent) },
+      { path: 'settings', loadComponent: () => import('./ws-admin/components/ws-settings/ws-settings.component').then(m => m.WsSettingsComponent) },
+      { path: '**', loadComponent: () => import('./ws-admin/components/test-files/test-files.component').then(m => m.TestFilesComponent) }
     ]
   },
-  { path: '**', component: HomeComponent }
+  { path: '**', loadComponent: () => import('./components/home/home.component').then(m => m.HomeComponent) }
 ];

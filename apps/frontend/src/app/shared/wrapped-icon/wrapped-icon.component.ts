@@ -1,4 +1,4 @@
-import { Component, Input } from '@angular/core';
+import { Component, input } from '@angular/core';
 import { MatIcon } from '@angular/material/icon';
 
 @Component({
@@ -8,5 +8,5 @@ import { MatIcon } from '@angular/material/icon';
   imports: [MatIcon]
 })
 export class WrappedIconComponent {
-  @Input() icon!: string;
+  readonly icon = input.required<string>();
 }

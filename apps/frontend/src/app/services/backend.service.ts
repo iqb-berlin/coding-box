@@ -1,4 +1,4 @@
-import { Injectable, Inject, forwardRef } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import {
   catchError, map, Observable, of, switchMap
@@ -33,6 +33,7 @@ import { UnitNoteDto } from '../../../../../api-dto/unit-notes/unit-note.dto';
 import { CreateUnitNoteDto } from '../../../../../api-dto/unit-notes/create-unit-note.dto';
 import { UpdateUnitNoteDto } from '../../../../../api-dto/unit-notes/update-unit-note.dto';
 import { ResourcePackageDto } from '../../../../../api-dto/resource-package/resource-package-dto';
+import { PaginatedWorkspaceUserDto } from '../../../../../api-dto/workspaces/paginated-workspace-user-dto';
 
 interface PaginatedResponse<T> {
   data: T[];
@@ -82,12 +83,9 @@ interface ResponseEntity {
   providedIn: 'root'
 })
 export class BackendService {
-  constructor(
-    @Inject('SERVER_URL') private readonly serverUrl: string,
-    private http: HttpClient,
-    @Inject(forwardRef(() => AppService)) public appService: AppService
-  ) {
-  }
+  private readonly serverUrl = inject<string>('SERVER_URL' as any);
+  private http = inject(HttpClient);
+  appService = inject(AppService);
 
   authHeader = { Authorization: `Bearer ${localStorage.getItem('id_token')}` };
 
@@ -178,12 +176,17 @@ export class BackendService {
       );
   }
 
-  getWorkspaceUsers(workspaceId:number): Observable<{ userId:number, workspaceId:number }[]> {
+  getWorkspaceUsers(workspaceId:number): Observable<PaginatedWorkspaceUserDto> {
     return this.http
-      .get<{ userId:number, workspaceId:number }[]>(`${this.serverUrl}admin/workspace/${workspaceId}/users`,
+      .get<PaginatedWorkspaceUserDto>(`${this.serverUrl}admin/workspace/${workspaceId}/users`,
       { headers: this.authHeader })
       .pipe(
-        catchError(() => of([]))
+        catchError(() => of({
+          data: [],
+          total: 0,
+          page: 0,
+          limit: 0
+        }))
       );
   }
 
@@ -280,7 +283,7 @@ export class BackendService {
 
   getCodingList(workspace_id:number, page: number = 1, limit: number = 100): Observable<PaginatedResponse<CodingListItem>> {
     const identity = this.appService.loggedUser?.sub || '';
-    return this.appService.createToken(workspace_id, identity, 1).pipe(
+    return this.appService.createToken(workspace_id, identity, 60).pipe(
       catchError(() => of('')),
       switchMap(token => {
         const params = new HttpParams()

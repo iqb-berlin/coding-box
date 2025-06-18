@@ -1,5 +1,5 @@
 import {
-  Component, Inject, OnDestroy, OnInit
+  Component, OnDestroy, OnInit, inject
 } from '@angular/core';
 import { TranslateService, TranslateModule } from '@ngx-translate/core';
 import { MAT_DIALOG_DATA, MatDialogRef, MatDialogModule } from '@angular/material/dialog';
@@ -18,7 +18,7 @@ import { MatIcon } from '@angular/material/icon';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { MatCheckbox } from '@angular/material/checkbox';
 import { MatAnchor, MatButton } from '@angular/material/button';
-import { DatePipe, NgIf, DecimalPipe } from '@angular/common';
+import { DatePipe, DecimalPipe } from '@angular/common';
 import { Subject, Subscription } from 'rxjs';
 import { debounceTime } from 'rxjs/operators';
 import { SearchFilterComponent } from '../../../shared/search-filter/search-filter.component';
@@ -56,11 +56,17 @@ export interface ResourcePackagesDialogData {
     MatHeaderRowDef,
     MatRowDef,
     MatColumnDef,
-    NgIf,
     MatDialogModule
   ]
 })
 export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
+  dialogRef = inject<MatDialogRef<ResourcePackagesDialogComponent>>(MatDialogRef);
+  data = inject<ResourcePackagesDialogData>(MAT_DIALOG_DATA);
+  backendService = inject(BackendService);
+  private appService = inject(AppService);
+  private snackBar = inject(MatSnackBar);
+  private translate = inject(TranslateService);
+
   // Resource packages
   resourcePackages: ResourcePackageDto[] = [];
   resourcePackageDataSource!: MatTableDataSource<ResourcePackageDto>;
@@ -71,15 +77,6 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
 
   private resourcePackageTextFilterChanged: Subject<string> = new Subject<string>();
   private resourcePackageTextFilterSubscription: Subscription | undefined;
-
-  constructor(
-    public dialogRef: MatDialogRef<ResourcePackagesDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: ResourcePackagesDialogData,
-    public backendService: BackendService,
-    private appService: AppService,
-    private snackBar: MatSnackBar,
-    private translate: TranslateService
-  ) {}
 
   ngOnInit(): void {
     this.loadResourcePackages();
