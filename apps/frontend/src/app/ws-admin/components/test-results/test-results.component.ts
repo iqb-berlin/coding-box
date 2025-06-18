@@ -108,7 +108,7 @@ export class TestResultsComponent implements OnInit {
   pageIndex: number = 0;
   selectedUnit: { alias: string; [key: string]: unknown } | undefined;
   testPerson!: P;
-  selectedBooklet: { id: number; title: string; name: string; units: unknown } | undefined;
+  selectedBooklet: any;
   isLoading: boolean = true;
   isUploadingResults: boolean = false;
   unitTags: UnitTagDto[] = [];
@@ -129,7 +129,6 @@ export class TestResultsComponent implements OnInit {
     private snackBar: MatSnackBar,
     private translateService: TranslateService
   ) {
-    this.selectedBooklet = undefined;
   }
 
   ngOnInit(): void {
@@ -142,13 +141,13 @@ export class TestResultsComponent implements OnInit {
     this.logs = [];
     this.bookletLogs = [];
     this.selectedUnit = undefined;
-    this.selectedBooklet = undefined;
-    this.unitTagsMap.clear(); // Clear the unit tags map
+    this.unitTagsMap.clear();
     this.backendService.getPersonTestResults(this.appService.selectedWorkspaceId, row.id)
       .subscribe(booklets => {
+        this.selectedBooklet = row.group;
         this.booklets = booklets;
-        this.sortBookletUnits(); // Sort units alphabetically
-        this.loadAllUnitTags(); // Load tags for all units
+        this.sortBookletUnits();
+        this.loadAllUnitTags();
       });
   }
 
@@ -213,8 +212,7 @@ export class TestResultsComponent implements OnInit {
     });
   }
 
-  replayBooklet(booklet: { id: number; title: string; name: string; units: unknown }) {
-    this.selectedBooklet = booklet;
+  replayBooklet() {
   }
 
   replayUnit() {
@@ -227,7 +225,7 @@ export class TestResultsComponent implements OnInit {
         const url = this.router
           .serializeUrl(
             this.router.createUrlTree(
-              [`replay/${this.testPerson.group}@${this.testPerson.code}@${this.selectedBooklet?.id}/${this.selectedUnit?.alias}/0/0`],
+              [`replay/${this.testPerson.login}@${this.testPerson.code}@${this.selectedBooklet}/${this.selectedUnit?.alias}/0/0`],
               { queryParams: queryParams })
           );
         window.open(`#/${url}`, '_blank');
@@ -330,14 +328,12 @@ export class TestResultsComponent implements OnInit {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   onUnitClick(unit: any): void {
-    // Initialize responses with expanded property set to false
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     this.responses = unit.results.map((response: any) => ({
       ...response,
       expanded: false
     }));
 
-    // Sort responses: first by status (VALUE_CHANGED first), then alphabetically by variableid
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     this.responses.sort((a: any, b: any) => {
       // First prioritize VALUE_CHANGED status
