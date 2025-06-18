@@ -31,7 +31,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDivider } from '@angular/material/divider';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { BackendService, ResponseValidationResult } from '../../../services/backend.service';
+import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
 import { TestGroupsInListDto } from '../../../../../../../api-dto/test-groups/testgroups-in-list.dto';
 import { TestCenterImportComponent } from '../test-center-import/test-center-import.component';
@@ -42,6 +42,7 @@ import { UnitTagDto } from '../../../../../../../api-dto/unit-tags/unit-tag.dto'
 import { CreateUnitTagDto } from '../../../../../../../api-dto/unit-tags/create-unit-tag.dto';
 import { UpdateUnitTagDto } from '../../../../../../../api-dto/unit-tags/update-unit-tag.dto';
 import { UnitNoteDto } from '../../../../../../../api-dto/unit-notes/unit-note.dto';
+import { ResponseValidationResultDialogComponent } from '../response-validation-result-dialog/response-validation-result-dialog.component';
 
 interface P {
   id: number;
@@ -837,24 +838,17 @@ export class TestResultsComponent implements OnInit {
     });
   }
 
-  // Response validation data
-  validationResult: ResponseValidationResult | null = null;
-  isValidatingResponses = false;
-  showValidationResults = false;
-
   /**
    * Validates responses against Testtaker XML files
    */
   validateResponses(): void {
-    this.isValidatingResponses = true;
-    this.showValidationResults = true;
-
+    const dialogRef = this.dialog.open(ResponseValidationResultDialogComponent, {
+      width: '800px',
+      data: null
+    });
     this.backendService.validateResponsesAgainstTesttakers(this.appService.selectedWorkspaceId).subscribe({
       next: result => {
-        this.validationResult = result;
-        this.isValidatingResponses = false;
-
-        // Show a snackbar with the validation result
+        dialogRef.componentInstance.data = result;
         const message = result.valid ?
           `Validierung erfolgreich: Alle ${result.totalResponses} Antworten sind gültig.` :
           `Validierung fehlgeschlagen: ${result.invalidResponses} von ${result.totalResponses} Antworten sind ungültig.`;
@@ -869,7 +863,7 @@ export class TestResultsComponent implements OnInit {
         );
       },
       error: () => {
-        this.isValidatingResponses = false;
+        dialogRef.close();
         this.snackBar.open(
           'Fehler bei der Validierung der Antworten',
           'Fehler',
