@@ -171,7 +171,12 @@
     "validation-booklets-in-testtakers-clear": "Alle Booklets sind in mindestens einer TestTakers-Datei referenziert.",
     "validation-referenced-booklets-exist": "Prüfung: Referenzierte Booklets vorhanden",
     "validation-referenced-booklets-missing": "Folgende in TestTakers-Dateien referenzierte Booklets sind nicht im Arbeitsbereich vorhanden",
-    "validation-referenced-booklets-exist-clear": "Alle in TestTakers-Dateien referenzierten Booklets sind im Arbeitsbereich vorhanden."
+    "validation-referenced-booklets-exist-clear": "Alle in TestTakers-Dateien referenzierten Booklets sind im Arbeitsbereich vorhanden.",
+    "validation-testtakers-duplicates": "Prüfung: Doppelte Testpersonen",
+    "validation-testtakers-duplicates-found": "Folgende Testpersonen sind mehrfach in den TestTakers-Dateien enthalten",
+    "validation-testtakers-duplicates-clear": "Alle Testpersonen sind eindeutig.",
+    "validation-ignored-testtakers-files": "Ignorierte TestTakers-Dateien",
+    "validation-ignored-testtakers-files-message": "Die folgenden TestTakers-Dateien wurden bei der Validierung ignoriert, da sie nur Logins im 'run-hot-return'- oder 'run-hot-restart'-Modus enthalten:"
   },
   "search-filter": {
     "filter-users": "Suche nach Nutzer:innen",
@@ -250,3 +255,4 @@
     "send-navigation-denied": "Sende die Nachricht \"Verweigerte Navigation\""
   }
 }
+
