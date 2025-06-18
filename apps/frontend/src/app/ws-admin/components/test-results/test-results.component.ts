@@ -43,6 +43,7 @@ import { CreateUnitTagDto } from '../../../../../../../api-dto/unit-tags/create-
 import { UpdateUnitTagDto } from '../../../../../../../api-dto/unit-tags/update-unit-tag.dto';
 import { UnitNoteDto } from '../../../../../../../api-dto/unit-notes/unit-note.dto';
 import { ResponseValidationResultDialogComponent } from '../response-validation-result-dialog/response-validation-result-dialog.component';
+import { TestResultsValidationComponent } from '../test-results-validation/test-results-validation.component';
 
 interface P {
   id: number;
@@ -89,7 +90,8 @@ interface P {
     MatButton,
     MatIconButton,
     MatDivider,
-    MatTooltipModule]
+    MatTooltipModule,
+    TestResultsValidationComponent]
 })
 export class TestResultsComponent implements OnInit {
   private dialog = inject(MatDialog);
@@ -121,6 +123,7 @@ export class TestResultsComponent implements OnInit {
   selectedBooklet: any;
   isLoading: boolean = true;
   isUploadingResults: boolean = false;
+  isValidating = false;
   unitTags: UnitTagDto[] = [];
   newTagText: string = '';
   unitTagsMap: Map<number, UnitTagDto[]> = new Map();
@@ -836,6 +839,18 @@ export class TestResultsComponent implements OnInit {
       this.isLoading = false;
       this.selection.clear();
     });
+  }
+
+  validateTestResults(): void {
+    this.isValidating = true;
+    this.backendService.validateTestResults(this.appService.selectedWorkspaceId)
+      .subscribe(validationResults => {
+        this.isValidating = false;
+        this.dialog.open(TestResultsValidationComponent, {
+          width: '800px',
+          data: { validationResults }
+        });
+      });
   }
 
   /**

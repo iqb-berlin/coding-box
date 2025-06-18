@@ -17,6 +17,7 @@ import { WorkspaceGuard } from './workspace.guard';
 import { FileDownloadDto } from '../../../../../../api-dto/files/file-download.dto';
 import { FileValidationResultDto } from '../../../../../../api-dto/files/file-validation-result.dto';
 import { WorkspaceFilesService } from '../../database/services/workspace-files.service';
+import { TestResultValidationDto } from '../../../../../../api-dto/test-groups/test-result-validation.dto';
 
 @ApiTags('Admin Workspace Files')
 @Controller('admin/workspace')
@@ -150,7 +151,6 @@ export class WorkspaceFilesController {
     }
 
     try {
-      // The service method now returns FileValidationResultDto or boolean
       return await this.workspaceFilesService.uploadTestFiles(workspaceId, files);
     } catch (error) {
       throw new InternalServerErrorException('Error uploading or validating test files.');
@@ -183,5 +183,20 @@ export class WorkspaceFilesController {
       logger.error(`'Error downloading test file:' ${error}`);
       throw new InternalServerErrorException('Unable to download the file. Please try again later.');
     }
+  }
+
+  @Get(':workspace_id/test-results/validation')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Validate test results against unit definitions' })
+  @ApiParam({ name: 'workspace_id', type: Number, required: true })
+  @ApiOkResponse({
+    description: 'Returns a list of validation errors for test results.',
+    type: [TestResultValidationDto]
+  })
+  async validateTestResults(
+    @Param('workspace_id') workspaceId: number
+  ): Promise<TestResultValidationDto[]> {
+    return this.workspaceFilesService.validateTestResults(workspaceId);
   }
 }

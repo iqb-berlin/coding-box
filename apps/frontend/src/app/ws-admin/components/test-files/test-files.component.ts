@@ -70,7 +70,7 @@ import { FileDownloadDto } from '../../../../../../../api-dto/files/file-downloa
     MatFormField,
     MatLabel,
     MatSelect,
-    MatOption
+    MatOption,
   ]
 })
 export class TestFilesComponent implements OnInit, OnDestroy {

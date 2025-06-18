@@ -18,6 +18,8 @@ import { SimpleDataValidationDto } from '../../../../../../api-dto/files/simple-
 import {
   BookletContentValidationDetails
 } from '../../../../../../api-dto/files/booklet-content-validation-details.dto';
+import { ResponseEntity } from '../entities/response.entity';
+import { TestResultValidationDto } from '../../../../../../api-dto/test-groups/test-result-validation.dto';
 
 function sanitizePath(filePath: string): string {
   const normalizedPath = path.normalize(filePath);
@@ -61,8 +63,137 @@ export class WorkspaceFilesService {
     @InjectRepository(FileUpload)
     private fileUploadRepository: Repository<FileUpload>,
     @InjectRepository(Persons)
-    private personsRepository: Repository<Persons>
+    private personsRepository: Repository<Persons>,
+    @InjectRepository(ResponseEntity)
+    private responseRepository: Repository<ResponseEntity>
   ) {}
+
+  async validateTestResults(workspaceId: number): Promise<TestResultValidationDto[]> {
+    this.logger.log(`Validating test results for workspace ${workspaceId}`);
+
+    const unitNamesInResponses = await this.responseRepository.createQueryBuilder('response')
+      .innerJoin('response.unit', 'unit')
+      .innerJoin('unit.booklet', 'booklet')
+      .innerJoin('booklet.person', 'person')
+      .where('person.workspace_id = :workspaceId', { workspaceId })
+      .select('DISTINCT unit.name', 'unitName')
+      .getRawMany();
+
+    const unitIds = unitNamesInResponses.map(u => u.unitName.toUpperCase());
+
+    if (unitIds.length === 0) {
+      this.logger.log('No units with responses found to validate.');
+      return [];
+    }
+
+    const unitFiles = await this.fileUploadRepository.find({
+      where: {
+        workspace_id: workspaceId,
+        file_type: 'Unit',
+        file_id: In(unitIds)
+      }
+    });
+
+    const unitDefinitions = new Map<string, any>();
+    for (const unitFile of unitFiles) {
+      try {
+        const unitId = unitFile.file_id;
+        if (!unitId) continue;
+
+        const xml = unitFile.data;
+        const $ = cheerio.load(xml, { xmlMode: true, recognizeSelfClosing: true });
+        const variables = {};
+        $('BaseVariables > Variable').each((i, elem) => {
+          const variable = $(elem);
+          const id = variable.attr('id');
+          const type = variable.attr('type');
+          const values = [];
+          variable.find('Values > Value > value').each((j, valElem) => {
+            values.push($(valElem).text());
+          });
+          if (id) {
+            variables[id] = { type, values };
+          }
+        });
+        unitDefinitions.set(unitId.toUpperCase(), variables);
+      } catch (e) {
+        this.logger.error(`Could not parse unit file ${unitFile.filename}`, e);
+      }
+    }
+
+    const responseStream = await this.responseRepository.createQueryBuilder('response')
+      .leftJoin('response.unit', 'unit')
+      .leftJoin('unit.booklet', 'booklet')
+      .leftJoin('booklet.person', 'person')
+      .select([
+        'response.id as "testResultId"',
+        'response.variableid as "variableId"',
+        'response.value as "value"',
+        'unit.name as "unitName"',
+        'person.id as "personId"'
+      ])
+      .where('person.workspace_id = :workspaceId', { workspaceId })
+      .stream();
+
+    const validationErrors: TestResultValidationDto[] = [];
+
+    for await (const response of responseStream) {
+      if (!response.unitName || !response.personId) continue;
+
+      const unitDef = unitDefinitions.get(response.unitName.toUpperCase());
+      if (!unitDef) {
+        continue;
+      }
+
+      const variableDef = unitDef[response.variableId];
+      if (!variableDef) {
+        validationErrors.push({
+          ...response,
+          error: `Variable '${response.variableId}' not defined in unit '${response.unitName}'.`
+        });
+        continue;
+      }
+
+      const { type, values } = variableDef;
+      const responseValue = response.value;
+
+      if (responseValue === null || responseValue === undefined) continue;
+
+      let isValid = true;
+      let error = '';
+
+      switch (type) {
+        case 'integer':
+          if (!/^-?\d+$/.test(responseValue)) {
+            isValid = false;
+            error = `Value '${responseValue}' is not a valid integer.`;
+          } else if (values.length > 0) {
+            if (!values.includes(responseValue)) {
+              isValid = false;
+              error = `Value '${responseValue}' is not in the list of allowed values: [${values.join(', ')}]`;
+            }
+          }
+          break;
+        case 'string':
+          if (values.length > 0 && !values.includes(responseValue)) {
+            isValid = false;
+            error = `Value '${responseValue}' is not in the list of allowed values.`;
+          }
+          break;
+        default:
+          break;
+      }
+
+      if (!isValid) {
+        validationErrors.push({
+          ...response,
+          error
+        });
+      }
+    }
+
+    return validationErrors;
+  }
 
   async findFiles(workspaceId: number, options?: { page: number; limit: number }): Promise<[FilesDto[], number]> {
     this.logger.log(`Fetching test files for workspace: ${workspaceId}`);
