@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  Body,
   Controller,
   Delete,
   Get, InternalServerErrorException, Param, Post, Query, UseGuards, UseInterceptors, UploadedFiles
@@ -221,5 +222,19 @@ export class WorkspaceFilesController {
     @Param('workspace_id') workspaceId: number
   ): Promise<TestResultValidationDto[]> {
     return this.workspaceFilesService.validateTestResults(workspaceId);
+  }
+
+  @Delete(':workspace_id/test-results/by-ids')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Delete test results by their IDs' })
+  @ApiParam({ name: 'workspace_id', type: Number, required: true })
+  @ApiBody({ schema: { type: 'object', properties: { ids: { type: 'array', items: { type: 'number' } } } } })
+  @ApiOkResponse({ description: 'Test results deleted successfully.', type: Boolean })
+  async deleteTestResultsByIds(
+    @Param('workspace_id') workspaceId: number, // Keep for guard
+      @Body('ids') ids: number[]
+  ): Promise<boolean> {
+    return this.workspaceFilesService.deleteTestResults(ids);
   }
 }

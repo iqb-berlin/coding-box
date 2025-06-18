@@ -577,6 +577,19 @@ export class BackendService {
     );
   }
 
+  deleteTestResults(workspaceId: number, resultIds: number[]): Observable<boolean> {
+    return this.http.delete<boolean>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/test-results/by-ids`,
+      {
+        headers: this.authHeader,
+        body: { ids: resultIds }
+      }
+    ).pipe(
+      catchError(() => of(false)),
+      map(() => true)
+    );
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   getTestResults(workspaceId: number, page: number, limit: number): Observable<any> {
     const params = {

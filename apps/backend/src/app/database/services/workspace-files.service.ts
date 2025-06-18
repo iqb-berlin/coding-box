@@ -195,10 +195,8 @@ export class WorkspaceFilesService {
     return validationErrors;
   }
 
-  async findFiles(
-    workspaceId: number,
-    options?: { page: number; limit: number; fileType?: string; fileSize?: string; searchText?: string }
-  ): Promise<[FilesDto[], number]> {
+
+  async findFiles(workspaceId: number, options?: { page: number; limit: number }): Promise<[FilesDto[], number]> {
     this.logger.log(`Fetching test files for workspace: ${workspaceId}`);
     const {
       page = 1, limit = 20, fileType, fileSize, searchText
