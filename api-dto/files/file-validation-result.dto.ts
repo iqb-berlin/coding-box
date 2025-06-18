@@ -36,4 +36,25 @@ export class FileValidationResultDto {
     description: 'Global validation to check if every booklet referenced in any TestTakers file actually exists in the workspace.'
   })
     referencedBookletsExistValidation?: SimpleDataValidationDto;
+
+  @ApiProperty({
+    type: () => SimpleDataValidationDto,
+    required: false,
+    description: 'Global validation to check for duplicate test-takers across all TestTakers files.'
+  })
+    testTakersDuplicatesValidation?: SimpleDataValidationDto;
+
+  @ApiProperty({
+    type: [String],
+    required: false,
+    description: 'List of TestTakers files that were ignored during validation because they only contain \'run-hot-return\' or \'run-hot-restart\' logins.'
+  })
+    ignoredTestTakersFiles?: string[];
+
+  @ApiProperty({
+    type: () => SimpleDataValidationDto,
+    required: false,
+    description: 'Global validation to check if every test-taker in TestTakers files corresponds to a person in the database.'
+  })
+    testTakersToPersonValidation?: SimpleDataValidationDto;
 }

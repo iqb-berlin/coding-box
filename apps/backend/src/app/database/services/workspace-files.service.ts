@@ -285,12 +285,85 @@ export class WorkspaceFilesService {
       this.logger.log(`No booklets referenced in TestTakers files to check for existence in workspace ${workspaceId}.`);
     }
 
+    const allTestTakersFiles = await this.fileUploadRepository.find({
+      where: { workspace_id: workspaceId, file_type: 'TestTakers' },
+      select: ['data', 'file_id']
+    });
+
+    const ignoredTestTakersFiles: string[] = [];
+    const allTestTakers = new Map<string, string[]>();
+
+    for (const ttFile of allTestTakersFiles) {
+      if (!ttFile.data) continue;
+      try {
+        const $tt = cheerio.load(ttFile.data, { xmlMode: true, recognizeSelfClosing: true });
+        const logins = $tt('Testtakers > Person > Login');
+        let hasNonHotLogin = false;
+
+        if (logins.length > 0) {
+          logins.each((_, loginElement) => {
+            const mode = $tt(loginElement).attr('mode')?.toLowerCase();
+            if (mode !== 'run-hot-return' && mode !== 'run-hot-restart') {
+              hasNonHotLogin = true;
+              return false; // break .each loop
+            }
+          });
+        } else {
+          hasNonHotLogin = true;
+        }
+
+        if (!hasNonHotLogin) {
+          ignoredTestTakersFiles.push(ttFile.file_id);
+          continue;
+        }
+
+        $tt('Testtakers > Person').each((_, personElement) => {
+          const loginElement = $tt(personElement).find('Login');
+          const login = loginElement.text().trim().toUpperCase();
+          const mode = loginElement.attr('mode')?.toLowerCase();
+
+          if (login && mode !== 'run-hot-return' && mode !== 'run-hot-restart') {
+            if (!allTestTakers.has(login)) {
+              allTestTakers.set(login, []);
+            }
+            allTestTakers.get(login)?.push(ttFile.file_id);
+          }
+        });
+      } catch (error) {
+        this.logger.error(`Error parsing TestTakers file ${ttFile.file_id} for duplicate check: ${error}`);
+      }
+    }
+
+    const duplicateTestTakers: string[] = [];
+    allTestTakers.forEach((files, login) => {
+      if (files.length > 1) {
+        duplicateTestTakers.push(`${login} (in ${files.join(', ')})`);
+      }
+    });
+
+    const testTakersDuplicatesValidation: SimpleDataValidationDto = {
+      complete: duplicateTestTakers.length === 0,
+      missing: duplicateTestTakers
+    };
+
+    if (duplicateTestTakers.length > 0) {
+      this.logger.warn(`Found ${duplicateTestTakers.length} duplicate test-takers in workspace ${workspaceId}: ${duplicateTestTakers.join('; ')}`);
+    } else {
+      this.logger.log(`No duplicate test-takers found in workspace ${workspaceId}.`);
+    }
+
+    if (ignoredTestTakersFiles.length > 0) {
+      this.logger.log(`Ignored ${ignoredTestTakersFiles.length} TestTakers files in workspace ${workspaceId}: ${ignoredTestTakersFiles.join(', ')}`);
+    }
+
     return {
       bookletValidationResults: bookletValidationResults,
       orphanedUnitsValidation: orphanedUnitsValidation,
       allUnitsHavePlayerValidation: allUnitsHavePlayerValidation,
       bookletsInTestTakersValidation: bookletsInTestTakersValidation,
-      referencedBookletsExistValidation: referencedBookletsExistValidation
+      referencedBookletsExistValidation: referencedBookletsExistValidation,
+      testTakersDuplicatesValidation: testTakersDuplicatesValidation,
+      ignoredTestTakersFiles: ignoredTestTakersFiles
     };
   }
 
@@ -872,24 +945,20 @@ export class WorkspaceFilesService {
 
       const allResourceIds = existingResources.map(resource => resource.file_id);
 
-      // Find missing references
       const missingCodingSchemeRefs = allCodingSchemeRefs.filter(ref => !allResourceIds.includes(ref));
       const missingDefinitionRefs = allDefinitionRefs.filter(ref => !allResourceIds.includes(ref));
       const missingPlayerRefs = allPlayerRefs.filter(ref => !allResourceIds.includes(ref));
 
-      // Check if all references exist
       const allCodingSchemesExist = missingCodingSchemeRefs.length === 0;
       const allCodingDefinitionsExist = missingDefinitionRefs.length === 0;
       const allPlayerRefsExist = missingPlayerRefs.length === 0;
 
-      // Find missing units
       const foundUnitIds = existingUnits.map(unit => unit.file_id.toUpperCase());
       const missingUnits = allUnitIds.filter(unitId => !foundUnitIds.includes(unitId));
       const uniqueUnits = Array.from(new Set(missingUnits));
 
       const allUnitsExist = missingUnits.length === 0;
 
-      // Create lists of all files with their match status
       const unitFiles: FileStatus[] = allUnitIds.map(unitId => ({
         filename: unitId,
         exists: foundUnitIds.includes(unitId)
