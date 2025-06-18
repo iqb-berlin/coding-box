@@ -1,0 +1,69 @@
+<div class="data-card">
+  <h2 mat-dialog-title class="section-title">Validierungsergebnisse</h2>
+  <mat-dialog-content>
+    <p class="section-description">Überprüfung der Antworten gegen Testtaker XML Dateien</p>
+    <mat-divider></mat-divider>
+
+    <div class="loading-container" *ngIf="!data">
+      <mat-spinner class="mat-spinner"></mat-spinner>
+      <p class="loading-text">Antworten werden validiert...</p>
+    </div>
+
+    <div *ngIf="data" class="validation-results-container">
+      <div class="validation-summary">
+        <div class="summary-item" [ngClass]="{'valid': data.valid, 'invalid': !data.valid}">
+          <mat-icon>{{ data.valid ? 'check_circle' : 'error' }}</mat-icon>
+          <span>Status: {{ data.valid ? 'Gültig' : 'Ungültig' }}</span>
+        </div>
+        <div class="summary-item">
+          <span>Gesamtanzahl der Antworten: {{ data.totalResponses }}</span>
+        </div>
+        <div class="summary-item">
+          <span>Gültige Antworten: {{ data.validResponses }}</span>
+        </div>
+        <div class="summary-item">
+          <span>Ungültige Antworten: {{ data.invalidResponses }}</span>
+        </div>
+      </div>
+
+      <div *ngIf="data.invalidGroups.length > 0" class="invalid-groups">
+        <h3>Ungültige Gruppen:</h3>
+        <div class="invalid-group-list">
+          <div class="invalid-group-item" *ngFor="let group of data.invalidGroups">
+            {{ group }}
+          </div>
+        </div>
+      </div>
+
+      <h3 class="details-title">Details:</h3>
+      <div class="validation-details-header">
+        <div class="detail-group">Gruppe</div>
+        <div class="detail-exists">Existiert in Testtaker XML</div>
+        <div class="detail-count">Anzahl der Antworten</div>
+      </div>
+
+      <div class="validation-details-list">
+        <div class="validation-detail-item" *ngFor="let detail of data.details" [ngClass]="{'invalid-detail': !detail.exists}">
+          <div class="detail-group">{{ detail.group }}</div>
+          <div class="detail-exists">
+            <mat-icon class="status-icon">{{ detail.exists ? 'check_circle' : 'cancel' }}</mat-icon>
+            {{ detail.exists ? 'Ja' : 'Nein' }}
+          </div>
+          <div class="detail-count">{{ detail.count }}</div>
+        </div>
+      </div>
+    </div>
+
+    <div *ngIf="data === null" class="empty-state">
+      <mat-icon>info</mat-icon>
+      <p>Keine Validierungsergebnisse verfügbar</p>
+    </div>
+  </mat-dialog-content>
+  <mat-dialog-actions align="end">
+    <button mat-raised-button color="primary" [mat-dialog-close]="true">
+      <mat-icon>close</mat-icon>
+      Schließen
+    </button>
+  </mat-dialog-actions>
+</div>
+
