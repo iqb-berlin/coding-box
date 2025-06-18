@@ -11,12 +11,12 @@ import FileUpload from '../entities/file_upload.entity';
 import { FilesDto } from '../../../../../../api-dto/files/files.dto';
 import { FileIo } from '../../admin/workspace/file-io.interface';
 import { FileDownloadDto } from '../../../../../../api-dto/files/file-download.dto';
+import { FileValidationResultDto } from '../../../../../../api-dto/files/file-validation-result.dto';
+import { BookletValidationResultEntryDto } from '../../../../../../api-dto/files/booklet-validation-result-entry.dto';
+import { SimpleDataValidationDto } from '../../../../../../api-dto/files/simple-data-validation.dto';
 import {
-  FileValidationResultDto,
-  BookletValidationResultEntryDto,
-  BookletContentValidationDetails,
-  SimpleDataValidationDto
-} from '../../../../../../api-dto/files/file-validation-result.dto';
+  BookletContentValidationDetails
+} from '../../../../../../api-dto/files/booklet-content-validation-details.dto';
 
 function sanitizePath(filePath: string): string {
   const normalizedPath = path.normalize(filePath);
@@ -112,7 +112,6 @@ export class WorkspaceFilesService {
       const bookletProcessingPromises = bookletFileEntities.map(async bookletEntity => {
         const result = await this.processSingleBookletValidation(bookletEntity, workspaceId);
         if (result && result.validationDetails.units.files) {
-          // Collect all unit IDs that are referenced and exist or are missing but referenced
           result.validationDetails.units.files.forEach(unitFile => {
             allReferencedUnitIds.add(unitFile.filename.toUpperCase());
           });
@@ -123,11 +122,8 @@ export class WorkspaceFilesService {
       bookletValidationResults.push(...results.filter(r => r !== null) as BookletValidationResultEntryDto[]);
     } else {
       this.logger.warn(`No booklets found in workspace ${workspaceId}. All units will be considered orphaned.`);
-      // If no booklets, all units are technically orphaned if we proceed with deletion.
-      // For now, let's report them as orphaned. The deletion logic below will handle them.
     }
 
-    // Identify orphaned units
     const allWorkspaceUnits = await this.fileUploadRepository.find({
       where: { workspace_id: workspaceId, file_type: 'Unit' },
       select: ['file_id', 'id'] // Select 'id' for deletion
@@ -152,7 +148,6 @@ export class WorkspaceFilesService {
       this.logger.log(`No orphaned units found to delete in workspace ${workspaceId}.`);
     }
 
-    // Global check: Ensure every remaining unit has a player
     const remainingUnitsAfterOrphanDeletion = await this.fileUploadRepository.find({
       where: { workspace_id: workspaceId, file_type: 'Unit' },
       select: ['file_id', 'data'] // Need data to parse for player refs
@@ -164,6 +159,7 @@ export class WorkspaceFilesService {
       try {
         const $unit = cheerio.load(unitEntity.data, { xmlMode: true, recognizeSelfClosing: true });
         let hasPlayerRef = false;
+        // eslint-disable-next-line consistent-return
         $unit('DefinitionRef').each((_, el) => {
           if ($unit(el).attr('player')) {
             hasPlayerRef = true;
@@ -235,11 +231,36 @@ export class WorkspaceFilesService {
       this.logger.log(`No booklets in workspace ${workspaceId} to check for TestTakers references.`);
     }
 
+    const allWorkspaceBookletIds = new Set(allBookletEntities.map(b => b.file_id.toUpperCase()));
+    const missingBookletsReferencedInTestTakers: string[] = [];
+
+    if (referencedBookletIdsInTestTakers.size > 0) {
+      for (const referencedBookletId of referencedBookletIdsInTestTakers) {
+        if (!allWorkspaceBookletIds.has(referencedBookletId)) {
+          missingBookletsReferencedInTestTakers.push(referencedBookletId);
+        }
+      }
+    }
+
+    const referencedBookletsExistValidation: SimpleDataValidationDto = {
+      complete: missingBookletsReferencedInTestTakers.length === 0,
+      missing: missingBookletsReferencedInTestTakers
+    };
+
+    if (missingBookletsReferencedInTestTakers.length > 0) {
+      this.logger.warn(`Found ${missingBookletsReferencedInTestTakers.length} booklets referenced in TestTakers files but not found in workspace ${workspaceId}: ${missingBookletsReferencedInTestTakers.join(', ')}`);
+    } else if (referencedBookletIdsInTestTakers.size > 0) {
+      this.logger.log(`All booklets referenced in TestTakers files exist in workspace ${workspaceId}.`);
+    } else {
+      this.logger.log(`No booklets referenced in TestTakers files to check for existence in workspace ${workspaceId}.`);
+    }
+
     return {
       bookletValidationResults: bookletValidationResults,
       orphanedUnitsValidation: orphanedUnitsValidation,
       allUnitsHavePlayerValidation: allUnitsHavePlayerValidation,
-      bookletsInTestTakersValidation: bookletsInTestTakersValidation
+      bookletsInTestTakersValidation: bookletsInTestTakersValidation,
+      referencedBookletsExistValidation: referencedBookletsExistValidation
     };
   }
 
@@ -260,7 +281,6 @@ export class WorkspaceFilesService {
       files: [{ filename: bookletId, exists: true }]
     };
 
-    // Extract unit IDs referenced ONLY by this booklet
     const $booklet = cheerio.load(bookletEntity.data, { xmlMode: true, recognizeSelfClosing: true });
     const unitIdsReferencedByThisBooklet: string[] = [];
     $booklet('Unit').each((_, element) => {
@@ -269,8 +289,6 @@ export class WorkspaceFilesService {
         unitIdsReferencedByThisBooklet.push(unitId.toUpperCase().trim());
       }
     });
-    // Add these to the global set of referenced units for orphaned check later (alternative to parsing files again)
-    // unitIdsReferencedByThisBooklet.forEach(id => allReferencedUnitIds.add(id)); // This line is moved to the caller
 
     if (unitIdsReferencedByThisBooklet.length === 0) {
       this.logger.log(`Booklet ${bookletId} does not reference any units.`);
@@ -932,15 +950,7 @@ export class WorkspaceFilesService {
 
       // Search for JSON+LD <script> tags in the parsed DOM.
       const metaDataElement = playerContent('script[type="application/ld+json"]');
-      if (!metaDataElement.length) {
-        console.error('Meta-data <script> tag not found');
-      }
-
       const metadata = JSON.parse(metaDataElement.text());
-      if (!metadata.id || !metadata.version) {
-        console.error('Invalid metadata structure: Missing id or version');
-      }
-
       return WorkspaceFilesService.normalizePlayerId(`${metadata.id}-${metadata.version}`);
     } catch (error) {
       return WorkspaceFilesService.getResourceId(file);

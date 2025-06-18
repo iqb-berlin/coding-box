@@ -1,4 +1,44 @@
 <mat-dialog-content>
+  <div *ngIf="data && data.testTakersBookletsValidation" class="validation-card global-booklet-testtakers-check-card">
+    <h4>
+      <mat-icon class="section-icon">rule_folder</mat-icon> <!-- Icon for booklet in testtakers check -->
+      {{ 'ws-admin.validation-testtakers-booklets' | translate }}
+    </h4>
+    <p class="status-row">
+      Status:
+      <span *ngIf="data.testTakersBookletsValidation.complete" class="status-complete">
+        <mat-icon class="status-icon">check_circle</mat-icon>
+        {{ 'ws-admin.validation-complete' | translate }}
+      </span>
+      <span *ngIf="!data.testTakersBookletsValidation.complete" class="status-incomplete">
+        <mat-icon class="status-icon">error</mat-icon>
+        {{ 'ws-admin.validation-incomplete' | translate }}
+      </span>
+    </p>
+    <div *ngIf="!data.testTakersBookletsValidation.complete && data.testTakersBookletsValidation.missingBookletsByTesttakers" class="missing-items">
+      <p>
+        <mat-icon class="missing-icon">warning_amber</mat-icon>
+        {{ 'ws-admin.validation-booklets-missing-testtakers' | translate }}:
+      </p>
+      <ul>
+        <li *ngFor="let testTaker of objectKeys(data.testTakersBookletsValidation.missingBookletsByTesttakers)">
+          <strong>{{ testTaker }}:</strong>
+          <ul>
+            <li *ngFor="let booklet of data.testTakersBookletsValidation.missingBookletsByTesttakers[testTaker]">
+              {{ booklet }}
+            </li>
+          </ul>
+        </li>
+      </ul>
+    </div>
+    <div *ngIf="data.testTakersBookletsValidation.complete" class="all-clear-message">
+      <p>
+        <mat-icon class="status-icon">check_circle_outline</mat-icon>
+        {{ 'ws-admin.validation-booklets-in-testtakers-clear' | translate }}
+      </p>
+    </div>
+  </div>
+
   <div *ngIf="data && data.bookletsInTestTakersValidation" class="validation-card global-booklet-testtakers-check-card">
     <h4>
       <mat-icon class="section-icon">rule_folder</mat-icon> <!-- Icon for booklet in testtakers check -->
@@ -28,6 +68,39 @@
       <p>
         <mat-icon class="status-icon">check_circle_outline</mat-icon>
         {{ 'ws-admin.validation-booklets-in-testtakers-clear' | translate }}
+      </p>
+    </div>
+  </div>
+
+  <div *ngIf="data && data.referencedBookletsExistValidation" class="validation-card global-booklet-testtakers-check-card">
+    <h4>
+      <mat-icon class="section-icon">rule_folder</mat-icon> <!-- Icon for booklet in testtakers check -->
+      {{ 'ws-admin.validation-referenced-booklets-exist' | translate }}
+    </h4>
+    <p class="status-row">
+      Status:
+      <span *ngIf="data.referencedBookletsExistValidation.complete" class="status-complete">
+        <mat-icon class="status-icon">check_circle</mat-icon>
+        {{ 'ws-admin.validation-complete' | translate }}
+      </span>
+      <span *ngIf="!data.referencedBookletsExistValidation.complete" class="status-incomplete">
+        <mat-icon class="status-icon">error</mat-icon>
+        {{ 'ws-admin.validation-incomplete' | translate }}
+      </span>
+    </p>
+    <div *ngIf="!data.referencedBookletsExistValidation.complete && data.referencedBookletsExistValidation.missing && data.referencedBookletsExistValidation.missing.length > 0" class="missing-items">
+      <p>
+        <mat-icon class="missing-icon">warning_amber</mat-icon>
+        {{ 'ws-admin.validation-referenced-booklets-missing' | translate }}:
+      </p>
+      <ul>
+        <li *ngFor="let item of data.referencedBookletsExistValidation.missing">{{ item }}</li>
+      </ul>
+    </div>
+    <div *ngIf="data.referencedBookletsExistValidation.complete" class="all-clear-message">
+      <p>
+        <mat-icon class="status-icon">check_circle_outline</mat-icon>
+        {{ 'ws-admin.validation-referenced-booklets-exist-clear' | translate }}
       </p>
     </div>
   </div>
@@ -185,10 +258,10 @@
       </div>
     </div>
   </div>
-  <div *ngIf="(!bookletValidationResults || bookletValidationResults.length === 0) && !data.orphanedUnitsValidation && !data.allUnitsHavePlayerValidation && !data.bookletsInTestTakersValidation" class="no-results">
+  <div *ngIf="(!bookletValidationResults || bookletValidationResults.length === 0) && !data.orphanedUnitsValidation && !data.allUnitsHavePlayerValidation && !data.bookletsInTestTakersValidation && !data.referencedBookletsExistValidation" class="no-results">
     <p>{{ 'ws-admin.validation-no-data' | translate }}</p>
   </div>
-  <div *ngIf="bookletValidationResults && bookletValidationResults.length === 0 && data.orphanedUnitsValidation && data.orphanedUnitsValidation.complete && data.allUnitsHavePlayerValidation && data.allUnitsHavePlayerValidation.complete && data.bookletsInTestTakersValidation && data.bookletsInTestTakersValidation.complete" class="no-booklets-but-orphaned-clear">
+  <div *ngIf="bookletValidationResults && bookletValidationResults.length === 0 && data.orphanedUnitsValidation && data.orphanedUnitsValidation.complete && data.allUnitsHavePlayerValidation && data.allUnitsHavePlayerValidation.complete && data.bookletsInTestTakersValidation && data.bookletsInTestTakersValidation.complete && data.referencedBookletsExistValidation && data.referencedBookletsExistValidation.complete" class="no-booklets-but-orphaned-clear">
     <!-- This case might be redundant if orphanedUnitsValidation section already shows a clear message -->
     <p>{{ 'ws-admin.validation-no-booklets-to-display' | translate }}</p>
   </div>
