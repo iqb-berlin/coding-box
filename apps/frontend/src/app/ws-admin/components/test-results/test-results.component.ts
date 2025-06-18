@@ -130,18 +130,6 @@ export class TestResultsComponent implements OnInit {
   @ViewChild(MatPaginator) paginator!: MatPaginator;
   @ViewChild(MatSort) sort!: MatSort;
 
-  constructor(
-    private dialog: MatDialog,
-    private backendService: BackendService,
-    private appService: AppService,
-    private router: Router,
-    private snackBar: MatSnackBar,
-    private translateService: TranslateService
-  ) {
-  constructor() {
-    this.selectedBooklet = undefined;
-  }
-
   ngOnInit(): void {
     this.createTestResultsList();
   }
