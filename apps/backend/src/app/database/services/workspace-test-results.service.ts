@@ -174,8 +174,22 @@ export class WorkspaceTestResultsService {
     const validLimit = Math.min(Math.max(1, limit), MAX_LIMIT); // Between 1 and MAX_LIMIT
 
     try {
+      const personIdsQuery = this.personsRepository.createQueryBuilder('person')
+        .select('person.id')
+        .innerJoin('person.booklets_relation', 'booklet')
+        .innerJoin('booklet.units', 'unit')
+        .innerJoin('unit.responses', 'response')
+        .where('person.workspace_id = :workspace_id', { workspace_id })
+        .distinct(true);
+
+      const personIds = (await personIdsQuery.getRawMany()).map(p => p.person_id);
+
+      if (personIds.length === 0) {
+        return [[], 0];
+      }
+
       const [results, total] = await this.personsRepository.findAndCount({
-        where: { workspace_id: workspace_id },
+        where: { id: In(personIds) },
         select: [
           'id',
           'group',
@@ -187,7 +201,6 @@ export class WorkspaceTestResultsService {
         take: validLimit,
         order: { code: 'ASC' }
       });
-
       return [results, total];
     } catch (error) {
       this.logger.error(`Failed to fetch test results for workspace_id ${workspace_id}: ${error.message}`, error.stack);

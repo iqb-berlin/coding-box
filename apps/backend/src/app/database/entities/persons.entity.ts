@@ -7,8 +7,8 @@ import { Booklet } from './booklet.entity';
 
 @Entity()
 @Unique('persons_pk', ['code', 'group', 'login'])
-@Index(['workspace_id', 'code']) // Composite index for common query patterns
-@Index(['workspace_id', 'group']) // Composite index for filtering by group within workspace
+@Index(['workspace_id', 'code'])
+@Index(['workspace_id', 'group'])
 
 class Persons {
   @PrimaryGeneratedColumn()
@@ -39,9 +39,7 @@ class Persons {
   @Column({ type: 'varchar' })
     source!: string;
 
-  // Add explicit relationship to Booklet entity
   @OneToMany(() => Booklet, booklet => booklet.person, {
-    // Cascade operations to booklets when person is modified
     cascade: true
   })
     booklets_relation!: Booklet[];
