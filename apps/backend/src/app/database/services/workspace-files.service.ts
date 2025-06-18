@@ -8,6 +8,7 @@ import * as path from 'path';
 import * as libxmljs from 'libxmljs2';
 import { ResponseDto } from 'api-dto/responses/response-dto';
 import FileUpload from '../entities/file_upload.entity';
+import Persons from '../entities/persons.entity';
 import { FilesDto } from '../../../../../../api-dto/files/files.dto';
 import { FileIo } from '../../admin/workspace/file-io.interface';
 import { FileDownloadDto } from '../../../../../../api-dto/files/file-download.dto';
@@ -58,7 +59,9 @@ export class WorkspaceFilesService {
 
   constructor(
     @InjectRepository(FileUpload)
-    private fileUploadRepository: Repository<FileUpload>
+    private fileUploadRepository: Repository<FileUpload>,
+    @InjectRepository(Persons)
+    private personsRepository: Repository<Persons>
   ) {}
 
   async findFiles(workspaceId: number, options?: { page: number; limit: number }): Promise<[FilesDto[], number]> {
@@ -326,6 +329,28 @@ export class WorkspaceFilesService {
       this.logger.log(`Ignored ${ignoredTestTakersFiles.length} TestTakers files in workspace ${workspaceId}: ${ignoredTestTakersFiles.join(', ')}`);
     }
 
+    const personCodesFromDb = (await this.personsRepository.find({
+      where: { workspace_id: workspaceId },
+      select: ['code']
+    })).map(p => p.code.toUpperCase());
+
+    const testTakerLoginsFromFile = Array.from(allTestTakers.keys());
+
+    const missingPersons = testTakerLoginsFromFile.filter(login => !personCodesFromDb.includes(login));
+
+    const testTakersToPersonValidation: SimpleDataValidationDto = {
+      complete: missingPersons.length === 0,
+      missing: missingPersons
+    };
+
+    if (missingPersons.length > 0) {
+      this.logger.warn(`Found ${missingPersons.length} test-takers from files that are not in the persons table for workspace ${workspaceId}: ${missingPersons.join(', ')}`);
+    } else if (testTakerLoginsFromFile.length > 0) {
+      this.logger.log(`All test-takers from files are present in the persons table for workspace ${workspaceId}.`);
+    } else {
+      this.logger.log('No test-takers from files to check against the persons table.');
+    }
+
     return {
       bookletValidationResults: bookletValidationResults,
       orphanedUnitsValidation: orphanedUnitsValidation,
@@ -333,7 +358,8 @@ export class WorkspaceFilesService {
       bookletsInTestTakersValidation: bookletsInTestTakersValidation,
       referencedBookletsExistValidation: referencedBookletsExistValidation,
       testTakersDuplicatesValidation: testTakersDuplicatesValidation,
-      ignoredTestTakersFiles: ignoredTestTakersFiles
+      ignoredTestTakersFiles: ignoredTestTakersFiles,
+      testTakersToPersonValidation: testTakersToPersonValidation
     };
   }
 
