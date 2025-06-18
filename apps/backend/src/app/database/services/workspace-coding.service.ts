@@ -349,7 +349,7 @@ export class WorkspaceCodingService {
           const bookletInfo = booklet?.bookletinfo;
           const loginName = person?.login || '';
           const loginCode = person?.code || '';
-          const loginGroup = person?.group || '';
+          //const loginGroup = person?.group || '';
           const bookletId = bookletInfo?.name || '';
           const unitKey = unit?.name || '';
           const unitAlias = unit?.alias || '';
@@ -378,7 +378,7 @@ export class WorkspaceCodingService {
             this.logger.warn(`VOUD file not found for unit ${unitKey}`);
           }
 
-          const url = `${server}/#/replay/${loginGroup}@${loginCode}@${bookletId}/${unitKey}/${variablePage}/${variableAnchor}?auth=${authToken}`;
+          const url = `${server}/#/replay/${loginName}@${loginCode}@${bookletId}/${unitKey}/${variablePage}/${variableAnchor}?auth=${authToken}`;
 
           return {
             unit_key: unitKey,
@@ -423,7 +423,7 @@ export class WorkspaceCodingService {
         const bookletInfo = booklet?.bookletinfo;
         const loginName = person?.login || '';
         const loginCode = person?.code || '';
-        const loginGroup = person?.group || '';
+        //const loginGroup = person?.group || '';
         const bookletId = bookletInfo?.name || '';
         const unitKey = unit?.name || '';
         const unitAlias = unit?.alias || '';
@@ -454,7 +454,7 @@ export class WorkspaceCodingService {
           this.logger.warn(`VOUD file not found for unit ${unitKey}`);
         }
 
-        const url = `${server}/#/replay/${loginGroup}@${loginCode}@${bookletId}/${unitKey}/${variablePage}/${variableAnchor}?auth=${authToken}`;
+        const url = `${server}/#/replay/${loginName}@${loginCode}@${bookletId}/${unitKey}/${variablePage}/${variableAnchor}?auth=${authToken}`;
         return {
           unit_key: unitKey,
           unit_alias: unitAlias,

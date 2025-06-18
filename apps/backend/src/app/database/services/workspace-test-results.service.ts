@@ -223,8 +223,12 @@ export class WorkspaceTestResultsService {
   }
 
   async findUnitResponse(workspaceId: number, connector: string, unitId: string): Promise<{ responses: { id: string, content: { id: string; value: string; status: string }[] }[] }> {
-    const [group, code] = connector.split('@');
-    const person = await this.personsRepository.findOne({ where: { code, group } });
+    const [login, code, group] = connector.split('@');
+    const person = await this.personsRepository.findOne({
+      where: {
+        code, login, group, workspace_id: workspaceId
+      }
+    });
     if (!person) {
       throw new Error(`Person mit ID ${person.id} wurde nicht gefunden.`);
     }
