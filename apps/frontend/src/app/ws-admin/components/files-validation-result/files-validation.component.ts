@@ -43,6 +43,8 @@ export class FilesValidationDialogComponent {
   // Manages the expanded state for each section of each booklet
   expandedStates: Map<string, ExpandedBookletSectionsState> = new Map();
 
+  objectKeys = Object.keys;
+
   constructor(
     public dialogRef: MatDialogRef<FilesValidationDialogComponent>,
     @Inject(MAT_DIALOG_DATA) public data: any

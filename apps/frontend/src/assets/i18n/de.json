@@ -168,7 +168,10 @@
     "upload-test-takers": "TestTakers hochladen",
     "validation-booklets-in-testtakers": "Prüfung: Booklets in TestTakers referenziert",
     "validation-booklets-missing-testtakers": "Folgende Booklets werden in keiner TestTakers-Datei verwendet",
-    "validation-booklets-in-testtakers-clear": "Alle Booklets sind in mindestens einer TestTakers-Datei referenziert."
+    "validation-booklets-in-testtakers-clear": "Alle Booklets sind in mindestens einer TestTakers-Datei referenziert.",
+    "validation-referenced-booklets-exist": "Prüfung: Referenzierte Booklets vorhanden",
+    "validation-referenced-booklets-missing": "Folgende in TestTakers-Dateien referenzierte Booklets sind nicht im Arbeitsbereich vorhanden",
+    "validation-referenced-booklets-exist-clear": "Alle in TestTakers-Dateien referenzierten Booklets sind im Arbeitsbereich vorhanden."
   },
   "search-filter": {
     "filter-users": "Suche nach Nutzer:innen",
