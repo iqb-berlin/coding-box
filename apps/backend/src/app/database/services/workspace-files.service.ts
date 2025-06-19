@@ -105,7 +105,7 @@ export class WorkspaceFilesService {
         const variables = {};
         $('BaseVariables > Variable').each((i, elem) => {
           const variable = $(elem);
-          const id = variable.attr('id');
+          const id = variable.attr('alias');
           const type = variable.attr('type');
           const values = [];
           variable.find('Values > Value > value').each((j, valElem) => {
@@ -260,6 +260,23 @@ export class WorkspaceFilesService {
     return !!res;
   }
 
+  async deleteBooklet(workspaceId: number, bookletId: string): Promise<boolean> {
+    this.logger.log(`Deleting booklet ${bookletId} from workspace ${workspaceId}`);
+    try {
+      const result = await this.fileUploadRepository.delete({
+        workspace_id: workspaceId,
+        file_id: bookletId,
+        file_type: 'Booklet'
+      });
+      const affectedCount = result.affected || 0;
+      this.logger.log(`Successfully deleted ${affectedCount} booklet(s).`);
+      return affectedCount > 0;
+    } catch (e) {
+      this.logger.error(`Error deleting booklet ${bookletId}`, e);
+      return false;
+    }
+  }
+
   async validateTestFiles(workspaceId: number): Promise<FileValidationResultDto> {
     this.logger.log(`Starting file validation for workspace ID: ${workspaceId}`);
 
@@ -288,7 +305,7 @@ export class WorkspaceFilesService {
 
     const allWorkspaceUnits = await this.fileUploadRepository.find({
       where: { workspace_id: workspaceId, file_type: 'Unit' },
-      select: ['file_id', 'id'] // Select 'id' for deletion
+      select: ['file_id', 'id']
     });
 
     const orphanedUnitEntities = allWorkspaceUnits.filter(unitEntity => !allReferencedUnitIds.has((unitEntity.file_id || '').toUpperCase())
@@ -358,7 +375,7 @@ export class WorkspaceFilesService {
 
     if (allBookletIds.length > 0) {
       const testTakersFiles = await this.fileUploadRepository.find({
-        where: { workspace_id: workspaceId, file_type: 'TestTakers' },
+        where: { workspace_id: workspaceId, file_type: In(['TestTakers', 'Testtakers']) },
         select: ['data', 'file_id']
       });
 
@@ -368,6 +385,7 @@ export class WorkspaceFilesService {
           const $tt = cheerio.load(ttFile.data, { xmlMode: true, recognizeSelfClosing: true });
           $tt('Booklet').each((_, bookletElement) => {
             const bookletIdFromTestTaker = $tt(bookletElement).text().trim().toUpperCase();
+            console.log(bookletIdFromTestTaker, 'bookletIdFromTestTaker');
             if (bookletIdFromTestTaker) {
               referencedBookletIdsInTestTakers.add(bookletIdFromTestTaker);
             }
@@ -377,7 +395,7 @@ export class WorkspaceFilesService {
         }
       }
     }
-
+    console.log(referencedBookletIdsInTestTakers, 'referenced');
     const bookletsNotReferencedInTestTakers = allBookletIds.filter(bId => !referencedBookletIdsInTestTakers.has(bId));
 
     const bookletsInTestTakersValidation: SimpleDataValidationDto = {
@@ -418,7 +436,7 @@ export class WorkspaceFilesService {
     }
 
     const allTestTakersFiles = await this.fileUploadRepository.find({
-      where: { workspace_id: workspaceId, file_type: 'TestTakers' },
+      where: { workspace_id: workspaceId, file_type: In(['TestTakers', 'Testtakers']) },
       select: ['data', 'file_id']
     });
 

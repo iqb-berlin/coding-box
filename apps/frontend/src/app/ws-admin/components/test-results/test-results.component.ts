@@ -147,7 +147,7 @@ export class TestResultsComponent implements OnInit {
     this.unitTagsMap.clear();
     this.backendService.getPersonTestResults(this.appService.selectedWorkspaceId, row.id)
       .subscribe(booklets => {
-        this.selectedBooklet = row.group;
+        this.selectedBooklet = row.login;
         this.booklets = booklets;
         this.sortBookletUnits();
         this.loadAllUnitTags();
@@ -594,10 +594,6 @@ export class TestResultsComponent implements OnInit {
     this.selectedUnit = booklet;
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  setSelectedBooklet(booklet:any) {
-    this.selectedBooklet = booklet;
-  }
 
   formatTimestamp(timestamp: string): string {
     const date = new Date(Number(timestamp));

@@ -240,6 +240,17 @@ export class BackendService {
     ), of(true));
   }
 
+  deleteBooklet(workspaceId: number, bookletId: string): Observable<boolean> {
+    return this.http
+      .delete(`${this.serverUrl}admin/workspace/${workspaceId}/booklets/${bookletId}`, {
+        headers: this.authHeader
+      })
+      .pipe(
+        catchError(() => of(false)),
+        map(() => true)
+      );
+  }
+
   downloadFile(workspaceId: number, fileId: number): Observable<FileDownloadDto> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/files/${fileId}/download`;
     return this.http.get<FileDownloadDto>(url, { headers: this.authHeader });

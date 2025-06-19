@@ -23,7 +23,7 @@ import { MatAnchor, MatButton } from '@angular/material/button';
 import { DatePipe } from '@angular/common';
 import { MatFormField, MatLabel } from '@angular/material/form-field';
 import { MatOption, MatSelect } from '@angular/material/select';
-import { Subject, Subscription } from 'rxjs';
+import { forkJoin, Subject, Subscription } from 'rxjs';
 import { debounceTime } from 'rxjs/operators';
 import { FilesValidationDialogComponent } from '../files-validation-result/files-validation.component';
 import { TestCenterImportComponent } from '../test-center-import/test-center-import.component';
@@ -70,7 +70,7 @@ import { FileDownloadDto } from '../../../../../../../api-dto/files/file-downloa
     MatFormField,
     MatLabel,
     MatSelect,
-    MatOption,
+    MatOption
   ]
 })
 export class TestFilesComponent implements OnInit, OnDestroy {
@@ -281,10 +281,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
     this.textFilterValue = '';
     this.selectedFileType = '';
     this.selectedFileSize = '';
-    // Direkt applyFilters aufrufen oder auch über den Subject, je nach gewünschtem Verhalten
     this.applyFilters();
-    // Wenn clearFilters auch debounced werden soll:
-    // this.textFilterChanged.next(this.textFilterValue);
   }
 
   /** Handles file selection for upload */
@@ -296,8 +293,6 @@ export class TestFilesComponent implements OnInit, OnDestroy {
       this.isLoading = true;
       this.isValidating = true; // This is used to show "Validierung wird durchgeführt..."
 
-      // The backend service might be generic enough, or you might want specific endpoints later.
-      // For now, assuming uploadTestFiles can handle different XMLs by their content.
       this.backendService.uploadTestFiles(this.appService.selectedWorkspaceId, files)
         .subscribe(response => {
           this.isLoading = false;
@@ -309,12 +304,41 @@ export class TestFilesComponent implements OnInit, OnDestroy {
               { duration: 3000 }
             );
             this.loadTestFiles(true);
-          } else if (typeof response === 'object' && response !== null && 'validationDetails' in response) {
-            this.dialog.open(FilesValidationDialogComponent, {
+          } else if (typeof response === 'object' && response !== null && 'bookletValidationResults' in response) {
+            const dialogRef = this.dialog.open(FilesValidationDialogComponent, {
               width: '600px',
               data: response as FileValidationResultDto
             });
-            this.loadTestFiles(true);
+            dialogRef.afterClosed().subscribe(result => {
+              if (result && result.action === 'deleteBooklet') {
+                this.backendService.deleteBooklet(this.appService.selectedWorkspaceId, result.payload)
+                  .subscribe(success => {
+                    if (success) {
+                      this.snackBar.open(this.translate.instant('ws-admin.files-deleted'), '', { duration: 3000 });
+                    } else {
+                      this.snackBar.open(this.translate.instant('ws-admin.files-not-deleted'), this.translate.instant('error'), { duration: 3000 });
+                    }
+                    this.loadTestFiles(true);
+                  });
+              } else if (result && result.action === 'deleteBooklets') {
+                const bookletIds = result.payload as string[];
+                if (bookletIds && bookletIds.length > 0) {
+                  const deleteObservables = bookletIds.map(id => this.backendService.deleteBooklet(this.appService.selectedWorkspaceId, id)
+                  );
+                  forkJoin(deleteObservables).subscribe(results => {
+                    const allSucceeded = results.every(r => r);
+                    if (allSucceeded) {
+                      this.snackBar.open(this.translate.instant('ws-admin.files-deleted'), '', { duration: 3000 });
+                    } else {
+                      this.snackBar.open(this.translate.instant('ws-admin.some-files-not-deleted'), this.translate.instant('error'), { duration: 3000 });
+                    }
+                    this.loadTestFiles(true);
+                  });
+                }
+              } else {
+                this.loadTestFiles(true);
+              }
+            });
           } else {
             this.snackBar.open(
               this.translate.instant('ws-admin.unexpected-server-response'),
@@ -375,7 +399,8 @@ export class TestFilesComponent implements OnInit, OnDestroy {
     this.isValidating = true;
     this.backendService.validateFiles(this.appService.selectedWorkspaceId)
       .subscribe(respOk => {
-        this.handleValidationResponse(respOk as FileValidationResultDto | false); // Added type assertion for clarity
+        console.log('Validation response:', respOk);
+        this.handleValidationResponse(respOk as FileValidationResultDto | false);
       });
   }
 
@@ -400,9 +425,37 @@ export class TestFilesComponent implements OnInit, OnDestroy {
         { duration: 3000 }
       );
     } else {
-      this.dialog.open(FilesValidationDialogComponent, {
+      const dialogRef = this.dialog.open(FilesValidationDialogComponent, {
         width: '600px',
-        data: res // Pass the whole FileValidationResultDto object
+        data: res
+      });
+      dialogRef.afterClosed().subscribe(result => {
+        if (result && result.action === 'deleteBooklet') {
+          this.backendService.deleteBooklet(this.appService.selectedWorkspaceId, result.payload)
+            .subscribe(success => {
+              if (success) {
+                this.snackBar.open(this.translate.instant('ws-admin.files-deleted'), '', { duration: 3000 });
+                this.loadTestFiles(true);
+              } else {
+                this.snackBar.open(this.translate.instant('ws-admin.files-not-deleted'), this.translate.instant('error'), { duration: 3000 });
+              }
+            });
+        } else if (result && result.action === 'deleteBooklets') {
+          const bookletIds = result.payload as string[];
+          if (bookletIds && bookletIds.length > 0) {
+            const deleteObservables = bookletIds.map(id => this.backendService.deleteBooklet(this.appService.selectedWorkspaceId, id)
+            );
+            forkJoin(deleteObservables).subscribe(results => {
+              const allSucceeded = results.every(r => r);
+              if (allSucceeded) {
+                this.snackBar.open(this.translate.instant('ws-admin.files-deleted'), '', { duration: 3000 });
+              } else {
+                this.snackBar.open(this.translate.instant('ws-admin.some-files-not-deleted'), this.translate.instant('error'), { duration: 3000 });
+              }
+              this.loadTestFiles(true);
+            });
+          }
+        }
       });
     }
   }

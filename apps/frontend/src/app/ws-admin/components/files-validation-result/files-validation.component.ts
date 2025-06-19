@@ -10,6 +10,7 @@ import { NgClass } from '@angular/common';
 import { MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { TranslateModule } from '@ngx-translate/core';
+import { MatIconButton } from '@angular/material/button';
 
 interface ExpandedBookletSectionsState {
   bookletSelfStatus: boolean;
@@ -29,7 +30,8 @@ interface ExpandedBookletSectionsState {
     MatButton,
     TranslateModule,
     MatDialogClose,
-    MatIcon
+    MatIcon,
+    MatIconButton
 ],
   styleUrls: ['./files-validation.component.scss']
 })
@@ -83,6 +85,22 @@ export class FilesValidationDialogComponent {
       case 'player': return 'Player';
       case 'bookletSelfStatus': return 'Booklet Datei';
       default: return sectionKey;
+    }
+  }
+
+  deleteBooklet(bookletId: string): void {
+    this.dialogRef.close({
+      action: 'deleteBooklet',
+      payload: bookletId
+    });
+  }
+
+  deleteAllUnusedBooklets(): void {
+    if (this.data && this.data.bookletsInTestTakersValidation && this.data.bookletsInTestTakersValidation.missing) {
+      this.dialogRef.close({
+        action: 'deleteBooklets',
+        payload: this.data.bookletsInTestTakersValidation.missing
+      });
     }
   }
 }

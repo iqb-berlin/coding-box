@@ -148,7 +148,7 @@
               @for (booklet of booklets; track booklet) {
                 <mat-expansion-panel [expanded]="booklets.length === 1" class="booklet-panel">
                   <mat-expansion-panel-header>
-                    <mat-panel-title (click)="setSelectedBooklet(booklet)" class="booklet-title">
+                    <mat-panel-title class="booklet-title">
                       {{ booklet.name }}
                     </mat-panel-title>
                   </mat-expansion-panel-header>
