@@ -6,7 +6,7 @@ import {
   MatDialogContent,
   MatDialogRef
 } from '@angular/material/dialog';
-import { NgForOf, NgIf, NgClass } from '@angular/common';
+import { NgClass } from '@angular/common';
 import { MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { TranslateModule } from '@ngx-translate/core';
@@ -23,8 +23,6 @@ interface ExpandedBookletSectionsState {
   selector: 'files-validation-dialog',
   templateUrl: './files-validation.component.html',
   imports: [
-    NgIf,
-    NgForOf,
     NgClass,
     MatDialogContent,
     MatDialogActions,
@@ -32,7 +30,7 @@ interface ExpandedBookletSectionsState {
     TranslateModule,
     MatDialogClose,
     MatIcon
-  ],
+],
   styleUrls: ['./files-validation.component.scss']
 })
 export class FilesValidationDialogComponent {

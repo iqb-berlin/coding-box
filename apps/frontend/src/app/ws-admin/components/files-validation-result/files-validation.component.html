@@ -1,281 +1,375 @@
 <mat-dialog-content>
-  <div *ngIf="data && data.testTakersBookletsValidation" class="validation-card global-booklet-testtakers-check-card">
-    <h4>
-      <mat-icon class="section-icon">rule_folder</mat-icon> <!-- Icon for booklet in testtakers check -->
-      {{ 'ws-admin.validation-testtakers-booklets' | translate }}
-    </h4>
-    <p class="status-row">
-      Status:
-      <span *ngIf="data.testTakersBookletsValidation.complete" class="status-complete">
-        <mat-icon class="status-icon">check_circle</mat-icon>
-        {{ 'ws-admin.validation-complete' | translate }}
-      </span>
-      <span *ngIf="!data.testTakersBookletsValidation.complete" class="status-incomplete">
-        <mat-icon class="status-icon">error</mat-icon>
-        {{ 'ws-admin.validation-incomplete' | translate }}
-      </span>
-    </p>
-    <div *ngIf="!data.testTakersBookletsValidation.complete && data.testTakersBookletsValidation.missingBookletsByTesttakers" class="missing-items">
-      <p>
-        <mat-icon class="missing-icon">warning_amber</mat-icon>
-        {{ 'ws-admin.validation-booklets-missing-testtakers' | translate }}:
-      </p>
-      <ul>
-        <li *ngFor="let testTaker of objectKeys(data.testTakersBookletsValidation.missingBookletsByTesttakers)">
-          <strong>{{ testTaker }}:</strong>
-          <ul>
-            <li *ngFor="let booklet of data.testTakersBookletsValidation.missingBookletsByTesttakers[testTaker]">
-              {{ booklet }}
-            </li>
-          </ul>
-        </li>
-      </ul>
-    </div>
-    <div *ngIf="data.testTakersBookletsValidation.complete" class="all-clear-message">
-      <p>
-        <mat-icon class="status-icon">check_circle_outline</mat-icon>
-        {{ 'ws-admin.validation-booklets-in-testtakers-clear' | translate }}
-      </p>
-    </div>
-  </div>
-
-  <div *ngIf="data && data.bookletsInTestTakersValidation" class="validation-card global-booklet-testtakers-check-card">
-    <div *ngIf="!data.bookletsInTestTakersValidation.complete && data.bookletsInTestTakersValidation.missing && data.bookletsInTestTakersValidation.missing.length > 0" class="missing-items">
-      <p>
-        <mat-icon class="missing-icon">warning_amber</mat-icon>
-        {{ 'ws-admin.validation-booklets-missing-testtakers' | translate }}:
-      </p>
-      <ul>
-        <li *ngFor="let item of data.bookletsInTestTakersValidation.missing">{{ item }}</li>
-      </ul>
-    </div>
-    <div *ngIf="data.bookletsInTestTakersValidation.complete" class="all-clear-message">
-      <p>
-        <mat-icon class="status-icon">check_circle_outline</mat-icon>
-        {{ 'ws-admin.validation-booklets-in-testtakers-clear' | translate }}
-      </p>
-    </div>
-  </div>
-
-  <div *ngIf="data && data.referencedBookletsExistValidation" class="validation-card global-booklet-testtakers-check-card">
-    <div *ngIf="!data.referencedBookletsExistValidation.complete && data.referencedBookletsExistValidation.missing && data.referencedBookletsExistValidation.missing.length > 0" class="missing-items">
-      <p>
-        <mat-icon class="missing-icon">warning_amber</mat-icon>
-        {{ 'ws-admin.validation-referenced-booklets-missing' | translate }}:
-      </p>
-      <ul>
-        <li *ngFor="let item of data.referencedBookletsExistValidation.missing">{{ item }}</li>
-      </ul>
-    </div>
-    <div *ngIf="data.referencedBookletsExistValidation.complete" class="all-clear-message">
-      <p>
-        <mat-icon class="status-icon">check_circle_outline</mat-icon>
-        {{ 'ws-admin.validation-referenced-booklets-exist-clear' | translate }}
-      </p>
-    </div>
-  </div>
-
-  <div *ngIf="data && data.testTakersDuplicatesValidation" class="validation-card global-booklet-testtakers-check-card">
-    <div *ngIf="!data.testTakersDuplicatesValidation.complete && data.testTakersDuplicatesValidation.missing && data.testTakersDuplicatesValidation.missing.length > 0" class="missing-items">
-      <p>
-        <mat-icon class="missing-icon">warning_amber</mat-icon>
-        {{ 'ws-admin.validation-testtakers-duplicates-found' | translate }}:
-      </p>
-      <ul>
-        <li *ngFor="let item of data.testTakersDuplicatesValidation.missing">{{ item }}</li>
-      </ul>
-    </div>
-    <div *ngIf="data.testTakersDuplicatesValidation.complete" class="all-clear-message">
-      <p>
-        <mat-icon class="status-icon">check_circle_outline</mat-icon>
-        {{ 'ws-admin.validation-testtakers-duplicates-clear' | translate }}
-      </p>
-    </div>
-  </div>
-
-  <div *ngIf="data && data.testTakersToPersonValidation" class="validation-card global-person-check-card">
-    <h4>
-      <mat-icon class="section-icon">person_search</mat-icon>
-      {{ 'ws-admin.validation-testtakers-to-person' | translate }}
-    </h4>
-    <p class="status-row">
-      Status:
-      <span *ngIf="data.testTakersToPersonValidation.complete" class="status-complete">
-        <mat-icon class="status-icon">check_circle</mat-icon>
-        {{ 'ws-admin.validation-complete' | translate }}
-      </span>
-      <span *ngIf="!data.testTakersToPersonValidation.complete" class="status-incomplete">
-        <mat-icon class="status-icon">error</mat-icon>
-        {{ 'ws-admin.validation-incomplete' | translate }}
-      </span>
-    </p>
-    <div *ngIf="!data.testTakersToPersonValidation.complete && data.testTakersToPersonValidation.missing && data.testTakersToPersonValidation.missing.length > 0" class="missing-items">
-      <p>
-        <mat-icon class="missing-icon">warning_amber</mat-icon>
-        {{ 'ws-admin.validation-testtakers-to-person-missing' | translate }}:
-      </p>
-      <ul>
-        <li *ngFor="let item of data.testTakersToPersonValidation.missing">{{ item }}</li>
-      </ul>
-    </div>
-    <div *ngIf="data.testTakersToPersonValidation.complete" class="all-clear-message">
-      <p>
-        <mat-icon class="status-icon">check_circle_outline</mat-icon>
-        {{ 'ws-admin.validation-testtakers-to-person-clear' | translate }}
-      </p>
-    </div>
-  </div>
-
-  <div *ngIf="data && data.ignoredTestTakersFiles && data.ignoredTestTakersFiles.length > 0" class="validation-card ignored-testtakers-card">
-    <h4>
-      <mat-icon class="section-icon">info_outline</mat-icon>
-      {{ 'ws-admin.validation-ignored-testtakers-files' | translate }}
-    </h4>
-    <div class="missing-items">
-      <p>
-        <mat-icon class="missing-icon">info</mat-icon>
-        {{ 'ws-admin.validation-ignored-testtakers-files-message' | translate }}:
-      </p>
-      <ul>
-        <li *ngFor="let item of data.ignoredTestTakersFiles">{{ item }}</li>
-      </ul>
-    </div>
-  </div>
-
-  <div *ngIf="data && data.allUnitsHavePlayerValidation" class="validation-card global-player-check-card">
-    <div *ngIf="!data.allUnitsHavePlayerValidation.complete && data.allUnitsHavePlayerValidation.missing && data.allUnitsHavePlayerValidation.missing.length > 0" class="missing-items">
-      <p>
-        <mat-icon class="missing-icon">warning_amber</mat-icon>
-        {{ 'ws-admin.validation-units-missing-player' | translate }}:
-      </p>
-      <ul>
-        <li *ngFor="let item of data.allUnitsHavePlayerValidation.missing">{{ item }}</li>
-      </ul>
-    </div>
-    <div *ngIf="data.allUnitsHavePlayerValidation.complete" class="all-clear-message">
-      <p>
-        <mat-icon class="status-icon">check_circle_outline</mat-icon>
-        {{ 'ws-admin.validation-all-units-have-player-clear' | translate }}
-      </p>
-    </div>
-  </div>
-
-  <div *ngIf="data && data.orphanedUnitsValidation" class="validation-card orphaned-units-card">
-    <div *ngIf="!data.orphanedUnitsValidation.complete && data.orphanedUnitsValidation.missing && data.orphanedUnitsValidation.missing.length > 0" class="missing-items">
-      <p>
-        <mat-icon class="missing-icon">info</mat-icon> <!-- Changed icon for informational message -->
-        {{ 'ws-admin.validation-orphaned-units-message' | translate }}:
-      </p>
-      <ul>
-        <li *ngFor="let item of data.orphanedUnitsValidation.missing">{{ item }}</li>
-      </ul>
-    </div>
-    <div *ngIf="data.orphanedUnitsValidation.complete" class="all-clear-message">
-      <p>
-        <mat-icon class="status-icon">check_circle_outline</mat-icon>
-        {{ 'ws-admin.validation-orphaned-units-clear' | translate }}
-      </p>
-    </div>
-  </div>
-
-  <div *ngIf="bookletValidationResults && bookletValidationResults.length > 0" class="scroll-container">
-    <div *ngFor="let bookletResult of bookletValidationResults" class="booklet-validation-container">
-      <h3 class="booklet-header">
-        <mat-icon class="booklet-icon">library_books</mat-icon>
-        Booklet: {{ bookletResult.bookletId }}
-      </h3>
-
-      <div class="validation-card">
-        <h4>
-          <mat-icon class="section-icon">book</mat-icon>
-          {{ getSectionDisplayName('bookletSelfStatus') }}
-        </h4>
-        <p class="status-row">
-          Status:
-          <span *ngIf="bookletResult.validationDetails.bookletSelfStatus.complete" class="status-complete">
+  @if (data && data.testTakersBookletsValidation) {
+    <div class="validation-card global-booklet-testtakers-check-card">
+      <h4>
+        <mat-icon class="section-icon">rule_folder</mat-icon> <!-- Icon for booklet in testtakers check -->
+        {{ 'ws-admin.validation-testtakers-booklets' | translate }}
+      </h4>
+      <p class="status-row">
+        Status:
+        @if (data.testTakersBookletsValidation.complete) {
+          <span class="status-complete">
             <mat-icon class="status-icon">check_circle</mat-icon>
-            Vollständig
+            {{ 'ws-admin.validation-complete' | translate }}
           </span>
-          <span *ngIf="!bookletResult.validationDetails.bookletSelfStatus.complete" class="status-incomplete">
+        }
+        @if (!data.testTakersBookletsValidation.complete) {
+          <span class="status-incomplete">
             <mat-icon class="status-icon">error</mat-icon>
-            Unvollständig
+            {{ 'ws-admin.validation-incomplete' | translate }}
           </span>
-        </p>
-        <!-- No missing items list for bookletSelfStatus as it's a single file check -->
-        <div class="files-list-container">
-          <!-- No toggle for bookletSelfStatus files, directly show -->
-          <p class="files-header">
-            <mat-icon class="files-icon">list</mat-icon>
-            <span>Datei:</span>
-          </p>
-          <div class="files-list expanded"> <!-- Always expanded for the single booklet file -->
-            <ul>
-              <li *ngFor="let file of bookletResult.validationDetails.bookletSelfStatus.files" [ngClass]="{'file-exists': file.exists, 'file-missing': !file.exists}">
-                <mat-icon class="file-status-icon">{{ file.exists ? 'check_circle' : 'error' }}</mat-icon>
-                {{ file.filename }}
-              </li>
-            </ul>
-          </div>
-        </div>
-      </div>
-
-      <!-- Iterate over other sections (units, schemes, etc.) within this booklet -->
-      <div *ngFor="let sectionKey of getDataValidationSectionKeys(bookletResult.validationDetails)" class="validation-card">
-        <h4> <!-- Changed from h3 to h4 for section title -->
-          <mat-icon class="section-icon">{{ sectionKey === 'units' ? 'view_module' : sectionKey === 'schemes' ? 'schema' : sectionKey === 'definitions' ? 'description' : 'play_circle' }}</mat-icon>
-          {{ getSectionDisplayName(sectionKey.toString()) }}
-        </h4>
-        <p class="status-row">
-          Status:
-          <span *ngIf="bookletResult.validationDetails[sectionKey]?.complete" class="status-complete">
-            <mat-icon class="status-icon">check_circle</mat-icon>
-            Vollständig
-          </span>
-          <span *ngIf="!bookletResult.validationDetails[sectionKey]?.complete" class="status-incomplete">
-            <mat-icon class="status-icon">error</mat-icon>
-            Unvollständig
-          </span>
-        </p>
-        <div *ngIf="!bookletResult.validationDetails[sectionKey]?.complete && bookletResult.validationDetails[sectionKey]?.missing.length > 0" class="missing-items">
+        }
+      </p>
+      @if (!data.testTakersBookletsValidation.complete && data.testTakersBookletsValidation.missingBookletsByTesttakers) {
+        <div class="missing-items">
           <p>
-            <mat-icon class="missing-icon">warning</mat-icon>
-            Fehlende Dateien:
+            <mat-icon class="missing-icon">warning_amber</mat-icon>
+            {{ 'ws-admin.validation-booklets-missing-testtakers' | translate }}:
           </p>
           <ul>
-            <li *ngFor="let item of bookletResult.validationDetails[sectionKey]?.missing">{{ item }}</li>
+            @for (testTaker of objectKeys(data.testTakersBookletsValidation.missingBookletsByTesttakers); track testTaker) {
+              <li>
+                <strong>{{ testTaker }}:</strong>
+                <ul>
+                  @for (booklet of data.testTakersBookletsValidation.missingBookletsByTesttakers[testTaker]; track booklet) {
+                    <li>
+                      {{ booklet }}
+                    </li>
+                  }
+                </ul>
+              </li>
+            }
           </ul>
         </div>
-        <div class="files-list-container">
-          <p class="files-header" (click)="toggleFilesList(bookletResult.bookletId, sectionKey)">
-            <mat-icon class="files-icon">list</mat-icon>
-            <span>Alle Dateien:</span>
-            <mat-icon class="toggle-icon">{{ isFilesListExpanded(bookletResult.bookletId, sectionKey) ? 'expand_less' : 'expand_more' }}</mat-icon>
+      }
+      @if (data.testTakersBookletsValidation.complete) {
+        <div class="all-clear-message">
+          <p>
+            <mat-icon class="status-icon">check_circle_outline</mat-icon>
+            {{ 'ws-admin.validation-booklets-in-testtakers-clear' | translate }}
           </p>
-          <div class="files-list" [ngClass]="{'expanded': isFilesListExpanded(bookletResult.bookletId, sectionKey) }">
-            <ul>
-              <li *ngFor="let file of bookletResult.validationDetails[sectionKey]?.files" [ngClass]="{'file-exists': file.exists, 'file-missing': !file.exists}">
-                <mat-icon class="file-status-icon">{{ file.exists ? 'check_circle' : 'error' }}</mat-icon>
-                {{ file.filename }}
-              </li>
-            </ul>
-          </div>
         </div>
+      }
+    </div>
+  }
+
+  @if (data && data.bookletsInTestTakersValidation) {
+    <div class="validation-card global-booklet-testtakers-check-card">
+      @if (!data.bookletsInTestTakersValidation.complete && data.bookletsInTestTakersValidation.missing && data.bookletsInTestTakersValidation.missing.length > 0) {
+        <div class="missing-items">
+          <p>
+            <mat-icon class="missing-icon">warning_amber</mat-icon>
+            {{ 'ws-admin.validation-booklets-missing-testtakers' | translate }}:
+          </p>
+          <ul>
+            @for (item of data.bookletsInTestTakersValidation.missing; track item) {
+              <li>{{ item }}</li>
+            }
+          </ul>
+        </div>
+      }
+      @if (data.bookletsInTestTakersValidation.complete) {
+        <div class="all-clear-message">
+          <p>
+            <mat-icon class="status-icon">check_circle_outline</mat-icon>
+            {{ 'ws-admin.validation-booklets-in-testtakers-clear' | translate }}
+          </p>
+        </div>
+      }
+    </div>
+  }
+
+  @if (data && data.referencedBookletsExistValidation) {
+    <div class="validation-card global-booklet-testtakers-check-card">
+      @if (!data.referencedBookletsExistValidation.complete && data.referencedBookletsExistValidation.missing && data.referencedBookletsExistValidation.missing.length > 0) {
+        <div class="missing-items">
+          <p>
+            <mat-icon class="missing-icon">warning_amber</mat-icon>
+            {{ 'ws-admin.validation-referenced-booklets-missing' | translate }}:
+          </p>
+          <ul>
+            @for (item of data.referencedBookletsExistValidation.missing; track item) {
+              <li>{{ item }}</li>
+            }
+          </ul>
+        </div>
+      }
+      @if (data.referencedBookletsExistValidation.complete) {
+        <div class="all-clear-message">
+          <p>
+            <mat-icon class="status-icon">check_circle_outline</mat-icon>
+            {{ 'ws-admin.validation-referenced-booklets-exist-clear' | translate }}
+          </p>
+        </div>
+      }
+    </div>
+  }
+
+  @if (data && data.testTakersDuplicatesValidation) {
+    <div class="validation-card global-booklet-testtakers-check-card">
+      @if (!data.testTakersDuplicatesValidation.complete && data.testTakersDuplicatesValidation.missing && data.testTakersDuplicatesValidation.missing.length > 0) {
+        <div class="missing-items">
+          <p>
+            <mat-icon class="missing-icon">warning_amber</mat-icon>
+            {{ 'ws-admin.validation-testtakers-duplicates-found' | translate }}:
+          </p>
+          <ul>
+            @for (item of data.testTakersDuplicatesValidation.missing; track item) {
+              <li>{{ item }}</li>
+            }
+          </ul>
+        </div>
+      }
+      @if (data.testTakersDuplicatesValidation.complete) {
+        <div class="all-clear-message">
+          <p>
+            <mat-icon class="status-icon">check_circle_outline</mat-icon>
+            {{ 'ws-admin.validation-testtakers-duplicates-clear' | translate }}
+          </p>
+        </div>
+      }
+    </div>
+  }
+
+  @if (data && data.testTakersToPersonValidation) {
+    <div class="validation-card global-person-check-card">
+      <h4>
+        <mat-icon class="section-icon">person_search</mat-icon>
+        {{ 'ws-admin.validation-testtakers-to-person' | translate }}
+      </h4>
+      <p class="status-row">
+        Status:
+        @if (data.testTakersToPersonValidation.complete) {
+          <span class="status-complete">
+            <mat-icon class="status-icon">check_circle</mat-icon>
+            {{ 'ws-admin.validation-complete' | translate }}
+          </span>
+        }
+        @if (!data.testTakersToPersonValidation.complete) {
+          <span class="status-incomplete">
+            <mat-icon class="status-icon">error</mat-icon>
+            {{ 'ws-admin.validation-incomplete' | translate }}
+          </span>
+        }
+      </p>
+      @if (!data.testTakersToPersonValidation.complete && data.testTakersToPersonValidation.missing && data.testTakersToPersonValidation.missing.length > 0) {
+        <div class="missing-items">
+          <p>
+            <mat-icon class="missing-icon">warning_amber</mat-icon>
+            {{ 'ws-admin.validation-testtakers-to-person-missing' | translate }}:
+          </p>
+          <ul>
+            @for (item of data.testTakersToPersonValidation.missing; track item) {
+              <li>{{ item }}</li>
+            }
+          </ul>
+        </div>
+      }
+      @if (data.testTakersToPersonValidation.complete) {
+        <div class="all-clear-message">
+          <p>
+            <mat-icon class="status-icon">check_circle_outline</mat-icon>
+            {{ 'ws-admin.validation-testtakers-to-person-clear' | translate }}
+          </p>
+        </div>
+      }
+    </div>
+  }
+
+  @if (data && data.ignoredTestTakersFiles && data.ignoredTestTakersFiles.length > 0) {
+    <div class="validation-card ignored-testtakers-card">
+      <h4>
+        <mat-icon class="section-icon">info_outline</mat-icon>
+        {{ 'ws-admin.validation-ignored-testtakers-files' | translate }}
+      </h4>
+      <div class="missing-items">
+        <p>
+          <mat-icon class="missing-icon">info</mat-icon>
+          {{ 'ws-admin.validation-ignored-testtakers-files-message' | translate }}:
+        </p>
+        <ul>
+          @for (item of data.ignoredTestTakersFiles; track item) {
+            <li>{{ item }}</li>
+          }
+        </ul>
       </div>
     </div>
-  </div>
-  <div *ngIf="(!bookletValidationResults || bookletValidationResults.length === 0) && !data.orphanedUnitsValidation && !data.allUnitsHavePlayerValidation && !data.bookletsInTestTakersValidation && !data.referencedBookletsExistValidation && !data.testTakersDuplicatesValidation && (!data.ignoredTestTakersFiles || data.ignoredTestTakersFiles.length === 0) && !data.testTakersToPersonValidation" class="no-results">
-    <p>{{ 'ws-admin.validation-no-data' | translate }}</p>
-  </div>
-  <div *ngIf="bookletValidationResults && bookletValidationResults.length === 0 && data.orphanedUnitsValidation && data.orphanedUnitsValidation.complete && data.allUnitsHavePlayerValidation && data.allUnitsHavePlayerValidation.complete && data.bookletsInTestTakersValidation && data.bookletsInTestTakersValidation.complete && data.referencedBookletsExistValidation && data.referencedBookletsExistValidation.complete && data.testTakersDuplicatesValidation && data.testTakersDuplicatesValidation.complete && data.testTakersToPersonValidation && data.testTakersToPersonValidation.complete" class="no-booklets-but-orphaned-clear">
-    <!-- This case might be redundant if orphanedUnitsValidation section already shows a clear message -->
-    <p>{{ 'ws-admin.validation-no-booklets-to-display' | translate }}</p>
-  </div>
+  }
+
+  @if (data && data.allUnitsHavePlayerValidation) {
+    <div class="validation-card global-player-check-card">
+      @if (!data.allUnitsHavePlayerValidation.complete && data.allUnitsHavePlayerValidation.missing && data.allUnitsHavePlayerValidation.missing.length > 0) {
+        <div class="missing-items">
+          <p>
+            <mat-icon class="missing-icon">warning_amber</mat-icon>
+            {{ 'ws-admin.validation-units-missing-player' | translate }}:
+          </p>
+          <ul>
+            @for (item of data.allUnitsHavePlayerValidation.missing; track item) {
+              <li>{{ item }}</li>
+            }
+          </ul>
+        </div>
+      }
+      @if (data.allUnitsHavePlayerValidation.complete) {
+        <div class="all-clear-message">
+          <p>
+            <mat-icon class="status-icon">check_circle_outline</mat-icon>
+            {{ 'ws-admin.validation-all-units-have-player-clear' | translate }}
+          </p>
+        </div>
+      }
+    </div>
+  }
+
+  @if (data && data.orphanedUnitsValidation) {
+    <div class="validation-card orphaned-units-card">
+      @if (!data.orphanedUnitsValidation.complete && data.orphanedUnitsValidation.missing && data.orphanedUnitsValidation.missing.length > 0) {
+        <div class="missing-items">
+          <p>
+            <mat-icon class="missing-icon">info</mat-icon> <!-- Changed icon for informational message -->
+            {{ 'ws-admin.validation-orphaned-units-message' | translate }}:
+          </p>
+          <ul>
+            @for (item of data.orphanedUnitsValidation.missing; track item) {
+              <li>{{ item }}</li>
+            }
+          </ul>
+        </div>
+      }
+      @if (data.orphanedUnitsValidation.complete) {
+        <div class="all-clear-message">
+          <p>
+            <mat-icon class="status-icon">check_circle_outline</mat-icon>
+            {{ 'ws-admin.validation-orphaned-units-clear' | translate }}
+          </p>
+        </div>
+      }
+    </div>
+  }
+
+  @if (bookletValidationResults && bookletValidationResults.length > 0) {
+    <div class="scroll-container">
+      @for (bookletResult of bookletValidationResults; track bookletResult) {
+        <div class="booklet-validation-container">
+          <h3 class="booklet-header">
+            <mat-icon class="booklet-icon">library_books</mat-icon>
+            Booklet: {{ bookletResult.bookletId }}
+          </h3>
+          <div class="validation-card">
+            <h4>
+              <mat-icon class="section-icon">book</mat-icon>
+              {{ getSectionDisplayName('bookletSelfStatus') }}
+            </h4>
+            <p class="status-row">
+              Status:
+              @if (bookletResult.validationDetails.bookletSelfStatus.complete) {
+                <span class="status-complete">
+                  <mat-icon class="status-icon">check_circle</mat-icon>
+                  Vollständig
+                </span>
+              }
+              @if (!bookletResult.validationDetails.bookletSelfStatus.complete) {
+                <span class="status-incomplete">
+                  <mat-icon class="status-icon">error</mat-icon>
+                  Unvollständig
+                </span>
+              }
+            </p>
+            <!-- No missing items list for bookletSelfStatus as it's a single file check -->
+            <div class="files-list-container">
+              <!-- No toggle for bookletSelfStatus files, directly show -->
+              <p class="files-header">
+                <mat-icon class="files-icon">list</mat-icon>
+                <span>Datei:</span>
+              </p>
+              <div class="files-list expanded"> <!-- Always expanded for the single booklet file -->
+                <ul>
+                  @for (file of bookletResult.validationDetails.bookletSelfStatus.files; track file) {
+                    <li [ngClass]="{'file-exists': file.exists, 'file-missing': !file.exists}">
+                      <mat-icon class="file-status-icon">{{ file.exists ? 'check_circle' : 'error' }}</mat-icon>
+                      {{ file.filename }}
+                    </li>
+                  }
+                </ul>
+              </div>
+            </div>
+          </div>
+          <!-- Iterate over other sections (units, schemes, etc.) within this booklet -->
+          @for (sectionKey of getDataValidationSectionKeys(bookletResult.validationDetails); track sectionKey) {
+            <div class="validation-card">
+              <h4> <!-- Changed from h3 to h4 for section title -->
+                <mat-icon class="section-icon">{{ sectionKey === 'units' ? 'view_module' : sectionKey === 'schemes' ? 'schema' : sectionKey === 'definitions' ? 'description' : 'play_circle' }}</mat-icon>
+                {{ getSectionDisplayName(sectionKey.toString()) }}
+              </h4>
+              <p class="status-row">
+                Status:
+                @if (bookletResult.validationDetails[sectionKey]?.complete) {
+                  <span class="status-complete">
+                    <mat-icon class="status-icon">check_circle</mat-icon>
+                    Vollständig
+                  </span>
+                }
+                @if (!bookletResult.validationDetails[sectionKey]?.complete) {
+                  <span class="status-incomplete">
+                    <mat-icon class="status-icon">error</mat-icon>
+                    Unvollständig
+                  </span>
+                }
+              </p>
+              @if (!bookletResult.validationDetails[sectionKey]?.complete && bookletResult.validationDetails[sectionKey]?.missing.length > 0) {
+                <div class="missing-items">
+                  <p>
+                    <mat-icon class="missing-icon">warning</mat-icon>
+                    Fehlende Dateien:
+                  </p>
+                  <ul>
+                    @for (item of bookletResult.validationDetails[sectionKey]?.missing; track item) {
+                      <li>{{ item }}</li>
+                    }
+                  </ul>
+                </div>
+              }
+              <div class="files-list-container">
+                <p class="files-header" (click)="toggleFilesList(bookletResult.bookletId, sectionKey)">
+                  <mat-icon class="files-icon">list</mat-icon>
+                  <span>Alle Dateien:</span>
+                  <mat-icon class="toggle-icon">{{ isFilesListExpanded(bookletResult.bookletId, sectionKey) ? 'expand_less' : 'expand_more' }}</mat-icon>
+                </p>
+                <div class="files-list" [ngClass]="{'expanded': isFilesListExpanded(bookletResult.bookletId, sectionKey) }">
+                  <ul>
+                    @for (file of bookletResult.validationDetails[sectionKey]?.files; track file) {
+                      <li [ngClass]="{'file-exists': file.exists, 'file-missing': !file.exists}">
+                        <mat-icon class="file-status-icon">{{ file.exists ? 'check_circle' : 'error' }}</mat-icon>
+                        {{ file.filename }}
+                      </li>
+                    }
+                  </ul>
+                </div>
+              </div>
+            </div>
+          }
+        </div>
+      }
+    </div>
+  }
+  @if ((!bookletValidationResults || bookletValidationResults.length === 0) && !data.orphanedUnitsValidation && !data.allUnitsHavePlayerValidation && !data.bookletsInTestTakersValidation && !data.referencedBookletsExistValidation && !data.testTakersDuplicatesValidation && (!data.ignoredTestTakersFiles || data.ignoredTestTakersFiles.length === 0) && !data.testTakersToPersonValidation) {
+    <div class="no-results">
+      <p>{{ 'ws-admin.validation-no-data' | translate }}</p>
+    </div>
+  }
+  @if (bookletValidationResults && bookletValidationResults.length === 0 && data.orphanedUnitsValidation && data.orphanedUnitsValidation.complete && data.allUnitsHavePlayerValidation && data.allUnitsHavePlayerValidation.complete && data.bookletsInTestTakersValidation && data.bookletsInTestTakersValidation.complete && data.referencedBookletsExistValidation && data.referencedBookletsExistValidation.complete && data.testTakersDuplicatesValidation && data.testTakersDuplicatesValidation.complete && data.testTakersToPersonValidation && data.testTakersToPersonValidation.complete) {
+    <div class="no-booklets-but-orphaned-clear">
+      <!-- This case might be redundant if orphanedUnitsValidation section already shows a clear message -->
+      <p>{{ 'ws-admin.validation-no-booklets-to-display' | translate }}</p>
+    </div>
+  }
 </mat-dialog-content>
 <mat-dialog-actions align="end">
   <button mat-raised-button
-          color="primary"
-          type="submit"
-          [mat-dialog-close]="true">
+    color="primary"
+    type="submit"
+    [mat-dialog-close]="true">
     {{ 'close' | translate }}
   </button>
 </mat-dialog-actions>

@@ -316,45 +316,50 @@
 </div>
 
 <!-- Base Variables Section -->
-<div class="base-variables-section" *ngIf="showBaseVariables">
-  <div class="data-card">
-    <h2 class="section-title">Basisvariablen</h2>
-    <p class="section-description">Liste aller Basisvariablen aus den Unit XML Dateien</p>
-    <mat-divider></mat-divider>
-
-    <div class="loading-container" *ngIf="isLoadingBaseVariables">
-      <mat-spinner class="mat-spinner"></mat-spinner>
-      <p class="loading-text">Basisvariablen werden geladen...</p>
-    </div>
-
-    <div *ngIf="!isLoadingBaseVariables" class="base-variables-container">
-      <div class="base-variables-header">
-        <div class="base-variable-id">ID</div>
-        <div class="base-variable-type">Typ</div>
-        <div class="base-variable-format">Format</div>
-        <div class="base-variable-nullable">Nullable</div>
-      </div>
-
-      <div class="base-variables-list">
-        <div class="base-variable-item" *ngFor="let variable of baseVariables">
-          <div class="base-variable-id">{{ variable.id }}</div>
-          <div class="base-variable-type">{{ variable.type }}</div>
-          <div class="base-variable-format">{{ variable.format || '-' }}</div>
-          <div class="base-variable-nullable">{{ variable.nullable }}</div>
+@if (showBaseVariables) {
+  <div class="base-variables-section">
+    <div class="data-card">
+      <h2 class="section-title">Basisvariablen</h2>
+      <p class="section-description">Liste aller Basisvariablen aus den Unit XML Dateien</p>
+      <mat-divider></mat-divider>
+      @if (isLoadingBaseVariables) {
+        <div class="loading-container">
+          <mat-spinner class="mat-spinner"></mat-spinner>
+          <p class="loading-text">Basisvariablen werden geladen...</p>
         </div>
-      </div>
-
-      <div class="empty-state" *ngIf="baseVariables.length === 0">
-        <mat-icon>info</mat-icon>
-        <p>Keine Basisvariablen gefunden</p>
-      </div>
-
-      <div class="base-variables-actions">
-        <button mat-raised-button color="primary" (click)="showBaseVariables = false">
-          <mat-icon>close</mat-icon>
-          Schließen
-        </button>
-      </div>
+      }
+      @if (!isLoadingBaseVariables) {
+        <div class="base-variables-container">
+          <div class="base-variables-header">
+            <div class="base-variable-id">ID</div>
+            <div class="base-variable-type">Typ</div>
+            <div class="base-variable-format">Format</div>
+            <div class="base-variable-nullable">Nullable</div>
+          </div>
+          <div class="base-variables-list">
+            @for (variable of baseVariables; track variable) {
+              <div class="base-variable-item">
+                <div class="base-variable-id">{{ variable.id }}</div>
+                <div class="base-variable-type">{{ variable.type }}</div>
+                <div class="base-variable-format">{{ variable.format || '-' }}</div>
+                <div class="base-variable-nullable">{{ variable.nullable }}</div>
+              </div>
+            }
+          </div>
+          @if (baseVariables.length === 0) {
+            <div class="empty-state">
+              <mat-icon>info</mat-icon>
+              <p>Keine Basisvariablen gefunden</p>
+            </div>
+          }
+          <div class="base-variables-actions">
+            <button mat-raised-button color="primary" (click)="showBaseVariables = false">
+              <mat-icon>close</mat-icon>
+              Schließen
+            </button>
+          </div>
+        </div>
+      }
     </div>
   </div>
-</div>
+}

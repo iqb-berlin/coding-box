@@ -36,7 +36,7 @@ export class UserAccessRightsDialogComponent {
       this.backendService.getWorkspaceUsers(this.data.selectedWorkspace[0])
         .subscribe(users => {
           if (Array.isArray(users.data)) {
-            this.selectedUserIds = users.data.map(user => user.userId);
+            this.selectedUserIds = users.data.map((user:any) => user.userId);
           }
         });
     }

@@ -188,7 +188,7 @@ export class BackendService {
       );
   }
 
-  getWorkspaceUsers(workspaceId:number): Observable<{ userId:number, workspaceId:number }[]> {
+  getWorkspaceUsers(workspaceId:number): Observable<any> {
     return this.http
       .get<{ userId:number, workspaceId:number }[]>(`${this.serverUrl}admin/workspace/${workspaceId}/users`,
       { headers: this.authHeader })

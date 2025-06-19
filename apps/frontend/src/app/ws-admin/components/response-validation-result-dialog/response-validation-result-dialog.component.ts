@@ -1,7 +1,7 @@
 import { Component, Inject } from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialogModule } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
-import { NgClass, NgForOf, NgIf } from '@angular/common';
+import { NgClass } from '@angular/common';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDividerModule } from '@angular/material/divider';
@@ -15,13 +15,11 @@ import { ResponseValidationResult } from '../../../services/backend.service';
   imports: [
     MatDialogModule,
     MatIconModule,
-    NgIf,
     NgClass,
-    NgForOf,
     MatProgressSpinnerModule,
     MatButtonModule,
     MatDividerModule
-  ]
+]
 })
 export class ResponseValidationResultDialogComponent {
   constructor(

@@ -1,7 +1,7 @@
 import { Component, Inject, OnInit } from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatTableModule } from '@angular/material/table';
-import { CommonModule } from '@angular/common';
+
 import { MatButtonModule } from '@angular/material/button';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { TestResultValidationDto } from '../../../../../../../api-dto/test-groups/test-result-validation.dto';
@@ -14,12 +14,11 @@ import { AppService } from '../../../services/app.service';
   styleUrls: ['./test-results-validation.component.scss'],
   standalone: true,
   imports: [
-    CommonModule,
     MatDialogModule,
     MatTableModule,
     MatButtonModule,
     MatSnackBarModule
-  ]
+]
 })
 export class TestResultsValidationComponent implements OnInit {
   validationResults: TestResultValidationDto[] = [];
