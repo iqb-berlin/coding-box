@@ -845,6 +845,7 @@ export class TestResultsComponent implements OnInit {
     this.isValidating = true;
     this.backendService.validateTestResults(this.appService.selectedWorkspaceId)
       .subscribe(validationResults => {
+        console.log(validationResults);
         this.isValidating = false;
         this.dialog.open(TestResultsValidationComponent, {
           width: '800px',
