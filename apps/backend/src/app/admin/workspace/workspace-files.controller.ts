@@ -124,6 +124,21 @@ export class WorkspaceFilesController {
     return this.workspaceFilesService.deleteTestFiles(workspace_id, query.fileIds.split(';'));
   }
 
+  @Delete(':workspace_id/booklets/:bookletId')
+  @ApiTags('ws admin test-files')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiOperation({ summary: 'Delete a booklet file' })
+  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
+  @ApiParam({ name: 'bookletId', type: String, description: 'ID of the booklet to delete' })
+  @ApiOkResponse({ description: 'Booklet deleted successfully.' })
+  @ApiNotFoundResponse({ description: 'Booklet not found.' })
+  async deleteBooklet(
+    @Param('workspace_id') workspace_id: number,
+      @Param('bookletId') bookletId: string
+  ): Promise<boolean> {
+    return this.workspaceFilesService.deleteBooklet(workspace_id, bookletId);
+  }
+
   @Get(':workspace_id/files/validation')
   @ApiTags('test files validation')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)

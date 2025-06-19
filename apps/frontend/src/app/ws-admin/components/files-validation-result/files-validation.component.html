@@ -1,8 +1,8 @@
 <mat-dialog-content>
   @if (data && data.testTakersBookletsValidation) {
-    <div class="validation-card global-booklet-testtakers-check-card">
+    <div class="validation-card global-booklet-testtakers-check-card" [class.complete]="data.testTakersBookletsValidation.complete" [class.incomplete]="!data.testTakersBookletsValidation.complete">
       <h4>
-        <mat-icon class="section-icon">rule_folder</mat-icon> <!-- Icon for booklet in testtakers check -->
+        <mat-icon class="section-icon">rule_folder</mat-icon>
         {{ 'ws-admin.validation-testtakers-booklets' | translate }}
       </h4>
       <p class="status-row">
@@ -54,21 +54,39 @@
   }
 
   @if (data && data.bookletsInTestTakersValidation) {
-    <div class="validation-card global-booklet-testtakers-check-card">
+    <div class="validation-card global-booklet-testtakers-check-card" [class.complete]="data.bookletsInTestTakersValidation.complete" [class.incomplete]="!data.bookletsInTestTakersValidation.complete">
       @if (!data.bookletsInTestTakersValidation.complete && data.bookletsInTestTakersValidation.missing && data.bookletsInTestTakersValidation.missing.length > 0) {
-        <div class="missing-items">
+        <div class="missing-items-header">
           <p>
             <mat-icon class="missing-icon">warning_amber</mat-icon>
             {{ 'ws-admin.validation-booklets-missing-testtakers' | translate }}:
           </p>
+          <button mat-raised-button color="warn" (click)="deleteAllUnusedBooklets()">
+            <mat-icon>delete_sweep</mat-icon>
+            {{ 'ws-admin.delete-all' | translate }}
+          </button>
+        </div>
+        <div class="missing-items">
           <ul>
             @for (item of data.bookletsInTestTakersValidation.missing; track item) {
-              <li>{{ item }}</li>
+              <li>
+                <span>{{ item }}</span>
+                <button mat-icon-button (click)="deleteBooklet(item)" [title]="'ws-admin.delete-booklet' | translate">
+                  <mat-icon>delete</mat-icon>
+                </button>
+              </li>
             }
           </ul>
         </div>
       }
       @if (data.bookletsInTestTakersValidation.complete) {
+        <p class="status-row">
+          @if (data.bookletsInTestTakersValidation.complete) {
+            <span class="status-complete">
+                  <mat-icon class="status-icon">check_circle</mat-icon>
+                </span>
+          }
+        </p>
         <div class="all-clear-message">
           <p>
             <mat-icon class="status-icon">check_circle_outline</mat-icon>
@@ -80,7 +98,7 @@
   }
 
   @if (data && data.referencedBookletsExistValidation) {
-    <div class="validation-card global-booklet-testtakers-check-card">
+    <div class="validation-card global-booklet-testtakers-check-card" [class.complete]="data.referencedBookletsExistValidation.complete" [class.incomplete]="!data.referencedBookletsExistValidation.complete">
       @if (!data.referencedBookletsExistValidation.complete && data.referencedBookletsExistValidation.missing && data.referencedBookletsExistValidation.missing.length > 0) {
         <div class="missing-items">
           <p>
@@ -106,7 +124,7 @@
   }
 
   @if (data && data.testTakersDuplicatesValidation) {
-    <div class="validation-card global-booklet-testtakers-check-card">
+    <div class="validation-card global-booklet-testtakers-check-card" [class.complete]="data.testTakersDuplicatesValidation.complete" [class.incomplete]="!data.testTakersDuplicatesValidation.complete">
       @if (!data.testTakersDuplicatesValidation.complete && data.testTakersDuplicatesValidation.missing && data.testTakersDuplicatesValidation.missing.length > 0) {
         <div class="missing-items">
           <p>
@@ -132,11 +150,7 @@
   }
 
   @if (data && data.testTakersToPersonValidation) {
-    <div class="validation-card global-person-check-card">
-      <h4>
-        <mat-icon class="section-icon">person_search</mat-icon>
-        {{ 'ws-admin.validation-testtakers-to-person' | translate }}
-      </h4>
+    <div class="validation-card global-person-check-card" [class.complete]="data.testTakersToPersonValidation.complete" [class.incomplete]="!data.testTakersToPersonValidation.complete">
       <p class="status-row">
         Status:
         @if (data.testTakersToPersonValidation.complete) {
@@ -197,7 +211,7 @@
   }
 
   @if (data && data.allUnitsHavePlayerValidation) {
-    <div class="validation-card global-player-check-card">
+    <div class="validation-card global-player-check-card" [class.complete]="data.allUnitsHavePlayerValidation.complete" [class.incomplete]="!data.allUnitsHavePlayerValidation.complete">
       @if (!data.allUnitsHavePlayerValidation.complete && data.allUnitsHavePlayerValidation.missing && data.allUnitsHavePlayerValidation.missing.length > 0) {
         <div class="missing-items">
           <p>
@@ -223,7 +237,7 @@
   }
 
   @if (data && data.orphanedUnitsValidation) {
-    <div class="validation-card orphaned-units-card">
+    <div class="validation-card orphaned-units-card" [class.complete]="data.orphanedUnitsValidation.complete" [class.incomplete]="!data.orphanedUnitsValidation.complete">
       @if (!data.orphanedUnitsValidation.complete && data.orphanedUnitsValidation.missing && data.orphanedUnitsValidation.missing.length > 0) {
         <div class="missing-items">
           <p>
@@ -256,7 +270,7 @@
             <mat-icon class="booklet-icon">library_books</mat-icon>
             Booklet: {{ bookletResult.bookletId }}
           </h3>
-          <div class="validation-card">
+          <div class="validation-card" [class.complete]="bookletResult.validationDetails.bookletSelfStatus.complete" [class.incomplete]="!bookletResult.validationDetails.bookletSelfStatus.complete">
             <h4>
               <mat-icon class="section-icon">book</mat-icon>
               {{ getSectionDisplayName('bookletSelfStatus') }}
@@ -297,7 +311,7 @@
           </div>
           <!-- Iterate over other sections (units, schemes, etc.) within this booklet -->
           @for (sectionKey of getDataValidationSectionKeys(bookletResult.validationDetails); track sectionKey) {
-            <div class="validation-card">
+            <div class="validation-card" [class.complete]="bookletResult.validationDetails[sectionKey]?.complete" [class.incomplete]="!bookletResult.validationDetails[sectionKey]?.complete">
               <h4> <!-- Changed from h3 to h4 for section title -->
                 <mat-icon class="section-icon">{{ sectionKey === 'units' ? 'view_module' : sectionKey === 'schemes' ? 'schema' : sectionKey === 'definitions' ? 'description' : 'play_circle' }}</mat-icon>
                 {{ getSectionDisplayName(sectionKey.toString()) }}
@@ -373,4 +387,3 @@
     {{ 'close' | translate }}
   </button>
 </mat-dialog-actions>
-
