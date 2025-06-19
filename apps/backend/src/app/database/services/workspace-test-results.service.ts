@@ -9,6 +9,8 @@ import { BookletInfo } from '../entities/bookletInfo.entity';
 import { BookletLog } from '../entities/bookletLog.entity';
 import { UnitLog } from '../entities/unitLog.entity';
 import { Session } from '../entities/session.entity';
+import * as cheerio from 'cheerio';
+import FileUpload from '../entities/file_upload.entity';
 
 @Injectable()
 export class WorkspaceTestResultsService {
@@ -31,6 +33,8 @@ export class WorkspaceTestResultsService {
     private unitLogRepository: Repository<UnitLog>,
     @InjectRepository(Session)
     private sessionRepository: Repository<Session>,
+    @InjectRepository(FileUpload)
+    private fileUploadRepository: Repository<FileUpload>,
     private readonly connection: Connection
   ) {}
 
@@ -75,6 +79,33 @@ export class WorkspaceTestResultsService {
         select: ['id', 'name', 'size']
       });
 
+      const bookletFileNames = bookletInfoData.map(bi => bi.name);
+      const bookletFiles = await this.fileUploadRepository.find({
+        where: {
+          workspace_id: workspaceId,
+          file_type: 'Booklet',
+          file_id: In(bookletFileNames)
+        }
+      });
+
+      const bookletReferencedUnits = new Map<string, string[]>();
+      for (const bookletFile of bookletFiles) {
+        try {
+          const xml = bookletFile.data.toString();
+          const $ = cheerio.load(xml, { xmlMode: true });
+          const unitsInBooklet: string[] = [];
+          $('Unit').each((i, elem) => {
+            const unitId = $(elem).attr('id');
+            if (unitId) {
+              unitsInBooklet.push(unitId.toUpperCase());
+            }
+          });
+          console.log(unitsInBooklet,bookletFile);
+          bookletReferencedUnits.set(bookletFile.file_id.toUpperCase(), unitsInBooklet);
+        } catch (e) {
+          this.logger.error(`Could not parse booklet file ${bookletFile.filename}`, e);
+        }
+      }
       const units = await this.unitRepository.find({
         where: { bookletid: In(bookletIds) },
         select: ['id', 'name', 'alias', 'bookletid']
@@ -116,6 +147,7 @@ export class WorkspaceTestResultsService {
 
       return booklets.map(booklet => {
         const bookletInfo = bookletInfoData.find(info => info.id === booklet.infoid);
+        const referencedUnits = bookletInfo ? bookletReferencedUnits.get(bookletInfo.name.toUpperCase()) : undefined;
         return {
           id: booklet.id,
           personid: booklet.personid,
@@ -136,7 +168,8 @@ export class WorkspaceTestResultsService {
             ts: session.ts?.toString()
           })),
           units: units
-            .filter(unit => unit.bookletid === booklet.id)
+            .filter(unit => unit.bookletid === booklet.id &&
+              (!referencedUnits || referencedUnits.includes(unit.name.toUpperCase())))
             .map(unit => ({
               id: unit.id,
               bookletid: unit.bookletid,
