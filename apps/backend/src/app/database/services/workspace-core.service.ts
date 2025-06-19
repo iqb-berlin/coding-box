@@ -1,11 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Connection, In, Repository } from 'typeorm';
 import Workspace from '../entities/workspace.entity';
 import { WorkspaceInListDto } from '../../../../../../api-dto/workspaces/workspace-in-list-dto';
 import { WorkspaceFullDto } from '../../../../../../api-dto/workspaces/workspace-full-dto';
 import { CreateWorkspaceDto } from '../../../../../../api-dto/workspaces/create-workspace-dto';
 import { AdminWorkspaceNotFoundException } from '../../exceptions/admin-workspace-not-found.exception';
+import FileUpload from '../entities/file_upload.entity';
+import Persons from '../entities/persons.entity';
 
 @Injectable()
 export class WorkspaceCoreService {
@@ -13,7 +15,8 @@ export class WorkspaceCoreService {
 
   constructor(
     @InjectRepository(Workspace)
-    private workspaceRepository: Repository<Workspace>
+    private workspaceRepository: Repository<Workspace>,
+    private connection: Connection
   ) {}
 
   async findAll(options?: { page: number; limit: number }): Promise<[WorkspaceInListDto[], number]> {
@@ -91,8 +94,22 @@ export class WorkspaceCoreService {
       return;
     }
     this.logger.log(`Attempting to delete workspaces with IDs: ${ids.join(', ')}`);
+
+    const queryRunner = this.connection.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
     try {
-      const result = await this.workspaceRepository.delete(ids);
+      await queryRunner.manager.delete(FileUpload, { workspace_id: In(ids) });
+      this.logger.log(`Deleted file uploads for workspaces with IDs: ${ids.join(', ')}`);
+
+      await queryRunner.manager.delete(Persons, { workspace_id: In(ids) });
+      this.logger.log(`Deleted persons for workspaces with IDs: ${ids.join(', ')}`);
+
+      const result = await queryRunner.manager.delete(Workspace, { id: In(ids) });
+      this.logger.log(`Deleted workspaces with IDs: ${ids.join(', ')}`);
+
+      await queryRunner.commitTransaction();
 
       if (result.affected && result.affected > 0) {
         this.logger.log(`Successfully deleted ${result.affected} workspace(s) with IDs: ${ids.join(', ')}`);
@@ -100,8 +117,11 @@ export class WorkspaceCoreService {
         this.logger.warn(`No workspaces found with the specified IDs: ${ids.join(', ')}`);
       }
     } catch (error) {
+      await queryRunner.rollbackTransaction();
       this.logger.error(`Failed to delete workspaces with IDs: ${ids.join(', ')}. Error: ${error.message}`, error.stack);
       throw error;
+    } finally {
+      await queryRunner.release();
     }
   }
 }
