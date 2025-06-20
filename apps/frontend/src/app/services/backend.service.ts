@@ -198,11 +198,13 @@ export class BackendService {
       );
   }
 
-  // Todo: Use queryParams for ids
   deleteWorkspace(ids: number[]): Observable<boolean> {
+    const params = new HttpParams().set('ids', ids.join(';'));
     return this.http
-      .delete(`${this.serverUrl}admin/workspace/${ids.join(';')}`,
-        { headers: this.authHeader })
+      .delete(`${this.serverUrl}admin/workspace`, {
+        headers: this.authHeader,
+        params
+      })
       .pipe(
         catchError(() => of(false)),
         map(() => true)

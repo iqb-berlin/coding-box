@@ -3,13 +3,23 @@ import {
   Body,
   Controller,
   Delete,
-  Get, Param, Patch,
-  Post, Query, UseGuards
+  Get,
+  ParseArrayPipe,
+  Patch,
+  Post,
+  Query,
+  UseGuards
 } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
-  ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiNotFoundResponse, ApiOkResponse, ApiOperation,
-  ApiParam, ApiQuery, ApiTags
+  ApiBearerAuth,
+  ApiBody,
+  ApiCreatedResponse,
+  ApiNotFoundResponse,
+  ApiOkResponse,
+  ApiOperation, ApiParam,
+  ApiQuery,
+  ApiTags
 } from '@nestjs/swagger';
 import { logger } from 'nx/src/utils/logger';
 import { WorkspaceInListDto } from '../../../../../../api-dto/workspaces/workspace-in-list-dto';
@@ -104,16 +114,14 @@ export class WorkspaceController {
     }
   }
 
-  // TODO: use query params
-  // TODO: use ParseIntPipe
-  @Delete(':ids')
+  @Delete()
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Delete workspaces',
     description: 'Deletes one or more workspaces by their IDs (separated by semicolons)'
   })
-  @ApiParam({
+  @ApiQuery({
     name: 'ids',
     description: 'Semicolon-separated list of workspace IDs to delete',
     example: '1;2;3',
@@ -123,9 +131,8 @@ export class WorkspaceController {
   @ApiNotFoundResponse({ description: 'Admin workspace not found.' })
   @ApiBadRequestResponse({ description: 'Invalid workspace IDs' })
   @ApiTags('admin workspaces')
-  async remove(@Param('ids') ids: string): Promise<void> {
-    const idsAsNumberArray: number[] = ids.split(';').map(idString => parseInt(idString, 10));
-    return this.workspaceCoreService.remove(idsAsNumberArray);
+  async remove(@Query('ids', new ParseArrayPipe({ items: Number, separator: ';' })) ids: number[]): Promise<void> {
+    return this.workspaceCoreService.remove(ids);
   }
 
   @Patch()
