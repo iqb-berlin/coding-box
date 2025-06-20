@@ -149,13 +149,25 @@ export class WorkspaceCodingService {
         }
 
         const codedResponses = responses.map(response => {
-          const codedResult = scheme.code([{
-            id: response.variableid,
-            value: response.value,
-            status: response.status as ResponseStatusType
-          }]);
+          let codedResult;
+          let codedStatus;
 
-          const codedStatus = codedResult[0]?.status;
+          if (response.codedstatus === 'VALUE_CHANGED') {
+            codedStatus = null;
+            codedResult = [{}];
+          } else {
+            codedResult = scheme.code([{
+              id: response.variableid,
+              value: response.value,
+              status: response.status as ResponseStatusType
+            }]);
+            codedStatus = codedResult[0]?.status;
+          }
+
+          if (codedStatus === 'VALUE_CHANGED' || codedStatus === null) {
+            codedStatus = null;
+          }
+
           if (!statistics.statusCounts[codedStatus]) {
             statistics.statusCounts[codedStatus] = 0;
           }
@@ -190,8 +202,7 @@ export class WorkspaceCodingService {
                 codedstatus: codedResponse.codedstatus,
                 score: codedResponse.score
               }
-            )
-            );
+            ));
             try {
               await Promise.all(individualUpdatePromises);
               this.logger.log(`Batch #${index + 1} (Größe: ${batch.length}) erfolgreich aktualisiert.`);

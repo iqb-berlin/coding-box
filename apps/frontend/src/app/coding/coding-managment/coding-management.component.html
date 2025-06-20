@@ -32,61 +32,20 @@
             <span class="statistic-label">Gesamtanzahl der gegebenen Antworten:</span>
             <span class="statistic-value">{{ codingStatistics.totalResponses }}</span>
           </div>
-          @if (codingStatistics.statusCounts['INVALID'] !== undefined) {
+          @for (status of getStatuses(); track status) {
             <div class="statistic-item">
-              <span class="statistic-label">Anzahl der Antworten mit Status INVALID:</span>
-              <span class="statistic-value">
-                {{ codingStatistics.statusCounts['INVALID'] }}
-                <span class="percentage">({{ getStatusPercentage('INVALID') }}%)</span>
-              </span>
-              <a mat-button color="primary" (click)="fetchResponsesByStatus('INVALID')" class="view-button">
-                <mat-icon>visibility</mat-icon>
-                Anzeigen
-              </a>
-            </div>
-          }
-          @if (codingStatistics.statusCounts['CODING_INCOMPLETE'] !== undefined) {
-            <div class="statistic-item">
-              <span class="statistic-label">Anzahl der Antworten mit Status CODING_INCOMPLETE:</span>
-              <span class="statistic-value">
-                {{ codingStatistics.statusCounts['CODING_INCOMPLETE'] }}
-                <span class="percentage">({{ getStatusPercentage('CODING_INCOMPLETE') }}%)</span>
-              </span>
-              <a mat-button color="primary" (click)="fetchResponsesByStatus('CODING_INCOMPLETE')" class="view-button">
-                <mat-icon>visibility</mat-icon>
-                Anzeigen
-              </a>
-            </div>
-          }
-          @if (codingStatistics.statusCounts['NOT_REACHED'] !== undefined) {
-            <div class="statistic-item">
-              <span class="statistic-label">Anzahl der Antworten mit Status NOT_REACHED:</span>
-              <span class="statistic-value">
-                {{ codingStatistics.statusCounts['NOT_REACHED'] }}
-                <span class="percentage">({{ getStatusPercentage('NOT_REACHED') }}%)</span>
-              </span>
-              <a mat-button color="primary" (click)="fetchResponsesByStatus('NOT_REACHED')" class="view-button">
-                <mat-icon>visibility</mat-icon>
-                Anzeigen
-              </a>
-            </div>
-          }
-          @if (codingStatistics.statusCounts['INTENDED_INCOMPLETE'] !== undefined) {
-            <div class="statistic-item">
-              <span class="statistic-label">Anzahl der Antworten mit Status INTENDED_INCOMPLETE:</span>
-              <span class="statistic-value">
-                {{ codingStatistics.statusCounts['INTENDED_INCOMPLETE'] }}
-                <span class="percentage">({{ getStatusPercentage('INTENDED_INCOMPLETE') }}%)</span>
-              </span>
-              <a mat-button color="primary" (click)="fetchResponsesByStatus('INTENDED_INCOMPLETE')" class="view-button">
-                <mat-icon>visibility</mat-icon>
-                Anzeigen
-              </a>
-            </div>
-          }
-          @for (status of getOtherStatuses(); track status) {
-            <div class="statistic-item">
-              <span class="statistic-label">Anzahl der Antworten mit Status {{ status }}:</span>
+              @if (isNullStatus(status)) {
+                <span class="statistic-label warning">
+                  Unkodierte Antworten
+                  <mat-icon
+                    class="warning-icon"
+                    matTooltip="Es fehlen Kodierschemata für diese Antworten.">
+                    warning
+                  </mat-icon>
+                </span>
+              } @else {
+                <span class="statistic-label">Anzahl der Antworten mit Status {{ status }}:</span>
+              }
               <span class="statistic-value">
                 {{ codingStatistics.statusCounts[status] }}
                 <span class="percentage">({{ getStatusPercentage(status) }}%)</span>
@@ -211,4 +170,3 @@
 }
 </div>
 </div>
-

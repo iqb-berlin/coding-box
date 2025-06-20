@@ -25,7 +25,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatIcon } from '@angular/material/icon';
-import { MatAnchor, MatIconButton } from '@angular/material/button';
+import { MatAnchor, MatButton, MatIconButton } from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { ScrollingModule } from '@angular/cdk/scrolling';
 import { MatDivider } from '@angular/material/divider';
@@ -81,7 +81,8 @@ interface Success {
     MatAnchor,
     MatIconButton,
     MatTooltipModule,
-    MatDivider
+    MatDivider,
+    MatButton
   ],
   styleUrls: ['./coding-management.component.scss']
 })
@@ -156,10 +157,12 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
       });
   }
 
-  getOtherStatuses(): string[] {
-    const excludedStatuses = ['INVALID', 'CODING_INCOMPLETE', 'NOT_REACHED', 'INTENDED_INCOMPLETE'];
-    return Object.keys(this.codingStatistics.statusCounts)
-      .filter(status => !excludedStatuses.includes(status));
+  getStatuses(): string[] {
+    return Object.keys(this.codingStatistics.statusCounts);
+  }
+
+  isNullStatus(status: string): boolean {
+    return status === 'null';
   }
 
   getStatusPercentage(status: string): number {

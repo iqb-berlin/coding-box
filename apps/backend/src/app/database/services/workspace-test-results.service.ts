@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Connection, In, Repository } from 'typeorm';
+import * as cheerio from 'cheerio';
 import Persons from '../entities/persons.entity';
 import { Unit } from '../entities/unit.entity';
 import { Booklet } from '../entities/booklet.entity';
@@ -9,7 +10,6 @@ import { BookletInfo } from '../entities/bookletInfo.entity';
 import { BookletLog } from '../entities/bookletLog.entity';
 import { UnitLog } from '../entities/unitLog.entity';
 import { Session } from '../entities/session.entity';
-import * as cheerio from 'cheerio';
 import FileUpload from '../entities/file_upload.entity';
 
 @Injectable()
@@ -100,7 +100,6 @@ export class WorkspaceTestResultsService {
               unitsInBooklet.push(unitId.toUpperCase());
             }
           });
-          console.log(unitsInBooklet,bookletFile);
           bookletReferencedUnits.set(bookletFile.file_id.toUpperCase(), unitsInBooklet);
         } catch (e) {
           this.logger.error(`Could not parse booklet file ${bookletFile.filename}`, e);
@@ -321,9 +320,15 @@ export class WorkspaceTestResultsService {
         .leftJoinAndSelect('booklet.person', 'person')
         .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo') // Diese Relation wird geladen, wie im Originalcode
         .where('response.status = :constStatus', { constStatus: 'VALUE_CHANGED' })
-        .andWhere('response.codedStatus = :statusParam', { statusParam: status })
-        .andWhere('person.workspace_id = :workspace_id_param', { workspace_id_param: workspace_id })
-        .orderBy('response.id', 'ASC');
+        .andWhere('person.workspace_id = :workspace_id_param', { workspace_id_param: workspace_id });
+
+      if (status === 'null') {
+        queryBuilder.andWhere('response.codedStatus IS NULL');
+      } else {
+        queryBuilder.andWhere('response.codedStatus = :statusParam', { statusParam: status });
+      }
+
+      queryBuilder.orderBy('response.id', 'ASC');
 
       if (options) {
         const { page, limit } = options;
