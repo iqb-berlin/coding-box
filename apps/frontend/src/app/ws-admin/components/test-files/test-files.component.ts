@@ -38,6 +38,7 @@ import { FileSizePipe } from '../../../shared/pipes/filesize.pipe';
 import { FilesInListDto } from '../../../../../../../api-dto/files/files-in-list.dto';
 import { FileValidationResultDto } from '../../../../../../../api-dto/files/file-validation-result.dto';
 import { FileDownloadDto } from '../../../../../../../api-dto/files/file-download.dto';
+import { FileContentDialogComponent } from '../file-content-dialog/file-content-dialog.component';
 
 @Component({
   selector: 'coding-box-test-files',
@@ -80,7 +81,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   private snackBar = inject(MatSnackBar);
   private translate = inject(TranslateService);
 
-  displayedColumns: string[] = ['selectCheckbox', 'filename', 'file_size', 'file_type', 'created_at'];
+  displayedColumns: string[] = ['selectCheckbox', 'filename', 'file_size', 'file_type', 'created_at', 'actions'];
   dataSource!: MatTableDataSource<FilesInListDto>;
   tableCheckboxSelection = new SelectionModel<FilesInListDto>(true, []);
   isLoading = false;
@@ -375,6 +376,19 @@ export class TestFilesComponent implements OnInit, OnDestroy {
       .subscribe(respOk => {
         this.handleDeleteResponse(respOk);
       });
+  }
+
+  showFileContent(row: FilesInListDto): void {
+    this.backendService.downloadFile(this.appService.selectedWorkspaceId, row.id).subscribe({
+      next: (res: FileDownloadDto) => {
+        const decodedString = atob(res.base64Data);
+        this.dialog.open(FileContentDialogComponent, {
+          data: decodedString,
+          width: '80vw',
+          height: '80vh'
+        });
+      }
+    });
   }
 
   downloadFile(row: FilesInListDto): void {
