@@ -1,4 +1,6 @@
-import { Injectable, Logger, MethodNotAllowedException } from '@nestjs/common';
+import {
+  Injectable, Logger, BadRequestException, ForbiddenException
+} from '@nestjs/common';
 import { Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import User from '../entities/user.entity';
@@ -189,19 +191,25 @@ export class UsersService {
     await this.usersRepository.delete(id);
   }
 
-  removeIds(ids: number[]) {
-    // TODO: Sich selbst bzw. alle löschen verhindern?
-    if (ids && ids.length) {
-      ids.forEach(id => this.remove(id));
+  async removeIds(ids: number[], currentUserId: number): Promise<void> {
+    if (!ids || ids.length === 0) {
+      throw new BadRequestException('No user IDs were provided for deletion.');
     }
-    // TODO: Eigene Exception mit Custom-Parametern
-    throw new MethodNotAllowedException();
+
+    if (ids.includes(currentUserId)) {
+      throw new ForbiddenException('A user cannot delete themselves.');
+    }
+
+    const totalUsers = await this.usersRepository.count();
+    if (ids.length >= totalUsers) {
+      throw new ForbiddenException('All users cannot be deleted at once.');
+    }
+
+    await this.usersRepository.delete(ids);
   }
 
   async createKeycloakUser(keycloakUser: CreateUserDto): Promise<number> {
     const { username, identity, issuer } = keycloakUser;
-
-    // Search for an existing user by either username or a combination of identity and issuer
     const existingUser = await this.usersRepository.findOne({
       where: [
         { username },
@@ -213,12 +221,10 @@ export class UsersService {
     });
 
     if (existingUser) {
-      // Prepare fields to update if the provided identity or issuer has changed
       const updatedFields: Partial<User> = {};
       if (identity && existingUser.identity !== identity) updatedFields.identity = identity;
       if (issuer && existingUser.issuer !== issuer) updatedFields.issuer = issuer;
 
-      // Only update the database if there are fields to update
       if (Object.keys(updatedFields).length > 0) {
         await this.usersRepository.update({ id: existingUser.id }, updatedFields);
         this.logger.log(`Updating existing user: ${JSON.stringify({ ...existingUser, ...updatedFields })}`);
