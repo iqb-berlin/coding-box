@@ -1,6 +1,6 @@
 import {
   Body,
-  Controller, Delete, Get, Param, Patch, Post, UseGuards
+  Controller, Delete, Get, Param, Patch, Post, Query, Req, UseGuards
 } from '@nestjs/common';
 import {
   ApiBadRequestResponse, ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiMethodNotAllowedResponse,
@@ -120,13 +120,14 @@ export class UsersController {
   @ApiBadRequestResponse({ description: 'Invalid user IDs' })
   @ApiNotFoundResponse({ description: 'One or more users not found' })
   @ApiTags('admin users')
-  async remove(@Param('ids') ids: string): Promise<void> {
+  async remove(@Param('ids') ids: string, @Req() req): Promise<void> {
     const idsAsNumberArray: number[] = [];
     ids.split(';').forEach(s => idsAsNumberArray.push(parseInt(s, 10)));
-    return this.usersService.remove(idsAsNumberArray);
+    return this.usersService.removeIds(idsAsNumberArray, req.user.id);
   }
 
   @Delete()
+  @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Delete users by query',
@@ -144,8 +145,8 @@ export class UsersController {
   @ApiBadRequestResponse({ description: 'Invalid user IDs' })
   @ApiNotFoundResponse({ description: 'One or more users not found' })
   @ApiMethodNotAllowedResponse({ description: 'Active admin user must not be deleted' })
-  async removeIds(ids: number[]): Promise<void> {
-    return this.usersService.removeIds(ids);
+  async removeIds(@Query('id') ids: number[], @Req() req): Promise<void> {
+    return this.usersService.removeIds(ids, req.user.id);
   }
 
   @Post(':userId/workspaces')
