@@ -32,61 +32,16 @@
             <span class="statistic-label">Gesamtanzahl der gegebenen Antworten:</span>
             <span class="statistic-value">{{ codingStatistics.totalResponses }}</span>
           </div>
-          @if (codingStatistics.statusCounts['INVALID'] !== undefined) {
+          @for (status of getStatuses(); track status) {
             <div class="statistic-item">
-              <span class="statistic-label">Anzahl der Antworten mit Status INVALID:</span>
-              <span class="statistic-value">
-                {{ codingStatistics.statusCounts['INVALID'] }}
-                <span class="percentage">({{ getStatusPercentage('INVALID') }}%)</span>
+              <span class="statistic-label">
+                @if (status === 'null') {
+                  unkodierte Antworten:
+                  <mat-icon class="warning-icon" color="warn" [matTooltip]="'Kodierschemata fehlen'">warning</mat-icon>
+                } @else {
+                  Anzahl der Antworten mit Status {{ status }}:
+                }
               </span>
-              <a mat-button color="primary" (click)="fetchResponsesByStatus('INVALID')" class="view-button">
-                <mat-icon>visibility</mat-icon>
-                Anzeigen
-              </a>
-            </div>
-          }
-          @if (codingStatistics.statusCounts['CODING_INCOMPLETE'] !== undefined) {
-            <div class="statistic-item">
-              <span class="statistic-label">Anzahl der Antworten mit Status CODING_INCOMPLETE:</span>
-              <span class="statistic-value">
-                {{ codingStatistics.statusCounts['CODING_INCOMPLETE'] }}
-                <span class="percentage">({{ getStatusPercentage('CODING_INCOMPLETE') }}%)</span>
-              </span>
-              <a mat-button color="primary" (click)="fetchResponsesByStatus('CODING_INCOMPLETE')" class="view-button">
-                <mat-icon>visibility</mat-icon>
-                Anzeigen
-              </a>
-            </div>
-          }
-          @if (codingStatistics.statusCounts['NOT_REACHED'] !== undefined) {
-            <div class="statistic-item">
-              <span class="statistic-label">Anzahl der Antworten mit Status NOT_REACHED:</span>
-              <span class="statistic-value">
-                {{ codingStatistics.statusCounts['NOT_REACHED'] }}
-                <span class="percentage">({{ getStatusPercentage('NOT_REACHED') }}%)</span>
-              </span>
-              <a mat-button color="primary" (click)="fetchResponsesByStatus('NOT_REACHED')" class="view-button">
-                <mat-icon>visibility</mat-icon>
-                Anzeigen
-              </a>
-            </div>
-          }
-          @if (codingStatistics.statusCounts['INTENDED_INCOMPLETE'] !== undefined) {
-            <div class="statistic-item">
-              <span class="statistic-label">Anzahl der Antworten mit Status INTENDED_INCOMPLETE:</span>
-              <span class="statistic-value">
-                {{ codingStatistics.statusCounts['INTENDED_INCOMPLETE'] }}
-                <span class="percentage">({{ getStatusPercentage('INTENDED_INCOMPLETE') }}%)</span>
-              </span>
-              <a mat-button color="primary" (click)="fetchResponsesByStatus('INTENDED_INCOMPLETE')" class="view-button">
-                <mat-icon>visibility</mat-icon>
-                Anzeigen
-              </a>
-            </div>
-          }
-          @for (status of getOtherStatuses(); track status) {
-            <div class="statistic-item">
-              <span class="statistic-label">Anzahl der Antworten mit Status {{ status }}:</span>
               <span class="statistic-value">
                 {{ codingStatistics.statusCounts[status] }}
                 <span class="percentage">({{ getStatusPercentage(status) }}%)</span>
@@ -136,7 +91,13 @@
           <h2 class="section-title">Kodierdaten</h2>
           @if (currentStatusFilter) {
             <div class="current-status">
-              <h3>Antworten mit Status: <span class="status-badge">{{ currentStatusFilter }}</span></h3>
+              <h3>
+                @if (currentStatusFilter === 'null') {
+                  Unkodierte Antworten
+                } @else {
+                  Antworten mit Status: <span class="status-badge">{{ currentStatusFilter }}</span>
+                }
+              </h3>
             </div>
           }
         </div>
@@ -168,7 +129,6 @@
             </ng-container>
           }
           @if (element.id !== 0) {
-            <!-- Special case for actions column -->
             @if (column === 'actions') {
               <button mat-icon-button color="primary" (click)="openReplay(element)" matTooltip="Im Replay anzeigen" class="action-button">
                 <mat-icon>play_circle_filled</mat-icon>
@@ -211,4 +171,3 @@
 }
 </div>
 </div>
-

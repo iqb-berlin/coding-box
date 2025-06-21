@@ -273,11 +273,16 @@ export class WorkspaceTestResultsService {
         .leftJoinAndSelect('response.unit', 'unit')
         .leftJoinAndSelect('unit.booklet', 'booklet')
         .leftJoinAndSelect('booklet.person', 'person')
-        .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo') // Diese Relation wird geladen, wie im Originalcode
+        .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
         .where('response.status = :constStatus', { constStatus: 'VALUE_CHANGED' })
-        .andWhere('response.codedStatus = :statusParam', { statusParam: status })
         .andWhere('person.workspace_id = :workspace_id_param', { workspace_id_param: workspace_id })
         .orderBy('response.id', 'ASC');
+
+      if (status === 'null') {
+        queryBuilder.andWhere('response.codedStatus IS NULL');
+      } else {
+        queryBuilder.andWhere('response.codedStatus = :statusParam', { statusParam: status });
+      }
 
       if (options) {
         const { page, limit } = options;
