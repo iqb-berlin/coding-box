@@ -1,5 +1,5 @@
 import {
-  Component, OnDestroy, OnInit, ViewChild, inject
+  Component, OnInit, ViewChild, inject
 } from '@angular/core';
 import { TranslateService, TranslateModule } from '@ngx-translate/core';
 import { MatDialog } from '@angular/material/dialog';
@@ -23,8 +23,7 @@ import { MatAnchor, MatButton } from '@angular/material/button';
 import { DatePipe } from '@angular/common';
 import { MatFormField, MatLabel } from '@angular/material/form-field';
 import { MatOption, MatSelect } from '@angular/material/select';
-import { forkJoin, Subject, Subscription } from 'rxjs';
-import { debounceTime } from 'rxjs/operators';
+import { forkJoin } from 'rxjs';
 import { MatPaginator } from '@angular/material/paginator';
 import { FilesValidationDialogComponent } from '../files-validation-result/files-validation.component';
 import { TestCenterImportComponent } from '../test-center-import/test-center-import.component';
@@ -76,7 +75,7 @@ import { FileContentDialogComponent } from '../file-content-dialog/file-content-
     MatPaginator
   ]
 })
-export class TestFilesComponent implements OnInit, OnDestroy {
+export class TestFilesComponent implements OnInit {
   appService = inject(AppService);
   backendService = inject(BackendService);
   private dialog = inject(MatDialog);
@@ -106,9 +105,6 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   textFilterValue: string = '';
   @ViewChild(MatSort) sort!: MatSort;
 
-  private textFilterChanged: Subject<string> = new Subject<string>();
-  private textFilterSubscription: Subscription | undefined;
-
   // Pagination variables
   page: number = 1;
   limit: number = 100;
@@ -116,17 +112,6 @@ export class TestFilesComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.loadTestFiles(false);
-    this.textFilterSubscription = this.textFilterChanged
-      .pipe(debounceTime(300)) // Debounce für 300ms
-      .subscribe(() => {
-        this.applyFilters();
-      });
-  }
-
-  ngOnDestroy(): void {
-    if (this.textFilterSubscription) {
-      this.textFilterSubscription.unsubscribe();
-    }
   }
 
   /** Getter for setting table sorting */
@@ -197,19 +182,21 @@ export class TestFilesComponent implements OnInit, OnDestroy {
 
   /** Handles text filter changes */
   onTextFilterChange(value: string): void {
-    this.textFilterValue = value.trim();
-    this.textFilterChanged.next(this.textFilterValue);
+    if (this.textFilterValue !== value) {
+      this.textFilterValue = value;
+      this.applyFilters();
+    }
   }
 
-  /** Clears all filters */
+  /** Clears all filters and reloads the data */
   clearFilters(): void {
-    this.textFilterValue = '';
     this.selectedFileType = '';
     this.selectedFileSize = '';
+    this.textFilterValue = '';
     this.applyFilters();
   }
 
-  /** Handles file selection for upload */
+  /** Handles file selection from the file input */
   onFileSelected(target: EventTarget | null, uploadType: string): void { // Added uploadType parameter
     if (!target) return;
     const inputElement = target as HTMLInputElement;

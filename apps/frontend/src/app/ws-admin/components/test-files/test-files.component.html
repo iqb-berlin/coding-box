@@ -59,6 +59,7 @@
         <div class="filter-container">
           <coding-box-search-filter
             [title]="'search-filter.filter-test-files' | translate"
+            [value]="textFilterValue"
             (valueChange)="onTextFilterChange($event)">
           </coding-box-search-filter>
 
@@ -172,14 +173,8 @@
       </mat-paginator>
       <div class="empty-state" *ngIf="dataSource?.data?.length === 0">
         <mat-icon class="empty-icon">folder_open</mat-icon>
-        <p class="empty-text">Keine Test-Dateien vorhanden. Laden Sie Dateien hoch, um zu beginnen.</p>
+        <p class="empty-text">Keine Test-Dateien vorhanden.</p>
       </div>
-      @if (dataSource?.data?.length === 0) {
-        <div class="empty-state">
-          <mat-icon class="empty-icon">folder_open</mat-icon>
-          <p class="empty-text">Keine Test-Dateien vorhanden. Laden Sie Dateien hoch, um zu beginnen.</p>
-        </div>
-      }
     </div>
   }
 

@@ -205,8 +205,7 @@ export class WorkspaceFilesService {
     return validationErrors;
   }
 
-
-  async findFiles(workspaceId: number, options?: { page: number; limit: number }): Promise<[FilesDto[], number]> {
+  async findFiles(workspaceId: number, options?: { page: number; fileType: string, fileSize: string, searchText: string,limit: number }): Promise<[FilesDto[], number]> {
     this.logger.log(`Fetching test files for workspace: ${workspaceId}`);
     const {
       page = 1, limit = 20, fileType, fileSize, searchText
@@ -268,6 +267,23 @@ export class WorkspaceFilesService {
     this.logger.log(`Delete test files for workspace ${workspace_id}`);
     const res = await this.fileUploadRepository.delete(fileIds);
     return !!res;
+  }
+
+  async deleteTestResults(ids: number[]): Promise<boolean> {
+    this.logger.log(`Attempting to delete ${ids.length} test results.`);
+    if (!ids || ids.length === 0) {
+      this.logger.warn('No test result IDs provided for deletion. Aborting.');
+      return true;
+    }
+    try {
+      const result = await this.responseRepository.delete(ids);
+      const affectedCount = result.affected || 0;
+      this.logger.log(`Successfully deleted ${affectedCount} of ${ids.length} targeted test result(s).`);
+      return affectedCount === ids.length;
+    } catch (e) {
+      this.logger.error(`Error deleting test results: ${e.message}`, e.stack);
+      return false;
+    }
   }
 
   async deleteBooklet(workspaceId: number, bookletId: string): Promise<boolean> {
