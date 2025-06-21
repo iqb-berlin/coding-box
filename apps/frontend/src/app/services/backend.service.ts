@@ -477,10 +477,20 @@ export class BackendService {
       { headers: this.authHeader });
   }
 
-  getFilesList(workspaceId: number, page: number = 1, limit: number = 10000): Observable<PaginatedResponse<FilesInListDto>> {
-    const params = new HttpParams()
+  getFilesList(
+    workspaceId: number,
+    page: number = 1,
+    limit: number = 10000,
+    fileType?: string,
+    fileSize?: string,
+    searchText?: string
+  ): Observable<PaginatedResponse<FilesInListDto>> {
+    let params = new HttpParams()
       .set('page', page.toString())
       .set('limit', limit.toString());
+    if (fileType) params = params.set('fileType', fileType);
+    if (fileSize) params = params.set('fileSize', fileSize);
+    if (searchText) params = params.set('searchText', searchText);
 
     return this.http.get<PaginatedResponse<FilesInListDto>>(
       `${this.serverUrl}admin/workspace/${workspaceId}/files`,

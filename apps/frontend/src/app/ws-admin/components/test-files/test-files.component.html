@@ -143,6 +143,13 @@
           <p class="empty-text">Keine Test-Dateien vorhanden. Laden Sie Dateien hoch, um zu beginnen.</p>
         </div>
       }
+      <mat-paginator
+        [length]="total"
+        [pageIndex]="page - 1"
+        [pageSize]="limit"
+        [pageSizeOptions]="[100, 200, 500,1000]"
+        (page)="onPageChange($event)">
+      </mat-paginator>
     </div>
   }
 
