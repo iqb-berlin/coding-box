@@ -5,6 +5,7 @@
     } @else if (accessLevel === 2){
       <coding-box-coding-management-manual></coding-box-coding-management-manual>
     } @else if (accessLevel > 2 || authData.isAdmin){
+      <div class="flex-container">
       <nav mat-tab-nav-bar class="navigation" [tabPanel]="tabPanel">
       @for (link of navLinks; track link) {
         <a mat-tab-link
@@ -16,9 +17,10 @@
         </a>
       }
     </nav>
-      <mat-tab-nav-panel #tabPanel>
+      <mat-tab-nav-panel #tabPanel class="router-panel">
         <router-outlet></router-outlet>
       </mat-tab-nav-panel>
+      </div>
     }
   </div>
 </div>

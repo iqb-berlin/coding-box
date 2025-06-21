@@ -24,3 +24,14 @@ a{
 .navigation{
   margin-bottom: 10px;
 }
+
+.flex-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.router-panel {
+  flex: 1;
+  overflow: auto;
+}

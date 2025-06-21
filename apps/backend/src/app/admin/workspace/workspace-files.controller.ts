@@ -47,6 +47,24 @@ export class WorkspaceFilesController {
     description: 'Number of items per page',
     type: Number
   })
+  @ApiQuery({
+    name: 'fileType',
+    required: false,
+    description: 'Filter by file type',
+    type: String
+  })
+  @ApiQuery({
+    name: 'fileSize',
+    required: false,
+    description: 'Filter by file size range (e.g. 0-10KB, 10KB-100KB, 100KB-1MB, 1MB-10MB, 10MB+)',
+    type: String
+  })
+  @ApiQuery({
+    name: 'searchText',
+    required: false,
+    description: 'Filter by search text (filename, type, date)',
+    type: String
+  })
   @ApiOkResponse({
     description: 'Files retrieved successfully.',
     schema: {
@@ -69,7 +87,10 @@ export class WorkspaceFilesController {
   async findFiles(
     @Param('workspace_id') workspace_id: number,
                            @Query('page') page: number = 1,
-                           @Query('limit') limit: number = 20
+                           @Query('limit') limit: number = 20,
+                           @Query('fileType') fileType?: string,
+                           @Query('fileSize') fileSize?: string,
+                           @Query('searchText') searchText?: string
   ): Promise<{ data: FilesDto[]; total: number; page: number; limit: number }> {
     if (!workspace_id || workspace_id <= 0) {
       throw new BadRequestException(
@@ -77,7 +98,9 @@ export class WorkspaceFilesController {
       );
     }
     try {
-      const [files, total] = await this.workspaceFilesService.findFiles(workspace_id, { page, limit });
+      const [files, total] = await this.workspaceFilesService.findFiles(workspace_id, {
+        page, limit, fileType, fileSize, searchText
+      });
       return {
         data: files,
         total,
