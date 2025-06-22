@@ -2,7 +2,7 @@ import {
   BadRequestException,
   Controller,
   Delete,
-  Get, InternalServerErrorException, Param, Post, Query, UseGuards, UseInterceptors, UploadedFiles
+  Get, InternalServerErrorException, NotFoundException, Param, Post, Query, UseGuards, UseInterceptors, UploadedFiles
 } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
@@ -205,6 +205,114 @@ export class WorkspaceFilesController {
     } catch (error) {
       logger.error(`'Error downloading test file:' ${error}`);
       throw new InternalServerErrorException('Unable to download the file. Please try again later.');
+    }
+  }
+
+  @Get(':workspace_id/unit/:unit_id/content')
+  @ApiTags('admin workspace')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get unit XML content', description: 'Retrieves the XML content of a unit file' })
+  @ApiParam({
+    name: 'workspace_id',
+    type: Number,
+    required: true,
+    description: 'The unique ID of the workspace'
+  })
+  @ApiParam({
+    name: 'unit_id',
+    type: Number,
+    required: true,
+    description: 'The unique ID of the unit'
+  })
+  @ApiOkResponse({
+    description: 'Unit XML content retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        content: { type: 'string' }
+      }
+    }
+  })
+  @ApiNotFoundResponse({
+    description: 'Unit not found'
+  })
+  @ApiBadRequestResponse({
+    description: 'Invalid workspace ID or unit ID'
+  })
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  async getUnitContent(
+    @Param('workspace_id') workspace_id: number,
+      @Param('unit_id') unit_id: number
+  ): Promise<{ content: string }> {
+    if (!workspace_id || workspace_id <= 0) {
+      throw new BadRequestException('Invalid workspace ID. Please provide a valid ID.');
+    }
+    if (!unit_id || unit_id <= 0) {
+      throw new BadRequestException('Invalid unit ID. Please provide a valid ID.');
+    }
+
+    try {
+      const content = await this.workspaceFilesService.getUnitContent(workspace_id, unit_id);
+      return { content };
+    } catch (error) {
+      if (error.message.includes('not found')) {
+        throw new NotFoundException(`Unit with ID ${unit_id} not found in workspace ${workspace_id}`);
+      }
+      throw new InternalServerErrorException(`Error retrieving unit content: ${error.message}`);
+    }
+  }
+
+  @Get(':workspace_id/files/coding-scheme/:coding_scheme_ref')
+  @ApiTags('admin workspace')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get coding scheme file', description: 'Retrieves a coding scheme file by its reference name' })
+  @ApiParam({
+    name: 'workspace_id',
+    type: Number,
+    required: true,
+    description: 'The unique ID of the workspace'
+  })
+  @ApiParam({
+    name: 'coding_scheme_ref',
+    type: String,
+    required: true,
+    description: 'The reference name of the coding scheme'
+  })
+  @ApiOkResponse({
+    description: 'Coding scheme file retrieved successfully',
+    type: FileDownloadDto
+  })
+  @ApiNotFoundResponse({
+    description: 'Coding scheme file not found'
+  })
+  @ApiBadRequestResponse({
+    description: 'Invalid workspace ID or coding scheme reference'
+  })
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  async getCodingSchemeFile(
+    @Param('workspace_id') workspace_id: number,
+      @Param('coding_scheme_ref') coding_scheme_ref: string
+  ): Promise<FileDownloadDto> {
+    if (!workspace_id || workspace_id <= 0) {
+      throw new BadRequestException('Invalid workspace ID. Please provide a valid ID.');
+    }
+    if (!coding_scheme_ref) {
+      throw new BadRequestException('Invalid coding scheme reference. Please provide a valid reference.');
+    }
+
+    try {
+      const codingSchemeFile = await this.workspaceFilesService.getCodingSchemeByRef(workspace_id, coding_scheme_ref);
+
+      if (!codingSchemeFile) {
+        throw new NotFoundException(`Coding scheme file '${coding_scheme_ref}' not found in workspace ${workspace_id}`);
+      }
+
+      return codingSchemeFile;
+    } catch (error) {
+      if (error.status === 404) {
+        throw error;
+      }
+      throw new InternalServerErrorException(`Error retrieving coding scheme file: ${error.message}`);
     }
   }
 }

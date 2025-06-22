@@ -862,4 +862,92 @@ export class WorkspaceFilesService {
 
     return `${module}-${majorVersion}.${minorVersion}`.toUpperCase();
   }
+
+  /**
+   * Retrieves the XML content of a unit file
+   * @param workspaceId The ID of the workspace
+   * @param unitId The ID of the unit
+   * @returns The XML content of the unit file
+   */
+  async getUnitContent(workspaceId: number, unitId: number): Promise<string> {
+    try {
+      console.log(`Retrieving unit content for workspace ${workspaceId} and unit ${unitId}`);
+      const unitFile = await this.fileUploadRepository.findOne({
+        where: { workspace_id: workspaceId, file_id: `${unitId}` }
+      });
+
+      if (!unitFile) {
+        this.logger.error(`Unit file with ID ${unitId} not found in workspace ${workspaceId}`);
+        throw new Error(`Unit file with ID ${unitId} not found`);
+      }
+
+      if (unitFile.data) {
+        return unitFile.data.toString();
+      }
+
+      throw new Error('Unit file has no data content');
+    } catch (error) {
+      this.logger.error(`Error retrieving unit content: ${error.message}`, error.stack);
+      throw error;
+    }
+  }
+
+  /**
+   * Extracts the CodingSchemeRef from an XML string
+   * @param xmlContent The XML content to parse
+   * @returns The coding scheme reference name or null if not found
+   */
+  extractCodingSchemeRef(xmlContent: string): string | null {
+    try {
+      // Verwende cheerio, um das XML zu parsen
+      const $ = cheerio.load(xmlContent, { xmlMode: true, recognizeSelfClosing: true });
+
+      // Suche nach dem CodingSchemeRef-Tag
+      const codingSchemeRefTag = $('CodingSchemeRef');
+
+      if (codingSchemeRefTag.length > 0) {
+        // Hole den Text-Inhalt des Tags
+        return codingSchemeRefTag.text().trim();
+      }
+
+      return null;
+    } catch (error) {
+      this.logger.error(`Error extracting CodingSchemeRef: ${error.message}`, error.stack);
+      return null;
+    }
+  }
+
+  /**
+   * Finds a coding scheme file by its reference name
+   * @param workspaceId The ID of the workspace
+   * @param codingSchemeRef The reference name of the coding scheme
+   * @returns The coding scheme file data
+   */
+  async getCodingSchemeByRef(workspaceId: number, codingSchemeRef: string): Promise<FileDownloadDto | null> {
+    try {
+      console.log(`Retrieving coding scheme for workspace ${workspaceId} with reference ${codingSchemeRef}`);
+      const codingSchemeFile = await this.fileUploadRepository.findOne({
+        where: {
+          workspace_id: workspaceId,
+          file_id: codingSchemeRef.toUpperCase()
+        }
+      });
+
+      if (!codingSchemeFile) {
+        this.logger.warn(`Coding scheme file '${codingSchemeRef.toUpperCase()}' not found in workspace ${workspaceId}`);
+        return null;
+      }
+
+      const base64Data = codingSchemeFile.data.toString();
+
+      return {
+        filename: codingSchemeFile.filename,
+        base64Data,
+        mimeType: codingSchemeFile.file_type
+      };
+    } catch (error) {
+      this.logger.error(`Error retrieving coding scheme: ${error.message}`, error.stack);
+      return null;
+    }
+  }
 }
