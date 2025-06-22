@@ -686,4 +686,23 @@ export class BackendService {
       catchError(() => of(-1))
     );
   }
+
+  getCodingSchemeFile(workspaceId: number, codingSchemeRef: string): Observable<FileDownloadDto | null> {
+    return this.http.get<FileDownloadDto | null>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/files/coding-scheme/${codingSchemeRef}`,
+      { headers: this.authHeader }
+    ).pipe(
+      catchError(() => of(null))
+    );
+  }
+
+  getUnitContentXml(workspaceId: number, unitId: number): Observable<string | null> {
+    return this.http.get<{ content: string }>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/unit/${unitId}/content`,
+      { headers: this.authHeader }
+    ).pipe(
+      map(response => response.content),
+      catchError(() => of(null))
+    );
+  }
 }

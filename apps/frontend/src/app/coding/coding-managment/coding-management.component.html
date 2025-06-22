@@ -130,9 +130,18 @@
           }
           @if (element.id !== 0) {
             @if (column === 'actions') {
-              <button mat-icon-button color="primary" (click)="openReplay(element)" matTooltip="Im Replay anzeigen" class="action-button">
-                <mat-icon>play_circle_filled</mat-icon>
-              </button>
+              <div class="action-buttons-container">
+                <button mat-icon-button color="primary" (click)="openReplay(element)" matTooltip="Im Replay anzeigen" class="action-button">
+                  <mat-icon>play_circle_filled</mat-icon>
+                </button>
+                <button mat-icon-button color="accent" (click)="getCodingSchemeRefFromUnit(element.unit.name)" matTooltip="Kodierschema anzeigen" class="action-button">
+                  <mat-icon>code</mat-icon>
+                </button>
+              </div>
+            } @else if (column === 'unitname') {
+              <span class="clickable-cell" (click)="showUnitXml(element.unit.name)" matTooltip="Unit-XML anzeigen">
+                {{ element[column] }}
+              </span>
             } @else {
                   <span [ngClass]="{'status-value': column === 'status' || column === 'codedstatus',
                                     'status-complete': (column === 'status' && element[column] === 'CODING_COMPLETE') || (column === 'codedstatus' && element[column] === 'CODING_COMPLETE'),

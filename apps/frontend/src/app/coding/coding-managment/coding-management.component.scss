@@ -705,3 +705,13 @@
     max-height: 300px;
   }
 }
+
+.clickable-cell {
+  cursor: pointer;
+  color: #3f51b5; /* Primärfarbe für bessere Sichtbarkeit als Link */
+  text-decoration: underline;
+
+  &:hover {
+    color: #283593; /* Dunklere Farbe beim Hover */
+  }
+}
