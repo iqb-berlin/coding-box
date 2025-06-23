@@ -12,6 +12,7 @@ import { Booklet } from '../entities/booklet.entity';
 import { ResponseEntity } from '../entities/response.entity';
 import { CodingStatistics } from './shared-types';
 import { prepareDefinition } from '../../utils/voud/transform';
+import { extractVariableLocation } from '../../utils/voud/extractVariableLocation';
 
 @Injectable()
 export class WorkspaceCodingService {
@@ -361,13 +362,20 @@ export class WorkspaceCodingService {
               const respDefinition = {
                 definition: voudFile.data
               };
-              const transformResult = prepareDefinition(respDefinition);
-              const variablePageInfo = transformResult.variablePages.find(
+              // const transformResult = prepareDefinition(respDefinition);
+              const variableLocation = extractVariableLocation([respDefinition]);
+              const variablePageInfo = variableLocation[0].variable_pages.find(
                 pageInfo => pageInfo.variable_ref === response.variableid
+              );
+              const variablePageAlwaysVisible = variableLocation[0].variable_pages.find(
+                pageInfo => pageInfo.variable_page_always_visible === true
               );
 
               if (variablePageInfo) {
-                variablePage = variablePageInfo.variable_page.toString();
+                if (variablePageAlwaysVisible && variablePageInfo.variable_page_always_visible === true) {
+                  variablePage = (variablePageInfo.variable_path.pages - 1).toString();
+                }
+                variablePage = variablePageInfo?.variable_path?.pages.toString();
               }
 
               this.logger.log(`Processed VOUD file for unit ${unitKey}, variable ${response.variableid}, page ${variablePage}`);
@@ -436,14 +444,20 @@ export class WorkspaceCodingService {
             const respDefinition = {
               definition: voudFile.data
             };
-            const transformResult = prepareDefinition(respDefinition);
-
-            const variablePageInfo = transformResult.variablePages.find(
+            // const transformResult = prepareDefinition(respDefinition);
+            const variableLocation = extractVariableLocation([respDefinition]);
+            const variablePageInfo = variableLocation[0].variable_pages.find(
               pageInfo => pageInfo.variable_ref === response.variableid
+            );
+            const variablePageAlwaysVisible = variableLocation[0].variable_pages.find(
+              pageInfo => pageInfo.variable_page_always_visible === true
             );
 
             if (variablePageInfo) {
-              variablePage = variablePageInfo.variable_page.toString();
+              if (variablePageAlwaysVisible && variablePageInfo.variable_page_always_visible === true) {
+                variablePage = (variablePageInfo.variable_path.pages - 1).toString();
+              }
+              variablePage = variablePageInfo?.variable_path?.pages.toString();
             }
 
             this.logger.log(`Processed VOUD file for unit ${unitKey}, variable ${response.variableid}, page ${variablePage}`);
