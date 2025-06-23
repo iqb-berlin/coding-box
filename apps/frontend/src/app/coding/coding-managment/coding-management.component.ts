@@ -30,7 +30,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { ScrollingModule } from '@angular/cdk/scrolling';
 import { MatDivider } from '@angular/material/divider';
 import { MatDialog } from '@angular/material/dialog';
-import { ContentDialogComponent } from '../content-dialog/content-dialog.component';
+import { ContentDialogComponent } from '../../shared/dialogs/content-dialog/content-dialog.component';
 import { BackendService, CodingListItem } from '../../services/backend.service';
 import { AppService } from '../../services/app.service';
 import { CodingStatistics } from '../../../../../../api-dto/coding/coding-statistics';

@@ -39,6 +39,7 @@ import { FileSizePipe } from '../../../shared/pipes/filesize.pipe';
 import { FilesInListDto } from '../../../../../../../api-dto/files/files-in-list.dto';
 import { FileValidationResultDto } from '../../../../../../../api-dto/files/file-validation-result.dto';
 import { FileDownloadDto } from '../../../../../../../api-dto/files/file-download.dto';
+import { ContentDialogComponent } from '../../../shared/dialogs/content-dialog/content-dialog.component';
 
 @Component({
   selector: 'coding-box-test-files',
@@ -72,7 +73,8 @@ import { FileDownloadDto } from '../../../../../../../api-dto/files/file-downloa
     MatLabel,
     MatSelect,
     MatOption,
-    MatPaginator
+    MatPaginator,
+    ContentDialogComponent
   ]
 })
 export class TestFilesComponent implements OnInit, OnDestroy {
@@ -82,7 +84,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   private snackBar = inject(MatSnackBar);
   private translate = inject(TranslateService);
 
-  displayedColumns: string[] = ['selectCheckbox', 'filename', 'file_size', 'file_type', 'created_at'];
+  displayedColumns: string[] = ['selectCheckbox', 'filename', 'file_size', 'file_type', 'created_at', 'actions'];
   dataSource!: MatTableDataSource<FilesInListDto>;
   tableCheckboxSelection = new SelectionModel<FilesInListDto>(true, []);
   isLoading = false;
@@ -368,5 +370,19 @@ export class TestFilesComponent implements OnInit, OnDestroy {
     this.page = event.pageIndex + 1;
     this.limit = event.pageSize;
     this.loadTestFiles(true);
+  }
+
+  showFileContent(file: FilesInListDto): void {
+    this.backendService.downloadFile(this.appService.selectedWorkspaceId, file.id).subscribe(fileData => {
+      const decodedContent = atob(fileData.base64Data);
+      this.dialog.open(ContentDialogComponent, {
+        width: '800px',
+        height: '800px',
+        data: {
+          title: file.filename,
+          content: decodedContent
+        }
+      });
+    });
   }
 }
