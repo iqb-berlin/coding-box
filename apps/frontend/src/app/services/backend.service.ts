@@ -35,6 +35,7 @@ import { UpdateUnitNoteDto } from '../../../../../api-dto/unit-notes/update-unit
 import { ResourcePackageDto } from '../../../../../api-dto/resource-package/resource-package-dto';
 import { PaginatedWorkspaceUserDto } from '../../../../../api-dto/workspaces/paginated-workspace-user-dto';
 import { InvalidVariableDto } from '../../../../../api-dto/files/variable-validation.dto';
+import { TestTakersValidationDto } from '../../../../../api-dto/files/testtakers-validation.dto';
 
 interface PaginatedResponse<T> {
   data: T[];
@@ -300,6 +301,21 @@ export class BackendService {
         total: 0,
         page,
         limit
+      }))
+    );
+  }
+
+  validateTestTakers(workspaceId: number): Observable<TestTakersValidationDto> {
+    return this.http.get<TestTakersValidationDto>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/files/validate-testtakers`,
+      { headers: this.authHeader }
+    ).pipe(
+      catchError(() => of({
+        testTakersFound: false,
+        totalGroups: 0,
+        totalLogins: 0,
+        totalBookletCodes: 0,
+        missingPersons: []
       }))
     );
   }

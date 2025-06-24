@@ -14,6 +14,7 @@ import { FileDownloadDto } from '../../../../../../api-dto/files/file-download.d
 import { FileValidationResultDto } from '../../../../../../api-dto/files/file-validation-result.dto';
 import { ResponseDto } from '../../../../../../api-dto/responses/response-dto';
 import { InvalidVariableDto } from '../../../../../../api-dto/files/variable-validation.dto';
+import { TestTakerLoginDto, MissingPersonDto, TestTakersValidationDto } from '../../../../../../api-dto/files/testtakers-validation.dto';
 import { ResponseEntity } from '../entities/response.entity';
 import { Unit } from '../entities/unit.entity';
 import Persons from '../entities/persons.entity';
@@ -1029,7 +1030,6 @@ export class WorkspaceFilesService {
       relations: ['unit'] // Include unit relation to access unit.name
     });
 
-
     // Check each response
     for (const response of responses) {
       const unit = response.unit;
@@ -1276,6 +1276,121 @@ export class WorkspaceFilesService {
    * @param limit Number of items per page
    * @returns Paginated validation result with invalid responses
    */
+  /**
+   * Validates TestTakers XML files and checks if each person from the persons table is found
+   * @param workspaceId The ID of the workspace
+   * @returns Validation results
+   */
+  async validateTestTakers(workspaceId: number): Promise<TestTakersValidationDto> {
+    try {
+      // Find TestTakers files in the workspace
+      const testTakers = await this.fileUploadRepository.find({
+        where: { workspace_id: workspaceId, file_type: In(['TestTakers', 'Testtakers']) }
+      });
+
+      if (!testTakers || testTakers.length === 0) {
+        this.logger.warn(`No TestTakers found in workspace with ID ${workspaceId}.`);
+        return {
+          testTakersFound: false,
+          totalGroups: 0,
+          totalLogins: 0,
+          totalBookletCodes: 0,
+          missingPersons: []
+        };
+      }
+
+      // Parse XML to extract Groups, Logins, and Booklet codes
+      const testTakerLogins: TestTakerLoginDto[] = [];
+      let totalGroups = 0;
+      let totalLogins = 0;
+      let totalBookletCodes = 0;
+
+      // Process all test takers
+      for (const testTaker of testTakers) {
+        const xmlDocument = cheerio.load(testTaker.data, { xmlMode: true, recognizeSelfClosing: true });
+        const groupElements = xmlDocument('Group');
+
+        if (groupElements.length === 0) {
+          this.logger.warn(`No <Group> elements found in TestTakers file ${testTaker.file_id}.`);
+          continue;
+        }
+
+        totalGroups += groupElements.length;
+
+        // Extract data from each group
+        for (let i = 0; i < groupElements.length; i += 1) {
+          const groupElement = groupElements[i];
+          const groupId = xmlDocument(groupElement).attr('id');
+          const loginElements = xmlDocument(groupElement).find('Login');
+
+          // Extract data from each login
+          for (let j = 0; j < loginElements.length; j += 1) {
+            const loginElement = loginElements[j];
+            const loginName = xmlDocument(loginElement).attr('name');
+            const loginMode = xmlDocument(loginElement).attr('mode');
+
+            // Only include logins with mode "run-hot-return" or "run-hot-restart"
+            if (loginMode === 'run-hot-return' || loginMode === 'run-hot-restart') {
+              totalLogins += 1;
+
+              const bookletElements = xmlDocument(loginElement).find('Booklet');
+              const bookletCodes: string[] = [];
+
+              // Extract data from each booklet
+              for (let k = 0; k < bookletElements.length; k += 1) {
+                const bookletElement = bookletElements[k];
+                const codes = xmlDocument(bookletElement).attr('codes');
+                if (codes) {
+                  bookletCodes.push(codes);
+                  totalBookletCodes += 1;
+                }
+              }
+
+              testTakerLogins.push({
+                group: groupId || '',
+                login: loginName || '',
+                mode: loginMode || '',
+                bookletCodes
+              });
+            }
+          }
+        }
+      }
+
+      // Find all persons in the workspace
+      const persons = await this.personsRepository.find({
+        where: { workspace_id: workspaceId }
+      });
+
+      // Check if each person from the persons table is found in the extracted data
+      const missingPersons: MissingPersonDto[] = [];
+
+      for (const person of persons) {
+        const found = testTakerLogins.some(login => login.group === person.group && login.login === person.login);
+
+        if (!found) {
+          missingPersons.push({
+            group: person.group,
+            login: person.login,
+            code: person.code,
+            reason: 'Person not found in TestTakers XML'
+          });
+        }
+      }
+
+      return {
+        testTakersFound: true,
+        totalGroups,
+        totalLogins,
+        totalBookletCodes,
+        missingPersons
+      };
+    } catch (error) {
+      this.logger.error(`Error validating TestTakers for workspace ${workspaceId}: ${error.message}`, error.stack);
+      throw error;
+    }
+  }
+
   async validateResponseStatus(workspaceId: number, page: number = 1, limit: number = 10): Promise<{ data: InvalidVariableDto[]; total: number; page: number; limit: number }> {
     // Valid response status values
     console.log(`Validating response status for workspace ${workspaceId} with page ${page} and limit ${limit}`);

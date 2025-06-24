@@ -18,6 +18,7 @@ import { FileDownloadDto } from '../../../../../../api-dto/files/file-download.d
 import { FileValidationResultDto } from '../../../../../../api-dto/files/file-validation-result.dto';
 import { WorkspaceFilesService } from '../../database/services/workspace-files.service';
 import { InvalidVariableDto } from '../../../../../../api-dto/files/variable-validation.dto';
+import { TestTakersValidationDto } from '../../../../../../api-dto/files/testtakers-validation.dto';
 
 @ApiTags('Admin Workspace Files')
 @Controller('admin/workspace')
@@ -135,6 +136,19 @@ export class WorkspaceFilesController {
   async validateTestFiles(
     @Param('workspace_id') workspace_id: number): Promise<FileValidationResultDto> {
     return this.workspaceFilesService.validateTestFiles(workspace_id);
+  }
+
+  @Get(':workspace_id/files/validate-testtakers')
+  @ApiTags('test files validation')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiOperation({ summary: 'Validate TestTakers', description: 'Validates TestTakers XML files and checks if each person from the persons table is found' })
+  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
+  @ApiOkResponse({
+    description: 'TestTakers validation result'
+  })
+  async validateTestTakers(
+    @Param('workspace_id') workspace_id: number): Promise<TestTakersValidationDto> {
+    return this.workspaceFilesService.validateTestTakers(workspace_id);
   }
 
   @Get(':workspace_id/files/validate-response-status')

@@ -2,10 +2,62 @@
 <mat-dialog-content>
   <mat-stepper orientation="vertical" [linear]="true" #stepper>
     <mat-step label="Testperson definiert" >
-      <p>Prüft, ob für jede Antwort eine Testperson definiert ist.</p>
+      <p>Prüft, ob für jede Testperson in der Datenbank ein entsprechender Eintrag in den TestTakers XML-Dateien existiert.</p>
+      <button mat-button (click)="validateTestTakers()">TestTakers validieren</button>
+      @if (isTestTakersValidationRunning) {
+        <div class="loading-container">
+          <mat-spinner class="mat-spinner"></mat-spinner>
+          <p class="loading-text">TestTakers werden validiert...</p>
+        </div>
+      }
+      @if (testTakersValidationResult) {
+        <div>
+          <p>
+            @if (testTakersValidationResult.testTakersFound) {
+              TestTakers gefunden: {{ testTakersValidationResult.totalGroups }} Gruppen, {{ testTakersValidationResult.totalLogins }} Logins, {{ testTakersValidationResult.totalBookletCodes }} Booklet-Codes.
+            } @else {
+              Keine TestTakers gefunden.
+            }
+          </p>
+          @if (testTakersValidationResult.missingPersons.length > 0) {
+            <p>
+              {{ testTakersValidationResult.missingPersons.length }} Testpersonen wurden nicht in den TestTakers XML-Dateien gefunden.
+            </p>
+            <div class="actions-container">
+              <button mat-button (click)="toggleMissingPersonsExpansion()">
+                {{ expandedMissingPersonsPanel ? 'Liste einklappen' : 'Liste ausklappen' }}
+              </button>
+            </div>
+
+            <mat-expansion-panel [expanded]="expandedMissingPersonsPanel">
+              <table mat-table [dataSource]="paginatedMissingPersons">
+                <ng-container matColumnDef="group">
+                  <th mat-header-cell *matHeaderCellDef>Gruppe</th>
+                  <td mat-cell *matCellDef="let element">{{ element.group }}</td>
+                </ng-container>
+                <ng-container matColumnDef="login">
+                  <th mat-header-cell *matHeaderCellDef>Login</th>
+                  <td mat-cell *matCellDef="let element">{{ element.login }}</td>
+                </ng-container>
+                <ng-container matColumnDef="code">
+                  <th mat-header-cell *matHeaderCellDef>Code</th>
+                  <td mat-cell *matCellDef="let element">{{ element.code }}</td>
+                </ng-container>
+                <ng-container matColumnDef="reason">
+                  <th mat-header-cell *matHeaderCellDef>Grund</th>
+                  <td mat-cell *matCellDef="let element">{{ element.reason }}</td>
+                </ng-container>
+                <tr mat-header-row *matHeaderRowDef="['group', 'login', 'code', 'reason']"></tr>
+                <tr mat-row *matRowDef="let row; columns: ['group', 'login', 'code', 'reason'];"></tr>
+              </table>
+            </mat-expansion-panel>
+          } @else {
+            <p>Alle Testpersonen wurden in den TestTakers XML-Dateien gefunden.</p>
+          }
+        </div>
+      }
       <div>
-        <button mat-button matStepperNext>Daten bereinigen</button>
-        <button mat-button matStepperNext>Daten behalten</button>
+        <button mat-button matStepperNext>Weiter</button>
       </div>
     </mat-step>
     <mat-step label="Variable definiert">
@@ -160,8 +212,8 @@
         <button mat-button matStepperNext>Weiter</button>
       </div>
     </mat-step>
-    <mat-step label="Wert ist gültig">
-      <p>Prüft, ob der Wert der Antwort gültig ist (gemäß Unit.xml).</p>
+    <mat-step label="Status ist gültig">
+      <p>Prüft, ob der Status der Antwort gültig ist (gemäß Unit.xml).</p>
       <button mat-button (click)="validateResponseStatus()">Antwortstatus validieren</button>
       @if (isResponseStatusValidationRunning) {
         <div class="loading-container">

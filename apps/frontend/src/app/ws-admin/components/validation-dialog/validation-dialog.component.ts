@@ -16,6 +16,7 @@ import { MatPaginator, MatPaginatorModule, PageEvent } from '@angular/material/p
 import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
 import { InvalidVariableDto } from '../../../../../../../api-dto/files/variable-validation.dto';
+import { TestTakersValidationDto, MissingPersonDto } from '../../../../../../../api-dto/files/testtakers-validation.dto';
 import { ContentDialogComponent } from '../../../shared/dialogs/content-dialog/content-dialog.component';
 
 @Component({
@@ -85,6 +86,12 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit {
   currentStatusVariablePage: number = 1;
   statusVariablePageSize: number = 10;
 
+  // TestTakers validation properties
+  testTakersValidationResult: TestTakersValidationDto | null = null;
+  isTestTakersValidationRunning: boolean = false;
+  expandedMissingPersonsPanel: boolean = false;
+  paginatedMissingPersons = new MatTableDataSource<MissingPersonDto>([]);
+
   isVariableValidationRunning: boolean = false;
   isVariableTypeValidationRunning: boolean = false;
   isResponseStatusValidationRunning: boolean = false;
@@ -124,6 +131,27 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit {
 
   updatePaginatedVariables(): void {
     this.paginatedVariables.data = this.invalidVariables;
+  }
+
+  updatePaginatedMissingPersons(): void {
+    if (this.testTakersValidationResult) {
+      this.paginatedMissingPersons.data = this.testTakersValidationResult.missingPersons;
+    }
+  }
+
+  validateTestTakers(): void {
+    this.isTestTakersValidationRunning = true;
+    this.testTakersValidationResult = null;
+    this.backendService.validateTestTakers(this.appService.selectedWorkspaceId)
+      .subscribe(result => {
+        this.testTakersValidationResult = result;
+        this.updatePaginatedMissingPersons();
+        this.isTestTakersValidationRunning = false;
+      });
+  }
+
+  toggleMissingPersonsExpansion(): void {
+    this.expandedMissingPersonsPanel = !this.expandedMissingPersonsPanel;
   }
 
   updatePaginatedTypeVariables(): void {
