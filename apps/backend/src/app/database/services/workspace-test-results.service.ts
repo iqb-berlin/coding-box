@@ -162,8 +162,8 @@ export class WorkspaceTestResultsService {
     }
   }
 
-  async findTestResults(workspace_id: number, options: { page: number; limit: number }): Promise<[Persons[], number]> {
-    const { page, limit } = options;
+  async findTestResults(workspace_id: number, options: { page: number; limit: number; searchText?: string }): Promise<[Persons[], number]> {
+    const { page, limit, searchText } = options;
 
     if (!workspace_id || workspace_id <= 0) {
       throw new Error('Invalid workspace_id provided');
@@ -174,19 +174,33 @@ export class WorkspaceTestResultsService {
     const validLimit = Math.min(Math.max(1, limit), MAX_LIMIT); // Between 1 and MAX_LIMIT
 
     try {
-      const [results, total] = await this.personsRepository.findAndCount({
-        where: { workspace_id: workspace_id },
-        select: [
-          'id',
-          'group',
-          'login',
-          'code',
-          'uploaded_at'
-        ],
-        skip: (validPage - 1) * validLimit,
-        take: validLimit,
-        order: { code: 'ASC' }
-      });
+      // Use query builder to support text search
+      const queryBuilder = this.personsRepository.createQueryBuilder('person')
+        .where('person.workspace_id = :workspace_id', { workspace_id })
+        .select([
+          'person.id',
+          'person.group',
+          'person.login',
+          'person.code',
+          'person.uploaded_at'
+        ]);
+
+      // Add search condition if searchText is provided
+      if (searchText && searchText.trim() !== '') {
+        queryBuilder.andWhere(
+          '(person.code ILIKE :searchText OR person.group ILIKE :searchText OR person.login ILIKE :searchText)',
+          { searchText: `%${searchText.trim()}%` }
+        );
+      }
+
+      // Add pagination
+      queryBuilder
+        .skip((validPage - 1) * validLimit)
+        .take(validLimit)
+        .orderBy('person.code', 'ASC');
+
+      // Execute query
+      const [results, total] = await queryBuilder.getManyAndCount();
 
       return [results, total];
     } catch (error) {

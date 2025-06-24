@@ -7,12 +7,18 @@ import {
   MatTableDataSource, MatCell, MatColumnDef, MatHeaderCell, MatHeaderRow, MatRow
 } from '@angular/material/table';
 import {
-  Component, OnInit, ViewChild, inject
+  Component, OnDestroy, OnInit, ViewChild, inject
 } from '@angular/core';
 import { MatSort, MatSortHeader } from '@angular/material/sort';
 import { FormsModule, UntypedFormGroup } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { MatPaginator, MatPaginatorModule, PageEvent } from '@angular/material/paginator';
+import {
+  Subject,
+  Subscription,
+  debounceTime,
+  distinctUntilChanged
+} from 'rxjs';
 import { SelectionModel } from '@angular/cdk/collections';
 import {
   MatAccordion,
@@ -33,7 +39,6 @@ import { MatDivider } from '@angular/material/divider';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
-import { TestGroupsInListDto } from '../../../../../../../api-dto/test-groups/testgroups-in-list.dto';
 import { TestCenterImportComponent } from '../test-center-import/test-center-import.component';
 import { LogDialogComponent } from '../booklet-log-dialog/log-dialog.component';
 import { TagDialogComponent } from '../tag-dialog/tag-dialog.component';
@@ -42,6 +47,75 @@ import { UnitTagDto } from '../../../../../../../api-dto/unit-tags/unit-tag.dto'
 import { CreateUnitTagDto } from '../../../../../../../api-dto/unit-tags/create-unit-tag.dto';
 import { UpdateUnitTagDto } from '../../../../../../../api-dto/unit-tags/update-unit-tag.dto';
 import { UnitNoteDto } from '../../../../../../../api-dto/unit-notes/unit-note.dto';
+
+interface BookletLog {
+  id: number;
+  bookletid: number;
+  ts: string;
+  parameter: string;
+  key: string;
+}
+
+interface BookletSession {
+  id: number;
+  browser: string;
+  os: string;
+  screen: string;
+  ts: string;
+}
+
+interface UnitResult {
+  id: number;
+  unitid: number;
+  variableid: string;
+  status: string;
+  value: string;
+  subform: string;
+  code?: number;
+  score?: number;
+  codedstatus?: string;
+}
+
+interface UnitLog {
+  id: number;
+  unitid: number;
+  ts: string;
+  key: string;
+  parameter: string;
+}
+
+interface Unit {
+  id: number;
+  bookletid: number;
+  name: string;
+  alias: string | null;
+  results: UnitResult[];
+  logs: UnitLog[];
+}
+
+interface Booklet {
+  id: number;
+  personid: number;
+  name: string;
+  title?: string;
+  size: number;
+  logs: BookletLog[];
+  sessions?: BookletSession[];
+  units: Unit[];
+}
+
+interface Response {
+  id: number;
+  unitid: number;
+  variableid: string;
+  status: string;
+  value: string;
+  subform: string;
+  code?: number;
+  score?: number;
+  codedstatus?: string;
+  expanded?: boolean;
+}
 
 interface P {
   id: number;
@@ -90,7 +164,7 @@ interface P {
     MatDivider,
     MatTooltipModule]
 })
-export class TestResultsComponent implements OnInit {
+export class TestResultsComponent implements OnInit, OnDestroy {
   private dialog = inject(MatDialog);
   private backendService = inject(BackendService);
   private appService = inject(AppService);
@@ -98,40 +172,56 @@ export class TestResultsComponent implements OnInit {
   private snackBar = inject(MatSnackBar);
   private translateService = inject(TranslateService);
 
+  // Search debounce
+  private searchSubject = new Subject<string>();
+  private searchSubscription: Subscription | null = null;
+  private readonly SEARCH_DEBOUNCE_TIME = 800; // milliseconds
+
   selection = new SelectionModel<P>(true, []);
-  tableSelectionCheckboxes = new SelectionModel<TestGroupsInListDto>(true, []);
   dataSource !: MatTableDataSource<P>;
   displayedColumns: string[] = ['select', 'code', 'group', 'login', 'uploaded_at'];
   data: P[] = [];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  booklets: { id: number; title: string, name:string, units:any, logs?: any[], sessions?: any[] }[] = [];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  results: { [key: string]: any }[] = [];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  responses: any = [];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  logs: any = [];
+  booklets: Booklet[] = [];
+  results: { [key: string]: unknown }[] = [];
+  responses: Response[] = [];
+  logs: UnitLog[] = [];
   bookletLogs: { [key: string]: unknown }[] = [];
   totalRecords: number = 0;
   pageSize: number = 50;
   pageIndex: number = 0;
-  selectedUnit: { alias: string; [key: string]: unknown } | undefined;
+  selectedUnit: Unit | undefined;
   testPerson!: P;
-  selectedBooklet: any;
+  selectedBooklet!: Booklet | string;
   isLoading: boolean = true;
   isUploadingResults: boolean = false;
+  isSearching: boolean = false;
   unitTags: UnitTagDto[] = [];
   newTagText: string = '';
   unitTagsMap: Map<number, UnitTagDto[]> = new Map();
   unitNotes: UnitNoteDto[] = [];
   unitNotesMap: Map<number, UnitNoteDto[]> = new Map();
-  readonly SHORT_PROCESSING_TIME_THRESHOLD_MS: number = 60000; // 1 minute in milliseconds
+  readonly SHORT_PROCESSING_TIME_THRESHOLD_MS: number = 60000;
 
   @ViewChild(MatPaginator) paginator!: MatPaginator;
   @ViewChild(MatSort) sort!: MatSort;
 
   ngOnInit(): void {
-    this.createTestResultsList();
+    this.searchSubscription = this.searchSubject.pipe(
+      debounceTime(this.SEARCH_DEBOUNCE_TIME),
+      distinctUntilChanged()
+    ).subscribe(searchText => {
+      this.createTestResultsList(0, this.pageSize, searchText);
+    });
+
+    this.createTestResultsList(0, this.pageSize);
+  }
+
+  ngOnDestroy(): void {
+    // Clean up subscriptions
+    if (this.searchSubscription) {
+      this.searchSubscription.unsubscribe();
+      this.searchSubscription = null;
+    }
   }
 
   onRowClick(row: P): void {
@@ -224,7 +314,7 @@ export class TestResultsComponent implements OnInit {
         const url = this.router
           .serializeUrl(
             this.router.createUrlTree(
-              [`replay/${this.testPerson.login}@${this.testPerson.code}@${this.selectedBooklet}/${this.selectedUnit?.alias}/0/0`],
+              [`replay/${this.testPerson.login}@${this.testPerson.code}@${this.testPerson.group}/${this.selectedUnit?.alias}/0/0`],
               { queryParams: queryParams })
           );
         window.open(`#/${url}`, '_blank');
@@ -233,15 +323,11 @@ export class TestResultsComponent implements OnInit {
 
   applyFilter(event: Event): void {
     const filterValue = (event.target as HTMLInputElement).value;
-    this.dataSource.filter = filterValue.trim().toLowerCase();
-
-    if (this.dataSource.paginator) {
-      this.dataSource.paginator.firstPage();
-    }
+    this.isSearching = true;
+    this.searchSubject.next(filterValue);
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  openBookletLogsDialog(booklet: any) {
+  openBookletLogsDialog(booklet: Booklet) {
     this.dialog.open(LogDialogComponent, {
       width: '700px',
       data: {
@@ -325,16 +411,14 @@ export class TestResultsComponent implements OnInit {
     });
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  onUnitClick(unit: any): void {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    this.responses = unit.results.map((response: any) => ({
+  onUnitClick(unit: Unit, booklet: Booklet): void {
+    this.responses = unit.results.map((response: UnitResult) => ({
       ...response,
       expanded: false
     }));
+    this.selectedBooklet = booklet.name;
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    this.responses.sort((a: any, b: any) => {
+    this.responses.sort((a: Response, b: Response) => {
       // First prioritize VALUE_CHANGED status
       if (a.status === 'VALUE_CHANGED' && b.status !== 'VALUE_CHANGED') {
         return -1;
@@ -354,9 +438,7 @@ export class TestResultsComponent implements OnInit {
     // this.loadUnitNotes();
   }
 
-  /**
-   * Load tags for the selected unit
-   */
+
   loadUnitTags(): void {
     if (this.selectedUnit && this.selectedUnit.id) {
       this.backendService.getUnitTags(
@@ -383,9 +465,7 @@ export class TestResultsComponent implements OnInit {
     }
   }
 
-  /**
-   * Load notes for the selected unit
-   */
+
   loadUnitNotes(): void {
     if (this.selectedUnit && this.selectedUnit.id) {
       this.backendService.getUnitNotes(
@@ -412,9 +492,6 @@ export class TestResultsComponent implements OnInit {
     }
   }
 
-  /**
-   * Add a new tag to the selected unit
-   */
   addUnitTag(): void {
     if (!this.newTagText.trim()) {
       this.snackBar.open(
@@ -431,11 +508,6 @@ export class TestResultsComponent implements OnInit {
     }
   }
 
-  /**
-   * Add a new tag to a specific unit
-   * @param unitId The ID of the unit
-   * @param tagText The text for the new tag
-   */
   addTagToUnit(unitId: number, tagText: string): void {
     if (!tagText.trim()) {
       this.snackBar.open(
@@ -482,11 +554,6 @@ export class TestResultsComponent implements OnInit {
     });
   }
 
-  /**
-   * Update an existing tag
-   * @param tagId The ID of the tag to update
-   * @param newText The new text for the tag
-   */
   updateUnitTag(tagId: number, newText: string): void {
     if (!newText.trim()) {
       this.snackBar.open(
@@ -529,21 +596,13 @@ export class TestResultsComponent implements OnInit {
     });
   }
 
-  /**
-   * Delete a tag from the selected unit
-   * @param tagId The ID of the tag to delete
-   */
+
   deleteUnitTag(tagId: number): void {
     if (this.selectedUnit && this.selectedUnit.id) {
       this.deleteTagFromUnit(tagId, this.selectedUnit.id as number);
     }
   }
 
-  /**
-   * Delete a tag from a specific unit
-   * @param tagId The ID of the tag to delete
-   * @param unitId The ID of the unit the tag belongs to
-   */
   deleteTagFromUnit(tagId: number, unitId: number): void {
     this.backendService.deleteUnitTag(
       this.appService.selectedWorkspaceId,
@@ -551,12 +610,10 @@ export class TestResultsComponent implements OnInit {
     ).subscribe({
       next: success => {
         if (success) {
-          // If this is the selected unit, update the unitTags array
           if (this.selectedUnit && this.selectedUnit.id === unitId) {
             this.unitTags = this.unitTags.filter(tag => tag.id !== tagId);
           }
 
-          // Update the unitTagsMap
           const tags = this.unitTagsMap.get(unitId) || [];
           this.unitTagsMap.set(unitId, tags.filter(tag => tag.id !== tagId));
 
@@ -583,16 +640,8 @@ export class TestResultsComponent implements OnInit {
     });
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  onBookletClick(booklet: any): void {
-    this.bookletLogs = booklet.logs;
-    // this.logs = this.createUnitHistory(unit);
-    this.selectedUnit = booklet;
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  setSelectedBooklet(booklet:any) {
-    this.selectedBooklet = booklet;
+  setSelectedBooklet(booklet: Booklet) {
+    this.selectedBooklet = booklet.name;
   }
 
   formatTimestamp(timestamp: string): string {
@@ -600,18 +649,13 @@ export class TestResultsComponent implements OnInit {
     return date.toLocaleString();
   }
 
-  /**
-   * Calculates the processing time for a booklet based on its logs
-   * @param booklet The booklet to calculate processing time for
-   * @returns The processing time in milliseconds, or null if it cannot be calculated
-   */
-  calculateBookletProcessingTime(booklet: any): number | null {
+  calculateBookletProcessingTime(booklet: Booklet): number | null {
     if (!booklet.logs || !Array.isArray(booklet.logs) || booklet.logs.length === 0) {
       return null;
     }
 
-    const pollingLog = booklet.logs.find((log: any) => log.key === 'CONTROLLER' && log.parameter === 'RUNNING');
-    const terminatedLog = booklet.logs.find((log: any) => log.key === 'CONTROLLER' && log.parameter === 'TERMINATED');
+    const pollingLog = booklet.logs.find((log: BookletLog) => log.key === 'CONTROLLER' && log.parameter === 'RUNNING');
+    const terminatedLog = booklet.logs.find((log: BookletLog) => log.key === 'CONTROLLER' && log.parameter === 'TERMINATED');
     if (pollingLog && terminatedLog) {
       const pollingTime = Number(pollingLog.ts);
       const terminatedTime = Number(terminatedLog.ts);
@@ -624,26 +668,16 @@ export class TestResultsComponent implements OnInit {
     return null;
   }
 
-  /**
-   * Formats a duration in milliseconds to a readable format (minutes:seconds)
-   * @param durationMs The duration in milliseconds
-   * @returns A formatted string in the format MM:SS
-   */
+
   formatDuration(durationMs: number | null): string {
     if (durationMs === null || durationMs < 0) return '00:00';
-
-    // Convert to seconds
     const totalSeconds = Math.floor(durationMs / 1000);
-
-    // Calculate minutes and remaining seconds
     const minutes = Math.floor(totalSeconds / 60);
     const seconds = totalSeconds % 60;
-
-    // Format as MM:SS
     return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
   }
 
-  isBookletComplete(booklet: any): boolean {
+  isBookletComplete(booklet: Booklet): boolean {
     if (!booklet.logs || !Array.isArray(booklet.logs) || booklet.logs.length === 0) {
       return true;
     }
@@ -651,19 +685,19 @@ export class TestResultsComponent implements OnInit {
     if (!booklet.units || !Array.isArray(booklet.units) || booklet.units.length === 0) {
       return false;
     }
-    const unitIdLogs = booklet.logs.filter((log: any) => log.key === 'CURRENT_UNIT_ID');
+    const unitIdLogs = booklet.logs.filter((log: BookletLog) => log.key === 'CURRENT_UNIT_ID');
     const unitAliases = booklet.units
-      .map((unit: any) => unit.alias)
+      .map((unit: Unit) => unit.alias)
       .filter((alias: string | null) => alias !== null) as string[];
 
     const allUnitsVisited = unitAliases.every(
-      (alias: string) => unitIdLogs.some((log: any) => log.parameter === alias)
+      (alias: string) => unitIdLogs.some((log: BookletLog) => log.parameter === alias)
     );
 
     return allUnitsVisited && unitAliases.length > 0;
   }
 
-  hasShortProcessingTime(booklet: any): boolean {
+  hasShortProcessingTime(booklet: Booklet): boolean {
     if (!booklet.logs || !Array.isArray(booklet.logs) || booklet.logs.length === 0) {
       return false;
     }
@@ -672,15 +706,12 @@ export class TestResultsComponent implements OnInit {
     return processingTime === null || processingTime < this.SHORT_PROCESSING_TIME_THRESHOLD_MS;
   }
 
-  // Check if any response value for a unit starts with "UEsD"
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  hasGeogebraResponse(unit: any): boolean {
+  hasGeogebraResponse(unit: Unit): boolean {
     if (!unit || !unit.results || !Array.isArray(unit.results)) {
       return false;
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return unit.results.some((response:any) => response.value && typeof response.value === 'string' && response.value.startsWith('UEsD'));
+    return unit.results.some((response: UnitResult) => response.value && response.value.startsWith('UEsD'));
   }
 
   getColor(status: string): string {
@@ -698,17 +729,32 @@ export class TestResultsComponent implements OnInit {
     }
   }
 
+  getCurrentSearchText(): string {
+    const searchInput = document.querySelector('.search-input') as HTMLInputElement;
+    return searchInput ? searchInput.value : '';
+  }
+
+  clearSearch(): void {
+    const searchInput = document.querySelector('.search-input') as HTMLInputElement;
+    if (searchInput) {
+      searchInput.value = '';
+      this.createTestResultsList(0, this.pageSize);
+    }
+  }
+
   onPaginatorChange(event: PageEvent): void {
     this.pageSize = event.pageSize;
     this.pageIndex = event.pageIndex;
-    this.createTestResultsList(this.pageIndex, this.pageSize);
+    this.createTestResultsList(this.pageIndex, this.pageSize, this.getCurrentSearchText());
   }
 
-  createTestResultsList(page: number = 0, limit: number = 50): void {
+  createTestResultsList(page: number = 0, limit: number = 50, searchText: string = ''): void {
     const validPage = Math.max(0, page);
-    this.backendService.getTestResults(this.appService.selectedWorkspaceId, validPage, limit)
+    this.isLoading = !this.isSearching;
+    this.backendService.getTestResults(this.appService.selectedWorkspaceId, validPage, limit, searchText)
       .subscribe(response => {
         this.isLoading = false;
+        this.isSearching = false;
         const { data, total } = response;
         this.updateTable(data, total);
       });
@@ -732,16 +778,14 @@ export class TestResultsComponent implements OnInit {
     this.selection.toggle(row);
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private updateTable(data: any[], total: number): void {
-    this.data = data;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const mappedResults = data.map((result: any) => ({
-      id: result.id,
-      code: result.code,
-      group: result.group,
-      login: result.login,
-      uploaded_at: result.uploaded_at
+  private updateTable(data: Record<string, unknown>[], total: number): void {
+    this.data = data as any;
+    const mappedResults = data.map((result: Record<string, unknown>) => ({
+      id: result.id as number,
+      code: result.code as string,
+      group: result.group as string,
+      login: result.login as string,
+      uploaded_at: result.uploaded_at as Date
     }));
     this.dataSource = new MatTableDataSource(mappedResults);
     this.totalRecords = total;
@@ -759,7 +803,7 @@ export class TestResultsComponent implements OnInit {
 
     dialogRef.afterClosed().subscribe((result: boolean | UntypedFormGroup) => {
       if (result instanceof UntypedFormGroup || result) {
-        this.createTestResultsList(this.pageIndex, this.pageSize);
+        this.createTestResultsList(this.pageIndex, this.pageSize, this.getCurrentSearchText());
       }
     });
   }
@@ -776,7 +820,7 @@ export class TestResultsComponent implements OnInit {
           resultType
         ).subscribe(() => {
           setTimeout(() => {
-            this.createTestResultsList(this.pageIndex, this.pageSize);
+            this.createTestResultsList(this.pageIndex, this.pageSize, this.getCurrentSearchText());
           }, 1000);
           this.isLoading = false;
           this.isUploadingResults = false;
@@ -798,7 +842,7 @@ export class TestResultsComponent implements OnInit {
           '',
           { duration: 1000 }
         );
-        this.createTestResultsList(this.pageIndex, this.pageSize);
+        this.createTestResultsList(this.pageIndex, this.pageSize, this.getCurrentSearchText());
       } else {
         this.snackBar.open(
           this.translateService.instant('ws-admin.test-group-not-deleted'),
@@ -824,7 +868,7 @@ export class TestResultsComponent implements OnInit {
           '',
           { duration: 1000 }
         );
-        this.createTestResultsList(this.pageIndex, this.pageSize);
+        this.createTestResultsList(this.pageIndex, this.pageSize, this.getCurrentSearchText());
       } else {
         this.snackBar.open(
           this.translateService.instant('ws-admin.test-group-not-coded'),
