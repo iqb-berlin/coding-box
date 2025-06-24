@@ -13,7 +13,7 @@ import { FileIo } from '../../admin/workspace/file-io.interface';
 import { FileDownloadDto } from '../../../../../../api-dto/files/file-download.dto';
 import { FileValidationResultDto } from '../../../../../../api-dto/files/file-validation-result.dto';
 import { ResponseDto } from '../../../../../../api-dto/responses/response-dto';
-import { VariableValidationDto, InvalidVariableDto } from '../../../../../../api-dto/files/variable-validation.dto';
+import { InvalidVariableDto } from '../../../../../../api-dto/files/variable-validation.dto';
 import { ResponseEntity } from '../entities/response.entity';
 import { Unit } from '../entities/unit.entity';
 import Persons from '../entities/persons.entity';
@@ -827,20 +827,10 @@ export class WorkspaceFilesService {
   private static getPlayerId(file: FileIo): string {
     try {
       const playerCode = file.buffer.toString();
-
       const playerContent = cheerio.load(playerCode);
-
       // Search for JSON+LD <script> tags in the parsed DOM.
       const metaDataElement = playerContent('script[type="application/ld+json"]');
-      if (!metaDataElement.length) {
-        console.error('Meta-data <script> tag not found');
-      }
-
       const metadata = JSON.parse(metaDataElement.text());
-      if (!metadata.id || !metadata.version) {
-        console.error('Invalid metadata structure: Missing id or version');
-      }
-
       return WorkspaceFilesService.normalizePlayerId(`${metadata.id}-${metadata.version}`);
     } catch (error) {
       return WorkspaceFilesService.getResourceId(file);
@@ -941,7 +931,6 @@ export class WorkspaceFilesService {
    */
   async getCodingSchemeByRef(workspaceId: number, codingSchemeRef: string): Promise<FileDownloadDto | null> {
     try {
-      console.log(`Retrieving coding scheme for workspace ${workspaceId} with reference ${codingSchemeRef}`);
       const codingSchemeFile = await this.fileUploadRepository.findOne({
         where: {
           workspace_id: workspaceId,
@@ -985,7 +974,6 @@ export class WorkspaceFilesService {
               [parsedXml.Unit.BaseVariables.Variable];
             for (const variable of baseVariables) {
               if (variable.$.alias) {
-                console.log(variable.$.alias);
                 variables.add(variable.$.alias);
               }
             }
@@ -996,8 +984,6 @@ export class WorkspaceFilesService {
         console.error(`Could not parse Unit file ${unitFile.filename}: ${e.message}`);
       }
     }
-    console.log(`Found ${unitVariables.size} units with variables in workspace ${workspaceId}`);
-    console.log(`Unit variables: ${JSON.stringify(Array.from(unitVariables.entries()))}`);
 
     const invalidVariables: InvalidVariableDto[] = [];
 
@@ -1035,7 +1021,6 @@ export class WorkspaceFilesService {
       };
     }
 
-    // Get all unit IDs
     const unitIds = units.map(unit => unit.id);
 
     // Find all responses that belong to these units
@@ -1044,7 +1029,6 @@ export class WorkspaceFilesService {
       relations: ['unit'] // Include unit relation to access unit.name
     });
 
-    console.log(`Found ${responses.length} responses for units in workspace ${workspaceId}`);
 
     // Check each response
     for (const response of responses) {
@@ -1283,6 +1267,104 @@ export class WorkspaceFilesService {
       default:
         return true; // For unknown types, assume the value is valid
     }
+  }
+
+  /**
+   * Validates if response status is one of the valid values
+   * @param workspaceId The ID of the workspace
+   * @param page Page number for pagination
+   * @param limit Number of items per page
+   * @returns Paginated validation result with invalid responses
+   */
+  async validateResponseStatus(workspaceId: number, page: number = 1, limit: number = 10): Promise<{ data: InvalidVariableDto[]; total: number; page: number; limit: number }> {
+    // Valid response status values
+    console.log(`Validating response status for workspace ${workspaceId} with page ${page} and limit ${limit}`);
+    const validStatusValues = ['VALUE_CHANGED', 'NOT_REACHED', 'DISPLAYED', 'UNSET', 'PARTLY_DISPLAYED'];
+
+    // Find all persons with the given workspace_id
+    const persons = await this.personsRepository.find({
+      where: { workspace_id: workspaceId }
+    });
+
+    if (persons.length === 0) {
+      this.logger.warn(`No persons found for workspace ${workspaceId}`);
+      return {
+        data: [],
+        total: 0,
+        page,
+        limit
+      };
+    }
+
+    // Get all person IDs
+    const personIds = persons.map(person => person.id);
+
+    // Find all units that belong to booklets that belong to these persons
+    const units = await this.unitRepository.createQueryBuilder('unit')
+      .innerJoin('unit.booklet', 'booklet')
+      .where('booklet.personid IN (:...personIds)', { personIds })
+      .getMany();
+
+    if (units.length === 0) {
+      this.logger.warn(`No units found for persons in workspace ${workspaceId}`);
+      return {
+        data: [],
+        total: 0,
+        page,
+        limit
+      };
+    }
+
+    // Get all unit IDs
+    const unitIds = units.map(unit => unit.id);
+
+    // Find all responses that belong to these units
+    const responses = await this.responseRepository.find({
+      where: { unitid: In(unitIds) },
+      relations: ['unit'] // Include unit relation to access unit.name
+    });
+
+    console.log(`Found ${responses.length} responses for units in workspace ${workspaceId}`);
+
+    const invalidVariables: InvalidVariableDto[] = [];
+
+    // Check each response
+    for (const response of responses) {
+      const unit = response.unit;
+      if (!unit) {
+        this.logger.warn(`Response ${response.id} has no associated unit`);
+        continue;
+      }
+
+      const unitName = unit.name;
+      const variableId = response.variableid;
+      const status = response.status;
+
+      // Check if the response status is one of the valid values
+      if (!validStatusValues.includes(status)) {
+        invalidVariables.push({
+          fileName: `Unit ${unitName}`,
+          variableId: variableId,
+          value: response.value || '',
+          responseId: response.id,
+          errorReason: `Invalid response status: ${status}. Valid values are: ${validStatusValues.join(', ')}`
+        });
+      }
+    }
+
+    // Apply pagination
+    const validPage = Math.max(1, page);
+    const validLimit = Math.min(Math.max(1, limit), 1000);
+    const startIndex = (validPage - 1) * validLimit;
+    const endIndex = startIndex + validLimit;
+    const paginatedData = invalidVariables.slice(startIndex, endIndex);
+
+    return {
+      data: paginatedData,
+      total: invalidVariables.length,
+      page: validPage,
+      limit: validLimit
+    };
   }
 
   /**

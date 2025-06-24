@@ -137,6 +137,43 @@ export class WorkspaceFilesController {
     return this.workspaceFilesService.validateTestFiles(workspace_id);
   }
 
+  @Get(':workspace_id/files/validate-response-status')
+  @ApiTags('test files validation')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiOperation({ summary: 'Validate response status', description: 'Validates if response status is one of the valid values (VALUE_CHANGED, NOT_REACHED, DISPLAYED, UNSET, PARTLY_DISPLAYED)' })
+  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    description: 'Page number for pagination',
+    type: Number
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    description: 'Number of items per page',
+    type: Number
+  })
+  @ApiOkResponse({
+    description: 'Response status validation result',
+    schema: {
+      type: 'object',
+      properties: {
+        data: { type: 'array', items: { $ref: '#/components/schemas/InvalidVariableDto' } },
+        total: { type: 'number' },
+        page: { type: 'number' },
+        limit: { type: 'number' }
+      }
+    }
+  })
+  async validateResponseStatus(
+    @Param('workspace_id') workspace_id: number,
+                           @Query('page') page: number = 1,
+                           @Query('limit') limit: number = 10
+  ): Promise<{ data: InvalidVariableDto[]; total: number; page: number; limit: number }> {
+    return this.workspaceFilesService.validateResponseStatus(workspace_id, page, limit);
+  }
+
   @Get(':workspace_id/files/validate-variables')
   @ApiTags('test files validation')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
@@ -203,6 +240,7 @@ export class WorkspaceFilesController {
       }
     }
   })
+
   async validateVariableTypes(
     @Param('workspace_id') workspace_id: number,
                            @Query('page') page: number = 1,

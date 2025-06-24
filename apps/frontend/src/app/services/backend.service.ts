@@ -34,7 +34,7 @@ import { CreateUnitNoteDto } from '../../../../../api-dto/unit-notes/create-unit
 import { UpdateUnitNoteDto } from '../../../../../api-dto/unit-notes/update-unit-note.dto';
 import { ResourcePackageDto } from '../../../../../api-dto/resource-package/resource-package-dto';
 import { PaginatedWorkspaceUserDto } from '../../../../../api-dto/workspaces/paginated-workspace-user-dto';
-import { InvalidVariableDto, VariableValidationDto } from '../../../../../api-dto/files/variable-validation.dto';
+import { InvalidVariableDto } from '../../../../../api-dto/files/variable-validation.dto';
 
 interface PaginatedResponse<T> {
   data: T[];
@@ -275,6 +275,24 @@ export class BackendService {
 
     return this.http.get<PaginatedResponse<InvalidVariableDto>>(
       `${this.serverUrl}admin/workspace/${workspaceId}/files/validate-variable-types`,
+      { headers: this.authHeader, params }
+    ).pipe(
+      catchError(() => of({
+        data: [],
+        total: 0,
+        page,
+        limit
+      }))
+    );
+  }
+
+  validateResponseStatus(workspaceId: number, page: number = 1, limit: number = 10): Observable<PaginatedResponse<InvalidVariableDto>> {
+    const params = new HttpParams()
+      .set('page', page.toString())
+      .set('limit', limit.toString());
+
+    return this.http.get<PaginatedResponse<InvalidVariableDto>>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/files/validate-response-status`,
       { headers: this.authHeader, params }
     ).pipe(
       catchError(() => of({

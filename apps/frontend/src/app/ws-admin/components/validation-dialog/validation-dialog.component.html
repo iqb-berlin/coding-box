@@ -162,9 +162,78 @@
     </mat-step>
     <mat-step label="Wert ist gültig">
       <p>Prüft, ob der Wert der Antwort gültig ist (gemäß Unit.xml).</p>
+      <button mat-button (click)="validateResponseStatus()">Antwortstatus validieren</button>
+      @if (isResponseStatusValidationRunning) {
+        <div class="loading-container">
+          <mat-spinner class="mat-spinner"></mat-spinner>
+          <p class="loading-text">Antwortstatus wird validiert...</p>
+        </div>
+      }
+      @if (invalidStatusVariables.length > 0 || totalInvalidStatusVariables > 0) {
+        <p>
+          {{ totalInvalidStatusVariables }} ungültige Antwortstatus gefunden.
+        </p>
+        @if (invalidStatusVariables.length > 0) {
+          <div class="actions-container">
+            <button mat-button (click)="toggleStatusExpansion()">
+              {{ expandedStatusPanel ? 'Liste einklappen' : 'Liste ausklappen' }}
+            </button>
+            <button mat-button (click)="selectAllStatusResponses()">Alle auswählen</button>
+            <button mat-button (click)="deselectAllStatusResponses()">Auswahl aufheben</button>
+            <button mat-button color="warn" (click)="deleteSelectedStatusResponses()" [disabled]="isDeletingResponses || selectedStatusResponses.size === 0">
+              @if (isDeletingResponses) {
+                <mat-spinner diameter="20"></mat-spinner> Löschen...
+              } @else {
+                Ausgewählte löschen ({{ selectedStatusResponses.size }})
+              }
+            </button>
+          </div>
+
+          <mat-expansion-panel [expanded]="expandedStatusPanel">
+            <table mat-table [dataSource]="paginatedStatusVariables">
+              <ng-container matColumnDef="select">
+                <th mat-header-cell *matHeaderCellDef>Auswählen</th>
+                <td mat-cell *matCellDef="let element">
+                  <input type="checkbox"
+                         [checked]="isStatusResponseSelected(element.responseId)"
+                         (change)="toggleStatusResponseSelection(element.responseId)"
+                         [disabled]="!element.responseId">
+                </td>
+              </ng-container>
+              <ng-container matColumnDef="fileName">
+                <th mat-header-cell *matHeaderCellDef>Dateiname</th>
+                <td mat-cell *matCellDef="let element">
+                  <a href="javascript:void(0)" (click)="showUnitXml(element.fileName)">{{ element.fileName }}</a>
+                </td>
+              </ng-container>
+              <ng-container matColumnDef="variableId">
+                <th mat-header-cell *matHeaderCellDef>Variablen-ID</th>
+                <td mat-cell *matCellDef="let element">{{ element.variableId }}</td>
+              </ng-container>
+              <ng-container matColumnDef="value">
+                <th mat-header-cell *matHeaderCellDef>Wert</th>
+                <td mat-cell *matCellDef="let element">{{ element.value }}</td>
+              </ng-container>
+              <ng-container matColumnDef="errorReason">
+                <th mat-header-cell *matHeaderCellDef>Fehlergrund</th>
+                <td mat-cell *matCellDef="let element">{{ element.errorReason }}</td>
+              </ng-container>
+              <tr mat-header-row *matHeaderRowDef="['select', 'fileName', 'variableId', 'value', 'errorReason']"></tr>
+              <tr mat-row *matRowDef="let row; columns: ['select', 'fileName', 'variableId', 'value', 'errorReason'];"></tr>
+            </table>
+            <mat-paginator #statusVariablePaginator
+                         [pageSize]="statusVariablePageSize"
+                         [pageSizeOptions]="pageSizeOptions"
+                         [length]="totalInvalidStatusVariables"
+                         [pageIndex]="currentStatusVariablePage - 1"
+                         (page)="onStatusVariablePageChange($event)"
+                         aria-label="Seite auswählen">
+            </mat-paginator>
+          </mat-expansion-panel>
+        }
+      }
       <div>
-        <button mat-button matStepperNext>Daten bereinigen</button>
-        <button mat-button matStepperNext>Daten behalten</button>
+        <button mat-button matStepperNext>Weiter</button>
       </div>
     </mat-step>
     <mat-step label="Antwort vorgesehen">

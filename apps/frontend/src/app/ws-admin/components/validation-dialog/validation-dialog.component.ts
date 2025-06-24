@@ -1,4 +1,6 @@
-import { Component, Inject, inject, ViewChild, AfterViewInit, OnInit } from '@angular/core';
+import {
+  Component, Inject, inject, ViewChild, AfterViewInit, OnInit
+} from '@angular/core';
 import {
   MAT_DIALOG_DATA, MatDialog, MatDialogModule, MatDialogRef
 } from '@angular/material/dialog';
@@ -59,6 +61,7 @@ import { ContentDialogComponent } from '../../../shared/dialogs/content-dialog/c
 export class ValidationDialogComponent implements AfterViewInit, OnInit {
   @ViewChild('variablePaginator') variablePaginator!: MatPaginator;
   @ViewChild('variableTypePaginator') variableTypePaginator!: MatPaginator;
+  @ViewChild('statusVariablePaginator') statusVariablePaginator!: MatPaginator;
 
   firstStepCompleted = true;
   backendService = inject(BackendService);
@@ -76,13 +79,22 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit {
   currentTypeVariablePage: number = 1;
   typeVariablePageSize: number = 10;
 
+  // Response status validation properties
+  invalidStatusVariables: InvalidVariableDto[] = [];
+  totalInvalidStatusVariables: number = 0;
+  currentStatusVariablePage: number = 1;
+  statusVariablePageSize: number = 10;
+
   isVariableValidationRunning: boolean = false;
   isVariableTypeValidationRunning: boolean = false;
+  isResponseStatusValidationRunning: boolean = false;
   isDeletingResponses: boolean = false;
   expandedPanel: boolean = false;
   expandedTypePanel: boolean = false;
+  expandedStatusPanel: boolean = false;
   selectedResponses: Set<number> = new Set<number>();
   selectedTypeResponses: Set<number> = new Set<number>();
+  selectedStatusResponses: Set<number> = new Set<number>();
 
   // Pagination properties
   pageSizeOptions = [5, 10, 25, 50];
@@ -90,6 +102,7 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit {
   // Paginated data
   paginatedVariables = new MatTableDataSource<InvalidVariableDto>([]);
   paginatedTypeVariables = new MatTableDataSource<InvalidVariableDto>([]);
+  paginatedStatusVariables = new MatTableDataSource<InvalidVariableDto>([]);
 
   constructor(
     @Inject(MAT_DIALOG_DATA) public data: unknown,
@@ -106,6 +119,7 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit {
     // Set up paginators after view is initialized
     this.paginatedVariables.paginator = this.variablePaginator;
     this.paginatedTypeVariables.paginator = this.variableTypePaginator;
+    this.paginatedStatusVariables.paginator = this.statusVariablePaginator;
   }
 
   updatePaginatedVariables(): void {
@@ -114,6 +128,10 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit {
 
   updatePaginatedTypeVariables(): void {
     this.paginatedTypeVariables.data = this.invalidTypeVariables;
+  }
+
+  updatePaginatedStatusVariables(): void {
+    this.paginatedStatusVariables.data = this.invalidStatusVariables;
   }
 
   validateVariables(): void {
@@ -210,10 +228,35 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit {
     });
   }
 
+  validateResponseStatus(): void {
+    this.isResponseStatusValidationRunning = true;
+    this.invalidStatusVariables = [];
+    this.totalInvalidStatusVariables = 0;
+    this.selectedStatusResponses.clear();
+    this.backendService.validateResponseStatus(
+      this.appService.selectedWorkspaceId,
+      this.currentStatusVariablePage,
+      this.statusVariablePageSize
+    ).subscribe(result => {
+      this.invalidStatusVariables = result.data;
+      this.totalInvalidStatusVariables = result.total;
+      this.currentStatusVariablePage = result.page;
+      this.statusVariablePageSize = result.limit;
+      this.updatePaginatedStatusVariables();
+      this.isResponseStatusValidationRunning = false;
+    });
+  }
+
   onTypeVariablePageChange(event: PageEvent): void {
     this.currentTypeVariablePage = event.pageIndex + 1;
     this.typeVariablePageSize = event.pageSize;
     this.validateVariableTypes();
+  }
+
+  onStatusVariablePageChange(event: PageEvent): void {
+    this.currentStatusVariablePage = event.pageIndex + 1;
+    this.statusVariablePageSize = event.pageSize;
+    this.validateResponseStatus();
   }
 
   toggleTypeResponseSelection(responseId: number | undefined): void {
@@ -266,12 +309,64 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit {
     this.expandedTypePanel = !this.expandedTypePanel;
   }
 
+  toggleStatusResponseSelection(responseId: number | undefined): void {
+    if (responseId === undefined) return;
+
+    if (this.selectedStatusResponses.has(responseId)) {
+      this.selectedStatusResponses.delete(responseId);
+    } else {
+      this.selectedStatusResponses.add(responseId);
+    }
+  }
+
+  isStatusResponseSelected(responseId: number | undefined): boolean {
+    return responseId !== undefined && this.selectedStatusResponses.has(responseId);
+  }
+
+  selectAllStatusResponses(): void {
+    this.invalidStatusVariables.forEach(variable => {
+      if (variable.responseId !== undefined) {
+        this.selectedStatusResponses.add(variable.responseId);
+      }
+    });
+  }
+
+  deselectAllStatusResponses(): void {
+    this.selectedStatusResponses.clear();
+  }
+
+  deleteSelectedStatusResponses(): void {
+    if (this.selectedStatusResponses.size === 0) {
+      this.snackBar.open('Keine Antworten ausgewählt', 'Schließen', { duration: 3000 });
+      return;
+    }
+
+    this.isDeletingResponses = true;
+    const responseIds = Array.from(this.selectedStatusResponses);
+
+    this.backendService.deleteInvalidResponses(this.appService.selectedWorkspaceId, responseIds)
+      .subscribe(deletedCount => {
+        this.isDeletingResponses = false;
+        this.snackBar.open(`${deletedCount} Antworten gelöscht`, 'Schließen', { duration: 3000 });
+
+        // Refresh the data after deletion
+        this.validateResponseStatus();
+        this.selectedStatusResponses.clear();
+      });
+  }
+
+  toggleStatusExpansion(): void {
+    this.expandedStatusPanel = !this.expandedStatusPanel;
+  }
+
   closeWithResults(): void {
     this.dialogRef.close({
       invalidVariables: this.invalidVariables,
       totalInvalidVariables: this.totalInvalidVariables,
       invalidTypeVariables: this.invalidTypeVariables,
-      totalInvalidTypeVariables: this.totalInvalidTypeVariables
+      totalInvalidTypeVariables: this.totalInvalidTypeVariables,
+      invalidStatusVariables: this.invalidStatusVariables,
+      totalInvalidStatusVariables: this.totalInvalidStatusVariables
     });
   }
 

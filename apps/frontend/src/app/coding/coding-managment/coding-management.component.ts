@@ -223,7 +223,6 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
         })
       )
       .subscribe(response => {
-        console.log(response);
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         this.data = response.data.map((item: any) => ({
           id: item.id,
@@ -572,7 +571,6 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
       )
       .subscribe(xmlContent => {
         if (!xmlContent) return;
-        console.log(xmlContent);
         const codingSchemeRef = this.extractCodingSchemeRefFromXml(xmlContent);
 
         if (codingSchemeRef) {
@@ -641,7 +639,6 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
           });
         }
       });
-
   }
 
   showUnitXml(unitId: number): void {
