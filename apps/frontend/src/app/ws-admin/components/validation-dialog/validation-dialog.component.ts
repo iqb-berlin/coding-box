@@ -113,6 +113,21 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit {
   currentStatusVariablePage: number = 1;
   statusVariablePageSize: number = 10;
 
+  // Group responses validation properties
+  groupResponsesResult: {
+    testTakersFound: boolean;
+    groupsWithResponses: { group: string; hasResponse: boolean }[];
+    allGroupsHaveResponses: boolean;
+  } | null = null;
+
+  isGroupResponsesValidationRunning: boolean = false;
+
+  groupResponsesValidationWasRun: boolean = false;
+
+  expandedGroupResponsesPanel: boolean = false;
+
+  paginatedGroupResponses = new MatTableDataSource<{ group: string; hasResponse: boolean }>([]);
+
   // TestTakers validation properties
   testTakersValidationResult: TestTakersValidationDto | null = null;
   isTestTakersValidationRunning: boolean = false;
@@ -173,6 +188,12 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit {
     }
   }
 
+  updatePaginatedGroupResponses(): void {
+    if (this.groupResponsesResult) {
+      this.paginatedGroupResponses.data = this.groupResponsesResult.groupsWithResponses;
+    }
+  }
+
   validateTestTakers(): void {
     this.isTestTakersValidationRunning = true;
     this.testTakersValidationResult = null;
@@ -188,6 +209,23 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit {
 
   toggleMissingPersonsExpansion(): void {
     this.expandedMissingPersonsPanel = !this.expandedMissingPersonsPanel;
+  }
+
+  toggleGroupResponsesExpansion(): void {
+    this.expandedGroupResponsesPanel = !this.expandedGroupResponsesPanel;
+  }
+
+  validateGroupResponses(): void {
+    this.isGroupResponsesValidationRunning = true;
+    this.groupResponsesResult = null;
+    this.groupResponsesValidationWasRun = false;
+    this.backendService.validateGroupResponses(this.appService.selectedWorkspaceId)
+      .subscribe(result => {
+        this.groupResponsesResult = result;
+        this.updatePaginatedGroupResponses();
+        this.isGroupResponsesValidationRunning = false;
+        this.groupResponsesValidationWasRun = true;
+      });
   }
 
   updatePaginatedTypeVariables(): void {

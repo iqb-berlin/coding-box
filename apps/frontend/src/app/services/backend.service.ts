@@ -320,6 +320,27 @@ export class BackendService {
     );
   }
 
+  validateGroupResponses(workspaceId: number): Observable<{
+    testTakersFound: boolean;
+    groupsWithResponses: { group: string; hasResponse: boolean }[];
+    allGroupsHaveResponses: boolean;
+  }> {
+    return this.http.get<{
+      testTakersFound: boolean;
+      groupsWithResponses: { group: string; hasResponse: boolean }[];
+      allGroupsHaveResponses: boolean;
+    }>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/files/validate-group-responses`,
+      { headers: this.authHeader }
+    ).pipe(
+      catchError(() => of({
+        testTakersFound: false,
+        groupsWithResponses: [],
+        allGroupsHaveResponses: false
+      }))
+    );
+  }
+
   deleteInvalidResponses(workspaceId: number, responseIds: number[]): Observable<number> {
     const params = new HttpParams().set('responseIds', responseIds.join(','));
     return this.http.delete<number>(

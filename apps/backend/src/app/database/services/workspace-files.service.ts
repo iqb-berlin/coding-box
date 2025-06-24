@@ -1483,6 +1483,138 @@ export class WorkspaceFilesService {
   }
 
   /**
+   * Validates if there's at least one response for each group found in TestTakers XML files
+   * @param workspaceId The ID of the workspace
+   * @returns Validation result indicating whether at least one response was found for each group
+   */
+  async validateGroupResponses(workspaceId: number): Promise<{
+    testTakersFound: boolean;
+    groupsWithResponses: { group: string; hasResponse: boolean }[];
+    allGroupsHaveResponses: boolean;
+  }> {
+    try {
+      // Find TestTakers files in the workspace
+      const testTakers = await this.fileUploadRepository.find({
+        where: { workspace_id: workspaceId, file_type: In(['TestTakers', 'Testtakers']) }
+      });
+
+      if (!testTakers || testTakers.length === 0) {
+        this.logger.warn(`No TestTakers found in workspace with ID ${workspaceId}.`);
+        return {
+          testTakersFound: false,
+          groupsWithResponses: [],
+          allGroupsHaveResponses: false
+        };
+      }
+
+      // Extract groups from TestTakers XML files
+      const groups: Set<string> = new Set();
+
+      // Process all test takers
+      for (const testTaker of testTakers) {
+        const xmlDocument = cheerio.load(testTaker.data, { xmlMode: true, recognizeSelfClosing: true });
+        const groupElements = xmlDocument('Group');
+
+        if (groupElements.length === 0) {
+          this.logger.warn(`No <Group> elements found in TestTakers file ${testTaker.file_id}.`);
+          continue;
+        }
+
+        // Extract data from each group
+        for (let i = 0; i < groupElements.length; i += 1) {
+          const groupElement = groupElements[i];
+          const groupId = xmlDocument(groupElement).attr('id');
+          const loginElements = xmlDocument(groupElement).find('Login');
+
+          // Check if there's at least one login with mode "run-hot-return" or "run-hot-restart"
+          let hasValidLogin = false;
+          for (let j = 0; j < loginElements.length; j += 1) {
+            const loginElement = loginElements[j];
+            const loginMode = xmlDocument(loginElement).attr('mode');
+
+            if (loginMode === 'run-hot-return' || loginMode === 'run-hot-restart') {
+              hasValidLogin = true;
+              break;
+            }
+          }
+
+          // Only add groups with valid logins
+          if (hasValidLogin && groupId) {
+            groups.add(groupId);
+          }
+        }
+      }
+
+      if (groups.size === 0) {
+        this.logger.warn(`No valid groups found in TestTakers files for workspace ${workspaceId}.`);
+        return {
+          testTakersFound: true,
+          groupsWithResponses: [],
+          allGroupsHaveResponses: false
+        };
+      }
+
+      // Check if each group has at least one response
+      const groupsWithResponses: { group: string; hasResponse: boolean }[] = [];
+      let allGroupsHaveResponses = true;
+
+      for (const group of groups) {
+        // Find persons with this group ID
+        const persons = await this.personsRepository.find({
+          where: { workspace_id: workspaceId, group }
+        });
+
+        if (persons.length === 0) {
+          // No persons found for this group
+          groupsWithResponses.push({ group, hasResponse: false });
+          allGroupsHaveResponses = false;
+          continue;
+        }
+
+        // Get all person IDs
+        const personIds = persons.map(person => person.id);
+
+        // Find all units that belong to booklets that belong to these persons
+        const units = await this.unitRepository.createQueryBuilder('unit')
+          .innerJoin('unit.booklet', 'booklet')
+          .where('booklet.personid IN (:...personIds)', { personIds })
+          .getMany();
+
+        if (units.length === 0) {
+          // No units found for persons in this group
+          groupsWithResponses.push({ group, hasResponse: false });
+          allGroupsHaveResponses = false;
+          continue;
+        }
+
+        // Get all unit IDs
+        const unitIds = units.map(unit => unit.id);
+
+        // Check if there's at least one response for these units
+        const responseCount = await this.responseRepository.count({
+          where: { unitid: In(unitIds) }
+        });
+
+        const hasResponse = responseCount > 0;
+        groupsWithResponses.push({ group, hasResponse });
+
+        if (!hasResponse) {
+          allGroupsHaveResponses = false;
+        }
+      }
+
+      return {
+        testTakersFound: true,
+        groupsWithResponses,
+        allGroupsHaveResponses
+      };
+    } catch (error) {
+      this.logger.error(`Error validating group responses for workspace ${workspaceId}: ${error.message}`, error.stack);
+      throw error;
+    }
+  }
+
+  /**
    * Deletes invalid responses from the database
    * @param workspaceId The ID of the workspace
    * @param responseIds Array of response IDs to delete

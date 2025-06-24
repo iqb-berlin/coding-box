@@ -151,6 +151,37 @@ export class WorkspaceFilesController {
     return this.workspaceFilesService.validateTestTakers(workspace_id);
   }
 
+  @Get(':workspace_id/files/validate-group-responses')
+  @ApiTags('test files validation')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiOperation({ summary: 'Validate group responses', description: 'Validates if there\'s at least one response for each group found in TestTakers XML files' })
+  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
+  @ApiOkResponse({
+    description: 'Group responses validation result',
+    schema: {
+      type: 'object',
+      properties: {
+        testTakersFound: { type: 'boolean' },
+        groupsWithResponses: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              group: { type: 'string' },
+              hasResponse: { type: 'boolean' }
+            }
+          }
+        },
+        allGroupsHaveResponses: { type: 'boolean' }
+      }
+    }
+  })
+  async validateGroupResponses(
+    @Param('workspace_id') workspace_id: number
+  ): Promise<{ testTakersFound: boolean; groupsWithResponses: { group: string; hasResponse: boolean }[]; allGroupsHaveResponses: boolean }> {
+    return this.workspaceFilesService.validateGroupResponses(workspace_id);
+  }
+
   @Get(':workspace_id/files/validate-response-status')
   @ApiTags('test files validation')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
