@@ -1,0 +1,107 @@
+<h1 mat-dialog-title>Antworten validieren</h1>
+<mat-dialog-content>
+  <mat-stepper orientation="vertical" [linear]="true" #stepper>
+    <mat-step label="Testperson definiert" >
+      <p>Prüft, ob für jede Antwort eine Testperson definiert ist.</p>
+      <div>
+        <button mat-button matStepperNext>Daten bereinigen</button>
+        <button mat-button matStepperNext>Daten behalten</button>
+      </div>
+    </mat-step>
+    <mat-step label="Variable definiert">
+      <p>Prüft, ob die Variable in der Unit.xml definiert ist.</p>
+      <button mat-button (click)="validateVariables()">Variablen validieren</button>
+      @if (isVariableValidationRunning) {
+        <div class="loading-container">
+          <mat-spinner class="mat-spinner"></mat-spinner>
+          <p class="loading-text">Variablen werden validiert...</p>
+        </div>
+      }
+      @if (variableValidationResult) {
+        <p>
+          {{ variableValidationResult.checkedFiles }} Dateien geprüft.
+          {{ variableValidationResult.invalidVariables.length }} ungültige Variablen gefunden.
+        </p>
+        @if (variableValidationResult.invalidVariables.length > 0) {
+          <div class="actions-container">
+            <button mat-button (click)="toggleExpansion()">
+              {{ expandedPanel ? 'Liste einklappen' : 'Liste ausklappen' }}
+            </button>
+            <button mat-button (click)="selectAllResponses()">Alle auswählen</button>
+            <button mat-button (click)="deselectAllResponses()">Auswahl aufheben</button>
+            <button mat-button color="warn" (click)="deleteSelectedResponses()" [disabled]="isDeletingResponses || selectedResponses.size === 0">
+              @if (isDeletingResponses) {
+                <mat-spinner diameter="20"></mat-spinner> Löschen...
+              } @else {
+                Ausgewählte löschen ({{ selectedResponses.size }})
+              }
+            </button>
+          </div>
+
+          <mat-expansion-panel [expanded]="expandedPanel">
+            <table mat-table [dataSource]="variableValidationResult.invalidVariables">
+              <ng-container matColumnDef="select">
+                <th mat-header-cell *matHeaderCellDef>Auswählen</th>
+                <td mat-cell *matCellDef="let element">
+                  <input type="checkbox"
+                         [checked]="isResponseSelected(element.responseId)"
+                         (change)="toggleResponseSelection(element.responseId)"
+                         [disabled]="!element.responseId">
+                </td>
+              </ng-container>
+              <ng-container matColumnDef="fileName">
+                <th mat-header-cell *matHeaderCellDef>Dateiname</th>
+                <td mat-cell *matCellDef="let element">{{ element.fileName }}</td>
+              </ng-container>
+              <ng-container matColumnDef="variableId">
+                <th mat-header-cell *matHeaderCellDef>Variablen-ID</th>
+                <td mat-cell *matCellDef="let element">{{ element.variableId }}</td>
+              </ng-container>
+              <ng-container matColumnDef="value">
+                <th mat-header-cell *matHeaderCellDef>Wert</th>
+                <td mat-cell *matCellDef="let element">{{ element.value }}</td>
+              </ng-container>
+              <tr mat-header-row *matHeaderRowDef="['select', 'fileName', 'variableId', 'value']"></tr>
+              <tr mat-row *matRowDef="let row; columns: ['select', 'fileName', 'variableId', 'value'];"></tr>
+            </table>
+          </mat-expansion-panel>
+        }
+      }
+      <div>
+        <button mat-button matStepperNext>Weiter</button>
+      </div>
+    </mat-step>
+    <mat-step label="Variable ist gültig">
+      <p>Prüft, ob die Variable gültig ist.</p>
+      <div>
+        <button mat-button matStepperNext>Daten bereinigen</button>
+        <button mat-button matStepperNext>Daten behalten</button>
+      </div>
+    </mat-step>
+    <mat-step label="Wert ist gültig">
+      <p>Prüft, ob der Wert der Antwort gültig ist (gemäß Unit.xml).</p>
+      <div>
+        <button mat-button matStepperNext>Daten bereinigen</button>
+        <button mat-button matStepperNext>Daten behalten</button>
+      </div>
+    </mat-step>
+    <mat-step label="Antwort vorgesehen">
+      <p>Prüft, ob die Antwort für die Kombination Testperson x Booklet x Unit vorgesehen ist.</p>
+      <div>
+        <button mat-button matStepperNext>Daten bereinigen</button>
+        <button mat-button matStepperNext>Daten behalten</button>
+      </div>
+    </mat-step>
+    <mat-step label="Antworten für alle Gruppen">
+      <p>Prüft, ob Antworten für alle Testperson-Gruppen vorliegen.</p>
+      <div>
+        <button mat-button matStepperNext>Daten bereinigen</button>
+        <button mat-button matStepperNext>Daten behalten</button>
+      </div>
+    </mat-step>
+  </mat-stepper>
+</mat-dialog-content>
+<mat-dialog-actions>
+  <button mat-button (click)="closeWithResults()">Übernehmen</button>
+  <button mat-button mat-dialog-close>Abbrechen</button>
+</mat-dialog-actions>

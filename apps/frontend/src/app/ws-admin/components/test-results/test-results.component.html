@@ -21,6 +21,10 @@
         <mat-icon>code</mat-icon>
         Kodieren
       </a>
+      <a mat-raised-button color="accent" (click)="openValidationDialog()">
+        <mat-icon>rule</mat-icon>
+        Validieren
+      </a>
     </div>
   </div>
   <input #hiddenResponsesFileInput type="file"
@@ -41,6 +45,42 @@
       <p class="loading-text">Ergebnisse werden hochgeladen...</p>
     </div>
   }
+
+  @if (isVariableValidationRunning) {
+    <div class="loading-container">
+      <mat-spinner class="mat-spinner"></mat-spinner>
+      <p class="loading-text">Variablen werden validiert...</p>
+    </div>
+  }
+
+  @if (variableValidationResult) {
+    <div class="validation-results-card">
+      <h2 class="section-title">Variablen-Validierungsergebnis</h2>
+      <p class="section-description">
+        {{ variableValidationResult.checkedFiles }} Dateien geprüft.
+        {{ variableValidationResult.invalidVariables.length }} ungültige Variablen gefunden.
+      </p>
+      @if (variableValidationResult.invalidVariables.length > 0) {
+        <mat-table [dataSource]="variableValidationResult.invalidVariables" class="validation-table">
+          <ng-container matColumnDef="fileName">
+            <mat-header-cell *matHeaderCellDef>Dateiname</mat-header-cell>
+            <mat-cell *matCellDef="let element">{{ element.fileName }}</mat-cell>
+          </ng-container>
+          <ng-container matColumnDef="variableId">
+            <mat-header-cell *matHeaderCellDef>Variablen-ID</mat-header-cell>
+            <mat-cell *matCellDef="let element">{{ element.variableId }}</mat-cell>
+          </ng-container>
+          <ng-container matColumnDef="value">
+            <mat-header-cell *matHeaderCellDef>Wert</mat-header-cell>
+            <mat-cell *matCellDef="let element">{{ element.value }}</mat-cell>
+          </ng-container>
+          <mat-header-row *matHeaderRowDef="['fileName', 'variableId', 'value']"></mat-header-row>
+          <mat-row *matRowDef="let row; columns: ['fileName', 'variableId', 'value'];"></mat-row>
+        </mat-table>
+      }
+    </div>
+  }
+
 
   @if(!isUploadingResults){
     @if ( dataSource) {

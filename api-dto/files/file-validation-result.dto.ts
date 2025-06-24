@@ -1,27 +1,48 @@
 import { ApiProperty } from '@nestjs/swagger';
 
-type FileStatus = {
-  filename: string;
-  exists: boolean;
-};
+export class FileStatus {
+  @ApiProperty()
+    filename!: string;
 
-type DataValidation = {
-  complete: boolean;
-  missing: string[];
-  files: FileStatus[];
-};
+  @ApiProperty()
+    exists!: boolean;
+}
+
+export class DataValidation {
+  @ApiProperty()
+    complete!: boolean;
+
+  @ApiProperty({ type: [String] })
+    missing!: string[];
+
+  @ApiProperty({ type: [FileStatus] })
+    files!: FileStatus[];
+}
+
+export class ValidationData {
+  @ApiProperty()
+    testTaker!: string;
+
+  @ApiProperty({ type: DataValidation })
+    booklets!: DataValidation;
+
+  @ApiProperty({ type: DataValidation })
+    units!: DataValidation;
+
+  @ApiProperty({ type: DataValidation })
+    schemes!: DataValidation;
+
+  @ApiProperty({ type: DataValidation })
+    definitions!: DataValidation;
+
+  @ApiProperty({ type: DataValidation })
+    player!: DataValidation;
+}
 
 export class FileValidationResultDto {
   @ApiProperty({ type: Boolean, description: 'Indicates whether test takers were found' })
     testTakersFound!: boolean;
 
-  @ApiProperty({ type: [Object], description: 'Array of validation results for each test taker' })
-    validationResults!: {
-    testTaker: string;
-    booklets: DataValidation;
-    units: DataValidation;
-    schemes: DataValidation;
-    definitions: DataValidation;
-    player: DataValidation;
-  }[];
+  @ApiProperty({ type: [ValidationData], description: 'Array of validation results for each test taker' })
+    validationResults!: ValidationData[];
 }

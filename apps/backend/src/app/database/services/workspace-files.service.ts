@@ -6,12 +6,17 @@ import AdmZip = require('adm-zip');
 import * as fs from 'fs';
 import * as path from 'path';
 import * as libxmljs from 'libxmljs2';
+import { parseStringPromise } from 'xml2js';
 import FileUpload from '../entities/file_upload.entity';
 import { FilesDto } from '../../../../../../api-dto/files/files.dto';
 import { FileIo } from '../../admin/workspace/file-io.interface';
 import { FileDownloadDto } from '../../../../../../api-dto/files/file-download.dto';
 import { FileValidationResultDto } from '../../../../../../api-dto/files/file-validation-result.dto';
 import { ResponseDto } from '../../../../../../api-dto/responses/response-dto';
+import { VariableValidationDto, InvalidVariableDto } from '../../../../../../api-dto/files/variable-validation.dto';
+import { ResponseEntity } from '../entities/response.entity';
+import { Unit } from '../entities/unit.entity';
+import Persons from '../entities/persons.entity';
 
 function sanitizePath(filePath: string): string {
   const normalizedPath = path.normalize(filePath);
@@ -62,7 +67,15 @@ export class WorkspaceFilesService {
 
   constructor(
     @InjectRepository(FileUpload)
-    private fileUploadRepository: Repository<FileUpload>
+    private fileUploadRepository: Repository<FileUpload>,
+    @InjectRepository(ResponseEntity)
+    private responseRepository: Repository<ResponseEntity>,
+    @InjectRepository(Unit)
+    private unitRepository: Repository<Unit>,
+    @InjectRepository(FileUpload)
+    private filesRepository: Repository<FileUpload>,
+    @InjectRepository(Persons)
+    private personsRepository: Repository<Persons>
   ) {}
 
   async findFiles(
@@ -948,6 +961,169 @@ export class WorkspaceFilesService {
     } catch (error) {
       this.logger.error(`Error retrieving coding scheme: ${error.message}`, error.stack);
       return null;
+    }
+  }
+
+  async validateVariables(workspaceId: number): Promise<VariableValidationDto> {
+    const unitFiles = await this.filesRepository.find({
+      where: { workspace_id: workspaceId, file_type: 'Unit' }
+    });
+    const unitVariables = new Map<string, Set<string>>();
+    for (const unitFile of unitFiles) {
+      try {
+        const xmlContent = unitFile.data.toString();
+        const parsedXml = await parseStringPromise(xmlContent, { explicitArray: false });
+        if (parsedXml.Unit && parsedXml.Unit.Metadata && parsedXml.Unit.Metadata.Id) {
+          const unitName = parsedXml.Unit.Metadata.Id;
+          const variables = new Set<string>();
+          if (parsedXml.Unit.BaseVariables && parsedXml.Unit.BaseVariables.Variable) {
+            const baseVariables = Array.isArray(parsedXml.Unit.BaseVariables.Variable) ?
+              parsedXml.Unit.BaseVariables.Variable :
+              [parsedXml.Unit.BaseVariables.Variable];
+            for (const variable of baseVariables) {
+              if (variable.$.alias) {
+                console.log(variable.$.alias);
+                variables.add(variable.$.alias);
+              }
+            }
+          }
+          unitVariables.set(unitName, variables);
+        }
+      } catch (e) {
+        console.error(`Could not parse Unit file ${unitFile.filename}: ${e.message}`);
+      }
+    }
+    console.log(`Found ${unitVariables.size} units with variables in workspace ${workspaceId}`);
+    console.log(`Unit variables: ${JSON.stringify(Array.from(unitVariables.entries()))}`);
+
+    const invalidVariables: InvalidVariableDto[] = [];
+
+    // Find all persons with the given workspace_id
+    const persons = await this.personsRepository.find({
+      where: { workspace_id: workspaceId }
+    });
+
+    if (persons.length === 0) {
+      this.logger.warn(`No persons found for workspace ${workspaceId}`);
+      return {
+        checkedFiles: unitFiles.length,
+        invalidVariables
+      };
+    }
+
+    // Get all person IDs
+    const personIds = persons.map(person => person.id);
+
+    // Find all units that belong to booklets that belong to these persons
+    const units = await this.unitRepository.createQueryBuilder('unit')
+      .innerJoin('unit.booklet', 'booklet')
+      .where('booklet.personid IN (:...personIds)', { personIds })
+      .getMany();
+
+    if (units.length === 0) {
+      this.logger.warn(`No units found for persons in workspace ${workspaceId}`);
+      return {
+        checkedFiles: unitFiles.length,
+        invalidVariables
+      };
+    }
+
+    // Get all unit IDs
+    const unitIds = units.map(unit => unit.id);
+
+    // Find all responses that belong to these units
+    const responses = await this.responseRepository.find({
+      where: { unitid: In(unitIds) },
+      relations: ['unit'] // Include unit relation to access unit.name
+    });
+
+    console.log(`Found ${responses.length} responses for units in workspace ${workspaceId}`);
+
+    // Check each response
+    for (const response of responses) {
+      const unit = response.unit;
+      if (!unit) {
+        this.logger.warn(`Response ${response.id} has no associated unit`);
+        continue;
+      }
+
+      const unitName = unit.name;
+      const variableId = response.variableid;
+
+      // Check if the unit name exists in unitVariables
+      if (!unitVariables.has(unitName)) {
+        invalidVariables.push({
+          fileName: `Unit ${unitName}`,
+          variableId: variableId,
+          value: response.value || '',
+          responseId: response.id
+        });
+        continue;
+      }
+
+      // Check if the variable ID exists in the unit's variables
+      const unitVars = unitVariables.get(unitName);
+      if (!unitVars || !unitVars.has(variableId)) {
+        invalidVariables.push({
+          fileName: `Unit ${unitName}`,
+          variableId: variableId,
+          value: response.value || '',
+          responseId: response.id
+        });
+      }
+    }
+
+    return {
+      checkedFiles: unitFiles.length,
+      invalidVariables
+    };
+  }
+
+  /**
+   * Deletes invalid responses from the database
+   * @param workspaceId The ID of the workspace
+   * @param responseIds Array of response IDs to delete
+   * @returns Number of deleted responses
+   */
+  async deleteInvalidResponses(workspaceId: number, responseIds: number[]): Promise<number> {
+    try {
+      this.logger.log(`Deleting invalid responses for workspace ${workspaceId}: ${responseIds.join(', ')}`);
+
+      // Verify that the responses belong to units that belong to persons in the workspace
+      const persons = await this.personsRepository.find({
+        where: { workspace_id: workspaceId }
+      });
+
+      if (persons.length === 0) {
+        this.logger.warn(`No persons found for workspace ${workspaceId}`);
+        return 0;
+      }
+
+      const personIds = persons.map(person => person.id);
+
+      const units = await this.unitRepository.createQueryBuilder('unit')
+        .innerJoin('unit.booklet', 'booklet')
+        .where('booklet.personid IN (:...personIds)', { personIds })
+        .getMany();
+
+      if (units.length === 0) {
+        this.logger.warn(`No units found for persons in workspace ${workspaceId}`);
+        return 0;
+      }
+
+      const unitIds = units.map(unit => unit.id);
+
+      // Delete responses that match the given IDs and belong to the units in the workspace
+      const deleteResult = await this.responseRepository.delete({
+        id: In(responseIds),
+        unitid: In(unitIds)
+      });
+
+      this.logger.log(`Deleted ${deleteResult.affected} invalid responses`);
+      return deleteResult.affected || 0;
+    } catch (error) {
+      this.logger.error(`Error deleting invalid responses: ${error.message}`, error.stack);
+      throw error;
     }
   }
 }

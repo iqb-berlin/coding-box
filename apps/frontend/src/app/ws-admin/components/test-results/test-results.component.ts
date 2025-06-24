@@ -47,6 +47,8 @@ import { UnitTagDto } from '../../../../../../../api-dto/unit-tags/unit-tag.dto'
 import { CreateUnitTagDto } from '../../../../../../../api-dto/unit-tags/create-unit-tag.dto';
 import { UpdateUnitTagDto } from '../../../../../../../api-dto/unit-tags/update-unit-tag.dto';
 import { UnitNoteDto } from '../../../../../../../api-dto/unit-notes/unit-note.dto';
+import { ValidationDialogComponent } from '../validation-dialog/validation-dialog.component';
+import { VariableValidationDto } from '../../../../../../../api-dto/files/variable-validation.dto';
 
 interface BookletLog {
   id: number;
@@ -162,7 +164,9 @@ interface P {
     MatButton,
     MatIconButton,
     MatDivider,
-    MatTooltipModule]
+    MatTooltipModule,
+    ValidationDialogComponent
+  ]
 })
 export class TestResultsComponent implements OnInit, OnDestroy {
   private dialog = inject(MatDialog);
@@ -194,6 +198,8 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   selectedBooklet!: Booklet | string;
   isLoading: boolean = true;
   isUploadingResults: boolean = false;
+  isVariableValidationRunning: boolean = false;
+  variableValidationResult: VariableValidationDto | null = null;
   isSearching: boolean = false;
   unitTags: UnitTagDto[] = [];
   newTagText: string = '';
@@ -323,9 +329,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
   applyFilter(event: Event): void {
     const filterValue = (event.target as HTMLInputElement).value;
-    // Set isSearching to true when a search is triggered
     this.isSearching = true;
-    // Push the search text to the subject, which will debounce and then trigger the search
     this.searchSubject.next(filterValue);
   }
 
@@ -929,6 +933,19 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       }
       this.isLoading = false;
       this.selection.clear();
+    });
+  }
+
+  openValidationDialog(): void {
+    const dialogRef = this.dialog.open(ValidationDialogComponent, {
+      width: '800px'
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result && result.variableValidationResult) {
+        this.variableValidationResult = result.variableValidationResult;
+        this.isVariableValidationRunning = false;
+      }
     });
   }
 }

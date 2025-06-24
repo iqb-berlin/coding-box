@@ -34,6 +34,7 @@ import { CreateUnitNoteDto } from '../../../../../api-dto/unit-notes/create-unit
 import { UpdateUnitNoteDto } from '../../../../../api-dto/unit-notes/update-unit-note.dto';
 import { ResourcePackageDto } from '../../../../../api-dto/resource-package/resource-package-dto';
 import { PaginatedWorkspaceUserDto } from '../../../../../api-dto/workspaces/paginated-workspace-user-dto';
+import { VariableValidationDto } from '../../../../../api-dto/files/variable-validation.dto';
 
 interface PaginatedResponse<T> {
   data: T[];
@@ -247,6 +248,28 @@ export class BackendService {
         catchError(() => of(false)),
         map(res => res)
       );
+  }
+
+  validateVariables(workspaceId: number): Observable<VariableValidationDto> {
+    return this.http.get<VariableValidationDto>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/files/validate-variables`,
+      { headers: this.authHeader }
+    ).pipe(
+      catchError(() => of({
+        checkedFiles: 0,
+        invalidVariables: []
+      }
+      )));
+  }
+
+  deleteInvalidResponses(workspaceId: number, responseIds: number[]): Observable<number> {
+    const params = new HttpParams().set('responseIds', responseIds.join(','));
+    return this.http.delete<number>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/files/invalid-responses`,
+      { headers: this.authHeader, params }
+    ).pipe(
+      catchError(() => of(0))
+    );
   }
 
   deleteTestPersons(workspace_id:number, testPersonIds: number[]): Observable<boolean> {
