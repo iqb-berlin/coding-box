@@ -34,20 +34,52 @@ export class WorkspacePlayerService {
     this.logger.log(`Attempting to retrieve files for player '${playerName}' in workspace ${workspaceId}`);
 
     try {
+      // Parse the player name to extract module and major version
+      const playerNameUpperCase = playerName.toUpperCase();
+      const regex = /^(\D+)-(\d+)\.(\d+)$/;
+      const matches = playerNameUpperCase.match(regex);
+
+      if (matches) {
+        const module = matches[1];
+        const majorVersion = matches[2];
+
+        // Always search for all players with the same module and major version
+        const similarPlayers = await this.fileUploadRepository
+          .createQueryBuilder('file')
+          .where('file.workspace_id = :workspaceId', { workspaceId })
+          .andWhere('file.file_id LIKE :pattern', { pattern: `${module}-${majorVersion}.%` })
+          .getMany();
+
+        if (similarPlayers.length > 0) {
+          this.logger.log(`Found ${similarPlayers.length} player(s) with module ${module} and major version ${majorVersion} in workspace ${workspaceId}`);
+
+          // Sort by minor version (descending) and return the highest one
+          similarPlayers.sort((a, b) => {
+            const minorA = parseInt(a.file_id.split('.')[1], 10);
+            const minorB = parseInt(b.file_id.split('.')[1], 10);
+            return minorB - minorA; // Descending order
+          });
+
+          this.logger.log(`Automatically selecting player with highest minor version: ${similarPlayers[0].file_id}`);
+          return [similarPlayers[0]];
+        }
+      }
+
+      // If no players with the same module and major version were found, try to find an exact match
       const files = await this.fileUploadRepository.find({
         where: {
-          file_id: playerName.toUpperCase(),
+          file_id: playerNameUpperCase,
           workspace_id: workspaceId
         }
       });
 
-      if (files.length === 0) {
-        this.logger.warn(`No files found for player '${playerName}' in workspace ${workspaceId}`);
-      } else {
+      if (files.length > 0) {
         this.logger.log(`Found ${files.length} file(s) for player '${playerName}' in workspace ${workspaceId}`);
+        return files;
       }
 
-      return files;
+      this.logger.warn(`No files found for player '${playerName}' in workspace ${workspaceId}`);
+      return [];
     } catch (error) {
       this.logger.error(
         `Failed to retrieve files for player '${playerName}' in workspace ${workspaceId}`,
