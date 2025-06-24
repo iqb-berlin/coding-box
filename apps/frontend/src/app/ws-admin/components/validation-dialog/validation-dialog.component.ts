@@ -13,6 +13,7 @@ import { MatTableModule, MatTableDataSource } from '@angular/material/table';
 import { MatExpansionModule } from '@angular/material/expansion';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatPaginator, MatPaginatorModule, PageEvent } from '@angular/material/paginator';
+import { MatIconModule } from '@angular/material/icon';
 import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
 import { InvalidVariableDto } from '../../../../../../../api-dto/files/variable-validation.dto';
@@ -34,7 +35,8 @@ import { ContentDialogComponent } from '../../../shared/dialogs/content-dialog/c
     MatTableModule,
     MatExpansionModule,
     MatSnackBarModule,
-    MatPaginatorModule
+    MatPaginatorModule,
+    MatIconModule
   ],
   styles: [`
     .actions-container {
@@ -56,6 +58,31 @@ import { ContentDialogComponent } from '../../../shared/dialogs/content-dialog/c
 
     table {
       width: 100%;
+    }
+
+    .validation-result {
+      display: flex;
+      align-items: center;
+      margin: 10px 0;
+      padding: 8px 16px;
+      border-radius: 4px;
+      font-weight: 500;
+    }
+
+    .validation-success {
+      background-color: rgba(76, 175, 80, 0.1);
+      color: #4CAF50;
+      border: 1px solid #4CAF50;
+    }
+
+    .validation-error {
+      background-color: rgba(244, 67, 54, 0.1);
+      color: #F44336;
+      border: 1px solid #F44336;
+    }
+
+    .validation-result mat-icon {
+      margin-right: 8px;
     }
   `]
 })
@@ -89,12 +116,19 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit {
   // TestTakers validation properties
   testTakersValidationResult: TestTakersValidationDto | null = null;
   isTestTakersValidationRunning: boolean = false;
+  testTakersValidationWasRun: boolean = false;
   expandedMissingPersonsPanel: boolean = false;
   paginatedMissingPersons = new MatTableDataSource<MissingPersonDto>([]);
 
+  // Validation running flags
   isVariableValidationRunning: boolean = false;
   isVariableTypeValidationRunning: boolean = false;
   isResponseStatusValidationRunning: boolean = false;
+
+  // Validation was run flags
+  validateVariablesWasRun: boolean = false;
+  validateVariableTypesWasRun: boolean = false;
+  validateResponseStatusWasRun: boolean = false;
   isDeletingResponses: boolean = false;
   expandedPanel: boolean = false;
   expandedTypePanel: boolean = false;
@@ -142,11 +176,13 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit {
   validateTestTakers(): void {
     this.isTestTakersValidationRunning = true;
     this.testTakersValidationResult = null;
+    this.testTakersValidationWasRun = false;
     this.backendService.validateTestTakers(this.appService.selectedWorkspaceId)
       .subscribe(result => {
         this.testTakersValidationResult = result;
         this.updatePaginatedMissingPersons();
         this.isTestTakersValidationRunning = false;
+        this.testTakersValidationWasRun = true;
       });
   }
 
@@ -166,6 +202,7 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit {
     this.isVariableValidationRunning = true;
     this.invalidVariables = [];
     this.totalInvalidVariables = 0;
+    this.validateVariablesWasRun = false;
     this.selectedResponses.clear();
     this.backendService.validateVariables(
       this.appService.selectedWorkspaceId,
@@ -178,6 +215,7 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit {
       this.variablePageSize = result.limit;
       this.updatePaginatedVariables();
       this.isVariableValidationRunning = false;
+      this.validateVariablesWasRun = true;
     });
   }
 
@@ -233,6 +271,45 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit {
       });
   }
 
+  deleteAllResponses(): void {
+    if (this.invalidVariables.length === 0) {
+      this.snackBar.open('Keine ungültigen Variablen vorhanden', 'Schließen', { duration: 3000 });
+      return;
+    }
+
+    // Create confirmation dialog
+    const dialogRef = this.dialog.open(ContentDialogComponent, {
+      width: '400px',
+      data: {
+        title: 'Alle Einträge löschen',
+        content: `Wirklich alle ${this.totalInvalidVariables} ungültigen Variablen löschen?`,
+        isJson: false,
+        isXml: false,
+        showDeleteButton: true
+      }
+    });
+
+    dialogRef.afterClosed().subscribe(deleteFromDb => {
+      if (deleteFromDb) {
+        this.isDeletingResponses = true;
+        // Get all response IDs
+        const responseIds = this.invalidVariables
+          .filter(variable => variable.responseId !== undefined)
+          .map(variable => variable.responseId as number);
+
+        this.backendService.deleteInvalidResponses(this.appService.selectedWorkspaceId, responseIds)
+          .subscribe(deletedCount => {
+            this.isDeletingResponses = false;
+            this.snackBar.open(`${deletedCount} Antworten gelöscht`, 'Schließen', { duration: 3000 });
+
+            // Refresh the data after deletion
+            this.validateVariables();
+            this.selectedResponses.clear();
+          });
+      }
+    });
+  }
+
   toggleExpansion(): void {
     this.expandedPanel = !this.expandedPanel;
   }
@@ -241,6 +318,7 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit {
     this.isVariableTypeValidationRunning = true;
     this.invalidTypeVariables = [];
     this.totalInvalidTypeVariables = 0;
+    this.validateVariableTypesWasRun = false;
     this.selectedTypeResponses.clear();
     this.backendService.validateVariableTypes(
       this.appService.selectedWorkspaceId,
@@ -253,6 +331,7 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit {
       this.typeVariablePageSize = result.limit;
       this.updatePaginatedTypeVariables();
       this.isVariableTypeValidationRunning = false;
+      this.validateVariableTypesWasRun = true;
     });
   }
 
@@ -260,6 +339,7 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit {
     this.isResponseStatusValidationRunning = true;
     this.invalidStatusVariables = [];
     this.totalInvalidStatusVariables = 0;
+    this.validateResponseStatusWasRun = false;
     this.selectedStatusResponses.clear();
     this.backendService.validateResponseStatus(
       this.appService.selectedWorkspaceId,
@@ -272,6 +352,7 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit {
       this.statusVariablePageSize = result.limit;
       this.updatePaginatedStatusVariables();
       this.isResponseStatusValidationRunning = false;
+      this.validateResponseStatusWasRun = true;
     });
   }
 
@@ -333,6 +414,45 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit {
       });
   }
 
+  deleteAllTypeResponses(): void {
+    if (this.invalidTypeVariables.length === 0) {
+      this.snackBar.open('Keine ungültigen Variablentypen vorhanden', 'Schließen', { duration: 3000 });
+      return;
+    }
+
+    // Create confirmation dialog
+    const dialogRef = this.dialog.open(ContentDialogComponent, {
+      width: '400px',
+      data: {
+        title: 'Alle Einträge löschen',
+        content: `Wirklich alle ${this.totalInvalidTypeVariables} ungültigen Variablentypen löschen?`,
+        isJson: false,
+        isXml: false,
+        showDeleteButton: true
+      }
+    });
+
+    dialogRef.afterClosed().subscribe(deleteFromDb => {
+      if (deleteFromDb) {
+        this.isDeletingResponses = true;
+        // Get all response IDs
+        const responseIds = this.invalidTypeVariables
+          .filter(variable => variable.responseId !== undefined)
+          .map(variable => variable.responseId as number);
+
+        this.backendService.deleteInvalidResponses(this.appService.selectedWorkspaceId, responseIds)
+          .subscribe(deletedCount => {
+            this.isDeletingResponses = false;
+            this.snackBar.open(`${deletedCount} Antworten gelöscht`, 'Schließen', { duration: 3000 });
+
+            // Refresh the data after deletion
+            this.validateVariableTypes();
+            this.selectedTypeResponses.clear();
+          });
+      }
+    });
+  }
+
   toggleTypeExpansion(): void {
     this.expandedTypePanel = !this.expandedTypePanel;
   }
@@ -381,6 +501,45 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit {
         this.validateResponseStatus();
         this.selectedStatusResponses.clear();
       });
+  }
+
+  deleteAllStatusResponses(): void {
+    if (this.invalidStatusVariables.length === 0) {
+      this.snackBar.open('Keine ungültigen Antwortstatus vorhanden', 'Schließen', { duration: 3000 });
+      return;
+    }
+
+    // Create confirmation dialog
+    const dialogRef = this.dialog.open(ContentDialogComponent, {
+      width: '400px',
+      data: {
+        title: 'Alle Einträge löschen',
+        content: `Wirklich alle ${this.totalInvalidStatusVariables} ungültigen Antwortstatus löschen?`,
+        isJson: false,
+        isXml: false,
+        showDeleteButton: true
+      }
+    });
+
+    dialogRef.afterClosed().subscribe(deleteFromDb => {
+      if (deleteFromDb) {
+        this.isDeletingResponses = true;
+        // Get all response IDs
+        const responseIds = this.invalidStatusVariables
+          .filter(variable => variable.responseId !== undefined)
+          .map(variable => variable.responseId as number);
+
+        this.backendService.deleteInvalidResponses(this.appService.selectedWorkspaceId, responseIds)
+          .subscribe(deletedCount => {
+            this.isDeletingResponses = false;
+            this.snackBar.open(`${deletedCount} Antworten gelöscht`, 'Schließen', { duration: 3000 });
+
+            // Refresh the data after deletion
+            this.validateResponseStatus();
+            this.selectedStatusResponses.clear();
+          });
+      }
+    });
   }
 
   toggleStatusExpansion(): void {

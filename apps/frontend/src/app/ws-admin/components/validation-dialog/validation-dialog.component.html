@@ -12,17 +12,19 @@
       }
       @if (testTakersValidationResult) {
         <div>
-          <p>
-            @if (testTakersValidationResult.testTakersFound) {
-              TestTakers gefunden: {{ testTakersValidationResult.totalGroups }} Gruppen, {{ testTakersValidationResult.totalLogins }} Logins, {{ testTakersValidationResult.totalBookletCodes }} Booklet-Codes.
-            } @else {
-              Keine TestTakers gefunden.
-            }
-          </p>
+          @if (testTakersValidationResult.testTakersFound) {
+            <p>TestTakers gefunden: {{ testTakersValidationResult.totalGroups }} Gruppen, {{ testTakersValidationResult.totalLogins }} Logins, {{ testTakersValidationResult.totalBookletCodes }} Booklet-Codes.</p>
+          } @else {
+            <div class="validation-result validation-error">
+              <mat-icon>error</mat-icon>
+              <span>Prüfung fehlgeschlagen: Keine TestTakers gefunden.</span>
+            </div>
+          }
           @if (testTakersValidationResult.missingPersons.length > 0) {
-            <p>
-              {{ testTakersValidationResult.missingPersons.length }} Testpersonen wurden nicht in den TestTakers XML-Dateien gefunden.
-            </p>
+            <div class="validation-result validation-error">
+              <mat-icon>error</mat-icon>
+              <span>Prüfung fehlgeschlagen: {{ testTakersValidationResult.missingPersons.length }} Testpersonen wurden nicht in den TestTakers XML-Dateien gefunden.</span>
+            </div>
             <div class="actions-container">
               <button mat-button (click)="toggleMissingPersonsExpansion()">
                 {{ expandedMissingPersonsPanel ? 'Liste einklappen' : 'Liste ausklappen' }}
@@ -52,7 +54,10 @@
               </table>
             </mat-expansion-panel>
           } @else {
-            <p>Alle Testpersonen wurden in den TestTakers XML-Dateien gefunden.</p>
+            <div class="validation-result validation-success">
+              <mat-icon>check_circle</mat-icon>
+              <span>Prüfung bestanden: Alle Testpersonen wurden in den TestTakers XML-Dateien gefunden.</span>
+            </div>
           }
         </div>
       }
@@ -70,9 +75,10 @@
         </div>
       }
       @if (invalidVariables.length > 0 || totalInvalidVariables > 0) {
-        <p>
-          {{ totalInvalidVariables }} ungültige Variablen gefunden.
-        </p>
+        <div class="validation-result validation-error">
+          <mat-icon>error</mat-icon>
+          <span>Prüfung fehlgeschlagen: {{ totalInvalidVariables }} ungültige Variablen gefunden.</span>
+        </div>
         @if (invalidVariables.length > 0) {
           <div class="actions-container">
             <button mat-button (click)="toggleExpansion()">
@@ -85,6 +91,13 @@
                 <mat-spinner diameter="20"></mat-spinner> Löschen...
               } @else {
                 Ausgewählte löschen ({{ selectedResponses.size }})
+              }
+            </button>
+            <button mat-button color="warn" (click)="deleteAllResponses()" [disabled]="isDeletingResponses || invalidVariables.length === 0">
+              @if (isDeletingResponses) {
+                <mat-spinner diameter="20"></mat-spinner> Löschen...
+              } @else {
+                Alle löschen ({{ totalInvalidVariables }})
               }
             </button>
           </div>
@@ -127,6 +140,11 @@
             </mat-paginator>
           </mat-expansion-panel>
         }
+      } @else if (!isVariableValidationRunning && invalidVariables.length === 0 && totalInvalidVariables === 0 && validateVariablesWasRun) {
+        <div class="validation-result validation-success">
+          <mat-icon>check_circle</mat-icon>
+          <span>Prüfung bestanden: Keine ungültigen Variablen gefunden.</span>
+        </div>
       }
       <div>
         <button mat-button matStepperNext>Weiter</button>
@@ -142,9 +160,10 @@
         </div>
       }
       @if (invalidTypeVariables.length > 0 || totalInvalidTypeVariables > 0) {
-        <p>
-          {{ totalInvalidTypeVariables }} ungültige Variablenwerte gefunden.
-        </p>
+        <div class="validation-result validation-error">
+          <mat-icon>error</mat-icon>
+          <span>Prüfung fehlgeschlagen: {{ totalInvalidTypeVariables }} ungültige Variablenwerte gefunden.</span>
+        </div>
         @if (invalidTypeVariables.length > 0) {
           <div class="actions-container">
             <button mat-button (click)="toggleTypeExpansion()">
@@ -157,6 +176,13 @@
                 <mat-spinner diameter="20"></mat-spinner> Löschen...
               } @else {
                 Ausgewählte löschen ({{ selectedTypeResponses.size }})
+              }
+            </button>
+            <button mat-button color="warn" (click)="deleteAllTypeResponses()" [disabled]="isDeletingResponses || invalidTypeVariables.length === 0">
+              @if (isDeletingResponses) {
+                <mat-spinner diameter="20"></mat-spinner> Löschen...
+              } @else {
+                Alle löschen ({{ totalInvalidTypeVariables }})
               }
             </button>
           </div>
@@ -207,6 +233,11 @@
             </mat-paginator>
           </mat-expansion-panel>
         }
+      } @else if (!isVariableTypeValidationRunning && invalidTypeVariables.length === 0 && totalInvalidTypeVariables === 0 && validateVariableTypesWasRun) {
+        <div class="validation-result validation-success">
+          <mat-icon>check_circle</mat-icon>
+          <span>Prüfung bestanden: Keine ungültigen Variablenwerte gefunden.</span>
+        </div>
       }
       <div>
         <button mat-button matStepperNext>Weiter</button>
@@ -222,9 +253,10 @@
         </div>
       }
       @if (invalidStatusVariables.length > 0 || totalInvalidStatusVariables > 0) {
-        <p>
-          {{ totalInvalidStatusVariables }} ungültige Antwortstatus gefunden.
-        </p>
+        <div class="validation-result validation-error">
+          <mat-icon>error</mat-icon>
+          <span>Prüfung fehlgeschlagen: {{ totalInvalidStatusVariables }} ungültige Antwortstatus gefunden.</span>
+        </div>
         @if (invalidStatusVariables.length > 0) {
           <div class="actions-container">
             <button mat-button (click)="toggleStatusExpansion()">
@@ -237,6 +269,13 @@
                 <mat-spinner diameter="20"></mat-spinner> Löschen...
               } @else {
                 Ausgewählte löschen ({{ selectedStatusResponses.size }})
+              }
+            </button>
+            <button mat-button color="warn" (click)="deleteAllStatusResponses()" [disabled]="isDeletingResponses || invalidStatusVariables.length === 0">
+              @if (isDeletingResponses) {
+                <mat-spinner diameter="20"></mat-spinner> Löschen...
+              } @else {
+                Alle löschen ({{ totalInvalidStatusVariables }})
               }
             </button>
           </div>
@@ -283,6 +322,11 @@
             </mat-paginator>
           </mat-expansion-panel>
         }
+      } @else if (!isResponseStatusValidationRunning && invalidStatusVariables.length === 0 && totalInvalidStatusVariables === 0 && validateResponseStatusWasRun) {
+        <div class="validation-result validation-success">
+          <mat-icon>check_circle</mat-icon>
+          <span>Prüfung bestanden: Keine ungültigen Antwortstatus gefunden.</span>
+        </div>
       }
       <div>
         <button mat-button matStepperNext>Weiter</button>
@@ -304,7 +348,7 @@
     </mat-step>
   </mat-stepper>
 </mat-dialog-content>
-<mat-dialog-actions>
-  <button mat-button (click)="closeWithResults()">Übernehmen</button>
+<mat-dialog-actions align="end">
   <button mat-button mat-dialog-close>Abbrechen</button>
+  <button mat-button color="primary" (click)="closeWithResults()">Übernehmen</button>
 </mat-dialog-actions>
