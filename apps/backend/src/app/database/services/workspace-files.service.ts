@@ -118,6 +118,9 @@ export class WorkspaceFilesService {
         case '10MB+':
           qb = qb.andWhere('file.file_size >= :min', { min: 10 * MB });
           break;
+        default:
+          // No filter applied for unknown file size values
+          break;
       }
     }
 
@@ -529,7 +532,7 @@ export class WorkspaceFilesService {
         }
       }
 
-      // @ts-expect-error
+      // @ts-expect-error - Type mismatch between fileUploadRepository.create and the provided object
       const fileUpload = this.fileUploadRepository.create({
         workspace_id: workspaceId,
         filename: file.originalname,
@@ -964,7 +967,7 @@ export class WorkspaceFilesService {
     }
   }
 
-  async validateVariables(workspaceId: number): Promise<VariableValidationDto> {
+  async validateVariables(workspaceId: number, page: number = 1, limit: number = 10): Promise<{ data: InvalidVariableDto[]; total: number; page: number; limit: number }> {
     const unitFiles = await this.filesRepository.find({
       where: { workspace_id: workspaceId, file_type: 'Unit' }
     });
@@ -1006,8 +1009,10 @@ export class WorkspaceFilesService {
     if (persons.length === 0) {
       this.logger.warn(`No persons found for workspace ${workspaceId}`);
       return {
-        checkedFiles: unitFiles.length,
-        invalidVariables
+        data: [],
+        total: 0,
+        page,
+        limit
       };
     }
 
@@ -1023,8 +1028,10 @@ export class WorkspaceFilesService {
     if (units.length === 0) {
       this.logger.warn(`No units found for persons in workspace ${workspaceId}`);
       return {
-        checkedFiles: unitFiles.length,
-        invalidVariables
+        data: [],
+        total: 0,
+        page,
+        limit
       };
     }
 
@@ -1056,7 +1063,8 @@ export class WorkspaceFilesService {
           fileName: `Unit ${unitName}`,
           variableId: variableId,
           value: response.value || '',
-          responseId: response.id
+          responseId: response.id,
+          errorReason: 'Unit not found'
         });
         continue;
       }
@@ -1068,15 +1076,213 @@ export class WorkspaceFilesService {
           fileName: `Unit ${unitName}`,
           variableId: variableId,
           value: response.value || '',
-          responseId: response.id
+          responseId: response.id,
+          errorReason: 'Variable not defined in unit'
         });
       }
     }
 
+    // Apply pagination
+    const validPage = Math.max(1, page);
+    const validLimit = Math.min(Math.max(1, limit), 1000);
+    const startIndex = (validPage - 1) * validLimit;
+    const endIndex = startIndex + validLimit;
+    const paginatedData = invalidVariables.slice(startIndex, endIndex);
+
     return {
-      checkedFiles: unitFiles.length,
-      invalidVariables
+      data: paginatedData,
+      total: invalidVariables.length,
+      page: validPage,
+      limit: validLimit
     };
+  }
+
+  /**
+   * Validates if variable values match their defined types
+   * @param workspaceId The ID of the workspace
+   * @param page Page number for pagination
+   * @param limit Number of items per page
+   * @returns Paginated validation result with invalid variables
+   */
+  async validateVariableTypes(workspaceId: number, page: number = 1, limit: number = 10): Promise<{ data: InvalidVariableDto[]; total: number; page: number; limit: number }> {
+    const unitFiles = await this.filesRepository.find({
+      where: { workspace_id: workspaceId, file_type: 'Unit' }
+    });
+
+    // Map to store unit variables with their types
+    // Key: unitName, Value: Map of variableId to type
+    const unitVariableTypes = new Map<string, Map<string, string>>();
+
+    for (const unitFile of unitFiles) {
+      try {
+        const xmlContent = unitFile.data.toString();
+        const parsedXml = await parseStringPromise(xmlContent, { explicitArray: false });
+        if (parsedXml.Unit && parsedXml.Unit.Metadata && parsedXml.Unit.Metadata.Id) {
+          const unitName = parsedXml.Unit.Metadata.Id;
+          const variableTypes = new Map<string, string>();
+
+          if (parsedXml.Unit.BaseVariables && parsedXml.Unit.BaseVariables.Variable) {
+            const baseVariables = Array.isArray(parsedXml.Unit.BaseVariables.Variable) ?
+              parsedXml.Unit.BaseVariables.Variable :
+              [parsedXml.Unit.BaseVariables.Variable];
+
+            for (const variable of baseVariables) {
+              if (variable.$.alias && variable.$.type) {
+                variableTypes.set(variable.$.alias, variable.$.type);
+              }
+            }
+          }
+
+          unitVariableTypes.set(unitName, variableTypes);
+        }
+      } catch (e) {
+        console.error(`Could not parse Unit file ${unitFile.filename}: ${e.message}`);
+      }
+    }
+
+    console.log(`Found ${unitVariableTypes.size} units with variable types in workspace ${workspaceId}`);
+
+    const invalidVariables: InvalidVariableDto[] = [];
+
+    // Find all persons with the given workspace_id
+    const persons = await this.personsRepository.find({
+      where: { workspace_id: workspaceId }
+    });
+
+    if (persons.length === 0) {
+      this.logger.warn(`No persons found for workspace ${workspaceId}`);
+      return {
+        data: [],
+        total: 0,
+        page,
+        limit
+      };
+    }
+
+    // Get all person IDs
+    const personIds = persons.map(person => person.id);
+
+    // Find all units that belong to booklets that belong to these persons
+    const units = await this.unitRepository.createQueryBuilder('unit')
+      .innerJoin('unit.booklet', 'booklet')
+      .where('booklet.personid IN (:...personIds)', { personIds })
+      .getMany();
+
+    if (units.length === 0) {
+      this.logger.warn(`No units found for persons in workspace ${workspaceId}`);
+      return {
+        data: [],
+        total: 0,
+        page,
+        limit
+      };
+    }
+
+    // Get all unit IDs
+    const unitIds = units.map(unit => unit.id);
+
+    // Find all responses that belong to these units
+    const responses = await this.responseRepository.find({
+      where: { unitid: In(unitIds) },
+      relations: ['unit'] // Include unit relation to access unit.name
+    });
+
+    console.log(`Found ${responses.length} responses for units in workspace ${workspaceId}`);
+
+    // Check each response
+    for (const response of responses) {
+      const unit = response.unit;
+      if (!unit) {
+        this.logger.warn(`Response ${response.id} has no associated unit`);
+        continue;
+      }
+
+      const unitName = unit.name;
+      const variableId = response.variableid;
+      const value = response.value || '';
+
+      // Skip if unit not found or variable not defined (already checked in validateVariables)
+      if (!unitVariableTypes.has(unitName)) {
+        continue;
+      }
+
+      const variableTypes = unitVariableTypes.get(unitName);
+      if (!variableTypes || !variableTypes.has(variableId)) {
+        continue;
+      }
+
+      // Get the expected type for this variable
+      const expectedType = variableTypes.get(variableId);
+
+      // Validate the value against the expected type
+      if (!this.isValidValueForType(value, expectedType)) {
+        invalidVariables.push({
+          fileName: `Unit ${unitName}`,
+          variableId: variableId,
+          value: value,
+          responseId: response.id,
+          expectedType: expectedType,
+          errorReason: `Value does not match expected type: ${expectedType}`
+        });
+      }
+    }
+
+    // Apply pagination
+    const validPage = Math.max(1, page);
+    const validLimit = Math.min(Math.max(1, limit), 1000);
+    const startIndex = (validPage - 1) * validLimit;
+    const endIndex = startIndex + validLimit;
+    const paginatedData = invalidVariables.slice(startIndex, endIndex);
+
+    return {
+      data: paginatedData,
+      total: invalidVariables.length,
+      page: validPage,
+      limit: validLimit
+    };
+  }
+
+  /**
+   * Checks if a value is valid for a given type
+   * @param value The value to check
+   * @param type The expected type (string, integer, number, boolean, json)
+   * @returns True if the value is valid for the type, false otherwise
+   */
+  private isValidValueForType(value: string, type: string): boolean {
+    if (!value && type !== 'string') {
+      return false;
+    }
+
+    switch (type.toLowerCase()) {
+      case 'string':
+        return true; // All values are valid strings
+
+      case 'integer':
+        // Check if the value is an integer
+        return /^-?\d+$/.test(value);
+
+      case 'number':
+        // Check if the value is a number (integer or decimal)
+        return !Number.isNaN(Number(value)) && Number.isFinite(Number(value));
+
+      case 'boolean': {
+        // Check if the value is a boolean (true/false, 0/1, yes/no)
+        const lowerValue = value.toLowerCase();
+        return ['true', 'false', '0', '1', 'yes', 'no'].includes(lowerValue);
+      }
+
+      case 'json':
+        // Check if the value is valid JSON
+        try {
+          JSON.parse(value);
+          return true;
+        } catch (e) {
+          return false;
+        }
+
+      default:
+        return true; // For unknown types, assume the value is valid
+    }
   }
 
   /**

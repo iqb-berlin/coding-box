@@ -938,12 +938,12 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
   openValidationDialog(): void {
     const dialogRef = this.dialog.open(ValidationDialogComponent, {
-      width: '800px'
+      width: '1200px'
     });
 
     dialogRef.afterClosed().subscribe(result => {
-      if (result && result.variableValidationResult) {
-        this.variableValidationResult = result.variableValidationResult;
+      if (result) {
+        // Handle the paginated validation results if needed
         this.isVariableValidationRunning = false;
       }
     });

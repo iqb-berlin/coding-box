@@ -3,6 +3,8 @@ export interface InvalidVariableDto {
   variableId: string;
   value: string;
   responseId?: number;
+  expectedType?: string;
+  errorReason?: string;
 }
 
 export interface VariableValidationDto {

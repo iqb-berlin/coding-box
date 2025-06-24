@@ -556,7 +556,7 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
     const workspaceId = this.appService.selectedWorkspaceId;
     this.isLoading = true;
 
-    this.backendService.getUnitContentXml(workspaceId, unitId)
+    this.backendService.getUnitContentXml(workspaceId, unitId.toString())
       .pipe(
         catchError(() => {
           this.isLoading = false;
@@ -648,7 +648,7 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
     const workspaceId = this.appService.selectedWorkspaceId;
     this.isLoading = true;
 
-    this.backendService.getUnitContentXml(workspaceId, unitId)
+    this.backendService.getUnitContentXml(workspaceId, unitId.toString())
       .pipe(
         catchError(() => {
           this.isLoading = false;

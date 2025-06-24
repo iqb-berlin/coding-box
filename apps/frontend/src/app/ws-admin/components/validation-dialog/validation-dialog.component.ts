@@ -1,16 +1,20 @@
-import { Component, Inject, inject } from '@angular/core';
-import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
+import { Component, Inject, inject, ViewChild, AfterViewInit, OnInit } from '@angular/core';
+import {
+  MAT_DIALOG_DATA, MatDialog, MatDialogModule, MatDialogRef
+} from '@angular/material/dialog';
 import { MatStepperModule } from '@angular/material/stepper';
 import { MatButtonModule } from '@angular/material/button';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { MatTableModule } from '@angular/material/table';
+import { MatTableModule, MatTableDataSource } from '@angular/material/table';
 import { MatExpansionModule } from '@angular/material/expansion';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import { MatPaginator, MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
-import { VariableValidationDto } from '../../../../../../../api-dto/files/variable-validation.dto';
+import { InvalidVariableDto } from '../../../../../../../api-dto/files/variable-validation.dto';
+import { ContentDialogComponent } from '../../../shared/dialogs/content-dialog/content-dialog.component';
 
 @Component({
   selector: 'coding-box-validation-dialog',
@@ -26,7 +30,8 @@ import { VariableValidationDto } from '../../../../../../../api-dto/files/variab
     MatProgressSpinnerModule,
     MatTableModule,
     MatExpansionModule,
-    MatSnackBarModule
+    MatSnackBarModule,
+    MatPaginatorModule
   ],
   styles: [`
     .actions-container {
@@ -51,31 +56,89 @@ import { VariableValidationDto } from '../../../../../../../api-dto/files/variab
     }
   `]
 })
-export class ValidationDialogComponent {
+export class ValidationDialogComponent implements AfterViewInit, OnInit {
+  @ViewChild('variablePaginator') variablePaginator!: MatPaginator;
+  @ViewChild('variableTypePaginator') variableTypePaginator!: MatPaginator;
+
   firstStepCompleted = true;
   backendService = inject(BackendService);
   appService = inject(AppService);
-  variableValidationResult: VariableValidationDto | null = null;
+
+  // Variable validation properties
+  invalidVariables: InvalidVariableDto[] = [];
+  totalInvalidVariables: number = 0;
+  currentVariablePage: number = 1;
+  variablePageSize: number = 10;
+
+  // Variable type validation properties
+  invalidTypeVariables: InvalidVariableDto[] = [];
+  totalInvalidTypeVariables: number = 0;
+  currentTypeVariablePage: number = 1;
+  typeVariablePageSize: number = 10;
+
   isVariableValidationRunning: boolean = false;
+  isVariableTypeValidationRunning: boolean = false;
   isDeletingResponses: boolean = false;
   expandedPanel: boolean = false;
+  expandedTypePanel: boolean = false;
   selectedResponses: Set<number> = new Set<number>();
+  selectedTypeResponses: Set<number> = new Set<number>();
+
+  // Pagination properties
+  pageSizeOptions = [5, 10, 25, 50];
+
+  // Paginated data
+  paginatedVariables = new MatTableDataSource<InvalidVariableDto>([]);
+  paginatedTypeVariables = new MatTableDataSource<InvalidVariableDto>([]);
 
   constructor(
     @Inject(MAT_DIALOG_DATA) public data: unknown,
     private dialogRef: MatDialogRef<ValidationDialogComponent>,
-    private snackBar: MatSnackBar
+    private snackBar: MatSnackBar,
+    private dialog: MatDialog
   ) {}
+
+  ngOnInit(): void {
+    // Initialize component
+  }
+
+  ngAfterViewInit(): void {
+    // Set up paginators after view is initialized
+    this.paginatedVariables.paginator = this.variablePaginator;
+    this.paginatedTypeVariables.paginator = this.variableTypePaginator;
+  }
+
+  updatePaginatedVariables(): void {
+    this.paginatedVariables.data = this.invalidVariables;
+  }
+
+  updatePaginatedTypeVariables(): void {
+    this.paginatedTypeVariables.data = this.invalidTypeVariables;
+  }
 
   validateVariables(): void {
     this.isVariableValidationRunning = true;
-    this.variableValidationResult = null;
+    this.invalidVariables = [];
+    this.totalInvalidVariables = 0;
     this.selectedResponses.clear();
-    this.backendService.validateVariables(this.appService.selectedWorkspaceId)
-      .subscribe(result => {
-        this.variableValidationResult = result;
-        this.isVariableValidationRunning = false;
-      });
+    this.backendService.validateVariables(
+      this.appService.selectedWorkspaceId,
+      this.currentVariablePage,
+      this.variablePageSize
+    ).subscribe(result => {
+      this.invalidVariables = result.data;
+      this.totalInvalidVariables = result.total;
+      this.currentVariablePage = result.page;
+      this.variablePageSize = result.limit;
+      this.updatePaginatedVariables();
+      this.isVariableValidationRunning = false;
+    });
+  }
+
+  onVariablePageChange(event: PageEvent): void {
+    this.currentVariablePage = event.pageIndex + 1;
+    this.variablePageSize = event.pageSize;
+    this.validateVariables();
   }
 
   toggleResponseSelection(responseId: number | undefined): void {
@@ -93,9 +156,7 @@ export class ValidationDialogComponent {
   }
 
   selectAllResponses(): void {
-    if (!this.variableValidationResult) return;
-
-    this.variableValidationResult.invalidVariables.forEach(variable => {
+    this.invalidVariables.forEach(variable => {
       if (variable.responseId !== undefined) {
         this.selectedResponses.add(variable.responseId);
       }
@@ -120,12 +181,8 @@ export class ValidationDialogComponent {
         this.isDeletingResponses = false;
         this.snackBar.open(`${deletedCount} Antworten gelöscht`, 'Schließen', { duration: 3000 });
 
-        // Remove deleted responses from the list
-        if (this.variableValidationResult) {
-          this.variableValidationResult.invalidVariables = this.variableValidationResult.invalidVariables
-            .filter(variable => variable.responseId === undefined || !this.selectedResponses.has(variable.responseId));
-        }
-
+        // Refresh the data after deletion
+        this.validateVariables();
         this.selectedResponses.clear();
       });
   }
@@ -134,9 +191,122 @@ export class ValidationDialogComponent {
     this.expandedPanel = !this.expandedPanel;
   }
 
+  validateVariableTypes(): void {
+    this.isVariableTypeValidationRunning = true;
+    this.invalidTypeVariables = [];
+    this.totalInvalidTypeVariables = 0;
+    this.selectedTypeResponses.clear();
+    this.backendService.validateVariableTypes(
+      this.appService.selectedWorkspaceId,
+      this.currentTypeVariablePage,
+      this.typeVariablePageSize
+    ).subscribe(result => {
+      this.invalidTypeVariables = result.data;
+      this.totalInvalidTypeVariables = result.total;
+      this.currentTypeVariablePage = result.page;
+      this.typeVariablePageSize = result.limit;
+      this.updatePaginatedTypeVariables();
+      this.isVariableTypeValidationRunning = false;
+    });
+  }
+
+  onTypeVariablePageChange(event: PageEvent): void {
+    this.currentTypeVariablePage = event.pageIndex + 1;
+    this.typeVariablePageSize = event.pageSize;
+    this.validateVariableTypes();
+  }
+
+  toggleTypeResponseSelection(responseId: number | undefined): void {
+    if (responseId === undefined) return;
+
+    if (this.selectedTypeResponses.has(responseId)) {
+      this.selectedTypeResponses.delete(responseId);
+    } else {
+      this.selectedTypeResponses.add(responseId);
+    }
+  }
+
+  isTypeResponseSelected(responseId: number | undefined): boolean {
+    return responseId !== undefined && this.selectedTypeResponses.has(responseId);
+  }
+
+  selectAllTypeResponses(): void {
+    this.invalidTypeVariables.forEach(variable => {
+      if (variable.responseId !== undefined) {
+        this.selectedTypeResponses.add(variable.responseId);
+      }
+    });
+  }
+
+  deselectAllTypeResponses(): void {
+    this.selectedTypeResponses.clear();
+  }
+
+  deleteSelectedTypeResponses(): void {
+    if (this.selectedTypeResponses.size === 0) {
+      this.snackBar.open('Keine Antworten ausgewählt', 'Schließen', { duration: 3000 });
+      return;
+    }
+
+    this.isDeletingResponses = true;
+    const responseIds = Array.from(this.selectedTypeResponses);
+
+    this.backendService.deleteInvalidResponses(this.appService.selectedWorkspaceId, responseIds)
+      .subscribe(deletedCount => {
+        this.isDeletingResponses = false;
+        this.snackBar.open(`${deletedCount} Antworten gelöscht`, 'Schließen', { duration: 3000 });
+
+        // Refresh the data after deletion
+        this.validateVariableTypes();
+        this.selectedTypeResponses.clear();
+      });
+  }
+
+  toggleTypeExpansion(): void {
+    this.expandedTypePanel = !this.expandedTypePanel;
+  }
+
   closeWithResults(): void {
     this.dialogRef.close({
-      variableValidationResult: this.variableValidationResult
+      invalidVariables: this.invalidVariables,
+      totalInvalidVariables: this.totalInvalidVariables,
+      invalidTypeVariables: this.invalidTypeVariables,
+      totalInvalidTypeVariables: this.totalInvalidTypeVariables
     });
+  }
+
+  /**
+   * Extracts the unit ID from the fileName
+   * @param fileName The fileName in the format "Unit unitName"
+   * @returns The unit name
+   */
+  extractUnitName(fileName: string): string {
+    // The fileName is in the format "Unit unitName"
+    const match = fileName.match(/^Unit\s+(.+)$/);
+    return match ? match[1] : fileName;
+  }
+
+  /**
+   * Shows the unit XML content in a dialog
+   * @param fileName The fileName in the format "Unit unitName"
+   */
+  showUnitXml(fileName: string): void {
+    const unitName = this.extractUnitName(fileName);
+
+    this.backendService.getUnitContentXml(this.appService.selectedWorkspaceId, unitName)
+      .subscribe(xmlContent => {
+        if (xmlContent) {
+          this.dialog.open(ContentDialogComponent, {
+            width: '80%',
+            data: {
+              title: `Unit XML: ${unitName}`,
+              content: xmlContent,
+              isXml: true
+            }
+          });
+        } else {
+          this.snackBar.open(`Keine XML-Daten für Unit ${unitName} gefunden`, 'Schließen', { duration: 3000 });
+        }
+      });
   }
 }
