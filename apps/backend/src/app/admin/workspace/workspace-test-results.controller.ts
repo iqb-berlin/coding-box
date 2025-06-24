@@ -42,6 +42,12 @@ export class WorkspaceTestResultsController {
     description: 'Number of items per page',
     type: Number
   })
+  @ApiQuery({
+    name: 'searchText',
+    required: false,
+    description: 'Text to search for in code, group, or login fields',
+    type: String
+  })
   @ApiOkResponse({
     description: 'Test results retrieved successfully.',
     schema: {
@@ -59,9 +65,10 @@ export class WorkspaceTestResultsController {
   async findTestResults(
     @Param('workspace_id') workspace_id: number,
                            @Query('page') page: number = 1,
-                           @Query('limit') limit: number = 20
+                           @Query('limit') limit: number = 20,
+                           @Query('searchText') searchText?: string
   ): Promise<{ data: Persons[]; total: number; page: number; limit: number }> {
-    const [data, total] = await this.workspaceTestResultsService.findTestResults(workspace_id, { page, limit });
+    const [data, total] = await this.workspaceTestResultsService.findTestResults(workspace_id, { page, limit, searchText });
     return {
       data, total, page, limit
     };
