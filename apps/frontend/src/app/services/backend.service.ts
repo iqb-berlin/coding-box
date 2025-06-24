@@ -538,11 +538,17 @@ export class BackendService {
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  getTestResults(workspaceId: number, page: number, limit: number): Observable<any> {
-    const params = {
+  getTestResults(workspaceId: number, page: number, limit: number, searchText?: string): Observable<any> {
+    const params: { [key: string]: string } = {
       page: page.toString(),
       limit: limit.toString()
     };
+
+    // Add searchText parameter if provided
+    if (searchText && searchText.trim() !== '') {
+      params.searchText = searchText.trim();
+    }
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return this.http.get<any>(
       `${this.serverUrl}admin/workspace/${workspaceId}/test-results/`,

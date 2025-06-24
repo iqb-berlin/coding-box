@@ -158,11 +158,12 @@
   align-items: center;
   background-color: #f5f9ff;
   border-radius: 28px;
-  padding: 10px 18px;
+  padding: 6px 16px;
   margin-bottom: 20px;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
   border: 1px solid rgba(25, 118, 210, 0.1);
   transition: all 0.2s ease;
+  width: 100%;
 
   &:focus-within {
     box-shadow: 0 3px 8px rgba(25, 118, 210, 0.15);
@@ -171,18 +172,19 @@
 
   .search-icon {
     color: #1976d2;
-    margin-right: 10px;
+    margin-right: 8px;
     opacity: 0.8;
+    font-size: 18px;
   }
 
   .search-input {
     border: none;
     background: transparent;
     flex: 1;
-    font-size: 15px;
+    font-size: 14px;
     outline: none;
     color: #333;
-    padding: 4px 0;
+    padding: 2px 0;
 
     &::placeholder {
       color: #7a9cc6;
@@ -201,6 +203,28 @@
   border: 1px solid rgba(0, 0, 0, 0.08);
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
   background-color: white;
+
+  .search-loading-indicator {
+    position: absolute;
+    top: 0;
+    right: 0;
+    display: flex;
+    align-items: center;
+    padding: 8px 16px;
+    background-color: rgba(25, 118, 210, 0.1);
+    border-radius: 0 8px 0 8px;
+    z-index: 10;
+
+    mat-spinner {
+      margin-right: 8px;
+    }
+
+    span {
+      font-size: 14px;
+      color: #1976d2;
+      font-weight: 500;
+    }
+  }
 
   /* Custom scrollbar styling */
   &::-webkit-scrollbar {
