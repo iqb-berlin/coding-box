@@ -65,35 +65,65 @@ export class WorkspaceFilesService {
     private fileUploadRepository: Repository<FileUpload>
   ) {}
 
-  async findFiles(workspaceId: number, options?: { page: number; limit: number }): Promise<[FilesDto[], number]> {
+  async findFiles(
+    workspaceId: number,
+    options?: { page: number; limit: number; fileType?: string; fileSize?: string; searchText?: string }
+  ): Promise<[FilesDto[], number]> {
     this.logger.log(`Fetching test files for workspace: ${workspaceId}`);
+    const {
+      page = 1, limit = 20, fileType, fileSize, searchText
+    } = options || {};
+    const MAX_LIMIT = 10000;
+    const validPage = Math.max(1, page);
+    const validLimit = Math.min(Math.max(1, limit), MAX_LIMIT);
 
-    if (options) {
-      const { page, limit } = options;
-      const MAX_LIMIT = 10000;
-      const validPage = Math.max(1, page);
-      const validLimit = Math.min(Math.max(1, limit), MAX_LIMIT);
+    // QueryBuilder für flexible Filterung
+    let qb = this.fileUploadRepository.createQueryBuilder('file')
+      .where('file.workspace_id = :workspaceId', { workspaceId });
 
-      const [files, total] = await this.fileUploadRepository.findAndCount({
-        where: { workspace_id: workspaceId },
-        select: ['id', 'filename', 'file_id', 'file_size', 'file_type', 'created_at'],
-        skip: (validPage - 1) * validLimit,
-        take: validLimit,
-        order: { created_at: 'DESC' }
-      });
-
-      this.logger.log(`Found ${files.length} files (page ${validPage}, limit ${validLimit}, total ${total}).`);
-      return [files, total];
+    if (fileType) {
+      qb = qb.andWhere('file.file_type = :fileType', { fileType });
     }
 
-    const files = await this.fileUploadRepository.find({
-      where: { workspace_id: workspaceId },
-      select: ['id', 'filename', 'file_id', 'file_size', 'file_type', 'created_at'],
-      order: { created_at: 'DESC' }
-    });
+    if (fileSize) {
+      // fileSize-Filter: z.B. '0-10KB', '10KB-100KB', '100KB-1MB', '1MB-10MB', '10MB+'
+      const KB = 1024;
+      const MB = 1024 * KB;
+      switch (fileSize) {
+        case '0-10KB':
+          qb = qb.andWhere('file.file_size < :max', { max: 10 * KB });
+          break;
+        case '10KB-100KB':
+          qb = qb.andWhere('file.file_size >= :min AND file.file_size < :max', { min: 10 * KB, max: 100 * KB });
+          break;
+        case '100KB-1MB':
+          qb = qb.andWhere('file.file_size >= :min AND file.file_size < :max', { min: 100 * KB, max: 1 * MB });
+          break;
+        case '1MB-10MB':
+          qb = qb.andWhere('file.file_size >= :min AND file.file_size < :max', { min: 1 * MB, max: 10 * MB });
+          break;
+        case '10MB+':
+          qb = qb.andWhere('file.file_size >= :min', { min: 10 * MB });
+          break;
+      }
+    }
 
-    this.logger.log(`Found ${files.length} files.`);
-    return [files, files.length];
+    if (searchText) {
+      const search = `%${searchText.toLowerCase()}%`;
+      qb = qb.andWhere(
+        '(LOWER(file.filename) LIKE :search OR LOWER(file.file_type) LIKE :search OR TO_CHAR(file.created_at, \'DD.MM.YYYY HH24:MI\') ILIKE :search)',
+        { search }
+      );
+    }
+
+    qb = qb.select(['file.id', 'file.filename', 'file.file_id', 'file.file_size', 'file.file_type', 'file.created_at'])
+      .orderBy('file.created_at', 'DESC')
+      .skip((validPage - 1) * validLimit)
+      .take(validLimit);
+
+    const [files, total] = await qb.getManyAndCount();
+    this.logger.log(`Found ${files.length} files (page ${validPage}, limit ${validLimit}, total ${total}).`);
+    return [files, total];
   }
 
   async deleteTestFiles(workspace_id: number, fileIds: string[]): Promise<boolean> {
@@ -831,5 +861,93 @@ export class WorkspaceFilesService {
     // const label = labelWithDash ? labelWithDash.substring(1) : '';
 
     return `${module}-${majorVersion}.${minorVersion}`.toUpperCase();
+  }
+
+  /**
+   * Retrieves the XML content of a unit file
+   * @param workspaceId The ID of the workspace
+   * @param unitId The ID of the unit
+   * @returns The XML content of the unit file
+   */
+  async getUnitContent(workspaceId: number, unitId: number): Promise<string> {
+    try {
+      console.log(`Retrieving unit content for workspace ${workspaceId} and unit ${unitId}`);
+      const unitFile = await this.fileUploadRepository.findOne({
+        where: { workspace_id: workspaceId, file_id: `${unitId}` }
+      });
+
+      if (!unitFile) {
+        this.logger.error(`Unit file with ID ${unitId} not found in workspace ${workspaceId}`);
+        throw new Error(`Unit file with ID ${unitId} not found`);
+      }
+
+      if (unitFile.data) {
+        return unitFile.data.toString();
+      }
+
+      throw new Error('Unit file has no data content');
+    } catch (error) {
+      this.logger.error(`Error retrieving unit content: ${error.message}`, error.stack);
+      throw error;
+    }
+  }
+
+  /**
+   * Extracts the CodingSchemeRef from an XML string
+   * @param xmlContent The XML content to parse
+   * @returns The coding scheme reference name or null if not found
+   */
+  extractCodingSchemeRef(xmlContent: string): string | null {
+    try {
+      // Verwende cheerio, um das XML zu parsen
+      const $ = cheerio.load(xmlContent, { xmlMode: true, recognizeSelfClosing: true });
+
+      // Suche nach dem CodingSchemeRef-Tag
+      const codingSchemeRefTag = $('CodingSchemeRef');
+
+      if (codingSchemeRefTag.length > 0) {
+        // Hole den Text-Inhalt des Tags
+        return codingSchemeRefTag.text().trim();
+      }
+
+      return null;
+    } catch (error) {
+      this.logger.error(`Error extracting CodingSchemeRef: ${error.message}`, error.stack);
+      return null;
+    }
+  }
+
+  /**
+   * Finds a coding scheme file by its reference name
+   * @param workspaceId The ID of the workspace
+   * @param codingSchemeRef The reference name of the coding scheme
+   * @returns The coding scheme file data
+   */
+  async getCodingSchemeByRef(workspaceId: number, codingSchemeRef: string): Promise<FileDownloadDto | null> {
+    try {
+      console.log(`Retrieving coding scheme for workspace ${workspaceId} with reference ${codingSchemeRef}`);
+      const codingSchemeFile = await this.fileUploadRepository.findOne({
+        where: {
+          workspace_id: workspaceId,
+          file_id: codingSchemeRef.toUpperCase()
+        }
+      });
+
+      if (!codingSchemeFile) {
+        this.logger.warn(`Coding scheme file '${codingSchemeRef.toUpperCase()}' not found in workspace ${workspaceId}`);
+        return null;
+      }
+
+      const base64Data = codingSchemeFile.data.toString();
+
+      return {
+        filename: codingSchemeFile.filename,
+        base64Data,
+        mimeType: codingSchemeFile.file_type
+      };
+    } catch (error) {
+      this.logger.error(`Error retrieving coding scheme: ${error.message}`, error.stack);
+      return null;
+    }
   }
 }
