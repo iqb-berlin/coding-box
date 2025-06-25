@@ -93,6 +93,7 @@ interface Unit {
   results: UnitResult[];
   logs: UnitLog[];
   tags: UnitTagDto[];
+
 }
 
 interface Booklet {
@@ -173,6 +174,11 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   private router = inject(Router);
   private snackBar = inject(MatSnackBar);
   private translateService = inject(TranslateService);
+  private searchSubject = new Subject<string>();
+  private searchSubscription: Subscription | null = null;
+  private readonly SEARCH_DEBOUNCE_TIME = 800; // milliseconds
+
+  // Search debounce
   private searchSubject = new Subject<string>();
   private searchSubscription: Subscription | null = null;
   private readonly SEARCH_DEBOUNCE_TIME = 800; // milliseconds
@@ -614,6 +620,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     return date.toLocaleString();
   }
 
+
   calculateBookletProcessingTime(booklet: Booklet): number | null {
     if (!booklet.logs || !Array.isArray(booklet.logs) || booklet.logs.length === 0) {
       return null;
@@ -692,6 +699,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
         return 'lightgrey';
     }
   }
+
 
   getCurrentSearchText(): string {
     const searchInput = document.querySelector('.search-input') as HTMLInputElement;
