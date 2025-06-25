@@ -21,6 +21,10 @@
         <mat-icon>code</mat-icon>
         Kodieren
       </a>
+      <a mat-raised-button color="primary" (click)="openUnitSearchDialog()">
+        <mat-icon>search</mat-icon>
+        Suchen
+      </a>
     </div>
   </div>
   <input #hiddenResponsesFileInput type="file"
@@ -196,7 +200,7 @@
                   <mat-list class="unit-list">
                     @for (unit of booklet.units; track unit) {
                       <mat-list-item
-                        (click)="onUnitClick(unit)"
+                        (click)="onUnitClick(unit, booklet)"
                         class="unit-item">
                         <mat-icon class="unit-icon">assignment</mat-icon>
                         <span class="unit-name">{{ unit?.alias || 'Unbenannte Einheit' }}</span>
