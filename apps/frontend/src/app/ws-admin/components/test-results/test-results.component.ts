@@ -43,6 +43,7 @@ import { TestCenterImportComponent } from '../test-center-import/test-center-imp
 import { LogDialogComponent } from '../booklet-log-dialog/log-dialog.component';
 import { TagDialogComponent } from '../tag-dialog/tag-dialog.component';
 import { NoteDialogComponent } from '../note-dialog/note-dialog.component';
+import { UnitSearchDialogComponent } from '../unit-search-dialog/unit-search-dialog.component';
 import { UnitTagDto } from '../../../../../../../api-dto/unit-tags/unit-tag.dto';
 import { CreateUnitTagDto } from '../../../../../../../api-dto/unit-tags/create-unit-tag.dto';
 import { UpdateUnitTagDto } from '../../../../../../../api-dto/unit-tags/update-unit-tag.dto';
@@ -91,6 +92,8 @@ interface Unit {
   alias: string | null;
   results: UnitResult[];
   logs: UnitLog[];
+  tags: UnitTagDto[];
+
 }
 
 interface Booklet {
@@ -171,17 +174,15 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   private router = inject(Router);
   private snackBar = inject(MatSnackBar);
   private translateService = inject(TranslateService);
-
-  // Search debounce
   private searchSubject = new Subject<string>();
   private searchSubscription: Subscription | null = null;
-  private readonly SEARCH_DEBOUNCE_TIME = 800; // milliseconds
+  private readonly SEARCH_DEBOUNCE_TIME = 800;
 
   selection = new SelectionModel<P>(true, []);
   dataSource !: MatTableDataSource<P>;
   displayedColumns: string[] = ['select', 'code', 'group', 'login', 'uploaded_at'];
   data: P[] = [];
-  booklets: Booklet[] = [];
+  booklets!: Booklet[];
   results: { [key: string]: unknown }[] = [];
   responses: Response[] = [];
   logs: UnitLog[] = [];
@@ -217,7 +218,6 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
-    // Clean up subscriptions
     if (this.searchSubscription) {
       this.searchSubscription.unsubscribe();
       this.searchSubscription = null;
@@ -240,9 +240,6 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       });
   }
 
-  /**
-   * Sort units in each booklet alphabetically by alias
-   */
   sortBookletUnits(): void {
     if (!this.booklets || this.booklets.length === 0) {
       return;
@@ -270,34 +267,23 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Load tags for all units in all booklets
+   * Load tags for all units in all booklets from the response
    */
   loadAllUnitTags(): void {
     if (!this.booklets || this.booklets.length === 0) {
       return;
     }
 
-    // Collect all unit IDs
-    const unitIds: number[] = [];
+    this.unitTagsMap.clear();
+
     this.booklets.forEach(booklet => {
       if (booklet.units && Array.isArray(booklet.units)) {
         booklet.units.forEach(unit => {
-          if (unit.id) {
-            unitIds.push(unit.id);
+          if (unit.id && unit.tags) {
+            this.unitTagsMap.set(unit.id, unit.tags);
           }
         });
       }
-    });
-
-    unitIds.forEach(unitId => {
-      this.backendService.getUnitTags(
-        this.appService.selectedWorkspaceId,
-        unitId
-      ).subscribe({
-        next: tags => {
-          this.unitTagsMap.set(unitId, tags);
-        }
-      });
     });
   }
 
@@ -314,7 +300,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
         const url = this.router
           .serializeUrl(
             this.router.createUrlTree(
-              [`replay/${this.testPerson.login}@${this.testPerson.code}@${this.selectedBooklet}/${this.selectedUnit?.alias}/0/0`],
+              [`replay/${this.testPerson.login}@${this.testPerson.code}@${this.testPerson.group}/${this.selectedUnit?.alias}/0/0`],
               { queryParams: queryParams })
           );
         window.open(`#/${url}`, '_blank');
@@ -323,9 +309,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
   applyFilter(event: Event): void {
     const filterValue = (event.target as HTMLInputElement).value;
-    // Set isSearching to true when a search is triggered
     this.isSearching = true;
-    // Push the search text to the subject, which will debounce and then trigger the search
     this.searchSubject.next(filterValue);
   }
 
@@ -413,11 +397,12 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     });
   }
 
-  onUnitClick(unit: Unit): void {
+  onUnitClick(unit: Unit, booklet: Booklet): void {
     this.responses = unit.results.map((response: UnitResult) => ({
       ...response,
       expanded: false
     }));
+    this.selectedBooklet = booklet.name;
 
     this.responses.sort((a: Response, b: Response) => {
       // First prioritize VALUE_CHANGED status
@@ -439,38 +424,15 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     // this.loadUnitNotes();
   }
 
-  /**
-   * Load tags for the selected unit
-   */
   loadUnitTags(): void {
     if (this.selectedUnit && this.selectedUnit.id) {
-      this.backendService.getUnitTags(
-        this.appService.selectedWorkspaceId,
-        this.selectedUnit.id as number
-      ).subscribe({
-        next: tags => {
-          this.unitTags = tags;
-
-          // Update the unitTagsMap
-          // @ts-expect-error - Property 'id' may not exist on type '{ alias: string; }'
-          this.unitTagsMap.set(this.selectedUnit.id as number, tags);
-        },
-        error: () => {
-          this.snackBar.open(
-            'Fehler beim Laden der Tags',
-            'Fehler',
-            { duration: 3000 }
-          );
-        }
-      });
+      const tags = this.unitTagsMap.get(this.selectedUnit.id as number) || [];
+      this.unitTags = tags;
     } else {
       this.unitTags = [];
     }
   }
 
-  /**
-   * Load notes for the selected unit
-   */
   loadUnitNotes(): void {
     if (this.selectedUnit && this.selectedUnit.id) {
       this.backendService.getUnitNotes(
@@ -497,9 +459,6 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     }
   }
 
-  /**
-   * Add a new tag to the selected unit
-   */
   addUnitTag(): void {
     if (!this.newTagText.trim()) {
       this.snackBar.open(
@@ -516,11 +475,6 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     }
   }
 
-  /**
-   * Add a new tag to a specific unit
-   * @param unitId The ID of the unit
-   * @param tagText The text for the new tag
-   */
   addTagToUnit(unitId: number, tagText: string): void {
     if (!tagText.trim()) {
       this.snackBar.open(
@@ -567,11 +521,6 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     });
   }
 
-  /**
-   * Update an existing tag
-   * @param tagId The ID of the tag to update
-   * @param newText The new text for the tag
-   */
   updateUnitTag(tagId: number, newText: string): void {
     if (!newText.trim()) {
       this.snackBar.open(
@@ -614,21 +563,12 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     });
   }
 
-  /**
-   * Delete a tag from the selected unit
-   * @param tagId The ID of the tag to delete
-   */
   deleteUnitTag(tagId: number): void {
     if (this.selectedUnit && this.selectedUnit.id) {
       this.deleteTagFromUnit(tagId, this.selectedUnit.id as number);
     }
   }
 
-  /**
-   * Delete a tag from a specific unit
-   * @param tagId The ID of the tag to delete
-   * @param unitId The ID of the unit the tag belongs to
-   */
   deleteTagFromUnit(tagId: number, unitId: number): void {
     this.backendService.deleteUnitTag(
       this.appService.selectedWorkspaceId,
@@ -636,12 +576,10 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     ).subscribe({
       next: success => {
         if (success) {
-          // If this is the selected unit, update the unitTags array
           if (this.selectedUnit && this.selectedUnit.id === unitId) {
             this.unitTags = this.unitTags.filter(tag => tag.id !== tagId);
           }
 
-          // Update the unitTagsMap
           const tags = this.unitTagsMap.get(unitId) || [];
           this.unitTagsMap.set(unitId, tags.filter(tag => tag.id !== tagId));
 
@@ -669,7 +607,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   }
 
   setSelectedBooklet(booklet: Booklet) {
-    this.selectedBooklet = booklet;
+    this.selectedBooklet = booklet.name;
   }
 
   formatTimestamp(timestamp: string): string {
@@ -677,11 +615,6 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     return date.toLocaleString();
   }
 
-  /**
-   * Calculates the processing time for a booklet based on its logs
-   * @param booklet The booklet to calculate processing time for
-   * @returns The processing time in milliseconds, or null if it cannot be calculated
-   */
   calculateBookletProcessingTime(booklet: Booklet): number | null {
     if (!booklet.logs || !Array.isArray(booklet.logs) || booklet.logs.length === 0) {
       return null;
@@ -701,22 +634,11 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     return null;
   }
 
-  /**
-   * Formats a duration in milliseconds to a readable format (minutes:seconds)
-   * @param durationMs The duration in milliseconds
-   * @returns A formatted string in the format MM:SS
-   */
   formatDuration(durationMs: number | null): string {
     if (durationMs === null || durationMs < 0) return '00:00';
-
-    // Convert to seconds
     const totalSeconds = Math.floor(durationMs / 1000);
-
-    // Calculate minutes and remaining seconds
     const minutes = Math.floor(totalSeconds / 60);
     const seconds = totalSeconds % 60;
-
-    // Format as MM:SS
     return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
   }
 
@@ -749,7 +671,6 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     return processingTime === null || processingTime < this.SHORT_PROCESSING_TIME_THRESHOLD_MS;
   }
 
-  // Check if any response value for a unit starts with "UEsD"
   hasGeogebraResponse(unit: Unit): boolean {
     if (!unit || !unit.results || !Array.isArray(unit.results)) {
       return false;
@@ -773,18 +694,11 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     }
   }
 
-  /**
-   * Gets the current search text from the search input field
-   * @returns The current search text, or an empty string if not available
-   */
   getCurrentSearchText(): string {
     const searchInput = document.querySelector('.search-input') as HTMLInputElement;
     return searchInput ? searchInput.value : '';
   }
 
-  /**
-   * Clears the search input and resets the search results
-   */
   clearSearch(): void {
     const searchInput = document.querySelector('.search-input') as HTMLInputElement;
     if (searchInput) {
@@ -929,6 +843,18 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       }
       this.isLoading = false;
       this.selection.clear();
+    });
+  }
+
+  /**
+   * Opens a dialog to search for units by name across all test persons
+   */
+  openUnitSearchDialog(): void {
+    this.dialog.open(UnitSearchDialogComponent, {
+      width: '1200px',
+      data: {
+        title: 'Aufgaben suchen'
+      }
     });
   }
 }

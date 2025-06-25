@@ -9,6 +9,7 @@ import { BookletInfo } from '../entities/bookletInfo.entity';
 import { BookletLog } from '../entities/bookletLog.entity';
 import { UnitLog } from '../entities/unitLog.entity';
 import { Session } from '../entities/session.entity';
+import { UnitTagService } from './unit-tag.service';
 
 @Injectable()
 export class WorkspaceTestResultsService {
@@ -31,7 +32,8 @@ export class WorkspaceTestResultsService {
     private unitLogRepository: Repository<UnitLog>,
     @InjectRepository(Session)
     private sessionRepository: Repository<Session>,
-    private readonly connection: Connection
+    private readonly connection: Connection,
+    private readonly unitTagService: UnitTagService
   ) {}
 
   async findPersonTestResults(personId: number, workspaceId: number): Promise<{
@@ -48,6 +50,7 @@ export class WorkspaceTestResultsService {
       alias: string | null;
       results: { id: number; unitid: number }[];
       logs: { id: number; unitid: number; ts: string; key: string; parameter: string }[];
+      tags: { id: number; unitId: number; tag: string; color?: string; createdAt: Date }[];
     }[];
   }[]> {
     if (!personId || !workspaceId) {
@@ -114,6 +117,15 @@ export class WorkspaceTestResultsService {
         select: ['id', 'unitid', 'ts', 'key', 'parameter']
       });
 
+      const allUnitTags = await Promise.all(
+        unitIds.map(unitId => this.unitTagService.findAllByUnitId(unitId))
+      );
+
+      const unitTagsMap = new Map<number, { id: number; unitId: number; tag: string; color?: string; createdAt: Date }[]>();
+      unitIds.forEach((unitId, index) => {
+        unitTagsMap.set(unitId, allUnitTags[index]);
+      });
+
       return booklets.map(booklet => {
         const bookletInfo = bookletInfoData.find(info => info.id === booklet.infoid);
         return {
@@ -149,7 +161,8 @@ export class WorkspaceTestResultsService {
                 ts: log.ts.toString(),
                 key: log.key,
                 parameter: log.parameter
-              }))
+              })),
+              tags: unitTagsMap.get(unit.id) || []
             }))
         };
       });
@@ -366,5 +379,396 @@ export class WorkspaceTestResultsService {
 
       return { success: true, report };
     });
+  }
+
+  /**
+   * Delete a unit and all its associated responses
+   * @param workspaceId The ID of the workspace
+   * @param unitId The ID of the unit to delete
+   * @returns A success flag and a report with deleted unit and warnings
+   */
+  async deleteUnit(
+    workspaceId: number,
+    unitId: number
+  ): Promise<{
+      success: boolean;
+      report: {
+        deletedUnit: number | null;
+        warnings: string[];
+      };
+    }> {
+    return this.connection.transaction(async manager => {
+      const report = {
+        deletedUnit: null,
+        warnings: []
+      };
+
+      // Check if the unit exists and belongs to the workspace
+      const unit = await manager
+        .createQueryBuilder(Unit, 'unit')
+        .leftJoinAndSelect('unit.booklet', 'booklet')
+        .leftJoinAndSelect('booklet.person', 'person')
+        .where('unit.id = :unitId', { unitId })
+        .andWhere('person.workspace_id = :workspaceId', { workspaceId })
+        .getOne();
+
+      if (!unit) {
+        const warningMessage = `Keine Unit mit ID ${unitId} im Workspace ${workspaceId} gefunden`;
+        this.logger.warn(warningMessage);
+        report.warnings.push(warningMessage);
+        return { success: false, report };
+      }
+
+      // Delete the unit (cascade will delete associated responses)
+      await manager
+        .createQueryBuilder()
+        .delete()
+        .from(Unit)
+        .where('id = :unitId', { unitId })
+        .execute();
+
+      report.deletedUnit = unitId;
+
+      return { success: true, report };
+    });
+  }
+
+  /**
+   * Delete a response
+   * @param workspaceId The ID of the workspace
+   * @param responseId The ID of the response to delete
+   * @returns A success flag and a report with deleted response and warnings
+   */
+  async deleteResponse(
+    workspaceId: number,
+    responseId: number
+  ): Promise<{
+      success: boolean;
+      report: {
+        deletedResponse: number | null;
+        warnings: string[];
+      };
+    }> {
+    return this.connection.transaction(async manager => {
+      const report = {
+        deletedResponse: null,
+        warnings: []
+      };
+
+      // Check if the response exists and belongs to the workspace
+      const response = await manager
+        .createQueryBuilder(ResponseEntity, 'response')
+        .leftJoinAndSelect('response.unit', 'unit')
+        .leftJoinAndSelect('unit.booklet', 'booklet')
+        .leftJoinAndSelect('booklet.person', 'person')
+        .where('response.id = :responseId', { responseId })
+        .andWhere('person.workspace_id = :workspaceId', { workspaceId })
+        .getOne();
+
+      if (!response) {
+        const warningMessage = `Keine Antwort mit ID ${responseId} im Workspace ${workspaceId} gefunden`;
+        this.logger.warn(warningMessage);
+        report.warnings.push(warningMessage);
+        return { success: false, report };
+      }
+
+      // Delete the response
+      await manager
+        .createQueryBuilder()
+        .delete()
+        .from(ResponseEntity)
+        .where('id = :responseId', { responseId })
+        .execute();
+
+      report.deletedResponse = responseId;
+
+      return { success: true, report };
+    });
+  }
+
+  /**
+   * Delete a booklet and all its associated units and responses
+   * @param workspaceId The ID of the workspace
+   * @param bookletId The ID of the booklet to delete
+   * @returns A success flag and a report with deleted booklet and warnings
+   */
+  async deleteBooklet(
+    workspaceId: number,
+    bookletId: number
+  ): Promise<{
+      success: boolean;
+      report: {
+        deletedBooklet: number | null;
+        warnings: string[];
+      };
+    }> {
+    return this.connection.transaction(async manager => {
+      const report = {
+        deletedBooklet: null,
+        warnings: []
+      };
+
+      // Check if the booklet exists and belongs to the workspace
+      const booklet = await manager
+        .createQueryBuilder(Booklet, 'booklet')
+        .leftJoinAndSelect('booklet.person', 'person')
+        .where('booklet.id = :bookletId', { bookletId })
+        .andWhere('person.workspace_id = :workspaceId', { workspaceId })
+        .getOne();
+
+      if (!booklet) {
+        const warningMessage = `Kein Booklet mit ID ${bookletId} im Workspace ${workspaceId} gefunden`;
+        this.logger.warn(warningMessage);
+        report.warnings.push(warningMessage);
+        return { success: false, report };
+      }
+
+      // Delete the booklet (cascade will delete associated units and responses)
+      await manager
+        .createQueryBuilder()
+        .delete()
+        .from(Booklet)
+        .where('id = :bookletId', { bookletId })
+        .execute();
+
+      report.deletedBooklet = bookletId;
+
+      return { success: true, report };
+    });
+  }
+
+  /**
+   * Search for responses across all test persons in a workspace
+   * @param workspaceId The ID of the workspace
+   * @param searchParams Search parameters (value, variableId, unitName)
+   * @param options Pagination options
+   * @returns An array of responses matching the search criteria and total count
+   */
+  async searchResponses(
+    workspaceId: number,
+    searchParams: { value?: string; variableId?: string; unitName?: string; status?: string; codedStatus?: string; group?: string; code?: string },
+    options: { page?: number; limit?: number } = {}
+  ): Promise<{
+      data: {
+        responseId: number;
+        variableId: string;
+        value: string;
+        status: string;
+        code?: number;
+        score?: number;
+        codedStatus?: string;
+        unitId: number;
+        unitName: string;
+        unitAlias: string | null;
+        bookletId: number;
+        bookletName: string;
+        personId: number;
+        personLogin: string;
+        personCode: string;
+        personGroup: string;
+      }[];
+      total: number;
+    }> {
+    if (!workspaceId) {
+      throw new Error('workspaceId is required.');
+    }
+
+    const page = options.page || 1;
+    const limit = options.limit || 10;
+    const skip = (page - 1) * limit;
+
+    try {
+      this.logger.log(
+        `Searching for responses in workspace: ${workspaceId} with params: ${JSON.stringify(searchParams)} (page: ${page}, limit: ${limit})`
+      );
+
+      // Create a query to find responses matching the search criteria
+      const query = this.responseRepository.createQueryBuilder('response')
+        .innerJoinAndSelect('response.unit', 'unit')
+        .innerJoinAndSelect('unit.booklet', 'booklet')
+        .innerJoinAndSelect('booklet.person', 'person')
+        .innerJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
+        .where('person.workspace_id = :workspaceId', { workspaceId });
+
+      // Add search conditions based on provided parameters
+      if (searchParams.value) {
+        query.andWhere('response.value ILIKE :value', { value: `%${searchParams.value}%` });
+      }
+
+      if (searchParams.variableId) {
+        query.andWhere('response.variableid ILIKE :variableId', { variableId: `%${searchParams.variableId}%` });
+      }
+
+      if (searchParams.unitName) {
+        query.andWhere('unit.name ILIKE :unitName', { unitName: `%${searchParams.unitName}%` });
+      }
+
+      if (searchParams.status) {
+        query.andWhere('response.status = :status', { status: searchParams.status });
+      }
+
+      if (searchParams.codedStatus) {
+        query.andWhere('response.codedstatus = :codedStatus', { codedStatus: searchParams.codedStatus });
+      }
+
+      if (searchParams.group) {
+        query.andWhere('person.group = :group', { group: searchParams.group });
+      }
+
+      if (searchParams.code) {
+        query.andWhere('person.code = :code', { code: searchParams.code });
+      }
+
+      // Get total count
+      const total = await query.getCount();
+
+      if (total === 0) {
+        this.logger.log(`No responses found matching the criteria in workspace: ${workspaceId}`);
+        return { data: [], total: 0 };
+      }
+
+      // Apply pagination
+      query.skip(skip).take(limit);
+
+      const responses = await query.getMany();
+
+      this.logger.log(`Found ${total} responses matching the criteria in workspace: ${workspaceId}, returning ${responses.length} for page ${page}`);
+
+      // Map the results to the desired format
+      const data = responses.map(response => ({
+        responseId: response.id,
+        variableId: response.variableid,
+        value: response.value || '',
+        status: response.status,
+        code: response.code,
+        score: response.score,
+        codedStatus: response.codedstatus,
+        unitId: response.unit.id,
+        unitName: response.unit.name,
+        unitAlias: response.unit.alias,
+        bookletId: response.unit.booklet.id,
+        bookletName: response.unit.booklet.bookletinfo.name,
+        personId: response.unit.booklet.person.id,
+        personLogin: response.unit.booklet.person.login,
+        personCode: response.unit.booklet.person.code,
+        personGroup: response.unit.booklet.person.group
+      }));
+
+      return { data, total };
+    } catch (error) {
+      this.logger.error(
+        `Failed to search for responses in workspace: ${workspaceId}`,
+        error.stack
+      );
+      throw new Error(`An error occurred while searching for responses: ${error.message}`);
+    }
+  }
+
+  /**
+   * Find units by name across all test persons in a workspace
+   * @param workspaceId The ID of the workspace
+   * @param unitName The name of the unit to search for
+   * @param options Pagination options
+   * @returns An array of units with the same name across different test persons and total count
+   */
+  async findUnitsByName(
+    workspaceId: number,
+    unitName: string,
+    options: { page?: number; limit?: number } = {}
+  ): Promise<{
+      data: {
+        unitId: number;
+        unitName: string;
+        unitAlias: string | null;
+        bookletId: number;
+        bookletName: string;
+        personId: number;
+        personLogin: string;
+        personCode: string;
+        personGroup: string;
+        tags: { id: number; unitId: number; tag: string; color?: string; createdAt: Date }[];
+        responses: { variableId: string; value: string; status: string; code?: number; score?: number; codedStatus?: string }[];
+      }[];
+      total: number;
+    }> {
+    if (!workspaceId || !unitName) {
+      throw new Error('Both workspaceId and unitName are required.');
+    }
+
+    const page = options.page || 1;
+    const limit = options.limit || 10;
+    const skip = (page - 1) * limit;
+
+    try {
+      this.logger.log(
+        `Searching for units with name: ${unitName} in workspace: ${workspaceId} (page: ${page}, limit: ${limit})`
+      );
+
+      // Create a query to find all units with the given name
+      const query = this.unitRepository.createQueryBuilder('unit')
+        .innerJoinAndSelect('unit.booklet', 'booklet')
+        .innerJoinAndSelect('booklet.person', 'person')
+        .innerJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
+        .leftJoinAndSelect('unit.responses', 'response')
+        .where('unit.name = :unitName', { unitName })
+        .andWhere('person.workspace_id = :workspaceId', { workspaceId });
+
+      // Get total count
+      const total = await query.getCount();
+
+      if (total === 0) {
+        this.logger.log(`No units found with name: ${unitName} in workspace: ${workspaceId}`);
+        return { data: [], total: 0 };
+      }
+
+      // Apply pagination
+      query.skip(skip).take(limit);
+
+      const units = await query.getMany();
+
+      this.logger.log(`Found ${total} units with name: ${unitName} in workspace: ${workspaceId}, returning ${units.length} for page ${page}`);
+
+      // Get tags for all units
+      const unitIds = units.map(unit => unit.id);
+      const allUnitTags = await Promise.all(
+        unitIds.map(unitId => this.unitTagService.findAllByUnitId(unitId))
+      );
+
+      // Create a map of unit ID to tags
+      const unitTagsMap = new Map<number, { id: number; unitId: number; tag: string; color?: string; createdAt: Date }[]>();
+      unitIds.forEach((unitId, index) => {
+        unitTagsMap.set(unitId, allUnitTags[index]);
+      });
+
+      // Map the results to the desired format
+      const data = units.map(unit => ({
+        unitId: unit.id,
+        unitName: unit.name,
+        unitAlias: unit.alias,
+        bookletId: unit.booklet.id,
+        bookletName: unit.booklet.bookletinfo.name,
+        personId: unit.booklet.person.id,
+        personLogin: unit.booklet.person.login,
+        personCode: unit.booklet.person.code,
+        personGroup: unit.booklet.person.group,
+        tags: unitTagsMap.get(unit.id) || [],
+        responses: unit.responses ? unit.responses.map(response => ({
+          variableId: response.variableid,
+          value: response.value || '',
+          status: response.status,
+          code: response.code,
+          score: response.score,
+          codedStatus: response.codedstatus
+        })) : []
+      }));
+
+      return { data, total };
+    } catch (error) {
+      this.logger.error(
+        `Failed to search for units with name: ${unitName} in workspace: ${workspaceId}`,
+        error.stack
+      );
+      throw new Error(`An error occurred while searching for units with name: ${unitName}: ${error.message}`);
+    }
   }
 }
