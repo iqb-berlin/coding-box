@@ -1,0 +1,293 @@
+<div class="unit-search-dialog">
+  <h2 mat-dialog-title>{{ data.title }}</h2>
+  <div mat-dialog-content>
+    <!-- Search Mode Toggle -->
+    <div class="search-mode-toggle">
+      <button mat-button [class.active]="searchMode === 'unit'" (click)="toggleSearchMode()">Aufgaben suchen</button>
+      <button mat-button [class.active]="searchMode === 'response'" (click)="toggleSearchMode()">Antworten suchen</button>
+    </div>
+
+    <!-- Unit Search -->
+    @if (searchMode === 'unit') {
+      <div class="search-container">
+        <mat-form-field appearance="outline" class="search-field">
+          <mat-label>Aufgabe suchen</mat-label>
+          <input matInput [(ngModel)]="searchText" (ngModelChange)="onUnitSearchChange()" placeholder="Geben Sie den Namen der Aufgabe ein...">
+          <mat-icon matSuffix>search</mat-icon>
+        </mat-form-field>
+      </div>
+    }
+
+    <!-- Response Search -->
+    @if (searchMode === 'response') {
+      <div class="search-container response-search">
+        <mat-form-field appearance="outline" class="search-field">
+          <mat-label>Antwort-Wert</mat-label>
+          <input matInput [(ngModel)]="searchValue" (ngModelChange)="onResponseSearchChange()" placeholder="Suche nach Antwort-Wert...">
+          <mat-icon matSuffix>search</mat-icon>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" class="search-field">
+          <mat-label>Variablen-ID</mat-label>
+          <input matInput [(ngModel)]="searchVariableId" (ngModelChange)="onResponseSearchChange()" placeholder="Suche nach Variablen-ID...">
+          <mat-icon matSuffix>search</mat-icon>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" class="search-field">
+          <mat-label>Aufgabe</mat-label>
+          <input matInput [(ngModel)]="searchUnitName" (ngModelChange)="onResponseSearchChange()" placeholder="Suche nach Aufgabe...">
+          <mat-icon matSuffix>search</mat-icon>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" class="search-field">
+          <mat-label>Status</mat-label>
+          <input matInput [(ngModel)]="searchStatus" (ngModelChange)="onResponseSearchChange()" placeholder="Suche nach Status...">
+          <mat-icon matSuffix>search</mat-icon>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" class="search-field">
+          <mat-label>Kodier Status</mat-label>
+          <input matInput [(ngModel)]="searchCodedStatus" (ngModelChange)="onResponseSearchChange()" placeholder="Suche nach Kodier Status...">
+          <mat-icon matSuffix>search</mat-icon>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" class="search-field">
+          <mat-label>Gruppe</mat-label>
+          <input matInput [(ngModel)]="searchGroup" (ngModelChange)="onResponseSearchChange()" placeholder="Suche nach Gruppe...">
+          <mat-icon matSuffix>search</mat-icon>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" class="search-field">
+          <mat-label>Code</mat-label>
+          <input matInput [(ngModel)]="searchCode" (ngModelChange)="onResponseSearchChange()" placeholder="Suche nach Code...">
+          <mat-icon matSuffix>search</mat-icon>
+        </mat-form-field>
+      </div>
+    }
+
+    <div class="results-container">
+      @if (isLoading) {
+        <div class="loading-container">
+          <mat-spinner diameter="40"></mat-spinner>
+          <p>Suche läuft...</p>
+        </div>
+      } @else if (searchMode === 'unit' && unitSearchResults.length === 0 && searchText.trim().length > 2) {
+        <div class="no-results">
+          <mat-icon>search_off</mat-icon>
+          <p>Keine Ergebnisse gefunden für "{{ searchText }}"</p>
+        </div>
+      } @else if (searchMode === 'response' && responseSearchResults.length === 0 &&
+                 (searchValue.trim() !== '' || searchVariableId.trim() !== '' || searchUnitName.trim() !== '' ||
+                  searchStatus.trim() !== '' || searchCodedStatus.trim() !== '' || searchGroup.trim() !== '' ||
+                  searchCode.trim() !== '')) {
+        <div class="no-results">
+          <mat-icon>search_off</mat-icon>
+          <p>Keine Ergebnisse gefunden für die angegebenen Suchkriterien</p>
+        </div>
+      } @else if (searchMode === 'unit' && searchText.trim().length <= 2) {
+        <div class="search-hint">
+          <mat-icon>info</mat-icon>
+          <p>Geben Sie Zeichen ein, um die Suche zu starten</p>
+        </div>
+      } @else if (searchMode === 'response' &&
+                 searchValue.trim() === '' &&
+                 searchVariableId.trim() === '' &&
+                 searchUnitName.trim() === '' &&
+                 searchStatus.trim() === '' &&
+                 searchCodedStatus.trim() === '' &&
+                 searchGroup.trim() === '' &&
+                 searchCode.trim() === '') {
+        <div class="search-hint">
+          <mat-icon>info</mat-icon>
+          <p>Geben Sie Zeichen in eines der Suchfelder ein, um die Suche zu starten</p>
+        </div>
+      } @else {
+        <!-- Unit Search Results -->
+        @if (searchMode === 'unit') {
+          <table mat-table [dataSource]="unitSearchResults" class="results-table">
+            <!-- Unit Name Column -->
+            <ng-container matColumnDef="unitName">
+              <th mat-header-cell *matHeaderCellDef>Aufgabe</th>
+              <td mat-cell *matCellDef="let unit">{{ unit.unitName }}</td>
+            </ng-container>
+
+            <!-- Unit Alias Column -->
+            <ng-container matColumnDef="unitAlias">
+              <th mat-header-cell *matHeaderCellDef>Alias</th>
+              <td mat-cell *matCellDef="let unit">{{ unit.unitAlias || '-' }}</td>
+            </ng-container>
+
+            <!-- Booklet Name Column -->
+            <ng-container matColumnDef="bookletName">
+              <th mat-header-cell *matHeaderCellDef>Booklet</th>
+              <td mat-cell *matCellDef="let unit">{{ unit.bookletName }}</td>
+            </ng-container>
+
+            <!-- Person Login Column -->
+            <ng-container matColumnDef="personLogin">
+              <th mat-header-cell *matHeaderCellDef>Login</th>
+              <td mat-cell *matCellDef="let unit">{{ unit.personLogin }}</td>
+            </ng-container>
+
+            <!-- Person Code Column -->
+            <ng-container matColumnDef="personCode">
+              <th mat-header-cell *matHeaderCellDef>Code</th>
+              <td mat-cell *matCellDef="let unit">{{ unit.personCode }}</td>
+            </ng-container>
+
+            <!-- Person Group Column -->
+            <ng-container matColumnDef="personGroup">
+              <th mat-header-cell *matHeaderCellDef>Gruppe</th>
+              <td mat-cell *matCellDef="let unit">{{ unit.personGroup }}</td>
+            </ng-container>
+
+            <!-- Tags Column -->
+            <ng-container matColumnDef="tags">
+              <th mat-header-cell *matHeaderCellDef>Tags</th>
+              <td mat-cell *matCellDef="let unit">
+                <div class="tags-container">
+                  @for (tag of unit.tags; track tag) {
+                    <span class="tag-chip" [style.background-color]="tag.color || '#e0e0e0'">
+                      {{ tag.tag }}
+                    </span>
+                  }
+                  @if (unit.tags.length === 0) {
+                    <span class="no-tags">Keine Tags</span>
+                  }
+                </div>
+              </td>
+            </ng-container>
+
+            <!-- Response Value Column -->
+            <ng-container matColumnDef="responseValue">
+              <th mat-header-cell *matHeaderCellDef>Antwort</th>
+              <td mat-cell *matCellDef="let unit">
+                @if (unit.responses && unit.responses.length > 0) {
+                  <div class="response-value">
+                    @for (response of unit.responses.slice(0, 1); track response) {
+                      <div class="response-content">
+                        <span class="response-variable">{{ response.variableId }}:</span>
+                        <span class="response-text">{{ response.value | slice:0:50 }}{{ response.value.length > 50 ? '...' : '' }}</span>
+                      </div>
+                    }
+                    @if (unit.responses.length > 1) {
+                      <span class="more-responses">+{{ unit.responses.length - 1 }} weitere</span>
+                    }
+                  </div>
+                } @else {
+                  <span class="no-response">Keine Antwort verfügbar</span>
+                }
+              </td>
+            </ng-container>
+
+            <!-- Actions Column -->
+            <ng-container matColumnDef="actions">
+              <th mat-header-cell *matHeaderCellDef>Aktionen</th>
+              <td mat-cell *matCellDef="let unit">
+                <button mat-icon-button color="primary" (click)="replayUnit(unit)" matTooltip="Replay Unit">
+                  <mat-icon>play_arrow</mat-icon>
+                </button>
+              </td>
+            </ng-container>
+
+            <tr mat-header-row *matHeaderRowDef="unitDisplayedColumns; sticky: true"></tr>
+            <tr mat-row *matRowDef="let row; columns: unitDisplayedColumns;" class="result-row"></tr>
+          </table>
+        }
+
+        <!-- Response Search Results -->
+        @if (searchMode === 'response') {
+          <table mat-table [dataSource]="responseSearchResults" class="results-table">
+            <!-- Variable ID Column -->
+            <ng-container matColumnDef="variableId">
+              <th mat-header-cell *matHeaderCellDef>Variable ID</th>
+              <td mat-cell *matCellDef="let response">{{ response.variableId }}</td>
+            </ng-container>
+
+            <!-- Value Column -->
+            <ng-container matColumnDef="value">
+              <th mat-header-cell *matHeaderCellDef>Wert</th>
+              <td mat-cell *matCellDef="let response">
+                <span class="response-text">{{ response.value | slice:0:50 }}{{ response.value.length > 50 ? '...' : '' }}</span>
+              </td>
+            </ng-container>
+
+            <!-- Status Column -->
+            <ng-container matColumnDef="status">
+              <th mat-header-cell *matHeaderCellDef>Status</th>
+              <td mat-cell *matCellDef="let response">{{ response.status }}</td>
+            </ng-container>
+
+            <!-- Coded Status Column -->
+            <ng-container matColumnDef="codedStatus">
+              <th mat-header-cell *matHeaderCellDef>Kodier Status</th>
+              <td mat-cell *matCellDef="let response">{{ response.codedStatus }}</td>
+            </ng-container>
+
+            <!-- Unit Name Column -->
+            <ng-container matColumnDef="unitName">
+              <th mat-header-cell *matHeaderCellDef>Aufgabe</th>
+              <td mat-cell *matCellDef="let response">{{ response.unitName }}</td>
+            </ng-container>
+
+            <!-- Unit Alias Column -->
+            <ng-container matColumnDef="unitAlias">
+              <th mat-header-cell *matHeaderCellDef>Alias</th>
+              <td mat-cell *matCellDef="let response">{{ response.unitAlias || '-' }}</td>
+            </ng-container>
+
+            <!-- Booklet Name Column -->
+            <ng-container matColumnDef="bookletName">
+              <th mat-header-cell *matHeaderCellDef>Booklet</th>
+              <td mat-cell *matCellDef="let response">{{ response.bookletName }}</td>
+            </ng-container>
+
+            <!-- Person Login Column -->
+            <ng-container matColumnDef="personLogin">
+              <th mat-header-cell *matHeaderCellDef>Login</th>
+              <td mat-cell *matCellDef="let response">{{ response.personLogin }}</td>
+            </ng-container>
+
+            <!-- Person Code Column -->
+            <ng-container matColumnDef="personCode">
+              <th mat-header-cell *matHeaderCellDef>Code</th>
+              <td mat-cell *matCellDef="let response">{{ response.personCode }}</td>
+            </ng-container>
+
+            <!-- Person Group Column -->
+            <ng-container matColumnDef="personGroup">
+              <th mat-header-cell *matHeaderCellDef>Gruppe</th>
+              <td mat-cell *matCellDef="let response">{{ response.personGroup }}</td>
+            </ng-container>
+
+            <!-- Actions Column -->
+            <ng-container matColumnDef="actions">
+              <th mat-header-cell *matHeaderCellDef>Aktionen</th>
+              <td mat-cell *matCellDef="let response">
+                <button mat-icon-button color="primary" (click)="replayUnit(response)" matTooltip="Replay Unit">
+                  <mat-icon>play_arrow</mat-icon>
+                </button>
+              </td>
+            </ng-container>
+
+            <tr mat-header-row *matHeaderRowDef="responseDisplayedColumns; sticky: true"></tr>
+            <tr mat-row *matRowDef="let row; columns: responseDisplayedColumns;" class="result-row"></tr>
+          </table>
+        }
+
+        <!-- Pagination -->
+        <mat-paginator
+          [length]="totalItems"
+          [pageSize]="pageSize"
+          [pageIndex]="pageIndex"
+          [pageSizeOptions]="pageSizeOptions"
+          (page)="onPageChange($event)"
+          aria-label="Seite wählen">
+        </mat-paginator>
+      }
+    </div>
+  </div>
+  <div mat-dialog-actions align="end">
+    <button mat-button (click)="close()">Schließen</button>
+  </div>
+</div>

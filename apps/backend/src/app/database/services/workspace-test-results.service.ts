@@ -380,4 +380,239 @@ export class WorkspaceTestResultsService {
       return { success: true, report };
     });
   }
+
+  /**
+   * Search for responses across all test persons in a workspace
+   * @param workspaceId The ID of the workspace
+   * @param searchParams Search parameters (value, variableId, unitName)
+   * @param options Pagination options
+   * @returns An array of responses matching the search criteria and total count
+   */
+  async searchResponses(
+    workspaceId: number,
+    searchParams: { value?: string; variableId?: string; unitName?: string; status?: string; codedStatus?: string; group?: string; code?: string },
+    options: { page?: number; limit?: number } = {}
+  ): Promise<{
+      data: {
+        responseId: number;
+        variableId: string;
+        value: string;
+        status: string;
+        code?: number;
+        score?: number;
+        codedStatus?: string;
+        unitId: number;
+        unitName: string;
+        unitAlias: string | null;
+        bookletId: number;
+        bookletName: string;
+        personId: number;
+        personLogin: string;
+        personCode: string;
+        personGroup: string;
+      }[];
+      total: number;
+    }> {
+    if (!workspaceId) {
+      throw new Error('workspaceId is required.');
+    }
+
+    const page = options.page || 1;
+    const limit = options.limit || 10;
+    const skip = (page - 1) * limit;
+
+    try {
+      this.logger.log(
+        `Searching for responses in workspace: ${workspaceId} with params: ${JSON.stringify(searchParams)} (page: ${page}, limit: ${limit})`
+      );
+
+      // Create a query to find responses matching the search criteria
+      const query = this.responseRepository.createQueryBuilder('response')
+        .innerJoinAndSelect('response.unit', 'unit')
+        .innerJoinAndSelect('unit.booklet', 'booklet')
+        .innerJoinAndSelect('booklet.person', 'person')
+        .innerJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
+        .where('person.workspace_id = :workspaceId', { workspaceId });
+
+      // Add search conditions based on provided parameters
+      if (searchParams.value) {
+        query.andWhere('response.value ILIKE :value', { value: `%${searchParams.value}%` });
+      }
+
+      if (searchParams.variableId) {
+        query.andWhere('response.variableid ILIKE :variableId', { variableId: `%${searchParams.variableId}%` });
+      }
+
+      if (searchParams.unitName) {
+        query.andWhere('unit.name ILIKE :unitName', { unitName: `%${searchParams.unitName}%` });
+      }
+
+      if (searchParams.status) {
+        query.andWhere('response.status = :status', { status: searchParams.status });
+      }
+
+      if (searchParams.codedStatus) {
+        query.andWhere('response.codedstatus = :codedStatus', { codedStatus: searchParams.codedStatus });
+      }
+
+      if (searchParams.group) {
+        query.andWhere('person.group = :group', { group: searchParams.group });
+      }
+
+      if (searchParams.code) {
+        query.andWhere('person.code = :code', { code: searchParams.code });
+      }
+
+      // Get total count
+      const total = await query.getCount();
+
+      if (total === 0) {
+        this.logger.log(`No responses found matching the criteria in workspace: ${workspaceId}`);
+        return { data: [], total: 0 };
+      }
+
+      // Apply pagination
+      query.skip(skip).take(limit);
+
+      const responses = await query.getMany();
+
+      this.logger.log(`Found ${total} responses matching the criteria in workspace: ${workspaceId}, returning ${responses.length} for page ${page}`);
+
+      // Map the results to the desired format
+      const data = responses.map(response => ({
+        responseId: response.id,
+        variableId: response.variableid,
+        value: response.value || '',
+        status: response.status,
+        code: response.code,
+        score: response.score,
+        codedStatus: response.codedstatus,
+        unitId: response.unit.id,
+        unitName: response.unit.name,
+        unitAlias: response.unit.alias,
+        bookletId: response.unit.booklet.id,
+        bookletName: response.unit.booklet.bookletinfo.name,
+        personId: response.unit.booklet.person.id,
+        personLogin: response.unit.booklet.person.login,
+        personCode: response.unit.booklet.person.code,
+        personGroup: response.unit.booklet.person.group
+      }));
+
+      return { data, total };
+    } catch (error) {
+      this.logger.error(
+        `Failed to search for responses in workspace: ${workspaceId}`,
+        error.stack
+      );
+      throw new Error(`An error occurred while searching for responses: ${error.message}`);
+    }
+  }
+
+  /**
+   * Find units by name across all test persons in a workspace
+   * @param workspaceId The ID of the workspace
+   * @param unitName The name of the unit to search for
+   * @param options Pagination options
+   * @returns An array of units with the same name across different test persons and total count
+   */
+  async findUnitsByName(
+    workspaceId: number,
+    unitName: string,
+    options: { page?: number; limit?: number } = {}
+  ): Promise<{
+      data: {
+        unitId: number;
+        unitName: string;
+        unitAlias: string | null;
+        bookletId: number;
+        bookletName: string;
+        personId: number;
+        personLogin: string;
+        personCode: string;
+        personGroup: string;
+        tags: { id: number; unitId: number; tag: string; color?: string; createdAt: Date }[];
+        responses: { variableId: string; value: string; status: string; code?: number; score?: number; codedStatus?: string }[];
+      }[];
+      total: number;
+    }> {
+    if (!workspaceId || !unitName) {
+      throw new Error('Both workspaceId and unitName are required.');
+    }
+
+    const page = options.page || 1;
+    const limit = options.limit || 10;
+    const skip = (page - 1) * limit;
+
+    try {
+      this.logger.log(
+        `Searching for units with name: ${unitName} in workspace: ${workspaceId} (page: ${page}, limit: ${limit})`
+      );
+
+      // Create a query to find all units with the given name
+      const query = this.unitRepository.createQueryBuilder('unit')
+        .innerJoinAndSelect('unit.booklet', 'booklet')
+        .innerJoinAndSelect('booklet.person', 'person')
+        .innerJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
+        .leftJoinAndSelect('unit.responses', 'response')
+        .where('unit.name = :unitName', { unitName })
+        .andWhere('person.workspace_id = :workspaceId', { workspaceId });
+
+      // Get total count
+      const total = await query.getCount();
+
+      if (total === 0) {
+        this.logger.log(`No units found with name: ${unitName} in workspace: ${workspaceId}`);
+        return { data: [], total: 0 };
+      }
+
+      // Apply pagination
+      query.skip(skip).take(limit);
+
+      const units = await query.getMany();
+
+      this.logger.log(`Found ${total} units with name: ${unitName} in workspace: ${workspaceId}, returning ${units.length} for page ${page}`);
+
+      // Get tags for all units
+      const unitIds = units.map(unit => unit.id);
+      const allUnitTags = await Promise.all(
+        unitIds.map(unitId => this.unitTagService.findAllByUnitId(unitId))
+      );
+
+      // Create a map of unit ID to tags
+      const unitTagsMap = new Map<number, { id: number; unitId: number; tag: string; color?: string; createdAt: Date }[]>();
+      unitIds.forEach((unitId, index) => {
+        unitTagsMap.set(unitId, allUnitTags[index]);
+      });
+
+      // Map the results to the desired format
+      const data = units.map(unit => ({
+        unitId: unit.id,
+        unitName: unit.name,
+        unitAlias: unit.alias,
+        bookletId: unit.booklet.id,
+        bookletName: unit.booklet.bookletinfo.name,
+        personId: unit.booklet.person.id,
+        personLogin: unit.booklet.person.login,
+        personCode: unit.booklet.person.code,
+        personGroup: unit.booklet.person.group,
+        tags: unitTagsMap.get(unit.id) || [],
+        responses: unit.responses ? unit.responses.map(response => ({
+          variableId: response.variableid,
+          value: response.value || '',
+          status: response.status,
+          code: response.code,
+          score: response.score,
+          codedStatus: response.codedstatus
+        })) : []
+      }));
+
+      return { data, total };
+    } catch (error) {
+      this.logger.error(
+        `Failed to search for units with name: ${unitName} in workspace: ${workspaceId}`,
+        error.stack
+      );
+      throw new Error(`An error occurred while searching for units with name: ${unitName}: ${error.message}`);
+    }
+  }
 }

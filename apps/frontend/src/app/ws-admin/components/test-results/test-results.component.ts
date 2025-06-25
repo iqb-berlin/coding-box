@@ -43,6 +43,7 @@ import { TestCenterImportComponent } from '../test-center-import/test-center-imp
 import { LogDialogComponent } from '../booklet-log-dialog/log-dialog.component';
 import { TagDialogComponent } from '../tag-dialog/tag-dialog.component';
 import { NoteDialogComponent } from '../note-dialog/note-dialog.component';
+import { UnitSearchDialogComponent } from '../unit-search-dialog/unit-search-dialog.component';
 import { UnitTagDto } from '../../../../../../../api-dto/unit-tags/unit-tag.dto';
 import { CreateUnitTagDto } from '../../../../../../../api-dto/unit-tags/create-unit-tag.dto';
 import { UpdateUnitTagDto } from '../../../../../../../api-dto/unit-tags/update-unit-tag.dto';
@@ -841,6 +842,18 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       }
       this.isLoading = false;
       this.selection.clear();
+    });
+  }
+
+  /**
+   * Opens a dialog to search for units by name across all test persons
+   */
+  openUnitSearchDialog(): void {
+    this.dialog.open(UnitSearchDialogComponent, {
+      width: '1200px',
+      data: {
+        title: 'Aufgaben suchen'
+      }
     });
   }
 }
