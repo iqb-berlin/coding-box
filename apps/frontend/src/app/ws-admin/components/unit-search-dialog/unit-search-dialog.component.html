@@ -104,6 +104,15 @@
       } @else {
         <!-- Unit Search Results -->
         @if (searchMode === 'unit') {
+          <!-- Delete All Button for Units -->
+          @if (unitSearchResults.length > 0) {
+            <div class="delete-all-container">
+              <button mat-stroked-button (click)="deleteAllUnits()">
+                <mat-icon>delete_sweep</mat-icon>
+                Alle {{ unitSearchResults.length }} gefilterten Aufgaben löschen
+              </button>
+            </div>
+          }
           <table mat-table [dataSource]="unitSearchResults" class="results-table">
             <!-- Unit Name Column -->
             <ng-container matColumnDef="unitName">
@@ -187,6 +196,9 @@
                 <button mat-icon-button color="primary" (click)="replayUnit(unit)" matTooltip="Replay Unit">
                   <mat-icon>play_arrow</mat-icon>
                 </button>
+                <button mat-icon-button color="warn" (click)="deleteUnit(unit)" matTooltip="Unit löschen">
+                  <mat-icon>delete</mat-icon>
+                </button>
               </td>
             </ng-container>
 
@@ -197,6 +209,15 @@
 
         <!-- Response Search Results -->
         @if (searchMode === 'response') {
+          <!-- Delete All Button for Responses -->
+          @if (responseSearchResults.length > 0) {
+            <div class="delete-all-container">
+              <button mat-stroked-button (click)="deleteAllResponses()">
+                <mat-icon>delete_sweep</mat-icon>
+                Alle {{ responseSearchResults.length }} gefilterten Antworten löschen
+              </button>
+            </div>
+          }
           <table mat-table [dataSource]="responseSearchResults" class="results-table">
             <!-- Variable ID Column -->
             <ng-container matColumnDef="variableId">
@@ -266,6 +287,9 @@
               <td mat-cell *matCellDef="let response">
                 <button mat-icon-button color="primary" (click)="replayUnit(response)" matTooltip="Replay Unit">
                   <mat-icon>play_arrow</mat-icon>
+                </button>
+                <button mat-icon-button color="warn" (click)="deleteResponse(response)" matTooltip="Antwort löschen">
+                  <mat-icon>delete</mat-icon>
                 </button>
               </td>
             </ng-container>

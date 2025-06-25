@@ -4,7 +4,12 @@ import {
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
-import { MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
+import {
+  MatDialog,
+  MatDialogModule,
+  MatDialogRef,
+  MAT_DIALOG_DATA
+} from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
@@ -12,11 +17,13 @@ import { MatTableModule } from '@angular/material/table';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatPaginator, MatPaginatorModule, PageEvent } from '@angular/material/paginator';
+import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateModule } from '@ngx-translate/core';
 import { Router } from '@angular/router';
 import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
 import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
+import { ConfirmDialogComponent, ConfirmDialogData } from '../../../shared/dialogs/confirm-dialog.component';
 
 interface UnitSearchResult {
   unitId: number;
@@ -106,7 +113,9 @@ export class UnitSearchDialogComponent implements OnInit {
     @Inject(MAT_DIALOG_DATA) public data: { title: string },
     private backendService: BackendService,
     private appService: AppService,
-    private router: Router
+    private router: Router,
+    private dialog: MatDialog,
+    private snackBar: MatSnackBar
   ) {}
 
   ngOnInit(): void {
@@ -244,5 +253,253 @@ export class UnitSearchDialogComponent implements OnInit {
           );
         window.open(`#/${url}`, '_blank');
       });
+  }
+
+  /**
+   * Deletes a unit and all its associated responses
+   * @param unit The unit to delete
+   */
+  deleteUnit(unit: UnitSearchResult): void {
+    const dialogRef = this.dialog.open(ConfirmDialogComponent, {
+      width: '400px',
+      data: {
+        title: 'Unit löschen',
+        content: `Sind Sie sicher, dass Sie die Unit "${unit.unitName}" (${unit.unitAlias || 'ohne Alias'}) löschen möchten? Alle zugehörigen Antworten werden ebenfalls gelöscht.`,
+        confirmButtonLabel: 'Löschen',
+        showCancel: true
+      } as ConfirmDialogData
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result) {
+        this.isLoading = true;
+        this.backendService.deleteUnit(
+          this.appService.selectedWorkspaceId,
+          unit.unitId
+        ).subscribe({
+          next: response => {
+            this.isLoading = false;
+            if (response.success) {
+              this.unitSearchResults = this.unitSearchResults.filter(u => u.unitId !== unit.unitId);
+              this.totalItems -= 1;
+              this.snackBar.open(
+                `Unit erfolgreich gelöscht. Unit ID: ${response.report.deletedUnit}`,
+                'Schließen',
+                { duration: 3000 }
+              );
+            } else {
+              this.snackBar.open(
+                `Fehler beim Löschen der Unit: ${response.report.warnings.join(', ')}`,
+                'Fehler',
+                { duration: 5000 }
+              );
+            }
+          },
+          error: () => {
+            this.isLoading = false;
+            this.snackBar.open(
+              'Fehler beim Löschen der Unit. Bitte versuchen Sie es später erneut.',
+              'Fehler',
+              { duration: 5000 }
+            );
+          }
+        });
+      }
+    });
+  }
+
+  /**
+   * Deletes a response
+   * @param response The response to delete
+   */
+  deleteResponse(response: ResponseSearchResult): void {
+    const dialogRef = this.dialog.open(ConfirmDialogComponent, {
+      width: '400px',
+      data: {
+        title: 'Antwort löschen',
+        content: `Sind Sie sicher, dass Sie die Antwort für Variable "${response.variableId}" löschen möchten?`,
+        confirmButtonLabel: 'Löschen',
+        showCancel: true
+      } as ConfirmDialogData
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result) {
+        this.isLoading = true;
+        this.backendService.deleteResponse(
+          this.appService.selectedWorkspaceId,
+          response.responseId
+        ).subscribe({
+          next: apiResponse => {
+            this.isLoading = false;
+            if (apiResponse.success) {
+              // Remove the response from the results
+              this.responseSearchResults = this.responseSearchResults.filter(r => r.responseId !== response.responseId);
+              // Update total count
+              this.totalItems -= 1;
+              // Show success message
+              this.snackBar.open(
+                `Antwort erfolgreich gelöscht. Antwort ID: ${apiResponse.report.deletedResponse}`,
+                'Schließen',
+                { duration: 3000 }
+              );
+            } else {
+              // Show error message
+              this.snackBar.open(
+                `Fehler beim Löschen der Antwort: ${apiResponse.report.warnings.join(', ')}`,
+                'Fehler',
+                { duration: 5000 }
+              );
+            }
+          },
+          error: () => {
+            this.isLoading = false;
+            this.snackBar.open(
+              'Fehler beim Löschen der Antwort. Bitte versuchen Sie es später erneut.',
+              'Fehler',
+              { duration: 5000 }
+            );
+          }
+        });
+      }
+    });
+  }
+
+  /**
+   * Deletes all filtered units
+   */
+  deleteAllUnits(): void {
+    if (this.unitSearchResults.length === 0) {
+      this.snackBar.open(
+        'Keine Aufgaben zum Löschen gefunden.',
+        'Info',
+        { duration: 3000 }
+      );
+      return;
+    }
+
+    const dialogRef = this.dialog.open(ConfirmDialogComponent, {
+      width: '400px',
+      data: {
+        title: 'Alle gefilterten Aufgaben löschen',
+        content: `Sind Sie sicher, dass Sie alle ${this.unitSearchResults.length} gefilterten Aufgaben löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.`,
+        confirmButtonLabel: 'Alle löschen',
+        showCancel: true
+      } as ConfirmDialogData
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result) {
+        this.isLoading = true;
+        const unitIds = this.unitSearchResults.map(unit => unit.unitId);
+
+        this.backendService.deleteMultipleUnits(
+          this.appService.selectedWorkspaceId,
+          unitIds
+        ).subscribe({
+          next: response => {
+            this.isLoading = false;
+            if (response.success) {
+              const deletedCount = response.report.deletedUnits.length;
+
+              // Clear the search results
+              this.unitSearchResults = [];
+              this.totalItems = 0;
+
+              // Show success message
+              this.snackBar.open(
+                `${deletedCount} Aufgaben erfolgreich gelöscht.`,
+                'Schließen',
+                { duration: 3000 }
+              );
+            } else {
+              // Show error message
+              this.snackBar.open(
+                `Fehler beim Löschen der Aufgaben: ${response.report.warnings.join(', ')}`,
+                'Fehler',
+                { duration: 5000 }
+              );
+            }
+          },
+          error: () => {
+            this.isLoading = false;
+            this.snackBar.open(
+              'Fehler beim Löschen der Aufgaben. Bitte versuchen Sie es später erneut.',
+              'Fehler',
+              { duration: 5000 }
+            );
+          }
+        });
+      }
+    });
+  }
+
+  /**
+   * Deletes all filtered responses
+   */
+  deleteAllResponses(): void {
+    if (this.responseSearchResults.length === 0) {
+      this.snackBar.open(
+        'Keine Antworten zum Löschen gefunden.',
+        'Info',
+        { duration: 3000 }
+      );
+      return;
+    }
+
+    const dialogRef = this.dialog.open(ConfirmDialogComponent, {
+      width: '400px',
+      data: {
+        title: 'Alle gefilterten Antworten löschen',
+        content: `Sind Sie sicher, dass Sie alle ${this.responseSearchResults.length} gefilterten Antworten löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.`,
+        confirmButtonLabel: 'Alle löschen',
+        showCancel: true
+      } as ConfirmDialogData
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result) {
+        this.isLoading = true;
+        const responseIds = this.responseSearchResults.map(response => response.responseId);
+
+        this.backendService.deleteMultipleResponses(
+          this.appService.selectedWorkspaceId,
+          responseIds
+        ).subscribe({
+          next: response => {
+            this.isLoading = false;
+            if (response.success) {
+              const deletedCount = response.report.deletedResponses.length;
+
+              // Clear the search results
+              this.responseSearchResults = [];
+              this.totalItems = 0;
+
+              // Show success message
+              this.snackBar.open(
+                `${deletedCount} Antworten erfolgreich gelöscht.`,
+                'Schließen',
+                { duration: 3000 }
+              );
+            } else {
+              // Show error message
+              this.snackBar.open(
+                `Fehler beim Löschen der Antworten: ${response.report.warnings.join(', ')}`,
+                'Fehler',
+                { duration: 5000 }
+              );
+            }
+          },
+          error: () => {
+            this.isLoading = false;
+            this.snackBar.open(
+              'Fehler beim Löschen der Antworten. Bitte versuchen Sie es später erneut.',
+              'Fehler',
+              { duration: 5000 }
+            );
+          }
+        });
+      }
+    });
   }
 }

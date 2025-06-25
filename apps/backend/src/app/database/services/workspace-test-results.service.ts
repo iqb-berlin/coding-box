@@ -382,6 +382,162 @@ export class WorkspaceTestResultsService {
   }
 
   /**
+   * Delete a unit and all its associated responses
+   * @param workspaceId The ID of the workspace
+   * @param unitId The ID of the unit to delete
+   * @returns A success flag and a report with deleted unit and warnings
+   */
+  async deleteUnit(
+    workspaceId: number,
+    unitId: number
+  ): Promise<{
+      success: boolean;
+      report: {
+        deletedUnit: number | null;
+        warnings: string[];
+      };
+    }> {
+    return this.connection.transaction(async manager => {
+      const report = {
+        deletedUnit: null,
+        warnings: []
+      };
+
+      // Check if the unit exists and belongs to the workspace
+      const unit = await manager
+        .createQueryBuilder(Unit, 'unit')
+        .leftJoinAndSelect('unit.booklet', 'booklet')
+        .leftJoinAndSelect('booklet.person', 'person')
+        .where('unit.id = :unitId', { unitId })
+        .andWhere('person.workspace_id = :workspaceId', { workspaceId })
+        .getOne();
+
+      if (!unit) {
+        const warningMessage = `Keine Unit mit ID ${unitId} im Workspace ${workspaceId} gefunden`;
+        this.logger.warn(warningMessage);
+        report.warnings.push(warningMessage);
+        return { success: false, report };
+      }
+
+      // Delete the unit (cascade will delete associated responses)
+      await manager
+        .createQueryBuilder()
+        .delete()
+        .from(Unit)
+        .where('id = :unitId', { unitId })
+        .execute();
+
+      report.deletedUnit = unitId;
+
+      return { success: true, report };
+    });
+  }
+
+  /**
+   * Delete a response
+   * @param workspaceId The ID of the workspace
+   * @param responseId The ID of the response to delete
+   * @returns A success flag and a report with deleted response and warnings
+   */
+  async deleteResponse(
+    workspaceId: number,
+    responseId: number
+  ): Promise<{
+      success: boolean;
+      report: {
+        deletedResponse: number | null;
+        warnings: string[];
+      };
+    }> {
+    return this.connection.transaction(async manager => {
+      const report = {
+        deletedResponse: null,
+        warnings: []
+      };
+
+      // Check if the response exists and belongs to the workspace
+      const response = await manager
+        .createQueryBuilder(ResponseEntity, 'response')
+        .leftJoinAndSelect('response.unit', 'unit')
+        .leftJoinAndSelect('unit.booklet', 'booklet')
+        .leftJoinAndSelect('booklet.person', 'person')
+        .where('response.id = :responseId', { responseId })
+        .andWhere('person.workspace_id = :workspaceId', { workspaceId })
+        .getOne();
+
+      if (!response) {
+        const warningMessage = `Keine Antwort mit ID ${responseId} im Workspace ${workspaceId} gefunden`;
+        this.logger.warn(warningMessage);
+        report.warnings.push(warningMessage);
+        return { success: false, report };
+      }
+
+      // Delete the response
+      await manager
+        .createQueryBuilder()
+        .delete()
+        .from(ResponseEntity)
+        .where('id = :responseId', { responseId })
+        .execute();
+
+      report.deletedResponse = responseId;
+
+      return { success: true, report };
+    });
+  }
+
+  /**
+   * Delete a booklet and all its associated units and responses
+   * @param workspaceId The ID of the workspace
+   * @param bookletId The ID of the booklet to delete
+   * @returns A success flag and a report with deleted booklet and warnings
+   */
+  async deleteBooklet(
+    workspaceId: number,
+    bookletId: number
+  ): Promise<{
+      success: boolean;
+      report: {
+        deletedBooklet: number | null;
+        warnings: string[];
+      };
+    }> {
+    return this.connection.transaction(async manager => {
+      const report = {
+        deletedBooklet: null,
+        warnings: []
+      };
+
+      // Check if the booklet exists and belongs to the workspace
+      const booklet = await manager
+        .createQueryBuilder(Booklet, 'booklet')
+        .leftJoinAndSelect('booklet.person', 'person')
+        .where('booklet.id = :bookletId', { bookletId })
+        .andWhere('person.workspace_id = :workspaceId', { workspaceId })
+        .getOne();
+
+      if (!booklet) {
+        const warningMessage = `Kein Booklet mit ID ${bookletId} im Workspace ${workspaceId} gefunden`;
+        this.logger.warn(warningMessage);
+        report.warnings.push(warningMessage);
+        return { success: false, report };
+      }
+
+      // Delete the booklet (cascade will delete associated units and responses)
+      await manager
+        .createQueryBuilder()
+        .delete()
+        .from(Booklet)
+        .where('id = :bookletId', { bookletId })
+        .execute();
+
+      report.deletedBooklet = bookletId;
+
+      return { success: true, report };
+    });
+  }
+
+  /**
    * Search for responses across all test persons in a workspace
    * @param workspaceId The ID of the workspace
    * @param searchParams Search parameters (value, variableId, unitName)

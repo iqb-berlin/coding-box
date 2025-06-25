@@ -1,7 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import {
-  catchError, map, Observable, of, switchMap
+  catchError, forkJoin, map, Observable, of, switchMap
 } from 'rxjs';
 import { logger } from 'nx/src/utils/logger';
 import { CreateUserDto } from '../../../../../api-dto/user/create-user-dto';
@@ -698,7 +698,6 @@ export class BackendService {
     );
   }
 
-
   searchResponses(
     workspaceId: number,
     searchParams: { value?: string; variableId?: string; unitName?: string; status?: string; codedStatus?: string; group?: string; code?: string },
@@ -847,6 +846,164 @@ export class BackendService {
       catchError(() => {
         logger.error(`Error searching for units with name: ${unitName}`);
         return of({ data: [], total: 0 });
+      })
+    );
+  }
+
+  /**
+   * Delete a unit and all its associated responses
+   * @param workspaceId The ID of the workspace
+   * @param unitId The ID of the unit to delete
+   * @returns An Observable of the deletion result
+   */
+  deleteUnit(workspaceId: number, unitId: number): Observable<{
+    success: boolean;
+    report: {
+      deletedUnit: number | null;
+      warnings: string[];
+    };
+  }> {
+    return this.http.delete<{
+      success: boolean;
+      report: {
+        deletedUnit: number | null;
+        warnings: string[];
+      };
+    }>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/units/${unitId}`,
+      { headers: this.authHeader }
+    ).pipe(
+      catchError(() => {
+        logger.error(`Error deleting unit with ID: ${unitId}`);
+        return of({ success: false, report: { deletedUnit: null, warnings: ['Failed to delete unit'] } });
+      })
+    );
+  }
+
+  /**
+   * Delete multiple units and all their associated responses
+   * @param workspaceId The ID of the workspace
+   * @param unitIds Array of unit IDs to delete
+   * @returns An Observable of the deletion result
+   */
+  deleteMultipleUnits(workspaceId: number, unitIds: number[]): Observable<{
+    success: boolean;
+    report: {
+      deletedUnits: number[];
+      warnings: string[];
+    };
+  }> {
+    // Create a series of delete requests for each unit
+    const deleteRequests = unitIds.map(unitId => this.deleteUnit(workspaceId, unitId));
+
+    // Combine all requests and aggregate the results
+    return forkJoin(deleteRequests).pipe(
+      map(results => {
+        const successfulDeletes = results.filter(result => result.success);
+        const deletedUnits = successfulDeletes
+          .map(result => result.report.deletedUnit)
+          .filter(id => id !== null) as number[];
+
+        const warnings = results
+          .filter(result => !result.success || result.report.warnings.length > 0)
+          .flatMap(result => result.report.warnings);
+
+        return {
+          success: deletedUnits.length > 0,
+          report: {
+            deletedUnits,
+            warnings
+          }
+        };
+      }),
+      catchError(() => {
+        logger.error('Error deleting multiple units');
+        return of({
+          success: false,
+          report: {
+            deletedUnits: [],
+            warnings: ['Failed to delete units']
+          }
+        });
+      })
+    );
+  }
+
+  /**
+   * Delete a response
+   * @param workspaceId The ID of the workspace
+   * @param responseId The ID of the response to delete
+   * @returns An Observable of the deletion result
+   */
+  deleteResponse(workspaceId: number, responseId: number): Observable<{
+    success: boolean;
+    report: {
+      deletedResponse: number | null;
+      warnings: string[];
+    };
+  }> {
+    return this.http.delete<{
+      success: boolean;
+      report: {
+        deletedResponse: number | null;
+        warnings: string[];
+      };
+    }>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/responses/${responseId}`,
+      { headers: this.authHeader }
+    ).pipe(
+      catchError(() => {
+        logger.error(`Error deleting response with ID: ${responseId}`);
+        return of({ success: false, report: { deletedResponse: null, warnings: ['Failed to delete response'] } });
+      })
+    );
+  }
+
+  /**
+   * Delete multiple responses
+   * @param workspaceId The ID of the workspace
+   * @param responseIds Array of response IDs to delete
+   * @returns An Observable of the deletion result
+   */
+  deleteMultipleResponses(workspaceId: number, responseIds: number[]): Observable<{
+    success: boolean;
+    report: {
+      deletedResponses: number[];
+      warnings: string[];
+    };
+  }> {
+    // Create a series of delete requests for each response
+    const deleteRequests = responseIds.map(responseId => this.deleteResponse(workspaceId, responseId));
+
+    // Combine all requests and aggregate the results
+    return forkJoin(deleteRequests).pipe(
+      map(results => {
+        const successfulDeletes = results.filter(result => result.success);
+        const deletedResponses = successfulDeletes
+          .map(result => result.report.deletedResponse)
+          .filter(id => id !== null) as number[];
+
+        const warnings = results
+          .filter(result => !result.success || result.report.warnings.length > 0)
+          .flatMap(result => result.report.warnings);
+
+        return {
+          success: deletedResponses.length > 0,
+          report: {
+            deletedResponses,
+            warnings
+          }
+        };
+      }),
+      catchError(() => {
+        logger.error('Error deleting multiple responses');
+        return of({
+          success: false,
+          report: {
+            deletedResponses: [],
+            warnings: ['Failed to delete responses']
+          }
+        });
       })
     );
   }

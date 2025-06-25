@@ -183,6 +183,120 @@ export class WorkspaceTestResultsController {
     return this.workspaceTestResultsService.deleteTestPersons(Number(workspaceId), testPersonIds);
   }
 
+  @Delete(':workspace_id/units/:unitId')
+  @ApiOperation({
+    summary: 'Delete a unit',
+    description: 'Deletes a unit and all its associated responses'
+  })
+  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
+  @ApiParam({ name: 'unitId', type: Number, description: 'ID of the unit to delete' })
+  @ApiOkResponse({
+    description: 'Unit deleted successfully.',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        report: {
+          type: 'object',
+          properties: {
+            deletedUnit: { type: 'number', nullable: true },
+            warnings: { type: 'array', items: { type: 'string' } }
+          }
+        }
+      }
+    }
+  })
+  @ApiBadRequestResponse({ description: 'Failed to delete unit' })
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  async deleteUnit(
+    @Param('workspace_id') workspaceId: number,
+      @Param('unitId') unitId: number
+  ): Promise<{
+        success: boolean;
+        report: {
+          deletedUnit: number | null;
+          warnings: string[];
+        };
+      }> {
+    return this.workspaceTestResultsService.deleteUnit(workspaceId, unitId);
+  }
+
+  @Delete(':workspace_id/responses/:responseId')
+  @ApiOperation({
+    summary: 'Delete a response',
+    description: 'Deletes a response'
+  })
+  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
+  @ApiParam({ name: 'responseId', type: Number, description: 'ID of the response to delete' })
+  @ApiOkResponse({
+    description: 'Response deleted successfully.',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        report: {
+          type: 'object',
+          properties: {
+            deletedResponse: { type: 'number', nullable: true },
+            warnings: { type: 'array', items: { type: 'string' } }
+          }
+        }
+      }
+    }
+  })
+  @ApiBadRequestResponse({ description: 'Failed to delete response' })
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  async deleteResponse(
+    @Param('workspace_id') workspaceId: number,
+      @Param('responseId') responseId: number
+  ): Promise<{
+        success: boolean;
+        report: {
+          deletedResponse: number | null;
+          warnings: string[];
+        };
+      }> {
+    return this.workspaceTestResultsService.deleteResponse(workspaceId, responseId);
+  }
+
+  @Delete(':workspace_id/booklets/:bookletId')
+  @ApiOperation({
+    summary: 'Delete a booklet',
+    description: 'Deletes a booklet and all its associated units and responses'
+  })
+  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
+  @ApiParam({ name: 'bookletId', type: Number, description: 'ID of the booklet to delete' })
+  @ApiOkResponse({
+    description: 'Booklet deleted successfully.',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        report: {
+          type: 'object',
+          properties: {
+            deletedBooklet: { type: 'number', nullable: true },
+            warnings: { type: 'array', items: { type: 'string' } }
+          }
+        }
+      }
+    }
+  })
+  @ApiBadRequestResponse({ description: 'Failed to delete booklet' })
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  async deleteBooklet(
+    @Param('workspace_id') workspaceId: number,
+      @Param('bookletId') bookletId: number
+  ): Promise<{
+        success: boolean;
+        report: {
+          deletedBooklet: number | null;
+          warnings: string[];
+        };
+      }> {
+    return this.workspaceTestResultsService.deleteBooklet(workspaceId, bookletId);
+  }
+
   @Get(':workspace_id/responses')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiParam({ name: 'workspace_id', type: Number })
