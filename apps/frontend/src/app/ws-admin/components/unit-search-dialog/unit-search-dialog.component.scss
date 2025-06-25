@@ -85,6 +85,12 @@
       background-color: #f0f0f0;
     }
   }
+
+  td[mat-cell]:last-child {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+  }
 }
 
 .tags-container {
@@ -138,6 +144,30 @@
   color: #999;
   font-style: italic;
   font-size: 12px;
+}
+
+/* Delete All Button styles */
+.delete-all-container {
+  margin-bottom: 16px;
+  display: flex;
+  justify-content: flex-start;
+
+  button {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 12px;
+    font-size: 12px;
+    color: #666;
+    border-color: #ccc;
+
+    mat-icon {
+      margin-right: 2px;
+      font-size: 18px;
+      height: 18px;
+      width: 18px;
+    }
+  }
 }
 
 /* Pagination styles */
