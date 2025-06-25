@@ -21,6 +21,10 @@
         <mat-icon>code</mat-icon>
         Kodieren
       </a>
+      <a mat-raised-button color="primary" (click)="openUnitSearchDialog()">
+        <mat-icon>search</mat-icon>
+        Suchen
+      </a>
     </div>
   </div>
   <input #hiddenResponsesFileInput type="file"
@@ -43,27 +47,36 @@
   }
 
   @if(!isUploadingResults){
-    @if ( dataSource && dataSource.data.length) {
+    @if ( dataSource) {
       <div class="content-container">
         <div class="data-card">
           <h2 class="section-title">Testpersonen</h2>
           <p class="section-description">Wählen Sie eine Testperson aus, um deren Ergebnisse anzuzeigen</p>
           <mat-divider></mat-divider>
 
-          @if (isLoading) {
+          @if (isLoading && !isSearching) {
             <div class="loading-container">
               <mat-spinner class="mat-spinner"></mat-spinner>
               <p class="loading-text">Daten werden geladen...</p>
             </div>
           }
 
-          @if (!isLoading) {
+          @if (!isLoading || isSearching) {
             <div class="table-section">
               <div class="search-container">
                 <mat-icon class="search-icon">search</mat-icon>
                 <input matInput (input)="applyFilter($event)" placeholder="Suchen..." class="search-input">
+                <button mat-icon-button (click)="clearSearch()" class="clear-button" aria-label="Clear search">
+                  <mat-icon>clear</mat-icon>
+                </button>
               </div>
               <div class="table-container">
+                @if (isSearching) {
+                  <div class="search-loading-indicator">
+                    <mat-spinner diameter="20"></mat-spinner>
+                    <span>Suche läuft...</span>
+                  </div>
+                }
                 <mat-table [dataSource]="dataSource" matSort class="persons-table">
                   <ng-container matColumnDef="select">
                     <mat-header-cell *matHeaderCellDef>
@@ -112,6 +125,20 @@
                     *matRowDef="let row; columns: displayedColumns;"
                   class="clickable-row"></mat-row>
                 </mat-table>
+
+                @if (dataSource && dataSource.data.length === 0) {
+                  <div class="empty-state-container">
+                    <mat-icon class="empty-state-icon">search_off</mat-icon>
+                    <h2 class="empty-state-title">Keine Ergebnisse gefunden</h2>
+                    <p class="empty-state-description">Bitte versuchen Sie es mit einem anderen Suchbegriff oder setzen Sie den Filter zurück.</p>
+                    <div class="empty-state-actions">
+                      <a mat-raised-button color="primary" (click)="clearSearch()">
+                        <mat-icon>clear</mat-icon>
+                        Filter zurücksetzen
+                      </a>
+                    </div>
+                  </div>
+                }
               </div>
               <mat-paginator
                 [length]="totalRecords"
@@ -173,7 +200,7 @@
                   <mat-list class="unit-list">
                     @for (unit of booklet.units; track unit) {
                       <mat-list-item
-                        (click)="onUnitClick(unit)"
+                        (click)="onUnitClick(unit, booklet)"
                         class="unit-item">
                         <mat-icon class="unit-icon">assignment</mat-icon>
                         <span class="unit-name">{{ unit?.alias || 'Unbenannte Einheit' }}</span>
@@ -261,7 +288,7 @@
                       }
                       <div class="detail-row">
                         <span class="detail-label">Value:</span>
-                        <span class="detail-value">{{ response.value | slice:0:1000 }}{{ response.value?.length > 1000 ? '...' : '' }}</span>
+                        <span class="detail-value">{{ response.value | slice:0:1000 }}{{ response.value.length > 1000 ? '...' : '' }}</span>
                       </div>
                     </div>
                   }
@@ -271,7 +298,7 @@
           </div>
         }
 
-        @if (logs?.length > 0) {
+        @if (logs.length > 0) {
           <div class="logs-card">
             <h2 class="section-title">Logs</h2>
             <p class="section-description">Protokolleinträge für die ausgewählte Unit</p>

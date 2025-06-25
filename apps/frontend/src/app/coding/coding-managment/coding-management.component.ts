@@ -25,11 +25,12 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatIcon } from '@angular/material/icon';
-import { MatAnchor, MatIconButton } from '@angular/material/button';
+import { MatAnchor, MatButton, MatIconButton } from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { ScrollingModule } from '@angular/cdk/scrolling';
 import { MatDivider } from '@angular/material/divider';
 import { MatDialog } from '@angular/material/dialog';
+import { ContentDialogComponent } from '../../shared/dialogs/content-dialog/content-dialog.component';
 import { BackendService, CodingListItem } from '../../services/backend.service';
 import { AppService } from '../../services/app.service';
 import { CodingStatistics } from '../../../../../../api-dto/coding/coding-statistics';
@@ -50,6 +51,7 @@ interface Success {
   login_code?: string;
   login_group?: string;
   booklet_id?: string;
+  codingSchemeRef?: string;
 }
 
 @Component({
@@ -81,7 +83,8 @@ interface Success {
     MatAnchor,
     MatIconButton,
     MatTooltipModule,
-    MatDivider
+    MatDivider,
+    MatButton
   ],
   styleUrls: ['./coding-management.component.scss']
 })
@@ -145,7 +148,10 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
             duration: 5000,
             panelClass: ['error-snackbar']
           });
-          return of({ totalResponses: 0, statusCounts: {} });
+          return of({
+            totalResponses: 0,
+            statusCounts: {}
+          });
         }),
         finalize(() => {
           this.isLoadingStatistics = false;
@@ -156,10 +162,8 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
       });
   }
 
-  getOtherStatuses(): string[] {
-    const excludedStatuses = ['INVALID', 'CODING_INCOMPLETE', 'NOT_REACHED', 'INTENDED_INCOMPLETE'];
-    return Object.keys(this.codingStatistics.statusCounts)
-      .filter(status => !excludedStatuses.includes(status));
+  getStatuses(): string[] {
+    return Object.keys(this.codingStatistics.statusCounts);
   }
 
   getStatusPercentage(status: string): number {
@@ -185,12 +189,13 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
       return [];
     }
 
-    return Object.keys(this.codingStatistics.statusCounts).map(status => ({
-      status,
-      count: this.codingStatistics.statusCounts[status],
-      percentage: this.getStatusPercentage(status),
-      color: this.getStatusColor(status)
-    }));
+    return Object.keys(this.codingStatistics.statusCounts)
+      .map(status => ({
+        status,
+        count: this.codingStatistics.statusCounts[status],
+        percentage: this.getStatusPercentage(status),
+        color: this.getStatusColor(status)
+      }));
   }
 
   fetchResponsesByStatus(status: string, page: number = 1, limit: number = this.pageSize): void {
@@ -207,7 +212,10 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
             panelClass: ['error-snackbar']
           });
           return of({
-            data: [], total: 0, page, limit
+            data: [],
+            total: 0,
+            page,
+            limit
           });
         }),
         finalize(() => {
@@ -215,16 +223,18 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
         })
       )
       .subscribe(response => {
+        console.log(response);
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         this.data = response.data.map((item: any) => ({
           id: item.id,
-          unitid: item.unitId,
+          unitid: item.unitid,
           variableid: item.variableid || '',
           status: item.status || '',
           value: item.value || '',
           subform: item.subform || '',
           code: item.code,
           score: item.score,
+          unit: item.unit,
           codedstatus: item.codedstatus || '',
           unitname: item.unit?.name || '',
           // Extract information for replay URL
@@ -251,7 +261,8 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
 
   applyFilter(event: Event): void {
     const filterValue = (event.target as HTMLInputElement).value;
-    this.dataSource.filter = filterValue.trim().toLowerCase();
+    this.dataSource.filter = filterValue.trim()
+      .toLowerCase();
 
     if (this.dataSource.paginator) {
       this.dataSource.paginator.firstPage();
@@ -338,7 +349,10 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
                 duration: 5000,
                 panelClass: ['error-snackbar']
               });
-              return of({ totalResponses: 0, statusCounts: {} });
+              return of({
+                totalResponses: 0,
+                statusCounts: {}
+              });
             }),
             finalize(async () => {
               this.isAutoCoding = false;
@@ -369,61 +383,65 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
       width: '500px'
     });
 
-    dialogRef.afterClosed().subscribe((format: ExportFormat | undefined) => {
-      if (!format) {
-        return;
-      }
+    dialogRef.afterClosed()
+      .subscribe((format: ExportFormat | undefined) => {
+        if (!format) {
+          return;
+        }
 
-      const workspaceId = this.appService.selectedWorkspaceId;
-      this.isLoading = true;
+        const workspaceId = this.appService.selectedWorkspaceId;
+        this.isLoading = true;
 
-      this.backendService.getCodingList(workspaceId, page, limit)
-        .pipe(
-          catchError(() => {
-            this.isLoading = false;
-            this.snackBar.open('Fehler beim Abrufen der Kodierliste', 'Schließen', {
-              duration: 5000,
-              panelClass: ['error-snackbar']
-            });
-            return of({
-              data: [], total: 0, page, limit
-            });
-          }),
-          finalize(() => {
-            this.isLoading = false;
-          })
-        )
-        .subscribe(result => {
-          if (result && result.data.length > 0) {
-            switch (format) {
-              case 'json':
-                this.downloadCodingListAsJson(result.data);
-                break;
-              case 'csv':
-                this.downloadCodingListAsCsv(workspaceId);
-                break;
-              case 'excel':
-                this.downloadCodingListAsExcel(workspaceId);
-                break;
-              default:
-                this.snackBar.open(`Unbekanntes Format: ${format}`, 'Schließen', {
-                  duration: 5000,
-                  panelClass: ['error-snackbar']
-                });
-                break;
+        this.backendService.getCodingList(workspaceId, page, limit)
+          .pipe(
+            catchError(() => {
+              this.isLoading = false;
+              this.snackBar.open('Fehler beim Abrufen der Kodierliste', 'Schließen', {
+                duration: 5000,
+                panelClass: ['error-snackbar']
+              });
+              return of({
+                data: [],
+                total: 0,
+                page,
+                limit
+              });
+            }),
+            finalize(() => {
+              this.isLoading = false;
+            })
+          )
+          .subscribe(result => {
+            if (result && result.data.length > 0) {
+              switch (format) {
+                case 'json':
+                  this.downloadCodingListAsJson(result.data);
+                  break;
+                case 'csv':
+                  this.downloadCodingListAsCsv(workspaceId);
+                  break;
+                case 'excel':
+                  this.downloadCodingListAsExcel(workspaceId);
+                  break;
+                default:
+                  this.snackBar.open(`Unbekanntes Format: ${format}`, 'Schließen', {
+                    duration: 5000,
+                    panelClass: ['error-snackbar']
+                  });
+                  break;
+              }
+
+              this.snackBar.open(`Kodierliste mit ${result.total} Einträgen wurde erfolgreich abgerufen.`, 'Schließen', {
+                duration: 5000,
+                panelClass: ['success-snackbar']
+              });
+            } else {
+              this.snackBar.open('Keine Einträge in der Kodierliste gefunden.', 'Schlie��en', {
+                duration: 5000
+              });
             }
-
-            this.snackBar.open(`Kodierliste mit ${result.total} Einträgen wurde erfolgreich abgerufen.`, 'Schließen', {
-              duration: 5000,
-              panelClass: ['success-snackbar']
-            });
-          } else {
-            this.snackBar.open('Keine Einträge in der Kodierliste gefunden.', 'Schließen', {
-              duration: 5000
-            });
-          }
-        });
-    });
+          });
+      });
   }
 
   downloadCodingListAsJson(data: never[] | CodingListItem[]): void {
@@ -441,7 +459,8 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
 
     const a = document.createElement('a');
     a.href = url;
-    a.download = `coding-list-${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `coding-list-${new Date().toISOString()
+      .slice(0, 10)}.json`;
     document.body.appendChild(a);
     a.click();
 
@@ -478,11 +497,10 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `coding-list-${new Date().toISOString().slice(0, 10)}.csv`;
+        a.download = `coding-list-${new Date().toISOString()
+          .slice(0, 10)}.csv`;
         document.body.appendChild(a);
         a.click();
-
-        // Clean up
         window.URL.revokeObjectURL(url);
         document.body.removeChild(a);
 
@@ -518,7 +536,8 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `coding-list-${new Date().toISOString().slice(0, 10)}.xlsx`;
+        a.download = `coding-list-${new Date().toISOString()
+          .slice(0, 10)}.xlsx`;
         document.body.appendChild(a);
         a.click();
 
@@ -529,6 +548,129 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
         this.snackBar.open('Kodierliste wurde als Excel heruntergeladen.', 'Schließen', {
           duration: 5000,
           panelClass: ['success-snackbar']
+        });
+      });
+  }
+
+  getCodingSchemeRefFromUnit(unitId: number): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    this.isLoading = true;
+
+    this.backendService.getUnitContentXml(workspaceId, unitId)
+      .pipe(
+        catchError(() => {
+          this.isLoading = false;
+          this.snackBar.open(`Fehler beim Abrufen der Unit-XML-Daten für Unit ${unitId}`, 'Schließen', {
+            duration: 5000,
+            panelClass: ['error-snackbar']
+          });
+          return of(null);
+        }),
+        finalize(() => {
+          this.isLoading = false;
+        })
+      )
+      .subscribe(xmlContent => {
+        if (!xmlContent) return;
+        console.log(xmlContent);
+        const codingSchemeRef = this.extractCodingSchemeRefFromXml(xmlContent);
+
+        if (codingSchemeRef) {
+          this.showCodingScheme(codingSchemeRef);
+        } else {
+          this.snackBar.open(`Kein Kodierschema-Verweis in der Unit ${unitId} gefunden.`, 'Schließen', {
+            duration: 5000
+          });
+        }
+      });
+  }
+
+  private extractCodingSchemeRefFromXml(xmlContent: string): string | null {
+    try {
+      const parser = new DOMParser();
+      const xmlDoc = parser.parseFromString(xmlContent, 'text/xml');
+      const codingSchemeRefElement = xmlDoc.querySelector('CodingSchemeRef');
+
+      if (codingSchemeRefElement && codingSchemeRefElement.textContent) {
+        return codingSchemeRefElement.textContent.trim();
+      }
+    } catch (error) {
+      console.error('Fehler beim Parsen des XML:', error);
+    }
+
+    return null;
+  }
+
+  showCodingScheme(codingSchemeRef: string): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+
+    this.backendService.getCodingSchemeFile(workspaceId, codingSchemeRef)
+      .pipe(
+        catchError(() => {
+          this.snackBar.open(`Fehler beim Abrufen des Kodierschemas '${codingSchemeRef}'`, 'Schließen', {
+            duration: 5000,
+            panelClass: ['error-snackbar']
+          });
+          return of(null);
+        })
+      )
+      .subscribe(fileData => {
+        if (!fileData || !fileData.base64Data) {
+          this.snackBar.open(`Kodierschema '${codingSchemeRef}' wurde nicht gefunden.`, 'Schließen', {
+            duration: 5000,
+            panelClass: ['error-snackbar']
+          });
+          return;
+        }
+
+        try {
+          const decodedData = fileData.base64Data;
+
+          this.dialog.open(ContentDialogComponent, {
+            width: '80%',
+            data: {
+              title: `Kodierschema: ${codingSchemeRef}`,
+              content: decodedData,
+              isJson: true
+            }
+          });
+        } catch (error) {
+          this.snackBar.open(`Fehler beim Verarbeiten des Kodierschemas '${codingSchemeRef}'`, 'Schließen', {
+            duration: 5000,
+            panelClass: ['error-snackbar']
+          });
+        }
+      });
+
+  }
+
+  showUnitXml(unitId: number): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    this.isLoading = true;
+
+    this.backendService.getUnitContentXml(workspaceId, unitId)
+      .pipe(
+        catchError(() => {
+          this.isLoading = false;
+          this.snackBar.open(`Fehler beim Abrufen der Unit-XML-Daten für Unit ${unitId}`, 'Schließen', {
+            duration: 5000,
+            panelClass: ['error-snackbar']
+          });
+          return of(null);
+        }),
+        finalize(() => {
+          this.isLoading = false;
+        })
+      )
+      .subscribe(xmlContent => {
+        if (!xmlContent) return;
+        this.dialog.open(ContentDialogComponent, {
+          width: '80%',
+          data: {
+            title: `Unit-XML für Unit ${unitId}`,
+            content: xmlContent,
+            isXml: true
+          }
         });
       });
   }

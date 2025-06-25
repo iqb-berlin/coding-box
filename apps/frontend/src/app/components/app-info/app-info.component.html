@@ -1,19 +1,35 @@
 <div class="app-info">
-  <p>Das <a href="https://www.iqb.hu-berlin.de/" target="_blank">Institut zur Qualitätsentwicklung im Bildungswesen (IQB)</a> betreibt auf diesen Seiten eine Anwendung für die Kodierung von Antworten aus Testungen. </p>
-  <ul>
-    <li>Version {{'home.appVersion' | translate: {version: appVersion()} }}</li>
-    @if (isUserLoggedIn()) {
-      <li>
-          {{'Angemeldet als: ' + userName() }}
-      </li>
-    }
-    @if (isAdmin()) {
-      <li>{{'home.isAdminMessage' | translate}}</li>
-    }
-  </ul>
-  <div class="fx-row-center-center impressum" >
+  <div class="content">
+    <p>
+      Das <a href="https://www.iqb.hu-berlin.de/" target="_blank">Institut zur Qualitätsentwicklung im Bildungswesen (IQB)</a>
+      betreibt auf diesen Seiten eine Anwendung für die Kodierung von Antworten aus Testungen.
+    </p>
+
+    <div class="info-card">
+      <ul>
+        <li>
+          <span class="info-label">Version:</span>
+          <span class="info-value">{{'home.appVersion' | translate: {version: appVersion()} }}</span>
+        </li>
+        @if (isUserLoggedIn()) {
+          <li>
+            <span class="info-label">Benutzer:</span>
+            <span class="info-value">{{ userName() }}</span>
+          </li>
+        }
+        @if (isAdmin()) {
+          <li>
+            <span class="info-label">Status:</span>
+            <span class="info-value admin-badge">{{'home.isAdminMessage' | translate}}</span>
+          </li>
+        }
+      </ul>
+    </div>
+  </div>
+
+  <div class="fx-row-center-center impressum">
     <a mat-raised-button color="primary" (click)="openImpressumDialog()">
-      {{'home.imprint' | translate}}
+      <span class="button-text">{{'home.imprint' | translate}}</span>
     </a>
   </div>
 </div>

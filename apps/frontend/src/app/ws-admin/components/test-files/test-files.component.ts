@@ -25,6 +25,7 @@ import { MatFormField, MatLabel } from '@angular/material/form-field';
 import { MatOption, MatSelect } from '@angular/material/select';
 import { Subject, Subscription } from 'rxjs';
 import { debounceTime } from 'rxjs/operators';
+import { MatPaginator } from '@angular/material/paginator';
 import { FilesValidationDialogComponent } from '../files-validation-result/files-validation.component';
 import { TestCenterImportComponent } from '../test-center-import/test-center-import.component';
 import { ResourcePackagesDialogComponent } from '../resource-packages-dialog/resource-packages-dialog.component';
@@ -38,6 +39,7 @@ import { FileSizePipe } from '../../../shared/pipes/filesize.pipe';
 import { FilesInListDto } from '../../../../../../../api-dto/files/files-in-list.dto';
 import { FileValidationResultDto } from '../../../../../../../api-dto/files/file-validation-result.dto';
 import { FileDownloadDto } from '../../../../../../../api-dto/files/file-download.dto';
+import { ContentDialogComponent } from '../../../shared/dialogs/content-dialog/content-dialog.component';
 
 @Component({
   selector: 'coding-box-test-files',
@@ -70,7 +72,9 @@ import { FileDownloadDto } from '../../../../../../../api-dto/files/file-downloa
     MatFormField,
     MatLabel,
     MatSelect,
-    MatOption
+    MatOption,
+    MatPaginator,
+    ContentDialogComponent
   ]
 })
 export class TestFilesComponent implements OnInit, OnDestroy {
@@ -80,7 +84,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   private snackBar = inject(MatSnackBar);
   private translate = inject(TranslateService);
 
-  displayedColumns: string[] = ['selectCheckbox', 'filename', 'file_size', 'file_type', 'created_at'];
+  displayedColumns: string[] = ['selectCheckbox', 'filename', 'file_size', 'file_type', 'created_at', 'actions'];
   dataSource!: MatTableDataSource<FilesInListDto>;
   tableCheckboxSelection = new SelectionModel<FilesInListDto>(true, []);
   isLoading = false;
@@ -105,19 +109,11 @@ export class TestFilesComponent implements OnInit, OnDestroy {
 
   private textFilterChanged: Subject<string> = new Subject<string>();
   private textFilterSubscription: Subscription | undefined;
-  // Definition der Größeneinheiten und ihrer Multiplikatoren in Bytes
-  private readonly SIZES_UNITS = {
-    bytes: 1,
-    b: 1,
-    kb: 1024,
-    kib: 1024,
-    mb: 1024 ** 2,
-    mib: 1024 ** 2,
-    gb: 1024 ** 3,
-    gib: 1024 ** 3,
-    tb: 1024 ** 4,
-    tib: 1024 ** 4
-  };
+
+  // Pagination variables
+  page: number = 1;
+  limit: number = 100;
+  total: number = 0;
 
   ngOnInit(): void {
     this.loadTestFiles(false);
@@ -160,21 +156,25 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   loadTestFiles(forceReload: boolean): void {
     this.isLoading = true;
     this.isValidating = false;
-    if (forceReload || !this.appService.workspaceData?.testFiles.data.length) {
-      this.backendService.getFilesList(this.appService.selectedWorkspaceId)
-        .subscribe(files => {
-          this.updateTable(files);
-        });
-    } else {
-      this.updateTable(this.appService.workspaceData.testFiles || []);
-    }
+    this.backendService.getFilesList(
+      this.appService.selectedWorkspaceId,
+      this.page,
+      this.limit,
+      this.selectedFileType,
+      this.selectedFileSize,
+      this.textFilterValue
+    ).subscribe(response => {
+      this.total = response.total;
+      this.page = response.page;
+      this.limit = response.limit;
+      this.updateTable(response);
+    });
   }
 
   /** Updates the table data source and stops spinner */
   private updateTable(files: { data: FilesInListDto[] }): void {
     this.dataSource = new MatTableDataSource(files.data);
     this.extractFileTypes(files.data);
-    this.setupFilterPredicate();
     this.isLoading = false;
   }
 
@@ -190,84 +190,10 @@ export class TestFilesComponent implements OnInit, OnDestroy {
     this.fileTypes.unshift('');
   }
 
-  /** Sets up custom filter predicate for the data source */
-  private setupFilterPredicate(): void {
-    this.dataSource.filterPredicate = (data: FilesInListDto, filter: string) => {
-      const filterObj = JSON.parse(filter || '{}');
-      // Text filter - check if any of the fields contain the search text
-      const textMatch = !filterObj.text || (
-        (data.filename && data.filename.toLowerCase().includes(filterObj.text.toLowerCase())) ||
-        (data.file_type && data.file_type.toLowerCase().includes(filterObj.text.toLowerCase())) ||
-        (data.created_at && new Date(data.created_at).toLocaleDateString().includes(filterObj.text.toLowerCase()))
-      );
-      // File type filter
-      const typeMatch = !filterObj.fileType ||
-        (data.file_type && data.file_type === filterObj.fileType);
-      // File size filter
-      const sizeMatch = this.isFileSizeInRange(data.file_size, filterObj.fileSize);
-      return (textMatch && typeMatch && sizeMatch) as boolean;
-    };
-  }
-
-  /** Parses a file size string (e.g., "10 KB", "1.5 MB") into bytes */
-  private parseFileSizeToBytes(fileSizeStr: string | undefined | null): number | null {
-    if (!fileSizeStr) return 0; // Interpret empty or null as 0 Bytes
-    const str = String(fileSizeStr).trim().toLowerCase();
-    if (str === '0' || str === '0 bytes' || str === '0b') return 0;
-    const match = str.match(/^([\d.]+)\s*([a-z]+)?$/);
-    if (match) {
-      const value = parseFloat(match[1]);
-      const unit = match[2] || 'bytes';
-      if (Number.isNaN(value)) return null; // Invalid number part
-      const multiplier = this.SIZES_UNITS[unit as keyof typeof this.SIZES_UNITS];
-      if (multiplier !== undefined) {
-        return value * multiplier;
-      }
-      if (match[2]) return null;
-      return value; // Value is in bytes
-    }
-    const numericValue = parseFloat(str);
-    if (!Number.isNaN(numericValue) && /^[\d.]+$/.test(str)) {
-      return numericValue;
-    }
-    return null; // Unable to parse
-  }
-
-  /** Checks if a file size is within the selected range */
-  private isFileSizeInRange(fileSize: string | undefined, range: string): boolean {
-    const sizeInBytes = this.parseFileSizeToBytes(fileSize);
-    if (sizeInBytes === null) {
-      return range === '' || range === undefined;
-    }
-    const KB = 1024;
-    const MB = 1024 * KB;
-    switch (range) {
-      case '0-10KB': // Less than 10KB
-        return sizeInBytes < 10 * KB;
-      case '10KB-100KB': // 10KB to 100KB (exclusive of 100KB)
-        return sizeInBytes >= 10 * KB && sizeInBytes < 100 * KB;
-      case '100KB-1MB': // 100KB to 1MB (exclusive of 1MB)
-        return sizeInBytes >= 100 * KB && sizeInBytes < 1 * MB;
-      case '1MB-10MB': // 1MB to 10MB (exclusive of 10MB)
-        return sizeInBytes >= 1 * MB && sizeInBytes < 10 * MB;
-      case '10MB+': // 10MB or more
-        return sizeInBytes >= 10 * MB;
-      default: // No range selected or unknown range, so it matches
-        return true;
-    }
-  }
-
   /** Applies all filters */
   applyFilters(): void {
-    const filterObj = {
-      text: this.textFilterValue,
-      fileType: this.selectedFileType,
-      fileSize: this.selectedFileSize
-    };
-    this.dataSource.filter = JSON.stringify(filterObj);
-    if (this.dataSource.paginator) {
-      this.dataSource.paginator.firstPage();
-    }
+    this.page = 1;
+    this.loadTestFiles(true);
   }
 
   /** Handles text filter changes */
@@ -281,10 +207,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
     this.textFilterValue = '';
     this.selectedFileType = '';
     this.selectedFileSize = '';
-    // Direkt applyFilters aufrufen oder auch über den Subject, je nach gewünschtem Verhalten
     this.applyFilters();
-    // Wenn clearFilters auch debounced werden soll:
-    // this.textFilterChanged.next(this.textFilterValue);
   }
 
   /** Handles file selection for upload */
@@ -439,6 +362,27 @@ export class TestFilesComponent implements OnInit, OnDestroy {
         // Optionally reload test files if they include resource packages
         // this.loadTestFiles(true);
       }
+    });
+  }
+
+  /** Wird vom MatPaginator aufgerufen */
+  onPageChange(event: any): void {
+    this.page = event.pageIndex + 1;
+    this.limit = event.pageSize;
+    this.loadTestFiles(true);
+  }
+
+  showFileContent(file: FilesInListDto): void {
+    this.backendService.downloadFile(this.appService.selectedWorkspaceId, file.id).subscribe(fileData => {
+      const decodedContent = atob(fileData.base64Data);
+      this.dialog.open(ContentDialogComponent, {
+        width: '800px',
+        height: '800px',
+        data: {
+          title: file.filename,
+          content: decodedContent
+        }
+      });
     });
   }
 }

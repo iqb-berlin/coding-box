@@ -33,6 +33,8 @@ export class WorkspacesComponent {
   selectedWorkspaceId = 0;
   selectedWorkspaces : number[] = [];
   workspacesChanged: boolean = false;
+  isDeleting: boolean = false;
+  deleteStatus: string = '';
 
   @ViewChild(MatSort) sort = new MatSort();
 
@@ -83,19 +85,44 @@ export class WorkspacesComponent {
   }
 
   deleteWorkspace(workspace_ids:number[]): void {
+    this.isDeleting = true;
+    const deleteSteps = [
+      'admin.deleting-workspace-starting',
+      'admin.deleting-workspace-files',
+      'admin.deleting-workspace-persons',
+      'admin.deleting-workspace-finish'
+    ];
+
+    let stepIndex = 0;
+    const interval = setInterval(() => {
+      if (stepIndex < deleteSteps.length) {
+        this.deleteStatus = this.translateService.instant(deleteSteps[stepIndex]);
+        // eslint-disable-next-line no-plusplus
+        stepIndex++;
+      } else {
+        clearInterval(interval);
+      }
+    }, 1000);
+
     this.backendService.deleteWorkspace(workspace_ids).subscribe(
       respOk => {
+        clearInterval(interval);
         if (respOk) {
-          this.snackBar.open(
-            this.translateService.instant('admin.workspace-deleted'),
-            '',
-            { duration: 1000 });
-          this.workspacesChanged = true;
+          this.deleteStatus = this.translateService.instant('admin.deleting-workspace-success');
+          setTimeout(() => {
+            this.snackBar.open(
+              this.translateService.instant('admin.workspace-deleted'),
+              '',
+              { duration: 1000 });
+            this.workspacesChanged = true;
+            this.isDeleting = false;
+          }, 1000);
         } else {
           this.snackBar.open(
             this.translateService.instant('admin.workspace-not-deleted'),
             this.translateService.instant('error'),
             { duration: 1000 });
+          this.isDeleting = false;
         }
       }
     );
