@@ -697,4 +697,157 @@ export class BackendService {
       catchError(() => of(null))
     );
   }
+
+
+  searchResponses(
+    workspaceId: number,
+    searchParams: { value?: string; variableId?: string; unitName?: string; status?: string; codedStatus?: string; group?: string; code?: string },
+    page?: number,
+    limit?: number
+  ): Observable<{
+      data: {
+        responseId: number;
+        variableId: string;
+        value: string;
+        status: string;
+        code?: number;
+        score?: number;
+        codedStatus?: string;
+        unitId: number;
+        unitName: string;
+        unitAlias: string | null;
+        bookletId: number;
+        bookletName: string;
+        personId: number;
+        personLogin: string;
+        personCode: string;
+        personGroup: string;
+      }[];
+      total: number;
+    }> {
+    let params = new HttpParams();
+
+    if (searchParams.value) {
+      params = params.set('value', searchParams.value);
+    }
+
+    if (searchParams.variableId) {
+      params = params.set('variableId', searchParams.variableId);
+    }
+
+    if (searchParams.unitName) {
+      params = params.set('unitName', searchParams.unitName);
+    }
+
+    if (searchParams.status) {
+      params = params.set('status', searchParams.status);
+    }
+
+    if (searchParams.codedStatus) {
+      params = params.set('codedStatus', searchParams.codedStatus);
+    }
+
+    if (searchParams.group) {
+      params = params.set('group', searchParams.group);
+    }
+
+    if (searchParams.code) {
+      params = params.set('code', searchParams.code);
+    }
+
+    if (page !== undefined) {
+      params = params.set('page', page.toString());
+    }
+
+    if (limit !== undefined) {
+      params = params.set('limit', limit.toString());
+    }
+
+    return this.http.get<{
+      data: {
+        responseId: number;
+        variableId: string;
+        value: string;
+        status: string;
+        code?: number;
+        score?: number;
+        codedStatus?: string;
+        unitId: number;
+        unitName: string;
+        unitAlias: string | null;
+        bookletId: number;
+        bookletName: string;
+        personId: number;
+        personLogin: string;
+        personCode: string;
+        personGroup: string;
+      }[];
+      total: number;
+    }>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/responses/search`,
+      { headers: this.authHeader, params }
+    ).pipe(
+      catchError(() => {
+        logger.error(`Error searching for responses with params: ${JSON.stringify(searchParams)}`);
+        return of({ data: [], total: 0 });
+      })
+    );
+  }
+
+  searchUnitsByName(
+    workspaceId: number,
+    unitName: string,
+    page?: number,
+    limit?: number
+  ): Observable<{
+      data: {
+        unitId: number;
+        unitName: string;
+        unitAlias: string | null;
+        bookletId: number;
+        bookletName: string;
+        personId: number;
+        personLogin: string;
+        personCode: string;
+        personGroup: string;
+        tags: { id: number; unitId: number; tag: string; color?: string; createdAt: Date }[];
+        responses: { variableId: string; value: string; status: string; code?: number; score?: number; codedStatus?: string }[];
+      }[];
+      total: number;
+    }> {
+    let params = new HttpParams().set('unitName', unitName);
+
+    if (page !== undefined) {
+      params = params.set('page', page.toString());
+    }
+
+    if (limit !== undefined) {
+      params = params.set('limit', limit.toString());
+    }
+
+    return this.http.get<{
+      data: {
+        unitId: number;
+        unitName: string;
+        unitAlias: string | null;
+        bookletId: number;
+        bookletName: string;
+        personId: number;
+        personLogin: string;
+        personCode: string;
+        personGroup: string;
+        tags: { id: number; unitId: number; tag: string; color?: string; createdAt: Date }[];
+        responses: { variableId: string; value: string; status: string; code?: number; score?: number; codedStatus?: string }[];
+      }[];
+      total: number;
+    }>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/units/search`,
+      { headers: this.authHeader, params }
+    ).pipe(
+      catchError(() => {
+        logger.error(`Error searching for units with name: ${unitName}`);
+        return of({ data: [], total: 0 });
+      })
+    );
+  }
 }

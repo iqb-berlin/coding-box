@@ -268,6 +268,277 @@ export class WorkspaceTestResultsController {
     };
   }
 
+  @Get(':workspace_id/responses/search')
+  @ApiOperation({
+    summary: 'Search for responses',
+    description: 'Searches for responses across all test persons in a workspace by value, variable ID, and unit name'
+  })
+  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
+  @ApiQuery({
+    name: 'value',
+    required: false,
+    description: 'Value to search for in responses',
+    type: String
+  })
+  @ApiQuery({
+    name: 'variableId',
+    required: false,
+    description: 'Variable ID to search for',
+    type: String
+  })
+  @ApiQuery({
+    name: 'unitName',
+    required: false,
+    description: 'Name of the unit to search for',
+    type: String
+  })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    description: 'Status of the response',
+    type: String
+  })
+  @ApiQuery({
+    name: 'codedStatus',
+    required: false,
+    description: 'Coded status of the response',
+    type: String
+  })
+  @ApiQuery({
+    name: 'group',
+    required: false,
+    description: 'Group of the person',
+    type: String
+  })
+  @ApiQuery({
+    name: 'code',
+    required: false,
+    description: 'Code of the person',
+    type: String
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    description: 'Page number (1-based)',
+    type: Number
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    description: 'Number of items per page',
+    type: Number
+  })
+  @ApiOkResponse({
+    description: 'Responses retrieved successfully.',
+    schema: {
+      type: 'object',
+      properties: {
+        data: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              responseId: { type: 'number', description: 'ID of the response' },
+              variableId: { type: 'string', description: 'ID of the variable' },
+              value: { type: 'string', description: 'Value of the response' },
+              status: { type: 'string', description: 'Status of the response' },
+              code: { type: 'number', nullable: true, description: 'Code of the response' },
+              score: { type: 'number', nullable: true, description: 'Score of the response' },
+              codedStatus: { type: 'string', nullable: true, description: 'Coded status of the response' },
+              unitId: { type: 'number', description: 'ID of the unit' },
+              unitName: { type: 'string', description: 'Name of the unit' },
+              unitAlias: { type: 'string', nullable: true, description: 'Alias of the unit' },
+              bookletId: { type: 'number', description: 'ID of the booklet' },
+              bookletName: { type: 'string', description: 'Name of the booklet' },
+              personId: { type: 'number', description: 'ID of the person' },
+              personLogin: { type: 'string', description: 'Login of the person' },
+              personCode: { type: 'string', description: 'Code of the person' },
+              personGroup: { type: 'string', description: 'Group of the person' }
+            }
+          }
+        },
+        total: { type: 'number', description: 'Total number of items' }
+      }
+    }
+  })
+  @ApiBadRequestResponse({ description: 'Failed to search for responses' })
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  async searchResponses(
+    @Param('workspace_id') workspace_id: number,
+      @Query('value') value?: string,
+      @Query('variableId') variableId?: string,
+      @Query('unitName') unitName?: string,
+      @Query('status') status?: string,
+      @Query('codedStatus') codedStatus?: string,
+      @Query('group') group?: string,
+      @Query('code') code?: string,
+      @Query('page') page?: number,
+      @Query('limit') limit?: number
+  ): Promise<{
+        data: {
+          responseId: number;
+          variableId: string;
+          value: string;
+          status: string;
+          code?: number;
+          score?: number;
+          codedStatus?: string;
+          unitId: number;
+          unitName: string;
+          unitAlias: string | null;
+          bookletId: number;
+          bookletName: string;
+          personId: number;
+          personLogin: string;
+          personCode: string;
+          personGroup: string;
+        }[];
+        total: number;
+      }> {
+    if (!workspace_id || Number.isNaN(workspace_id)) {
+      throw new BadRequestException('Invalid workspace_id.');
+    }
+
+    // No longer require at least one parameter to be provided
+
+    try {
+      return await this.workspaceTestResultsService.searchResponses(
+        workspace_id,
+        {
+          value,
+          variableId,
+          unitName,
+          status,
+          codedStatus,
+          group,
+          code
+        },
+        { page, limit }
+      );
+    } catch (error) {
+      logger.error(`Error searching for responses: ${error}`);
+      throw new BadRequestException(`Failed to search for responses. ${error.message}`);
+    }
+  }
+
+  @Get(':workspace_id/units/search')
+  @ApiOperation({
+    summary: 'Search for units by name',
+    description: 'Searches for units with a specific name across all test persons in a workspace'
+  })
+  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
+  @ApiQuery({
+    name: 'unitName',
+    required: true,
+    description: 'Name of the unit to search for',
+    type: String
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    description: 'Page number (1-based)',
+    type: Number
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    description: 'Number of items per page',
+    type: Number
+  })
+  @ApiOkResponse({
+    description: 'Units retrieved successfully.',
+    schema: {
+      type: 'object',
+      properties: {
+        data: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              unitId: { type: 'number', description: 'ID of the unit' },
+              unitName: { type: 'string', description: 'Name of the unit' },
+              unitAlias: { type: 'string', nullable: true, description: 'Alias of the unit' },
+              bookletId: { type: 'number', description: 'ID of the booklet' },
+              bookletName: { type: 'string', description: 'Name of the booklet' },
+              personId: { type: 'number', description: 'ID of the person' },
+              personLogin: { type: 'string', description: 'Login of the person' },
+              personCode: { type: 'string', description: 'Code of the person' },
+              personGroup: { type: 'string', description: 'Group of the person' },
+              tags: {
+                type: 'array',
+                description: 'Tags associated with the unit',
+                items: {
+                  type: 'object',
+                  properties: {
+                    id: { type: 'number' },
+                    unitId: { type: 'number' },
+                    tag: { type: 'string' },
+                    color: { type: 'string', nullable: true },
+                    createdAt: { type: 'string', format: 'date-time' }
+                  }
+                }
+              },
+              responses: {
+                type: 'array',
+                description: 'Responses associated with the unit',
+                items: {
+                  type: 'object',
+                  properties: {
+                    variableId: { type: 'string', description: 'ID of the variable' },
+                    value: { type: 'string', description: 'Value of the response' },
+                    status: { type: 'string', description: 'Status of the response' },
+                    code: { type: 'number', nullable: true, description: 'Code of the response' },
+                    score: { type: 'number', nullable: true, description: 'Score of the response' },
+                    codedStatus: { type: 'string', nullable: true, description: 'Coded status of the response' }
+                  }
+                }
+              }
+            }
+          }
+        },
+        total: { type: 'number', description: 'Total number of items' }
+      }
+    }
+  })
+  @ApiBadRequestResponse({ description: 'Failed to search for units' })
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  async findUnitsByName(
+    @Param('workspace_id') workspace_id: number,
+      @Query('unitName') unitName: string,
+      @Query('page') page?: number,
+      @Query('limit') limit?: number
+  ): Promise<{
+        data: {
+          unitId: number;
+          unitName: string;
+          unitAlias: string | null;
+          bookletId: number;
+          bookletName: string;
+          personId: number;
+          personLogin: string;
+          personCode: string;
+          personGroup: string;
+          tags: { id: number; unitId: number; tag: string; color?: string; createdAt: Date }[];
+          responses: { variableId: string; value: string; status: string; code?: number; score?: number; codedStatus?: string }[];
+        }[];
+        total: number;
+      }> {
+    if (!workspace_id || Number.isNaN(workspace_id)) {
+      throw new BadRequestException('Invalid workspace_id.');
+    }
+
+    if (!unitName) {
+      throw new BadRequestException('Unit name is required.');
+    }
+
+    try {
+      return await this.workspaceTestResultsService.findUnitsByName(workspace_id, unitName, { page, limit });
+    } catch (error) {
+      logger.error(`Error searching for units with name ${unitName}: ${error}`);
+      throw new BadRequestException(`Failed to search for units with name ${unitName}. ${error.message}`);
+    }
+  }
+
   @Post(':workspace_id/upload/results/:resultType')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiBearerAuth()
