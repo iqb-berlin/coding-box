@@ -9,6 +9,7 @@ import { BookletInfo } from '../entities/bookletInfo.entity';
 import { BookletLog } from '../entities/bookletLog.entity';
 import { UnitLog } from '../entities/unitLog.entity';
 import { Session } from '../entities/session.entity';
+import { UnitTagService } from './unit-tag.service';
 
 @Injectable()
 export class WorkspaceTestResultsService {
@@ -31,7 +32,8 @@ export class WorkspaceTestResultsService {
     private unitLogRepository: Repository<UnitLog>,
     @InjectRepository(Session)
     private sessionRepository: Repository<Session>,
-    private readonly connection: Connection
+    private readonly connection: Connection,
+    private readonly unitTagService: UnitTagService
   ) {}
 
   async findPersonTestResults(personId: number, workspaceId: number): Promise<{
@@ -48,6 +50,7 @@ export class WorkspaceTestResultsService {
       alias: string | null;
       results: { id: number; unitid: number }[];
       logs: { id: number; unitid: number; ts: string; key: string; parameter: string }[];
+      tags: { id: number; unitId: number; tag: string; color?: string; createdAt: Date }[];
     }[];
   }[]> {
     if (!personId || !workspaceId) {
@@ -114,6 +117,15 @@ export class WorkspaceTestResultsService {
         select: ['id', 'unitid', 'ts', 'key', 'parameter']
       });
 
+      const allUnitTags = await Promise.all(
+        unitIds.map(unitId => this.unitTagService.findAllByUnitId(unitId))
+      );
+
+      const unitTagsMap = new Map<number, { id: number; unitId: number; tag: string; color?: string; createdAt: Date }[]>();
+      unitIds.forEach((unitId, index) => {
+        unitTagsMap.set(unitId, allUnitTags[index]);
+      });
+
       return booklets.map(booklet => {
         const bookletInfo = bookletInfoData.find(info => info.id === booklet.infoid);
         return {
@@ -149,7 +161,8 @@ export class WorkspaceTestResultsService {
                 ts: log.ts.toString(),
                 key: log.key,
                 parameter: log.parameter
-              }))
+              })),
+              tags: unitTagsMap.get(unit.id) || []
             }))
         };
       });
