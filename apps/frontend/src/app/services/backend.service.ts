@@ -544,7 +544,6 @@ export class BackendService {
       limit: limit.toString()
     };
 
-    // Add searchText parameter if provided
     if (searchText && searchText.trim() !== '') {
       params.searchText = searchText.trim();
     }
@@ -566,22 +565,9 @@ export class BackendService {
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  getPersonTestResults(workspaceId: number, personId: number): Observable<any> {
-    return this.http.get<Promise<{
-      id: number;
-      personid: number;
-      name: string;
-      size: number;
-      logs: { id: number; bookletid: number; ts: string; parameter: string, key: string }[];
-      units: {
-        id: number;
-        bookletid: number;
-        name: string;
-        alias: string | null;
-        results: { id: number; unitid: number }[];
-        logs: { id: number; unitid: number; ts: string; key: string; parameter: string }[];
-      }[];
-    }[]>[]>(
+  getPersonTestResults(workspaceId: number, personId: number): Observable<any[]> {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return this.http.get<any[]>(
       `${this.serverUrl}admin/workspace/${workspaceId}/test-results/${personId}`,
       { headers: this.authHeader }
     );

@@ -91,6 +91,7 @@ interface Unit {
   alias: string | null;
   results: UnitResult[];
   logs: UnitLog[];
+  tags: UnitTagDto[];
 }
 
 interface Booklet {
@@ -171,8 +172,6 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   private router = inject(Router);
   private snackBar = inject(MatSnackBar);
   private translateService = inject(TranslateService);
-
-  // Search debounce
   private searchSubject = new Subject<string>();
   private searchSubscription: Subscription | null = null;
   private readonly SEARCH_DEBOUNCE_TIME = 800; // milliseconds
@@ -181,7 +180,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   dataSource !: MatTableDataSource<P>;
   displayedColumns: string[] = ['select', 'code', 'group', 'login', 'uploaded_at'];
   data: P[] = [];
-  booklets: Booklet[] = [];
+  booklets!: Booklet[];
   results: { [key: string]: unknown }[] = [];
   responses: Response[] = [];
   logs: UnitLog[] = [];
@@ -217,7 +216,6 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
-    // Clean up subscriptions
     if (this.searchSubscription) {
       this.searchSubscription.unsubscribe();
       this.searchSubscription = null;
@@ -240,9 +238,6 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       });
   }
 
-  /**
-   * Sort units in each booklet alphabetically by alias
-   */
   sortBookletUnits(): void {
     if (!this.booklets || this.booklets.length === 0) {
       return;
@@ -270,34 +265,23 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Load tags for all units in all booklets
+   * Load tags for all units in all booklets from the response
    */
   loadAllUnitTags(): void {
     if (!this.booklets || this.booklets.length === 0) {
       return;
     }
 
-    // Collect all unit IDs
-    const unitIds: number[] = [];
+    this.unitTagsMap.clear();
+
     this.booklets.forEach(booklet => {
       if (booklet.units && Array.isArray(booklet.units)) {
         booklet.units.forEach(unit => {
-          if (unit.id) {
-            unitIds.push(unit.id);
+          if (unit.id && unit.tags) {
+            this.unitTagsMap.set(unit.id, unit.tags);
           }
         });
       }
-    });
-
-    unitIds.forEach(unitId => {
-      this.backendService.getUnitTags(
-        this.appService.selectedWorkspaceId,
-        unitId
-      ).subscribe({
-        next: tags => {
-          this.unitTagsMap.set(unitId, tags);
-        }
-      });
     });
   }
 
@@ -438,33 +422,14 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     // this.loadUnitNotes();
   }
 
-
   loadUnitTags(): void {
     if (this.selectedUnit && this.selectedUnit.id) {
-      this.backendService.getUnitTags(
-        this.appService.selectedWorkspaceId,
-        this.selectedUnit.id as number
-      ).subscribe({
-        next: tags => {
-          this.unitTags = tags;
-
-          // Update the unitTagsMap
-          // @ts-expect-error - Property 'id' may not exist on type '{ alias: string; }'
-          this.unitTagsMap.set(this.selectedUnit.id as number, tags);
-        },
-        error: () => {
-          this.snackBar.open(
-            'Fehler beim Laden der Tags',
-            'Fehler',
-            { duration: 3000 }
-          );
-        }
-      });
+      const tags = this.unitTagsMap.get(this.selectedUnit.id as number) || [];
+      this.unitTags = tags;
     } else {
       this.unitTags = [];
     }
   }
-
 
   loadUnitNotes(): void {
     if (this.selectedUnit && this.selectedUnit.id) {
@@ -596,7 +561,6 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     });
   }
 
-
   deleteUnitTag(tagId: number): void {
     if (this.selectedUnit && this.selectedUnit.id) {
       this.deleteTagFromUnit(tagId, this.selectedUnit.id as number);
@@ -667,7 +631,6 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
     return null;
   }
-
 
   formatDuration(durationMs: number | null): string {
     if (durationMs === null || durationMs < 0) return '00:00';
