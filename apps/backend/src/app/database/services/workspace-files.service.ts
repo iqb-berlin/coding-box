@@ -89,6 +89,7 @@ export class WorkspaceFilesService {
       // fileSize-Filter: z.B. '0-10KB', '10KB-100KB', '100KB-1MB', '1MB-10MB', '10MB+'
       const KB = 1024;
       const MB = 1024 * KB;
+      // eslint-disable-next-line default-case
       switch (fileSize) {
         case '0-10KB':
           qb = qb.andWhere('file.file_size < :max', { max: 10 * KB });
@@ -468,7 +469,7 @@ export class WorkspaceFilesService {
         file_size: file.size,
         data: file.buffer.toString(),
         file_id: resolvedFileId
-      }, ['file_id']);
+      }, ['file_id', 'workspace_id']);
     } catch (error) {
       this.logger.error(`Error processing XML file: ${error.message}`);
       throw error;
@@ -485,7 +486,7 @@ export class WorkspaceFilesService {
       file_size: file.size,
       file_id: resourceFileId,
       data: file.buffer.toString()
-    }, ['file_id']);
+    }, ['file_id', 'workspace_id']);
   }
 
   private async handleOctetStreamFile(workspaceId: number, file: FileIo): Promise<void> {
@@ -800,7 +801,7 @@ export class WorkspaceFilesService {
   async testCenterImport(entries: Record<string, unknown>[]): Promise<boolean> {
     try {
       const registry = this.fileUploadRepository.create(entries);
-      await this.fileUploadRepository.upsert(registry, ['file_id']);
+      await this.fileUploadRepository.upsert(registry, ['file_id', 'workspace_id']);
       return true;
     } catch (error) {
       this.logger.error('Error during test center import', error);
@@ -811,20 +812,9 @@ export class WorkspaceFilesService {
   private static getPlayerId(file: FileIo): string {
     try {
       const playerCode = file.buffer.toString();
-
       const playerContent = cheerio.load(playerCode);
-
-      // Search for JSON+LD <script> tags in the parsed DOM.
       const metaDataElement = playerContent('script[type="application/ld+json"]');
-      if (!metaDataElement.length) {
-        console.error('Meta-data <script> tag not found');
-      }
-
       const metadata = JSON.parse(metaDataElement.text());
-      if (!metadata.id || !metadata.version) {
-        console.error('Invalid metadata structure: Missing id or version');
-      }
-
       return WorkspaceFilesService.normalizePlayerId(`${metadata.id}-${metadata.version}`);
     } catch (error) {
       return WorkspaceFilesService.getResourceId(file);
@@ -871,7 +861,6 @@ export class WorkspaceFilesService {
    */
   async getUnitContent(workspaceId: number, unitId: number): Promise<string> {
     try {
-      console.log(`Retrieving unit content for workspace ${workspaceId} and unit ${unitId}`);
       const unitFile = await this.fileUploadRepository.findOne({
         where: { workspace_id: workspaceId, file_id: `${unitId}` }
       });
@@ -925,7 +914,6 @@ export class WorkspaceFilesService {
    */
   async getCodingSchemeByRef(workspaceId: number, codingSchemeRef: string): Promise<FileDownloadDto | null> {
     try {
-      console.log(`Retrieving coding scheme for workspace ${workspaceId} with reference ${codingSchemeRef}`);
       const codingSchemeFile = await this.fileUploadRepository.findOne({
         where: {
           workspace_id: workspaceId,
