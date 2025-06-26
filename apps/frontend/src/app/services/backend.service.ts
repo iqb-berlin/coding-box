@@ -521,13 +521,12 @@ export class BackendService {
   }
 
   getUnit(workspaceId: number,
-          testPerson: string,
           unitId:string,
           authToken?:string
   ): Observable<FilesDto[]> {
     const headers = authToken ? { Authorization: `Bearer ${authToken}` } : this.authHeader;
     return this.http.get<FilesDto[]>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/unit/${testPerson}/${unitId}`,
+      `${this.serverUrl}admin/workspace/${workspaceId}/unit/${unitId}`,
       { headers });
   }
 

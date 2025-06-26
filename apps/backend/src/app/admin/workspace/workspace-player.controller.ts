@@ -51,13 +51,12 @@ export class WorkspacePlayerController {
     return this.workspacePlayerService.findUnitDef(workspace_id, unitIdToUpperCase);
   }
 
-  @Get(':workspace_id/unit/:testPerson/:unitId')
+  @Get(':workspace_id/unit/:unitId')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiParam({ name: 'workspace_id', type: Number })
   async findUnit(@WorkspaceId() id: number,
-    @Param('testPerson') testPerson:string,
     @Param('unitId') unitId:string): Promise<FileUpload[]> {
     const unitIdToUpperCase = unitId.toUpperCase();
-    return this.workspacePlayerService.findUnit(id, testPerson, unitIdToUpperCase);
+    return this.workspacePlayerService.findUnit(id, unitIdToUpperCase);
   }
 }
