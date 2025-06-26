@@ -65,10 +65,28 @@ export class WorkspaceFilesService {
     private fileUploadRepository: Repository<FileUpload>
   ) {}
 
+  async findAllFileTypes(workspaceId: number): Promise<string[]> {
+    this.logger.log(`Fetching all file types for workspace: ${workspaceId}`);
+
+    try {
+      const result = await this.fileUploadRepository
+        .createQueryBuilder('file')
+        .select('DISTINCT file.file_type', 'file_type')
+        .where('file.workspace_id = :workspaceId', { workspaceId })
+        .andWhere('file.file_type IS NOT NULL')
+        .getRawMany();
+
+      return result.map(item => item.file_type).sort();
+    } catch (error) {
+      this.logger.error(`Error fetching file types for workspace ${workspaceId}: ${error.message}`, error.stack);
+      return [];
+    }
+  }
+
   async findFiles(
     workspaceId: number,
     options?: { page: number; limit: number; fileType?: string; fileSize?: string; searchText?: string }
-  ): Promise<[FilesDto[], number]> {
+  ): Promise<[FilesDto[], number, string[]]> {
     this.logger.log(`Fetching test files for workspace: ${workspaceId}`);
     const {
       page = 1, limit = 20, fileType, fileSize, searchText
@@ -124,7 +142,11 @@ export class WorkspaceFilesService {
 
     const [files, total] = await qb.getManyAndCount();
     this.logger.log(`Found ${files.length} files (page ${validPage}, limit ${validLimit}, total ${total}).`);
-    return [files, total];
+
+    // Get all file types for this workspace
+    const fileTypes = await this.findAllFileTypes(workspaceId);
+
+    return [files, total, fileTypes];
   }
 
   async deleteTestFiles(workspace_id: number, fileIds: string[]): Promise<boolean> {
