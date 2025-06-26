@@ -174,8 +174,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   /** Updates the table data source and stops spinner */
   private updateTable(files: { data: FilesInListDto[], fileTypes: string[] }): void {
     this.dataSource = new MatTableDataSource(files.data);
-    // Add empty string at the beginning for "All file types" option
-    this.fileTypes = ['', ...files.fileTypes];
+    this.fileTypes = files.fileTypes;
     this.isLoading = false;
   }
 
