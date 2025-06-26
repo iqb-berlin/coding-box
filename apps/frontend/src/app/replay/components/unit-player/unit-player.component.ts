@@ -9,7 +9,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { ReactiveFormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
-  debounceTime, Subject, Subscription, takeUntil
+  debounceTime, fromEvent, Subject, Subscription, takeUntil
 } from 'rxjs';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { AppService } from '../../../services/app.service';
@@ -43,6 +43,8 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
   readonly unitPlayer = input<string>();
   readonly unitResponses = input<ResponseDto>();
   readonly pageId = input<string>();
+  readonly printMode = input<boolean>(false);
+  iFrameHeight = input<number>();
   readonly invalidPage = output<'notInList' | 'notCurrent' | null>();
   @ViewChild('hostingIframe') hostingIframe!: ElementRef;
   private validPages: Subject<{ pages: string[], current: string }> = new Subject();
@@ -82,6 +84,16 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
   private updateIframeContent(content: string): void {
     if (this.iFrameElement && this.iFrameElement.srcdoc !== content) {
       this.iFrameElement.srcdoc = content;
+
+      // Add an event listener to recalculate height after content is loaded
+      fromEvent(this.iFrameElement, 'load')
+        .pipe(takeUntil(this.ngUnsubscribe))
+        .subscribe(() => {
+          // Wait a bit for the content to render properly
+          setTimeout(() => {
+            this.calculateIFrameHeight();
+          }, 500);
+        });
     }
   }
 
@@ -300,9 +312,10 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
         },
         playerConfig: {
           stateReportPolicy: 'eager',
-          pagingMode: 'buttons',
+          ...(this.printMode() ? { pagingMode: 'concat-scroll' } : { pagingMode: 'buttons' }),
           directDownloadUrl: this.backendService.getDirectDownloadLink(),
-          startPage: this.pageId() || this.unitResponses()?.unit_state?.CURRENT_PAGE_ID || ''
+          startPage: this.pageId() || this.unitResponses()?.unit_state?.CURRENT_PAGE_ID || '',
+          ...(this.printMode() ? { printMode: 'on' } : {})
         }
       });
     }
@@ -359,6 +372,24 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
         this.pageList[this.pageList.length - 1].disabled = currentPageIndex === this.pageList.length - 2;
       }
     }
+  }
+
+  private calculateIFrameHeight(): number | undefined {
+    const iframeDoc = this.iFrameElement?.contentDocument || this.iFrameElement?.contentWindow?.document;
+    const height = iframeDoc && iframeDoc.body.offsetHeight;
+    if (height) {
+      if (this.iFrameElement) {
+        if (this.printMode()) {
+          // Set the height directly on the iframe element when in print mode
+          this.iFrameElement.style.minHeight = `${height}px`;
+        } else {
+          // Reset the min-height when not in print mode
+          this.iFrameElement.style.minHeight = '';
+        }
+      }
+      return height;
+    }
+    return undefined;
   }
 
   setPresentationStatus(status: string): void {

@@ -57,6 +57,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   anchor: string | undefined;
   responses: any | undefined = undefined;
   dataElementAliases: string[] = [];
+  isPrintMode: boolean = false;
   private testPerson: string = '';
   private unitId: string = '';
   private authToken: string = '';
@@ -102,11 +103,22 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       ?.subscribe(async params => {
         this.resetSnackBars();
         this.resetUnitData();
+        this.authToken = await this.getAuthToken();
         try {
+          // Check if we're in print-view mode
+          const url = this.route.snapshot.url;
+          this.isPrintMode = url.length > 0 && url[0].path === 'print-view';
+
           const testPersonInput = this.testPersonInput();
           const unitIdInput = this.unitIdInput();
-          if (Object.keys(params).length === 4) {
-            this.authToken = await this.getAuthToken();
+
+          if (this.isPrintMode && params.unitId) {
+            this.unitId = params.unitId;
+            const decoded: JwtPayload & { workspace: string } = jwtDecode(this.authToken);
+            const workspace = decoded?.workspace;
+            const unitData = await this.getUnitData(Number(workspace), this.authToken);
+            this.setUnitProperties(unitData);
+          } else if (Object.keys(params).length === 4) {
             this.setUnitParams(params);
             if (this.authToken) {
               const decoded: JwtPayload & { workspace: string } = jwtDecode(this.authToken);
@@ -123,7 +135,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
           } else if (testPersonInput && unitIdInput) {
             this.setTestPerson(testPersonInput);
             this.unitId = unitIdInput;
-          } else if (Object.keys(params).length !== 4) {
+          } else if (Object.keys(params).length !== 4 && !this.isPrintMode) {
             ReplayComponent.throwError('ParamsError');
           }
         } catch (error) {
@@ -249,6 +261,10 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   private getResponses(workspace: number, authToken?:string): Observable<ResponseDto[]> {
+    // In print mode, we don't need responses, so return an empty array
+    if (this.isPrintMode) {
+      return of([]);
+    }
     return this.backendService
       .getResponses(workspace, this.testPerson, this.unitId, authToken);
   }
@@ -260,7 +276,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         file_id: this.lastUnit.id
       }]);
     }
-    return this.backendService.getUnit(workspace, this.testPerson, this.unitId, authToken);
+    return this.backendService.getUnit(workspace, this.unitId, authToken);
   }
 
   private getPlayer(
@@ -284,6 +300,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         this.getResponses(workspace, authToken),
         this.getUnit(workspace, authToken)
           .pipe(switchMap(unitFile => {
+            console.log(`UnitFile: ${unitFile}`);
             this.checkUnitId(unitFile);
             let player = '';
             xml2js.parseString(unitFile[0].data, (err:any, result:any) => {
