@@ -484,7 +484,7 @@ export class BackendService {
     fileType?: string,
     fileSize?: string,
     searchText?: string
-  ): Observable<PaginatedResponse<FilesInListDto>> {
+  ): Observable<PaginatedResponse<FilesInListDto> & { fileTypes: string[] }> {
     let params = new HttpParams()
       .set('page', page.toString())
       .set('limit', limit.toString());
@@ -492,7 +492,7 @@ export class BackendService {
     if (fileSize) params = params.set('fileSize', fileSize);
     if (searchText) params = params.set('searchText', searchText);
 
-    return this.http.get<PaginatedResponse<FilesInListDto>>(
+    return this.http.get<PaginatedResponse<FilesInListDto> & { fileTypes: string[] }>(
       `${this.serverUrl}admin/workspace/${workspaceId}/files`,
       { headers: this.authHeader, params }
     );
