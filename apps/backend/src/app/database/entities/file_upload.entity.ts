@@ -3,7 +3,7 @@ import {
 } from 'typeorm';
 
 @Entity()
-@Unique('file_upload_id', ['file_id'])
+@Unique('file_upload_id', ['file_id', 'workspace_id'])
 class FileUpload {
   @PrimaryColumn({ type: 'integer' })
     id: number;
