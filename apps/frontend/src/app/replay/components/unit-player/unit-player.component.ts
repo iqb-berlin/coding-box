@@ -69,13 +69,11 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
     const unitPlayerChange = changes[unitPlayer];
     const unitResponsesChange = changes[unitResponses];
 
-    // Check if `unitDef` is set to undefined
     if (unitDefChange?.previousValue && !unitDefChange.currentValue) {
       this.resetIframeContent();
       return;
     }
 
-    // Check if `unitDef` has changed
     if (unitDefChange?.currentValue && unitDefChange.previousValue !== unitDefChange.currentValue) {
       this.handleUnitDefChange(unitDefChange.currentValue, unitPlayerChange, unitResponsesChange);
     }
@@ -104,7 +102,12 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
       if (unitResponsesChange?.currentValue?.responses) {
         this.dataParts = unitResponsesChange.currentValue.responses.reduce(
           (acc: { [key: string]: string }, response: { id: string; content: string }) => {
-            acc[response.id] = JSON.stringify(response.content);
+            try {
+              JSON.parse(response.content);
+              acc[response.id] = response.content;
+            } catch (e) {
+              acc[response.id] = JSON.stringify(response.content);
+            }
             return acc;
           }, {}
         );
@@ -181,9 +184,8 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
                   msgData.specVersion?.match(/\d+/);
                 this.playerApiVersion = majorVersionMatch && majorVersionMatch.length > 0 ?
                   Number(majorVersionMatch[0]) :
-                  2; // Default to version 2 if none found
+                  2;
               } else {
-                // Default version for non-relevant message types
                 this.playerApiVersion = 1;
               }
 
@@ -264,8 +266,6 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
               break;
 
             default:
-              // eslint-disable-next-line no-console
-              console.warn(`processMessagePost ignored message: ${msgType}`);
               break;
           }
         }

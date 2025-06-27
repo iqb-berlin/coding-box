@@ -300,7 +300,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
         const url = this.router
           .serializeUrl(
             this.router.createUrlTree(
-              [`replay/${this.testPerson.login}@${this.testPerson.code}@${this.testPerson.group}/${this.selectedUnit?.alias}/0/0`],
+              [`replay/${this.testPerson.login}@${this.testPerson.code}@${this.selectedBooklet}/${this.selectedUnit?.alias}/0/0`],
               { queryParams: queryParams })
           );
         window.open(`#/${url}`, '_blank');
@@ -541,7 +541,6 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       updateTagDto
     ).subscribe({
       next: updatedTag => {
-        // Update the tag in the array
         const index = this.unitTags.findIndex(tag => tag.id === tagId);
         if (index !== -1) {
           this.unitTags[index] = updatedTag;
@@ -744,6 +743,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   }
 
   private updateTable(data: Record<string, unknown>[], total: number): void {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     this.data = data as any;
     const mappedResults = data.map((result: Record<string, unknown>) => ({
       id: result.id as number,

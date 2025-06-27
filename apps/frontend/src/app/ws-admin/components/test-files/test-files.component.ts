@@ -172,22 +172,10 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   }
 
   /** Updates the table data source and stops spinner */
-  private updateTable(files: { data: FilesInListDto[] }): void {
+  private updateTable(files: { data: FilesInListDto[], fileTypes: string[] }): void {
     this.dataSource = new MatTableDataSource(files.data);
-    this.extractFileTypes(files.data);
+    this.fileTypes = files.fileTypes;
     this.isLoading = false;
-  }
-
-  /** Extracts unique file types from the data */
-  private extractFileTypes(files: FilesInListDto[]): void {
-    const types = new Set<string>();
-    files.forEach(file => {
-      if (file.file_type) {
-        types.add(file.file_type);
-      }
-    });
-    this.fileTypes = Array.from(types).sort();
-    this.fileTypes.unshift('');
   }
 
   /** Applies all filters */
