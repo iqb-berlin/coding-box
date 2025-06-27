@@ -73,7 +73,8 @@ export class WorkspaceFilesController {
         data: { type: 'array', items: { $ref: '#/components/schemas/FilesDto' } },
         total: { type: 'number' },
         page: { type: 'number' },
-        limit: { type: 'number' }
+        limit: { type: 'number' },
+        fileTypes: { type: 'array', items: { type: 'string' } }
       }
     }
   })
@@ -91,21 +92,22 @@ export class WorkspaceFilesController {
                            @Query('fileType') fileType?: string,
                            @Query('fileSize') fileSize?: string,
                            @Query('searchText') searchText?: string
-  ): Promise<{ data: FilesDto[]; total: number; page: number; limit: number }> {
+  ): Promise<{ data: FilesDto[]; total: number; page: number; limit: number; fileTypes: string[] }> {
     if (!workspace_id || workspace_id <= 0) {
       throw new BadRequestException(
         'Invalid workspace ID. Please provide a valid ID.'
       );
     }
     try {
-      const [files, total] = await this.workspaceFilesService.findFiles(workspace_id, {
+      const [files, total, fileTypes] = await this.workspaceFilesService.findFiles(workspace_id, {
         page, limit, fileType, fileSize, searchText
       });
       return {
         data: files,
         total,
         page,
-        limit
+        limit,
+        fileTypes
       };
     } catch (error) {
       throw new BadRequestException(

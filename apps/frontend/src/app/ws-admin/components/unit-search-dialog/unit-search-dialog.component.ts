@@ -248,7 +248,7 @@ export class UnitSearchDialogComponent implements OnInit {
         const url = this.router
           .serializeUrl(
             this.router.createUrlTree(
-              [`replay/${item.personLogin}@${item.personCode}@${item.personGroup}/${item.unitAlias}/0/0`],
+              [`replay/${item.personLogin}@${item.personCode}@${item.bookletId}/${item.unitAlias}/0/0`],
               { queryParams: queryParams })
           );
         window.open(`#/${url}`, '_blank');
