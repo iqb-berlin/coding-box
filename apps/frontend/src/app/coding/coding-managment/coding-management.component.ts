@@ -314,7 +314,7 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
         if (!token) {
           return;
         }
-        const url = `${window.location.origin}/#/replay/${response.login_name}@${response.login_code}@${response.login_group}/${response.unitname}/${page}/${response.variableid}?auth=${token}`;
+        const url = `${window.location.origin}/#/replay/${response.login_name}@${response.login_code}@${response.booklet_id}/${response.unitname}/${page}/${response.variableid}?auth=${token}`;
         window.open(url, '_blank');
       }
       );
@@ -641,7 +641,6 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
           });
         }
       });
-
   }
 
   showUnitXml(unitId: number): void {
