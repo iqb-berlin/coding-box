@@ -187,7 +187,6 @@ export class WorkspaceTestResultsService {
     const validLimit = Math.min(Math.max(1, limit), MAX_LIMIT); // Between 1 and MAX_LIMIT
 
     try {
-      // Use query builder to support text search
       const queryBuilder = this.personsRepository.createQueryBuilder('person')
         .where('person.workspace_id = :workspace_id', { workspace_id })
         .select([
@@ -250,31 +249,44 @@ export class WorkspaceTestResultsService {
   }
 
   async findUnitResponse(workspaceId: number, connector: string, unitId: string): Promise<{ responses: { id: string, content: { id: string; value: string; status: string }[] }[] }> {
-    const [login, code, group] = connector.split('@');
+    const [login, code, bookletId] = connector.split('@');
     const person = await this.personsRepository.findOne({
       where: {
-        code, login, group, workspace_id: workspaceId
+        code, login, workspace_id: workspaceId
       }
     });
     if (!person) {
       throw new Error(`Person mit ID ${person.id} wurde nicht gefunden.`);
     }
 
-    const booklets = await this.bookletRepository.find({
-      where: { personid: person.id }
+    const bookletInfo = await this.bookletInfoRepository.findOne({
+      where: { name: bookletId }
     });
 
-    if (!booklets || booklets.length === 0) {
-      throw new Error(`Keine Booklets für die Person mit ID ${person.id} gefunden.`);
+    if (!bookletInfo) {
+      throw new Error(`Kein Booklet mit der ID ${bookletId} gefunden.`);
     }
+
+    const booklet = await this.bookletRepository.findOne({
+      where: {
+        personid: person.id,
+        infoid: bookletInfo.id
+      }
+    });
+
+    if (!booklet) {
+      throw new Error(`Kein Booklet für die Person mit ID ${person.id} und Booklet ID ${bookletId} gefunden.`);
+    }
+
+    const booklets = [booklet];
     const unit = await this.unitRepository.findOne({
       where: {
-        bookletid: In(booklets.map(booklet => booklet.id)),
+        bookletid: In(booklets.map(b => b.id)),
         alias: unitId
       },
       relations: ['responses']
     });
-    const mappedResponses = unit.responses// Filter für subform = 'elementCodes'
+    const mappedResponses = unit.responses
       .filter(response => response.subform === 'elementCodes')
       .map(response => ({
         id: response.variableid,

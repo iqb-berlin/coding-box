@@ -11,7 +11,6 @@ import { Unit } from '../entities/unit.entity';
 import { Booklet } from '../entities/booklet.entity';
 import { ResponseEntity } from '../entities/response.entity';
 import { CodingStatistics } from './shared-types';
-import { prepareDefinition } from '../../utils/voud/transform';
 import { extractVariableLocation } from '../../utils/voud/extractVariableLocation';
 
 @Injectable()
@@ -350,7 +349,7 @@ export class WorkspaceCodingService {
           const bookletInfo = booklet?.bookletinfo;
           const loginName = person?.login || '';
           const loginCode = person?.code || '';
-          const loginGroup = person.group || '';
+          //const loginGroup = person.group || '';
           const bookletId = bookletInfo?.name || '';
           const unitKey = unit?.name || '';
           const unitAlias = unit?.alias || '';
@@ -386,7 +385,7 @@ export class WorkspaceCodingService {
             this.logger.warn(`VOUD file not found for unit ${unitKey}`);
           }
 
-          const url = `${server}/#/replay/${loginName}@${loginCode}@${loginGroup}/${unitKey}/${variablePage}/${variableAnchor}?auth=${authToken}`;
+          const url = `${server}/#/replay/${loginName}@${loginCode}@${bookletId}/${unitKey}/${variablePage}/${variableAnchor}?auth=${authToken}`;
 
           return {
             unit_key: unitKey,
@@ -431,7 +430,7 @@ export class WorkspaceCodingService {
         const bookletInfo = booklet?.bookletinfo;
         const loginName = person?.login || '';
         const loginCode = person?.code || '';
-        const loginGroup = person.group || '';
+        // const loginGroup = person.group || '';
         const bookletId = bookletInfo?.name || '';
         const unitKey = unit?.name || '';
         const unitAlias = unit?.alias || '';
@@ -468,7 +467,7 @@ export class WorkspaceCodingService {
           this.logger.warn(`VOUD file not found for unit ${unitKey}`);
         }
 
-        const url = `${server}/#/replay/${loginName}@${loginCode}@${loginGroup}/${unitKey}/${variablePage}/${variableAnchor}?auth=${authToken}`;
+        const url = `${server}/#/replay/${loginName}@${loginCode}@${bookletId}/${unitKey}/${variablePage}/${variableAnchor}?auth=${authToken}`;
         return {
           unit_key: unitKey,
           unit_alias: unitAlias,
