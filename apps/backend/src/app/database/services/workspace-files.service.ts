@@ -213,7 +213,7 @@ export class WorkspaceFilesService {
   }
 
   private async processTestTaker(testTaker: FileUpload): Promise<ValidationData | null> {
-    const xmlDocument = cheerio.load(testTaker.data, { xmlMode: true, recognizeSelfClosing: true });
+    const xmlDocument = cheerio.load(testTaker.data, { xml: true });
     const bookletTags = xmlDocument('Booklet');
     const unitTags = xmlDocument('Unit');
 
@@ -281,8 +281,8 @@ export class WorkspaceFilesService {
   }
 
   private extractXmlData(
-    bookletTags: cheerio.Cheerio<cheerio.Element>,
-    unitTags: cheerio.Cheerio<cheerio.Element>
+    bookletTags: cheerio.Cheerio<any>,
+    unitTags: cheerio.Cheerio<any>
   ): {
       uniqueBooklets: Set<string>;
       uniqueUnits: Set<string>;
@@ -434,7 +434,7 @@ export class WorkspaceFilesService {
       }
 
       const xmlContent = file.buffer.toString('utf8');
-      const xmlDocument = cheerio.load(file.buffer.toString('utf8'), { xmlMode: true, recognizeSelfClosing: true });
+      const xmlDocument = cheerio.load(file.buffer.toString('utf8'), { xml: true });
       const firstChild = xmlDocument.root().children().first();
       const rootTagName = firstChild ? firstChild.prop('tagName') : null;
 
@@ -911,7 +911,7 @@ export class WorkspaceFilesService {
   extractCodingSchemeRef(xmlContent: string): string | null {
     try {
       // Verwende cheerio, um das XML zu parsen
-      const $ = cheerio.load(xmlContent, { xmlMode: true, recognizeSelfClosing: true });
+      const $ = cheerio.load(xmlContent, { xml: true });
 
       // Suche nach dem CodingSchemeRef-Tag
       const codingSchemeRefTag = $('CodingSchemeRef');
