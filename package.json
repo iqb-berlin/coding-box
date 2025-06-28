@@ -1,6 +1,6 @@
 {
   "name": "coding-box",
-  "version": "0.7.2",
+  "version": "0.7.3",
   "author": "IQB - Institut zur Qualitätsentwicklung im Bildungswesen",
   "license": "MIT",
   "scripts": {
@@ -47,7 +47,7 @@
     "adm-zip": "^0.5.9",
     "ajv": "^8.17.1",
     "ajv-keywords": "^5.1.0",
-    "cheerio": "^1.0.0-rc.12",
+    "cheerio": "^1.1.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
     "fast-csv": "^5.0.1",
