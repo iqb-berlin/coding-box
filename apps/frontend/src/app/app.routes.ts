@@ -1,6 +1,7 @@
 import { Routes } from '@angular/router';
 
 import { canActivateAuth } from './auth/auth.guard';
+import { canActivateWithToken } from './auth/token.guard';
 
 export const routes: Routes = [
   { path: '', redirectTo: 'home', pathMatch: 'full' },
@@ -10,21 +11,21 @@ export const routes: Routes = [
   },
   {
     path: 'replay/:testPerson/:unitId/:page/:anchor',
-    canActivate: [canActivateAuth],
+    canActivate: [canActivateWithToken],
     loadComponent: () => import('./replay/components/replay/replay.component').then(m => m.ReplayComponent)
   },
   {
     path: 'replay/:testPerson/:unitId/:page',
-    canActivate: [canActivateAuth],
+    canActivate: [canActivateWithToken],
     loadComponent: () => import('./replay/components/replay/replay.component').then(m => m.ReplayComponent)
   },
   {
     path: 'replay/:testPerson/:unitId',
-    canActivate: [canActivateAuth],
+    canActivate: [canActivateWithToken],
     loadComponent: () => import('./replay/components/replay/replay.component').then(m => m.ReplayComponent)
   },
-  { path: 'replay/:testPerson', canActivate: [canActivateAuth], loadComponent: () => import('./replay/components/replay/replay.component').then(m => m.ReplayComponent) },
-  { path: 'replay', canActivate: [canActivateAuth], loadComponent: () => import('./replay/components/replay/replay.component').then(m => m.ReplayComponent) },
+  { path: 'replay/:testPerson', canActivate: [canActivateWithToken], loadComponent: () => import('./replay/components/replay/replay.component').then(m => m.ReplayComponent) },
+  { path: 'replay', canActivate: [canActivateWithToken], loadComponent: () => import('./replay/components/replay/replay.component').then(m => m.ReplayComponent) },
   { path: 'coding-manual', canActivate: [canActivateAuth], loadComponent: () => import('./coding/coding-management-manual/coding-management-manual.component').then(m => m.CodingManagementManualComponent) },
   {
     path: 'admin',
