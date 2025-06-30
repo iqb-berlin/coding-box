@@ -31,7 +31,20 @@ export class WorkspaceCodingService {
   ) {}
 
   async codeTestPersons(workspace_id: number, testPersonIds: string): Promise<CodingStatistics> {
-    const ids = testPersonIds.split(',');
+    const startTime = Date.now();
+    const metrics: { [key: string]: number } = {};
+
+    if (!workspace_id || !testPersonIds || testPersonIds.trim() === '') {
+      this.logger.warn('Ungültige Eingabeparameter: workspace_id oder testPersonIds fehlen.');
+      return { totalResponses: 0, statusCounts: {} };
+    }
+
+    const ids = testPersonIds.split(',').filter(id => id.trim() !== '');
+    if (ids.length === 0) {
+      this.logger.warn('Keine gültigen Personen-IDs angegeben.');
+      return { totalResponses: 0, statusCounts: {} };
+    }
+
     this.logger.log(`Verarbeite Personen ${testPersonIds} für Workspace ${workspace_id}`);
 
     const statistics: CodingStatistics = {
@@ -39,179 +52,284 @@ export class WorkspaceCodingService {
       statusCounts: {}
     };
 
+    const queryRunner = this.responseRepository.manager.connection.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction('READ COMMITTED');
+
     try {
+      const personsQueryStart = Date.now();
       const persons = await this.personsRepository.find({
-        where: { workspace_id, id: In(ids) }, select: ['id', 'group', 'login', 'code', 'uploaded_at']
+        where: { workspace_id, id: In(ids) },
+        select: ['id', 'group', 'login', 'code', 'uploaded_at']
       });
+      metrics.personsQuery = Date.now() - personsQueryStart;
 
       if (!persons || persons.length === 0) {
         this.logger.warn('Keine Personen gefunden mit den angegebenen IDs.');
+        await queryRunner.release();
         return statistics;
       }
 
       const personIds = persons.map(person => person.id);
-
+      const bookletQueryStart = Date.now();
       const booklets = await this.bookletRepository.find({
-        where: { personid: In(personIds) }
+        where: { personid: In(personIds) },
+        select: ['id', 'personid'] // Only select needed fields
       });
+      metrics.bookletQuery = Date.now() - bookletQueryStart;
 
       if (!booklets || booklets.length === 0) {
         this.logger.log('Keine Booklets für die angegebenen Personen gefunden.');
+        await queryRunner.release();
         return statistics;
       }
 
       const bookletIds = booklets.map(booklet => booklet.id);
-
+      const unitQueryStart = Date.now();
       const units = await this.unitRepository.find({
-        where: { bookletid: In(bookletIds) }
+        where: { bookletid: In(bookletIds) },
+        select: ['id', 'bookletid', 'name', 'alias'] // Only select needed fields
       });
+      metrics.unitQuery = Date.now() - unitQueryStart;
 
       if (!units || units.length === 0) {
         this.logger.log('Keine Einheiten für die angegebenen Booklets gefunden.');
+        await queryRunner.release();
         return statistics;
       }
 
       const bookletToUnitsMap = new Map();
-      units.forEach(unit => {
+      const unitIds = new Set<number>();
+      const unitAliasesSet = new Set<string>();
+
+      for (const unit of units) {
         if (!bookletToUnitsMap.has(unit.bookletid)) {
           bookletToUnitsMap.set(unit.bookletid, []);
         }
         bookletToUnitsMap.get(unit.bookletid).push(unit);
-      });
+        unitIds.add(unit.id);
+        unitAliasesSet.add(unit.alias.toUpperCase());
+      }
 
-      const unitIds = units.map(unit => unit.id);
-      const unitAliases = units.map(unit => unit.alias.toUpperCase());
+      const unitIdsArray = Array.from(unitIds);
+      const unitAliasesArray = Array.from(unitAliasesSet);
 
+      const responseQueryStart = Date.now();
       const allResponses = await this.responseRepository.find({
-        where: { unitid: In(unitIds), status: In(['VALUE_CHANGED']) }
+        where: { unitid: In(unitIdsArray), status: In(['VALUE_CHANGED']) },
+        select: ['id', 'unitid', 'variableid', 'value', 'status'] // Only select needed fields
       });
+      metrics.responseQuery = Date.now() - responseQueryStart;
+
+      if (!allResponses || allResponses.length === 0) {
+        this.logger.log('Keine zu kodierenden Antworten gefunden.');
+        await queryRunner.release();
+        return statistics;
+      }
 
       const unitToResponsesMap = new Map();
-      allResponses.forEach(response => {
+      for (const response of allResponses) {
         if (!unitToResponsesMap.has(response.unitid)) {
           unitToResponsesMap.set(response.unitid, []);
         }
         unitToResponsesMap.get(response.unitid).push(response);
-      });
+      }
+
+      const fileQueryStart = Date.now();
       const testFiles = await this.fileUploadRepository.find({
-        where: { workspace_id: workspace_id, file_id: In(unitAliases) }
+        where: { workspace_id: workspace_id, file_id: In(unitAliasesArray) },
+        select: ['file_id', 'data', 'filename'] // Only select needed fields
       });
+      metrics.fileQuery = Date.now() - fileQueryStart;
 
       const fileIdToTestFileMap = new Map();
       testFiles.forEach(file => {
         fileIdToTestFileMap.set(file.file_id, file);
       });
-
+      const schemeExtractStart = Date.now();
       const codingSchemeRefs = new Set<string>();
       const unitToCodingSchemeRefMap = new Map();
-      for (const unit of units) {
-        const testFile = fileIdToTestFileMap.get(unit.alias.toUpperCase());
-        if (!testFile) continue;
+      const batchSize = 50;
+      for (let i = 0; i < units.length; i += batchSize) {
+        const unitBatch = units.slice(i, i + batchSize);
 
-        try {
-          const $ = cheerio.load(testFile.data);
-          const codingSchemeRefText = $('codingSchemeRef').text();
-          if (codingSchemeRefText) {
-            codingSchemeRefs.add(codingSchemeRefText.toUpperCase());
-            unitToCodingSchemeRefMap.set(unit.id, codingSchemeRefText.toUpperCase());
+        for (const unit of unitBatch) {
+          const testFile = fileIdToTestFileMap.get(unit.alias.toUpperCase());
+          if (!testFile) continue;
+
+          try {
+            const $ = cheerio.load(testFile.data);
+            const codingSchemeRefText = $('codingSchemeRef').text();
+            if (codingSchemeRefText) {
+              codingSchemeRefs.add(codingSchemeRefText.toUpperCase());
+              unitToCodingSchemeRefMap.set(unit.id, codingSchemeRefText.toUpperCase());
+            }
+          } catch (error) {
+            this.logger.error(`--- Fehler beim Verarbeiten der Datei ${testFile.filename}: ${error.message}`);
           }
-        } catch (error) {
-          this.logger.error(`--- Fehler beim Verarbeiten der Datei ${testFile.filename}: ${error.message}`);
         }
       }
+      metrics.schemeExtract = Date.now() - schemeExtractStart;
+
+      const schemeQueryStart = Date.now();
       const codingSchemeFiles = await this.fileUploadRepository.find({
         where: { file_id: In([...codingSchemeRefs]) },
         select: ['file_id', 'data', 'filename']
       });
-
+      metrics.schemeQuery = Date.now() - schemeQueryStart;
+      const schemeParsing = Date.now();
       const fileIdToCodingSchemeMap = new Map();
+      const emptyScheme = new Autocoder.CodingScheme({});
+
       codingSchemeFiles.forEach(file => {
         try {
-          const scheme = new Autocoder.CodingScheme(JSON.parse(JSON.stringify(file.data)));
+          const data = typeof file.data === 'string' ? JSON.parse(file.data) : file.data;
+          const scheme = new Autocoder.CodingScheme(data);
           fileIdToCodingSchemeMap.set(file.file_id, scheme);
         } catch (error) {
           this.logger.error(`--- Fehler beim Verarbeiten des Kodierschemas ${file.filename}: ${error.message}`);
         }
       });
+      metrics.schemeParsing = Date.now() - schemeParsing;
+
+      const processingStart = Date.now();
 
       const allCodedResponses = [];
+      const estimatedResponseCount = allResponses.length;
+      allCodedResponses.length = estimatedResponseCount;
+      let responseIndex = 0;
 
-      for (const unit of units) {
-        const responses = unitToResponsesMap.get(unit.id) || [];
-        if (responses.length === 0) continue;
+      for (let i = 0; i < units.length; i += batchSize) {
+        const unitBatch = units.slice(i, i + batchSize);
 
-        statistics.totalResponses += responses.length;
+        for (const unit of unitBatch) {
+          const responses = unitToResponsesMap.get(unit.id) || [];
+          if (responses.length === 0) continue;
 
-        let scheme = new Autocoder.CodingScheme({});
-        const codingSchemeRef = unitToCodingSchemeRefMap.get(unit.id);
-        if (codingSchemeRef) {
-          scheme = fileIdToCodingSchemeMap.get(codingSchemeRef) || scheme;
+          statistics.totalResponses += responses.length;
+
+          const codingSchemeRef = unitToCodingSchemeRefMap.get(unit.id);
+          const scheme = codingSchemeRef ?
+            (fileIdToCodingSchemeMap.get(codingSchemeRef) || emptyScheme) :
+            emptyScheme;
+
+          for (const response of responses) {
+            const codedResult = scheme.code([{
+              id: response.variableid,
+              value: response.value,
+              status: response.status as ResponseStatusType
+            }]);
+
+            const codedStatus = codedResult[0]?.status;
+            if (!statistics.statusCounts[codedStatus]) {
+              statistics.statusCounts[codedStatus] = 0;
+            }
+            statistics.statusCounts[codedStatus] += 1;
+
+            allCodedResponses[responseIndex] = {
+              id: response.id,
+              code: codedResult[0]?.code,
+              codedstatus: codedStatus,
+              score: codedResult[0]?.score
+            };
+            responseIndex += 1;
+          }
         }
-
-        const codedResponses = responses.map(response => {
-          const codedResult = scheme.code([{
-            id: response.variableid,
-            value: response.value,
-            status: response.status as ResponseStatusType
-          }]);
-
-          const codedStatus = codedResult[0]?.status;
-          if (!statistics.statusCounts[codedStatus]) {
-            statistics.statusCounts[codedStatus] = 0;
-          }
-          statistics.statusCounts[codedStatus] += 1;
-
-          return {
-            ...response, // Enthält die ursprüngliche 'id' und andere Felder der Response
-            code: codedResult[0]?.code,
-            codedstatus: codedStatus,
-            score: codedResult[0]?.score
-          };
-        });
-
-        allCodedResponses.push(...codedResponses);
       }
+
+      allCodedResponses.length = responseIndex;
+      metrics.processing = Date.now() - processingStart;
+
+      // Update responses in batches with transaction support
       if (allCodedResponses.length > 0) {
+        const updateStart = Date.now();
         try {
-          const batchSize = 10000;
+          const updateBatchSize = 500;
           const batches = [];
-          for (let i = 0; i < allCodedResponses.length; i += batchSize) {
-            batches.push(allCodedResponses.slice(i, i + batchSize));
+          for (let i = 0; i < allCodedResponses.length; i += updateBatchSize) {
+            batches.push(allCodedResponses.slice(i, i + updateBatchSize));
           }
 
-          this.logger.log(`Starte die Aktualisierung von ${allCodedResponses.length} Responses in ${batches.length} Batches (concurrent).`);
+          this.logger.log(`Starte die Aktualisierung von ${allCodedResponses.length} Responses in ${batches.length} Batches (sequential).`);
 
-          const updateBatchPromises = batches.map(async (batch, index) => {
+          for (let index = 0; index < batches.length; index++) {
+            const batch = batches[index];
             this.logger.log(`Starte Aktualisierung für Batch #${index + 1} (Größe: ${batch.length}).`);
-            const individualUpdatePromises = batch.map(codedResponse => this.responseRepository.update(
-              codedResponse.id,
-              {
-                code: codedResponse.code,
-                codedstatus: codedResponse.codedstatus,
-                score: codedResponse.score
-              }
-            )
-            );
+
             try {
-              await Promise.all(individualUpdatePromises);
+              if (batch.length > 0) {
+                const updatePromises = batch.map(response => queryRunner.manager.update(
+                  ResponseEntity,
+                  response.id,
+                  {
+                    code: response.code,
+                    codedstatus: response.codedstatus,
+                    score: response.score
+                  }
+                ));
+
+                await Promise.all(updatePromises);
+              }
+
               this.logger.log(`Batch #${index + 1} (Größe: ${batch.length}) erfolgreich aktualisiert.`);
             } catch (error) {
               this.logger.error(`Fehler beim Aktualisieren von Batch #${index + 1} (Größe: ${batch.length}):`, error.message);
+              // Rollback transaction on error
+              await queryRunner.rollbackTransaction();
+              await queryRunner.release();
               throw error;
             }
-          });
+          }
 
-          await Promise.all(updateBatchPromises);
-
+          // Commit transaction if all updates were successful
+          await queryRunner.commitTransaction();
           this.logger.log(`${allCodedResponses.length} Responses wurden erfolgreich aktualisiert.`);
         } catch (error) {
           this.logger.error('Fehler beim Aktualisieren der Responses:', error.message);
+          // Ensure transaction is rolled back on error
+          try {
+            await queryRunner.rollbackTransaction();
+          } catch (rollbackError) {
+            this.logger.error('Fehler beim Rollback der Transaktion:', rollbackError.message);
+          }
+        } finally {
+          // Always release the query runner
+          await queryRunner.release();
         }
+        metrics.update = Date.now() - updateStart;
+      } else {
+        // Release query runner if no updates were performed
+        await queryRunner.release();
       }
+
+      // Log performance metrics
+      const totalTime = Date.now() - startTime;
+      this.logger.log(`Performance metrics for codeTestPersons (total: ${totalTime}ms):
+        - Persons query: ${metrics.personsQuery}ms
+        - Booklet query: ${metrics.bookletQuery}ms
+        - Unit query: ${metrics.unitQuery}ms
+        - Response query: ${metrics.responseQuery}ms
+        - File query: ${metrics.fileQuery}ms
+        - Scheme extraction: ${metrics.schemeExtract}ms
+        - Scheme query: ${metrics.schemeQuery}ms
+        - Scheme parsing: ${metrics.schemeParsing}ms
+        - Response processing: ${metrics.processing}ms
+        - Database updates: ${metrics.update || 0}ms`);
 
       return statistics;
     } catch (error) {
       this.logger.error('Fehler beim Verarbeiten der Personen:', error);
+
+      // Ensure transaction is rolled back on error
+      try {
+        await queryRunner.rollbackTransaction();
+      } catch (rollbackError) {
+        this.logger.error('Fehler beim Rollback der Transaktion:', rollbackError.message);
+      } finally {
+        // Always release the query runner
+        await queryRunner.release();
+      }
+
       return statistics;
     }
   }
@@ -349,7 +467,7 @@ export class WorkspaceCodingService {
           const bookletInfo = booklet?.bookletinfo;
           const loginName = person?.login || '';
           const loginCode = person?.code || '';
-          //const loginGroup = person.group || '';
+          // const loginGroup = person.group || '';
           const bookletId = bookletInfo?.name || '';
           const unitKey = unit?.name || '';
           const unitAlias = unit?.alias || '';
@@ -523,7 +641,9 @@ export class WorkspaceCodingService {
         .getRawMany();
 
       statusCountResults.forEach(result => {
-        statistics.statusCounts[result.statusValue] = parseInt(result.count, 10);
+        const count = parseInt(result.count, 10);
+        // Ensure count is a valid number
+        statistics.statusCounts[result.statusValue] = Number.isNaN(count) ? 0 : count;
       });
 
       return statistics;
