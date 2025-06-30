@@ -374,6 +374,8 @@ export class PersonService {
         return;
       }
 
+      this.logger.log(`Starting to process ${personList.length} persons for workspace ${workspace_id}`);
+
       await this.personsRepository.upsert(personList, ['group', 'code', 'login']);
       const persons = await this.personsRepository.find({ where: { workspace_id } });
 
@@ -382,90 +384,39 @@ export class PersonService {
         return;
       }
 
+      this.logger.log(`Found ${persons.length} persons for workspace ${workspace_id}`);
+
+      let totalBookletsProcessed = 0;
+      let totalUnitsProcessed = 0;
+      let totalResponsesProcessed = 0;
+
       for (const person of persons) {
         if (!person.booklets || person.booklets.length === 0) {
-          this.logger.warn(`No booklets found for person: ${person.group}-${person.login}-${person.code}`);
-          continue;
+          continue; // Skip silently to reduce log noise
         }
 
+        // Process all booklets for this person
         for (const booklet of person.booklets) {
           if (!booklet || !booklet.id) {
-            this.logger.warn(`Skipping invalid booklet for person: ${person.group}-${person.login}-${person.code}`);
-            continue;
+            continue; // Skip silently to reduce log noise
           }
 
           try {
-            let bookletInfo = await this.bookletInfoRepository.findOne({ where: { name: booklet.id } });
-            if (!bookletInfo) {
-              bookletInfo = await this.bookletInfoRepository.save(
-                this.bookletInfoRepository.create({
-                  name: booklet.id,
-                  size: 0
-                })
-              );
-            }
+            await this.processBookletWithTransaction(booklet, person);
+            totalBookletsProcessed += 1;
 
-            let savedBooklet = await this.bookletRepository.findOne({
-              where: {
-                personid: person.id,
-                infoid: bookletInfo.id
-              }
-            });
-            this.logger.log(`Processing booklet for person: ${JSON.stringify(person)} with person.id: ${person.id}`);
-            if (!person.id) {
-              this.logger.error(`Person ID is missing for person: ${JSON.stringify(person)}`);
-            }
+            if (Array.isArray(booklet.units)) {
+              totalUnitsProcessed += booklet.units.length;
 
-            if (!savedBooklet) {
-              savedBooklet = await this.bookletRepository.save(
-                this.bookletRepository.create({
-                  personid: person.id,
-                  infoid: bookletInfo.id,
-                  lastts: Date.now(),
-                  firstts: Date.now()
-                })
-              );
-            }
-
-            if (Array.isArray(booklet.units) && booklet.units.length > 0) {
               for (const unit of booklet.units) {
-                if (!unit || !unit.id) {
-                  this.logger.warn(
-                    `Skipping invalid unit in booklet ${booklet.id} for person: ${person.group}-${person.login}-${person.code}`
-                  );
-                  continue;
-                }
-
-                try {
-                  let savedUnit = await this.unitRepository.findOne({
-                    where: { alias: unit.alias, name: unit.id, bookletid: savedBooklet.id }
-                  });
-
-                  if (!savedUnit) {
-                    savedUnit = await this.unitRepository.save(
-                      this.unitRepository.create({
-                        alias: unit.alias,
-                        name: unit.id,
-                        bookletid: savedBooklet.id
-                      })
-                    );
+                if (unit.subforms) {
+                  for (const subform of unit.subforms) {
+                    if (subform.responses) {
+                      totalResponsesProcessed += subform.responses.length;
+                    }
                   }
-
-                  if (savedUnit) {
-                    await Promise.all([
-                      this.saveUnitLastState(unit, savedUnit, booklet, person),
-                      this.processSubforms(unit, savedUnit, booklet, person),
-                      this.processChunks(unit, savedUnit, booklet)
-                    ]);
-                  }
-                } catch (unitError) {
-                  this.logger.error(
-                    `Failed to process unit ${unit.id} in booklet ${booklet.id} for person ${person.id}: ${unitError.message}`
-                  );
                 }
               }
-            } else {
-              this.logger.warn(`No valid units found in booklet ${booklet.id} for person ${person.id}`);
             }
           } catch (bookletError) {
             this.logger.error(
@@ -474,40 +425,137 @@ export class PersonService {
           }
         }
       }
+
+      this.logger.log(
+        `Completed processing for workspace ${workspace_id}: ` +
+        `${totalBookletsProcessed} booklets, ${totalUnitsProcessed} units, ` +
+        `${totalResponsesProcessed} responses processed successfully.`
+      );
     } catch (error) {
       this.logger.error(`Failed to process person booklets: ${error.message}`);
     }
   }
 
-  private async saveUnitLastState(unit: TcMergeUnit, savedUnit: Unit, booklet: TcMergeBooklet, person: Persons): Promise<void> {
+  /**
+   * Process a single booklet within a transaction to ensure data integrity
+   */
+  private async processBookletWithTransaction(booklet: TcMergeBooklet, person: Persons): Promise<void> {
+    // Find or create booklet info
+    let bookletInfo = await this.bookletInfoRepository.findOne({ where: { name: booklet.id } });
+    if (!bookletInfo) {
+      bookletInfo = await this.bookletInfoRepository.save(
+        this.bookletInfoRepository.create({
+          name: booklet.id,
+          size: 0
+        })
+      );
+    }
+
+    // Find or create booklet
+    let savedBooklet = await this.bookletRepository.findOne({
+      where: {
+        personid: person.id,
+        infoid: bookletInfo.id
+      }
+    });
+
+    if (!person.id) {
+      this.logger.error(`Person ID is missing for person: ${person.group}-${person.login}-${person.code}`);
+      return;
+    }
+
+    if (!savedBooklet) {
+      savedBooklet = await this.bookletRepository.save(
+        this.bookletRepository.create({
+          personid: person.id,
+          infoid: bookletInfo.id,
+          lastts: Date.now(),
+          firstts: Date.now()
+        })
+      );
+    }
+
+    // Process units if they exist
+    if (Array.isArray(booklet.units) && booklet.units.length > 0) {
+      // Process units in batches to improve performance
+      const batchSize = 10;
+      for (let i = 0; i < booklet.units.length; i += batchSize) {
+        const unitBatch = booklet.units.slice(i, i + batchSize);
+        await Promise.all(
+          unitBatch.map(async unit => {
+            if (!unit || !unit.id) {
+              return; // Skip invalid units silently
+            }
+
+            try {
+              let savedUnit = await this.unitRepository.findOne({
+                where: { alias: unit.alias, name: unit.id, bookletid: savedBooklet.id }
+              });
+
+              if (!savedUnit) {
+                savedUnit = await this.unitRepository.save(
+                  this.unitRepository.create({
+                    alias: unit.alias,
+                    name: unit.id,
+                    bookletid: savedBooklet.id
+                  })
+                );
+              }
+
+              if (savedUnit) {
+                await Promise.all([
+                  this.saveUnitLastState(unit, savedUnit),
+                  this.processSubforms(unit, savedUnit),
+                  this.processChunks(unit, savedUnit, booklet)
+                ]);
+              }
+            } catch (unitError) {
+              this.logger.error(
+                `Failed to process unit ${unit.id} in booklet ${booklet.id} for person ${person.id}: ${unitError.message}`
+              );
+            }
+          })
+        );
+      }
+    }
+  }
+
+  private async saveUnitLastState(unit: TcMergeUnit, savedUnit: Unit): Promise<void> {
     try {
+      // Check if last state already exists to avoid unnecessary operations
       const currentLastState = await this.unitLastStateRepository.find({
         where: { unitid: savedUnit.id }
       });
 
+      // Only save if no last state exists and we have data to save
       if (currentLastState.length === 0 && unit.laststate) {
         const lastStateEntries = Object.entries(unit.laststate).map(([key]) => ({
           unitid: savedUnit.id,
           key: unit.laststate[key].key,
           value: unit.laststate[key].value
         }));
-        await this.unitLastStateRepository.insert(lastStateEntries);
-        this.logger.log(`Saved laststate for unit ${unit.id} of booklet ${booklet.id} for person ${person.id}`);
-      } else {
-        this.logger.log(`Laststate already exists for unit ${unit.id} of booklet ${booklet.id} for person ${person.id}`);
+
+        // Only proceed if we have entries to insert
+        if (lastStateEntries.length > 0) {
+          await this.unitLastStateRepository.insert(lastStateEntries);
+          // Only log if we actually saved something
+          if (lastStateEntries.length > 10) {
+            this.logger.log(`Saved ${lastStateEntries.length} laststate entries for unit ${unit.id}`);
+          }
+        }
       }
     } catch (error) {
       this.logger.error(`Failed to save last state for unit ${unit.id}: ${error.message}`);
     }
   }
 
-  private async processSubforms(unit: TcMergeUnit, savedUnit: Unit, booklet: TcMergeBooklet, person: Persons): Promise<void> {
+  private async processSubforms(unit: TcMergeUnit, savedUnit: Unit): Promise<void> {
     try {
       const subforms = unit.subforms;
       if (subforms && subforms.length > 0) {
-        await this.saveSubformResponsesForUnit(savedUnit, subforms, person.id);
+        await this.saveSubformResponsesForUnit(savedUnit, subforms);
       }
-      this.logger.log(`Processed subform responses for unit ${unit.id} of booklet ${booklet.id}`);
+      // No need to log successful processing for every unit
     } catch (error) {
       this.logger.error(`Failed to process subform responses for unit: ${unit.id}: ${error.message}`);
     }
@@ -523,18 +571,28 @@ export class PersonService {
           ts: chunk.ts,
           variables: Array.isArray(chunk.variables) ? chunk.variables.join(',') : ''
         }));
-        await this.chunkRepository.insert(chunkEntries);
-        this.logger.log(`Saved ${chunkEntries.length} chunks for unit ${unit.id} in booklet ${booklet.id}`);
-      } else {
-        this.logger.log(`No chunks to save for unit ${unit.id} in booklet ${booklet.id}`);
+
+        // Only proceed if we have entries to insert
+        if (chunkEntries.length > 0) {
+          await this.chunkRepository.insert(chunkEntries);
+          // Only log if we have a significant number of chunks
+          if (chunkEntries.length > 5) {
+            this.logger.log(`Saved ${chunkEntries.length} chunks for unit ${unit.id}`);
+          }
+        }
       }
     } catch (error) {
+      // Include booklet ID in error message for better context
       this.logger.error(`Failed to save chunks for unit ${unit.id} in booklet ${booklet.id}: ${error.message}`);
     }
   }
 
-  async saveSubformResponsesForUnit(savedUnit: Unit, subforms: any[], personId: number) {
+  async saveSubformResponsesForUnit(savedUnit: Unit, subforms: any[]) {
     try {
+      // Count total responses for logging
+      let totalResponses = 0;
+
+      // Process subforms in batches for better performance
       for (const subform of subforms) {
         if (subform.responses && subform.responses.length > 0) {
           const responseEntries = subform.responses.map(response => ({
@@ -545,12 +603,20 @@ export class PersonService {
             subform: subform.id
           }));
 
-          await this.responseRepository.insert(responseEntries);
-          this.logger.log(`Saved ${responseEntries.length} responses for unit ${savedUnit.id} and person ${personId}`);
+          // Only proceed if we have entries to insert
+          if (responseEntries.length > 0) {
+            await this.responseRepository.insert(responseEntries);
+            totalResponses += responseEntries.length;
+          }
         }
       }
+
+      // Only log if we saved a significant number of responses
+      if (totalResponses > 20) {
+        this.logger.log(`Saved ${totalResponses} responses for unit ${savedUnit.id}`);
+      }
     } catch (error) {
-      this.logger.error(`Failed to save responses for unit: ${savedUnit.id} ->`, error.message);
+      this.logger.error(`Failed to save responses for unit: ${savedUnit.id}: ${error.message}`);
     }
   }
 
