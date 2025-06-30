@@ -1,3 +1,5 @@
+@use 'sass:color';
+
 $iqb-accent: rgb(0, 96, 100);
 
 
@@ -44,7 +46,7 @@ $iqb-accent: rgb(0, 96, 100);
       transition: color 0.2s ease;
 
       &:hover {
-        color: darken($iqb-accent, 10%);
+        color: color.adjust($iqb-accent, $lightness: -10%);
         text-decoration: underline;
       }
     }

@@ -110,7 +110,16 @@ export class TestcenterService {
           headers: headersRequest
         }
       );
-      return response.data;
+
+      const existingGroups = await this.personService.getWorkspaceGroups(Number(workspace_id));
+
+      // Mark test groups that already exist in the database
+      const testGroups = response.data.map(group => ({
+        ...group,
+        existsInDatabase: existingGroups.includes(group.groupName)
+      }));
+
+      return testGroups;
     } catch (error) {
       logger.error(`Error fetching test groups: ${error.message}`);
       return [];
