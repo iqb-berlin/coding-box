@@ -288,11 +288,33 @@ export class WorkspaceTestResultsService {
     });
     const mappedResponses = unit.responses
       .filter(response => response.subform === 'elementCodes')
-      .map(response => ({
-        id: response.variableid,
-        value: response.value,
-        status: response.status
-      }));
+      .map(response => {
+        let value = response.value;
+        if (typeof value === 'string') {
+          if (value.startsWith('[') && value.endsWith(']')) {
+            try {
+              value = JSON.parse(value);
+            } catch (e) {
+              // If parsing fails, keep the original value
+              this.logger.warn(`Failed to parse JSON array: ${value}`);
+            }
+          } else if (value.startsWith('{') && value.endsWith('}')) {
+            try {
+              const jsonArrayString = value.replace(/^\{/, '[').replace(/\}$/, ']');
+              value = JSON.parse(jsonArrayString);
+            } catch (e) {
+              // If parsing fails, keep the original value
+              this.logger.warn(`Failed to parse curly brace array: ${value}`);
+            }
+          }
+        }
+
+        return {
+          id: response.variableid,
+          value: value,
+          status: response.status
+        };
+      });
 
     const uniqueResponses = mappedResponses.filter(
       (response, index, self) => index === self.findIndex(r => r.id === response.id)
