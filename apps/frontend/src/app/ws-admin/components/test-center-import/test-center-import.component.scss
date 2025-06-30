@@ -373,6 +373,40 @@
         font-weight: 600;
       }
     }
+
+    .status-badge {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 500;
+
+      &.existing {
+        background-color: #e8f5e9;
+        color: #2e7d32;
+
+        mat-icon {
+          color: #2e7d32;
+          font-size: 16px;
+          height: 16px;
+          width: 16px;
+        }
+      }
+
+      &.new {
+        background-color: #fff8e1;
+        color: #ff8f00;
+
+        mat-icon {
+          color: #ff8f00;
+          font-size: 16px;
+          height: 16px;
+          width: 16px;
+        }
+      }
+    }
   }
 
   .selection-summary {

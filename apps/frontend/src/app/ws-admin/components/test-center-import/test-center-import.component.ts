@@ -115,6 +115,7 @@ export class TestCenterImportComponent {
     'select',
     'groupName',
     'groupLabel',
+    'status',
     'bookletsStarted',
     'numUnitsMin',
     'numUnitsMax',

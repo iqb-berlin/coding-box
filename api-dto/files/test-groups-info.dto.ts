@@ -1,5 +1,5 @@
 import {
-  IsString, IsInt, IsNumber, Min
+  IsString, IsInt, IsNumber, Min, IsBoolean, IsOptional
 } from 'class-validator';
 
 export class TestGroupsInfoDto {
@@ -31,4 +31,8 @@ export class TestGroupsInfoDto {
   @IsInt()
   @Min(0)
     lastChange!: number;
+
+  @IsBoolean()
+  @IsOptional()
+    existsInDatabase?: boolean;
 }

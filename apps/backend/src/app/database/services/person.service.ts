@@ -49,6 +49,29 @@ export class PersonService {
   }
 
   logger = new Logger(PersonService.name);
+
+  /**
+   * Get all unique group names for a given workspace
+   * @param workspaceId The ID of the workspace
+   * @returns An array of unique group names
+   */
+  async getWorkspaceGroups(workspaceId: number): Promise<string[]> {
+    try {
+      // Query for distinct group values in the workspace
+      const result = await this.personsRepository
+        .createQueryBuilder('person')
+        .select('DISTINCT person.group', 'group')
+        .where('person.workspace_id = :workspaceId', { workspaceId })
+        .getRawMany();
+
+      // Extract group names from the result
+      return result.map(item => item.group);
+    } catch (error) {
+      this.logger.error(`Error fetching workspace groups: ${error.message}`);
+      return [];
+    }
+  }
+
   async createPersonList(rows: Array<{ groupname: string; loginname: string; code: string }>, workspace_id: number): Promise<Person[]> {
     if (!Array.isArray(rows)) {
       this.logger.error('Invalid input: rows must be an array');
