@@ -18,7 +18,7 @@ export const journalInterceptor: HttpInterceptorFn = (
   next: HttpHandlerFn
 ): Observable<HttpEvent<unknown>> => {
   const appService = inject(AppService);
-  const journalService = inject(JournalService);
+  //const journalService = inject(JournalService);
 
   // Only intercept requests to the backend API
   if (!request.url.startsWith(appService.serverUrl)) {
@@ -33,9 +33,10 @@ export const journalInterceptor: HttpInterceptorFn = (
   return next(request).pipe(
     tap(event => {
       if (event instanceof HttpResponse) {
-        // Only log successful requests that modify data
-        if (isDataModifyingRequest(request) && event.status >= 200 && event.status < 300) {
-          logAction(request, event, appService, journalService);
+        // Only log successful requests that modify data and are related to test results
+        if (isDataModifyingRequest(request) && event.status >= 200 && event.status < 300 &&
+            isTestResultsRequest(request)) {
+          //logAction(request, event, appService, journalService);
         }
       }
     })
@@ -48,6 +49,17 @@ export const journalInterceptor: HttpInterceptorFn = (
 function isDataModifyingRequest(request: HttpRequest<unknown>): boolean {
   // Check if the request method indicates data modification
   return ['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method);
+}
+
+/**
+ * Checks if the request is related to test results
+ */
+function isTestResultsRequest(request: HttpRequest<unknown>): boolean {
+  // Check if the request URL contains test-results related paths
+  return request.url.includes('/test-results') ||
+         request.url.includes('/responses') ||
+         request.url.includes('/units') ||
+         request.url.includes('/booklets');
 }
 
 /**
