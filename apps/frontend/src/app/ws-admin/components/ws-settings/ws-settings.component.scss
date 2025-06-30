@@ -4,12 +4,13 @@
   padding: 0 20px;
   width: 100%;
   display: flex;
-  flex-direction: row;
+  flex-direction: column;
   gap: 30px;
 }
 
 .token-settings-card,
-.access-rights-card {
+.access-rights-card,
+.journal-card {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   border-radius: 8px;
   overflow: hidden;
@@ -103,12 +104,12 @@ button mat-icon {
 /* Responsive styles */
 @media (max-width: 992px) {
   .wrapper {
-    flex-direction: column;
     gap: 20px;
   }
 
   .token-settings-card,
-  .access-rights-card {
+  .access-rights-card,
+  .journal-card {
     margin-bottom: 20px;
   }
 }

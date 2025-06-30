@@ -1,0 +1,68 @@
+<div class="journal-container">
+  <div class="journal-header">
+    <button mat-raised-button color="primary" (click)="downloadCsv()">
+      <mat-icon>download</mat-icon> Als CSV herunterladen
+    </button>
+  </div>
+
+  <div class="journal-table-container">
+    @if (loading) {
+      <div class="loading-indicator">
+        <p>Lade Journal-Einträge...</p>
+      </div>
+    } @else if (journalEntries.length === 0) {
+      <div class="no-entries">
+        <p>Keine Journal-Einträge gefunden.</p>
+      </div>
+    } @else {
+      <table mat-table [dataSource]="journalEntries" class="journal-table">
+        <!-- Timestamp Column -->
+        <ng-container matColumnDef="timestamp">
+          <th mat-header-cell *matHeaderCellDef>Zeitstempel</th>
+          <td mat-cell *matCellDef="let entry">{{ entry.timestamp | date:'dd.MM.yyyy HH:mm:ss' }}</td>
+        </ng-container>
+
+        <!-- User ID Column -->
+        <ng-container matColumnDef="userId">
+          <th mat-header-cell *matHeaderCellDef>Benutzer</th>
+          <td mat-cell *matCellDef="let entry">{{ entry.userId }}</td>
+        </ng-container>
+
+        <!-- Action Type Column -->
+        <ng-container matColumnDef="actionType">
+          <th mat-header-cell *matHeaderCellDef>Aktion</th>
+          <td mat-cell *matCellDef="let entry">{{ entry.actionType }}</td>
+        </ng-container>
+
+        <!-- Entity Type Column -->
+        <ng-container matColumnDef="entityType">
+          <th mat-header-cell *matHeaderCellDef>Entitätstyp</th>
+          <td mat-cell *matCellDef="let entry">{{ entry.entityType }}</td>
+        </ng-container>
+
+        <!-- Entity ID Column -->
+        <ng-container matColumnDef="entityId">
+          <th mat-header-cell *matHeaderCellDef>Entitäts-ID</th>
+          <td mat-cell *matCellDef="let entry">{{ entry.entityId }}</td>
+        </ng-container>
+
+        <!-- Details Column -->
+        <ng-container matColumnDef="details">
+          <th mat-header-cell *matHeaderCellDef>Details</th>
+          <td mat-cell *matCellDef="let entry">{{ entry.details  | json }}</td>
+        </ng-container>
+
+        <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+        <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+      </table>
+
+      <mat-paginator
+        [length]="totalEntries"
+        [pageSize]="pageSize"
+        [pageSizeOptions]="[5, 10, 20, 50, 100]"
+        (page)="handlePageEvent($event)"
+        aria-label="Seite auswählen">
+      </mat-paginator>
+    }
+  </div>
+</div>

@@ -14,6 +14,7 @@ import { LogoController } from './logo/logo.controller';
 import { UnitTagsController } from './unit-tags/unit-tags.controller';
 import { UnitNotesController } from './unit-notes/unit-notes.controller';
 import { ResourcePackageController } from './resource-packages/resource-package.controller';
+import { JournalController } from './workspace/journal.controller';
 
 @Module({
   imports: [
@@ -33,7 +34,8 @@ import { ResourcePackageController } from './resource-packages/resource-package.
     LogoController,
     UnitTagsController,
     UnitNotesController,
-    ResourcePackageController
+    ResourcePackageController,
+    JournalController
   ],
   providers: []
 })

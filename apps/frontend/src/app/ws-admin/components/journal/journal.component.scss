@@ -1,0 +1,59 @@
+.journal-container {
+  padding: 16px;
+}
+
+.journal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.journal-table-container {
+  background-color: white;
+  border-radius: 4px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  padding: 16px;
+}
+
+.journal-table {
+  width: 100%;
+}
+
+.loading-indicator, .no-entries {
+  padding: 24px;
+  text-align: center;
+  color: rgba(0, 0, 0, 0.54);
+}
+
+.mat-column-timestamp {
+  width: 180px;
+}
+
+.mat-column-user_id {
+  width: 120px;
+}
+
+.mat-column-action_type {
+  width: 100px;
+}
+
+.mat-column-entity_type {
+  width: 120px;
+}
+
+.mat-column-entity_id {
+  width: 100px;
+}
+
+.mat-column-details {
+  min-width: 200px;
+}
+
+/* Make the table responsive */
+@media (max-width: 768px) {
+  .journal-table {
+    display: block;
+    overflow-x: auto;
+  }
+}
