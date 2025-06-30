@@ -54,12 +54,18 @@ export class JournalController {
     // For now, we'll use a placeholder
     const userId = 'current-user'; // This should be replaced with actual user ID from JWT
 
+    const entityId = parseInt(createJournalEntryDto.entity_id, 10);
+
+    if (Number.isNaN(entityId)) {
+      throw new Error(`Invalid entity_id: "${createJournalEntryDto.entity_id}" is not a valid number`);
+    }
+
     return this.journalService.createEntry(
       userId,
       workspaceId,
       createJournalEntryDto.action_type,
       createJournalEntryDto.entity_type,
-      parseInt(createJournalEntryDto.entity_id, 10),
+      entityId,
       createJournalEntryDto.details ? JSON.parse(createJournalEntryDto.details) : undefined
     );
   }

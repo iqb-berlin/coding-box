@@ -133,13 +133,9 @@ function getEntityId(url: string): string {
       return parts[i];
     }
   }
-
-  return 'unknown';
+  return '0';
 }
 
-/**
- * Sanitizes the request/response body by removing sensitive information
- */
 function sanitizeBody(body: unknown): unknown {
   // Remove sensitive information from the body
   if (!body) return null;
