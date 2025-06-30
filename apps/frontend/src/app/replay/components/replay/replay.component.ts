@@ -300,7 +300,6 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         this.getResponses(workspace, authToken),
         this.getUnit(workspace, authToken)
           .pipe(switchMap(unitFile => {
-            console.log(`UnitFile: ${unitFile}`);
             this.checkUnitId(unitFile);
             let player = '';
             xml2js.parseString(unitFile[0].data, (err:any, result:any) => {

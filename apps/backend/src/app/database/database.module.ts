@@ -36,6 +36,8 @@ import { AuthService } from '../auth/service/auth.service';
 import { UnitTagService } from './services/unit-tag.service';
 import { UnitNoteService } from './services/unit-note.service';
 import { ResourcePackageService } from './services/resource-package.service';
+import { JournalEntry } from './entities/journal-entry.entity';
+import { JournalService } from './services/journal.service';
 
 @Module({
   imports: [
@@ -65,7 +67,7 @@ import { ResourcePackageService } from './services/resource-package.service';
         password: configService.get('POSTGRES_PASSWORD'),
         database: configService.get('POSTGRES_DB'),
         entities: [BookletInfo, Booklet, Session, BookletLog, Unit, UnitLog, UnitLastState, ResponseEntity,
-          User, Workspace, WorkspaceAdmin, FileUpload, WorkspaceUser, ResourcePackage, Logs, Persons, ChunkEntity, BookletLog, Session, UnitLog, UnitTag, UnitNote
+          User, Workspace, WorkspaceAdmin, FileUpload, WorkspaceUser, ResourcePackage, Logs, Persons, ChunkEntity, BookletLog, Session, UnitLog, UnitTag, UnitNote, JournalEntry
         ],
         synchronize: false
       }),
@@ -90,7 +92,8 @@ import { ResourcePackageService } from './services/resource-package.service';
       UnitLastState,
       Session,
       UnitTag,
-      UnitNote
+      UnitNote,
+      JournalEntry
     ])
   ],
   providers: [
@@ -108,7 +111,8 @@ import { ResourcePackageService } from './services/resource-package.service';
     JwtService,
     UnitTagService,
     UnitNoteService,
-    ResourcePackageService
+    ResourcePackageService,
+    JournalService
   ],
   exports: [
     User,
@@ -132,7 +136,8 @@ import { ResourcePackageService } from './services/resource-package.service';
     PersonService,
     AuthService,
     UnitTagService,
-    UnitNoteService
+    UnitNoteService,
+    JournalService
   ]
 })
 export class DatabaseModule {}

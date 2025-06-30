@@ -4,7 +4,11 @@ import {
 } from '@angular/core';
 import { provideRouter } from '@angular/router';
 import { TranslateLoader, TranslateModule } from '@ngx-translate/core';
-import { HTTP_INTERCEPTORS, HttpClient, provideHttpClient } from '@angular/common/http';
+import {
+  HttpClient,
+  provideHttpClient,
+  withInterceptors
+} from '@angular/common/http';
 import { TranslateHttpLoader } from '@ngx-translate/http-loader';
 import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
 import {
@@ -17,7 +21,8 @@ import {
 import { HashLocationStrategy, LocationStrategy } from '@angular/common';
 import { routes } from './app.routes';
 import { environment } from '../environments/environment';
-import { AuthInterceptor } from './interceptors/auth.interceptor';
+import { authInterceptor } from './interceptors/auth.interceptor';
+import { journalInterceptor } from './services/journal-interceptor';
 
 export function createTranslateLoader(http: HttpClient): TranslateHttpLoader {
   return new TranslateHttpLoader(http, './assets/i18n/', '.json');
@@ -55,30 +60,30 @@ export const provideKeycloakAngular = () => provideKeycloak({
 });
 
 export const appConfig: ApplicationConfig = {
-  providers: [provideHttpClient(), {
-    provide: HTTP_INTERCEPTORS,
-    useClass: AuthInterceptor,
-    multi: true
-  },
-  importProvidersFrom(TranslateModule.forRoot({
-    defaultLanguage: 'de',
-    loader: {
-      provide: TranslateLoader,
-      useFactory: createTranslateLoader,
-      deps: [HttpClient]
-    }
-  })),
-  provideKeycloakAngular(),
-  provideRouter(routes),
-  provideAnimationsAsync(),
-  {
-    provide: 'SERVER_URL',
-    useValue: environment.backendUrl
-  },
-  {
-    provide: LocationStrategy,
-    useClass: HashLocationStrategy
-  },
-  provideAppInitializer(() => {
-  })]
+  providers: [
+    provideHttpClient(
+      withInterceptors([journalInterceptor, authInterceptor])
+    ),
+    importProvidersFrom(TranslateModule.forRoot({
+      defaultLanguage: 'de',
+      loader: {
+        provide: TranslateLoader,
+        useFactory: createTranslateLoader,
+        deps: [HttpClient]
+      }
+    })),
+    provideKeycloakAngular(),
+    provideRouter(routes),
+    provideAnimationsAsync(),
+    {
+      provide: 'SERVER_URL',
+      useValue: environment.backendUrl
+    },
+    {
+      provide: LocationStrategy,
+      useClass: HashLocationStrategy
+    },
+    provideAppInitializer(() => {
+    })
+  ]
 };

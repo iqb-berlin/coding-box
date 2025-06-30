@@ -28,7 +28,7 @@ type WorkspaceData = {
   providedIn: 'root'
 })
 export class AppService {
-  private readonly serverUrl = inject<string>('SERVER_URL' as any);
+  public readonly serverUrl = inject<string>('SERVER_URL' as any);
   private http = inject(HttpClient);
   private logoService = inject(LogoService);
 
