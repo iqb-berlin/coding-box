@@ -10,6 +10,7 @@ import { BookletLog } from '../entities/bookletLog.entity';
 import { UnitLog } from '../entities/unitLog.entity';
 import { Session } from '../entities/session.entity';
 import { UnitTagService } from './unit-tag.service';
+import { JournalService } from './journal.service';
 
 @Injectable()
 export class WorkspaceTestResultsService {
@@ -33,7 +34,8 @@ export class WorkspaceTestResultsService {
     @InjectRepository(Session)
     private sessionRepository: Repository<Session>,
     private readonly connection: Connection,
-    private readonly unitTagService: UnitTagService
+    private readonly unitTagService: UnitTagService,
+    private readonly journalService: JournalService
   ) {}
 
   async findPersonTestResults(personId: number, workspaceId: number): Promise<{
@@ -319,6 +321,35 @@ export class WorkspaceTestResultsService {
     const uniqueResponses = mappedResponses.filter(
       (response, index, self) => index === self.findIndex(r => r.id === response.id)
     );
+
+    // Log the operation to the journal
+    try {
+      await this.journalService.createEntry(
+        'system', // userId
+        workspaceId,
+        'view',
+        'unit-response',
+        unit.id,
+        {
+          unitId: unit.id,
+          unitName: unit.name,
+          unitAlias: unit.alias,
+          personId: person.id,
+          personLogin: person.login,
+          personCode: person.code,
+          personGroup: person.group,
+          personSource: person.source,
+          personUploadedAt: person.uploaded_at,
+          bookletId: booklet.id,
+          bookletName: bookletInfo.name,
+          responseCount: uniqueResponses.length,
+          message: 'Unit response viewed'
+        }
+      );
+    } catch (error) {
+      this.logger.error(`Failed to create journal entry for viewing unit response ${unit.id}: ${error.message}`);
+    }
+
     return {
       responses: [{
         id: 'elementCodes',
@@ -389,7 +420,15 @@ export class WorkspaceTestResultsService {
 
       const existingPersons = await manager
         .createQueryBuilder(Persons, 'persons')
-        .select('persons.id')
+        .select([
+          'persons.id',
+          'persons.login',
+          'persons.code',
+          'persons.group',
+          'persons.workspace_id',
+          'persons.uploaded_at',
+          'persons.source'
+        ])
         .where('persons.id IN (:...ids)', { ids })
         .getMany();
 
@@ -410,6 +449,30 @@ export class WorkspaceTestResultsService {
         .execute();
 
       report.deletedPersons = existingIds;
+
+      // Log the operation to the journal
+      for (const person of existingPersons) {
+        try {
+          await this.journalService.createEntry(
+            'system', // userId
+            workspaceId,
+            'delete',
+            'test-person',
+            person.id,
+            {
+              personId: person.id,
+              personLogin: person.login,
+              personCode: person.code,
+              personGroup: person.group,
+              personSource: person.source,
+              personUploadedAt: person.uploaded_at,
+              message: 'Test person deleted'
+            }
+          );
+        } catch (error) {
+          this.logger.error(`Failed to create journal entry for deleting test person ${person.id}: ${error.message}`);
+        }
+      }
 
       return { success: true, report };
     });
@@ -462,6 +525,32 @@ export class WorkspaceTestResultsService {
         .execute();
 
       report.deletedUnit = unitId;
+
+      // Log the operation to the journal
+      try {
+        await this.journalService.createEntry(
+          'system', // userId
+          workspaceId,
+          'delete',
+          'unit',
+          unitId,
+          {
+            unitId,
+            unitName: unit.name,
+            unitAlias: unit.alias,
+            bookletId: unit.booklet?.id,
+            personId: unit.booklet?.person?.id,
+            personLogin: unit.booklet?.person?.login,
+            personCode: unit.booklet?.person?.code,
+            personGroup: unit.booklet?.person?.group,
+            personSource: unit.booklet?.person?.source,
+            personUploadedAt: unit.booklet?.person?.uploaded_at,
+            message: 'Unit deleted'
+          }
+        );
+      } catch (error) {
+        this.logger.error(`Failed to create journal entry for deleting unit ${unitId}: ${error.message}`);
+      }
 
       return { success: true, report };
     });
@@ -516,6 +605,34 @@ export class WorkspaceTestResultsService {
 
       report.deletedResponse = responseId;
 
+      // Log the operation to the journal
+      try {
+        await this.journalService.createEntry(
+          'system', // userId
+          workspaceId,
+          'delete',
+          'response',
+          responseId,
+          {
+            responseId,
+            unitId: response.unit.id,
+            unitName: response.unit.name,
+            variableId: response.variableid,
+            value: response.value,
+            bookletId: response.unit.booklet?.id,
+            personId: response.unit.booklet?.person?.id,
+            personLogin: response.unit.booklet?.person?.login,
+            personCode: response.unit.booklet?.person?.code,
+            personGroup: response.unit.booklet?.person?.group,
+            personSource: response.unit.booklet?.person?.source,
+            personUploadedAt: response.unit.booklet?.person?.uploaded_at,
+            message: 'Response deleted'
+          }
+        );
+      } catch (error) {
+        this.logger.error(`Failed to create journal entry for deleting response ${responseId}: ${error.message}`);
+      }
+
       return { success: true, report };
     });
   }
@@ -566,6 +683,29 @@ export class WorkspaceTestResultsService {
         .execute();
 
       report.deletedBooklet = bookletId;
+
+      // Log the operation to the journal
+      try {
+        await this.journalService.createEntry(
+          'system', // userId
+          workspaceId,
+          'delete',
+          'booklet',
+          bookletId,
+          {
+            bookletId,
+            personId: booklet.personid,
+            personLogin: booklet.person?.login || 'Unknown',
+            personCode: booklet.person?.code,
+            personGroup: booklet.person?.group,
+            personSource: booklet.person?.source,
+            personUploadedAt: booklet.person?.uploaded_at,
+            message: 'Booklet deleted'
+          }
+        );
+      } catch (error) {
+        this.logger.error(`Failed to create journal entry for deleting booklet ${bookletId}: ${error.message}`);
+      }
 
       return { success: true, report };
     });
