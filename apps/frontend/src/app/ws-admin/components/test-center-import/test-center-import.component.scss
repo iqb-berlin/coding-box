@@ -374,6 +374,12 @@
       }
     }
 
+    .status-badges {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
     .status-badge {
       display: flex;
       align-items: center;
@@ -382,6 +388,7 @@
       border-radius: 12px;
       font-size: 12px;
       font-weight: 500;
+      width: fit-content;
 
       &.existing {
         background-color: #e8f5e9;
@@ -401,6 +408,18 @@
 
         mat-icon {
           color: #ff8f00;
+          font-size: 16px;
+          height: 16px;
+          width: 16px;
+        }
+      }
+
+      &.logs {
+        background-color: #e3f2fd;
+        color: #1976d2;
+
+        mat-icon {
+          color: #1976d2;
           font-size: 16px;
           height: 16px;
           width: 16px;

@@ -44,6 +44,7 @@ import { LogDialogComponent } from '../booklet-log-dialog/log-dialog.component';
 import { TagDialogComponent } from '../tag-dialog/tag-dialog.component';
 import { NoteDialogComponent } from '../note-dialog/note-dialog.component';
 import { UnitSearchDialogComponent } from '../unit-search-dialog/unit-search-dialog.component';
+import { ConfirmDialogComponent, ConfirmDialogData } from '../../../shared/dialogs/confirm-dialog.component';
 import { UnitTagDto } from '../../../../../../../api-dto/unit-tags/unit-tag.dto';
 import { CreateUnitTagDto } from '../../../../../../../api-dto/unit-tags/create-unit-tag.dto';
 import { UpdateUnitTagDto } from '../../../../../../../api-dto/unit-tags/update-unit-tag.dto';
@@ -777,18 +778,35 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     if (targetElement) {
       const inputElement = targetElement as HTMLInputElement;
       if (inputElement.files && inputElement.files.length > 0) {
-        this.isLoading = true;
-        this.isUploadingResults = true;
-        this.backendService.uploadTestResults(
-          this.appService.selectedWorkspaceId,
-          inputElement.files,
-          resultType
-        ).subscribe(() => {
-          setTimeout(() => {
-            this.createTestResultsList(this.pageIndex, this.pageSize, this.getCurrentSearchText());
-          }, 1000);
-          this.isLoading = false;
-          this.isUploadingResults = false;
+        const dialogRef = this.dialog.open(ConfirmDialogComponent, {
+          width: '400px',
+          data: <ConfirmDialogData>{
+            title: resultType === 'logs' ? 'Logs überschreiben' : 'Antworten überschreiben',
+            content: resultType === 'logs' ?
+              'Möchten Sie vorhandene Logs überschreiben, falls diese bereits existieren?' :
+              'Möchten Sie vorhandene Antworten überschreiben, falls diese bereits existieren?',
+            confirmButtonLabel: 'Überschreiben',
+            showCancel: true
+          }
+        });
+
+        dialogRef.afterClosed().subscribe(overwriteExisting => {
+          if (overwriteExisting !== undefined) {
+            this.isLoading = true;
+            this.isUploadingResults = true;
+            this.backendService.uploadTestResults(
+              this.appService.selectedWorkspaceId,
+              inputElement.files,
+              resultType,
+              overwriteExisting // Pass the user's choice
+            ).subscribe(() => {
+              setTimeout(() => {
+                this.createTestResultsList(this.pageIndex, this.pageSize, this.getCurrentSearchText());
+              }, 1000);
+              this.isLoading = false;
+              this.isUploadingResults = false;
+            });
+          }
         });
       }
     }

@@ -385,14 +385,20 @@ export class BackendService {
     });
   }
 
-  uploadTestResults(workspaceId: number, files: FileList | null, resultType: 'logs' | 'responses'): Observable<number> {
+  uploadTestResults(
+    workspaceId: number,
+    files: FileList | null,
+    resultType: 'logs' | 'responses',
+    overwriteExisting: boolean = true
+  ): Observable<number> {
     const formData = new FormData();
     if (files) {
       for (let i = 0; i < files.length; i++) {
         formData.append('files', files[i]);
       }
     }
-    return this.http.post<never>(`${this.serverUrl}admin/workspace/${workspaceId}/upload/results/${resultType}`, formData, {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/upload/results/${resultType}?overwriteExisting=${overwriteExisting}`;
+    return this.http.post<never>(url, formData, {
       headers: this.authHeader
     });
   }
@@ -585,7 +591,8 @@ export class BackendService {
                        url:string,
                        token:string,
                        importOptions:ImportOptions,
-                       testGroups: string[]
+                       testGroups: string[],
+                       overwriteExistingLogs:boolean = false
   ): Observable<Result> {
     const {
       units, responses, definitions, player, codings, logs, testTakers, booklets
@@ -604,7 +611,8 @@ export class BackendService {
       .set('token', token)
       .set('testTakers', String(testTakers))
       .set('booklets', String(booklets))
-      .set('testGroups', String(testGroups.join(',')));
+      .set('testGroups', String(testGroups.join(',')))
+      .set('overwriteExistingLogs', String(overwriteExistingLogs));
 
     return this.http
       .get<Result>(`${this.serverUrl}admin/workspace/${workspace_id}/importWorkspaceFiles`, { headers: this.authHeader, params })
