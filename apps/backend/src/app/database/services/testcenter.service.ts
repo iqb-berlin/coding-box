@@ -114,13 +114,13 @@ export class TestcenterService {
           headers: headersRequest
         }
       );
-
       const existingGroups = await this.personService.getWorkspaceGroups(Number(workspace_id));
+      const groupsWithLogs = await this.personService.getGroupsWithBookletLogs(Number(workspace_id));
 
-      // Mark test groups that already exist in the database
       const testGroups = response.data.map(group => ({
         ...group,
-        existsInDatabase: existingGroups.includes(group.groupName)
+        existsInDatabase: existingGroups.includes(group.groupName),
+        hasBookletLogs: groupsWithLogs.get(group.groupName) || false
       }));
 
       return testGroups;
@@ -186,12 +186,12 @@ export class TestcenterService {
     server: string,
     url: string,
     authToken: string,
-    testGroups: string
+    testGroups: string,
+    overwriteExistingLogs: boolean = true
   ): Promise<Promise<void>[]> {
     logger.log('Import logs data from TC');
     const headersRequest = this.createHeaders(authToken);
     const logsChunks = this.createChunks(testGroups.split(','), 2);
-
     const logsPromises = logsChunks.map(async chunk => {
       const logsUrl = url ?
         `${url}/api/workspace/${tc_workspace}/report/log?dataIds=${chunk.join(',')}` :
@@ -204,10 +204,18 @@ export class TestcenterService {
         const { bookletLogs, unitLogs } = this.separateLogsByType(logData);
 
         const persons = await this.personService.createPersonList(logData, Number(workspace_id));
-        // @ts-expect-error - Method signature mismatch between PersonService and expected types
-        await this.personService.processPersonLogs(persons, unitLogs, bookletLogs);
+
+        // Process logs with overwrite flag
+        const result = await this.personService.processPersonLogs(
+          persons,
+          unitLogs,
+          bookletLogs,
+          overwriteExistingLogs
+        );
+
+        logger.log(`Logs import result: ${JSON.stringify(result)}`);
       } catch (error) {
-        logger.error('Error processing logs:');
+        logger.error(`Error processing logs: ${error.message}`);
         throw error;
       }
     });
@@ -297,12 +305,6 @@ export class TestcenterService {
     return filePromises;
   }
 
-  /**
-   * Creates database entries from fetched files
-   * @param fetchedFiles The fetched files
-   * @param workspace_id The workspace ID
-   * @returns An array of database entries
-   */
   private createDatabaseEntries(
     fetchedFiles: Array<{
       data: File;
@@ -330,7 +332,8 @@ export class TestcenterService {
     url: string,
     authToken: string,
     importOptions: ImportOptions,
-    testGroups: string
+    testGroups: string,
+    overwriteExistingLogs: boolean = true
   ): Promise<Result> {
     const { responses, logs } = importOptions;
     const result: Result = {
@@ -366,7 +369,7 @@ export class TestcenterService {
 
       if (logs === 'true') {
         const logsPromises = await this.importLogs(
-          workspace_id, tc_workspace, server, url, authToken, testGroups
+          workspace_id, tc_workspace, server, url, authToken, testGroups, overwriteExistingLogs
         );
         promises.push(...logsPromises);
         result.logs = logsPromises.length;

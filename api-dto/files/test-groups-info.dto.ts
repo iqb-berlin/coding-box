@@ -35,4 +35,8 @@ export class TestGroupsInfoDto {
   @IsBoolean()
   @IsOptional()
     existsInDatabase?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+    hasBookletLogs?: boolean;
 }
