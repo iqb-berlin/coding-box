@@ -86,7 +86,8 @@ export type Chunk = {
 };
 
 export type TcMergeSubForms = {
-  id: string
+  id: string,
+  responses: TcMergeResponse[],
 };
 
 export type TcMergeResponse = {
