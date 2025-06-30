@@ -50,7 +50,11 @@ export type Result = {
   success: boolean,
   testFiles: number,
   responses: number,
-  logs: number
+  logs: number,
+  booklets: number,
+  units: number,
+  persons: number,
+  importedGroups: string
 };
 
 @Injectable()
@@ -333,7 +337,11 @@ export class TestcenterService {
       success: false,
       testFiles: 0,
       responses: 0,
-      logs: 0
+      logs: 0,
+      booklets: 0,
+      units: 0,
+      persons: 0,
+      importedGroups: testGroups
     };
 
     const promises: Promise<void>[] = [];
@@ -345,6 +353,15 @@ export class TestcenterService {
         );
         promises.push(...responsePromises);
         result.responses = responsePromises.length;
+
+        try {
+          const stats = await this.personService.getImportStatistics(Number(workspace_id));
+          result.persons = stats.persons || 0;
+          result.booklets = stats.booklets || 0;
+          result.units = stats.units || 0;
+        } catch (statsError) {
+          logger.warn(`Could not get import statistics: ${statsError.message}`);
+        }
       }
 
       if (logs === 'true') {

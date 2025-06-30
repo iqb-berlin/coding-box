@@ -70,7 +70,11 @@ export type Result = {
   success: boolean,
   testFiles: number,
   responses: number,
-  logs: number
+  logs: number,
+  booklets: number,
+  units: number,
+  persons: number,
+  importedGroups: string[]
 };
 
 @Component({
@@ -257,26 +261,56 @@ export class TestCenterImportComponent {
 
   goBackToOptions(): void {
     this.showTestGroups = false;
-    this.selectedRows = []; // Clear selected rows when going back
+    this.selectedRows = [];
   }
 
   startNewImport(): void {
-    // Reset state to allow for a new import
     this.uploadData = {} as Result;
     this.showTestGroups = false;
     this.selectedRows = [];
 
-    // If we're importing test results, go back to test groups selection
     if (this.data.importType === 'testResults') {
       this.getTestGroups();
     }
   }
 
   goBackToTestGroups(): void {
-    // Reset upload data and selected rows, but keep test groups
     this.uploadData = {} as Result;
     this.selectedRows = [];
     this.showTestGroups = true;
+  }
+
+  /**
+   * Refreshes the test groups list to update status after import
+   */
+  refreshTestGroups(): void {
+    const formValues = {
+      testCenter: this.loginForm.get('testCenter')?.value,
+      workspace: this.importFilesForm.get('workspace')?.value,
+      testCenterIndividual: this.loginForm.get('testCenterIndividual')?.value || ''
+    };
+
+    const tempIsUploadingTestResults = this.isUploadingTestResults;
+    this.isUploadingTestResults = true;
+
+    this.backendService
+      .importTestcenterGroups(
+        this.appService.selectedWorkspaceId,
+        formValues.workspace,
+        formValues.testCenter,
+        formValues.testCenterIndividual,
+        this.authToken
+      )
+      .subscribe({
+        next: response => {
+          this.isUploadingTestResults = tempIsUploadingTestResults;
+          this.workspaceAdminService.setTestGroups(response);
+          this.testGroups = response;
+        },
+        error: () => {
+          this.isUploadingTestResults = tempIsUploadingTestResults;
+        }
+      });
   }
 
   getTestData(): void {
@@ -298,8 +332,8 @@ export class TestCenterImportComponent {
 
     this.uploadData = {} as Result;
     this.isUploadingTestFiles = true;
-    // Only set isUploadingTestResults to true when importing test results
     this.isUploadingTestResults = this.data.importType === 'testResults';
+    const selectedGroupNames = this.selectedRows.map(group => group.groupName);
 
     this.backendService
       .importWorkspaceFiles(
@@ -309,17 +343,31 @@ export class TestCenterImportComponent {
         formValues.testCenterIndividual,
         this.authToken,
         formValues.importOptions,
-        this.selectedRows.map(group => group.groupName)
+        selectedGroupNames
       )
       .subscribe({
         next: data => {
           this.uploadData = data;
           this.isUploadingTestFiles = false;
           this.isUploadingTestResults = false;
-          // Reset selected rows to allow for another import
+
+          if (this.data.importType === 'testResults') {
+            this.refreshTestGroups();
+          }
+
           this.selectedRows = [];
         },
         error: () => {
+          this.uploadData = {
+            success: false,
+            testFiles: 0,
+            responses: 0,
+            logs: 0,
+            booklets: 0,
+            units: 0,
+            persons: 0,
+            importedGroups: selectedGroupNames
+          };
           this.isUploadingTestFiles = false;
           this.isUploadingTestResults = false;
         }

@@ -72,6 +72,52 @@ export class PersonService {
     }
   }
 
+  /**
+   * Get statistics about the import process for a workspace
+   * @param workspaceId The ID of the workspace
+   * @returns Statistics about the import process
+   */
+  async getImportStatistics(workspaceId: number): Promise<{
+    persons: number;
+    booklets: number;
+    units: number;
+  }> {
+    try {
+      // Count persons in the workspace
+      const personsCount = await this.personsRepository.count({
+        where: { workspace_id: workspaceId }
+      });
+
+      // Count booklets in the workspace
+      const bookletsCount = await this.bookletRepository
+        .createQueryBuilder('booklet')
+        .innerJoin('booklet.person', 'person')
+        .where('person.workspace_id = :workspaceId', { workspaceId })
+        .getCount();
+
+      // Count units in the workspace
+      const unitsCount = await this.unitRepository
+        .createQueryBuilder('unit')
+        .innerJoin('unit.booklet', 'booklet')
+        .innerJoin('booklet.person', 'person')
+        .where('person.workspace_id = :workspaceId', { workspaceId })
+        .getCount();
+
+      return {
+        persons: personsCount,
+        booklets: bookletsCount,
+        units: unitsCount
+      };
+    } catch (error) {
+      this.logger.error(`Error fetching import statistics: ${error.message}`);
+      return {
+        persons: 0,
+        booklets: 0,
+        units: 0
+      };
+    }
+  }
+
   async createPersonList(rows: Array<{ groupname: string; loginname: string; code: string }>, workspace_id: number): Promise<Person[]> {
     if (!Array.isArray(rows)) {
       this.logger.error('Invalid input: rows must be an array');
@@ -304,7 +350,7 @@ export class PersonService {
       });
   }
 
-  private extractVariablesFromSubforms(subforms: any[]): Set<string> {
+  private extractVariablesFromSubforms(subforms: any): Set<string> {
     const variables = new Set<string>();
     subforms.forEach(subform => subform.responses.forEach(response => variables.add(response.id))
     );

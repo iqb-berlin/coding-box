@@ -610,7 +610,14 @@ export class BackendService {
       .get<Result>(`${this.serverUrl}admin/workspace/${workspace_id}/importWorkspaceFiles`, { headers: this.authHeader, params })
       .pipe(
         catchError(() => of({
-          success: false, testFiles: 0, responses: 0, logs: 0
+          success: false,
+          testFiles: 0,
+          responses: 0,
+          logs: 0,
+          booklets: 0,
+          units: 0,
+          persons: 0,
+          importedGroups: []
         }))
       );
   }
