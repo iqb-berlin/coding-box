@@ -18,7 +18,7 @@ export const journalInterceptor: HttpInterceptorFn = (
   next: HttpHandlerFn
 ): Observable<HttpEvent<unknown>> => {
   const appService = inject(AppService);
-  //const journalService = inject(JournalService);
+  // const journalService = inject(JournalService);
 
   // Only intercept requests to the backend API
   if (!request.url.startsWith(appService.serverUrl)) {
@@ -36,7 +36,7 @@ export const journalInterceptor: HttpInterceptorFn = (
         // Only log successful requests that modify data and are related to test results
         if (isDataModifyingRequest(request) && event.status >= 200 && event.status < 300 &&
             isTestResultsRequest(request)) {
-          //logAction(request, event, appService, journalService);
+          // logAction(request, event, appService, journalService);
         }
       }
     })

@@ -322,34 +322,6 @@ export class WorkspaceTestResultsService {
       (response, index, self) => index === self.findIndex(r => r.id === response.id)
     );
 
-    // Log the operation to the journal
-    try {
-      await this.journalService.createEntry(
-        'system', // userId
-        workspaceId,
-        'view',
-        'unit-response',
-        unit.id,
-        {
-          unitId: unit.id,
-          unitName: unit.name,
-          unitAlias: unit.alias,
-          personId: person.id,
-          personLogin: person.login,
-          personCode: person.code,
-          personGroup: person.group,
-          personSource: person.source,
-          personUploadedAt: person.uploaded_at,
-          bookletId: booklet.id,
-          bookletName: bookletInfo.name,
-          responseCount: uniqueResponses.length,
-          message: 'Unit response viewed'
-        }
-      );
-    } catch (error) {
-      this.logger.error(`Failed to create journal entry for viewing unit response ${unit.id}: ${error.message}`);
-    }
-
     return {
       responses: [{
         id: 'elementCodes',
