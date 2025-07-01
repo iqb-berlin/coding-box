@@ -237,6 +237,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
         this.selectedBooklet = row.group;
         const uniqueBooklets = this.filterUniqueBooklets(booklets);
         this.booklets = uniqueBooklets;
+        this.sortBooklets();
         this.sortBookletUnits();
         this.loadAllUnitTags();
       });
@@ -252,6 +253,17 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     });
 
     return Array.from(uniqueBookletsMap.values());
+  }
+
+  sortBooklets(): void {
+    if (!this.booklets || this.booklets.length === 0) {
+      return;
+    }
+    this.booklets.sort((a, b) => {
+      const nameA = a.name || '';
+      const nameB = b.name || '';
+      return nameA.localeCompare(nameB);
+    });
   }
 
   sortBookletUnits(): void {
