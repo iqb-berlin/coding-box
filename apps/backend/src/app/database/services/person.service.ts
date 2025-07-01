@@ -662,13 +662,20 @@ export class PersonService {
       let totalResponsesSaved = 0;
       for (const subform of subforms) {
         if (subform.responses && subform.responses.length > 0) {
-          const responseEntries = subform.responses.map(response => ({
-            unitid: Number(savedUnit.id),
-            variableid: response.id,
-            status: response.status,
-            value: response.value,
-            subform: subform.id
-          }));
+          const responseEntries = subform.responses.map(response => {
+            let value = response.value;
+            if (typeof value === 'string' && value.startsWith('{') && value.endsWith('}')) {
+              value = `[${value.substring(1, value.length - 1)}]`;
+            }
+
+            return {
+              unitid: Number(savedUnit.id),
+              variableid: response.id,
+              status: response.status,
+              value: value,
+              subform: subform.id
+            };
+          });
 
           if (responseEntries.length > 0) {
             const BATCH_SIZE = 1000;
