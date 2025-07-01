@@ -235,10 +235,23 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     this.backendService.getPersonTestResults(this.appService.selectedWorkspaceId, row.id)
       .subscribe(booklets => {
         this.selectedBooklet = row.group;
-        this.booklets = booklets;
+        const uniqueBooklets = this.filterUniqueBooklets(booklets);
+        this.booklets = uniqueBooklets;
         this.sortBookletUnits();
         this.loadAllUnitTags();
       });
+  }
+
+  filterUniqueBooklets(booklets: Booklet[]): Booklet[] {
+    const uniqueBookletsMap = new Map<string, Booklet>();
+
+    booklets.forEach(booklet => {
+      if (!uniqueBookletsMap.has(booklet.name)) {
+        uniqueBookletsMap.set(booklet.name, booklet);
+      }
+    });
+
+    return Array.from(uniqueBookletsMap.values());
   }
 
   sortBookletUnits(): void {
@@ -258,18 +271,10 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     });
   }
 
-  /**
-   * Get tags for a specific unit
-   * @param unitId The ID of the unit
-   * @returns An array of tags for the unit, or an empty array if no tags are found
-   */
   getUnitTags(unitId: number): UnitTagDto[] {
     return this.unitTagsMap.get(unitId) || [];
   }
 
-  /**
-   * Load tags for all units in all booklets from the response
-   */
   loadAllUnitTags(): void {
     if (!this.booklets || this.booklets.length === 0) {
       return;
