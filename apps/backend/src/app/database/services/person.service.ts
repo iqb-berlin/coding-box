@@ -416,7 +416,7 @@ export class PersonService {
       subforms,
       chunks: [
         {
-          id: 'elementCodes',
+          id: parsedResponses[0]?.id || '',
           type: parsedResponses[0]?.responseType || '',
           ts: parsedResponses[0]?.ts || 0,
           variables: Array.from(variables)
@@ -540,7 +540,6 @@ export class PersonService {
       );
     }
 
-    // Process units if they exist
     if (Array.isArray(booklet.units) && booklet.units.length > 0) {
       // Process units in batches to improve performance
       const batchSize = 10;
