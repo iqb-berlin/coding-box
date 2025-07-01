@@ -234,10 +234,6 @@ export class UnitSearchDialogComponent implements OnInit {
     this.dialogRef.close();
   }
 
-  /**
-   * Replays a unit in a new tab
-   * @param item The unit or response to replay
-   */
   replayUnit(item: UnitSearchResult | ResponseSearchResult): void {
     this.appService
       .createToken(this.appService.selectedWorkspaceId, this.appService.loggedUser?.sub || '', 1)
@@ -248,17 +244,13 @@ export class UnitSearchDialogComponent implements OnInit {
         const url = this.router
           .serializeUrl(
             this.router.createUrlTree(
-              [`replay/${item.personLogin}@${item.personCode}@${item.bookletId}/${item.unitAlias}/0/0`],
+              [`replay/${item.personLogin}@${item.personCode}@${item.bookletName}/${item.unitAlias}/0/0`],
               { queryParams: queryParams })
           );
         window.open(`#/${url}`, '_blank');
       });
   }
 
-  /**
-   * Deletes a unit and all its associated responses
-   * @param unit The unit to delete
-   */
   deleteUnit(unit: UnitSearchResult): void {
     const dialogRef = this.dialog.open(ConfirmDialogComponent, {
       width: '400px',
@@ -308,10 +300,6 @@ export class UnitSearchDialogComponent implements OnInit {
     });
   }
 
-  /**
-   * Deletes a response
-   * @param response The response to delete
-   */
   deleteResponse(response: ResponseSearchResult): void {
     const dialogRef = this.dialog.open(ConfirmDialogComponent, {
       width: '400px',
@@ -333,11 +321,8 @@ export class UnitSearchDialogComponent implements OnInit {
           next: apiResponse => {
             this.isLoading = false;
             if (apiResponse.success) {
-              // Remove the response from the results
               this.responseSearchResults = this.responseSearchResults.filter(r => r.responseId !== response.responseId);
-              // Update total count
               this.totalItems -= 1;
-              // Show success message
               this.snackBar.open(
                 `Antwort erfolgreich gelöscht. Antwort ID: ${apiResponse.report.deletedResponse}`,
                 'Schließen',
@@ -365,9 +350,6 @@ export class UnitSearchDialogComponent implements OnInit {
     });
   }
 
-  /**
-   * Deletes all filtered units
-   */
   deleteAllUnits(): void {
     if (this.unitSearchResults.length === 0) {
       this.snackBar.open(
@@ -401,19 +383,14 @@ export class UnitSearchDialogComponent implements OnInit {
             this.isLoading = false;
             if (response.success) {
               const deletedCount = response.report.deletedUnits.length;
-
-              // Clear the search results
               this.unitSearchResults = [];
               this.totalItems = 0;
-
-              // Show success message
               this.snackBar.open(
                 `${deletedCount} Aufgaben erfolgreich gelöscht.`,
                 'Schließen',
                 { duration: 3000 }
               );
             } else {
-              // Show error message
               this.snackBar.open(
                 `Fehler beim Löschen der Aufgaben: ${response.report.warnings.join(', ')}`,
                 'Fehler',
@@ -434,9 +411,6 @@ export class UnitSearchDialogComponent implements OnInit {
     });
   }
 
-  /**
-   * Deletes all filtered responses
-   */
   deleteAllResponses(): void {
     if (this.responseSearchResults.length === 0) {
       this.snackBar.open(

@@ -3,7 +3,7 @@ import { TranslateModule } from '@ngx-translate/core';
 import { MatButton } from '@angular/material/button';
 import {
   MatDialogContent, MatDialogActions, MatDialogClose,
-  MAT_DIALOG_DATA
+  MAT_DIALOG_DATA, MatDialog
 } from '@angular/material/dialog';
 import { MatFormField, MatLabel } from '@angular/material/form-field';
 import {
@@ -15,17 +15,20 @@ import { MatOption, MatSelect } from '@angular/material/select';
 import { MatCheckbox } from '@angular/material/checkbox';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { MatIcon } from '@angular/material/icon';
-import { catchError, of } from 'rxjs';
+import { catchError, firstValueFrom, of } from 'rxjs';
 import { DatePipe } from '@angular/common';
 import {
   MatCell,
   MatCellDef, MatColumnDef, MatHeaderCell, MatHeaderCellDef, MatHeaderRow, MatHeaderRowDef, MatRow, MatRowDef, MatTable
 } from '@angular/material/table';
 // eslint-disable-next-line import/no-cycle
+import { MatTooltip } from '@angular/material/tooltip';
+// eslint-disable-next-line import/no-cycle
 import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
 import { WorkspaceAdminService } from '../../services/workspace-admin.service';
 import { TestGroupsInfoDto } from '../../../../../../../api-dto/files/test-groups-info.dto';
+import { ConfirmDialogComponent, ConfirmDialogData } from '../../../shared/dialogs/confirm-dialog.component';
 
 export type ServerResponse = {
   token: string,
@@ -70,14 +73,25 @@ export type Result = {
   success: boolean,
   testFiles: number,
   responses: number,
-  logs: number
+  logs: number,
+  booklets: number,
+  units: number,
+  persons: number,
+  importedGroups: string[]
 };
+
+export interface ImportFormValues {
+  testCenter: number;
+  workspace: string;
+  testCenterIndividual: string;
+  importOptions: ImportOptions;
+}
 
 @Component({
   selector: 'coding-box-test-center-import',
   templateUrl: 'test-center-import.component.html',
   styleUrls: ['./test-center-import.component.scss'],
-  imports: [MatDialogContent, MatLabel, MatDialogActions, MatButton, MatDialogClose, TranslateModule, MatFormField, ReactiveFormsModule, MatInput, MatSelect, MatOption, MatCheckbox, MatProgressSpinner, MatIcon, FormsModule, DatePipe, MatTable, MatHeaderCellDef, MatCellDef, MatHeaderRowDef, MatRowDef, MatColumnDef, MatHeaderCell, MatCell, MatHeaderRow, MatRow]
+  imports: [MatDialogContent, MatLabel, MatDialogActions, MatButton, MatDialogClose, TranslateModule, MatFormField, ReactiveFormsModule, MatInput, MatSelect, MatOption, MatCheckbox, MatProgressSpinner, MatIcon, FormsModule, DatePipe, MatTable, MatHeaderCellDef, MatCellDef, MatHeaderRowDef, MatRowDef, MatColumnDef, MatHeaderCell, MatCell, MatHeaderRow, MatRow, MatTooltip]
 })
 
 export class TestCenterImportComponent {
@@ -89,6 +103,7 @@ export class TestCenterImportComponent {
   private workspaceAdminService = inject(WorkspaceAdminService);
   private fb = inject(UntypedFormBuilder);
   private appService = inject(AppService);
+  private dialog = inject(MatDialog);
 
   testCenters: Testcenter[] = [{
     id: 1,
@@ -115,6 +130,7 @@ export class TestCenterImportComponent {
     'select',
     'groupName',
     'groupLabel',
+    'status',
     'bookletsStarted',
     'numUnitsMin',
     'numUnitsMax',
@@ -256,26 +272,90 @@ export class TestCenterImportComponent {
 
   goBackToOptions(): void {
     this.showTestGroups = false;
-    this.selectedRows = []; // Clear selected rows when going back
+    this.selectedRows = [];
   }
 
   startNewImport(): void {
-    // Reset state to allow for a new import
     this.uploadData = {} as Result;
     this.showTestGroups = false;
     this.selectedRows = [];
 
-    // If we're importing test results, go back to test groups selection
     if (this.data.importType === 'testResults') {
       this.getTestGroups();
     }
   }
 
   goBackToTestGroups(): void {
-    // Reset upload data and selected rows, but keep test groups
     this.uploadData = {} as Result;
     this.selectedRows = [];
     this.showTestGroups = true;
+  }
+
+  /**
+   * Refreshes the test groups list to update status after import
+   */
+  refreshTestGroups(): void {
+    const formValues = {
+      testCenter: this.loginForm.get('testCenter')?.value,
+      workspace: this.importFilesForm.get('workspace')?.value,
+      testCenterIndividual: this.loginForm.get('testCenterIndividual')?.value || ''
+    };
+
+    const tempIsUploadingTestResults = this.isUploadingTestResults;
+    this.isUploadingTestResults = true;
+
+    this.backendService
+      .importTestcenterGroups(
+        this.appService.selectedWorkspaceId,
+        formValues.workspace,
+        formValues.testCenter,
+        formValues.testCenterIndividual,
+        this.authToken
+      )
+      .subscribe({
+        next: response => {
+          this.isUploadingTestResults = tempIsUploadingTestResults;
+          this.workspaceAdminService.setTestGroups(response);
+          this.testGroups = response;
+        },
+        error: () => {
+          this.isUploadingTestResults = tempIsUploadingTestResults;
+        }
+      });
+  }
+
+  /**
+   * Check if any selected groups have logs
+   * @returns True if any selected group has logs
+   */
+  private hasSelectedGroupsWithLogs(): boolean {
+    return this.selectedRows.some(group => group.hasBookletLogs);
+  }
+
+  /**
+   * Show confirmation dialog for overwriting logs
+   * @returns Promise that resolves to true if user confirms, false otherwise
+   */
+  private async confirmOverwriteLogs(): Promise<boolean> {
+    // Count groups with logs
+    const groupsWithLogs = this.selectedRows.filter(group => group.hasBookletLogs);
+
+    if (groupsWithLogs.length === 0) {
+      return true; // No confirmation needed
+    }
+
+    const dialogRef = this.dialog.open(ConfirmDialogComponent, {
+      width: '400px',
+      data: <ConfirmDialogData>{
+        title: 'Logs überschreiben',
+        content: `${groupsWithLogs.length} ausgewählte Testgruppe(n) haben bereits Booklet-Logs in der Datenbank. ` +
+                'Möchten Sie die vorhandenen Logs überschreiben?',
+        confirmButtonLabel: 'Überschreiben',
+        showCancel: true
+      }
+    });
+
+    return firstValueFrom(dialogRef.afterClosed());
   }
 
   getTestData(): void {
@@ -297,28 +377,76 @@ export class TestCenterImportComponent {
 
     this.uploadData = {} as Result;
     this.isUploadingTestFiles = true;
-    // Only set isUploadingTestResults to true when importing test results
     this.isUploadingTestResults = this.data.importType === 'testResults';
+    const selectedGroupNames = this.selectedRows.map(group => group.groupName);
 
+    const needsConfirmation = formValues.importOptions.logs && this.hasSelectedGroupsWithLogs();
+
+    if (needsConfirmation) {
+      this.isUploadingTestFiles = false;
+      this.isUploadingTestResults = false;
+
+      this.confirmOverwriteLogs().then(confirmed => {
+        if (confirmed) {
+          this.isUploadingTestFiles = true;
+          this.isUploadingTestResults = this.data.importType === 'testResults';
+          this.performImport(formValues, selectedGroupNames, true);
+        } else {
+          this.isUploadingTestFiles = true;
+          this.isUploadingTestResults = this.data.importType === 'testResults';
+          this.performImport(formValues, selectedGroupNames, false);
+        }
+      });
+    } else {
+      this.performImport(formValues, selectedGroupNames, true);
+    }
+  }
+
+  /**
+   * Perform the actual import
+   * @param formValues The form values
+   * @param selectedGroupNames The selected group names
+   * @param overwriteExistingLogs Whether to overwrite existing logs
+   */
+  private performImport(
+    formValues: ImportFormValues,
+    selectedGroupNames: string[],
+    overwriteExistingLogs: boolean
+  ): void {
     this.backendService
       .importWorkspaceFiles(
         this.appService.selectedWorkspaceId,
         formValues.workspace,
-        formValues.testCenter,
+        formValues.testCenter.toString(),
         formValues.testCenterIndividual,
         this.authToken,
         formValues.importOptions,
-        this.selectedRows.map(group => group.groupName)
+        selectedGroupNames,
+        overwriteExistingLogs
       )
       .subscribe({
         next: data => {
           this.uploadData = data;
           this.isUploadingTestFiles = false;
           this.isUploadingTestResults = false;
-          // Reset selected rows to allow for another import
+
+          if (this.data.importType === 'testResults') {
+            this.refreshTestGroups();
+          }
+
           this.selectedRows = [];
         },
         error: () => {
+          this.uploadData = {
+            success: false,
+            testFiles: 0,
+            responses: 0,
+            logs: 0,
+            booklets: 0,
+            units: 0,
+            persons: 0,
+            importedGroups: selectedGroupNames
+          };
           this.isUploadingTestFiles = false;
           this.isUploadingTestResults = false;
         }

@@ -73,8 +73,7 @@ import { ContentDialogComponent } from '../../../shared/dialogs/content-dialog/c
     MatLabel,
     MatSelect,
     MatOption,
-    MatPaginator,
-    ContentDialogComponent
+    MatPaginator
   ]
 })
 export class TestFilesComponent implements OnInit, OnDestroy {

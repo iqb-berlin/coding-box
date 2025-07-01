@@ -1,35 +1,36 @@
-import { Injectable, inject } from '@angular/core';
+import { inject } from '@angular/core';
 import {
-  HttpRequest, HttpHandler, HttpEvent, HttpInterceptor, HttpHeaders
+  HttpEvent, HttpHandlerFn, HttpHeaders, HttpInterceptorFn, HttpRequest
 } from '@angular/common/http';
 import { finalize, Observable, tap } from 'rxjs';
 import { AppHttpError } from './app-http-error.class';
 import { AppService } from '../services/app.service';
 
-@Injectable({
-  providedIn: 'root'
-})
-export class AuthInterceptor implements HttpInterceptor {
-  private appService = inject(AppService);
-  readonly appVersion = inject<string>('APP_VERSION' as any);
-  intercept(req: HttpRequest<unknown>, next: HttpHandler): Observable<HttpEvent<unknown>> {
-    const idToken = 'ssss';// localStorage.getItem('id_token');
-    const headers = new HttpHeaders({ Authorization: `Bearer ${idToken}` });
-    let httpErrorInfo: AppHttpError | null = null;
-    return next.handle(req.clone({ headers }))
-      .pipe(
-        tap({
-          error: error => {
-            httpErrorInfo = new AppHttpError(error);
-          }
-        }),
-        finalize(() => {
-          if (httpErrorInfo) {
-            httpErrorInfo.method = req.method;
-            httpErrorInfo.urlWithParams = req.urlWithParams;
-            this.appService.addErrorMessage(httpErrorInfo);
-          }
-        })
-      );
-  }
-}
+/**
+ * Functional interceptor for adding authentication headers and handling errors
+ */
+export const authInterceptor: HttpInterceptorFn = (
+  req: HttpRequest<unknown>,
+  next: HttpHandlerFn
+): Observable<HttpEvent<unknown>> => {
+  const appService = inject(AppService);
+  const idToken = localStorage.getItem('id_token');
+  const headers = new HttpHeaders({ Authorization: `Bearer ${idToken}` });
+  let httpErrorInfo: AppHttpError | null = null;
+
+  return next(req.clone({ headers }))
+    .pipe(
+      tap({
+        error: error => {
+          httpErrorInfo = new AppHttpError(error);
+        }
+      }),
+      finalize(() => {
+        if (httpErrorInfo) {
+          httpErrorInfo.method = req.method;
+          httpErrorInfo.urlWithParams = req.urlWithParams;
+          appService.addErrorMessage(httpErrorInfo);
+        }
+      })
+    );
+};

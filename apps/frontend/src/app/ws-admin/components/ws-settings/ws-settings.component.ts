@@ -12,6 +12,7 @@ import { Clipboard } from '@angular/cdk/clipboard';
 
 import { AppService } from '../../../services/app.service';
 import { WsAccessRightsComponent } from '../ws-access-rights/ws-access-rights.component';
+import { JournalComponent } from '../journal/journal.component';
 
 @Component({
   selector: 'coding-box-ws-settings',
@@ -26,7 +27,8 @@ import { WsAccessRightsComponent } from '../ws-access-rights/ws-access-rights.co
     MatCardModule,
     MatIconModule,
     CdkTextareaAutosize,
-    WsAccessRightsComponent
+    WsAccessRightsComponent,
+    JournalComponent
   ]
 })
 export class WsSettingsComponent {

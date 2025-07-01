@@ -203,10 +203,60 @@
               </div>
             }
 
-            @if(uploadData && uploadData.success){
-              <div class="success-message">
-                <mat-icon>check_circle</mat-icon>
-                <span>Der Testcenter Import war erfolgreich.</span>
+            @if(uploadData){
+              <div class="success-message" [class.error-message]="!uploadData.success">
+                <div class="success-header">
+                  @if(uploadData.success) {
+                    <mat-icon>check_circle</mat-icon>
+                    <span>Der Testcenter Import war erfolgreich.</span>
+                  } @else {
+                    <mat-icon>warning</mat-icon>
+                    <span>Der Testcenter Import wurde mit Fehlern abgeschlossen.</span>
+                  }
+                </div>
+
+                <div class="import-stats">
+                  <h4>Import Statistik:</h4>
+                  <ul class="stats-list">
+                    @if (uploadData.testFiles > 0) {
+                      <li>
+                        <mat-icon>description</mat-icon>
+                        <span>{{ uploadData.testFiles }} Testdateien importiert</span>
+                      </li>
+                    }
+                    @if (uploadData.responses > 0) {
+                      <li>
+                        <mat-icon>question_answer</mat-icon>
+                        <span>{{ uploadData.responses }} Antworten importiert</span>
+                      </li>
+                    }
+                    @if (uploadData.logs > 0) {
+                      <li>
+                        <mat-icon>history</mat-icon>
+                        <span>{{ uploadData.logs }} Logs importiert</span>
+                      </li>
+                    }
+                    @if (uploadData.booklets > 0) {
+                      <li>
+                        <mat-icon>book</mat-icon>
+                        <span>{{ uploadData.booklets }} Booklets importiert</span>
+                      </li>
+                    }
+                    @if (uploadData.units > 0) {
+                      <li>
+                        <mat-icon>assignment</mat-icon>
+                        <span>{{ uploadData.units }} Units importiert</span>
+                      </li>
+                    }
+                    @if (uploadData.persons > 0) {
+                      <li>
+                        <mat-icon>person</mat-icon>
+                        <span>{{ uploadData.persons }} Personen importiert</span>
+                      </li>
+                    }
+                  </ul>
+                </div>
+
                 <div class="success-actions">
                   @if (data.importType === 'testResults') {
                     <button mat-stroked-button color="primary" (click)="goBackToTestGroups()" class="back-to-groups-button">
@@ -272,6 +322,29 @@
                 <ng-container matColumnDef="groupLabel">
                   <th mat-header-cell *matHeaderCellDef> Gruppenlabel </th>
                   <td mat-cell *matCellDef="let group"> {{ group.groupLabel }} </td>
+                </ng-container>
+                <ng-container matColumnDef="status">
+                  <th mat-header-cell *matHeaderCellDef> Status </th>
+                  <td mat-cell *matCellDef="let group">
+                    <div class="status-badges">
+                      @if (group.existsInDatabase) {
+                        <span class="status-badge existing" matTooltip="Diese Gruppe existiert bereits in der Datenbank">
+                          <mat-icon>check_circle</mat-icon> Vorhanden
+                        </span>
+                      } @else {
+                        <span class="status-badge new" matTooltip="Diese Gruppe ist neu und existiert noch nicht in der Datenbank">
+                          <mat-icon>add_circle</mat-icon> Neu
+                        </span>
+                      }
+
+                      <!-- Logs status badge -->
+                      @if (group.hasBookletLogs) {
+                        <span class="status-badge logs" matTooltip="Diese Gruppe hat bereits Booklet-Logs in der Datenbank">
+                          <mat-icon>history</mat-icon> Logs vorhanden
+                        </span>
+                      }
+                    </div>
+                  </td>
                 </ng-container>
                 <ng-container matColumnDef="bookletsStarted">
                   <th mat-header-cell *matHeaderCellDef> Gestartete Booklets </th>

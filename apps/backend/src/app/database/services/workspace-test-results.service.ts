@@ -10,6 +10,7 @@ import { BookletLog } from '../entities/bookletLog.entity';
 import { UnitLog } from '../entities/unitLog.entity';
 import { Session } from '../entities/session.entity';
 import { UnitTagService } from './unit-tag.service';
+import { JournalService } from './journal.service';
 
 @Injectable()
 export class WorkspaceTestResultsService {
@@ -33,7 +34,8 @@ export class WorkspaceTestResultsService {
     @InjectRepository(Session)
     private sessionRepository: Repository<Session>,
     private readonly connection: Connection,
-    private readonly unitTagService: UnitTagService
+    private readonly unitTagService: UnitTagService,
+    private readonly journalService: JournalService
   ) {}
 
   async findPersonTestResults(personId: number, workspaceId: number): Promise<{
@@ -288,15 +290,38 @@ export class WorkspaceTestResultsService {
     });
     const mappedResponses = unit.responses
       .filter(response => response.subform === 'elementCodes')
-      .map(response => ({
-        id: response.variableid,
-        value: response.value,
-        status: response.status
-      }));
+      .map(response => {
+        let value = response.value;
+        if (typeof value === 'string') {
+          if (value.startsWith('[') && value.endsWith(']')) {
+            try {
+              value = JSON.parse(value);
+            } catch (e) {
+              // If parsing fails, keep the original value
+              this.logger.warn(`Failed to parse JSON array: ${value}`);
+            }
+          } else if (value.startsWith('{') && value.endsWith('}')) {
+            try {
+              const jsonArrayString = value.replace(/^\{/, '[').replace(/\}$/, ']');
+              value = JSON.parse(jsonArrayString);
+            } catch (e) {
+              // If parsing fails, keep the original value
+              this.logger.warn(`Failed to parse curly brace array: ${value}`);
+            }
+          }
+        }
+
+        return {
+          id: response.variableid,
+          value: value,
+          status: response.status
+        };
+      });
 
     const uniqueResponses = mappedResponses.filter(
       (response, index, self) => index === self.findIndex(r => r.id === response.id)
     );
+
     return {
       responses: [{
         id: 'elementCodes',
@@ -367,7 +392,15 @@ export class WorkspaceTestResultsService {
 
       const existingPersons = await manager
         .createQueryBuilder(Persons, 'persons')
-        .select('persons.id')
+        .select([
+          'persons.id',
+          'persons.login',
+          'persons.code',
+          'persons.group',
+          'persons.workspace_id',
+          'persons.uploaded_at',
+          'persons.source'
+        ])
         .where('persons.id IN (:...ids)', { ids })
         .getMany();
 
@@ -389,16 +422,34 @@ export class WorkspaceTestResultsService {
 
       report.deletedPersons = existingIds;
 
+      for (const person of existingPersons) {
+        try {
+          await this.journalService.createEntry(
+            'system', // userId
+            workspaceId,
+            'delete',
+            'test-person',
+            person.id,
+            {
+              personId: person.id,
+              personLogin: person.login,
+              personCode: person.code,
+              personGroup: person.group,
+              personSource: person.source,
+              personUploadedAt: person.uploaded_at,
+              message: 'Test person deleted'
+            }
+          );
+        } catch (error) {
+          this.logger.error(`Failed to create journal entry for deleting test person ${person.id}: ${error.message}`);
+        }
+      }
+
       return { success: true, report };
     });
   }
 
-  /**
-   * Delete a unit and all its associated responses
-   * @param workspaceId The ID of the workspace
-   * @param unitId The ID of the unit to delete
-   * @returns A success flag and a report with deleted unit and warnings
-   */
+
   async deleteUnit(
     workspaceId: number,
     unitId: number
@@ -415,7 +466,6 @@ export class WorkspaceTestResultsService {
         warnings: []
       };
 
-      // Check if the unit exists and belongs to the workspace
       const unit = await manager
         .createQueryBuilder(Unit, 'unit')
         .leftJoinAndSelect('unit.booklet', 'booklet')
@@ -431,7 +481,6 @@ export class WorkspaceTestResultsService {
         return { success: false, report };
       }
 
-      // Delete the unit (cascade will delete associated responses)
       await manager
         .createQueryBuilder()
         .delete()
@@ -441,16 +490,35 @@ export class WorkspaceTestResultsService {
 
       report.deletedUnit = unitId;
 
+      try {
+        await this.journalService.createEntry(
+          'system', // userId
+          workspaceId,
+          'delete',
+          'unit',
+          unitId,
+          {
+            unitId,
+            unitName: unit.name,
+            unitAlias: unit.alias,
+            bookletId: unit.booklet?.id,
+            personId: unit.booklet?.person?.id,
+            personLogin: unit.booklet?.person?.login,
+            personCode: unit.booklet?.person?.code,
+            personGroup: unit.booklet?.person?.group,
+            personSource: unit.booklet?.person?.source,
+            personUploadedAt: unit.booklet?.person?.uploaded_at,
+            message: 'Unit deleted'
+          }
+        );
+      } catch (error) {
+        this.logger.error(`Failed to create journal entry for deleting unit ${unitId}: ${error.message}`);
+      }
+
       return { success: true, report };
     });
   }
 
-  /**
-   * Delete a response
-   * @param workspaceId The ID of the workspace
-   * @param responseId The ID of the response to delete
-   * @returns A success flag and a report with deleted response and warnings
-   */
   async deleteResponse(
     workspaceId: number,
     responseId: number
@@ -467,7 +535,6 @@ export class WorkspaceTestResultsService {
         warnings: []
       };
 
-      // Check if the response exists and belongs to the workspace
       const response = await manager
         .createQueryBuilder(ResponseEntity, 'response')
         .leftJoinAndSelect('response.unit', 'unit')
@@ -484,7 +551,6 @@ export class WorkspaceTestResultsService {
         return { success: false, report };
       }
 
-      // Delete the response
       await manager
         .createQueryBuilder()
         .delete()
@@ -494,16 +560,37 @@ export class WorkspaceTestResultsService {
 
       report.deletedResponse = responseId;
 
+      try {
+        await this.journalService.createEntry(
+          'system', // userId
+          workspaceId,
+          'delete',
+          'response',
+          responseId,
+          {
+            responseId,
+            unitId: response.unit.id,
+            unitName: response.unit.name,
+            variableId: response.variableid,
+            value: response.value,
+            bookletId: response.unit.booklet?.id,
+            personId: response.unit.booklet?.person?.id,
+            personLogin: response.unit.booklet?.person?.login,
+            personCode: response.unit.booklet?.person?.code,
+            personGroup: response.unit.booklet?.person?.group,
+            personSource: response.unit.booklet?.person?.source,
+            personUploadedAt: response.unit.booklet?.person?.uploaded_at,
+            message: 'Response deleted'
+          }
+        );
+      } catch (error) {
+        this.logger.error(`Failed to create journal entry for deleting response ${responseId}: ${error.message}`);
+      }
+
       return { success: true, report };
     });
   }
 
-  /**
-   * Delete a booklet and all its associated units and responses
-   * @param workspaceId The ID of the workspace
-   * @param bookletId The ID of the booklet to delete
-   * @returns A success flag and a report with deleted booklet and warnings
-   */
   async deleteBooklet(
     workspaceId: number,
     bookletId: number
@@ -520,7 +607,6 @@ export class WorkspaceTestResultsService {
         warnings: []
       };
 
-      // Check if the booklet exists and belongs to the workspace
       const booklet = await manager
         .createQueryBuilder(Booklet, 'booklet')
         .leftJoinAndSelect('booklet.person', 'person')
@@ -545,17 +631,32 @@ export class WorkspaceTestResultsService {
 
       report.deletedBooklet = bookletId;
 
+      try {
+        await this.journalService.createEntry(
+          'system', // userId
+          workspaceId,
+          'delete',
+          'booklet',
+          bookletId,
+          {
+            bookletId,
+            personId: booklet.personid,
+            personLogin: booklet.person?.login || 'Unknown',
+            personCode: booklet.person?.code,
+            personGroup: booklet.person?.group,
+            personSource: booklet.person?.source,
+            personUploadedAt: booklet.person?.uploaded_at,
+            message: 'Booklet deleted'
+          }
+        );
+      } catch (error) {
+        this.logger.error(`Failed to create journal entry for deleting booklet ${bookletId}: ${error.message}`);
+      }
+
       return { success: true, report };
     });
   }
 
-  /**
-   * Search for responses across all test persons in a workspace
-   * @param workspaceId The ID of the workspace
-   * @param searchParams Search parameters (value, variableId, unitName)
-   * @param options Pagination options
-   * @returns An array of responses matching the search criteria and total count
-   */
   async searchResponses(
     workspaceId: number,
     searchParams: { value?: string; variableId?: string; unitName?: string; status?: string; codedStatus?: string; group?: string; code?: string },
@@ -594,7 +695,6 @@ export class WorkspaceTestResultsService {
         `Searching for responses in workspace: ${workspaceId} with params: ${JSON.stringify(searchParams)} (page: ${page}, limit: ${limit})`
       );
 
-      // Create a query to find responses matching the search criteria
       const query = this.responseRepository.createQueryBuilder('response')
         .innerJoinAndSelect('response.unit', 'unit')
         .innerJoinAndSelect('unit.booklet', 'booklet')
@@ -602,7 +702,6 @@ export class WorkspaceTestResultsService {
         .innerJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
         .where('person.workspace_id = :workspaceId', { workspaceId });
 
-      // Add search conditions based on provided parameters
       if (searchParams.value) {
         query.andWhere('response.value ILIKE :value', { value: `%${searchParams.value}%` });
       }
@@ -631,7 +730,6 @@ export class WorkspaceTestResultsService {
         query.andWhere('person.code = :code', { code: searchParams.code });
       }
 
-      // Get total count
       const total = await query.getCount();
 
       if (total === 0) {
@@ -639,14 +737,12 @@ export class WorkspaceTestResultsService {
         return { data: [], total: 0 };
       }
 
-      // Apply pagination
       query.skip(skip).take(limit);
 
       const responses = await query.getMany();
 
       this.logger.log(`Found ${total} responses matching the criteria in workspace: ${workspaceId}, returning ${responses.length} for page ${page}`);
 
-      // Map the results to the desired format
       const data = responses.map(response => ({
         responseId: response.id,
         variableId: response.variableid,
@@ -676,13 +772,6 @@ export class WorkspaceTestResultsService {
     }
   }
 
-  /**
-   * Find units by name across all test persons in a workspace
-   * @param workspaceId The ID of the workspace
-   * @param unitName The name of the unit to search for
-   * @param options Pagination options
-   * @returns An array of units with the same name across different test persons and total count
-   */
   async findUnitsByName(
     workspaceId: number,
     unitName: string,
@@ -725,7 +814,6 @@ export class WorkspaceTestResultsService {
         .where('unit.name = :unitName', { unitName })
         .andWhere('person.workspace_id = :workspaceId', { workspaceId });
 
-      // Get total count
       const total = await query.getCount();
 
       if (total === 0) {
@@ -733,27 +821,23 @@ export class WorkspaceTestResultsService {
         return { data: [], total: 0 };
       }
 
-      // Apply pagination
       query.skip(skip).take(limit);
 
       const units = await query.getMany();
 
       this.logger.log(`Found ${total} units with name: ${unitName} in workspace: ${workspaceId}, returning ${units.length} for page ${page}`);
 
-      // Get tags for all units
       const unitIds = units.map(unit => unit.id);
       const allUnitTags = await Promise.all(
         unitIds.map(unitId => this.unitTagService.findAllByUnitId(unitId))
       );
 
-      // Create a map of unit ID to tags
       const unitTagsMap = new Map<number, { id: number; unitId: number; tag: string; color?: string; createdAt: Date }[]>();
       unitIds.forEach((unitId, index) => {
         unitTagsMap.set(unitId, allUnitTags[index]);
       });
 
-      // Map the results to the desired format
-      const data = units.map(unit => ({
+      let data = units.map(unit => ({
         unitId: unit.id,
         unitName: unit.name,
         unitAlias: unit.alias,
@@ -774,7 +858,16 @@ export class WorkspaceTestResultsService {
         })) : []
       }));
 
-      return { data, total };
+      const uniqueMap = new Map<string, typeof data[0]>();
+      data.forEach(item => {
+        const uniqueKey = `${item.personGroup}|${item.personCode}|${item.personLogin}|${item.bookletName}|${item.unitName}`;
+        if (!uniqueMap.has(uniqueKey)) {
+          uniqueMap.set(uniqueKey, item);
+        }
+      });
+
+      data = Array.from(uniqueMap.values());
+      return { data, total: data.length };
     } catch (error) {
       this.logger.error(
         `Failed to search for units with name: ${unitName} in workspace: ${workspaceId}`,

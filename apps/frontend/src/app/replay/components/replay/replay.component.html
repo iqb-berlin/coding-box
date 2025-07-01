@@ -1,4 +1,4 @@
-<div class="replay-container">
+<div class="replay-container" [class.print-mode]="isPrintMode">
   <cb-spinner [isLoaded]="isLoaded"></cb-spinner>
   @if (!!player && unitDef ){
     <coding-box-unit-player
@@ -6,6 +6,7 @@
       [unitPlayer]="player"
       [unitResponses]="responses"
       [pageId]="page"
+      [printMode]="isPrintMode"
       (invalidPage)="checkPageError($event)">
     </coding-box-unit-player>
   }

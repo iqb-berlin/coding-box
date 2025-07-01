@@ -373,6 +373,59 @@
         font-weight: 600;
       }
     }
+
+    .status-badges {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .status-badge {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 500;
+      width: fit-content;
+
+      &.existing {
+        background-color: #e8f5e9;
+        color: #2e7d32;
+
+        mat-icon {
+          color: #2e7d32;
+          font-size: 16px;
+          height: 16px;
+          width: 16px;
+        }
+      }
+
+      &.new {
+        background-color: #fff8e1;
+        color: #ff8f00;
+
+        mat-icon {
+          color: #ff8f00;
+          font-size: 16px;
+          height: 16px;
+          width: 16px;
+        }
+      }
+
+      &.logs {
+        background-color: #e3f2fd;
+        color: #1976d2;
+
+        mat-icon {
+          color: #1976d2;
+          font-size: 16px;
+          height: 16px;
+          width: 16px;
+        }
+      }
+    }
   }
 
   .selection-summary {
@@ -452,9 +505,74 @@
   color: #2e7d32;
   flex-direction: column;
   align-items: flex-start;
+  padding: 20px;
+
+  .success-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+    width: 100%;
+
+    mat-icon {
+      color: #2e7d32;
+      font-size: 24px;
+      height: 24px;
+      width: 24px;
+    }
+
+    span {
+      font-size: 16px;
+      font-weight: 500;
+    }
+  }
 
   mat-icon {
     color: #2e7d32;
+  }
+
+  .import-stats {
+    background-color: rgba(255, 255, 255, 0.7);
+    border-radius: 8px;
+    padding: 16px;
+    width: 100%;
+    margin-bottom: 16px;
+    border: 1px solid rgba(46, 125, 50, 0.1);
+
+    h4 {
+      font-size: 15px;
+      font-weight: 500;
+      margin: 0 0 12px 0;
+      color: #2e7d32;
+    }
+
+    .stats-list {
+      list-style-type: none;
+      padding: 0;
+      margin: 0;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 12px;
+
+      li {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 14px;
+        color: #444;
+
+        mat-icon {
+          color: #2e7d32;
+          font-size: 18px;
+          height: 18px;
+          width: 18px;
+        }
+
+        span {
+          font-weight: normal;
+        }
+      }
+    }
   }
 
   .success-actions {

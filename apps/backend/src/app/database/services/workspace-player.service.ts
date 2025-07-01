@@ -115,8 +115,8 @@ export class WorkspacePlayerService {
     }
   }
 
-  async findUnit(workspace_id: number, testPerson: string, unitId: string): Promise<FileUpload[]> {
-    this.logger.log('Returning unit for test person', testPerson);
+  async findUnit(workspace_id: number, unitId: string): Promise<FileUpload[]> {
+    this.logger.log('Returning unit for unitId', unitId);
     return this.fileUploadRepository.find(
       { where: { file_id: `${unitId}`, workspace_id: workspace_id } });
   }
