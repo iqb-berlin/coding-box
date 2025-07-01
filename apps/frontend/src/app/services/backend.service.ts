@@ -34,6 +34,8 @@ import { CreateUnitNoteDto } from '../../../../../api-dto/unit-notes/create-unit
 import { UpdateUnitNoteDto } from '../../../../../api-dto/unit-notes/update-unit-note.dto';
 import { ResourcePackageDto } from '../../../../../api-dto/resource-package/resource-package-dto';
 import { PaginatedWorkspaceUserDto } from '../../../../../api-dto/workspaces/paginated-workspace-user-dto';
+import { InvalidVariableDto } from '../../../../../api-dto/files/variable-validation.dto';
+import { TestTakersValidationDto } from '../../../../../api-dto/files/testtakers-validation.dto';
 
 interface PaginatedResponse<T> {
   data: T[];
@@ -1019,6 +1021,106 @@ export class BackendService {
           }
         });
       })
+    );
+  }
+
+  validateVariables(workspaceId: number, page: number = 1, limit: number = 10): Observable<PaginatedResponse<InvalidVariableDto>> {
+    const params = new HttpParams()
+      .set('page', page.toString())
+      .set('limit', limit.toString());
+
+    return this.http.get<PaginatedResponse<InvalidVariableDto>>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/files/validate-variables`,
+      { headers: this.authHeader, params }
+    ).pipe(
+      catchError(() => of({
+        data: [],
+        total: 0,
+        page,
+        limit
+      }))
+    );
+  }
+
+  validateVariableTypes(workspaceId: number, page: number = 1, limit: number = 10): Observable<PaginatedResponse<InvalidVariableDto>> {
+    const params = new HttpParams()
+      .set('page', page.toString())
+      .set('limit', limit.toString());
+
+    return this.http.get<PaginatedResponse<InvalidVariableDto>>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/files/validate-variable-types`,
+      { headers: this.authHeader, params }
+    ).pipe(
+      catchError(() => of({
+        data: [],
+        total: 0,
+        page,
+        limit
+      }))
+    );
+  }
+
+  validateResponseStatus(workspaceId: number, page: number = 1, limit: number = 10): Observable<PaginatedResponse<InvalidVariableDto>> {
+    const params = new HttpParams()
+      .set('page', page.toString())
+      .set('limit', limit.toString());
+
+    return this.http.get<PaginatedResponse<InvalidVariableDto>>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/files/validate-response-status`,
+      { headers: this.authHeader, params }
+    ).pipe(
+      catchError(() => of({
+        data: [],
+        total: 0,
+        page,
+        limit
+      }))
+    );
+  }
+
+  validateTestTakers(workspaceId: number): Observable<TestTakersValidationDto> {
+    return this.http.get<TestTakersValidationDto>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/files/validate-testtakers`,
+      { headers: this.authHeader }
+    ).pipe(
+      catchError(() => of({
+        testTakersFound: false,
+        totalGroups: 0,
+        totalLogins: 0,
+        totalBookletCodes: 0,
+        missingPersons: []
+      }))
+    );
+  }
+
+  validateGroupResponses(workspaceId: number): Observable<{
+    testTakersFound: boolean;
+    groupsWithResponses: { group: string; hasResponse: boolean }[];
+    allGroupsHaveResponses: boolean;
+  }> {
+    return this.http.get<{
+      testTakersFound: boolean;
+      groupsWithResponses: { group: string; hasResponse: boolean }[];
+      allGroupsHaveResponses: boolean;
+    }>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/files/validate-group-responses`,
+      { headers: this.authHeader }
+    ).pipe(
+      catchError(() => of({
+        testTakersFound: false,
+        groupsWithResponses: [],
+        allGroupsHaveResponses: false
+      }))
+    );
+  }
+
+  deleteInvalidResponses(workspaceId: number, responseIds: number[]): Observable<number> {
+    const params = new HttpParams().set('responseIds', responseIds.join(','));
+    return this.http.delete<number>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/files/invalid-responses`,
+      { headers: this.authHeader, params }
+    ).pipe(
+      catchError(() => of(0))
     );
   }
 }

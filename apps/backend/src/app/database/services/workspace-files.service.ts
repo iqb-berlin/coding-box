@@ -6,12 +6,22 @@ import AdmZip = require('adm-zip');
 import * as fs from 'fs';
 import * as path from 'path';
 import * as libxmljs from 'libxmljs2';
+import { parseStringPromise } from 'xml2js';
 import FileUpload from '../entities/file_upload.entity';
 import { FilesDto } from '../../../../../../api-dto/files/files.dto';
 import { FileIo } from '../../admin/workspace/file-io.interface';
 import { FileDownloadDto } from '../../../../../../api-dto/files/file-download.dto';
 import { FileValidationResultDto } from '../../../../../../api-dto/files/file-validation-result.dto';
 import { ResponseDto } from '../../../../../../api-dto/responses/response-dto';
+import { InvalidVariableDto } from '../../../../../../api-dto/files/variable-validation.dto';
+import { Unit } from '../entities/unit.entity';
+import { ResponseEntity } from '../entities/response.entity';
+import {
+  MissingPersonDto,
+  TestTakerLoginDto,
+  TestTakersValidationDto
+} from '../../../../../../api-dto/files/testtakers-validation.dto';
+import Persons from '../entities/persons.entity';
 
 function sanitizePath(filePath: string): string {
   const normalizedPath = path.normalize(filePath);
@@ -62,7 +72,16 @@ export class WorkspaceFilesService {
 
   constructor(
     @InjectRepository(FileUpload)
-    private fileUploadRepository: Repository<FileUpload>
+    private fileUploadRepository: Repository<FileUpload>,
+    @InjectRepository(ResponseEntity)
+    private responseRepository: Repository<ResponseEntity>,
+    @InjectRepository(Unit)
+    private unitRepository: Repository<Unit>,
+    @InjectRepository(FileUpload)
+    private filesRepository: Repository<FileUpload>,
+    @InjectRepository(Persons)
+    private personsRepository: Repository<Persons>
+
   ) {}
 
   async findAllFileTypes(workspaceId: number): Promise<string[]> {
@@ -958,6 +977,711 @@ export class WorkspaceFilesService {
     } catch (error) {
       this.logger.error(`Error retrieving coding scheme: ${error.message}`, error.stack);
       return null;
+    }
+  }
+
+  async validateVariables(workspaceId: number, page: number = 1, limit: number = 10): Promise<{ data: InvalidVariableDto[]; total: number; page: number; limit: number }> {
+    const unitFiles = await this.filesRepository.find({
+      where: { workspace_id: workspaceId, file_type: 'Unit' }
+    });
+    const unitVariables = new Map<string, Set<string>>();
+    for (const unitFile of unitFiles) {
+      try {
+        const xmlContent = unitFile.data.toString();
+        const parsedXml = await parseStringPromise(xmlContent, { explicitArray: false });
+        if (parsedXml.Unit && parsedXml.Unit.Metadata && parsedXml.Unit.Metadata.Id) {
+          const unitName = parsedXml.Unit.Metadata.Id;
+          const variables = new Set<string>();
+          if (parsedXml.Unit.BaseVariables && parsedXml.Unit.BaseVariables.Variable) {
+            const baseVariables = Array.isArray(parsedXml.Unit.BaseVariables.Variable) ?
+              parsedXml.Unit.BaseVariables.Variable :
+              [parsedXml.Unit.BaseVariables.Variable];
+            for (const variable of baseVariables) {
+              if (variable.$.alias) {
+                variables.add(variable.$.alias);
+              }
+            }
+          }
+          unitVariables.set(unitName, variables);
+        }
+      } catch (e) {
+        console.error(`Could not parse Unit file ${unitFile.filename}: ${e.message}`);
+      }
+    }
+
+    const invalidVariables: InvalidVariableDto[] = [];
+
+    // Find all persons with the given workspace_id
+    const persons = await this.personsRepository.find({
+      where: { workspace_id: workspaceId }
+    });
+
+    if (persons.length === 0) {
+      this.logger.warn(`No persons found for workspace ${workspaceId}`);
+      return {
+        data: [],
+        total: 0,
+        page,
+        limit
+      };
+    }
+
+    // Get all person IDs
+    const personIds = persons.map(person => person.id);
+
+    // Find all units that belong to booklets that belong to these persons
+    const units = await this.unitRepository.createQueryBuilder('unit')
+      .innerJoin('unit.booklet', 'booklet')
+      .where('booklet.personid IN (:...personIds)', { personIds })
+      .getMany();
+
+    if (units.length === 0) {
+      this.logger.warn(`No units found for persons in workspace ${workspaceId}`);
+      return {
+        data: [],
+        total: 0,
+        page,
+        limit
+      };
+    }
+
+    const unitIds = units.map(unit => unit.id);
+
+    // Find all responses that belong to these units
+    const responses = await this.responseRepository.find({
+      where: { unitid: In(unitIds) },
+      relations: ['unit'] // Include unit relation to access unit.name
+    });
+
+    // Check each response
+    for (const response of responses) {
+      const unit = response.unit;
+      if (!unit) {
+        this.logger.warn(`Response ${response.id} has no associated unit`);
+        continue;
+      }
+
+      const unitName = unit.name;
+      const variableId = response.variableid;
+
+      // Check if the unit name exists in unitVariables
+      if (!unitVariables.has(unitName)) {
+        invalidVariables.push({
+          fileName: `Unit ${unitName}`,
+          variableId: variableId,
+          value: response.value || '',
+          responseId: response.id,
+          errorReason: 'Unit not found'
+        });
+        continue;
+      }
+
+      // Check if the variable ID exists in the unit's variables
+      const unitVars = unitVariables.get(unitName);
+      if (!unitVars || !unitVars.has(variableId)) {
+        invalidVariables.push({
+          fileName: `Unit ${unitName}`,
+          variableId: variableId,
+          value: response.value || '',
+          responseId: response.id,
+          errorReason: 'Variable not defined in unit'
+        });
+      }
+    }
+
+    // Apply pagination
+    const validPage = Math.max(1, page);
+    const validLimit = Math.min(Math.max(1, limit), 1000);
+    const startIndex = (validPage - 1) * validLimit;
+    const endIndex = startIndex + validLimit;
+    const paginatedData = invalidVariables.slice(startIndex, endIndex);
+
+    return {
+      data: paginatedData,
+      total: invalidVariables.length,
+      page: validPage,
+      limit: validLimit
+    };
+  }
+
+  /**
+   * Validates if variable values match their defined types
+   * @param workspaceId The ID of the workspace
+   * @param page Page number for pagination
+   * @param limit Number of items per page
+   * @returns Paginated validation result with invalid variables
+   */
+  async validateVariableTypes(workspaceId: number, page: number = 1, limit: number = 10): Promise<{ data: InvalidVariableDto[]; total: number; page: number; limit: number }> {
+    const unitFiles = await this.filesRepository.find({
+      where: { workspace_id: workspaceId, file_type: 'Unit' }
+    });
+
+    // Map to store unit variables with their types
+    // Key: unitName, Value: Map of variableId to type
+    const unitVariableTypes = new Map<string, Map<string, string>>();
+
+    for (const unitFile of unitFiles) {
+      try {
+        const xmlContent = unitFile.data.toString();
+        const parsedXml = await parseStringPromise(xmlContent, { explicitArray: false });
+        if (parsedXml.Unit && parsedXml.Unit.Metadata && parsedXml.Unit.Metadata.Id) {
+          const unitName = parsedXml.Unit.Metadata.Id;
+          const variableTypes = new Map<string, string>();
+
+          if (parsedXml.Unit.BaseVariables && parsedXml.Unit.BaseVariables.Variable) {
+            const baseVariables = Array.isArray(parsedXml.Unit.BaseVariables.Variable) ?
+              parsedXml.Unit.BaseVariables.Variable :
+              [parsedXml.Unit.BaseVariables.Variable];
+
+            for (const variable of baseVariables) {
+              if (variable.$.alias && variable.$.type) {
+                variableTypes.set(variable.$.alias, variable.$.type);
+              }
+            }
+          }
+
+          unitVariableTypes.set(unitName, variableTypes);
+        }
+      } catch (e) {
+        console.error(`Could not parse Unit file ${unitFile.filename}: ${e.message}`);
+      }
+    }
+
+    console.log(`Found ${unitVariableTypes.size} units with variable types in workspace ${workspaceId}`);
+
+    const invalidVariables: InvalidVariableDto[] = [];
+
+    // Find all persons with the given workspace_id
+    const persons = await this.personsRepository.find({
+      where: { workspace_id: workspaceId }
+    });
+
+    if (persons.length === 0) {
+      this.logger.warn(`No persons found for workspace ${workspaceId}`);
+      return {
+        data: [],
+        total: 0,
+        page,
+        limit
+      };
+    }
+
+    // Get all person IDs
+    const personIds = persons.map(person => person.id);
+
+    // Find all units that belong to booklets that belong to these persons
+    const units = await this.unitRepository.createQueryBuilder('unit')
+      .innerJoin('unit.booklet', 'booklet')
+      .where('booklet.personid IN (:...personIds)', { personIds })
+      .getMany();
+
+    if (units.length === 0) {
+      this.logger.warn(`No units found for persons in workspace ${workspaceId}`);
+      return {
+        data: [],
+        total: 0,
+        page,
+        limit
+      };
+    }
+
+    // Get all unit IDs
+    const unitIds = units.map(unit => unit.id);
+
+    // Find all responses that belong to these units
+    const responses = await this.responseRepository.find({
+      where: { unitid: In(unitIds) },
+      relations: ['unit'] // Include unit relation to access unit.name
+    });
+
+    console.log(`Found ${responses.length} responses for units in workspace ${workspaceId}`);
+
+    // Check each response
+    for (const response of responses) {
+      const unit = response.unit;
+      if (!unit) {
+        this.logger.warn(`Response ${response.id} has no associated unit`);
+        continue;
+      }
+
+      const unitName = unit.name;
+      const variableId = response.variableid;
+      const value = response.value || '';
+
+      // Skip if unit not found or variable not defined (already checked in validateVariables)
+      if (!unitVariableTypes.has(unitName)) {
+        continue;
+      }
+
+      const variableTypes = unitVariableTypes.get(unitName);
+      if (!variableTypes || !variableTypes.has(variableId)) {
+        continue;
+      }
+
+      // Get the expected type for this variable
+      const expectedType = variableTypes.get(variableId);
+
+      // Validate the value against the expected type
+      if (!this.isValidValueForType(value, expectedType)) {
+        invalidVariables.push({
+          fileName: `Unit ${unitName}`,
+          variableId: variableId,
+          value: value,
+          responseId: response.id,
+          expectedType: expectedType,
+          errorReason: `Value does not match expected type: ${expectedType}`
+        });
+      }
+    }
+
+    // Apply pagination
+    const validPage = Math.max(1, page);
+    const validLimit = Math.min(Math.max(1, limit), 1000);
+    const startIndex = (validPage - 1) * validLimit;
+    const endIndex = startIndex + validLimit;
+    const paginatedData = invalidVariables.slice(startIndex, endIndex);
+
+    return {
+      data: paginatedData,
+      total: invalidVariables.length,
+      page: validPage,
+      limit: validLimit
+    };
+  }
+
+  /**
+   * Checks if a value is valid for a given type
+   * @param value The value to check
+   * @param type The expected type (string, integer, number, boolean, json)
+   * @returns True if the value is valid for the type, false otherwise
+   */
+  private isValidValueForType(value: string, type: string): boolean {
+    if (!value && type !== 'string') {
+      return false;
+    }
+
+    switch (type.toLowerCase()) {
+      case 'string':
+        return true; // All values are valid strings
+
+      case 'integer':
+        // Check if the value is an integer
+        return /^-?\d+$/.test(value);
+
+      case 'number':
+        // Check if the value is a number (integer or decimal)
+        return !Number.isNaN(Number(value)) && Number.isFinite(Number(value));
+
+      case 'boolean': {
+        // Check if the value is a boolean (true/false, 0/1, yes/no)
+        const lowerValue = value.toLowerCase();
+        return ['true', 'false', '0', '1', 'yes', 'no'].includes(lowerValue);
+      }
+
+      case 'json':
+        // Check if the value is valid JSON
+        try {
+          JSON.parse(value);
+          return true;
+        } catch (e) {
+          return false;
+        }
+
+      default:
+        return true; // For unknown types, assume the value is valid
+    }
+  }
+
+  /**
+   * Validates if response status is one of the valid values
+   * @param workspaceId The ID of the workspace
+   * @param page Page number for pagination
+   * @param limit Number of items per page
+   * @returns Paginated validation result with invalid responses
+   */
+  /**
+   * Validates TestTakers XML files and checks if each person from the persons table is found
+   * @param workspaceId The ID of the workspace
+   * @returns Validation results
+   */
+  async validateTestTakers(workspaceId: number): Promise<TestTakersValidationDto> {
+    try {
+      // Find TestTakers files in the workspace
+      const testTakers = await this.fileUploadRepository.find({
+        where: { workspace_id: workspaceId, file_type: In(['TestTakers', 'Testtakers']) }
+      });
+
+      if (!testTakers || testTakers.length === 0) {
+        this.logger.warn(`No TestTakers found in workspace with ID ${workspaceId}.`);
+        return {
+          testTakersFound: false,
+          totalGroups: 0,
+          totalLogins: 0,
+          totalBookletCodes: 0,
+          missingPersons: []
+        };
+      }
+
+      // Parse XML to extract Groups, Logins, and Booklet codes
+      const testTakerLogins: TestTakerLoginDto[] = [];
+      let totalGroups = 0;
+      let totalLogins = 0;
+      let totalBookletCodes = 0;
+
+      // Process all test takers
+      for (const testTaker of testTakers) {
+        const xmlDocument = cheerio.load(testTaker.data, { xml: true });
+        const groupElements = xmlDocument('Group');
+
+        if (groupElements.length === 0) {
+          this.logger.warn(`No <Group> elements found in TestTakers file ${testTaker.file_id}.`);
+          continue;
+        }
+
+        totalGroups += groupElements.length;
+
+        // Extract data from each group
+        for (let i = 0; i < groupElements.length; i += 1) {
+          const groupElement = groupElements[i];
+          const groupId = xmlDocument(groupElement).attr('id');
+          const loginElements = xmlDocument(groupElement).find('Login');
+
+          // Extract data from each login
+          for (let j = 0; j < loginElements.length; j += 1) {
+            const loginElement = loginElements[j];
+            const loginName = xmlDocument(loginElement).attr('name');
+            const loginMode = xmlDocument(loginElement).attr('mode');
+
+            // Only include logins with mode "run-hot-return" or "run-hot-restart"
+            if (loginMode === 'run-hot-return' || loginMode === 'run-hot-restart') {
+              totalLogins += 1;
+
+              const bookletElements = xmlDocument(loginElement).find('Booklet');
+              const bookletCodes: string[] = [];
+
+              // Extract data from each booklet
+              for (let k = 0; k < bookletElements.length; k += 1) {
+                const bookletElement = bookletElements[k];
+                const codes = xmlDocument(bookletElement).attr('codes');
+                if (codes) {
+                  bookletCodes.push(codes);
+                  totalBookletCodes += 1;
+                }
+              }
+
+              testTakerLogins.push({
+                group: groupId || '',
+                login: loginName || '',
+                mode: loginMode || '',
+                bookletCodes
+              });
+            }
+          }
+        }
+      }
+
+      // Find all persons in the workspace
+      const persons = await this.personsRepository.find({
+        where: { workspace_id: workspaceId }
+      });
+
+      // Check if each person from the persons table is found in the extracted data
+      const missingPersons: MissingPersonDto[] = [];
+
+      for (const person of persons) {
+        const found = testTakerLogins.some(login => login.group === person.group && login.login === person.login);
+
+        if (!found) {
+          missingPersons.push({
+            group: person.group,
+            login: person.login,
+            code: person.code,
+            reason: 'Person not found in TestTakers XML'
+          });
+        }
+      }
+
+      return {
+        testTakersFound: true,
+        totalGroups,
+        totalLogins,
+        totalBookletCodes,
+        missingPersons
+      };
+    } catch (error) {
+      this.logger.error(`Error validating TestTakers for workspace ${workspaceId}: ${error.message}`, error.stack);
+      throw error;
+    }
+  }
+
+  async validateResponseStatus(workspaceId: number, page: number = 1, limit: number = 10): Promise<{ data: InvalidVariableDto[]; total: number; page: number; limit: number }> {
+    // Valid response status values
+    console.log(`Validating response status for workspace ${workspaceId} with page ${page} and limit ${limit}`);
+    const validStatusValues = ['VALUE_CHANGED', 'NOT_REACHED', 'DISPLAYED', 'UNSET', 'PARTLY_DISPLAYED'];
+
+    // Find all persons with the given workspace_id
+    const persons = await this.personsRepository.find({
+      where: { workspace_id: workspaceId }
+    });
+
+    if (persons.length === 0) {
+      this.logger.warn(`No persons found for workspace ${workspaceId}`);
+      return {
+        data: [],
+        total: 0,
+        page,
+        limit
+      };
+    }
+
+    // Get all person IDs
+    const personIds = persons.map(person => person.id);
+
+    // Find all units that belong to booklets that belong to these persons
+    const units = await this.unitRepository.createQueryBuilder('unit')
+      .innerJoin('unit.booklet', 'booklet')
+      .where('booklet.personid IN (:...personIds)', { personIds })
+      .getMany();
+
+    if (units.length === 0) {
+      this.logger.warn(`No units found for persons in workspace ${workspaceId}`);
+      return {
+        data: [],
+        total: 0,
+        page,
+        limit
+      };
+    }
+
+    // Get all unit IDs
+    const unitIds = units.map(unit => unit.id);
+
+    // Find all responses that belong to these units
+    const responses = await this.responseRepository.find({
+      where: { unitid: In(unitIds) },
+      relations: ['unit'] // Include unit relation to access unit.name
+    });
+
+    console.log(`Found ${responses.length} responses for units in workspace ${workspaceId}`);
+
+    const invalidVariables: InvalidVariableDto[] = [];
+
+    // Check each response
+    for (const response of responses) {
+      const unit = response.unit;
+      if (!unit) {
+        this.logger.warn(`Response ${response.id} has no associated unit`);
+        continue;
+      }
+
+      const unitName = unit.name;
+      const variableId = response.variableid;
+      const status = response.status;
+
+      // Check if the response status is one of the valid values
+      if (!validStatusValues.includes(status)) {
+        invalidVariables.push({
+          fileName: `Unit ${unitName}`,
+          variableId: variableId,
+          value: response.value || '',
+          responseId: response.id,
+          errorReason: `Invalid response status: ${status}. Valid values are: ${validStatusValues.join(', ')}`
+        });
+      }
+    }
+
+    // Apply pagination
+    const validPage = Math.max(1, page);
+    const validLimit = Math.min(Math.max(1, limit), 1000);
+    const startIndex = (validPage - 1) * validLimit;
+    const endIndex = startIndex + validLimit;
+    const paginatedData = invalidVariables.slice(startIndex, endIndex);
+
+    return {
+      data: paginatedData,
+      total: invalidVariables.length,
+      page: validPage,
+      limit: validLimit
+    };
+  }
+
+  /**
+   * Validates if there's at least one response for each group found in TestTakers XML files
+   * @param workspaceId The ID of the workspace
+   * @returns Validation result indicating whether at least one response was found for each group
+   */
+  async validateGroupResponses(workspaceId: number): Promise<{
+    testTakersFound: boolean;
+    groupsWithResponses: { group: string; hasResponse: boolean }[];
+    allGroupsHaveResponses: boolean;
+  }> {
+    try {
+      // Find TestTakers files in the workspace
+      const testTakers = await this.fileUploadRepository.find({
+        where: { workspace_id: workspaceId, file_type: In(['TestTakers', 'Testtakers']) }
+      });
+
+      if (!testTakers || testTakers.length === 0) {
+        this.logger.warn(`No TestTakers found in workspace with ID ${workspaceId}.`);
+        return {
+          testTakersFound: false,
+          groupsWithResponses: [],
+          allGroupsHaveResponses: false
+        };
+      }
+
+      // Extract groups from TestTakers XML files
+      const groups: Set<string> = new Set();
+
+      // Process all test takers
+      for (const testTaker of testTakers) {
+        const xmlDocument = cheerio.load(testTaker.data, { xml: true });
+        const groupElements = xmlDocument('Group');
+
+        if (groupElements.length === 0) {
+          this.logger.warn(`No <Group> elements found in TestTakers file ${testTaker.file_id}.`);
+          continue;
+        }
+
+        // Extract data from each group
+        for (let i = 0; i < groupElements.length; i += 1) {
+          const groupElement = groupElements[i];
+          const groupId = xmlDocument(groupElement).attr('id');
+          const loginElements = xmlDocument(groupElement).find('Login');
+
+          // Check if there's at least one login with mode "run-hot-return" or "run-hot-restart"
+          let hasValidLogin = false;
+          for (let j = 0; j < loginElements.length; j += 1) {
+            const loginElement = loginElements[j];
+            const loginMode = xmlDocument(loginElement).attr('mode');
+
+            if (loginMode === 'run-hot-return' || loginMode === 'run-hot-restart') {
+              hasValidLogin = true;
+              break;
+            }
+          }
+
+          // Only add groups with valid logins
+          if (hasValidLogin && groupId) {
+            groups.add(groupId);
+          }
+        }
+      }
+
+      if (groups.size === 0) {
+        this.logger.warn(`No valid groups found in TestTakers files for workspace ${workspaceId}.`);
+        return {
+          testTakersFound: true,
+          groupsWithResponses: [],
+          allGroupsHaveResponses: false
+        };
+      }
+
+      // Check if each group has at least one response
+      const groupsWithResponses: { group: string; hasResponse: boolean }[] = [];
+      let allGroupsHaveResponses = true;
+
+      for (const group of groups) {
+        // Find persons with this group ID
+        const persons = await this.personsRepository.find({
+          where: { workspace_id: workspaceId, group }
+        });
+
+        if (persons.length === 0) {
+          // No persons found for this group
+          groupsWithResponses.push({ group, hasResponse: false });
+          allGroupsHaveResponses = false;
+          continue;
+        }
+
+        // Get all person IDs
+        const personIds = persons.map(person => person.id);
+
+        // Find all units that belong to booklets that belong to these persons
+        const units = await this.unitRepository.createQueryBuilder('unit')
+          .innerJoin('unit.booklet', 'booklet')
+          .where('booklet.personid IN (:...personIds)', { personIds })
+          .getMany();
+
+        if (units.length === 0) {
+          // No units found for persons in this group
+          groupsWithResponses.push({ group, hasResponse: false });
+          allGroupsHaveResponses = false;
+          continue;
+        }
+
+        // Get all unit IDs
+        const unitIds = units.map(unit => unit.id);
+
+        // Check if there's at least one response for these units
+        const responseCount = await this.responseRepository.count({
+          where: { unitid: In(unitIds) }
+        });
+
+        const hasResponse = responseCount > 0;
+        groupsWithResponses.push({ group, hasResponse });
+
+        if (!hasResponse) {
+          allGroupsHaveResponses = false;
+        }
+      }
+
+      return {
+        testTakersFound: true,
+        groupsWithResponses,
+        allGroupsHaveResponses
+      };
+    } catch (error) {
+      this.logger.error(`Error validating group responses for workspace ${workspaceId}: ${error.message}`, error.stack);
+      throw error;
+    }
+  }
+
+  /**
+   * Deletes invalid responses from the database
+   * @param workspaceId The ID of the workspace
+   * @param responseIds Array of response IDs to delete
+   * @returns Number of deleted responses
+   */
+  async deleteInvalidResponses(workspaceId: number, responseIds: number[]): Promise<number> {
+    try {
+      this.logger.log(`Deleting invalid responses for workspace ${workspaceId}: ${responseIds.join(', ')}`);
+
+      // Verify that the responses belong to units that belong to persons in the workspace
+      const persons = await this.personsRepository.find({
+        where: { workspace_id: workspaceId }
+      });
+
+      if (persons.length === 0) {
+        this.logger.warn(`No persons found for workspace ${workspaceId}`);
+        return 0;
+      }
+
+      const personIds = persons.map(person => person.id);
+
+      const units = await this.unitRepository.createQueryBuilder('unit')
+        .innerJoin('unit.booklet', 'booklet')
+        .where('booklet.personid IN (:...personIds)', { personIds })
+        .getMany();
+
+      if (units.length === 0) {
+        this.logger.warn(`No units found for persons in workspace ${workspaceId}`);
+        return 0;
+      }
+
+      const unitIds = units.map(unit => unit.id);
+
+      // Delete responses that match the given IDs and belong to the units in the workspace
+      const deleteResult = await this.responseRepository.delete({
+        id: In(responseIds),
+        unitid: In(unitIds)
+      });
+
+      this.logger.log(`Deleted ${deleteResult.affected} invalid responses`);
+      return deleteResult.affected || 0;
+    } catch (error) {
+      this.logger.error(`Error deleting invalid responses: ${error.message}`, error.stack);
+      throw error;
     }
   }
 }
