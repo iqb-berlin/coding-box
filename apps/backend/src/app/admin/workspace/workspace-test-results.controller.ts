@@ -513,8 +513,6 @@ export class WorkspaceTestResultsController {
       throw new BadRequestException('Invalid workspace_id.');
     }
 
-    // No longer require at least one parameter to be provided
-
     try {
       return await this.workspaceTestResultsService.searchResponses(
         workspace_id,
