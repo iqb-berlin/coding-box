@@ -288,45 +288,59 @@ export class WorkspaceTestResultsService {
       },
       relations: ['responses']
     });
-    const mappedResponses = unit.responses
-      .filter(response => response.subform === 'elementCodes')
-      .map(response => {
-        let value = response.value;
-        if (typeof value === 'string') {
-          if (value.startsWith('[') && value.endsWith(']')) {
-            try {
-              value = JSON.parse(value);
-            } catch (e) {
-              // If parsing fails, keep the original value
-              this.logger.warn(`Failed to parse JSON array: ${value}`);
-            }
-          } else if (value.startsWith('{') && value.endsWith('}')) {
-            try {
-              const jsonArrayString = value.replace(/^\{/, '[').replace(/\}$/, ']');
-              value = JSON.parse(jsonArrayString);
-            } catch (e) {
-              // If parsing fails, keep the original value
-              this.logger.warn(`Failed to parse curly brace array: ${value}`);
-            }
+
+    const responsesBySubform = {};
+
+    unit.responses.forEach(response => {
+      let value = response.value;
+      if (typeof value === 'string') {
+        if (value.startsWith('[') && value.endsWith(']')) {
+          try {
+            value = JSON.parse(value);
+          } catch (e) {
+            // If parsing fails, keep the original value
+            this.logger.warn(`Failed to parse JSON array: ${value}`);
+          }
+        } else if (value.startsWith('{') && value.endsWith('}')) {
+          try {
+            const jsonArrayString = value.replace(/^\{/, '[').replace(/\}$/, ']');
+            value = JSON.parse(jsonArrayString);
+          } catch (e) {
+            // If parsing fails, keep the original value
+            this.logger.warn(`Failed to parse curly brace array: ${value}`);
           }
         }
+      }
 
-        return {
-          id: response.variableid,
-          value: value,
-          status: response.status
-        };
-      });
+      const mappedResponse = {
+        id: response.variableid,
+        value: value,
+        status: response.status
+      };
 
-    const uniqueResponses = mappedResponses.filter(
-      (response, index, self) => index === self.findIndex(r => r.id === response.id)
-    );
+      const subformKey = response.subform || 'elementCodes';
+
+      if (!responsesBySubform[subformKey]) {
+        responsesBySubform[subformKey] = [];
+      }
+
+      responsesBySubform[subformKey].push(mappedResponse);
+    });
+
+    // Create responses array with unique responses for each subform
+    const responsesArray = Object.keys(responsesBySubform).map(subform => {
+      const uniqueResponses = responsesBySubform[subform].filter(
+        (response, index, self) => index === self.findIndex(r => r.id === response.id)
+      );
+
+      return {
+        id: subform === 'default' ? 'elementCodes' : subform,
+        content: uniqueResponses
+      };
+    });
 
     return {
-      responses: [{
-        id: 'elementCodes',
-        content: uniqueResponses
-      }]
+      responses: responsesArray
     };
   }
 
@@ -448,7 +462,6 @@ export class WorkspaceTestResultsService {
       return { success: true, report };
     });
   }
-
 
   async deleteUnit(
     workspaceId: number,
