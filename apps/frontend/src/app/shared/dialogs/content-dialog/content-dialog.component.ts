@@ -11,6 +11,7 @@ export interface DialogData {
   content: string;
   isJson?: boolean;
   isXml?: boolean;
+  showDeleteButton?: boolean;
 }
 
 @Component({
@@ -40,6 +41,9 @@ export interface DialogData {
     <mat-divider></mat-divider>
     <mat-dialog-actions align="end">
       <button mat-button (click)="close()">Schließen</button>
+      @if (data.showDeleteButton) {
+        <button mat-button color="warn" (click)="close(true)">Aus Datenbank löschen</button>
+      }
     </mat-dialog-actions>
   `,
   styles: [`
@@ -75,8 +79,8 @@ export class ContentDialogComponent {
     @Inject(MAT_DIALOG_DATA) public data: DialogData
   ) {}
 
-  close(): void {
-    this.dialogRef.close();
+  close(deleteFromDb: boolean = false): void {
+    this.dialogRef.close(deleteFromDb);
   }
 
   formatJson(jsonString: string): string {
