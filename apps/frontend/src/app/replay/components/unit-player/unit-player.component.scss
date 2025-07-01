@@ -1,5 +1,10 @@
 .unitHost {
-  height: 100vh;
+  height: 2000px;
   width: 100vw;
   border: none;
+}
+
+:host(.print-mode) .unitHost {
+  height: auto;
+  /* min-height will be set dynamically based on content */
 }

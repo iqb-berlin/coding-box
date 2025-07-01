@@ -21,9 +21,10 @@ export const routes: Routes = [
   },
   {
     path: 'replay/:testPerson/:unitId',
-    canActivate: [canActivateWithToken],
+    canActivate: [canActivateAuth],
     loadComponent: () => import('./replay/components/replay/replay.component').then(m => m.ReplayComponent)
   },
+  { path: 'print-view/:unitId', canActivate: [canActivateWithToken], loadComponent: () => import('./replay/components/replay/replay.component').then(m => m.ReplayComponent) },
   { path: 'replay/:testPerson', canActivate: [canActivateWithToken], loadComponent: () => import('./replay/components/replay/replay.component').then(m => m.ReplayComponent) },
   { path: 'replay', canActivate: [canActivateWithToken], loadComponent: () => import('./replay/components/replay/replay.component').then(m => m.ReplayComponent) },
   { path: 'coding-manual', canActivate: [canActivateAuth], loadComponent: () => import('./coding/coding-management-manual/coding-management-manual.component').then(m => m.CodingManagementManualComponent) },

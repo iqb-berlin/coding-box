@@ -46,6 +46,12 @@ export class WorkspaceTestCenterController {
   @ApiQuery({ name: 'testTakers', required: false, description: 'Include test takers' })
   @ApiQuery({ name: 'testGroups', required: false, description: 'Include test groups' })
   @ApiQuery({ name: 'booklets', required: false, description: 'Include booklets' })
+  @ApiQuery({
+    name: 'overwriteExistingLogs',
+    required: false,
+    description: 'Whether to overwrite existing logs',
+    type: Boolean
+  })
   @ApiOkResponse({ description: 'Files imported successfully', type: Object })
   @ApiBadRequestResponse({ description: 'Failed to import files' })
   async importWorkspaceFiles(
@@ -62,7 +68,8 @@ export class WorkspaceTestCenterController {
       @Query('codings') codings: string,
       @Query('testTakers') testTakers: string,
       @Query('testGroups') testGroups: string,
-      @Query('booklets') booklets: string)
+      @Query('booklets') booklets: string,
+      @Query('overwriteExistingLogs') overwriteExistingLogs: string)
       : Promise<Result> {
     const importOptions:ImportOptions = {
       definitions: definitions,
@@ -75,7 +82,18 @@ export class WorkspaceTestCenterController {
       testTakers: testTakers
     };
 
-    return this.testCenterService.importWorkspaceFiles(workspace_id, tc_workspace, server, decodeURIComponent(url), token, importOptions, testGroups);
+    const overwriteLogs = overwriteExistingLogs === 'true';
+
+    return this.testCenterService.importWorkspaceFiles(
+      workspace_id,
+      tc_workspace,
+      server,
+      decodeURIComponent(url),
+      token,
+      importOptions,
+      testGroups,
+      overwriteLogs
+    );
   }
 
   @Get(':workspace_id/importWorkspaceFiles/testGroups')

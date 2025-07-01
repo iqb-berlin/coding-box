@@ -19,8 +19,13 @@ export class UploadResultsService {
   ) {
   }
 
-  async uploadTestResults(workspace_id: number, originalFiles: FileIo[], resultType:'logs' | 'responses'): Promise<boolean> {
-    this.logger.log(`Uploading test results for workspace ${workspace_id}`);
+  async uploadTestResults(
+    workspace_id: number,
+    originalFiles: FileIo[],
+    resultType:'logs' | 'responses',
+    overwriteExisting: boolean = true
+  ): Promise<boolean> {
+    this.logger.log(`Uploading test results for workspace ${workspace_id} (overwrite existing: ${overwriteExisting})`);
     const MAX_FILES_LENGTH = 1000;
     if (originalFiles.length > MAX_FILES_LENGTH) {
       this.logger.error(`Too many files to upload: ${originalFiles.length}`);
@@ -29,13 +34,18 @@ export class UploadResultsService {
     const filePromises = [];
     for (let i = 0; i < originalFiles.length; i++) {
       const file = originalFiles[i];
-      filePromises.push(this.uploadFile(file, workspace_id, resultType));
+      filePromises.push(this.uploadFile(file, workspace_id, resultType, overwriteExisting));
     }
     await Promise.all(filePromises);
     return true;
   }
 
-  async uploadFile(file: FileIo, workspace_id: number, resultType: 'logs' | 'responses'): Promise<void> {
+  async uploadFile(
+    file: FileIo,
+    workspace_id: number,
+    resultType: 'logs' | 'responses',
+    overwriteExisting: boolean = true
+  ): Promise<void> {
     if (file.mimetype === 'text/csv') {
       const bufferStream = new Readable();
       bufferStream.push(file.buffer);
@@ -50,7 +60,7 @@ export class UploadResultsService {
             { bookletLogs: [], unitLogs: [] }
           );
           const persons = await this.personService.createPersonList(rowData, workspace_id);
-          await this.personService.processPersonLogs(persons, unitLogs, bookletLogs);
+          await this.personService.processPersonLogs(persons, unitLogs, bookletLogs, overwriteExisting);
         });
       } else if (resultType === 'responses') {
         await this.handleCsvStream<Response>(bufferStream, resultType, async rowData => {

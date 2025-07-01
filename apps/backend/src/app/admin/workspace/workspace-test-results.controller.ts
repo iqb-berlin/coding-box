@@ -513,8 +513,6 @@ export class WorkspaceTestResultsController {
       throw new BadRequestException('Invalid workspace_id.');
     }
 
-    // No longer require at least one parameter to be provided
-
     try {
       return await this.workspaceTestResultsService.searchResponses(
         workspace_id,
@@ -697,10 +695,17 @@ export class WorkspaceTestResultsController {
   @ApiBadRequestResponse({
     description: 'Invalid request. Please check your input data.'
   })
+  @ApiQuery({
+    name: 'overwriteExisting',
+    type: Boolean,
+    required: false,
+    description: 'Whether to overwrite existing logs/responses (default: true)'
+  })
   async addTestResults(
     @Param('workspace_id') workspace_id: number,
       @Param('resultType') resultType: 'logs' | 'responses',
-      @UploadedFiles() files: Express.Multer.File[]
+      @UploadedFiles() files: Express.Multer.File[],
+      @Query('overwriteExisting') overwriteExisting?: string
   ): Promise<boolean> {
     if (!workspace_id || Number.isNaN(workspace_id)) {
       throw new BadRequestException('Invalid workspace_id.');
@@ -710,8 +715,13 @@ export class WorkspaceTestResultsController {
       throw new BadRequestException('No files were uploaded.');
     }
 
+    // Convert the query parameter to a boolean
+    const shouldOverwrite = overwriteExisting !== 'false';
+
+    logger.log(`Uploading test results with overwriteExisting=${shouldOverwrite}`);
+
     try {
-      return await this.uploadResults.uploadTestResults(workspace_id, files, resultType);
+      return await this.uploadResults.uploadTestResults(workspace_id, files, resultType, shouldOverwrite);
     } catch (error) {
       logger.error('Error uploading test results!');
       throw new BadRequestException('Uploading test results failed. Please try again.');

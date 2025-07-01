@@ -41,9 +41,11 @@ import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
 import { TestCenterImportComponent } from '../test-center-import/test-center-import.component';
 import { LogDialogComponent } from '../booklet-log-dialog/log-dialog.component';
+import { UnitLogsDialogComponent } from '../unit-logs-dialog/unit-logs-dialog.component';
 import { TagDialogComponent } from '../tag-dialog/tag-dialog.component';
 import { NoteDialogComponent } from '../note-dialog/note-dialog.component';
 import { UnitSearchDialogComponent } from '../unit-search-dialog/unit-search-dialog.component';
+import { ConfirmDialogComponent, ConfirmDialogData } from '../../../shared/dialogs/confirm-dialog.component';
 import { UnitTagDto } from '../../../../../../../api-dto/unit-tags/unit-tag.dto';
 import { CreateUnitTagDto } from '../../../../../../../api-dto/unit-tags/create-unit-tag.dto';
 import { UpdateUnitTagDto } from '../../../../../../../api-dto/unit-tags/update-unit-tag.dto';
@@ -234,10 +236,35 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     this.backendService.getPersonTestResults(this.appService.selectedWorkspaceId, row.id)
       .subscribe(booklets => {
         this.selectedBooklet = row.group;
-        this.booklets = booklets;
+        const uniqueBooklets = this.filterUniqueBooklets(booklets);
+        this.booklets = uniqueBooklets;
+        this.sortBooklets();
         this.sortBookletUnits();
         this.loadAllUnitTags();
       });
+  }
+
+  filterUniqueBooklets(booklets: Booklet[]): Booklet[] {
+    const uniqueBookletsMap = new Map<string, Booklet>();
+
+    booklets.forEach(booklet => {
+      if (!uniqueBookletsMap.has(booklet.name)) {
+        uniqueBookletsMap.set(booklet.name, booklet);
+      }
+    });
+
+    return Array.from(uniqueBookletsMap.values());
+  }
+
+  sortBooklets(): void {
+    if (!this.booklets || this.booklets.length === 0) {
+      return;
+    }
+    this.booklets.sort((a, b) => {
+      const nameA = a.name || '';
+      const nameB = b.name || '';
+      return nameA.localeCompare(nameB);
+    });
   }
 
   sortBookletUnits(): void {
@@ -257,18 +284,10 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     });
   }
 
-  /**
-   * Get tags for a specific unit
-   * @param unitId The ID of the unit
-   * @returns An array of tags for the unit, or an empty array if no tags are found
-   */
   getUnitTags(unitId: number): UnitTagDto[] {
     return this.unitTagsMap.get(unitId) || [];
   }
 
-  /**
-   * Load tags for all units in all booklets from the response
-   */
   loadAllUnitTags(): void {
     if (!this.booklets || this.booklets.length === 0) {
       return;
@@ -314,6 +333,15 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   }
 
   openBookletLogsDialog(booklet: Booklet) {
+    if (!booklet.logs || booklet.logs.length === 0) {
+      this.snackBar.open(
+        'Keine Logs für dieses Booklet vorhanden',
+        'Info',
+        { duration: 3000 }
+      );
+      return;
+    }
+
     this.dialog.open(LogDialogComponent, {
       width: '700px',
       data: {
@@ -334,7 +362,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.dialog.open(LogDialogComponent, {
+    this.dialog.open(UnitLogsDialogComponent, {
       width: '700px',
       data: {
         logs: this.logs,
@@ -777,18 +805,35 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     if (targetElement) {
       const inputElement = targetElement as HTMLInputElement;
       if (inputElement.files && inputElement.files.length > 0) {
-        this.isLoading = true;
-        this.isUploadingResults = true;
-        this.backendService.uploadTestResults(
-          this.appService.selectedWorkspaceId,
-          inputElement.files,
-          resultType
-        ).subscribe(() => {
-          setTimeout(() => {
-            this.createTestResultsList(this.pageIndex, this.pageSize, this.getCurrentSearchText());
-          }, 1000);
-          this.isLoading = false;
-          this.isUploadingResults = false;
+        const dialogRef = this.dialog.open(ConfirmDialogComponent, {
+          width: '400px',
+          data: <ConfirmDialogData>{
+            title: resultType === 'logs' ? 'Logs überschreiben' : 'Antworten überschreiben',
+            content: resultType === 'logs' ?
+              'Möchten Sie vorhandene Logs überschreiben, falls diese bereits existieren?' :
+              'Möchten Sie vorhandene Antworten überschreiben, falls diese bereits existieren?',
+            confirmButtonLabel: 'Überschreiben',
+            showCancel: true
+          }
+        });
+
+        dialogRef.afterClosed().subscribe(overwriteExisting => {
+          if (overwriteExisting !== undefined) {
+            this.isLoading = true;
+            this.isUploadingResults = true;
+            this.backendService.uploadTestResults(
+              this.appService.selectedWorkspaceId,
+              inputElement.files,
+              resultType,
+              overwriteExisting // Pass the user's choice
+            ).subscribe(() => {
+              setTimeout(() => {
+                this.createTestResultsList(this.pageIndex, this.pageSize, this.getCurrentSearchText());
+              }, 1000);
+              this.isLoading = false;
+              this.isUploadingResults = false;
+            });
+          }
         });
       }
     }
