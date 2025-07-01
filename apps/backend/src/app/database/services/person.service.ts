@@ -356,7 +356,6 @@ export class PersonService {
 
   private extractSubforms(parsedResponses: Chunk[]): TcMergeSubForms[] {
     return parsedResponses
-      .filter(chunk => chunk?.id === 'elementCodes')
       .map(chunk => {
         try {
           const chunkContent: TcMergeResponse[] = JSON.parse(chunk.content);
@@ -417,7 +416,7 @@ export class PersonService {
       subforms,
       chunks: [
         {
-          id: 'elementCodes',
+          id: parsedResponses[0]?.id || '',
           type: parsedResponses[0]?.responseType || '',
           ts: parsedResponses[0]?.ts || 0,
           variables: Array.from(variables)
@@ -541,7 +540,6 @@ export class PersonService {
       );
     }
 
-    // Process units if they exist
     if (Array.isArray(booklet.units) && booklet.units.length > 0) {
       // Process units in batches to improve performance
       const batchSize = 10;
@@ -765,14 +763,6 @@ export class PersonService {
     return booklet;
   }
 
-  /**
-   * Process logs for persons
-   * @param persons The persons to process logs for
-   * @param unitLogs The unit logs to process
-   * @param bookletLogs The booklet logs to process
-   * @param overwriteExistingLogs Whether to overwrite existing logs
-   * @returns A summary of the processing results
-   */
   async processPersonLogs(
     persons: Person[],
     unitLogs: any,

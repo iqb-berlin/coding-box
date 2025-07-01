@@ -124,7 +124,6 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
           }, {}
         );
       }
-
       if (this.iFrameElement) {
         const unitPlayerContent = unitPlayerChange?.currentValue || this.unitPlayer() || '';
         this.updateIframeContent(unitPlayerContent.replace(/&quot;/g, ''));
