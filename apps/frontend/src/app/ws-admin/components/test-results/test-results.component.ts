@@ -41,6 +41,7 @@ import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
 import { TestCenterImportComponent } from '../test-center-import/test-center-import.component';
 import { LogDialogComponent } from '../booklet-log-dialog/log-dialog.component';
+import { UnitLogsDialogComponent } from '../unit-logs-dialog/unit-logs-dialog.component';
 import { TagDialogComponent } from '../tag-dialog/tag-dialog.component';
 import { NoteDialogComponent } from '../note-dialog/note-dialog.component';
 import { UnitSearchDialogComponent } from '../unit-search-dialog/unit-search-dialog.component';
@@ -332,6 +333,15 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   }
 
   openBookletLogsDialog(booklet: Booklet) {
+    if (!booklet.logs || booklet.logs.length === 0) {
+      this.snackBar.open(
+        'Keine Logs für dieses Booklet vorhanden',
+        'Info',
+        { duration: 3000 }
+      );
+      return;
+    }
+
     this.dialog.open(LogDialogComponent, {
       width: '700px',
       data: {
@@ -352,7 +362,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.dialog.open(LogDialogComponent, {
+    this.dialog.open(UnitLogsDialogComponent, {
       width: '700px',
       data: {
         logs: this.logs,
