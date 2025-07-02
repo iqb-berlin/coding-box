@@ -9,6 +9,7 @@ import { Booklet } from './booklet.entity';
 @Unique('persons_pk', ['code', 'group', 'login'])
 @Index(['workspace_id', 'code']) // Composite index for common query patterns
 @Index(['workspace_id', 'group']) // Composite index for filtering by group within workspace
+@Index(['login', 'code', 'workspace_id']) // Composite index for findUnitResponse query
 
 class Persons {
   @PrimaryGeneratedColumn()
