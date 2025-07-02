@@ -1,9 +1,10 @@
 import {
-  Entity, Column, PrimaryGeneratedColumn, Unique
+  Entity, Column, PrimaryGeneratedColumn, Unique, Index
 } from 'typeorm';
 
 @Entity('bookletinfo')
 @Unique('bookletinfo_pk', ['name'])
+@Index(['name'])
 
 export class BookletInfo {
   @PrimaryGeneratedColumn()
