@@ -1147,11 +1147,8 @@ export class WorkspaceFilesService {
       }
     }
 
-    console.log(`Found ${unitVariableTypes.size} units with variable types in workspace ${workspaceId}`);
-
     const invalidVariables: InvalidVariableDto[] = [];
 
-    // Find all persons with the given workspace_id
     const persons = await this.personsRepository.find({
       where: { workspace_id: workspaceId }
     });
@@ -1166,10 +1163,8 @@ export class WorkspaceFilesService {
       };
     }
 
-    // Get all person IDs
     const personIds = persons.map(person => person.id);
 
-    // Find all units that belong to booklets that belong to these persons
     const units = await this.unitRepository.createQueryBuilder('unit')
       .innerJoin('unit.booklet', 'booklet')
       .where('booklet.personid IN (:...personIds)', { personIds })
@@ -1185,18 +1180,13 @@ export class WorkspaceFilesService {
       };
     }
 
-    // Get all unit IDs
     const unitIds = units.map(unit => unit.id);
 
-    // Find all responses that belong to these units
     const responses = await this.responseRepository.find({
       where: { unitid: In(unitIds) },
       relations: ['unit'] // Include unit relation to access unit.name
     });
 
-    console.log(`Found ${responses.length} responses for units in workspace ${workspaceId}`);
-
-    // Check each response
     for (const response of responses) {
       const unit = response.unit;
       if (!unit) {
@@ -1208,7 +1198,6 @@ export class WorkspaceFilesService {
       const variableId = response.variableid;
       const value = response.value || '';
 
-      // Skip if unit not found or variable not defined (already checked in validateVariables)
       if (!unitVariableTypes.has(unitName)) {
         continue;
       }
@@ -1218,10 +1207,8 @@ export class WorkspaceFilesService {
         continue;
       }
 
-      // Get the expected type for this variable
       const expectedType = variableTypes.get(variableId);
 
-      // Validate the value against the expected type
       if (!this.isValidValueForType(value, expectedType)) {
         invalidVariables.push({
           fileName: `Unit ${unitName}`,
@@ -1415,11 +1402,8 @@ export class WorkspaceFilesService {
   }
 
   async validateResponseStatus(workspaceId: number, page: number = 1, limit: number = 10): Promise<{ data: InvalidVariableDto[]; total: number; page: number; limit: number }> {
-    // Valid response status values
-    console.log(`Validating response status for workspace ${workspaceId} with page ${page} and limit ${limit}`);
     const validStatusValues = ['VALUE_CHANGED', 'NOT_REACHED', 'DISPLAYED', 'UNSET', 'PARTLY_DISPLAYED'];
 
-    // Find all persons with the given workspace_id
     const persons = await this.personsRepository.find({
       where: { workspace_id: workspaceId }
     });
@@ -1434,10 +1418,8 @@ export class WorkspaceFilesService {
       };
     }
 
-    // Get all person IDs
     const personIds = persons.map(person => person.id);
 
-    // Find all units that belong to booklets that belong to these persons
     const units = await this.unitRepository.createQueryBuilder('unit')
       .innerJoin('unit.booklet', 'booklet')
       .where('booklet.personid IN (:...personIds)', { personIds })
@@ -1453,20 +1435,15 @@ export class WorkspaceFilesService {
       };
     }
 
-    // Get all unit IDs
     const unitIds = units.map(unit => unit.id);
 
-    // Find all responses that belong to these units
     const responses = await this.responseRepository.find({
       where: { unitid: In(unitIds) },
       relations: ['unit'] // Include unit relation to access unit.name
     });
 
-    console.log(`Found ${responses.length} responses for units in workspace ${workspaceId}`);
-
     const invalidVariables: InvalidVariableDto[] = [];
 
-    // Check each response
     for (const response of responses) {
       const unit = response.unit;
       if (!unit) {
@@ -1505,16 +1482,18 @@ export class WorkspaceFilesService {
     };
   }
 
-  /**
-   * Validates if there's at least one response for each group found in TestTakers XML files
-   * @param workspaceId The ID of the workspace
-   * @returns Validation result indicating whether at least one response was found for each group
-   */
-  async validateGroupResponses(workspaceId: number): Promise<{
-    testTakersFound: boolean;
-    groupsWithResponses: { group: string; hasResponse: boolean }[];
-    allGroupsHaveResponses: boolean;
-  }> {
+  async validateGroupResponses(
+    workspaceId: number,
+    page: number = 1,
+    limit: number = 10
+  ): Promise<{
+      testTakersFound: boolean;
+      groupsWithResponses: { group: string; hasResponse: boolean }[];
+      allGroupsHaveResponses: boolean;
+      total: number;
+      page: number;
+      limit: number;
+    }> {
     try {
       // Find TestTakers files in the workspace
       const testTakers = await this.fileUploadRepository.find({
@@ -1526,7 +1505,10 @@ export class WorkspaceFilesService {
         return {
           testTakersFound: false,
           groupsWithResponses: [],
-          allGroupsHaveResponses: false
+          allGroupsHaveResponses: false,
+          total: 0,
+          page,
+          limit
         };
       }
 
@@ -1573,7 +1555,10 @@ export class WorkspaceFilesService {
         return {
           testTakersFound: true,
           groupsWithResponses: [],
-          allGroupsHaveResponses: false
+          allGroupsHaveResponses: false,
+          total: 0,
+          page,
+          limit
         };
       }
 
@@ -1626,10 +1611,20 @@ export class WorkspaceFilesService {
         }
       }
 
+      // Apply pagination
+      const validPage = Math.max(1, page);
+      const validLimit = Math.max(1, limit);
+      const startIndex = (validPage - 1) * validLimit;
+      const endIndex = startIndex + validLimit;
+      const paginatedGroupsWithResponses = groupsWithResponses.slice(startIndex, endIndex);
+
       return {
         testTakersFound: true,
-        groupsWithResponses,
-        allGroupsHaveResponses
+        groupsWithResponses: paginatedGroupsWithResponses,
+        allGroupsHaveResponses,
+        total: groupsWithResponses.length,
+        page: validPage,
+        limit: validLimit
       };
     } catch (error) {
       this.logger.error(`Error validating group responses for workspace ${workspaceId}: ${error.message}`, error.stack);

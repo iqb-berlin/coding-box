@@ -90,6 +90,7 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit {
   @ViewChild('variablePaginator') variablePaginator!: MatPaginator;
   @ViewChild('variableTypePaginator') variableTypePaginator!: MatPaginator;
   @ViewChild('statusVariablePaginator') statusVariablePaginator!: MatPaginator;
+  @ViewChild('groupResponsesPaginator') groupResponsesPaginator!: MatPaginator;
 
   firstStepCompleted = true;
   backendService = inject(BackendService);
@@ -127,6 +128,11 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit {
   expandedGroupResponsesPanel: boolean = false;
 
   paginatedGroupResponses = new MatTableDataSource<{ group: string; hasResponse: boolean }>([]);
+
+  // Group responses pagination properties
+  currentGroupResponsesPage: number = 1;
+  groupResponsesPageSize: number = 10;
+  totalGroupResponses: number = 0;
 
   // TestTakers validation properties
   testTakersValidationResult: TestTakersValidationDto | null = null;
@@ -176,6 +182,7 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit {
     this.paginatedVariables.paginator = this.variablePaginator;
     this.paginatedTypeVariables.paginator = this.variableTypePaginator;
     this.paginatedStatusVariables.paginator = this.statusVariablePaginator;
+    this.paginatedGroupResponses.paginator = this.groupResponsesPaginator;
   }
 
   updatePaginatedVariables(): void {
@@ -191,7 +198,26 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit {
   updatePaginatedGroupResponses(): void {
     if (this.groupResponsesResult) {
       this.paginatedGroupResponses.data = this.groupResponsesResult.groupsWithResponses;
+      // totalGroupResponses is now set from the server response
     }
+  }
+
+  onGroupResponsesPageChange(event: PageEvent): void {
+    this.currentGroupResponsesPage = event.pageIndex + 1;
+    this.groupResponsesPageSize = event.pageSize;
+
+    // Reload data from server with new pagination parameters
+    this.isGroupResponsesValidationRunning = true;
+    this.backendService.validateGroupResponses(
+      this.appService.selectedWorkspaceId,
+      this.currentGroupResponsesPage,
+      this.groupResponsesPageSize
+    ).subscribe(result => {
+      this.groupResponsesResult = result;
+      this.totalGroupResponses = result.total;
+      this.updatePaginatedGroupResponses();
+      this.isGroupResponsesValidationRunning = false;
+    });
   }
 
   validateTestTakers(): void {
@@ -219,13 +245,18 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit {
     this.isGroupResponsesValidationRunning = true;
     this.groupResponsesResult = null;
     this.groupResponsesValidationWasRun = false;
-    this.backendService.validateGroupResponses(this.appService.selectedWorkspaceId)
-      .subscribe(result => {
-        this.groupResponsesResult = result;
-        this.updatePaginatedGroupResponses();
-        this.isGroupResponsesValidationRunning = false;
-        this.groupResponsesValidationWasRun = true;
-      });
+    this.currentGroupResponsesPage = 1;
+    this.backendService.validateGroupResponses(
+      this.appService.selectedWorkspaceId,
+      this.currentGroupResponsesPage,
+      this.groupResponsesPageSize
+    ).subscribe(result => {
+      this.groupResponsesResult = result;
+      this.totalGroupResponses = result.total;
+      this.updatePaginatedGroupResponses();
+      this.isGroupResponsesValidationRunning = false;
+      this.groupResponsesValidationWasRun = true;
+    });
   }
 
   updatePaginatedTypeVariables(): void {

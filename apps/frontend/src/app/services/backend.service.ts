@@ -1093,23 +1093,36 @@ export class BackendService {
     );
   }
 
-  validateGroupResponses(workspaceId: number): Observable<{
+  validateGroupResponses(workspaceId: number, page: number = 1, limit: number = 10): Observable<{
     testTakersFound: boolean;
     groupsWithResponses: { group: string; hasResponse: boolean }[];
     allGroupsHaveResponses: boolean;
+    total: number;
+    page: number;
+    limit: number;
   }> {
+    const params = new HttpParams()
+      .set('page', page.toString())
+      .set('limit', limit.toString());
+
     return this.http.get<{
       testTakersFound: boolean;
       groupsWithResponses: { group: string; hasResponse: boolean }[];
       allGroupsHaveResponses: boolean;
+      total: number;
+      page: number;
+      limit: number;
     }>(
       `${this.serverUrl}admin/workspace/${workspaceId}/files/validate-group-responses`,
-      { headers: this.authHeader }
+      { headers: this.authHeader, params }
     ).pipe(
       catchError(() => of({
         testTakersFound: false,
         groupsWithResponses: [],
-        allGroupsHaveResponses: false
+        allGroupsHaveResponses: false,
+        total: 0,
+        page,
+        limit
       }))
     );
   }
