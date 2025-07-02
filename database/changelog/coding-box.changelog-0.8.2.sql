@@ -17,7 +17,7 @@ CREATE INDEX IF NOT EXISTS "idx_persons_login_code_workspace" ON "public"."perso
 CREATE INDEX IF NOT EXISTS "idx_response_unitid_variableid" ON "public"."response" ("unitid", "variableid");
 CREATE INDEX IF NOT EXISTS "idx_response_unitid_status" ON "public"."response" ("unitid", "status");
 CREATE INDEX IF NOT EXISTS "idx_response_codedstatus" ON "public"."response" ("codedstatus");
-CREATE INDEX IF NOT EXISTS "idx_response_value" ON "public"."response" ("value");
+CREATE INDEX IF NOT EXISTS "idx_response_value" ON "public"."response" (substring("value", 1, 1000));
 -- rollback DROP INDEX IF EXISTS "idx_response_unitid_variableid"; DROP INDEX IF EXISTS "idx_response_unitid_status"; DROP INDEX IF EXISTS "idx_response_codedstatus"; DROP INDEX IF EXISTS "idx_response_value";
 
 -- changeset jurei733:4
