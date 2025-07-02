@@ -35,6 +35,8 @@ interface ErrorMessages {
   notInList: string;
   notCurrent: string;
   unknown: string;
+  tokenExpired: string;
+  tokenInvalid: string;
 }
 
 @Component({
@@ -98,14 +100,55 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     return auth;
   }
 
+  private validateToken(token: string): { isValid: boolean; errorType?: 'token_expired' | 'token_invalid' } {
+    if (!token) {
+      return { isValid: false, errorType: 'token_invalid' };
+    }
+
+    try {
+      // Decode the token to verify it's a valid JWT
+      const decoded: JwtPayload & { workspace: string } = jwtDecode(token);
+
+      // Check if the token has expired
+      const currentTime = Math.floor(Date.now() / 1000);
+      if (decoded.exp && decoded.exp < currentTime) {
+        return { isValid: false, errorType: 'token_expired' };
+      }
+
+      // Check if the token has the required workspace claim
+      if (!decoded.workspace) {
+        return { isValid: false, errorType: 'token_invalid' };
+      }
+
+      // Token is valid
+      return { isValid: true };
+    } catch (error) {
+      // Token is invalid (couldn't be decoded)
+      return { isValid: false, errorType: 'token_invalid' };
+    }
+  }
+
   private subscribeRouter(): void {
     this.routerSubscription = this.route.params
       ?.subscribe(async params => {
         this.resetSnackBars();
         this.resetUnitData();
         this.authToken = await this.getAuthToken();
+
+        if (this.authToken) {
+          const tokenValidation = this.validateToken(this.authToken);
+          if (!tokenValidation.isValid) {
+            this.setIsLoaded();
+            if (tokenValidation.errorType === 'token_expired') {
+              this.openErrorSnackBar(this.getErrorMessages().tokenExpired, 'Schließen');
+            } else {
+              this.openErrorSnackBar(this.getErrorMessages().tokenInvalid, 'Schließen');
+            }
+            return;
+          }
+        }
+
         try {
-          // Check if we're in print-view mode
           const url = this.route.snapshot.url;
           this.isPrintMode = url.length > 0 && url[0].path === 'print-view';
 
@@ -194,6 +237,22 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     }
     this.resetUnitData();
     this.resetSnackBars();
+
+    // Validate the token if it exists
+    if (this.authToken) {
+      const tokenValidation = this.validateToken(this.authToken);
+      if (!tokenValidation.isValid) {
+        this.setIsLoaded();
+        // Show appropriate error message based on validation result
+        if (tokenValidation.errorType === 'token_expired') {
+          this.openErrorSnackBar(this.getErrorMessages().tokenExpired, 'Schließen');
+        } else {
+          this.openErrorSnackBar(this.getErrorMessages().tokenInvalid, 'Schließen');
+        }
+        return Promise.resolve();
+      }
+    }
+
     const { unitIdInput } = changes;
     try {
       this.unitId = unitIdInput.currentValue;
@@ -326,6 +385,8 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       ResponsesError: `Keine Antworten für Aufgabe "${this.unitId}" von Testperson "${this.testPerson}" gefunden`,
       notInList: `Keine valide Seite mit ID "${this.page}" gefunden`,
       notCurrent: `Seite mit ID "${this.page}" kann nicht ausgewählt werden`,
+      tokenExpired: 'Das Authentisierungs-Token ist abgelaufen',
+      tokenInvalid: 'Das Authentisierungs-Token ist ungültig',
       unknown: 'Unbekannter Fehler'
     };
   }
