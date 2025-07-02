@@ -902,4 +902,138 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       }
     });
   }
+
+  /**
+   * Deletes a unit after confirmation
+   * @param unit The unit to delete
+   * @param booklet The booklet containing the unit
+   */
+  deleteUnit(unit: Unit, booklet: Booklet): void {
+    if (!unit.id) {
+      this.snackBar.open(
+        'Diese Unit kann nicht gelöscht werden, da sie keine ID hat.',
+        'Fehler',
+        { duration: 3000 }
+      );
+      return;
+    }
+
+    const dialogRef = this.dialog.open(ConfirmDialogComponent, {
+      width: '400px',
+      data: <ConfirmDialogData>{
+        title: 'Unit löschen',
+        content: `Möchten Sie die Unit "${unit.alias || 'Unbenannte Einheit'}" wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.`,
+        confirmButtonLabel: 'Löschen',
+        showCancel: true
+      }
+    });
+
+    dialogRef.afterClosed().subscribe(confirmed => {
+      if (confirmed) {
+        this.backendService.deleteUnit(
+          this.appService.selectedWorkspaceId,
+          unit.id as number
+        ).subscribe({
+          next: result => {
+            if (result.success) {
+              // Remove the unit from the booklet's units array
+              const unitIndex = booklet.units.findIndex(u => u.id === unit.id);
+              if (unitIndex !== -1) {
+                booklet.units.splice(unitIndex, 1);
+              }
+
+              // If this was the selected unit, clear the selection
+              if (this.selectedUnit && this.selectedUnit.id === unit.id) {
+                this.selectedUnit = undefined;
+                this.responses = [];
+                this.logs = [];
+              }
+
+              this.snackBar.open(
+                `Unit "${unit.alias || 'Unbenannte Einheit'}" wurde erfolgreich gelöscht.`,
+                'Erfolg',
+                { duration: 3000 }
+              );
+            } else {
+              this.snackBar.open(
+                `Fehler beim Löschen der Unit: ${result.report.warnings.join(', ')}`,
+                'Fehler',
+                { duration: 3000 }
+              );
+            }
+          },
+          error: () => {
+            this.snackBar.open(
+              'Fehler beim Löschen der Unit. Bitte versuchen Sie es später erneut.',
+              'Fehler',
+              { duration: 3000 }
+            );
+          }
+        });
+      }
+    });
+  }
+
+  /**
+   * Deletes a response after confirmation
+   * @param response The response to delete
+   */
+  deleteResponse(response: Response): void {
+    if (!response.id) {
+      this.snackBar.open(
+        'Diese Antwort kann nicht gelöscht werden, da sie keine ID hat.',
+        'Fehler',
+        { duration: 3000 }
+      );
+      return;
+    }
+
+    const dialogRef = this.dialog.open(ConfirmDialogComponent, {
+      width: '400px',
+      data: <ConfirmDialogData>{
+        title: 'Antwort löschen',
+        content: `Möchten Sie die Antwort für Variable "${response.variableid}" wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.`,
+        confirmButtonLabel: 'Löschen',
+        showCancel: true
+      }
+    });
+
+    dialogRef.afterClosed().subscribe(confirmed => {
+      if (confirmed) {
+        this.backendService.deleteResponse(
+          this.appService.selectedWorkspaceId,
+          response.id as number
+        ).subscribe({
+          next: result => {
+            if (result.success) {
+              // Remove the response from the responses array
+              const responseIndex = this.responses.findIndex(r => r.id === response.id);
+              if (responseIndex !== -1) {
+                this.responses.splice(responseIndex, 1);
+              }
+
+              this.snackBar.open(
+                `Antwort für Variable "${response.variableid}" wurde erfolgreich gelöscht.`,
+                'Erfolg',
+                { duration: 3000 }
+              );
+            } else {
+              this.snackBar.open(
+                `Fehler beim Löschen der Antwort: ${result.report.warnings.join(', ')}`,
+                'Fehler',
+                { duration: 3000 }
+              );
+            }
+          },
+          error: () => {
+            this.snackBar.open(
+              'Fehler beim Löschen der Antwort. Bitte versuchen Sie es später erneut.',
+              'Fehler',
+              { duration: 3000 }
+            );
+          }
+        });
+      }
+    });
+  }
 }

@@ -215,6 +215,13 @@
                               </div>
                             }
                           </div>
+                          <button mat-icon-button
+                                  color="warn"
+                                  (click)="$event.stopPropagation(); deleteUnit(unit, booklet)"
+                                  class="delete-unit-button"
+                                  matTooltip="Unit löschen">
+                            <mat-icon>delete</mat-icon>
+                          </button>
                         }
                       </mat-list-item>
                     }
@@ -262,9 +269,15 @@
                       <span class="variable-id">{{ response.variableid }}</span>
                       <span class="response-status">{{ response.status }}</span>
                     </div>
-                    <button mat-icon-button (click)="response.expanded = !response.expanded" class="expand-button">
-                      <mat-icon>{{ response.expanded ? 'expand_less' : 'expand_more' }}</mat-icon>
-                    </button>
+                    <div class="response-buttons">
+                      <button mat-icon-button color="warn" (click)="$event.stopPropagation(); deleteResponse(response)"
+                              class="delete-response-button" matTooltip="Antwort löschen">
+                        <mat-icon>delete</mat-icon>
+                      </button>
+                      <button mat-icon-button (click)="response.expanded = !response.expanded" class="expand-button">
+                        <mat-icon>{{ response.expanded ? 'expand_less' : 'expand_more' }}</mat-icon>
+                      </button>
+                    </div>
                   </div>
                   @if (response.expanded) {
                     <div class="response-details">
