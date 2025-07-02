@@ -281,13 +281,13 @@
                   </div>
                   @if (response.expanded) {
                     <div class="response-details">
-                      @if (response.code) {
+                      @if (response.code && response.codedstatus) {
                         <div class="detail-row">
                           <span class="detail-label">Code:</span>
                           <span class="detail-value">{{ response.code }}</span>
                         </div>
                       }
-                      @if (response.score) {
+                      @if (response.score && response.codedstatus) {
                         <div class="detail-row">
                           <span class="detail-label">Score:</span>
                           <span class="detail-value">{{ response.score }}</span>
