@@ -395,6 +395,14 @@
                 <tr mat-header-row *matHeaderRowDef="['group', 'hasResponse']"></tr>
                 <tr mat-row *matRowDef="let row; columns: ['group', 'hasResponse'];"></tr>
               </table>
+              <mat-paginator #groupResponsesPaginator
+                           [pageSize]="groupResponsesPageSize"
+                           [pageSizeOptions]="pageSizeOptions"
+                           [length]="totalGroupResponses"
+                           [pageIndex]="currentGroupResponsesPage - 1"
+                           (page)="onGroupResponsesPageChange($event)"
+                           aria-label="Seite auswählen">
+              </mat-paginator>
             </mat-expansion-panel>
           } @else {
             <div class="validation-result validation-error">

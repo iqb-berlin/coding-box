@@ -307,10 +307,6 @@ export class WorkspaceFilesController {
     try {
       const codingSchemeFile = await this.workspaceFilesService.getCodingSchemeByRef(workspace_id, coding_scheme_ref);
 
-      if (!codingSchemeFile) {
-        throw new NotFoundException(`Coding scheme file '${coding_scheme_ref}' not found in workspace ${workspace_id}`);
-      }
-
       return codingSchemeFile;
     } catch (error) {
       if (error.status === 404) {
@@ -338,6 +334,18 @@ export class WorkspaceFilesController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiOperation({ summary: 'Validate group responses', description: 'Validates if there\'s at least one response for each group found in TestTakers XML files' })
   @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    description: 'Page number for pagination',
+    type: Number
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    description: 'Number of items per page',
+    type: Number
+  })
   @ApiOkResponse({
     description: 'Group responses validation result',
     schema: {
@@ -354,14 +362,26 @@ export class WorkspaceFilesController {
             }
           }
         },
-        allGroupsHaveResponses: { type: 'boolean' }
+        allGroupsHaveResponses: { type: 'boolean' },
+        total: { type: 'number' },
+        page: { type: 'number' },
+        limit: { type: 'number' }
       }
     }
   })
   async validateGroupResponses(
-    @Param('workspace_id') workspace_id: number
-  ): Promise<{ testTakersFound: boolean; groupsWithResponses: { group: string; hasResponse: boolean }[]; allGroupsHaveResponses: boolean }> {
-    return this.workspaceFilesService.validateGroupResponses(workspace_id);
+    @Param('workspace_id') workspace_id: number,
+                           @Query('page') page: number = 1,
+                           @Query('limit') limit: number = 10
+  ): Promise<{
+        testTakersFound: boolean;
+        groupsWithResponses: { group: string; hasResponse: boolean }[];
+        allGroupsHaveResponses: boolean;
+        total: number;
+        page: number;
+        limit: number;
+      }> {
+    return this.workspaceFilesService.validateGroupResponses(workspace_id, page, limit);
   }
 
   @Get(':workspace_id/files/validate-response-status')
