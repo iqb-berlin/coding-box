@@ -50,6 +50,8 @@ import { UnitTagDto } from '../../../../../../../api-dto/unit-tags/unit-tag.dto'
 import { CreateUnitTagDto } from '../../../../../../../api-dto/unit-tags/create-unit-tag.dto';
 import { UpdateUnitTagDto } from '../../../../../../../api-dto/unit-tags/update-unit-tag.dto';
 import { UnitNoteDto } from '../../../../../../../api-dto/unit-notes/unit-note.dto';
+import { ValidationDialogComponent } from '../validation-dialog/validation-dialog.component';
+import { VariableValidationDto } from '../../../../../../../api-dto/files/variable-validation.dto';
 
 interface BookletLog {
   id: number;
@@ -203,6 +205,8 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   unitTagsMap: Map<number, UnitTagDto[]> = new Map();
   unitNotes: UnitNoteDto[] = [];
   unitNotesMap: Map<number, UnitNoteDto[]> = new Map();
+  isVariableValidationRunning: boolean = false;
+  variableValidationResult: VariableValidationDto | null = null;
   readonly SHORT_PROCESSING_TIME_THRESHOLD_MS: number = 60000;
 
   @ViewChild(MatPaginator) paginator!: MatPaginator;
@@ -1033,6 +1037,19 @@ export class TestResultsComponent implements OnInit, OnDestroy {
             );
           }
         });
+      }
+    });
+  }
+
+  openValidationDialog(): void {
+    const dialogRef = this.dialog.open(ValidationDialogComponent, {
+      width: '800px'
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result && result.variableValidationResult) {
+        this.variableValidationResult = result.variableValidationResult;
+        this.isVariableValidationRunning = false;
       }
     });
   }
