@@ -17,6 +17,8 @@ import { WorkspaceGuard } from './workspace.guard';
 import { FileDownloadDto } from '../../../../../../api-dto/files/file-download.dto';
 import { FileValidationResultDto } from '../../../../../../api-dto/files/file-validation-result.dto';
 import { WorkspaceFilesService } from '../../database/services/workspace-files.service';
+import { InvalidVariableDto } from '../../../../../../api-dto/files/variable-validation.dto';
+import { TestTakersValidationDto } from '../../../../../../api-dto/files/testtakers-validation.dto';
 
 @ApiTags('Admin Workspace Files')
 @Controller('admin/workspace')
@@ -305,10 +307,6 @@ export class WorkspaceFilesController {
     try {
       const codingSchemeFile = await this.workspaceFilesService.getCodingSchemeByRef(workspace_id, coding_scheme_ref);
 
-      if (!codingSchemeFile) {
-        throw new NotFoundException(`Coding scheme file '${coding_scheme_ref}' not found in workspace ${workspace_id}`);
-      }
-
       return codingSchemeFile;
     } catch (error) {
       if (error.status === 404) {
@@ -316,5 +314,202 @@ export class WorkspaceFilesController {
       }
       throw new InternalServerErrorException(`Error retrieving coding scheme file: ${error.message}`);
     }
+  }
+
+  @Get(':workspace_id/files/validate-testtakers')
+  @ApiTags('test files validation')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiOperation({ summary: 'Validate TestTakers', description: 'Validates TestTakers XML files and checks if each person from the persons table is found' })
+  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
+  @ApiOkResponse({
+    description: 'TestTakers validation result'
+  })
+  async validateTestTakers(
+    @Param('workspace_id') workspace_id: number): Promise<TestTakersValidationDto> {
+    return this.workspaceFilesService.validateTestTakers(workspace_id);
+  }
+
+  @Get(':workspace_id/files/validate-group-responses')
+  @ApiTags('test files validation')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiOperation({ summary: 'Validate group responses', description: 'Validates if there\'s at least one response for each group found in TestTakers XML files' })
+  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    description: 'Page number for pagination',
+    type: Number
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    description: 'Number of items per page',
+    type: Number
+  })
+  @ApiOkResponse({
+    description: 'Group responses validation result',
+    schema: {
+      type: 'object',
+      properties: {
+        testTakersFound: { type: 'boolean' },
+        groupsWithResponses: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              group: { type: 'string' },
+              hasResponse: { type: 'boolean' }
+            }
+          }
+        },
+        allGroupsHaveResponses: { type: 'boolean' },
+        total: { type: 'number' },
+        page: { type: 'number' },
+        limit: { type: 'number' }
+      }
+    }
+  })
+  async validateGroupResponses(
+    @Param('workspace_id') workspace_id: number,
+                           @Query('page') page: number = 1,
+                           @Query('limit') limit: number = 10
+  ): Promise<{
+        testTakersFound: boolean;
+        groupsWithResponses: { group: string; hasResponse: boolean }[];
+        allGroupsHaveResponses: boolean;
+        total: number;
+        page: number;
+        limit: number;
+      }> {
+    return this.workspaceFilesService.validateGroupResponses(workspace_id, page, limit);
+  }
+
+  @Get(':workspace_id/files/validate-response-status')
+  @ApiTags('test files validation')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiOperation({ summary: 'Validate response status', description: 'Validates if response status is one of the valid values (VALUE_CHANGED, NOT_REACHED, DISPLAYED, UNSET, PARTLY_DISPLAYED)' })
+  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    description: 'Page number for pagination',
+    type: Number
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    description: 'Number of items per page',
+    type: Number
+  })
+  @ApiOkResponse({
+    description: 'Response status validation result',
+    schema: {
+      type: 'object',
+      properties: {
+        data: { type: 'array', items: { $ref: '#/components/schemas/InvalidVariableDto' } },
+        total: { type: 'number' },
+        page: { type: 'number' },
+        limit: { type: 'number' }
+      }
+    }
+  })
+  async validateResponseStatus(
+    @Param('workspace_id') workspace_id: number,
+                           @Query('page') page: number = 1,
+                           @Query('limit') limit: number = 10
+  ): Promise<{ data: InvalidVariableDto[]; total: number; page: number; limit: number }> {
+    return this.workspaceFilesService.validateResponseStatus(workspace_id, page, limit);
+  }
+
+  @Get(':workspace_id/files/validate-variables')
+  @ApiTags('test files validation')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiOperation({ summary: 'Validate variables', description: 'Validates if variables in responses are defined in Unit-XMLs' })
+  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    description: 'Page number for pagination',
+    type: Number
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    description: 'Number of items per page',
+    type: Number
+  })
+  @ApiOkResponse({
+    description: 'Variables validation result',
+    schema: {
+      type: 'object',
+      properties: {
+        data: { type: 'array', items: { $ref: '#/components/schemas/InvalidVariableDto' } },
+        total: { type: 'number' },
+        page: { type: 'number' },
+        limit: { type: 'number' }
+      }
+    }
+  })
+  async validateVariables(
+    @Param('workspace_id') workspace_id: number,
+                           @Query('page') page: number = 1,
+                           @Query('limit') limit: number = 10
+  ): Promise<{ data: InvalidVariableDto[]; total: number; page: number; limit: number }> {
+    return this.workspaceFilesService.validateVariables(workspace_id, page, limit);
+  }
+
+  @Get(':workspace_id/files/validate-variable-types')
+  @ApiTags('test files validation')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiOperation({ summary: 'Validate variable types', description: 'Validates if variable values match their defined types in Unit-XMLs' })
+  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    description: 'Page number for pagination',
+    type: Number
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    description: 'Number of items per page',
+    type: Number
+  })
+  @ApiOkResponse({
+    description: 'Variable types validation result',
+    schema: {
+      type: 'object',
+      properties: {
+        data: { type: 'array', items: { $ref: '#/components/schemas/InvalidVariableDto' } },
+        total: { type: 'number' },
+        page: { type: 'number' },
+        limit: { type: 'number' }
+      }
+    }
+  })
+
+  async validateVariableTypes(
+    @Param('workspace_id') workspace_id: number,
+                           @Query('page') page: number = 1,
+                           @Query('limit') limit: number = 10
+  ): Promise<{ data: InvalidVariableDto[]; total: number; page: number; limit: number }> {
+    return this.workspaceFilesService.validateVariableTypes(workspace_id, page, limit);
+  }
+
+  @Delete(':workspace_id/files/invalid-responses')
+  @ApiTags('test files validation')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiOperation({ summary: 'Delete invalid responses', description: 'Deletes invalid responses from the database' })
+  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
+  @ApiQuery({ name: 'responseIds', type: String, description: 'Comma-separated list of response IDs to delete' })
+  @ApiOkResponse({
+    description: 'Number of deleted responses',
+    type: Number
+  })
+  async deleteInvalidResponses(
+    @Param('workspace_id') workspace_id: number,
+      @Query('responseIds') responseIds: string): Promise<number> {
+    const ids = responseIds.split(',').map(id => parseInt(id, 10));
+    return this.workspaceFilesService.deleteInvalidResponses(workspace_id, ids);
   }
 }
