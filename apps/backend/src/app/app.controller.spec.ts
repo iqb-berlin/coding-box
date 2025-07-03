@@ -4,6 +4,7 @@ import { AppController } from './app.controller';
 import { AuthService } from './auth/service/auth.service';
 import { UsersService } from './database/services/users.service';
 import { TestcenterService } from './database/services/testcenter.service';
+import { WorkspaceUsersService } from './database/services/workspace-users.service';
 
 describe('AppController', () => {
   beforeEach(async () => {
@@ -21,6 +22,10 @@ describe('AppController', () => {
         {
           provide: TestcenterService,
           useValue: createMock<TestcenterService>()
+        },
+        {
+          provide: WorkspaceUsersService,
+          useValue: createMock<WorkspaceUsersService>()
         }
       ]
     }).compile();
