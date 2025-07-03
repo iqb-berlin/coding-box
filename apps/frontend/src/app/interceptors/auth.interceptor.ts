@@ -14,11 +14,17 @@ export const authInterceptor: HttpInterceptorFn = (
   next: HttpHandlerFn
 ): Observable<HttpEvent<unknown>> => {
   const appService = inject(AppService);
-  const idToken = localStorage.getItem('id_token');
-  const headers = new HttpHeaders({ Authorization: `Bearer ${idToken}` });
   let httpErrorInfo: AppHttpError | null = null;
 
-  return next(req.clone({ headers }))
+  let modifiedReq = req;
+
+  if (!req.headers.has('Authorization')) {
+    const idToken = localStorage.getItem('id_token');
+    const headers = new HttpHeaders({ Authorization: `Bearer ${idToken}` });
+    modifiedReq = req.clone({ headers });
+  }
+
+  return next(modifiedReq)
     .pipe(
       tap({
         error: error => {
