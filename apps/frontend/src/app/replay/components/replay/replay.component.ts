@@ -106,24 +106,16 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     }
 
     try {
-      // Decode the token to verify it's a valid JWT
       const decoded: JwtPayload & { workspace: string } = jwtDecode(token);
-
-      // Check if the token has expired
       const currentTime = Math.floor(Date.now() / 1000);
       if (decoded.exp && decoded.exp < currentTime) {
         return { isValid: false, errorType: 'token_expired' };
       }
-
-      // Check if the token has the required workspace claim
       if (!decoded.workspace) {
         return { isValid: false, errorType: 'token_invalid' };
       }
-
-      // Token is valid
       return { isValid: true };
     } catch (error) {
-      // Token is invalid (couldn't be decoded)
       return { isValid: false, errorType: 'token_invalid' };
     }
   }
@@ -238,12 +230,10 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     this.resetUnitData();
     this.resetSnackBars();
 
-    // Validate the token if it exists
     if (this.authToken) {
       const tokenValidation = this.validateToken(this.authToken);
       if (!tokenValidation.isValid) {
         this.setIsLoaded();
-        // Show appropriate error message based on validation result
         if (tokenValidation.errorType === 'token_expired') {
           this.openErrorSnackBar(this.getErrorMessages().tokenExpired, 'Schließen');
         } else {
@@ -257,7 +247,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     try {
       this.unitId = unitIdInput.currentValue;
       this.setTestPerson(this.testPersonInput() || '');
-      const unitData = await this.getUnitData(this.appService.selectedWorkspaceId);
+      const unitData = await this.getUnitData(this.appService.selectedWorkspaceId, this.authToken);
       this.setUnitProperties(unitData);
     } catch (error) {
       this.setIsLoaded();
