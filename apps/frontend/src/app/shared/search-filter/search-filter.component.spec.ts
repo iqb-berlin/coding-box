@@ -1,10 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { TranslateModule } from '@ngx-translate/core';
-import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatInputModule } from '@angular/material/input';
-import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
-import { MatIconModule } from '@angular/material/icon';
-import { MatTooltipModule } from '@angular/material/tooltip';
 import { SearchFilterComponent } from './search-filter.component';
 
 describe('SearchFilterComponent', () => {
@@ -14,17 +10,15 @@ describe('SearchFilterComponent', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [
-        MatTooltipModule,
-        MatIconModule,
-        BrowserAnimationsModule,
-        MatInputModule,
-        MatFormFieldModule,
+        SearchFilterComponent,
+        NoopAnimationsModule,
         TranslateModule.forRoot()
       ]
     }).compileComponents();
 
     fixture = TestBed.createComponent(SearchFilterComponent);
     component = fixture.componentInstance;
+    fixture.componentRef.setInput('title', 'test search');
     fixture.detectChanges();
   });
 

@@ -18,6 +18,8 @@ describe('AccountActionComponent', () => {
 
     fixture = TestBed.createComponent(AccountActionComponent);
     component = fixture.componentInstance;
+    fixture.componentRef.setInput('type', 'logout');
+    fixture.componentRef.setInput('iconName', 'exit_to_app');
     fixture.detectChanges();
   });
 
