@@ -21,6 +21,9 @@ describe('UsersMenuComponent', () => {
 
     fixture = TestBed.createComponent(UsersMenuComponent);
     component = fixture.componentInstance;
+    fixture.componentRef.setInput('selectedUser', []);
+    fixture.componentRef.setInput('checkedRows', []);
+    fixture.componentRef.setInput('selectedRows', []);
     fixture.detectChanges();
   });
 
