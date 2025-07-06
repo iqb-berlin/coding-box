@@ -4,7 +4,6 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatRadioModule } from '@angular/material/radio';
 import { FormsModule } from '@angular/forms';
 
-
 export type ExportFormat = 'json' | 'csv' | 'excel';
 
 @Component({
@@ -17,7 +16,7 @@ export type ExportFormat = 'json' | 'csv' | 'excel';
     MatDialogModule,
     MatButtonModule,
     MatRadioModule
-]
+  ]
 })
 export class ExportDialogComponent {
   dialogRef = inject<MatDialogRef<ExportDialogComponent>>(MatDialogRef);

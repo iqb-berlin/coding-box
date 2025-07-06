@@ -1,9 +1,9 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
 import { ActivatedRoute } from '@angular/router';
+import { provideHttpClient } from '@angular/common/http';
 import { CodingManagementComponent } from './coding-management.component';
 import { environment } from '../../../environments/environment';
-import { provideHttpClient } from '@angular/common/http';
 
 describe('CodingManagementComponent', () => {
   let component: CodingManagementComponent;
