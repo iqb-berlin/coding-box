@@ -444,6 +444,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         }
       }
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.error('Error searching for elements with data-element-alias:', error);
     }
 
@@ -473,6 +474,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         }
       }
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.error('Error getting data-element-alias values:', error);
     }
 
@@ -496,6 +498,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         return true;
       }
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.error(`Error scrolling to element with alias "${alias}":`, error);
     }
 

@@ -20,7 +20,6 @@ export const journalInterceptor: HttpInterceptorFn = (
   const appService = inject(AppService);
   // const journalService = inject(JournalService);
 
-  // Only intercept requests to the backend API
   if (!request.url.startsWith(appService.serverUrl)) {
     return next(request);
   }
@@ -43,28 +42,18 @@ export const journalInterceptor: HttpInterceptorFn = (
   );
 };
 
-/**
- * Checks if the request method indicates data modification
- */
 function isDataModifyingRequest(request: HttpRequest<unknown>): boolean {
-  // Check if the request method indicates data modification
   return ['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method);
 }
 
-/**
- * Checks if the request is related to test results
- */
 function isTestResultsRequest(request: HttpRequest<unknown>): boolean {
-  // Check if the request URL contains test-results related paths
   return request.url.includes('/test-results') ||
          request.url.includes('/responses') ||
          request.url.includes('/units') ||
          request.url.includes('/booklets');
 }
 
-/**
- * Logs an action to the journal
- */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function logAction(
   request: HttpRequest<unknown>,
   response: HttpResponse<unknown>,
@@ -76,14 +65,12 @@ function logAction(
     return;
   }
 
-  // Extract information from the request
   const url = request.url;
   const method = request.method;
   const actionType = getActionType(method);
   const entityType = getEntityType(url);
   const entityId = getEntityId(url);
 
-  // Create details from the request body and response
   const details = JSON.stringify({
     method,
     url,
@@ -92,7 +79,6 @@ function logAction(
     responseBody: response.body ? sanitizeBody(response.body) : null
   });
 
-  // Log the action to the journal
   journalService.createJournalEntry(
     workspaceId,
     actionType,
@@ -102,9 +88,6 @@ function logAction(
   ).subscribe();
 }
 
-/**
- * Gets the action type based on the HTTP method
- */
 function getActionType(method: string): string {
   switch (method) {
     case 'POST': return 'create';
@@ -115,9 +98,6 @@ function getActionType(method: string): string {
   }
 }
 
-/**
- * Gets the entity type based on the URL
- */
 function getEntityType(url: string): string {
   // Extract entity type from URL
   if (url.includes('/test-results')) return 'test-results';
@@ -132,11 +112,7 @@ function getEntityType(url: string): string {
   return 'unknown';
 }
 
-/**
- * Gets the entity ID from the URL
- */
 function getEntityId(url: string): string {
-  // Try to extract an ID from the URL
   const parts = url.split('/');
   const idPattern = /^[0-9]+$/;
 

@@ -93,8 +93,7 @@ export class CoderListComponent implements OnInit, AfterViewInit {
         this.dataSource.data = coders;
         this.isLoading = false;
       },
-      error: error => {
-        console.error('Error loading coders:', error);
+      error: () => {
         this.snackBar.open('Fehler beim Laden der Kodierer', 'Schließen', { duration: 3000 });
         this.isLoading = false;
       }
@@ -141,8 +140,7 @@ export class CoderListComponent implements OnInit, AfterViewInit {
         this.loadCoders();
         this.coderForm.reset();
       },
-      error: error => {
-        console.error('Error creating coder:', error);
+      error: () => {
         this.snackBar.open('Fehler beim Erstellen des Kodierers', 'Schließen', { duration: 3000 });
       }
     });
@@ -180,8 +178,7 @@ export class CoderListComponent implements OnInit, AfterViewInit {
         this.editingCoderId = null;
         this.coderForm.reset();
       },
-      error: error => {
-        console.error('Error updating coder:', error);
+      error: () => {
         this.snackBar.open('Fehler beim Aktualisieren des Kodierers', 'Schließen', { duration: 3000 });
       }
     });
@@ -195,13 +192,11 @@ export class CoderListComponent implements OnInit, AfterViewInit {
 
     const deletePromises = this.selection.selected.map(coder => this.coderService.deleteCoder(coder.id));
 
-    // Using Promise.all to wait for all delete operations to complete
     Promise.all(deletePromises).then(() => {
       this.snackBar.open('Kodierer erfolgreich gelöscht', 'Schließen', { duration: 3000 });
       this.loadCoders();
       this.selection.clear();
-    }).catch(error => {
-      console.error('Error deleting coders:', error);
+    }).catch(() => {
       this.snackBar.open('Fehler beim Löschen der Kodierer', 'Schließen', { duration: 3000 });
     });
   }
