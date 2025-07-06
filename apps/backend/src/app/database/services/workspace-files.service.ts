@@ -300,7 +300,9 @@ export class WorkspaceFilesService {
   }
 
   private extractXmlData(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     bookletTags: cheerio.Cheerio<any>,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     unitTags: cheerio.Cheerio<any>
   ): {
       uniqueBooklets: Set<string>;
@@ -558,7 +560,7 @@ export class WorkspaceFilesService {
         }
       }
 
-      // @ts-expect-error
+      // @ts-expect-error: not exact match
       const fileUpload = this.fileUploadRepository.create({
         workspace_id: workspaceId,
         filename: file.originalname,
@@ -1004,9 +1006,7 @@ export class WorkspaceFilesService {
           }
           unitVariables.set(unitName, variables);
         }
-      } catch (e) {
-        console.error(`Could not parse Unit file ${unitFile.filename}: ${e.message}`);
-      }
+      } catch (e) { /* empty */ }
     }
 
     const invalidVariables: InvalidVariableDto[] = [];
@@ -1142,9 +1142,7 @@ export class WorkspaceFilesService {
 
           unitVariableTypes.set(unitName, variableTypes);
         }
-      } catch (e) {
-        console.error(`Could not parse Unit file ${unitFile.filename}: ${e.message}`);
-      }
+      } catch (e) { /* empty */ }
     }
 
     const invalidVariables: InvalidVariableDto[] = [];
