@@ -17,6 +17,7 @@ import { TestGroupsInListDto } from '../../../../../api-dto/test-groups/testgrou
 import { FilesInListDto } from '../../../../../api-dto/files/files-in-list.dto';
 import { CreateUserDto } from '../../../../../api-dto/user/create-user-dto';
 import { LogoService } from './logo.service';
+import { SERVER_URL } from '../injection-tokens';
 
 type WorkspaceData = {
   testGroups: TestGroupsInListDto[];
@@ -28,7 +29,7 @@ type WorkspaceData = {
   providedIn: 'root'
 })
 export class AppService {
-  public readonly serverUrl = inject<string>('SERVER_URL' as any);
+  readonly serverUrl = inject(SERVER_URL);
   private http = inject(HttpClient);
   private logoService = inject(LogoService);
 
@@ -78,11 +79,6 @@ export class AppService {
     );
   }
 
-  /**
-   * Logs in using Keycloak
-   * @param user The user to log in
-   * @returns An Observable of whether the login was successful
-   */
   keycloakLogin(user: CreateUserDto): Observable<boolean | null> {
     return this.http.post<string>(`${this.serverUrl}keycloak-login`, user)
       .pipe(
@@ -111,11 +107,6 @@ export class AppService {
       );
   }
 
-  /**
-   * Gets authentication data for the specified identity
-   * @param id The identity to get auth data for
-   * @returns An Observable of the auth data
-   */
   getAuthData(id: string): Observable<AuthDataDto> {
     return this.http.get<AuthDataDto>(
       `${this.serverUrl}auth-data?identity=${id}`,
@@ -123,9 +114,6 @@ export class AppService {
     );
   }
 
-  /**
-   * Refreshes the auth data by fetching it from the backend
-   */
   refreshAuthData(): void {
     if (this.loggedUser?.sub) {
       this.getAuthData(this.loggedUser.sub).subscribe(authData => {
@@ -134,9 +122,6 @@ export class AppService {
     }
   }
 
-  /**
-   * Loads saved logo settings from the server
-   */
   private loadLogoSettings(): void {
     this.logoService.getLogoSettings().subscribe({
       next: settings => {

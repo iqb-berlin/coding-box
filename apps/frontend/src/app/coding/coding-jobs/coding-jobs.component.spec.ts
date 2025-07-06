@@ -4,6 +4,7 @@ import { ActivatedRoute } from '@angular/router';
 import { provideHttpClient } from '@angular/common/http';
 import { CodingJobsComponent } from './coding-jobs.component';
 import { environment } from '../../../environments/environment';
+import { SERVER_URL } from '../../injection-tokens';
 
 describe('CodingJobsComponent', () => {
   let component: CodingJobsComponent;
@@ -15,7 +16,7 @@ describe('CodingJobsComponent', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       providers: [
-        { provide: 'SERVER_URL', useValue: environment.backendUrl },
+        { provide: SERVER_URL, useValue: environment.backendUrl },
 
         {
           provide: ActivatedRoute,

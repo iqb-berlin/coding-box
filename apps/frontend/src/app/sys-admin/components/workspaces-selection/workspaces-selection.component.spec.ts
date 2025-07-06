@@ -11,6 +11,7 @@ import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { provideHttpClient } from '@angular/common/http';
 import { WorkspacesSelectionComponent } from './workspaces-selection.component';
 import { environment } from '../../../../environments/environment';
+import { SERVER_URL } from '../../../injection-tokens';
 
 describe('WorkspacesSelectionComponent', () => {
   let component: WorkspacesSelectionComponent;
@@ -31,7 +32,7 @@ describe('WorkspacesSelectionComponent', () => {
       providers: [
         provideHttpClient(),
         {
-          provide: 'SERVER_URL',
+          provide: SERVER_URL,
           useValue: environment.backendUrl
         }
       ]

@@ -12,6 +12,7 @@ import { MatDialogModule } from '@angular/material/dialog';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { WorkspacesComponent } from './workspaces.component';
 import { environment } from '../../../../environments/environment';
+import { SERVER_URL } from '../../../injection-tokens';
 
 describe('WorkspaceGroupsComponent', () => {
   let component: WorkspacesComponent;
@@ -32,7 +33,7 @@ describe('WorkspaceGroupsComponent', () => {
       providers: [
         provideHttpClient(),
         {
-          provide: 'SERVER_URL',
+          provide: SERVER_URL,
           useValue: environment.backendUrl
         }
       ]

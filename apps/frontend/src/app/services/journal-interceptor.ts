@@ -10,9 +10,6 @@ import { Observable, tap } from 'rxjs';
 import { AppService } from './app.service';
 import { JournalService } from './journal.service';
 
-/**
- * Functional interceptor for logging HTTP requests to the journal
- */
 export const journalInterceptor: HttpInterceptorFn = (
   request: HttpRequest<unknown>,
   next: HttpHandlerFn

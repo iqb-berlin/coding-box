@@ -36,6 +36,7 @@ import { ResourcePackageDto } from '../../../../../api-dto/resource-package/reso
 import { PaginatedWorkspaceUserDto } from '../../../../../api-dto/workspaces/paginated-workspace-user-dto';
 import { InvalidVariableDto } from '../../../../../api-dto/files/variable-validation.dto';
 import { TestTakersValidationDto } from '../../../../../api-dto/files/testtakers-validation.dto';
+import { SERVER_URL } from '../injection-tokens';
 
 interface PaginatedResponse<T> {
   data: T[];
@@ -85,7 +86,7 @@ interface ResponseEntity {
   providedIn: 'root'
 })
 export class BackendService {
-  private readonly serverUrl = inject<string>('SERVER_URL' as any);
+  readonly serverUrl = inject(SERVER_URL);
   private http = inject(HttpClient);
   appService = inject(AppService);
 

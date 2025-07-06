@@ -23,6 +23,7 @@ import { routes } from './app.routes';
 import { environment } from '../environments/environment';
 import { authInterceptor } from './interceptors/auth.interceptor';
 import { journalInterceptor } from './services/journal-interceptor';
+import { SERVER_URL } from './injection-tokens';
 
 export function createTranslateLoader(http: HttpClient): TranslateHttpLoader {
   return new TranslateHttpLoader(http, './assets/i18n/', '.json');
@@ -76,7 +77,7 @@ export const appConfig: ApplicationConfig = {
     provideRouter(routes),
     provideAnimationsAsync(),
     {
-      provide: 'SERVER_URL',
+      provide: SERVER_URL,
       useValue: environment.backendUrl
     },
     {

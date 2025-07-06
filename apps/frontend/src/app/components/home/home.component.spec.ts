@@ -7,6 +7,7 @@ import { HomeComponent } from './home.component';
 import { AuthService } from '../../auth/service/auth.service';
 import { environment } from '../../../environments/environment';
 import { AppService } from '../../services/app.service';
+import { SERVER_URL } from '../../injection-tokens';
 
 const mockAuthService = {
   isLoggedIn: jest.fn(() => true)
@@ -43,7 +44,7 @@ describe('HomeComponent', () => {
         { provide: AuthService, useValue: mockAuthService },
         { provide: AppService, useValue: mockAppService },
         {
-          provide: 'SERVER_URL',
+          provide: SERVER_URL,
           useValue: environment.backendUrl
         }, provideHttpClient()]
     })
