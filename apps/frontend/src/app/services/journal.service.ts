@@ -1,6 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, catchError, of } from 'rxjs';
+import { SERVER_URL } from '../injection-tokens';
 
 export interface JournalEntry {
   id: number;
@@ -23,7 +24,7 @@ export interface PaginatedJournalEntries {
   providedIn: 'root'
 })
 export class JournalService {
-  private readonly serverUrl = inject<string>('SERVER_URL' as any);
+  readonly serverUrl = inject(SERVER_URL);
   private http = inject(HttpClient);
 
   authHeader = { Authorization: `Bearer ${localStorage.getItem('id_token')}` };

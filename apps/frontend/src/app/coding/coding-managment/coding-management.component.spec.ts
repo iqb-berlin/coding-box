@@ -4,6 +4,7 @@ import { ActivatedRoute } from '@angular/router';
 import { provideHttpClient } from '@angular/common/http';
 import { CodingManagementComponent } from './coding-management.component';
 import { environment } from '../../../environments/environment';
+import { SERVER_URL } from '../../injection-tokens';
 
 describe('CodingManagementComponent', () => {
   let component: CodingManagementComponent;
@@ -18,7 +19,7 @@ describe('CodingManagementComponent', () => {
       providers: [
         provideHttpClient(),
         {
-          provide: 'SERVER_URL',
+          provide: SERVER_URL,
           useValue: environment.backendUrl
         },
         {

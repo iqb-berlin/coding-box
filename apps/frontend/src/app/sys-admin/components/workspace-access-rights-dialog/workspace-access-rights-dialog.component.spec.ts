@@ -5,6 +5,7 @@ import { TranslateModule } from '@ngx-translate/core';
 import { MatIconModule } from '@angular/material/icon';
 import { WorkspaceAccessRightsDialogComponent } from './workspace-access-rights-dialog.component';
 import { environment } from '../../../../environments/environment';
+import { SERVER_URL } from '../../../injection-tokens';
 
 describe('WorkspaceAccessRightsDialogComponent', () => {
   let component: WorkspaceAccessRightsDialogComponent;
@@ -17,7 +18,7 @@ describe('WorkspaceAccessRightsDialogComponent', () => {
         useValue: {}
       },
       {
-        provide: 'SERVER_URL',
+        provide: SERVER_URL,
         useValue: environment.backendUrl
       }
       ],

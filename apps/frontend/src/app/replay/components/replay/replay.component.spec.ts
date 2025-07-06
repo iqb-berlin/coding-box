@@ -4,6 +4,7 @@ import { ActivatedRoute } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 import { ReplayComponent } from './replay.component';
 import { environment } from '../../../../environments/environment';
+import { SERVER_URL } from '../../../injection-tokens';
 
 describe('ReplayComponent', () => {
   let component: ReplayComponent;
@@ -19,7 +20,7 @@ describe('ReplayComponent', () => {
         useValue: fakeActivatedRoute
       },
       {
-        provide: 'SERVER_URL',
+        provide: SERVER_URL,
         useValue: environment.backendUrl
       }],
       imports: [ReplayComponent, HttpClientModule, TranslateModule.forRoot()]

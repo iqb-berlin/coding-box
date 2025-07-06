@@ -10,6 +10,7 @@ import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { provideHttpClient } from '@angular/common/http';
 import { environment } from '../../../../environments/environment';
 import { TestResultsComponent } from './test-results.component';
+import { SERVER_URL } from '../../../injection-tokens';
 
 describe('TestResultsComponent', () => {
   let component: TestResultsComponent;
@@ -29,7 +30,7 @@ describe('TestResultsComponent', () => {
       providers: [
         provideHttpClient(),
         {
-          provide: 'SERVER_URL',
+          provide: SERVER_URL,
           useValue: environment.backendUrl
         }
       ]

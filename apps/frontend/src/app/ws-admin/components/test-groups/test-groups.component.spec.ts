@@ -4,12 +4,13 @@ import { TranslateModule } from '@ngx-translate/core';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBarModule } from '@angular/material/snack-bar';
-import { HttpClientModule } from '@angular/common/http';
+import { provideHttpClient } from '@angular/common/http';
 import { MatTableModule } from '@angular/material/table';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { environment } from '../../../../environments/environment';
 import { TestGroupsComponent } from './test-groups.component';
+import { SERVER_URL } from '../../../injection-tokens';
 
 describe('UsersComponent', () => {
   let component: TestGroupsComponent;
@@ -24,15 +25,15 @@ describe('UsersComponent', () => {
         MatTooltipModule,
         MatIconModule,
         MatTableModule,
-        HttpClientModule,
         NoopAnimationsModule,
         TranslateModule.forRoot()
       ],
       providers: [
         {
-          provide: 'SERVER_URL',
+          provide: SERVER_URL,
           useValue: environment.backendUrl
-        }
+        },
+        provideHttpClient()
       ]
     }).compileComponents();
 

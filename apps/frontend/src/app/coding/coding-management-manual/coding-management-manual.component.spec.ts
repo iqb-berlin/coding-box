@@ -5,6 +5,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { CodingManagementManualComponent } from './coding-management-manual.component';
 import { environment } from '../../../environments/environment';
+import { SERVER_URL } from '../../injection-tokens';
 
 describe('CodingManagementManualComponent', () => {
   let component: CodingManagementManualComponent;
@@ -22,7 +23,7 @@ describe('CodingManagementManualComponent', () => {
           provide: ActivatedRoute,
           useValue: fakeActivatedRoute
         }, {
-          provide: 'SERVER_URL',
+          provide: SERVER_URL,
           useValue: environment.backendUrl
         }, provideHttpClient()],
       imports: [
