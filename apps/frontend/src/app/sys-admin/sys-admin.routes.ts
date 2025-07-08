@@ -1,5 +1,5 @@
 import { Routes } from '@angular/router';
-import { canActivateAuth } from '../auth/guards/auth.guard';
+import { canActivateAuth } from '../core/guards/auth.guard';
 
 export const sysAdminRoutes: Routes = [
   {
