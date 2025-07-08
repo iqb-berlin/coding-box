@@ -30,7 +30,7 @@ import { AppLogoDto } from '../../../../../../api-dto/app-logo-dto';
 @Controller('admin/logo')
 @ApiTags('admin')
 export class LogoController {
-  LOGO_PATH = path.join(process.cwd(), 'apps', 'frontend', 'src', 'assets', 'logo');
+  LOGO_PATH = path.join(process.cwd(), 'apps', 'frontend', 'src', 'assets', 'images');
   ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/svg+xml', 'image/webp'];
   MAX_FILE_SIZE = 4 * 1024 * 1024; // 4MB
 
@@ -42,7 +42,7 @@ export class LogoController {
     FileInterceptor('logo', {
       storage: diskStorage({
         destination: (req, file, cb) => {
-          const uploadPath = path.join(process.cwd(), 'apps', 'frontend', 'src', 'assets');
+          const uploadPath = path.join(process.cwd(), 'apps', 'frontend', 'src', 'assets', 'images');
           if (!fs.existsSync(uploadPath)) {
             fs.mkdirSync(uploadPath, { recursive: true });
           }
@@ -93,7 +93,7 @@ export class LogoController {
     try {
       // Always return the consistent path to the uploaded file
       // This ensures the path matches the actual saved filename (logo + extension)
-      return { path: `assets/logo${path.extname(file.originalname)}` };
+      return { path: `assets/images/logo${path.extname(file.originalname)}` };
     } catch (error) {
       throw new InternalServerErrorException('Failed to upload logo');
     }
@@ -106,8 +106,8 @@ export class LogoController {
   @ApiOkResponse({ description: 'Logo deleted successfully', type: Boolean })
   async deleteLogo(): Promise<{ success: boolean }> {
     try {
-      // Find all files starting with 'logo' in the assets directory
-      const assetsDir = path.join(process.cwd(), 'apps', 'frontend', 'src', 'assets');
+      // Find all files starting with 'logo' in the images directory
+      const assetsDir = path.join(process.cwd(), 'apps', 'frontend', 'src', 'assets', 'images');
       const files = fs.readdirSync(assetsDir);
 
       let deleted = false;
@@ -119,7 +119,7 @@ export class LogoController {
       }
 
       // Delete logo settings file if it exists
-      const settingsPath = path.join(process.cwd(), 'apps', 'frontend', 'src', 'assets', 'logo-settings.json');
+      const settingsPath = path.join(process.cwd(), 'apps', 'frontend', 'src', 'assets', 'data', 'logo-settings.json');
       if (fs.existsSync(settingsPath)) {
         fs.unlinkSync(settingsPath);
       }
@@ -138,7 +138,13 @@ export class LogoController {
   @ApiOkResponse({ description: 'Logo settings saved successfully', type: Boolean })
   async saveLogoSettings(@Body() logoSettings: AppLogoDto): Promise<{ success: boolean }> {
     try {
-      const settingsPath = path.join(process.cwd(), 'apps', 'frontend', 'src', 'assets', 'logo-settings.json');
+      const dataDir = path.join(process.cwd(), 'apps', 'frontend', 'src', 'assets', 'data');
+      const settingsPath = path.join(dataDir, 'logo-settings.json');
+
+      // Ensure data directory exists
+      if (!fs.existsSync(dataDir)) {
+        fs.mkdirSync(dataDir, { recursive: true });
+      }
 
       // Save the settings to a file
       fs.writeFileSync(settingsPath, JSON.stringify(logoSettings, null, 2));
@@ -156,7 +162,7 @@ export class LogoController {
   @ApiOkResponse({ description: 'Logo settings retrieved successfully', type: AppLogoDto })
   async getLogoSettings(): Promise<AppLogoDto> {
     try {
-      const settingsPath = path.join(process.cwd(), 'apps', 'frontend', 'src', 'assets', 'logo-settings.json');
+      const settingsPath = path.join(process.cwd(), 'apps', 'frontend', 'src', 'assets', 'data', 'logo-settings.json');
 
       // Check if settings file exists
       if (fs.existsSync(settingsPath)) {
@@ -167,7 +173,7 @@ export class LogoController {
 
       // Return default settings if file doesn't exist
       return {
-        data: 'assets/IQB-LogoA.png',
+        data: 'assets/images/IQB-LogoA.png',
         alt: 'Zur Startseite',
         bodyBackground: 'linear-gradient(180deg, rgba(7,70,94,1) 0%, rgba(6,112,123,1) 24%, rgba(1,192,229,1) 85%)',
         boxBackground: 'lightgray'
