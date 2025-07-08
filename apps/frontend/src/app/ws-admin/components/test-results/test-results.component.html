@@ -305,7 +305,7 @@
                       }
                       <div class="detail-row">
                         <span class="detail-label">Value:</span>
-                        <span class="detail-value">{{ response.value | slice:0:1000 }}{{ response.value.length > 1000 ? '...' : '' }}</span>
+                        <span class="detail-value">{{ response.value ? (response.value | slice:0:1000) : '' }}{{ response.value && response.value.length > 1000 ? '...' : '' }}</span>
                       </div>
                     </div>
                   }

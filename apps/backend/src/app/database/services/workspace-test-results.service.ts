@@ -64,110 +64,175 @@ export class WorkspaceTestResultsService {
         `Fetching booklets, bookletInfo data, units, and test results for personId: ${personId} and workspaceId: ${workspaceId}`
       );
 
-      const booklets = await this.bookletRepository.find({
-        where: { personid: personId },
-        select: ['id', 'personid', 'infoid']
-      });
+      // Get booklets with bookletInfo in a single query using join
+      const booklets = await this.bookletRepository
+        .createQueryBuilder('booklet')
+        .innerJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
+        .where('booklet.personid = :personId', { personId })
+        .select([
+          'booklet.id',
+          'booklet.personid',
+          'bookletinfo.id',
+          'bookletinfo.name',
+          'bookletinfo.size'
+        ])
+        .getMany();
+
       if (!booklets || booklets.length === 0) {
         this.logger.log(`No booklets found for personId: ${personId}`);
         return [];
       }
 
       const bookletIds = booklets.map(booklet => booklet.id);
-      const bookletInfoIds = booklets.map(booklet => booklet.infoid);
-      const bookletInfoData = await this.bookletInfoRepository.find({
-        where: { id: In(bookletInfoIds) },
-        select: ['id', 'name', 'size']
-      });
 
-      const units = await this.unitRepository.find({
-        where: { bookletid: In(bookletIds) },
-        select: ['id', 'name', 'alias', 'bookletid']
-      });
+      // Get units with responses in a single query using join
+      const units = await this.unitRepository
+        .createQueryBuilder('unit')
+        .leftJoinAndSelect('unit.responses', 'response')
+        .where('unit.bookletid IN (:...bookletIds)', { bookletIds })
+        .select([
+          'unit.id',
+          'unit.name',
+          'unit.alias',
+          'unit.bookletid',
+          'response.id',
+          'response.unitid',
+          'response.variableid',
+          'response.status',
+          'response.value',
+          'response.subform',
+          'response.code',
+          'response.score',
+          'response.codedstatus'
+        ])
+        .getMany();
 
       const unitIds = units.map(unit => unit.id);
 
-      const responses = await this.responseRepository.find({
-        where: { unitid: In(unitIds) }
+      // Create a map of unit ID to responses
+      const unitResultMap = new Map<number, { id: number; unitid: number }[]>();
+      units.forEach(unit => {
+        if (unit.responses) {
+          // Remove duplicate responses
+          const uniqueResponses = Array.from(
+            new Map(unit.responses.map(response => [response.id, response])).values()
+          );
+          unitResultMap.set(unit.id, uniqueResponses);
+        }
       });
 
-      const uniqueResponses = Array.from(
-        new Map(responses.map(response => [response.id, response])).values()
-      );
+      // Get booklet logs in a single query
+      const bookletLogs = await this.bookletLogRepository
+        .createQueryBuilder('bookletLog')
+        .where('bookletLog.bookletid IN (:...bookletIds)', { bookletIds })
+        .select(['bookletLog.id', 'bookletLog.bookletid', 'bookletLog.ts', 'bookletLog.parameter', 'bookletLog.key'])
+        .getMany();
 
-      const unitResultMap = new Map<number, { id: number; unitid: number }[]>();
-      for (const response of uniqueResponses) {
-        if (!unitResultMap.has(response.unitid)) {
-          unitResultMap.set(response.unitid, []);
+      // Get sessions in a single query
+      const sessions = await this.sessionRepository
+        .createQueryBuilder('session')
+        .innerJoin('session.booklet', 'booklet')
+        .where('booklet.id IN (:...bookletIds)', { bookletIds })
+        .select(['session.id', 'session.browser', 'session.os', 'session.screen', 'session.ts', 'booklet.id'])
+        .getMany();
+
+      // Get unit logs in a single query
+      const unitLogs = await this.unitLogRepository
+        .createQueryBuilder('unitLog')
+        .where('unitLog.unitid IN (:...unitIds)', { unitIds })
+        .select(['unitLog.id', 'unitLog.unitid', 'unitLog.ts', 'unitLog.key', 'unitLog.parameter'])
+        .getMany();
+
+      // Group logs by unit ID for faster lookup
+      const unitLogsMap = new Map<number, { id: number; unitid: number; ts: string; key: string; parameter: string }[]>();
+      unitLogs.forEach(log => {
+        if (!unitLogsMap.has(log.unitid)) {
+          unitLogsMap.set(log.unitid, []);
         }
-        unitResultMap.get(response.unitid)?.push(response);
+        unitLogsMap.get(log.unitid)?.push({
+          id: log.id,
+          unitid: log.unitid,
+          ts: log.ts.toString(),
+          key: log.key,
+          parameter: log.parameter
+        });
+      });
+
+      // Get unit tags in a single batch query instead of multiple individual queries
+      const unitTagsMap = new Map<number, { id: number; unitId: number; tag: string; color?: string; createdAt: Date }[]>();
+
+      // Only fetch tags if there are units
+      if (unitIds.length > 0) {
+        const allTags = await this.unitTagService.findAllByUnitIds(unitIds);
+
+        // Group tags by unit ID
+        allTags.forEach(tag => {
+          if (!unitTagsMap.has(tag.unitId)) {
+            unitTagsMap.set(tag.unitId, []);
+          }
+          unitTagsMap.get(tag.unitId)?.push(tag);
+        });
       }
 
-      const bookletLogs = await this.bookletLogRepository.find({
-        where: { bookletid: In(bookletIds) },
-        select: ['id', 'bookletid', 'ts', 'parameter', 'key']
-      });
-
-      const sessions = await this.sessionRepository.find({
-        where: { booklet: { id: In(bookletIds) } },
-        relations: ['booklet'],
-        select: ['id', 'browser', 'os', 'screen', 'ts']
-      });
-
-      const unitLogs = await this.unitLogRepository.find({
-        where: { unitid: In(unitIds) },
-        select: ['id', 'unitid', 'ts', 'key', 'parameter']
-      });
-
-      const allUnitTags = await Promise.all(
-        unitIds.map(unitId => this.unitTagService.findAllByUnitId(unitId))
-      );
-
-      const unitTagsMap = new Map<number, { id: number; unitId: number; tag: string; color?: string; createdAt: Date }[]>();
-      unitIds.forEach((unitId, index) => {
-        unitTagsMap.set(unitId, allUnitTags[index]);
-      });
-
-      return booklets.map(booklet => {
-        const bookletInfo = bookletInfoData.find(info => info.id === booklet.infoid);
-        return {
-          id: booklet.id,
-          personid: booklet.personid,
-          name: bookletInfo.name,
-          size: bookletInfo.size,
-          logs: bookletLogs.filter(log => log.bookletid === booklet.id).map(log => ({
-            id: log.id,
-            bookletid: log.bookletid,
-            ts: log.ts.toString(),
-            key: log.key,
-            parameter: log.parameter
-          })),
-          sessions: sessions.filter(session => session.booklet?.id === booklet.id).map(session => ({
+      // Group sessions by booklet ID for faster lookup
+      const sessionsMap = new Map<number, { id: number; browser: string; os: string; screen: string; ts: string }[]>();
+      sessions.forEach(session => {
+        const bookletId = session.booklet?.id;
+        if (bookletId && !sessionsMap.has(bookletId)) {
+          sessionsMap.set(bookletId, []);
+        }
+        if (bookletId) {
+          sessionsMap.get(bookletId)?.push({
             id: session.id,
             browser: session.browser,
             os: session.os,
             screen: session.screen,
             ts: session.ts?.toString()
-          })),
-          units: units
-            .filter(unit => unit.bookletid === booklet.id)
-            .map(unit => ({
-              id: unit.id,
-              bookletid: unit.bookletid,
-              name: unit.name,
-              alias: unit.alias,
-              results: unitResultMap.get(unit.id) || [],
-              logs: unitLogs.filter(log => log.unitid === unit.id).map(log => ({
-                id: log.id,
-                unitid: log.unitid,
-                ts: log.ts.toString(),
-                key: log.key,
-                parameter: log.parameter
-              })),
-              tags: unitTagsMap.get(unit.id) || []
-            }))
-        };
+          });
+        }
       });
+
+      // Group booklet logs by booklet ID for faster lookup
+      const bookletLogsMap = new Map<number, { id: number; bookletid: number; ts: string; key: string; parameter: string }[]>();
+      bookletLogs.forEach(log => {
+        if (!bookletLogsMap.has(log.bookletid)) {
+          bookletLogsMap.set(log.bookletid, []);
+        }
+        bookletLogsMap.get(log.bookletid)?.push({
+          id: log.id,
+          bookletid: log.bookletid,
+          ts: log.ts.toString(),
+          key: log.key,
+          parameter: log.parameter
+        });
+      });
+
+      // Group units by booklet ID for faster lookup
+      const unitsMap = new Map<number, Unit[]>();
+      units.forEach(unit => {
+        if (!unitsMap.has(unit.bookletid)) {
+          unitsMap.set(unit.bookletid, []);
+        }
+        unitsMap.get(unit.bookletid)?.push(unit);
+      });
+
+      return booklets.map(booklet => ({
+        id: booklet.id,
+        personid: booklet.personid,
+        name: booklet.bookletinfo.name,
+        size: booklet.bookletinfo.size,
+        logs: bookletLogsMap.get(booklet.id) || [],
+        sessions: sessionsMap.get(booklet.id) || [],
+        units: (unitsMap.get(booklet.id) || []).map(unit => ({
+          id: unit.id,
+          bookletid: unit.bookletid,
+          name: unit.name,
+          alias: unit.alias,
+          results: unitResultMap.get(unit.id) || [],
+          logs: unitLogsMap.get(unit.id) || [],
+          tags: unitTagsMap.get(unit.id) || []
+        }))
+      }));
     } catch (error) {
       this.logger.error(
         `Failed to fetch booklets, bookletInfo, units, and results for personId: ${personId} and workspaceId: ${workspaceId}`,
