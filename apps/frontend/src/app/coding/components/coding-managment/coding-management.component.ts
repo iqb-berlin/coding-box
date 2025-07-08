@@ -30,13 +30,13 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { ScrollingModule } from '@angular/cdk/scrolling';
 import { MatDivider } from '@angular/material/divider';
 import { MatDialog } from '@angular/material/dialog';
-import { ContentDialogComponent } from '../../shared/dialogs/content-dialog/content-dialog.component';
-import { BackendService } from '../../services/backend.service';
-import { AppService } from '../../services/app.service';
-import { CodingStatistics } from '../../../../../../api-dto/coding/coding-statistics';
+import { ContentDialogComponent } from '../../../shared/dialogs/content-dialog/content-dialog.component';
+import { BackendService } from '../../../services/backend.service';
+import { AppService } from '../../../services/app.service';
+import { CodingStatistics } from '../../../../../../../api-dto/coding/coding-statistics';
 import { ExportDialogComponent, ExportFormat } from '../export-dialog/export-dialog.component';
-import { Success } from '../models/success.model';
-import { CodingListItem } from '../models/coding-list-item.model';
+import { Success } from '../../models/success.model';
+import { CodingListItem } from '../../models/coding-list-item.model';
 
 @Component({
   selector: 'app-coding-management',

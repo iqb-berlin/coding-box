@@ -19,10 +19,10 @@ import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { MatCheckbox } from '@angular/material/checkbox';
 import { MatAnchor, MatButton } from '@angular/material/button';
 import { DatePipe, NgClass } from '@angular/common';
-import { AppService } from '../../services/app.service';
-import { BackendService } from '../../services/backend.service';
-import { SearchFilterComponent } from '../../shared/search-filter/search-filter.component';
-import { CodingJob } from '../models/coding-job.model';
+import { AppService } from '../../../services/app.service';
+import { BackendService } from '../../../services/backend.service';
+import { SearchFilterComponent } from '../../../shared/search-filter/search-filter.component';
+import { CodingJob } from '../../models/coding-job.model';
 
 @Component({
   selector: 'coding-box-coding-jobs',

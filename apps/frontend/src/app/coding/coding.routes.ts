@@ -5,6 +5,6 @@ export const codingRoutes: Routes = [
   {
     path: 'coding-manual',
     canActivate: [canActivateAuth],
-    loadComponent: () => import('./coding-management-manual/coding-management-manual.component').then(m => m.CodingManagementManualComponent)
+    loadComponent: () => import('./components/coding-management-manual/coding-management-manual.component').then(m => m.CodingManagementManualComponent)
   }
 ];
