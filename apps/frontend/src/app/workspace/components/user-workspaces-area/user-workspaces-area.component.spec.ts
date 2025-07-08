@@ -2,6 +2,8 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
 import { UserWorkspacesAreaComponent } from './user-workspaces-area.component';
 import { AuthService } from '../../../auth/service/auth.service';
+import { environment } from '../../../../environments/environment';
+import { AuthService } from '../../../auth/services/auth.service';
 
 const mockAuthService = {
   getLoggedUser: jest.fn(),
