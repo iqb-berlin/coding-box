@@ -452,36 +452,6 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   /**
-   * Returns the values of the data-element-alias attributes found in the player's HTML.
-   *
-   * @returns {string[]} An array of data-element-alias values
-   */
-  getDataElementAliases(): string[] {
-    try {
-      // Access the iframe's content document through the UnitPlayerComponent
-      if (this.unitPlayerComponent && this.unitPlayerComponent.hostingIframe) {
-        const iframe = this.unitPlayerComponent.hostingIframe.nativeElement as HTMLIFrameElement;
-
-        // Check if the iframe has loaded content
-        if (iframe.contentDocument) {
-          // Query for all div elements with data-element-alias attribute
-          const elements = iframe.contentDocument.querySelectorAll('div[data-element-alias]');
-
-          // Extract and return the alias values
-          return Array.from(elements)
-            .map(element => element.getAttribute('data-element-alias'))
-            .filter((alias): alias is string => alias !== null);
-        }
-      }
-    } catch (error) {
-      // eslint-disable-next-line no-console
-      console.error('Error getting data-element-alias values:', error);
-    }
-
-    return [];
-  }
-
-  /**
    * Scrolls to a div element with the specified data-element-alias in the player's HTML.
    *
    * @param {string} alias - The data-element-alias value of the element to scroll to
@@ -494,7 +464,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       const element = elements[alias];
       if (element) {
         // Use scrollIntoView with smooth behavior by default
-        element.scrollIntoView(options || { behavior: 'smooth', block: 'center' });
+        element.scrollIntoView(options || { behavior: 'smooth', block: 'start' });
         return true;
       }
     } catch (error) {
@@ -503,23 +473,5 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     }
 
     return false;
-  }
-
-  /**
-   * Updates the dataElementAliases array with the values of data-element-alias attributes
-   * found in the player's HTML and automatically scrolls to each element.
-   */
-  updateDataElementAliases(): void {
-    this.dataElementAliases = this.getDataElementAliases();
-
-    // Automatically scroll to each element with data-element-alias
-    if (this.dataElementAliases.length > 0) {
-      // Scroll to each element with a small delay between each scroll
-      this.dataElementAliases.forEach((alias, index) => {
-        setTimeout(() => {
-          this.scrollToElementByAlias(alias, { behavior: 'smooth', block: 'center' });
-        }, index); // 1 second delay between each scroll
-      });
-    }
   }
 }
