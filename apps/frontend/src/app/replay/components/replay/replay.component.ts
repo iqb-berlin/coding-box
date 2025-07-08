@@ -130,7 +130,12 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
                 this.setUnitProperties(unitData);
                 setTimeout(() => {
                   if (this.unitPlayerComponent?.hostingIframe?.nativeElement) {
-                    scrollToElementByAlias(this.unitPlayerComponent.hostingIframe.nativeElement, this.anchor || '');
+                    if (this.anchor) {
+                      scrollToElementByAlias(this.unitPlayerComponent.hostingIframe.nativeElement, this.anchor);
+                    } else {
+                      // When no anchor is provided, scroll to the top of the content
+                      this.scrollToTop();
+                    }
                   }
                 }, 1000);
               }
@@ -371,6 +376,23 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     this.unitDef = '';
     this.page = undefined;
     this.responses = undefined;
+  }
+
+  /**
+   * Scrolls the iframe content to the top
+   */
+  private scrollToTop(): void {
+    try {
+      if (this.unitPlayerComponent?.hostingIframe?.nativeElement?.contentWindow) {
+        this.unitPlayerComponent.hostingIframe.nativeElement.contentWindow.scrollTo({
+          top: 0,
+          left: 0,
+          behavior: 'smooth'
+        });
+      }
+    } catch (error) {
+      console.error('Error scrolling to top:', error);
+    }
   }
 
   ngOnDestroy(): void {
