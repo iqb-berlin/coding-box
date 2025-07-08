@@ -31,28 +31,12 @@ import { ScrollingModule } from '@angular/cdk/scrolling';
 import { MatDivider } from '@angular/material/divider';
 import { MatDialog } from '@angular/material/dialog';
 import { ContentDialogComponent } from '../../shared/dialogs/content-dialog/content-dialog.component';
-import { BackendService, CodingListItem } from '../../services/backend.service';
+import { BackendService } from '../../services/backend.service';
 import { AppService } from '../../services/app.service';
 import { CodingStatistics } from '../../../../../../api-dto/coding/coding-statistics';
 import { ExportDialogComponent, ExportFormat } from '../export-dialog/export-dialog.component';
-
-interface Success {
-  id: number;
-  unitid: number;
-  variableid: string;
-  status: string;
-  value: string;
-  subform: string;
-  code: string | null;
-  score: string | null;
-  codedstatus: string;
-  unitname: string;
-  login_name?: string;
-  login_code?: string;
-  login_group?: string;
-  booklet_id?: string;
-  codingSchemeRef?: string;
-}
+import { Success } from '../models/success.model';
+import { CodingListItem } from '../models/coding-list-item.model';
 
 @Component({
   selector: 'app-coding-management',

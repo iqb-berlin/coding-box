@@ -16,13 +16,7 @@ import { AppService } from '../../../services/app.service';
 import { BackendService } from '../../../services/backend.service';
 import { ResponseDto } from '../../../../../../../api-dto/responses/response-dto';
 import { SpinnerComponent } from '../spinner/spinner.component';
-
-export interface PageData {
-  index: number;
-  id: string;
-  type: '#next' | '#previous' | '#goto';
-  disabled: boolean;
-}
+import { PageData } from '../../models/page-data.model';
 
 export type Progress = 'none' | 'some' | 'complete';
 

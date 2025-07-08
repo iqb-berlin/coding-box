@@ -22,15 +22,7 @@ import { DatePipe, NgClass } from '@angular/common';
 import { AppService } from '../../services/app.service';
 import { BackendService } from '../../services/backend.service';
 import { SearchFilterComponent } from '../../shared/search-filter/search-filter.component';
-
-interface CodingJob {
-  id: number;
-  name: string;
-  description: string;
-  status: string;
-  created_at: Date;
-  updated_at: Date;
-}
+import { CodingJob } from '../models/coding-job.model';
 
 @Component({
   selector: 'coding-box-coding-jobs',
@@ -65,7 +57,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
   backendService = inject(BackendService);
   private snackBar = inject(MatSnackBar);
 
-  displayedColumns: string[] = ['selectCheckbox', 'name', 'description', 'status', 'created_at', 'updated_at'];
+  displayedColumns: string[] = ['selectCheckbox', 'name', 'description', 'status', 'createdAt', 'updatedAt'];
   dataSource = new MatTableDataSource<CodingJob>([]);
   selection = new SelectionModel<CodingJob>(true, []);
   isLoading = false;
@@ -77,24 +69,27 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
       name: 'Kodierjob 1',
       description: 'Beschreibung für Kodierjob 1',
       status: 'active',
-      created_at: new Date('2023-01-01'),
-      updated_at: new Date('2023-01-15')
+      createdAt: new Date('2023-01-01'),
+      updatedAt: new Date('2023-01-15'),
+      assignedCoders: [1, 2]
     },
     {
       id: 2,
       name: 'Kodierjob 2',
       description: 'Beschreibung für Kodierjob 2',
       status: 'completed',
-      created_at: new Date('2023-02-01'),
-      updated_at: new Date('2023-02-15')
+      createdAt: new Date('2023-02-01'),
+      updatedAt: new Date('2023-02-15'),
+      assignedCoders: [3]
     },
     {
       id: 3,
       name: 'Kodierjob 3',
       description: 'Beschreibung für Kodierjob 3',
       status: 'pending',
-      created_at: new Date('2023-03-01'),
-      updated_at: new Date('2023-03-15')
+      createdAt: new Date('2023-03-01'),
+      updatedAt: new Date('2023-03-15'),
+      assignedCoders: []
     }
   ];
 
