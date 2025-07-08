@@ -1,4 +1,3 @@
-/* eslint-disable  @typescript-eslint/no-explicit-any */
 import {
   Component, OnChanges, OnDestroy, OnInit, SimpleChanges, ViewChild, inject,
   input
@@ -24,6 +23,8 @@ import { ResponseDto } from '../../../../../../../api-dto/responses/response-dto
 import { SpinnerComponent } from '../spinner/spinner.component';
 import { FilesDto } from '../../../../../../../api-dto/files/files.dto';
 import { ErrorMessages } from '../../models/error-messages.model';
+import { validateToken, isTestperson } from '../../utils/token-utils';
+import { scrollToElementByAlias } from '../../utils/dom-utils';
 
 @Component({
   selector: 'coding-box-replay',
@@ -43,8 +44,8 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   isLoaded: Subject<boolean> = new Subject<boolean>();
   page: string | undefined;
   anchor: string | undefined;
+  /* eslint-disable  @typescript-eslint/no-explicit-any */
   responses: any | undefined = undefined;
-  dataElementAliases: string[] = [];
   isPrintMode: boolean = false;
   private testPerson: string = '';
   private unitId: string = '';
@@ -86,26 +87,6 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     return auth;
   }
 
-  private validateToken(token: string): { isValid: boolean; errorType?: 'token_expired' | 'token_invalid' } {
-    if (!token) {
-      return { isValid: false, errorType: 'token_invalid' };
-    }
-
-    try {
-      const decoded: JwtPayload & { workspace: string } = jwtDecode(token);
-      const currentTime = Math.floor(Date.now() / 1000);
-      if (decoded.exp && decoded.exp < currentTime) {
-        return { isValid: false, errorType: 'token_expired' };
-      }
-      if (!decoded.workspace) {
-        return { isValid: false, errorType: 'token_invalid' };
-      }
-      return { isValid: true };
-    } catch (error) {
-      return { isValid: false, errorType: 'token_invalid' };
-    }
-  }
-
   private subscribeRouter(): void {
     this.routerSubscription = this.route.params
       ?.subscribe(async params => {
@@ -114,7 +95,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         this.authToken = await this.getAuthToken();
 
         if (this.authToken) {
-          const tokenValidation = this.validateToken(this.authToken);
+          const tokenValidation = validateToken(this.authToken);
           if (!tokenValidation.isValid) {
             this.setIsLoaded();
             if (tokenValidation.errorType === 'token_expired') {
@@ -147,9 +128,11 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
               if (workspace) {
                 const unitData = await this.getUnitData(Number(workspace), this.authToken);
                 this.setUnitProperties(unitData);
-                if (this.anchor) {
-                  setTimeout(() => this.scrollToElementByAlias(this.anchor || ''), 1000);
-                }
+                setTimeout(() => {
+                  if (this.unitPlayerComponent?.hostingIframe?.nativeElement) {
+                    scrollToElementByAlias(this.unitPlayerComponent.hostingIframe.nativeElement, this.anchor || '');
+                  }
+                }, 1000);
               }
             } else {
               ReplayComponent.throwError('QueryError');
@@ -186,17 +169,11 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   private setTestPerson(testPerson: string): void {
-    if (!ReplayComponent.isTestperson(testPerson)) {
+    if (!isTestperson(testPerson)) {
       ReplayComponent.throwError('TestPersonError');
     } else {
       this.testPerson = testPerson;
     }
-  }
-
-  private static isTestperson(testperson: string): boolean {
-    if (testperson.split('@').length !== 3) return false;
-    const reg = /^.+(@.+){2}$/;
-    return reg.test(testperson);
   }
 
   private checkUnitId(unitFile: FilesDto[]): void {
@@ -218,7 +195,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     this.resetSnackBars();
 
     if (this.authToken) {
-      const tokenValidation = this.validateToken(this.authToken);
+      const tokenValidation = validateToken(this.authToken);
       if (!tokenValidation.isValid) {
         this.setIsLoaded();
         if (tokenValidation.errorType === 'token_expired') {
@@ -400,65 +377,5 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     this.routerSubscription?.unsubscribe();
     this.routerSubscription = null;
     this.resetSnackBars();
-  }
-
-  /**
-   * Searches for div elements with data-element-alias attribute in the player's HTML
-   * and returns an object mapping the aliases to their corresponding elements.
-   *
-   * @returns {Record<string, HTMLElement>} An object mapping data-element-alias values to their HTML elements
-   */
-  findElementsByDataAlias(): Record<string, HTMLElement> {
-    const result: Record<string, HTMLElement> = {};
-
-    try {
-      // Access the iframe's content document through the UnitPlayerComponent
-      if (this.unitPlayerComponent && this.unitPlayerComponent.hostingIframe) {
-        const iframe = this.unitPlayerComponent.hostingIframe.nativeElement as HTMLIFrameElement;
-
-        // Check if the iframe has loaded content
-        if (iframe.contentDocument) {
-          // Query for all div elements with data-element-alias attribute
-          const elements = iframe.contentDocument.querySelectorAll('div[data-element-alias]');
-
-          // Create a mapping of aliases to elements
-          elements.forEach((element: Element) => {
-            const alias = element.getAttribute('data-element-alias');
-            if (alias) {
-              result[alias] = element as HTMLElement;
-            }
-          });
-        }
-      }
-    } catch (error) {
-      // eslint-disable-next-line no-console
-      console.error('Error searching for elements with data-element-alias:', error);
-    }
-
-    return result;
-  }
-
-  /**
-   * Scrolls to a div element with the specified data-element-alias in the player's HTML.
-   *
-   * @param {string} alias - The data-element-alias value of the element to scroll to
-   * @param {ScrollIntoViewOptions} [options] - Optional scroll behavior options
-   * @returns {boolean} True if the element was found and scrolled to, false otherwise
-   */
-  scrollToElementByAlias(alias: string, options?: ScrollIntoViewOptions): boolean {
-    try {
-      const elements = this.findElementsByDataAlias();
-      const element = elements[alias];
-      if (element) {
-        // Use scrollIntoView with smooth behavior by default
-        element.scrollIntoView(options || { behavior: 'smooth', block: 'start' });
-        return true;
-      }
-    } catch (error) {
-      // eslint-disable-next-line no-console
-      console.error(`Error scrolling to element with alias "${alias}":`, error);
-    }
-
-    return false;
   }
 }
