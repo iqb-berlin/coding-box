@@ -1,6 +1,6 @@
 import { Component } from '@angular/core';
 import { TranslateModule } from '@ngx-translate/core';
-import { MatAnchor } from '@angular/material/button';
+import { MatAnchor, MatButton } from '@angular/material/button';
 import {
   MatCard, MatCardContent, MatCardHeader, MatCardTitle
 } from '@angular/material/card';
@@ -12,7 +12,7 @@ import { CodingJobsComponent } from '../coding-jobs/coding-jobs.component';
   selector: 'coding-box-coding-management-manual',
   templateUrl: './coding-management-manual.component.html',
   styleUrls: ['./coding-management-manual.component.scss'],
-  imports: [TranslateModule, CoderListComponent, MatAnchor, CodingJobsComponent, MatCardContent, MatCardTitle, MatCardHeader, MatCard, MatIcon]
+  imports: [TranslateModule, CoderListComponent, MatAnchor, CodingJobsComponent, MatCardContent, MatCardTitle, MatCardHeader, MatCard, MatIcon, MatButton]
 })
 export class CodingManagementManualComponent {
 }

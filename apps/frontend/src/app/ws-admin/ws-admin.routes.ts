@@ -11,7 +11,7 @@ export const wsAdminRoutes: Routes = [
       { path: 'test-files', loadComponent: () => import('./components/test-files/test-files.component').then(m => m.TestFilesComponent) },
       { path: 'test-results', loadComponent: () => import('./components/test-groups/test-groups.component').then(m => m.TestGroupsComponent) },
       { path: 'users', loadComponent: () => import('./components/ws-users/ws-users.component').then(m => m.WsUsersComponent) },
-      { path: 'coding', loadComponent: () => import('../coding/coding-managment/coding-management.component').then(m => m.CodingManagementComponent) },
+      { path: 'coding', loadComponent: () => import('../coding/components/coding-managment/coding-management.component').then(m => m.CodingManagementComponent) },
       { path: 'settings', loadComponent: () => import('./components/ws-settings/ws-settings.component').then(m => m.WsSettingsComponent) },
       { path: '**', loadComponent: () => import('./components/test-files/test-files.component').then(m => m.TestFilesComponent) }
     ]

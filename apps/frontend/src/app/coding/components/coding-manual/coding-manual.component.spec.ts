@@ -3,8 +3,8 @@ import { TranslateModule } from '@ngx-translate/core';
 import { provideHttpClient } from '@angular/common/http';
 import { ActivatedRoute } from '@angular/router';
 import { CodingManualComponent } from './coding-manual.component';
-import { environment } from '../../../environments/environment';
 import { SERVER_URL } from '../../injection-tokens';
+import { environment } from '../../../../environments/environment';
 
 describe('CodingManualComponent', () => {
   let component: CodingManualComponent;

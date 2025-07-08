@@ -24,9 +24,9 @@ import {
   ReactiveFormsModule,
   Validators
 } from '@angular/forms';
-import { SearchFilterComponent } from '../../shared/search-filter/search-filter.component';
-import { CoderService } from '../services/coder.service';
-import { Coder } from '../models/coder.model';
+import { SearchFilterComponent } from '../../../shared/search-filter/search-filter.component';
+import { CoderService } from '../../services/coder.service';
+import { Coder } from '../../models/coder.model';
 
 @Component({
   selector: 'coding-box-coder-list',
