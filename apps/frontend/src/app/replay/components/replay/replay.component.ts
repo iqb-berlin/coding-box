@@ -23,21 +23,7 @@ import { AppService } from '../../../services/app.service';
 import { ResponseDto } from '../../../../../../../api-dto/responses/response-dto';
 import { SpinnerComponent } from '../spinner/spinner.component';
 import { FilesDto } from '../../../../../../../api-dto/files/files.dto';
-
-interface ErrorMessages {
-  QueryError: string;
-  ParamsError: string;
-  401: string;
-  UnitIdError: string;
-  TestPersonError: string;
-  PlayerError: string;
-  ResponsesError: string;
-  notInList: string;
-  notCurrent: string;
-  unknown: string;
-  tokenExpired: string;
-  tokenInvalid: string;
-}
+import { ErrorMessages } from '../../models/error-messages.model';
 
 @Component({
   selector: 'coding-box-replay',
