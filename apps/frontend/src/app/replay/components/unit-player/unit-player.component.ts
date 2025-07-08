@@ -9,7 +9,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { ReactiveFormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
-  debounceTime, fromEvent, Subject, Subscription, takeUntil
+  combineLatest, debounceTime, fromEvent, Observable, Subject, Subscription, takeUntil
 } from 'rxjs';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { AppService } from '../../../services/app.service';
@@ -139,29 +139,48 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
   }
 
   private subscribeForValidPages(): void {
-    this.validPagesSubscription = this.validPages
-      .pipe(debounceTime(2000))
-      .subscribe({
-        next: validPages => {
-          const pageId = this.pageId();
-          if (!pageId) {
-            this.invalidPage.emit('notInList');
-            return;
-          }
+    // Create an Observable that emits the current pageId whenever it changes
+    const pageId$ = new Observable<string>(observer => {
+      // Initial value
+      observer.next(this.pageId() || '');
 
-          if (!validPages.pages.includes(pageId)) {
-            this.invalidPage.emit('notInList');
-          } else if (validPages.current !== pageId) {
-            this.invalidPage.emit('notCurrent');
-          } else {
-            this.invalidPage.emit(null);
-            this.cleanupValidPagesSubscription();
-          }
-        },
-        error: () => {
+      // Set up a MutationObserver to watch for changes to the pageId input
+      const callback = () => {
+        observer.next(this.pageId() || '');
+      };
+
+      const interval = setInterval(callback, 500);
+
+      // Cleanup function
+      return () => {
+        clearInterval(interval);
+      };
+    });
+
+    // Use combineLatest to wait for both pageId and validPages to be available
+    this.validPagesSubscription = combineLatest([
+      pageId$,
+      this.validPages.pipe(debounceTime(2000))
+    ]).subscribe({
+      next: ([pageId, validPages]) => {
+        if (!pageId) {
           this.invalidPage.emit('notInList');
+          return;
         }
-      });
+
+        if (!validPages.pages.includes(pageId)) {
+          this.invalidPage.emit('notInList');
+        } else if (validPages.current !== pageId) {
+          this.invalidPage.emit('notCurrent');
+        } else {
+          this.invalidPage.emit(null);
+          this.cleanupValidPagesSubscription();
+        }
+      },
+      error: () => {
+        this.invalidPage.emit('notInList');
+      }
+    });
   }
 
   private cleanupValidPagesSubscription(): void {

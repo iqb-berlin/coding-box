@@ -47,8 +47,8 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   /* eslint-disable  @typescript-eslint/no-explicit-any */
   responses: any | undefined = undefined;
   isPrintMode: boolean = false;
-  private testPerson: string = '';
-  private unitId: string = '';
+  testPerson: string = '';
+  unitId: string = '';
   private authToken: string = '';
   private errorSnackbarRef: MatSnackBarRef<TextOnlySnackBar> | null = null;
   private pageErrorSnackbarRef: MatSnackBarRef<TextOnlySnackBar> | null = null;
@@ -87,7 +87,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     return auth;
   }
 
-  private subscribeRouter(): void {
+  subscribeRouter(): void {
     this.routerSubscription = this.route.params
       ?.subscribe(async params => {
         this.resetSnackBars();
@@ -163,7 +163,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     setTimeout(() => this.isLoaded.next(true));
   }
 
-  private setUnitParams(params: Params): void {
+  setUnitParams(params: Params): void {
     const {
       page, testPerson, unitId, anchor
     } = params;
@@ -173,7 +173,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     this.setTestPerson(testPerson);
   }
 
-  private setTestPerson(testPerson: string): void {
+  setTestPerson(testPerson: string): void {
     if (!isTestperson(testPerson)) {
       ReplayComponent.throwError('TestPersonError');
     } else {
@@ -250,7 +250,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     this.lastPlayer.id = playerData.file_id;
   }
 
-  private static getNormalizedPlayerId(name: string): string {
+  static getNormalizedPlayerId(name: string): string {
     const reg = /^(\D+?)[@V-]?((\d+)(\.\d+)?(\.\d+)?(-\S+?)?)?(.\D{3,4})?$/;
     const matches = name.match(reg);
     if (matches) {
