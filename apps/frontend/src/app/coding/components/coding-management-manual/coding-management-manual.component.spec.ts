@@ -4,8 +4,8 @@ import { ActivatedRoute } from '@angular/router';
 import { provideHttpClient } from '@angular/common/http';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { CodingManagementManualComponent } from './coding-management-manual.component';
-import { environment } from '../../../environments/environment';
-import { SERVER_URL } from '../../injection-tokens';
+import { SERVER_URL } from '../../../injection-tokens';
+import { environment } from '../../../../environments/environment';
 
 describe('CodingManagementManualComponent', () => {
   let component: CodingManagementManualComponent;

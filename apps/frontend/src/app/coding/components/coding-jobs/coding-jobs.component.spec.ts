@@ -3,8 +3,8 @@ import { TranslateModule } from '@ngx-translate/core';
 import { ActivatedRoute } from '@angular/router';
 import { provideHttpClient } from '@angular/common/http';
 import { CodingJobsComponent } from './coding-jobs.component';
-import { environment } from '../../../environments/environment';
-import { SERVER_URL } from '../../injection-tokens';
+import { SERVER_URL } from '../../../injection-tokens';
+import { environment } from '../../../../environments/environment';
 
 describe('CodingJobsComponent', () => {
   let component: CodingJobsComponent;

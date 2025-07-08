@@ -6,7 +6,7 @@ import { TranslateModule } from '@ngx-translate/core';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { AppService } from '../../../services/app.service';
 import { HomeComponent } from '../../../components/home/home.component';
-import { AuthService } from '../../../auth/service/auth.service';
+import { AuthService } from '../../../core/services/auth.service';
 
 describe('HomeComponent', () => {
   let component: HomeComponent;
