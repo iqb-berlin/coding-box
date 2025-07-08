@@ -3,8 +3,8 @@ import { TranslateModule } from '@ngx-translate/core';
 import { ActivatedRoute } from '@angular/router';
 import { provideHttpClient } from '@angular/common/http';
 import { CodingManagementComponent } from './coding-management.component';
-import { environment } from '../../../environments/environment';
-import { SERVER_URL } from '../../injection-tokens';
+import { SERVER_URL } from '../../../injection-tokens';
+import { environment } from '../../../../environments/environment';
 
 describe('CodingManagementComponent', () => {
   let component: CodingManagementComponent;

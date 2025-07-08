@@ -23,6 +23,7 @@ import { routes } from './app.routes';
 import { environment } from '../environments/environment';
 import { authInterceptor } from './core/interceptors/auth.interceptor';
 import { journalInterceptor } from './core/interceptors/journal-interceptor';
+import { SERVER_URL } from './injection-tokens';
 
 export function createTranslateLoader(http: HttpClient): TranslateHttpLoader {
   return new TranslateHttpLoader(http, './assets/i18n/', '.json');
