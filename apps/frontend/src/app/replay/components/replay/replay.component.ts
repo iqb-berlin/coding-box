@@ -153,7 +153,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
             const workspace = decoded?.workspace;
             const unitData = await this.getUnitData(Number(workspace), this.authToken);
             this.setUnitProperties(unitData);
-          } else if (Object.keys(params).length === 4) {
+          } else if (Object.keys(params).length >= 3 && Object.keys(params).length <= 4) {
             this.setUnitParams(params);
             if (this.authToken) {
               const decoded: JwtPayload & { workspace: string } = jwtDecode(this.authToken);
@@ -161,8 +161,9 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
               if (workspace) {
                 const unitData = await this.getUnitData(Number(workspace), this.authToken);
                 this.setUnitProperties(unitData);
-                setTimeout(() => this.scrollToElementByAlias(this.anchor || ''), 1000
-                );
+                if (this.anchor) {
+                  setTimeout(() => this.scrollToElementByAlias(this.anchor || ''), 1000);
+                }
               }
             } else {
               ReplayComponent.throwError('QueryError');
