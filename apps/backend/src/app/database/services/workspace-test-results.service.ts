@@ -409,8 +409,20 @@ export class WorkspaceTestResultsService {
     };
   }
 
+  private responsesByStatusCache: Map<string, { data: [ResponseEntity[], number]; timestamp: number }> = new Map();
+  private readonly RESPONSES_CACHE_TTL_MS = 1 * 60 * 1000; // 1 minute cache TTL
+
   async getResponsesByStatus(workspace_id: number, status: string, options?: { page: number; limit: number }): Promise<[ResponseEntity[], number]> {
     this.logger.log(`Getting responses with status ${status} for workspace ${workspace_id}`);
+
+    const cacheKey = `${workspace_id}-${status}-${options?.page || 0}-${options?.limit || 0}`;
+
+    const cachedResult = this.responsesByStatusCache.get(cacheKey);
+    if (cachedResult && (Date.now() - cachedResult.timestamp) < this.RESPONSES_CACHE_TTL_MS) {
+      this.logger.log(`Returning cached responses for status ${status} (workspace ${workspace_id})`);
+      return cachedResult.data;
+    }
+
     try {
       const queryBuilder = this.responseRepository.createQueryBuilder('response')
         .leftJoinAndSelect('response.unit', 'unit')
@@ -427,6 +439,8 @@ export class WorkspaceTestResultsService {
         queryBuilder.andWhere('response.codedStatus = :statusParam', { statusParam: status });
       }
 
+      let result: [ResponseEntity[], number];
+
       if (options) {
         const { page, limit } = options;
         const MAX_LIMIT = 500;
@@ -437,15 +451,20 @@ export class WorkspaceTestResultsService {
           .skip((validPage - 1) * validLimit)
           .take(validLimit);
 
-        const [responses, total] = await queryBuilder.getManyAndCount();
-        this.logger.log(`Found ${responses.length} responses with status ${status} (page ${validPage}, limit ${validLimit}, total ${total}) for workspace ${workspace_id}`);
-        return [responses, total];
+        result = await queryBuilder.getManyAndCount();
+        this.logger.log(`Found ${result[0].length} responses with status ${status} (page ${validPage}, limit ${validLimit}, total ${result[1]}) for workspace ${workspace_id}`);
+      } else {
+        // For non-paginated queries, still use getManyAndCount to avoid multiple queries
+        result = await queryBuilder.getManyAndCount();
+        this.logger.log(`Found ${result[0].length} responses with status ${status} for workspace ${workspace_id}`);
       }
 
-      const responses = await queryBuilder.getMany();
-      const total = await queryBuilder.getCount();
-      this.logger.log(`Found ${responses.length} responses with status ${status} for workspace ${workspace_id}`);
-      return [responses, total];
+      this.responsesByStatusCache.set(cacheKey, {
+        data: result,
+        timestamp: Date.now()
+      });
+
+      return result;
     } catch (error) {
       this.logger.error(`Error getting responses by status: ${error.message}`);
       return [[], 0];
