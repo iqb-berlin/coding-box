@@ -430,10 +430,23 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   }
 
   onUnitClick(unit: Unit, booklet: Booklet): void {
-    this.responses = unit.results.map((response: UnitResult) => ({
+    const mappedResponses = unit.results.map((response: UnitResult) => ({
       ...response,
       expanded: false
     }));
+    const getUniqueKey = (r: Response) => `${r.variableid}|${r.unitid}|${r.value}`;
+
+    const uniqueMap = new Map<string, Response>();
+    mappedResponses.forEach(response => {
+      const key = getUniqueKey(response);
+      if (!uniqueMap.has(key)) {
+        uniqueMap.set(key, response);
+      }
+    });
+
+    const uniqueResponses = Array.from(uniqueMap.values());
+
+    this.responses = uniqueResponses;
     this.selectedBooklet = booklet.name;
 
     this.responses.sort((a: Response, b: Response) => {

@@ -1,5 +1,4 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { FilesInListDto } from 'api-dto/files/files-in-list.dto';
 import { UnitNoteDto } from 'api-dto/unit-notes/unit-note.dto';
@@ -92,7 +91,6 @@ interface ResponseEntity {
 })
 export class BackendService {
   readonly serverUrl = inject(SERVER_URL);
-  private http = inject(HttpClient);
   appService = inject(AppService);
 
   // Inject specialized services

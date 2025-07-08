@@ -164,7 +164,7 @@
             <mat-divider></mat-divider>
 
             <mat-accordion class="accordion">
-              @for (booklet of booklets; track booklet) {
+              @for (booklet of booklets; track booklet.id) {
                 <mat-expansion-panel [expanded]="booklets.length === 1" class="booklet-panel">
                   <mat-expansion-panel-header>
                     <mat-panel-title (click)="setSelectedBooklet(booklet)" class="booklet-title">
@@ -202,7 +202,7 @@
                   <mat-divider class="section-divider"></mat-divider>
                   <h3 class="units-title">Aufgaben</h3>
                   <mat-list class="unit-list">
-                    @for (unit of booklet.units; track unit) {
+                    @for (unit of booklet.units; track unit.id) {
                       <mat-list-item
                         (click)="onUnitClick(unit, booklet)"
                         class="unit-item">
@@ -213,7 +213,7 @@
                         }
                         @if (unit.id) {
                           <div class="unit-tags-container">
-                            @for (tag of getUnitTags(unit.id); track tag) {
+                            @for (tag of getUnitTags(unit.id); track tag.id) {
                               <div class="unit-tag-item">
                                 <span class="unit-tag">{{ tag.tag }}</span>
                               </div>
@@ -259,7 +259,7 @@
               <!--            </button>-->
             </div>
             <div class="var-list">
-              @for (response of this.responses; track response) {
+              @for (response of this.responses; track response.id) {
                 <div
                   class="response-item"
                   >
@@ -309,25 +309,6 @@
                       </div>
                     </div>
                   }
-                </div>
-              }
-            </div>
-          </div>
-        }
-
-        @if (logs.length > 0) {
-          <div class="logs-card">
-            <h2 class="section-title">Logs</h2>
-            <p class="section-description">Protokolleinträge für die ausgewählte Unit</p>
-            <mat-divider></mat-divider>
-            <div class="log-list">
-              @for (log of this.logs; track log;) {
-                <div class="log-item">
-                  <div class="log-header">
-                    <span class="log-key">{{ log.key }}</span>
-                    <span class="log-timestamp">{{ formatTimestamp(log.ts) }}</span>
-                  </div>
-                  <div class="log-parameter">{{ log.parameter }}</div>
                 </div>
               }
             </div>
