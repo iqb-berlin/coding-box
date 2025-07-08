@@ -4,7 +4,7 @@ import { InjectionToken } from '@angular/core';
 import { KeycloakService } from 'keycloak-angular';
 import { AppComponent } from './app.component';
 import { environment } from '../environments/environment';
-import { AuthService } from './auth/service/auth.service';
+import { AuthService } from './core/services/auth.service';
 
 export const AUTH_TOKEN = new InjectionToken<string>('AUTH_TOKEN');
 const mockAuthService = {

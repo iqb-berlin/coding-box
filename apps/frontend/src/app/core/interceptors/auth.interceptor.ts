@@ -4,7 +4,7 @@ import {
 } from '@angular/common/http';
 import { finalize, Observable, tap } from 'rxjs';
 import { AppHttpError } from './app-http-error.class';
-import { AppService } from '../services/app.service';
+import { AppService } from '../../services/app.service';
 
 /**
  * Functional interceptor for adding authentication headers and handling errors

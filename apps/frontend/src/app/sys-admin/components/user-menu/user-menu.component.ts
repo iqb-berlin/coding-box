@@ -5,7 +5,7 @@ import { MatMenu, MatMenuTrigger } from '@angular/material/menu';
 import { MatButton } from '@angular/material/button';
 import { WrappedIconComponent } from '../../../shared/wrapped-icon/wrapped-icon.component';
 import { AccountActionComponent } from '../account-action/account-action.component';
-import { AuthService } from '../../../auth/services/auth.service';
+import { AuthService } from '../../../core/services/auth.service';
 
 @Component({
   selector: 'coding-box-user-menu',

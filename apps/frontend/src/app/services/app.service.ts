@@ -12,7 +12,7 @@ import {
 import { KeycloakProfile, KeycloakTokenParsed } from 'keycloak-js';
 import { AppLogoDto } from '../../../../../api-dto/app-logo-dto';
 import { AuthDataDto } from '../../../../../api-dto/auth-data-dto';
-import { AppHttpError } from '../interceptors/app-http-error.class';
+import { AppHttpError } from '../core/interceptors/app-http-error.class';
 import { TestGroupsInListDto } from '../../../../../api-dto/test-groups/testgroups-in-list.dto';
 import { FilesInListDto } from '../../../../../api-dto/files/files-in-list.dto';
 import { CreateUserDto } from '../../../../../api-dto/user/create-user-dto';

@@ -1,6 +1,4 @@
 import { Routes } from '@angular/router';
-
-import { canActivateAuth } from './auth/guards/auth.guard';
 import { replayRoutes } from './replay/replay.routes';
 import { sysAdminRoutes } from './sys-admin/sys-admin.routes';
 import { wsAdminRoutes } from './ws-admin/ws-admin.routes';

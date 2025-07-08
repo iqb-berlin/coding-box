@@ -4,7 +4,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { ActivatedRoute } from '@angular/router';
 import { of } from 'rxjs';
 import { HomeComponent } from './home.component';
-import { AuthService } from '../../auth/services/auth.service';
+import { AuthService } from '../../core/services/auth.service';
 import { environment } from '../../../environments/environment';
 import { AppService } from '../../services/app.service';
 import { SERVER_URL } from '../../injection-tokens';
