@@ -1,0 +1,41 @@
+.dialog-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  max-width: 1200px;
+  max-height: 90vh;
+  overflow: hidden;
+}
+
+.dialog-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 24px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.12);
+}
+
+.dialog-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 500;
+}
+
+.close-button {
+  margin-left: 16px;
+}
+
+.dialog-content {
+  flex: 1;
+  overflow: auto;
+  padding: 0;
+}
+
+::ng-deep .mat-mdc-dialog-container {
+  padding: 0 !important;
+}
+
+::ng-deep .mat-mdc-dialog-surface {
+  overflow: hidden !important;
+}
