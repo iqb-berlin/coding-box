@@ -37,6 +37,7 @@ import { CodingStatistics } from '../../../../../../../api-dto/coding/coding-sta
 import { ExportDialogComponent, ExportFormat } from '../export-dialog/export-dialog.component';
 import { Success } from '../../models/success.model';
 import { CodingListItem } from '../../models/coding-list-item.model';
+import { TestPersonCodingDialogComponent } from '../test-person-coding-dialog/test-person-coding-dialog.component';
 
 @Component({
   selector: 'app-coding-management',
@@ -305,61 +306,20 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
   }
 
   onAutoCode(): void {
-    const workspaceId = this.appService.selectedWorkspaceId;
-    this.isAutoCoding = true;
+    // Open the test person coding dialog
+    const dialogRef = this.dialog.open(TestPersonCodingDialogComponent, {
+      width: '90vw',
+      height: '90vh',
+      maxWidth: '100vw',
+      maxHeight: '100vh',
+      panelClass: 'full-screen-dialog'
+    });
 
-    this.backendService.getTestPersons(workspaceId)
-      .pipe(
-        catchError(() => {
-          this.isAutoCoding = false;
-          this.snackBar.open('Fehler beim Abrufen der Testgruppen', 'Schließen', {
-            duration: 5000,
-            panelClass: ['error-snackbar']
-          });
-          return of([]);
-        })
-      )
-      .subscribe(testPersons => {
-        if (testPersons.length === 0) {
-          this.isAutoCoding = false;
-          return;
-        }
-
-        this.backendService.codeTestPersons(workspaceId, testPersons)
-          .pipe(
-            catchError(() => {
-              this.isAutoCoding = false;
-              this.snackBar.open('Fehler beim Kodieren der Testpersonen', 'Schließen', {
-                duration: 5000,
-                panelClass: ['error-snackbar']
-              });
-              return of({
-                totalResponses: 0,
-                statusCounts: {}
-              });
-            }),
-            finalize(async () => {
-              this.isAutoCoding = false;
-              this.fetchCodingStatistics();
-            })
-          )
-          .subscribe(stats => {
-            // Create a report message
-            let reportMessage = `Insgesamt wurden ${stats.totalResponses} Antworten verarbeitet.\n\n`;
-            reportMessage += 'Verteilung der Kodier-Status:\n';
-            for (const status in stats.statusCounts) {
-              if (Object.prototype.hasOwnProperty.call(stats.statusCounts, status)) {
-                // @ts-expect-error - Index access on statusCounts object
-                reportMessage += `${status}: ${stats.statusCounts[status]}\n`;
-              }
-            }
-
-            this.snackBar.open(reportMessage, 'Schließen', {
-              duration: 10000,
-              panelClass: ['success-snackbar']
-            });
-          });
-      });
+    // Handle dialog close event if needed
+    dialogRef.afterClosed().subscribe(() => {
+      // Refresh statistics after dialog is closed
+      this.fetchCodingStatistics();
+    });
   }
 
   fetchCodingList(page: number = 1, limit: number = this.pageSize): void {
