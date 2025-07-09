@@ -1,7 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
 import { UserWorkspacesComponent } from './user-workspaces.component';
-import { AuthService } from '../../../auth/service/auth.service';
+import { AuthService } from '../../../core/services/auth.service';
 
 const mockKeycloak = {
   idTokenParsed: { sub: 'test-user-id', preferred_username: 'test-user' },

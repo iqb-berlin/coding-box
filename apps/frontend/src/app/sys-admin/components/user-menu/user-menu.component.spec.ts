@@ -2,7 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { UserMenuComponent } from './user-menu.component';
-import { AuthService } from '../../../auth/service/auth.service';
+import { AuthService } from '../../../core/services/auth.service';
 
 const mockAuthService = {
   logout: jest.fn().mockResolvedValue(undefined),

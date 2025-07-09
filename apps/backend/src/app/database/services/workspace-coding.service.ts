@@ -616,8 +616,19 @@ export class WorkspaceCodingService {
     }
   }
 
+  // Cache for statistics with TTL
+  private statisticsCache: Map<number, { data: CodingStatistics; timestamp: number }> = new Map();
+  private readonly CACHE_TTL_MS = 1 * 60 * 1000; // 1 minute cache TTL
+
   async getCodingStatistics(workspace_id: number): Promise<CodingStatistics> {
     this.logger.log(`Getting coding statistics for workspace ${workspace_id}`);
+
+    // Check if we have a valid cached result
+    const cachedResult = this.statisticsCache.get(workspace_id);
+    if (cachedResult && (Date.now() - cachedResult.timestamp) < this.CACHE_TTL_MS) {
+      this.logger.log(`Returning cached statistics for workspace ${workspace_id}`);
+      return cachedResult.data;
+    }
 
     const statistics: CodingStatistics = {
       totalResponses: 0,
@@ -625,31 +636,40 @@ export class WorkspaceCodingService {
     };
 
     try {
-      const queryBuilder = this.responseRepository.createQueryBuilder('response')
+      // Optimized query: get total count and status counts in a single query
+      const statusCountResults = await this.responseRepository.createQueryBuilder('response')
         .innerJoin('response.unit', 'unit')
         .innerJoin('unit.booklet', 'booklet')
         .innerJoin('booklet.person', 'person')
         .where('response.status = :status', { status: 'VALUE_CHANGED' })
-        .andWhere('person.workspace_id = :workspace_id', { workspace_id });
-
-      statistics.totalResponses = await queryBuilder.getCount();
-
-      const statusCountResults = await queryBuilder
+        .andWhere('person.workspace_id = :workspace_id', { workspace_id })
         .select('COALESCE(response.codedstatus, null)', 'statusValue')
         .addSelect('COUNT(response.id)', 'count')
         .groupBy('COALESCE(response.codedstatus, null)')
         .getRawMany();
 
+      // Calculate total from the sum of all status counts
+      let totalResponses = 0;
+
       statusCountResults.forEach(result => {
         const count = parseInt(result.count, 10);
         // Ensure count is a valid number
-        statistics.statusCounts[result.statusValue] = Number.isNaN(count) ? 0 : count;
+        const validCount = Number.isNaN(count) ? 0 : count;
+        statistics.statusCounts[result.statusValue] = validCount;
+        totalResponses += validCount;
+      });
+
+      statistics.totalResponses = totalResponses;
+
+      // Cache the result
+      this.statisticsCache.set(workspace_id, {
+        data: statistics,
+        timestamp: Date.now()
       });
 
       return statistics;
     } catch (error) {
       this.logger.error(`Error getting coding statistics: ${error.message}`);
-
       return statistics;
     }
   }
