@@ -38,6 +38,141 @@ export class WorkspaceCodingService {
   private testFileCache: Map<number, { files: Map<string, FileUpload>; timestamp: number }> = new Map();
   private readonly TEST_FILE_CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes cache TTL
 
+  /**
+   * Get test files from cache or fetch them from the database
+   * @param workspace_id Workspace ID
+   * @param unitAliasesArray Array of unit aliases to fetch
+   * @returns Map of file ID to file
+   */
+  private async getTestFilesWithCache(workspace_id: number, unitAliasesArray: string[]): Promise<Map<string, FileUpload>> {
+    // Check if we have a valid cache entry
+    const cacheEntry = this.testFileCache.get(workspace_id);
+    const now = Date.now();
+
+    if (cacheEntry && (now - cacheEntry.timestamp) < this.TEST_FILE_CACHE_TTL_MS) {
+      this.logger.log(`Using cached test files for workspace ${workspace_id}`);
+
+      // Check if all requested unit aliases are in the cache
+      const missingAliases = unitAliasesArray.filter(alias => !cacheEntry.files.has(alias));
+
+      if (missingAliases.length === 0) {
+        // All files are in the cache, return the cached files
+        return cacheEntry.files;
+      }
+
+      // Some files are missing, fetch only the missing ones
+      this.logger.log(`Fetching ${missingAliases.length} missing test files for workspace ${workspace_id}`);
+      const missingFiles = await this.fileUploadRepository.find({
+        where: { workspace_id, file_id: In(missingAliases) },
+        select: ['file_id', 'data', 'filename']
+      });
+
+      // Add the missing files to the cache
+      missingFiles.forEach(file => {
+        cacheEntry.files.set(file.file_id, file);
+      });
+
+      // Update the timestamp
+      cacheEntry.timestamp = now;
+
+      return cacheEntry.files;
+    }
+
+    // No valid cache entry, fetch all files
+    this.logger.log(`Fetching all test files for workspace ${workspace_id}`);
+    const testFiles = await this.fileUploadRepository.find({
+      where: { workspace_id, file_id: In(unitAliasesArray) },
+      select: ['file_id', 'data', 'filename']
+    });
+
+    // Create a new cache entry
+    const fileMap = new Map<string, FileUpload>();
+    testFiles.forEach(file => {
+      fileMap.set(file.file_id, file);
+    });
+
+    // Store in cache
+    this.testFileCache.set(workspace_id, { files: fileMap, timestamp: now });
+
+    return fileMap;
+  }
+
+  /**
+   * Get coding schemes from cache or fetch them from the database
+   * @param codingSchemeRefs Array of coding scheme references to fetch
+   * @returns Map of scheme ID to parsed coding scheme
+   */
+  private async getCodingSchemesWithCache(codingSchemeRefs: string[]): Promise<Map<string, Autocoder.CodingScheme>> {
+    const now = Date.now();
+    const result = new Map<string, Autocoder.CodingScheme>();
+    const emptyScheme = new Autocoder.CodingScheme({});
+
+    // Check which schemes are in the cache and still valid
+    const missingSchemeRefs = codingSchemeRefs.filter(ref => {
+      const cacheEntry = this.codingSchemeCache.get(ref);
+      if (cacheEntry && (now - cacheEntry.timestamp) < this.SCHEME_CACHE_TTL_MS) {
+        // Scheme is in cache and still valid
+        result.set(ref, cacheEntry.scheme);
+        return false;
+      }
+      return true;
+    });
+
+    if (missingSchemeRefs.length === 0) {
+      // All schemes are in the cache
+      this.logger.log('Using all cached coding schemes');
+      return result;
+    }
+
+    // Fetch missing schemes
+    this.logger.log(`Fetching ${missingSchemeRefs.length} missing coding schemes`);
+    const codingSchemeFiles = await this.fileUploadRepository.find({
+      where: { file_id: In(missingSchemeRefs) },
+      select: ['file_id', 'data', 'filename']
+    });
+
+    // Parse and cache the schemes
+    codingSchemeFiles.forEach(file => {
+      try {
+        const data = typeof file.data === 'string' ? JSON.parse(file.data) : file.data;
+        const scheme = new Autocoder.CodingScheme(data);
+
+        // Store in result map
+        result.set(file.file_id, scheme);
+
+        // Store in cache
+        this.codingSchemeCache.set(file.file_id, { scheme, timestamp: now });
+      } catch (error) {
+        this.logger.error(`--- Fehler beim Verarbeiten des Kodierschemas ${file.filename}: ${error.message}`);
+        // Use empty scheme for invalid schemes
+        result.set(file.file_id, emptyScheme);
+      }
+    });
+
+    return result;
+  }
+
+  /**
+   * Clean up expired items from caches
+   */
+  private cleanupCaches(): void {
+    const now = Date.now();
+
+    // Clean up coding scheme cache
+    for (const [key, entry] of this.codingSchemeCache.entries()) {
+      if (now - entry.timestamp > this.SCHEME_CACHE_TTL_MS) {
+        this.codingSchemeCache.delete(key);
+      }
+    }
+
+    // Clean up test file cache
+    for (const [key, entry] of this.testFileCache.entries()) {
+      if (now - entry.timestamp > this.TEST_FILE_CACHE_TTL_MS) {
+        this.testFileCache.delete(key);
+      }
+    }
+  }
+
   // Job status tracking
   private jobStatus: Map<string, { status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled'; progress: number; result?: CodingStatistics; error?: string; workspaceId?: number; createdAt?: Date }> = new Map();
 
@@ -192,6 +327,9 @@ export class WorkspaceCodingService {
     progressCallback?: (progress: number) => void,
     jobId?: string
   ): Promise<CodingStatistics> {
+    // Clean up expired cache entries
+    this.cleanupCaches();
+
     const startTime = Date.now();
     const metrics: { [key: string]: number } = {};
 
@@ -396,16 +534,9 @@ export class WorkspaceCodingService {
 
       // Step 7: Get test files - 70% progress
       const fileQueryStart = Date.now();
-      const testFiles = await this.fileUploadRepository.find({
-        where: { workspace_id: workspace_id, file_id: In(unitAliasesArray) },
-        select: ['file_id', 'data', 'filename'] // Only select needed fields
-      });
+      // Use cache for test files
+      const fileIdToTestFileMap = await this.getTestFilesWithCache(workspace_id, unitAliasesArray);
       metrics.fileQuery = Date.now() - fileQueryStart;
-
-      const fileIdToTestFileMap = new Map();
-      testFiles.forEach(file => {
-        fileIdToTestFileMap.set(file.file_id, file);
-      });
 
       // Report progress after step 7
       if (progressCallback) {
@@ -475,11 +606,11 @@ export class WorkspaceCodingService {
 
       // Step 9: Get coding scheme files - 85% progress
       const schemeQueryStart = Date.now();
-      const codingSchemeFiles = await this.fileUploadRepository.find({
-        where: { file_id: In([...codingSchemeRefs]) },
-        select: ['file_id', 'data', 'filename']
-      });
+      // Use cache for coding schemes
+      const fileIdToCodingSchemeMap = await this.getCodingSchemesWithCache([...codingSchemeRefs]);
       metrics.schemeQuery = Date.now() - schemeQueryStart;
+      // No separate parsing step needed as it's handled by the cache helper
+      metrics.schemeParsing = 0;
 
       // Report progress after step 9
       if (progressCallback) {
@@ -496,21 +627,8 @@ export class WorkspaceCodingService {
         }
       }
 
-      // Step 10: Parse coding schemes - 90% progress
-      const schemeParsing = Date.now();
-      const fileIdToCodingSchemeMap = new Map();
+      // Skip to step 11 (step 10 is now part of getCodingSchemesWithCache)
       const emptyScheme = new Autocoder.CodingScheme({});
-
-      codingSchemeFiles.forEach(file => {
-        try {
-          const data = typeof file.data === 'string' ? JSON.parse(file.data) : file.data;
-          const scheme = new Autocoder.CodingScheme(data);
-          fileIdToCodingSchemeMap.set(file.file_id, scheme);
-        } catch (error) {
-          this.logger.error(`--- Fehler beim Verarbeiten des Kodierschemas ${file.filename}: ${error.message}`);
-        }
-      });
-      metrics.schemeParsing = Date.now() - schemeParsing;
 
       // Report progress after step 10
       if (progressCallback) {
@@ -718,6 +836,9 @@ export class WorkspaceCodingService {
   }
 
   async codeTestPersons(workspace_id: number, testPersonIds: string): Promise<CodingStatisticsWithJob> {
+    // Clean up expired cache entries
+    this.cleanupCaches();
+
     const startTime = Date.now();
     const metrics: { [key: string]: number } = {};
 
@@ -848,16 +969,9 @@ export class WorkspaceCodingService {
       }
 
       const fileQueryStart = Date.now();
-      const testFiles = await this.fileUploadRepository.find({
-        where: { workspace_id: workspace_id, file_id: In(unitAliasesArray) },
-        select: ['file_id', 'data', 'filename'] // Only select needed fields
-      });
+      // Use cache for test files
+      const fileIdToTestFileMap = await this.getTestFilesWithCache(workspace_id, unitAliasesArray);
       metrics.fileQuery = Date.now() - fileQueryStart;
-
-      const fileIdToTestFileMap = new Map();
-      testFiles.forEach(file => {
-        fileIdToTestFileMap.set(file.file_id, file);
-      });
       const schemeExtractStart = Date.now();
       const codingSchemeRefs = new Set<string>();
       const unitToCodingSchemeRefMap = new Map();
@@ -884,25 +998,12 @@ export class WorkspaceCodingService {
       metrics.schemeExtract = Date.now() - schemeExtractStart;
 
       const schemeQueryStart = Date.now();
-      const codingSchemeFiles = await this.fileUploadRepository.find({
-        where: { file_id: In([...codingSchemeRefs]) },
-        select: ['file_id', 'data', 'filename']
-      });
+      // Use cache for coding schemes
+      const fileIdToCodingSchemeMap = await this.getCodingSchemesWithCache([...codingSchemeRefs]);
       metrics.schemeQuery = Date.now() - schemeQueryStart;
-      const schemeParsing = Date.now();
-      const fileIdToCodingSchemeMap = new Map();
+      // No separate parsing step needed as it's handled by the cache helper
+      metrics.schemeParsing = 0;
       const emptyScheme = new Autocoder.CodingScheme({});
-
-      codingSchemeFiles.forEach(file => {
-        try {
-          const data = typeof file.data === 'string' ? JSON.parse(file.data) : file.data;
-          const scheme = new Autocoder.CodingScheme(data);
-          fileIdToCodingSchemeMap.set(file.file_id, scheme);
-        } catch (error) {
-          this.logger.error(`--- Fehler beim Verarbeiten des Kodierschemas ${file.filename}: ${error.message}`);
-        }
-      });
-      metrics.schemeParsing = Date.now() - schemeParsing;
 
       const processingStart = Date.now();
 
