@@ -108,3 +108,8 @@ export interface CodingStatistics {
     [key: string]: number;
   };
 }
+
+export interface CodingStatisticsWithJob extends CodingStatistics {
+  jobId?: string;
+  message?: string;
+}

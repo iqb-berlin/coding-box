@@ -1,6 +1,6 @@
 import {
   Controller,
-  Get, Query, Res, UseGuards
+  Get, Param, Query, Res, UseGuards
 } from '@nestjs/common';
 import {
   ApiOkResponse,
@@ -172,5 +172,139 @@ export class WorkspaceCodingController {
   })
   async getCodingStatistics(@WorkspaceId() workspace_id: number): Promise<CodingStatistics> {
     return this.workspaceCodingService.getCodingStatistics(workspace_id);
+  }
+
+  @Get(':workspace_id/coding/job/:jobId')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiParam({ name: 'jobId', type: String, description: 'ID of the background job' })
+  @ApiOkResponse({
+    description: 'Job status retrieved successfully.',
+    schema: {
+      type: 'object',
+      properties: {
+        status: {
+          type: 'string',
+          enum: ['pending', 'processing', 'completed', 'failed', 'cancelled'],
+          description: 'Current status of the job'
+        },
+        progress: {
+          type: 'number',
+          description: 'Progress percentage (0-100)'
+        },
+        result: {
+          type: 'object',
+          description: 'Result of the job (only available when status is completed)',
+          properties: {
+            totalResponses: { type: 'number' },
+            statusCounts: {
+              type: 'object',
+              additionalProperties: { type: 'number' }
+            }
+          }
+        },
+        error: {
+          type: 'string',
+          description: 'Error message (only available when status is failed)'
+        }
+      }
+    }
+  })
+  async getJobStatus(@Param('jobId') jobId: string): Promise<{ status: string; progress: number; result?: CodingStatistics; error?: string } | { error: string }> {
+    const status = this.workspaceCodingService.getJobStatus(jobId);
+    if (!status) {
+      return { error: `Job with ID ${jobId} not found` };
+    }
+    return status;
+  }
+
+  @Get(':workspace_id/coding/job/:jobId/cancel')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiParam({ name: 'jobId', type: String, description: 'ID of the background job to cancel' })
+  @ApiOkResponse({
+    description: 'Job cancellation request processed.',
+    schema: {
+      type: 'object',
+      properties: {
+        success: {
+          type: 'boolean',
+          description: 'Whether the cancellation request was successful'
+        },
+        message: {
+          type: 'string',
+          description: 'Message describing the result of the cancellation request'
+        }
+      }
+    }
+  })
+  async cancelJob(@Param('jobId') jobId: string): Promise<{ success: boolean; message: string }> {
+    return this.workspaceCodingService.cancelJob(jobId);
+  }
+
+  @Get(':workspace_id/coding/jobs')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiOkResponse({
+    description: 'List of all jobs retrieved successfully.',
+    schema: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          jobId: {
+            type: 'string',
+            description: 'Unique identifier for the job'
+          },
+          status: {
+            type: 'string',
+            enum: ['pending', 'processing', 'completed', 'failed', 'cancelled'],
+            description: 'Current status of the job'
+          },
+          progress: {
+            type: 'number',
+            description: 'Progress percentage (0-100)'
+          },
+          result: {
+            type: 'object',
+            description: 'Result of the job (only available when status is completed)',
+            properties: {
+              totalResponses: { type: 'number' },
+              statusCounts: {
+                type: 'object',
+                additionalProperties: { type: 'number' }
+              }
+            }
+          },
+          error: {
+            type: 'string',
+            description: 'Error message (only available when status is failed)'
+          },
+          workspaceId: {
+            type: 'number',
+            description: 'ID of the workspace the job belongs to'
+          },
+          createdAt: {
+            type: 'string',
+            format: 'date-time',
+            description: 'Date and time when the job was created'
+          }
+        }
+      }
+    }
+  })
+  async getAllJobs(@WorkspaceId() workspace_id: number): Promise<{
+    jobId: string;
+    status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
+    progress: number;
+    result?: CodingStatistics;
+    error?: string;
+    workspaceId?: number;
+    createdAt?: Date;
+  }[]> {
+    return this.workspaceCodingService.getAllJobs(workspace_id);
   }
 }
