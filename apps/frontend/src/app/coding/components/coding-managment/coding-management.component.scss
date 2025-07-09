@@ -715,3 +715,24 @@
     color: #283593; /* Dunklere Farbe beim Hover */
   }
 }
+
+// Dialog styles for test person coding
+::ng-deep .full-screen-dialog {
+  .mat-mdc-dialog-container {
+    padding: 0 !important;
+  }
+
+  .mat-mdc-dialog-surface {
+    border-radius: 12px;
+    overflow: hidden !important;
+  }
+
+  .mdc-dialog__container {
+    height: 100%;
+  }
+
+  .mdc-dialog__surface {
+    max-width: 100vw !important;
+    max-height: 100vh !important;
+  }
+}
