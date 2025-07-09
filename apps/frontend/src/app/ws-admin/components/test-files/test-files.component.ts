@@ -40,6 +40,7 @@ import { FilesInListDto } from '../../../../../../../api-dto/files/files-in-list
 import { FileValidationResultDto } from '../../../../../../../api-dto/files/file-validation-result.dto';
 import { FileDownloadDto } from '../../../../../../../api-dto/files/file-download.dto';
 import { ContentDialogComponent } from '../../../shared/dialogs/content-dialog/content-dialog.component';
+import { getFileIcon } from '../../utils/file-utils';
 
 @Component({
   selector: 'coding-box-test-files',
@@ -115,7 +116,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.loadTestFiles();
     this.textFilterSubscription = this.textFilterChanged
-      .pipe(debounceTime(300)) // Debounce für 300ms
+      .pipe(debounceTime(300))
       .subscribe(() => {
         this.applyFilters();
       });
@@ -294,26 +295,6 @@ export class TestFilesComponent implements OnInit, OnDestroy {
     }
   }
 
-  getFileIcon(fileType: string): string {
-    const type = fileType.toLowerCase();
-    if (type.includes('xml')) {
-      return 'code';
-    }
-    if (type.includes('zip')) {
-      return 'folder_zip';
-    }
-    if (type.includes('html')) {
-      return 'html';
-    }
-    if (type.includes('csv')) {
-      return 'table_chart';
-    }
-    if (type.includes('voud') || type.includes('vocs')) {
-      return 'description';
-    }
-    return 'insert_drive_file';
-  }
-
   openResourcePackagesDialog(): void {
     const dialogRef = this.dialog.open(ResourcePackagesDialogComponent, {
       width: '90%',
@@ -351,4 +332,6 @@ export class TestFilesComponent implements OnInit, OnDestroy {
       });
     });
   }
+
+  protected readonly getFileIcon = getFileIcon;
 }

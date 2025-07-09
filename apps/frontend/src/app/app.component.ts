@@ -8,7 +8,7 @@ import { MatButton } from '@angular/material/button';
 import { LocationStrategy } from '@angular/common';
 import { KeycloakProfile } from 'keycloak-js';
 import { AppService } from './services/app.service';
-import { AuthService } from './auth/service/auth.service';
+import { AuthService } from './core/services/auth.service';
 import { CreateUserDto } from '../../../../api-dto/user/create-user-dto';
 import { BackendService } from './services/backend.service';
 import { WrappedIconComponent } from './shared/wrapped-icon/wrapped-icon.component';

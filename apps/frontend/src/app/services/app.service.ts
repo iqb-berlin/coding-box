@@ -12,7 +12,7 @@ import {
 import { KeycloakProfile, KeycloakTokenParsed } from 'keycloak-js';
 import { AppLogoDto } from '../../../../../api-dto/app-logo-dto';
 import { AuthDataDto } from '../../../../../api-dto/auth-data-dto';
-import { AppHttpError } from '../interceptors/app-http-error.class';
+import { AppHttpError } from '../core/interceptors/app-http-error.class';
 import { TestGroupsInListDto } from '../../../../../api-dto/test-groups/testgroups-in-list.dto';
 import { FilesInListDto } from '../../../../../api-dto/files/files-in-list.dto';
 import { CreateUserDto } from '../../../../../api-dto/user/create-user-dto';
@@ -168,7 +168,7 @@ export class AppService {
 }
 
 export const standardLogo: AppLogoDto = {
-  data: 'assets/IQB-LogoA.png',
+  data: 'assets/images/IQB-LogoA.png',
   alt: 'Zur Startseite',
   bodyBackground: 'linear-gradient(180deg, rgba(7,70,94,1) 0%, rgba(6,112,123,1) 24%, rgba(1,192,229,1) 85%)',
   boxBackground: 'lightgray'

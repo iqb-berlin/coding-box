@@ -5,11 +5,11 @@ import {
 import { TranslateModule } from '@ngx-translate/core';
 import { MatTabLink, MatTabNav, MatTabNavPanel } from '@angular/material/tabs';
 import { AppService } from '../../../services/app.service';
-import { CodingJobsComponent } from '../../../coding/coding-jobs/coding-jobs.component';
+import { CodingJobsComponent } from '../../../coding/components/coding-jobs/coding-jobs.component';
 import { BackendService } from '../../../services/backend.service';
 import {
   CodingManagementManualComponent
-} from '../../../coding/coding-management-manual/coding-management-manual.component';
+} from '../../../coding/components/coding-management-manual/coding-management-manual.component';
 
 @Component({
   selector: 'coding-box-ws-admin',
