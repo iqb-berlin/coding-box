@@ -139,25 +139,20 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
   }
 
   private subscribeForValidPages(): void {
-    // Create an Observable that emits the current pageId whenever it changes
     const pageId$ = new Observable<string>(observer => {
-      // Initial value
       observer.next(this.pageId() || '');
 
-      // Set up a MutationObserver to watch for changes to the pageId input
       const callback = () => {
         observer.next(this.pageId() || '');
       };
 
       const interval = setInterval(callback, 500);
 
-      // Cleanup function
       return () => {
         clearInterval(interval);
       };
     });
 
-    // Use combineLatest to wait for both pageId and validPages to be available
     this.validPagesSubscription = combineLatest([
       pageId$,
       this.validPages.pipe(debounceTime(2000))
