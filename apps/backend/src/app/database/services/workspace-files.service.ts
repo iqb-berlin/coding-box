@@ -1082,7 +1082,7 @@ export class WorkspaceFilesService {
 
       if (!unitVariables.has(unitName)) {
         invalidVariables.push({
-          fileName: `Unit ${unitName}`,
+          fileName: `${unitName}`,
           variableId: variableId,
           value: response.value || '',
           responseId: response.id,
@@ -1094,7 +1094,7 @@ export class WorkspaceFilesService {
       const unitVars = unitVariables.get(unitName);
       if (!unitVars || !unitVars.has(variableId)) {
         invalidVariables.push({
-          fileName: `Unit ${unitName}`,
+          fileName: `${unitName}`,
           variableId: variableId,
           value: response.value || '',
           responseId: response.id,
@@ -1276,7 +1276,7 @@ export class WorkspaceFilesService {
 
       if (!this.isValidValueForType(value, expectedType)) {
         invalidVariables.push({
-          fileName: `Unit ${unitName}`,
+          fileName: `${unitName}`,
           variableId: variableId,
           value: value,
           responseId: response.id,
@@ -1301,13 +1301,16 @@ export class WorkspaceFilesService {
   }
 
   private isValidValueForType(value: string, type: string): boolean {
-    if (!value && type !== 'string') {
-      return false;
+    if (!value) {
+      return true; // Skip validation for empty values
     }
 
     switch (type.toLowerCase()) {
       case 'string':
         return true; // All values are valid strings
+
+      case 'no-value':
+        return true; // Ignore validation for no-value type
 
       case 'integer':
         // Check if the value is an integer
@@ -1560,7 +1563,7 @@ export class WorkspaceFilesService {
 
       if (!validStatusValues.includes(status)) {
         invalidVariables.push({
-          fileName: `Unit ${unitName}`,
+          fileName: `${unitName}`,
           variableId: variableId,
           value: response.value || '',
           responseId: response.id,

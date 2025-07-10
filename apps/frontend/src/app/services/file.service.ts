@@ -147,7 +147,7 @@ export class FileService {
       { headers });
   }
 
-  getUnitContentXml(workspaceId: number, unitId: number): Observable<string | null> {
+  getUnitContentXml(workspaceId: number, unitId: string): Observable<string | null> {
     return this.http.get<{ content: string }>(
       `${this.serverUrl}admin/workspace/${workspaceId}/unit/${unitId}/content`,
       { headers: this.authHeader }
