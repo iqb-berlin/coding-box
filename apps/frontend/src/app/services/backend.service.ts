@@ -372,7 +372,7 @@ export class BackendService {
     return this.fileService.getCodingSchemeFile(workspaceId, codingSchemeRef);
   }
 
-  getUnitContentXml(workspaceId: number, unitId: number): Observable<string | null> {
+  getUnitContentXml(workspaceId: number, unitId: string): Observable<string | null> {
     return this.fileService.getUnitContentXml(workspaceId, unitId);
   }
 
