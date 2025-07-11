@@ -38,6 +38,11 @@ services:
       - "traefik.http.services.frontend.loadbalancer.server.port=8080"
       - "traefik.docker.network=app-net"
     image: ${REGISTRY_PATH}iqbberlin/coding-box-frontend:${TAG}
+    environment:
+      - KEYCLOAK_URL=${KEYCLOAK_URL:-https://keycloak.kodierbox.iqb.hu-berlin.de/}
+      - KEYCLOAK_REALM=${KEYCLOAK_REALM:-iqb}
+      - KEYCLOAK_CLIENT_ID=${KEYCLOAK_CLIENT_ID:-coding-box}
+      - BACKEND_URL=${BACKEND_URL:-api/}
     volumes:
       - "./config/frontend/default.conf.template:/etc/nginx/templates/default.conf.template:ro"
     restart: always

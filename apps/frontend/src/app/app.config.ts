@@ -35,20 +35,18 @@ const allUrlsCondition = createInterceptorCondition<IncludeBearerTokenCondition>
 
 export const provideKeycloakAngular = () => provideKeycloak({
   config: {
-    url: 'https://www.iqb-login.de',
-    realm: 'iqb',
-    clientId: 'coding-box'
+    url: environment.keycloak.url,
+    realm: environment.keycloak.realm,
+    clientId: environment.keycloak.clientId
   },
   initOptions: {
     onLoad: 'check-sso',
-    // redirectUri: 'https://iqb-kodierbox.de',
-    // onLoad: 'login-required',
     checkLoginIframe: false
   },
   features: [
     withAutoRefreshToken({
       onInactivityTimeout: 'logout',
-      sessionTimeout: 60000
+      sessionTimeout: 300000
     })
   ],
 
