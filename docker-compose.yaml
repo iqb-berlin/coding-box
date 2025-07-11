@@ -53,6 +53,11 @@ services:
         condition: service_completed_successfully
       backend:
         condition: service_started
+    environment:
+      - KEYCLOAK_URL=${KEYCLOAK_URL:-https://keycloak.kodierbox.iqb.hu-berlin.de/}
+      - KEYCLOAK_REALM=${KEYCLOAK_REALM:-iqb}
+      - KEYCLOAK_CLIENT_ID=${KEYCLOAK_CLIENT_ID:-coding-box}
+      - BACKEND_URL=${BACKEND_URL:-api/}
     networks:
       - application-network
 
