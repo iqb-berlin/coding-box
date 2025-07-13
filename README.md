@@ -78,10 +78,6 @@ For production environments, you can use the file `docker-compose.coding-box.pro
 
 ---
 
-## Key Features
-
-
----
 
 ## Useful Scripts
 

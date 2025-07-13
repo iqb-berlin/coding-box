@@ -25,7 +25,7 @@ import { MatFormField, MatLabel } from '@angular/material/form-field';
 import { MatOption, MatSelect } from '@angular/material/select';
 import { Subject, Subscription } from 'rxjs';
 import { debounceTime } from 'rxjs/operators';
-import { MatPaginator } from '@angular/material/paginator';
+import { MatPaginator, PageEvent } from '@angular/material/paginator';
 import { FilesValidationDialogComponent } from '../files-validation-result/files-validation.component';
 import { TestCenterImportComponent } from '../test-center-import/test-center-import.component';
 import { ResourcePackagesDialogComponent } from '../resource-packages-dialog/resource-packages-dialog.component';
@@ -40,6 +40,7 @@ import { FilesInListDto } from '../../../../../../../api-dto/files/files-in-list
 import { FileValidationResultDto } from '../../../../../../../api-dto/files/file-validation-result.dto';
 import { FileDownloadDto } from '../../../../../../../api-dto/files/file-download.dto';
 import { ContentDialogComponent } from '../../../shared/dialogs/content-dialog/content-dialog.component';
+import { getFileIcon } from '../../utils/file-utils';
 
 @Component({
   selector: 'coding-box-test-files',
@@ -100,7 +101,6 @@ export class TestFilesComponent implements OnInit, OnDestroy {
     { value: '10MB+', display: '> 10MB' }
   ];
 
-  // Flag to track if resource packages have been modified
   resourcePackagesModified = false;
 
   textFilterValue: string = '';
@@ -109,15 +109,14 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   private textFilterChanged: Subject<string> = new Subject<string>();
   private textFilterSubscription: Subscription | undefined;
 
-  // Pagination variables
   page: number = 1;
   limit: number = 100;
   total: number = 0;
 
   ngOnInit(): void {
-    this.loadTestFiles(false);
+    this.loadTestFiles();
     this.textFilterSubscription = this.textFilterChanged
-      .pipe(debounceTime(300)) // Debounce für 300ms
+      .pipe(debounceTime(300))
       .subscribe(() => {
         this.applyFilters();
       });
@@ -137,22 +136,19 @@ export class TestFilesComponent implements OnInit, OnDestroy {
     return this.sort;
   }
 
-  /** Checks if all rows are selected */
   private isAllSelected(): boolean {
     const numSelected = this.tableCheckboxSelection.selected.length;
     const numRows = this.dataSource?.data.length || 0;
     return numSelected === numRows;
   }
 
-  /** Toggles the selection of all rows */
   masterToggle(): void {
     this.isAllSelected() ?
       this.tableCheckboxSelection.clear() :
       this.dataSource?.data.forEach(row => this.tableCheckboxSelection.select(row));
   }
 
-  /** Loads test files and updates the data source */
-  loadTestFiles(forceReload: boolean): void {
+  loadTestFiles(): void {
     this.isLoading = true;
     this.isValidating = false;
     this.backendService.getFilesList(
@@ -170,26 +166,22 @@ export class TestFilesComponent implements OnInit, OnDestroy {
     });
   }
 
-  /** Updates the table data source and stops spinner */
   private updateTable(files: { data: FilesInListDto[], fileTypes: string[] }): void {
     this.dataSource = new MatTableDataSource(files.data);
     this.fileTypes = files.fileTypes;
     this.isLoading = false;
   }
 
-  /** Applies all filters */
   applyFilters(): void {
     this.page = 1;
-    this.loadTestFiles(true);
+    this.loadTestFiles();
   }
 
-  /** Handles text filter changes */
   onTextFilterChange(value: string): void {
     this.textFilterValue = value.trim();
     this.textFilterChanged.next(this.textFilterValue);
   }
 
-  /** Clears all filters */
   clearFilters(): void {
     this.textFilterValue = '';
     this.selectedFileType = '';
@@ -197,7 +189,6 @@ export class TestFilesComponent implements OnInit, OnDestroy {
     this.applyFilters();
   }
 
-  /** Handles file selection for upload */
   onFileSelected(target: EventTarget | null): void {
     if (!target) return;
     const inputElement = target as HTMLInputElement;
@@ -213,7 +204,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
 
   private onUploadSuccess(): void {
     setTimeout(() => {
-      this.loadTestFiles(true);
+      this.loadTestFiles();
     }, 1000); // Optional timeout to simulate processing delay
     this.isLoading = false;
     this.isValidating = false;
@@ -228,9 +219,8 @@ export class TestFilesComponent implements OnInit, OnDestroy {
       }
     });
     dialogRef.afterClosed().subscribe((result: boolean | UntypedFormGroup) => {
-      // Reload files if dialog returns a positive result
       if (result instanceof UntypedFormGroup || result) {
-        this.loadTestFiles(true);
+        this.loadTestFiles();
       }
     });
   }
@@ -276,7 +266,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
       { duration: 1000 }
     );
     if (success) {
-      this.loadTestFiles(true);
+      this.loadTestFiles();
     }
   }
 
@@ -305,34 +295,6 @@ export class TestFilesComponent implements OnInit, OnDestroy {
     }
   }
 
-  /**
-   * Returns the appropriate icon based on file type
-   */
-  getFileIcon(fileType: string): string {
-    const type = fileType.toLowerCase();
-    if (type.includes('xml')) {
-      return 'code';
-    }
-    if (type.includes('zip')) {
-      return 'folder_zip';
-    }
-    if (type.includes('html')) {
-      return 'html';
-    }
-    if (type.includes('csv')) {
-      return 'table_chart';
-    }
-    if (type.includes('voud') || type.includes('vocs')) {
-      return 'description';
-    }
-    return 'insert_drive_file';
-  }
-
-  // Resource Packages methods
-
-  /**
-   * Opens the resource packages dialog
-   */
   openResourcePackagesDialog(): void {
     const dialogRef = this.dialog.open(ResourcePackagesDialogComponent, {
       width: '90%',
@@ -343,20 +305,18 @@ export class TestFilesComponent implements OnInit, OnDestroy {
     });
 
     dialogRef.afterClosed().subscribe(result => {
-      // If result is true, resource packages were modified (uploaded or deleted)
       if (result === true) {
         this.resourcePackagesModified = true;
         // Optionally reload test files if they include resource packages
-        // this.loadTestFiles(true);
+        // this.loadTestFiles();
       }
     });
   }
 
-  /** Wird vom MatPaginator aufgerufen */
-  onPageChange(event: any): void {
+  onPageChange(event: PageEvent): void {
     this.page = event.pageIndex + 1;
     this.limit = event.pageSize;
-    this.loadTestFiles(true);
+    this.loadTestFiles();
   }
 
   showFileContent(file: FilesInListDto): void {
@@ -372,4 +332,6 @@ export class TestFilesComponent implements OnInit, OnDestroy {
       });
     });
   }
+
+  protected readonly getFileIcon = getFileIcon;
 }

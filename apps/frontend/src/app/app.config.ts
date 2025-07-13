@@ -21,8 +21,9 @@ import {
 import { HashLocationStrategy, LocationStrategy } from '@angular/common';
 import { routes } from './app.routes';
 import { environment } from '../environments/environment';
-import { authInterceptor } from './interceptors/auth.interceptor';
-import { journalInterceptor } from './services/journal-interceptor';
+import { authInterceptor } from './core/interceptors/auth.interceptor';
+import { journalInterceptor } from './core/interceptors/journal-interceptor';
+import { SERVER_URL } from './injection-tokens';
 
 export function createTranslateLoader(http: HttpClient): TranslateHttpLoader {
   return new TranslateHttpLoader(http, './assets/i18n/', '.json');
@@ -34,20 +35,18 @@ const allUrlsCondition = createInterceptorCondition<IncludeBearerTokenCondition>
 
 export const provideKeycloakAngular = () => provideKeycloak({
   config: {
-    url: 'https://www.iqb-login.de',
-    realm: 'iqb',
-    clientId: 'coding-box'
+    url: environment.keycloak.url,
+    realm: environment.keycloak.realm,
+    clientId: environment.keycloak.clientId
   },
   initOptions: {
     onLoad: 'check-sso',
-    // redirectUri: 'https://iqb-kodierbox.de',
-    // onLoad: 'login-required',
     checkLoginIframe: false
   },
   features: [
     withAutoRefreshToken({
       onInactivityTimeout: 'logout',
-      sessionTimeout: 60000
+      sessionTimeout: 300000
     })
   ],
 
@@ -76,7 +75,7 @@ export const appConfig: ApplicationConfig = {
     provideRouter(routes),
     provideAnimationsAsync(),
     {
-      provide: 'SERVER_URL',
+      provide: SERVER_URL,
       useValue: environment.backendUrl
     },
     {

@@ -10,6 +10,7 @@ import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { provideHttpClient } from '@angular/common/http';
 import { WsSettingsComponent } from './ws-settings.component';
 import { environment } from '../../../../environments/environment';
+import { SERVER_URL } from '../../../injection-tokens';
 
 describe('WsSettingsComponent', () => {
   let component: WsSettingsComponent;
@@ -19,7 +20,7 @@ describe('WsSettingsComponent', () => {
     await TestBed.configureTestingModule({
       providers: [provideHttpClient(),
         {
-          provide: 'SERVER_URL',
+          provide: SERVER_URL,
           useValue: environment.backendUrl
         }],
       imports: [

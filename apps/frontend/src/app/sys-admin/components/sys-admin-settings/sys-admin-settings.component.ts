@@ -95,9 +95,6 @@ export class SysAdminSettingsComponent {
     }
   }
 
-  /**
-   * Uploads the selected logo
-   */
   uploadLogo(): void {
     if (!this.selectedFile || !this.previewUrl) return;
 
@@ -110,11 +107,8 @@ export class SysAdminSettingsComponent {
           boxBackground: this.appService.appLogo.boxBackground
         };
 
-        // Update the appLogo property in the AppService
         this.appService.appLogo = newLogo;
         this.isDefaultLogo = false;
-
-        // Save the logo settings to the server
         this.logoService.saveLogoSettings(newLogo).subscribe({
           next: settingsResponse => {
             if (settingsResponse.success) {
@@ -124,23 +118,18 @@ export class SysAdminSettingsComponent {
             }
             this.resetFileInput();
           },
-          error: settingsError => {
-            console.error('Error saving logo settings:', settingsError);
+          error: () => {
             this.snackBar.open('Logo aktualisiert, aber Fehler beim Speichern der Einstellungen', 'Schließen', { duration: 3000 });
             this.resetFileInput();
           }
         });
       },
-      error: error => {
-        console.error('Error uploading logo:', error);
+      error: () => {
         this.snackBar.open('Fehler beim Hochladen des Logos', 'Schließen', { duration: 3000 });
       }
     });
   }
 
-  /**
-   * Resets to the default logo
-   */
   resetToDefaultLogo(): void {
     this.logoService.deleteLogo().subscribe({
       next: response => {
@@ -155,26 +144,20 @@ export class SysAdminSettingsComponent {
         }
         this.resetFileInput();
       },
-      error: error => {
-        console.error('Error resetting logo:', error);
+      error: () => {
         this.snackBar.open('Fehler beim Zurücksetzen des Logos', 'Schließen', { duration: 3000 });
       }
     });
   }
 
-  /**
-   * Saves the alternative text for the logo
-   */
   saveAltText(): void {
     const updatedLogo = {
       ...this.appService.appLogo,
       alt: this.logoAltText
     };
 
-    // Update the appLogo property in the AppService
     this.appService.appLogo = updatedLogo;
 
-    // Save the logo settings to the server
     this.logoService.saveLogoSettings(updatedLogo).subscribe({
       next: response => {
         if (response.success) {
@@ -183,16 +166,12 @@ export class SysAdminSettingsComponent {
           this.snackBar.open('Fehler beim Speichern des Alternativtexts', 'Schließen', { duration: 3000 });
         }
       },
-      error: error => {
-        console.error('Error saving alt text:', error);
+      error: () => {
         this.snackBar.open('Fehler beim Speichern des Alternativtexts', 'Schließen', { duration: 3000 });
       }
     });
   }
 
-  /**
-   * Updates the background color preview when the input changes
-   */
   updateBackgroundPreview(): void {
     // The preview is automatically updated through data binding
     // This method is called when the input changes
@@ -207,10 +186,7 @@ export class SysAdminSettingsComponent {
       bodyBackground: this.backgroundColorValue
     };
 
-    // Update the appLogo property in the AppService
     this.appService.appLogo = updatedLogo;
-
-    // Save the logo settings to the server
     this.logoService.saveLogoSettings(updatedLogo).subscribe({
       next: response => {
         if (response.success) {
@@ -219,8 +195,7 @@ export class SysAdminSettingsComponent {
           this.snackBar.open('Fehler beim Speichern der Hintergrundfarbe', 'Schließen', { duration: 3000 });
         }
       },
-      error: error => {
-        console.error('Error saving background color:', error);
+      error: () => {
         this.snackBar.open('Fehler beim Speichern der Hintergrundfarbe', 'Schließen', { duration: 3000 });
       }
     });
@@ -230,19 +205,12 @@ export class SysAdminSettingsComponent {
    * Resets the background color to the standard linear gradient
    */
   resetToDefaultBackground(): void {
-    // Set the background color value to the standard gradient from standardLogo
     this.backgroundColorValue = standardLogo.bodyBackground || '';
-
-    // Create updated logo object with default background
     const updatedLogo = {
       ...this.appService.appLogo,
       bodyBackground: this.backgroundColorValue
     };
-
-    // Update the appLogo property in the AppService
     this.appService.appLogo = updatedLogo;
-
-    // Save the logo settings to the server
     this.logoService.saveLogoSettings(updatedLogo).subscribe({
       next: response => {
         if (response.success) {
@@ -251,8 +219,7 @@ export class SysAdminSettingsComponent {
           this.snackBar.open('Fehler beim Zurücksetzen der Hintergrundfarbe', 'Schließen', { duration: 3000 });
         }
       },
-      error: error => {
-        console.error('Error resetting background color:', error);
+      error: () => {
         this.snackBar.open('Fehler beim Zurücksetzen der Hintergrundfarbe', 'Schließen', { duration: 3000 });
       }
     });

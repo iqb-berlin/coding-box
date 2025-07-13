@@ -1,5 +1,4 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { MatIconModule } from '@angular/material/icon';
 import { WrappedIconComponent } from './wrapped-icon.component';
 
 describe('WrappedIconComponent', () => {
@@ -8,13 +7,12 @@ describe('WrappedIconComponent', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [
-        MatIconModule
-      ]
+      imports: [WrappedIconComponent]
     }).compileComponents();
 
     fixture = TestBed.createComponent(WrappedIconComponent);
     component = fixture.componentInstance;
+    fixture.componentRef.setInput('icon', 'home');
     fixture.detectChanges();
   });
 

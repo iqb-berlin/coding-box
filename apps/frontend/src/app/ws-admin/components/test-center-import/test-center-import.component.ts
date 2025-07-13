@@ -30,20 +30,6 @@ import { WorkspaceAdminService } from '../../services/workspace-admin.service';
 import { TestGroupsInfoDto } from '../../../../../../../api-dto/files/test-groups-info.dto';
 import { ConfirmDialogComponent, ConfirmDialogData } from '../../../shared/dialogs/confirm-dialog.component';
 
-export type ServerResponse = {
-  token: string,
-  displayName: string,
-  customTexts: unknown,
-  flags: [],
-  claims: {
-    workspaceAdmin: WorkspaceAdmin[],
-  },
-  groupToken: null,
-  access: {
-    workspaceAdmin: string[],
-  }
-};
-
 export type WorkspaceAdmin = {
   label: string,
   id: string,

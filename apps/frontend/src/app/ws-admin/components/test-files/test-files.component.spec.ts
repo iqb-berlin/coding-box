@@ -4,6 +4,7 @@ import { HttpClientModule } from '@angular/common/http';
 import { ActivatedRoute } from '@angular/router';
 import { TestFilesComponent } from './test-files.component';
 import { environment } from '../../../../environments/environment';
+import { SERVER_URL } from '../../../injection-tokens';
 
 describe('TestFilesComponent', () => {
   let component: TestFilesComponent;
@@ -19,7 +20,7 @@ describe('TestFilesComponent', () => {
         useValue: fakeActivatedRoute
       },
       {
-        provide: 'SERVER_URL',
+        provide: SERVER_URL,
         useValue: environment.backendUrl
       }],
       imports: [

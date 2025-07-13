@@ -9,20 +9,14 @@ import { MatButtonModule } from '@angular/material/button';
 import { ReactiveFormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
-  debounceTime, fromEvent, Subject, Subscription, takeUntil
+  combineLatest, debounceTime, fromEvent, Observable, Subject, Subscription, takeUntil
 } from 'rxjs';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { AppService } from '../../../services/app.service';
 import { BackendService } from '../../../services/backend.service';
 import { ResponseDto } from '../../../../../../../api-dto/responses/response-dto';
 import { SpinnerComponent } from '../spinner/spinner.component';
-
-export interface PageData {
-  index: number;
-  id: string;
-  type: '#next' | '#previous' | '#goto';
-  disabled: boolean;
-}
+import { PageData } from '../../models/page-data.model';
 
 export type Progress = 'none' | 'some' | 'complete';
 
@@ -145,29 +139,43 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
   }
 
   private subscribeForValidPages(): void {
-    this.validPagesSubscription = this.validPages
-      .pipe(debounceTime(2000))
-      .subscribe({
-        next: validPages => {
-          const pageId = this.pageId();
-          if (!pageId) {
-            this.invalidPage.emit('notInList');
-            return;
-          }
+    const pageId$ = new Observable<string>(observer => {
+      observer.next(this.pageId() || '');
 
-          if (!validPages.pages.includes(pageId)) {
-            this.invalidPage.emit('notInList');
-          } else if (validPages.current !== pageId) {
-            this.invalidPage.emit('notCurrent');
-          } else {
-            this.invalidPage.emit(null);
-            this.cleanupValidPagesSubscription();
-          }
-        },
-        error: () => {
+      const callback = () => {
+        observer.next(this.pageId() || '');
+      };
+
+      const interval = setInterval(callback, 500);
+
+      return () => {
+        clearInterval(interval);
+      };
+    });
+
+    this.validPagesSubscription = combineLatest([
+      pageId$,
+      this.validPages.pipe(debounceTime(2000))
+    ]).subscribe({
+      next: ([pageId, validPages]) => {
+        if (!pageId) {
           this.invalidPage.emit('notInList');
+          return;
         }
-      });
+
+        if (!validPages.pages.includes(pageId)) {
+          this.invalidPage.emit('notInList');
+        } else if (validPages.current !== pageId) {
+          this.invalidPage.emit('notCurrent');
+        } else {
+          this.invalidPage.emit(null);
+          this.cleanupValidPagesSubscription();
+        }
+      },
+      error: () => {
+        this.invalidPage.emit('notInList');
+      }
+    });
   }
 
   private cleanupValidPagesSubscription(): void {
