@@ -12,6 +12,10 @@ RUN --mount=type=cache,target=/var/cache/apk \
 ENV LANG=de_DE.utf8
 ENV TZ=Europe/Berlin
 
+# Copy custom PostgreSQL configuration
+COPY database/config/postgresql.conf /etc/postgresql/postgresql.conf
+
+# Copy healthcheck script
 COPY database/healthcheck/postgres-healthcheck /usr/local/bin/
 HEALTHCHECK \
     --interval=10s \
@@ -22,3 +26,6 @@ HEALTHCHECK \
     CMD ["postgres-healthcheck"]
 
 EXPOSE 5432
+
+# Use custom configuration file
+CMD ["postgres", "-c", "config_file=/etc/postgresql/postgresql.conf"]
