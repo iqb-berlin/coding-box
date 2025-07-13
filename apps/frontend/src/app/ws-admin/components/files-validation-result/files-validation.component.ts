@@ -56,13 +56,13 @@ interface ExpandedFilesLists {
 })
 export class FilesValidationDialogComponent {
   dialogRef = inject<MatDialogRef<FilesValidationDialogComponent>>(MatDialogRef);
-  data = inject(MAT_DIALOG_DATA);
+  data = inject<FilesValidation[]>(MAT_DIALOG_DATA);
   expandedFilesLists: Map<string, ExpandedFilesLists> = new Map();
 
   constructor() {
     const data = this.data;
     if (data) {
-      data.forEach((val:any) => {
+      data.forEach((val: FilesValidation) => {
         this.expandedFilesLists.set(val.testTaker, {
           booklets: false,
           units: false,

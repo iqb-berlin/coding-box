@@ -3,7 +3,7 @@
 ARG REGISTRY_PATH=""
 
 
-FROM ${REGISTRY_PATH}postgres:14.12-alpine3.18
+FROM ${REGISTRY_PATH}postgres:14.12-alpine3.19
 
 RUN --mount=type=cache,target=/var/cache/apk \
     apk add --update musl musl-utils musl-locales tzdata
@@ -12,7 +12,16 @@ RUN --mount=type=cache,target=/var/cache/apk \
 ENV LANG=de_DE.utf8
 ENV TZ=Europe/Berlin
 
+# Copy custom PostgreSQL configuration
+# COPY database/config/postgresql.conf /etc/postgresql/postgresql.conf
+
+# Copy healthcheck script
 COPY database/healthcheck/postgres-healthcheck /usr/local/bin/
+
+# RUN chown postgres:postgres /etc/postgresql/postgresql.conf
+
+# CMD ["postgres", "-c", "config_file=/etc/postgresql/postgresql.conf"]
+
 HEALTHCHECK \
     --interval=10s \
     --timeout=3s \
@@ -22,3 +31,6 @@ HEALTHCHECK \
     CMD ["postgres-healthcheck"]
 
 EXPOSE 5432
+
+
+

@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, In } from 'typeorm';
 import { UnitTag } from '../entities/unitTag.entity';
 import { Unit } from '../entities/unit.entity';
 import { CreateUnitTagDto } from '../../../../../../api-dto/unit-tags/create-unit-tag.dto';
@@ -69,6 +69,32 @@ export class UnitTagService {
     // Find all tags for the unit
     const tags = await this.unitTagRepository.find({
       where: { unitId },
+      order: { createdAt: 'DESC' }
+    });
+
+    // Return the DTOs
+    return tags.map(tag => ({
+      id: tag.id,
+      unitId: tag.unitId,
+      tag: tag.tag,
+      color: tag.color,
+      createdAt: tag.createdAt
+    }));
+  }
+
+  /**
+   * Find all tags for multiple units in a single query
+   * @param unitIds Array of unit IDs
+   * @returns An array of tags for all specified units
+   */
+  async findAllByUnitIds(unitIds: number[]): Promise<UnitTagDto[]> {
+    if (!unitIds || unitIds.length === 0) {
+      return [];
+    }
+
+    // Find all tags for the units in a single query
+    const tags = await this.unitTagRepository.find({
+      where: { unitId: In(unitIds) },
       order: { createdAt: 'DESC' }
     });
 

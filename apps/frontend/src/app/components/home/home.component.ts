@@ -11,7 +11,6 @@ import { ActivatedRoute } from '@angular/router';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { AppService } from '../../services/app.service';
 import { AppInfoComponent } from '../app-info/app-info.component';
-// eslint-disable-next-line max-len
 import { UserWorkspacesAreaComponent } from '../../workspace/components/user-workspaces-area/user-workspaces-area.component';
 import { WorkspaceFullDto } from '../../../../../../api-dto/workspaces/workspace-full-dto';
 
@@ -43,8 +42,10 @@ export class HomeComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.appService.refreshAuthData();
     this.authSubscription = this.appService.authData$.subscribe(authData => {
-      this.authData = authData;
-      this.workspaces = authData.workspaces;
+      if (authData) {
+        this.authData = authData;
+        this.workspaces = authData.workspaces;
+      }
     });
 
     this.route.queryParams.subscribe(params => {
@@ -59,7 +60,7 @@ export class HomeComponent implements OnInit, OnDestroy {
    * @param errorCode The error code from the query parameters
    */
   private showErrorMessage(errorCode: string): void {
-    let message = 'Ein Fehler ist aufgetreten';
+    let message;
 
     switch (errorCode) {
       case 'token_missing':

@@ -4,6 +4,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { provideNoopAnimations } from '@angular/platform-browser/animations'; // Importieren
 import { SysAdminSettingsComponent } from './sys-admin-settings.component';
 import { environment } from '../../../../environments/environment';
+import { SERVER_URL } from '../../../injection-tokens';
 
 describe('SysAdminSettingsComponent', () => {
   let component: SysAdminSettingsComponent;
@@ -14,7 +15,7 @@ describe('SysAdminSettingsComponent', () => {
       providers: [
         provideHttpClient(),
         {
-          provide: 'SERVER_URL',
+          provide: SERVER_URL,
           useValue: environment.backendUrl
         },
         provideNoopAnimations() // Hier hinzufügen

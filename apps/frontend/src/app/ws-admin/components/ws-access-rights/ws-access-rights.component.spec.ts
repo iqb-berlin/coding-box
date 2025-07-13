@@ -10,6 +10,7 @@ import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { provideHttpClient } from '@angular/common/http';
 import { WsAccessRightsComponent } from './ws-access-rights.component';
 import { environment } from '../../../../environments/environment';
+import { SERVER_URL } from '../../../injection-tokens';
 
 describe('WsAccessRightsComponent', () => {
   let component: WsAccessRightsComponent;
@@ -18,7 +19,7 @@ describe('WsAccessRightsComponent', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       providers: [provideHttpClient(), {
-        provide: 'SERVER_URL',
+        provide: SERVER_URL,
         useValue: environment.backendUrl
       }],
       imports: [

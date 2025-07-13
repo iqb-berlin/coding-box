@@ -158,10 +158,8 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit {
   selectedTypeResponses: Set<number> = new Set<number>();
   selectedStatusResponses: Set<number> = new Set<number>();
 
-  // Pagination properties
-  pageSizeOptions = [5, 10, 25, 50];
+  pageSizeOptions = [25, 50, 100, 200];
 
-  // Paginated data
   paginatedVariables = new MatTableDataSource<InvalidVariableDto>([]);
   paginatedTypeVariables = new MatTableDataSource<InvalidVariableDto>([]);
   paginatedStatusVariables = new MatTableDataSource<InvalidVariableDto>([]);
@@ -174,7 +172,6 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit {
   ) {}
 
   ngOnInit(): void {
-    // Initialize component
   }
 
   ngAfterViewInit(): void {
@@ -334,7 +331,6 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit {
         this.isDeletingResponses = false;
         this.snackBar.open(`${deletedCount} Antworten gelöscht`, 'Schließen', { duration: 3000 });
 
-        // Refresh the data after deletion
         this.validateVariables();
         this.selectedResponses.clear();
       });
@@ -346,7 +342,6 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit {
       return;
     }
 
-    // Create confirmation dialog
     const dialogRef = this.dialog.open(ContentDialogComponent, {
       width: '400px',
       data: {
@@ -361,7 +356,6 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit {
     dialogRef.afterClosed().subscribe(deleteFromDb => {
       if (deleteFromDb) {
         this.isDeletingResponses = true;
-        // Get all response IDs
         const responseIds = this.invalidVariables
           .filter(variable => variable.responseId !== undefined)
           .map(variable => variable.responseId as number);
@@ -371,7 +365,6 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit {
             this.isDeletingResponses = false;
             this.snackBar.open(`${deletedCount} Antworten gelöscht`, 'Schließen', { duration: 3000 });
 
-            // Refresh the data after deletion
             this.validateVariables();
             this.selectedResponses.clear();
           });
@@ -477,7 +470,6 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit {
         this.isDeletingResponses = false;
         this.snackBar.open(`${deletedCount} Antworten gelöscht`, 'Schließen', { duration: 3000 });
 
-        // Refresh the data after deletion
         this.validateVariableTypes();
         this.selectedTypeResponses.clear();
       });
@@ -489,7 +481,6 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit {
       return;
     }
 
-    // Create confirmation dialog
     const dialogRef = this.dialog.open(ContentDialogComponent, {
       width: '400px',
       data: {
@@ -504,7 +495,6 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit {
     dialogRef.afterClosed().subscribe(deleteFromDb => {
       if (deleteFromDb) {
         this.isDeletingResponses = true;
-        // Get all response IDs
         const responseIds = this.invalidTypeVariables
           .filter(variable => variable.responseId !== undefined)
           .map(variable => variable.responseId as number);
@@ -514,7 +504,6 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit {
             this.isDeletingResponses = false;
             this.snackBar.open(`${deletedCount} Antworten gelöscht`, 'Schließen', { duration: 3000 });
 
-            // Refresh the data after deletion
             this.validateVariableTypes();
             this.selectedTypeResponses.clear();
           });
@@ -566,7 +555,6 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit {
         this.isDeletingResponses = false;
         this.snackBar.open(`${deletedCount} Antworten gelöscht`, 'Schließen', { duration: 3000 });
 
-        // Refresh the data after deletion
         this.validateResponseStatus();
         this.selectedStatusResponses.clear();
       });
@@ -578,7 +566,6 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit {
       return;
     }
 
-    // Create confirmation dialog
     const dialogRef = this.dialog.open(ContentDialogComponent, {
       width: '400px',
       data: {
@@ -593,7 +580,6 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit {
     dialogRef.afterClosed().subscribe(deleteFromDb => {
       if (deleteFromDb) {
         this.isDeletingResponses = true;
-        // Get all response IDs
         const responseIds = this.invalidStatusVariables
           .filter(variable => variable.responseId !== undefined)
           .map(variable => variable.responseId as number);
@@ -602,8 +588,6 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit {
           .subscribe(deletedCount => {
             this.isDeletingResponses = false;
             this.snackBar.open(`${deletedCount} Antworten gelöscht`, 'Schließen', { duration: 3000 });
-
-            // Refresh the data after deletion
             this.validateResponseStatus();
             this.selectedStatusResponses.clear();
           });
@@ -626,25 +610,8 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit {
     });
   }
 
-  /**
-   * Extracts the unit ID from the fileName
-   * @param fileName The fileName in the format "Unit unitName"
-   * @returns The unit name
-   */
-  extractUnitName(fileName: string): string {
-    // The fileName is in the format "Unit unitName"
-    const match = fileName.match(/^Unit\s+(.+)$/);
-    return match ? match[1] : fileName;
-  }
-
-  /**
-   * Shows the unit XML content in a dialog
-   * @param fileName The fileName in the format "Unit unitName"
-   */
-  showUnitXml(fileName: string): void {
-    const unitName = this.extractUnitName(fileName);
-
-    this.backendService.getUnitContentXml(this.appService.selectedWorkspaceId, Number(unitName))
+  showUnitXml(unitName: string): void {
+    this.backendService.getUnitContentXml(this.appService.selectedWorkspaceId, unitName)
       .subscribe(xmlContent => {
         if (xmlContent) {
           this.dialog.open(ContentDialogComponent, {

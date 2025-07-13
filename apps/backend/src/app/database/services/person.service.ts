@@ -367,6 +367,7 @@ export class PersonService {
       });
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private extractVariablesFromSubforms(subforms: any[]): Set<string> {
     const variables = new Set<string>();
     subforms.forEach(subform => subform.responses.forEach(response => variables.add(response.id))
@@ -654,6 +655,7 @@ export class PersonService {
 
   async saveSubformResponsesForUnit(
     savedUnit: Unit,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     subforms: any[]
   ): Promise<{ success: boolean; saved: number; skipped: number }> {
     try {
@@ -765,7 +767,9 @@ export class PersonService {
 
   async processPersonLogs(
     persons: Person[],
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     unitLogs: any,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     bookletLogs: any,
     overwriteExistingLogs: boolean = true
   ): Promise<{

@@ -300,7 +300,9 @@ export class WorkspaceFilesService {
   }
 
   private extractXmlData(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     bookletTags: cheerio.Cheerio<any>,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     unitTags: cheerio.Cheerio<any>
   ): {
       uniqueBooklets: Set<string>;
@@ -558,7 +560,7 @@ export class WorkspaceFilesService {
         }
       }
 
-      // @ts-expect-error
+      // @ts-expect-error: not exact match
       const fileUpload = this.fileUploadRepository.create({
         workspace_id: workspaceId,
         filename: file.originalname,
@@ -894,65 +896,24 @@ export class WorkspaceFilesService {
     return `${module}-${majorVersion}.${minorVersion}`.toUpperCase();
   }
 
-  /**
-   * Retrieves the XML content of a unit file
-   * @param workspaceId The ID of the workspace
-   * @param unitId The ID of the unit
-   * @returns The XML content of the unit file
-   */
   async getUnitContent(workspaceId: number, unitId: number): Promise<string> {
-    try {
-      const unitFile = await this.fileUploadRepository.findOne({
-        where: { workspace_id: workspaceId, file_id: `${unitId}` }
-      });
+    const unitFile = await this.fileUploadRepository.findOne({
+      where: { workspace_id: workspaceId, file_id: `${unitId}` }
+    });
 
-      if (!unitFile) {
-        this.logger.error(`Unit file with ID ${unitId} not found in workspace ${workspaceId}`);
-        throw new Error(`Unit file with ID ${unitId} not found`);
-      }
+    if (!unitFile) {
+      this.logger.error(`Unit file with ID ${unitId} not found in workspace ${workspaceId}`);
+      throw new Error(`Unit file with ID ${unitId} not found`);
+    }
 
-      if (unitFile.data) {
-        return unitFile.data.toString();
-      }
-
+    if (!unitFile.data) {
+      this.logger.error(`Unit file with ID ${unitId} has no data content`);
       throw new Error('Unit file has no data content');
-    } catch (error) {
-      this.logger.error(`Error retrieving unit content: ${error.message}`, error.stack);
-      throw error;
     }
+
+    return unitFile.data.toString();
   }
 
-  /**
-   * Extracts the CodingSchemeRef from an XML string
-   * @param xmlContent The XML content to parse
-   * @returns The coding scheme reference name or null if not found
-   */
-  extractCodingSchemeRef(xmlContent: string): string | null {
-    try {
-      // Verwende cheerio, um das XML zu parsen
-      const $ = cheerio.load(xmlContent, { xml: true });
-
-      // Suche nach dem CodingSchemeRef-Tag
-      const codingSchemeRefTag = $('CodingSchemeRef');
-
-      if (codingSchemeRefTag.length > 0) {
-        // Hole den Text-Inhalt des Tags
-        return codingSchemeRefTag.text().trim();
-      }
-
-      return null;
-    } catch (error) {
-      this.logger.error(`Error extracting CodingSchemeRef: ${error.message}`, error.stack);
-      return null;
-    }
-  }
-
-  /**
-   * Finds a coding scheme file by its reference name
-   * @param workspaceId The ID of the workspace
-   * @param codingSchemeRef The reference name of the coding scheme
-   * @returns The coding scheme file data
-   */
   async getCodingSchemeByRef(workspaceId: number, codingSchemeRef: string): Promise<FileDownloadDto | null> {
     try {
       const codingSchemeFile = await this.fileUploadRepository.findOne({
@@ -981,6 +942,16 @@ export class WorkspaceFilesService {
   }
 
   async validateVariables(workspaceId: number, page: number = 1, limit: number = 10): Promise<{ data: InvalidVariableDto[]; total: number; page: number; limit: number }> {
+    if (!workspaceId) {
+      this.logger.error('Workspace ID is required');
+      return {
+        data: [],
+        total: 0,
+        page,
+        limit
+      };
+    }
+
     const unitFiles = await this.filesRepository.find({
       where: { workspace_id: workspaceId, file_type: 'Unit' }
     });
@@ -1004,14 +975,11 @@ export class WorkspaceFilesService {
           }
           unitVariables.set(unitName, variables);
         }
-      } catch (e) {
-        console.error(`Could not parse Unit file ${unitFile.filename}: ${e.message}`);
-      }
+      } catch (e) { /* empty */ }
     }
 
     const invalidVariables: InvalidVariableDto[] = [];
 
-    // Find all persons with the given workspace_id
     const persons = await this.personsRepository.find({
       where: { workspace_id: workspaceId }
     });
@@ -1026,16 +994,33 @@ export class WorkspaceFilesService {
       };
     }
 
-    // Get all person IDs
     const personIds = persons.map(person => person.id);
 
-    // Find all units that belong to booklets that belong to these persons
-    const units = await this.unitRepository.createQueryBuilder('unit')
-      .innerJoin('unit.booklet', 'booklet')
-      .where('booklet.personid IN (:...personIds)', { personIds })
-      .getMany();
+    if (personIds.length === 0) {
+      this.logger.warn(`No person IDs found for workspace ${workspaceId}`);
+      return {
+        data: [],
+        total: 0,
+        page,
+        limit
+      };
+    }
 
-    if (units.length === 0) {
+    const batchSize = 1000;
+    let allUnits: Unit[] = [];
+
+    for (let i = 0; i < personIds.length; i += batchSize) {
+      const personIdsBatch = personIds.slice(i, i + batchSize);
+
+      const unitsBatch = await this.unitRepository.createQueryBuilder('unit')
+        .innerJoin('unit.booklet', 'booklet')
+        .where('booklet.personid IN (:...personIdsBatch)', { personIdsBatch })
+        .getMany();
+
+      allUnits = [...allUnits, ...unitsBatch];
+    }
+
+    if (allUnits.length === 0) {
       this.logger.warn(`No units found for persons in workspace ${workspaceId}`);
       return {
         data: [],
@@ -1045,16 +1030,42 @@ export class WorkspaceFilesService {
       };
     }
 
-    const unitIds = units.map(unit => unit.id);
+    const unitIds = allUnits.map(unit => unit.id);
 
-    // Find all responses that belong to these units
-    const responses = await this.responseRepository.find({
-      where: { unitid: In(unitIds) },
-      relations: ['unit'] // Include unit relation to access unit.name
-    });
+    if (unitIds.length === 0) {
+      this.logger.warn(`No unit IDs found for persons in workspace ${workspaceId}`);
+      return {
+        data: [],
+        total: 0,
+        page,
+        limit
+      };
+    }
 
-    // Check each response
-    for (const response of responses) {
+    let allResponses: ResponseEntity[] = [];
+
+    for (let i = 0; i < unitIds.length; i += batchSize) {
+      const unitIdsBatch = unitIds.slice(i, i + batchSize);
+
+      const responsesBatch = await this.responseRepository.find({
+        where: { unitid: In(unitIdsBatch) },
+        relations: ['unit']
+      });
+
+      allResponses = [...allResponses, ...responsesBatch];
+    }
+
+    if (allResponses.length === 0) {
+      this.logger.warn(`No responses found for units in workspace ${workspaceId}`);
+      return {
+        data: [],
+        total: 0,
+        page,
+        limit
+      };
+    }
+
+    for (const response of allResponses) {
       const unit = response.unit;
       if (!unit) {
         this.logger.warn(`Response ${response.id} has no associated unit`);
@@ -1064,10 +1075,14 @@ export class WorkspaceFilesService {
       const unitName = unit.name;
       const variableId = response.variableid;
 
-      // Check if the unit name exists in unitVariables
+      if (!variableId) {
+        this.logger.warn(`Response ${response.id} has no variable ID`);
+        continue;
+      }
+
       if (!unitVariables.has(unitName)) {
         invalidVariables.push({
-          fileName: `Unit ${unitName}`,
+          fileName: `${unitName}`,
           variableId: variableId,
           value: response.value || '',
           responseId: response.id,
@@ -1076,11 +1091,10 @@ export class WorkspaceFilesService {
         continue;
       }
 
-      // Check if the variable ID exists in the unit's variables
       const unitVars = unitVariables.get(unitName);
       if (!unitVars || !unitVars.has(variableId)) {
         invalidVariables.push({
-          fileName: `Unit ${unitName}`,
+          fileName: `${unitName}`,
           variableId: variableId,
           value: response.value || '',
           responseId: response.id,
@@ -1089,7 +1103,6 @@ export class WorkspaceFilesService {
       }
     }
 
-    // Apply pagination
     const validPage = Math.max(1, page);
     const validLimit = Math.min(Math.max(1, limit), 1000);
     const startIndex = (validPage - 1) * validLimit;
@@ -1104,20 +1117,21 @@ export class WorkspaceFilesService {
     };
   }
 
-  /**
-   * Validates if variable values match their defined types
-   * @param workspaceId The ID of the workspace
-   * @param page Page number for pagination
-   * @param limit Number of items per page
-   * @returns Paginated validation result with invalid variables
-   */
   async validateVariableTypes(workspaceId: number, page: number = 1, limit: number = 10): Promise<{ data: InvalidVariableDto[]; total: number; page: number; limit: number }> {
+    if (!workspaceId) {
+      this.logger.error('Workspace ID is required');
+      return {
+        data: [],
+        total: 0,
+        page,
+        limit
+      };
+    }
+
     const unitFiles = await this.filesRepository.find({
       where: { workspace_id: workspaceId, file_type: 'Unit' }
     });
 
-    // Map to store unit variables with their types
-    // Key: unitName, Value: Map of variableId to type
     const unitVariableTypes = new Map<string, Map<string, string>>();
 
     for (const unitFile of unitFiles) {
@@ -1142,9 +1156,7 @@ export class WorkspaceFilesService {
 
           unitVariableTypes.set(unitName, variableTypes);
         }
-      } catch (e) {
-        console.error(`Could not parse Unit file ${unitFile.filename}: ${e.message}`);
-      }
+      } catch (e) { /* empty */ }
     }
 
     const invalidVariables: InvalidVariableDto[] = [];
@@ -1165,12 +1177,31 @@ export class WorkspaceFilesService {
 
     const personIds = persons.map(person => person.id);
 
-    const units = await this.unitRepository.createQueryBuilder('unit')
-      .innerJoin('unit.booklet', 'booklet')
-      .where('booklet.personid IN (:...personIds)', { personIds })
-      .getMany();
+    if (personIds.length === 0) {
+      this.logger.warn(`No person IDs found for workspace ${workspaceId}`);
+      return {
+        data: [],
+        total: 0,
+        page,
+        limit
+      };
+    }
 
-    if (units.length === 0) {
+    const batchSize = 1000;
+    let allUnits: Unit[] = [];
+
+    for (let i = 0; i < personIds.length; i += batchSize) {
+      const personIdsBatch = personIds.slice(i, i + batchSize);
+
+      const unitsBatch = await this.unitRepository.createQueryBuilder('unit')
+        .innerJoin('unit.booklet', 'booklet')
+        .where('booklet.personid IN (:...personIdsBatch)', { personIdsBatch })
+        .getMany();
+
+      allUnits = [...allUnits, ...unitsBatch];
+    }
+
+    if (allUnits.length === 0) {
       this.logger.warn(`No units found for persons in workspace ${workspaceId}`);
       return {
         data: [],
@@ -1180,14 +1211,42 @@ export class WorkspaceFilesService {
       };
     }
 
-    const unitIds = units.map(unit => unit.id);
+    const unitIds = allUnits.map(unit => unit.id);
 
-    const responses = await this.responseRepository.find({
-      where: { unitid: In(unitIds) },
-      relations: ['unit'] // Include unit relation to access unit.name
-    });
+    if (unitIds.length === 0) {
+      this.logger.warn(`No unit IDs found for persons in workspace ${workspaceId}`);
+      return {
+        data: [],
+        total: 0,
+        page,
+        limit
+      };
+    }
 
-    for (const response of responses) {
+    let allResponses: ResponseEntity[] = [];
+
+    for (let i = 0; i < unitIds.length; i += batchSize) {
+      const unitIdsBatch = unitIds.slice(i, i + batchSize);
+
+      const responsesBatch = await this.responseRepository.find({
+        where: { unitid: In(unitIdsBatch) },
+        relations: ['unit']
+      });
+
+      allResponses = [...allResponses, ...responsesBatch];
+    }
+
+    if (allResponses.length === 0) {
+      this.logger.warn(`No responses found for units in workspace ${workspaceId}`);
+      return {
+        data: [],
+        total: 0,
+        page,
+        limit
+      };
+    }
+
+    for (const response of allResponses) {
       const unit = response.unit;
       if (!unit) {
         this.logger.warn(`Response ${response.id} has no associated unit`);
@@ -1196,6 +1255,12 @@ export class WorkspaceFilesService {
 
       const unitName = unit.name;
       const variableId = response.variableid;
+
+      if (!variableId) {
+        this.logger.warn(`Response ${response.id} has no variable ID`);
+        continue;
+      }
+
       const value = response.value || '';
 
       if (!unitVariableTypes.has(unitName)) {
@@ -1211,7 +1276,7 @@ export class WorkspaceFilesService {
 
       if (!this.isValidValueForType(value, expectedType)) {
         invalidVariables.push({
-          fileName: `Unit ${unitName}`,
+          fileName: `${unitName}`,
           variableId: variableId,
           value: value,
           responseId: response.id,
@@ -1221,7 +1286,6 @@ export class WorkspaceFilesService {
       }
     }
 
-    // Apply pagination
     const validPage = Math.max(1, page);
     const validLimit = Math.min(Math.max(1, limit), 1000);
     const startIndex = (validPage - 1) * validLimit;
@@ -1236,20 +1300,17 @@ export class WorkspaceFilesService {
     };
   }
 
-  /**
-   * Checks if a value is valid for a given type
-   * @param value The value to check
-   * @param type The expected type (string, integer, number, boolean, json)
-   * @returns True if the value is valid for the type, false otherwise
-   */
   private isValidValueForType(value: string, type: string): boolean {
-    if (!value && type !== 'string') {
-      return false;
+    if (!value) {
+      return true; // Skip validation for empty values
     }
 
     switch (type.toLowerCase()) {
       case 'string':
         return true; // All values are valid strings
+
+      case 'no-value':
+        return true; // Ignore validation for no-value type
 
       case 'integer':
         // Check if the value is an integer
@@ -1266,7 +1327,6 @@ export class WorkspaceFilesService {
       }
 
       case 'json':
-        // Check if the value is valid JSON
         try {
           JSON.parse(value);
           return true;
@@ -1279,21 +1339,8 @@ export class WorkspaceFilesService {
     }
   }
 
-  /**
-   * Validates if response status is one of the valid values
-   * @param workspaceId The ID of the workspace
-   * @param page Page number for pagination
-   * @param limit Number of items per page
-   * @returns Paginated validation result with invalid responses
-   */
-  /**
-   * Validates TestTakers XML files and checks if each person from the persons table is found
-   * @param workspaceId The ID of the workspace
-   * @returns Validation results
-   */
   async validateTestTakers(workspaceId: number): Promise<TestTakersValidationDto> {
     try {
-      // Find TestTakers files in the workspace
       const testTakers = await this.fileUploadRepository.find({
         where: { workspace_id: workspaceId, file_type: In(['TestTakers', 'Testtakers']) }
       });
@@ -1309,13 +1356,11 @@ export class WorkspaceFilesService {
         };
       }
 
-      // Parse XML to extract Groups, Logins, and Booklet codes
       const testTakerLogins: TestTakerLoginDto[] = [];
       let totalGroups = 0;
       let totalLogins = 0;
       let totalBookletCodes = 0;
 
-      // Process all test takers
       for (const testTaker of testTakers) {
         const xmlDocument = cheerio.load(testTaker.data, { xml: true });
         const groupElements = xmlDocument('Group');
@@ -1367,12 +1412,10 @@ export class WorkspaceFilesService {
         }
       }
 
-      // Find all persons in the workspace
       const persons = await this.personsRepository.find({
         where: { workspace_id: workspaceId }
       });
 
-      // Check if each person from the persons table is found in the extracted data
       const missingPersons: MissingPersonDto[] = [];
 
       for (const person of persons) {
@@ -1402,6 +1445,16 @@ export class WorkspaceFilesService {
   }
 
   async validateResponseStatus(workspaceId: number, page: number = 1, limit: number = 10): Promise<{ data: InvalidVariableDto[]; total: number; page: number; limit: number }> {
+    if (!workspaceId) {
+      this.logger.error('Workspace ID is required');
+      return {
+        data: [],
+        total: 0,
+        page,
+        limit
+      };
+    }
+
     const validStatusValues = ['VALUE_CHANGED', 'NOT_REACHED', 'DISPLAYED', 'UNSET', 'PARTLY_DISPLAYED'];
 
     const persons = await this.personsRepository.find({
@@ -1420,12 +1473,31 @@ export class WorkspaceFilesService {
 
     const personIds = persons.map(person => person.id);
 
-    const units = await this.unitRepository.createQueryBuilder('unit')
-      .innerJoin('unit.booklet', 'booklet')
-      .where('booklet.personid IN (:...personIds)', { personIds })
-      .getMany();
+    if (personIds.length === 0) {
+      this.logger.warn(`No person IDs found for workspace ${workspaceId}`);
+      return {
+        data: [],
+        total: 0,
+        page,
+        limit
+      };
+    }
 
-    if (units.length === 0) {
+    const batchSize = 1000;
+    let allUnits: Unit[] = [];
+
+    for (let i = 0; i < personIds.length; i += batchSize) {
+      const personIdsBatch = personIds.slice(i, i + batchSize);
+
+      const unitsBatch = await this.unitRepository.createQueryBuilder('unit')
+        .innerJoin('unit.booklet', 'booklet')
+        .where('booklet.personid IN (:...personIdsBatch)', { personIdsBatch })
+        .getMany();
+
+      allUnits = [...allUnits, ...unitsBatch];
+    }
+
+    if (allUnits.length === 0) {
       this.logger.warn(`No units found for persons in workspace ${workspaceId}`);
       return {
         data: [],
@@ -1435,16 +1507,44 @@ export class WorkspaceFilesService {
       };
     }
 
-    const unitIds = units.map(unit => unit.id);
+    const unitIds = allUnits.map(unit => unit.id);
 
-    const responses = await this.responseRepository.find({
-      where: { unitid: In(unitIds) },
-      relations: ['unit'] // Include unit relation to access unit.name
-    });
+    if (unitIds.length === 0) {
+      this.logger.warn(`No unit IDs found for persons in workspace ${workspaceId}`);
+      return {
+        data: [],
+        total: 0,
+        page,
+        limit
+      };
+    }
+
+    let allResponses: ResponseEntity[] = [];
+
+    for (let i = 0; i < unitIds.length; i += batchSize) {
+      const unitIdsBatch = unitIds.slice(i, i + batchSize);
+
+      const responsesBatch = await this.responseRepository.find({
+        where: { unitid: In(unitIdsBatch) },
+        relations: ['unit'] // Include unit relation to access unit.name
+      });
+
+      allResponses = [...allResponses, ...responsesBatch];
+    }
+
+    if (allResponses.length === 0) {
+      this.logger.warn(`No responses found for units in workspace ${workspaceId}`);
+      return {
+        data: [],
+        total: 0,
+        page,
+        limit
+      };
+    }
 
     const invalidVariables: InvalidVariableDto[] = [];
 
-    for (const response of responses) {
+    for (const response of allResponses) {
       const unit = response.unit;
       if (!unit) {
         this.logger.warn(`Response ${response.id} has no associated unit`);
@@ -1453,12 +1553,17 @@ export class WorkspaceFilesService {
 
       const unitName = unit.name;
       const variableId = response.variableid;
+
+      if (!variableId) {
+        this.logger.warn(`Response ${response.id} has no variable ID`);
+        continue;
+      }
+
       const status = response.status;
 
-      // Check if the response status is one of the valid values
       if (!validStatusValues.includes(status)) {
         invalidVariables.push({
-          fileName: `Unit ${unitName}`,
+          fileName: `${unitName}`,
           variableId: variableId,
           value: response.value || '',
           responseId: response.id,
@@ -1467,7 +1572,6 @@ export class WorkspaceFilesService {
       }
     }
 
-    // Apply pagination
     const validPage = Math.max(1, page);
     const validLimit = Math.min(Math.max(1, limit), 1000);
     const startIndex = (validPage - 1) * validLimit;
@@ -1495,7 +1599,17 @@ export class WorkspaceFilesService {
       limit: number;
     }> {
     try {
-      // Find TestTakers files in the workspace
+      if (!workspaceId) {
+        this.logger.error('Workspace ID is required');
+        return {
+          testTakersFound: false,
+          groupsWithResponses: [],
+          allGroupsHaveResponses: false,
+          total: 0,
+          page,
+          limit
+        };
+      }
       const testTakers = await this.fileUploadRepository.find({
         where: { workspace_id: workspaceId, file_type: In(['TestTakers', 'Testtakers']) }
       });
@@ -1512,10 +1626,8 @@ export class WorkspaceFilesService {
         };
       }
 
-      // Extract groups from TestTakers XML files
       const groups: Set<string> = new Set();
 
-      // Process all test takers
       for (const testTaker of testTakers) {
         const xmlDocument = cheerio.load(testTaker.data, { xml: true });
         const groupElements = xmlDocument('Group');
@@ -1582,13 +1694,29 @@ export class WorkspaceFilesService {
         // Get all person IDs
         const personIds = persons.map(person => person.id);
 
-        // Find all units that belong to booklets that belong to these persons
-        const units = await this.unitRepository.createQueryBuilder('unit')
-          .innerJoin('unit.booklet', 'booklet')
-          .where('booklet.personid IN (:...personIds)', { personIds })
-          .getMany();
+        if (personIds.length === 0) {
+          this.logger.warn(`No person IDs found for group ${group} in workspace ${workspaceId}`);
+          groupsWithResponses.push({ group, hasResponse: false });
+          allGroupsHaveResponses = false;
+          continue;
+        }
 
-        if (units.length === 0) {
+        const batchSize = 1000;
+        let allUnits: Unit[] = [];
+
+        for (let i = 0; i < personIds.length; i += batchSize) {
+          const personIdsBatch = personIds.slice(i, i + batchSize);
+
+          // Find units for this batch of person IDs
+          const unitsBatch = await this.unitRepository.createQueryBuilder('unit')
+            .innerJoin('unit.booklet', 'booklet')
+            .where('booklet.personid IN (:...personIdsBatch)', { personIdsBatch })
+            .getMany();
+
+          allUnits = [...allUnits, ...unitsBatch];
+        }
+
+        if (allUnits.length === 0) {
           // No units found for persons in this group
           groupsWithResponses.push({ group, hasResponse: false });
           allGroupsHaveResponses = false;
@@ -1596,14 +1724,28 @@ export class WorkspaceFilesService {
         }
 
         // Get all unit IDs
-        const unitIds = units.map(unit => unit.id);
+        const unitIds = allUnits.map(unit => unit.id);
 
-        // Check if there's at least one response for these units
-        const responseCount = await this.responseRepository.count({
-          where: { unitid: In(unitIds) }
-        });
+        if (unitIds.length === 0) {
+          this.logger.warn(`No unit IDs found for group ${group} in workspace ${workspaceId}`);
+          groupsWithResponses.push({ group, hasResponse: false });
+          allGroupsHaveResponses = false;
+          continue;
+        }
 
-        const hasResponse = responseCount > 0;
+        let totalResponseCount = 0;
+
+        for (let i = 0; i < unitIds.length; i += batchSize) {
+          const unitIdsBatch = unitIds.slice(i, i + batchSize);
+
+          const responseCountBatch = await this.responseRepository.count({
+            where: { unitid: In(unitIdsBatch) }
+          });
+
+          totalResponseCount += responseCountBatch;
+        }
+
+        const hasResponse = totalResponseCount > 0;
         groupsWithResponses.push({ group, hasResponse });
 
         if (!hasResponse) {
@@ -1632,14 +1774,18 @@ export class WorkspaceFilesService {
     }
   }
 
-  /**
-   * Deletes invalid responses from the database
-   * @param workspaceId The ID of the workspace
-   * @param responseIds Array of response IDs to delete
-   * @returns Number of deleted responses
-   */
   async deleteInvalidResponses(workspaceId: number, responseIds: number[]): Promise<number> {
     try {
+      if (!workspaceId) {
+        this.logger.error('Workspace ID is required');
+        return 0;
+      }
+
+      if (!responseIds || responseIds.length === 0) {
+        this.logger.warn('No response IDs provided for deletion');
+        return 0;
+      }
+
       this.logger.log(`Deleting invalid responses for workspace ${workspaceId}: ${responseIds.join(', ')}`);
 
       // Verify that the responses belong to units that belong to persons in the workspace
@@ -1652,28 +1798,61 @@ export class WorkspaceFilesService {
         return 0;
       }
 
+      // Get all person IDs
       const personIds = persons.map(person => person.id);
 
-      const units = await this.unitRepository.createQueryBuilder('unit')
-        .innerJoin('unit.booklet', 'booklet')
-        .where('booklet.personid IN (:...personIds)', { personIds })
-        .getMany();
+      // Check if personIds array is empty
+      if (personIds.length === 0) {
+        this.logger.warn(`No person IDs found for workspace ${workspaceId}`);
+        return 0;
+      }
 
-      if (units.length === 0) {
+      const batchSize = 1000;
+      let allUnits: Unit[] = [];
+
+      for (let i = 0; i < personIds.length; i += batchSize) {
+        const personIdsBatch = personIds.slice(i, i + batchSize);
+
+        const unitsBatch = await this.unitRepository.createQueryBuilder('unit')
+          .innerJoin('unit.booklet', 'booklet')
+          .where('booklet.personid IN (:...personIdsBatch)', { personIdsBatch })
+          .getMany();
+
+        allUnits = [...allUnits, ...unitsBatch];
+      }
+
+      if (allUnits.length === 0) {
         this.logger.warn(`No units found for persons in workspace ${workspaceId}`);
         return 0;
       }
 
-      const unitIds = units.map(unit => unit.id);
+      const unitIds = allUnits.map(unit => unit.id);
 
-      // Delete responses that match the given IDs and belong to the units in the workspace
-      const deleteResult = await this.responseRepository.delete({
-        id: In(responseIds),
-        unitid: In(unitIds)
-      });
+      if (unitIds.length === 0) {
+        this.logger.warn(`No unit IDs found for persons in workspace ${workspaceId}`);
+        return 0;
+      }
 
-      this.logger.log(`Deleted ${deleteResult.affected} invalid responses`);
-      return deleteResult.affected || 0;
+      let totalDeleted = 0;
+
+      for (let i = 0; i < responseIds.length; i += batchSize) {
+        const responseIdsBatch = responseIds.slice(i, i + batchSize);
+
+        for (let j = 0; j < unitIds.length; j += batchSize) {
+          const unitIdsBatch = unitIds.slice(j, j + batchSize);
+
+          // Delete responses that match the given IDs and belong to the units in the workspace
+          const deleteResult = await this.responseRepository.delete({
+            id: In(responseIdsBatch),
+            unitid: In(unitIdsBatch)
+          });
+
+          totalDeleted += deleteResult.affected || 0;
+        }
+      }
+
+      this.logger.log(`Deleted ${totalDeleted} invalid responses`);
+      return totalDeleted;
     } catch (error) {
       this.logger.error(`Error deleting invalid responses: ${error.message}`, error.stack);
       throw error;

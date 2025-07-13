@@ -1,29 +1,28 @@
-// eslint-disable-next-line max-classes-per-file
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
 import { UserWorkspacesAreaComponent } from './user-workspaces-area.component';
-import { environment } from '../../../../environments/environment';
-import { AuthService } from '../../../auth/service/auth.service';
+import { AuthService } from '../../../core/services/auth.service';
 
+const mockAuthService = {
+  getLoggedUser: jest.fn(),
+  isLoggedIn: jest.fn().mockReturnValue(true)
+
+};
 describe('UserWorkspacesAreaComponent', () => {
   let component: UserWorkspacesAreaComponent;
   let fixture: ComponentFixture<UserWorkspacesAreaComponent>;
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [
-        TranslateModule.forRoot()
-      ],
+      imports: [UserWorkspacesAreaComponent, TranslateModule.forRoot()],
       providers: [
-        AuthService,
-        {
-          provide: 'SERVER_URL',
-          useValue: environment.backendUrl
-        }]
+        { provide: AuthService, useValue: mockAuthService }
+      ]
     }).compileComponents();
 
     fixture = TestBed.createComponent(UserWorkspacesAreaComponent);
     component = fixture.componentInstance;
+    fixture.componentRef.setInput('workspaces', []);
     fixture.detectChanges();
   });
 
