@@ -17,6 +17,11 @@ COPY database/config/postgresql.conf /etc/postgresql/postgresql.conf
 
 # Copy healthcheck script
 COPY database/healthcheck/postgres-healthcheck /usr/local/bin/
+
+RUN chown postgres:postgres /etc/postgresql/postgresql.conf
+
+CMD ["postgres", "-c", "config_file=/etc/postgresql/postgresql.conf"]
+
 HEALTHCHECK \
     --interval=10s \
     --timeout=3s \
@@ -27,5 +32,5 @@ HEALTHCHECK \
 
 EXPOSE 5432
 
-# Use custom configuration file
-CMD ["postgres", "-c", "config_file=/etc/postgresql/postgresql.conf"]
+
+
