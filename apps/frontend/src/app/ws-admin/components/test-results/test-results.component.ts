@@ -52,6 +52,7 @@ import { UpdateUnitTagDto } from '../../../../../../../api-dto/unit-tags/update-
 import { UnitNoteDto } from '../../../../../../../api-dto/unit-notes/unit-note.dto';
 import { ValidationDialogComponent } from '../validation-dialog/validation-dialog.component';
 import { VariableValidationDto } from '../../../../../../../api-dto/files/variable-validation.dto';
+import { VariableAnalysisDialogComponent } from '../variable-analysis-dialog/variable-analysis-dialog.component';
 
 interface BookletLog {
   id: number;
@@ -1063,6 +1064,139 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       if (result && result.variableValidationResult) {
         this.variableValidationResult = result.variableValidationResult;
         this.isVariableValidationRunning = false;
+      }
+    });
+  }
+
+  /**
+   * Opens a dialog to analyze variable frequencies for the entire workspace
+   */
+  openVariableAnalysisDialog(): void {
+    // Show loading indicator
+    const loadingSnackBar = this.snackBar.open(
+      'Starte Analyse...',
+      '',
+      { duration: 3000 }
+    );
+
+    // Create an asynchronous analysis job
+    this.backendService.createVariableAnalysisJob(
+      this.appService.selectedWorkspaceId,
+      this.selectedUnit?.id // Optional unit ID, may be undefined
+    ).subscribe({
+      next: job => {
+        loadingSnackBar.dismiss();
+
+        // Show success message with job ID
+        this.snackBar.open(
+          `Analyse gestartet (Job ID: ${job.id}). Sie werden benachrichtigt, wenn die Analyse abgeschlossen ist.`,
+          'OK',
+          { duration: 5000 }
+        );
+
+        this.pollJobStatus(job.id);
+      },
+      error: () => {
+        loadingSnackBar.dismiss();
+        this.snackBar.open(
+          'Fehler beim Starten der Analyse',
+          'Fehler',
+          { duration: 3000 }
+        );
+      }
+    });
+  }
+
+  /**
+   * Poll for job status and show notification when complete
+   * @param jobId The ID of the job to poll
+   */
+  private pollJobStatus(jobId: number): void {
+    const pollingInterval = 5000;
+
+    // Set up a timer to check job status
+    const timer = setInterval(() => {
+      this.backendService.getVariableAnalysisJob(
+        this.appService.selectedWorkspaceId,
+        jobId
+      ).subscribe({
+        next: job => {
+          // Check if the job is completed or failed
+          if (job.status === 'completed') {
+            // Stop polling
+            clearInterval(timer);
+
+            // Show success notification
+            const snackBarRef = this.snackBar.open(
+              'Variablen-Analyse abgeschlossen',
+              'Ergebnisse anzeigen',
+              { duration: 10000 }
+            );
+
+            // Handle click on action button
+            snackBarRef.onAction().subscribe(() => {
+              this.showAnalysisResults(jobId);
+            });
+          } else if (job.status === 'failed') {
+            // Stop polling
+            clearInterval(timer);
+
+            this.snackBar.open(
+              `Fehler bei der Analyse: ${job.error || 'Unbekannter Fehler'}`,
+              'Fehler',
+              { duration: 5000 }
+            );
+          }
+          // If status is 'pending' or 'processing', continue polling
+        },
+        error: () => {
+          // Stop polling on error
+          clearInterval(timer);
+
+          this.snackBar.open(
+            'Fehler beim Abrufen des Analyse-Status',
+            'Fehler',
+            { duration: 3000 }
+          );
+        }
+      });
+    }, pollingInterval);
+  }
+
+  /**
+   * Show analysis results for a completed job
+   * @param jobId The ID of the completed job
+   */
+  private showAnalysisResults(jobId: number): void {
+    const loadingSnackBar = this.snackBar.open(
+      'Lade Analyse-Ergebnisse...',
+      '',
+      { duration: undefined }
+    );
+
+    this.backendService.getVariableAnalysisResults(
+      this.appService.selectedWorkspaceId,
+      jobId
+    ).subscribe({
+      next: results => {
+        loadingSnackBar.dismiss();
+
+        this.dialog.open(VariableAnalysisDialogComponent, {
+          width: '800px',
+          data: {
+            unitId: this.selectedUnit?.id, // Optional unit ID, may be undefined
+            title: `Item/Variablen Analyse für den gesamten Workspace (${results.variables.length} Variablen)`,
+            analysisResults: results
+          }
+        });
+      },
+      error: () => {
+        loadingSnackBar.dismiss();
+        this.snackBar.open(
+          'Fehler beim Laden der Analyse-Ergebnisse',
+          'Fehler',
+          { duration: 3000 }
+        );
       }
     });
   }
