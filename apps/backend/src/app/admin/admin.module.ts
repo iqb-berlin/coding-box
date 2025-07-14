@@ -15,6 +15,7 @@ import { UnitTagsController } from './unit-tags/unit-tags.controller';
 import { UnitNotesController } from './unit-notes/unit-notes.controller';
 import { ResourcePackageController } from './resource-packages/resource-package.controller';
 import { JournalController } from './workspace/journal.controller';
+import { VariableAnalysisController } from './variable-analysis/variable-analysis.controller';
 
 @Module({
   imports: [
@@ -35,7 +36,8 @@ import { JournalController } from './workspace/journal.controller';
     UnitTagsController,
     UnitNotesController,
     ResourcePackageController,
-    JournalController
+    JournalController,
+    VariableAnalysisController
   ],
   providers: []
 })
