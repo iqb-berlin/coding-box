@@ -179,11 +179,6 @@ export class WorkspaceCodingService {
   // Job status tracking
   private jobStatus: Map<string, { status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'paused'; progress: number; result?: CodingStatistics; error?: string; workspaceId?: number; createdAt?: Date }> = new Map();
 
-  /**
-   * Get all jobs
-   * @param workspaceId Optional workspace ID to filter jobs
-   * @returns Array of job status objects with job IDs
-   */
   async getAllJobs(workspaceId?: number): Promise<{
     jobId: string;
     status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'paused';
@@ -223,16 +218,13 @@ export class WorkspaceCodingService {
     });
 
     try {
-      // Get jobs from the database
       const whereClause = workspaceId !== undefined ? { workspace_id: workspaceId } : {};
       const dbJobs = await this.jobRepository.find({
         where: whereClause,
         order: { created_at: 'DESC' }
       });
 
-      // Convert database jobs to the expected format
       for (const job of dbJobs) {
-        // Parse the result if it exists
         let result: CodingStatistics | undefined;
         if (job.result) {
           try {
@@ -253,10 +245,8 @@ export class WorkspaceCodingService {
           error: job.error,
           workspaceId: job.workspace_id,
           createdAt: job.created_at,
-          // Add group names and duration if this is a TestPersonCodingJob
           groupNames: isTestPersonCodingJob ? (job as TestPersonCodingJob).group_names : undefined,
           durationMs: isTestPersonCodingJob ? (job as TestPersonCodingJob).duration_ms : undefined,
-          // For completed jobs, set completedAt to updated_at
           completedAt: job.status === 'completed' ? job.updated_at : undefined
         });
       }
@@ -272,12 +262,6 @@ export class WorkspaceCodingService {
     });
   }
 
-  /**
-   * Process test persons in the background
-   * @param jobId Unique job ID
-   * @param workspace_id Workspace ID
-   * @param personIds Array of person IDs to process
-   */
   private async processTestPersonsInBackground(jobId: number, workspace_id: number, personIds: string[]): Promise<void> {
     try {
       // Get the job from the database
@@ -341,6 +325,9 @@ export class WorkspaceCodingService {
       }
 
       await this.jobRepository.save(currentJob);
+      this.statisticsCache.delete(workspace_id);
+      this.logger.log(`Invalidated coding statistics cache for workspace ${workspace_id}`);
+
       this.logger.log(`Background job ${jobId} completed successfully`);
     } catch (error) {
       try {
@@ -370,11 +357,6 @@ export class WorkspaceCodingService {
     }
   }
 
-  /**
-   * Get the status of a background job
-   * @param jobId Job ID
-   * @returns Job status or null if job not found
-   */
   async getJobStatus(jobId: string): Promise<{ status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'paused'; progress: number; result?: CodingStatistics; error?: string } | null> {
     try {
       // First check the in-memory job status map for backward compatibility
@@ -411,11 +393,6 @@ export class WorkspaceCodingService {
     }
   }
 
-  /**
-   * Cancel a running job
-   * @param jobId Job ID to cancel
-   * @returns Object with success flag and message
-   */
   async cancelJob(jobId: string): Promise<{ success: boolean; message: string }> {
     try {
       // First check the in-memory job status map for backward compatibility
@@ -462,32 +439,15 @@ export class WorkspaceCodingService {
     }
   }
 
-  /**
-   * Process a batch of test persons with progress tracking
-   * @param workspace_id Workspace ID
-   * @param personIds Array of person IDs to process
-   * @param progressCallback Callback function to report progress (0-100)
-   * @param jobId Optional job ID for cancellation checking
-   * @returns Coding statistics
-   */
-  /**
-   * Helper method to check if a job has been cancelled or paused
-   * @param jobId The ID of the job to check
-   * @returns True if the job has been cancelled or paused, false otherwise
-   */
   private async isJobCancelled(jobId: string | number): Promise<boolean> {
     try {
-      // First check the in-memory job status map for backward compatibility
       const inMemoryStatus = this.jobStatus.get(jobId.toString());
       if (inMemoryStatus && (inMemoryStatus.status === 'cancelled' || inMemoryStatus.status === 'paused')) {
         return true;
       }
 
-      // If not found in memory or not cancelled/paused, check the database
       const job = await this.jobRepository.findOne({ where: { id: Number(jobId) } });
       return job && (job.status === 'cancelled' || job.status === 'paused');
-
-
     } catch (error) {
       this.logger.error(`Error checking job cancellation or pause: ${error.message}`, error.stack);
       return false; // Assume not cancelled or paused on error
@@ -1486,17 +1446,10 @@ export class WorkspaceCodingService {
     }
   }
 
-  /**
-   * Resume a paused job
-   * @param jobId Job ID to resume
-   * @returns Object with success flag and message
-   */
   async resumeJob(jobId: string): Promise<{ success: boolean; message: string }> {
     try {
-      // First check the in-memory job status map for backward compatibility
       const inMemoryJob = this.jobStatus.get(jobId);
       if (inMemoryJob) {
-        // Only paused jobs can be resumed
         if (inMemoryJob.status !== 'paused') {
           return {
             success: false,
@@ -1504,20 +1457,17 @@ export class WorkspaceCodingService {
           };
         }
 
-        // Update job status to processing
         this.jobStatus.set(jobId, { ...inMemoryJob, status: 'processing' });
         this.logger.log(`In-memory job ${jobId} has been resumed`);
 
         return { success: true, message: `Job ${jobId} has been resumed successfully` };
       }
 
-      // If not found in memory, check the database
       const job = await this.jobRepository.findOne({ where: { id: parseInt(jobId, 10) } });
       if (!job) {
         return { success: false, message: `Job with ID ${jobId} not found` };
       }
 
-      // Only paused jobs can be resumed
       if (job.status !== 'paused') {
         return {
           success: false,
@@ -1525,7 +1475,6 @@ export class WorkspaceCodingService {
         };
       }
 
-      // Update job status to processing
       job.status = 'processing';
       await this.jobRepository.save(job);
       this.logger.log(`Job ${jobId} has been resumed`);
