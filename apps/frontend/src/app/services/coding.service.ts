@@ -71,6 +71,8 @@ export class CodingService {
     statusCounts: {
       [key: string]: number;
     };
+    jobId?: string;
+    message?: string;
   }> {
     const params = new HttpParams().set('testPersons', testPersonIds.join(','));
     return this.http
@@ -79,11 +81,114 @@ export class CodingService {
       statusCounts: {
         [key: string]: number;
       };
+      jobId?: string;
+      message?: string;
     }>(
       `${this.serverUrl}admin/workspace/${workspace_id}/coding`,
       { headers: this.authHeader, params })
       .pipe(
         catchError(() => of({ totalResponses: 0, statusCounts: {} }))
+      );
+  }
+
+  getCodingJobStatus(workspace_id: number, jobId: string): Observable<{
+    status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
+    progress: number;
+    result?: {
+      totalResponses: number;
+      statusCounts: {
+        [key: string]: number;
+      };
+    };
+    error?: string;
+  }> {
+    return this.http
+      .get<{
+      status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
+      progress: number;
+      result?: {
+        totalResponses: number;
+        statusCounts: {
+          [key: string]: number;
+        };
+      };
+      error?: string;
+    }>(
+      `${this.serverUrl}admin/workspace/${workspace_id}/coding/job/${jobId}`,
+      { headers: this.authHeader }
+    )
+      .pipe(
+        catchError(error => {
+          console.error('Error getting job status:', error);
+          return of({
+            status: 'failed' as const,
+            progress: 0,
+            error: 'Failed to get job status'
+          });
+        })
+      );
+  }
+
+  cancelCodingJob(workspace_id: number, jobId: string): Observable<{
+    success: boolean;
+    message: string;
+  }> {
+    return this.http
+      .get<{
+      success: boolean;
+      message: string;
+    }>(
+      `${this.serverUrl}admin/workspace/${workspace_id}/coding/job/${jobId}/cancel`,
+      { headers: this.authHeader }
+    )
+      .pipe(
+        catchError(error => {
+          console.error('Error cancelling job:', error);
+          return of({
+            success: false,
+            message: 'Failed to cancel job'
+          });
+        })
+      );
+  }
+
+  getAllCodingJobs(workspace_id: number): Observable<{
+    jobId: string;
+    status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
+    progress: number;
+    result?: {
+      totalResponses: number;
+      statusCounts: {
+        [key: string]: number;
+      };
+    };
+    error?: string;
+    workspaceId?: number;
+    createdAt?: Date;
+  }[]> {
+    return this.http
+      .get<{
+      jobId: string;
+      status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
+      progress: number;
+      result?: {
+        totalResponses: number;
+        statusCounts: {
+          [key: string]: number;
+        };
+      };
+      error?: string;
+      workspaceId?: number;
+      createdAt?: Date;
+    }[]>(
+      `${this.serverUrl}admin/workspace/${workspace_id}/coding/jobs`,
+      { headers: this.authHeader }
+    )
+      .pipe(
+        catchError(error => {
+          console.error('Error getting all jobs:', error);
+          return of([]);
+        })
       );
   }
 

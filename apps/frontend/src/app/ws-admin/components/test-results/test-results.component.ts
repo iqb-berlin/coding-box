@@ -52,6 +52,7 @@ import { UpdateUnitTagDto } from '../../../../../../../api-dto/unit-tags/update-
 import { UnitNoteDto } from '../../../../../../../api-dto/unit-notes/unit-note.dto';
 import { ValidationDialogComponent } from '../validation-dialog/validation-dialog.component';
 import { VariableValidationDto } from '../../../../../../../api-dto/files/variable-validation.dto';
+import { VariableAnalysisDialogComponent } from '../variable-analysis-dialog/variable-analysis-dialog.component';
 
 interface BookletLog {
   id: number;
@@ -200,6 +201,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   isLoading: boolean = true;
   isUploadingResults: boolean = false;
   isSearching: boolean = false;
+  isLoadingBooklets: boolean = false;
   unitTags: UnitTagDto[] = [];
   newTagText: string = '';
   unitTagsMap: Map<number, UnitTagDto[]> = new Map();
@@ -237,14 +239,21 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     this.bookletLogs = [];
     this.selectedUnit = undefined;
     this.unitTagsMap.clear();
+    this.isLoadingBooklets = true;
     this.backendService.getPersonTestResults(this.appService.selectedWorkspaceId, row.id)
-      .subscribe(booklets => {
-        this.selectedBooklet = row.group;
-        const uniqueBooklets = this.filterUniqueBooklets(booklets);
-        this.booklets = uniqueBooklets;
-        this.sortBooklets();
-        this.sortBookletUnits();
-        this.loadAllUnitTags();
+      .subscribe({
+        next: booklets => {
+          this.selectedBooklet = row.group;
+          const uniqueBooklets = this.filterUniqueBooklets(booklets);
+          this.booklets = uniqueBooklets;
+          this.sortBooklets();
+          this.sortBookletUnits();
+          this.loadAllUnitTags();
+          this.isLoadingBooklets = false;
+        },
+        error: () => {
+          this.isLoadingBooklets = false;
+        }
       });
   }
 
@@ -885,32 +894,132 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   codeSelectedPersons(): void {
     this.isLoading = true;
     const selectedTestPersons = this.selection.selected;
+    const loadingSnackBar = this.snackBar.open(
+      'Starte Kodierung...',
+      '',
+      { duration: 3000 }
+    );
+
     this.backendService.codeTestPersons(
       this.appService.selectedWorkspaceId,
       selectedTestPersons.map(person => person.id)
-    ).subscribe(respOk => {
-      if (respOk) {
+    ).subscribe({
+      next: result => {
+        loadingSnackBar.dismiss();
+        this.isLoading = false;
+        this.selection.clear();
+
+        if (result.jobId) {
+          this.snackBar.open(
+            `Kodierung gestartet (Job ID: ${result.jobId}). Sie werden benachrichtigt, wenn die Kodierung abgeschlossen ist.`,
+            'OK',
+            { duration: 5000 }
+          );
+
+          this.pollCodingJobStatus(result.jobId);
+        } else if (result.totalResponses > 0) { // Handle synchronous result (backward compatibility)
+          this.snackBar.open(
+            this.translateService.instant('ws-admin.test-group-coded'),
+            '',
+            { duration: 1000 }
+          );
+          this.createTestResultsList(this.pageIndex, this.pageSize, this.getCurrentSearchText());
+        } else {
+          this.snackBar.open(
+            this.translateService.instant('ws-admin.test-group-not-coded'),
+            this.translateService.instant('error'),
+            { duration: 1000 }
+          );
+        }
+      },
+      error: () => {
+        loadingSnackBar.dismiss();
+        this.isLoading = false;
+        this.selection.clear();
+
         this.snackBar.open(
-          this.translateService.instant('ws-admin.test-group-coded'),
-          '',
-          { duration: 1000 }
-        );
-        this.createTestResultsList(this.pageIndex, this.pageSize, this.getCurrentSearchText());
-      } else {
-        this.snackBar.open(
-          this.translateService.instant('ws-admin.test-group-not-coded'),
-          this.translateService.instant('error'),
-          { duration: 1000 }
+          'Fehler beim Starten der Kodierung',
+          'Fehler',
+          { duration: 3000 }
         );
       }
-      this.isLoading = false;
-      this.selection.clear();
     });
   }
 
-  /**
-   * Opens a dialog to search for units by name across all test persons
-   */
+  private pollCodingJobStatus(jobId: string): void {
+    const pollingInterval = 5000;
+
+    // Set up a timer to check job status
+    const timer = setInterval(() => {
+      this.backendService.getCodingJobStatus(
+        this.appService.selectedWorkspaceId,
+        jobId
+      ).subscribe({
+        next: job => {
+          // Check if the job is completed or failed
+          if (job.status === 'completed') {
+            // Stop polling
+            clearInterval(timer);
+
+            // Show success notification
+            const snackBarRef = this.snackBar.open(
+              'Kodierung abgeschlossen',
+              'Ergebnisse anzeigen',
+              { duration: 10000 }
+            );
+
+            // Handle click on action button
+            snackBarRef.onAction().subscribe(() => {
+              this.showCodingResults(job.result);
+              this.createTestResultsList(this.pageIndex, this.pageSize, this.getCurrentSearchText());
+            });
+          } else if (job.status === 'failed') {
+            // Stop polling
+            clearInterval(timer);
+
+            this.snackBar.open(
+              `Fehler bei der Kodierung: ${job.error || 'Unbekannter Fehler'}`,
+              'Fehler',
+              { duration: 5000 }
+            );
+          }
+          // If status is 'pending' or 'processing', continue polling
+        },
+        error: () => {
+          // Stop polling on error
+          clearInterval(timer);
+
+          this.snackBar.open(
+            'Fehler beim Abrufen des Kodierungs-Status',
+            'Fehler',
+            { duration: 3000 }
+          );
+        }
+      });
+    }, pollingInterval);
+  }
+
+  private showCodingResults(result?: { totalResponses: number; statusCounts: { [key: string]: number } }): void {
+    if (!result) {
+      this.snackBar.open(
+        'Keine Kodierungsergebnisse verfügbar',
+        'Info',
+        { duration: 3000 }
+      );
+      return;
+    }
+
+    const statusMessages = Object.entries(result.statusCounts)
+      .map(([status, count]) => `${status}: ${count}`)
+      .join(', ');
+
+    this.snackBar.open(
+      `Kodierung abgeschlossen: ${result.totalResponses} Antworten verarbeitet (${statusMessages})`,
+      'OK',
+      { duration: 5000 }
+    );
+  }
+
   openUnitSearchDialog(): void {
     this.dialog.open(UnitSearchDialogComponent, {
       width: '1200px',
@@ -920,11 +1029,6 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     });
   }
 
-  /**
-   * Deletes a unit after confirmation
-   * @param unit The unit to delete
-   * @param booklet The booklet containing the unit
-   */
   deleteUnit(unit: Unit, booklet: Booklet): void {
     if (!unit.id) {
       this.snackBar.open(
@@ -991,10 +1095,6 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     });
   }
 
-  /**
-   * Deletes a response after confirmation
-   * @param response The response to delete
-   */
   deleteResponse(response: Response): void {
     if (!response.id) {
       this.snackBar.open(
@@ -1063,6 +1163,42 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       if (result && result.variableValidationResult) {
         this.variableValidationResult = result.variableValidationResult;
         this.isVariableValidationRunning = false;
+      }
+    });
+  }
+
+  openVariableAnalysisDialog(): void {
+    const loadingSnackBar = this.snackBar.open(
+      'Lade Analyse-Aufträge...',
+      '',
+      { duration: 3000 }
+    );
+
+    this.backendService.getAllVariableAnalysisJobs(
+      this.appService.selectedWorkspaceId
+    ).subscribe({
+      next: jobs => {
+        loadingSnackBar.dismiss();
+
+        const variableAnalysisJobs = jobs.filter(job => job.type === 'variable-analysis');
+
+        this.dialog.open(VariableAnalysisDialogComponent, {
+          width: '900px',
+          data: {
+            unitId: this.selectedUnit?.id, // Optional unit ID, may be undefined
+            title: 'Item/Variablen Analyse',
+            workspaceId: this.appService.selectedWorkspaceId,
+            jobs: variableAnalysisJobs
+          }
+        });
+      },
+      error: () => {
+        loadingSnackBar.dismiss();
+        this.snackBar.open(
+          'Fehler beim Laden der Analyse-Aufträge',
+          'Fehler',
+          { duration: 3000 }
+        );
       }
     });
   }

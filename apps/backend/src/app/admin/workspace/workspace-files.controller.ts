@@ -512,4 +512,24 @@ export class WorkspaceFilesController {
     const ids = responseIds.split(',').map(id => parseInt(id, 10));
     return this.workspaceFilesService.deleteInvalidResponses(workspace_id, ids);
   }
+
+  @Delete(':workspace_id/files/all-invalid-responses')
+  @ApiTags('test files validation')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiOperation({ summary: 'Delete all invalid responses', description: 'Deletes all invalid responses of a specific type from the database' })
+  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
+  @ApiQuery({
+    name: 'validationType',
+    enum: ['variables', 'variableTypes', 'responseStatus'],
+    description: 'Type of validation to use for identifying invalid responses'
+  })
+  @ApiOkResponse({
+    description: 'Number of deleted responses',
+    type: Number
+  })
+  async deleteAllInvalidResponses(
+    @Param('workspace_id') workspace_id: number,
+      @Query('validationType') validationType: 'variables' | 'variableTypes' | 'responseStatus'): Promise<number> {
+    return this.workspaceFilesService.deleteAllInvalidResponses(workspace_id, validationType);
+  }
 }

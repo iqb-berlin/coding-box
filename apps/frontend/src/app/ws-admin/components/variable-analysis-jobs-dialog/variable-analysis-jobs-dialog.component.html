@@ -1,0 +1,95 @@
+<div class="dialog-container">
+  <h2 class="dialog-title">Variablen-Analyse Aufträge</h2>
+  <mat-divider></mat-divider>
+
+  <div class="dialog-content">
+    <div class="actions-container">
+      <button mat-raised-button color="primary" (click)="refreshJobs()" [disabled]="isLoading">
+        <mat-icon>refresh</mat-icon>
+        Aktualisieren
+      </button>
+    </div>
+
+    @if (isLoading) {
+      <div class="loading-container">
+        <mat-spinner diameter="40"></mat-spinner>
+        <p>Lade Aufträge...</p>
+      </div>
+    } @else if (data.jobs.length === 0) {
+      <div class="empty-state">
+        <mat-icon class="empty-icon">info</mat-icon>
+        <p>Keine Variablen-Analyse Aufträge gefunden.</p>
+      </div>
+    } @else {
+      <div class="table-container">
+        <table mat-table [dataSource]="data.jobs" class="jobs-table">
+          <!-- ID Column -->
+          <ng-container matColumnDef="id">
+            <th mat-header-cell *matHeaderCellDef>ID</th>
+            <td mat-cell *matCellDef="let job">{{ job.id }}</td>
+          </ng-container>
+
+          <!-- Status Column -->
+          <ng-container matColumnDef="status">
+            <th mat-header-cell *matHeaderCellDef>Status</th>
+            <td mat-cell *matCellDef="let job">
+              <span class="status-badge status-{{ job.status }}">{{ job.status }}</span>
+            </td>
+          </ng-container>
+
+          <!-- Created At Column -->
+          <ng-container matColumnDef="createdAt">
+            <th mat-header-cell *matHeaderCellDef>Erstellt am</th>
+            <td mat-cell *matCellDef="let job">{{ formatDate(job.created_at) }}</td>
+          </ng-container>
+
+          <!-- Unit ID Column -->
+          <ng-container matColumnDef="unitId">
+            <th mat-header-cell *matHeaderCellDef>Unit ID</th>
+            <td mat-cell *matCellDef="let job">{{ job.unit_id || 'Alle' }}</td>
+          </ng-container>
+
+          <!-- Variable ID Column -->
+          <ng-container matColumnDef="variableId">
+            <th mat-header-cell *matHeaderCellDef>Variable ID</th>
+            <td mat-cell *matCellDef="let job">{{ job.variable_id || 'Alle' }}</td>
+          </ng-container>
+
+          <!-- Actions Column -->
+          <ng-container matColumnDef="actions">
+            <th mat-header-cell *matHeaderCellDef>Aktionen</th>
+            <td mat-cell *matCellDef="let job">
+              <!-- View results button for completed jobs -->
+              @if (job.status === 'completed') {
+                <button mat-icon-button color="primary" (click)="viewResults(job.id)" matTooltip="Ergebnisse anzeigen">
+                  <mat-icon>visibility</mat-icon>
+                </button>
+              }
+
+              <!-- Cancel button for pending or processing jobs -->
+              @if (job.status === 'pending' || job.status === 'processing') {
+                <button mat-icon-button color="warn" (click)="cancelJob(job.id)" matTooltip="Auftrag abbrechen">
+                  <mat-icon>cancel</mat-icon>
+                </button>
+              }
+
+              <!-- Error indicator for failed jobs -->
+              @if (job.status === 'failed') {
+                <button mat-icon-button color="accent" matTooltip="Fehler: {{ job.error || 'Unbekannter Fehler' }}">
+                  <mat-icon>error</mat-icon>
+                </button>
+              }
+            </td>
+          </ng-container>
+
+          <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+          <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+        </table>
+      </div>
+    }
+  </div>
+
+  <div class="dialog-actions">
+    <button mat-raised-button color="primary" (click)="onClose()">Schließen</button>
+  </div>
+</div>

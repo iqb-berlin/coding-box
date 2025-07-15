@@ -134,7 +134,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
                       scrollToElementByAlias(this.unitPlayerComponent.hostingIframe.nativeElement, this.anchor);
                     } else {
                       // When no anchor is provided, scroll to the top of the content
-                      this.scrollToTop();
+                      // this.scrollToTop();
                     }
                   }
                 }, 1000);
@@ -341,7 +341,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       UnitIdError: 'Unbekannte Unit-ID',
       TestPersonError: 'Ungültige ID für Testperson',
       PlayerError: 'Ungültiger Player-Name',
-      ResponsesError: `Keine Antworten für Aufgabe "${this.unitId}" von Testperson "${this.testPerson}" gefunden`,
+      ResponsesError: `Fehler beim Laden der Antworten für Aufgabe "${this.unitId}" von Testperson "${this.testPerson}"`,
       notInList: `Keine valide Seite mit ID "${this.page}" gefunden`,
       notCurrent: `Seite mit ID "${this.page}" kann nicht ausgewählt werden`,
       tokenExpired: 'Das Authentisierungs-Token ist abgelaufen',
@@ -351,7 +351,17 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   private catchError(error: HttpErrorResponse): void {
-    const messageKey = error.status === 401 ? '401' : error.message as keyof ErrorMessages;
+    let messageKey: keyof ErrorMessages;
+
+    if (error.status === 401) {
+      messageKey = '401' as keyof ErrorMessages;
+    } else if (error.status === 404 && this.unitId && this.testPerson) {
+      // If it's a 404 error and we have unitId and testPerson, it's likely a ResponsesError
+      messageKey = 'ResponsesError' as keyof ErrorMessages;
+    } else {
+      messageKey = error.message as keyof ErrorMessages;
+    }
+
     const message = this.getErrorMessages()[messageKey] || this.getErrorMessages().unknown;
     this.openErrorSnackBar(message, 'Schließen');
   }
@@ -378,9 +388,6 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     this.responses = undefined;
   }
 
-  /**
-   * Scrolls the iframe content to the top
-   */
   private scrollToTop(): void {
     try {
       if (this.unitPlayerComponent?.hostingIframe?.nativeElement?.contentWindow) {

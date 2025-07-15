@@ -10,6 +10,7 @@ import Persons from '../entities/persons.entity';
 import { Unit } from '../entities/unit.entity';
 import { Booklet } from '../entities/booklet.entity';
 import { ResponseEntity } from '../entities/response.entity';
+import { TestPersonCodingJob } from '../entities/test-person-coding-job.entity';
 import { CodingStatistics, CodingStatisticsWithJob } from './shared-types';
 import { extractVariableLocation } from '../../utils/voud/extractVariableLocation';
 
@@ -27,7 +28,9 @@ export class WorkspaceCodingService {
     @InjectRepository(Booklet)
     private bookletRepository: Repository<Booklet>,
     @InjectRepository(ResponseEntity)
-    private responseRepository: Repository<ResponseEntity>
+    private responseRepository: Repository<ResponseEntity>,
+    @InjectRepository(TestPersonCodingJob)
+    private jobRepository: Repository<TestPersonCodingJob>
   ) {}
 
   // Cache for coding schemes with TTL
@@ -174,16 +177,34 @@ export class WorkspaceCodingService {
   }
 
   // Job status tracking
-  private jobStatus: Map<string, { status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled'; progress: number; result?: CodingStatistics; error?: string; workspaceId?: number; createdAt?: Date }> = new Map();
+  private jobStatus: Map<string, { status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'paused'; progress: number; result?: CodingStatistics; error?: string; workspaceId?: number; createdAt?: Date }> = new Map();
 
-  /**
-   * Get all jobs
-   * @param workspaceId Optional workspace ID to filter jobs
-   * @returns Array of job status objects with job IDs
-   */
-  getAllJobs(workspaceId?: number): { jobId: string; status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled'; progress: number; result?: CodingStatistics; error?: string; workspaceId?: number; createdAt?: Date }[] {
-    const jobs: { jobId: string; status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled'; progress: number; result?: CodingStatistics; error?: string; workspaceId?: number; createdAt?: Date }[] = [];
+  async getAllJobs(workspaceId?: number): Promise<{
+    jobId: string;
+    status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'paused';
+    progress: number;
+    result?: CodingStatistics;
+    error?: string;
+    workspaceId?: number;
+    createdAt?: Date;
+    groupNames?: string;
+    durationMs?: number;
+    completedAt?: Date;
+  }[]> {
+    const jobs: {
+      jobId: string;
+      status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'paused';
+      progress: number;
+      result?: CodingStatistics;
+      error?: string;
+      workspaceId?: number;
+      createdAt?: Date;
+      groupNames?: string;
+      durationMs?: number;
+      completedAt?: Date;
+    }[] = [];
 
+    // First get jobs from the in-memory map for backward compatibility
     this.jobStatus.forEach((status, jobId) => {
       // If workspaceId is provided, filter jobs by workspace
       if (workspaceId !== undefined && status.workspaceId !== workspaceId) {
@@ -196,6 +217,43 @@ export class WorkspaceCodingService {
       });
     });
 
+    try {
+      const whereClause = workspaceId !== undefined ? { workspace_id: workspaceId } : {};
+      const dbJobs = await this.jobRepository.find({
+        where: whereClause,
+        order: { created_at: 'DESC' }
+      });
+
+      for (const job of dbJobs) {
+        let result: CodingStatistics | undefined;
+        if (job.result) {
+          try {
+            result = JSON.parse(job.result) as CodingStatistics;
+          } catch (error) {
+            this.logger.error(`Error parsing job result: ${error.message}`, error.stack);
+          }
+        }
+
+        // Check if this is a TestPersonCodingJob to get additional fields
+        const isTestPersonCodingJob = job.type === 'test-person-coding';
+
+        jobs.push({
+          jobId: job.id.toString(),
+          status: job.status as 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'paused',
+          progress: job.progress || 0,
+          result,
+          error: job.error,
+          workspaceId: job.workspace_id,
+          createdAt: job.created_at,
+          groupNames: isTestPersonCodingJob ? (job as TestPersonCodingJob).group_names : undefined,
+          durationMs: isTestPersonCodingJob ? (job as TestPersonCodingJob).duration_ms : undefined,
+          completedAt: job.status === 'completed' ? job.updated_at : undefined
+        });
+      }
+    } catch (error) {
+      this.logger.error(`Error getting jobs from database: ${error.message}`, error.stack);
+    }
+
     // Sort jobs by creation date (newest first)
     return jobs.sort((a, b) => {
       if (!a.createdAt) return 1;
@@ -204,123 +262,198 @@ export class WorkspaceCodingService {
     });
   }
 
-  /**
-   * Process test persons in the background
-   * @param jobId Unique job ID
-   * @param workspace_id Workspace ID
-   * @param personIds Array of person IDs to process
-   */
-  private async processTestPersonsInBackground(jobId: string, workspace_id: number, personIds: string[]): Promise<void> {
-    // Update job status to processing
-    this.jobStatus.set(jobId, {
-      status: 'processing',
-      progress: 0,
-      workspaceId: workspace_id,
-      createdAt: new Date()
-    });
-
+  private async processTestPersonsInBackground(jobId: number, workspace_id: number, personIds: string[]): Promise<void> {
     try {
+      // Get the job from the database
+      const job = await this.jobRepository.findOne({ where: { id: jobId } });
+      if (!job) {
+        this.logger.error(`Job with ID ${jobId} not found`);
+        return;
+      }
+
+      // Update job status to processing
+      job.status = 'processing';
+      job.progress = 0;
+      await this.jobRepository.save(job);
+
       // Clone the implementation of codeTestPersons but with progress tracking
-      const result = await this.processTestPersonsBatch(workspace_id, personIds, progress => {
+      const result = await this.processTestPersonsBatch(workspace_id, personIds, async progress => {
         // Update job progress
-        const currentStatus = this.jobStatus.get(jobId);
-        if (currentStatus) {
-          // Don't update if job has been cancelled
-          if (currentStatus.status === 'cancelled') {
+        try {
+          // Get the latest job status
+          const currentJob = await this.jobRepository.findOne({ where: { id: jobId } });
+          if (!currentJob) {
+            this.logger.error(`Job with ID ${jobId} not found when updating progress`);
             return;
           }
-          this.jobStatus.set(jobId, { ...currentStatus, progress });
+
+          // Don't update if job has been cancelled or paused
+          if (currentJob.status === 'cancelled' || currentJob.status === 'paused') {
+            return;
+          }
+
+          // Update progress
+          currentJob.progress = progress;
+          await this.jobRepository.save(currentJob);
+        } catch (error) {
+          this.logger.error(`Error updating job progress: ${error.message}`, error.stack);
         }
-      }, jobId);
+      }, jobId.toString());
 
       // Check if job was cancelled during processing
-      const currentStatus = this.jobStatus.get(jobId);
-      if (currentStatus && currentStatus.status === 'cancelled') {
-        this.logger.log(`Background job ${jobId} was cancelled`);
+      const currentJob = await this.jobRepository.findOne({ where: { id: jobId } });
+      if (!currentJob) {
+        this.logger.error(`Job with ID ${jobId} not found when checking cancellation`);
+        return;
+      }
+
+      if (currentJob.status === 'cancelled' || currentJob.status === 'paused') {
+        this.logger.log(`Background job ${jobId} was ${currentJob.status}`);
         return;
       }
 
       // Update job status to completed with result
-      const currentJob = this.jobStatus.get(jobId);
-      this.jobStatus.set(jobId, {
-        status: 'completed',
-        progress: 100,
-        result,
-        workspaceId: currentJob?.workspaceId,
-        createdAt: currentJob?.createdAt
-      });
-      this.logger.log(`Background job ${jobId} completed successfully`);
-    } catch (error) {
-      // Check if job was cancelled during processing
-      const currentStatus = this.jobStatus.get(jobId);
-      if (currentStatus && currentStatus.status === 'cancelled') {
-        this.logger.log(`Background job ${jobId} was cancelled`);
-        return;
+      currentJob.status = 'completed';
+      currentJob.progress = 100;
+      currentJob.result = JSON.stringify(result);
+
+      // Calculate and store job duration if it's a TestPersonCodingJob
+      if (currentJob.type === 'test-person-coding' && currentJob.created_at) {
+        const durationMs = Date.now() - currentJob.created_at.getTime();
+        (currentJob as TestPersonCodingJob).duration_ms = durationMs;
+        this.logger.log(`Job ${jobId} completed in ${durationMs}ms`);
       }
 
-      // Update job status to failed with error
-      const currentJob = this.jobStatus.get(jobId);
-      this.jobStatus.set(jobId, {
-        status: 'failed',
-        progress: 0,
-        error: error.message,
-        workspaceId: currentJob?.workspaceId,
-        createdAt: currentJob?.createdAt
-      });
+      await this.jobRepository.save(currentJob);
+      this.statisticsCache.delete(workspace_id);
+      this.logger.log(`Invalidated coding statistics cache for workspace ${workspace_id}`);
+
+      this.logger.log(`Background job ${jobId} completed successfully`);
+    } catch (error) {
+      try {
+        // Get the job from the database
+        const job = await this.jobRepository.findOne({ where: { id: jobId } });
+        if (!job) {
+          this.logger.error(`Job with ID ${jobId} not found when handling error`);
+          return;
+        }
+
+        // Don't update if job has been cancelled or paused
+        if (job.status === 'cancelled' || job.status === 'paused') {
+          this.logger.log(`Background job ${jobId} was ${job.status}`);
+          return;
+        }
+
+        // Update job status to failed with error
+        job.status = 'failed';
+        job.progress = 0;
+        job.error = error.message;
+        await this.jobRepository.save(job);
+      } catch (innerError) {
+        this.logger.error(`Error updating job status: ${innerError.message}`, innerError.stack);
+      }
+
       this.logger.error(`Background job ${jobId} failed: ${error.message}`, error.stack);
     }
-
-    // Remove job status after 1 hour to prevent memory leaks
-    setTimeout(() => {
-      this.jobStatus.delete(jobId);
-      this.logger.log(`Removed job status for job ${jobId}`);
-    }, 60 * 60 * 1000);
   }
 
-  /**
-   * Get the status of a background job
-   * @param jobId Job ID
-   * @returns Job status or null if job not found
-   */
-  getJobStatus(jobId: string): { status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled'; progress: number; result?: CodingStatistics; error?: string } | null {
-    return this.jobStatus.get(jobId) || null;
-  }
+  async getJobStatus(jobId: string): Promise<{ status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'paused'; progress: number; result?: CodingStatistics; error?: string } | null> {
+    try {
+      // First check the in-memory job status map for backward compatibility
+      const inMemoryStatus = this.jobStatus.get(jobId);
+      if (inMemoryStatus) {
+        return inMemoryStatus;
+      }
 
-  /**
-   * Cancel a running job
-   * @param jobId Job ID to cancel
-   * @returns Object with success flag and message
-   */
-  cancelJob(jobId: string): { success: boolean; message: string } {
-    const job = this.jobStatus.get(jobId);
+      // If not found in memory, check the database
+      const job = await this.jobRepository.findOne({ where: { id: parseInt(jobId, 10) } });
+      if (!job) {
+        return null;
+      }
 
-    if (!job) {
-      return { success: false, message: `Job with ID ${jobId} not found` };
-    }
+      // Parse the result if it exists
+      let result: CodingStatistics | undefined;
+      if (job.result) {
+        try {
+          result = JSON.parse(job.result) as CodingStatistics;
+        } catch (error) {
+          this.logger.error(`Error parsing job result: ${error.message}`, error.stack);
+        }
+      }
 
-    // Only pending or processing jobs can be cancelled
-    if (job.status !== 'pending' && job.status !== 'processing') {
       return {
-        success: false,
-        message: `Job with ID ${jobId} cannot be cancelled because it is already ${job.status}`
+        status: job.status as 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'paused',
+        progress: job.progress || 0,
+        result,
+        error: job.error
       };
+    } catch (error) {
+      this.logger.error(`Error getting job status: ${error.message}`, error.stack);
+      return null;
     }
-
-    // Update job status to cancelled
-    this.jobStatus.set(jobId, { ...job, status: 'cancelled' });
-    this.logger.log(`Job ${jobId} has been cancelled`);
-
-    return { success: true, message: `Job ${jobId} has been cancelled successfully` };
   }
 
-  /**
-   * Process a batch of test persons with progress tracking
-   * @param workspace_id Workspace ID
-   * @param personIds Array of person IDs to process
-   * @param progressCallback Callback function to report progress (0-100)
-   * @param jobId Optional job ID for cancellation checking
-   * @returns Coding statistics
-   */
+  async cancelJob(jobId: string): Promise<{ success: boolean; message: string }> {
+    try {
+      // First check the in-memory job status map for backward compatibility
+      const inMemoryJob = this.jobStatus.get(jobId);
+      if (inMemoryJob) {
+        // Only pending or processing jobs can be cancelled
+        if (inMemoryJob.status !== 'pending' && inMemoryJob.status !== 'processing') {
+          return {
+            success: false,
+            message: `Job with ID ${jobId} cannot be cancelled because it is already ${inMemoryJob.status}`
+          };
+        }
+
+        // Update job status to cancelled
+        this.jobStatus.set(jobId, { ...inMemoryJob, status: 'cancelled' });
+        this.logger.log(`In-memory job ${jobId} has been cancelled`);
+
+        return { success: true, message: `Job ${jobId} has been cancelled successfully` };
+      }
+
+      // If not found in memory, check the database
+      const job = await this.jobRepository.findOne({ where: { id: parseInt(jobId, 10) } });
+      if (!job) {
+        return { success: false, message: `Job with ID ${jobId} not found` };
+      }
+
+      // Only pending or processing jobs can be cancelled
+      if (job.status !== 'pending' && job.status !== 'processing') {
+        return {
+          success: false,
+          message: `Job with ID ${jobId} cannot be cancelled because it is already ${job.status}`
+        };
+      }
+
+      // Update job status to cancelled
+      job.status = 'cancelled';
+      await this.jobRepository.save(job);
+      this.logger.log(`Job ${jobId} has been cancelled`);
+
+      return { success: true, message: `Job ${jobId} has been cancelled successfully` };
+    } catch (error) {
+      this.logger.error(`Error cancelling job: ${error.message}`, error.stack);
+      return { success: false, message: `Error cancelling job: ${error.message}` };
+    }
+  }
+
+  private async isJobCancelled(jobId: string | number): Promise<boolean> {
+    try {
+      const inMemoryStatus = this.jobStatus.get(jobId.toString());
+      if (inMemoryStatus && (inMemoryStatus.status === 'cancelled' || inMemoryStatus.status === 'paused')) {
+        return true;
+      }
+
+      const job = await this.jobRepository.findOne({ where: { id: Number(jobId) } });
+      return job && (job.status === 'cancelled' || job.status === 'paused');
+    } catch (error) {
+      this.logger.error(`Error checking job cancellation or pause: ${error.message}`, error.stack);
+      return false; // Assume not cancelled or paused on error
+    }
+  }
+
   private async processTestPersonsBatch(
     workspace_id: number,
     personIds: string[],
@@ -344,13 +477,10 @@ export class WorkspaceCodingService {
       progressCallback(0);
     }
 
-    // Check for cancellation before starting work
-    if (jobId) {
-      const jobStatus = this.jobStatus.get(jobId);
-      if (jobStatus && jobStatus.status === 'cancelled') {
-        this.logger.log(`Job ${jobId} was cancelled before processing started`);
-        return statistics;
-      }
+    // Check for cancellation or pause before starting work
+    if (jobId && await this.isJobCancelled(jobId)) {
+      this.logger.log(`Job ${jobId} was cancelled or paused before processing started`);
+      return statistics;
     }
 
     const queryRunner = this.responseRepository.manager.connection.createQueryRunner();
@@ -377,14 +507,11 @@ export class WorkspaceCodingService {
         progressCallback(10);
       }
 
-      // Check for cancellation after step 1
-      if (jobId) {
-        const jobStatus = this.jobStatus.get(jobId);
-        if (jobStatus && jobStatus.status === 'cancelled') {
-          this.logger.log(`Job ${jobId} was cancelled after getting persons`);
-          await queryRunner.release();
-          return statistics;
-        }
+      // Check for cancellation or pause after step 1
+      if (jobId && await this.isJobCancelled(jobId)) {
+        this.logger.log(`Job ${jobId} was cancelled or paused after getting persons`);
+        await queryRunner.release();
+        return statistics;
       }
 
       // Step 2: Get booklets - 20% progress
@@ -407,14 +534,11 @@ export class WorkspaceCodingService {
         progressCallback(20);
       }
 
-      // Check for cancellation after step 2
-      if (jobId) {
-        const jobStatus = this.jobStatus.get(jobId);
-        if (jobStatus && jobStatus.status === 'cancelled') {
-          this.logger.log(`Job ${jobId} was cancelled after getting booklets`);
-          await queryRunner.release();
-          return statistics;
-        }
+      // Check for cancellation or pause after step 2
+      if (jobId && await this.isJobCancelled(jobId)) {
+        this.logger.log(`Job ${jobId} was cancelled or paused after getting booklets`);
+        await queryRunner.release();
+        return statistics;
       }
 
       // Step 3: Get units - 30% progress
@@ -437,14 +561,11 @@ export class WorkspaceCodingService {
         progressCallback(30);
       }
 
-      // Check for cancellation after step 3
-      if (jobId) {
-        const jobStatus = this.jobStatus.get(jobId);
-        if (jobStatus && jobStatus.status === 'cancelled') {
-          this.logger.log(`Job ${jobId} was cancelled after getting units`);
-          await queryRunner.release();
-          return statistics;
-        }
+      // Check for cancellation or pause after step 3
+      if (jobId && await this.isJobCancelled(jobId)) {
+        this.logger.log(`Job ${jobId} was cancelled or paused after getting units`);
+        await queryRunner.release();
+        return statistics;
       }
 
       // Step 4: Process units and build maps - 40% progress
@@ -469,14 +590,11 @@ export class WorkspaceCodingService {
         progressCallback(40);
       }
 
-      // Check for cancellation after step 4
-      if (jobId) {
-        const jobStatus = this.jobStatus.get(jobId);
-        if (jobStatus && jobStatus.status === 'cancelled') {
-          this.logger.log(`Job ${jobId} was cancelled after processing units`);
-          await queryRunner.release();
-          return statistics;
-        }
+      // Check for cancellation or pause after step 4
+      if (jobId && await this.isJobCancelled(jobId)) {
+        this.logger.log(`Job ${jobId} was cancelled or paused after processing units`);
+        await queryRunner.release();
+        return statistics;
       }
 
       // Step 5: Get responses - 50% progress
@@ -498,14 +616,11 @@ export class WorkspaceCodingService {
         progressCallback(50);
       }
 
-      // Check for cancellation after step 5
-      if (jobId) {
-        const jobStatus = this.jobStatus.get(jobId);
-        if (jobStatus && jobStatus.status === 'cancelled') {
-          this.logger.log(`Job ${jobId} was cancelled after getting responses`);
-          await queryRunner.release();
-          return statistics;
-        }
+      // Check for cancellation or pause after step 5
+      if (jobId && await this.isJobCancelled(jobId)) {
+        this.logger.log(`Job ${jobId} was cancelled or paused after getting responses`);
+        await queryRunner.release();
+        return statistics;
       }
 
       // Step 6: Process responses and build maps - 60% progress
@@ -522,14 +637,11 @@ export class WorkspaceCodingService {
         progressCallback(60);
       }
 
-      // Check for cancellation after step 6
-      if (jobId) {
-        const jobStatus = this.jobStatus.get(jobId);
-        if (jobStatus && jobStatus.status === 'cancelled') {
-          this.logger.log(`Job ${jobId} was cancelled after processing responses`);
-          await queryRunner.release();
-          return statistics;
-        }
+      // Check for cancellation or pause after step 6
+      if (jobId && await this.isJobCancelled(jobId)) {
+        this.logger.log(`Job ${jobId} was cancelled or paused after processing responses`);
+        await queryRunner.release();
+        return statistics;
       }
 
       // Step 7: Get test files - 70% progress
@@ -543,14 +655,11 @@ export class WorkspaceCodingService {
         progressCallback(70);
       }
 
-      // Check for cancellation after step 7
-      if (jobId) {
-        const jobStatus = this.jobStatus.get(jobId);
-        if (jobStatus && jobStatus.status === 'cancelled') {
-          this.logger.log(`Job ${jobId} was cancelled after getting test files`);
-          await queryRunner.release();
-          return statistics;
-        }
+      // Check for cancellation or pause after step 7
+      if (jobId && await this.isJobCancelled(jobId)) {
+        this.logger.log(`Job ${jobId} was cancelled or paused after getting test files`);
+        await queryRunner.release();
+        return statistics;
       }
 
       // Step 8: Extract coding scheme references - 80% progress
@@ -577,14 +686,11 @@ export class WorkspaceCodingService {
           }
         }
 
-        // Check for cancellation during scheme extraction
-        if (jobId) {
-          const jobStatus = this.jobStatus.get(jobId);
-          if (jobStatus && jobStatus.status === 'cancelled') {
-            this.logger.log(`Job ${jobId} was cancelled during scheme extraction`);
-            await queryRunner.release();
-            return statistics;
-          }
+        // Check for cancellation or pause during scheme extraction
+        if (jobId && await this.isJobCancelled(jobId)) {
+          this.logger.log(`Job ${jobId} was cancelled or paused during scheme extraction`);
+          await queryRunner.release();
+          return statistics;
         }
       }
       metrics.schemeExtract = Date.now() - schemeExtractStart;
@@ -594,14 +700,11 @@ export class WorkspaceCodingService {
         progressCallback(80);
       }
 
-      // Check for cancellation after step 8
-      if (jobId) {
-        const jobStatus = this.jobStatus.get(jobId);
-        if (jobStatus && jobStatus.status === 'cancelled') {
-          this.logger.log(`Job ${jobId} was cancelled after extracting scheme references`);
-          await queryRunner.release();
-          return statistics;
-        }
+      // Check for cancellation or pause after step 8
+      if (jobId && await this.isJobCancelled(jobId)) {
+        this.logger.log(`Job ${jobId} was cancelled or paused after extracting scheme references`);
+        await queryRunner.release();
+        return statistics;
       }
 
       // Step 9: Get coding scheme files - 85% progress
@@ -617,14 +720,11 @@ export class WorkspaceCodingService {
         progressCallback(85);
       }
 
-      // Check for cancellation after step 9
-      if (jobId) {
-        const jobStatus = this.jobStatus.get(jobId);
-        if (jobStatus && jobStatus.status === 'cancelled') {
-          this.logger.log(`Job ${jobId} was cancelled after getting coding scheme files`);
-          await queryRunner.release();
-          return statistics;
-        }
+      // Check for cancellation or pause after step 9
+      if (jobId && await this.isJobCancelled(jobId)) {
+        this.logger.log(`Job ${jobId} was cancelled or paused after getting coding scheme files`);
+        await queryRunner.release();
+        return statistics;
       }
 
       // Skip to step 11 (step 10 is now part of getCodingSchemesWithCache)
@@ -635,14 +735,11 @@ export class WorkspaceCodingService {
         progressCallback(90);
       }
 
-      // Check for cancellation after step 10
-      if (jobId) {
-        const jobStatus = this.jobStatus.get(jobId);
-        if (jobStatus && jobStatus.status === 'cancelled') {
-          this.logger.log(`Job ${jobId} was cancelled after parsing coding schemes`);
-          await queryRunner.release();
-          return statistics;
-        }
+      // Check for cancellation or pause after step 10
+      if (jobId && await this.isJobCancelled(jobId)) {
+        this.logger.log(`Job ${jobId} was cancelled or paused after parsing coding schemes`);
+        await queryRunner.release();
+        return statistics;
       }
 
       // Step 11: Process and code responses - 95% progress
@@ -690,14 +787,11 @@ export class WorkspaceCodingService {
           }
         }
 
-        // Check for cancellation during response processing
-        if (jobId) {
-          const jobStatus = this.jobStatus.get(jobId);
-          if (jobStatus && jobStatus.status === 'cancelled') {
-            this.logger.log(`Job ${jobId} was cancelled during response processing`);
-            await queryRunner.release();
-            return statistics;
-          }
+        // Check for cancellation or pause during response processing
+        if (jobId && await this.isJobCancelled(jobId)) {
+          this.logger.log(`Job ${jobId} was cancelled or paused during response processing`);
+          await queryRunner.release();
+          return statistics;
         }
       }
 
@@ -709,14 +803,11 @@ export class WorkspaceCodingService {
         progressCallback(95);
       }
 
-      // Check for cancellation after step 11
-      if (jobId) {
-        const jobStatus = this.jobStatus.get(jobId);
-        if (jobStatus && jobStatus.status === 'cancelled') {
-          this.logger.log(`Job ${jobId} was cancelled after processing responses`);
-          await queryRunner.release();
-          return statistics;
-        }
+      // Check for cancellation or pause after step 11
+      if (jobId && await this.isJobCancelled(jobId)) {
+        this.logger.log(`Job ${jobId} was cancelled or paused after processing responses`);
+        await queryRunner.release();
+        return statistics;
       }
 
       // Step 12: Update responses in database - 100% progress
@@ -735,15 +826,12 @@ export class WorkspaceCodingService {
             const batch = batches[index];
             this.logger.log(`Starte Aktualisierung für Batch #${index + 1} (Größe: ${batch.length}).`);
 
-            // Check for cancellation before updating batch
-            if (jobId) {
-              const jobStatus = this.jobStatus.get(jobId);
-              if (jobStatus && jobStatus.status === 'cancelled') {
-                this.logger.log(`Job ${jobId} was cancelled before updating batch #${index + 1}`);
-                await queryRunner.rollbackTransaction();
-                await queryRunner.release();
-                return statistics;
-              }
+            // Check for cancellation or pause before updating batch
+            if (jobId && await this.isJobCancelled(jobId)) {
+              this.logger.log(`Job ${jobId} was cancelled or paused before updating batch #${index + 1}`);
+              await queryRunner.rollbackTransaction();
+              await queryRunner.release();
+              return statistics;
             }
 
             try {
@@ -766,7 +854,7 @@ export class WorkspaceCodingService {
               // Update progress during batch updates
               if (progressCallback) {
                 const batchProgress = 95 + (5 * ((index + 1) / batches.length));
-                progressCallback(Math.min(batchProgress, 99)); // Cap at 99% until fully complete
+                progressCallback(Math.round(Math.min(batchProgress, 99))); // Cap at 99% until fully complete and round to integer
               }
             } catch (error) {
               this.logger.error(`Fehler beim Aktualisieren von Batch #${index + 1} (Größe: ${batch.length}):`, error.message);
@@ -827,7 +915,6 @@ export class WorkspaceCodingService {
       } catch (rollbackError) {
         this.logger.error('Fehler beim Rollback der Transaktion:', rollbackError.message);
       } finally {
-        // Always release the query runner
         await queryRunner.release();
       }
 
@@ -835,316 +922,87 @@ export class WorkspaceCodingService {
     }
   }
 
-  async codeTestPersons(workspace_id: number, testPersonIds: string): Promise<CodingStatisticsWithJob> {
-    // Clean up expired cache entries
+  async codeTestPersons(workspace_id: number, testPersonIdsOrGroups: string): Promise<CodingStatisticsWithJob> {
     this.cleanupCaches();
 
-    const startTime = Date.now();
-    const metrics: { [key: string]: number } = {};
-
-    if (!workspace_id || !testPersonIds || testPersonIds.trim() === '') {
-      this.logger.warn('Ungültige Eingabeparameter: workspace_id oder testPersonIds fehlen.');
+    if (!workspace_id || !testPersonIdsOrGroups || testPersonIdsOrGroups.trim() === '') {
+      this.logger.warn('Ungültige Eingabeparameter: workspace_id oder testPersonIdsOrGroups fehlen.');
       return { totalResponses: 0, statusCounts: {} };
     }
 
-    const ids = testPersonIds.split(',').filter(id => id.trim() !== '');
-    if (ids.length === 0) {
-      this.logger.warn('Keine gültigen Personen-IDs angegeben.');
+    const groupsOrIds = testPersonIdsOrGroups.split(',').filter(item => item.trim() !== '');
+    if (groupsOrIds.length === 0) {
+      this.logger.warn('Keine gültigen Gruppen oder Personen-IDs angegeben.');
       return { totalResponses: 0, statusCounts: {} };
     }
 
-    // If there are more than 100 test persons, process in the background
-    if (ids.length > 100) {
-      const jobId = `${workspace_id}-${Date.now()}`;
-      this.logger.log(`Starting background job ${jobId} for ${ids.length} test persons in workspace ${workspace_id}`);
+    // Check if the input contains groups or person IDs
+    // If all items can be parsed as numbers, they are person IDs
+    // Otherwise, they are group names
+    const areAllNumbers = groupsOrIds.every(item => !Number.isNaN(Number(item)));
 
-      // Set initial job status
-      this.jobStatus.set(jobId, {
-        status: 'pending',
-        progress: 0,
-        workspaceId: workspace_id,
-        createdAt: new Date()
-      });
+    let personIds: string[] = [];
 
-      // Process in the background
-      this.processTestPersonsInBackground(jobId, workspace_id, ids);
+    if (areAllNumbers) {
+      personIds = groupsOrIds;
+      this.logger.log(`Using provided person IDs: ${personIds.length} persons`);
+    } else {
+      // Input contains group names, fetch all persons in these groups
+      this.logger.log(`Fetching persons for groups: ${groupsOrIds.join(', ')}`);
 
-      // Return a response indicating the job has been scheduled
-      return {
-        totalResponses: 0,
-        statusCounts: {},
-        jobId,
-        message: `Processing ${ids.length} test persons in the background. Check job status with jobId: ${jobId}`
-      };
-    }
-
-    this.logger.log(`Verarbeite Personen ${testPersonIds} für Workspace ${workspace_id}`);
-
-    const statistics: CodingStatistics = {
-      totalResponses: 0,
-      statusCounts: {}
-    };
-
-    const queryRunner = this.responseRepository.manager.connection.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction('READ COMMITTED');
-
-    try {
-      const personsQueryStart = Date.now();
-      const persons = await this.personsRepository.find({
-        where: { workspace_id, id: In(ids) },
-        select: ['id', 'group', 'login', 'code', 'uploaded_at']
-      });
-      metrics.personsQuery = Date.now() - personsQueryStart;
-
-      if (!persons || persons.length === 0) {
-        this.logger.warn('Keine Personen gefunden mit den angegebenen IDs.');
-        await queryRunner.release();
-        return statistics;
-      }
-
-      const personIds = persons.map(person => person.id);
-      const bookletQueryStart = Date.now();
-      const booklets = await this.bookletRepository.find({
-        where: { personid: In(personIds) },
-        select: ['id', 'personid'] // Only select needed fields
-      });
-      metrics.bookletQuery = Date.now() - bookletQueryStart;
-
-      if (!booklets || booklets.length === 0) {
-        this.logger.log('Keine Booklets für die angegebenen Personen gefunden.');
-        await queryRunner.release();
-        return statistics;
-      }
-
-      const bookletIds = booklets.map(booklet => booklet.id);
-      const unitQueryStart = Date.now();
-      const units = await this.unitRepository.find({
-        where: { bookletid: In(bookletIds) },
-        select: ['id', 'bookletid', 'name', 'alias'] // Only select needed fields
-      });
-      metrics.unitQuery = Date.now() - unitQueryStart;
-
-      if (!units || units.length === 0) {
-        this.logger.log('Keine Einheiten für die angegebenen Booklets gefunden.');
-        await queryRunner.release();
-        return statistics;
-      }
-
-      const bookletToUnitsMap = new Map();
-      const unitIds = new Set<number>();
-      const unitAliasesSet = new Set<string>();
-
-      for (const unit of units) {
-        if (!bookletToUnitsMap.has(unit.bookletid)) {
-          bookletToUnitsMap.set(unit.bookletid, []);
-        }
-        bookletToUnitsMap.get(unit.bookletid).push(unit);
-        unitIds.add(unit.id);
-        unitAliasesSet.add(unit.alias.toUpperCase());
-      }
-
-      const unitIdsArray = Array.from(unitIds);
-      const unitAliasesArray = Array.from(unitAliasesSet);
-
-      const responseQueryStart = Date.now();
-      const allResponses = await this.responseRepository.find({
-        where: { unitid: In(unitIdsArray), status: In(['VALUE_CHANGED']) },
-        select: ['id', 'unitid', 'variableid', 'value', 'status'] // Only select needed fields
-      });
-      metrics.responseQuery = Date.now() - responseQueryStart;
-
-      if (!allResponses || allResponses.length === 0) {
-        this.logger.log('Keine zu kodierenden Antworten gefunden.');
-        await queryRunner.release();
-        return statistics;
-      }
-
-      const unitToResponsesMap = new Map();
-      for (const response of allResponses) {
-        if (!unitToResponsesMap.has(response.unitid)) {
-          unitToResponsesMap.set(response.unitid, []);
-        }
-        unitToResponsesMap.get(response.unitid).push(response);
-      }
-
-      const fileQueryStart = Date.now();
-      // Use cache for test files
-      const fileIdToTestFileMap = await this.getTestFilesWithCache(workspace_id, unitAliasesArray);
-      metrics.fileQuery = Date.now() - fileQueryStart;
-      const schemeExtractStart = Date.now();
-      const codingSchemeRefs = new Set<string>();
-      const unitToCodingSchemeRefMap = new Map();
-      const batchSize = 50;
-      for (let i = 0; i < units.length; i += batchSize) {
-        const unitBatch = units.slice(i, i + batchSize);
-
-        for (const unit of unitBatch) {
-          const testFile = fileIdToTestFileMap.get(unit.alias.toUpperCase());
-          if (!testFile) continue;
-
-          try {
-            const $ = cheerio.load(testFile.data);
-            const codingSchemeRefText = $('codingSchemeRef').text();
-            if (codingSchemeRefText) {
-              codingSchemeRefs.add(codingSchemeRefText.toUpperCase());
-              unitToCodingSchemeRefMap.set(unit.id, codingSchemeRefText.toUpperCase());
-            }
-          } catch (error) {
-            this.logger.error(`--- Fehler beim Verarbeiten der Datei ${testFile.filename}: ${error.message}`);
-          }
-        }
-      }
-      metrics.schemeExtract = Date.now() - schemeExtractStart;
-
-      const schemeQueryStart = Date.now();
-      // Use cache for coding schemes
-      const fileIdToCodingSchemeMap = await this.getCodingSchemesWithCache([...codingSchemeRefs]);
-      metrics.schemeQuery = Date.now() - schemeQueryStart;
-      // No separate parsing step needed as it's handled by the cache helper
-      metrics.schemeParsing = 0;
-      const emptyScheme = new Autocoder.CodingScheme({});
-
-      const processingStart = Date.now();
-
-      const allCodedResponses = [];
-      const estimatedResponseCount = allResponses.length;
-      allCodedResponses.length = estimatedResponseCount;
-      let responseIndex = 0;
-
-      for (let i = 0; i < units.length; i += batchSize) {
-        const unitBatch = units.slice(i, i + batchSize);
-
-        for (const unit of unitBatch) {
-          const responses = unitToResponsesMap.get(unit.id) || [];
-          if (responses.length === 0) continue;
-
-          statistics.totalResponses += responses.length;
-
-          const codingSchemeRef = unitToCodingSchemeRefMap.get(unit.id);
-          const scheme = codingSchemeRef ?
-            (fileIdToCodingSchemeMap.get(codingSchemeRef) || emptyScheme) :
-            emptyScheme;
-
-          for (const response of responses) {
-            const codedResult = scheme.code([{
-              id: response.variableid,
-              value: response.value,
-              status: response.status as ResponseStatusType
-            }]);
-
-            const codedStatus = codedResult[0]?.status;
-            if (!statistics.statusCounts[codedStatus]) {
-              statistics.statusCounts[codedStatus] = 0;
-            }
-            statistics.statusCounts[codedStatus] += 1;
-
-            allCodedResponses[responseIndex] = {
-              id: response.id,
-              code: codedResult[0]?.code,
-              codedstatus: codedStatus,
-              score: codedResult[0]?.score
-            };
-            responseIndex += 1;
-          }
-        }
-      }
-
-      allCodedResponses.length = responseIndex;
-      metrics.processing = Date.now() - processingStart;
-
-      // Update responses in batches with transaction support
-      if (allCodedResponses.length > 0) {
-        const updateStart = Date.now();
-        try {
-          const updateBatchSize = 500;
-          const batches = [];
-          for (let i = 0; i < allCodedResponses.length; i += updateBatchSize) {
-            batches.push(allCodedResponses.slice(i, i + updateBatchSize));
-          }
-
-          this.logger.log(`Starte die Aktualisierung von ${allCodedResponses.length} Responses in ${batches.length} Batches (sequential).`);
-
-          for (let index = 0; index < batches.length; index++) {
-            const batch = batches[index];
-            this.logger.log(`Starte Aktualisierung für Batch #${index + 1} (Größe: ${batch.length}).`);
-
-            try {
-              if (batch.length > 0) {
-                const updatePromises = batch.map(response => queryRunner.manager.update(
-                  ResponseEntity,
-                  response.id,
-                  {
-                    code: response.code,
-                    codedstatus: response.codedstatus,
-                    score: response.score
-                  }
-                ));
-
-                await Promise.all(updatePromises);
-              }
-
-              this.logger.log(`Batch #${index + 1} (Größe: ${batch.length}) erfolgreich aktualisiert.`);
-            } catch (error) {
-              this.logger.error(`Fehler beim Aktualisieren von Batch #${index + 1} (Größe: ${batch.length}):`, error.message);
-              // Rollback transaction on error
-              await queryRunner.rollbackTransaction();
-              await queryRunner.release();
-              throw error;
-            }
-          }
-
-          // Commit transaction if all updates were successful
-          await queryRunner.commitTransaction();
-          this.logger.log(`${allCodedResponses.length} Responses wurden erfolgreich aktualisiert.`);
-        } catch (error) {
-          this.logger.error('Fehler beim Aktualisieren der Responses:', error.message);
-          // Ensure transaction is rolled back on error
-          try {
-            await queryRunner.rollbackTransaction();
-          } catch (rollbackError) {
-            this.logger.error('Fehler beim Rollback der Transaktion:', rollbackError.message);
-          }
-        } finally {
-          // Always release the query runner
-          await queryRunner.release();
-        }
-        metrics.update = Date.now() - updateStart;
-      } else {
-        // Release query runner if no updates were performed
-        await queryRunner.release();
-      }
-
-      // Log performance metrics
-      const totalTime = Date.now() - startTime;
-      this.logger.log(`Performance metrics for codeTestPersons (total: ${totalTime}ms):
-        - Persons query: ${metrics.personsQuery}ms
-        - Booklet query: ${metrics.bookletQuery}ms
-        - Unit query: ${metrics.unitQuery}ms
-        - Response query: ${metrics.responseQuery}ms
-        - File query: ${metrics.fileQuery}ms
-        - Scheme extraction: ${metrics.schemeExtract}ms
-        - Scheme query: ${metrics.schemeQuery}ms
-        - Scheme parsing: ${metrics.schemeParsing}ms
-        - Response processing: ${metrics.processing}ms
-        - Database updates: ${metrics.update || 0}ms`);
-
-      return statistics;
-    } catch (error) {
-      this.logger.error('Fehler beim Verarbeiten der Personen:', error);
-
-      // Ensure transaction is rolled back on error
       try {
-        await queryRunner.rollbackTransaction();
-      } catch (rollbackError) {
-        this.logger.error('Fehler beim Rollback der Transaktion:', rollbackError.message);
-      } finally {
-        // Always release the query runner
-        await queryRunner.release();
-      }
+        const persons = await this.personsRepository.find({
+          where: {
+            workspace_id,
+            group: In(groupsOrIds)
+          },
+          select: ['id']
+        });
 
-      return statistics;
+        personIds = persons.map(person => person.id.toString());
+        this.logger.log(`Found ${personIds.length} persons in the specified groups`);
+
+        if (personIds.length === 0) {
+          this.logger.warn(`No persons found in groups: ${groupsOrIds.join(', ')}`);
+          return {
+            totalResponses: 0,
+            statusCounts: {},
+            message: `No persons found in the selected groups: ${groupsOrIds.join(', ')}`
+          };
+        }
+      } catch (error) {
+        this.logger.error(`Error fetching persons for groups: ${error.message}`, error.stack);
+        return {
+          totalResponses: 0,
+          statusCounts: {},
+          message: `Error fetching persons for groups: ${error.message}`
+        };
+      }
     }
+
+    // Always process as a job, regardless of the number of test persons
+    this.logger.log(`Starting job for ${personIds.length} test persons in workspace ${workspace_id}`);
+
+    const job = this.jobRepository.create({
+      workspace_id,
+      person_ids: personIds.join(','),
+      status: 'pending',
+      progress: 0,
+      // Store group names if groups were provided (not person IDs)
+      group_names: !areAllNumbers ? groupsOrIds.join(',') : undefined
+    });
+
+    const savedJob = await this.jobRepository.save(job);
+    this.logger.log(`Created test person coding job with ID ${savedJob.id}`);
+
+    this.processTestPersonsInBackground(savedJob.id, workspace_id, personIds);
+
+    return {
+      totalResponses: 0,
+      statusCounts: {},
+      jobId: savedJob.id.toString(),
+      message: `Processing ${personIds.length} test persons in the background. Check job status with jobId: ${savedJob.id}`
+    };
   }
 
   async getManualTestPersons(workspace_id: number, personIds?: string): Promise<unknown> {
@@ -1535,5 +1393,96 @@ export class WorkspaceCodingService {
   async getCodingListAsExcel(workspace_id: number): Promise<Buffer> {
     this.logger.log(`Generating Excel export for workspace ${workspace_id}`);
     return this.getCodingListAsCsv(workspace_id);
+  }
+
+  /**
+   * Pause a running job
+   * @param jobId Job ID to pause
+   * @returns Object with success flag and message
+   */
+  async pauseJob(jobId: string): Promise<{ success: boolean; message: string }> {
+    try {
+      // First check the in-memory job status map for backward compatibility
+      const inMemoryJob = this.jobStatus.get(jobId);
+      if (inMemoryJob) {
+        // Only processing jobs can be paused
+        if (inMemoryJob.status !== 'processing') {
+          return {
+            success: false,
+            message: `Job with ID ${jobId} cannot be paused because it is ${inMemoryJob.status}`
+          };
+        }
+
+        // Update job status to paused
+        this.jobStatus.set(jobId, { ...inMemoryJob, status: 'paused' });
+        this.logger.log(`In-memory job ${jobId} has been paused`);
+
+        return { success: true, message: `Job ${jobId} has been paused successfully` };
+      }
+
+      // If not found in memory, check the database
+      const job = await this.jobRepository.findOne({ where: { id: parseInt(jobId, 10) } });
+      if (!job) {
+        return { success: false, message: `Job with ID ${jobId} not found` };
+      }
+
+      // Only processing jobs can be paused
+      if (job.status !== 'processing') {
+        return {
+          success: false,
+          message: `Job with ID ${jobId} cannot be paused because it is ${job.status}`
+        };
+      }
+
+      // Update job status to paused
+      job.status = 'paused';
+      await this.jobRepository.save(job);
+      this.logger.log(`Job ${jobId} has been paused`);
+
+      return { success: true, message: `Job ${jobId} has been paused successfully` };
+    } catch (error) {
+      this.logger.error(`Error pausing job: ${error.message}`, error.stack);
+      return { success: false, message: `Error pausing job: ${error.message}` };
+    }
+  }
+
+  async resumeJob(jobId: string): Promise<{ success: boolean; message: string }> {
+    try {
+      const inMemoryJob = this.jobStatus.get(jobId);
+      if (inMemoryJob) {
+        if (inMemoryJob.status !== 'paused') {
+          return {
+            success: false,
+            message: `Job with ID ${jobId} cannot be resumed because it is ${inMemoryJob.status}`
+          };
+        }
+
+        this.jobStatus.set(jobId, { ...inMemoryJob, status: 'processing' });
+        this.logger.log(`In-memory job ${jobId} has been resumed`);
+
+        return { success: true, message: `Job ${jobId} has been resumed successfully` };
+      }
+
+      const job = await this.jobRepository.findOne({ where: { id: parseInt(jobId, 10) } });
+      if (!job) {
+        return { success: false, message: `Job with ID ${jobId} not found` };
+      }
+
+      if (job.status !== 'paused') {
+        return {
+          success: false,
+          message: `Job with ID ${jobId} cannot be resumed because it is ${job.status}`
+        };
+      }
+
+      job.status = 'processing';
+      await this.jobRepository.save(job);
+      this.logger.log(`Job ${jobId} has been resumed`);
+
+      return { success: true, message: `Job ${jobId} has been resumed successfully` };
+    } catch (error) {
+      this.logger.error(`Error resuming job: ${error.message}`, error.stack);
+      return { success: false, message: `Error resuming job: ${error.message}` };
+    }
   }
 }

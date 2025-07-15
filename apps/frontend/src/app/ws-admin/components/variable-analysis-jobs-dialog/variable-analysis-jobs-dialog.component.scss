@@ -1,0 +1,96 @@
+.dialog-container {
+  display: flex;
+  flex-direction: column;
+  min-height: 400px;
+  max-height: 80vh;
+}
+
+.dialog-title {
+  margin: 0;
+  padding: 16px;
+  font-size: 20px;
+  font-weight: 500;
+}
+
+.dialog-content {
+  flex: 1;
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding: 8px 16px;
+}
+
+.actions-container {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 16px;
+}
+
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  color: #666;
+}
+
+.empty-icon {
+  font-size: 48px;
+  width: 48px;
+  height: 48px;
+  margin-bottom: 16px;
+}
+
+.table-container {
+  overflow-x: auto;
+}
+
+.jobs-table {
+  width: 100%;
+}
+
+.status-badge {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: uppercase;
+}
+
+.status-pending {
+  background-color: #e3f2fd;
+  color: #0d47a1;
+}
+
+.status-processing {
+  background-color: #e8f5e9;
+  color: #1b5e20;
+}
+
+.status-completed {
+  background-color: #e8f5e9;
+  color: #1b5e20;
+}
+
+.status-failed {
+  background-color: #ffebee;
+  color: #b71c1c;
+}
+
+.status-cancelled {
+  background-color: #fafafa;
+  color: #616161;
+}
