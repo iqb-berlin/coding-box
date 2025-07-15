@@ -78,7 +78,7 @@ export class VariableAnalysisController {
   @ApiNotFoundResponse({
     description: 'Workspace not found.'
   })
-  async getVariableFrequencies(@WorkspaceId() workspaceId: number, @Query('unitId') unitId?: number, @Query('variableId') variableId?: string, @Query('page') page: number = 1, @Query('limit') limit: number = 50): Promise<VariableAnalysisResultDto> {
+  async getVariableFrequencies(@WorkspaceId() workspaceId: number, @Query('unitId') unitId?: number, @Query('variableId') variableId?: string): Promise<VariableAnalysisResultDto> {
     try {
       return await this.variableAnalysisService.getVariableFrequencies(
         workspaceId,
