@@ -568,4 +568,12 @@ export class BackendService {
   ): Observable<VariableAnalysisResultDto> {
     return this.variableAnalysisService.getAnalysisResults(workspaceId, jobId);
   }
+
+  getAllVariableAnalysisJobs(workspaceId: number): Observable<VariableAnalysisJobDto[]> {
+    return this.variableAnalysisService.getAllJobs(workspaceId);
+  }
+
+  cancelVariableAnalysisJob(workspaceId: number, jobId: number): Observable<{ success: boolean; message: string }> {
+    return this.variableAnalysisService.cancelJob(workspaceId, jobId);
+  }
 }

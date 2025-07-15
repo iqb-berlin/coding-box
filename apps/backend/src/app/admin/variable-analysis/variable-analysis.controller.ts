@@ -83,9 +83,7 @@ export class VariableAnalysisController {
       return await this.variableAnalysisService.getVariableFrequencies(
         workspaceId,
         unitId,
-        variableId,
-        page,
-        limit
+        variableId
       );
     } catch (error) {
       if (error instanceof NotFoundException) {
