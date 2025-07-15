@@ -182,8 +182,48 @@ export class BackendService {
     statusCounts: {
       [key: string]: number;
     };
+    jobId?: string;
+    message?: string;
   }> {
     return this.codingService.codeTestPersons(workspace_id, testPersonIds);
+  }
+
+  getCodingJobStatus(workspace_id: number, jobId: string): Observable<{
+    status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
+    progress: number;
+    result?: {
+      totalResponses: number;
+      statusCounts: {
+        [key: string]: number;
+      };
+    };
+    error?: string;
+  }> {
+    return this.codingService.getCodingJobStatus(workspace_id, jobId);
+  }
+
+  cancelCodingJob(workspace_id: number, jobId: string): Observable<{
+    success: boolean;
+    message: string;
+  }> {
+    return this.codingService.cancelCodingJob(workspace_id, jobId);
+  }
+
+  getAllCodingJobs(workspace_id: number): Observable<{
+    jobId: string;
+    status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
+    progress: number;
+    result?: {
+      totalResponses: number;
+      statusCounts: {
+        [key: string]: number;
+      };
+    };
+    error?: string;
+    workspaceId?: number;
+    createdAt?: Date;
+  }[]> {
+    return this.codingService.getAllCodingJobs(workspace_id);
   }
 
   getCodingList(workspace_id: number, page: number = 1, limit: number = 100): Observable<PaginatedResponse<CodingListItem>> {

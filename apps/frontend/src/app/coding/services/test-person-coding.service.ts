@@ -46,6 +46,9 @@ export interface JobStatus {
   workspaceId?: number;
   createdAt?: Date;
   testPersonId?: string;
+  groupNames?: string;
+  durationMs?: number;
+  completedAt?: Date;
 }
 
 export interface JobInfo extends JobStatus {
@@ -63,11 +66,6 @@ export class TestPersonCodingService {
     return { Authorization: `Bearer ${localStorage.getItem('id_token')}` };
   }
 
-  /**
-   * Code test persons
-   * @param workspaceId Workspace ID
-   * @param testPersonIds Comma-separated list of test person IDs
-   */
   codeTestPersons(workspaceId: number, testPersonIds: string): Observable<CodingStatisticsWithJob> {
     return this.http
       .get<CodingStatisticsWithJob>(
@@ -184,38 +182,6 @@ export class TestPersonCodingService {
   }
 
   /**
-   * Pause job
-   * @param workspaceId Workspace ID
-   * @param jobId Job ID
-   */
-  pauseJob(workspaceId: number, jobId: string): Observable<{ success: boolean; message: string }> {
-    return this.http
-      .get<{ success: boolean; message: string }>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/coding/job/${jobId}/pause`,
-      { headers: this.authHeader }
-    )
-      .pipe(
-        catchError(() => of({ success: false, message: `Failed to pause job ${jobId}` }))
-      );
-  }
-
-  /**
-   * Resume job
-   * @param workspaceId Workspace ID
-   * @param jobId Job ID
-   */
-  resumeJob(workspaceId: number, jobId: string): Observable<{ success: boolean; message: string }> {
-    return this.http
-      .get<{ success: boolean; message: string }>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/coding/job/${jobId}/resume`,
-      { headers: this.authHeader }
-    )
-      .pipe(
-        catchError(() => of({ success: false, message: `Failed to resume job ${jobId}` }))
-      );
-  }
-
-  /**
    * Export coding list as CSV
    * @param workspaceId Workspace ID
    */
@@ -260,6 +226,22 @@ export class TestPersonCodingService {
     return this.http
       .get<JobInfo[]>(
       `${this.serverUrl}admin/workspace/${workspaceId}/coding/jobs`,
+      { headers: this.authHeader }
+    )
+      .pipe(
+        catchError(() => of([]))
+      );
+  }
+
+  /**
+   * Get all test person groups for a workspace
+   * @param workspaceId Workspace ID
+   * @returns Observable of an array of group names
+   */
+  getWorkspaceGroups(workspaceId: number): Observable<string[]> {
+    return this.http
+      .get<string[]>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/coding/groups`,
       { headers: this.authHeader }
     )
       .pipe(
