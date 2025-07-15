@@ -23,7 +23,7 @@
         </mat-form-field>
       </div>
 
-      @if (variables.length === 0) {
+      @if (variableCombos.length === 0) {
         <div class="empty-state">
           <mat-icon class="empty-icon">info</mat-icon>
           <p>Keine Variablen gefunden.</p>
@@ -35,12 +35,12 @@
             <span>Es werden maximal die {{ MAX_VALUES_PER_VARIABLE }} häufigsten Werte pro Variable angezeigt.</span>
           </div>
 
-          @for (variable of variables; track variable) {
+          @for (combo of variableCombos; track combo) {
             <div class="variable-section">
-              <h3 class="variable-title">{{ variable }}</h3>
+              <h3 class="variable-title">{{ combo.unitName }}: {{ combo.variableId }}</h3>
 
               <div class="table-container">
-                <table mat-table [dataSource]="variableFrequencies[variable]" matSort class="frequency-table">
+                <table mat-table [dataSource]="variableFrequencies[combo.unitName + ':' + combo.variableId]" matSort class="frequency-table">
                   <!-- Value Column -->
                   <ng-container matColumnDef="value">
                     <th mat-header-cell *matHeaderCellDef>Wert</th>

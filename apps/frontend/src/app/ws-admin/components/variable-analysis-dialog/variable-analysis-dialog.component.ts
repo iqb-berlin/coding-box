@@ -30,8 +30,12 @@ export interface VariableAnalysisData {
     expanded?: boolean;
   }[];
   analysisResults?: {
-    variables: string[];
+    variableCombos: {
+      unitName: string;
+      variableId: string;
+    }[];
     frequencies: { [key: string]: {
+      unitName?: string;
       variableId: string;
       value: string;
       count: number;
@@ -42,10 +46,16 @@ export interface VariableAnalysisData {
 }
 
 export interface VariableFrequency {
+  unitName?: string;
   variableid: string;
   value: string;
   count: number;
   percentage: number;
+}
+
+export interface VariableCombo {
+  unitName: string;
+  variableId: string;
 }
 
 @Component({
@@ -72,10 +82,10 @@ export class VariableAnalysisDialogComponent implements OnInit {
   variableFrequencies: { [key: string]: VariableFrequency[] } = {};
   displayedColumns: string[] = ['value', 'count', 'percentage'];
 
-  allVariables: string[] = [];
+  allVariableCombos: VariableCombo[] = [];
 
-  // Filtered and paginated variables
-  variables: string[] = [];
+  // Filtered and paginated variable combinations
+  variableCombos: VariableCombo[] = [];
 
   searchText = '';
   private searchSubject = new Subject<string>();
@@ -108,24 +118,36 @@ export class VariableAnalysisDialogComponent implements OnInit {
     // Check if we have pre-calculated analysis results
     if (this.data.analysisResults) {
       // Use the pre-calculated results
-      this.allVariables = this.data.analysisResults!.variables;
+      this.allVariableCombos = this.data.analysisResults!.variableCombos;
 
       // Convert the frequencies to our internal format
-      Object.keys(this.data.analysisResults!.frequencies).forEach(variableId => {
-        this.variableFrequencies[variableId] = this.data.analysisResults!.frequencies[variableId].map(freq => ({
-          variableid: freq.variableId,
-          value: freq.value,
-          count: freq.count,
-          percentage: freq.percentage
-        }));
+      Object.keys(this.data.analysisResults!.frequencies).forEach(comboKey => {
+        // Get the first frequency item to extract unitName and variableId
+        const firstFreq = this.data.analysisResults!.frequencies[comboKey][0];
+        if (firstFreq) {
+          // Create a key that matches what we use in the template
+          const newComboKey = `${firstFreq.unitName || 'Unknown'}:${firstFreq.variableId}`;
+
+          this.variableFrequencies[newComboKey] = this.data.analysisResults!.frequencies[comboKey].map(freq => ({
+            unitName: freq.unitName,
+            variableid: freq.variableId,
+            value: freq.value,
+            count: freq.count,
+            percentage: freq.percentage
+          }));
+        }
       });
     } else if (this.data.responses && this.data.responses.length > 0) {
       // Fall back to the old behavior of analyzing responses
-      // Group responses by variableid
+      // Group responses by variableid (without unitName since we don't have that info)
       const responsesByVariable: { [key: string]: { [key: string]: number } } = {};
 
-      // Initialize the variables array
-      this.allVariables = Array.from(new Set(this.data.responses.map(r => r.variableid)));
+      // Initialize the variables array with just variableId (no unitName)
+      const variableIds = Array.from(new Set(this.data.responses.map(r => r.variableid)));
+      this.allVariableCombos = variableIds.map(variableId => ({
+        unitName: 'Unknown', // We don't have unitName in the old format
+        variableId
+      }));
 
       // Count occurrences of each value for each variable
       this.data.responses.forEach(response => {
@@ -146,11 +168,15 @@ export class VariableAnalysisDialogComponent implements OnInit {
         const valueMap = responsesByVariable[variableid];
         const totalResponses = Object.values(valueMap).reduce((sum, count) => sum + count, 0);
 
+        // Create a key that matches what we use in the template
+        const comboKey = `Unknown:${variableid}`;
+
         // Sort by count in descending order and limit to MAX_VALUES_PER_VARIABLE
-        this.variableFrequencies[variableid] = Object.keys(valueMap)
+        this.variableFrequencies[comboKey] = Object.keys(valueMap)
           .map(value => {
             const count = valueMap[value];
             return {
+              unitName: 'Unknown',
               variableid,
               value,
               count,
@@ -161,10 +187,16 @@ export class VariableAnalysisDialogComponent implements OnInit {
           .slice(0, this.MAX_VALUES_PER_VARIABLE); // Limit the number of values shown
       });
     } else {
-      this.allVariables = [];
+      this.allVariableCombos = [];
     }
 
-    this.allVariables.sort();
+    // Sort by unitName and then by variableId
+    this.allVariableCombos.sort((a, b) => {
+      if (a.unitName !== b.unitName) {
+        return a.unitName.localeCompare(b.unitName);
+      }
+      return a.variableId.localeCompare(b.variableId);
+    });
 
     // Initialize the filtered and paginated variables
     this.filterVariables();
@@ -173,16 +205,17 @@ export class VariableAnalysisDialogComponent implements OnInit {
   }
 
   /**
-   * Filter variables based on search text and update pagination
+   * Filter variable combinations based on search text and update pagination
    */
   filterVariables(): void {
-    const filteredVariables = this.searchText ?
-      this.allVariables.filter(v => v.toLowerCase().includes(this.searchText.toLowerCase())) :
-      this.allVariables;
+    const filteredCombos = this.searchText ?
+      this.allVariableCombos.filter(combo => combo.unitName.toLowerCase().includes(this.searchText.toLowerCase()) ||
+        combo.variableId.toLowerCase().includes(this.searchText.toLowerCase())) :
+      this.allVariableCombos;
 
     const startIndex = this.currentPage * this.pageSize;
     const endIndex = startIndex + this.pageSize;
-    this.variables = filteredVariables.slice(startIndex, endIndex);
+    this.variableCombos = filteredCombos.slice(startIndex, endIndex);
   }
 
   onSearchChange(event: Event): void {
@@ -198,8 +231,9 @@ export class VariableAnalysisDialogComponent implements OnInit {
 
   getTotalFilteredVariables(): number {
     return this.searchText ?
-      this.allVariables.filter(v => v.toLowerCase().includes(this.searchText.toLowerCase())).length :
-      this.allVariables.length;
+      this.allVariableCombos.filter(combo => combo.unitName.toLowerCase().includes(this.searchText.toLowerCase()) ||
+        combo.variableId.toLowerCase().includes(this.searchText.toLowerCase())).length :
+      this.allVariableCombos.length;
   }
 
   onClose(): void {

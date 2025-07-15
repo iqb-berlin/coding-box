@@ -9,14 +9,20 @@ import { SERVER_URL } from '../injection-tokens';
 import { VariableAnalysisJobDto } from '../models/variable-analysis-job.dto';
 
 export interface VariableFrequencyDto {
+  unitName?: string;
   variableId: string;
   value: string;
   count: number;
   percentage: number;
 }
 
+export interface VariableCombo {
+  unitName: string;
+  variableId: string;
+}
+
 export interface VariableAnalysisResultDto {
-  variables: string[];
+  variableCombos: VariableCombo[];
   frequencies: { [key: string]: VariableFrequencyDto[] };
   total: number;
 }
