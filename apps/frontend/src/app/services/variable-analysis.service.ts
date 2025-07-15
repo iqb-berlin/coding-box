@@ -8,6 +8,11 @@ import { logger } from 'nx/src/utils/logger';
 import { SERVER_URL } from '../injection-tokens';
 import { VariableAnalysisJobDto } from '../models/variable-analysis-job.dto';
 
+export interface JobCancelResult {
+  success: boolean;
+  message: string;
+}
+
 export interface VariableFrequencyDto {
   unitName?: string;
   variableId: string;
@@ -90,6 +95,31 @@ export class VariableAnalysisService {
     ).pipe(
       catchError(error => {
         logger.error(`Error getting variable analysis results: ${error.message}`);
+        throw error;
+      })
+    );
+  }
+
+  getAllJobs(workspaceId: number): Observable<VariableAnalysisJobDto[]> {
+    return this.http.get<VariableAnalysisJobDto[]>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/jobs`,
+      { headers: this.authHeader }
+    ).pipe(
+      catchError(error => {
+        logger.error(`Error getting all variable analysis jobs: ${error.message}`);
+        throw error;
+      })
+    );
+  }
+
+  cancelJob(workspaceId: number, jobId: number): Observable<JobCancelResult> {
+    return this.http.post<JobCancelResult>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/jobs/${jobId}/cancel`,
+      null,
+      { headers: this.authHeader }
+    ).pipe(
+      catchError(error => {
+        logger.error(`Error cancelling variable analysis job: ${error.message}`);
         throw error;
       })
     );

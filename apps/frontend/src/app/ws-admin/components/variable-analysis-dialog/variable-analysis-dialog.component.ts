@@ -13,10 +13,16 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { FormsModule } from '@angular/forms';
 import { Subject } from 'rxjs';
 import { debounceTime, distinctUntilChanged } from 'rxjs/operators';
+import { MatTabsModule } from '@angular/material/tabs';
+import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatSnackBar } from '@angular/material/snack-bar';
+import { BackendService } from '../../../services/backend.service';
+import { VariableAnalysisJobDto } from '../../../models/variable-analysis-job.dto';
 
 export interface VariableAnalysisData {
   unitId: number;
   title: string;
+  workspaceId: number;
   responses?: {
     id: number;
     unitid: number;
@@ -43,6 +49,7 @@ export interface VariableAnalysisData {
     }[] };
     total: number;
   };
+  jobs?: VariableAnalysisJobDto[];
 }
 
 export interface VariableFrequency {
@@ -74,7 +81,9 @@ export interface VariableCombo {
     MatSortModule,
     MatPaginatorModule,
     MatInputModule,
-    MatFormFieldModule
+    MatFormFieldModule,
+    MatTabsModule,
+    MatTooltipModule
   ]
 })
 export class VariableAnalysisDialogComponent implements OnInit {
@@ -95,9 +104,15 @@ export class VariableAnalysisDialogComponent implements OnInit {
 
   readonly MAX_VALUES_PER_VARIABLE = 20;
 
+  isJobsLoading = false;
+  jobs: VariableAnalysisJobDto[] = [];
+  jobsDisplayedColumns: string[] = ['id', 'status', 'createdAt', 'unitId', 'variableId', 'actions'];
+
   constructor(
     public dialogRef: MatDialogRef<VariableAnalysisDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: VariableAnalysisData
+    @Inject(MAT_DIALOG_DATA) public data: VariableAnalysisData,
+    private backendService: BackendService,
+    private snackBar: MatSnackBar
   ) {}
 
   ngOnInit(): void {
@@ -110,6 +125,12 @@ export class VariableAnalysisDialogComponent implements OnInit {
     });
 
     this.analyzeVariables();
+
+    if (this.data.jobs) {
+      this.jobs = this.data.jobs;
+    } else {
+      this.refreshJobs();
+    }
   }
 
   analyzeVariables(): void {
@@ -204,9 +225,6 @@ export class VariableAnalysisDialogComponent implements OnInit {
     this.isLoading = false;
   }
 
-  /**
-   * Filter variable combinations based on search text and update pagination
-   */
   filterVariables(): void {
     const filteredCombos = this.searchText ?
       this.allVariableCombos.filter(combo => combo.unitName.toLowerCase().includes(this.searchText.toLowerCase()) ||
@@ -238,5 +256,128 @@ export class VariableAnalysisDialogComponent implements OnInit {
 
   onClose(): void {
     this.dialogRef.close();
+  }
+
+  refreshJobs(): void {
+    this.isJobsLoading = true;
+    this.backendService.getAllVariableAnalysisJobs(this.data.workspaceId)
+      .subscribe({
+        next: jobs => {
+          this.jobs = jobs.filter(job => job.type === 'variable-analysis');
+          this.isJobsLoading = false;
+        },
+        error: () => {
+          this.snackBar.open(
+            'Fehler beim Laden der Analyse-Aufträge',
+            'Fehler',
+            { duration: 3000 }
+          );
+          this.isJobsLoading = false;
+        }
+      });
+  }
+
+  startNewAnalysis(): void {
+    this.isJobsLoading = true;
+    const loadingSnackBar = this.snackBar.open(
+      'Starte Analyse...',
+      '',
+      { duration: 3000 }
+    );
+
+    this.backendService.createVariableAnalysisJob(
+      this.data.workspaceId,
+      this.data.unitId // Optional unit ID, may be undefined
+    ).subscribe({
+      next: job => {
+        loadingSnackBar.dismiss();
+        this.snackBar.open(
+          `Analyse gestartet (Job ID: ${job.id}). Sie werden benachrichtigt, wenn die Analyse abgeschlossen ist.`,
+          'OK',
+          { duration: 5000 }
+        );
+        this.refreshJobs();
+      },
+      error: () => {
+        loadingSnackBar.dismiss();
+        this.snackBar.open(
+          'Fehler beim Starten der Analyse',
+          'Fehler',
+          { duration: 3000 }
+        );
+        this.isJobsLoading = false;
+      }
+    });
+  }
+
+  cancelJob(jobId: number): void {
+    this.isJobsLoading = true;
+    this.backendService.cancelVariableAnalysisJob(this.data.workspaceId, jobId)
+      .subscribe({
+        next: result => {
+          if (result.success) {
+            this.snackBar.open(
+              result.message || 'Analyse-Auftrag erfolgreich abgebrochen',
+              'OK',
+              { duration: 3000 }
+            );
+            this.refreshJobs();
+          } else {
+            this.snackBar.open(
+              result.message || 'Fehler beim Abbrechen des Analyse-Auftrags',
+              'Fehler',
+              { duration: 3000 }
+            );
+            this.isJobsLoading = false;
+          }
+        },
+        error: () => {
+          this.snackBar.open(
+            'Fehler beim Abbrechen des Analyse-Auftrags',
+            'Fehler',
+            { duration: 3000 }
+          );
+          this.isJobsLoading = false;
+        }
+      });
+  }
+
+  viewJobResults(jobId: number): void {
+    this.isLoading = true;
+    const loadingSnackBar = this.snackBar.open(
+      'Lade Analyse-Ergebnisse...',
+      '',
+      { duration: undefined }
+    );
+
+    this.backendService.getVariableAnalysisResults(
+      this.data.workspaceId,
+      jobId
+    ).subscribe({
+      next: results => {
+        loadingSnackBar.dismiss();
+        this.isLoading = false;
+
+        // Update the data with the new results
+        this.data.analysisResults = results;
+
+        // Re-analyze variables with the new results
+        this.analyzeVariables();
+      },
+      error: () => {
+        loadingSnackBar.dismiss();
+        this.isLoading = false;
+        this.snackBar.open(
+          'Fehler beim Laden der Analyse-Ergebnisse',
+          'Fehler',
+          { duration: 3000 }
+        );
+      }
+    });
+  }
+
+  formatDate(date: Date): string {
+    if (!date) return '';
+    return new Date(date).toLocaleString();
   }
 }

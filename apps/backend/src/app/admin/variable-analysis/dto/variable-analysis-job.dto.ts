@@ -23,6 +23,11 @@ export class VariableAnalysisJobDto {
   updated_at: Date;
 
   /**
+   * Type of the job, used for inheritance discrimination
+   */
+  type?: string;
+
+  /**
    * Static method to create a DTO from an entity
    */
   static fromEntity(entity: VariableAnalysisJob): VariableAnalysisJobDto {
@@ -35,6 +40,7 @@ export class VariableAnalysisJobDto {
     dto.error = entity.error;
     dto.created_at = entity.created_at;
     dto.updated_at = entity.updated_at;
+    dto.type = entity.type;
     return dto;
   }
 }

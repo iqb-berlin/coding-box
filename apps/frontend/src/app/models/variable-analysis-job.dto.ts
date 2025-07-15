@@ -15,4 +15,9 @@ export interface VariableAnalysisJobDto {
   error?: string;
   created_at: Date;
   updated_at: Date;
+
+  /**
+   * Type of the job, used for inheritance discrimination
+   */
+  type?: string;
 }
