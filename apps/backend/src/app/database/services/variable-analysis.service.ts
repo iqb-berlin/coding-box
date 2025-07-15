@@ -42,7 +42,6 @@ export class VariableAnalysisService {
     const savedJob = await this.jobRepository.save(job);
     this.logger.log(`Created variable analysis job with ID ${savedJob.id}`);
 
-    // Start processing the job asynchronously
     this.processAnalysisJob(savedJob.id).catch(error => {
       this.logger.error(`Error processing job ${savedJob.id}: ${error.message}`, error.stack);
     });
@@ -50,12 +49,6 @@ export class VariableAnalysisService {
     return savedJob;
   }
 
-  /**
-   * Get a variable analysis job by ID
-   * @param jobId The ID of the job
-   * @param workspaceId Optional workspace ID to filter by
-   * @returns The job
-   */
   async getAnalysisJob(jobId: number, workspaceId?: number): Promise<VariableAnalysisJob> {
     const whereClause: { id: number; workspace_id?: number } = { id: jobId };
 
@@ -74,14 +67,7 @@ export class VariableAnalysisService {
     return job;
   }
 
-  /**
-   * Get the results of a completed analysis job
-   * @param jobId The ID of the job
-   * @param workspaceId Optional workspace ID to filter by
-   * @returns The analysis results
-   */
   async getAnalysisResults(jobId: number, workspaceId?: number): Promise<VariableAnalysisResultDto> {
-    // Get the job, optionally filtering by workspace
     const job = await this.getAnalysisJob(jobId, workspaceId);
 
     if (job.status !== 'completed') {
@@ -100,11 +86,6 @@ export class VariableAnalysisService {
     }
   }
 
-  /**
-   * Get all analysis jobs for a workspace
-   * @param workspaceId The ID of the workspace
-   * @returns The jobs
-   */
   async getAnalysisJobs(workspaceId: number): Promise<VariableAnalysisJob[]> {
     return this.jobRepository.find({
       where: { workspace_id: workspaceId },
@@ -112,20 +93,14 @@ export class VariableAnalysisService {
     });
   }
 
-  /**
-   * Process a variable analysis job
-   * @param jobId The ID of the job to process
-   */
   private async processAnalysisJob(jobId: number): Promise<void> {
     try {
       // Get the job without workspace filtering since this is an internal method
       const job = await this.getAnalysisJob(jobId);
 
-      // Update job status to processing
       job.status = 'processing';
       await this.jobRepository.save(job);
 
-      // Perform the analysis
       const result = await this.getVariableFrequencies(
         job.workspace_id,
         job.unit_id,
@@ -142,8 +117,6 @@ export class VariableAnalysisService {
       try {
         // Try to get the job again in case it was deleted
         const job = await this.getAnalysisJob(jobId);
-
-        // Update job with error
         job.error = error.message;
         job.status = 'failed';
         await this.jobRepository.save(job);
@@ -156,21 +129,10 @@ export class VariableAnalysisService {
     }
   }
 
-  /**
-   * Get variable frequencies for a workspace
-   * @param workspaceId The ID of the workspace
-   * @param unitId Optional unit ID to filter by
-   * @param variableId Optional variable ID to filter by
-   * @param page Page number for pagination
-   * @param limit Number of items per page
-   * @returns The variable analysis result
-   */
   async getVariableFrequencies(
     workspaceId: number,
     unitId?: number,
     variableId?: string,
-    page: number = 1,
-    limit: number = 50
   ): Promise<VariableAnalysisResultDto> {
     // Build the query
     const query = this.responseRepository
@@ -178,7 +140,8 @@ export class VariableAnalysisService {
       .innerJoin('response.unit', 'unit')
       .innerJoin('unit.booklet', 'booklet')
       .innerJoin('booklet.person', 'person')
-      .innerJoin('booklet.bookletinfo', 'bookletinfo');
+      .innerJoin('booklet.bookletinfo', 'bookletinfo')
+      .where('person.workspace_id = :workspaceId', { workspaceId });
 
     // Add filters
     if (unitId) {
@@ -189,44 +152,49 @@ export class VariableAnalysisService {
       query.andWhere('response.variableId LIKE :variableId', { variableId: `%${variableId}%` });
     }
 
-    // Get distinct variable IDs
-    const variableIdsQuery = query.clone()
-      .select('DISTINCT response.variableId', 'variableId')
-      .orderBy('response.variableId', 'ASC');
+    // Get distinct combinations of unit name and variable ID
+    const variableCombosQuery = query.clone()
+      .select('DISTINCT unit.name', 'unitName')
+      .addSelect('response.variableId', 'variableId')
+      .orderBy('unit.name', 'ASC')
+      .addOrderBy('response.variableId', 'ASC');
 
-    // Apply pagination to variable IDs
-    const offset = (page - 1) * limit;
-    variableIdsQuery.offset(offset).limit(limit);
+    // Execute the query to get variable combinations
+    const variableCombosResult = await variableCombosQuery.getRawMany();
+    const variableCombos = variableCombosResult.map(result => ({
+      unitName: result.unitName,
+      variableId: result.variableId
+    }));
 
-    // Execute the query to get variable IDs
-    const variableIdsResult = await variableIdsQuery.getRawMany();
-    const variableIds = variableIdsResult.map(result => result.variableId);
-
-    // If no variables found, return empty result
-    if (variableIds.length === 0) {
+    // If no variable combinations found, return empty result
+    if (variableCombos.length === 0) {
       return {
-        variables: [],
+        variableCombos: [],
         frequencies: {},
         total: 0
       };
     }
 
-    // Get total count of distinct variable IDs
+    // Get total count of distinct variable combinations
     const totalQuery = query.clone()
-      .select('COUNT(DISTINCT response.variableId)', 'count');
+      .select('COUNT(DISTINCT CONCAT(unit.name, response.variableId))', 'count');
     const totalResult = await totalQuery.getRawOne();
     const total = parseInt(totalResult.count, 10);
 
-    // Get frequencies for each variable
+    // Get frequencies for each variable combination
     const frequencies: { [key: string]: VariableFrequencyDto[] } = {};
 
-    // Process each variable ID
-    for (const varId of variableIds) {
-      // Get all values for this variable
+    // Process each variable combination
+    for (const combo of variableCombos) {
+      // Create a unique key for this combination
+      const comboKey = `${combo.unitName}:${combo.variableId}`;
+
+      // Get all values for this variable combination
       const valuesQuery = query.clone()
         .select('response.value', 'value')
         .addSelect('COUNT(*)', 'count')
-        .where('response.variableId = :varId', { varId })
+        .where('unit.name = :unitName', { unitName: combo.unitName })
+        .andWhere('response.variableId = :varId', { varId: combo.variableId })
         .groupBy('response.value')
         .orderBy('count', 'DESC');
 
@@ -235,8 +203,9 @@ export class VariableAnalysisService {
       const totalResponses = valuesResult.reduce((sum, result) => sum + parseInt(result.count, 10), 0);
 
       // Map to DTOs
-      frequencies[varId] = valuesResult.map(result => ({
-        variableId: varId,
+      frequencies[comboKey] = valuesResult.map(result => ({
+        unitName: combo.unitName,
+        variableId: combo.variableId,
         value: result.value || '',
         count: parseInt(result.count, 10),
         percentage: (parseInt(result.count, 10) / totalResponses) * 100
@@ -244,7 +213,7 @@ export class VariableAnalysisService {
     }
 
     return {
-      variables: variableIds,
+      variableCombos,
       frequencies,
       total
     };

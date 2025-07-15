@@ -1259,7 +1259,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           width: '800px',
           data: {
             unitId: this.selectedUnit?.id, // Optional unit ID, may be undefined
-            title: `Item/Variablen Analyse für den gesamten Workspace (${results.variables.length} Variablen)`,
+            title: `Item/Variablen Analyse für den gesamten Workspace (${results.variableCombos.length} Variablen)`,
             analysisResults: results
           }
         });
