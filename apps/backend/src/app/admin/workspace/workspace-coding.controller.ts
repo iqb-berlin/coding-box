@@ -12,12 +12,14 @@ import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
 import { WorkspaceCodingService } from '../../database/services/workspace-coding.service';
+import { PersonService } from '../../database/services/person.service';
 
 @ApiTags('Admin Workspace Coding')
 @Controller('admin/workspace')
 export class WorkspaceCodingController {
   constructor(
-    private workspaceCodingService: WorkspaceCodingService
+    private workspaceCodingService: WorkspaceCodingService,
+    private personService: PersonService
   ) {}
 
   @Get(':workspace_id/coding')
@@ -186,7 +188,7 @@ export class WorkspaceCodingController {
       properties: {
         status: {
           type: 'string',
-          enum: ['pending', 'processing', 'completed', 'failed', 'cancelled'],
+          enum: ['pending', 'processing', 'completed', 'failed', 'cancelled', 'paused'],
           description: 'Current status of the job'
         },
         progress: {
@@ -261,7 +263,7 @@ export class WorkspaceCodingController {
           },
           status: {
             type: 'string',
-            enum: ['pending', 'processing', 'completed', 'failed', 'cancelled'],
+            enum: ['pending', 'processing', 'completed', 'failed', 'cancelled', 'paused'],
             description: 'Current status of the job'
           },
           progress: {
@@ -298,7 +300,7 @@ export class WorkspaceCodingController {
   })
   async getAllJobs(@WorkspaceId() workspace_id: number): Promise<{
     jobId: string;
-    status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
+    status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'paused';
     progress: number;
     result?: CodingStatistics;
     error?: string;
@@ -306,5 +308,73 @@ export class WorkspaceCodingController {
     createdAt?: Date;
   }[]> {
     return this.workspaceCodingService.getAllJobs(workspace_id);
+  }
+
+  @Get(':workspace_id/coding/groups')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiOkResponse({
+    description: 'List of all test person groups in the workspace retrieved successfully.',
+    schema: {
+      type: 'array',
+      items: {
+        type: 'string',
+        description: 'Group name'
+      }
+    }
+  })
+  async getWorkspaceGroups(@WorkspaceId() workspace_id: number): Promise<string[]> {
+    return this.personService.getWorkspaceGroups(workspace_id);
+  }
+
+  @Get(':workspace_id/coding/job/:jobId/pause')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiParam({ name: 'jobId', type: String, description: 'ID of the background job to pause' })
+  @ApiOkResponse({
+    description: 'Job pause request processed.',
+    schema: {
+      type: 'object',
+      properties: {
+        success: {
+          type: 'boolean',
+          description: 'Whether the pause request was successful'
+        },
+        message: {
+          type: 'string',
+          description: 'Message describing the result of the pause request'
+        }
+      }
+    }
+  })
+  async pauseJob(@Param('jobId') jobId: string): Promise<{ success: boolean; message: string }> {
+    return this.workspaceCodingService.pauseJob(jobId);
+  }
+
+  @Get(':workspace_id/coding/job/:jobId/resume')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiParam({ name: 'jobId', type: String, description: 'ID of the background job to resume' })
+  @ApiOkResponse({
+    description: 'Job resume request processed.',
+    schema: {
+      type: 'object',
+      properties: {
+        success: {
+          type: 'boolean',
+          description: 'Whether the resume request was successful'
+        },
+        message: {
+          type: 'string',
+          description: 'Message describing the result of the resume request'
+        }
+      }
+    }
+  })
+  async resumeJob(@Param('jobId') jobId: string): Promise<{ success: boolean; message: string }> {
+    return this.workspaceCodingService.resumeJob(jobId);
   }
 }

@@ -16,6 +16,7 @@ import { UnitNotesController } from './unit-notes/unit-notes.controller';
 import { ResourcePackageController } from './resource-packages/resource-package.controller';
 import { JournalController } from './workspace/journal.controller';
 import { VariableAnalysisController } from './variable-analysis/variable-analysis.controller';
+import { JobsController } from './jobs/jobs.controller';
 
 @Module({
   imports: [
@@ -37,7 +38,8 @@ import { VariableAnalysisController } from './variable-analysis/variable-analysi
     UnitNotesController,
     ResourcePackageController,
     JournalController,
-    VariableAnalysisController
+    VariableAnalysisController,
+    JobsController
   ],
   providers: []
 })

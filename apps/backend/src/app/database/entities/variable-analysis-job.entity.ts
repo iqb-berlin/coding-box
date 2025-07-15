@@ -1,37 +1,23 @@
 import {
-  Entity,
   Column,
-  PrimaryGeneratedColumn,
-  CreateDateColumn,
-  UpdateDateColumn
+  ChildEntity
 } from 'typeorm';
+import { Job } from './job.entity';
 
-@Entity()
-export class VariableAnalysisJob {
-  @PrimaryGeneratedColumn()
-    id: number;
-
-  @Column()
-    workspace_id: number;
-
+/**
+ * Entity for variable analysis jobs
+ */
+@ChildEntity('variable-analysis')
+export class VariableAnalysisJob extends Job {
+  /**
+   * Optional unit ID to filter by
+   */
   @Column({ nullable: true })
     unit_id?: number;
 
+  /**
+   * Optional variable ID to filter by
+   */
   @Column({ nullable: true })
     variable_id?: string;
-
-  @Column()
-    status: string;
-
-  @Column({ nullable: true })
-    error?: string;
-
-  @Column({ type: 'text', nullable: true })
-    result?: string;
-
-  @CreateDateColumn()
-    created_at: Date;
-
-  @UpdateDateColumn()
-    updated_at: Date;
 }
