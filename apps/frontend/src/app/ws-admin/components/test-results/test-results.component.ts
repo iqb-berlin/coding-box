@@ -201,6 +201,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   isLoading: boolean = true;
   isUploadingResults: boolean = false;
   isSearching: boolean = false;
+  isLoadingBooklets: boolean = false;
   unitTags: UnitTagDto[] = [];
   newTagText: string = '';
   unitTagsMap: Map<number, UnitTagDto[]> = new Map();
@@ -238,14 +239,21 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     this.bookletLogs = [];
     this.selectedUnit = undefined;
     this.unitTagsMap.clear();
+    this.isLoadingBooklets = true;
     this.backendService.getPersonTestResults(this.appService.selectedWorkspaceId, row.id)
-      .subscribe(booklets => {
-        this.selectedBooklet = row.group;
-        const uniqueBooklets = this.filterUniqueBooklets(booklets);
-        this.booklets = uniqueBooklets;
-        this.sortBooklets();
-        this.sortBookletUnits();
-        this.loadAllUnitTags();
+      .subscribe({
+        next: booklets => {
+          this.selectedBooklet = row.group;
+          const uniqueBooklets = this.filterUniqueBooklets(booklets);
+          this.booklets = uniqueBooklets;
+          this.sortBooklets();
+          this.sortBookletUnits();
+          this.loadAllUnitTags();
+          this.isLoadingBooklets = false;
+        },
+        error: () => {
+          this.isLoadingBooklets = false;
+        }
       });
   }
 

@@ -167,7 +167,12 @@
             <p class="section-description">Wählen Sie ein Booklet aus, um dessen Aufgaben anzuzeigen</p>
             <mat-divider></mat-divider>
 
-            <mat-accordion class="accordion">
+            <div *ngIf="isLoadingBooklets" class="loading-container">
+              <mat-spinner class="mat-spinner"></mat-spinner>
+              <p class="loading-text">Booklets werden geladen...</p>
+            </div>
+
+            <mat-accordion class="accordion" [style.display]="isLoadingBooklets ? 'none' : 'block'">
               @for (booklet of booklets; track booklet.id) {
                 <mat-expansion-panel [expanded]="booklets.length === 1" class="booklet-panel">
                   <mat-expansion-panel-header>
