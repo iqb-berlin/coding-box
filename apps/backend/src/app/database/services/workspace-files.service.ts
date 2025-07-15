@@ -1132,7 +1132,7 @@ export class WorkspaceFilesService {
       where: { workspace_id: workspaceId, file_type: 'Unit' }
     });
 
-    const unitVariableTypes = new Map<string, Map<string, string>>();
+    const unitVariableTypes = new Map<string, Map<string, { type: string; multiple?: boolean; nullable?: boolean }>>();
 
     for (const unitFile of unitFiles) {
       try {
@@ -1140,7 +1140,7 @@ export class WorkspaceFilesService {
         const parsedXml = await parseStringPromise(xmlContent, { explicitArray: false });
         if (parsedXml.Unit && parsedXml.Unit.Metadata && parsedXml.Unit.Metadata.Id) {
           const unitName = parsedXml.Unit.Metadata.Id;
-          const variableTypes = new Map<string, string>();
+          const variableTypes = new Map<string, { type: string; multiple?: boolean; nullable?: boolean }>();
 
           if (parsedXml.Unit.BaseVariables && parsedXml.Unit.BaseVariables.Variable) {
             const baseVariables = Array.isArray(parsedXml.Unit.BaseVariables.Variable) ?
@@ -1149,7 +1149,13 @@ export class WorkspaceFilesService {
 
             for (const variable of baseVariables) {
               if (variable.$.alias && variable.$.type) {
-                variableTypes.set(variable.$.alias, variable.$.type);
+                const multiple = variable.$.multiple === 'true' || variable.$.multiple === true;
+                const nullable = variable.$.nullable === 'true' || variable.$.nullable === true;
+                variableTypes.set(variable.$.alias, {
+                  type: variable.$.type,
+                  multiple: multiple || undefined,
+                  nullable: nullable || undefined
+                });
               }
             }
           }
@@ -1272,7 +1278,51 @@ export class WorkspaceFilesService {
         continue;
       }
 
-      const expectedType = variableTypes.get(variableId);
+      const variableInfo = variableTypes.get(variableId);
+      const expectedType = variableInfo.type;
+      const isMultiple = variableInfo.multiple === true;
+      const isNullable = variableInfo.nullable !== false; // If nullable is undefined or true, treat as nullable
+
+      // Check if multiple is true and value is not an array
+      if (isMultiple) {
+        try {
+          const parsedValue = JSON.parse(value);
+          if (!Array.isArray(parsedValue)) {
+            invalidVariables.push({
+              fileName: `${unitName}`,
+              variableId: variableId,
+              value: value,
+              responseId: response.id,
+              expectedType: `${expectedType} (array)`,
+              errorReason: 'Variable has multiple=true but value is not an array'
+            });
+            continue;
+          }
+        } catch (e) {
+          invalidVariables.push({
+            fileName: `${unitName}`,
+            variableId: variableId,
+            value: value,
+            responseId: response.id,
+            expectedType: `${expectedType} (array)`,
+            errorReason: 'Variable has multiple=true but value is not a valid JSON array'
+          });
+          continue;
+        }
+      }
+
+      // Check if nullable is false and value is null or empty
+      if (!isNullable && (!value || value.trim() === '')) {
+        invalidVariables.push({
+          fileName: `${unitName}`,
+          variableId: variableId,
+          value: value,
+          responseId: response.id,
+          expectedType: expectedType,
+          errorReason: 'Variable has nullable=false but value is null or empty'
+        });
+        continue;
+      }
 
       if (!this.isValidValueForType(value, expectedType)) {
         invalidVariables.push({
