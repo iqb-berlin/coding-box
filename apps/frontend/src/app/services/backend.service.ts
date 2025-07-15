@@ -543,6 +543,10 @@ export class BackendService {
     return this.validationService.deleteInvalidResponses(workspaceId, responseIds);
   }
 
+  deleteAllInvalidResponses(workspaceId: number, validationType: 'variables' | 'variableTypes' | 'responseStatus'): Observable<number> {
+    return this.validationService.deleteAllInvalidResponses(workspaceId, validationType);
+  }
+
   createVariableAnalysisJob(
     workspaceId: number,
     unitId?: number,

@@ -337,7 +337,7 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit {
   }
 
   deleteAllResponses(): void {
-    if (this.invalidVariables.length === 0) {
+    if (this.totalInvalidVariables === 0) {
       this.snackBar.open('Keine ungültigen Variablen vorhanden', 'Schließen', { duration: 3000 });
       return;
     }
@@ -356,11 +356,8 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit {
     dialogRef.afterClosed().subscribe(deleteFromDb => {
       if (deleteFromDb) {
         this.isDeletingResponses = true;
-        const responseIds = this.invalidVariables
-          .filter(variable => variable.responseId !== undefined)
-          .map(variable => variable.responseId as number);
 
-        this.backendService.deleteInvalidResponses(this.appService.selectedWorkspaceId, responseIds)
+        this.backendService.deleteAllInvalidResponses(this.appService.selectedWorkspaceId, 'variables')
           .subscribe(deletedCount => {
             this.isDeletingResponses = false;
             this.snackBar.open(`${deletedCount} Antworten gelöscht`, 'Schließen', { duration: 3000 });
@@ -476,7 +473,7 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit {
   }
 
   deleteAllTypeResponses(): void {
-    if (this.invalidTypeVariables.length === 0) {
+    if (this.totalInvalidTypeVariables === 0) {
       this.snackBar.open('Keine ungültigen Variablentypen vorhanden', 'Schließen', { duration: 3000 });
       return;
     }
@@ -495,11 +492,8 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit {
     dialogRef.afterClosed().subscribe(deleteFromDb => {
       if (deleteFromDb) {
         this.isDeletingResponses = true;
-        const responseIds = this.invalidTypeVariables
-          .filter(variable => variable.responseId !== undefined)
-          .map(variable => variable.responseId as number);
 
-        this.backendService.deleteInvalidResponses(this.appService.selectedWorkspaceId, responseIds)
+        this.backendService.deleteAllInvalidResponses(this.appService.selectedWorkspaceId, 'variableTypes')
           .subscribe(deletedCount => {
             this.isDeletingResponses = false;
             this.snackBar.open(`${deletedCount} Antworten gelöscht`, 'Schließen', { duration: 3000 });
@@ -561,7 +555,7 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit {
   }
 
   deleteAllStatusResponses(): void {
-    if (this.invalidStatusVariables.length === 0) {
+    if (this.totalInvalidStatusVariables === 0) {
       this.snackBar.open('Keine ungültigen Antwortstatus vorhanden', 'Schließen', { duration: 3000 });
       return;
     }
@@ -580,11 +574,8 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit {
     dialogRef.afterClosed().subscribe(deleteFromDb => {
       if (deleteFromDb) {
         this.isDeletingResponses = true;
-        const responseIds = this.invalidStatusVariables
-          .filter(variable => variable.responseId !== undefined)
-          .map(variable => variable.responseId as number);
 
-        this.backendService.deleteInvalidResponses(this.appService.selectedWorkspaceId, responseIds)
+        this.backendService.deleteAllInvalidResponses(this.appService.selectedWorkspaceId, 'responseStatus')
           .subscribe(deletedCount => {
             this.isDeletingResponses = false;
             this.snackBar.open(`${deletedCount} Antworten gelöscht`, 'Schließen', { duration: 3000 });
