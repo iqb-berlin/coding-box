@@ -1,0 +1,142 @@
+.dialog-container {
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  max-height: 80vh;
+  min-width: 600px;
+}
+
+.dialog-title {
+  margin-top: 0;
+  margin-bottom: 16px;
+  font-size: 20px;
+  font-weight: 500;
+}
+
+.dialog-content {
+  flex: 1;
+  overflow-y: auto;
+  margin: 16px 0;
+}
+
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+
+  p {
+    margin-top: 16px;
+    font-size: 16px;
+  }
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+
+  .empty-icon {
+    font-size: 48px;
+    height: 48px;
+    width: 48px;
+    margin-bottom: 16px;
+    color: #888;
+  }
+
+  p {
+    font-size: 16px;
+    color: #666;
+  }
+}
+
+.search-container {
+  margin-bottom: 16px;
+
+  .search-field {
+    width: 100%;
+  }
+}
+
+.variables-container {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+
+  .info-message {
+    display: flex;
+    align-items: center;
+    background-color: #e3f2fd;
+    padding: 8px 16px;
+    border-radius: 4px;
+    margin-bottom: 16px;
+
+    mat-icon {
+      color: #2196f3;
+      margin-right: 8px;
+    }
+
+    span {
+      font-size: 14px;
+      color: #333;
+    }
+  }
+
+  mat-paginator {
+    margin-top: 16px;
+  }
+}
+
+.variable-section {
+  background-color: #f5f5f5;
+  border-radius: 4px;
+  padding: 16px;
+
+  .variable-title {
+    margin-top: 0;
+    margin-bottom: 16px;
+    font-size: 18px;
+    font-weight: 500;
+    color: #333;
+  }
+}
+
+.table-container {
+  overflow-x: auto;
+
+  .frequency-table {
+    width: 100%;
+
+    .mat-mdc-header-cell {
+      font-weight: 500;
+      color: #333;
+    }
+
+    .mat-mdc-row:nth-child(even) {
+      background-color: rgba(0, 0, 0, 0.02);
+    }
+
+    .mat-mdc-row:hover {
+      background-color: rgba(0, 0, 0, 0.04);
+    }
+  }
+}
+
+.value-cell {
+  max-width: 400px;
+  word-break: break-word;
+
+  .empty-value {
+    font-style: italic;
+    color: #888;
+  }
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+}

@@ -24,6 +24,8 @@ import { UnitService } from './unit.service';
 // eslint-disable-next-line import/no-cycle
 import { ImportService } from './import.service';
 import { AuthenticationService } from './authentication.service';
+import { VariableAnalysisService, VariableAnalysisResultDto } from './variable-analysis.service';
+import { VariableAnalysisJobDto } from '../models/variable-analysis-job.dto';
 import { FilesDto } from '../../../../../api-dto/files/files.dto';
 import { CreateUnitNoteDto } from '../../../../../api-dto/unit-notes/create-unit-note.dto';
 import { WorkspaceFullDto } from '../../../../../api-dto/workspaces/workspace-full-dto';
@@ -107,6 +109,7 @@ export class BackendService {
   private unitService = inject(UnitService);
   private importService = inject(ImportService);
   private authenticationService = inject(AuthenticationService);
+  private variableAnalysisService = inject(VariableAnalysisService);
 
   authHeader = { Authorization: `Bearer ${localStorage.getItem('id_token')}` };
 
@@ -179,8 +182,48 @@ export class BackendService {
     statusCounts: {
       [key: string]: number;
     };
+    jobId?: string;
+    message?: string;
   }> {
     return this.codingService.codeTestPersons(workspace_id, testPersonIds);
+  }
+
+  getCodingJobStatus(workspace_id: number, jobId: string): Observable<{
+    status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
+    progress: number;
+    result?: {
+      totalResponses: number;
+      statusCounts: {
+        [key: string]: number;
+      };
+    };
+    error?: string;
+  }> {
+    return this.codingService.getCodingJobStatus(workspace_id, jobId);
+  }
+
+  cancelCodingJob(workspace_id: number, jobId: string): Observable<{
+    success: boolean;
+    message: string;
+  }> {
+    return this.codingService.cancelCodingJob(workspace_id, jobId);
+  }
+
+  getAllCodingJobs(workspace_id: number): Observable<{
+    jobId: string;
+    status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
+    progress: number;
+    result?: {
+      totalResponses: number;
+      statusCounts: {
+        [key: string]: number;
+      };
+    };
+    error?: string;
+    workspaceId?: number;
+    createdAt?: Date;
+  }[]> {
+    return this.codingService.getAllCodingJobs(workspace_id);
   }
 
   getCodingList(workspace_id: number, page: number = 1, limit: number = 100): Observable<PaginatedResponse<CodingListItem>> {
@@ -498,5 +541,43 @@ export class BackendService {
 
   deleteInvalidResponses(workspaceId: number, responseIds: number[]): Observable<number> {
     return this.validationService.deleteInvalidResponses(workspaceId, responseIds);
+  }
+
+  deleteAllInvalidResponses(workspaceId: number, validationType: 'variables' | 'variableTypes' | 'responseStatus'): Observable<number> {
+    return this.validationService.deleteAllInvalidResponses(workspaceId, validationType);
+  }
+
+  createVariableAnalysisJob(
+    workspaceId: number,
+    unitId?: number,
+    variableId?: string
+  ): Observable<VariableAnalysisJobDto> {
+    return this.variableAnalysisService.createAnalysisJob(
+      workspaceId,
+      unitId,
+      variableId
+    );
+  }
+
+  getVariableAnalysisJob(
+    workspaceId: number,
+    jobId: number
+  ): Observable<VariableAnalysisJobDto> {
+    return this.variableAnalysisService.getAnalysisJob(workspaceId, jobId);
+  }
+
+  getVariableAnalysisResults(
+    workspaceId: number,
+    jobId: number
+  ): Observable<VariableAnalysisResultDto> {
+    return this.variableAnalysisService.getAnalysisResults(workspaceId, jobId);
+  }
+
+  getAllVariableAnalysisJobs(workspaceId: number): Observable<VariableAnalysisJobDto[]> {
+    return this.variableAnalysisService.getAllJobs(workspaceId);
+  }
+
+  cancelVariableAnalysisJob(workspaceId: number, jobId: number): Observable<{ success: boolean; message: string }> {
+    return this.variableAnalysisService.cancelJob(workspaceId, jobId);
   }
 }

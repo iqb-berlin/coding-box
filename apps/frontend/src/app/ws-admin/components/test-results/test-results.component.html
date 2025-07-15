@@ -29,6 +29,10 @@
         <mat-icon>rule</mat-icon>
         Validieren
       </a>
+      <a mat-raised-button color="primary" (click)="openVariableAnalysisDialog()">
+        <mat-icon>analytics</mat-icon>
+        Item/Variablen Analyse
+      </a>
     </div>
   </div>
   <input #hiddenResponsesFileInput type="file"
@@ -159,11 +163,16 @@
 
         <div class="results-section">
           <div class="booklets-card">
-            <h2 class="section-title">Booklets</h2>
-            <p class="section-description">Wählen Sie ein Booklet aus, um dessen Aufgaben anzuzeigen</p>
+            <h2 class="section-title">Testhefte</h2>
+            <p class="section-description">Wählen Sie ein Testheft aus, um dessen Aufgaben anzuzeigen</p>
             <mat-divider></mat-divider>
 
-            <mat-accordion class="accordion">
+            <div *ngIf="isLoadingBooklets" class="loading-container">
+              <mat-spinner class="mat-spinner"></mat-spinner>
+              <p class="loading-text">Booklets werden geladen...</p>
+            </div>
+
+            <mat-accordion class="accordion" [style.display]="isLoadingBooklets ? 'none' : 'block'">
               @for (booklet of booklets; track booklet.id) {
                 <mat-expansion-panel [expanded]="booklets.length === 1" class="booklet-panel">
                   <mat-expansion-panel-header>
@@ -178,7 +187,7 @@
                     </button>
                     <button mat-stroked-button color="primary" (click)="openBookletLogsDialog(booklet)" class="action-button">
                       <mat-icon>list</mat-icon>
-                      Logs anzeigen
+                      Logs
                     </button>
                   </div>
                   @if (hasShortProcessingTime(booklet) || !isBookletComplete(booklet)) {

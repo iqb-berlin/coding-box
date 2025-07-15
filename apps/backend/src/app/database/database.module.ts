@@ -38,6 +38,11 @@ import { UnitNoteService } from './services/unit-note.service';
 import { ResourcePackageService } from './services/resource-package.service';
 import { JournalEntry } from './entities/journal-entry.entity';
 import { JournalService } from './services/journal.service';
+import { VariableAnalysisService } from './services/variable-analysis.service';
+import { JobService } from './services/job.service';
+import { Job } from './entities/job.entity';
+import { VariableAnalysisJob } from './entities/variable-analysis-job.entity';
+import { TestPersonCodingJob } from './entities/test-person-coding-job.entity';
 
 @Module({
   imports: [
@@ -67,7 +72,7 @@ import { JournalService } from './services/journal.service';
         password: configService.get('POSTGRES_PASSWORD'),
         database: configService.get('POSTGRES_DB'),
         entities: [BookletInfo, Booklet, Session, BookletLog, Unit, UnitLog, UnitLastState, ResponseEntity,
-          User, Workspace, WorkspaceAdmin, FileUpload, WorkspaceUser, ResourcePackage, Logs, Persons, ChunkEntity, BookletLog, Session, UnitLog, UnitTag, UnitNote, JournalEntry
+          User, Workspace, WorkspaceAdmin, FileUpload, WorkspaceUser, ResourcePackage, Logs, Persons, ChunkEntity, BookletLog, Session, UnitLog, UnitTag, UnitNote, JournalEntry, Job, VariableAnalysisJob, TestPersonCodingJob
         ],
         synchronize: false
       }),
@@ -93,7 +98,10 @@ import { JournalService } from './services/journal.service';
       Session,
       UnitTag,
       UnitNote,
-      JournalEntry
+      JournalEntry,
+      Job,
+      VariableAnalysisJob,
+      TestPersonCodingJob
     ])
   ],
   providers: [
@@ -112,7 +120,9 @@ import { JournalService } from './services/journal.service';
     UnitTagService,
     UnitNoteService,
     ResourcePackageService,
-    JournalService
+    JournalService,
+    VariableAnalysisService,
+    JobService
   ],
   exports: [
     User,
@@ -137,7 +147,9 @@ import { JournalService } from './services/journal.service';
     AuthService,
     UnitTagService,
     UnitNoteService,
-    JournalService
+    JournalService,
+    VariableAnalysisService,
+    JobService
   ]
 })
 export class DatabaseModule {}

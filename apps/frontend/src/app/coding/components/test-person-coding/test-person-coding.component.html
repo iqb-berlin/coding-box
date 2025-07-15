@@ -1,104 +1,59 @@
 <div class="test-person-coding-container">
-  <div class="header-section">
-    <h1 class="page-title">Test Person Coding</h1>
-    <p class="page-description">Manage and process test person coding for workspace.</p>
-  </div>
-
-  <!-- Statistics Card -->
-  <mat-card class="statistics-card" *ngIf="statistics$ | async as statistics">
-    <mat-card-header>
-      <mat-card-title>Coding Statistics</mat-card-title>
-    </mat-card-header>
-    <mat-card-content>
-      <div class="statistics-content">
-        <div class="statistic-item">
-          <span class="statistic-label">Total Responses:</span>
-          <span class="statistic-value">{{ statistics.totalResponses }}</span>
-        </div>
-        <div class="status-counts">
-          <h3>Status Counts:</h3>
-          <div class="status-grid">
-            <div class="status-item" *ngFor="let status of statistics.statusCounts | keyvalue">
-              <span class="status-label">{{ status.key || 'Unknown' }}:</span>
-              <span class="status-value">{{ status.value }}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </mat-card-content>
-  </mat-card>
-
-  <!-- Code Test Persons Card -->
   <mat-card class="code-test-persons-card">
     <mat-card-header>
-      <mat-card-title>Code Test Persons</mat-card-title>
+      <mat-card-title>Testpersonen Kodieren</mat-card-title>
     </mat-card-header>
     <mat-card-content>
       <div class="form-container">
-        <mat-form-field appearance="outline" class="full-width">
-          <mat-label>Test Person IDs (comma-separated)</mat-label>
-          <input matInput #testPersonIds placeholder="e.g. 1,2,3,4,5">
-          <mat-hint>Enter comma-separated list of test person IDs to code</mat-hint>
-        </mat-form-field>
-
-        <div class="settings-container">
-          <mat-form-field appearance="outline" class="group-size-field">
-            <mat-label>Group Size</mat-label>
-            <input matInput type="number" [(ngModel)]="groupSize" min="1" max="100">
-            <mat-hint>Number of test persons per job</mat-hint>
+        <div class="group-selection-container">
+          <mat-form-field appearance="outline" class="full-width">
+            <mat-label>Testpersonengruppen auswählen</mat-label>
+            <mat-select multiple [(ngModel)]="selectedGroups">
+              <mat-option *ngIf="groupsLoading" disabled>Gruppen werden geladen...</mat-option>
+              <mat-option *ngIf="!groupsLoading && availableGroups.length === 0" disabled>Keine Gruppen verfügbar</mat-option>
+              <mat-option *ngFor="let group of availableGroups" [value]="group">{{ group }}</mat-option>
+            </mat-select>
+            <mat-hint>Wählen Sie eine oder mehrere Gruppen zum Kodieren aus</mat-hint>
           </mat-form-field>
-
-          <div class="sequential-checkbox">
-            <mat-checkbox [(ngModel)]="runSequentially">Run jobs sequentially</mat-checkbox>
-            <div class="hint-text">When enabled, jobs will run one after another</div>
-          </div>
         </div>
-
         <div class="button-container">
-          <button mat-raised-button color="primary" [disabled]="isLoading" (click)="codeTestPersons(testPersonIds.value)">
+          <button mat-raised-button color="primary" [disabled]="isLoading || selectedGroups.length === 0" (click)="codeTestPersons(selectedGroups.join(','))">
             <mat-icon>code</mat-icon>
-            Code Test Persons
-          </button>
-          <button mat-raised-button color="accent" [disabled]="isLoading" (click)="codeFiveTestPersons()">
-            <mat-icon>filter_5</mat-icon>
-            Code 5 Test Persons
+            Ausgewählte Gruppen kodieren
           </button>
           <button mat-raised-button color="accent" [disabled]="isLoading" (click)="codeAllTestPersons()">
             <mat-icon>group</mat-icon>
-            Code All Test Persons
+            Alle Testpersonen kodieren
           </button>
         </div>
       </div>
     </mat-card-content>
   </mat-card>
 
-  <!-- All Jobs Card -->
   <mat-card class="jobs-card">
     <mat-card-header>
-      <mat-card-title>Running Jobs</mat-card-title>
+      <mat-card-title>Laufende Aufträge</mat-card-title>
     </mat-card-header>
     <mat-card-content>
       <div class="jobs-actions">
         <button mat-raised-button color="primary" (click)="loadAllJobs()" [disabled]="jobsLoading">
           <mat-icon>refresh</mat-icon>
-          Refresh Jobs
+          Aufträge aktualisieren
         </button>
       </div>
 
       <div class="loading-indicator" *ngIf="jobsLoading">
         <mat-spinner diameter="40"></mat-spinner>
-        <span>Loading jobs...</span>
+        <span>Aufträge werden geladen...</span>
       </div>
 
       <div class="table-container" *ngIf="allJobs.length > 0; else noJobs">
         <table mat-table [dataSource]="allJobs" class="mat-elevation-z8">
-          <!-- Job ID Column -->
           <ng-container matColumnDef="jobId">
-            <th mat-header-cell *matHeaderCellDef>Job ID</th>
+            <th mat-header-cell *matHeaderCellDef>Auftrags-ID</th>
             <td mat-cell *matCellDef="let job">{{ job.jobId }}</td>
           </ng-container>
 
-          <!-- Status Column -->
           <ng-container matColumnDef="status">
             <th mat-header-cell *matHeaderCellDef>Status</th>
             <td mat-cell *matCellDef="let job">
@@ -106,9 +61,8 @@
             </td>
           </ng-container>
 
-          <!-- Progress Column -->
           <ng-container matColumnDef="progress">
-            <th mat-header-cell *matHeaderCellDef>Progress</th>
+            <th mat-header-cell *matHeaderCellDef>Fortschritt</th>
             <td mat-cell *matCellDef="let job">
               <div class="progress-container">
                 <span class="progress-value">{{ job.progress }}%</span>
@@ -117,49 +71,54 @@
             </td>
           </ng-container>
 
-          <!-- Created At Column -->
           <ng-container matColumnDef="createdAt">
-            <th mat-header-cell *matHeaderCellDef>Created</th>
+            <th mat-header-cell *matHeaderCellDef>Erstellt</th>
             <td mat-cell *matCellDef="let job">{{ job.createdAt | date:'medium' }}</td>
           </ng-container>
 
-          <!-- Actions Column -->
+          <ng-container matColumnDef="groups">
+            <th mat-header-cell *matHeaderCellDef>Gruppen</th>
+            <td mat-cell *matCellDef="let job">
+              <span *ngIf="job.groupNames" class="truncated-text" [matTooltip]="job.groupNames">
+                {{ truncateText(job.groupNames, 30) }}
+              </span>
+              <span *ngIf="!job.groupNames" class="no-data">-</span>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="duration">
+            <th mat-header-cell *matHeaderCellDef>Dauer</th>
+            <td mat-cell *matCellDef="let job">
+              <span *ngIf="job.durationMs">{{ formatDuration(job.durationMs) }}</span>
+              <span *ngIf="!job.durationMs && job.status === 'completed'">Unbekannt</span>
+              <span *ngIf="!job.durationMs && job.status !== 'completed'" class="no-data">-</span>
+            </td>
+          </ng-container>
+
           <ng-container matColumnDef="actions">
-            <th mat-header-cell *matHeaderCellDef>Actions</th>
+            <th mat-header-cell *matHeaderCellDef>Aktionen</th>
             <td mat-cell *matCellDef="let job">
               <div class="job-actions">
-                <!-- Cancel button for pending, processing, or paused jobs -->
-                <button mat-icon-button color="warn" *ngIf="job.status === 'pending' || job.status === 'processing' || job.status === 'paused'"
-                        (click)="cancelJob(job.jobId)" matTooltip="Cancel Job">
+                <!-- Cancel button for pending or processing jobs -->
+                <button mat-icon-button color="warn" *ngIf="job.status === 'pending' || job.status === 'processing'"
+                        (click)="cancelJob(job.jobId)" matTooltip="Auftrag abbrechen">
                   <mat-icon>cancel</mat-icon>
-                </button>
-
-                <!-- Pause button for processing jobs -->
-                <button mat-icon-button color="accent" *ngIf="job.status === 'processing'"
-                        (click)="pauseJob(job.jobId)" matTooltip="Pause Job">
-                  <mat-icon>pause</mat-icon>
-                </button>
-
-                <!-- Resume button for paused jobs -->
-                <button mat-icon-button color="primary" *ngIf="job.status === 'paused'"
-                        (click)="resumeJob(job.jobId)" matTooltip="Resume Job">
-                  <mat-icon>play_arrow</mat-icon>
                 </button>
 
                 <!-- View result button for completed jobs -->
                 <button mat-icon-button color="primary" *ngIf="job.status === 'completed'"
-                        (click)="showJobResult(job)" matTooltip="Show Result">
+                        (click)="showJobResult(job)" matTooltip="Ergebnis anzeigen">
                   <mat-icon>visibility</mat-icon>
                 </button>
 
                 <!-- Error indicator for failed jobs -->
                 <button mat-icon-button color="accent" *ngIf="job.status === 'failed'"
-                        matTooltip="Error: {{ job.error }}">
+                        matTooltip="Fehler: {{ job.error }}">
                   <mat-icon>error</mat-icon>
                 </button>
 
                 <!-- Test person indicator if available -->
-                <span *ngIf="job.testPersonId" class="test-person-indicator" matTooltip="Test Person ID: {{ job.testPersonId }}">
+                <span *ngIf="job.testPersonId" class="test-person-indicator" matTooltip="Testpersonen-ID: {{ job.testPersonId }}">
                   <mat-icon>person</mat-icon>
                   {{ job.testPersonId }}
                 </span>
@@ -167,50 +126,25 @@
             </td>
           </ng-container>
 
-          <tr mat-header-row *matHeaderRowDef="['jobId', 'status', 'progress', 'createdAt', 'actions']"></tr>
-          <tr mat-row *matRowDef="let row; columns: ['jobId', 'status', 'progress', 'createdAt', 'actions'];"></tr>
+          <tr mat-header-row *matHeaderRowDef="['jobId', 'status', 'progress', 'createdAt', 'groups', 'duration', 'actions']"></tr>
+          <tr mat-row *matRowDef="let row; columns: ['jobId', 'status', 'progress', 'createdAt', 'groups', 'duration', 'actions'];"></tr>
         </table>
       </div>
 
       <ng-template #noJobs>
         <div class="no-data" *ngIf="!jobsLoading">
           <mat-icon>work_off</mat-icon>
-          <p>No jobs found.</p>
+          <p>Keine Aufträge gefunden.</p>
         </div>
       </ng-template>
     </mat-card-content>
   </mat-card>
 
-  <!-- Sequential Processing Status Card (shown when sequential processing is active) -->
-  <mat-card class="sequential-status-card" *ngIf="runSequentially && processingQueue.length > 0 && currentJobIndex < totalJobs">
-    <mat-card-header>
-      <mat-card-title>Sequential Processing Status</mat-card-title>
-      <mat-card-subtitle>Processing chunks sequentially</mat-card-subtitle>
-    </mat-card-header>
-    <mat-card-content>
-      <div class="job-status-content">
-        <div class="status-row">
-          <span class="status-label">Current Chunk:</span>
-          <span class="status-value">{{ currentJobIndex + 1 }} of {{ totalJobs }}</span>
-        </div>
-        <div class="status-row">
-          <span class="status-label">Progress:</span>
-          <span class="status-value">{{ Math.round((currentJobIndex / totalJobs) * 100) }}%</span>
-        </div>
-        <mat-progress-bar mode="determinate" [value]="(currentJobIndex / totalJobs) * 100"></mat-progress-bar>
-        <div class="status-row">
-          <span class="status-label">Chunk Size:</span>
-          <span class="status-value">{{ processingQueue[currentJobIndex]?.length || 0 }} test persons</span>
-        </div>
-      </div>
-    </mat-card-content>
-  </mat-card>
 
-  <!-- Job Status Card (shown only when a job is active) -->
   <mat-card class="job-status-card" *ngIf="activeJobId && jobStatus">
     <mat-card-header>
-      <mat-card-title>Current Job Status</mat-card-title>
-      <mat-card-subtitle>Job ID: {{ activeJobId }}</mat-card-subtitle>
+      <mat-card-title>Aktueller Auftragsstatus</mat-card-title>
+      <mat-card-subtitle>Auftrags-ID: {{ activeJobId }}</mat-card-subtitle>
     </mat-card-header>
     <mat-card-content>
       <div class="job-status-content">
@@ -219,18 +153,28 @@
           <span class="status-value" [ngClass]="'status-' + jobStatus.status">{{ jobStatus.status | titlecase }}</span>
         </div>
         <div class="status-row">
-          <span class="status-label">Progress:</span>
+          <span class="status-label">Fortschritt:</span>
           <span class="status-value">{{ jobStatus.progress }}%</span>
         </div>
         <mat-progress-bar mode="determinate" [value]="jobStatus.progress"></mat-progress-bar>
+        <div class="status-row" *ngIf="jobStatus.groupNames">
+          <span class="status-label">Gruppen:</span>
+          <span class="status-value truncated-text" [matTooltip]="jobStatus.groupNames">
+            {{ truncateText(jobStatus.groupNames, 50) }}
+          </span>
+        </div>
+        <div class="status-row" *ngIf="jobStatus.durationMs">
+          <span class="status-label">Dauer:</span>
+          <span class="status-value">{{ formatDuration(jobStatus.durationMs) }}</span>
+        </div>
         <div class="status-row" *ngIf="jobStatus.error">
-          <span class="status-label">Error:</span>
+          <span class="status-label">Fehler:</span>
           <span class="status-value error">{{ jobStatus.error }}</span>
         </div>
         <div class="button-container" *ngIf="jobStatus.status === 'pending' || jobStatus.status === 'processing'">
           <button mat-raised-button color="warn" (click)="cancelJob()">
             <mat-icon>cancel</mat-icon>
-            Cancel Job
+            Auftrag abbrechen
           </button>
         </div>
       </div>

@@ -1104,7 +1104,8 @@ export class WorkspaceFilesService {
     }
 
     const validPage = Math.max(1, page);
-    const validLimit = Math.min(Math.max(1, limit), 1000);
+    // Remove the 1000 item limit when limit is set to Number.MAX_SAFE_INTEGER
+    const validLimit = limit === Number.MAX_SAFE_INTEGER ? limit : Math.min(Math.max(1, limit), 1000);
     const startIndex = (validPage - 1) * validLimit;
     const endIndex = startIndex + validLimit;
     const paginatedData = invalidVariables.slice(startIndex, endIndex);
@@ -1132,7 +1133,7 @@ export class WorkspaceFilesService {
       where: { workspace_id: workspaceId, file_type: 'Unit' }
     });
 
-    const unitVariableTypes = new Map<string, Map<string, string>>();
+    const unitVariableTypes = new Map<string, Map<string, { type: string; multiple?: boolean; nullable?: boolean }>>();
 
     for (const unitFile of unitFiles) {
       try {
@@ -1140,7 +1141,7 @@ export class WorkspaceFilesService {
         const parsedXml = await parseStringPromise(xmlContent, { explicitArray: false });
         if (parsedXml.Unit && parsedXml.Unit.Metadata && parsedXml.Unit.Metadata.Id) {
           const unitName = parsedXml.Unit.Metadata.Id;
-          const variableTypes = new Map<string, string>();
+          const variableTypes = new Map<string, { type: string; multiple?: boolean; nullable?: boolean }>();
 
           if (parsedXml.Unit.BaseVariables && parsedXml.Unit.BaseVariables.Variable) {
             const baseVariables = Array.isArray(parsedXml.Unit.BaseVariables.Variable) ?
@@ -1149,7 +1150,13 @@ export class WorkspaceFilesService {
 
             for (const variable of baseVariables) {
               if (variable.$.alias && variable.$.type) {
-                variableTypes.set(variable.$.alias, variable.$.type);
+                const multiple = variable.$.multiple === 'true' || variable.$.multiple === true;
+                const nullable = variable.$.nullable === 'true' || variable.$.nullable === true;
+                variableTypes.set(variable.$.alias, {
+                  type: variable.$.type,
+                  multiple: multiple || undefined,
+                  nullable: nullable || undefined
+                });
               }
             }
           }
@@ -1272,7 +1279,51 @@ export class WorkspaceFilesService {
         continue;
       }
 
-      const expectedType = variableTypes.get(variableId);
+      const variableInfo = variableTypes.get(variableId);
+      const expectedType = variableInfo.type;
+      const isMultiple = variableInfo.multiple === true;
+      const isNullable = variableInfo.nullable !== false; // If nullable is undefined or true, treat as nullable
+
+      // Check if multiple is true and value is not an array
+      if (isMultiple) {
+        try {
+          const parsedValue = JSON.parse(value);
+          if (!Array.isArray(parsedValue)) {
+            invalidVariables.push({
+              fileName: `${unitName}`,
+              variableId: variableId,
+              value: value,
+              responseId: response.id,
+              expectedType: `${expectedType} (array)`,
+              errorReason: 'Variable has multiple=true but value is not an array'
+            });
+            continue;
+          }
+        } catch (e) {
+          invalidVariables.push({
+            fileName: `${unitName}`,
+            variableId: variableId,
+            value: value,
+            responseId: response.id,
+            expectedType: `${expectedType} (array)`,
+            errorReason: 'Variable has multiple=true but value is not a valid JSON array'
+          });
+          continue;
+        }
+      }
+
+      // Check if nullable is false and value is null or empty
+      if (!isNullable && (!value || value.trim() === '')) {
+        invalidVariables.push({
+          fileName: `${unitName}`,
+          variableId: variableId,
+          value: value,
+          responseId: response.id,
+          expectedType: expectedType,
+          errorReason: 'Variable has nullable=false but value is null or empty'
+        });
+        continue;
+      }
 
       if (!this.isValidValueForType(value, expectedType)) {
         invalidVariables.push({
@@ -1287,7 +1338,8 @@ export class WorkspaceFilesService {
     }
 
     const validPage = Math.max(1, page);
-    const validLimit = Math.min(Math.max(1, limit), 1000);
+    // Remove the 1000 item limit when limit is set to Number.MAX_SAFE_INTEGER
+    const validLimit = limit === Number.MAX_SAFE_INTEGER ? limit : Math.min(Math.max(1, limit), 1000);
     const startIndex = (validPage - 1) * validLimit;
     const endIndex = startIndex + validLimit;
     const paginatedData = invalidVariables.slice(startIndex, endIndex);
@@ -1573,7 +1625,8 @@ export class WorkspaceFilesService {
     }
 
     const validPage = Math.max(1, page);
-    const validLimit = Math.min(Math.max(1, limit), 1000);
+    // Remove the 1000 item limit when limit is set to Number.MAX_SAFE_INTEGER
+    const validLimit = limit === Number.MAX_SAFE_INTEGER ? limit : Math.min(Math.max(1, limit), 1000);
     const startIndex = (validPage - 1) * validLimit;
     const endIndex = startIndex + validLimit;
     const paginatedData = invalidVariables.slice(startIndex, endIndex);
@@ -1855,6 +1908,52 @@ export class WorkspaceFilesService {
       return totalDeleted;
     } catch (error) {
       this.logger.error(`Error deleting invalid responses: ${error.message}`, error.stack);
+      throw error;
+    }
+  }
+
+  async deleteAllInvalidResponses(workspaceId: number, validationType: 'variables' | 'variableTypes' | 'responseStatus'): Promise<number> {
+    try {
+      if (!workspaceId) {
+        this.logger.error('Workspace ID is required');
+        return 0;
+      }
+
+      this.logger.log(`Deleting all invalid responses for workspace ${workspaceId} of type ${validationType}`);
+
+      // Get all invalid responses based on the validation type
+      let invalidResponses: InvalidVariableDto[] = [];
+
+      if (validationType === 'variables') {
+        const result = await this.validateVariables(workspaceId, 1, Number.MAX_SAFE_INTEGER);
+        invalidResponses = result.data;
+      } else if (validationType === 'variableTypes') {
+        const result = await this.validateVariableTypes(workspaceId, 1, Number.MAX_SAFE_INTEGER);
+        invalidResponses = result.data;
+      } else if (validationType === 'responseStatus') {
+        const result = await this.validateResponseStatus(workspaceId, 1, Number.MAX_SAFE_INTEGER);
+        invalidResponses = result.data;
+      }
+
+      if (invalidResponses.length === 0) {
+        this.logger.warn(`No invalid responses found for workspace ${workspaceId} of type ${validationType}`);
+        return 0;
+      }
+
+      // Extract response IDs
+      const responseIds = invalidResponses
+        .filter(variable => variable.responseId !== undefined)
+        .map(variable => variable.responseId as number);
+
+      if (responseIds.length === 0) {
+        this.logger.warn(`No response IDs found for invalid responses in workspace ${workspaceId} of type ${validationType}`);
+        return 0;
+      }
+
+      // Delete the invalid responses
+      return await this.deleteInvalidResponses(workspaceId, responseIds);
+    } catch (error) {
+      this.logger.error(`Error deleting all invalid responses: ${error.message}`, error.stack);
       throw error;
     }
   }

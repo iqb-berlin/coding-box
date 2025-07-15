@@ -139,4 +139,14 @@ export class ValidationService {
       catchError(() => of(0))
     );
   }
+
+  deleteAllInvalidResponses(workspaceId: number, validationType: 'variables' | 'variableTypes' | 'responseStatus'): Observable<number> {
+    const params = new HttpParams().set('validationType', validationType);
+    return this.http.delete<number>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/files/all-invalid-responses`,
+      { headers: this.authHeader, params }
+    ).pipe(
+      catchError(() => of(0))
+    );
+  }
 }
