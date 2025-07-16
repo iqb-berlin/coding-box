@@ -42,6 +42,7 @@ type DataValidation = {
   missingUnitsPerBooklet?: { booklet: string; missingUnits: string[] }[];
   unitsWithoutPlayer?: string[];
   unused?: string[];
+  unusedBooklets?: string[];
   files: FileStatus[];
 };
 
@@ -193,7 +194,38 @@ export class WorkspaceFilesService {
         };
       }
 
-      const validationResultsPromises = testTakers.map(testTaker => this.processTestTaker(testTaker));
+      const allBooklets = await this.fileUploadRepository.find({
+        where: { workspace_id: workspaceId, file_type: 'Booklet' }
+      });
+
+      if (!allBooklets || allBooklets.length === 0) {
+        this.logger.warn(`No booklets found in workspace with ID ${workspaceId}.`);
+        return {
+          testTakersFound: true,
+          validationResults: this.createEmptyValidationData()
+        };
+      }
+
+      const bookletIdsInTestTakers = new Set<string>();
+      for (const testTaker of testTakers) {
+        const xmlDocument = cheerio.load(testTaker.data, { xml: true });
+        const bookletTags = xmlDocument('Booklet');
+
+        bookletTags.each((_, element) => {
+          const bookletId = xmlDocument(element).text().trim().toUpperCase();
+          if (bookletId) {
+            bookletIdsInTestTakers.add(bookletId);
+          }
+        });
+      }
+
+      const unusedBooklets = allBooklets
+        .filter(booklet => !bookletIdsInTestTakers.has(booklet.file_id.toUpperCase()))
+        .map(booklet => booklet.file_id);
+
+      this.logger.log(`Found ${unusedBooklets.length} booklets not included in any TestTakers file`);
+
+      const validationResultsPromises = testTakers.map(testTaker => this.processTestTaker(testTaker, unusedBooklets));
       const validationResults = (await Promise.all(validationResultsPromises)).filter(Boolean);
 
       if (validationResults.length > 0) {
@@ -203,21 +235,14 @@ export class WorkspaceFilesService {
         };
       }
 
-      const booklets = await this.fileUploadRepository.find({
-        where: { workspace_id: workspaceId, file_type: 'Booklet' }
-      });
-
-      if (!booklets || booklets.length === 0) {
-        this.logger.warn(`No booklets found in workspace with ID ${workspaceId}.`);
-        return {
-          testTakersFound: true,
-          validationResults: this.createEmptyValidationData()
-        };
+      const emptyValidation = this.createEmptyValidationData();
+      if (emptyValidation.length > 0 && unusedBooklets.length > 0) {
+        emptyValidation[0].booklets.unusedBooklets = unusedBooklets;
       }
 
       return {
         testTakersFound: true,
-        validationResults: this.createEmptyValidationData()
+        validationResults: emptyValidation
       };
     } catch (error) {
       this.logger.error(`Error during test file validation for workspace ID ${workspaceId}: ${error.message}`, error.stack);
@@ -228,7 +253,12 @@ export class WorkspaceFilesService {
   private createEmptyValidationData(): ValidationData[] {
     return [{
       testTaker: '',
-      booklets: { complete: false, missing: [], files: [] },
+      booklets: {
+        complete: false,
+        missing: [],
+        unusedBooklets: [],
+        files: []
+      },
       units: {
         complete: false,
         missing: [],
@@ -287,7 +317,7 @@ ${bookletRefs}
     }
   }
 
-  private async processTestTaker(testTaker: FileUpload): Promise<ValidationData | null> {
+  private async processTestTaker(testTaker: FileUpload, unusedBooklets: string[] = []): Promise<ValidationData | null> {
     const xmlDocument = cheerio.load(testTaker.data, { xml: true });
     const bookletTags = xmlDocument('Booklet');
     const unitTags = xmlDocument('Unit');
@@ -333,6 +363,7 @@ ${bookletRefs}
       booklets: {
         complete: bookletComplete,
         missing: missingBooklets,
+        unusedBooklets,
         files: bookletFiles
       },
       units: {
