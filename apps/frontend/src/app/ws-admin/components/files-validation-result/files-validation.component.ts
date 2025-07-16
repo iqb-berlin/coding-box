@@ -31,7 +31,6 @@ type FilesValidation = {
   player: DataValidation;
 };
 
-// Interface to track expanded state of file lists
 interface ExpandedFilesLists {
   booklets: boolean;
   units: boolean;
@@ -74,11 +73,6 @@ export class FilesValidationDialogComponent {
     }
   }
 
-  /**
-   * Toggle the expanded state of a file list
-   * @param testTaker The test taker identifier
-   * @param section The section to toggle
-   */
   toggleFilesList(testTaker: string, section: keyof ExpandedFilesLists): void {
     const sections = this.expandedFilesLists.get(testTaker);
     if (sections) {
@@ -86,12 +80,6 @@ export class FilesValidationDialogComponent {
     }
   }
 
-  /**
-   * Check if a file list is expanded
-   * @param testTaker The test taker identifier
-   * @param section The section to check
-   * @returns True if the file list is expanded, false otherwise
-   */
   isFilesListExpanded(testTaker: string, section: keyof ExpandedFilesLists): boolean {
     const sections = this.expandedFilesLists.get(testTaker);
     return sections ? sections[section] : false;

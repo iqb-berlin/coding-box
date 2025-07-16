@@ -1,4 +1,3 @@
-// Dialog styles
 mat-dialog-title {
   font-size: 1.8em;
   font-weight: 600;
@@ -13,9 +12,6 @@ mat-dialog-content {
   padding: 0;
 }
 
-
-
-// Container styles
 .scroll-container {
   max-height: 600px;
   overflow-y: auto;
@@ -47,7 +43,6 @@ mat-dialog-content {
   to { opacity: 1; }
 }
 
-// Test taker section
 h4 {
   font-size: 20px;
   font-weight: 600;
@@ -73,14 +68,12 @@ h4 {
   }
 }
 
-// Validation container
 .validation-container {
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
 
-// Validation card styles
 .validation-card {
   background-color: white;
   border-radius: 12px;
@@ -151,7 +144,6 @@ h4 {
     }
   }
 
-  // Complete status
   .status-complete {
     color: #2e7d32;
     background-color: rgba(46, 125, 50, 0.1);
@@ -162,7 +154,6 @@ h4 {
     }
   }
 
-  // Incomplete status
   .status-incomplete {
     color: #d32f2f;
     background-color: rgba(211, 47, 47, 0.1);
@@ -281,9 +272,28 @@ h4 {
     transition: all 0.3s ease-in-out;
 
     &.expanded {
-      max-height: 500px; // Large enough to accommodate most file lists
+      max-height: 400px;
       opacity: 1;
       padding: 16px;
+      overflow-y: auto;
+
+      &::-webkit-scrollbar {
+        width: 6px;
+      }
+
+      &::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 3px;
+      }
+
+      &::-webkit-scrollbar-thumb {
+        background: #c1d5e8;
+        border-radius: 3px;
+      }
+
+      &::-webkit-scrollbar-thumb:hover {
+        background: #a3c0e0;
+      }
     }
 
     ul {
