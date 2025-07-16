@@ -40,6 +40,22 @@
           </div>
         }
 
+        @if (val.booklets.unusedBooklets && val.booklets.unusedBooklets.length > 0) {
+          <div class="missing-units-warning">
+            <mat-icon class="warning-icon">warning</mat-icon>
+            <div class="warning-content">
+              <p class="warning-title">Booklets nicht in Testtaker-Datei enthalten:</p>
+              <div class="scrollable-list">
+                <ul>
+                  @for (booklet of val.booklets.unusedBooklets; track booklet) {
+                    <li>{{ booklet }}</li>
+                  }
+                </ul>
+              </div>
+            </div>
+          </div>
+        }
+
         @if (data) {
           <div class="validation-container">
             <!-- Booklets Section -->

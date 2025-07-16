@@ -98,6 +98,33 @@ h4 {
       font-size: 16px;
     }
 
+    .scrollable-list {
+      max-height: 150px;
+      overflow-y: auto;
+      border: 1px solid rgba(211, 47, 47, 0.1);
+      border-radius: 4px;
+      padding: 8px;
+      background-color: rgba(255, 255, 255, 0.5);
+
+      &::-webkit-scrollbar {
+        width: 6px;
+      }
+
+      &::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 3px;
+      }
+
+      &::-webkit-scrollbar-thumb {
+        background: #c1d5e8;
+        border-radius: 3px;
+      }
+
+      &::-webkit-scrollbar-thumb:hover {
+        background: #a3c0e0;
+      }
+    }
+
     ul {
       margin: 0;
       padding-left: 16px;
