@@ -39,6 +39,7 @@ type FileStatus = {
 type DataValidation = {
   complete: boolean;
   missing: string[];
+  missingUnitsPerBooklet?: { booklet: string; missingUnits: string[] }[];
   unused?: string[];
   files: FileStatus[];
 };
@@ -55,6 +56,7 @@ type ValidationData = {
 export type ValidationResult = {
   allUnitsExist: boolean;
   missingUnits: string[];
+  missingUnitsPerBooklet: { booklet: string; missingUnits: string[] }[];
   unitFiles: FileStatus[];
   allUnitsUsedInBooklets: boolean;
   unusedUnits: string[];
@@ -230,6 +232,7 @@ export class WorkspaceFilesService {
       units: {
         complete: false,
         missing: [],
+        missingUnitsPerBooklet: [],
         unused: [],
         files: []
       },
@@ -259,6 +262,7 @@ export class WorkspaceFilesService {
     const {
       allUnitsExist,
       missingUnits,
+      missingUnitsPerBooklet,
       unitFiles,
       unusedUnits,
       missingCodingSchemeRefs,
@@ -288,6 +292,7 @@ export class WorkspaceFilesService {
       units: {
         complete: bookletComplete ? (allUnitsExist) : false,
         missing: missingUnits,
+        missingUnitsPerBooklet: missingUnitsPerBooklet,
         unused: unusedUnits,
         files: unitFiles
       },
@@ -675,6 +680,8 @@ export class WorkspaceFilesService {
         file_id: In(bookletNames.map(b => b.toUpperCase()))
       });
 
+      const bookletToUnitsMap = new Map<string, string[]>();
+
       const unitIdsPromises = existingBooklets.map(async booklet => {
         try {
           const fileData = booklet.data;
@@ -687,6 +694,8 @@ export class WorkspaceFilesService {
               unitIds.push(unitId.toUpperCase());
             }
           });
+
+          bookletToUnitsMap.set(booklet.file_id, unitIds);
 
           return unitIds;
         } catch (error) {
@@ -793,6 +802,20 @@ export class WorkspaceFilesService {
       const missingUnits = allUnitIds.filter(unitId => !foundUnitIds.includes(unitId));
       const uniqueUnits = Array.from(new Set(missingUnits));
 
+      // Track missing units per booklet
+      const missingUnitsPerBooklet: { booklet: string; missingUnits: string[] }[] = [];
+
+      // Check each booklet for missing units
+      for (const [booklet, units] of bookletToUnitsMap.entries()) {
+        const missingUnitsForBooklet = units.filter(unitId => !foundUnitIds.includes(unitId));
+        if (missingUnitsForBooklet.length > 0) {
+          missingUnitsPerBooklet.push({
+            booklet,
+            missingUnits: missingUnitsForBooklet
+          });
+        }
+      }
+
       const allUnitsExist = missingUnits.length === 0;
 
       // Create lists of all files with their match status
@@ -819,6 +842,7 @@ export class WorkspaceFilesService {
       return {
         allUnitsExist,
         missingUnits: uniqueUnits,
+        missingUnitsPerBooklet,
         unitFiles,
         allUnitsUsedInBooklets,
         unusedUnits,

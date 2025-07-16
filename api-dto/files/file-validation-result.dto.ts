@@ -8,6 +8,7 @@ type FileStatus = {
 type DataValidation = {
   complete: boolean;
   missing: string[];
+  missingUnitsPerBooklet?: { booklet: string; missingUnits: string[] }[];
   files: FileStatus[];
 };
 
