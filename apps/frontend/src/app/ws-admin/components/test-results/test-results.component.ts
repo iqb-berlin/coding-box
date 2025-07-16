@@ -53,6 +53,7 @@ import { UnitNoteDto } from '../../../../../../../api-dto/unit-notes/unit-note.d
 import { ValidationDialogComponent } from '../validation-dialog/validation-dialog.component';
 import { VariableValidationDto } from '../../../../../../../api-dto/files/variable-validation.dto';
 import { VariableAnalysisDialogComponent } from '../variable-analysis-dialog/variable-analysis-dialog.component';
+import { ValidationTaskStateService } from '../../../services/validation-task-state.service';
 
 interface BookletLog {
   id: number;
@@ -179,6 +180,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   private router = inject(Router);
   private snackBar = inject(MatSnackBar);
   private translateService = inject(TranslateService);
+  private validationTaskStateService = inject(ValidationTaskStateService);
   private searchSubject = new Subject<string>();
   private searchSubscription: Subscription | null = null;
   private readonly SEARCH_DEBOUNCE_TIME = 800;
@@ -211,6 +213,11 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   variableValidationResult: VariableValidationDto | null = null;
   readonly SHORT_PROCESSING_TIME_THRESHOLD_MS: number = 60000;
 
+  // Interval for checking validation status
+  private validationStatusInterval: number | null = null;
+  // Flag to track if component is initialized
+  private isInitialized: boolean = false;
+
   @ViewChild(MatPaginator) paginator!: MatPaginator;
   @ViewChild(MatSort) sort!: MatSort;
 
@@ -223,6 +230,10 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     });
 
     this.createTestResultsList(0, this.pageSize);
+
+    // Start interval to check validation status
+    this.startValidationStatusCheck();
+    this.isInitialized = true;
   }
 
   ngOnDestroy(): void {
@@ -230,6 +241,112 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       this.searchSubscription.unsubscribe();
       this.searchSubscription = null;
     }
+
+    // Stop interval when component is destroyed
+    this.stopValidationStatusCheck();
+  }
+
+  /**
+   * Start interval to check validation status
+   */
+  private startValidationStatusCheck(): void {
+    // Check immediately
+    this.checkValidationStatus();
+
+    // Then check every 5 seconds
+    this.validationStatusInterval = window.setInterval(() => {
+      this.checkValidationStatus();
+    }, 5000);
+  }
+
+  /**
+   * Stop interval for checking validation status
+   */
+  private stopValidationStatusCheck(): void {
+    if (this.validationStatusInterval !== null) {
+      window.clearInterval(this.validationStatusInterval);
+      this.validationStatusInterval = null;
+    }
+  }
+
+  /**
+   * Check validation status by querying active tasks
+   */
+  private checkValidationStatus(): void {
+    if (!this.isInitialized || !this.appService.selectedWorkspaceId) {
+      return;
+    }
+
+    const taskIds = this.validationTaskStateService.getAllTaskIds(this.appService.selectedWorkspaceId);
+
+    // If there are active tasks, check their status
+    if (Object.keys(taskIds).length > 0) {
+      for (const [type, taskId] of Object.entries(taskIds)) {
+        this.backendService.getValidationTask(this.appService.selectedWorkspaceId, taskId)
+          .subscribe({
+            next: task => {
+              // If task is completed or failed, remove it from the service
+              if (task.status === 'completed' || task.status === 'failed') {
+                this.validationTaskStateService.removeTaskId(
+                  this.appService.selectedWorkspaceId,
+                  type as 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'groupResponses'
+                );
+              }
+            },
+            error: () => {
+              // If there's an error, remove the task from the service
+              this.validationTaskStateService.removeTaskId(
+                this.appService.selectedWorkspaceId,
+                type as 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'groupResponses'
+              );
+            }
+          });
+      }
+    }
+  }
+
+  /**
+   * Check if any validation task is running
+   * @returns True if any validation task is running
+   */
+  isAnyValidationRunning(): boolean {
+    if (!this.appService.selectedWorkspaceId) {
+      return false;
+    }
+
+    const taskIds = this.validationTaskStateService.getAllTaskIds(this.appService.selectedWorkspaceId);
+    return Object.keys(taskIds).length > 0;
+  }
+
+  /**
+   * Get the overall validation status
+   * @returns The status: 'running', 'failed', 'success', or 'not-run'
+   */
+  getOverallValidationStatus(): 'running' | 'failed' | 'success' | 'not-run' {
+    if (this.isAnyValidationRunning()) {
+      return 'running';
+    }
+
+    if (this.appService.selectedWorkspaceId) {
+      const results = this.validationTaskStateService.getAllValidationResults(this.appService.selectedWorkspaceId);
+
+      if (Object.keys(results).length > 0) {
+        const hasFailedValidation = Object.values(results).some(result => result.status === 'failed');
+        if (hasFailedValidation) {
+          return 'failed';
+        }
+
+        const validationTypes = ['variables', 'variableTypes', 'responseStatus', 'testTakers', 'groupResponses'];
+        const hasAllValidations = validationTypes.every(type => results[type]);
+        if (hasAllValidations) {
+          return 'success';
+        }
+
+        return 'success';
+      }
+    }
+
+    return 'not-run';
   }
 
   onRowClick(row: P): void {
@@ -1160,9 +1277,13 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     });
 
     dialogRef.afterClosed().subscribe(result => {
-      if (result && result.variableValidationResult) {
-        this.variableValidationResult = result.variableValidationResult;
-        this.isVariableValidationRunning = false;
+      if (result) {
+        if (result.variableValidationResult) {
+          this.variableValidationResult = result.variableValidationResult;
+          this.isVariableValidationRunning = false;
+        }
+        this.checkValidationStatus();
+        this.getOverallValidationStatus();
       }
     });
   }

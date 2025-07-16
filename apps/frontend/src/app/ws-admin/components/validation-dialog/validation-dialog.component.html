@@ -1,4 +1,118 @@
 <h1 mat-dialog-title>Antworten validieren</h1>
+<div class="info-banner" *ngIf="isAnyValidationRunning()">
+  <mat-icon>info</mat-icon>
+  <span>Validierungen laufen im Hintergrund weiter, auch wenn Sie diesen Dialog schließen.</span>
+</div>
+
+<!-- Validation Summary -->
+<div class="validation-summary">
+  <div class="validation-summary-title">Validierungsstatus</div>
+
+  <!-- TestTakers Validation -->
+  <div class="validation-summary-item"
+       [ngClass]="{
+         'validation-running': getValidationStatus('testTakers') === 'running',
+         'validation-error': getValidationStatus('testTakers') === 'failed',
+         'validation-success': getValidationStatus('testTakers') === 'success',
+         'validation-not-run': getValidationStatus('testTakers') === 'not-run'
+       }">
+    <mat-icon *ngIf="getValidationStatus('testTakers') === 'running'">hourglass_empty</mat-icon>
+    <mat-icon *ngIf="getValidationStatus('testTakers') === 'failed'">error</mat-icon>
+    <mat-icon *ngIf="getValidationStatus('testTakers') === 'success'">check_circle</mat-icon>
+    <mat-icon *ngIf="getValidationStatus('testTakers') === 'not-run'">radio_button_unchecked</mat-icon>
+    <span class="validation-summary-item-label">{{ getValidationLabel('testTakers') }}</span>
+    <span *ngIf="getValidationStatus('testTakers') === 'running'">Läuft...</span>
+    <span *ngIf="getValidationStatus('testTakers') === 'failed' && testTakersValidationResult">
+      {{ testTakersValidationResult.missingPersons.length }} fehlende Testpersonen
+    </span>
+    <span *ngIf="getValidationStatus('testTakers') === 'success'">OK</span>
+    <span *ngIf="getValidationStatus('testTakers') === 'not-run'">Nicht ausgeführt</span>
+  </div>
+
+  <!-- Variables Validation -->
+  <div class="validation-summary-item"
+       [ngClass]="{
+         'validation-running': getValidationStatus('variables') === 'running',
+         'validation-error': getValidationStatus('variables') === 'failed',
+         'validation-success': getValidationStatus('variables') === 'success',
+         'validation-not-run': getValidationStatus('variables') === 'not-run'
+       }">
+    <mat-icon *ngIf="getValidationStatus('variables') === 'running'">hourglass_empty</mat-icon>
+    <mat-icon *ngIf="getValidationStatus('variables') === 'failed'">error</mat-icon>
+    <mat-icon *ngIf="getValidationStatus('variables') === 'success'">check_circle</mat-icon>
+    <mat-icon *ngIf="getValidationStatus('variables') === 'not-run'">radio_button_unchecked</mat-icon>
+    <span class="validation-summary-item-label">{{ getValidationLabel('variables') }}</span>
+    <span *ngIf="getValidationStatus('variables') === 'running'">Läuft...</span>
+    <span *ngIf="getValidationStatus('variables') === 'failed'">
+      {{ totalInvalidVariables }} ungültige Variablen
+    </span>
+    <span *ngIf="getValidationStatus('variables') === 'success'">OK</span>
+    <span *ngIf="getValidationStatus('variables') === 'not-run'">Nicht ausgeführt</span>
+  </div>
+
+  <!-- Variable Types Validation -->
+  <div class="validation-summary-item"
+       [ngClass]="{
+         'validation-running': getValidationStatus('variableTypes') === 'running',
+         'validation-error': getValidationStatus('variableTypes') === 'failed',
+         'validation-success': getValidationStatus('variableTypes') === 'success',
+         'validation-not-run': getValidationStatus('variableTypes') === 'not-run'
+       }">
+    <mat-icon *ngIf="getValidationStatus('variableTypes') === 'running'">hourglass_empty</mat-icon>
+    <mat-icon *ngIf="getValidationStatus('variableTypes') === 'failed'">error</mat-icon>
+    <mat-icon *ngIf="getValidationStatus('variableTypes') === 'success'">check_circle</mat-icon>
+    <mat-icon *ngIf="getValidationStatus('variableTypes') === 'not-run'">radio_button_unchecked</mat-icon>
+    <span class="validation-summary-item-label">{{ getValidationLabel('variableTypes') }}</span>
+    <span *ngIf="getValidationStatus('variableTypes') === 'running'">Läuft...</span>
+    <span *ngIf="getValidationStatus('variableTypes') === 'failed'">
+      {{ totalInvalidTypeVariables }} ungültige Variablentypen
+    </span>
+    <span *ngIf="getValidationStatus('variableTypes') === 'success'">OK</span>
+    <span *ngIf="getValidationStatus('variableTypes') === 'not-run'">Nicht ausgeführt</span>
+  </div>
+
+  <!-- Response Status Validation -->
+  <div class="validation-summary-item"
+       [ngClass]="{
+         'validation-running': getValidationStatus('responseStatus') === 'running',
+         'validation-error': getValidationStatus('responseStatus') === 'failed',
+         'validation-success': getValidationStatus('responseStatus') === 'success',
+         'validation-not-run': getValidationStatus('responseStatus') === 'not-run'
+       }">
+    <mat-icon *ngIf="getValidationStatus('responseStatus') === 'running'">hourglass_empty</mat-icon>
+    <mat-icon *ngIf="getValidationStatus('responseStatus') === 'failed'">error</mat-icon>
+    <mat-icon *ngIf="getValidationStatus('responseStatus') === 'success'">check_circle</mat-icon>
+    <mat-icon *ngIf="getValidationStatus('responseStatus') === 'not-run'">radio_button_unchecked</mat-icon>
+    <span class="validation-summary-item-label">{{ getValidationLabel('responseStatus') }}</span>
+    <span *ngIf="getValidationStatus('responseStatus') === 'running'">Läuft...</span>
+    <span *ngIf="getValidationStatus('responseStatus') === 'failed'">
+      {{ totalInvalidStatusVariables }} ungültige Antwortstatus
+    </span>
+    <span *ngIf="getValidationStatus('responseStatus') === 'success'">OK</span>
+    <span *ngIf="getValidationStatus('responseStatus') === 'not-run'">Nicht ausgeführt</span>
+  </div>
+
+  <!-- Group Responses Validation -->
+  <div class="validation-summary-item"
+       [ngClass]="{
+         'validation-running': getValidationStatus('groupResponses') === 'running',
+         'validation-error': getValidationStatus('groupResponses') === 'failed',
+         'validation-success': getValidationStatus('groupResponses') === 'success',
+         'validation-not-run': getValidationStatus('groupResponses') === 'not-run'
+       }">
+    <mat-icon *ngIf="getValidationStatus('groupResponses') === 'running'">hourglass_empty</mat-icon>
+    <mat-icon *ngIf="getValidationStatus('groupResponses') === 'failed'">error</mat-icon>
+    <mat-icon *ngIf="getValidationStatus('groupResponses') === 'success'">check_circle</mat-icon>
+    <mat-icon *ngIf="getValidationStatus('groupResponses') === 'not-run'">radio_button_unchecked</mat-icon>
+    <span class="validation-summary-item-label">{{ getValidationLabel('groupResponses') }}</span>
+    <span *ngIf="getValidationStatus('groupResponses') === 'running'">Läuft...</span>
+    <span *ngIf="getValidationStatus('groupResponses') === 'failed' && groupResponsesResult">
+      Nicht alle Gruppen haben Antworten
+    </span>
+    <span *ngIf="getValidationStatus('groupResponses') === 'success'">OK</span>
+    <span *ngIf="getValidationStatus('groupResponses') === 'not-run'">Nicht ausgeführt</span>
+  </div>
+</div>
 <mat-dialog-content>
   <mat-stepper orientation="vertical" [linear]="true" #stepper>
     <mat-step label="Testperson definiert" >

@@ -409,6 +409,21 @@
     box-shadow: 0 3px 8px rgba(0, 0, 0, 0.12);
     transition: all 0.2s ease;
 
+    .rotating-icon {
+      animation: rotate 2s linear infinite;
+    }
+
+    .validation-status-text {
+      margin-left: 8px;
+      font-size: 12px;
+      opacity: 0.8;
+    }
+
+    @keyframes rotate {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
     &:hover {
       transform: translateY(-2px);
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
