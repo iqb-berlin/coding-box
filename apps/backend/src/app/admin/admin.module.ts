@@ -17,6 +17,7 @@ import { ResourcePackageController } from './resource-packages/resource-package.
 import { JournalController } from './workspace/journal.controller';
 import { VariableAnalysisController } from './variable-analysis/variable-analysis.controller';
 import { JobsController } from './jobs/jobs.controller';
+import { ValidationTaskController } from './workspace/validation-task.controller';
 
 @Module({
   imports: [
@@ -39,7 +40,8 @@ import { JobsController } from './jobs/jobs.controller';
     ResourcePackageController,
     JournalController,
     VariableAnalysisController,
-    JobsController
+    JobsController,
+    ValidationTaskController
   ],
   providers: []
 })

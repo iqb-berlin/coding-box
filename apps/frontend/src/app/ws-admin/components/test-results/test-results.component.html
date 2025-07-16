@@ -25,9 +25,11 @@
         <mat-icon>search</mat-icon>
         Suchen
       </a>
-      <a mat-raised-button color="accent" (click)="openValidationDialog()">
-        <mat-icon>rule</mat-icon>
+      <a mat-raised-button color="primary" (click)="openValidationDialog()">
+        <mat-icon *ngIf="isAnyValidationRunning()" class="rotating-icon">sync</mat-icon>
+        <mat-icon *ngIf="!isAnyValidationRunning()">rule</mat-icon>
         Validieren
+        <span *ngIf="isAnyValidationRunning()" class="validation-status-text">Läuft...</span>
       </a>
       <a mat-raised-button color="primary" (click)="openVariableAnalysisDialog()">
         <mat-icon>analytics</mat-icon>
@@ -169,7 +171,7 @@
 
             <div *ngIf="isLoadingBooklets" class="loading-container">
               <mat-spinner class="mat-spinner"></mat-spinner>
-              <p class="loading-text">Booklets werden geladen...</p>
+              <p class="loading-text">Testhefte werden geladen...</p>
             </div>
 
             <mat-accordion class="accordion" [style.display]="isLoadingBooklets ? 'none' : 'block'">

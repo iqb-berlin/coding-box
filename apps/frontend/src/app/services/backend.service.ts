@@ -26,6 +26,7 @@ import { ImportService } from './import.service';
 import { AuthenticationService } from './authentication.service';
 import { VariableAnalysisService, VariableAnalysisResultDto } from './variable-analysis.service';
 import { VariableAnalysisJobDto } from '../models/variable-analysis-job.dto';
+import { ValidationTaskDto } from '../models/validation-task.dto';
 import { FilesDto } from '../../../../../api-dto/files/files.dto';
 import { CreateUnitNoteDto } from '../../../../../api-dto/unit-notes/create-unit-note.dto';
 import { WorkspaceFullDto } from '../../../../../api-dto/workspaces/workspace-full-dto';
@@ -579,5 +580,45 @@ export class BackendService {
 
   cancelVariableAnalysisJob(workspaceId: number, jobId: number): Observable<{ success: boolean; message: string }> {
     return this.variableAnalysisService.cancelJob(workspaceId, jobId);
+  }
+
+  createValidationTask(
+    workspaceId: number,
+    type: 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'groupResponses' | 'deleteResponses' | 'deleteAllResponses',
+    page?: number,
+    limit?: number,
+    additionalData?: Record<string, unknown>
+  ): Observable<ValidationTaskDto> {
+    return this.validationService.createValidationTask(workspaceId, type, page, limit, additionalData);
+  }
+
+  createDeleteResponsesTask(
+    workspaceId: number,
+    responseIds: number[]
+  ): Observable<ValidationTaskDto> {
+    return this.validationService.createDeleteResponsesTask(workspaceId, responseIds);
+  }
+
+  createDeleteAllResponsesTask(
+    workspaceId: number,
+    validationType: 'variables' | 'variableTypes' | 'responseStatus'
+  ): Observable<ValidationTaskDto> {
+    return this.validationService.createDeleteAllResponsesTask(workspaceId, validationType);
+  }
+
+  getValidationTask(workspaceId: number, taskId: number): Observable<ValidationTaskDto> {
+    return this.validationService.getValidationTask(workspaceId, taskId);
+  }
+
+  getValidationResults(workspaceId: number, taskId: number): Observable<unknown> {
+    return this.validationService.getValidationResults(workspaceId, taskId);
+  }
+
+  pollValidationTask(
+    workspaceId: number,
+    taskId: number,
+    pollInterval: number = 2000
+  ): Observable<ValidationTaskDto> {
+    return this.validationService.pollValidationTask(workspaceId, taskId, pollInterval);
   }
 }
