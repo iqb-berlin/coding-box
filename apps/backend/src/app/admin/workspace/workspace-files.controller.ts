@@ -532,4 +532,21 @@ export class WorkspaceFilesController {
       @Query('validationType') validationType: 'variables' | 'variableTypes' | 'responseStatus'): Promise<number> {
     return this.workspaceFilesService.deleteAllInvalidResponses(workspace_id, validationType);
   }
+
+  @Post(':workspace_id/files/create-dummy-testtaker')
+  @ApiTags('test files validation')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiOperation({ summary: 'Create dummy testtaker file', description: 'Creates a dummy testtaker file that includes all booklets in the workspace' })
+  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
+  @ApiOkResponse({
+    description: 'Dummy testtaker file created successfully',
+    type: Boolean
+  })
+  @ApiBadRequestResponse({
+    description: 'Failed to create dummy testtaker file'
+  })
+  async createDummyTestTakerFile(
+    @Param('workspace_id') workspace_id: number): Promise<boolean> {
+    return this.workspaceFilesService.createDummyTestTakerFile(workspace_id);
+  }
 }

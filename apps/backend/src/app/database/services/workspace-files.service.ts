@@ -121,7 +121,6 @@ export class WorkspaceFilesService {
     const validPage = Math.max(1, page);
     const validLimit = Math.min(Math.max(1, limit), MAX_LIMIT);
 
-    // QueryBuilder für flexible Filterung
     let qb = this.fileUploadRepository.createQueryBuilder('file')
       .where('file.workspace_id = :workspaceId', { workspaceId });
 
@@ -169,7 +168,6 @@ export class WorkspaceFilesService {
     const [files, total] = await qb.getManyAndCount();
     this.logger.log(`Found ${files.length} files (page ${validPage}, limit ${validLimit}, total ${total}).`);
 
-    // Get all file types for this workspace
     const fileTypes = await this.findAllFileTypes(workspaceId);
 
     return [files, total, fileTypes];
@@ -243,6 +241,50 @@ export class WorkspaceFilesService {
       definitions: { complete: false, missing: [], files: [] },
       player: { complete: false, missing: [], files: [] }
     }];
+  }
+
+  async createDummyTestTakerFile(workspaceId: number): Promise<boolean> {
+    try {
+      const booklets = await this.fileUploadRepository.find({
+        where: { workspace_id: workspaceId, file_type: 'Booklet' }
+      });
+
+      if (!booklets || booklets.length === 0) {
+        this.logger.warn(`No booklets found in workspace with ID ${workspaceId}.`);
+        return false;
+      }
+
+      const bookletRefs = booklets.map(booklet => `    <Booklet>${booklet.file_id}</Booklet>`).join('\n');
+
+      const dummyTestTakerXml = `<?xml version="1.0" encoding="utf-8"?>
+<TestTakers>
+  <Metadata>
+    <Description>Auto-generated TestTakers file including all booklets</Description>
+  </Metadata>
+  <Group id="auto-generated" label="Auto-generated">
+    <Login name="auto-generated" mode="run-hot-return">
+${bookletRefs}
+    </Login>
+  </Group>
+</TestTakers>`;
+
+      const newTestTakerFile = this.fileUploadRepository.create({
+        workspace_id: workspaceId,
+        filename: 'auto-generated-testtakers.xml',
+        file_id: 'AUTO-GENERATED-TESTTAKERS',
+        file_type: 'TestTakers',
+        file_size: dummyTestTakerXml.length,
+        data: dummyTestTakerXml
+      });
+
+      await this.fileUploadRepository.save(newTestTakerFile);
+
+      this.logger.log(`Created dummy TestTakers file for workspace ${workspaceId} with ${booklets.length} booklets.`);
+      return true;
+    } catch (error) {
+      this.logger.error(`Error creating dummy TestTakers file for workspace ${workspaceId}: ${error.message}`, error.stack);
+      return false;
+    }
   }
 
   private async processTestTaker(testTaker: FileUpload): Promise<ValidationData | null> {
