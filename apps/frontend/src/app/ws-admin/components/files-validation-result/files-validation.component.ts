@@ -19,6 +19,7 @@ type FileStatus = {
 type DataValidation = {
   complete: boolean;
   missing: string[];
+  unused?: string[];
   files: FileStatus[];
 };
 
