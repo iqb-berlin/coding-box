@@ -165,4 +165,14 @@ export class FileService {
       catchError(() => of(null))
     );
   }
+
+  createDummyTestTakerFile(workspaceId: number): Observable<boolean> {
+    return this.http.post<boolean>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/files/create-dummy-testtaker`,
+      {},
+      { headers: this.authHeader }
+    ).pipe(
+      catchError(() => of(false))
+    );
+  }
 }

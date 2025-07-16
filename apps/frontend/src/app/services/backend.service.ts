@@ -621,4 +621,8 @@ export class BackendService {
   ): Observable<ValidationTaskDto> {
     return this.validationService.pollValidationTask(workspaceId, taskId, pollInterval);
   }
+
+  createDummyTestTakerFile(workspaceId: number): Observable<boolean> {
+    return this.fileService.createDummyTestTakerFile(workspaceId);
+  }
 }
