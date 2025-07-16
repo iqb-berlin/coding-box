@@ -40,6 +40,7 @@ type DataValidation = {
   complete: boolean;
   missing: string[];
   missingUnitsPerBooklet?: { booklet: string; missingUnits: string[] }[];
+  unitsWithoutPlayer?: string[];
   unused?: string[];
   files: FileStatus[];
 };
@@ -57,6 +58,7 @@ export type ValidationResult = {
   allUnitsExist: boolean;
   missingUnits: string[];
   missingUnitsPerBooklet: { booklet: string; missingUnits: string[] }[];
+  unitsWithoutPlayer: string[];
   unitFiles: FileStatus[];
   allUnitsUsedInBooklets: boolean;
   unusedUnits: string[];
@@ -233,6 +235,7 @@ export class WorkspaceFilesService {
         complete: false,
         missing: [],
         missingUnitsPerBooklet: [],
+        unitsWithoutPlayer: [],
         unused: [],
         files: []
       },
@@ -273,7 +276,8 @@ export class WorkspaceFilesService {
       allCodingDefinitionsExist,
       allPlayerRefsExist,
       missingPlayerRefs,
-      playerFiles
+      playerFiles,
+      unitsWithoutPlayer
     } = await this.checkMissingUnits(Array.from(uniqueBooklets));
 
     // If booklets are incomplete, all other categories should also be marked as incomplete
@@ -293,6 +297,7 @@ export class WorkspaceFilesService {
         complete: bookletComplete ? (allUnitsExist) : false,
         missing: missingUnits,
         missingUnitsPerBooklet: missingUnitsPerBooklet,
+        unitsWithoutPlayer: unitsWithoutPlayer,
         unused: unusedUnits,
         files: unitFiles
       },
@@ -743,7 +748,9 @@ export class WorkspaceFilesService {
           const refs = {
             codingSchemeRefs: [] as string[],
             definitionRefs: [] as string[],
-            playerRefs: [] as string[]
+            playerRefs: [] as string[],
+            unitId: unit.file_id,
+            hasPlayer: false
           };
 
           $('Unit').each((_, element) => {
@@ -762,24 +769,33 @@ export class WorkspaceFilesService {
 
             if (playerRef) {
               refs.playerRefs.push(playerRef.toUpperCase());
+              refs.hasPlayer = true;
             }
           });
 
           return refs;
         } catch (error) {
           this.logger.error(`Fehler beim Verarbeiten von Unit ${unit.file_id}:`, error);
-          return { codingSchemeRefs: [], definitionRefs: [], playerRefs: [] };
+          return {
+            codingSchemeRefs: [],
+            definitionRefs: [],
+            playerRefs: [],
+            unitId: unit.file_id,
+            hasPlayer: false
+          };
         }
       });
 
       const allRefs = await Promise.all(refsPromises);
 
-      // Combine all references using Sets to remove duplicates
+      const unitsWithoutPlayer = allRefs
+        .filter(ref => !ref.hasPlayer)
+        .map(ref => ref.unitId);
+
       const allCodingSchemeRefs = Array.from(new Set(allRefs.flatMap(ref => ref.codingSchemeRefs)));
       const allDefinitionRefs = Array.from(new Set(allRefs.flatMap(ref => ref.definitionRefs)));
       const allPlayerRefs = Array.from(new Set(allRefs.flatMap(ref => ref.playerRefs)));
 
-      // Get all resources in the current workspace
       const existingResources = await this.fileUploadRepository.findBy({
         file_type: 'Resource',
         workspace_id: existingBooklets.length > 0 ? existingBooklets[0].workspace_id : null
@@ -843,6 +859,7 @@ export class WorkspaceFilesService {
         allUnitsExist,
         missingUnits: uniqueUnits,
         missingUnitsPerBooklet,
+        unitsWithoutPlayer,
         unitFiles,
         allUnitsUsedInBooklets,
         unusedUnits,

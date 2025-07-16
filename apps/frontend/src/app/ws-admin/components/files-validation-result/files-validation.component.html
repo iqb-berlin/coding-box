@@ -26,6 +26,20 @@
           </div>
         }
 
+        @if (val.units.unitsWithoutPlayer && val.units.unitsWithoutPlayer.length > 0) {
+          <div class="missing-units-warning">
+            <mat-icon class="warning-icon">warning</mat-icon>
+            <div class="warning-content">
+              <p class="warning-title">Units ohne definierten Player:</p>
+              <ul>
+                @for (unit of val.units.unitsWithoutPlayer; track unit) {
+                  <li>{{ unit }}</li>
+                }
+              </ul>
+            </div>
+          </div>
+        }
+
         @if (data) {
           <div class="validation-container">
             <!-- Booklets Section -->
