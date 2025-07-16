@@ -215,7 +215,51 @@ h4 {
     }
   }
 
-  // Files list container and header styles
+  .unused-items {
+    background-color: #fff8e1;
+    border-radius: 8px;
+    padding: 16px;
+    margin-top: 12px;
+    border: 1px solid rgba(245, 124, 0, 0.1);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+    transition: all 0.2s ease;
+
+    p {
+      font-weight: 600;
+      color: #555;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+
+      .unused-icon {
+        color: #f57c00;
+        margin-right: 8px;
+        font-size: 20px;
+        height: 20px;
+        width: 20px;
+      }
+    }
+
+    ul {
+      margin: 0;
+      padding-left: 28px;
+
+      li {
+        font-size: 14px;
+        color: #666;
+        margin-bottom: 8px;
+        line-height: 1.5;
+        padding: 4px 0;
+        border-bottom: 1px dashed rgba(245, 124, 0, 0.1);
+
+        &:last-child {
+          margin-bottom: 0;
+          border-bottom: none;
+        }
+      }
+    }
+  }
+
   .files-list-container {
     margin-top: 12px;
 

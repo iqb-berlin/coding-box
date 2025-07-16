@@ -39,6 +39,7 @@ type FileStatus = {
 type DataValidation = {
   complete: boolean;
   missing: string[];
+  unused?: string[];
   files: FileStatus[];
 };
 
@@ -55,6 +56,8 @@ export type ValidationResult = {
   allUnitsExist: boolean;
   missingUnits: string[];
   unitFiles: FileStatus[];
+  allUnitsUsedInBooklets: boolean;
+  unusedUnits: string[];
   allCodingSchemesExist: boolean;
   allCodingDefinitionsExist: boolean;
   missingCodingSchemeRefs: string[];
@@ -224,7 +227,12 @@ export class WorkspaceFilesService {
     return [{
       testTaker: '',
       booklets: { complete: false, missing: [], files: [] },
-      units: { complete: false, missing: [], files: [] },
+      units: {
+        complete: false,
+        missing: [],
+        unused: [],
+        files: []
+      },
       schemes: { complete: false, missing: [], files: [] },
       definitions: { complete: false, missing: [], files: [] },
       player: { complete: false, missing: [], files: [] }
@@ -252,6 +260,7 @@ export class WorkspaceFilesService {
       allUnitsExist,
       missingUnits,
       unitFiles,
+      unusedUnits,
       missingCodingSchemeRefs,
       missingDefinitionRefs,
       schemeFiles,
@@ -277,8 +286,9 @@ export class WorkspaceFilesService {
         files: bookletFiles
       },
       units: {
-        complete: bookletComplete ? allUnitsExist : false,
+        complete: bookletComplete ? (allUnitsExist) : false,
         missing: missingUnits,
+        unused: unusedUnits,
         files: unitFiles
       },
       schemes: {
@@ -687,6 +697,18 @@ export class WorkspaceFilesService {
 
       const allUnitIdsArrays = await Promise.all(unitIdsPromises);
       const allUnitIds = Array.from(new Set(allUnitIdsArrays.flat()));
+
+      const allUnitsInWorkspace = await this.fileUploadRepository.findBy({
+        file_type: 'Unit',
+        workspace_id: existingBooklets.length > 0 ? existingBooklets[0].workspace_id : null
+      });
+
+      const unusedUnits = allUnitsInWorkspace
+        .filter(unit => !allUnitIds.includes(unit.file_id.toUpperCase()))
+        .map(unit => unit.file_id);
+
+      const allUnitsUsedInBooklets = unusedUnits.length === 0;
+
       const chunkSize = 50;
       const unitBatches = [];
 
@@ -696,7 +718,10 @@ export class WorkspaceFilesService {
       }
 
       const unitBatchPromises = unitBatches.map(batch => this.fileUploadRepository.find({
-        where: { file_id: In(batch) }
+        where: {
+          file_id: In(batch),
+          workspace_id: existingBooklets.length > 0 ? existingBooklets[0].workspace_id : null
+        }
       }));
 
       const unitBatchResults = await Promise.all(unitBatchPromises);
@@ -745,9 +770,10 @@ export class WorkspaceFilesService {
       const allDefinitionRefs = Array.from(new Set(allRefs.flatMap(ref => ref.definitionRefs)));
       const allPlayerRefs = Array.from(new Set(allRefs.flatMap(ref => ref.playerRefs)));
 
-      // Get all resources in a single query
+      // Get all resources in the current workspace
       const existingResources = await this.fileUploadRepository.findBy({
-        file_type: 'Resource'
+        file_type: 'Resource',
+        workspace_id: existingBooklets.length > 0 ? existingBooklets[0].workspace_id : null
       });
 
       const allResourceIds = existingResources.map(resource => resource.file_id);
@@ -794,6 +820,8 @@ export class WorkspaceFilesService {
         allUnitsExist,
         missingUnits: uniqueUnits,
         unitFiles,
+        allUnitsUsedInBooklets,
+        unusedUnits,
         allCodingSchemesExist,
         allCodingDefinitionsExist,
         missingCodingSchemeRefs,
@@ -1770,13 +1798,11 @@ export class WorkspaceFilesService {
         }
 
         if (allUnits.length === 0) {
-          // No units found for persons in this group
           groupsWithResponses.push({ group, hasResponse: false });
           allGroupsHaveResponses = false;
           continue;
         }
 
-        // Get all unit IDs
         const unitIds = allUnits.map(unit => unit.id);
 
         if (unitIds.length === 0) {
@@ -1841,7 +1867,6 @@ export class WorkspaceFilesService {
 
       this.logger.log(`Deleting invalid responses for workspace ${workspaceId}: ${responseIds.join(', ')}`);
 
-      // Verify that the responses belong to units that belong to persons in the workspace
       const persons = await this.personsRepository.find({
         where: { workspace_id: workspaceId }
       });
@@ -1851,10 +1876,8 @@ export class WorkspaceFilesService {
         return 0;
       }
 
-      // Get all person IDs
       const personIds = persons.map(person => person.id);
 
-      // Check if personIds array is empty
       if (personIds.length === 0) {
         this.logger.warn(`No person IDs found for workspace ${workspaceId}`);
         return 0;
@@ -1894,7 +1917,6 @@ export class WorkspaceFilesService {
         for (let j = 0; j < unitIds.length; j += batchSize) {
           const unitIdsBatch = unitIds.slice(j, j + batchSize);
 
-          // Delete responses that match the given IDs and belong to the units in the workspace
           const deleteResult = await this.responseRepository.delete({
             id: In(responseIdsBatch),
             unitid: In(unitIdsBatch)
@@ -1921,7 +1943,6 @@ export class WorkspaceFilesService {
 
       this.logger.log(`Deleting all invalid responses for workspace ${workspaceId} of type ${validationType}`);
 
-      // Get all invalid responses based on the validation type
       let invalidResponses: InvalidVariableDto[] = [];
 
       if (validationType === 'variables') {
@@ -1940,7 +1961,6 @@ export class WorkspaceFilesService {
         return 0;
       }
 
-      // Extract response IDs
       const responseIds = invalidResponses
         .filter(variable => variable.responseId !== undefined)
         .map(variable => variable.responseId as number);
@@ -1950,7 +1970,6 @@ export class WorkspaceFilesService {
         return 0;
       }
 
-      // Delete the invalid responses
       return await this.deleteInvalidResponses(workspaceId, responseIds);
     } catch (error) {
       this.logger.error(`Error deleting all invalid responses: ${error.message}`, error.stack);

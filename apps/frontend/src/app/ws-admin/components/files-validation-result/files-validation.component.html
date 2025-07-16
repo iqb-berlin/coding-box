@@ -68,18 +68,34 @@
                   </span>
                 }
               </p>
-              @if (!val.units.complete) {
-                <div class="missing-items">
+              @if (val.units.unused && val.units.unused.length > 0) {
+                <div class="unused-items">
                   <p>
-                    <mat-icon class="missing-icon">warning</mat-icon>
-                    Fehlende Dateien:
+                    <mat-icon class="unused-icon">warning</mat-icon>
+                    Nicht verwendete Units:
                   </p>
                   <ul>
-                    @for (item of val.units.missing; track item) {
+                    @for (item of val.units.unused; track item) {
                       <li>{{ item }}</li>
                     }
                   </ul>
                 </div>
+              }
+              @if (!val.units.complete) {
+                @if (val.units.missing && val.units.missing.length > 0) {
+                  <div class="missing-items">
+                    <p>
+                      <mat-icon class="missing-icon">warning</mat-icon>
+                      Fehlende Dateien:
+                    </p>
+                    <ul>
+                      @for (item of val.units.missing; track item) {
+                        <li>{{ item }}</li>
+                      }
+                    </ul>
+                  </div>
+                }
+
               }
               <div class="files-list-container">
                 <p class="files-header" (click)="toggleFilesList(val.testTaker, 'units')">
