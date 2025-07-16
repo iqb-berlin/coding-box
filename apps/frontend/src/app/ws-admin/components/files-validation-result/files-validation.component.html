@@ -7,6 +7,20 @@
           {{val.testTaker}}
         </h4>
 
+        @if (val.booklets.missing && val.booklets.missing.length > 0) {
+          <div class="missing-units-warning">
+            <mat-icon class="warning-icon">warning</mat-icon>
+            <div class="warning-content">
+              <p class="warning-title">Fehlende Booklets:</p>
+              <ul>
+                @for (booklet of val.booklets.missing; track booklet) {
+                  <li>{{ booklet }}</li>
+                }
+              </ul>
+            </div>
+          </div>
+        }
+
         @if (val.units.missingUnitsPerBooklet && val.units.missingUnitsPerBooklet.length > 0) {
           <div class="missing-units-warning">
             <mat-icon class="warning-icon">warning</mat-icon>
