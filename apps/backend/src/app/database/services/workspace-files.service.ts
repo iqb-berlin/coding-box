@@ -280,8 +280,67 @@ export class WorkspaceFilesService {
       });
 
       if (!booklets || booklets.length === 0) {
-        this.logger.warn(`No booklets found in workspace with ID ${workspaceId}.`);
-        return false;
+        // Check if there are units available
+        const units = await this.fileUploadRepository.find({
+          where: { workspace_id: workspaceId, file_type: 'Unit' }
+        });
+
+        if (!units || units.length === 0) {
+          this.logger.warn(`No booklets or units found in workspace with ID ${workspaceId}.`);
+          return false;
+        }
+
+        // Create a fake booklet that includes all available units
+        const unitRefs = units.map(unit => `  <Unit id="${unit.file_id}"/>`).join('\n');
+        const fakeBookletId = 'AUTO-GENERATED-BOOKLET';
+        const fakeBookletXml = `<?xml version="1.0" encoding="utf-8"?>
+<Booklet>
+  <Metadata>
+    <Id>${fakeBookletId}</Id>
+    <Label>Auto-generated Booklet</Label>
+    <Description>Auto-generated booklet including all units</Description>
+  </Metadata>
+  <Units>
+${unitRefs}
+  </Units>
+</Booklet>`;
+
+        const fakeBooklet = this.fileUploadRepository.create({
+          workspace_id: workspaceId,
+          filename: 'auto-generated-booklet.xml',
+          file_id: fakeBookletId,
+          file_type: 'Booklet',
+          file_size: fakeBookletXml.length,
+          data: fakeBookletXml
+        });
+
+        await this.fileUploadRepository.save(fakeBooklet);
+        this.logger.log(`Created fake booklet for workspace ${workspaceId} with ${units.length} units.`);
+
+        const dummyTestTakerXml = `<?xml version="1.0" encoding="utf-8"?>
+<TestTakers>
+  <Metadata>
+    <Description>Auto-generated TestTakers file with auto-generated booklet</Description>
+  </Metadata>
+  <Group id="auto-generated" label="Auto-generated">
+    <Login name="auto-generated" mode="run-hot-return">
+      <Booklet>${fakeBookletId}</Booklet>
+    </Login>
+  </Group>
+</TestTakers>`;
+
+        const newTestTakerFile = this.fileUploadRepository.create({
+          workspace_id: workspaceId,
+          filename: 'auto-generated-testtakers.xml',
+          file_id: 'AUTO-GENERATED-TESTTAKERS',
+          file_type: 'TestTakers',
+          file_size: dummyTestTakerXml.length,
+          data: dummyTestTakerXml
+        });
+
+        await this.fileUploadRepository.save(newTestTakerFile);
+        this.logger.log(`Created dummy TestTakers file for workspace ${workspaceId} with auto-generated booklet.`);
+        return true;
       }
 
       const bookletRefs = booklets.map(booklet => `    <Booklet>${booklet.file_id}</Booklet>`).join('\n');
