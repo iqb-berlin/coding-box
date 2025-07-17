@@ -395,7 +395,7 @@ export class WorkspaceTestResultsService {
   }
 
   private responsesByStatusCache: Map<string, { data: [ResponseEntity[], number]; timestamp: number }> = new Map();
-  private readonly RESPONSES_CACHE_TTL_MS = 1 * 60 * 1000; // 1 minute cache TTL
+  private readonly RESPONSES_CACHE_TTL_MS = 60 * 1000; // 1 minute cache TTL
 
   async getResponsesByStatus(workspace_id: number, status: string, options?: { page: number; limit: number }): Promise<[ResponseEntity[], number]> {
     this.logger.log(`Getting responses with status ${status} for workspace ${workspace_id}`);

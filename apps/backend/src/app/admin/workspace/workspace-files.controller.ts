@@ -349,9 +349,7 @@ export class WorkspaceFilesController {
     }
 
     try {
-      const codingSchemeFile = await this.workspaceFilesService.getCodingSchemeByRef(workspace_id, coding_scheme_ref);
-
-      return codingSchemeFile;
+      return await this.workspaceFilesService.getCodingSchemeByRef(workspace_id, coding_scheme_ref);
     } catch (error) {
       if (error.status === 404) {
         throw error;

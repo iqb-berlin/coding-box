@@ -1318,7 +1318,7 @@ export class WorkspaceCodingService {
   }
 
   private statisticsCache: Map<number, { data: CodingStatistics; timestamp: number }> = new Map();
-  private readonly CACHE_TTL_MS = 1 * 60 * 1000; // 1 minute cache TTL
+  private readonly CACHE_TTL_MS = 60 * 1000; // 1 minute cache TTL
 
   async getCodingStatistics(workspace_id: number): Promise<CodingStatistics> {
     this.logger.log(`Getting coding statistics for workspace ${workspace_id}`);

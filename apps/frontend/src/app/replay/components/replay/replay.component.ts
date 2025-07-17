@@ -24,7 +24,7 @@ import { SpinnerComponent } from '../spinner/spinner.component';
 import { FilesDto } from '../../../../../../../api-dto/files/files.dto';
 import { ErrorMessages } from '../../models/error-messages.model';
 import { validateToken, isTestperson } from '../../utils/token-utils';
-import { scrollToElementByAlias } from '../../utils/dom-utils';
+import { scrollToElementByAlias, highlightAspectSectionWithAnchor } from '../../utils/dom-utils';
 
 @Component({
   selector: 'coding-box-replay',
@@ -131,6 +131,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
                 setTimeout(() => {
                   if (this.unitPlayerComponent?.hostingIframe?.nativeElement) {
                     if (this.anchor) {
+                      highlightAspectSectionWithAnchor(this.unitPlayerComponent.hostingIframe.nativeElement, this.anchor);
                       scrollToElementByAlias(this.unitPlayerComponent.hostingIframe.nativeElement, this.anchor);
                     } else {
                       // When no anchor is provided, scroll to the top of the content
