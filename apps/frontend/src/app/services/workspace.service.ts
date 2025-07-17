@@ -105,4 +105,25 @@ export class WorkspaceService {
       userIds,
       { headers: this.authHeader });
   }
+
+  /**
+   * Resolves duplicate test takers by keeping only the selected occurrences
+   * @param workspaceId The ID of the workspace
+   * @param resolutionMap A map of login names to selected test taker files
+   * @returns An Observable that emits true if the operation was successful, false otherwise
+   */
+  resolveDuplicateTestTakers(workspaceId: number, resolutionMap: Record<string, string>): Observable<boolean> {
+    if (!workspaceId || !Object.keys(resolutionMap).length) {
+      return of(false);
+    }
+
+    return this.http.post(
+      `${this.serverUrl}admin/workspace/${workspaceId}/testtakers/resolve-duplicates`,
+      { resolutionMap },
+      { headers: this.authHeader }
+    ).pipe(
+      map(() => true),
+      catchError(() => of(false))
+    );
+  }
 }

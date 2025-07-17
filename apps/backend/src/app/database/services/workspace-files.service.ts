@@ -211,6 +211,7 @@ export class WorkspaceFilesService {
       const shouldFilterMode = (loginMode: string) => !modesNotToFilter.includes(loginMode);
 
       let filteredTestTakers: FilteredTestTaker[] = [];
+      const loginOccurrences = new Map<string, { testTaker: string, mode: string }[]>();
 
       for (const testTaker of testTakers) {
         const xmlDocument = cheerio.load(testTaker.data, { xml: true });
@@ -225,16 +226,32 @@ export class WorkspaceFilesService {
             const loginName = xmlDocument(loginElement).attr('name');
             const loginMode = xmlDocument(loginElement).attr('mode');
 
-            if (loginMode && shouldFilterMode(loginMode)) {
+            if (loginMode && shouldFilterMode(loginMode) && loginName) {
               filteredTestTakers.push({
                 testTaker: testTaker.file_id,
                 mode: loginMode,
-                login: loginName || ''
+                login: loginName
               });
+
+              const occurrences = loginOccurrences.get(loginName) || [];
+              occurrences.push({
+                testTaker: testTaker.file_id,
+                mode: loginMode
+              });
+              loginOccurrences.set(loginName, occurrences);
             }
           }
         }
       }
+
+      const duplicateTestTakers = Array.from(loginOccurrences.entries())
+        .filter(([, occurrences]) => occurrences.length > 1)
+        .map(([login, occurrences]) => ({
+          login,
+          occurrences
+        }));
+
+      this.logger.log(`Found ${duplicateTestTakers.length} duplicate test takers across files`);
 
       if (filteredTestTakers.length > 0) {
         const loginNames = filteredTestTakers.map(item => item.login);
@@ -282,6 +299,7 @@ export class WorkspaceFilesService {
         return {
           testTakersFound: true,
           filteredTestTakers: filteredTestTakers.length > 0 ? filteredTestTakers : undefined,
+          duplicateTestTakers: duplicateTestTakers.length > 0 ? duplicateTestTakers : undefined,
           validationResults
         };
       }
@@ -294,6 +312,7 @@ export class WorkspaceFilesService {
       return {
         testTakersFound: true,
         filteredTestTakers: filteredTestTakers.length > 0 ? filteredTestTakers : undefined,
+        duplicateTestTakers: duplicateTestTakers.length > 0 ? duplicateTestTakers : undefined,
         validationResults: emptyValidation
       };
     } catch (error) {

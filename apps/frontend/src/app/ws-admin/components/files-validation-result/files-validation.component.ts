@@ -15,6 +15,7 @@ import { SelectionModel } from '@angular/cdk/collections';
 import { ScrollingModule } from '@angular/cdk/scrolling';
 import { TranslateModule } from '@ngx-translate/core';
 import { WorkspaceService } from '../../../services/workspace.service';
+import { DuplicateTestTaker } from '../../../../../../../api-dto/files/file-validation-result.dto';
 
 type FileStatus = {
   filename: string;
@@ -77,18 +78,22 @@ export class FilesValidationDialogComponent {
   data = inject<{
     validationResults: FilesValidation[];
     filteredTestTakers?: FilteredTestTaker[];
+    duplicateTestTakers?: DuplicateTestTaker[];
     workspaceId?: number;
   }>(MAT_DIALOG_DATA);
 
   expandedFilesLists: Map<string, ExpandedFilesLists> = new Map();
 
   filteredTestTakers: FilteredTestTaker[] = [];
+  duplicateTestTakers: DuplicateTestTaker[] = [];
 
   selection = new SelectionModel<FilteredTestTaker>(true, []);
+  duplicateSelection = new Map<string, string>(); // Maps login to selected testTaker file
 
   modeGroups: { mode: string, count: number }[] = [];
 
   allSelected = false;
+  isResolvingDuplicates = false;
 
   private workspaceService = inject(WorkspaceService);
 
@@ -120,7 +125,61 @@ export class FilesValidationDialogComponent {
 
         this.modeGroups = Array.from(modeMap.entries()).map(([mode, count]) => ({ mode, count }));
       }
+
+      if (this.data.duplicateTestTakers) {
+        this.duplicateTestTakers = this.data.duplicateTestTakers;
+
+        // Initialize selection with the first occurrence for each duplicate
+        this.duplicateTestTakers.forEach(duplicate => {
+          if (duplicate.occurrences.length > 0) {
+            this.duplicateSelection.set(duplicate.login, duplicate.occurrences[0].testTaker);
+          }
+        });
+      }
     }
+  }
+
+  // Select which occurrence of a duplicate test taker to keep
+  selectDuplicateOccurrence(login: string, testTaker: string): void {
+    this.duplicateSelection.set(login, testTaker);
+  }
+
+  // Get the selected occurrence for a duplicate test taker
+  getSelectedOccurrence(login: string): string | undefined {
+    return this.duplicateSelection.get(login);
+  }
+
+  // Resolve duplicate test takers by keeping only the selected occurrences
+  resolveDuplicateTestTakers(): void {
+    if (!this.data.workspaceId || this.duplicateTestTakers.length === 0 || this.isResolvingDuplicates) {
+      return;
+    }
+
+    this.isResolvingDuplicates = true;
+
+    // Create a map of login -> selected testTaker file
+    const resolutionMap = new Map<string, string>();
+    this.duplicateTestTakers.forEach(duplicate => {
+      const selectedTestTaker = this.duplicateSelection.get(duplicate.login);
+      if (selectedTestTaker) {
+        resolutionMap.set(duplicate.login, selectedTestTaker);
+      }
+    });
+
+    // Call service to resolve duplicates
+    this.workspaceService.resolveDuplicateTestTakers(this.data.workspaceId, Object.fromEntries(resolutionMap))
+      .subscribe({
+        next: success => {
+          if (success) {
+            // Remove resolved duplicates from the list
+            this.duplicateTestTakers = [];
+          }
+          this.isResolvingDuplicates = false;
+        },
+        error: () => {
+          this.isResolvingDuplicates = false;
+        }
+      });
   }
 
   toggleSelection(testTaker: FilteredTestTaker): void {

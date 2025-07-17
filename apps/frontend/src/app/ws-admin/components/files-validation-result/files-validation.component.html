@@ -1,6 +1,49 @@
 <mat-dialog-content>
   @if (data) {
     <div class="scroll-container">
+      @if (duplicateTestTakers && duplicateTestTakers.length > 0) {
+        <div class="missing-units-warning duplicate-testtakers-warning">
+          <mat-icon class="warning-icon">error</mat-icon>
+          <div class="warning-content">
+            <p class="warning-title">Doppelte TestTaker gefunden:</p>
+            <p>Die folgenden Login-Namen wurden in mehreren TestTaker-Dateien gefunden. Bitte wählen Sie aus, welche Vorkommen Sie behalten möchten.</p>
+
+            @for (duplicate of duplicateTestTakers; track duplicate.login) {
+              <div class="duplicate-item">
+                <p class="duplicate-login">Login: <strong>{{ duplicate.login }}</strong></p>
+                <div class="duplicate-occurrences">
+                  @for (occurrence of duplicate.occurrences; track occurrence.testTaker) {
+                    <div class="occurrence-item">
+                      <mat-checkbox
+                        [checked]="getSelectedOccurrence(duplicate.login) === occurrence.testTaker"
+                        (change)="selectDuplicateOccurrence(duplicate.login, occurrence.testTaker)">
+                        <strong>{{ occurrence.testTaker }}</strong> ({{ occurrence.mode }})
+                      </mat-checkbox>
+                    </div>
+                  }
+                </div>
+              </div>
+            }
+
+            <div class="resolve-button-container">
+              <button
+                mat-raised-button
+                color="primary"
+                class="resolve-button"
+                (click)="resolveDuplicateTestTakers()"
+                [disabled]="isResolvingDuplicates">
+                <mat-icon>{{ isResolvingDuplicates ? 'hourglass_empty' : 'check_circle' }}</mat-icon>
+                @if (isResolvingDuplicates) {
+                  Wird bearbeitet...
+                } @else {
+                  Doppelte TestTaker auflösen
+                }
+              </button>
+            </div>
+          </div>
+        </div>
+      }
+
       @if (filteredTestTakers && filteredTestTakers.length > 0) {
         <div class="missing-units-warning filtered-testtakers-warning">
           <mat-icon class="warning-icon">warning</mat-icon>
