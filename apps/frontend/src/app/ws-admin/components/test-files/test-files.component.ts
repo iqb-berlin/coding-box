@@ -206,7 +206,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   private onUploadSuccess(): void {
     setTimeout(() => {
       this.loadTestFiles();
-    }, 1000); // Optional timeout to simulate processing delay
+    }, 1000);
     this.isLoading = false;
     this.isValidating = false;
   }
@@ -317,7 +317,6 @@ export class TestFilesComponent implements OnInit, OnDestroy {
                 }
               });
           } else {
-            // User doesn't want to create a dummy testtaker file
             this.snackBar.open(
               'Keine Testtaker-Dateien vorhanden.',
               'OK',
@@ -325,7 +324,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
             );
 
             this.dialog.open(FilesValidationDialogComponent, {
-              width: '600px',
+              width: '900px',
               data: {
                 validationResults: res.validationResults,
                 filteredTestTakers: res.filteredTestTakers,
@@ -336,7 +335,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
         });
       } else {
         this.dialog.open(FilesValidationDialogComponent, {
-          width: '600px',
+          width: '900px',
           data: {
             validationResults: res.validationResults,
             filteredTestTakers: res.filteredTestTakers,
