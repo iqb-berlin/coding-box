@@ -40,6 +40,9 @@ class Persons {
   @Column({ type: 'varchar' })
     source!: string;
 
+  @Column({ type: 'boolean', default: true })
+    consider!: boolean;
+
   // Add explicit relationship to Booklet entity
   @OneToMany(() => Booklet, booklet => booklet.person, {
     // Cascade operations to booklets when person is modified

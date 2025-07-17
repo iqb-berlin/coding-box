@@ -33,22 +33,13 @@ export class WorkspaceCodingService {
     private jobRepository: Repository<TestPersonCodingJob>
   ) {}
 
-  // Cache for coding schemes with TTL
   private codingSchemeCache: Map<string, { scheme: Autocoder.CodingScheme; timestamp: number }> = new Map();
   private readonly SCHEME_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes cache TTL
 
-  // Cache for test files with TTL
   private testFileCache: Map<number, { files: Map<string, FileUpload>; timestamp: number }> = new Map();
   private readonly TEST_FILE_CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes cache TTL
 
-  /**
-   * Get test files from cache or fetch them from the database
-   * @param workspace_id Workspace ID
-   * @param unitAliasesArray Array of unit aliases to fetch
-   * @returns Map of file ID to file
-   */
   private async getTestFilesWithCache(workspace_id: number, unitAliasesArray: string[]): Promise<Map<string, FileUpload>> {
-    // Check if we have a valid cache entry
     const cacheEntry = this.testFileCache.get(workspace_id);
     const now = Date.now();
 
@@ -100,11 +91,6 @@ export class WorkspaceCodingService {
     return fileMap;
   }
 
-  /**
-   * Get coding schemes from cache or fetch them from the database
-   * @param codingSchemeRefs Array of coding scheme references to fetch
-   * @returns Map of scheme ID to parsed coding scheme
-   */
   private async getCodingSchemesWithCache(codingSchemeRefs: string[]): Promise<Map<string, Autocoder.CodingScheme>> {
     const now = Date.now();
     const result = new Map<string, Autocoder.CodingScheme>();
@@ -155,9 +141,6 @@ export class WorkspaceCodingService {
     return result;
   }
 
-  /**
-   * Clean up expired items from caches
-   */
   private cleanupCaches(): void {
     const now = Date.now();
 
@@ -176,7 +159,6 @@ export class WorkspaceCodingService {
     }
   }
 
-  // Job status tracking
   private jobStatus: Map<string, { status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'paused'; progress: number; result?: CodingStatistics; error?: string; workspaceId?: number; createdAt?: Date }> = new Map();
 
   async getAllJobs(workspaceId?: number): Promise<{
@@ -264,19 +246,16 @@ export class WorkspaceCodingService {
 
   private async processTestPersonsInBackground(jobId: number, workspace_id: number, personIds: string[]): Promise<void> {
     try {
-      // Get the job from the database
       const job = await this.jobRepository.findOne({ where: { id: jobId } });
       if (!job) {
         this.logger.error(`Job with ID ${jobId} not found`);
         return;
       }
 
-      // Update job status to processing
       job.status = 'processing';
       job.progress = 0;
       await this.jobRepository.save(job);
 
-      // Process test persons in smaller batches to avoid memory issues
       const BATCH_SIZE = 500;
       const totalPersons = personIds.length;
       let processedPersons = 0;
@@ -1004,7 +983,8 @@ export class WorkspaceCodingService {
         const persons = await this.personsRepository.find({
           where: {
             workspace_id,
-            group: In(groupsOrIds)
+            group: In(groupsOrIds),
+            consider: true
           },
           select: ['id']
         });
@@ -1064,7 +1044,7 @@ export class WorkspaceCodingService {
 
     try {
       const persons = await this.personsRepository.find({
-        where: { workspace_id: workspace_id }
+        where: { workspace_id: workspace_id, consider: true }
       });
 
       if (!persons.length) {
@@ -1337,14 +1317,12 @@ export class WorkspaceCodingService {
     }
   }
 
-  // Cache for statistics with TTL
   private statisticsCache: Map<number, { data: CodingStatistics; timestamp: number }> = new Map();
   private readonly CACHE_TTL_MS = 1 * 60 * 1000; // 1 minute cache TTL
 
   async getCodingStatistics(workspace_id: number): Promise<CodingStatistics> {
     this.logger.log(`Getting coding statistics for workspace ${workspace_id}`);
 
-    // Check if we have a valid cached result
     const cachedResult = this.statisticsCache.get(workspace_id);
     if (cachedResult && (Date.now() - cachedResult.timestamp) < this.CACHE_TTL_MS) {
       this.logger.log(`Returning cached statistics for workspace ${workspace_id}`);
@@ -1364,6 +1342,7 @@ export class WorkspaceCodingService {
         .innerJoin('booklet.person', 'person')
         .where('response.status = :status', { status: 'VALUE_CHANGED' })
         .andWhere('person.workspace_id = :workspace_id', { workspace_id })
+        .andWhere('person.consider = :consider', { consider: true })
         .select('COALESCE(response.codedstatus, null)', 'statusValue')
         .addSelect('COUNT(response.id)', 'count')
         .groupBy('COALESCE(response.codedstatus, null)')

@@ -11,7 +11,7 @@ import FileUpload from '../entities/file_upload.entity';
 import { FilesDto } from '../../../../../../api-dto/files/files.dto';
 import { FileIo } from '../../admin/workspace/file-io.interface';
 import { FileDownloadDto } from '../../../../../../api-dto/files/file-download.dto';
-import { FileValidationResultDto } from '../../../../../../api-dto/files/file-validation-result.dto';
+import { FileValidationResultDto, FilteredTestTaker } from '../../../../../../api-dto/files/file-validation-result.dto';
 import { ResponseDto } from '../../../../../../api-dto/responses/response-dto';
 import { InvalidVariableDto } from '../../../../../../api-dto/files/variable-validation.dto';
 import { Unit } from '../entities/unit.entity';
@@ -206,6 +206,55 @@ export class WorkspaceFilesService {
         };
       }
 
+      const modesNotToFilter = ['run-hot-return', 'run-hot-restart', 'run-trial'];
+
+      const shouldFilterMode = (loginMode: string) => !modesNotToFilter.includes(loginMode);
+
+      let filteredTestTakers: FilteredTestTaker[] = [];
+
+      for (const testTaker of testTakers) {
+        const xmlDocument = cheerio.load(testTaker.data, { xml: true });
+        const groupElements = xmlDocument('Group');
+
+        for (let i = 0; i < groupElements.length; i++) {
+          const groupElement = groupElements[i];
+          const loginElements = xmlDocument(groupElement).find('Login');
+
+          for (let j = 0; j < loginElements.length; j++) {
+            const loginElement = loginElements[j];
+            const loginName = xmlDocument(loginElement).attr('name');
+            const loginMode = xmlDocument(loginElement).attr('mode');
+
+            if (loginMode && shouldFilterMode(loginMode)) {
+              filteredTestTakers.push({
+                testTaker: testTaker.file_id,
+                mode: loginMode,
+                login: loginName || ''
+              });
+            }
+          }
+        }
+      }
+
+      if (filteredTestTakers.length > 0) {
+        const loginNames = filteredTestTakers.map(item => item.login);
+        const personsNotConsidered = await this.personsRepository.find({
+          where: {
+            workspace_id: workspaceId,
+            login: In(loginNames),
+            consider: false
+          },
+          select: ['login']
+        });
+
+        const loginsNotConsidered = personsNotConsidered.map(person => person.login);
+
+        if (loginsNotConsidered.length > 0) {
+          this.logger.log(`Filtering out ${loginsNotConsidered.length} test takers where consider is false`);
+          filteredTestTakers = filteredTestTakers.filter(item => !loginsNotConsidered.includes(item.login));
+        }
+      }
+
       const bookletIdsInTestTakers = new Set<string>();
       for (const testTaker of testTakers) {
         const xmlDocument = cheerio.load(testTaker.data, { xml: true });
@@ -224,6 +273,7 @@ export class WorkspaceFilesService {
         .map(booklet => booklet.file_id);
 
       this.logger.log(`Found ${unusedBooklets.length} booklets not included in any TestTakers file`);
+      this.logger.log(`Found ${filteredTestTakers.length} TestTakers with modes other than 'run-hot-return', 'run-hot-restart', 'run-trial'`);
 
       const validationResultsPromises = testTakers.map(testTaker => this.processTestTaker(testTaker, unusedBooklets));
       const validationResults = (await Promise.all(validationResultsPromises)).filter(Boolean);
@@ -231,6 +281,7 @@ export class WorkspaceFilesService {
       if (validationResults.length > 0) {
         return {
           testTakersFound: true,
+          filteredTestTakers: filteredTestTakers.length > 0 ? filteredTestTakers : undefined,
           validationResults
         };
       }
@@ -242,6 +293,7 @@ export class WorkspaceFilesService {
 
       return {
         testTakersFound: true,
+        filteredTestTakers: filteredTestTakers.length > 0 ? filteredTestTakers : undefined,
         validationResults: emptyValidation
       };
     } catch (error) {
@@ -280,7 +332,6 @@ export class WorkspaceFilesService {
       });
 
       if (!booklets || booklets.length === 0) {
-        // Check if there are units available
         const units = await this.fileUploadRepository.find({
           where: { workspace_id: workspaceId, file_type: 'Unit' }
         });
@@ -1182,7 +1233,7 @@ ${bookletRefs}
     const invalidVariables: InvalidVariableDto[] = [];
 
     const persons = await this.personsRepository.find({
-      where: { workspace_id: workspaceId }
+      where: { workspace_id: workspaceId, consider: true }
     });
 
     if (persons.length === 0) {
@@ -1370,7 +1421,7 @@ ${bookletRefs}
     const invalidVariables: InvalidVariableDto[] = [];
 
     const persons = await this.personsRepository.find({
-      where: { workspace_id: workspaceId }
+      where: { workspace_id: workspaceId, consider: true }
     });
 
     if (persons.length === 0) {
@@ -1666,7 +1717,7 @@ ${bookletRefs}
       }
 
       const persons = await this.personsRepository.find({
-        where: { workspace_id: workspaceId }
+        where: { workspace_id: workspaceId, consider: true }
       });
 
       const missingPersons: MissingPersonDto[] = [];
@@ -1711,7 +1762,7 @@ ${bookletRefs}
     const validStatusValues = ['VALUE_CHANGED', 'NOT_REACHED', 'DISPLAYED', 'UNSET', 'PARTLY_DISPLAYED'];
 
     const persons = await this.personsRepository.find({
-      where: { workspace_id: workspaceId }
+      where: { workspace_id: workspaceId, consider: true }
     });
 
     if (persons.length === 0) {
@@ -1935,7 +1986,7 @@ ${bookletRefs}
       for (const group of groups) {
         // Find persons with this group ID
         const persons = await this.personsRepository.find({
-          where: { workspace_id: workspaceId, group }
+          where: { workspace_id: workspaceId, group, consider: true }
         });
 
         if (persons.length === 0) {
@@ -2041,7 +2092,7 @@ ${bookletRefs}
       this.logger.log(`Deleting invalid responses for workspace ${workspaceId}: ${responseIds.join(', ')}`);
 
       const persons = await this.personsRepository.find({
-        where: { workspace_id: workspaceId }
+        where: { workspace_id: workspaceId, consider: true }
       });
 
       if (persons.length === 0) {
