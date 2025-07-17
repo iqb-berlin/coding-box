@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import Persons from '../entities/persons.entity';
 import { Booklet } from '../entities/booklet.entity';
 import { Unit } from '../entities/unit.entity';
@@ -56,6 +56,7 @@ export class PersonService {
         .createQueryBuilder('person')
         .select('DISTINCT person.group', 'group')
         .where('person.workspace_id = :workspaceId', { workspaceId })
+        .andWhere('person.consider = :consider', { consider: true })
         .getRawMany();
 
       return result.map(item => item.group);
@@ -73,6 +74,7 @@ export class PersonService {
         .innerJoin('booklet.person', 'person')
         .where('person.workspace_id = :workspaceId', { workspaceId })
         .andWhere('person.group = :groupName', { groupName })
+        .andWhere('person.consider = :consider', { consider: true })
         .getCount();
 
       return count > 0;
@@ -98,6 +100,29 @@ export class PersonService {
     }
   }
 
+  async markPersonsAsNotConsidered(workspaceId: number, logins: string[]): Promise<boolean> {
+    try {
+      if (!workspaceId || !logins || logins.length === 0) {
+        this.logger.warn('Invalid parameters for markPersonsAsNotConsidered');
+        return false;
+      }
+
+      const result = await this.personsRepository.update(
+        {
+          workspace_id: workspaceId,
+          login: In(logins)
+        },
+        { consider: false }
+      );
+
+      this.logger.log(`Marked ${result.affected} persons as not to be considered in workspace ${workspaceId}`);
+      return result.affected > 0;
+    } catch (error) {
+      this.logger.error(`Error marking persons as not considered: ${error.message}`, error.stack);
+      return false;
+    }
+  }
+
   async getImportStatistics(workspaceId: number): Promise<{
     persons: number;
     booklets: number;
@@ -105,13 +130,14 @@ export class PersonService {
   }> {
     try {
       const personsCount = await this.personsRepository.count({
-        where: { workspace_id: workspaceId }
+        where: { workspace_id: workspaceId, consider: true }
       });
 
       const bookletsCount = await this.bookletRepository
         .createQueryBuilder('booklet')
         .innerJoin('booklet.person', 'person')
         .where('person.workspace_id = :workspaceId', { workspaceId })
+        .andWhere('person.consider = :consider', { consider: true })
         .getCount();
 
       const unitsCount = await this.unitRepository
@@ -119,6 +145,7 @@ export class PersonService {
         .innerJoin('unit.booklet', 'booklet')
         .innerJoin('booklet.person', 'person')
         .where('person.workspace_id = :workspaceId', { workspaceId })
+        .andWhere('person.consider = :consider', { consider: true })
         .getCount();
 
       return {

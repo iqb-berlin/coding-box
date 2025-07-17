@@ -23,6 +23,21 @@ export class WorkspaceService {
     return { Authorization: `Bearer ${localStorage.getItem('id_token')}` };
   }
 
+  markTestTakersAsExcluded(workspaceId: number, logins: string[]): Observable<boolean> {
+    if (!workspaceId || !logins.length) {
+      return of(false);
+    }
+
+    return this.http.post(
+      `${this.serverUrl}admin/workspace/${workspaceId}/persons/exclude`,
+      { logins },
+      { headers: this.authHeader }
+    ).pipe(
+      map(() => true),
+      catchError(() => of(false))
+    );
+  }
+
   getAllWorkspacesList(): Observable<PaginatedWorkspacesDto> {
     return this.http
       .get<PaginatedWorkspacesDto>(`${this.serverUrl}admin/workspace`,

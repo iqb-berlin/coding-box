@@ -326,14 +326,22 @@ export class TestFilesComponent implements OnInit, OnDestroy {
 
             this.dialog.open(FilesValidationDialogComponent, {
               width: '600px',
-              data: res.validationResults
+              data: {
+                validationResults: res.validationResults,
+                filteredTestTakers: res.filteredTestTakers,
+                workspaceId: this.appService.selectedWorkspaceId
+              }
             });
           }
         });
       } else {
         this.dialog.open(FilesValidationDialogComponent, {
           width: '600px',
-          data: res.validationResults
+          data: {
+            validationResults: res.validationResults,
+            filteredTestTakers: res.filteredTestTakers,
+            workspaceId: this.appService.selectedWorkspaceId
+          }
         });
       }
     }

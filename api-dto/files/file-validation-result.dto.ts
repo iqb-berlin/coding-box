@@ -14,9 +14,18 @@ type DataValidation = {
   files: FileStatus[];
 };
 
+export type FilteredTestTaker = {
+  testTaker: string;
+  mode: string;
+  login: string;
+};
+
 export class FileValidationResultDto {
   @ApiProperty({ type: Boolean, description: 'Indicates whether test takers were found' })
     testTakersFound!: boolean;
+
+  @ApiProperty({ type: [Object], description: 'Array of filtered test takers with specific modes' })
+    filteredTestTakers?: FilteredTestTaker[];
 
   @ApiProperty({ type: [Object], description: 'Array of validation results for each test taker' })
     validationResults!: {

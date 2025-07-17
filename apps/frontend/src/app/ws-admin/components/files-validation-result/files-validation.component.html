@@ -1,7 +1,70 @@
 <mat-dialog-content>
   @if (data) {
     <div class="scroll-container">
-      @for(val of data; track data){
+      @if (filteredTestTakers && filteredTestTakers.length > 0) {
+        <div class="missing-units-warning filtered-testtakers-warning">
+          <mat-icon class="warning-icon">warning</mat-icon>
+          <div class="warning-content">
+            <p class="warning-title">TestTaker zum Filtern:</p>
+
+            <div class="mode-selection">
+              <div class="select-all-row">
+                <mat-checkbox
+                  [checked]="allSelected"
+                  [indeterminate]="selection.hasValue() && !allSelected"
+                  (change)="toggleAllSelection()">
+                  Alle auswählen
+                </mat-checkbox>
+                <span class="count-badge">{{ selection.selected.length }} / {{ filteredTestTakers.length }}</span>
+              </div>
+
+              @for (modeGroup of modeGroups; track modeGroup) {
+                <div class="mode-group">
+                  <mat-checkbox
+                    [checked]="isModeSelected(modeGroup.mode)"
+                    (change)="toggleModeSelection(modeGroup.mode)">
+                    {{ modeGroup.mode }} ({{ modeGroup.count }})
+                  </mat-checkbox>
+                </div>
+              }
+            </div>
+
+            <cdk-virtual-scroll-viewport class="test-takers-list" [itemSize]="48" [minBufferPx]="200" [maxBufferPx]="400">
+              <div *cdkVirtualFor="let item of filteredTestTakers; trackBy: trackByFn" class="virtual-item">
+                <mat-checkbox
+                  [checked]="selection.isSelected(item)"
+                  (change)="toggleSelection(item)">
+                  <strong>{{ item.testTaker }}:</strong> {{ item.login }} ({{ item.mode }})
+                </mat-checkbox>
+              </div>
+            </cdk-virtual-scroll-viewport>
+
+            <div class="exclude-button-container">
+              <button
+                mat-raised-button
+                color="warn"
+                class="exclude-button"
+                (click)="markTestTakersAsExcluded()"
+                [disabled]="isExcluding || selection.selected.length === 0">
+                <mat-icon>{{ isExcluding ? 'hourglass_empty' : 'block' }}</mat-icon>
+                @if (isExcluding) {
+                  Wird bearbeitet... ({{ excludingProgress }}%)
+                } @else {
+                  Ausgewählte TestTaker ausschließen ({{ selection.selected.length }})
+                }
+              </button>
+
+              @if (isExcluding) {
+                <div class="progress-container">
+                  <div class="progress-bar" [style.width.%]="excludingProgress"></div>
+                </div>
+              }
+            </div>
+          </div>
+        </div>
+      }
+
+      @for(val of data.validationResults; track data.validationResults){
         <h4>
           <mat-icon class="test-taker-icon">person</mat-icon>
           {{val.testTaker}}
