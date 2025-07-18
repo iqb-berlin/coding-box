@@ -32,16 +32,30 @@ export class ValidationTaskController {
   @ApiQuery({ name: 'limit', description: 'Page size', required: false })
   async createValidationTask(
     @WorkspaceId() workspaceId: number,
-      @Query('type') type: 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'groupResponses' | 'deleteResponses' | 'deleteAllResponses',
+      @Query('type') type: 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'groupResponses' | 'deleteResponses' | 'deleteAllResponses' | 'duplicateResponses',
       @Query('page') page?: number,
-      @Query('limit') limit?: number
+      @Query('limit') limit?: number,
+      @Query() allQueryParams?: Record<string, string | number | boolean | undefined>
   ): Promise<ValidationTaskDto> {
     this.logger.log(`Creating validation task of type ${type} for workspace ${workspaceId}`);
+
+    // Extract additional data from query parameters
+    const additionalData: Record<string, unknown> = {};
+    if (allQueryParams) {
+      // Copy all query parameters except type, page, and limit
+      Object.entries(allQueryParams).forEach(([key, value]) => {
+        if (key !== 'type' && key !== 'page' && key !== 'limit') {
+          additionalData[key] = value;
+        }
+      });
+    }
+
     const task = await this.validationTaskService.createValidationTask(
       workspaceId,
       type,
       page,
-      limit
+      limit,
+      Object.keys(additionalData).length > 0 ? additionalData : undefined
     );
     return ValidationTaskDto.fromEntity(task);
   }

@@ -20,7 +20,7 @@ export class ValidationTask extends Job {
    * - 'deleteAllResponses': Delete all invalid responses of a specific type
    */
   @Column()
-    validation_type: 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'groupResponses' | 'deleteResponses' | 'deleteAllResponses';
+    validation_type: 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'groupResponses' | 'deleteResponses' | 'deleteAllResponses' | 'duplicateResponses';
 
   /**
    * Pagination parameters for paginated results

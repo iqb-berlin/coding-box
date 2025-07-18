@@ -20,6 +20,7 @@ import { FileValidationResultDto } from '../../../../../../api-dto/files/file-va
 import { WorkspaceFilesService } from '../../database/services/workspace-files.service';
 import { InvalidVariableDto } from '../../../../../../api-dto/files/variable-validation.dto';
 import { TestTakersValidationDto } from '../../../../../../api-dto/files/testtakers-validation.dto';
+import { DuplicateResponsesResultDto } from '../../../../../../api-dto/files/duplicate-response.dto';
 import { PersonService } from '../../database/services/person.service';
 
 @ApiTags('Admin Workspace Files')
@@ -461,6 +462,66 @@ export class WorkspaceFilesController {
                            @Query('limit') limit: number = 10
   ): Promise<{ data: InvalidVariableDto[]; total: number; page: number; limit: number }> {
     return this.workspaceFilesService.validateResponseStatus(workspace_id, page, limit);
+  }
+
+  @Get(':workspace_id/files/validate-duplicate-responses')
+  @ApiTags('test files validation')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiOperation({ summary: 'Validate duplicate responses', description: 'Identifies duplicate responses (same variable ID for the same unit, booklet, and test taker)' })
+  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    description: 'Page number for pagination',
+    type: Number
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    description: 'Number of items per page',
+    type: Number
+  })
+  @ApiOkResponse({
+    description: 'Duplicate responses validation result',
+    schema: {
+      type: 'object',
+      properties: {
+        data: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              unitName: { type: 'string' },
+              unitId: { type: 'number' },
+              variableId: { type: 'string' },
+              bookletName: { type: 'string' },
+              testTakerLogin: { type: 'string' },
+              duplicates: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    responseId: { type: 'number' },
+                    value: { type: 'string' },
+                    status: { type: 'string' }
+                  }
+                }
+              }
+            }
+          }
+        },
+        total: { type: 'number' },
+        page: { type: 'number' },
+        limit: { type: 'number' }
+      }
+    }
+  })
+  async validateDuplicateResponses(
+    @Param('workspace_id') workspace_id: number,
+                           @Query('page') page: number = 1,
+                           @Query('limit') limit: number = 10
+  ): Promise<DuplicateResponsesResultDto> {
+    return this.workspaceFilesService.validateDuplicateResponses(workspace_id, page, limit);
   }
 
   @Get(':workspace_id/files/validate-variables')

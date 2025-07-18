@@ -12,8 +12,10 @@ import {
 } from 'rxjs';
 import { InvalidVariableDto } from '../../../../../api-dto/files/variable-validation.dto';
 import { TestTakersValidationDto } from '../../../../../api-dto/files/testtakers-validation.dto';
+import { DuplicateResponsesResultDto } from '../../../../../api-dto/files/duplicate-response.dto';
 import { SERVER_URL } from '../injection-tokens';
 import { ValidationTaskDto } from '../models/validation-task.dto';
+import { ResolveDuplicateResponsesRequestDto, ResolveDuplicateResponsesResponseDto } from '../models/duplicate-response-selection.dto';
 
 interface PaginatedResponse<T> {
   data: T[];
@@ -136,6 +138,40 @@ export class ValidationService {
     );
   }
 
+  validateDuplicateResponses(workspaceId: number, page: number = 1, limit: number = 10): Observable<DuplicateResponsesResultDto> {
+    const params = new HttpParams()
+      .set('page', page.toString())
+      .set('limit', limit.toString());
+
+    return this.http.get<DuplicateResponsesResultDto>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/files/validate-duplicate-responses`,
+      { headers: this.authHeader, params }
+    ).pipe(
+      catchError(() => of({
+        data: [],
+        total: 0,
+        page,
+        limit
+      }))
+    );
+  }
+
+  resolveDuplicateResponses(
+    workspaceId: number,
+    resolutionData: ResolveDuplicateResponsesRequestDto
+  ): Observable<ResolveDuplicateResponsesResponseDto> {
+    return this.http.post<ResolveDuplicateResponsesResponseDto>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/responses/resolve-duplicates`,
+      resolutionData,
+      { headers: this.authHeader }
+    ).pipe(
+      catchError(() => of({
+        resolvedCount: 0,
+        success: false
+      }))
+    );
+  }
+
   deleteInvalidResponses(workspaceId: number, responseIds: number[]): Observable<number> {
     const params = new HttpParams().set('responseIds', responseIds.join(','));
     return this.http.delete<number>(
@@ -146,7 +182,7 @@ export class ValidationService {
     );
   }
 
-  deleteAllInvalidResponses(workspaceId: number, validationType: 'variables' | 'variableTypes' | 'responseStatus'): Observable<number> {
+  deleteAllInvalidResponses(workspaceId: number, validationType: 'variables' | 'variableTypes' | 'responseStatus' | 'duplicateResponses'): Observable<number> {
     const params = new HttpParams().set('validationType', validationType);
     return this.http.delete<number>(
       `${this.serverUrl}admin/workspace/${workspaceId}/files/all-invalid-responses`,
@@ -158,7 +194,7 @@ export class ValidationService {
 
   createValidationTask(
     workspaceId: number,
-    type: 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'groupResponses' | 'deleteResponses' | 'deleteAllResponses',
+    type: 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'groupResponses' | 'deleteResponses' | 'deleteAllResponses' | 'duplicateResponses',
     page?: number,
     limit?: number,
     additionalData?: Record<string, unknown>
@@ -192,7 +228,6 @@ export class ValidationService {
       { headers: this.authHeader, params }
     ).pipe(
       catchError(error => {
-        console.error(`Error creating validation task: ${error.message}`);
         throw error;
       })
     );
@@ -213,7 +248,7 @@ export class ValidationService {
 
   createDeleteAllResponsesTask(
     workspaceId: number,
-    validationType: 'variables' | 'variableTypes' | 'responseStatus'
+    validationType: 'variables' | 'variableTypes' | 'responseStatus' | 'duplicateResponses'
   ): Observable<ValidationTaskDto> {
     return this.createValidationTask(
       workspaceId,
@@ -230,7 +265,6 @@ export class ValidationService {
       { headers: this.authHeader }
     ).pipe(
       catchError(error => {
-        console.error(`Error getting validation task: ${error.message}`);
         throw error;
       })
     );
@@ -254,7 +288,6 @@ export class ValidationService {
       { headers: this.authHeader }
     ).pipe(
       catchError(error => {
-        console.error(`Error getting validation results: ${error.message}`);
         throw error;
       })
     );
@@ -307,8 +340,7 @@ export class ValidationService {
                 map<unknown, [string, { task: ValidationTaskDto; result: unknown }]>(
                   result => [type, { task, result }] as [string, { task: ValidationTaskDto; result: unknown }]
                 ),
-                catchError(error => {
-                  console.error(`Error getting results for task ${task.id}: ${error.message}`);
+                catchError(() => {
                   return of([type, { task, result: null }] as [string, { task: ValidationTaskDto; result: unknown }]);
                 })
               )

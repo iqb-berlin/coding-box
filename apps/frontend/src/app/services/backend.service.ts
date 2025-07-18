@@ -544,7 +544,7 @@ export class BackendService {
     return this.validationService.deleteInvalidResponses(workspaceId, responseIds);
   }
 
-  deleteAllInvalidResponses(workspaceId: number, validationType: 'variables' | 'variableTypes' | 'responseStatus'): Observable<number> {
+  deleteAllInvalidResponses(workspaceId: number, validationType: 'variables' | 'variableTypes' | 'responseStatus' | 'duplicateResponses'): Observable<number> {
     return this.validationService.deleteAllInvalidResponses(workspaceId, validationType);
   }
 
@@ -584,7 +584,7 @@ export class BackendService {
 
   createValidationTask(
     workspaceId: number,
-    type: 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'groupResponses' | 'deleteResponses' | 'deleteAllResponses',
+    type: 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'groupResponses' | 'deleteResponses' | 'deleteAllResponses' | 'duplicateResponses',
     page?: number,
     limit?: number,
     additionalData?: Record<string, unknown>
@@ -601,7 +601,7 @@ export class BackendService {
 
   createDeleteAllResponsesTask(
     workspaceId: number,
-    validationType: 'variables' | 'variableTypes' | 'responseStatus'
+    validationType: 'variables' | 'variableTypes' | 'responseStatus' | 'duplicateResponses'
   ): Observable<ValidationTaskDto> {
     return this.validationService.createDeleteAllResponsesTask(workspaceId, validationType);
   }

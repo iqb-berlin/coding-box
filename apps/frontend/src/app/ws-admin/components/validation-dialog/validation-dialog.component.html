@@ -112,6 +112,27 @@
     <span *ngIf="getValidationStatus('groupResponses') === 'success'">OK</span>
     <span *ngIf="getValidationStatus('groupResponses') === 'not-run'">Nicht ausgeführt</span>
   </div>
+
+  <!-- Duplicate Responses Validation -->
+  <div class="validation-summary-item"
+       [ngClass]="{
+         'validation-running': getValidationStatus('duplicateResponses') === 'running',
+         'validation-error': getValidationStatus('duplicateResponses') === 'failed',
+         'validation-success': getValidationStatus('duplicateResponses') === 'success',
+         'validation-not-run': getValidationStatus('duplicateResponses') === 'not-run'
+       }">
+    <mat-icon *ngIf="getValidationStatus('duplicateResponses') === 'running'">hourglass_empty</mat-icon>
+    <mat-icon *ngIf="getValidationStatus('duplicateResponses') === 'failed'">error</mat-icon>
+    <mat-icon *ngIf="getValidationStatus('duplicateResponses') === 'success'">check_circle</mat-icon>
+    <mat-icon *ngIf="getValidationStatus('duplicateResponses') === 'not-run'">radio_button_unchecked</mat-icon>
+    <span class="validation-summary-item-label">{{ getValidationLabel('duplicateResponses') }}</span>
+    <span *ngIf="getValidationStatus('duplicateResponses') === 'running'">Läuft...</span>
+    <span *ngIf="getValidationStatus('duplicateResponses') === 'failed' && duplicateResponsesResult">
+      {{ totalDuplicateResponses }} doppelte Antworten gefunden
+    </span>
+    <span *ngIf="getValidationStatus('duplicateResponses') === 'success'">OK</span>
+    <span *ngIf="getValidationStatus('duplicateResponses') === 'not-run'">Nicht ausgeführt</span>
+  </div>
 </div>
 <mat-dialog-content>
   <mat-stepper orientation="vertical" [linear]="true" #stepper>
@@ -126,9 +147,7 @@
       }
       @if (testTakersValidationResult) {
         <div>
-          @if (testTakersValidationResult.testTakersFound) {
-            <p>TestTakers gefunden: {{ testTakersValidationResult.totalGroups }} Gruppen, {{ testTakersValidationResult.totalLogins }} Logins, {{ testTakersValidationResult.totalBookletCodes }} Booklet-Codes.</p>
-          } @else {
+          @if (!testTakersValidationResult.testTakersFound) {
             <div class="validation-result validation-error">
               <mat-icon>error</mat-icon>
               <span>Prüfung fehlgeschlagen: Keine TestTakers gefunden.</span>
@@ -167,7 +186,7 @@
                 <tr mat-row *matRowDef="let row; columns: ['group', 'login', 'code', 'reason'];"></tr>
               </table>
             </mat-expansion-panel>
-          } @else {
+          } @else if (testTakersValidationWasRun) {
             <div class="validation-result validation-success">
               <mat-icon>check_circle</mat-icon>
               <span>Prüfung bestanden: Alle Testpersonen wurden in den TestTakers XML-Dateien gefunden.</span>
@@ -446,6 +465,104 @@
         <button mat-button matStepperNext>Weiter</button>
       </div>
     </mat-step>
+    <mat-step label="Doppelte Antworten">
+      <p>Prüft, ob doppelte Antworten für die gleiche Variable, Unit und Testperson existieren.</p>
+      <button mat-button (click)="validateDuplicateResponses()">Doppelte Antworten validieren</button>
+      @if (isDuplicateResponsesValidationRunning) {
+        <div class="loading-container">
+          <mat-spinner class="mat-spinner"></mat-spinner>
+          <p class="loading-text">Doppelte Antworten werden validiert...</p>
+        </div>
+      }
+      @if (duplicateResponses.length > 0 || totalDuplicateResponses > 0) {
+        <div class="validation-result validation-error">
+          <mat-icon>error</mat-icon>
+          <span>Prüfung fehlgeschlagen: {{ totalDuplicateResponses }} doppelte Antworten gefunden.</span>
+        </div>
+        @if (duplicateResponses.length > 0) {
+          <div class="actions-container">
+            <button mat-button (click)="toggleDuplicateResponsesExpansion()">
+              {{ expandedDuplicateResponsesPanel ? 'Liste einklappen' : 'Liste ausklappen' }}
+            </button>
+            <button mat-button color="primary" (click)="resolveDuplicateResponses()" [disabled]="isResolvingDuplicateResponses || !hasSelectedDuplicateResponses()">
+              @if (isResolvingDuplicateResponses) {
+                <mat-spinner diameter="20"></mat-spinner> Wird bearbeitet...
+              } @else {
+                Ausgewählte behalten ({{ getSelectedDuplicateResponsesCount() }})
+              }
+            </button>
+            <button mat-button color="warn" (click)="resolveAllDuplicateResponses()" [disabled]="isResolvingDuplicateResponses || duplicateResponses.length === 0">
+              @if (isResolvingDuplicateResponses) {
+                <mat-spinner diameter="20"></mat-spinner> Wird bearbeitet...
+              } @else {
+                Alle automatisch auflösen ({{ totalDuplicateResponses }})
+              }
+            </button>
+          </div>
+
+          <mat-expansion-panel [expanded]="expandedDuplicateResponsesPanel">
+            <div class="duplicate-responses-container">
+              @for (duplicate of paginatedDuplicateResponses; track duplicate.unitId + '_' + duplicate.variableId + '_' + duplicate.testTakerLogin) {
+                <div class="duplicate-response-item">
+                  <div class="duplicate-response-header">
+                    <div class="duplicate-response-info">
+                      <strong>Unit:</strong> {{ duplicate.unitName }} |
+                      <strong>Variable:</strong> {{ duplicate.variableId }} |
+                      <strong>Testperson:</strong> {{ duplicate.testTakerLogin }} |
+                      <strong>Booklet:</strong> {{ duplicate.bookletName }}
+                    </div>
+                  </div>
+                  <div class="duplicate-response-duplicates">
+                    <table class="duplicate-response-table">
+                      <thead>
+                        <tr>
+                          <th>Auswählen</th>
+                          <th>Antwort-ID</th>
+                          <th>Wert</th>
+                          <th>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        @for (responseDuplicate of duplicate.duplicates; track responseDuplicate.responseId) {
+                          <tr>
+                            <td>
+                              <input type="radio"
+                                     name="duplicate_{{ duplicate.unitId }}_{{ duplicate.variableId }}_{{ duplicate.testTakerLogin }}"
+                                     [value]="responseDuplicate.responseId"
+                                     [checked]="isSelectedDuplicateResponse(duplicate, responseDuplicate.responseId)"
+                                     (change)="selectDuplicateResponse(duplicate, responseDuplicate.responseId)">
+                            </td>
+                            <td>{{ responseDuplicate.responseId }}</td>
+                            <td>{{ responseDuplicate.value }}</td>
+                            <td>{{ responseDuplicate.status }}</td>
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              }
+            </div>
+            <mat-paginator #duplicateResponsesPaginator
+                           [pageSize]="duplicateResponsesPageSize"
+                           [pageSizeOptions]="pageSizeOptions"
+                           [length]="totalDuplicateResponses"
+                           [pageIndex]="currentDuplicateResponsesPage - 1"
+                           (page)="onDuplicateResponsesPageChange($event)"
+                           aria-label="Seite auswählen">
+            </mat-paginator>
+          </mat-expansion-panel>
+        }
+      } @else if (!isDuplicateResponsesValidationRunning && duplicateResponses.length === 0 && totalDuplicateResponses === 0 && validateDuplicateResponsesWasRun) {
+        <div class="validation-result validation-success">
+          <mat-icon>check_circle</mat-icon>
+          <span>Prüfung bestanden: Keine doppelten Antworten gefunden.</span>
+        </div>
+      }
+      <div>
+        <button mat-button matStepperNext>Weiter</button>
+      </div>
+    </mat-step>
     <mat-step label="Antwort vorgesehen">
       <p>Prüft, ob die Antwort für die Kombination Testperson x Booklet x Unit vorgesehen ist.</p>
       <div>
@@ -518,7 +635,7 @@
                            aria-label="Seite auswählen">
               </mat-paginator>
             </mat-expansion-panel>
-          } @else {
+          } @else if (groupResponsesValidationWasRun) {
             <div class="validation-result validation-error">
               <mat-icon>error</mat-icon>
               <span>Prüfung fehlgeschlagen: Keine gültigen Gruppen gefunden.</span>
