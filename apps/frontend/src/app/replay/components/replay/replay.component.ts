@@ -389,20 +389,6 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     this.responses = undefined;
   }
 
-  private scrollToTop(): void {
-    try {
-      if (this.unitPlayerComponent?.hostingIframe?.nativeElement?.contentWindow) {
-        this.unitPlayerComponent.hostingIframe.nativeElement.contentWindow.scrollTo({
-          top: 0,
-          left: 0,
-          behavior: 'smooth'
-        });
-      }
-    } catch (error) {
-      console.error('Error scrolling to top:', error);
-    }
-  }
-
   ngOnDestroy(): void {
     this.routerSubscription?.unsubscribe();
     this.routerSubscription = null;

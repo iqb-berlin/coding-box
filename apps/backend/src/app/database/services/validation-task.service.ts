@@ -16,7 +16,7 @@ export class ValidationTaskService {
 
   async createValidationTask(
     workspaceId: number,
-    validationType: 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'groupResponses' | 'deleteResponses' | 'deleteAllResponses',
+    validationType: 'variables' | 'variableTypes' | 'responseStatus' | 'duplicateResponses' | 'testTakers' | 'groupResponses' | 'deleteResponses' | 'deleteAllResponses',
     page?: number,
     limit?: number,
     additionalData?: Record<string, unknown>
@@ -124,6 +124,13 @@ export class ValidationTaskService {
             task.limit || 10
           );
           break;
+        case 'duplicateResponses':
+          result = await this.validationService.validateDuplicateResponses(
+            task.workspace_id,
+            task.page || 1,
+            task.limit || 10
+          );
+          break;
         case 'testTakers':
           result = await this.validationService.validateTestTakers(task.workspace_id);
           break;
@@ -148,7 +155,7 @@ export class ValidationTaskService {
           break;
         case 'deleteAllResponses':
           if (taskData && typeof taskData.validationType === 'string') {
-            const validationType = taskData.validationType as 'variables' | 'variableTypes' | 'responseStatus';
+            const validationType = taskData.validationType as 'variables' | 'variableTypes' | 'responseStatus' | 'duplicateResponses';
             const deletedCount = await this.validationService.deleteAllInvalidResponses(
               task.workspace_id,
               validationType

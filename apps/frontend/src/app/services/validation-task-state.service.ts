@@ -1,6 +1,5 @@
 import { Injectable } from '@angular/core';
 
-// Define interfaces for validation results
 export interface ValidationResult {
   status: 'success' | 'failed' | 'not-run';
   timestamp: number;
@@ -17,14 +16,14 @@ export class ValidationTaskStateService {
   // Store validation results by workspace ID and validation type
   private validationResults: Record<number, Record<string, ValidationResult>> = {};
 
-  setTaskId(workspaceId: number, type: 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'groupResponses', taskId: number): void {
+  setTaskId(workspaceId: number, type: 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'groupResponses' | 'duplicateResponses', taskId: number): void {
     if (!this.activeTasks[workspaceId]) {
       this.activeTasks[workspaceId] = {};
     }
     this.activeTasks[workspaceId][type] = taskId;
   }
 
-  removeTaskId(workspaceId: number, type: 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'groupResponses'): void {
+  removeTaskId(workspaceId: number, type: 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'groupResponses' | 'duplicateResponses'): void {
     if (this.activeTasks[workspaceId]) {
       delete this.activeTasks[workspaceId][type];
     }
@@ -36,7 +35,7 @@ export class ValidationTaskStateService {
 
   setValidationResult(
     workspaceId: number,
-    type: 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'groupResponses',
+    type: 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'groupResponses' | 'duplicateResponses',
     result: ValidationResult
   ): void {
     if (!this.validationResults[workspaceId]) {

@@ -14,8 +14,10 @@ import { FileDownloadDto } from '../../../../../../api-dto/files/file-download.d
 import { FileValidationResultDto, FilteredTestTaker } from '../../../../../../api-dto/files/file-validation-result.dto';
 import { ResponseDto } from '../../../../../../api-dto/responses/response-dto';
 import { InvalidVariableDto } from '../../../../../../api-dto/files/variable-validation.dto';
+import { DuplicateResponseDto, DuplicateResponsesResultDto } from '../../../../../../api-dto/files/duplicate-response.dto';
 import { Unit } from '../entities/unit.entity';
 import { ResponseEntity } from '../entities/response.entity';
+import { Booklet } from '../entities/booklet.entity';
 import {
   MissingPersonDto,
   TestTakerLoginDto,
@@ -88,8 +90,9 @@ export class WorkspaceFilesService {
     @InjectRepository(FileUpload)
     private filesRepository: Repository<FileUpload>,
     @InjectRepository(Persons)
-    private personsRepository: Repository<Persons>
-
+    private personsRepository: Repository<Persons>,
+    @InjectRepository(Booklet)
+    private bookletRepository: Repository<Booklet>
   ) {}
 
   async findAllFileTypes(workspaceId: number): Promise<string[]> {
@@ -1767,6 +1770,175 @@ ${bookletRefs}
     }
   }
 
+  async validateDuplicateResponses(workspaceId: number, page: number = 1, limit: number = 10): Promise<DuplicateResponsesResultDto> {
+    if (!workspaceId) {
+      this.logger.error('Workspace ID is required for validateDuplicateResponses');
+      return {
+        data: [],
+        total: 0,
+        page,
+        limit
+      };
+    }
+
+    // Get all persons in the workspace that should be considered
+    const persons = await this.personsRepository.find({
+      where: { workspace_id: workspaceId, consider: true }
+    });
+
+    if (persons.length === 0) {
+      this.logger.warn(`No persons found for workspace ${workspaceId}`);
+      return {
+        data: [],
+        total: 0,
+        page,
+        limit
+      };
+    }
+
+    const personIds = persons.map(person => person.id);
+    const personMap = new Map(persons.map(person => [person.id, person]));
+
+    // Get all booklets for these persons
+    const booklets = await this.bookletRepository.find({
+      where: { personid: In(personIds) },
+      relations: ['bookletinfo']
+    });
+
+    if (booklets.length === 0) {
+      this.logger.warn(`No booklets found for persons in workspace ${workspaceId}`);
+      return {
+        data: [],
+        total: 0,
+        page,
+        limit
+      };
+    }
+
+    const bookletMap = new Map(booklets.map(booklet => [booklet.id, booklet]));
+
+    // Get all units for these booklets
+    const batchSize = 1000;
+    let allUnits: Unit[] = [];
+    const bookletIds = booklets.map(booklet => booklet.id);
+
+    for (let i = 0; i < bookletIds.length; i += batchSize) {
+      const bookletIdsBatch = bookletIds.slice(i, i + batchSize);
+      const unitsBatch = await this.unitRepository.find({
+        where: { bookletid: In(bookletIdsBatch) }
+      });
+      allUnits = [...allUnits, ...unitsBatch];
+    }
+
+    if (allUnits.length === 0) {
+      this.logger.warn(`No units found for booklets in workspace ${workspaceId}`);
+      return {
+        data: [],
+        total: 0,
+        page,
+        limit
+      };
+    }
+
+    const unitIds = allUnits.map(unit => unit.id);
+    const unitMap = new Map(allUnits.map(unit => [unit.id, unit]));
+
+    // Get all responses for these units
+    let allResponses: ResponseEntity[] = [];
+    for (let i = 0; i < unitIds.length; i += batchSize) {
+      const unitIdsBatch = unitIds.slice(i, i + batchSize);
+      const responsesBatch = await this.responseRepository.find({
+        where: { unitid: In(unitIdsBatch) }
+      });
+      allResponses = [...allResponses, ...responsesBatch];
+    }
+
+    if (allResponses.length === 0) {
+      this.logger.warn(`No responses found for units in workspace ${workspaceId}`);
+      return {
+        data: [],
+        total: 0,
+        page,
+        limit
+      };
+    }
+
+    // Group responses by unitid and variableid
+    const responseGroups = new Map<string, ResponseEntity[]>();
+    for (const response of allResponses) {
+      const key = `${response.unitid}_${response.variableid}`;
+      if (!responseGroups.has(key)) {
+        responseGroups.set(key, []);
+      }
+      responseGroups.get(key)?.push(response);
+    }
+
+    // Find groups with more than one response (duplicates)
+    const duplicateResponses: DuplicateResponseDto[] = [];
+    for (const [, responses] of responseGroups.entries()) {
+      if (responses.length > 1) {
+        // Get the first response to extract unit information
+        const firstResponse = responses[0];
+        const unit = unitMap.get(firstResponse.unitid);
+
+        if (!unit) {
+          this.logger.warn(`Unit not found for response ${firstResponse.id}`);
+          continue;
+        }
+
+        const booklet = bookletMap.get(unit.bookletid);
+        if (!booklet) {
+          this.logger.warn(`Booklet not found for unit ${unit.id}`);
+          continue;
+        }
+
+        const person = personMap.get(booklet.personid);
+        if (!person) {
+          this.logger.warn(`Person not found for booklet ${booklet.id}`);
+          continue;
+        }
+
+        const bookletName = booklet.bookletinfo?.name || 'Unknown';
+
+        duplicateResponses.push({
+          unitName: unit.name,
+          unitId: unit.id,
+          variableId: firstResponse.variableid,
+          bookletName,
+          testTakerLogin: person.login,
+          duplicates: responses.map(response => ({
+            responseId: response.id,
+            value: response.value || '',
+            status: response.status
+            // We don't have timestamp in the response entity, but could add if needed
+          }))
+        });
+      }
+    }
+
+    // Sort duplicates by unitName, variableId for consistent ordering
+    duplicateResponses.sort((a, b) => {
+      if (a.unitName !== b.unitName) {
+        return a.unitName.localeCompare(b.unitName);
+      }
+      return a.variableId.localeCompare(b.variableId);
+    });
+
+    // Paginate results
+    const validPage = Math.max(1, page);
+    const validLimit = limit === Number.MAX_SAFE_INTEGER ? limit : Math.min(Math.max(1, limit), 1000);
+    const startIndex = (validPage - 1) * validLimit;
+    const endIndex = startIndex + validLimit;
+    const paginatedData = duplicateResponses.slice(startIndex, endIndex);
+
+    return {
+      data: paginatedData,
+      total: duplicateResponses.length,
+      page: validPage,
+      limit: validLimit
+    };
+  }
+
   async validateResponseStatus(workspaceId: number, page: number = 1, limit: number = 10): Promise<{ data: InvalidVariableDto[]; total: number; page: number; limit: number }> {
     if (!workspaceId) {
       this.logger.error('Workspace ID is required');
@@ -2177,7 +2349,7 @@ ${bookletRefs}
     }
   }
 
-  async deleteAllInvalidResponses(workspaceId: number, validationType: 'variables' | 'variableTypes' | 'responseStatus'): Promise<number> {
+  async deleteAllInvalidResponses(workspaceId: number, validationType: 'variables' | 'variableTypes' | 'responseStatus' | 'duplicateResponses'): Promise<number> {
     try {
       if (!workspaceId) {
         this.logger.error('Workspace ID is required');
@@ -2186,6 +2358,38 @@ ${bookletRefs}
 
       this.logger.log(`Deleting all invalid responses for workspace ${workspaceId} of type ${validationType}`);
 
+      // Handle duplicate responses
+      if (validationType === 'duplicateResponses') {
+        const result = await this.validateDuplicateResponses(workspaceId, 1, Number.MAX_SAFE_INTEGER);
+
+        if (result.data.length === 0) {
+          this.logger.warn(`No duplicate responses found for workspace ${workspaceId}`);
+          return 0;
+        }
+
+        // Extract all response IDs from all duplicates
+        const responseIds: number[] = [];
+        for (const duplicateResponse of result.data) {
+          // For each duplicate response, we take all but the first response ID
+          // This keeps one response and deletes the duplicates
+          if (duplicateResponse.duplicates.length > 1) {
+            // Get all duplicate response IDs (skip the first one to keep it)
+            const duplicateIds = duplicateResponse.duplicates
+              .slice(1) // Skip the first one to keep it
+              .map(duplicate => duplicate.responseId);
+            responseIds.push(...duplicateIds);
+          }
+        }
+
+        if (responseIds.length === 0) {
+          this.logger.warn(`No duplicate response IDs found for workspace ${workspaceId}`);
+          return 0;
+        }
+
+        return await this.deleteInvalidResponses(workspaceId, responseIds);
+      }
+
+      // Handle other validation types (variables, variableTypes, responseStatus)
       let invalidResponses: InvalidVariableDto[] = [];
 
       if (validationType === 'variables') {

@@ -21,6 +21,8 @@ import { ValidationTaskStateService, ValidationResult } from '../../../services/
 import { ValidationService } from '../../../services/validation.service';
 import { InvalidVariableDto } from '../../../../../../../api-dto/files/variable-validation.dto';
 import { TestTakersValidationDto, MissingPersonDto } from '../../../../../../../api-dto/files/testtakers-validation.dto';
+import { DuplicateResponsesResultDto } from '../../../../../../../api-dto/files/duplicate-response.dto';
+import { DuplicateResponseSelectionDto } from '../../../models/duplicate-response-selection.dto';
 import { ContentDialogComponent } from '../../../shared/dialogs/content-dialog/content-dialog.component';
 import { ValidationTaskDto } from '../../../models/validation-task.dto';
 
@@ -230,24 +232,37 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
   isVariableValidationRunning: boolean = false;
   isVariableTypeValidationRunning: boolean = false;
   isResponseStatusValidationRunning: boolean = false;
+  isDuplicateResponsesValidationRunning: boolean = false;
 
   // Validation was run flags
   validateVariablesWasRun: boolean = false;
   validateVariableTypesWasRun: boolean = false;
   validateResponseStatusWasRun: boolean = false;
+  validateDuplicateResponsesWasRun: boolean = false;
   isDeletingResponses: boolean = false;
+  isResolvingDuplicateResponses: boolean = false;
   expandedPanel: boolean = false;
   expandedTypePanel: boolean = false;
   expandedStatusPanel: boolean = false;
+  expandedDuplicateResponsesPanel: boolean = false;
   selectedResponses: Set<number> = new Set<number>();
   selectedTypeResponses: Set<number> = new Set<number>();
   selectedStatusResponses: Set<number> = new Set<number>();
+  duplicateResponseSelections: Map<string, number> = new Map<string, number>(); // Maps duplicate key to selected response ID
 
   pageSizeOptions = [25, 50, 100, 200];
 
   paginatedVariables = new MatTableDataSource<InvalidVariableDto>([]);
   paginatedTypeVariables = new MatTableDataSource<InvalidVariableDto>([]);
   paginatedStatusVariables = new MatTableDataSource<InvalidVariableDto>([]);
+
+  // Duplicate responses validation properties
+  duplicateResponses: DuplicateResponseSelectionDto[] = [];
+  duplicateResponsesResult: DuplicateResponsesResultDto | null = null;
+  totalDuplicateResponses: number = 0;
+  paginatedDuplicateResponses: DuplicateResponseSelectionDto[] = [];
+  duplicateResponsesPageSize: number = 10;
+  currentDuplicateResponsesPage: number = 1;
 
   constructor(
     @Inject(MAT_DIALOG_DATA) public data: unknown,
@@ -851,6 +866,10 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
     this.expandedGroupResponsesPanel = !this.expandedGroupResponsesPanel;
   }
 
+  toggleDuplicateResponsesExpansion(): void {
+    this.expandedDuplicateResponsesPanel = !this.expandedDuplicateResponsesPanel;
+  }
+
   validateGroupResponses(): void {
     this.isGroupResponsesValidationRunning = true;
     this.groupResponsesResult = null;
@@ -945,12 +964,350 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
     this.subscriptions.push(subscription);
   }
 
+  validateDuplicateResponses(): void {
+    this.isDuplicateResponsesValidationRunning = true;
+    this.duplicateResponses = [];
+    this.duplicateResponsesResult = null;
+    this.totalDuplicateResponses = 0;
+    this.validateDuplicateResponsesWasRun = false;
+    this.currentDuplicateResponsesPage = 1;
+    this.duplicateResponseSelections.clear();
+
+    // Cancel any existing subscription
+    this.subscriptions.forEach(sub => sub.unsubscribe());
+    this.subscriptions = [];
+
+    // Create a background validation task
+    const subscription = this.backendService.createValidationTask(
+      this.appService.selectedWorkspaceId,
+      'duplicateResponses',
+      this.currentDuplicateResponsesPage,
+      this.duplicateResponsesPageSize
+    ).subscribe(task => {
+      // Poll for task completion
+      const pollSubscription = this.backendService.pollValidationTask(
+        this.appService.selectedWorkspaceId,
+        task.id
+      ).subscribe({
+        next: updatedTask => {
+          // Update progress if available
+          if (updatedTask.progress) {
+            // Could show progress here if needed
+          }
+
+          // If task is completed, get the results
+          if (updatedTask.status === 'completed') {
+            this.backendService.getValidationResults(
+              this.appService.selectedWorkspaceId,
+              updatedTask.id
+            ).subscribe(result => {
+              // Type the result as DuplicateResponsesResultDto
+              const typedResult = result as DuplicateResponsesResultDto;
+
+              // Check if the result indicates errors (duplicate responses found)
+              const hasErrors = typedResult.total > 0;
+
+              // Create a validation result with the appropriate status
+              const validationResult: ValidationResult = {
+                status: hasErrors ? 'failed' : 'success',
+                timestamp: Date.now(),
+                details: {
+                  total: typedResult.total,
+                  hasErrors: hasErrors
+                }
+              };
+
+              // Store the result in the validation task state service
+              this.validationTaskStateService.setValidationResult(
+                this.appService.selectedWorkspaceId,
+                'duplicateResponses',
+                validationResult
+              );
+
+              // Convert to DuplicateResponseSelectionDto[] and initialize selections
+              this.duplicateResponses = typedResult.data.map(duplicate => {
+                // For each duplicate, select the first response by default
+                const defaultSelectedId = duplicate.duplicates.length > 0 ?
+                  duplicate.duplicates[0].responseId : undefined;
+
+                if (defaultSelectedId) {
+                  const key = `${duplicate.unitId}_${duplicate.variableId}_${duplicate.testTakerLogin}`;
+                  this.duplicateResponseSelections.set(key, defaultSelectedId);
+                }
+
+                return {
+                  ...duplicate,
+                  key: `${duplicate.unitId}_${duplicate.variableId}_${duplicate.testTakerLogin}`
+                };
+              });
+
+              this.totalDuplicateResponses = typedResult.total;
+              this.duplicateResponsesResult = typedResult;
+              this.updatePaginatedDuplicateResponses();
+              this.isDuplicateResponsesValidationRunning = false;
+              this.validateDuplicateResponsesWasRun = true;
+
+              // Save the validation result to the service
+              this.saveValidationResult('duplicateResponses');
+            });
+          } else if (updatedTask.status === 'failed') {
+            this.snackBar.open(`Validierung fehlgeschlagen: ${updatedTask.error || 'Unbekannter Fehler'}`, 'Schließen', { duration: 5000 });
+            this.isDuplicateResponsesValidationRunning = false;
+          }
+        },
+        error: () => {
+          this.snackBar.open('Fehler beim Abrufen des Validierungsstatus', 'Schließen', { duration: 5000 });
+          this.isDuplicateResponsesValidationRunning = false;
+        }
+      });
+
+      this.subscriptions.push(pollSubscription);
+    });
+
+    this.subscriptions.push(subscription);
+  }
+
   updatePaginatedTypeVariables(): void {
     this.paginatedTypeVariables.data = this.invalidTypeVariables;
   }
 
   updatePaginatedStatusVariables(): void {
     this.paginatedStatusVariables.data = this.invalidStatusVariables;
+  }
+
+  updatePaginatedDuplicateResponses(): void {
+    this.paginatedDuplicateResponses = this.duplicateResponses.slice(
+      (this.currentDuplicateResponsesPage - 1) * this.duplicateResponsesPageSize,
+      this.currentDuplicateResponsesPage * this.duplicateResponsesPageSize
+    );
+  }
+
+  /**
+   * Checks if a specific response is selected for a duplicate
+   * @param duplicate The duplicate response
+   * @param responseId The response ID to check
+   * @returns True if the response is selected, false otherwise
+   */
+  isSelectedDuplicateResponse(duplicate: DuplicateResponseSelectionDto, responseId: number): boolean {
+    return this.duplicateResponseSelections.get(duplicate.key) === responseId;
+  }
+
+  /**
+   * Selects a specific response for a duplicate
+   * @param duplicate The duplicate response
+   * @param responseId The response ID to select
+   */
+  selectDuplicateResponse(duplicate: DuplicateResponseSelectionDto, responseId: number): void {
+    this.duplicateResponseSelections.set(duplicate.key, responseId);
+  }
+
+  /**
+   * Checks if any duplicate responses are selected
+   * @returns True if any duplicate responses are selected, false otherwise
+   */
+  hasSelectedDuplicateResponses(): boolean {
+    return this.duplicateResponseSelections.size > 0;
+  }
+
+  /**
+   * Gets the count of selected duplicate responses
+   * @returns The count of selected duplicate responses
+   */
+  getSelectedDuplicateResponsesCount(): number {
+    return this.duplicateResponseSelections.size;
+  }
+
+  onDuplicateResponsesPageChange(event: PageEvent): void {
+    this.currentDuplicateResponsesPage = event.pageIndex + 1;
+    this.duplicateResponsesPageSize = event.pageSize;
+
+    // Reload data from server with new pagination parameters using background task
+    this.isDuplicateResponsesValidationRunning = true;
+
+    // Cancel any existing subscription
+    this.subscriptions.forEach(sub => sub.unsubscribe());
+    this.subscriptions = [];
+
+    // Create a background validation task
+    const subscription = this.backendService.createValidationTask(
+      this.appService.selectedWorkspaceId,
+      'duplicateResponses',
+      this.currentDuplicateResponsesPage,
+      this.duplicateResponsesPageSize
+    ).subscribe(task => {
+      // Poll for task completion
+      const pollSubscription = this.backendService.pollValidationTask(
+        this.appService.selectedWorkspaceId,
+        task.id
+      ).subscribe({
+        next: updatedTask => {
+          // If task is completed, get the results
+          if (updatedTask.status === 'completed') {
+            this.backendService.getValidationResults(
+              this.appService.selectedWorkspaceId,
+              updatedTask.id
+            ).subscribe(result => {
+              // Type the result as DuplicateResponsesResultDto
+              const typedResult = result as DuplicateResponsesResultDto;
+
+              // Convert to DuplicateResponseSelectionDto[] and preserve selections
+              this.duplicateResponses = typedResult.data.map(duplicate => {
+                const key = `${duplicate.unitId}_${duplicate.variableId}_${duplicate.testTakerLogin}`;
+
+                // If we don't have a selection for this duplicate yet, select the first response by default
+                if (!this.duplicateResponseSelections.has(key) && duplicate.duplicates.length > 0) {
+                  this.duplicateResponseSelections.set(key, duplicate.duplicates[0].responseId);
+                }
+
+                return {
+                  ...duplicate,
+                  key
+                };
+              });
+
+              this.totalDuplicateResponses = typedResult.total;
+              this.duplicateResponsesResult = typedResult;
+              this.updatePaginatedDuplicateResponses();
+              this.isDuplicateResponsesValidationRunning = false;
+            });
+          } else if (updatedTask.status === 'failed') {
+            this.snackBar.open(`Validierung fehlgeschlagen: ${updatedTask.error || 'Unbekannter Fehler'}`, 'Schließen', { duration: 5000 });
+            this.isDuplicateResponsesValidationRunning = false;
+          }
+        },
+        error: () => {
+          this.snackBar.open('Fehler beim Abrufen des Validierungsstatus', 'Schließen', { duration: 5000 });
+          this.isDuplicateResponsesValidationRunning = false;
+        }
+      });
+
+      this.subscriptions.push(pollSubscription);
+    });
+
+    this.subscriptions.push(subscription);
+  }
+
+  /**
+   * Resolves duplicate responses by keeping the selected responses
+   * This method sends the selected responses to the backend for resolution
+   */
+  resolveDuplicateResponses(): void {
+    if (this.isResolvingDuplicateResponses || !this.hasSelectedDuplicateResponses()) {
+      return;
+    }
+
+    this.isResolvingDuplicateResponses = true;
+
+    // Create a map of response IDs to keep
+    const responseIdsToKeep: Record<string, number> = {};
+
+    // Convert the Map to a Record for the API request
+    this.duplicateResponseSelections.forEach((responseId, key) => {
+      responseIdsToKeep[key] = responseId;
+    });
+
+    // Call the validation service to resolve duplicates
+    const request = {
+      resolutionMap: responseIdsToKeep
+    };
+
+    this.validationService.resolveDuplicateResponses(this.appService.selectedWorkspaceId, request)
+      .subscribe({
+        next: result => {
+          if (result.success) {
+            this.snackBar.open(
+              `${result.resolvedCount} doppelte Antworten wurden erfolgreich aufgelöst.`,
+              'OK',
+              { duration: 3000 }
+            );
+
+            // Refresh the duplicate responses list
+            this.validateDuplicateResponses();
+          } else {
+            this.snackBar.open(
+              'Fehler beim Auflösen der doppelten Antworten.',
+              'Fehler',
+              { duration: 3000 }
+            );
+          }
+          this.isResolvingDuplicateResponses = false;
+        },
+        error: () => {
+          this.snackBar.open(
+            'Fehler beim Auflösen der doppelten Antworten.',
+            'Fehler',
+            { duration: 3000 }
+          );
+          this.isResolvingDuplicateResponses = false;
+        }
+      });
+  }
+
+  /**
+   * Resolves all duplicate responses automatically by keeping the first response for each duplicate
+   * This method uses the deleteAllInvalidResponses endpoint with 'duplicateResponses' type
+   */
+  resolveAllDuplicateResponses(): void {
+    if (this.isResolvingDuplicateResponses || this.duplicateResponses.length === 0) {
+      return;
+    }
+
+    this.isResolvingDuplicateResponses = true;
+
+    // Create a background task to delete all duplicate responses except the first one
+    const subscription = this.backendService.createValidationTask(
+      this.appService.selectedWorkspaceId,
+      'deleteAllResponses',
+      undefined,
+      undefined,
+      { validationType: 'duplicateResponses' }
+    ).subscribe(task => {
+      // Poll for task completion
+      const pollSubscription = this.backendService.pollValidationTask(
+        this.appService.selectedWorkspaceId,
+        task.id
+      ).subscribe({
+        next: updatedTask => {
+          if (updatedTask.status === 'completed') {
+            this.backendService.getValidationResults(
+              this.appService.selectedWorkspaceId,
+              updatedTask.id
+            ).subscribe(result => {
+              const typedResult = result as { deletedCount: number };
+
+              this.snackBar.open(
+                `${typedResult.deletedCount} doppelte Antworten wurden automatisch aufgelöst.`,
+                'OK',
+                { duration: 3000 }
+              );
+
+              // Refresh the duplicate responses list
+              this.validateDuplicateResponses();
+              this.isResolvingDuplicateResponses = false;
+            });
+          } else if (updatedTask.status === 'failed') {
+            this.snackBar.open(
+              `Fehler beim Auflösen der doppelten Antworten: ${updatedTask.error || 'Unbekannter Fehler'}`,
+              'Fehler',
+              { duration: 3000 }
+            );
+            this.isResolvingDuplicateResponses = false;
+          }
+        },
+        error: () => {
+          this.snackBar.open(
+            'Fehler beim Auflösen der doppelten Antworten.',
+            'Fehler',
+            { duration: 3000 }
+          );
+          this.isResolvingDuplicateResponses = false;
+        }
+      });
+
+      this.subscriptions.push(pollSubscription);
+    });
+
+    this.subscriptions.push(subscription);
   }
 
   validateVariables(): void {
@@ -2210,10 +2567,11 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
            this.isVariableTypeValidationRunning ||
            this.isResponseStatusValidationRunning ||
            this.isTestTakersValidationRunning ||
-           this.isGroupResponsesValidationRunning;
+           this.isGroupResponsesValidationRunning ||
+           this.isDuplicateResponsesValidationRunning;
   }
 
-  hasValidationFailed(type: 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'groupResponses'): boolean {
+  hasValidationFailed(type: 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'groupResponses' | 'duplicateResponses'): boolean {
     switch (type) {
       case 'variables':
         return this.validateVariablesWasRun && this.totalInvalidVariables > 0;
@@ -2235,12 +2593,14 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
                  !this.groupResponsesResult.testTakersFound ||
                  !this.groupResponsesResult.allGroupsHaveResponses
                );
+      case 'duplicateResponses':
+        return this.validateDuplicateResponsesWasRun && this.totalDuplicateResponses > 0;
       default:
         return false;
     }
   }
 
-  hasValidationSucceeded(type: 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'groupResponses'): boolean {
+  hasValidationSucceeded(type: 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'groupResponses' | 'duplicateResponses'): boolean {
     switch (type) {
       case 'variables':
         return this.validateVariablesWasRun && this.totalInvalidVariables === 0;
@@ -2258,12 +2618,14 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
                this.groupResponsesResult !== null &&
                this.groupResponsesResult.testTakersFound &&
                this.groupResponsesResult.allGroupsHaveResponses;
+      case 'duplicateResponses':
+        return this.validateDuplicateResponsesWasRun && this.totalDuplicateResponses === 0;
       default:
         return false;
     }
   }
 
-  getValidationStatus(type: 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'groupResponses'): 'running' | 'failed' | 'success' | 'not-run' {
+  getValidationStatus(type: 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'groupResponses' | 'duplicateResponses'): 'running' | 'failed' | 'success' | 'not-run' {
     switch (type) {
       case 'variables':
         if (this.isVariableValidationRunning) return 'running';
@@ -2290,12 +2652,17 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
         if (this.hasValidationFailed('groupResponses')) return 'failed';
         if (this.hasValidationSucceeded('groupResponses')) return 'success';
         return 'not-run';
+      case 'duplicateResponses':
+        if (this.isDuplicateResponsesValidationRunning) return 'running';
+        if (this.hasValidationFailed('duplicateResponses')) return 'failed';
+        if (this.hasValidationSucceeded('duplicateResponses')) return 'success';
+        return 'not-run';
       default:
         return 'not-run';
     }
   }
 
-  getValidationLabel(type: 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'groupResponses'): string {
+  getValidationLabel(type: 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'groupResponses' | 'duplicateResponses'): string {
     switch (type) {
       case 'variables':
         return 'Variable definiert';
@@ -2307,12 +2674,14 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
         return 'Testperson definiert';
       case 'groupResponses':
         return 'Antworten für alle Gruppen';
+      case 'duplicateResponses':
+        return 'Doppelte Antworten';
       default:
         return '';
     }
   }
 
-  private saveValidationResult(type: 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'groupResponses'): void {
+  private saveValidationResult(type: 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'groupResponses' | 'duplicateResponses'): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     const status = this.getValidationStatus(type);
 
@@ -2330,7 +2699,7 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
     }
   }
 
-  private getValidationDetails(type: 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'groupResponses'): unknown {
+  private getValidationDetails(type: 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'groupResponses' | 'duplicateResponses'): unknown {
     switch (type) {
       case 'variables':
         return {
@@ -2362,6 +2731,11 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
           allGroupsHaveResponses: this.groupResponsesResult.allGroupsHaveResponses,
           hasErrors: !this.groupResponsesResult.testTakersFound ||
                     !this.groupResponsesResult.allGroupsHaveResponses
+        };
+      case 'duplicateResponses':
+        return {
+          total: this.totalDuplicateResponses,
+          hasErrors: this.totalDuplicateResponses > 0
         };
       default:
         return {};
