@@ -13,6 +13,13 @@ import { FileValidationResultDto } from '../../../../../api-dto/files/file-valid
 import { FileDownloadDto } from '../../../../../api-dto/files/file-download.dto';
 import { SERVER_URL } from '../injection-tokens';
 
+export interface BookletUnit {
+  id: number;
+  name: string;
+  alias: string | null;
+  bookletId: number;
+}
+
 interface PaginatedResponse<T> {
   data: T[];
   total: number;
@@ -173,6 +180,19 @@ export class FileService {
       { headers: this.authHeader }
     ).pipe(
       catchError(() => of(false))
+    );
+  }
+
+  getBookletUnits(workspaceId: number, bookletId: string, authToken?: string): Observable<BookletUnit[]> {
+    const headers = authToken ? { Authorization: `Bearer ${authToken}` } : this.authHeader;
+    return this.http.get<BookletUnit[]>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/booklet/${bookletId}/units`,
+      { headers }
+    ).pipe(
+      catchError(error => {
+        console.error(`Error retrieving booklet units for ${bookletId}:`, error);
+        return of([]);
+      })
     );
   }
 }

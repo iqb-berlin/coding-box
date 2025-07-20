@@ -1,10 +1,42 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { parseStringPromise } from 'xml2js';
 import FileUpload from '../entities/file_upload.entity';
 import { FilesDto } from '../../../../../../api-dto/files/files.dto';
 import Persons from '../entities/persons.entity';
 import { ResponseEntity } from '../entities/response.entity';
+
+export interface BookletUnit {
+  id: number;
+  name: string;
+  alias: string | null;
+  bookletId: number;
+}
+
+interface IndexTracker {
+  currentIndex: number;
+}
+
+interface XmlElementWithAttributes {
+  $?: {
+    id?: string;
+    alias?: string;
+    label?: string;
+  };
+}
+
+interface BookletElement {
+  Unit?: XmlElementWithAttributes[];
+  Testlet?: TestletElement[];
+  $?: {
+    id?: string;
+  };
+}
+
+interface TestletElement extends BookletElement {
+  // Testlet extends BookletElement to allow for nested testlets
+}
 
 @Injectable()
 export class WorkspacePlayerService {
@@ -145,5 +177,125 @@ export class WorkspacePlayerService {
       return res;
     }
     return [];
+  }
+
+  async getBookletUnits(workspaceId: number, bookletId: string): Promise<BookletUnit[]> {
+    this.logger.log(`Getting units for booklet ${bookletId} in workspace ${workspaceId}`);
+
+    try {
+      const bookletFiles = await this.fileUploadRepository.find({
+        where: {
+          file_id: bookletId.toUpperCase(),
+          workspace_id: workspaceId
+        }
+      });
+
+      if (!bookletFiles || bookletFiles.length === 0) {
+        this.logger.error(`Booklet file with ID ${bookletId} not found in workspace ${workspaceId}`);
+        throw new NotFoundException(`Booklet file with ID ${bookletId} not found`);
+      }
+
+      const bookletFile = bookletFiles[0];
+      const bookletData = bookletFile.data;
+
+      const units: BookletUnit[] = [];
+      let parsedBookletId = 0;
+
+      try {
+        const result = await parseStringPromise(bookletData);
+
+        if (result.Booklet && result.Booklet.$) {
+          parsedBookletId = parseInt(result.Booklet.$.id || '0', 10) || 0;
+          this.logger.log(`Parsed booklet ID: ${parsedBookletId}`);
+        }
+
+        if (result.Booklet && result.Booklet.Units && result.Booklet.Units[0]) {
+          const unitsElement = result.Booklet.Units[0];
+
+          const indexTracker = { currentIndex: 0 };
+
+          this.logger.log(`Starting to process booklet structure with ID: ${parsedBookletId}`);
+
+          // Process all units and testlets in the booklet
+          this.processUnitsAndTestlets(unitsElement, units, parsedBookletId, indexTracker);
+
+          this.logger.log(`Finished processing booklet structure. Final index: ${indexTracker.currentIndex}`);
+
+          this.logger.log(`Found ${units.length} total units in booklet ${bookletId}`);
+        }
+      } catch (error) {
+        this.logger.error(`Error parsing booklet XML: ${error.message}`, error.stack);
+        throw new Error(`Error parsing booklet XML: ${error.message}`);
+      }
+
+      if (units.length === 0) {
+        this.logger.warn(`No units found in booklet ${bookletId}`);
+      }
+
+      return units;
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      this.logger.error(`Error getting units for booklet ${bookletId}: ${error.message}`, error.stack);
+      throw new Error(`Error getting units for booklet ${bookletId}: ${error.message}`);
+    }
+  }
+
+  private processUnitsAndTestlets(
+    element: BookletElement,
+    units: BookletUnit[],
+    bookletId: number,
+    indexTracker: IndexTracker
+  ): void {
+    // Process direct Unit elements if they exist
+    if (element.Unit && Array.isArray(element.Unit)) {
+      this.logger.log(`Processing ${element.Unit.length} direct Unit elements`);
+      element.Unit.forEach((unitElement: XmlElementWithAttributes) => {
+        if (unitElement && unitElement.$) {
+          this.addUnitToList(unitElement, units, bookletId, indexTracker);
+        }
+      });
+    }
+
+    // Process Testlet elements if they exist
+    if (element.Testlet && Array.isArray(element.Testlet)) {
+      this.logger.log(`Processing ${element.Testlet.length} Testlet elements`);
+      element.Testlet.forEach((testlet: TestletElement) => {
+        // Log testlet ID for debugging
+        if (testlet && testlet.$) {
+          this.logger.log(`Processing Testlet with ID: ${testlet.$.id || 'unknown'}`);
+        }
+
+        // Process units inside this testlet
+        this.processUnitsAndTestlets(testlet, units, bookletId, indexTracker);
+      });
+    }
+  }
+
+  private addUnitToList(
+    unitElement: XmlElementWithAttributes,
+    units: BookletUnit[],
+    bookletId: number,
+    indexTracker: IndexTracker
+  ): void {
+    if (unitElement && unitElement.$) {
+      // Use the current index and then increment it
+      const currentIndex = indexTracker.currentIndex;
+      indexTracker.currentIndex += 1;
+
+      const unitId = parseInt(unitElement.$.id || '0', 10) || currentIndex + 1;
+      const unitName = unitElement.$.id || '';
+      const unitAlias = unitElement.$.alias || unitElement.$.label || null;
+
+      units.push({
+        id: unitId,
+        name: unitName,
+        alias: unitAlias,
+        bookletId: bookletId
+      });
+
+      this.logger.log(`Added unit: ${unitName} (${unitAlias || 'no alias'})`);
+    }
   }
 }

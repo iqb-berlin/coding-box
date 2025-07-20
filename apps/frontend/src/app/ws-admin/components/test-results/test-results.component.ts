@@ -54,6 +54,7 @@ import { ValidationDialogComponent } from '../validation-dialog/validation-dialo
 import { VariableValidationDto } from '../../../../../../../api-dto/files/variable-validation.dto';
 import { VariableAnalysisDialogComponent } from '../variable-analysis-dialog/variable-analysis-dialog.component';
 import { ValidationTaskStateService } from '../../../services/validation-task-state.service';
+import { BookletReplay, BookletReplayService } from '../../../services/booklet-replay.service';
 
 interface BookletLog {
   id: number;
@@ -181,6 +182,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   private snackBar = inject(MatSnackBar);
   private translateService = inject(TranslateService);
   private validationTaskStateService = inject(ValidationTaskStateService);
+  private bookletReplayService = inject(BookletReplayService);
   private searchSubject = new Subject<string>();
   private searchSubscription: Subscription | null = null;
   private readonly SEARCH_DEBOUNCE_TIME = 800;
@@ -475,7 +477,77 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     });
   }
 
-  replayBooklet() {
+  replayBooklet(booklet: Booklet) {
+    if (!booklet || !booklet.name) {
+      this.snackBar.open(
+        'Ungültiges Testheft',
+        'Info',
+        { duration: 3000 }
+      );
+      return;
+    }
+
+    // Show loading indicator
+    const loadingSnackBar = this.snackBar.open(
+      'Lade Testheft...',
+      '',
+      { duration: 3000 }
+    );
+
+    // Get the booklet from file_upload using the new method
+    this.bookletReplayService.getBookletFromFileUpload(
+      this.appService.selectedWorkspaceId,
+      booklet.name
+    ).subscribe({
+      next: bookletReplay => {
+        loadingSnackBar.dismiss();
+
+        if (!bookletReplay || !bookletReplay.units || bookletReplay.units.length === 0) {
+          this.snackBar.open(
+            'Keine Units im Testheft vorhanden',
+            'Info',
+            { duration: 3000 }
+          );
+          return;
+        }
+
+        // Serialize the booklet data for URL transmission
+        console.log(bookletReplay);
+        const serializedBooklet = this.serializeBookletData(bookletReplay);
+
+        const firstUnit = bookletReplay.units[0];
+
+        this.appService
+          .createToken(this.appService.selectedWorkspaceId, this.appService.loggedUser?.sub || '', 1)
+          .subscribe(token => {
+            const queryParams = {
+              auth: token,
+              mode: 'booklet',
+              bookletData: serializedBooklet
+            };
+
+            // Construct the URL with the first unit
+            const url = this.router
+              .serializeUrl(
+                this.router.createUrlTree(
+                  [`replay/${this.testPerson.login}@${this.testPerson.code}@${booklet.name}/${firstUnit.name}/0/0`],
+                  { queryParams: queryParams })
+              );
+
+            // Open the replay in a new tab
+            window.open(`#/${url}`, '_blank');
+          });
+      },
+      error: error => {
+        loadingSnackBar.dismiss();
+        console.error('Error loading booklet:', error);
+        this.snackBar.open(
+          'Fehler beim Laden des Testhefts',
+          'Fehler',
+          { duration: 3000 }
+        );
+      }
+    });
   }
 
   replayUnit() {
@@ -671,7 +743,6 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       this.unitNotes = [];
     }
   }
-
 
   hasUnitNotes(unitId: number): boolean {
     if (!unitId || !this.unitNotesMap.has(unitId)) {
@@ -1337,6 +1408,18 @@ export class TestResultsComponent implements OnInit, OnDestroy {
         this.getOverallValidationStatus();
       }
     });
+  }
+
+  private serializeBookletData(booklet: BookletReplay): string {
+    try {
+      // Convert the booklet to a JSON string
+      const jsonString = JSON.stringify(booklet);
+
+      // Base64 encode the JSON string to make it URL-safe
+      return btoa(jsonString);
+    } catch (error) {
+      return '';
+    }
   }
 
   openVariableAnalysisDialog(): void {

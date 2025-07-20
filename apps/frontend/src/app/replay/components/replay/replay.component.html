@@ -1,6 +1,28 @@
-<div class="replay-container" [class.print-mode]="isPrintMode">
+<div class="replay-container" [class.print-mode]="isPrintMode" [class.booklet-mode]="isBookletMode">
   <cb-spinner [isLoaded]="isLoaded"></cb-spinner>
-  @if (!!player && unitDef ){
+
+  <!-- Booklet navigation controls - only visible in booklet mode -->
+  @if (isBookletMode && !!player && unitDef) {
+    <div class="booklet-navigation">
+      <div class="navigation-controls">
+        <button class="nav-button prev-button" [disabled]="!hasPreviousUnit()" (click)="previousUnit()">
+          <span class="nav-icon">←</span> Vorherige Aufgabe
+        </button>
+
+        <div class="unit-position">
+          <span class="current-position">{{ currentUnitIndex + 1 }}</span>
+          <span class="position-separator">/</span>
+          <span class="total-units">{{ totalUnits }}</span>
+        </div>
+
+        <button class="nav-button next-button" [disabled]="!hasNextUnit()" (click)="nextUnit()">
+          Nächste Aufgabe <span class="nav-icon">→</span>
+        </button>
+      </div>
+    </div>
+  }
+
+  @if (!!player && unitDef) {
     <coding-box-unit-player
       [unitDef]="unitDef"
       [unitPlayer]="player"
