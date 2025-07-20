@@ -44,6 +44,7 @@ import { ImportOptions, Result } from '../ws-admin/components/test-center-import
 import { UpdateUnitNoteDto } from '../../../../../api-dto/unit-notes/update-unit-note.dto';
 import { ResponseDto } from '../../../../../api-dto/responses/response-dto';
 import { InvalidVariableDto } from '../../../../../api-dto/files/variable-validation.dto';
+import { BookletInfoDto } from '../../../../../api-dto/booklet-info/booklet-info.dto';
 
 interface PaginatedResponse<T> {
   data: T[];
@@ -347,6 +348,10 @@ export class BackendService {
 
   getBookletUnits(workspaceId: number, bookletId: string, authToken?: string): Observable<BookletUnit[]> {
     return this.fileService.getBookletUnits(workspaceId, bookletId, authToken);
+  }
+
+  getBookletInfo(workspaceId: number, bookletId: string, authToken?: string): Observable<BookletInfoDto> {
+    return this.fileService.getBookletInfo(workspaceId, bookletId, authToken);
   }
 
   getTestPersons(workspaceId: number): Observable<number[]> {
