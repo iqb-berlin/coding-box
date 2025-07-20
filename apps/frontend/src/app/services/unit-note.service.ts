@@ -32,6 +32,13 @@ export class UnitNoteService {
       { headers: this.authHeader });
   }
 
+  getNotesForMultipleUnits(workspaceId: number, unitIds: number[]): Observable<{ [unitId: number]: UnitNoteDto[] }> {
+    return this.http.post<{ [unitId: number]: UnitNoteDto[] }>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/unit-notes/units/notes`,
+      { unitIds },
+      { headers: this.authHeader });
+  }
+
   getUnitNote(workspaceId: number, noteId: number): Observable<UnitNoteDto> {
     return this.http.get<UnitNoteDto>(
       `${this.serverUrl}admin/workspace/${workspaceId}/unit-notes/${noteId}`,

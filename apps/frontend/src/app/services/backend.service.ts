@@ -298,6 +298,10 @@ export class BackendService {
     return this.unitNoteService.getUnitNotes(workspaceId, unitId);
   }
 
+  getNotesForMultipleUnits(workspaceId: number, unitIds: number[]): Observable<{ [unitId: number]: UnitNoteDto[] }> {
+    return this.unitNoteService.getNotesForMultipleUnits(workspaceId, unitIds);
+  }
+
   getUnitNote(workspaceId: number, noteId: number): Observable<UnitNoteDto> {
     return this.unitNoteService.getUnitNote(workspaceId, noteId);
   }

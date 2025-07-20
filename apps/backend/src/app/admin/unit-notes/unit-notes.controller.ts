@@ -110,6 +110,37 @@ export class UnitNotesController {
     }
   }
 
+  @Post('units/notes')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get all notes for multiple units',
+    description: 'Retrieves all notes for the specified units'
+  })
+  @ApiParam({
+    name: 'workspace_id',
+    type: Number,
+    required: true,
+    description: 'The ID of the workspace'
+  })
+  @ApiOkResponse({
+    description: 'The notes have been successfully retrieved.',
+    type: Object
+  })
+  @ApiBadRequestResponse({
+    description: 'Invalid input data.'
+  })
+  async findAllByUnitIds(
+    @WorkspaceId() workspaceId: number,
+      @Body() { unitIds }: { unitIds: number[] }
+  ): Promise<{ [unitId: number]: UnitNoteDto[] }> {
+    try {
+      return await this.unitNoteService.findAllByUnitIds(unitIds);
+    } catch (error) {
+      throw new BadRequestException(`Failed to retrieve notes: ${error.message}`);
+    }
+  }
+
   @Get(':id')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiBearerAuth()
