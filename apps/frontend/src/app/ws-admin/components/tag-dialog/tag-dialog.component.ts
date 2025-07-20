@@ -155,16 +155,27 @@ import { CreateUnitTagDto } from '../../../../../../../api-dto/unit-tags/create-
     }
 
     .tag-action-button {
-      width: 24px;
-      height: 24px;
-      line-height: 24px;
+      width: 45px;
+      height: 30px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background-color: rgba(244, 67, 54, 0.1);
+      border-radius: 15px;
+      transition: all 0.2s ease;
+    }
+
+    .tag-action-button:hover {
+      background-color: rgba(244, 67, 54, 0.2);
+      transform: scale(1.05);
     }
 
     .tag-action-button mat-icon {
-      font-size: 16px;
-      width: 16px;
-      height: 16px;
-      line-height: 16px;
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+      margin: 0;
+      color: #f44336;
     }
 
     .add-tag-form {

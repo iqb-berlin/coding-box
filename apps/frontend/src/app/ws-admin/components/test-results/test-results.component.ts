@@ -212,10 +212,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   isVariableValidationRunning: boolean = false;
   variableValidationResult: VariableValidationDto | null = null;
   readonly SHORT_PROCESSING_TIME_THRESHOLD_MS: number = 60000;
-
-  // Interval for checking validation status
   private validationStatusInterval: number | null = null;
-  // Flag to track if component is initialized
   private isInitialized: boolean = false;
 
   @ViewChild(MatPaginator) paginator!: MatPaginator;
@@ -230,8 +227,6 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     });
 
     this.createTestResultsList(0, this.pageSize);
-
-    // Start interval to check validation status
     this.startValidationStatusCheck();
     this.isInitialized = true;
   }
@@ -356,6 +351,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     this.bookletLogs = [];
     this.selectedUnit = undefined;
     this.unitTagsMap.clear();
+    this.unitNotesMap.clear();
     this.isLoadingBooklets = true;
     this.backendService.getPersonTestResults(this.appService.selectedWorkspaceId, row.id)
       .subscribe({
@@ -366,6 +362,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           this.sortBooklets();
           this.sortBookletUnits();
           this.loadAllUnitTags();
+          this.loadAllUnitNotes();
           this.isLoadingBooklets = false;
         },
         error: () => {
@@ -436,6 +433,48 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     });
   }
 
+  loadAllUnitNotes(): void {
+    if (!this.booklets || this.booklets.length === 0) {
+      return;
+    }
+
+    this.unitNotesMap.clear();
+
+    // Extract all unit IDs from the booklets
+    const unitIds: number[] = [];
+    this.booklets.forEach(booklet => {
+      if (booklet.units && Array.isArray(booklet.units)) {
+        booklet.units.forEach(unit => {
+          if (unit.id) {
+            unitIds.push(unit.id);
+          }
+        });
+      }
+    });
+
+    if (unitIds.length === 0) {
+      return;
+    }
+
+    this.backendService.getNotesForMultipleUnits(
+      this.appService.selectedWorkspaceId,
+      unitIds
+    ).subscribe({
+      next: notesByUnitId => {
+        Object.entries(notesByUnitId).forEach(([unitId, notes]) => {
+          this.unitNotesMap.set(Number(unitId), notes);
+        });
+      },
+      error: () => {
+        this.snackBar.open(
+          'Fehler beim Laden der Notizen',
+          'Fehler',
+          { duration: 3000 }
+        );
+      }
+    });
+  }
+
   replayBooklet() {
   }
 
@@ -465,7 +504,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   openBookletLogsDialog(booklet: Booklet) {
     if (!booklet.logs || booklet.logs.length === 0) {
       this.snackBar.open(
-        'Keine Logs für dieses Booklet vorhanden',
+        'Keine Logs für dieses Testheft vorhanden',
         'Info',
         { duration: 3000 }
       );
@@ -592,7 +631,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     this.selectedUnit = unit;
 
     this.loadUnitTags();
-    // this.loadUnitNotes();
+    this.loadUnitNotes();
   }
 
   loadUnitTags(): void {
@@ -606,28 +645,40 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
   loadUnitNotes(): void {
     if (this.selectedUnit && this.selectedUnit.id) {
-      this.backendService.getUnitNotes(
-        this.appService.selectedWorkspaceId,
-        this.selectedUnit.id as number
-      ).subscribe({
-        next: notes => {
-          this.unitNotes = notes;
-
-          // Update the unitNotesMap
-          // @ts-expect-error - Property 'id' may not exist on type '{ alias: string; }'
-          this.unitNotesMap.set(this.selectedUnit.id as number, notes);
-        },
-        error: () => {
-          this.snackBar.open(
-            'Fehler beim Laden der Notizen',
-            'Fehler',
-            { duration: 3000 }
-          );
-        }
-      });
+      const unitId = this.selectedUnit.id as number;
+      if (this.unitNotesMap.has(unitId)) {
+        // Use the pre-fetched notes
+        this.unitNotes = this.unitNotesMap.get(unitId) || [];
+      } else {
+        this.backendService.getUnitNotes(
+          this.appService.selectedWorkspaceId,
+          unitId
+        ).subscribe({
+          next: notes => {
+            this.unitNotes = notes;
+            this.unitNotesMap.set(unitId, notes);
+          },
+          error: () => {
+            this.snackBar.open(
+              'Fehler beim Laden der Notizen',
+              'Fehler',
+              { duration: 3000 }
+            );
+          }
+        });
+      }
     } else {
       this.unitNotes = [];
     }
+  }
+
+
+  hasUnitNotes(unitId: number): boolean {
+    if (!unitId || !this.unitNotesMap.has(unitId)) {
+      return false;
+    }
+    const notes = this.unitNotesMap.get(unitId) || [];
+    return notes.length > 0;
   }
 
   addUnitTag(): void {
