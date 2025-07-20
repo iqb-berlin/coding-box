@@ -3,14 +3,14 @@ import {
   Get, Param, UseGuards
 } from '@nestjs/common';
 import {
-  ApiParam, ApiTags
+  ApiOperation, ApiParam, ApiResponse, ApiTags
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
 import { FilesDto } from '../../../../../../api-dto/files/files.dto';
 import FileUpload from '../../database/entities/file_upload.entity';
-import { WorkspacePlayerService } from '../../database/services/workspace-player.service';
+import { WorkspacePlayerService, BookletUnit } from '../../database/services/workspace-player.service';
 import { ResponseEntity } from '../../database/entities/response.entity';
 
 @ApiTags('Admin Workspace Player')
@@ -58,5 +58,22 @@ export class WorkspacePlayerController {
     @Param('unitId') unitId:string): Promise<FileUpload[]> {
     const unitIdToUpperCase = unitId.toUpperCase();
     return this.workspacePlayerService.findUnit(id, unitIdToUpperCase);
+  }
+
+  @Get(':workspace_id/booklet/:bookletId/units')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiParam({ name: 'bookletId', type: String })
+  @ApiOperation({ summary: 'Get units from a booklet in order' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns an array of units from the booklet in the correct order',
+  })
+
+  async getBookletUnits(
+    @WorkspaceId() workspaceId: number,
+      @Param('bookletId') bookletId: string
+  ): Promise<BookletUnit[]> {
+    return this.workspacePlayerService.getBookletUnits(workspaceId, bookletId);
   }
 }

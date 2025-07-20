@@ -12,7 +12,7 @@ import { TestGroupsInfoDto } from '../../../../../api-dto/files/test-groups-info
 import { SERVER_URL } from '../injection-tokens';
 import { UserService } from './user.service';
 import { WorkspaceService } from './workspace.service';
-import { FileService } from './file.service';
+import { FileService, BookletUnit } from './file.service';
 import { CodingService } from './coding.service';
 import { UnitTagService } from './unit-tag.service';
 import { UnitNoteService } from './unit-note.service';
@@ -343,6 +343,10 @@ export class BackendService {
 
   getUnit(workspaceId: number, unitId: string, authToken?: string): Observable<FilesDto[]> {
     return this.fileService.getUnit(workspaceId, unitId, authToken);
+  }
+
+  getBookletUnits(workspaceId: number, bookletId: string, authToken?: string): Observable<BookletUnit[]> {
+    return this.fileService.getBookletUnits(workspaceId, bookletId, authToken);
   }
 
   getTestPersons(workspaceId: number): Observable<number[]> {

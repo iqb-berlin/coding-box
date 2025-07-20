@@ -92,11 +92,9 @@ export function scrollToElementByAlias(
   options?: ScrollIntoViewOptions
 ): boolean {
   try {
-    console.log(iframe);
     const elements = findElementsByDataAlias(iframe);
     const element = elements[alias];
     if (element) {
-      // Use scrollIntoView with smooth behavior by default
       element.scrollIntoView(options || { behavior: 'smooth', block: 'center' });
       return true;
     }
