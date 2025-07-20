@@ -1,0 +1,158 @@
+<div class="dialog-container">
+  <div class="dialog-header">
+    <h2 class="dialog-title">Booklet Information: {{ data.bookletId }}</h2>
+    <button mat-icon-button (click)="close()" class="close-button">
+      <mat-icon>close</mat-icon>
+    </button>
+  </div>
+
+  <mat-divider></mat-divider>
+
+  <div class="dialog-content">
+    <!-- Loading spinner -->
+    <div *ngIf="isLoading" class="loading-container">
+      <mat-spinner diameter="40"></mat-spinner>
+      <p>Loading booklet information...</p>
+    </div>
+
+    <!-- Error message -->
+    <div *ngIf="errorMessage" class="error-container">
+      <mat-icon color="warn">error</mat-icon>
+      <p>{{ errorMessage }}</p>
+    </div>
+
+    <!-- Booklet info content -->
+    <div *ngIf="!isLoading && !errorMessage && data.bookletInfo" class="booklet-info">
+      <mat-tab-group>
+        <!-- Metadata tab -->
+        <mat-tab label="Metadata">
+          <div class="tab-content">
+            <div class="info-section">
+              <h3>Booklet Metadata</h3>
+              <div class="info-item">
+                <span class="info-label">ID:</span>
+                <span class="info-value">{{ data.bookletInfo.metadata.id }}</span>
+              </div>
+              <div *ngIf="data.bookletInfo.metadata.label" class="info-item">
+                <span class="info-label">Label:</span>
+                <span class="info-value">{{ data.bookletInfo.metadata.label }}</span>
+              </div>
+              <div *ngIf="data.bookletInfo.metadata.description" class="info-item">
+                <span class="info-label">Description:</span>
+                <span class="info-value">{{ data.bookletInfo.metadata.description }}</span>
+              </div>
+            </div>
+
+            <div *ngIf="data.bookletInfo.restrictions && data.bookletInfo.restrictions.length > 0" class="info-section">
+              <h3>Restrictions</h3>
+              <div *ngFor="let restriction of data.bookletInfo.restrictions" class="info-item">
+                <span class="info-label">{{ restriction.type }}:</span>
+                <span class="info-value">{{ restriction.value }}</span>
+              </div>
+            </div>
+          </div>
+        </mat-tab>
+
+        <!-- Config tab -->
+        <mat-tab *ngIf="data.bookletInfo.config && data.bookletInfo.config.items && data.bookletInfo.config.items.length > 0"
+                label="Config ({{ data.bookletInfo.config.items.length }})">
+          <div class="tab-content">
+            <div class="info-section">
+              <h3>Booklet Configuration</h3>
+              <div class="config-list">
+                <div *ngFor="let configItem of data.bookletInfo.config.items" class="config-item">
+                  <span class="config-key">{{ configItem.key }}</span>
+                  <span class="config-value">{{ configItem.value }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </mat-tab>
+
+        <!-- Testlets tab -->
+        <mat-tab *ngIf="data.bookletInfo.testlets && data.bookletInfo.testlets.length > 0"
+                label="Testlets ({{ data.bookletInfo.testlets.length }})">
+          <div class="tab-content">
+            <div class="info-section">
+              <h3>Testlets in Booklet</h3>
+              <div class="testlets-list">
+                <div *ngFor="let testlet of data.bookletInfo.testlets" class="testlet-item">
+                  <div class="testlet-header">
+                    <span class="testlet-id">{{ testlet.id }}</span>
+                    <span *ngIf="testlet.label" class="testlet-label">{{ testlet.label }}</span>
+                  </div>
+
+                  <!-- Testlet restrictions -->
+                  <div *ngIf="testlet.restrictions && testlet.restrictions.length > 0" class="testlet-restrictions">
+                    <h4>Restrictions</h4>
+                    <div *ngFor="let restriction of testlet.restrictions" class="testlet-restriction">
+                      <span class="restriction-type">{{ restriction.type }}:</span>
+                      <span class="restriction-value">{{ restriction.value }}</span>
+                    </div>
+                  </div>
+
+                  <!-- Testlet units -->
+                  <div *ngIf="testlet.units && testlet.units.length > 0" class="testlet-units">
+                    <h4>Units ({{ testlet.units.length }})</h4>
+                    <div class="units-list">
+                      <div *ngFor="let unit of testlet.units" class="unit-item">
+                        <div class="unit-header">
+                          <span class="unit-position">#{{ unit.position }}</span>
+                          <span class="unit-id">{{ unit.id }}</span>
+                          <span *ngIf="unit.alias" class="unit-alias">({{ unit.alias }})</span>
+                        </div>
+                        <div *ngIf="unit.label" class="unit-label">
+                          {{ unit.label }}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </mat-tab>
+
+        <!-- Units tab - only shown if there are no testlets -->
+        <mat-tab *ngIf="!data.bookletInfo.testlets || data.bookletInfo.testlets.length === 0"
+                label="Units ({{ data.bookletInfo.units.length }})">
+          <div class="tab-content">
+            <div class="info-section">
+              <h3>Units in Booklet</h3>
+              <div class="units-list">
+                <div *ngFor="let unit of data.bookletInfo.units" class="unit-item">
+                  <div class="unit-header">
+                    <span class="unit-position">#{{ unit.position }}</span>
+                    <span class="unit-id">{{ unit.id }}</span>
+                    <span *ngIf="unit.alias" class="unit-alias">({{ unit.alias }})</span>
+                  </div>
+                  <div *ngIf="unit.label" class="unit-label">
+                    {{ unit.label }}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </mat-tab>
+
+        <!-- XML tab -->
+        <mat-tab label="XML">
+          <div class="tab-content">
+            <div class="info-section">
+              <h3>Raw XML</h3>
+              <div class="xml-content">
+                <pre>{{ data.bookletInfo.rawXml }}</pre>
+              </div>
+            </div>
+          </div>
+        </mat-tab>
+      </mat-tab-group>
+    </div>
+  </div>
+
+  <mat-divider></mat-divider>
+
+  <div class="dialog-actions">
+    <button mat-button (click)="close()">Close</button>
+  </div>
+</div>

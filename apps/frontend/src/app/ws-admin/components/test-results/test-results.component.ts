@@ -55,6 +55,8 @@ import { VariableValidationDto } from '../../../../../../../api-dto/files/variab
 import { VariableAnalysisDialogComponent } from '../variable-analysis-dialog/variable-analysis-dialog.component';
 import { ValidationTaskStateService } from '../../../services/validation-task-state.service';
 import { BookletReplay, BookletReplayService } from '../../../services/booklet-replay.service';
+import { BookletInfoDto } from '../../../../../../../api-dto/booklet-info/booklet-info.dto';
+import { BookletInfoDialogComponent } from '../booklet-info-dialog/booklet-info-dialog.component';
 
 interface BookletLog {
   id: number;
@@ -172,7 +174,8 @@ interface P {
     MatButton,
     MatIconButton,
     MatDivider,
-    MatTooltipModule]
+    MatTooltipModule
+  ]
 })
 export class TestResultsComponent implements OnInit, OnDestroy {
   private dialog = inject(MatDialog);
@@ -512,7 +515,6 @@ export class TestResultsComponent implements OnInit, OnDestroy {
         }
 
         // Serialize the booklet data for URL transmission
-        console.log(bookletReplay);
         const serializedBooklet = this.serializeBookletData(bookletReplay);
 
         const firstUnit = bookletReplay.units[0];
@@ -538,9 +540,8 @@ export class TestResultsComponent implements OnInit, OnDestroy {
             window.open(`#/${url}`, '_blank');
           });
       },
-      error: error => {
+      error: () => {
         loadingSnackBar.dismiss();
-        console.error('Error loading booklet:', error);
         this.snackBar.open(
           'Fehler beim Laden des Testhefts',
           'Fehler',
@@ -1451,6 +1452,39 @@ export class TestResultsComponent implements OnInit, OnDestroy {
         loadingSnackBar.dismiss();
         this.snackBar.open(
           'Fehler beim Laden der Analyse-Aufträge',
+          'Fehler',
+          { duration: 3000 }
+        );
+      }
+    });
+  }
+
+  openBookletInfoDialog(booklet: Booklet): void {
+    const loadingSnackBar = this.snackBar.open(
+      'Lade Booklet-Informationen...',
+      '',
+      { duration: 3000 }
+    );
+
+    this.backendService.getBookletInfo(
+      this.appService.selectedWorkspaceId,
+      booklet.name
+    ).subscribe({
+      next: (bookletInfo: BookletInfoDto) => {
+        loadingSnackBar.dismiss();
+
+        this.dialog.open(BookletInfoDialogComponent, {
+          width: '800px',
+          data: {
+            bookletInfo,
+            bookletId: booklet.name
+          }
+        });
+      },
+      error: () => {
+        loadingSnackBar.dismiss();
+        this.snackBar.open(
+          'Fehler beim Laden der Booklet-Informationen',
           'Fehler',
           { duration: 3000 }
         );

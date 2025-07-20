@@ -191,6 +191,10 @@
                       <mat-icon>list</mat-icon>
                       Logs
                     </button>
+                    <button mat-stroked-button color="primary" (click)="openBookletInfoDialog(booklet)" class="action-button">
+                      <mat-icon>info</mat-icon>
+                      Info
+                    </button>
                   </div>
                   @if (hasShortProcessingTime(booklet) || !isBookletComplete(booklet)) {
                     <div class="booklet-warnings">

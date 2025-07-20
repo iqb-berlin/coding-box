@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { HttpModule } from '@nestjs/axios';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { UsersController } from './users/users.controller';
 import { DatabaseModule } from '../database/database.module';
 import { AuthModule } from '../auth/auth.module';
@@ -18,12 +19,16 @@ import { JournalController } from './workspace/journal.controller';
 import { VariableAnalysisController } from './variable-analysis/variable-analysis.controller';
 import { JobsController } from './jobs/jobs.controller';
 import { ValidationTaskController } from './workspace/validation-task.controller';
+import { BookletInfoController } from './workspace/booklet-info.controller';
+import { BookletInfoService } from '../database/services/booklet-info.service';
+import FileUpload from '../database/entities/file_upload.entity';
 
 @Module({
   imports: [
     DatabaseModule,
     AuthModule,
-    HttpModule
+    HttpModule,
+    TypeOrmModule.forFeature([FileUpload])
   ],
   controllers: [
     UsersController,
@@ -41,8 +46,11 @@ import { ValidationTaskController } from './workspace/validation-task.controller
     JournalController,
     VariableAnalysisController,
     JobsController,
-    ValidationTaskController
+    ValidationTaskController,
+    BookletInfoController
   ],
-  providers: []
+  providers: [
+    BookletInfoService
+  ]
 })
 export class AdminModule {}
