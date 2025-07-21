@@ -45,6 +45,7 @@ import { UpdateUnitNoteDto } from '../../../../../api-dto/unit-notes/update-unit
 import { ResponseDto } from '../../../../../api-dto/responses/response-dto';
 import { InvalidVariableDto } from '../../../../../api-dto/files/variable-validation.dto';
 import { BookletInfoDto } from '../../../../../api-dto/booklet-info/booklet-info.dto';
+import { UnitInfoDto } from '../../../../../api-dto/unit-info/unit-info.dto';
 
 interface PaginatedResponse<T> {
   data: T[];
@@ -352,6 +353,10 @@ export class BackendService {
 
   getBookletInfo(workspaceId: number, bookletId: string, authToken?: string): Observable<BookletInfoDto> {
     return this.fileService.getBookletInfo(workspaceId, bookletId, authToken);
+  }
+
+  getUnitInfo(workspaceId: number, unitId: string, authToken?: string): Observable<UnitInfoDto> {
+    return this.fileService.getUnitInfo(workspaceId, unitId, authToken);
   }
 
   getTestPersons(workspaceId: number): Observable<number[]> {
