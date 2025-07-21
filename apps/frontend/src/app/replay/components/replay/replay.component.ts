@@ -24,7 +24,8 @@ import { SpinnerComponent } from '../spinner/spinner.component';
 import { FilesDto } from '../../../../../../../api-dto/files/files.dto';
 import { ErrorMessages } from '../../models/error-messages.model';
 import { validateToken, isTestperson } from '../../utils/token-utils';
-import { scrollToElementByAlias } from '../../utils/dom-utils';
+import { scrollToElementByAlias, highlightAspectSectionWithAnchor } from '../../utils/dom-utils';
+import { BookletReplay } from '../../../services/booklet-replay.service';
 
 @Component({
   selector: 'coding-box-replay',
@@ -49,6 +50,9 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   isPrintMode: boolean = false;
   testPerson: string = '';
   unitId: string = '';
+  isBookletMode: boolean = false;
+  currentUnitIndex: number = 0;
+  totalUnits: number = 0;
   private authToken: string = '';
   private errorSnackbarRef: MatSnackBarRef<TextOnlySnackBar> | null = null;
   private pageErrorSnackbarRef: MatSnackBarRef<TextOnlySnackBar> | null = null;
@@ -58,6 +62,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   private routerSubscription: Subscription | null = null;
   readonly testPersonInput = input<string>();
   readonly unitIdInput = input<string>();
+  private bookletData: BookletReplay | null = null;
   @ViewChild(UnitPlayerComponent) unitPlayerComponent: UnitPlayerComponent | undefined;
 
   ngOnInit(): void {
@@ -87,12 +92,44 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     return auth;
   }
 
+  private deserializeBookletData(encodedData: string): BookletReplay | null {
+    if (!encodedData) {
+      return null;
+    }
+
+    try {
+      // Decode the Base64 string to get the JSON string
+      const jsonString = atob(encodedData);
+
+      // Parse the JSON string to get the BookletReplay object
+      return JSON.parse(jsonString) as BookletReplay;
+    } catch (error) {
+      console.error('Error deserializing booklet data:', error);
+      return null;
+    }
+  }
+
   subscribeRouter(): void {
     this.routerSubscription = this.route.params
       ?.subscribe(async params => {
         this.resetSnackBars();
         this.resetUnitData();
         this.authToken = await this.getAuthToken();
+
+        const queryParams = await firstValueFrom(this.route.queryParams);
+        this.isBookletMode = queryParams.mode === 'booklet';
+
+        // If in booklet mode and bookletData is provided, deserialize it
+        if (this.isBookletMode && queryParams.bookletData) {
+          const deserializedBooklet = this.deserializeBookletData(queryParams.bookletData);
+          if (deserializedBooklet) {
+            console.log('Deserialized booklet data from URL:', deserializedBooklet);
+            this.bookletData = deserializedBooklet;
+            // Update the component state
+            this.currentUnitIndex = deserializedBooklet.currentUnitIndex;
+            this.totalUnits = deserializedBooklet.units.length;
+          }
+        }
 
         if (this.authToken) {
           const tokenValidation = validateToken(this.authToken);
@@ -128,9 +165,11 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
               if (workspace) {
                 const unitData = await this.getUnitData(Number(workspace), this.authToken);
                 this.setUnitProperties(unitData);
+
                 setTimeout(() => {
                   if (this.unitPlayerComponent?.hostingIframe?.nativeElement) {
                     if (this.anchor) {
+                      highlightAspectSectionWithAnchor(this.unitPlayerComponent.hostingIframe.nativeElement, this.anchor);
                       scrollToElementByAlias(this.unitPlayerComponent.hostingIframe.nativeElement, this.anchor);
                     } else {
                       // When no anchor is provided, scroll to the top of the content
@@ -190,38 +229,44 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   async ngOnChanges(changes: SimpleChanges): Promise<void> {
+    // Handle unitIdInput changes
     // eslint-disable-next-line @typescript-eslint/dot-notation
     if (typeof changes['unitIdInput']?.currentValue === 'undefined') {
       this.resetUnitData();
       this.resetSnackBars();
       return Promise.resolve();
     }
-    this.resetUnitData();
-    this.resetSnackBars();
 
-    if (this.authToken) {
-      const tokenValidation = validateToken(this.authToken);
-      if (!tokenValidation.isValid) {
-        this.setIsLoaded();
-        if (tokenValidation.errorType === 'token_expired') {
-          this.openErrorSnackBar(this.getErrorMessages().tokenExpired, 'Schließen');
-        } else {
-          this.openErrorSnackBar(this.getErrorMessages().tokenInvalid, 'Schließen');
+    // eslint-disable-next-line @typescript-eslint/dot-notation
+    if (changes.unitIdInput) {
+      this.resetUnitData();
+      this.resetSnackBars();
+
+      if (this.authToken) {
+        const tokenValidation = validateToken(this.authToken);
+        if (!tokenValidation.isValid) {
+          this.setIsLoaded();
+          if (tokenValidation.errorType === 'token_expired') {
+            this.openErrorSnackBar(this.getErrorMessages().tokenExpired, 'Schließen');
+          } else {
+            this.openErrorSnackBar(this.getErrorMessages().tokenInvalid, 'Schließen');
+          }
+          return Promise.resolve();
         }
-        return Promise.resolve();
+      }
+
+      const { unitIdInput } = changes;
+      try {
+        this.unitId = unitIdInput.currentValue;
+        this.setTestPerson(this.testPersonInput() || '');
+        const unitData = await this.getUnitData(this.appService.selectedWorkspaceId, this.authToken);
+        this.setUnitProperties(unitData);
+      } catch (error) {
+        this.setIsLoaded();
+        this.catchError(error as HttpErrorResponse);
       }
     }
 
-    const { unitIdInput } = changes;
-    try {
-      this.unitId = unitIdInput.currentValue;
-      this.setTestPerson(this.testPersonInput() || '');
-      const unitData = await this.getUnitData(this.appService.selectedWorkspaceId, this.authToken);
-      this.setUnitProperties(unitData);
-    } catch (error) {
-      this.setIsLoaded();
-      this.catchError(error as HttpErrorResponse);
-    }
     return Promise.resolve();
   }
 
@@ -388,18 +433,71 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     this.responses = undefined;
   }
 
-  private scrollToTop(): void {
-    try {
-      if (this.unitPlayerComponent?.hostingIframe?.nativeElement?.contentWindow) {
-        this.unitPlayerComponent.hostingIframe.nativeElement.contentWindow.scrollTo({
-          top: 0,
-          left: 0,
-          behavior: 'smooth'
-        });
+  nextUnit(): void {
+    if (this.isBookletMode && this.bookletData) {
+      if (this.bookletData.currentUnitIndex < this.bookletData.units.length - 1) {
+        this.bookletData = {
+          ...this.bookletData,
+          currentUnitIndex: this.bookletData.currentUnitIndex + 1
+        };
+
+        this.currentUnitIndex = this.bookletData.currentUnitIndex;
+
+        const currentUnit = this.bookletData.units[this.bookletData.currentUnitIndex];
+        if (currentUnit && currentUnit.name !== this.unitId) {
+          this.unitId = currentUnit.name;
+          if (this.authToken) {
+            const decoded: JwtPayload & { workspace: string } = jwtDecode(this.authToken);
+            const workspace = decoded?.workspace;
+            if (workspace) {
+              this.getUnitData(Number(workspace), this.authToken).then(unitData => {
+                this.setUnitProperties(unitData);
+              });
+            }
+          }
+        }
       }
-    } catch (error) {
-      console.error('Error scrolling to top:', error);
     }
+  }
+
+  previousUnit(): void {
+    if (this.isBookletMode && this.bookletData) {
+      if (this.bookletData.currentUnitIndex > 0) {
+        this.bookletData = {
+          ...this.bookletData,
+          currentUnitIndex: this.bookletData.currentUnitIndex - 1
+        };
+
+        this.currentUnitIndex = this.bookletData.currentUnitIndex;
+
+        const currentUnit = this.bookletData.units[this.bookletData.currentUnitIndex];
+        if (currentUnit && currentUnit.name !== this.unitId) {
+          this.unitId = currentUnit.name;
+
+          if (this.authToken) {
+            const decoded: JwtPayload & { workspace: string } = jwtDecode(this.authToken);
+            const workspace = decoded?.workspace;
+            if (workspace) {
+              this.getUnitData(Number(workspace), this.authToken).then(unitData => {
+                this.setUnitProperties(unitData);
+              });
+            }
+          }
+        }
+      }
+    }
+  }
+
+  hasNextUnit(): boolean {
+    if (!this.bookletData) return false;
+
+    return this.bookletData.currentUnitIndex < this.bookletData.units.length - 1;
+  }
+
+  hasPreviousUnit(): boolean {
+    if (!this.bookletData) return false;
+
+    return this.bookletData.currentUnitIndex > 0;
   }
 
   ngOnDestroy(): void {

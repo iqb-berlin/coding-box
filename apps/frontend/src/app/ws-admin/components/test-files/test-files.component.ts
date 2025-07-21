@@ -40,6 +40,7 @@ import { FilesInListDto } from '../../../../../../../api-dto/files/files-in-list
 import { FileValidationResultDto } from '../../../../../../../api-dto/files/file-validation-result.dto';
 import { FileDownloadDto } from '../../../../../../../api-dto/files/file-download.dto';
 import { ContentDialogComponent } from '../../../shared/dialogs/content-dialog/content-dialog.component';
+import { ConfirmDialogComponent } from '../../../shared/dialogs/confirm-dialog.component';
 import { getFileIcon } from '../../utils/file-utils';
 
 @Component({
@@ -205,7 +206,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   private onUploadSuccess(): void {
     setTimeout(() => {
       this.loadTestFiles();
-    }, 1000); // Optional timeout to simulate processing delay
+    }, 1000);
     this.isLoading = false;
     this.isValidating = false;
   }
@@ -281,15 +282,65 @@ export class TestFilesComponent implements OnInit, OnDestroy {
       );
     } else if (typeof res !== 'boolean') {
       if (!res.testTakersFound) {
-        this.snackBar.open(
-          'Keine Testtaker gefunden. Validierung nicht möglich.',
-          this.translate.instant('error'),
-          { duration: 5000 }
-        );
+        const confirmRef = this.dialog.open(ConfirmDialogComponent, {
+          width: '400px',
+          data: {
+            title: 'Keine Testtaker gefunden',
+            content: 'Es wurden keine Testtaker-Dateien gefunden. Möchten Sie eine automatisch generierte Testtaker-Datei erstellen?',
+            confirmButtonLabel: 'Ja',
+            showCancel: true
+          }
+        });
+
+        confirmRef.afterClosed().subscribe(result => {
+          if (result === true) {
+            this.isLoading = true;
+            this.backendService.createDummyTestTakerFile(this.appService.selectedWorkspaceId)
+              .subscribe(success => {
+                this.isLoading = false;
+                if (success) {
+                  this.snackBar.open(
+                    'Testtaker-Datei wurde erfolgreich erstellt.',
+                    'OK',
+                    { duration: 3000 }
+                  );
+                  this.loadTestFiles();
+                  setTimeout(() => {
+                    this.validateFiles();
+                  }, 1000);
+                } else {
+                  this.snackBar.open(
+                    'Fehler beim Erstellen der Testtaker-Datei.',
+                    this.translate.instant('error'),
+                    { duration: 3000 }
+                  );
+                }
+              });
+          } else {
+            this.snackBar.open(
+              'Keine Testtaker-Dateien vorhanden.',
+              'OK',
+              { duration: 3000 }
+            );
+
+            this.dialog.open(FilesValidationDialogComponent, {
+              width: '900px',
+              data: {
+                validationResults: res.validationResults,
+                filteredTestTakers: res.filteredTestTakers,
+                workspaceId: this.appService.selectedWorkspaceId
+              }
+            });
+          }
+        });
       } else {
         this.dialog.open(FilesValidationDialogComponent, {
-          width: '600px',
-          data: res.validationResults
+          width: '900px',
+          data: {
+            validationResults: res.validationResults,
+            filteredTestTakers: res.filteredTestTakers,
+            workspaceId: this.appService.selectedWorkspaceId
+          }
         });
       }
     }

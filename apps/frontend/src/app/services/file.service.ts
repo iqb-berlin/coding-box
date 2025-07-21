@@ -5,13 +5,21 @@ import {
   map,
   Observable,
   of,
-  switchMap
+  switchMap, throwError
 } from 'rxjs';
 import { FilesInListDto } from '../../../../../api-dto/files/files-in-list.dto';
 import { FilesDto } from '../../../../../api-dto/files/files.dto';
 import { FileValidationResultDto } from '../../../../../api-dto/files/file-validation-result.dto';
 import { FileDownloadDto } from '../../../../../api-dto/files/file-download.dto';
+import { BookletInfoDto } from '../../../../../api-dto/booklet-info/booklet-info.dto';
 import { SERVER_URL } from '../injection-tokens';
+
+export interface BookletUnit {
+  id: number;
+  name: string;
+  alias: string | null;
+  bookletId: number;
+}
 
 interface PaginatedResponse<T> {
   data: T[];
@@ -163,6 +171,42 @@ export class FileService {
       { headers: this.authHeader }
     ).pipe(
       catchError(() => of(null))
+    );
+  }
+
+  createDummyTestTakerFile(workspaceId: number): Observable<boolean> {
+    return this.http.post<boolean>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/files/create-dummy-testtaker`,
+      {},
+      { headers: this.authHeader }
+    ).pipe(
+      catchError(() => of(false))
+    );
+  }
+
+  getBookletUnits(workspaceId: number, bookletId: string, authToken?: string): Observable<BookletUnit[]> {
+    const headers = authToken ? { Authorization: `Bearer ${authToken}` } : this.authHeader;
+    return this.http.get<BookletUnit[]>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/booklet/${bookletId}/units`,
+      { headers }
+    ).pipe(
+      catchError(error => {
+        console.error(`Error retrieving booklet units for ${bookletId}:`, error);
+        return of([]);
+      })
+    );
+  }
+
+  getBookletInfo(workspaceId: number, bookletId: string, authToken?: string): Observable<BookletInfoDto> {
+    const headers = authToken ? { Authorization: `Bearer ${authToken}` } : this.authHeader;
+    return this.http.get<BookletInfoDto>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/booklet/${bookletId}/info`,
+      { headers }
+    ).pipe(
+      catchError(error => {
+        console.error(`Error retrieving booklet info for ${bookletId}:`, error);
+        return throwError(() => error);
+      })
     );
   }
 }
