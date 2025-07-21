@@ -11,11 +11,13 @@ import FileUpload from '../entities/file_upload.entity';
 import { FilesDto } from '../../../../../../api-dto/files/files.dto';
 import { FileIo } from '../../admin/workspace/file-io.interface';
 import { FileDownloadDto } from '../../../../../../api-dto/files/file-download.dto';
-import { FileValidationResultDto } from '../../../../../../api-dto/files/file-validation-result.dto';
+import { FileValidationResultDto, FilteredTestTaker } from '../../../../../../api-dto/files/file-validation-result.dto';
 import { ResponseDto } from '../../../../../../api-dto/responses/response-dto';
 import { InvalidVariableDto } from '../../../../../../api-dto/files/variable-validation.dto';
+import { DuplicateResponseDto, DuplicateResponsesResultDto } from '../../../../../../api-dto/files/duplicate-response.dto';
 import { Unit } from '../entities/unit.entity';
 import { ResponseEntity } from '../entities/response.entity';
+import { Booklet } from '../entities/booklet.entity';
 import {
   MissingPersonDto,
   TestTakerLoginDto,
@@ -39,6 +41,10 @@ type FileStatus = {
 type DataValidation = {
   complete: boolean;
   missing: string[];
+  missingUnitsPerBooklet?: { booklet: string; missingUnits: string[] }[];
+  unitsWithoutPlayer?: string[];
+  unused?: string[];
+  unusedBooklets?: string[];
   files: FileStatus[];
 };
 
@@ -54,7 +60,11 @@ type ValidationData = {
 export type ValidationResult = {
   allUnitsExist: boolean;
   missingUnits: string[];
+  missingUnitsPerBooklet: { booklet: string; missingUnits: string[] }[];
+  unitsWithoutPlayer: string[];
   unitFiles: FileStatus[];
+  allUnitsUsedInBooklets: boolean;
+  unusedUnits: string[];
   allCodingSchemesExist: boolean;
   allCodingDefinitionsExist: boolean;
   missingCodingSchemeRefs: string[];
@@ -80,8 +90,9 @@ export class WorkspaceFilesService {
     @InjectRepository(FileUpload)
     private filesRepository: Repository<FileUpload>,
     @InjectRepository(Persons)
-    private personsRepository: Repository<Persons>
-
+    private personsRepository: Repository<Persons>,
+    @InjectRepository(Booklet)
+    private bookletRepository: Repository<Booklet>
   ) {}
 
   async findAllFileTypes(workspaceId: number): Promise<string[]> {
@@ -114,7 +125,6 @@ export class WorkspaceFilesService {
     const validPage = Math.max(1, page);
     const validLimit = Math.min(Math.max(1, limit), MAX_LIMIT);
 
-    // QueryBuilder für flexible Filterung
     let qb = this.fileUploadRepository.createQueryBuilder('file')
       .where('file.workspace_id = :workspaceId', { workspaceId });
 
@@ -162,7 +172,6 @@ export class WorkspaceFilesService {
     const [files, total] = await qb.getManyAndCount();
     this.logger.log(`Found ${files.length} files (page ${validPage}, limit ${validLimit}, total ${total}).`);
 
-    // Get all file types for this workspace
     const fileTypes = await this.findAllFileTypes(workspaceId);
 
     return [files, total, fileTypes];
@@ -188,21 +197,11 @@ export class WorkspaceFilesService {
         };
       }
 
-      const validationResultsPromises = testTakers.map(testTaker => this.processTestTaker(testTaker));
-      const validationResults = (await Promise.all(validationResultsPromises)).filter(Boolean);
-
-      if (validationResults.length > 0) {
-        return {
-          testTakersFound: true,
-          validationResults
-        };
-      }
-
-      const booklets = await this.fileUploadRepository.find({
+      const allBooklets = await this.fileUploadRepository.find({
         where: { workspace_id: workspaceId, file_type: 'Booklet' }
       });
 
-      if (!booklets || booklets.length === 0) {
+      if (!allBooklets || allBooklets.length === 0) {
         this.logger.warn(`No booklets found in workspace with ID ${workspaceId}.`);
         return {
           testTakersFound: true,
@@ -210,9 +209,114 @@ export class WorkspaceFilesService {
         };
       }
 
+      const modesNotToFilter = ['run-hot-return', 'run-hot-restart', 'run-trial'];
+
+      const shouldFilterMode = (loginMode: string) => !modesNotToFilter.includes(loginMode);
+
+      let filteredTestTakers: FilteredTestTaker[] = [];
+      const loginOccurrences = new Map<string, { testTaker: string, mode: string }[]>();
+
+      for (const testTaker of testTakers) {
+        const xmlDocument = cheerio.load(testTaker.data, { xml: true });
+        const groupElements = xmlDocument('Group');
+
+        for (let i = 0; i < groupElements.length; i++) {
+          const groupElement = groupElements[i];
+          const loginElements = xmlDocument(groupElement).find('Login');
+
+          for (let j = 0; j < loginElements.length; j++) {
+            const loginElement = loginElements[j];
+            const loginName = xmlDocument(loginElement).attr('name');
+            const loginMode = xmlDocument(loginElement).attr('mode');
+
+            if (loginMode && shouldFilterMode(loginMode) && loginName) {
+              filteredTestTakers.push({
+                testTaker: testTaker.file_id,
+                mode: loginMode,
+                login: loginName
+              });
+
+              const occurrences = loginOccurrences.get(loginName) || [];
+              occurrences.push({
+                testTaker: testTaker.file_id,
+                mode: loginMode
+              });
+              loginOccurrences.set(loginName, occurrences);
+            }
+          }
+        }
+      }
+
+      const duplicateTestTakers = Array.from(loginOccurrences.entries())
+        .filter(([, occurrences]) => occurrences.length > 1)
+        .map(([login, occurrences]) => ({
+          login,
+          occurrences
+        }));
+
+      this.logger.log(`Found ${duplicateTestTakers.length} duplicate test takers across files`);
+
+      if (filteredTestTakers.length > 0) {
+        const loginNames = filteredTestTakers.map(item => item.login);
+        const personsNotConsidered = await this.personsRepository.find({
+          where: {
+            workspace_id: workspaceId,
+            login: In(loginNames),
+            consider: false
+          },
+          select: ['login']
+        });
+
+        const loginsNotConsidered = personsNotConsidered.map(person => person.login);
+
+        if (loginsNotConsidered.length > 0) {
+          this.logger.log(`Filtering out ${loginsNotConsidered.length} test takers where consider is false`);
+          filteredTestTakers = filteredTestTakers.filter(item => !loginsNotConsidered.includes(item.login));
+        }
+      }
+
+      const bookletIdsInTestTakers = new Set<string>();
+      for (const testTaker of testTakers) {
+        const xmlDocument = cheerio.load(testTaker.data, { xml: true });
+        const bookletTags = xmlDocument('Booklet');
+
+        bookletTags.each((_, element) => {
+          const bookletId = xmlDocument(element).text().trim().toUpperCase();
+          if (bookletId) {
+            bookletIdsInTestTakers.add(bookletId);
+          }
+        });
+      }
+
+      const unusedBooklets = allBooklets
+        .filter(booklet => !bookletIdsInTestTakers.has(booklet.file_id.toUpperCase()))
+        .map(booklet => booklet.file_id);
+
+      this.logger.log(`Found ${unusedBooklets.length} booklets not included in any TestTakers file`);
+      this.logger.log(`Found ${filteredTestTakers.length} TestTakers with modes other than 'run-hot-return', 'run-hot-restart', 'run-trial'`);
+
+      const validationResultsPromises = testTakers.map(testTaker => this.processTestTaker(testTaker, unusedBooklets));
+      const validationResults = (await Promise.all(validationResultsPromises)).filter(Boolean);
+
+      if (validationResults.length > 0) {
+        return {
+          testTakersFound: true,
+          filteredTestTakers: filteredTestTakers.length > 0 ? filteredTestTakers : undefined,
+          duplicateTestTakers: duplicateTestTakers.length > 0 ? duplicateTestTakers : undefined,
+          validationResults
+        };
+      }
+
+      const emptyValidation = this.createEmptyValidationData();
+      if (emptyValidation.length > 0 && unusedBooklets.length > 0) {
+        emptyValidation[0].booklets.unusedBooklets = unusedBooklets;
+      }
+
       return {
         testTakersFound: true,
-        validationResults: this.createEmptyValidationData()
+        filteredTestTakers: filteredTestTakers.length > 0 ? filteredTestTakers : undefined,
+        duplicateTestTakers: duplicateTestTakers.length > 0 ? duplicateTestTakers : undefined,
+        validationResults: emptyValidation
       };
     } catch (error) {
       this.logger.error(`Error during test file validation for workspace ID ${workspaceId}: ${error.message}`, error.stack);
@@ -223,15 +327,129 @@ export class WorkspaceFilesService {
   private createEmptyValidationData(): ValidationData[] {
     return [{
       testTaker: '',
-      booklets: { complete: false, missing: [], files: [] },
-      units: { complete: false, missing: [], files: [] },
+      booklets: {
+        complete: false,
+        missing: [],
+        unusedBooklets: [],
+        files: []
+      },
+      units: {
+        complete: false,
+        missing: [],
+        missingUnitsPerBooklet: [],
+        unitsWithoutPlayer: [],
+        unused: [],
+        files: []
+      },
       schemes: { complete: false, missing: [], files: [] },
       definitions: { complete: false, missing: [], files: [] },
       player: { complete: false, missing: [], files: [] }
     }];
   }
 
-  private async processTestTaker(testTaker: FileUpload): Promise<ValidationData | null> {
+  async createDummyTestTakerFile(workspaceId: number): Promise<boolean> {
+    try {
+      const booklets = await this.fileUploadRepository.find({
+        where: { workspace_id: workspaceId, file_type: 'Booklet' }
+      });
+
+      if (!booklets || booklets.length === 0) {
+        const units = await this.fileUploadRepository.find({
+          where: { workspace_id: workspaceId, file_type: 'Unit' }
+        });
+
+        if (!units || units.length === 0) {
+          this.logger.warn(`No booklets or units found in workspace with ID ${workspaceId}.`);
+          return false;
+        }
+
+        // Create a fake booklet that includes all available units
+        const unitRefs = units.map(unit => `  <Unit id="${unit.file_id}"/>`).join('\n');
+        const fakeBookletId = 'AUTO-GENERATED-BOOKLET';
+        const fakeBookletXml = `<?xml version="1.0" encoding="utf-8"?>
+<Booklet>
+  <Metadata>
+    <Id>${fakeBookletId}</Id>
+    <Label>Auto-generated Booklet</Label>
+    <Description>Auto-generated booklet including all units</Description>
+  </Metadata>
+  <Units>
+${unitRefs}
+  </Units>
+</Booklet>`;
+
+        const fakeBooklet = this.fileUploadRepository.create({
+          workspace_id: workspaceId,
+          filename: 'auto-generated-booklet.xml',
+          file_id: fakeBookletId,
+          file_type: 'Booklet',
+          file_size: fakeBookletXml.length,
+          data: fakeBookletXml
+        });
+
+        await this.fileUploadRepository.save(fakeBooklet);
+        this.logger.log(`Created fake booklet for workspace ${workspaceId} with ${units.length} units.`);
+
+        const dummyTestTakerXml = `<?xml version="1.0" encoding="utf-8"?>
+<TestTakers>
+  <Metadata>
+    <Description>Auto-generated TestTakers file with auto-generated booklet</Description>
+  </Metadata>
+  <Group id="auto-generated" label="Auto-generated">
+    <Login name="auto-generated" mode="run-hot-return">
+      <Booklet>${fakeBookletId}</Booklet>
+    </Login>
+  </Group>
+</TestTakers>`;
+
+        const newTestTakerFile = this.fileUploadRepository.create({
+          workspace_id: workspaceId,
+          filename: 'auto-generated-testtakers.xml',
+          file_id: 'AUTO-GENERATED-TESTTAKERS',
+          file_type: 'TestTakers',
+          file_size: dummyTestTakerXml.length,
+          data: dummyTestTakerXml
+        });
+
+        await this.fileUploadRepository.save(newTestTakerFile);
+        this.logger.log(`Created dummy TestTakers file for workspace ${workspaceId} with auto-generated booklet.`);
+        return true;
+      }
+
+      const bookletRefs = booklets.map(booklet => `    <Booklet>${booklet.file_id}</Booklet>`).join('\n');
+
+      const dummyTestTakerXml = `<?xml version="1.0" encoding="utf-8"?>
+<TestTakers>
+  <Metadata>
+    <Description>Auto-generated TestTakers file including all booklets</Description>
+  </Metadata>
+  <Group id="auto-generated" label="Auto-generated">
+    <Login name="auto-generated" mode="run-hot-return">
+${bookletRefs}
+    </Login>
+  </Group>
+</TestTakers>`;
+
+      const newTestTakerFile = this.fileUploadRepository.create({
+        workspace_id: workspaceId,
+        filename: 'auto-generated-testtakers.xml',
+        file_id: 'AUTO-GENERATED-TESTTAKERS',
+        file_type: 'TestTakers',
+        file_size: dummyTestTakerXml.length,
+        data: dummyTestTakerXml
+      });
+
+      await this.fileUploadRepository.save(newTestTakerFile);
+
+      this.logger.log(`Created dummy TestTakers file for workspace ${workspaceId} with ${booklets.length} booklets.`);
+      return true;
+    } catch (error) {
+      this.logger.error(`Error creating dummy TestTakers file for workspace ${workspaceId}: ${error.message}`, error.stack);
+      return false;
+    }
+  }
+
+  private async processTestTaker(testTaker: FileUpload, unusedBooklets: string[] = []): Promise<ValidationData | null> {
     const xmlDocument = cheerio.load(testTaker.data, { xml: true });
     const bookletTags = xmlDocument('Booklet');
     const unitTags = xmlDocument('Unit');
@@ -251,7 +469,9 @@ export class WorkspaceFilesService {
     const {
       allUnitsExist,
       missingUnits,
+      missingUnitsPerBooklet,
       unitFiles,
+      unusedUnits,
       missingCodingSchemeRefs,
       missingDefinitionRefs,
       schemeFiles,
@@ -260,7 +480,8 @@ export class WorkspaceFilesService {
       allCodingDefinitionsExist,
       allPlayerRefsExist,
       missingPlayerRefs,
-      playerFiles
+      playerFiles,
+      unitsWithoutPlayer
     } = await this.checkMissingUnits(Array.from(uniqueBooklets));
 
     // If booklets are incomplete, all other categories should also be marked as incomplete
@@ -274,11 +495,15 @@ export class WorkspaceFilesService {
       booklets: {
         complete: bookletComplete,
         missing: missingBooklets,
+        unusedBooklets,
         files: bookletFiles
       },
       units: {
-        complete: bookletComplete ? allUnitsExist : false,
+        complete: bookletComplete ? (allUnitsExist) : false,
         missing: missingUnits,
+        missingUnitsPerBooklet: missingUnitsPerBooklet,
+        unitsWithoutPlayer: unitsWithoutPlayer,
+        unused: unusedUnits,
         files: unitFiles
       },
       schemes: {
@@ -665,6 +890,8 @@ export class WorkspaceFilesService {
         file_id: In(bookletNames.map(b => b.toUpperCase()))
       });
 
+      const bookletToUnitsMap = new Map<string, string[]>();
+
       const unitIdsPromises = existingBooklets.map(async booklet => {
         try {
           const fileData = booklet.data;
@@ -678,6 +905,8 @@ export class WorkspaceFilesService {
             }
           });
 
+          bookletToUnitsMap.set(booklet.file_id, unitIds);
+
           return unitIds;
         } catch (error) {
           this.logger.error(`Fehler beim Verarbeiten von Unit ${booklet.file_id}:`, error);
@@ -687,6 +916,18 @@ export class WorkspaceFilesService {
 
       const allUnitIdsArrays = await Promise.all(unitIdsPromises);
       const allUnitIds = Array.from(new Set(allUnitIdsArrays.flat()));
+
+      const allUnitsInWorkspace = await this.fileUploadRepository.findBy({
+        file_type: 'Unit',
+        workspace_id: existingBooklets.length > 0 ? existingBooklets[0].workspace_id : null
+      });
+
+      const unusedUnits = allUnitsInWorkspace
+        .filter(unit => !allUnitIds.includes(unit.file_id.toUpperCase()))
+        .map(unit => unit.file_id);
+
+      const allUnitsUsedInBooklets = unusedUnits.length === 0;
+
       const chunkSize = 50;
       const unitBatches = [];
 
@@ -696,7 +937,10 @@ export class WorkspaceFilesService {
       }
 
       const unitBatchPromises = unitBatches.map(batch => this.fileUploadRepository.find({
-        where: { file_id: In(batch) }
+        where: {
+          file_id: In(batch),
+          workspace_id: existingBooklets.length > 0 ? existingBooklets[0].workspace_id : null
+        }
       }));
 
       const unitBatchResults = await Promise.all(unitBatchPromises);
@@ -709,7 +953,9 @@ export class WorkspaceFilesService {
           const refs = {
             codingSchemeRefs: [] as string[],
             definitionRefs: [] as string[],
-            playerRefs: [] as string[]
+            playerRefs: [] as string[],
+            unitId: unit.file_id,
+            hasPlayer: false
           };
 
           $('Unit').each((_, element) => {
@@ -728,26 +974,36 @@ export class WorkspaceFilesService {
 
             if (playerRef) {
               refs.playerRefs.push(playerRef.toUpperCase());
+              refs.hasPlayer = true;
             }
           });
 
           return refs;
         } catch (error) {
           this.logger.error(`Fehler beim Verarbeiten von Unit ${unit.file_id}:`, error);
-          return { codingSchemeRefs: [], definitionRefs: [], playerRefs: [] };
+          return {
+            codingSchemeRefs: [],
+            definitionRefs: [],
+            playerRefs: [],
+            unitId: unit.file_id,
+            hasPlayer: false
+          };
         }
       });
 
       const allRefs = await Promise.all(refsPromises);
 
-      // Combine all references using Sets to remove duplicates
+      const unitsWithoutPlayer = allRefs
+        .filter(ref => !ref.hasPlayer)
+        .map(ref => ref.unitId);
+
       const allCodingSchemeRefs = Array.from(new Set(allRefs.flatMap(ref => ref.codingSchemeRefs)));
       const allDefinitionRefs = Array.from(new Set(allRefs.flatMap(ref => ref.definitionRefs)));
       const allPlayerRefs = Array.from(new Set(allRefs.flatMap(ref => ref.playerRefs)));
 
-      // Get all resources in a single query
       const existingResources = await this.fileUploadRepository.findBy({
-        file_type: 'Resource'
+        file_type: 'Resource',
+        workspace_id: existingBooklets.length > 0 ? existingBooklets[0].workspace_id : null
       });
 
       const allResourceIds = existingResources.map(resource => resource.file_id);
@@ -766,6 +1022,20 @@ export class WorkspaceFilesService {
       const foundUnitIds = existingUnits.map(unit => unit.file_id.toUpperCase());
       const missingUnits = allUnitIds.filter(unitId => !foundUnitIds.includes(unitId));
       const uniqueUnits = Array.from(new Set(missingUnits));
+
+      // Track missing units per booklet
+      const missingUnitsPerBooklet: { booklet: string; missingUnits: string[] }[] = [];
+
+      // Check each booklet for missing units
+      for (const [booklet, units] of bookletToUnitsMap.entries()) {
+        const missingUnitsForBooklet = units.filter(unitId => !foundUnitIds.includes(unitId));
+        if (missingUnitsForBooklet.length > 0) {
+          missingUnitsPerBooklet.push({
+            booklet,
+            missingUnits: missingUnitsForBooklet
+          });
+        }
+      }
 
       const allUnitsExist = missingUnits.length === 0;
 
@@ -793,7 +1063,11 @@ export class WorkspaceFilesService {
       return {
         allUnitsExist,
         missingUnits: uniqueUnits,
+        missingUnitsPerBooklet,
+        unitsWithoutPlayer,
         unitFiles,
+        allUnitsUsedInBooklets,
+        unusedUnits,
         allCodingSchemesExist,
         allCodingDefinitionsExist,
         missingCodingSchemeRefs,
@@ -981,7 +1255,7 @@ export class WorkspaceFilesService {
     const invalidVariables: InvalidVariableDto[] = [];
 
     const persons = await this.personsRepository.find({
-      where: { workspace_id: workspaceId }
+      where: { workspace_id: workspaceId, consider: true }
     });
 
     if (persons.length === 0) {
@@ -1169,7 +1443,7 @@ export class WorkspaceFilesService {
     const invalidVariables: InvalidVariableDto[] = [];
 
     const persons = await this.personsRepository.find({
-      where: { workspace_id: workspaceId }
+      where: { workspace_id: workspaceId, consider: true }
     });
 
     if (persons.length === 0) {
@@ -1465,7 +1739,7 @@ export class WorkspaceFilesService {
       }
 
       const persons = await this.personsRepository.find({
-        where: { workspace_id: workspaceId }
+        where: { workspace_id: workspaceId, consider: true }
       });
 
       const missingPersons: MissingPersonDto[] = [];
@@ -1496,6 +1770,175 @@ export class WorkspaceFilesService {
     }
   }
 
+  async validateDuplicateResponses(workspaceId: number, page: number = 1, limit: number = 10): Promise<DuplicateResponsesResultDto> {
+    if (!workspaceId) {
+      this.logger.error('Workspace ID is required for validateDuplicateResponses');
+      return {
+        data: [],
+        total: 0,
+        page,
+        limit
+      };
+    }
+
+    // Get all persons in the workspace that should be considered
+    const persons = await this.personsRepository.find({
+      where: { workspace_id: workspaceId, consider: true }
+    });
+
+    if (persons.length === 0) {
+      this.logger.warn(`No persons found for workspace ${workspaceId}`);
+      return {
+        data: [],
+        total: 0,
+        page,
+        limit
+      };
+    }
+
+    const personIds = persons.map(person => person.id);
+    const personMap = new Map(persons.map(person => [person.id, person]));
+
+    // Get all booklets for these persons
+    const booklets = await this.bookletRepository.find({
+      where: { personid: In(personIds) },
+      relations: ['bookletinfo']
+    });
+
+    if (booklets.length === 0) {
+      this.logger.warn(`No booklets found for persons in workspace ${workspaceId}`);
+      return {
+        data: [],
+        total: 0,
+        page,
+        limit
+      };
+    }
+
+    const bookletMap = new Map(booklets.map(booklet => [booklet.id, booklet]));
+
+    // Get all units for these booklets
+    const batchSize = 1000;
+    let allUnits: Unit[] = [];
+    const bookletIds = booklets.map(booklet => booklet.id);
+
+    for (let i = 0; i < bookletIds.length; i += batchSize) {
+      const bookletIdsBatch = bookletIds.slice(i, i + batchSize);
+      const unitsBatch = await this.unitRepository.find({
+        where: { bookletid: In(bookletIdsBatch) }
+      });
+      allUnits = [...allUnits, ...unitsBatch];
+    }
+
+    if (allUnits.length === 0) {
+      this.logger.warn(`No units found for booklets in workspace ${workspaceId}`);
+      return {
+        data: [],
+        total: 0,
+        page,
+        limit
+      };
+    }
+
+    const unitIds = allUnits.map(unit => unit.id);
+    const unitMap = new Map(allUnits.map(unit => [unit.id, unit]));
+
+    // Get all responses for these units
+    let allResponses: ResponseEntity[] = [];
+    for (let i = 0; i < unitIds.length; i += batchSize) {
+      const unitIdsBatch = unitIds.slice(i, i + batchSize);
+      const responsesBatch = await this.responseRepository.find({
+        where: { unitid: In(unitIdsBatch) }
+      });
+      allResponses = [...allResponses, ...responsesBatch];
+    }
+
+    if (allResponses.length === 0) {
+      this.logger.warn(`No responses found for units in workspace ${workspaceId}`);
+      return {
+        data: [],
+        total: 0,
+        page,
+        limit
+      };
+    }
+
+    // Group responses by unitid and variableid
+    const responseGroups = new Map<string, ResponseEntity[]>();
+    for (const response of allResponses) {
+      const key = `${response.unitid}_${response.variableid}`;
+      if (!responseGroups.has(key)) {
+        responseGroups.set(key, []);
+      }
+      responseGroups.get(key)?.push(response);
+    }
+
+    // Find groups with more than one response (duplicates)
+    const duplicateResponses: DuplicateResponseDto[] = [];
+    for (const [, responses] of responseGroups.entries()) {
+      if (responses.length > 1) {
+        // Get the first response to extract unit information
+        const firstResponse = responses[0];
+        const unit = unitMap.get(firstResponse.unitid);
+
+        if (!unit) {
+          this.logger.warn(`Unit not found for response ${firstResponse.id}`);
+          continue;
+        }
+
+        const booklet = bookletMap.get(unit.bookletid);
+        if (!booklet) {
+          this.logger.warn(`Booklet not found for unit ${unit.id}`);
+          continue;
+        }
+
+        const person = personMap.get(booklet.personid);
+        if (!person) {
+          this.logger.warn(`Person not found for booklet ${booklet.id}`);
+          continue;
+        }
+
+        const bookletName = booklet.bookletinfo?.name || 'Unknown';
+
+        duplicateResponses.push({
+          unitName: unit.name,
+          unitId: unit.id,
+          variableId: firstResponse.variableid,
+          bookletName,
+          testTakerLogin: person.login,
+          duplicates: responses.map(response => ({
+            responseId: response.id,
+            value: response.value || '',
+            status: response.status
+            // We don't have timestamp in the response entity, but could add if needed
+          }))
+        });
+      }
+    }
+
+    // Sort duplicates by unitName, variableId for consistent ordering
+    duplicateResponses.sort((a, b) => {
+      if (a.unitName !== b.unitName) {
+        return a.unitName.localeCompare(b.unitName);
+      }
+      return a.variableId.localeCompare(b.variableId);
+    });
+
+    // Paginate results
+    const validPage = Math.max(1, page);
+    const validLimit = limit === Number.MAX_SAFE_INTEGER ? limit : Math.min(Math.max(1, limit), 1000);
+    const startIndex = (validPage - 1) * validLimit;
+    const endIndex = startIndex + validLimit;
+    const paginatedData = duplicateResponses.slice(startIndex, endIndex);
+
+    return {
+      data: paginatedData,
+      total: duplicateResponses.length,
+      page: validPage,
+      limit: validLimit
+    };
+  }
+
   async validateResponseStatus(workspaceId: number, page: number = 1, limit: number = 10): Promise<{ data: InvalidVariableDto[]; total: number; page: number; limit: number }> {
     if (!workspaceId) {
       this.logger.error('Workspace ID is required');
@@ -1510,7 +1953,7 @@ export class WorkspaceFilesService {
     const validStatusValues = ['VALUE_CHANGED', 'NOT_REACHED', 'DISPLAYED', 'UNSET', 'PARTLY_DISPLAYED'];
 
     const persons = await this.personsRepository.find({
-      where: { workspace_id: workspaceId }
+      where: { workspace_id: workspaceId, consider: true }
     });
 
     if (persons.length === 0) {
@@ -1734,7 +2177,7 @@ export class WorkspaceFilesService {
       for (const group of groups) {
         // Find persons with this group ID
         const persons = await this.personsRepository.find({
-          where: { workspace_id: workspaceId, group }
+          where: { workspace_id: workspaceId, group, consider: true }
         });
 
         if (persons.length === 0) {
@@ -1770,13 +2213,11 @@ export class WorkspaceFilesService {
         }
 
         if (allUnits.length === 0) {
-          // No units found for persons in this group
           groupsWithResponses.push({ group, hasResponse: false });
           allGroupsHaveResponses = false;
           continue;
         }
 
-        // Get all unit IDs
         const unitIds = allUnits.map(unit => unit.id);
 
         if (unitIds.length === 0) {
@@ -1841,9 +2282,8 @@ export class WorkspaceFilesService {
 
       this.logger.log(`Deleting invalid responses for workspace ${workspaceId}: ${responseIds.join(', ')}`);
 
-      // Verify that the responses belong to units that belong to persons in the workspace
       const persons = await this.personsRepository.find({
-        where: { workspace_id: workspaceId }
+        where: { workspace_id: workspaceId, consider: true }
       });
 
       if (persons.length === 0) {
@@ -1851,10 +2291,8 @@ export class WorkspaceFilesService {
         return 0;
       }
 
-      // Get all person IDs
       const personIds = persons.map(person => person.id);
 
-      // Check if personIds array is empty
       if (personIds.length === 0) {
         this.logger.warn(`No person IDs found for workspace ${workspaceId}`);
         return 0;
@@ -1894,7 +2332,6 @@ export class WorkspaceFilesService {
         for (let j = 0; j < unitIds.length; j += batchSize) {
           const unitIdsBatch = unitIds.slice(j, j + batchSize);
 
-          // Delete responses that match the given IDs and belong to the units in the workspace
           const deleteResult = await this.responseRepository.delete({
             id: In(responseIdsBatch),
             unitid: In(unitIdsBatch)
@@ -1912,7 +2349,7 @@ export class WorkspaceFilesService {
     }
   }
 
-  async deleteAllInvalidResponses(workspaceId: number, validationType: 'variables' | 'variableTypes' | 'responseStatus'): Promise<number> {
+  async deleteAllInvalidResponses(workspaceId: number, validationType: 'variables' | 'variableTypes' | 'responseStatus' | 'duplicateResponses'): Promise<number> {
     try {
       if (!workspaceId) {
         this.logger.error('Workspace ID is required');
@@ -1921,7 +2358,38 @@ export class WorkspaceFilesService {
 
       this.logger.log(`Deleting all invalid responses for workspace ${workspaceId} of type ${validationType}`);
 
-      // Get all invalid responses based on the validation type
+      // Handle duplicate responses
+      if (validationType === 'duplicateResponses') {
+        const result = await this.validateDuplicateResponses(workspaceId, 1, Number.MAX_SAFE_INTEGER);
+
+        if (result.data.length === 0) {
+          this.logger.warn(`No duplicate responses found for workspace ${workspaceId}`);
+          return 0;
+        }
+
+        // Extract all response IDs from all duplicates
+        const responseIds: number[] = [];
+        for (const duplicateResponse of result.data) {
+          // For each duplicate response, we take all but the first response ID
+          // This keeps one response and deletes the duplicates
+          if (duplicateResponse.duplicates.length > 1) {
+            // Get all duplicate response IDs (skip the first one to keep it)
+            const duplicateIds = duplicateResponse.duplicates
+              .slice(1) // Skip the first one to keep it
+              .map(duplicate => duplicate.responseId);
+            responseIds.push(...duplicateIds);
+          }
+        }
+
+        if (responseIds.length === 0) {
+          this.logger.warn(`No duplicate response IDs found for workspace ${workspaceId}`);
+          return 0;
+        }
+
+        return await this.deleteInvalidResponses(workspaceId, responseIds);
+      }
+
+      // Handle other validation types (variables, variableTypes, responseStatus)
       let invalidResponses: InvalidVariableDto[] = [];
 
       if (validationType === 'variables') {
@@ -1940,7 +2408,6 @@ export class WorkspaceFilesService {
         return 0;
       }
 
-      // Extract response IDs
       const responseIds = invalidResponses
         .filter(variable => variable.responseId !== undefined)
         .map(variable => variable.responseId as number);
@@ -1950,7 +2417,6 @@ export class WorkspaceFilesService {
         return 0;
       }
 
-      // Delete the invalid responses
       return await this.deleteInvalidResponses(workspaceId, responseIds);
     } catch (error) {
       this.logger.error(`Error deleting all invalid responses: ${error.message}`, error.stack);

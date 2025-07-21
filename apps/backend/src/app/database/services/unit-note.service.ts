@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, In } from 'typeorm';
 import { UnitNote } from '../entities/unitNote.entity';
 import { Unit } from '../entities/unit.entity';
 import { CreateUnitNoteDto } from '../../../../../../api-dto/unit-notes/create-unit-note.dto';
@@ -22,7 +22,6 @@ export class UnitNoteService {
    * @returns The created note
    */
   async create(createUnitNoteDto: CreateUnitNoteDto): Promise<UnitNoteDto> {
-    // Check if the unit exists
     const unit = await this.unitRepository.findOne({
       where: { id: createUnitNoteDto.unitId }
     });
@@ -31,16 +30,13 @@ export class UnitNoteService {
       throw new NotFoundException(`Unit with ID ${createUnitNoteDto.unitId} not found`);
     }
 
-    // Create the note
     const unitNote = this.unitNoteRepository.create({
       unitId: createUnitNoteDto.unitId,
       note: createUnitNoteDto.note
     });
 
-    // Save the note
     const savedNote = await this.unitNoteRepository.save(unitNote);
 
-    // Return the DTO
     return {
       id: savedNote.id,
       unitId: savedNote.unitId,
@@ -56,7 +52,6 @@ export class UnitNoteService {
    * @returns An array of notes
    */
   async findAllByUnitId(unitId: number): Promise<UnitNoteDto[]> {
-    // Check if the unit exists
     const unit = await this.unitRepository.findOne({
       where: { id: unitId }
     });
@@ -65,13 +60,11 @@ export class UnitNoteService {
       throw new NotFoundException(`Unit with ID ${unitId} not found`);
     }
 
-    // Find all notes for the unit
     const notes = await this.unitNoteRepository.find({
       where: { unitId },
       order: { createdAt: 'DESC' }
     });
 
-    // Return the DTOs
     return notes.map(note => ({
       id: note.id,
       unitId: note.unitId,
@@ -119,13 +112,10 @@ export class UnitNoteService {
       throw new NotFoundException(`Note with ID ${id} not found`);
     }
 
-    // Update the note
     note.note = updateUnitNoteDto.note;
 
-    // Save the note
     const updatedNote = await this.unitNoteRepository.save(note);
 
-    // Return the DTO
     return {
       id: updatedNote.id,
       unitId: updatedNote.unitId,
@@ -151,5 +141,39 @@ export class UnitNoteService {
 
     const result = await this.unitNoteRepository.delete(id);
     return result.affected > 0;
+  }
+
+  /**
+   * Find all notes for multiple units
+   * @param unitIds Array of unit IDs
+   * @returns An array of notes grouped by unit ID
+   */
+  async findAllByUnitIds(unitIds: number[]): Promise<{ [unitId: number]: UnitNoteDto[] }> {
+    if (!unitIds || unitIds.length === 0) {
+      return {};
+    }
+
+    const notes = await this.unitNoteRepository.find({
+      where: { unitId: In(unitIds) },
+      order: { createdAt: 'DESC' }
+    });
+
+    const notesByUnitId: { [unitId: number]: UnitNoteDto[] } = {};
+
+    notes.forEach(note => {
+      if (!notesByUnitId[note.unitId]) {
+        notesByUnitId[note.unitId] = [];
+      }
+
+      notesByUnitId[note.unitId].push({
+        id: note.id,
+        unitId: note.unitId,
+        note: note.note,
+        createdAt: note.createdAt,
+        updatedAt: note.updatedAt
+      });
+    });
+
+    return notesByUnitId;
   }
 }

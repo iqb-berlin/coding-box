@@ -12,7 +12,7 @@ import { TestGroupsInfoDto } from '../../../../../api-dto/files/test-groups-info
 import { SERVER_URL } from '../injection-tokens';
 import { UserService } from './user.service';
 import { WorkspaceService } from './workspace.service';
-import { FileService } from './file.service';
+import { FileService, BookletUnit } from './file.service';
 import { CodingService } from './coding.service';
 import { UnitTagService } from './unit-tag.service';
 import { UnitNoteService } from './unit-note.service';
@@ -26,6 +26,7 @@ import { ImportService } from './import.service';
 import { AuthenticationService } from './authentication.service';
 import { VariableAnalysisService, VariableAnalysisResultDto } from './variable-analysis.service';
 import { VariableAnalysisJobDto } from '../models/variable-analysis-job.dto';
+import { ValidationTaskDto } from '../models/validation-task.dto';
 import { FilesDto } from '../../../../../api-dto/files/files.dto';
 import { CreateUnitNoteDto } from '../../../../../api-dto/unit-notes/create-unit-note.dto';
 import { WorkspaceFullDto } from '../../../../../api-dto/workspaces/workspace-full-dto';
@@ -43,6 +44,7 @@ import { ImportOptions, Result } from '../ws-admin/components/test-center-import
 import { UpdateUnitNoteDto } from '../../../../../api-dto/unit-notes/update-unit-note.dto';
 import { ResponseDto } from '../../../../../api-dto/responses/response-dto';
 import { InvalidVariableDto } from '../../../../../api-dto/files/variable-validation.dto';
+import { BookletInfoDto } from '../../../../../api-dto/booklet-info/booklet-info.dto';
 
 interface PaginatedResponse<T> {
   data: T[];
@@ -297,6 +299,10 @@ export class BackendService {
     return this.unitNoteService.getUnitNotes(workspaceId, unitId);
   }
 
+  getNotesForMultipleUnits(workspaceId: number, unitIds: number[]): Observable<{ [unitId: number]: UnitNoteDto[] }> {
+    return this.unitNoteService.getNotesForMultipleUnits(workspaceId, unitIds);
+  }
+
   getUnitNote(workspaceId: number, noteId: number): Observable<UnitNoteDto> {
     return this.unitNoteService.getUnitNote(workspaceId, noteId);
   }
@@ -338,6 +344,14 @@ export class BackendService {
 
   getUnit(workspaceId: number, unitId: string, authToken?: string): Observable<FilesDto[]> {
     return this.fileService.getUnit(workspaceId, unitId, authToken);
+  }
+
+  getBookletUnits(workspaceId: number, bookletId: string, authToken?: string): Observable<BookletUnit[]> {
+    return this.fileService.getBookletUnits(workspaceId, bookletId, authToken);
+  }
+
+  getBookletInfo(workspaceId: number, bookletId: string, authToken?: string): Observable<BookletInfoDto> {
+    return this.fileService.getBookletInfo(workspaceId, bookletId, authToken);
   }
 
   getTestPersons(workspaceId: number): Observable<number[]> {
@@ -543,7 +557,7 @@ export class BackendService {
     return this.validationService.deleteInvalidResponses(workspaceId, responseIds);
   }
 
-  deleteAllInvalidResponses(workspaceId: number, validationType: 'variables' | 'variableTypes' | 'responseStatus'): Observable<number> {
+  deleteAllInvalidResponses(workspaceId: number, validationType: 'variables' | 'variableTypes' | 'responseStatus' | 'duplicateResponses'): Observable<number> {
     return this.validationService.deleteAllInvalidResponses(workspaceId, validationType);
   }
 
@@ -579,5 +593,49 @@ export class BackendService {
 
   cancelVariableAnalysisJob(workspaceId: number, jobId: number): Observable<{ success: boolean; message: string }> {
     return this.variableAnalysisService.cancelJob(workspaceId, jobId);
+  }
+
+  createValidationTask(
+    workspaceId: number,
+    type: 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'groupResponses' | 'deleteResponses' | 'deleteAllResponses' | 'duplicateResponses',
+    page?: number,
+    limit?: number,
+    additionalData?: Record<string, unknown>
+  ): Observable<ValidationTaskDto> {
+    return this.validationService.createValidationTask(workspaceId, type, page, limit, additionalData);
+  }
+
+  createDeleteResponsesTask(
+    workspaceId: number,
+    responseIds: number[]
+  ): Observable<ValidationTaskDto> {
+    return this.validationService.createDeleteResponsesTask(workspaceId, responseIds);
+  }
+
+  createDeleteAllResponsesTask(
+    workspaceId: number,
+    validationType: 'variables' | 'variableTypes' | 'responseStatus' | 'duplicateResponses'
+  ): Observable<ValidationTaskDto> {
+    return this.validationService.createDeleteAllResponsesTask(workspaceId, validationType);
+  }
+
+  getValidationTask(workspaceId: number, taskId: number): Observable<ValidationTaskDto> {
+    return this.validationService.getValidationTask(workspaceId, taskId);
+  }
+
+  getValidationResults(workspaceId: number, taskId: number): Observable<unknown> {
+    return this.validationService.getValidationResults(workspaceId, taskId);
+  }
+
+  pollValidationTask(
+    workspaceId: number,
+    taskId: number,
+    pollInterval: number = 2000
+  ): Observable<ValidationTaskDto> {
+    return this.validationService.pollValidationTask(workspaceId, taskId, pollInterval);
+  }
+
+  createDummyTestTakerFile(workspaceId: number): Observable<boolean> {
+    return this.fileService.createDummyTestTakerFile(workspaceId);
   }
 }

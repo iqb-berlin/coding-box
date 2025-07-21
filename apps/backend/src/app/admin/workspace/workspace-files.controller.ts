@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  Body,
   Controller,
   Delete,
   Get, InternalServerErrorException, NotFoundException, Param, Post, Query, UseGuards, UseInterceptors, UploadedFiles
@@ -19,12 +20,15 @@ import { FileValidationResultDto } from '../../../../../../api-dto/files/file-va
 import { WorkspaceFilesService } from '../../database/services/workspace-files.service';
 import { InvalidVariableDto } from '../../../../../../api-dto/files/variable-validation.dto';
 import { TestTakersValidationDto } from '../../../../../../api-dto/files/testtakers-validation.dto';
+import { DuplicateResponsesResultDto } from '../../../../../../api-dto/files/duplicate-response.dto';
+import { PersonService } from '../../database/services/person.service';
 
 @ApiTags('Admin Workspace Files')
 @Controller('admin/workspace')
 export class WorkspaceFilesController {
   constructor(
-    private workspaceFilesService: WorkspaceFilesService
+    private readonly workspaceFilesService: WorkspaceFilesService,
+    private readonly personService: PersonService
   ) {}
 
   @Get(':workspace_id/files')
@@ -126,11 +130,52 @@ export class WorkspaceFilesController {
     return this.workspaceFilesService.deleteTestFiles(workspace_id, query.fileIds.split(';'));
   }
 
+  @Post(':workspace_id/persons/exclude')
+  @ApiTags('ws admin test-files')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiOperation({ summary: 'Mark persons as not to be considered', description: 'Marks persons with specified logins as not to be considered in the persons database' })
+  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        logins: {
+          type: 'array',
+          items: {
+            type: 'string'
+          },
+          description: 'Array of login names to mark as not to be considered'
+        }
+      }
+    }
+  })
+  @ApiOkResponse({ description: 'Persons marked as not to be considered', type: Boolean })
+  async excludePersons(
+    @Param('workspace_id') workspaceId: number,
+      @Body() body: { logins: string[] }
+  ): Promise<boolean> {
+    if (!workspaceId) {
+      throw new BadRequestException('Workspace ID is required.');
+    }
+
+    if (!body.logins || !Array.isArray(body.logins) || body.logins.length === 0) {
+      throw new BadRequestException('At least one login name must be provided.');
+    }
+
+    return this.personService.markPersonsAsNotConsidered(workspaceId, body.logins);
+  }
+
   @Get(':workspace_id/files/validation')
   @ApiTags('test files validation')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiOperation({ summary: 'Validate test files', description: 'Validates test files and returns a hierarchical view of expected files and their status' })
   @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
+  @ApiQuery({
+    name: 'excludeModes',
+    type: String,
+    required: false,
+    description: 'Comma-separated list of modes to exclude from filtering (e.g., "run-hot-return,run-hot-restart,run-trial")'
+  })
   @ApiOkResponse({
     description: 'Files validation result',
     type: FileValidationResultDto
@@ -305,9 +350,7 @@ export class WorkspaceFilesController {
     }
 
     try {
-      const codingSchemeFile = await this.workspaceFilesService.getCodingSchemeByRef(workspace_id, coding_scheme_ref);
-
-      return codingSchemeFile;
+      return await this.workspaceFilesService.getCodingSchemeByRef(workspace_id, coding_scheme_ref);
     } catch (error) {
       if (error.status === 404) {
         throw error;
@@ -421,6 +464,66 @@ export class WorkspaceFilesController {
     return this.workspaceFilesService.validateResponseStatus(workspace_id, page, limit);
   }
 
+  @Get(':workspace_id/files/validate-duplicate-responses')
+  @ApiTags('test files validation')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiOperation({ summary: 'Validate duplicate responses', description: 'Identifies duplicate responses (same variable ID for the same unit, booklet, and test taker)' })
+  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    description: 'Page number for pagination',
+    type: Number
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    description: 'Number of items per page',
+    type: Number
+  })
+  @ApiOkResponse({
+    description: 'Duplicate responses validation result',
+    schema: {
+      type: 'object',
+      properties: {
+        data: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              unitName: { type: 'string' },
+              unitId: { type: 'number' },
+              variableId: { type: 'string' },
+              bookletName: { type: 'string' },
+              testTakerLogin: { type: 'string' },
+              duplicates: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    responseId: { type: 'number' },
+                    value: { type: 'string' },
+                    status: { type: 'string' }
+                  }
+                }
+              }
+            }
+          }
+        },
+        total: { type: 'number' },
+        page: { type: 'number' },
+        limit: { type: 'number' }
+      }
+    }
+  })
+  async validateDuplicateResponses(
+    @Param('workspace_id') workspace_id: number,
+                           @Query('page') page: number = 1,
+                           @Query('limit') limit: number = 10
+  ): Promise<DuplicateResponsesResultDto> {
+    return this.workspaceFilesService.validateDuplicateResponses(workspace_id, page, limit);
+  }
+
   @Get(':workspace_id/files/validate-variables')
   @ApiTags('test files validation')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
@@ -531,5 +634,22 @@ export class WorkspaceFilesController {
     @Param('workspace_id') workspace_id: number,
       @Query('validationType') validationType: 'variables' | 'variableTypes' | 'responseStatus'): Promise<number> {
     return this.workspaceFilesService.deleteAllInvalidResponses(workspace_id, validationType);
+  }
+
+  @Post(':workspace_id/files/create-dummy-testtaker')
+  @ApiTags('test files validation')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiOperation({ summary: 'Create dummy testtaker file', description: 'Creates a dummy testtaker file that includes all booklets in the workspace' })
+  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
+  @ApiOkResponse({
+    description: 'Dummy testtaker file created successfully',
+    type: Boolean
+  })
+  @ApiBadRequestResponse({
+    description: 'Failed to create dummy testtaker file'
+  })
+  async createDummyTestTakerFile(
+    @Param('workspace_id') workspace_id: number): Promise<boolean> {
+    return this.workspaceFilesService.createDummyTestTakerFile(workspace_id);
   }
 }

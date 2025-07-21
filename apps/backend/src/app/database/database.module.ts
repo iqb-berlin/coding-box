@@ -40,9 +40,11 @@ import { JournalEntry } from './entities/journal-entry.entity';
 import { JournalService } from './services/journal.service';
 import { VariableAnalysisService } from './services/variable-analysis.service';
 import { JobService } from './services/job.service';
+import { ValidationTaskService } from './services/validation-task.service';
 import { Job } from './entities/job.entity';
 import { VariableAnalysisJob } from './entities/variable-analysis-job.entity';
 import { TestPersonCodingJob } from './entities/test-person-coding-job.entity';
+import { ValidationTask } from './entities/validation-task.entity';
 
 @Module({
   imports: [
@@ -72,7 +74,7 @@ import { TestPersonCodingJob } from './entities/test-person-coding-job.entity';
         password: configService.get('POSTGRES_PASSWORD'),
         database: configService.get('POSTGRES_DB'),
         entities: [BookletInfo, Booklet, Session, BookletLog, Unit, UnitLog, UnitLastState, ResponseEntity,
-          User, Workspace, WorkspaceAdmin, FileUpload, WorkspaceUser, ResourcePackage, Logs, Persons, ChunkEntity, BookletLog, Session, UnitLog, UnitTag, UnitNote, JournalEntry, Job, VariableAnalysisJob, TestPersonCodingJob
+          User, Workspace, WorkspaceAdmin, FileUpload, WorkspaceUser, ResourcePackage, Logs, Persons, ChunkEntity, BookletLog, Session, UnitLog, UnitTag, UnitNote, JournalEntry, Job, VariableAnalysisJob, TestPersonCodingJob, ValidationTask
         ],
         synchronize: false
       }),
@@ -101,7 +103,8 @@ import { TestPersonCodingJob } from './entities/test-person-coding-job.entity';
       JournalEntry,
       Job,
       VariableAnalysisJob,
-      TestPersonCodingJob
+      TestPersonCodingJob,
+      ValidationTask
     ])
   ],
   providers: [
@@ -122,7 +125,8 @@ import { TestPersonCodingJob } from './entities/test-person-coding-job.entity';
     ResourcePackageService,
     JournalService,
     VariableAnalysisService,
-    JobService
+    JobService,
+    ValidationTaskService
   ],
   exports: [
     User,
@@ -149,7 +153,8 @@ import { TestPersonCodingJob } from './entities/test-person-coding-job.entity';
     UnitNoteService,
     JournalService,
     VariableAnalysisService,
-    JobService
+    JobService,
+    ValidationTaskService
   ]
 })
 export class DatabaseModule {}

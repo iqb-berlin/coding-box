@@ -64,7 +64,6 @@ export class WorkspaceTestResultsService {
         `Fetching booklets, bookletInfo data, units, and test results for personId: ${personId} and workspaceId: ${workspaceId}`
       );
 
-      // Get booklets with bookletInfo in a single query using join
       const booklets = await this.bookletRepository
         .createQueryBuilder('booklet')
         .innerJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
@@ -85,7 +84,6 @@ export class WorkspaceTestResultsService {
 
       const bookletIds = booklets.map(booklet => booklet.id);
 
-      // Get units with responses in a single query using join
       const units = await this.unitRepository
         .createQueryBuilder('unit')
         .leftJoinAndSelect('unit.responses', 'response')
@@ -109,11 +107,9 @@ export class WorkspaceTestResultsService {
 
       const unitIds = units.map(unit => unit.id);
 
-      // Create a map of unit ID to responses
       const unitResultMap = new Map<number, { id: number; unitid: number }[]>();
       units.forEach(unit => {
         if (unit.responses) {
-          // Remove duplicate responses
           const uniqueResponses = Array.from(
             new Map(unit.responses.map(response => [response.id, response])).values()
           );
@@ -121,14 +117,12 @@ export class WorkspaceTestResultsService {
         }
       });
 
-      // Get booklet logs in a single query
       const bookletLogs = await this.bookletLogRepository
         .createQueryBuilder('bookletLog')
         .where('bookletLog.bookletid IN (:...bookletIds)', { bookletIds })
         .select(['bookletLog.id', 'bookletLog.bookletid', 'bookletLog.ts', 'bookletLog.parameter', 'bookletLog.key'])
         .getMany();
 
-      // Get sessions in a single query
       const sessions = await this.sessionRepository
         .createQueryBuilder('session')
         .innerJoin('session.booklet', 'booklet')
@@ -136,7 +130,6 @@ export class WorkspaceTestResultsService {
         .select(['session.id', 'session.browser', 'session.os', 'session.screen', 'session.ts', 'booklet.id'])
         .getMany();
 
-      // Get unit logs in a single query
       const unitLogs = await this.unitLogRepository
         .createQueryBuilder('unitLog')
         .where('unitLog.unitid IN (:...unitIds)', { unitIds })
@@ -158,14 +151,11 @@ export class WorkspaceTestResultsService {
         });
       });
 
-      // Get unit tags in a single batch query instead of multiple individual queries
       const unitTagsMap = new Map<number, { id: number; unitId: number; tag: string; color?: string; createdAt: Date }[]>();
 
-      // Only fetch tags if there are units
       if (unitIds.length > 0) {
         const allTags = await this.unitTagService.findAllByUnitIds(unitIds);
 
-        // Group tags by unit ID
         allTags.forEach(tag => {
           if (!unitTagsMap.has(tag.unitId)) {
             unitTagsMap.set(tag.unitId, []);
@@ -174,7 +164,6 @@ export class WorkspaceTestResultsService {
         });
       }
 
-      // Group sessions by booklet ID for faster lookup
       const sessionsMap = new Map<number, { id: number; browser: string; os: string; screen: string; ts: string }[]>();
       sessions.forEach(session => {
         const bookletId = session.booklet?.id;
@@ -192,7 +181,6 @@ export class WorkspaceTestResultsService {
         }
       });
 
-      // Group booklet logs by booklet ID for faster lookup
       const bookletLogsMap = new Map<number, { id: number; bookletid: number; ts: string; key: string; parameter: string }[]>();
       bookletLogs.forEach(log => {
         if (!bookletLogsMap.has(log.bookletid)) {
@@ -207,7 +195,6 @@ export class WorkspaceTestResultsService {
         });
       });
 
-      // Group units by booklet ID for faster lookup
       const unitsMap = new Map<number, Unit[]>();
       units.forEach(unit => {
         if (!unitsMap.has(unit.bookletid)) {
@@ -256,6 +243,7 @@ export class WorkspaceTestResultsService {
     try {
       const queryBuilder = this.personsRepository.createQueryBuilder('person')
         .where('person.workspace_id = :workspace_id', { workspace_id })
+        .andWhere('person.consider = :consider', { consider: true })
         .select([
           'person.id',
           'person.group',
@@ -264,7 +252,6 @@ export class WorkspaceTestResultsService {
           'person.uploaded_at'
         ]);
 
-      // Add search condition if searchText is provided
       if (searchText && searchText.trim() !== '') {
         queryBuilder.andWhere(
           '(person.code ILIKE :searchText OR person.group ILIKE :searchText OR person.login ILIKE :searchText)',
@@ -278,7 +265,6 @@ export class WorkspaceTestResultsService {
         .take(validLimit)
         .orderBy('person.code', 'ASC');
 
-      // Execute query
       const [results, total] = await queryBuilder.getManyAndCount();
 
       return [results, total];
@@ -319,7 +305,7 @@ export class WorkspaceTestResultsService {
     const [login, code, bookletId] = connector.split('@');
     const person = await this.personsRepository.findOne({
       where: {
-        code, login, workspace_id: workspaceId
+        code, login, workspace_id: workspaceId, consider: true
       }
     });
     if (!person) {
@@ -368,10 +354,9 @@ export class WorkspaceTestResultsService {
           }
         } else if (value.startsWith('{') && value.endsWith('}')) {
           try {
-            const jsonArrayString = value.replace(/^\{/, '[').replace(/\}$/, ']');
+            const jsonArrayString = value.replace(/^\{/, '[').replace(/}$/, ']');
             value = JSON.parse(jsonArrayString);
           } catch (e) {
-            // If parsing fails, keep the original value
             this.logger.warn(`Failed to parse curly brace array: ${value}`);
           }
         }
@@ -410,7 +395,7 @@ export class WorkspaceTestResultsService {
   }
 
   private responsesByStatusCache: Map<string, { data: [ResponseEntity[], number]; timestamp: number }> = new Map();
-  private readonly RESPONSES_CACHE_TTL_MS = 1 * 60 * 1000; // 1 minute cache TTL
+  private readonly RESPONSES_CACHE_TTL_MS = 60 * 1000; // 1 minute cache TTL
 
   async getResponsesByStatus(workspace_id: number, status: string, options?: { page: number; limit: number }): Promise<[ResponseEntity[], number]> {
     this.logger.log(`Getting responses with status ${status} for workspace ${workspace_id}`);
@@ -523,7 +508,7 @@ export class WorkspaceTestResultsService {
       for (const person of existingPersons) {
         try {
           await this.journalService.createEntry(
-            'system', // userId
+            'system',
             workspaceId,
             'delete',
             'test-person',

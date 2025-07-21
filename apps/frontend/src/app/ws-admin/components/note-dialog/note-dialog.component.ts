@@ -23,16 +23,16 @@ import { CreateUnitNoteDto } from '../../../../../../../api-dto/unit-notes/creat
   selector: 'app-note-dialog',
   template: `
     <div class="dialog-header">
-      <h1 mat-dialog-title>{{ data.title || 'Unit Notes' }}</h1>
+      <h1 mat-dialog-title>{{ data.title || 'Unit Notizen' }}</h1>
       <div class="header-info">
-        <span class="note-count">{{ notes.length }} Notes</span>
+        <span class="note-count">{{ notes.length }} Notizen</span>
       </div>
     </div>
 
     <div mat-dialog-content>
       <div class="notes-section">
         <div class="section-header">
-          <h2>Notes</h2>
+          <h2>Notizen</h2>
         </div>
 
         <div class="notes-container">
@@ -42,7 +42,7 @@ import { CreateUnitNoteDto } from '../../../../../../../api-dto/unit-notes/creat
                 <div class="note-header">
                   <span class="note-date">{{ formatDate(note.updatedAt) }}</span>
                   <div class="note-actions">
-                    <button mat-icon-button (click)="deleteNote(note.id)" class="note-action-button" matTooltip="Note löschen">
+                    <button mat-icon-button (click)="deleteNote(note.id)" class="note-action-button" matTooltip="Notiz löschen">
                       <mat-icon>delete</mat-icon>
                     </button>
                   </div>
@@ -154,6 +154,7 @@ import { CreateUnitNoteDto } from '../../../../../../../api-dto/unit-notes/creat
       margin-bottom: 8px;
       padding-bottom: 4px;
       border-bottom: 1px dashed #e0e0e0;
+      min-height: 36px;
     }
 
     .note-date {
@@ -168,16 +169,30 @@ import { CreateUnitNoteDto } from '../../../../../../../api-dto/unit-notes/creat
     }
 
     .note-action-button {
-      width: 24px;
-      height: 24px;
-      line-height: 24px;
+      width: 36px;
+      height: 36px;
+      background-color: rgba(244, 67, 54, 0.1);
+      margin-right: 4px;
+      transition: all 0.2s ease;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      border-radius: 50%;
+      padding: 0;
+      overflow: visible;
+    }
+
+    .note-action-button:hover {
+      background-color: rgba(244, 67, 54, 0.2);
+      transform: scale(1.05);
     }
 
     .note-action-button mat-icon {
-      font-size: 16px;
-      width: 16px;
-      height: 16px;
-      line-height: 16px;
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+      color: #f44336;
+      margin: 0;
     }
 
     .note-content {

@@ -20,13 +20,6 @@ export class VariableAnalysisService {
     private jobRepository: Repository<VariableAnalysisJob>
   ) {}
 
-  /**
-   * Create a new variable analysis job
-   * @param workspaceId The ID of the workspace
-   * @param unitId Optional unit ID to filter by
-   * @param variableId Optional variable ID to filter by
-   * @returns The created job
-   */
   async createAnalysisJob(
     workspaceId: number,
     unitId?: number,
@@ -132,7 +125,7 @@ export class VariableAnalysisService {
   async getVariableFrequencies(
     workspaceId: number,
     unitId?: number,
-    variableId?: string,
+    variableId?: string
   ): Promise<VariableAnalysisResultDto> {
     // Build the query
     const query = this.responseRepository
@@ -141,7 +134,8 @@ export class VariableAnalysisService {
       .innerJoin('unit.booklet', 'booklet')
       .innerJoin('booklet.person', 'person')
       .innerJoin('booklet.bookletinfo', 'bookletinfo')
-      .where('person.workspace_id = :workspaceId', { workspaceId });
+      .where('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('person.consider = :consider', { consider: true });
 
     // Add filters
     if (unitId) {
