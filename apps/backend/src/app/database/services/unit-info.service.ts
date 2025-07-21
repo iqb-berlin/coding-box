@@ -1,0 +1,348 @@
+import { Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import * as xml2js from 'xml2js';
+import { UnitInfoDto } from '../../../../../../api-dto/unit-info/unit-info.dto';
+import { UnitMetadataDto } from '../../../../../../api-dto/unit-info/unit-metadata.dto';
+import { UnitDefinitionDto } from '../../../../../../api-dto/unit-info/unit-definition.dto';
+import { UnitVariableDto } from '../../../../../../api-dto/unit-info/unit-variable.dto';
+import { UnitVariableValueDto } from '../../../../../../api-dto/unit-info/unit-variable-value.dto';
+import { UnitCodingSchemeRefDto } from '../../../../../../api-dto/unit-info/unit-coding-scheme-ref.dto';
+import { UnitDependencyDto } from '../../../../../../api-dto/unit-info/unit-dependency.dto';
+import FileUpload from '../entities/file_upload.entity';
+
+@Injectable()
+export class UnitInfoService {
+  constructor(
+    @InjectRepository(FileUpload)
+    private fileUploadRepository: Repository<FileUpload>
+  ) {}
+
+  async getUnitInfo(workspaceId: number, unitId: string): Promise<UnitInfoDto> {
+    const unitFile = await this.fileUploadRepository.findOne({
+      where: {
+        workspace_id: workspaceId,
+        file_id: unitId
+      }
+    });
+
+    if (!unitFile) {
+      throw new Error(`Unit with ID ${unitId} not found in workspace ${workspaceId}`);
+    }
+
+    const unitXml = unitFile.data;
+    const unitInfo = await this.parseUnitXml(unitXml);
+    return unitInfo;
+  }
+
+  private async parseUnitXml(unitXml: string): Promise<UnitInfoDto> {
+    const parser = new xml2js.Parser({
+      explicitArray: true, // Always return arrays for elements that can occur multiple times
+      mergeAttrs: false, // Don't merge attributes into the element
+      attrkey: '$', // Use $ for attributes
+      charkey: '_' // Use _ for element text content
+    });
+
+    try {
+      if (!unitXml || typeof unitXml !== 'string') {
+        throw new Error('Invalid unit XML: XML data is empty or not a string');
+      }
+
+      const result = await parser.parseStringPromise(unitXml);
+      if (!result || !result.Unit) {
+        throw new Error('Invalid unit XML: Missing Unit element');
+      }
+
+      if (!result.Unit.Metadata || !result.Unit.Metadata.length) {
+        throw new Error('Invalid unit XML: Missing Metadata element');
+      }
+
+      const metadataElement = result.Unit.Metadata[0] as Record<string, any>;
+
+      if (!metadataElement.Id || !Array.isArray(metadataElement.Id) || metadataElement.Id.length === 0) {
+        throw new Error('Invalid unit XML: Missing required Id in Metadata');
+      }
+
+      if (!metadataElement.Label || !Array.isArray(metadataElement.Label) || metadataElement.Label.length === 0) {
+        throw new Error('Invalid unit XML: Missing required Label in Metadata');
+      }
+
+      // Extract metadata
+      const metadata: UnitMetadataDto = {
+        id: metadataElement.Id[0] as string || '',
+        label: metadataElement.Label[0] as string || '',
+        description: metadataElement.Description && Array.isArray(metadataElement.Description) ?
+          metadataElement.Description[0] as string : undefined,
+        transcript: metadataElement.Transcript && Array.isArray(metadataElement.Transcript) ?
+          metadataElement.Transcript[0] as string : undefined,
+        reference: metadataElement.Reference && Array.isArray(metadataElement.Reference) ?
+          metadataElement.Reference[0] as string : undefined
+      };
+
+      // Extract lastChange from metadata attributes if present
+      if (metadataElement.$ && metadataElement.$.lastChange) {
+        metadata.lastChange = new Date(metadataElement.$.lastChange as string);
+      } else if (metadataElement.Lastchange && Array.isArray(metadataElement.Lastchange) && metadataElement.Lastchange.length > 0) {
+        // Handle deprecated Lastchange element
+        metadata.lastChange = new Date(metadataElement.Lastchange[0] as string);
+      }
+
+      // Extract definition (required by schema)
+      if (!result.Unit.Definition && !result.Unit.DefinitionRef) {
+        throw new Error('Invalid unit XML: Missing Definition or DefinitionRef element');
+      }
+
+      let definition: UnitDefinitionDto;
+      if (result.Unit.Definition && Array.isArray(result.Unit.Definition) && result.Unit.Definition.length > 0) {
+        const definitionElement = result.Unit.Definition[0] as Record<string, any>;
+        if (!definitionElement.$ || !definitionElement.$.player) {
+          throw new Error('Invalid unit XML: Missing required player attribute in Definition');
+        }
+
+        definition = {
+          type: 'Definition',
+          player: definitionElement.$.player as string,
+          editor: definitionElement.$.editor as string,
+          content: definitionElement._ as string || ''
+        };
+
+        if (definitionElement.$.lastChange) {
+          definition.lastChange = new Date(definitionElement.$.lastChange as string);
+        }
+      } else if (result.Unit.DefinitionRef && Array.isArray(result.Unit.DefinitionRef) && result.Unit.DefinitionRef.length > 0) {
+        const definitionRefElement = result.Unit.DefinitionRef[0] as Record<string, any>;
+        if (!definitionRefElement.$ || !definitionRefElement.$.player) {
+          throw new Error('Invalid unit XML: Missing required player attribute in DefinitionRef');
+        }
+
+        definition = {
+          type: 'DefinitionRef',
+          player: definitionRefElement.$.player as string,
+          editor: definitionRefElement.$.editor as string,
+          content: definitionRefElement._ as string || ''
+        };
+
+        if (definitionRefElement.$.lastChange) {
+          definition.lastChange = new Date(definitionRefElement.$.lastChange as string);
+        }
+      } else {
+        throw new Error('Invalid unit XML: Missing Definition or DefinitionRef element');
+      }
+
+      // Extract coding scheme reference (optional)
+      let codingSchemeRef: UnitCodingSchemeRefDto | undefined;
+      if (result.Unit.CodingSchemeRef && Array.isArray(result.Unit.CodingSchemeRef) && result.Unit.CodingSchemeRef.length > 0) {
+        const codingSchemeRefElement = result.Unit.CodingSchemeRef[0] as Record<string, any>;
+        if (!codingSchemeRefElement.$ || !codingSchemeRefElement.$.schemer) {
+          throw new Error('Invalid unit XML: Missing required schemer attribute in CodingSchemeRef');
+        }
+
+        codingSchemeRef = {
+          content: codingSchemeRefElement._ as string || '',
+          schemer: codingSchemeRefElement.$.schemer as string,
+          schemeType: codingSchemeRefElement.$.schemeType as string
+        };
+
+        if (codingSchemeRefElement.$.lastChange) {
+          codingSchemeRef.lastChange = new Date(codingSchemeRefElement.$.lastChange as string);
+        }
+      }
+
+      // Extract dependencies (optional)
+      const dependencies: UnitDependencyDto[] = [];
+      if (result.Unit.Dependencies && Array.isArray(result.Unit.Dependencies) && result.Unit.Dependencies.length > 0) {
+        const dependenciesElement = result.Unit.Dependencies[0] as Record<string, unknown>;
+
+        // Process File dependencies
+        if (dependenciesElement.File && Array.isArray(dependenciesElement.File)) {
+          dependenciesElement.File.forEach((fileElement: Record<string, any>) => {
+            const dependency: UnitDependencyDto = {
+              type: 'File',
+              content: fileElement._ as string || '',
+              for: (fileElement.$ && fileElement.$.for) ?
+                (fileElement.$.for as 'player' | 'editor' | 'schemer' | 'coder') : 'player'
+            };
+            dependencies.push(dependency);
+          });
+        }
+
+        // Process deprecated 'file' dependencies (lowercase)
+        if (dependenciesElement.file && Array.isArray(dependenciesElement.file)) {
+          dependenciesElement.file.forEach((fileElement: Record<string, any>) => {
+            const dependency: UnitDependencyDto = {
+              type: 'File',
+              content: fileElement._ as string || '',
+              for: (fileElement.$ && fileElement.$.for) ?
+                (fileElement.$.for as 'player' | 'editor' | 'schemer' | 'coder') : 'player'
+            };
+            dependencies.push(dependency);
+          });
+        }
+
+        // Process Service dependencies
+        if (dependenciesElement.Service && Array.isArray(dependenciesElement.Service)) {
+          dependenciesElement.Service.forEach((serviceElement: Record<string, any>) => {
+            const dependency: UnitDependencyDto = {
+              type: 'Service',
+              content: serviceElement._ as string || '',
+              for: (serviceElement.$ && serviceElement.$.for) ?
+                (serviceElement.$.for as 'player' | 'editor' | 'schemer' | 'coder') : 'player'
+            };
+            dependencies.push(dependency);
+          });
+        }
+      }
+
+      // Extract base variables (optional)
+      const baseVariables: UnitVariableDto[] = [];
+      if (result.Unit.BaseVariables && Array.isArray(result.Unit.BaseVariables) && result.Unit.BaseVariables.length > 0) {
+        const baseVariablesElement = result.Unit.BaseVariables[0] as Record<string, unknown>;
+        if (baseVariablesElement.Variable && Array.isArray(baseVariablesElement.Variable)) {
+          baseVariablesElement.Variable.forEach((variableElement: Record<string, any>) => {
+            if (!variableElement.$ || !variableElement.$.id || !variableElement.$.type) {
+              return; // Skip invalid variables
+            }
+
+            const variable: UnitVariableDto = {
+              id: variableElement.$.id as string,
+              alias: variableElement.$.alias as string,
+              type: variableElement.$.type as 'string' | 'integer' | 'number' | 'boolean' | 'attachment' | 'json' | 'no-value',
+              format: variableElement.$.format as string,
+              multiple: variableElement.$.multiple === 'true',
+              nullable: variableElement.$.nullable === 'true',
+              page: variableElement.$.page as string
+            };
+
+            // Extract values
+            if (variableElement.Values && Array.isArray(variableElement.Values) && variableElement.Values.length > 0) {
+              const valuesElement = variableElement.Values[0] as Record<string, any>;
+              variable.valuesComplete = valuesElement.$ && valuesElement.$.complete === 'true';
+
+              if (valuesElement.Value && Array.isArray(valuesElement.Value)) {
+                variable.values = [];
+                valuesElement.Value.forEach((valueElement: Record<string, unknown>) => {
+                  if (!valueElement.label || !valueElement.value ||
+                      !Array.isArray(valueElement.label) || !Array.isArray(valueElement.value)) {
+                    return; // Skip invalid values
+                  }
+
+                  const value: UnitVariableValueDto = {
+                    label: valueElement.label[0] as string || '',
+                    value: valueElement.value[0] as string || ''
+                  };
+                  variable.values.push(value);
+                });
+              }
+            }
+
+            // Extract value position labels
+            if (variableElement.ValuePositionLabels && Array.isArray(variableElement.ValuePositionLabels) &&
+                variableElement.ValuePositionLabels.length > 0) {
+              const valuePositionLabelsElement = variableElement.ValuePositionLabels[0] as Record<string, unknown>;
+              if (valuePositionLabelsElement.ValuePositionLabel &&
+                  Array.isArray(valuePositionLabelsElement.ValuePositionLabel)) {
+                variable.valuePositionLabels = valuePositionLabelsElement.ValuePositionLabel.map(
+                  (label: unknown) => label as string
+                );
+              }
+            }
+
+            baseVariables.push(variable);
+          });
+        }
+      }
+
+      // Extract derived variables (optional)
+      const derivedVariables: UnitVariableDto[] = [];
+      if (result.Unit.DerivedVariables && Array.isArray(result.Unit.DerivedVariables) && result.Unit.DerivedVariables.length > 0) {
+        const derivedVariablesElement = result.Unit.DerivedVariables[0] as Record<string, unknown>;
+        if (derivedVariablesElement.Variable && Array.isArray(derivedVariablesElement.Variable)) {
+          derivedVariablesElement.Variable.forEach((variableElement: Record<string, any>) => {
+            if (!variableElement.$ || !variableElement.$.id || !variableElement.$.type) {
+              return; // Skip invalid variables
+            }
+
+            const variable: UnitVariableDto = {
+              id: variableElement.$.id as string,
+              alias: variableElement.$.alias as string,
+              type: variableElement.$.type as 'string' | 'integer' | 'number' | 'boolean' | 'attachment' | 'json' | 'no-value',
+              format: variableElement.$.format as string,
+              multiple: variableElement.$.multiple === 'true',
+              nullable: variableElement.$.nullable === 'true',
+              page: variableElement.$.page as string
+            };
+
+            // Extract values
+            if (variableElement.Values && Array.isArray(variableElement.Values) && variableElement.Values.length > 0) {
+              const valuesElement = variableElement.Values[0] as Record<string, any>;
+              variable.valuesComplete = valuesElement.$ && valuesElement.$.complete === 'true';
+
+              if (valuesElement.Value && Array.isArray(valuesElement.Value)) {
+                variable.values = [];
+                valuesElement.Value.forEach((valueElement: Record<string, unknown>) => {
+                  if (!valueElement.label || !valueElement.value ||
+                      !Array.isArray(valueElement.label) || !Array.isArray(valueElement.value)) {
+                    return; // Skip invalid values
+                  }
+
+                  const value: UnitVariableValueDto = {
+                    label: valueElement.label[0] as string || '',
+                    value: valueElement.value[0] as string || ''
+                  };
+                  variable.values.push(value);
+                });
+              }
+            }
+
+            // Extract value position labels
+            if (variableElement.ValuePositionLabels && Array.isArray(variableElement.ValuePositionLabels) &&
+                variableElement.ValuePositionLabels.length > 0) {
+              const valuePositionLabelsElement = variableElement.ValuePositionLabels[0] as Record<string, unknown>;
+              if (valuePositionLabelsElement.ValuePositionLabel &&
+                  Array.isArray(valuePositionLabelsElement.ValuePositionLabel)) {
+                variable.valuePositionLabels = valuePositionLabelsElement.ValuePositionLabel.map(
+                  (label: unknown) => label as string
+                );
+              }
+            }
+
+            derivedVariables.push(variable);
+          });
+        }
+      }
+
+      // Build the response object
+      const response: UnitInfoDto = {
+        metadata,
+        definition,
+        rawXml: unitXml
+      };
+
+      // Add optional properties if they exist
+      if (codingSchemeRef) {
+        response.codingSchemeRef = codingSchemeRef;
+      }
+
+      if (dependencies.length > 0) {
+        response.dependencies = dependencies;
+      }
+
+      if (baseVariables.length > 0) {
+        response.baseVariables = baseVariables;
+      }
+
+      if (derivedVariables.length > 0) {
+        response.derivedVariables = derivedVariables;
+      }
+
+      return response;
+    } catch (error) {
+      console.error('Error parsing unit XML:', error);
+      if (error instanceof Error) {
+        throw new Error(`Failed to parse unit XML: ${error.message}`);
+      } else {
+        throw new Error('Failed to parse unit XML: Unknown error');
+      }
+    }
+  }
+}

@@ -12,6 +12,7 @@ import { FilesDto } from '../../../../../api-dto/files/files.dto';
 import { FileValidationResultDto } from '../../../../../api-dto/files/file-validation-result.dto';
 import { FileDownloadDto } from '../../../../../api-dto/files/file-download.dto';
 import { BookletInfoDto } from '../../../../../api-dto/booklet-info/booklet-info.dto';
+import { UnitInfoDto } from '../../../../../api-dto/unit-info/unit-info.dto';
 import { SERVER_URL } from '../injection-tokens';
 
 export interface BookletUnit {
@@ -205,6 +206,19 @@ export class FileService {
     ).pipe(
       catchError(error => {
         console.error(`Error retrieving booklet info for ${bookletId}:`, error);
+        return throwError(() => error);
+      })
+    );
+  }
+
+  getUnitInfo(workspaceId: number, unitId: string, authToken?: string): Observable<UnitInfoDto> {
+    const headers = authToken ? { Authorization: `Bearer ${authToken}` } : this.authHeader;
+    return this.http.get<UnitInfoDto>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/unit/${unitId}/info`,
+      { headers }
+    ).pipe(
+      catchError(error => {
+        console.error(`Error retrieving unit info for ${unitId}:`, error);
         return throwError(() => error);
       })
     );
