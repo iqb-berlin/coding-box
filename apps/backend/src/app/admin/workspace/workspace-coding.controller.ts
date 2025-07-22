@@ -1,10 +1,10 @@
 import {
   Controller,
-  Get, Param, Query, Res, UseGuards
+  Get, Param, Post, Query, Res, UseGuards, Body
 } from '@nestjs/common';
 import {
   ApiOkResponse,
-  ApiParam, ApiQuery, ApiTags
+  ApiParam, ApiQuery, ApiTags, ApiBody
 } from '@nestjs/swagger';
 import { Response } from 'express';
 import { CodingStatistics } from '../../database/services/shared-types';
@@ -376,5 +376,117 @@ export class WorkspaceCodingController {
   })
   async resumeJob(@Param('jobId') jobId: string): Promise<{ success: boolean; message: string }> {
     return this.workspaceCodingService.resumeJob(jobId);
+  }
+
+  @Get(':workspace_id/coding/missings-profiles')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiOkResponse({
+    description: 'List of missings profiles retrieved successfully.',
+    schema: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          label: {
+            type: 'string',
+            description: 'Label of the missings profile'
+          }
+        }
+      }
+    }
+  })
+  async getMissingsProfiles(@WorkspaceId() workspace_id: number): Promise<{ label: string }[]> {
+    return this.workspaceCodingService.getMissingsProfiles(workspace_id);
+  }
+
+  @Post(':workspace_id/coding/codebook')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiBody({
+    description: 'Codebook generation parameters',
+    schema: {
+      type: 'object',
+      properties: {
+        missingsProfile: {
+          type: 'string',
+          description: 'Name of the missings profile to use'
+        },
+        contentOptions: {
+          type: 'object',
+          description: 'Options for codebook content generation',
+          properties: {
+            exportFormat: { type: 'string' },
+            missingsProfile: { type: 'string' },
+            hasOnlyManualCoding: { type: 'boolean' },
+            hasGeneralInstructions: { type: 'boolean' },
+            hasDerivedVars: { type: 'boolean' },
+            hasOnlyVarsWithCodes: { type: 'boolean' },
+            hasClosedVars: { type: 'boolean' },
+            codeLabelToUpper: { type: 'boolean' },
+            showScore: { type: 'boolean' },
+            hideItemVarRelation: { type: 'boolean' }
+          }
+        },
+        unitList: {
+          type: 'array',
+          items: { type: 'number' },
+          description: 'List of unit IDs to include in the codebook'
+        }
+      },
+      required: ['missingsProfile', 'contentOptions', 'unitList']
+    }
+  })
+  @ApiOkResponse({
+    description: 'Codebook generated successfully.',
+    schema: {
+      type: 'string',
+      format: 'binary',
+      description: 'Generated codebook file'
+    }
+  })
+  async generateCodebook(
+    @WorkspaceId() workspace_id: number,
+      @Body() body: {
+        missingsProfile: string;
+        contentOptions: {
+          exportFormat: string;
+          missingsProfile: string;
+          hasOnlyManualCoding: boolean;
+          hasGeneralInstructions: boolean;
+          hasDerivedVars: boolean;
+          hasOnlyVarsWithCodes: boolean;
+          hasClosedVars: boolean;
+          codeLabelToUpper: boolean;
+          showScore: boolean;
+          hideItemVarRelation: boolean;
+        };
+        unitList: number[];
+      },
+      @Res() res: Response
+  ): Promise<void> {
+    const { missingsProfile, contentOptions, unitList } = body;
+
+    const codebook = await this.workspaceCodingService.generateCodebook(
+      workspace_id,
+      missingsProfile,
+      contentOptions,
+      unitList
+    );
+
+    if (!codebook) {
+      res.status(404).send('Failed to generate codebook');
+      return;
+    }
+
+    const contentType = contentOptions.exportFormat === 'docx' ?
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document' :
+      'application/json';
+
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Disposition', `attachment; filename=codebook.${contentOptions.exportFormat.toLowerCase()}`);
+    res.send(codebook);
   }
 }
