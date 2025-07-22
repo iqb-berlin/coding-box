@@ -191,10 +191,7 @@ export class FileService {
       `${this.serverUrl}admin/workspace/${workspaceId}/booklet/${bookletId}/units`,
       { headers }
     ).pipe(
-      catchError(error => {
-        console.error(`Error retrieving booklet units for ${bookletId}:`, error);
-        return of([]);
-      })
+      catchError(() => of([]))
     );
   }
 
@@ -204,10 +201,7 @@ export class FileService {
       `${this.serverUrl}admin/workspace/${workspaceId}/booklet/${bookletId}/info`,
       { headers }
     ).pipe(
-      catchError(error => {
-        console.error(`Error retrieving booklet info for ${bookletId}:`, error);
-        return throwError(() => error);
-      })
+      catchError(error => throwError(() => error))
     );
   }
 
@@ -217,10 +211,16 @@ export class FileService {
       `${this.serverUrl}admin/workspace/${workspaceId}/unit/${unitId}/info`,
       { headers }
     ).pipe(
-      catchError(error => {
-        console.error(`Error retrieving unit info for ${unitId}:`, error);
-        return throwError(() => error);
-      })
+      catchError(error => throwError(() => error))
+    );
+  }
+
+  getUnitsWithFileIds(workspaceId: number): Observable<{ id: number; unitId: string; fileName: string; data: string }[]> {
+    return this.http.get<{ id: number; unitId: string; fileName: string; data: string }[]>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/files/units-with-file-ids`,
+      { headers: this.authHeader }
+    ).pipe(
+      catchError(() => of([]))
     );
   }
 }

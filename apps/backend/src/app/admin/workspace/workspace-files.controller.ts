@@ -652,4 +652,30 @@ export class WorkspaceFilesController {
     @Param('workspace_id') workspace_id: number): Promise<boolean> {
     return this.workspaceFilesService.createDummyTestTakerFile(workspace_id);
   }
+
+  @Get(':workspace_id/files/units-with-file-ids')
+  @ApiTags('admin workspace')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiOperation({ summary: 'Get units with file IDs', description: 'Retrieves a list of units with file_type "Unit" and their file IDs' })
+  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
+  @ApiOkResponse({
+    description: 'Units with file IDs retrieved successfully',
+    schema: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          unitId: { type: 'string' },
+          fileName: { type: 'string' }
+        }
+      }
+    }
+  })
+  @ApiBadRequestResponse({
+    description: 'Failed to retrieve units with file IDs'
+  })
+  async getUnitsWithFileIds(
+    @Param('workspace_id') workspace_id: number): Promise<{ unitId: string; fileName: string }[]> {
+    return this.workspaceFilesService.getUnitsWithFileIds(workspace_id);
+  }
 }

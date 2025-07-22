@@ -38,6 +38,7 @@ import { ExportDialogComponent, ExportFormat } from '../export-dialog/export-dia
 import { Success } from '../../models/success.model';
 import { CodingListItem } from '../../models/coding-list-item.model';
 import { TestPersonCodingDialogComponent } from '../test-person-coding-dialog/test-person-coding-dialog.component';
+import { ExportCodingBookComponent } from '../export-coding-book/export-coding-book.component';
 
 @Component({
   selector: 'app-coding-management',
@@ -618,5 +619,15 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
           }
         });
       });
+  }
+
+  /**
+   * Opens the export coding book dialog
+   */
+  openExportCodingBook(): void {
+    this.dialog.open(ExportCodingBookComponent, {
+      width: '80%',
+      height: '80%'
+    });
   }
 }

@@ -10,7 +10,8 @@
 
 .token-settings-card,
 .access-rights-card,
-.journal-card {
+.journal-card,
+.missings-profiles-card {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   border-radius: 8px;
   overflow: hidden;
@@ -97,6 +98,19 @@ h4 {
   justify-content: flex-end;
 }
 
+.missings-profiles-container {
+  background-color: #f9f9f9;
+  border-radius: 6px;
+  padding: 20px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.missings-profiles-actions {
+  display: flex;
+  margin-top: 20px;
+  justify-content: center;
+}
+
 button mat-icon {
   margin-right: 5px;
 }
@@ -109,7 +123,8 @@ button mat-icon {
 
   .token-settings-card,
   .access-rights-card,
-  .journal-card {
+  .journal-card,
+  .missings-profiles-card {
     margin-bottom: 20px;
   }
 }
@@ -130,7 +145,8 @@ button mat-icon {
 
 @media (max-width: 480px) {
   .token-actions,
-  .token-copy-action {
+  .token-copy-action,
+  .missings-profiles-actions {
     flex-direction: column;
     align-items: stretch;
   }

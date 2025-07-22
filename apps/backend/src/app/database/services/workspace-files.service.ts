@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { In, Like, Repository } from 'typeorm';
 import * as cheerio from 'cheerio';
 import AdmZip = require('adm-zip');
 import * as fs from 'fs';
@@ -446,6 +446,29 @@ ${bookletRefs}
     } catch (error) {
       this.logger.error(`Error creating dummy TestTakers file for workspace ${workspaceId}: ${error.message}`, error.stack);
       return false;
+    }
+  }
+
+  async getUnitsWithFileIds(workspaceId: number): Promise<{ id: number; unitId: string; fileName: string; data: string }[]> {
+    try {
+      const units = await this.fileUploadRepository.find({
+        where: { workspace_id: workspaceId, file_type: 'Resource', file_id: Like('%.VOCS') }
+      });
+
+      if (!units || units.length === 0) {
+        this.logger.warn(`No schmemes found in workspace with ID ${workspaceId}.`);
+        return [];
+      }
+
+      return units.map(unit => ({
+        id: unit.id,
+        unitId: unit.file_id,
+        fileName: unit.filename,
+        data: unit.data
+      }));
+    } catch (error) {
+      this.logger.error(`Error getting units with file IDs for workspace ${workspaceId}: ${error.message}`, error.stack);
+      return [];
     }
   }
 
