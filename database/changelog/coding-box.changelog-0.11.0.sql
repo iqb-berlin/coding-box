@@ -7,3 +7,7 @@ CREATE TABLE setting (
 );
 
 -- rollback DROP TABLE IF EXISTS setting;
+
+-- changeset jurei733:2
+ALTER TABLE "public"."file_upload" ADD COLUMN "structured_data" JSONB NULL;
+-- rollback ALTER TABLE "public"."file_upload" DROP COLUMN "structured_data";

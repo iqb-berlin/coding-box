@@ -7,7 +7,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as libxmljs from 'libxmljs2';
 import { parseStringPromise } from 'xml2js';
-import FileUpload from '../entities/file_upload.entity';
+import { VariableInfo } from '@iqb/responses';
+import FileUpload, { StructuredFileData } from '../entities/file_upload.entity';
 import { FilesDto } from '../../../../../../api-dto/files/files.dto';
 import { FileIo } from '../../admin/workspace/file-io.interface';
 import { FileDownloadDto } from '../../../../../../api-dto/files/file-download.dto';
@@ -695,6 +696,225 @@ ${bookletRefs}
     }
   }
 
+  private async extractUnitInfo(xmlDocument: cheerio.CheerioAPI): Promise<Record<string, unknown>> {
+    try {
+      const result: Record<string, unknown> = {};
+      const metadata = xmlDocument('Metadata');
+      if (metadata.length) {
+        const metadataInfo: Record<string, string> = {};
+
+        const id = metadata.find('Id');
+        if (id.length) {
+          metadataInfo.id = id.text().trim();
+        }
+
+        const label = metadata.find('Label');
+        if (label.length) {
+          metadataInfo.label = label.text().trim();
+        }
+
+        const description = metadata.find('Description');
+        if (description.length) {
+          metadataInfo.description = description.text().trim();
+        }
+
+        result.metadata = metadataInfo;
+      }
+
+      const baseVariables = xmlDocument('BaseVariables Variable');
+      if (baseVariables.length) {
+        const variables: Array<Record<string, unknown>> = [];
+
+        baseVariables.each((index, element) => {
+          const variable = xmlDocument(element);
+          const variableInfo: Record<string, unknown> = {};
+
+          const attrs = variable.attr();
+          if (attrs) {
+            variableInfo.id = attrs.id;
+            variableInfo.alias = attrs.alias;
+            variableInfo.type = attrs.type;
+            variableInfo.format = attrs.format;
+            variableInfo.multiple = attrs.multiple === 'true';
+            variableInfo.nullable = attrs.nullable !== 'false';
+
+            if (attrs.values) {
+              variableInfo.values = attrs.values.split('|');
+            }
+
+            if (attrs.valuesComplete) {
+              variableInfo.valuesComplete = attrs.valuesComplete === 'true';
+            }
+
+            if (attrs.page) {
+              variableInfo.page = attrs.page;
+            }
+          }
+
+          const alias = variable.text().trim();
+          if (alias) {
+            variableInfo.alias = alias;
+          }
+
+          variables.push(variableInfo);
+        });
+
+        result.variables = variables;
+      }
+
+      const definitions = xmlDocument('Definition');
+      if (definitions.length) {
+        const definitionsArray: Array<Record<string, string>> = [];
+
+        definitions.each((index, element) => {
+          const definition = xmlDocument(element);
+          const definitionInfo: Record<string, string> = {};
+
+          const attrs = definition.attr();
+          if (attrs) {
+            definitionInfo.id = attrs.id;
+            definitionInfo.type = attrs.type;
+          }
+
+          definitionsArray.push(definitionInfo);
+        });
+
+        result.definitions = definitionsArray;
+      }
+
+      return result;
+    } catch (error) {
+      this.logger.error(`Error extracting Unit information: ${error.message}`);
+      return {};
+    }
+  }
+
+  private async extractBookletInfo(xmlDocument: cheerio.CheerioAPI): Promise<Record<string, unknown>> {
+    try {
+      const result: Record<string, unknown> = {};
+      const metadata = xmlDocument('Metadata');
+      if (metadata.length) {
+        const metadataInfo: Record<string, string> = {};
+        const id = metadata.find('Id');
+        if (id.length) {
+          metadataInfo.id = id.text().trim();
+        }
+        const label = metadata.find('Label');
+        if (label.length) {
+          metadataInfo.label = label.text().trim();
+        }
+        const description = metadata.find('Description');
+        if (description.length) {
+          metadataInfo.description = description.text().trim();
+        }
+
+        result.metadata = metadataInfo;
+      }
+
+      const units = xmlDocument('Units Unit');
+      if (units.length) {
+        const unitsArray: Array<Record<string, string>> = [];
+
+        units.each((index, element) => {
+          const unit = xmlDocument(element);
+          const unitInfo: Record<string, string> = {};
+
+          const attrs = unit.attr();
+          if (attrs) {
+            unitInfo.id = attrs.id;
+            unitInfo.label = attrs.label;
+            unitInfo.labelShort = attrs.labelshort;
+          }
+
+          unitsArray.push(unitInfo);
+        });
+
+        result.units = unitsArray;
+      }
+
+      return result;
+    } catch (error) {
+      this.logger.error(`Error extracting Booklet information: ${error.message}`);
+      return {};
+    }
+  }
+
+  private async extractTestTakersInfo(xmlDocument: cheerio.CheerioAPI): Promise<Record<string, unknown>> {
+    try {
+      const result: Record<string, unknown> = {};
+
+      const testTakers = xmlDocument('Testtaker');
+      if (testTakers.length) {
+        const testTakersArray: Array<Record<string, unknown>> = [];
+
+        testTakers.each((index, element) => {
+          const testTaker = xmlDocument(element);
+          const testTakerInfo: Record<string, unknown> = {};
+
+          const attrs = testTaker.attr();
+          if (attrs) {
+            testTakerInfo.id = attrs.id;
+            testTakerInfo.login = attrs.login;
+            testTakerInfo.code = attrs.code;
+          }
+
+          const booklets = testTaker.find('Booklet');
+          if (booklets.length) {
+            const bookletsArray: string[] = [];
+
+            booklets.each((bookletIndex, bookletElement) => {
+              const booklet = xmlDocument(bookletElement);
+              bookletsArray.push(booklet.text().trim());
+            });
+
+            testTakerInfo.booklets = bookletsArray;
+          }
+
+          testTakersArray.push(testTakerInfo);
+        });
+
+        result.testTakers = testTakersArray;
+      }
+
+      const groups = xmlDocument('Group');
+      if (groups.length) {
+        const groupsArray: Array<Record<string, unknown>> = [];
+
+        groups.each((groupIndex, element) => {
+          const group = xmlDocument(element);
+          const groupInfo: Record<string, unknown> = {};
+
+          const attrs = group.attr();
+          if (attrs) {
+            groupInfo.id = attrs.id;
+            groupInfo.label = attrs.label;
+          }
+
+          const members = group.find('Member');
+          if (members.length) {
+            const membersArray: string[] = [];
+
+            members.each((memberIndex, memberElement) => {
+              const member = xmlDocument(memberElement);
+              membersArray.push(member.text().trim());
+            });
+
+            groupInfo.members = membersArray;
+          }
+
+          groupsArray.push(groupInfo);
+        });
+
+        result.groups = groupsArray;
+      }
+
+      return result;
+    } catch (error) {
+      this.logger.error(`Error extracting TestTakers information: ${error.message}`);
+      return {};
+    }
+  }
+
   private async handleXmlFile(workspaceId: number, file: FileIo): Promise<unknown> {
     try {
       if (!file.buffer || !file.buffer.length) {
@@ -753,13 +973,33 @@ ${bookletRefs}
         };
       }
 
+      let extractedInfo: Record<string, unknown> = {};
+      try {
+        if (fileType === 'Unit') {
+          extractedInfo = await this.extractUnitInfo(xmlDocument);
+        } else if (fileType === 'Booklet') {
+          extractedInfo = await this.extractBookletInfo(xmlDocument);
+        } else if (fileType === 'TestTakers') {
+          extractedInfo = await this.extractTestTakersInfo(xmlDocument);
+        }
+        this.logger.log(`Extracted information from ${fileType} file: ${JSON.stringify(extractedInfo)}`);
+      } catch (extractError) {
+        this.logger.error(`Error extracting information from ${fileType} file: ${extractError.message}`);
+        // Continue with upload even if extraction fails
+      }
+
+      const structuredData: StructuredFileData = {
+        extractedInfo
+      };
+
       return await this.fileUploadRepository.upsert({
         workspace_id: workspaceId,
         filename: file.originalname,
         file_type: fileType,
         file_size: file.size,
         data: file.buffer.toString(),
-        file_id: resolvedFileId
+        file_id: resolvedFileId,
+        structured_data: structuredData // Store extracted information in the structured_data column
       }, ['file_id', 'workspace_id']);
     } catch (error) {
       this.logger.error(`Error processing XML file: ${error.message}`);
@@ -768,16 +1008,62 @@ ${bookletRefs}
   }
 
   private async handleHtmlFile(workspaceId: number, file: FileIo): Promise<unknown> {
-    const resourceFileId = WorkspaceFilesService.getPlayerId(file);
+    try {
+      const playerCode = file.buffer.toString();
+      const playerContent = cheerio.load(playerCode);
+      const metaDataElement = playerContent('script[type="application/ld+json"]');
+      let metadata = {};
 
-    return this.fileUploadRepository.upsert({
-      filename: file.originalname,
-      workspace_id: workspaceId,
-      file_type: 'Resource',
-      file_size: file.size,
-      file_id: resourceFileId,
-      data: file.buffer.toString()
-    }, ['file_id', 'workspace_id']);
+      try {
+        metadata = JSON.parse(metaDataElement.text());
+      } catch (metadataError) {
+        this.logger.warn(`Error parsing metadata from HTML file: ${metadataError.message}`);
+      }
+      const structuredData: StructuredFileData = {
+        metadata
+      };
+
+      // Check if this is a schemer HTML file
+      if (metadata['@type'] === 'schemer') {
+        const resourceFileId = WorkspaceFilesService.getSchemerId(file);
+        const result = await this.fileUploadRepository.upsert({
+          filename: file.originalname,
+          workspace_id: workspaceId,
+          file_type: 'Schemer',
+          file_size: file.size,
+          file_id: resourceFileId,
+          data: file.buffer.toString(),
+          structured_data: structuredData
+        }, ['file_id', 'workspace_id']);
+        return result;
+      }
+
+      // Handle as player HTML file
+      const resourceFileId = WorkspaceFilesService.getPlayerId(file);
+      const result = await this.fileUploadRepository.upsert({
+        filename: file.originalname,
+        workspace_id: workspaceId,
+        file_type: 'Resource',
+        file_size: file.size,
+        file_id: resourceFileId,
+        data: file.buffer.toString(),
+        structured_data: structuredData
+      }, ['file_id', 'workspace_id']);
+      return result;
+    } catch (error) {
+      // If there's an error parsing the metadata, handle as a regular resource
+      const resourceFileId = WorkspaceFilesService.getResourceId(file);
+      const result = await this.fileUploadRepository.upsert({
+        filename: file.originalname,
+        workspace_id: workspaceId,
+        file_type: 'Resource',
+        file_size: file.size,
+        file_id: resourceFileId,
+        data: file.buffer.toString(),
+        structured_data: { metadata: {} }
+      }, ['file_id', 'workspace_id']);
+      return result;
+    }
   }
 
   private async handleOctetStreamFile(workspaceId: number, file: FileIo): Promise<void> {
@@ -786,6 +1072,7 @@ ${bookletRefs}
       const fileExtension = path.extname(file.originalname).toLowerCase();
       let fileType = 'Resource';
       let fileContent: string | Buffer = file.buffer;
+      let extractedInfo = {};
 
       if (['.xml', '.html', '.htm', '.xhtml', '.txt', '.json', '.csv'].includes(fileExtension)) {
         fileContent = file.buffer.toString('utf8');
@@ -796,17 +1083,37 @@ ${bookletRefs}
           const $ = cheerio.load(fileContent as string, { xmlMode: true });
           if ($('Testtakers').length > 0) {
             fileType = 'TestTakers';
+            extractedInfo = {
+              rootElement: 'Testtakers',
+              detectedVia: 'octet-stream-handler'
+            };
           } else if ($('Booklet').length > 0) {
             fileType = 'Booklet';
+            extractedInfo = {
+              rootElement: 'Booklet',
+              detectedVia: 'octet-stream-handler'
+            };
           } else if ($('Unit').length > 0) {
             fileType = 'Unit';
+            extractedInfo = {
+              rootElement: 'Unit',
+              detectedVia: 'octet-stream-handler'
+            };
           } else if ($('SysCheck').length > 0) {
             fileType = 'SysCheck';
+            extractedInfo = {
+              rootElement: 'SysCheck',
+              detectedVia: 'octet-stream-handler'
+            };
           }
         } catch (error) {
           this.logger.warn(`Could not parse XML content for ${file.originalname}: ${error.message}`);
         }
       }
+
+      const structuredData: StructuredFileData = {
+        extractedInfo
+      };
 
       // @ts-expect-error: not exact match
       const fileUpload = this.fileUploadRepository.create({
@@ -815,7 +1122,8 @@ ${bookletRefs}
         file_id: file.originalname.toUpperCase(),
         file_type: fileType,
         file_size: file.size,
-        data: fileContent
+        data: fileContent,
+        structured_data: structuredData
       });
 
       await this.fileUploadRepository.save(fileUpload);
@@ -1161,6 +1469,18 @@ ${bookletRefs}
     }
   }
 
+  private static getSchemerId(file: FileIo): string {
+    try {
+      const schemerCode = file.buffer.toString();
+      const schemerContent = cheerio.load(schemerCode);
+      const metaDataElement = schemerContent('script[type="application/ld+json"]');
+      const metadata = JSON.parse(metaDataElement.text());
+      return WorkspaceFilesService.normalizePlayerId(`${metadata['@id']}-${metadata.version}`);
+    } catch (error) {
+      return WorkspaceFilesService.getResourceId(file);
+    }
+  }
+
   private static getResourceId(file: FileIo): string {
     if (!file?.originalname) {
       throw new Error('Invalid file: originalname is required.');
@@ -1235,6 +1555,70 @@ ${bookletRefs}
     } catch (error) {
       this.logger.error(`Error retrieving coding scheme: ${error.message}`, error.stack);
       return null;
+    }
+  }
+
+  async getVariableInfoForScheme(workspaceId: number, schemeFileId: string): Promise<VariableInfo[]> {
+    try {
+      const unitFiles = await this.fileUploadRepository.find({
+        where: {
+          workspace_id: workspaceId,
+          file_type: 'Unit'
+        }
+      });
+
+      if (!unitFiles || unitFiles.length === 0) {
+        this.logger.warn(`No Unit files found in workspace ${workspaceId}`);
+        return [];
+      }
+
+      const filteredUnitFiles = unitFiles.filter(file => file.file_id === schemeFileId && !file.file_id.includes('VOCS'));
+
+      if (filteredUnitFiles.length === 0) {
+        this.logger.warn(`No Unit files with file_id ${schemeFileId} (without VOCS) found in workspace ${workspaceId}`);
+        return [];
+      }
+
+      const variableInfoArray: VariableInfo[] = [];
+
+      for (const unitFile of filteredUnitFiles) {
+        try {
+          const xmlContent = unitFile.data.toString();
+          const parsedXml = await parseStringPromise(xmlContent, { explicitArray: false });
+
+          if (parsedXml.Unit && parsedXml.Unit.BaseVariables && parsedXml.Unit.BaseVariables.Variable) {
+            const baseVariables = Array.isArray(parsedXml.Unit.BaseVariables.Variable) ?
+              parsedXml.Unit.BaseVariables.Variable :
+              [parsedXml.Unit.BaseVariables.Variable];
+
+            for (const variable of baseVariables) {
+              if (variable.$ && variable.$.alias && variable.$.type) {
+                const variableInfo: VariableInfo = {
+                  id: variable.$.id,
+                  alias: variable.$.alias,
+                  type: variable.$.type,
+                  multiple: variable.$.multiple === 'true' || variable.$.multiple === true,
+                  nullable: variable.$.nullable !== 'false' && variable.$.nullable !== false, // Default to true if not specified
+                  values: variable.$.values ? variable.$.values.split('|') : undefined,
+                  valuesComplete: variable.$.valuesComplete === 'true' || variable.$.valuesComplete === true,
+                  page: variable.$.page,
+                  format: '',
+                  valuePositionLabels: []
+                };
+
+                variableInfoArray.push(variableInfo);
+              }
+            }
+          }
+        } catch (e) {
+          this.logger.error(`Error parsing XML for unit file ${unitFile.file_id}: ${e.message}`);
+        }
+      }
+
+      return variableInfoArray;
+    } catch (error) {
+      this.logger.error(`Error retrieving variable info: ${error.message}`, error.stack);
+      return [];
     }
   }
 
