@@ -51,8 +51,6 @@ import { AppService } from '../../../services/app.service';
   ]
 })
 export class ExportCodingBookComponent implements OnInit {
-  @ViewChild('unitSelectionTable') unitSelectionTable: ElementRef | undefined;
-
   unitList: number[] = [];
   availableUnits: {
     unitId: number;
@@ -92,7 +90,7 @@ export class ExportCodingBookComponent implements OnInit {
   constructor(
     private backendService: BackendService,
     private appService: AppService,
-    private datePipe: DatePipe,
+    private datePipe: DatePipe
   ) {}
 
   ngOnInit(): void {
@@ -146,8 +144,8 @@ export class ExportCodingBookComponent implements OnInit {
           }
           this.isLoading = false;
         },
-        error: error => {
-          console.error('Error loading units with file IDs:', error);
+        error: () => {
+          // Error occurred while loading units with file IDs
           this.isLoading = false;
         }
       });
@@ -198,8 +196,8 @@ export class ExportCodingBookComponent implements OnInit {
           this.selectedMissingsProfile = '';
           this.contentOptions.missingsProfile = this.selectedMissingsProfile;
         },
-        error: error => {
-          console.error('Error loading missings profiles:', error);
+        error: () => {
+          // Error occurred while loading missings profiles
         }
       });
     }

@@ -18,12 +18,11 @@ export class CodebookGenerator {
   static generateCodebook(
     units: UnitPropertiesForCodebook[],
     contentSetting: CodeBookContentSetting,
-    missings: any
+    missings: Missing[]
   ): Promise<Buffer> {
     if (units.length === 0) {
       return Promise.resolve(Buffer.from('[]', 'utf-8'));
     }
-    console.log('units', units);
     const codebook: CodebookUnitDto[] = units.map((unit: UnitPropertiesForCodebook) => this.getCodeBookDataForUnit(unit, contentSetting, missings));
 
     if (contentSetting.exportFormat === 'docx') {

@@ -15,6 +15,8 @@ import {
   Header, FileChild
 } from 'docx';
 import * as cheerio from 'cheerio';
+// Using type-only import to avoid dependency warning
+import type { AnyNode, Element } from 'domhandler';
 import {
   BookVariable, CodeBookContentSetting, CodebookUnitDto, ItemMetadata
 } from './codebook.interfaces';
@@ -520,6 +522,7 @@ export class CodebookDocxGenerator {
    * @param contentSetting Codebook content settings
    * @returns List of paragraphs
    */
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   private static htmlToDocx(html: string, contentSetting: CodeBookContentSetting): Paragraph[] {
     const paragraphs: Paragraph[] = [];
     if (!html) return paragraphs;
@@ -543,14 +546,14 @@ export class CodebookDocxGenerator {
    * @param nodes List of nodes
    * @param paragraphs List of paragraphs
    */
-  private static processChildNodes(nodes: any, paragraphs: Paragraph[]): void {
+  private static processChildNodes(nodes: AnyNode[], paragraphs: Paragraph[]): void {
     for (const node of nodes) {
       if (node.type === 'text') {
-        if (node.data && node.data.trim()) {
+        if ('data' in node && node.data && node.data.trim()) {
           paragraphs.push(new Paragraph({ text: node.data.trim() }));
         }
       } else if (node.type === 'tag') {
-        const element = node as any;
+        const element = node as Element;
         const tagName = element.name.toLowerCase();
 
         if (tagName === 'p') {
@@ -573,14 +576,14 @@ export class CodebookDocxGenerator {
    * @param nodes List of nodes
    * @param textRuns List of text runs
    */
-  private static processInlineElements(nodes: any, textRuns: TextRun[]): void {
+  private static processInlineElements(nodes: AnyNode[], textRuns: TextRun[]): void {
     for (const node of nodes) {
       if (node.type === 'text') {
-        if (node.data && node.data.trim()) {
+        if ('data' in node && node.data && node.data.trim()) {
           textRuns.push(new TextRun({ text: node.data.trim() }));
         }
       } else if (node.type === 'tag') {
-        const element = node as any;
+        const element = node as Element;
         const tagName = element.name.toLowerCase();
 
         if (tagName === 'strong' || tagName === 'b') {
@@ -612,11 +615,11 @@ export class CodebookDocxGenerator {
    * @param paragraphs List of paragraphs
    * @param isOrdered Whether the list is ordered
    */
-  private static processListElements(nodes: any, paragraphs: Paragraph[], isOrdered: boolean): void {
+  private static processListElements(nodes: AnyNode[], paragraphs: Paragraph[], isOrdered: boolean): void {
     let index = 1;
     for (const node of nodes) {
       if (node.type === 'tag') {
-        const element = node as any;
+        const element = node as Element;
         if (element.name.toLowerCase() === 'li') {
           const textRuns: TextRun[] = [];
           this.processInlineElements(element.children, textRuns);
@@ -629,7 +632,7 @@ export class CodebookDocxGenerator {
               numbering: isOrdered ? {
                 reference: 'default-numbering',
                 level: 0,
-                instance: index++
+                instance: index += 1
               } : undefined
             }));
           }
