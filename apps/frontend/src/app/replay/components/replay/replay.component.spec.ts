@@ -45,7 +45,6 @@ const fakeActivatedRoute = {
 describe('ReplayComponent', () => {
   let component: ReplayComponent;
   let fixture: ComponentFixture<ReplayComponent>;
-  let backendService: BackendServiceMock;
   let snackBar: MatSnackBarMock;
 
   beforeEach(async () => {
@@ -70,7 +69,6 @@ describe('ReplayComponent', () => {
 
     fixture = TestBed.createComponent(ReplayComponent);
     component = fixture.componentInstance;
-    backendService = TestBed.inject(BackendService) as unknown as BackendServiceMock;
     snackBar = TestBed.inject(MatSnackBar) as unknown as MatSnackBarMock;
     fixture.detectChanges();
   });

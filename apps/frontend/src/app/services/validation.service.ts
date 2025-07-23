@@ -276,7 +276,7 @@ export class ValidationService {
       { headers: this.authHeader }
     ).pipe(
       catchError(error => {
-        console.error(`Error getting validation tasks: ${error.message}`);
+        // Error occurred while getting validation tasks
         throw error;
       })
     );
@@ -340,9 +340,7 @@ export class ValidationService {
                 map<unknown, [string, { task: ValidationTaskDto; result: unknown }]>(
                   result => [type, { task, result }] as [string, { task: ValidationTaskDto; result: unknown }]
                 ),
-                catchError(() => {
-                  return of([type, { task, result: null }] as [string, { task: ValidationTaskDto; result: unknown }]);
-                })
+                catchError(() => of([type, { task, result: null }] as [string, { task: ValidationTaskDto; result: unknown }]))
               )
             );
           }
@@ -362,10 +360,7 @@ export class ValidationService {
           })
         );
       }),
-      catchError(error => {
-        console.error(`Error getting last validation results: ${error.message}`);
-        return of<Record<string, { task: ValidationTaskDto; result: unknown }>>({});
-      })
+      catchError(() => of<Record<string, { task: ValidationTaskDto; result: unknown }>>({}))
     );
   }
 }

@@ -1039,8 +1039,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   }
 
   private updateTable(data: Record<string, unknown>[], total: number): void {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    this.data = data as any;
+    this.data = data as unknown as P[];
     const mappedResults = data.map((result: Record<string, unknown>) => ({
       id: result.id as number,
       code: result.code as string,

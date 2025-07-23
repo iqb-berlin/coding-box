@@ -46,6 +46,8 @@ import { ResponseDto } from '../../../../../api-dto/responses/response-dto';
 import { InvalidVariableDto } from '../../../../../api-dto/files/variable-validation.dto';
 import { BookletInfoDto } from '../../../../../api-dto/booklet-info/booklet-info.dto';
 import { UnitInfoDto } from '../../../../../api-dto/unit-info/unit-info.dto';
+import { CodeBookContentSetting } from '../../../../../api-dto/coding/codebook-content-setting';
+import { MissingsProfilesDto } from '../../../../../api-dto/coding/missings-profiles.dto';
 
 interface PaginatedResponse<T> {
   data: T[];
@@ -97,8 +99,6 @@ interface ResponseEntity {
 export class BackendService {
   readonly serverUrl = inject(SERVER_URL);
   appService = inject(AppService);
-
-  // Inject specialized services
   private userService = inject(UserService);
   private workspaceService = inject(WorkspaceService);
   private fileService = inject(FileService);
@@ -642,5 +642,38 @@ export class BackendService {
 
   createDummyTestTakerFile(workspaceId: number): Observable<boolean> {
     return this.fileService.createDummyTestTakerFile(workspaceId);
+  }
+
+  getMissingsProfiles(workspaceId: number): Observable<{ label: string }[]> {
+    return this.codingService.getMissingsProfiles(workspaceId);
+  }
+
+  getMissingsProfileDetails(workspaceId: number, label: string): Observable<MissingsProfilesDto | null> {
+    return this.codingService.getMissingsProfileDetails(workspaceId, label);
+  }
+
+  createMissingsProfile(workspaceId: number, profile: MissingsProfilesDto): Observable<MissingsProfilesDto | null> {
+    return this.codingService.createMissingsProfile(workspaceId, profile);
+  }
+
+  updateMissingsProfile(workspaceId: number, label: string, profile: MissingsProfilesDto): Observable<MissingsProfilesDto | null> {
+    return this.codingService.updateMissingsProfile(workspaceId, label, profile);
+  }
+
+  deleteMissingsProfile(workspaceId: number, label: string): Observable<boolean> {
+    return this.codingService.deleteMissingsProfile(workspaceId, label);
+  }
+
+  getCodingBook(
+    workspaceId: number,
+    missingsProfile: string,
+    contentOptions: CodeBookContentSetting,
+    unitList: number[]
+  ): Observable<Blob | null> {
+    return this.codingService.getCodingBook(workspaceId, missingsProfile, contentOptions, unitList);
+  }
+
+  getUnitsWithFileIds(workspaceId: number): Observable<{ id: number; unitId: string; fileName: string; data: string }[]> {
+    return this.fileService.getUnitsWithFileIds(workspaceId);
   }
 }

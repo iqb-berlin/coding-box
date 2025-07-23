@@ -23,10 +23,11 @@
   }@else {
     <div>
       <p>
-        Bitte loggen Sie sich ein, um auf Ihre Arbeitsbereiche zuzugreifen.
+        Bitte melden Sie sich an, um auf Ihre Arbeitsbereiche zuzugreifen.
       </p>
-      <button mat-raised-button color="primary" (click)="this.authService.login()">
-        Login
+      <button mat-raised-button color="primary" class="login-button" (click)="this.authService.login()">
+        <mat-icon>login</mat-icon>
+        <span>Anmelden</span>
       </button>
     </div>
   }
