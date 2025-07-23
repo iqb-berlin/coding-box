@@ -13,11 +13,10 @@ import {
   WidthType,
   PageNumber,
   ITableCellBorders,
-  Header
+  Header, FileChild
 } from 'docx';
 import * as cheerio from 'cheerio';
 // eslint-disable-next-line import/no-extraneous-dependencies
-import { FileChild } from 'docx/build/file/file-child';
 import {
   BookVariable, CodeBookContentSetting, CodebookUnitDto, ItemMetadata
 } from './codebook.interfaces';
