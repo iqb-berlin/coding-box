@@ -116,6 +116,9 @@
     "ts-node": "^10.9.2",
     "typescript": "5.8.3"
   },
+  "overrides": {
+    "form-data": "4.0.4"
+  },
   "eslintConfig": {
     "extends": "@iqb/eslint-config",
     "rules": {
