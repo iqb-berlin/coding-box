@@ -2860,8 +2860,8 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
             this.validationTaskStateService.setValidationResult(workspaceId, 'groupResponses', validationResult);
           }
         },
-        error: error => {
-          console.error('Error loading previous validation results:', error);
+        error: () => {
+          // Error occurred while loading previous validation results
         }
       });
 

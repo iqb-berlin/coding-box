@@ -1,27 +1,4 @@
-/**
- * DTO for variable frequency data
- */
-export class VariableFrequencyDto {
-  /**
-   * The ID of the variable
-   */
-  variableId: string;
-
-  /**
-   * The value of the variable
-   */
-  value: string;
-
-  /**
-   * The count of occurrences of this value
-   */
-  count: number;
-
-  /**
-   * The percentage of occurrences of this value
-   */
-  percentage: number;
-}
+import { VariableFrequencyDto } from './variable-frequency.dto';
 
 /**
  * DTO for variable analysis result

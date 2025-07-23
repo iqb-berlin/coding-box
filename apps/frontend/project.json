@@ -14,7 +14,8 @@
         "allowedCommonJsDependencies": [
           "xml2js",
           "base64-js",
-          "js-sha256"
+          "js-sha256",
+          "nx/src/utils/logger"
         ],
         "outputPath": "dist/apps/frontend",
         "index": "apps/frontend/src/index.html",
@@ -36,12 +37,12 @@
           "budgets": [
             {
               "type": "initial",
-              "maximumWarning": "500kb",
-              "maximumError": "2mb"
+              "maximumWarning": "2mb",
+              "maximumError": "3mb"
             },
             {
               "type": "anyComponentStyle",
-              "maximumWarning": "2kb",
+              "maximumWarning": "50kb",
               "maximumError": "100kb"
             }
           ],

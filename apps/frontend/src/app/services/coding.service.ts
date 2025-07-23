@@ -9,6 +9,8 @@ import {
 import { CodingStatistics } from '../../../../../api-dto/coding/coding-statistics';
 import { SERVER_URL } from '../injection-tokens';
 import { AppService } from './app.service';
+import { CodeBookContentSetting } from '../../../../../api-dto/coding/codebook-content-setting';
+import { MissingsProfilesDto } from '../../../../../api-dto/coding/missings-profiles.dto';
 
 interface PaginatedResponse<T> {
   data: T[];
@@ -118,14 +120,11 @@ export class CodingService {
       { headers: this.authHeader }
     )
       .pipe(
-        catchError(error => {
-          console.error('Error getting job status:', error);
-          return of({
-            status: 'failed' as const,
-            progress: 0,
-            error: 'Failed to get job status'
-          });
-        })
+        catchError(() => of({
+          status: 'failed' as const,
+          progress: 0,
+          error: 'Failed to get job status'
+        }))
       );
   }
 
@@ -142,13 +141,10 @@ export class CodingService {
       { headers: this.authHeader }
     )
       .pipe(
-        catchError(error => {
-          console.error('Error cancelling job:', error);
-          return of({
-            success: false,
-            message: 'Failed to cancel job'
-          });
-        })
+        catchError(() => of({
+          success: false,
+          message: 'Failed to cancel job'
+        }))
       );
   }
 
@@ -185,10 +181,7 @@ export class CodingService {
       { headers: this.authHeader }
     )
       .pipe(
-        catchError(error => {
-          console.error('Error getting all jobs:', error);
-          return of([]);
-        })
+        catchError(() => of([]))
       );
   }
 
@@ -267,6 +260,90 @@ export class CodingService {
           page,
           limit
         }))
+      );
+  }
+
+  getMissingsProfiles(workspaceId: number): Observable<{ label: string }[]> {
+    return this.http
+      .get<{ label: string }[]>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/coding/missings-profiles`,
+      { headers: this.authHeader }
+    )
+      .pipe(
+        catchError(() => of([]))
+      );
+  }
+
+  getMissingsProfileDetails(workspaceId: number, label: string): Observable<MissingsProfilesDto | null> {
+    return this.http
+      .get<MissingsProfilesDto>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/missings-profiles/${encodeURIComponent(label)}`,
+      { headers: this.authHeader }
+    )
+      .pipe(
+        catchError(() => of(null))
+      );
+  }
+
+  createMissingsProfile(workspaceId: number, profile: MissingsProfilesDto): Observable<MissingsProfilesDto | null> {
+    return this.http
+      .post<MissingsProfilesDto>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/missings-profiles`,
+      profile,
+      { headers: this.authHeader }
+    )
+      .pipe(
+        catchError(() => of(null))
+      );
+  }
+
+  updateMissingsProfile(workspaceId: number, label: string, profile: MissingsProfilesDto): Observable<MissingsProfilesDto | null> {
+    return this.http
+      .put<MissingsProfilesDto>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/missings-profiles/${encodeURIComponent(label)}`,
+      profile,
+      { headers: this.authHeader }
+    )
+      .pipe(
+        catchError(() => of(null))
+      );
+  }
+
+  deleteMissingsProfile(workspaceId: number, label: string): Observable<boolean> {
+    return this.http
+      .delete<boolean>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/missings-profiles/${encodeURIComponent(label)}`,
+      { headers: this.authHeader }
+    )
+      .pipe(
+        catchError(() => of(false))
+      );
+  }
+
+  getCodingBook(
+    workspaceId: number,
+    missingsProfile: string,
+    contentOptions: CodeBookContentSetting,
+    unitList: number[]
+  ): Observable<Blob | null> {
+    // Ensure unitList is an array of numbers
+    const payload = {
+      missingsProfile,
+      contentOptions,
+      unitList: Array.isArray(unitList) ? unitList : [unitList]
+    };
+
+    return this.http
+      .post(
+        `${this.serverUrl}admin/workspace/${workspaceId}/coding/codebook`,
+        payload,
+        {
+          headers: this.authHeader,
+          responseType: 'blob'
+        }
+      )
+      .pipe(
+        catchError(() => of(null))
       );
   }
 }

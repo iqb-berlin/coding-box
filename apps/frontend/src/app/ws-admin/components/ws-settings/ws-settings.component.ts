@@ -7,17 +7,20 @@ import { MatInputModule } from '@angular/material/input';
 import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { CdkTextareaAutosize } from '@angular/cdk/text-field';
 import { Clipboard } from '@angular/cdk/clipboard';
 
 import { AppService } from '../../../services/app.service';
 import { WsAccessRightsComponent } from '../ws-access-rights/ws-access-rights.component';
 import { JournalComponent } from '../journal/journal.component';
+import { EditMissingsProfilesDialogComponent } from '../../../coding/components/edit-missings-profiles-dialog/edit-missings-profiles-dialog.component';
 
 @Component({
   selector: 'coding-box-ws-settings',
   templateUrl: './ws-settings.component.html',
   styleUrls: ['./ws-settings.component.scss'],
+  standalone: true,
   imports: [
     FormsModule,
     TranslateModule,
@@ -26,6 +29,7 @@ import { JournalComponent } from '../journal/journal.component';
     MatInputModule,
     MatCardModule,
     MatIconModule,
+    MatDialogModule,
     CdkTextareaAutosize,
     WsAccessRightsComponent,
     JournalComponent
@@ -35,6 +39,7 @@ export class WsSettingsComponent {
   private appService = inject(AppService);
   private clipboard = inject(Clipboard);
   private snackBar = inject(MatSnackBar);
+  private dialog = inject(MatDialog);
 
   authToken: string | null = null;
   duration = 60;
@@ -52,6 +57,16 @@ export class WsSettingsComponent {
     if (this.authToken) {
       this.clipboard.copy(this.authToken);
       this.snackBar.open('Token in die Zwischenablage kopiert', 'Schließen', { duration: 3000 });
+    }
+  }
+
+  editMissingsProfiles(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (workspaceId) {
+      this.dialog.open(EditMissingsProfilesDialogComponent, {
+        width: '900px',
+        data: { workspaceId }
+      });
     }
   }
 }

@@ -1,0 +1,240 @@
+// Main container styles
+.export-codebook-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+// Dialog content styles
+.dialog-content {
+  min-height: 500px;
+  padding: 0;
+  overflow: hidden;
+}
+
+// Layout for the export panels
+.export-layout {
+  display: flex;
+  flex-direction: row;
+  gap: 20px;
+  height: 100%;
+  padding: 16px;
+
+  @media (max-width: 960px) {
+    flex-direction: column;
+  }
+}
+
+// Shared panel styles
+.unit-selection-panel,
+.settings-panel {
+  border-radius: 8px;
+  padding: 16px;
+  background-color: white;
+}
+
+// Unit selection panel styles
+.unit-selection-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  max-height: 600px;
+  min-width: 300px;
+
+  @media (max-width: 960px) {
+    max-height: 400px;
+  }
+
+  @media (max-height: 768px) {
+    max-height: 450px;
+  }
+
+  @media (max-height: 600px) {
+    max-height: 350px;
+  }
+}
+
+// Panel header with title and count
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+
+  h3 {
+    margin: 0;
+    font-weight: 500;
+  }
+
+  .selection-count {
+    background-color: #f0f0f0;
+    padding: 4px 8px;
+    border-radius: 16px;
+    font-size: 14px;
+    color: rgba(0, 0, 0, 0.7);
+  }
+}
+
+// Select all container
+.select-all-container {
+  margin-bottom: 16px;
+}
+
+// Search container
+.search-container {
+  margin-bottom: 16px;
+
+  .search-field {
+    width: 100%;
+  }
+}
+
+// Loading container
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+
+  .loading-text {
+    margin-top: 16px;
+    color: rgba(0, 0, 0, 0.6);
+  }
+}
+
+// Units table container
+.units-table-container {
+  overflow-y: auto; // Enable vertical scrolling
+  flex: 1;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  display: flex;
+  flex-direction: column;
+  max-height: 500px; // Fixed height to enable scrolling when content exceeds this height
+
+  // Ensure smooth scrolling on touch devices
+  -webkit-overflow-scrolling: touch;
+
+  // Add some bottom padding to ensure last row is fully visible when scrolled to bottom
+  padding-bottom: 4px;
+}
+
+// Units table styles
+.units-table {
+  width: 100%;
+  // Ensure table takes up available space in the container
+  flex: 1;
+  overflow: auto;
+
+  .mat-mdc-header-cell {
+    background-color: #f5f5f5;
+    font-weight: 500;
+    padding: 12px 16px;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+  }
+
+  .mat-mdc-cell {
+    padding: 12px 16px;
+    height: 48px; // Match row height
+    vertical-align: middle; // Center content vertically
+    box-sizing: border-box; // Include padding in height calculation
+  }
+
+  .mat-mdc-row {
+    height: 48px; // Fixed height for all rows
+    min-height: 48px; // Ensure minimum height
+
+    &.selected {
+      background-color: rgba(33, 150, 243, 0.08);
+    }
+
+    &:hover {
+      background-color: #f9f9f9;
+    }
+  }
+
+  .mat-column-select {
+    width: 60px;
+    text-align: center;
+  }
+
+  // No data row
+  .mat-mdc-no-data-row {
+    height: 48px; // Match regular row height
+    min-height: 48px;
+
+    .mat-mdc-cell {
+      text-align: center;
+      padding: 12px 16px; // Match regular cell padding
+      height: 48px; // Match regular cell height
+      color: rgba(0, 0, 0, 0.6);
+      vertical-align: middle;
+    }
+  }
+}
+
+// Settings panel styles
+.settings-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 300px;
+  max-width: 500px;
+  overflow-y: auto;
+
+  @media (max-width: 960px) {
+    max-width: none;
+  }
+}
+
+// Settings section styles
+.settings-section {
+  padding: 16px 0;
+
+  h3 {
+    margin-top: 0;
+    margin-bottom: 16px;
+    font-weight: 500;
+  }
+
+  &:first-child {
+    padding-top: 0;
+  }
+
+  &:last-child {
+    padding-bottom: 0;
+  }
+}
+
+// Warning section styles
+.warning-section {
+  padding: 16px;
+  background-color: rgba(244, 67, 54, 0.08);
+  border-radius: 4px;
+}
+
+// Options grid for checkboxes
+.options-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 12px;
+
+  mat-checkbox {
+    margin-bottom: 8px;
+  }
+}
+
+// Full width form field
+.full-width {
+  width: 100%;
+}
+
+// Export format radio group
+.export-format-group {
+  display: flex;
+  flex-direction: row;
+  gap: 16px;
+}

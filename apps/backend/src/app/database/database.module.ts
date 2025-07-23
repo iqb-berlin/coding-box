@@ -45,6 +45,7 @@ import { Job } from './entities/job.entity';
 import { VariableAnalysisJob } from './entities/variable-analysis-job.entity';
 import { TestPersonCodingJob } from './entities/test-person-coding-job.entity';
 import { ValidationTask } from './entities/validation-task.entity';
+import { Setting } from './entities/setting.entity';
 
 @Module({
   imports: [
@@ -74,7 +75,7 @@ import { ValidationTask } from './entities/validation-task.entity';
         password: configService.get('POSTGRES_PASSWORD'),
         database: configService.get('POSTGRES_DB'),
         entities: [BookletInfo, Booklet, Session, BookletLog, Unit, UnitLog, UnitLastState, ResponseEntity,
-          User, Workspace, WorkspaceAdmin, FileUpload, WorkspaceUser, ResourcePackage, Logs, Persons, ChunkEntity, BookletLog, Session, UnitLog, UnitTag, UnitNote, JournalEntry, Job, VariableAnalysisJob, TestPersonCodingJob, ValidationTask
+          User, Workspace, WorkspaceAdmin, FileUpload, WorkspaceUser, ResourcePackage, Logs, Persons, ChunkEntity, BookletLog, Session, UnitLog, UnitTag, UnitNote, JournalEntry, Job, VariableAnalysisJob, TestPersonCodingJob, ValidationTask, Setting
         ],
         synchronize: false
       }),
@@ -104,7 +105,8 @@ import { ValidationTask } from './entities/validation-task.entity';
       Job,
       VariableAnalysisJob,
       TestPersonCodingJob,
-      ValidationTask
+      ValidationTask,
+      Setting
     ])
   ],
   providers: [

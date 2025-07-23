@@ -67,7 +67,7 @@ export class WorkspacePlayerController {
   @ApiOperation({ summary: 'Get units from a booklet in order' })
   @ApiResponse({
     status: 200,
-    description: 'Returns an array of units from the booklet in the correct order',
+    description: 'Returns an array of units from the booklet in the correct order'
   })
 
   async getBookletUnits(
