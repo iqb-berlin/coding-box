@@ -1,5 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
+import { VariableInfo } from '@iqbspecs/variable-info/variable-info.interface';
 import { FilesInListDto } from 'api-dto/files/files-in-list.dto';
 import { UnitNoteDto } from 'api-dto/unit-notes/unit-note.dto';
 import { UpdateUnitTagDto } from 'api-dto/unit-tags/update-unit-tag.dto';
@@ -253,7 +254,7 @@ export class BackendService {
     return this.workspaceService.changeWorkspace(workspaceData);
   }
 
-  uploadTestFiles(workspaceId: number, files: FileList | null): Observable<number> {
+  uploadTestFiles(workspaceId: number, files: FileList | FormData | null): Observable<number> {
     return this.fileService.uploadTestFiles(workspaceId, files);
   }
 
@@ -675,5 +676,13 @@ export class BackendService {
 
   getUnitsWithFileIds(workspaceId: number): Observable<{ id: number; unitId: string; fileName: string; data: string }[]> {
     return this.fileService.getUnitsWithFileIds(workspaceId);
+  }
+
+  getVariableInfoForScheme(workspaceId: number, schemeFileId: string): Observable<VariableInfo[]> {
+    const fileId = schemeFileId.endsWith('.vocs') ?
+      schemeFileId.slice(0, -5) :
+      schemeFileId;
+
+    return this.fileService.getVariableInfoForScheme(workspaceId, fileId);
   }
 }

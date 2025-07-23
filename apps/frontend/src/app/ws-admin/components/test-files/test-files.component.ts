@@ -29,6 +29,7 @@ import { MatPaginator, PageEvent } from '@angular/material/paginator';
 import { FilesValidationDialogComponent } from '../files-validation-result/files-validation.component';
 import { TestCenterImportComponent } from '../test-center-import/test-center-import.component';
 import { ResourcePackagesDialogComponent } from '../resource-packages-dialog/resource-packages-dialog.component';
+import { SchemeEditorDialogComponent } from '../../../coding/components/scheme-editor-dialog/scheme-editor-dialog.component';
 import { AppService } from '../../../services/app.service';
 import { BackendService } from '../../../services/backend.service';
 import { HasSelectionValuePipe } from '../../../shared/pipes/hasSelectionValue.pipe';
@@ -373,14 +374,34 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   showFileContent(file: FilesInListDto): void {
     this.backendService.downloadFile(this.appService.selectedWorkspaceId, file.id).subscribe(fileData => {
       const decodedContent = atob(fileData.base64Data);
-      this.dialog.open(ContentDialogComponent, {
-        width: '800px',
-        height: '800px',
-        data: {
-          title: file.filename,
-          content: decodedContent
-        }
-      });
+
+      if (file.file_type === 'Resource' && file.filename.toLowerCase().endsWith('.vocs')) {
+        const dialogRef = this.dialog.open(SchemeEditorDialogComponent, {
+          width: '90%',
+          height: '90%',
+          data: {
+            workspaceId: this.appService.selectedWorkspaceId,
+            fileId: file.id,
+            fileName: file.filename,
+            content: decodedContent
+          }
+        });
+
+        dialogRef.afterClosed().subscribe(result => {
+          if (result === true) {
+            this.loadTestFiles();
+          }
+        });
+      } else {
+        this.dialog.open(ContentDialogComponent, {
+          width: '800px',
+          height: '800px',
+          data: {
+            title: file.filename,
+            content: decodedContent
+          }
+        });
+      }
     });
   }
 
