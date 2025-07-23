@@ -465,7 +465,7 @@ export class CodebookDocxGenerator {
                 new Paragraph({
                   alignment: AlignmentType.RIGHT,
                   children: [
-                    new TextRun('IQB-Studio Codebook '),
+                    new TextRun('IQB-Kodierbox Codebook '),
                     new TextRun({
                       children: [PageNumber.CURRENT],
                       font: 'Calibri'
