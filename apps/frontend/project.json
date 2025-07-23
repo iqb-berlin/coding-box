@@ -33,6 +33,7 @@
       },
       "configurations": {
         "production": {
+          "dependsOn": [],
           "budgets": [
             {
               "type": "initial",
