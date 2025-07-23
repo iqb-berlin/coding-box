@@ -53,7 +53,7 @@
     "cheerio": "^1.1.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
-    "docx": "^8.5.0",
+    "docx": "^9.5.1",
     "fast-csv": "^5.0.1",
     "file-saver-es": "^2.0.5",
     "@types/file-saver-es": "^2.0.1",
