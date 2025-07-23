@@ -105,11 +105,65 @@ export class UnitInfoService {
     }
 
     const unitXml = unitFile.data;
-    const unitInfo = await this.parseUnitXml(unitXml);
-    return unitInfo;
+    return this.parseUnitXml(unitXml);
+  }
+
+  /**
+   * Validate unit XML structure
+   * @param result Parsed XML result
+   */
+  private validateUnitStructure(result: { Unit: UnitElement }): void {
+    if (!result || !result.Unit) {
+      throw new Error('Invalid unit XML: Missing Unit element');
+    }
+
+    if (!result.Unit.Metadata || !result.Unit.Metadata.length) {
+      throw new Error('Invalid unit XML: Missing Metadata element');
+    }
+
+    const metadataElement = result.Unit.Metadata[0];
+
+    if (!metadataElement.Id || !Array.isArray(metadataElement.Id) || metadataElement.Id.length === 0) {
+      throw new Error('Invalid unit XML: Missing required Id in Metadata');
+    }
+
+    if (!metadataElement.Label || !Array.isArray(metadataElement.Label) || metadataElement.Label.length === 0) {
+      throw new Error('Invalid unit XML: Missing required Label in Metadata');
+    }
+
+    // Validate definition (required by schema)
+    if (!result.Unit.Definition && !result.Unit.DefinitionRef) {
+      throw new Error('Invalid unit XML: Missing Definition or DefinitionRef element');
+    }
+  }
+
+  /**
+   * Validate definition element
+   * @param element Definition or DefinitionRef element
+   * @param elementType Type of element ('Definition' or 'DefinitionRef')
+   */
+  private validateDefinitionElement(element: XmlElement, elementType: string): void {
+    if (!element.$ || !element.$.player) {
+      throw new Error(`Invalid unit XML: Missing required player attribute in ${elementType}`);
+    }
+  }
+
+  /**
+   * Validate coding scheme reference element
+   * @param element CodingSchemeRef element
+   */
+  private validateCodingSchemeElement(element: XmlElement): void {
+    if (!element.$ || !element.$.schemer) {
+      throw new Error('Invalid unit XML: Missing required schemer attribute in CodingSchemeRef');
+    }
   }
 
   private async parseUnitXml(unitXml: string): Promise<UnitInfoDto> {
+    // Validate input before parsing
+    if (!unitXml || typeof unitXml !== 'string') {
+      throw new Error('Invalid unit XML: XML data is empty or not a string');
+    }
+
     const parser = new xml2js.Parser({
       explicitArray: true, // Always return arrays for elements that can occur multiple times
       mergeAttrs: false, // Don't merge attributes into the element
@@ -118,28 +172,12 @@ export class UnitInfoService {
     });
 
     try {
-      if (!unitXml || typeof unitXml !== 'string') {
-        throw new Error('Invalid unit XML: XML data is empty or not a string');
-      }
-
       const result = await parser.parseStringPromise(unitXml) as { Unit: UnitElement };
-      if (!result || !result.Unit) {
-        throw new Error('Invalid unit XML: Missing Unit element');
-      }
 
-      if (!result.Unit.Metadata || !result.Unit.Metadata.length) {
-        throw new Error('Invalid unit XML: Missing Metadata element');
-      }
+      // Validate parsed result outside the try block
+      this.validateUnitStructure(result);
 
       const metadataElement = result.Unit.Metadata[0];
-
-      if (!metadataElement.Id || !Array.isArray(metadataElement.Id) || metadataElement.Id.length === 0) {
-        throw new Error('Invalid unit XML: Missing required Id in Metadata');
-      }
-
-      if (!metadataElement.Label || !Array.isArray(metadataElement.Label) || metadataElement.Label.length === 0) {
-        throw new Error('Invalid unit XML: Missing required Label in Metadata');
-      }
 
       // Extract metadata
       const metadata: UnitMetadataDto = {
@@ -161,17 +199,13 @@ export class UnitInfoService {
         metadata.lastChange = new Date(metadataElement.Lastchange[0] as string);
       }
 
-      // Extract definition (required by schema)
-      if (!result.Unit.Definition && !result.Unit.DefinitionRef) {
-        throw new Error('Invalid unit XML: Missing Definition or DefinitionRef element');
-      }
+      // Definition validation is now handled in validateUnitStructure
 
       let definition: UnitDefinitionDto;
       if (result.Unit.Definition && Array.isArray(result.Unit.Definition) && result.Unit.Definition.length > 0) {
         const definitionElement = result.Unit.Definition[0];
-        if (!definitionElement.$ || !definitionElement.$.player) {
-          throw new Error('Invalid unit XML: Missing required player attribute in Definition');
-        }
+        // Validation moved to validateDefinitionElement method
+        this.validateDefinitionElement(definitionElement, 'Definition');
 
         definition = {
           type: 'Definition',
@@ -185,9 +219,8 @@ export class UnitInfoService {
         }
       } else if (result.Unit.DefinitionRef && Array.isArray(result.Unit.DefinitionRef) && result.Unit.DefinitionRef.length > 0) {
         const definitionRefElement = result.Unit.DefinitionRef[0];
-        if (!definitionRefElement.$ || !definitionRefElement.$.player) {
-          throw new Error('Invalid unit XML: Missing required player attribute in DefinitionRef');
-        }
+        // Validation moved to validateDefinitionElement method
+        this.validateDefinitionElement(definitionRefElement, 'DefinitionRef');
 
         definition = {
           type: 'DefinitionRef',
@@ -199,17 +232,13 @@ export class UnitInfoService {
         if (definitionRefElement.$.lastChange) {
           definition.lastChange = new Date(definitionRefElement.$.lastChange as string);
         }
-      } else {
-        throw new Error('Invalid unit XML: Missing Definition or DefinitionRef element');
       }
 
-      // Extract coding scheme reference (optional)
       let codingSchemeRef: UnitCodingSchemeRefDto | undefined;
       if (result.Unit.CodingSchemeRef && Array.isArray(result.Unit.CodingSchemeRef) && result.Unit.CodingSchemeRef.length > 0) {
         const codingSchemeRefElement = result.Unit.CodingSchemeRef[0];
-        if (!codingSchemeRefElement.$ || !codingSchemeRefElement.$.schemer) {
-          throw new Error('Invalid unit XML: Missing required schemer attribute in CodingSchemeRef');
-        }
+        // Validation moved to validateCodingSchemeElement method
+        this.validateCodingSchemeElement(codingSchemeRefElement);
 
         codingSchemeRef = {
           content: codingSchemeRefElement._ as string || '',
@@ -411,7 +440,7 @@ export class UnitInfoService {
 
       return response;
     } catch (error) {
-      console.error('Error parsing unit XML:', error);
+      // Error will be thrown and can be handled by the caller
       if (error instanceof Error) {
         throw new Error(`Failed to parse unit XML: ${error.message}`);
       } else {
