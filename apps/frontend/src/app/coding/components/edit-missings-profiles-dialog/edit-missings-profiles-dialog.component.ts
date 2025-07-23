@@ -240,7 +240,7 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
       const missings = this.selectedProfile.parseMissings();
       return Array.isArray(missings) ? missings : [];
     } catch (error) {
-      console.error('Error getting missings:', error);
+      // Error occurred while parsing missings
       return [];
     }
   }

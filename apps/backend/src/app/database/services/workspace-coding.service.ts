@@ -1628,7 +1628,7 @@ export class WorkspaceCodingService {
       });
 
       if (!setting) {
-        throw new Error(`No missings profiles found`);
+        throw new Error('No missings profiles found');
       }
 
       let profiles: MissingsProfilesDto[] = [];

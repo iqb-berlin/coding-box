@@ -62,7 +62,7 @@ export function debounce<T extends (...args: unknown[]) => unknown>(
 ): (...args: Parameters<T>) => void {
   let timeout: number | null = null;
 
-  return function (...args: Parameters<T>): void {
+  return function debouncedFunction(...args: Parameters<T>): void {
     const later = () => {
       timeout = null;
       func(...args);

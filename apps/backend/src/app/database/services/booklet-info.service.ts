@@ -143,7 +143,7 @@ export class BookletInfoService {
 
       // If no units were found, the XML might be invalid
       if (units.length === 0) {
-        console.warn('Warning: No units found in booklet XML');
+        // No units found in booklet XML
       }
 
       // Extract restrictions from Units.Restrictions
@@ -169,7 +169,7 @@ export class BookletInfoService {
 
       return response;
     } catch (error) {
-      console.error('Error parsing booklet XML:', error);
+      // Error occurred while parsing booklet XML
       if (error instanceof Error) {
         throw new Error(`Failed to parse booklet XML: ${error.message}`);
       } else {

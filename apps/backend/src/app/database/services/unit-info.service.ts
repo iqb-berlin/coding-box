@@ -11,6 +11,80 @@ import { UnitCodingSchemeRefDto } from '../../../../../../api-dto/unit-info/unit
 import { UnitDependencyDto } from '../../../../../../api-dto/unit-info/unit-dependency.dto';
 import FileUpload from '../entities/file_upload.entity';
 
+// XML element interfaces for parsing
+interface XmlAttributes {
+  [key: string]: string;
+}
+
+interface XmlElement {
+  $?: XmlAttributes;
+  _?: string; // Element text content
+}
+
+interface MetadataElement extends XmlElement {
+  Id?: string[];
+  Label?: string[];
+  Description?: string[];
+  Transcript?: string[];
+  Reference?: string[];
+  Lastchange?: string[];
+}
+
+interface DefinitionElement extends XmlElement {
+  // $ contains player, editor, lastChange attributes
+}
+
+interface CodingSchemeRefElement extends XmlElement {
+  // $ contains schemer, schemeType, lastChange attributes
+}
+
+interface DependencyElement extends XmlElement {
+  // $ contains for attribute
+}
+
+interface DependenciesElement extends XmlElement {
+  File?: DependencyElement[];
+  file?: DependencyElement[]; // Deprecated lowercase version
+  Service?: DependencyElement[];
+}
+
+interface ValueElement extends XmlElement {
+  label?: string[];
+  value?: string[];
+}
+
+interface ValuesElement extends XmlElement {
+  Value?: ValueElement[];
+}
+
+interface ValuePositionLabelsElement extends XmlElement {
+  ValuePositionLabel?: string[];
+}
+
+interface VariableElement extends XmlElement {
+  // $ contains id, alias, type, format, multiple, nullable, page attributes
+  Values?: ValuesElement[];
+  ValuePositionLabels?: ValuePositionLabelsElement[];
+}
+
+interface BaseVariablesElement extends XmlElement {
+  Variable?: VariableElement[];
+}
+
+interface DerivedVariablesElement extends XmlElement {
+  Variable?: VariableElement[];
+}
+
+interface UnitElement extends XmlElement {
+  Metadata?: MetadataElement[];
+  Definition?: DefinitionElement[];
+  DefinitionRef?: DefinitionElement[];
+  CodingSchemeRef?: CodingSchemeRefElement[];
+  Dependencies?: DependenciesElement[];
+  BaseVariables?: BaseVariablesElement[];
+  DerivedVariables?: DerivedVariablesElement[];
+}
+
 @Injectable()
 export class UnitInfoService {
   constructor(
@@ -48,7 +122,7 @@ export class UnitInfoService {
         throw new Error('Invalid unit XML: XML data is empty or not a string');
       }
 
-      const result = await parser.parseStringPromise(unitXml);
+      const result = await parser.parseStringPromise(unitXml) as { Unit: UnitElement };
       if (!result || !result.Unit) {
         throw new Error('Invalid unit XML: Missing Unit element');
       }
@@ -57,7 +131,7 @@ export class UnitInfoService {
         throw new Error('Invalid unit XML: Missing Metadata element');
       }
 
-      const metadataElement = result.Unit.Metadata[0] as Record<string, any>;
+      const metadataElement = result.Unit.Metadata[0];
 
       if (!metadataElement.Id || !Array.isArray(metadataElement.Id) || metadataElement.Id.length === 0) {
         throw new Error('Invalid unit XML: Missing required Id in Metadata');
@@ -94,7 +168,7 @@ export class UnitInfoService {
 
       let definition: UnitDefinitionDto;
       if (result.Unit.Definition && Array.isArray(result.Unit.Definition) && result.Unit.Definition.length > 0) {
-        const definitionElement = result.Unit.Definition[0] as Record<string, any>;
+        const definitionElement = result.Unit.Definition[0];
         if (!definitionElement.$ || !definitionElement.$.player) {
           throw new Error('Invalid unit XML: Missing required player attribute in Definition');
         }
@@ -110,7 +184,7 @@ export class UnitInfoService {
           definition.lastChange = new Date(definitionElement.$.lastChange as string);
         }
       } else if (result.Unit.DefinitionRef && Array.isArray(result.Unit.DefinitionRef) && result.Unit.DefinitionRef.length > 0) {
-        const definitionRefElement = result.Unit.DefinitionRef[0] as Record<string, any>;
+        const definitionRefElement = result.Unit.DefinitionRef[0];
         if (!definitionRefElement.$ || !definitionRefElement.$.player) {
           throw new Error('Invalid unit XML: Missing required player attribute in DefinitionRef');
         }
@@ -132,7 +206,7 @@ export class UnitInfoService {
       // Extract coding scheme reference (optional)
       let codingSchemeRef: UnitCodingSchemeRefDto | undefined;
       if (result.Unit.CodingSchemeRef && Array.isArray(result.Unit.CodingSchemeRef) && result.Unit.CodingSchemeRef.length > 0) {
-        const codingSchemeRefElement = result.Unit.CodingSchemeRef[0] as Record<string, any>;
+        const codingSchemeRefElement = result.Unit.CodingSchemeRef[0];
         if (!codingSchemeRefElement.$ || !codingSchemeRefElement.$.schemer) {
           throw new Error('Invalid unit XML: Missing required schemer attribute in CodingSchemeRef');
         }
@@ -151,11 +225,11 @@ export class UnitInfoService {
       // Extract dependencies (optional)
       const dependencies: UnitDependencyDto[] = [];
       if (result.Unit.Dependencies && Array.isArray(result.Unit.Dependencies) && result.Unit.Dependencies.length > 0) {
-        const dependenciesElement = result.Unit.Dependencies[0] as Record<string, unknown>;
+        const dependenciesElement = result.Unit.Dependencies[0] as DependenciesElement;
 
         // Process File dependencies
         if (dependenciesElement.File && Array.isArray(dependenciesElement.File)) {
-          dependenciesElement.File.forEach((fileElement: Record<string, any>) => {
+          dependenciesElement.File.forEach((fileElement: DependencyElement) => {
             const dependency: UnitDependencyDto = {
               type: 'File',
               content: fileElement._ as string || '',
@@ -168,7 +242,7 @@ export class UnitInfoService {
 
         // Process deprecated 'file' dependencies (lowercase)
         if (dependenciesElement.file && Array.isArray(dependenciesElement.file)) {
-          dependenciesElement.file.forEach((fileElement: Record<string, any>) => {
+          dependenciesElement.file.forEach((fileElement: DependencyElement) => {
             const dependency: UnitDependencyDto = {
               type: 'File',
               content: fileElement._ as string || '',
@@ -181,7 +255,7 @@ export class UnitInfoService {
 
         // Process Service dependencies
         if (dependenciesElement.Service && Array.isArray(dependenciesElement.Service)) {
-          dependenciesElement.Service.forEach((serviceElement: Record<string, any>) => {
+          dependenciesElement.Service.forEach((serviceElement: DependencyElement) => {
             const dependency: UnitDependencyDto = {
               type: 'Service',
               content: serviceElement._ as string || '',
@@ -196,9 +270,9 @@ export class UnitInfoService {
       // Extract base variables (optional)
       const baseVariables: UnitVariableDto[] = [];
       if (result.Unit.BaseVariables && Array.isArray(result.Unit.BaseVariables) && result.Unit.BaseVariables.length > 0) {
-        const baseVariablesElement = result.Unit.BaseVariables[0] as Record<string, unknown>;
+        const baseVariablesElement = result.Unit.BaseVariables[0] as BaseVariablesElement;
         if (baseVariablesElement.Variable && Array.isArray(baseVariablesElement.Variable)) {
-          baseVariablesElement.Variable.forEach((variableElement: Record<string, any>) => {
+          baseVariablesElement.Variable.forEach((variableElement: VariableElement) => {
             if (!variableElement.$ || !variableElement.$.id || !variableElement.$.type) {
               return; // Skip invalid variables
             }
@@ -215,12 +289,12 @@ export class UnitInfoService {
 
             // Extract values
             if (variableElement.Values && Array.isArray(variableElement.Values) && variableElement.Values.length > 0) {
-              const valuesElement = variableElement.Values[0] as Record<string, any>;
+              const valuesElement = variableElement.Values[0] as ValuesElement;
               variable.valuesComplete = valuesElement.$ && valuesElement.$.complete === 'true';
 
               if (valuesElement.Value && Array.isArray(valuesElement.Value)) {
                 variable.values = [];
-                valuesElement.Value.forEach((valueElement: Record<string, unknown>) => {
+                valuesElement.Value.forEach((valueElement: ValueElement) => {
                   if (!valueElement.label || !valueElement.value ||
                       !Array.isArray(valueElement.label) || !Array.isArray(valueElement.value)) {
                     return; // Skip invalid values
@@ -238,7 +312,7 @@ export class UnitInfoService {
             // Extract value position labels
             if (variableElement.ValuePositionLabels && Array.isArray(variableElement.ValuePositionLabels) &&
                 variableElement.ValuePositionLabels.length > 0) {
-              const valuePositionLabelsElement = variableElement.ValuePositionLabels[0] as Record<string, unknown>;
+              const valuePositionLabelsElement = variableElement.ValuePositionLabels[0] as ValuePositionLabelsElement;
               if (valuePositionLabelsElement.ValuePositionLabel &&
                   Array.isArray(valuePositionLabelsElement.ValuePositionLabel)) {
                 variable.valuePositionLabels = valuePositionLabelsElement.ValuePositionLabel.map(
@@ -255,9 +329,9 @@ export class UnitInfoService {
       // Extract derived variables (optional)
       const derivedVariables: UnitVariableDto[] = [];
       if (result.Unit.DerivedVariables && Array.isArray(result.Unit.DerivedVariables) && result.Unit.DerivedVariables.length > 0) {
-        const derivedVariablesElement = result.Unit.DerivedVariables[0] as Record<string, unknown>;
+        const derivedVariablesElement = result.Unit.DerivedVariables[0] as DerivedVariablesElement;
         if (derivedVariablesElement.Variable && Array.isArray(derivedVariablesElement.Variable)) {
-          derivedVariablesElement.Variable.forEach((variableElement: Record<string, any>) => {
+          derivedVariablesElement.Variable.forEach((variableElement: VariableElement) => {
             if (!variableElement.$ || !variableElement.$.id || !variableElement.$.type) {
               return; // Skip invalid variables
             }
@@ -274,12 +348,12 @@ export class UnitInfoService {
 
             // Extract values
             if (variableElement.Values && Array.isArray(variableElement.Values) && variableElement.Values.length > 0) {
-              const valuesElement = variableElement.Values[0] as Record<string, any>;
+              const valuesElement = variableElement.Values[0] as ValuesElement;
               variable.valuesComplete = valuesElement.$ && valuesElement.$.complete === 'true';
 
               if (valuesElement.Value && Array.isArray(valuesElement.Value)) {
                 variable.values = [];
-                valuesElement.Value.forEach((valueElement: Record<string, unknown>) => {
+                valuesElement.Value.forEach((valueElement: ValueElement) => {
                   if (!valueElement.label || !valueElement.value ||
                       !Array.isArray(valueElement.label) || !Array.isArray(valueElement.value)) {
                     return; // Skip invalid values
@@ -297,7 +371,7 @@ export class UnitInfoService {
             // Extract value position labels
             if (variableElement.ValuePositionLabels && Array.isArray(variableElement.ValuePositionLabels) &&
                 variableElement.ValuePositionLabels.length > 0) {
-              const valuePositionLabelsElement = variableElement.ValuePositionLabels[0] as Record<string, unknown>;
+              const valuePositionLabelsElement = variableElement.ValuePositionLabels[0] as ValuePositionLabelsElement;
               if (valuePositionLabelsElement.ValuePositionLabel &&
                   Array.isArray(valuePositionLabelsElement.ValuePositionLabel)) {
                 variable.valuePositionLabels = valuePositionLabelsElement.ValuePositionLabel.map(

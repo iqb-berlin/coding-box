@@ -104,7 +104,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       // Parse the JSON string to get the BookletReplay object
       return JSON.parse(jsonString) as BookletReplay;
     } catch (error) {
-      console.error('Error deserializing booklet data:', error);
+      // Error occurred while deserializing booklet data
       return null;
     }
   }
@@ -123,7 +123,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         if (this.isBookletMode && queryParams.bookletData) {
           const deserializedBooklet = this.deserializeBookletData(queryParams.bookletData);
           if (deserializedBooklet) {
-            console.log('Deserialized booklet data from URL:', deserializedBooklet);
+            // Successfully deserialized booklet data from URL
             this.bookletData = deserializedBooklet;
             // Update the component state
             this.currentUnitIndex = deserializedBooklet.currentUnitIndex;

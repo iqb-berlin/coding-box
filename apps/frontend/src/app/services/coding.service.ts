@@ -120,14 +120,11 @@ export class CodingService {
       { headers: this.authHeader }
     )
       .pipe(
-        catchError(error => {
-          console.error('Error getting job status:', error);
-          return of({
-            status: 'failed' as const,
-            progress: 0,
-            error: 'Failed to get job status'
-          });
-        })
+        catchError(() => of({
+          status: 'failed' as const,
+          progress: 0,
+          error: 'Failed to get job status'
+        }))
       );
   }
 
@@ -144,13 +141,10 @@ export class CodingService {
       { headers: this.authHeader }
     )
       .pipe(
-        catchError(error => {
-          console.error('Error cancelling job:', error);
-          return of({
-            success: false,
-            message: 'Failed to cancel job'
-          });
-        })
+        catchError(() => of({
+          success: false,
+          message: 'Failed to cancel job'
+        }))
       );
   }
 
@@ -187,10 +181,7 @@ export class CodingService {
       { headers: this.authHeader }
     )
       .pipe(
-        catchError(error => {
-          console.error('Error getting all jobs:', error);
-          return of([]);
-        })
+        catchError(() => of([]))
       );
   }
 
@@ -290,10 +281,7 @@ export class CodingService {
       { headers: this.authHeader }
     )
       .pipe(
-        catchError(error => {
-          console.error('Error getting missings profile details:', error);
-          return of(null);
-        })
+        catchError(() => of(null))
       );
   }
 
@@ -305,10 +293,7 @@ export class CodingService {
       { headers: this.authHeader }
     )
       .pipe(
-        catchError(error => {
-          console.error('Error creating missings profile:', error);
-          return of(null);
-        })
+        catchError(() => of(null))
       );
   }
 
@@ -320,10 +305,7 @@ export class CodingService {
       { headers: this.authHeader }
     )
       .pipe(
-        catchError(error => {
-          console.error('Error updating missings profile:', error);
-          return of(null);
-        })
+        catchError(() => of(null))
       );
   }
 
@@ -334,10 +316,7 @@ export class CodingService {
       { headers: this.authHeader }
     )
       .pipe(
-        catchError(error => {
-          console.error('Error deleting missings profile:', error);
-          return of(false);
-        })
+        catchError(() => of(false))
       );
   }
 
@@ -364,10 +343,7 @@ export class CodingService {
         }
       )
       .pipe(
-        catchError(error => {
-          console.error('Error generating codebook:', error);
-          return of(null);
-        })
+        catchError(() => of(null))
       );
   }
 }
