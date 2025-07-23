@@ -1,5 +1,5 @@
 import {
-  Component, ElementRef, Inject, OnInit, Optional, ViewChild
+  Component, ElementRef, OnInit, ViewChild
 } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -22,7 +22,6 @@ import { debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { CodeBookContentSetting } from '../../../../../../../api-dto/coding/codebook-content-setting';
 import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
-import { IUnitSelectionComponent } from '../../../../../../backend/src/app/admin/code-book/codebook-services.interfaces';
 
 @Component({
   selector: 'shared-export-coding-book',
@@ -94,19 +93,12 @@ export class ExportCodingBookComponent implements OnInit {
     private backendService: BackendService,
     private appService: AppService,
     private datePipe: DatePipe,
-    @Optional() @Inject('unitSelectionComponent') public unitSelectionComponent?: IUnitSelectionComponent
   ) {}
 
   ngOnInit(): void {
     this.workspaceChanges = this.checkWorkspaceChanges();
     this.loadMissingsProfiles();
     this.loadUnitsWithFileIds();
-
-    if (this.unitSelectionComponent && this.unitSelectionComponent.selectionChanged) {
-      this.unitSelectionComponent.selectionChanged.subscribe((selectedUnits: number[]) => {
-        this.unitList = selectedUnits;
-      });
-    }
 
     this.filterTextChanged
       .pipe(
