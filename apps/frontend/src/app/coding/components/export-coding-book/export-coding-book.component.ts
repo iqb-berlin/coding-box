@@ -1,5 +1,5 @@
 import {
-  Component, ElementRef, OnInit, ViewChild
+  Component, OnInit
 } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
