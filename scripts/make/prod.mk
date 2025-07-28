@@ -10,7 +10,9 @@ include $(CODING_BOX_BASE_DIR)/.env.coding-box
 .PHONY: coding-box-up coding-box-down coding-box-start coding-box-stop coding-box-status coding-box-logs\
 	coding-box-config coding-box-system-prune coding-box-volumes-prune coding-box-images-clean\
 	coding-box-liquibase-status coding-box-connect-db coding-box-dump-all coding-box-restore-all coding-box-dump-db\
-	coding-box-restore-db coding-box-dump-db-data-only coding-box-restore-db-data-only coding-box-update
+	coding-box-restore-db coding-box-dump-db-data-only coding-box-restore-db-data-only coding-box-update\
+	coding-box-redis-monitor coding-box-redis-info coding-box-redis-stats coding-box-redis-ping\
+	coding-box-redis-flush-all coding-box-redis-flush-db coding-box-redis-cli
 
 ## disables printing the recipe of a make target before executing it
 .SILENT: prod-images-clean
@@ -294,6 +296,62 @@ coding-box-restore-db-data-only: coding-box-down .EXPORT_ALL_VARIABLES
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.prod.yaml\
 			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 		down
+
+## Monitor Redis in real-time
+coding-box-redis-monitor:
+	docker compose\
+			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
+			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.prod.yaml\
+			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
+		exec redis redis-cli monitor
+
+## Display Redis server information
+coding-box-redis-info:
+	docker compose\
+			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
+			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.prod.yaml\
+			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
+		exec redis redis-cli info
+
+## Display Redis statistics
+coding-box-redis-stats:
+	docker compose\
+			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
+			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.prod.yaml\
+			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
+		exec redis redis-cli info stats
+
+## Check Redis connection status
+coding-box-redis-ping:
+	docker compose\
+			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
+			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.prod.yaml\
+			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
+		exec redis redis-cli ping
+
+## Flush all Redis databases
+coding-box-redis-flush-all:
+	docker compose\
+			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
+			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.prod.yaml\
+			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
+		exec redis redis-cli flushall
+
+## Flush the current Redis database
+coding-box-redis-flush-db:
+	docker compose\
+			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
+			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.prod.yaml\
+			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
+		exec redis redis-cli flushdb
+
+## Open Redis CLI
+coding-box-redis-cli:
+	docker compose\
+			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
+			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.prod.yaml\
+			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
+		exec -it redis redis-cli
 
 coding-box-update:
 	bash $(CODING_BOX_BASE_DIR)/scripts/update.sh

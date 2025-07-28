@@ -10,13 +10,13 @@ import Persons from '../entities/persons.entity';
 import { Unit } from '../entities/unit.entity';
 import { Booklet } from '../entities/booklet.entity';
 import { ResponseEntity } from '../entities/response.entity';
-import { TestPersonCodingJob } from '../entities/test-person-coding-job.entity';
 import { Setting } from '../entities/setting.entity';
 import { CodingStatistics, CodingStatisticsWithJob } from './shared-types';
 import { extractVariableLocation } from '../../utils/voud/extractVariableLocation';
 import { CodebookGenerator } from '../../admin/code-book/codebook-generator.class';
 import { CodeBookContentSetting, UnitPropertiesForCodebook, Missing } from '../../admin/code-book/codebook.interfaces';
 import { MissingsProfilesDto } from '../../../../../../api-dto/coding/missings-profiles.dto';
+import { JobQueueService } from '../../job-queue/job-queue.service';
 
 @Injectable()
 export class WorkspaceCodingService {
@@ -33,10 +33,9 @@ export class WorkspaceCodingService {
     private bookletRepository: Repository<Booklet>,
     @InjectRepository(ResponseEntity)
     private responseRepository: Repository<ResponseEntity>,
-    @InjectRepository(TestPersonCodingJob)
-    private jobRepository: Repository<TestPersonCodingJob>,
     @InjectRepository(Setting)
-    private settingRepository: Repository<Setting>
+    private settingRepository: Repository<Setting>,
+    private jobQueueService: JobQueueService
   ) {}
 
   private codingSchemeCache: Map<string, { scheme: Autocoder.CodingScheme; timestamp: number }> = new Map();
@@ -165,7 +164,7 @@ export class WorkspaceCodingService {
     }
   }
 
-  private jobStatus: Map<string, { status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'paused'; progress: number; result?: CodingStatistics; error?: string; workspaceId?: number; createdAt?: Date }> = new Map();
+  // In-memory job status map removed as we now use only Bull for job management
 
   async getAllJobs(workspaceId?: number): Promise<{
     jobId: string;
@@ -179,249 +178,69 @@ export class WorkspaceCodingService {
     durationMs?: number;
     completedAt?: Date;
   }[]> {
-    const jobs: {
-      jobId: string;
-      status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'paused';
-      progress: number;
-      result?: CodingStatistics;
-      error?: string;
-      workspaceId?: number;
-      createdAt?: Date;
-      groupNames?: string;
-      durationMs?: number;
-      completedAt?: Date;
-    }[] = [];
-
-    // First get jobs from the in-memory map for backward compatibility
-    this.jobStatus.forEach((status, jobId) => {
-      // If workspaceId is provided, filter jobs by workspace
-      if (workspaceId !== undefined && status.workspaceId !== workspaceId) {
-        return;
-      }
-
-      jobs.push({
-        jobId,
-        ...status
-      });
-    });
-
-    try {
-      const whereClause = workspaceId !== undefined ? { workspace_id: workspaceId } : {};
-      const dbJobs = await this.jobRepository.find({
-        where: whereClause,
-        order: { created_at: 'DESC' }
-      });
-
-      for (const job of dbJobs) {
-        let result: CodingStatistics | undefined;
-        if (job.result) {
-          try {
-            result = JSON.parse(job.result) as CodingStatistics;
-          } catch (error) {
-            this.logger.error(`Error parsing job result: ${error.message}`, error.stack);
-          }
-        }
-
-        // Check if this is a TestPersonCodingJob to get additional fields
-        const isTestPersonCodingJob = job.type === 'test-person-coding';
-
-        jobs.push({
-          jobId: job.id.toString(),
-          status: job.status as 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'paused',
-          progress: job.progress || 0,
-          result,
-          error: job.error,
-          workspaceId: job.workspace_id,
-          createdAt: job.created_at,
-          groupNames: isTestPersonCodingJob ? (job as TestPersonCodingJob).group_names : undefined,
-          durationMs: isTestPersonCodingJob ? (job as TestPersonCodingJob).duration_ms : undefined,
-          completedAt: job.status === 'completed' ? job.updated_at : undefined
-        });
-      }
-    } catch (error) {
-      this.logger.error(`Error getting jobs from database: ${error.message}`, error.stack);
+    // Use getBullJobs for all workspaces
+    if (workspaceId !== undefined) {
+      return this.getBullJobs(workspaceId);
     }
 
-    // Sort jobs by creation date (newest first)
-    return jobs.sort((a, b) => {
-      if (!a.createdAt) return 1;
-      if (!b.createdAt) return -1;
-      return b.createdAt.getTime() - a.createdAt.getTime();
-    });
-  }
-
-  private async processTestPersonsInBackground(jobId: number, workspace_id: number, personIds: string[]): Promise<void> {
-    try {
-      const job = await this.jobRepository.findOne({ where: { id: jobId } });
-      if (!job) {
-        this.logger.error(`Job with ID ${jobId} not found`);
-        return;
-      }
-
-      job.status = 'processing';
-      job.progress = 0;
-      await this.jobRepository.save(job);
-
-      const BATCH_SIZE = 500;
-      const totalPersons = personIds.length;
-      let processedPersons = 0;
-      const combinedResult: CodingStatistics = { totalResponses: 0, statusCounts: {} };
-
-      this.logger.log(`Processing ${totalPersons} test persons in batches of ${BATCH_SIZE}`);
-
-      // Process each batch sequentially
-      for (let i = 0; i < personIds.length; i += BATCH_SIZE) {
-        const currentJobStatus = await this.jobRepository.findOne({ where: { id: jobId } });
-        if (!currentJobStatus || currentJobStatus.status === 'cancelled' || currentJobStatus.status === 'paused') {
-          this.logger.log(`Job ${jobId} was ${currentJobStatus ? currentJobStatus.status : 'cancelled'} before processing batch ${(i / BATCH_SIZE) + 1}`);
-          return;
-        }
-
-        const batchPersonIds = personIds.slice(i, i + BATCH_SIZE);
-        const batchNumber = (i / BATCH_SIZE) + 1;
-        const totalBatches = Math.ceil(totalPersons / BATCH_SIZE);
-        this.logger.log(`Processing batch ${batchNumber} of ${totalBatches} (${batchPersonIds.length} persons)`);
-
-        // Capture the current processed count for this batch's progress calculation
-        const currentProcessedCount = processedPersons;
-
-        const batchResult = await this.processTestPersonsBatch(workspace_id, batchPersonIds, async progress => {
-          // Calculate overall progress based on completed batches and current batch progress
-          const overallProgress = Math.min(
-            Math.floor(((currentProcessedCount + (batchPersonIds.length * (progress / 100))) / totalPersons) * 100),
-            99 // Cap at 99% until fully complete
-          );
-
-          // Update job progress
-          try {
-            const currentJob = await this.jobRepository.findOne({ where: { id: jobId } });
-            if (!currentJob) {
-              this.logger.error(`Job with ID ${jobId} not found when updating progress`);
-              return;
-            }
-
-            if (currentJob.status === 'cancelled' || currentJob.status === 'paused') {
-              return;
-            }
-
-            // Update progress
-            currentJob.progress = overallProgress;
-            await this.jobRepository.save(currentJob);
-          } catch (error) {
-            this.logger.error(`Error updating job progress: ${error.message}`, error.stack);
-          }
-        }, jobId.toString());
-
-        // Merge batch results into combined results
-        combinedResult.totalResponses += batchResult.totalResponses;
-
-        // Merge status counts
-        Object.entries(batchResult.statusCounts).forEach(([status, count]) => {
-          if (!combinedResult.statusCounts[status]) {
-            combinedResult.statusCounts[status] = 0;
-          }
-          combinedResult.statusCounts[status] += count;
-        });
-
-        // Update processed count
-        processedPersons += batchPersonIds.length;
-
-        // Force garbage collection between batches if available
-        if (global.gc) {
-          this.logger.log('Forcing garbage collection between batches');
-          global.gc();
-        }
-      }
-
-      // Use the combined result from all batches
-
-      // Check if job was cancelled during processing
-      const currentJob = await this.jobRepository.findOne({ where: { id: jobId } });
-      if (!currentJob) {
-        this.logger.error(`Job with ID ${jobId} not found when checking cancellation`);
-        return;
-      }
-
-      if (currentJob.status === 'cancelled' || currentJob.status === 'paused') {
-        this.logger.log(`Background job ${jobId} was ${currentJob.status}`);
-        return;
-      }
-
-      // Update job status to completed with result
-      currentJob.status = 'completed';
-      currentJob.progress = 100;
-      currentJob.result = JSON.stringify(combinedResult);
-
-      // Calculate and store job duration if it's a TestPersonCodingJob
-      if (currentJob.type === 'test-person-coding' && currentJob.created_at) {
-        const durationMs = Date.now() - currentJob.created_at.getTime();
-        (currentJob as TestPersonCodingJob).duration_ms = durationMs;
-        this.logger.log(`Job ${jobId} completed in ${durationMs}ms`);
-      }
-
-      await this.jobRepository.save(currentJob);
-      this.statisticsCache.delete(workspace_id);
-      this.logger.log(`Invalidated coding statistics cache for workspace ${workspace_id}`);
-
-      this.logger.log(`Background job ${jobId} completed successfully`);
-    } catch (error) {
-      try {
-        // Get the job from the database
-        const job = await this.jobRepository.findOne({ where: { id: jobId } });
-        if (!job) {
-          this.logger.error(`Job with ID ${jobId} not found when handling error`);
-          return;
-        }
-
-        // Don't update if job has been cancelled or paused
-        if (job.status === 'cancelled' || job.status === 'paused') {
-          this.logger.log(`Background job ${jobId} was ${job.status}`);
-          return;
-        }
-
-        // Update job status to failed with error
-        job.status = 'failed';
-        job.progress = 0;
-        job.error = error.message;
-        await this.jobRepository.save(job);
-      } catch (innerError) {
-        this.logger.error(`Error updating job status: ${innerError.message}`, innerError.stack);
-      }
-
-      this.logger.error(`Background job ${jobId} failed: ${error.message}`, error.stack);
-    }
+    // If no workspaceId is provided, we need to get jobs for all workspaces
+    // Since we don't have a way to get all jobs from Bull without a workspaceId,
+    // we'll return an empty array for now
+    this.logger.warn('getAllJobs called without workspaceId, returning empty array');
+    return [];
   }
 
   async getJobStatus(jobId: string): Promise<{ status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'paused'; progress: number; result?: CodingStatistics; error?: string } | null> {
     try {
-      // First check the in-memory job status map for backward compatibility
-      const inMemoryStatus = this.jobStatus.get(jobId);
-      if (inMemoryStatus) {
-        return inMemoryStatus;
-      }
+      // Get job from Bull queue
+      const bullJob = await this.jobQueueService.getTestPersonCodingJob(jobId);
+      if (bullJob) {
+        // Get job state and progress
+        const state = await bullJob.getState();
+        const progress = await bullJob.progress() || 0;
 
-      // If not found in memory, check the database
-      const job = await this.jobRepository.findOne({ where: { id: parseInt(jobId, 10) } });
-      if (!job) {
-        return null;
-      }
-
-      // Parse the result if it exists
-      let result: CodingStatistics | undefined;
-      if (job.result) {
-        try {
-          result = JSON.parse(job.result) as CodingStatistics;
-        } catch (error) {
-          this.logger.error(`Error parsing job result: ${error.message}`, error.stack);
+        // Map Bull job state to our job status
+        let status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'paused';
+        switch (state) {
+          case 'active':
+            status = 'processing';
+            break;
+          case 'completed':
+            status = 'completed';
+            break;
+          case 'failed':
+            status = 'failed';
+            break;
+          case 'delayed':
+          case 'waiting':
+            status = 'pending';
+            break;
+          case 'paused':
+            status = 'paused';
+            break;
+          default:
+            status = 'pending';
         }
+
+        // Get result from job return value if completed
+        let result: CodingStatistics | undefined;
+        let error: string | undefined;
+
+        if (state === 'completed' && bullJob.returnvalue) {
+          result = bullJob.returnvalue as CodingStatistics;
+        } else if (state === 'failed' && bullJob.failedReason) {
+          error = bullJob.failedReason;
+        }
+
+        return {
+          status,
+          progress: typeof progress === 'number' ? progress : 0,
+          result,
+          error
+        };
       }
 
-      return {
-        status: job.status as 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'paused',
-        progress: job.progress || 0,
-        result,
-        error: job.error
-      };
+      return null;
     } catch (error) {
       this.logger.error(`Error getting job status: ${error.message}`, error.stack);
       return null;
@@ -430,44 +249,28 @@ export class WorkspaceCodingService {
 
   async cancelJob(jobId: string): Promise<{ success: boolean; message: string }> {
     try {
-      // First check the in-memory job status map for backward compatibility
-      const inMemoryJob = this.jobStatus.get(jobId);
-      if (inMemoryJob) {
-        // Only pending or processing jobs can be cancelled
-        if (inMemoryJob.status !== 'pending' && inMemoryJob.status !== 'processing') {
-          return {
-            success: false,
-            message: `Job with ID ${jobId} cannot be cancelled because it is already ${inMemoryJob.status}`
-          };
-        }
-
-        // Update job status to cancelled
-        this.jobStatus.set(jobId, { ...inMemoryJob, status: 'cancelled' });
-        this.logger.log(`In-memory job ${jobId} has been cancelled`);
-
-        return { success: true, message: `Job ${jobId} has been cancelled successfully` };
-      }
-
-      // If not found in memory, check the database
-      const job = await this.jobRepository.findOne({ where: { id: parseInt(jobId, 10) } });
-      if (!job) {
+      // Get job from Bull queue
+      const bullJob = await this.jobQueueService.getTestPersonCodingJob(jobId);
+      if (!bullJob) {
         return { success: false, message: `Job with ID ${jobId} not found` };
       }
 
-      // Only pending or processing jobs can be cancelled
-      if (job.status !== 'pending' && job.status !== 'processing') {
+      // Check if job can be cancelled
+      const state = await bullJob.getState();
+      if (state === 'completed' || state === 'failed') {
         return {
           success: false,
-          message: `Job with ID ${jobId} cannot be cancelled because it is already ${job.status}`
+          message: `Job with ID ${jobId} cannot be cancelled because it is already ${state}`
         };
       }
 
-      // Update job status to cancelled
-      job.status = 'cancelled';
-      await this.jobRepository.save(job);
-      this.logger.log(`Job ${jobId} has been cancelled`);
-
-      return { success: true, message: `Job ${jobId} has been cancelled successfully` };
+      // Cancel the job
+      const result = await this.jobQueueService.cancelTestPersonCodingJob(jobId);
+      if (result) {
+        this.logger.log(`Job ${jobId} has been cancelled successfully`);
+        return { success: true, message: `Job ${jobId} has been cancelled successfully` };
+      }
+      return { success: false, message: `Failed to cancel job ${jobId}` };
     } catch (error) {
       this.logger.error(`Error cancelling job: ${error.message}`, error.stack);
       return { success: false, message: `Error cancelling job: ${error.message}` };
@@ -476,20 +279,26 @@ export class WorkspaceCodingService {
 
   private async isJobCancelled(jobId: string | number): Promise<boolean> {
     try {
-      const inMemoryStatus = this.jobStatus.get(jobId.toString());
-      if (inMemoryStatus && (inMemoryStatus.status === 'cancelled' || inMemoryStatus.status === 'paused')) {
-        return true;
-      }
+      // Check Redis queue
+      const bullJob = await this.jobQueueService.getTestPersonCodingJob(jobId.toString());
+      if (bullJob) {
+        // Check if job is paused via our custom isPaused property
+        if (bullJob.data.isPaused) {
+          return true;
+        }
 
-      const job = await this.jobRepository.findOne({ where: { id: Number(jobId) } });
-      return job && (job.status === 'cancelled' || job.status === 'paused');
+        // Also check Bull's native state
+        const state = await bullJob.getState();
+        return state === 'paused';
+      }
+      return false;
     } catch (error) {
       this.logger.error(`Error checking job cancellation or pause: ${error.message}`, error.stack);
       return false; // Assume not cancelled or paused on error
     }
   }
 
-  private async processTestPersonsBatch(
+  async processTestPersonsBatch(
     workspace_id: number,
     personIds: string[],
     progressCallback?: (progress: number) => void,
@@ -1019,25 +828,20 @@ export class WorkspaceCodingService {
     // Always process as a job, regardless of the number of test persons
     this.logger.log(`Starting job for ${personIds.length} test persons in workspace ${workspace_id}`);
 
-    const job = this.jobRepository.create({
-      workspace_id,
-      person_ids: personIds.join(','),
-      status: 'pending',
-      progress: 0,
-      // Store group names if groups were provided (not person IDs)
-      group_names: !areAllNumbers ? groupsOrIds.join(',') : undefined
+    // Add the job to the Redis queue
+    const bullJob = await this.jobQueueService.addTestPersonCodingJob({
+      workspaceId: workspace_id,
+      personIds,
+      groupNames: !areAllNumbers ? groupsOrIds.join(',') : undefined
     });
 
-    const savedJob = await this.jobRepository.save(job);
-    this.logger.log(`Created test person coding job with ID ${savedJob.id}`);
-
-    this.processTestPersonsInBackground(savedJob.id, workspace_id, personIds);
+    this.logger.log(`Added job to Redis queue with ID ${bullJob.id}`);
 
     return {
       totalResponses: 0,
       statusCounts: {},
-      jobId: savedJob.id.toString(),
-      message: `Processing ${personIds.length} test persons in the background. Check job status with jobId: ${savedJob.id}`
+      jobId: bullJob.id.toString(),
+      message: `Processing ${personIds.length} test persons in the background. Check job status with jobId: ${bullJob.id}`
     };
   }
 
@@ -1694,12 +1498,6 @@ export class WorkspaceCodingService {
     }
   }
 
-  /**
-   * Get a missings profile by label with its full details
-   * @param workspaceId Workspace ID (not used, profiles are global)
-   * @param label Label of the profile to get
-   * @returns Missings profile with the specified label, or null if not found
-   */
   async getMissingsProfileDetails(workspaceId: number, label: string): Promise<MissingsProfilesDto | null> {
     try {
       this.logger.log(`Getting missings profile details for '${label}' in workspace ${workspaceId}`);
@@ -1710,14 +1508,6 @@ export class WorkspaceCodingService {
     }
   }
 
-  /**
-   * Generate a codebook for the specified units using the specified missings profile
-   * @param workspaceId Workspace ID
-   * @param missingsProfile Missings profile label
-   * @param contentOptions Codebook content options
-   * @param unitIds Unit IDs
-   * @returns Generated codebook as a Buffer, or null if an error occurs
-   */
   async generateCodebook(
     workspaceId: number,
     missingsProfile: string,
@@ -1775,41 +1565,29 @@ export class WorkspaceCodingService {
 
   async pauseJob(jobId: string): Promise<{ success: boolean; message: string }> {
     try {
-      const inMemoryJob = this.jobStatus.get(jobId);
-      if (inMemoryJob) {
-        // Only processing jobs can be paused
-        if (inMemoryJob.status !== 'processing') {
-          return {
-            success: false,
-            message: `Job with ID ${jobId} cannot be paused because it is ${inMemoryJob.status}`
-          };
-        }
-
-        // Update job status to paused
-        this.jobStatus.set(jobId, { ...inMemoryJob, status: 'paused' });
-        this.logger.log(`In-memory job ${jobId} has been paused`);
-
-        return { success: true, message: `Job ${jobId} has been paused successfully` };
-      }
-
-      // If not found in memory, check the database
-      const job = await this.jobRepository.findOne({ where: { id: parseInt(jobId, 10) } });
-      if (!job) {
+      // Get job from Bull queue
+      const bullJob = await this.jobQueueService.getTestPersonCodingJob(jobId);
+      if (!bullJob) {
         return { success: false, message: `Job with ID ${jobId} not found` };
       }
 
-      // Only processing jobs can be paused
-      if (job.status !== 'processing') {
+      // Check if job can be paused
+      const state = await bullJob.getState();
+      if (state !== 'active' && state !== 'waiting' && state !== 'delayed') {
         return {
           success: false,
-          message: `Job with ID ${jobId} cannot be paused because it is ${job.status}`
+          message: `Job with ID ${jobId} cannot be paused because it is ${state}`
         };
       }
 
-      // Update job status to paused
-      job.status = 'paused';
-      await this.jobRepository.save(job);
-      this.logger.log(`Job ${jobId} has been paused`);
+      // Update job data to mark it as paused
+      const updatedData = {
+        ...bullJob.data,
+        isPaused: true
+      };
+
+      await bullJob.update(updatedData);
+      this.logger.log(`Job ${jobId} has been paused successfully`);
 
       return { success: true, message: `Job ${jobId} has been paused successfully` };
     } catch (error) {
@@ -1820,41 +1598,127 @@ export class WorkspaceCodingService {
 
   async resumeJob(jobId: string): Promise<{ success: boolean; message: string }> {
     try {
-      const inMemoryJob = this.jobStatus.get(jobId);
-      if (inMemoryJob) {
-        if (inMemoryJob.status !== 'paused') {
-          return {
-            success: false,
-            message: `Job with ID ${jobId} cannot be resumed because it is ${inMemoryJob.status}`
-          };
-        }
-
-        this.jobStatus.set(jobId, { ...inMemoryJob, status: 'processing' });
-        this.logger.log(`In-memory job ${jobId} has been resumed`);
-
-        return { success: true, message: `Job ${jobId} has been resumed successfully` };
-      }
-
-      const job = await this.jobRepository.findOne({ where: { id: parseInt(jobId, 10) } });
-      if (!job) {
+      // Get job from Bull queue
+      const bullJob = await this.jobQueueService.getTestPersonCodingJob(jobId);
+      if (!bullJob) {
         return { success: false, message: `Job with ID ${jobId} not found` };
       }
 
-      if (job.status !== 'paused') {
+      // Check if job is paused
+      if (!bullJob.data.isPaused) {
         return {
           success: false,
-          message: `Job with ID ${jobId} cannot be resumed because it is ${job.status}`
+          message: `Job with ID ${jobId} is not paused and cannot be resumed`
         };
       }
 
-      job.status = 'processing';
-      await this.jobRepository.save(job);
-      this.logger.log(`Job ${jobId} has been resumed`);
+      // Update job data to remove the isPaused flag
+      const { isPaused, ...restData } = bullJob.data;
+      await bullJob.update(restData);
 
+      this.logger.log(`Job ${jobId} has been resumed successfully`);
       return { success: true, message: `Job ${jobId} has been resumed successfully` };
     } catch (error) {
       this.logger.error(`Error resuming job: ${error.message}`, error.stack);
       return { success: false, message: `Error resuming job: ${error.message}` };
     }
+  }
+
+  /**
+   * Get jobs only from Redis Bull queue for a workspace
+   * @param workspaceId The workspace ID
+   * @returns Array of jobs from Redis Bull
+   */
+  async getBullJobs(workspaceId: number): Promise<{
+    jobId: string;
+    status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'paused';
+    progress: number;
+    result?: CodingStatistics;
+    error?: string;
+    workspaceId?: number;
+    createdAt?: Date;
+    groupNames?: string;
+    durationMs?: number;
+    completedAt?: Date;
+  }[]> {
+    const jobs: {
+      jobId: string;
+      status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'paused';
+      progress: number;
+      result?: CodingStatistics;
+      error?: string;
+      workspaceId?: number;
+      createdAt?: Date;
+      groupNames?: string;
+      durationMs?: number;
+      completedAt?: Date;
+    }[] = [];
+
+    try {
+      const bullJobs = await this.jobQueueService.getTestPersonCodingJobs(workspaceId);
+      for (const bullJob of bullJobs) {
+        // Get job state and progress
+        const state = await bullJob.getState();
+        const progress = await bullJob.progress() || 0;
+
+        // Map Bull job state to our job status
+        let status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'paused';
+        switch (state) {
+          case 'active':
+            status = 'processing';
+            break;
+          case 'completed':
+            status = 'completed';
+            break;
+          case 'failed':
+            status = 'failed';
+            break;
+          case 'delayed':
+          case 'waiting':
+            status = 'pending';
+            break;
+          case 'paused':
+            status = 'paused';
+            break;
+          default:
+            status = 'pending';
+        }
+
+        // Get result from job return value if completed
+        let result: CodingStatistics | undefined;
+        let error: string | undefined;
+
+        if (state === 'completed' && bullJob.returnvalue) {
+          result = bullJob.returnvalue as CodingStatistics;
+        } else if (state === 'failed' && bullJob.failedReason) {
+          error = bullJob.failedReason;
+        }
+
+        // Add job to the list
+        jobs.push({
+          jobId: bullJob.id.toString(),
+          status,
+          progress: typeof progress === 'number' ? progress : 0,
+          result,
+          error,
+          workspaceId: bullJob.data.workspaceId,
+          createdAt: new Date(bullJob.timestamp),
+          groupNames: bullJob.data.groupNames,
+          completedAt: state === 'completed' ? new Date(bullJob.finishedOn || Date.now()) : undefined,
+          durationMs: state === 'completed' && bullJob.finishedOn && bullJob.timestamp ?
+            bullJob.finishedOn - bullJob.timestamp :
+            undefined
+        });
+      }
+    } catch (bullError) {
+      this.logger.error(`Error getting jobs from Redis queue: ${bullError.message}`, bullError.stack);
+    }
+
+    // Sort jobs by creation date (newest first)
+    return jobs.sort((a, b) => {
+      if (!a.createdAt) return 1;
+      if (!b.createdAt) return -1;
+      return b.createdAt.getTime() - a.createdAt.getTime();
+    });
   }
 }

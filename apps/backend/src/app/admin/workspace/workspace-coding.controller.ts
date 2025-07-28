@@ -306,8 +306,91 @@ export class WorkspaceCodingController {
     error?: string;
     workspaceId?: number;
     createdAt?: Date;
+    groupNames?: string;
+    durationMs?: number;
+    completedAt?: Date;
   }[]> {
-    return this.workspaceCodingService.getAllJobs(workspace_id);
+    return this.workspaceCodingService.getBullJobs(workspace_id);
+  }
+
+  @Get(':workspace_id/coding/bull-jobs')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiOkResponse({
+    description: 'List of jobs from Redis Bull retrieved successfully.',
+    schema: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          jobId: {
+            type: 'string',
+            description: 'Unique identifier for the job'
+          },
+          status: {
+            type: 'string',
+            enum: ['pending', 'processing', 'completed', 'failed', 'cancelled', 'paused'],
+            description: 'Current status of the job'
+          },
+          progress: {
+            type: 'number',
+            description: 'Progress percentage (0-100)'
+          },
+          result: {
+            type: 'object',
+            description: 'Result of the job (only available when status is completed)',
+            properties: {
+              totalResponses: { type: 'number' },
+              statusCounts: {
+                type: 'object',
+                additionalProperties: { type: 'number' }
+              }
+            }
+          },
+          error: {
+            type: 'string',
+            description: 'Error message (only available when status is failed)'
+          },
+          workspaceId: {
+            type: 'number',
+            description: 'ID of the workspace the job belongs to'
+          },
+          createdAt: {
+            type: 'string',
+            format: 'date-time',
+            description: 'Date and time when the job was created'
+          },
+          groupNames: {
+            type: 'string',
+            description: 'Group names for the job'
+          },
+          durationMs: {
+            type: 'number',
+            description: 'Duration of the job in milliseconds'
+          },
+          completedAt: {
+            type: 'string',
+            format: 'date-time',
+            description: 'Date and time when the job was completed'
+          }
+        }
+      }
+    }
+  })
+  async getBullJobs(@WorkspaceId() workspace_id: number): Promise<{
+    jobId: string;
+    status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'paused';
+    progress: number;
+    result?: CodingStatistics;
+    error?: string;
+    workspaceId?: number;
+    createdAt?: Date;
+    groupNames?: string;
+    durationMs?: number;
+    completedAt?: Date;
+  }[]> {
+    return this.workspaceCodingService.getBullJobs(workspace_id);
   }
 
   @Get(':workspace_id/coding/groups')
