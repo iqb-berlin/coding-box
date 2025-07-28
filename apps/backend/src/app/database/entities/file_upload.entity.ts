@@ -2,6 +2,15 @@ import {
   Column, Entity, Index, PrimaryColumn, Unique
 } from 'typeorm';
 
+export interface StructuredFileData {
+  extractedInfo?: {
+    [key: string]: unknown;
+  };
+  metadata?: {
+    [key: string]: unknown;
+  };
+}
+
 @Entity()
 @Unique('file_upload_id', ['file_id', 'workspace_id'])
 class FileUpload {
@@ -30,6 +39,9 @@ class FileUpload {
 
   @Column({ type: 'varchar' })
     data: string;
+
+  @Column({ type: 'jsonb', nullable: true })
+    structured_data: StructuredFileData;
 }
 
 export default FileUpload;
