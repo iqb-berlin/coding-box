@@ -6,6 +6,10 @@ import { Job } from './job.entity';
 
 /**
  * Entity for test person coding jobs
+ *
+ * NOTE: This entity is no longer actively used in the codebase as of 2025-07-28.
+ * Job management has been transitioned to use Bull queue directly.
+ * This entity is kept for database compatibility and historical data.
  */
 @ChildEntity('test-person-coding')
 export class TestPersonCodingJob extends Job {
