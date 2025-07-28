@@ -7,6 +7,7 @@ import {
   of,
   switchMap, throwError
 } from 'rxjs';
+import { VariableInfo } from '@iqbspecs/variable-info/variable-info.interface';
 import { FilesInListDto } from '../../../../../api-dto/files/files-in-list.dto';
 import { FilesDto } from '../../../../../api-dto/files/files.dto';
 import { FileValidationResultDto } from '../../../../../api-dto/files/file-validation-result.dto';
@@ -102,13 +103,20 @@ export class FileService {
       );
   }
 
-  uploadTestFiles(workspaceId: number, files: FileList | null): Observable<number> {
-    const formData = new FormData();
-    if (files) {
-      for (let i = 0; i < files.length; i++) {
-        formData.append('files', files[i]);
+  uploadTestFiles(workspaceId: number, files: FileList | FormData | null): Observable<number> {
+    let formData: FormData;
+
+    if (files instanceof FormData) {
+      formData = files;
+    } else {
+      formData = new FormData();
+      if (files) {
+        for (let i = 0; i < files.length; i++) {
+          formData.append('files', files[i]);
+        }
       }
     }
+
     return this.http.post<never>(`${this.serverUrl}admin/workspace/${workspaceId}/upload`, formData, {
       headers: this.authHeader
     });
@@ -218,6 +226,15 @@ export class FileService {
   getUnitsWithFileIds(workspaceId: number): Observable<{ id: number; unitId: string; fileName: string; data: string }[]> {
     return this.http.get<{ id: number; unitId: string; fileName: string; data: string }[]>(
       `${this.serverUrl}admin/workspace/${workspaceId}/files/units-with-file-ids`,
+      { headers: this.authHeader }
+    ).pipe(
+      catchError(() => of([]))
+    );
+  }
+
+  getVariableInfoForScheme(workspaceId: number, schemeFileId: string): Observable<VariableInfo[]> {
+    return this.http.get<VariableInfo[]>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/files/variable-info/${schemeFileId}`,
       { headers: this.authHeader }
     ).pipe(
       catchError(() => of([]))
