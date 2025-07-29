@@ -2,185 +2,185 @@
 
   <div>
     <div class="fx-row-center-center-stretch fx-gap-20 action-buttons">
-      <a mat-raised-button color="primary" (click)="onAutoCode()">
-        <mat-icon>auto_fix_high</mat-icon>
-        Automatisch Kodieren
-      </a>
-      <a disabled mat-raised-button color="primary" [routerLink]="['/coding-manual']">
+      @if (!showManualCoding) {
+        <a mat-raised-button color="primary" (click)="onAutoCode()">
+          <mat-icon>auto_fix_high</mat-icon>
+          Automatisch Kodieren
+        </a>
+      }
+      <a mat-raised-button [color]="showManualCoding ? 'accent' : 'primary'" (click)="toggleManualCoding()" >
         <mat-icon>edit</mat-icon>
-        Manuell Kodieren
+        {{ showManualCoding ? 'Zurück zur Übersicht' : 'Manuell Kodieren' }}
       </a>
-      <a mat-raised-button color="primary" (click)="fetchResponsesByStatus('CODING_INCOMPLETE')">
-        <mat-icon>refresh</mat-icon>
-        Manuelle zu kodierende Fälle
-      </a>
-      <a mat-raised-button color="primary" (click)="fetchCodingList()">
-        <mat-icon>list</mat-icon>
-        Kodierliste
-      </a>
-      <a mat-raised-button color="primary" (click)="openExportCodingBook()">
-        <mat-icon>book</mat-icon>
-        Codebook
-      </a>
+      @if (!showManualCoding) {
+        <a mat-raised-button color="primary" (click)="fetchResponsesByStatus('CODING_INCOMPLETE')">
+          <mat-icon>refresh</mat-icon>
+          Manuelle zu kodierende Fälle
+        </a>
+      }
+      @if (!showManualCoding) {
+        <a mat-raised-button color="primary" (click)="fetchCodingList()">
+          <mat-icon>list</mat-icon>
+          Kodierliste
+        </a>
+      }
+      @if (!showManualCoding) {
+        <a mat-raised-button color="primary" (click)="openExportCodingBook()">
+          <mat-icon>book</mat-icon>
+          Codebook
+        </a>
+      }
     </div>
   </div>
 
-  <div class="fx-row-space-between-stretch">
-    @if (!isLoadingStatistics) {
-      <div class="statistics-card">
-        <h2 class="section-title">Kodierstatistiken</h2>
-        <p class="section-description">Übersicht über den Status der Kodierung und Antworten</p>
-        <mat-divider></mat-divider>
-        <div class="statistics-content">
-          <div class="statistic-item">
-            <span class="statistic-label">Gesamtanzahl der gegebenen Antworten:</span>
-            <span class="statistic-value">{{ codingStatistics.totalResponses }}</span>
-          </div>
-          @for (status of getStatuses(); track status) {
+  <!-- Regular Coding Management Content -->
+  @if (!showManualCoding) {
+    <div class="fx-row-space-between-stretch">
+      @if (!isLoadingStatistics) {
+        <div class="statistics-card">
+          <h2 class="section-title">Kodierstatistiken</h2>
+          <p class="section-description">Übersicht über den Status der Kodierung und Antworten</p>
+          <mat-divider></mat-divider>
+          <div class="statistics-content">
             <div class="statistic-item">
-              <span class="statistic-label">
-                @if (status === 'null') {
-                  unkodierte Antworten:
-                  <mat-icon class="warning-icon" color="warn" [matTooltip]="'Kodierschemata fehlen'">warning</mat-icon>
-                } @else {
-                  Anzahl der Antworten mit Status {{ status }}:
-                }
-              </span>
-              <span class="statistic-value">
-                {{ codingStatistics.statusCounts[status] }}
-                <span class="percentage">({{ getStatusPercentage(status) }}%)</span>
-              </span>
-              <a mat-button color="primary" (click)="fetchResponsesByStatus(status)" class="view-button">
-                <mat-icon>visibility</mat-icon>
-                Anzeigen
-              </a>
+              <span class="statistic-label">Gesamtanzahl der gegebenen Antworten:</span>
+              <span class="statistic-value">{{ codingStatistics.totalResponses }}</span>
             </div>
-          }
-        </div>
-        <div class="statistics-actions">
-          <a mat-raised-button color="primary" (click)="fetchCodingStatistics()">
-            <mat-icon>refresh</mat-icon>
-            Statistiken aktualisieren
-          </a>
-        </div>
-      </div>
-    }
-
-    @if (isLoadingStatistics) {
-      <div class="loading-container">
-        <mat-spinner diameter="40"></mat-spinner>
-        <p class="loading-text">Lade Kodierstatistiken...</p>
-      </div>
-    }
-
-
-
-    @if (isAutoCoding) {
-      <div class="loading-container">
-        <mat-spinner diameter="40"></mat-spinner>
-        <p class="loading-text">Antworten werden kodiert...</p>
-      </div>
-    }
-
-    @if (isLoading && !isAutoCoding) {
-      <div class="loading-container">
-        <mat-spinner diameter="40"></mat-spinner>
-        <p class="loading-text">Daten werden verarbeitet...</p>
-      </div>
-    }
-
-    @if (!isLoading && this.data.length > 0) {
-      <div class="data-card">
-        <div class="card-header">
-          <h2 class="section-title">Kodierdaten</h2>
-          @if (currentStatusFilter) {
-            <div class="current-status">
-              <h3>
-                @if (currentStatusFilter === 'null') {
-                  Unkodierte Antworten
-                } @else {
-                  Antworten mit Status: <span class="status-badge">{{ currentStatusFilter }}</span>
-                }
-              </h3>
-            </div>
-          }
-        </div>
-        <mat-divider></mat-divider>
-        <!--    <div class="filter-container">-->
-        <!--      <div class="filter-row">-->
-        <!--        <mat-form-field class="filter-field" appearance="outline">-->
-        <!--          <mat-label>Filter</mat-label>-->
-        <!--          <input matInput (input)="filterTextChanged.next($event)" placeholder="Nach unitname oder variableid filtern" #input>-->
-        <!--          <mat-icon matSuffix>search</mat-icon>-->
-        <!--          <button *ngIf="input.value" matSuffix mat-icon-button aria-label="Clear" (click)="input.value=''; filterTextChanged.next($event)">-->
-        <!--            <mat-icon>close</mat-icon>-->
-      <!--          </button>-->
-    <!--        </mat-form-field>-->
-    <!--        <div class="filter-spinner" *ngIf="isFilterLoading">-->
-    <!--          <mat-spinner diameter="24"></mat-spinner>-->
-  <!--        </div>-->
-<!--      </div>-->
-<!--    </div>-->
-<div class="table-container">
-  <table mat-table [dataSource]="dataSource" matSort class="coding-table">
-    @for (column of displayedColumns; track column) {
-      <ng-container matColumnDef="{{ column }}">
-        <th mat-header-cell *matHeaderCellDef mat-sort-header> {{ column | titlecase }} </th>
-        <td mat-cell *matCellDef="let element" [attr.colspan]="element.id === 0 ? displayedColumns.length : null">
-          @if (element.id === 0) {
-            <ng-container class="group-header">
-              <strong class="group-header-text">{{ element.unitname || element.variableid }}</strong>
-            </ng-container>
-          }
-          @if (element.id !== 0) {
-            @if (column === 'actions') {
-              <div class="action-buttons-container">
-                <button mat-icon-button color="primary" (click)="openReplay(element)" matTooltip="Im Replay anzeigen" class="action-button">
-                  <mat-icon>play_circle_filled</mat-icon>
-                </button>
-                <button mat-icon-button color="accent" (click)="getCodingSchemeRefFromUnit(element.unit.name)" matTooltip="Kodierschema anzeigen" class="action-button">
-                  <mat-icon>code</mat-icon>
-                </button>
+            @for (status of getStatuses(); track status) {
+              <div class="statistic-item">
+                <span class="statistic-label">
+                  @if (status === 'null') {
+                    unkodierte Antworten:
+                    <mat-icon class="warning-icon" color="warn" [matTooltip]="'Kodierschemata fehlen'">warning</mat-icon>
+                  } @else {
+                    Anzahl der Antworten mit Status {{ status }}:
+                  }
+                </span>
+                <span class="statistic-value">
+                  {{ codingStatistics.statusCounts[status] }}
+                  <span class="percentage">({{ getStatusPercentage(status) }}%)</span>
+                </span>
+                <a mat-button color="primary" (click)="fetchResponsesByStatus(status)" class="view-button">
+                  <mat-icon>visibility</mat-icon>
+                  Anzeigen
+                </a>
               </div>
-            } @else if (column === 'unitname') {
-              <span class="clickable-cell" (click)="showUnitXml(element.unit.name)" matTooltip="Unit-XML anzeigen">
-                {{ element[column] }}
-              </span>
-            } @else {
-                  <span [ngClass]="{'status-value': column === 'status' || column === 'codedstatus',
-                                    'status-complete': (column === 'status' && element[column] === 'CODING_COMPLETE') || (column === 'codedstatus' && element[column] === 'CODING_COMPLETE'),
-                                    'status-incomplete': (column === 'status' && element[column] === 'CODING_INCOMPLETE') || (column === 'codedstatus' && element[column] === 'CODING_INCOMPLETE'),
-                                    'status-changed': column === 'status' && element[column] === 'VALUE_CHANGED',
-                                    'status-not-reached': column === 'status' && element[column] === 'NOT_REACHED'}">
-                {{ element[column] }}
-              </span>
             }
-          }
-        </td>
-      </ng-container>
-    }
-    <tr mat-header-row *matHeaderRowDef="displayedColumns; sticky: true"></tr>
-    <tr mat-row *matRowDef="let row; columns: displayedColumns;" class="data-row"></tr>
-  </table>
-  <mat-paginator
-    [length]="totalRecords"
-    [pageSize]="pageSize"
-    [pageIndex]="pageIndex"
-    [pageSizeOptions]="pageSizeOptions"
-    showFirstLastButtons
-    (page)="onPaginatorChange($event)"
-    aria-label="Seiten auswählen">
-  </mat-paginator>
-</div>
-</div>
-}
+          </div>
+          <div class="statistics-actions">
+            <a mat-raised-button color="primary" (click)="fetchCodingStatistics()">
+              <mat-icon>refresh</mat-icon>
+              Statistiken aktualisieren
+            </a>
+          </div>
+        </div>
+      }
 
-@if (!isLoading && this.data.length === 0) {
-  <div class="empty-state">
-    <mat-icon class="empty-icon">code</mat-icon>
-    <h3>Noch keine Kodierdaten angezeigt</h3>
-    <p class="empty-text">Klicken Sie auf "Anzeigen" um Daten zu laden.</p>
-  </div>
-}
-</div>
+      @if (isLoadingStatistics) {
+        <div class="loading-container">
+          <mat-spinner diameter="40"></mat-spinner>
+          <p class="loading-text">Lade Kodierstatistiken...</p>
+        </div>
+      }
+
+      @if (isAutoCoding) {
+        <div class="loading-container">
+          <mat-spinner diameter="40"></mat-spinner>
+          <p class="loading-text">Antworten werden kodiert...</p>
+        </div>
+      }
+
+      @if (isLoading && !isAutoCoding) {
+        <div class="loading-container">
+          <mat-spinner diameter="40"></mat-spinner>
+          <p class="loading-text">Daten werden verarbeitet...</p>
+        </div>
+      }
+
+      @if (!isLoading && this.data.length > 0) {
+        <div class="data-card">
+          <div class="card-header">
+            <h2 class="section-title">Kodierdaten</h2>
+            @if (currentStatusFilter) {
+              <div class="current-status">
+                <h3>
+                  @if (currentStatusFilter === 'null') {
+                    Unkodierte Antworten
+                  } @else {
+                    Antworten mit Status: <span class="status-badge">{{ currentStatusFilter }}</span>
+                  }
+                </h3>
+              </div>
+            }
+          </div>
+          <mat-divider></mat-divider>
+          <div class="table-container">
+            <table mat-table [dataSource]="dataSource" matSort class="coding-table">
+              @for (column of displayedColumns; track column) {
+                <ng-container matColumnDef="{{ column }}">
+                  <th mat-header-cell *matHeaderCellDef mat-sort-header> {{ column | titlecase }} </th>
+                  <td mat-cell *matCellDef="let element" [attr.colspan]="element.id === 0 ? displayedColumns.length : null">
+                    @if (element.id === 0) {
+                      <ng-container class="group-header">
+                        <strong class="group-header-text">{{ element.unitname || element.variableid }}</strong>
+                      </ng-container>
+                    }
+                    @if (element.id !== 0) {
+                      @if (column === 'actions') {
+                        <div class="action-buttons-container">
+                          <button mat-icon-button color="primary" (click)="openReplay(element)" matTooltip="Im Replay anzeigen" class="action-button">
+                            <mat-icon>play_circle_filled</mat-icon>
+                          </button>
+                          <button mat-icon-button color="accent" (click)="getCodingSchemeRefFromUnit(element.unit.name)" matTooltip="Kodierschema anzeigen" class="action-button">
+                            <mat-icon>code</mat-icon>
+                          </button>
+                        </div>
+                      } @else if (column === 'unitname') {
+                        <span class="clickable-cell" (click)="showUnitXml(element.unit.name)" matTooltip="Unit-XML anzeigen">
+                          {{ element[column] }}
+                        </span>
+                      } @else {
+                        <span [ngClass]="{'status-value': column === 'status' || column === 'codedstatus',
+                                          'status-complete': (column === 'status' && element[column] === 'CODING_COMPLETE') || (column === 'codedstatus' && element[column] === 'CODING_COMPLETE'),
+                                          'status-incomplete': (column === 'status' && element[column] === 'CODING_INCOMPLETE') || (column === 'codedstatus' && element[column] === 'CODING_INCOMPLETE'),
+                                          'status-changed': column === 'status' && element[column] === 'VALUE_CHANGED',
+                                          'status-not-reached': column === 'status' && element[column] === 'NOT_REACHED'}">
+                          {{ element[column] }}
+                        </span>
+                      }
+                    }
+                  </td>
+                </ng-container>
+              }
+              <tr mat-header-row *matHeaderRowDef="displayedColumns; sticky: true"></tr>
+              <tr mat-row *matRowDef="let row; columns: displayedColumns;" class="data-row"></tr>
+            </table>
+            <mat-paginator
+              [length]="totalRecords"
+              [pageSize]="pageSize"
+              [pageIndex]="pageIndex"
+              [pageSizeOptions]="pageSizeOptions"
+              showFirstLastButtons
+              (page)="onPaginatorChange($event)"
+              aria-label="Seiten auswählen">
+            </mat-paginator>
+          </div>
+        </div>
+      }
+
+      @if (!isLoading && this.data.length === 0) {
+        <div class="empty-state">
+          <mat-icon class="empty-icon">code</mat-icon>
+          <h3>Noch keine Kodierdaten angezeigt</h3>
+          <p class="empty-text">Klicken Sie auf "Anzeigen" um Daten zu laden.</p>
+        </div>
+      }
+    </div>
+  }
+
+  <!-- Manual Coding Management Content -->
+  @if (showManualCoding) {
+    <coding-box-coding-management-manual></coding-box-coding-management-manual>
+  }
+
 </div>

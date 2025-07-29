@@ -1,0 +1,144 @@
+// Main container styles
+.coding-container {
+  padding: 24px;
+  width: 100%;
+  max-width: 1600px;
+  height: auto;
+  min-height: 60vh;
+  box-sizing: border-box;
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+// Action buttons styles
+.action-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  justify-content: flex-start;
+  margin: 20px 0 10px;
+
+  a[mat-raised-button] {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding: 0 20px;
+    height: 44px;
+    line-height: 44px;
+    border-radius: 22px;
+    font-weight: 500;
+    letter-spacing: 0.3px;
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.12);
+    transition: all 0.2s ease;
+    min-width: auto;
+
+    &:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+    }
+
+    &:active {
+      transform: translateY(0);
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    }
+
+    mat-icon {
+      margin-right: 10px;
+      font-size: 20px;
+      height: 20px;
+      width: 20px;
+      vertical-align: middle;
+    }
+  }
+}
+
+// Card styles
+.statistics-card {
+  background-color: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  padding: 24px;
+  margin-bottom: 24px;
+  width: 100%;
+  transition: box-shadow 0.3s ease, transform 0.2s ease;
+  border: 1px solid rgba(0, 0, 0, 0.03);
+
+  &:hover {
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1);
+  }
+
+  .section-title {
+    font-size: 22px;
+    font-weight: 500;
+    color: #1976d2;
+    margin: 0 0 10px 0;
+    letter-spacing: -0.3px;
+  }
+
+  .section-description {
+    font-size: 14px;
+    color: #666;
+    margin: 0 0 20px 0;
+    line-height: 1.5;
+  }
+
+  hr {
+    margin-bottom: 20px;
+    opacity: 0.7;
+    border: 0;
+    border-top: 1px solid rgba(0, 0, 0, 0.1);
+  }
+
+  .statistics-content {
+    margin: 20px 0;
+
+    .coder-list-container, .coding-jobs-container {
+      margin-bottom: 20px;
+    }
+
+    h3 {
+      font-size: 18px;
+      font-weight: 500;
+      color: #1976d2;
+      margin: 0 0 15px 0;
+    }
+  }
+}
+
+// Responsive styles
+@media (max-width: 768px) {
+  .coding-container {
+    padding: 16px;
+  }
+
+  .action-buttons {
+    gap: 12px;
+  }
+
+  .statistics-card {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 576px) {
+  .coding-container {
+    padding: 12px;
+  }
+
+  .action-buttons {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .action-buttons a[mat-raised-button] {
+    width: 100%;
+  }
+
+  .statistics-card {
+    padding: 12px;
+  }
+}
