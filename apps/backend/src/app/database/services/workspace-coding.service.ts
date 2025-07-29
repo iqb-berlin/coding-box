@@ -18,6 +18,13 @@ import { CodeBookContentSetting, UnitPropertiesForCodebook, Missing } from '../.
 import { MissingsProfilesDto } from '../../../../../../api-dto/coding/missings-profiles.dto';
 import { JobQueueService } from '../../job-queue/job-queue.service';
 
+interface CodedResponse {
+  id: number;
+  code?: string;
+  codedstatus?: string;
+  score?: number;
+}
+
 @Injectable()
 export class WorkspaceCodingService {
   private readonly logger = new Logger(WorkspaceCodingService.name);
@@ -249,7 +256,6 @@ export class WorkspaceCodingService {
 
   async cancelJob(jobId: string): Promise<{ success: boolean; message: string }> {
     try {
-      // Get job from Bull queue
       const bullJob = await this.jobQueueService.getTestPersonCodingJob(jobId);
       if (!bullJob) {
         return { success: false, message: `Job with ID ${jobId} not found` };
@@ -298,6 +304,233 @@ export class WorkspaceCodingService {
     }
   }
 
+  private async updateResponsesInDatabase(
+    allCodedResponses: CodedResponse[],
+    queryRunner: import('typeorm').QueryRunner,
+    jobId?: string,
+    progressCallback?: (progress: number) => void,
+    metrics?: { [key: string]: number }
+  ): Promise<boolean> {
+    if (allCodedResponses.length === 0) {
+      await queryRunner.release();
+      return true;
+    }
+
+    const updateStart = Date.now();
+    try {
+      const updateBatchSize = 500;
+      const batches = [];
+      for (let i = 0; i < allCodedResponses.length; i += updateBatchSize) {
+        batches.push(allCodedResponses.slice(i, i + updateBatchSize));
+      }
+
+      this.logger.log(`Starte die Aktualisierung von ${allCodedResponses.length} Responses in ${batches.length} Batches (sequential).`);
+
+      for (let index = 0; index < batches.length; index++) {
+        const batch = batches[index];
+        this.logger.log(`Starte Aktualisierung für Batch #${index + 1} (Größe: ${batch.length}).`);
+
+        // Check for cancellation or pause before updating batch
+        if (jobId && await this.isJobCancelled(jobId)) {
+          this.logger.log(`Job ${jobId} was cancelled or paused before updating batch #${index + 1}`);
+          await queryRunner.rollbackTransaction();
+          await queryRunner.release();
+          return false;
+        }
+
+        try {
+          if (batch.length > 0) {
+            const updatePromises = batch.map(response => queryRunner.manager.update(
+              ResponseEntity,
+              response.id,
+              {
+                code: response.code,
+                codedstatus: response.codedstatus,
+                score: response.score
+              }
+            ));
+
+            await Promise.all(updatePromises);
+          }
+
+          this.logger.log(`Batch #${index + 1} (Größe: ${batch.length}) erfolgreich aktualisiert.`);
+
+          // Update progress during batch updates
+          if (progressCallback) {
+            const batchProgress = 95 + (5 * ((index + 1) / batches.length));
+            progressCallback(Math.round(Math.min(batchProgress, 99))); // Cap at 99% until fully complete and round to integer
+          }
+        } catch (error) {
+          this.logger.error(`Fehler beim Aktualisieren von Batch #${index + 1} (Größe: ${batch.length}):`, error.message);
+          // Rollback transaction on error
+          await queryRunner.rollbackTransaction();
+          await queryRunner.release();
+          throw error;
+        }
+      }
+
+      // Commit transaction if all updates were successful
+      await queryRunner.commitTransaction();
+      this.logger.log(`${allCodedResponses.length} Responses wurden erfolgreich aktualisiert.`);
+
+      if (metrics) {
+        metrics.update = Date.now() - updateStart;
+      }
+
+      // Always release the query runner
+      await queryRunner.release();
+      return true;
+    } catch (error) {
+      this.logger.error('Fehler beim Aktualisieren der Responses:', error.message);
+      // Ensure transaction is rolled back on error
+      try {
+        await queryRunner.rollbackTransaction();
+      } catch (rollbackError) {
+        this.logger.error('Fehler beim Rollback der Transaktion:', rollbackError.message);
+      }
+      // Always release the query runner
+      await queryRunner.release();
+      return false;
+    }
+  }
+
+  private async processAndCodeResponses(
+    units: Unit[],
+    unitToResponsesMap: Map<number, ResponseEntity[]>,
+    unitToCodingSchemeRefMap: Map<number, string>,
+    fileIdToCodingSchemeMap: Map<string, Autocoder.CodingScheme>,
+    allResponses: ResponseEntity[],
+    statistics: CodingStatistics,
+    jobId?: string,
+    queryRunner?: import('typeorm').QueryRunner,
+    progressCallback?: (progress: number) => void
+  ): Promise<{ allCodedResponses: CodedResponse[]; statistics: CodingStatistics }> {
+    const allCodedResponses = [];
+    const estimatedResponseCount = allResponses.length;
+    allCodedResponses.length = estimatedResponseCount;
+    let responseIndex = 0;
+    const batchSize = 50;
+    const emptyScheme = new Autocoder.CodingScheme({});
+
+    for (let i = 0; i < units.length; i += batchSize) {
+      const unitBatch = units.slice(i, i + batchSize);
+
+      for (const unit of unitBatch) {
+        const responses = unitToResponsesMap.get(unit.id) || [];
+        if (responses.length === 0) continue;
+
+        statistics.totalResponses += responses.length;
+
+        const codingSchemeRef = unitToCodingSchemeRefMap.get(unit.id);
+        const scheme = codingSchemeRef ?
+          (fileIdToCodingSchemeMap.get(codingSchemeRef) || emptyScheme) :
+          emptyScheme;
+
+        for (const response of responses) {
+          const codedResult = scheme.code([{
+            id: response.variableid,
+            value: response.value,
+            status: response.status as ResponseStatusType
+          }]);
+
+          const codedStatus = codedResult[0]?.status;
+          if (!statistics.statusCounts[codedStatus]) {
+            statistics.statusCounts[codedStatus] = 0;
+          }
+          statistics.statusCounts[codedStatus] += 1;
+
+          allCodedResponses[responseIndex] = {
+            id: response.id,
+            code: codedResult[0]?.code,
+            codedstatus: codedStatus,
+            score: codedResult[0]?.score
+          };
+          responseIndex += 1;
+        }
+      }
+
+      // Check for cancellation or pause during response processing
+      if (jobId && await this.isJobCancelled(jobId)) {
+        this.logger.log(`Job ${jobId} was cancelled or paused during response processing`);
+        if (queryRunner) {
+          await queryRunner.release();
+        }
+        return { allCodedResponses, statistics };
+      }
+    }
+
+    allCodedResponses.length = responseIndex;
+
+    // Report progress after processing
+    if (progressCallback) {
+      progressCallback(95);
+    }
+
+    return { allCodedResponses, statistics };
+  }
+
+  private async getCodingSchemeFiles(
+    codingSchemeRefs: Set<string>,
+    jobId?: string,
+    queryRunner?: import('typeorm').QueryRunner
+  ): Promise<Map<string, Autocoder.CodingScheme>> {
+    // Use cache for coding schemes
+    const fileIdToCodingSchemeMap = await this.getCodingSchemesWithCache([...codingSchemeRefs]);
+
+    // Check for cancellation or pause
+    if (jobId && await this.isJobCancelled(jobId)) {
+      this.logger.log(`Job ${jobId} was cancelled or paused after getting coding scheme files`);
+      if (queryRunner) {
+        await queryRunner.release();
+      }
+      return fileIdToCodingSchemeMap;
+    }
+
+    return fileIdToCodingSchemeMap;
+  }
+
+  private async extractCodingSchemeReferences(
+    units: Unit[],
+    fileIdToTestFileMap: Map<string, FileUpload>,
+    jobId?: string,
+    queryRunner?: import('typeorm').QueryRunner
+  ): Promise<{ codingSchemeRefs: Set<string>; unitToCodingSchemeRefMap: Map<number, string> }> {
+    const codingSchemeRefs = new Set<string>();
+    const unitToCodingSchemeRefMap = new Map<number, string>();
+    const batchSize = 50;
+
+    for (let i = 0; i < units.length; i += batchSize) {
+      const unitBatch = units.slice(i, i + batchSize);
+
+      for (const unit of unitBatch) {
+        const testFile = fileIdToTestFileMap.get(unit.alias.toUpperCase());
+        if (!testFile) continue;
+
+        try {
+          const $ = cheerio.load(testFile.data);
+          const codingSchemeRefText = $('codingSchemeRef').text();
+          if (codingSchemeRefText) {
+            codingSchemeRefs.add(codingSchemeRefText.toUpperCase());
+            unitToCodingSchemeRefMap.set(unit.id, codingSchemeRefText.toUpperCase());
+          }
+        } catch (error) {
+          this.logger.error(`--- Fehler beim Verarbeiten der Datei ${testFile.filename}: ${error.message}`);
+        }
+      }
+
+      // Check for cancellation or pause during scheme extraction
+      if (jobId && await this.isJobCancelled(jobId)) {
+        this.logger.log(`Job ${jobId} was cancelled or paused during scheme extraction`);
+        if (queryRunner) {
+          await queryRunner.release();
+        }
+        return { codingSchemeRefs, unitToCodingSchemeRefMap };
+      }
+    }
+
+    return { codingSchemeRefs, unitToCodingSchemeRefMap };
+  }
+
   async processTestPersonsBatch(
     workspace_id: number,
     personIds: string[],
@@ -310,13 +543,11 @@ export class WorkspaceCodingService {
     const startTime = Date.now();
     const metrics: { [key: string]: number } = {};
 
-    // Initialize statistics
     const statistics: CodingStatistics = {
       totalResponses: 0,
       statusCounts: {}
     };
 
-    // Report initial progress
     if (progressCallback) {
       progressCallback(0);
     }
@@ -508,35 +739,12 @@ export class WorkspaceCodingService {
 
       // Step 8: Extract coding scheme references - 80% progress
       const schemeExtractStart = Date.now();
-      const codingSchemeRefs = new Set<string>();
-      const unitToCodingSchemeRefMap = new Map();
-      const batchSize = 50;
-      for (let i = 0; i < units.length; i += batchSize) {
-        const unitBatch = units.slice(i, i + batchSize);
-
-        for (const unit of unitBatch) {
-          const testFile = fileIdToTestFileMap.get(unit.alias.toUpperCase());
-          if (!testFile) continue;
-
-          try {
-            const $ = cheerio.load(testFile.data);
-            const codingSchemeRefText = $('codingSchemeRef').text();
-            if (codingSchemeRefText) {
-              codingSchemeRefs.add(codingSchemeRefText.toUpperCase());
-              unitToCodingSchemeRefMap.set(unit.id, codingSchemeRefText.toUpperCase());
-            }
-          } catch (error) {
-            this.logger.error(`--- Fehler beim Verarbeiten der Datei ${testFile.filename}: ${error.message}`);
-          }
-        }
-
-        // Check for cancellation or pause during scheme extraction
-        if (jobId && await this.isJobCancelled(jobId)) {
-          this.logger.log(`Job ${jobId} was cancelled or paused during scheme extraction`);
-          await queryRunner.release();
-          return statistics;
-        }
-      }
+      const { codingSchemeRefs, unitToCodingSchemeRefMap } = await this.extractCodingSchemeReferences(
+        units,
+        fileIdToTestFileMap,
+        jobId,
+        queryRunner
+      );
       metrics.schemeExtract = Date.now() - schemeExtractStart;
 
       // Report progress after step 8
@@ -553,8 +761,11 @@ export class WorkspaceCodingService {
 
       // Step 9: Get coding scheme files - 85% progress
       const schemeQueryStart = Date.now();
-      // Use cache for coding schemes
-      const fileIdToCodingSchemeMap = await this.getCodingSchemesWithCache([...codingSchemeRefs]);
+      const fileIdToCodingSchemeMap = await this.getCodingSchemeFiles(
+        codingSchemeRefs,
+        jobId,
+        queryRunner
+      );
       metrics.schemeQuery = Date.now() - schemeQueryStart;
       // No separate parsing step needed as it's handled by the cache helper
       metrics.schemeParsing = 0;
@@ -563,16 +774,6 @@ export class WorkspaceCodingService {
       if (progressCallback) {
         progressCallback(85);
       }
-
-      // Check for cancellation or pause after step 9
-      if (jobId && await this.isJobCancelled(jobId)) {
-        this.logger.log(`Job ${jobId} was cancelled or paused after getting coding scheme files`);
-        await queryRunner.release();
-        return statistics;
-      }
-
-      // Skip to step 11 (step 10 is now part of getCodingSchemesWithCache)
-      const emptyScheme = new Autocoder.CodingScheme({});
 
       // Report progress after step 10
       if (progressCallback) {
@@ -589,63 +790,19 @@ export class WorkspaceCodingService {
       // Step 11: Process and code responses - 95% progress
       const processingStart = Date.now();
 
-      const allCodedResponses = [];
-      const estimatedResponseCount = allResponses.length;
-      allCodedResponses.length = estimatedResponseCount;
-      let responseIndex = 0;
+      const { allCodedResponses } = await this.processAndCodeResponses(
+        units,
+        unitToResponsesMap,
+        unitToCodingSchemeRefMap,
+        fileIdToCodingSchemeMap,
+        allResponses,
+        statistics,
+        jobId,
+        queryRunner,
+        progressCallback
+      );
 
-      for (let i = 0; i < units.length; i += batchSize) {
-        const unitBatch = units.slice(i, i + batchSize);
-
-        for (const unit of unitBatch) {
-          const responses = unitToResponsesMap.get(unit.id) || [];
-          if (responses.length === 0) continue;
-
-          statistics.totalResponses += responses.length;
-
-          const codingSchemeRef = unitToCodingSchemeRefMap.get(unit.id);
-          const scheme = codingSchemeRef ?
-            (fileIdToCodingSchemeMap.get(codingSchemeRef) || emptyScheme) :
-            emptyScheme;
-
-          for (const response of responses) {
-            const codedResult = scheme.code([{
-              id: response.variableid,
-              value: response.value,
-              status: response.status as ResponseStatusType
-            }]);
-
-            const codedStatus = codedResult[0]?.status;
-            if (!statistics.statusCounts[codedStatus]) {
-              statistics.statusCounts[codedStatus] = 0;
-            }
-            statistics.statusCounts[codedStatus] += 1;
-
-            allCodedResponses[responseIndex] = {
-              id: response.id,
-              code: codedResult[0]?.code,
-              codedstatus: codedStatus,
-              score: codedResult[0]?.score
-            };
-            responseIndex += 1;
-          }
-        }
-
-        // Check for cancellation or pause during response processing
-        if (jobId && await this.isJobCancelled(jobId)) {
-          this.logger.log(`Job ${jobId} was cancelled or paused during response processing`);
-          await queryRunner.release();
-          return statistics;
-        }
-      }
-
-      allCodedResponses.length = responseIndex;
       metrics.processing = Date.now() - processingStart;
-
-      // Report progress after step 11
-      if (progressCallback) {
-        progressCallback(95);
-      }
 
       // Check for cancellation or pause after step 11
       if (jobId && await this.isJobCancelled(jobId)) {
@@ -655,79 +812,17 @@ export class WorkspaceCodingService {
       }
 
       // Step 12: Update responses in database - 100% progress
-      if (allCodedResponses.length > 0) {
-        const updateStart = Date.now();
-        try {
-          const updateBatchSize = 500;
-          const batches = [];
-          for (let i = 0; i < allCodedResponses.length; i += updateBatchSize) {
-            batches.push(allCodedResponses.slice(i, i + updateBatchSize));
-          }
+      const updateSuccess = await this.updateResponsesInDatabase(
+        allCodedResponses,
+        queryRunner,
+        jobId,
+        progressCallback,
+        metrics
+      );
 
-          this.logger.log(`Starte die Aktualisierung von ${allCodedResponses.length} Responses in ${batches.length} Batches (sequential).`);
-
-          for (let index = 0; index < batches.length; index++) {
-            const batch = batches[index];
-            this.logger.log(`Starte Aktualisierung für Batch #${index + 1} (Größe: ${batch.length}).`);
-
-            // Check for cancellation or pause before updating batch
-            if (jobId && await this.isJobCancelled(jobId)) {
-              this.logger.log(`Job ${jobId} was cancelled or paused before updating batch #${index + 1}`);
-              await queryRunner.rollbackTransaction();
-              await queryRunner.release();
-              return statistics;
-            }
-
-            try {
-              if (batch.length > 0) {
-                const updatePromises = batch.map(response => queryRunner.manager.update(
-                  ResponseEntity,
-                  response.id,
-                  {
-                    code: response.code,
-                    codedstatus: response.codedstatus,
-                    score: response.score
-                  }
-                ));
-
-                await Promise.all(updatePromises);
-              }
-
-              this.logger.log(`Batch #${index + 1} (Größe: ${batch.length}) erfolgreich aktualisiert.`);
-
-              // Update progress during batch updates
-              if (progressCallback) {
-                const batchProgress = 95 + (5 * ((index + 1) / batches.length));
-                progressCallback(Math.round(Math.min(batchProgress, 99))); // Cap at 99% until fully complete and round to integer
-              }
-            } catch (error) {
-              this.logger.error(`Fehler beim Aktualisieren von Batch #${index + 1} (Größe: ${batch.length}):`, error.message);
-              // Rollback transaction on error
-              await queryRunner.rollbackTransaction();
-              await queryRunner.release();
-              throw error;
-            }
-          }
-
-          // Commit transaction if all updates were successful
-          await queryRunner.commitTransaction();
-          this.logger.log(`${allCodedResponses.length} Responses wurden erfolgreich aktualisiert.`);
-        } catch (error) {
-          this.logger.error('Fehler beim Aktualisieren der Responses:', error.message);
-          // Ensure transaction is rolled back on error
-          try {
-            await queryRunner.rollbackTransaction();
-          } catch (rollbackError) {
-            this.logger.error('Fehler beim Rollback der Transaktion:', rollbackError.message);
-          }
-        } finally {
-          // Always release the query runner
-          await queryRunner.release();
-        }
-        metrics.update = Date.now() - updateStart;
-      } else {
-        // Release query runner if no updates were performed
-        await queryRunner.release();
+      if (!updateSuccess) {
+        // If update failed, return early
+        return statistics;
       }
 
       // Report completion
