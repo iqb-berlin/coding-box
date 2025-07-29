@@ -1,7 +1,6 @@
 import {
   Component, ViewChild, AfterViewInit, OnInit, OnDestroy, inject
 } from '@angular/core';
-import { RouterLink } from '@angular/router';
 import { NgClass, TitleCasePipe } from '@angular/common';
 import {
   catchError,
@@ -39,12 +38,12 @@ import { Success } from '../../models/success.model';
 import { CodingListItem } from '../../models/coding-list-item.model';
 import { TestPersonCodingDialogComponent } from '../test-person-coding-dialog/test-person-coding-dialog.component';
 import { ExportCodingBookComponent } from '../export-coding-book/export-coding-book.component';
+import { CodingManagementManualComponent } from '../coding-management-manual/coding-management-manual.component';
 
 @Component({
   selector: 'app-coding-management',
   templateUrl: './coding-management.component.html',
   imports: [
-    RouterLink,
     NgClass,
     MatTable,
     MatColumnDef,
@@ -70,7 +69,8 @@ import { ExportCodingBookComponent } from '../export-coding-book/export-coding-b
     MatIconButton,
     MatTooltipModule,
     MatDivider,
-    MatButton
+    MatButton,
+    CodingManagementManualComponent
   ],
   styleUrls: ['./coding-management.component.scss']
 })
@@ -91,6 +91,7 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
   isFilterLoading = false;
   isLoadingStatistics = false;
   isAutoCoding = false;
+  showManualCoding = false;
   currentStatusFilter: string | null = null;
   pageSizeOptions = [100, 200, 500];
   pageSize = 100;
@@ -629,5 +630,9 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
       width: '80%',
       height: '80%'
     });
+  }
+
+  toggleManualCoding(): void {
+    this.showManualCoding = !this.showManualCoding;
   }
 }
