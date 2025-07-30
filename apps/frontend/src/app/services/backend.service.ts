@@ -49,6 +49,7 @@ import { BookletInfoDto } from '../../../../../api-dto/booklet-info/booklet-info
 import { UnitInfoDto } from '../../../../../api-dto/unit-info/unit-info.dto';
 import { CodeBookContentSetting } from '../../../../../api-dto/coding/codebook-content-setting';
 import { MissingsProfilesDto } from '../../../../../api-dto/coding/missings-profiles.dto';
+import { VariableAnalysisItemDto } from '../../../../../api-dto/coding/variable-analysis-item.dto';
 
 interface PaginatedResponse<T> {
   data: T[];
@@ -244,6 +245,17 @@ export class BackendService {
 
   getCodingStatistics(workspace_id: number): Observable<CodingStatistics> {
     return this.codingService.getCodingStatistics(workspace_id);
+  }
+
+  getVariableAnalysis(
+    workspace_id: number,
+    page: number = 1,
+    limit: number = 100,
+    unitId?: string,
+    variableId?: string,
+    derivation?: string
+  ): Observable<PaginatedResponse<VariableAnalysisItemDto>> {
+    return this.codingService.getVariableAnalysis(workspace_id, page, limit, unitId, variableId, derivation);
   }
 
   getResponsesByStatus(workspace_id: number, status: string, page: number = 1, limit: number = 100): Observable<PaginatedResponse<ResponseEntity>> {
