@@ -1397,7 +1397,9 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
   openValidationDialog(): void {
     const dialogRef = this.dialog.open(ValidationDialogComponent, {
-      width: '800px'
+      width: '1000px',
+      maxHeight: '90vh',
+      autoFocus: false
     });
 
     dialogRef.afterClosed().subscribe(result => {
