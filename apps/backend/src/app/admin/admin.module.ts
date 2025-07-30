@@ -25,6 +25,7 @@ import { MissingsProfilesController } from './workspace/missings-profiles.contro
 import { BookletInfoService } from '../database/services/booklet-info.service';
 import { UnitInfoService } from '../database/services/unit-info.service';
 import FileUpload from '../database/entities/file_upload.entity';
+import { ReplayStatisticsController } from './replay-statistics/replay-statistics.controller';
 
 @Module({
   imports: [
@@ -52,7 +53,8 @@ import FileUpload from '../database/entities/file_upload.entity';
     ValidationTaskController,
     BookletInfoController,
     UnitInfoController,
-    MissingsProfilesController
+    MissingsProfilesController,
+    ReplayStatisticsController
   ],
   providers: [
     BookletInfoService,

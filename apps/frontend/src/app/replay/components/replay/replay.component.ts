@@ -64,8 +64,11 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   readonly unitIdInput = input<string>();
   private bookletData: BookletReplay | null = null;
   @ViewChild(UnitPlayerComponent) unitPlayerComponent: UnitPlayerComponent | undefined;
+  private replayStartTime: number = 0; // Track when replay viewing starts
 
   ngOnInit(): void {
+    // Record the start time when the component is initialized
+    this.replayStartTime = performance.now();
     this.subscribeRouter();
   }
 
@@ -372,8 +375,65 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
           }))
       ]));
     const endTime = performance.now();
-    const duration = endTime - startTime;
+    const duration = Math.floor(endTime - startTime);
     logger.log(`Replay-Dauer: ${duration.toFixed(2)}ms`);
+
+    if (duration) {
+      if (duration >= 1) {
+        try {
+          let testPersonLogin: string | undefined;
+          let testPersonCode: string | undefined;
+          let bookletId: string | undefined;
+
+          if (this.testPerson) {
+            const parts = this.testPerson.split('@');
+            console.log('parts', parts);
+            if (parts.length > 0) {
+              testPersonLogin = parts[0];
+              testPersonCode = parts[1];
+              bookletId = parts[2];
+            }
+          }
+          console.log('sss');
+          // Get workspace ID from auth token
+          if (authToken) {
+            try {
+              const decoded: JwtPayload & { workspace: string } = jwtDecode(authToken);
+              const workspaceId = Number(decoded?.workspace);
+              if (workspaceId) {
+                // Construct the replay URL
+                const replayUrl = window.location.href;
+
+                // Store the replay statistics
+                this.backendService.storeReplayStatistics(workspaceId, {
+                  unitId: this.unitId,
+                  bookletId,
+                  testPersonLogin,
+                  testPersonCode,
+                  durationMilliseconds: duration,
+                  replayUrl
+                }).subscribe({
+                  next: () => {
+                    logger.log(`Replay statistics stored successfully. Duration: ${duration}ms`);
+                  },
+                  error: error => {
+                    logger.error(`Error storing replay statistics: ${error}`);
+                  }
+                });
+              }
+            } catch (error) {
+              logger.error(`Error decoding auth token: ${error}`);
+            }
+          }
+        } catch (error) {
+          logger.error(`Error storing replay statistics: ${error}`);
+        }
+      }
+
+      // Reset the start time for the next unit
+      this.replayStartTime = performance.now();
+    }
+
     this.setIsLoaded();
     return { unitDef: unitData[0], response: unitData[1], player: unitData[2] };
   }

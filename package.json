@@ -70,6 +70,7 @@
     "reflect-metadata": "^0.2.0",
     "rxjs": "~7.8.0",
     "stream": "^0.0.2",
+    "@swimlane/ngx-charts": "^23.0.0-alpha.0",
     "timers": "^0.1.1",
     "tslib": "^2.3.0",
     "typeorm": "^0.3.20",

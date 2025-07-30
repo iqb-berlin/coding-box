@@ -15,6 +15,7 @@ import { AppService } from '../../../services/app.service';
 import { WsAccessRightsComponent } from '../ws-access-rights/ws-access-rights.component';
 import { JournalComponent } from '../journal/journal.component';
 import { EditMissingsProfilesDialogComponent } from '../../../coding/components/edit-missings-profiles-dialog/edit-missings-profiles-dialog.component';
+import { ReplayStatisticsDialogComponent } from '../replay-statistics-dialog/replay-statistics-dialog.component';
 
 @Component({
   selector: 'coding-box-ws-settings',
@@ -43,6 +44,16 @@ export class WsSettingsComponent {
 
   authToken: string | null = null;
   duration = 60;
+
+  openReplayStatistics(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (workspaceId) {
+      this.dialog.open(ReplayStatisticsDialogComponent, {
+        width: '900px',
+        data: { workspaceId }
+      });
+    }
+  }
 
   createToken(): void {
     this.appService

@@ -1,4 +1,5 @@
 import { Injectable, inject } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { VariableInfo } from '@iqbspecs/variable-info/variable-info.interface';
 import { FilesInListDto } from 'api-dto/files/files-in-list.dto';
@@ -51,6 +52,21 @@ import { CodeBookContentSetting } from '../../../../../api-dto/coding/codebook-c
 import { MissingsProfilesDto } from '../../../../../api-dto/coding/missings-profiles.dto';
 import { VariableAnalysisItemDto } from '../../../../../api-dto/coding/variable-analysis-item.dto';
 
+/**
+ * Response type for replay statistics
+ */
+type ReplayStatisticsResponse = {
+  id: number;
+  timestamp: string;
+  workspaceId: number;
+  unitId: string;
+  bookletId?: string;
+  testPersonLogin?: string;
+  testPersonCode?: string;
+  durationMilliseconds: number;
+  replayUrl?: string;
+};
+
 interface PaginatedResponse<T> {
   data: T[];
   total: number;
@@ -101,6 +117,7 @@ interface ResponseEntity {
 export class BackendService {
   readonly serverUrl = inject(SERVER_URL);
   appService = inject(AppService);
+  private http = inject(HttpClient);
   private userService = inject(UserService);
   private workspaceService = inject(WorkspaceService);
   private fileService = inject(FileService);
@@ -696,5 +713,75 @@ export class BackendService {
       schemeFileId;
 
     return this.fileService.getVariableInfoForScheme(workspaceId, fileId);
+  }
+
+  /**
+   * Store replay statistics
+   * @param workspaceId The ID of the workspace
+   * @param data Replay statistics data
+   * @returns Observable of the stored replay statistics
+   */
+  storeReplayStatistics(
+    workspaceId: number,
+    data: {
+      unitId: string;
+      bookletId?: string;
+      testPersonLogin?: string;
+      testPersonCode?: string;
+      durationMilliseconds: number;
+      replayUrl?: string;
+    }
+  ): Observable<ReplayStatisticsResponse> {
+    const url = `${this.serverUrl}/admin/workspace/${workspaceId}/replay-statistics`;
+    return this.http.post<ReplayStatisticsResponse>(url, data);
+  }
+
+  /**
+   * Get replay frequency by unit
+   * @param workspaceId The ID of the workspace
+   * @returns Observable of replay frequency data
+   */
+  getReplayFrequencyByUnit(workspaceId: number): Observable<Record<string, number>> {
+    const url = `${this.serverUrl}/admin/workspace/${workspaceId}/replay-statistics/frequency`;
+    return this.http.get<Record<string, number>>(url);
+  }
+
+  /**
+   * Get all replay statistics for a workspace
+   * @param workspaceId The ID of the workspace
+   * @returns Observable of replay statistics
+   */
+  getReplayStatistics(workspaceId: number): Observable<ReplayStatisticsResponse[]> {
+    const url = `${this.serverUrl}/admin/workspace/${workspaceId}/replay-statistics`;
+    return this.http.get<ReplayStatisticsResponse[]>(url);
+  }
+
+  /**
+   * Get replay duration statistics
+   * @param workspaceId The ID of the workspace
+   * @param unitId Optional unit ID to filter by
+   * @returns Observable of replay duration statistics
+   */
+  getReplayDurationStatistics(
+    workspaceId: number,
+    unitId?: string
+  ): Observable<{
+      min: number;
+      max: number;
+      average: number;
+      distribution: Record<string, number>;
+      unitAverages?: Record<string, number>;
+    }> {
+    let url = `${this.serverUrl}/admin/workspace/${workspaceId}/replay-statistics/duration`;
+    if (unitId) {
+      url += `?unitId=${encodeURIComponent(unitId)}`;
+    }
+    return this.http.get<{
+      min: number;
+      max: number;
+      average: number;
+      distribution: Record<string, number>;
+      unitAverages?: Record<string, number>;
+    }>(url);
   }
 }
