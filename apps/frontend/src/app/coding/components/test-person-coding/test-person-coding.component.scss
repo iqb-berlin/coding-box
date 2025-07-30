@@ -63,6 +63,38 @@
 
     table {
       width: 100%;
+      table-layout: fixed;
+    }
+
+    // Column width definitions
+    ::ng-deep {
+      .mat-column-jobId {
+        width: 80px;
+      }
+
+      .mat-column-status {
+        width: 100px;
+      }
+
+      .mat-column-progress {
+        width: 120px;
+      }
+
+      .mat-column-createdAt {
+        width: 160px;
+      }
+
+      .mat-column-groups {
+        width: 120px;
+      }
+
+      .mat-column-duration {
+        width: 100px;
+      }
+
+      .mat-column-actions {
+        width: 100px;
+      }
     }
 
     .no-data {
@@ -73,7 +105,7 @@
     .progress-container {
       display: flex;
       flex-direction: column;
-      width: 150px;
+      width: 100%;
 
       .progress-value {
         margin-bottom: 4px;

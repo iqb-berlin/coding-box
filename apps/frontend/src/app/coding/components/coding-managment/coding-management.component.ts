@@ -314,18 +314,13 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
   }
 
   onAutoCode(): void {
-    // Open the test person coding dialog
     const dialogRef = this.dialog.open(TestPersonCodingDialogComponent, {
-      width: '90vw',
       height: '90vh',
       maxWidth: '100vw',
-      maxHeight: '100vh',
-      panelClass: 'full-screen-dialog'
+      maxHeight: '100vh'
     });
 
-    // Handle dialog close event if needed
     dialogRef.afterClosed().subscribe(() => {
-      // Refresh statistics after dialog is closed
       this.fetchCodingStatistics();
     });
   }
