@@ -247,6 +247,31 @@ export class WorkspaceCodingController {
     return this.workspaceCodingService.cancelJob(jobId);
   }
 
+  @Get(':workspace_id/coding/job/:jobId/delete')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiParam({ name: 'jobId', type: String, description: 'ID of the background job to delete' })
+  @ApiOkResponse({
+    description: 'Job deletion request processed.',
+    schema: {
+      type: 'object',
+      properties: {
+        success: {
+          type: 'boolean',
+          description: 'Whether the deletion request was successful'
+        },
+        message: {
+          type: 'string',
+          description: 'Message describing the result of the deletion request'
+        }
+      }
+    }
+  })
+  async deleteJob(@Param('jobId') jobId: string): Promise<{ success: boolean; message: string }> {
+    return this.workspaceCodingService.deleteJob(jobId);
+  }
+
   @Get(':workspace_id/coding/jobs')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiTags('coding')

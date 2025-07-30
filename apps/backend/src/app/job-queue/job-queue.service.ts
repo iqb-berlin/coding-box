@@ -109,6 +109,28 @@ export class JobQueueService {
   }
 
   /**
+   * Delete a test person coding job
+   * @param jobId The job ID
+   * @returns True if the job was deleted, false otherwise
+   */
+  async deleteTestPersonCodingJob(jobId: string): Promise<boolean> {
+    const job = await this.testPersonCodingQueue.getJob(jobId);
+    if (!job) {
+      this.logger.warn(`Job with ID ${jobId} not found`);
+      return false;
+    }
+
+    try {
+      await job.remove();
+      this.logger.log(`Job ${jobId} has been deleted`);
+      return true;
+    } catch (error) {
+      this.logger.error(`Error deleting job: ${error.message}`, error.stack);
+      return false;
+    }
+  }
+
+  /**
    * Check if Redis is connected and jobs can be managed
    * @returns Redis connection status
    */

@@ -284,6 +284,26 @@ export class WorkspaceCodingService {
     }
   }
 
+  async deleteJob(jobId: string): Promise<{ success: boolean; message: string }> {
+    try {
+      const bullJob = await this.jobQueueService.getTestPersonCodingJob(jobId);
+      if (!bullJob) {
+        return { success: false, message: `Job with ID ${jobId} not found` };
+      }
+
+      // Delete the job
+      const result = await this.jobQueueService.deleteTestPersonCodingJob(jobId);
+      if (result) {
+        this.logger.log(`Job ${jobId} has been deleted successfully`);
+        return { success: true, message: `Job ${jobId} has been deleted successfully` };
+      }
+      return { success: false, message: `Failed to delete job ${jobId}` };
+    } catch (error) {
+      this.logger.error(`Error deleting job: ${error.message}`, error.stack);
+      return { success: false, message: `Error deleting job: ${error.message}` };
+    }
+  }
+
   private async isJobCancelled(jobId: string | number): Promise<boolean> {
     try {
       // Check Redis queue

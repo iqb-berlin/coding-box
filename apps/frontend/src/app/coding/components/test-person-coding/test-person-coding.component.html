@@ -99,16 +99,19 @@
             <th mat-header-cell *matHeaderCellDef>Aktionen</th>
             <td mat-cell *matCellDef="let job">
               <div class="job-actions">
-                <!-- Cancel button for pending or processing jobs -->
                 <button mat-icon-button color="warn" *ngIf="job.status === 'pending' || job.status === 'processing'"
                         (click)="cancelJob(job.jobId)" matTooltip="Auftrag abbrechen">
                   <mat-icon>cancel</mat-icon>
                 </button>
 
-                <!-- View result button for completed jobs -->
                 <button mat-icon-button color="primary" *ngIf="job.status === 'completed'"
                         (click)="showJobResult(job)" matTooltip="Ergebnis anzeigen">
                   <mat-icon>visibility</mat-icon>
+                </button>
+
+                <button mat-icon-button color="warn" *ngIf="job.status === 'completed' || job.status === 'failed'"
+                        (click)="deleteJob(job.jobId)" matTooltip="Auftrag löschen">
+                  <mat-icon>delete</mat-icon>
                 </button>
 
                 <!-- Error indicator for failed jobs -->
