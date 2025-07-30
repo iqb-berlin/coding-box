@@ -45,6 +45,8 @@ import { Job } from './entities/job.entity';
 import { VariableAnalysisJob } from './entities/variable-analysis-job.entity';
 import { ValidationTask } from './entities/validation-task.entity';
 import { Setting } from './entities/setting.entity';
+import { ReplayStatistics } from './entities/replay-statistics.entity';
+import { ReplayStatisticsService } from './services/replay-statistics.service';
 // eslint-disable-next-line import/no-cycle
 import { JobQueueModule } from '../job-queue/job-queue.module';
 
@@ -87,7 +89,7 @@ import { JobQueueModule } from '../job-queue/job-queue.module';
         password: configService.get('POSTGRES_PASSWORD'),
         database: configService.get('POSTGRES_DB'),
         entities: [BookletInfo, Booklet, Session, BookletLog, Unit, UnitLog, UnitLastState, ResponseEntity,
-          User, Workspace, WorkspaceAdmin, FileUpload, WorkspaceUser, ResourcePackage, Logs, Persons, ChunkEntity, BookletLog, Session, UnitLog, UnitTag, UnitNote, JournalEntry, Job, VariableAnalysisJob, ValidationTask, Setting
+          User, Workspace, WorkspaceAdmin, FileUpload, WorkspaceUser, ResourcePackage, Logs, Persons, ChunkEntity, BookletLog, Session, UnitLog, UnitTag, UnitNote, JournalEntry, Job, VariableAnalysisJob, ValidationTask, Setting, ReplayStatistics
         ],
         synchronize: false
       }),
@@ -117,7 +119,8 @@ import { JobQueueModule } from '../job-queue/job-queue.module';
       Job,
       VariableAnalysisJob,
       ValidationTask,
-      Setting
+      Setting,
+      ReplayStatistics
     ])
   ],
   providers: [
@@ -139,7 +142,8 @@ import { JobQueueModule } from '../job-queue/job-queue.module';
     JournalService,
     VariableAnalysisService,
     JobService,
-    ValidationTaskService
+    ValidationTaskService,
+    ReplayStatisticsService
   ],
   exports: [
     User,
@@ -167,7 +171,8 @@ import { JobQueueModule } from '../job-queue/job-queue.module';
     JournalService,
     VariableAnalysisService,
     JobService,
-    ValidationTaskService
+    ValidationTaskService,
+    ReplayStatisticsService
   ]
 })
 export class DatabaseModule {}

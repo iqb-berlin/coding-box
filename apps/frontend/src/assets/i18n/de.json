@@ -282,6 +282,22 @@
     "add-missing": "Missing-Wert hinzufügen",
     "save-profile": "Profil speichern",
     "delete-profile": "Profil löschen",
-    "select-missings-profile": "Missings-Profil auswählen"
+    "close": "Schließen",
+    "select-missings-profile": "Missings-Profil auswählen",
+    "replay-statistics": "Replay-Statistiken",
+    "loading-statistics": "Statistiken werden geladen...",
+    "replay-frequency": "Replay-Häufigkeit",
+    "replay-frequency-by-unit": "Replay-Häufigkeit nach Aufgabe",
+    "unit": "Aufgabe",
+    "replay-count": "Anzahl der Replays",
+    "replay-duration": "Replay-Dauer",
+    "replay-duration-distribution": "Verteilung der Replay-Dauer",
+    "duration-milliseconds": "Dauer (Millisekunden)",
+    "min-duration": "Minimale Dauer",
+    "max-duration": "Maximale Dauer",
+    "avg-duration": "Durchschnittliche Dauer",
+    "milliseconds": "Millisekunden",
+    "avg-duration-by-unit": "Durchschnittliche Dauer nach Aufgabe",
+    "avg-duration-milliseconds": "Durchschnittliche Dauer (Millisekunden)"
   }
 }

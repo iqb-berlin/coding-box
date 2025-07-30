@@ -1,0 +1,104 @@
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  Query,
+  UseGuards
+} from '@nestjs/common';
+import {
+  ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags
+} from '@nestjs/swagger';
+import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
+import { ReplayStatisticsService } from '../../database/services/replay-statistics.service';
+import { ReplayStatistics } from '../../database/entities/replay-statistics.entity';
+
+/**
+ * Controller for managing replay statistics
+ */
+@ApiTags('replay-statistics')
+@Controller('admin/workspace/:workspace_id/replay-statistics')
+export class ReplayStatisticsController {
+  constructor(
+    private readonly replayStatisticsService: ReplayStatisticsService
+  ) {}
+
+  /**
+   * Store replay statistics
+   */
+  @ApiOperation({ summary: 'Store replay statistics' })
+  @ApiParam({ name: 'workspace_id', description: 'ID of the workspace' })
+  @ApiResponse({ status: 201, description: 'Replay statistics stored successfully' })
+  @Post()
+  @UseGuards(JwtAuthGuard)
+  async storeReplayStatistics(
+    @Param('workspace_id') workspaceId: string,
+      @Body() data: {
+        unitId: string;
+        bookletId?: string;
+        testPersonLogin?: string;
+        testPersonCode?: string;
+        durationMilliseconds: number;
+        replayUrl?: string;
+      }
+  ): Promise<ReplayStatistics> {
+    return this.replayStatisticsService.storeReplayStatistics({
+      workspaceId: Number(workspaceId),
+      ...data
+    });
+  }
+
+  /**
+   * Get all replay statistics for a workspace
+   */
+  @ApiOperation({ summary: 'Get all replay statistics for a workspace' })
+  @ApiParam({ name: 'workspace_id', description: 'ID of the workspace' })
+  @ApiResponse({ status: 200, description: 'Replay statistics retrieved successfully' })
+  @Get()
+  @UseGuards(JwtAuthGuard)
+  async getReplayStatistics(
+    @Param('workspace_id') workspaceId: string
+  ): Promise<ReplayStatistics[]> {
+    return this.replayStatisticsService.getReplayStatistics(Number(workspaceId));
+  }
+
+  /**
+   * Get replay frequency by unit
+   */
+  @ApiOperation({ summary: 'Get replay frequency by unit' })
+  @ApiParam({ name: 'workspace_id', description: 'ID of the workspace' })
+  @ApiResponse({ status: 200, description: 'Replay frequency retrieved successfully' })
+  @Get('frequency')
+  @UseGuards(JwtAuthGuard)
+  async getReplayFrequencyByUnit(
+    @Param('workspace_id') workspaceId: string
+  ): Promise<Record<string, number>> {
+    return this.replayStatisticsService.getReplayFrequencyByUnit(Number(workspaceId));
+  }
+
+  /**
+   * Get replay duration statistics
+   */
+  @ApiOperation({ summary: 'Get replay duration statistics' })
+  @ApiParam({ name: 'workspace_id', description: 'ID of the workspace' })
+  @ApiQuery({ name: 'unitId', required: false, description: 'Filter by unit ID' })
+  @ApiResponse({ status: 200, description: 'Replay duration statistics retrieved successfully' })
+  @Get('duration')
+  @UseGuards(JwtAuthGuard)
+  async getReplayDurationStatistics(
+    @Param('workspace_id') workspaceId: string,
+      @Query('unitId') unitId?: string
+  ): Promise<{
+        min: number;
+        max: number;
+        average: number;
+        distribution: Record<string, number>;
+        unitAverages?: Record<string, number>;
+      }> {
+    return this.replayStatisticsService.getReplayDurationStatistics(
+      Number(workspaceId),
+      unitId
+    );
+  }
+}
