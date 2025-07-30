@@ -11,6 +11,7 @@ import { SERVER_URL } from '../injection-tokens';
 import { AppService } from './app.service';
 import { CodeBookContentSetting } from '../../../../../api-dto/coding/codebook-content-setting';
 import { MissingsProfilesDto } from '../../../../../api-dto/coding/missings-profiles.dto';
+import { VariableAnalysisItemDto } from '../../../../../api-dto/coding/variable-analysis-item.dto';
 
 interface PaginatedResponse<T> {
   data: T[];
@@ -345,5 +346,52 @@ export class CodingService {
       .pipe(
         catchError(() => of(null))
       );
+  }
+
+  getVariableAnalysis(
+    workspace_id: number,
+    page: number = 1,
+    limit: number = 100,
+    unitId?: string,
+    variableId?: string,
+    derivation?: string
+  ): Observable<PaginatedResponse<VariableAnalysisItemDto>> {
+    const identity = this.appService.loggedUser?.sub || '';
+    return this.appService.createToken(workspace_id, identity, 60).pipe(
+      catchError(() => of('')),
+      switchMap(token => {
+        let params = new HttpParams()
+          .set('authToken', token)
+          .set('serverUrl', window.location.origin)
+          .set('page', page.toString())
+          .set('limit', limit.toString());
+
+        if (unitId) {
+          params = params.set('unitId', unitId);
+        }
+
+        if (variableId) {
+          params = params.set('variableId', variableId);
+        }
+
+        if (derivation) {
+          params = params.set('derivation', derivation);
+        }
+
+        return this.http
+          .get<PaginatedResponse<VariableAnalysisItemDto>>(
+          `${this.serverUrl}admin/workspace/${workspace_id}/coding/variable-analysis`,
+          { headers: this.authHeader, params }
+        )
+          .pipe(
+            catchError(() => of({
+              data: [],
+              total: 0,
+              page,
+              limit
+            }))
+          );
+      })
+    );
   }
 }

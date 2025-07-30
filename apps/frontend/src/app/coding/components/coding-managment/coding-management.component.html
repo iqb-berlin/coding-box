@@ -30,6 +30,12 @@
           Codebook
         </a>
       }
+      @if (!showManualCoding) {
+        <a mat-raised-button color="primary" (click)="fetchVariableAnalysis()">
+          <mat-icon>analytics</mat-icon>
+          Item/Variablenanalyse
+        </a>
+      }
     </div>
   </div>
 
@@ -175,6 +181,7 @@
           <p class="empty-text">Klicken Sie auf "Anzeigen" um Daten zu laden.</p>
         </div>
       }
+
     </div>
   }
 

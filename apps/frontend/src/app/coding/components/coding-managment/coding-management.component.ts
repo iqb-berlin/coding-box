@@ -2,6 +2,7 @@ import {
   Component, ViewChild, AfterViewInit, OnInit, OnDestroy, inject
 } from '@angular/core';
 import { NgClass, TitleCasePipe } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import {
   catchError,
   finalize,
@@ -28,6 +29,7 @@ import { MatAnchor, MatButton, MatIconButton } from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { ScrollingModule } from '@angular/cdk/scrolling';
 import { MatDivider } from '@angular/material/divider';
+import { MatSelectModule } from '@angular/material/select';
 import { MatDialog } from '@angular/material/dialog';
 import { ContentDialogComponent } from '../../../shared/dialogs/content-dialog/content-dialog.component';
 import { BackendService } from '../../../services/backend.service';
@@ -39,6 +41,7 @@ import { CodingListItem } from '../../models/coding-list-item.model';
 import { TestPersonCodingDialogComponent } from '../test-person-coding-dialog/test-person-coding-dialog.component';
 import { ExportCodingBookComponent } from '../export-coding-book/export-coding-book.component';
 import { CodingManagementManualComponent } from '../coding-management-manual/coding-management-manual.component';
+import { VariableAnalysisDialogComponent } from '../variable-analysis-dialog/variable-analysis-dialog.component';
 
 @Component({
   selector: 'app-coding-management',
@@ -70,7 +73,9 @@ import { CodingManagementManualComponent } from '../coding-management-manual/cod
     MatTooltipModule,
     MatDivider,
     MatButton,
-    CodingManagementManualComponent
+    MatSelectModule,
+    CodingManagementManualComponent,
+    FormsModule
   ],
   styleUrls: ['./coding-management.component.scss']
 })
@@ -87,6 +92,7 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
   data: any[] = [];
   dataSource = new MatTableDataSource<CodingListItem>(this.data);
   displayedColumns: string[] = ['unitname', 'variableid', 'value', 'codedstatus', 'actions'];
+
   isLoading = false;
   isFilterLoading = false;
   isLoadingStatistics = false;
@@ -634,5 +640,19 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
 
   toggleManualCoding(): void {
     this.showManualCoding = !this.showManualCoding;
+  }
+
+  fetchVariableAnalysis(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+
+    this.dialog.open(VariableAnalysisDialogComponent, {
+      width: '90%',
+      height: '90%',
+      maxWidth: '1400px',
+      maxHeight: '900px',
+      data: {
+        workspaceId
+      }
+    });
   }
 }

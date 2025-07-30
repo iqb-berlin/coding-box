@@ -13,6 +13,7 @@ import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
 import { WorkspaceCodingService } from '../../database/services/workspace-coding.service';
 import { PersonService } from '../../database/services/person.service';
+import { VariableAnalysisItemDto } from '../../../../../../api-dto/coding/variable-analysis-item.dto';
 
 @ApiTags('Admin Workspace Coding')
 @Controller('admin/workspace')
@@ -571,5 +572,115 @@ export class WorkspaceCodingController {
     res.setHeader('Content-Type', contentType);
     res.setHeader('Content-Disposition', `attachment; filename=codebook.${contentOptions.exportFormat.toLowerCase()}`);
     res.send(codebook);
+  }
+
+  @Get(':workspace_id/coding/variable-analysis')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiQuery({
+    name: 'authToken',
+    required: true,
+    description: 'Authentication token for generating replay URLs',
+    type: String
+  })
+  @ApiQuery({
+    name: 'serverUrl',
+    required: false,
+    description: 'Server URL to use for generating links',
+    type: String
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    description: 'Page number for pagination (default: 1)',
+    type: Number
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    description: 'Number of items per page (default: 100, max: 500)',
+    type: Number
+  })
+  @ApiQuery({
+    name: 'unitId',
+    required: false,
+    description: 'Filter by unit ID',
+    type: String
+  })
+  @ApiQuery({
+    name: 'variableId',
+    required: false,
+    description: 'Filter by variable ID',
+    type: String
+  })
+  @ApiQuery({
+    name: 'derivation',
+    required: false,
+    description: 'Filter by derivation type',
+    type: String
+  })
+  @ApiOkResponse({
+    description: 'Variable analysis data retrieved successfully.',
+    schema: {
+      type: 'object',
+      properties: {
+        data: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              replayUrl: { type: 'string', description: 'Link to the replay of unit with its responses' },
+              unitId: { type: 'string', description: 'Unit ID' },
+              variableId: { type: 'string', description: 'Variable ID' },
+              derivation: { type: 'string', description: 'Derivation' },
+              code: { type: 'string', description: 'Code' },
+              description: { type: 'string', description: 'Description' },
+              score: { type: 'number', description: 'Score' },
+              occurrenceCount: { type: 'number', description: 'How often this unitId in combination with variableId with that code is in responses' },
+              totalCount: { type: 'number', description: 'Total amount of that combination variableId and unit Id' },
+              relativeOccurrence: { type: 'number', description: 'Relative occurrence (for bar chart)' }
+            }
+          }
+        },
+        total: { type: 'number', description: 'Total number of items' },
+        page: { type: 'number', description: 'Current page number' },
+        limit: { type: 'number', description: 'Number of items per page' }
+      }
+    }
+  })
+  async getVariableAnalysis(
+    @WorkspaceId() workspace_id: number,
+      @Query('authToken') authToken: string,
+      @Query('serverUrl') serverUrl?: string,
+                   @Query('page') page: number = 1,
+                   @Query('limit') limit: number = 100,
+                   @Query('unitId') unitId?: string,
+                   @Query('variableId') variableId?: string,
+                   @Query('derivation') derivation?: string
+  ): Promise<{
+        data: VariableAnalysisItemDto[];
+        total: number;
+        page: number;
+        limit: number;
+      }> {
+    // Validate and sanitize pagination parameters
+    const validPage = Math.max(1, page);
+    const validLimit = Math.min(Math.max(1, limit), 500); // Set maximum limit to 500
+
+    if (unitId || variableId || derivation) {
+      console.log(`Applying filters - unitId: ${unitId || 'none'}, variableId: ${variableId || 'none'}, derivation: ${derivation || 'none'}`);
+    }
+
+    return this.workspaceCodingService.getVariableAnalysis(
+      workspace_id,
+      authToken,
+      serverUrl,
+      validPage,
+      validLimit,
+      unitId,
+      variableId,
+      derivation
+    );
   }
 }
