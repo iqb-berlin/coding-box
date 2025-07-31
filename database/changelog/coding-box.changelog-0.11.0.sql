@@ -32,3 +32,7 @@ ALTER TABLE "public"."replay_statistics" ADD COLUMN "success" BOOLEAN NOT NULL D
 ALTER TABLE "public"."replay_statistics" ADD COLUMN "error_message" VARCHAR(2000) NULL;
 -- rollback ALTER TABLE "public"."replay_statistics" DROP COLUMN "success";
 -- rollback ALTER TABLE "public"."replay_statistics" DROP COLUMN "error_message";
+
+-- changeset jurei733:5
+CREATE INDEX IF NOT EXISTS response_id_idx ON response (id);
+-- rollback DROP INDEX IF EXISTS response_id_idx;
