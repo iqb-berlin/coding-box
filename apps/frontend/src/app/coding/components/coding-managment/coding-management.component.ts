@@ -1,8 +1,8 @@
 import {
   Component, ViewChild, AfterViewInit, OnInit, OnDestroy, inject
 } from '@angular/core';
-import { RouterLink } from '@angular/router';
 import { NgClass, TitleCasePipe } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import {
   catchError,
   finalize,
@@ -29,6 +29,7 @@ import { MatAnchor, MatButton, MatIconButton } from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { ScrollingModule } from '@angular/cdk/scrolling';
 import { MatDivider } from '@angular/material/divider';
+import { MatSelectModule } from '@angular/material/select';
 import { MatDialog } from '@angular/material/dialog';
 import { ContentDialogComponent } from '../../../shared/dialogs/content-dialog/content-dialog.component';
 import { BackendService } from '../../../services/backend.service';
@@ -38,12 +39,14 @@ import { ExportDialogComponent, ExportFormat } from '../export-dialog/export-dia
 import { Success } from '../../models/success.model';
 import { CodingListItem } from '../../models/coding-list-item.model';
 import { TestPersonCodingDialogComponent } from '../test-person-coding-dialog/test-person-coding-dialog.component';
+import { ExportCodingBookComponent } from '../export-coding-book/export-coding-book.component';
+import { CodingManagementManualComponent } from '../coding-management-manual/coding-management-manual.component';
+import { VariableAnalysisDialogComponent } from '../variable-analysis-dialog/variable-analysis-dialog.component';
 
 @Component({
   selector: 'app-coding-management',
   templateUrl: './coding-management.component.html',
   imports: [
-    RouterLink,
     NgClass,
     MatTable,
     MatColumnDef,
@@ -69,7 +72,10 @@ import { TestPersonCodingDialogComponent } from '../test-person-coding-dialog/te
     MatIconButton,
     MatTooltipModule,
     MatDivider,
-    MatButton
+    MatButton,
+    MatSelectModule,
+    CodingManagementManualComponent,
+    FormsModule
   ],
   styleUrls: ['./coding-management.component.scss']
 })
@@ -86,10 +92,12 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
   data: any[] = [];
   dataSource = new MatTableDataSource<CodingListItem>(this.data);
   displayedColumns: string[] = ['unitname', 'variableid', 'value', 'codedstatus', 'actions'];
+
   isLoading = false;
   isFilterLoading = false;
   isLoadingStatistics = false;
   isAutoCoding = false;
+  showManualCoding = false;
   currentStatusFilter: string | null = null;
   pageSizeOptions = [100, 200, 500];
   pageSize = 100;
@@ -306,18 +314,13 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
   }
 
   onAutoCode(): void {
-    // Open the test person coding dialog
     const dialogRef = this.dialog.open(TestPersonCodingDialogComponent, {
-      width: '90vw',
       height: '90vh',
       maxWidth: '100vw',
-      maxHeight: '100vh',
-      panelClass: 'full-screen-dialog'
+      maxHeight: '100vh'
     });
 
-    // Handle dialog close event if needed
     dialogRef.afterClosed().subscribe(() => {
-      // Refresh statistics after dialog is closed
       this.fetchCodingStatistics();
     });
   }
@@ -618,5 +621,33 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
           }
         });
       });
+  }
+
+  /**
+   * Opens the export coding book dialog
+   */
+  openExportCodingBook(): void {
+    this.dialog.open(ExportCodingBookComponent, {
+      width: '80%',
+      height: '80%'
+    });
+  }
+
+  toggleManualCoding(): void {
+    this.showManualCoding = !this.showManualCoding;
+  }
+
+  fetchVariableAnalysis(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+
+    this.dialog.open(VariableAnalysisDialogComponent, {
+      width: '90%',
+      height: '90%',
+      maxWidth: '1400px',
+      maxHeight: '900px',
+      data: {
+        workspaceId
+      }
+    });
   }
 }

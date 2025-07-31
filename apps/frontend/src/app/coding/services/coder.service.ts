@@ -1,42 +1,60 @@
-import { Injectable } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
 import { BehaviorSubject, Observable, of } from 'rxjs';
+import { HttpClient } from '@angular/common/http';
 import { Coder } from '../models/coder.model';
+import { SERVER_URL } from '../../injection-tokens';
 
 @Injectable({
   providedIn: 'root'
 })
 export class CoderService {
-  // Sample data for demonstration
-  private sampleCoders: Coder[] = [
-    {
-      id: 1,
-      name: 'Kodierer 1',
-      displayName: 'Max Mustermann',
-      email: 'max.mustermann@example.com',
-      assignedJobs: [1]
-    },
-    {
-      id: 2,
-      name: 'Kodierer 2',
-      displayName: 'Anna Schmidt',
-      email: 'anna.schmidt@example.com',
-      assignedJobs: [2]
-    },
-    {
-      id: 3,
-      name: 'Kodierer 3',
-      displayName: 'Tom Meyer',
-      email: 'tom.meyer@example.com',
-      assignedJobs: [3]
-    }
-  ];
+  private http = inject(HttpClient);
+  private readonly serverUrl = inject(SERVER_URL);
 
-  private codersSubject = new BehaviorSubject<Coder[]>(this.sampleCoders);
+  // Initialize with empty array
+  private codersSubject = new BehaviorSubject<Coder[]>([]);
 
   /**
-   * Gets all coders
+   * Gets all coders (users with accessLevel 1) for the current workspace
    */
   getCoders(): Observable<Coder[]> {
+    // Get the current workspace ID from localStorage
+    const workspaceId = localStorage.getItem('workspace_id');
+
+    if (!workspaceId) {
+      console.error('No workspace ID found in localStorage');
+      return of([]);
+    }
+
+    // Fetch coders from the API
+    const url = `${this.serverUrl}/admin/workspace/${workspaceId}/coders`;
+
+    interface WorkspaceUser {
+      userId: number;
+      workspaceId: number;
+      accessLevel: number;
+    }
+
+    this.http.get<{ data: WorkspaceUser[], total: number }>(url).subscribe({
+      next: response => {
+        // Map the workspace users with accessLevel 1 to Coder objects
+        const coders: Coder[] = response.data.map(user => ({
+          id: user.userId,
+          name: `User ${user.userId}`, // Default name if user details not available
+          displayName: `Coder ${user.userId}`, // Default display name
+          assignedJobs: []
+        }));
+
+        // Update the subject with the fetched coders
+        this.codersSubject.next(coders);
+      },
+      error: error => {
+        console.error('Error fetching coders:', error);
+        // Keep the current value in case of error
+      }
+    });
+
+    // Return the observable from the subject
     return this.codersSubject.asObservable();
   }
 

@@ -297,6 +297,20 @@ export class TestPersonCodingComponent implements OnInit {
       });
   }
 
+  deleteJob(jobId: string): void {
+    if (!jobId) return;
+
+    this.testPersonCodingService.deleteJob(this.workspaceId, jobId)
+      .subscribe(result => {
+        if (result.success) {
+          this.snackBar.open(result.message, 'Schließen', { duration: 3000 });
+          this.loadAllJobs();
+        } else {
+          this.snackBar.open(`Fehler beim Löschen des Auftrags: ${result.message}`, 'Schließen', { duration: 5000 });
+        }
+      });
+  }
+
   showJobResult(job: JobInfo): void {
     if (!job.result) {
       this.snackBar.open('Keine Ergebnisse für diesen Auftrag verfügbar', 'Schließen', { duration: 3000 });

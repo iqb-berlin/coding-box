@@ -20,6 +20,13 @@ services:
       - "traefik.http.services.backend.loadbalancer.server.port=3333"
       - "traefik.docker.network=app-net"
     image: ${REGISTRY_PATH}iqbberlin/coding-box-backend:${TAG}
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PREFIX: ${REDIS_PREFIX:-coding-box}
     volumes:
       - "backend_vol:/usr/src/coding-box-backend/packages"
     restart: always

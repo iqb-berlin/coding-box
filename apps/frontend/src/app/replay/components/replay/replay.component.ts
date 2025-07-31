@@ -64,8 +64,11 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   readonly unitIdInput = input<string>();
   private bookletData: BookletReplay | null = null;
   @ViewChild(UnitPlayerComponent) unitPlayerComponent: UnitPlayerComponent | undefined;
+  private replayStartTime: number = 0; // Track when replay viewing starts
 
   ngOnInit(): void {
+    // Record the start time when the component is initialized
+    this.replayStartTime = performance.now();
     this.subscribeRouter();
   }
 
@@ -104,7 +107,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       // Parse the JSON string to get the BookletReplay object
       return JSON.parse(jsonString) as BookletReplay;
     } catch (error) {
-      console.error('Error deserializing booklet data:', error);
+      // Error occurred while deserializing booklet data
       return null;
     }
   }
@@ -123,7 +126,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         if (this.isBookletMode && queryParams.bookletData) {
           const deserializedBooklet = this.deserializeBookletData(queryParams.bookletData);
           if (deserializedBooklet) {
-            console.log('Deserialized booklet data from URL:', deserializedBooklet);
+            // Successfully deserialized booklet data from URL
             this.bookletData = deserializedBooklet;
             // Update the component state
             this.currentUnitIndex = deserializedBooklet.currentUnitIndex;
@@ -237,7 +240,6 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       return Promise.resolve();
     }
 
-    // eslint-disable-next-line @typescript-eslint/dot-notation
     if (changes.unitIdInput) {
       this.resetUnitData();
       this.resetSnackBars();
@@ -372,8 +374,62 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
           }))
       ]));
     const endTime = performance.now();
-    const duration = endTime - startTime;
+    const duration = Math.floor(endTime - startTime);
     logger.log(`Replay-Dauer: ${duration.toFixed(2)}ms`);
+
+    if (duration) {
+      if (duration >= 1) {
+        try {
+          let testPersonLogin: string | undefined;
+          let testPersonCode: string | undefined;
+          let bookletId: string | undefined;
+
+          if (this.testPerson) {
+            const parts = this.testPerson.split('@');
+            console.log('parts', parts);
+            if (parts.length > 0) {
+              testPersonLogin = parts[0];
+              testPersonCode = parts[1];
+              bookletId = parts[2];
+            }
+          }
+          if (authToken) {
+            try {
+              const decoded: JwtPayload & { workspace: string } = jwtDecode(authToken);
+              const workspaceId = Number(decoded?.workspace);
+              if (workspaceId) {
+                const replayUrl = window.location.href;
+
+                this.backendService.storeReplayStatistics(workspaceId, {
+                  unitId: this.unitId,
+                  bookletId,
+                  testPersonLogin,
+                  testPersonCode,
+                  durationMilliseconds: duration,
+                  replayUrl,
+                  success: true
+                }).subscribe({
+                  next: () => {
+                    logger.log(`Replay statistics stored successfully. Duration: ${duration}ms`);
+                  },
+                  error: error => {
+                    logger.error(`Error storing replay statistics: ${error}`);
+                  }
+                });
+              }
+            } catch (error) {
+              logger.error(`Error decoding auth token: ${error}`);
+            }
+          }
+        } catch (error) {
+          logger.error(`Error storing replay statistics: ${error}`);
+        }
+      }
+
+      // Reset the start time for the next unit
+      this.replayStartTime = performance.now();
+    }
+
     this.setIsLoaded();
     return { unitDef: unitData[0], response: unitData[1], player: unitData[2] };
   }
@@ -387,8 +443,8 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       TestPersonError: 'Ungültige ID für Testperson',
       PlayerError: 'Ungültiger Player-Name',
       ResponsesError: `Fehler beim Laden der Antworten für Aufgabe "${this.unitId}" von Testperson "${this.testPerson}"`,
-      notInList: `Keine valide Seite mit ID "${this.page}" gefunden`,
-      notCurrent: `Seite mit ID "${this.page}" kann nicht ausgewählt werden`,
+      notInList: `Keine valide Seite mit der ID "${this.page || ''}" gefunden`,
+      notCurrent: `Seite mit der ID "${this.page || ''}" kann nicht ausgewählt werden`,
       tokenExpired: 'Das Authentisierungs-Token ist abgelaufen',
       tokenInvalid: 'Das Authentisierungs-Token ist ungültig',
       unknown: 'Unbekannter Fehler'
@@ -409,6 +465,62 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
     const message = this.getErrorMessages()[messageKey] || this.getErrorMessages().unknown;
     this.openErrorSnackBar(message, 'Schließen');
+
+    this.storeErrorInStatistics(message);
+  }
+
+  private storeErrorInStatistics(errorMessage: string): void {
+    // Calculate duration from start time to now
+    const duration = this.replayStartTime ? Math.round(performance.now() - this.replayStartTime) : 0;
+
+    // Get auth token from local storage
+    const authToken = localStorage.getItem('authToken');
+    if (!authToken) return;
+
+    try {
+      // Extract workspace ID from token
+      const decoded: JwtPayload & { workspace: string } = jwtDecode(authToken);
+      const workspaceId = Number(decoded?.workspace);
+      if (!workspaceId) return;
+
+      // Extract test person information
+      let testPersonLogin = '';
+      let testPersonCode = '';
+      let bookletId = '';
+
+      if (this.testPerson) {
+        const parts = this.testPerson.split(':');
+        if (parts.length > 0) {
+          testPersonLogin = parts[0];
+          testPersonCode = parts[1];
+          bookletId = parts[2];
+        }
+      }
+
+      // Construct the replay URL
+      const replayUrl = window.location.href;
+
+      // Store the replay statistics with error information
+      this.backendService.storeReplayStatistics(workspaceId, {
+        unitId: this.unitId || 'unknown',
+        bookletId,
+        testPersonLogin,
+        testPersonCode,
+        durationMilliseconds: duration,
+        replayUrl,
+        success: false,
+        errorMessage: errorMessage
+      }).subscribe({
+        next: () => {
+          logger.log('Error replay statistics stored successfully.');
+        },
+        error: error => {
+          logger.error(`Error storing replay error statistics: ${error}`);
+        }
+      });
+    } catch (error) {
+      logger.error(`Error storing replay error statistics: ${error}`);
+    }
   }
 
   checkPageError(pageError: 'notInList' | 'notCurrent' | null): void {

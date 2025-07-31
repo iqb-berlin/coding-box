@@ -5,11 +5,13 @@ import {
   map,
   Observable,
   of,
-  forkJoin
+  forkJoin,
+  tap
 } from 'rxjs';
 import { logger } from 'nx/src/utils/logger';
 import { ResponseDto } from '../../../../../api-dto/responses/response-dto';
 import { SERVER_URL } from '../injection-tokens';
+import { TestResultService } from './test-result.service';
 
 @Injectable({
   providedIn: 'root'
@@ -17,6 +19,7 @@ import { SERVER_URL } from '../injection-tokens';
 export class ResponseService {
   readonly serverUrl = inject(SERVER_URL);
   private http = inject(HttpClient);
+  private testResultService = inject(TestResultService);
 
   get authHeader() {
     return { Authorization: `Bearer ${localStorage.getItem('id_token')}` };
@@ -37,7 +40,13 @@ export class ResponseService {
         { headers: this.authHeader, params })
       .pipe(
         catchError(() => of(false)),
-        map(() => true)
+        map(() => true),
+        tap(success => {
+          // Invalidate cache if deletion was successful
+          if (success) {
+            this.testResultService.invalidateCache(workspace_id);
+          }
+        })
       );
   }
 
@@ -67,6 +76,12 @@ export class ResponseService {
       catchError(() => {
         logger.error(`Error deleting response with ID: ${responseId}`);
         return of({ success: false, report: { deletedResponse: null, warnings: ['Failed to delete response'] } });
+      }),
+      tap(result => {
+        // Invalidate cache if deletion was successful
+        if (result.success) {
+          this.testResultService.invalidateCache(workspaceId);
+        }
       })
     );
   }
@@ -116,6 +131,12 @@ export class ResponseService {
             warnings: ['Failed to delete responses']
           }
         });
+      }),
+      tap(result => {
+        // Invalidate cache if any responses were deleted successfully
+        if (result.success) {
+          this.testResultService.invalidateCache(workspaceId);
+        }
       })
     );
   }

@@ -70,6 +70,35 @@ dev-db-rollback-lastchangeset:
 dev-db-generate-docs:
 	$(MAKE) -f $(MK_FILE_DIR)/dev-db.mk -C $(MK_FILE_DIR) $@
 
+dev-redis-registry-login:
+	$(MAKE) -f $(MK_FILE_DIR)/dev-redis.mk -C $(MK_FILE_DIR) $@
+dev-redis-registry-logout:
+	$(MAKE) -f $(MK_FILE_DIR)/dev-redis.mk -C $(MK_FILE_DIR) $@
+dev-redis-build:
+	$(MAKE) -f $(MK_FILE_DIR)/dev-redis.mk -C $(MK_FILE_DIR) $@
+dev-redis-up:
+	$(MAKE) -f $(MK_FILE_DIR)/dev-redis.mk -C $(MK_FILE_DIR) $@
+dev-redis-down:
+	$(MAKE) -f $(MK_FILE_DIR)/dev-redis.mk -C $(MK_FILE_DIR) $@
+dev-redis-volumes-clean:
+	$(MAKE) -f $(MK_FILE_DIR)/dev-redis.mk -C $(MK_FILE_DIR) $@
+dev-redis-images-clean:
+	$(MAKE) -f $(MK_FILE_DIR)/dev-redis.mk -C $(MK_FILE_DIR) $@
+dev-redis-monitor:
+	$(MAKE) -f $(MK_FILE_DIR)/dev-redis.mk -C $(MK_FILE_DIR) $@
+dev-redis-info:
+	$(MAKE) -f $(MK_FILE_DIR)/dev-redis.mk -C $(MK_FILE_DIR) $@
+dev-redis-stats:
+	$(MAKE) -f $(MK_FILE_DIR)/dev-redis.mk -C $(MK_FILE_DIR) $@
+dev-redis-ping:
+	$(MAKE) -f $(MK_FILE_DIR)/dev-redis.mk -C $(MK_FILE_DIR) $@
+dev-redis-flush-all:
+	$(MAKE) -f $(MK_FILE_DIR)/dev-redis.mk -C $(MK_FILE_DIR) $@
+dev-redis-flush-db:
+	$(MAKE) -f $(MK_FILE_DIR)/dev-redis.mk -C $(MK_FILE_DIR) $@
+dev-redis-cli:
+	$(MAKE) -f $(MK_FILE_DIR)/dev-redis.mk -C $(MK_FILE_DIR) $@
+
 dev-test-app:
 	$(MAKE) -f $(MK_FILE_DIR)/dev-test.mk -C $(MK_FILE_DIR) $@
 dev-test-backend:
@@ -123,6 +152,21 @@ coding-box-dump-db-data-only:
 coding-box-restore-db-data-only:
 	$(MAKE) -f $(MK_FILE_DIR)/prod.mk -C $(MK_FILE_DIR) $@
 coding-box-update:
+	$(MAKE) -f $(MK_FILE_DIR)/prod.mk -C $(MK_FILE_DIR) $@
+
+coding-box-redis-monitor:
+	$(MAKE) -f $(MK_FILE_DIR)/prod.mk -C $(MK_FILE_DIR) $@
+coding-box-redis-info:
+	$(MAKE) -f $(MK_FILE_DIR)/prod.mk -C $(MK_FILE_DIR) $@
+coding-box-redis-stats:
+	$(MAKE) -f $(MK_FILE_DIR)/prod.mk -C $(MK_FILE_DIR) $@
+coding-box-redis-ping:
+	$(MAKE) -f $(MK_FILE_DIR)/prod.mk -C $(MK_FILE_DIR) $@
+coding-box-redis-flush-all:
+	$(MAKE) -f $(MK_FILE_DIR)/prod.mk -C $(MK_FILE_DIR) $@
+coding-box-redis-flush-db:
+	$(MAKE) -f $(MK_FILE_DIR)/prod.mk -C $(MK_FILE_DIR) $@
+coding-box-redis-cli:
 	$(MAKE) -f $(MK_FILE_DIR)/prod.mk -C $(MK_FILE_DIR) $@
 
 push-dockerhub:

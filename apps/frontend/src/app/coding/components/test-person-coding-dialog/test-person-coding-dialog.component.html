@@ -1,12 +1,15 @@
 <div class="dialog-container">
   <div class="dialog-header">
     <h2 class="dialog-title">Testpersonen Kodierung</h2>
-    <button mat-icon-button (click)="closeDialog()" class="close-button">
-      <mat-icon>close</mat-icon>
-    </button>
   </div>
 
   <div class="dialog-content">
     <coding-box-test-person-coding></coding-box-test-person-coding>
+  </div>
+
+  <div class="dialog-footer">
+    <button mat-button (click)="closeDialog()" class="close-button">
+      Schließen
+    </button>
   </div>
 </div>

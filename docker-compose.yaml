@@ -6,6 +6,20 @@ x-env-postgres: &env-postgres
   POSTGRES_DB: ${POSTGRES_DB}
   POSTGRES_SHARED_BUFFERS: ${POSTGRES_SHARED_BUFFERS}
 services:
+  redis:
+    image: redis:alpine
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - "redis_data:/data"
+    networks:
+      - application-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   db:
     environment:
       <<: *env-postgres
@@ -38,9 +52,14 @@ services:
         condition: service_healthy
       liquibase:
         condition: service_completed_successfully
+      redis:
+        condition: service_healthy
     environment:
       API_HOST: backend
       JWT_SECRET: ${JWT_SECRET}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PREFIX: ${REDIS_PREFIX:-coding-box}
       <<: *env-postgres
     networks:
       - application-network
@@ -64,6 +83,7 @@ services:
 volumes:
   db_vol:
   backend_vol:
+  redis_data:
 
 networks:
   application-network:

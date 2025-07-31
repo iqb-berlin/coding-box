@@ -30,7 +30,7 @@ export class WsAdminComponent implements OnInit {
   private appService = inject(AppService);
   private backendService = inject(BackendService);
 
-  navLinks: string[] = ['test-files', 'test-results', 'coding', 'settings'];
+  navLinks: string[] = ['test-files', 'test-results', 'coding', 'cleaning', 'export', 'settings'];
   accessLevel:number = 0;
   authData = AppService.defaultAuthData;
 
