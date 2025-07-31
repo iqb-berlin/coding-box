@@ -94,4 +94,24 @@ export class WorkspaceUsersService {
       throw new Error('Could not retrieve workspace users');
     }
   }
+
+  async findCoders(workspaceId: number): Promise<[WorkspaceUser[], number]> {
+    this.logger.log(`Retrieving coders (users with accessLevel 1) for workspace ID: ${workspaceId}`);
+
+    try {
+      const users = await this.workspaceUsersRepository.find({
+        where: {
+          workspaceId,
+          accessLevel: 1
+        },
+        order: { userId: 'ASC' }
+      });
+
+      this.logger.log(`Found ${users.length} coder(s) for workspace ID: ${workspaceId}`);
+      return [users, users.length];
+    } catch (error) {
+      this.logger.error(`Failed to retrieve coders for workspace ID: ${workspaceId}`, error.stack);
+      throw new Error('Could not retrieve workspace coders');
+    }
+  }
 }
