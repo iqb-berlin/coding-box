@@ -65,6 +65,8 @@ type ReplayStatisticsResponse = {
   testPersonCode?: string;
   durationMilliseconds: number;
   replayUrl?: string;
+  success?: boolean;
+  errorMessage?: string;
 };
 
 interface PaginatedResponse<T> {
@@ -724,6 +726,8 @@ export class BackendService {
       testPersonCode?: string;
       durationMilliseconds: number;
       replayUrl?: string;
+      success?: boolean;
+      errorMessage?: string;
     }
   ): Observable<ReplayStatisticsResponse> {
     const url = `${this.serverUrl}/admin/workspace/${workspaceId}/replay-statistics`;
@@ -765,6 +769,58 @@ export class BackendService {
 
   getReplayDistributionByHour(workspaceId: number): Observable<Record<string, number>> {
     const url = `${this.serverUrl}/admin/workspace/${workspaceId}/replay-statistics/distribution/hour`;
+    return this.http.get<Record<string, number>>(url);
+  }
+
+  /**
+   * Get replay error statistics
+   * @param workspaceId The ID of the workspace
+   * @returns Observable of replay error statistics
+   */
+  getReplayErrorStatistics(workspaceId: number): Observable<{
+    successRate: number;
+    totalReplays: number;
+    successfulReplays: number;
+    failedReplays: number;
+    commonErrors: Array<{ message: string; count: number }>;
+  }> {
+    const url = `${this.serverUrl}/admin/workspace/${workspaceId}/replay-statistics/errors`;
+    return this.http.get<{
+      successRate: number;
+      totalReplays: number;
+      successfulReplays: number;
+      failedReplays: number;
+      commonErrors: Array<{ message: string; count: number }>;
+    }>(url);
+  }
+
+  /**
+   * Get failure distribution by unit
+   * @param workspaceId The ID of the workspace
+   * @returns Observable of failure distribution by unit
+   */
+  getFailureDistributionByUnit(workspaceId: number): Observable<Record<string, number>> {
+    const url = `${this.serverUrl}/admin/workspace/${workspaceId}/replay-statistics/failures/unit`;
+    return this.http.get<Record<string, number>>(url);
+  }
+
+  /**
+   * Get failure distribution by day
+   * @param workspaceId The ID of the workspace
+   * @returns Observable of failure distribution by day
+   */
+  getFailureDistributionByDay(workspaceId: number): Observable<Record<string, number>> {
+    const url = `${this.serverUrl}/admin/workspace/${workspaceId}/replay-statistics/failures/day`;
+    return this.http.get<Record<string, number>>(url);
+  }
+
+  /**
+   * Get failure distribution by hour
+   * @param workspaceId The ID of the workspace
+   * @returns Observable of failure distribution by hour
+   */
+  getFailureDistributionByHour(workspaceId: number): Observable<Record<string, number>> {
+    const url = `${this.serverUrl}/admin/workspace/${workspaceId}/replay-statistics/failures/hour`;
     return this.http.get<Record<string, number>>(url);
   }
 }

@@ -26,3 +26,9 @@ CREATE TABLE replay_statistics (
 );
 
 -- rollback DROP TABLE IF EXISTS replay_statistics;
+
+-- changeset jurei733:4
+ALTER TABLE "public"."replay_statistics" ADD COLUMN "success" BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE "public"."replay_statistics" ADD COLUMN "error_message" VARCHAR(2000) NULL;
+-- rollback ALTER TABLE "public"."replay_statistics" DROP COLUMN "success";
+-- rollback ALTER TABLE "public"."replay_statistics" DROP COLUMN "error_message";

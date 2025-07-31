@@ -41,6 +41,8 @@ export class ReplayStatisticsController {
         testPersonCode?: string;
         durationMilliseconds: number;
         replayUrl?: string;
+        success?: boolean;
+        errorMessage?: string;
       }
   ): Promise<ReplayStatistics> {
     return this.replayStatisticsService.storeReplayStatistics({
@@ -128,5 +130,67 @@ export class ReplayStatisticsController {
     @Param('workspace_id') workspaceId: string
   ): Promise<Record<string, number>> {
     return this.replayStatisticsService.getReplayDistributionByHour(Number(workspaceId));
+  }
+
+  /**
+   * Get replay error statistics
+   */
+  @ApiOperation({ summary: 'Get replay error statistics' })
+  @ApiParam({ name: 'workspace_id', description: 'ID of the workspace' })
+  @ApiResponse({ status: 200, description: 'Replay error statistics retrieved successfully' })
+  @Get('errors')
+  @UseGuards(JwtAuthGuard)
+  async getReplayErrorStatistics(
+    @Param('workspace_id') workspaceId: string
+  ): Promise<{
+        successRate: number;
+        totalReplays: number;
+        successfulReplays: number;
+        failedReplays: number;
+        commonErrors: Array<{ message: string; count: number }>;
+      }> {
+    return this.replayStatisticsService.getReplayErrorStatistics(Number(workspaceId));
+  }
+
+  /**
+   * Get failure distribution by unit
+   */
+  @ApiOperation({ summary: 'Get failure distribution by unit' })
+  @ApiParam({ name: 'workspace_id', description: 'ID of the workspace' })
+  @ApiResponse({ status: 200, description: 'Failure distribution by unit retrieved successfully' })
+  @Get('failures/unit')
+  @UseGuards(JwtAuthGuard)
+  async getFailureDistributionByUnit(
+    @Param('workspace_id') workspaceId: string
+  ): Promise<Record<string, number>> {
+    return this.replayStatisticsService.getFailureDistributionByUnit(Number(workspaceId));
+  }
+
+  /**
+   * Get failure distribution by day
+   */
+  @ApiOperation({ summary: 'Get failure distribution by day' })
+  @ApiParam({ name: 'workspace_id', description: 'ID of the workspace' })
+  @ApiResponse({ status: 200, description: 'Failure distribution by day retrieved successfully' })
+  @Get('failures/day')
+  @UseGuards(JwtAuthGuard)
+  async getFailureDistributionByDay(
+    @Param('workspace_id') workspaceId: string
+  ): Promise<Record<string, number>> {
+    return this.replayStatisticsService.getFailureDistributionByDay(Number(workspaceId));
+  }
+
+  /**
+   * Get failure distribution by hour
+   */
+  @ApiOperation({ summary: 'Get failure distribution by hour' })
+  @ApiParam({ name: 'workspace_id', description: 'ID of the workspace' })
+  @ApiResponse({ status: 200, description: 'Failure distribution by hour retrieved successfully' })
+  @Get('failures/hour')
+  @UseGuards(JwtAuthGuard)
+  async getFailureDistributionByHour(
+    @Param('workspace_id') workspaceId: string
+  ): Promise<Record<string, number>> {
+    return this.replayStatisticsService.getFailureDistributionByHour(Number(workspaceId));
   }
 }

@@ -302,6 +302,18 @@
     "replay-distribution-by-day": "Verteilung der Replays nach Tag",
     "replay-distribution-by-hour": "Verteilung der Replays nach Stunde",
     "date": "Datum",
-    "hour": "Stunde"
+    "hour": "Stunde",
+    "replay-errors": "Replay-Fehler",
+    "success-rate": "Erfolgsrate",
+    "total-replays": "Gesamtzahl der Replays",
+    "successful-replays": "Erfolgreiche Replays",
+    "failed-replays": "Fehlgeschlagene Replays",
+    "common-errors": "Häufige Fehler",
+    "no-error-messages": "Keine Fehlermeldungen verfügbar",
+    "failure-distribution-by-unit": "Verteilung der Fehler nach Aufgabe",
+    "failure-distribution-by-day": "Verteilung der Fehler nach Tag",
+    "failure-distribution-by-hour": "Verteilung der Fehler nach Stunde",
+    "failure-count": "Anzahl der Fehler",
+    "no-failures": "Keine Fehler vorhanden"
   }
 }

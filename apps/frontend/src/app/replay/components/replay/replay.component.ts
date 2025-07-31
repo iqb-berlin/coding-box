@@ -240,7 +240,6 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       return Promise.resolve();
     }
 
-    // eslint-disable-next-line @typescript-eslint/dot-notation
     if (changes.unitIdInput) {
       this.resetUnitData();
       this.resetSnackBars();
@@ -394,24 +393,21 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
               bookletId = parts[2];
             }
           }
-          console.log('sss');
-          // Get workspace ID from auth token
           if (authToken) {
             try {
               const decoded: JwtPayload & { workspace: string } = jwtDecode(authToken);
               const workspaceId = Number(decoded?.workspace);
               if (workspaceId) {
-                // Construct the replay URL
                 const replayUrl = window.location.href;
 
-                // Store the replay statistics
                 this.backendService.storeReplayStatistics(workspaceId, {
                   unitId: this.unitId,
                   bookletId,
                   testPersonLogin,
                   testPersonCode,
                   durationMilliseconds: duration,
-                  replayUrl
+                  replayUrl,
+                  success: true
                 }).subscribe({
                   next: () => {
                     logger.log(`Replay statistics stored successfully. Duration: ${duration}ms`);
@@ -469,6 +465,62 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
     const message = this.getErrorMessages()[messageKey] || this.getErrorMessages().unknown;
     this.openErrorSnackBar(message, 'Schließen');
+
+    this.storeErrorInStatistics(message);
+  }
+
+  private storeErrorInStatistics(errorMessage: string): void {
+    // Calculate duration from start time to now
+    const duration = this.replayStartTime ? Math.round(performance.now() - this.replayStartTime) : 0;
+
+    // Get auth token from local storage
+    const authToken = localStorage.getItem('authToken');
+    if (!authToken) return;
+
+    try {
+      // Extract workspace ID from token
+      const decoded: JwtPayload & { workspace: string } = jwtDecode(authToken);
+      const workspaceId = Number(decoded?.workspace);
+      if (!workspaceId) return;
+
+      // Extract test person information
+      let testPersonLogin = '';
+      let testPersonCode = '';
+      let bookletId = '';
+
+      if (this.testPerson) {
+        const parts = this.testPerson.split(':');
+        if (parts.length > 0) {
+          testPersonLogin = parts[0];
+          testPersonCode = parts[1];
+          bookletId = parts[2];
+        }
+      }
+
+      // Construct the replay URL
+      const replayUrl = window.location.href;
+
+      // Store the replay statistics with error information
+      this.backendService.storeReplayStatistics(workspaceId, {
+        unitId: this.unitId || 'unknown',
+        bookletId,
+        testPersonLogin,
+        testPersonCode,
+        durationMilliseconds: duration,
+        replayUrl,
+        success: false,
+        errorMessage: errorMessage
+      }).subscribe({
+        next: () => {
+          logger.log('Error replay statistics stored successfully.');
+        },
+        error: error => {
+          logger.error(`Error storing replay error statistics: ${error}`);
+        }
+      });
+    } catch (error) {
+      logger.error(`Error storing replay error statistics: ${error}`);
+    }
   }
 
   checkPageError(pageError: 'notInList' | 'notCurrent' | null): void {
