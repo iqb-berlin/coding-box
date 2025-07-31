@@ -148,6 +148,113 @@ interface ReplayFrequencyData {
               ></ngx-charts-bar-vertical>
             </div>
           </mat-tab>
+
+          <!-- Error Statistics Tab -->
+          <mat-tab label="{{ 'workspace.replay-errors' | translate }}">
+            <div class="chart-container">
+              <div class="stats-container">
+                <mat-card>
+                  <mat-card-content>
+                    <div class="stat-item">
+                      <span class="stat-label">{{ 'workspace.success-rate' | translate }}:</span>
+                      <span class="stat-value">{{ errorStats.successRate.toFixed(2) }}%</span>
+                    </div>
+                    <div class="stat-item">
+                      <span class="stat-label">{{ 'workspace.total-replays' | translate }}:</span>
+                      <span class="stat-value">{{ errorStats.totalReplays }}</span>
+                    </div>
+                    <div class="stat-item">
+                      <span class="stat-label">{{ 'workspace.successful-replays' | translate }}:</span>
+                      <span class="stat-value">{{ errorStats.successfulReplays }}</span>
+                    </div>
+                    <div class="stat-item">
+                      <span class="stat-label">{{ 'workspace.failed-replays' | translate }}:</span>
+                      <span class="stat-value">{{ errorStats.failedReplays }}</span>
+                    </div>
+                  </mat-card-content>
+                </mat-card>
+              </div>
+
+              <div *ngIf="errorStats.commonErrors.length > 0">
+                <h3>{{ 'workspace.common-errors' | translate }}</h3>
+                <mat-card>
+                  <mat-card-content>
+                    <div *ngFor="let error of errorStats.commonErrors" class="error-item">
+                      <div class="error-count">{{ error.count }}</div>
+                      <div class="error-message">{{ error.message }}</div>
+                    </div>
+                  </mat-card-content>
+                </mat-card>
+              </div>
+
+              <div *ngIf="errorStats.commonErrors.length === 0 && errorStats.failedReplays > 0">
+                <p>{{ 'workspace.no-error-messages' | translate }}</p>
+              </div>
+            </div>
+          </mat-tab>
+
+          <!-- Failure Distribution by Unit Tab -->
+          <mat-tab label="{{ 'workspace.failure-distribution-by-unit' | translate }}">
+            <div class="chart-container">
+              <h3>{{ 'workspace.failure-distribution-by-unit' | translate }}</h3>
+              <div *ngIf="failureByUnitData.length === 0">
+                <p>{{ 'workspace.no-failures' | translate }}</p>
+              </div>
+              <ngx-charts-bar-vertical *ngIf="failureByUnitData.length > 0"
+                [results]="failureByUnitData"
+                [xAxis]="true"
+                [yAxis]="true"
+                [showXAxisLabel]="true"
+                [showYAxisLabel]="true"
+                [xAxisLabel]="'workspace.unit' | translate"
+                [yAxisLabel]="'workspace.failure-count' | translate"
+                [scheme]="colorScheme"
+                [showDataLabel]="true"
+              ></ngx-charts-bar-vertical>
+            </div>
+          </mat-tab>
+
+          <!-- Failure Distribution by Day Tab -->
+          <mat-tab label="{{ 'workspace.failure-distribution-by-day' | translate }}">
+            <div class="chart-container">
+              <h3>{{ 'workspace.failure-distribution-by-day' | translate }}</h3>
+              <div *ngIf="failureByDayData.length === 0">
+                <p>{{ 'workspace.no-failures' | translate }}</p>
+              </div>
+              <ngx-charts-bar-vertical *ngIf="failureByDayData.length > 0"
+                [results]="failureByDayData"
+                [xAxis]="true"
+                [yAxis]="true"
+                [showXAxisLabel]="true"
+                [showYAxisLabel]="true"
+                [xAxisLabel]="'workspace.date' | translate"
+                [yAxisLabel]="'workspace.failure-count' | translate"
+                [scheme]="colorScheme"
+                [showDataLabel]="true"
+              ></ngx-charts-bar-vertical>
+            </div>
+          </mat-tab>
+
+          <!-- Failure Distribution by Hour Tab -->
+          <mat-tab label="{{ 'workspace.failure-distribution-by-hour' | translate }}">
+            <div class="chart-container">
+              <h3>{{ 'workspace.failure-distribution-by-hour' | translate }}</h3>
+              <div *ngIf="failureByHourData.length === 0">
+                <p>{{ 'workspace.no-failures' | translate }}</p>
+              </div>
+              <ngx-charts-bar-vertical *ngIf="failureByHourData.length > 0"
+                [results]="failureByHourData"
+                [xAxis]="true"
+                [yAxis]="true"
+                [showXAxisLabel]="true"
+                [showYAxisLabel]="true"
+                [xAxisLabel]="'workspace.hour' | translate"
+                [yAxisLabel]="'workspace.failure-count' | translate"
+                [scheme]="colorScheme"
+                [showDataLabel]="true"
+              ></ngx-charts-bar-vertical>
+            </div>
+          </mat-tab>
         </mat-tab-group>
       </div>
     </mat-dialog-content>
@@ -200,6 +307,25 @@ interface ReplayFrequencyData {
     .stat-label {
       font-weight: bold;
     }
+
+    .error-item {
+      display: flex;
+      margin-bottom: 12px;
+      padding: 8px;
+      border-bottom: 1px solid #eee;
+    }
+
+    .error-count {
+      font-weight: bold;
+      min-width: 40px;
+      margin-right: 16px;
+      color: #d32f2f;
+    }
+
+    .error-message {
+      flex: 1;
+      word-break: break-word;
+    }
   `]
 })
 export class ReplayStatisticsDialogComponent implements OnInit {
@@ -215,6 +341,20 @@ export class ReplayStatisticsDialogComponent implements OnInit {
   unitDurationData: ReplayFrequencyData[] = [];
   dayDistributionData: ReplayFrequencyData[] = [];
   hourDistributionData: ReplayFrequencyData[] = [];
+
+  // Failure distribution data
+  failureByUnitData: ReplayFrequencyData[] = [];
+  failureByDayData: ReplayFrequencyData[] = [];
+  failureByHourData: ReplayFrequencyData[] = [];
+
+  // Error statistics data
+  errorStats = {
+    successRate: 0,
+    totalReplays: 0,
+    successfulReplays: 0,
+    failedReplays: 0,
+    commonErrors: [] as Array<{ message: string; count: number }>
+  };
 
   // Duration statistics
   durationStats = {
@@ -351,6 +491,94 @@ export class ReplayStatisticsDialogComponent implements OnInit {
             this.unitDurationData.sort((a, b) => a.name.localeCompare(b.name));
           }
 
+          // Load error statistics
+          this.loadErrorStatistics();
+        },
+        error: () => {
+          // Continue with error statistics even if duration statistics fails
+          this.loadErrorStatistics();
+        }
+      });
+  }
+
+  private loadErrorStatistics(): void {
+    this.backendService.getReplayErrorStatistics(this.workspaceId)
+      .subscribe({
+        next: data => {
+          this.errorStats = data;
+
+          // Load failure distributions
+          this.loadFailureDistributions();
+        },
+        error: () => {
+          // Continue with failure distributions even if error statistics fails
+          this.loadFailureDistributions();
+        }
+      });
+  }
+
+  private loadFailureDistributions(): void {
+    // Load failure distribution by unit
+    this.backendService.getFailureDistributionByUnit(this.workspaceId)
+      .subscribe({
+        next: data => {
+          this.failureByUnitData = Object.entries(data).map(([unitId, count]) => ({
+            name: unitId,
+            value: count
+          }));
+
+          // Sort by unit ID
+          this.failureByUnitData.sort((a, b) => a.name.localeCompare(b.name));
+
+          // Load failure distribution by day
+          this.loadFailureDistributionByDay();
+        },
+        error: () => {
+          // Continue with day distribution even if unit distribution fails
+          this.loadFailureDistributionByDay();
+        }
+      });
+  }
+
+  private loadFailureDistributionByDay(): void {
+    this.backendService.getFailureDistributionByDay(this.workspaceId)
+      .subscribe({
+        next: data => {
+          this.failureByDayData = Object.entries(data).map(([day, count]) => ({
+            name: day,
+            value: count
+          }));
+
+          // Sort by date (oldest first)
+          this.failureByDayData.sort((a, b) => a.name.localeCompare(b.name));
+
+          // Load failure distribution by hour
+          this.loadFailureDistributionByHour();
+        },
+        error: () => {
+          // Continue with hour distribution even if day distribution fails
+          this.loadFailureDistributionByHour();
+        }
+      });
+  }
+
+  private loadFailureDistributionByHour(): void {
+    this.backendService.getFailureDistributionByHour(this.workspaceId)
+      .subscribe({
+        next: data => {
+          this.failureByHourData = Object.entries(data).map(([hour, count]) => ({
+            name: `${hour}:00`,
+            value: count
+          }));
+
+          // Sort by hour (earliest first)
+          this.failureByHourData.sort((a, b) => {
+            const hourA = parseInt(a.name.split(':')[0], 10);
+            const hourB = parseInt(b.name.split(':')[0], 10);
+            return hourA - hourB;
+          });
+
+          // Complete loading
           this.loading = false;
         },
         error: () => {

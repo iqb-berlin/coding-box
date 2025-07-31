@@ -29,6 +29,8 @@ export class ReplayStatisticsService {
     testPersonCode?: string;
     durationMilliseconds: number;
     replayUrl?: string;
+    success?: boolean;
+    errorMessage?: string;
   }): Promise<ReplayStatistics> {
     try {
       // Map camelCase properties to snake_case properties to match the entity
@@ -39,7 +41,9 @@ export class ReplayStatisticsService {
         test_person_login: data.testPersonLogin,
         test_person_code: data.testPersonCode,
         duration_milliseconds: data.durationMilliseconds,
-        replay_url: data.replayUrl
+        replay_url: data.replayUrl,
+        success: data.success !== undefined ? data.success : true,
+        error_message: data.errorMessage
       };
 
       const replayStatistics = this.replayStatisticsRepository.create(mappedData);
@@ -212,6 +216,143 @@ export class ReplayStatisticsService {
       return hourDistribution;
     } catch (error) {
       this.logger.error(`Error calculating replay distribution by hour: ${error.message}`, error.stack);
+      throw error;
+    }
+  }
+
+  /**
+   * Get replay error statistics
+   * @param workspaceId The ID of the workspace
+   * @returns Object with error statistics
+   */
+  async getReplayErrorStatistics(workspaceId: number): Promise<{
+    successRate: number;
+    totalReplays: number;
+    successfulReplays: number;
+    failedReplays: number;
+    commonErrors: Array<{ message: string; count: number }>;
+  }> {
+    try {
+      const statistics = await this.getReplayStatistics(workspaceId);
+
+      if (statistics.length === 0) {
+        return {
+          successRate: 0,
+          totalReplays: 0,
+          successfulReplays: 0,
+          failedReplays: 0,
+          commonErrors: []
+        };
+      }
+
+      const totalReplays = statistics.length;
+      const successfulReplays = statistics.filter(stat => stat.success).length;
+      const failedReplays = totalReplays - successfulReplays;
+      const successRate = (successfulReplays / totalReplays) * 100;
+
+      // Count occurrences of each error message
+      const errorCounts: Record<string, number> = {};
+      statistics.forEach(stat => {
+        if (!stat.success && stat.error_message) {
+          errorCounts[stat.error_message] = (errorCounts[stat.error_message] || 0) + 1;
+        }
+      });
+
+      // Convert to array and sort by count (descending)
+      const commonErrors = Object.entries(errorCounts)
+        .map(([message, count]) => ({ message, count }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 10); // Get top 10 most common errors
+
+      return {
+        successRate,
+        totalReplays,
+        successfulReplays,
+        failedReplays,
+        commonErrors
+      };
+    } catch (error) {
+      this.logger.error(`Error calculating replay error statistics: ${error.message}`, error.stack);
+      throw error;
+    }
+  }
+
+  /**
+   * Get failure distribution by unit
+   * @param workspaceId The ID of the workspace
+   * @returns Object with units as keys and failure counts as values
+   */
+  async getFailureDistributionByUnit(workspaceId: number): Promise<Record<string, number>> {
+    try {
+      const statistics = await this.getReplayStatistics(workspaceId);
+
+      // Filter for failed replays only
+      const failedReplays = statistics.filter(stat => !stat.success);
+
+      // Group failures by unit
+      return failedReplays.reduce((acc, stat) => {
+        const unitId = stat.unit_id;
+        acc[unitId] = (acc[unitId] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+    } catch (error) {
+      this.logger.error(`Error calculating failure distribution by unit: ${error.message}`, error.stack);
+      throw error;
+    }
+  }
+
+  /**
+   * Get failure distribution by day
+   * @param workspaceId The ID of the workspace
+   * @returns Object with days as keys and failure counts as values
+   */
+  async getFailureDistributionByDay(workspaceId: number): Promise<Record<string, number>> {
+    try {
+      const statistics = await this.getReplayStatistics(workspaceId);
+
+      // Filter for failed replays only
+      const failedReplays = statistics.filter(stat => !stat.success);
+
+      // Group failures by day (YYYY-MM-DD format)
+      return failedReplays.reduce((acc, stat) => {
+        // Format the date as YYYY-MM-DD
+        const day = stat.timestamp.toISOString().split('T')[0];
+        acc[day] = (acc[day] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+    } catch (error) {
+      this.logger.error(`Error calculating failure distribution by day: ${error.message}`, error.stack);
+      throw error;
+    }
+  }
+
+  /**
+   * Get failure distribution by hour
+   * @param workspaceId The ID of the workspace
+   * @returns Object with hours (0-23) as keys and failure counts as values
+   */
+  async getFailureDistributionByHour(workspaceId: number): Promise<Record<string, number>> {
+    try {
+      const statistics = await this.getReplayStatistics(workspaceId);
+
+      // Filter for failed replays only
+      const failedReplays = statistics.filter(stat => !stat.success);
+
+      // Initialize all hours with 0 count
+      const hourDistribution: Record<string, number> = {};
+      for (let i = 0; i < 24; i++) {
+        hourDistribution[i.toString()] = 0;
+      }
+
+      // Count failures by hour
+      failedReplays.forEach(stat => {
+        const hour = stat.timestamp.getHours().toString();
+        hourDistribution[hour] += 1;
+      });
+
+      return hourDistribution;
+    } catch (error) {
+      this.logger.error(`Error calculating failure distribution by hour: ${error.message}`, error.stack);
       throw error;
     }
   }

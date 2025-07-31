@@ -37,4 +37,10 @@ export class ReplayStatistics {
 
   @Column({ type: 'varchar', length: 2000, nullable: true })
     replay_url: string;
+
+  @Column({ type: 'boolean', default: true })
+    success: boolean;
+
+  @Column({ type: 'varchar', length: 2000, nullable: true })
+    error_message: string;
 }
