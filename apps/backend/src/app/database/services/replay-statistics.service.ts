@@ -165,4 +165,54 @@ export class ReplayStatisticsService {
       throw error;
     }
   }
+
+  /**
+   * Get replay distribution by day
+   * @param workspaceId The ID of the workspace
+   * @returns Object with days as keys and replay counts as values
+   */
+  async getReplayDistributionByDay(workspaceId: number): Promise<Record<string, number>> {
+    try {
+      const statistics = await this.getReplayStatistics(workspaceId);
+
+      // Group replays by day (YYYY-MM-DD format)
+      return statistics.reduce((acc, stat) => {
+        // Format the date as YYYY-MM-DD
+        const day = stat.timestamp.toISOString().split('T')[0];
+        acc[day] = (acc[day] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+    } catch (error) {
+      this.logger.error(`Error calculating replay distribution by day: ${error.message}`, error.stack);
+      throw error;
+    }
+  }
+
+  /**
+   * Get replay distribution by hour
+   * @param workspaceId The ID of the workspace
+   * @returns Object with hours (0-23) as keys and replay counts as values
+   */
+  async getReplayDistributionByHour(workspaceId: number): Promise<Record<string, number>> {
+    try {
+      const statistics = await this.getReplayStatistics(workspaceId);
+
+      // Initialize all hours with 0 count
+      const hourDistribution: Record<string, number> = {};
+      for (let i = 0; i < 24; i++) {
+        hourDistribution[i.toString()] = 0;
+      }
+
+      // Count replays by hour
+      statistics.forEach(stat => {
+        const hour = stat.timestamp.getHours().toString();
+        hourDistribution[hour] += 1;
+      });
+
+      return hourDistribution;
+    } catch (error) {
+      this.logger.error(`Error calculating replay distribution by hour: ${error.message}`, error.stack);
+      throw error;
+    }
+  }
 }

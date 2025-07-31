@@ -298,6 +298,10 @@
     "avg-duration": "Durchschnittliche Dauer",
     "milliseconds": "Millisekunden",
     "avg-duration-by-unit": "Durchschnittliche Dauer nach Aufgabe",
-    "avg-duration-milliseconds": "Durchschnittliche Dauer (Millisekunden)"
+    "avg-duration-milliseconds": "Durchschnittliche Dauer (Millisekunden)",
+    "replay-distribution-by-day": "Verteilung der Replays nach Tag",
+    "replay-distribution-by-hour": "Verteilung der Replays nach Stunde",
+    "date": "Datum",
+    "hour": "Stunde"
   }
 }
