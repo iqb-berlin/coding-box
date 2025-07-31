@@ -5,7 +5,7 @@ import {
   map,
   Observable,
   of,
-  switchMap, throwError
+  switchMap, throwError, tap
 } from 'rxjs';
 import { VariableInfo } from '@iqbspecs/variable-info/variable-info.interface';
 import { FilesInListDto } from '../../../../../api-dto/files/files-in-list.dto';
@@ -15,6 +15,7 @@ import { FileDownloadDto } from '../../../../../api-dto/files/file-download.dto'
 import { BookletInfoDto } from '../../../../../api-dto/booklet-info/booklet-info.dto';
 import { UnitInfoDto } from '../../../../../api-dto/unit-info/unit-info.dto';
 import { SERVER_URL } from '../injection-tokens';
+import { TestResultService } from './test-result.service';
 
 export interface BookletUnit {
   id: number;
@@ -36,6 +37,7 @@ interface PaginatedResponse<T> {
 export class FileService {
   readonly serverUrl = inject(SERVER_URL);
   private http = inject(HttpClient);
+  private testResultService = inject(TestResultService);
 
   get authHeader() {
     return { Authorization: `Bearer ${localStorage.getItem('id_token')}` };
@@ -137,7 +139,12 @@ export class FileService {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/upload/results/${resultType}?overwriteExisting=${overwriteExisting}`;
     return this.http.post<never>(url, formData, {
       headers: this.authHeader
-    });
+    }).pipe(
+      tap(() => {
+        // Invalidate cache after uploading test results
+        this.testResultService.invalidateCache(workspaceId);
+      })
+    );
   }
 
   getUnitDef(workspaceId: number, unit: string, authToken?: string): Observable<FilesDto[]> {
