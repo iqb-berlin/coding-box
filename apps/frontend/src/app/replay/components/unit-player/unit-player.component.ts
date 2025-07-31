@@ -40,6 +40,8 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
   readonly printMode = input<boolean>(false);
   iFrameHeight = input<number>();
   readonly invalidPage = output<'notInList' | 'notCurrent' | null>();
+  // Track the last emitted page error to prevent flickering
+  private lastPageError: 'notInList' | 'notCurrent' | null = null;
   @ViewChild('hostingIframe') hostingIframe!: ElementRef;
   private validPages: Subject<{ pages: string[], current: string }> = new Subject();
   private iFrameElement: HTMLIFrameElement | undefined;
@@ -146,7 +148,8 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
         observer.next(this.pageId() || '');
       };
 
-      const interval = setInterval(callback, 500);
+      // Use a longer interval to reduce unnecessary checks
+      const interval = setInterval(callback, 2000);
 
       return () => {
         clearInterval(interval);
@@ -158,22 +161,38 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
       this.validPages.pipe(debounceTime(2000))
     ]).subscribe({
       next: ([pageId, validPages]) => {
+        // Don't emit error if pageId is empty - it might still be initializing
         if (!pageId) {
-          this.invalidPage.emit('notInList');
           return;
         }
 
-        if (!validPages.pages.includes(pageId)) {
-          this.invalidPage.emit('notInList');
-        } else if (validPages.current !== pageId) {
-          this.invalidPage.emit('notCurrent');
-        } else {
-          this.invalidPage.emit(null);
-          this.cleanupValidPagesSubscription();
+        // Only emit errors if we have valid pages to compare against
+        if (validPages.pages.length > 0) {
+          let newPageError: 'notInList' | 'notCurrent' | null = null;
+
+          if (!validPages.pages.includes(pageId)) {
+            newPageError = 'notInList';
+          } else if (validPages.current !== pageId) {
+            newPageError = 'notCurrent';
+          }
+
+          // Only emit if the error state has changed to prevent flickering
+          if (newPageError !== this.lastPageError) {
+            this.lastPageError = newPageError;
+            this.invalidPage.emit(newPageError);
+
+            if (newPageError === null) {
+              this.cleanupValidPagesSubscription();
+            }
+          }
         }
       },
       error: () => {
-        this.invalidPage.emit('notInList');
+        // Only emit if the error state has changed
+        if (this.lastPageError !== 'notInList') {
+          this.lastPageError = 'notInList';
+          this.invalidPage.emit('notInList');
+        }
       }
     });
   }
