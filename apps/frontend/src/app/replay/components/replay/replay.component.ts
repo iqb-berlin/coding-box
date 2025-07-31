@@ -443,8 +443,8 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       TestPersonError: 'Ungültige ID für Testperson',
       PlayerError: 'Ungültiger Player-Name',
       ResponsesError: `Fehler beim Laden der Antworten für Aufgabe "${this.unitId}" von Testperson "${this.testPerson}"`,
-      notInList: `Keine valide Seite mit ID "${this.page}" gefunden`,
-      notCurrent: `Seite mit ID "${this.page}" kann nicht ausgewählt werden`,
+      notInList: `Keine valide Seite mit der ID "${this.page || ''}" gefunden`,
+      notCurrent: `Seite mit der ID "${this.page || ''}" kann nicht ausgewählt werden`,
       tokenExpired: 'Das Authentisierungs-Token ist abgelaufen',
       tokenInvalid: 'Das Authentisierungs-Token ist ungültig',
       unknown: 'Unbekannter Fehler'
