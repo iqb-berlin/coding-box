@@ -57,6 +57,8 @@ import { ValidationTaskStateService } from '../../../services/validation-task-st
 import { BookletReplay, BookletReplayService } from '../../../services/booklet-replay.service';
 import { BookletInfoDto } from '../../../../../../../api-dto/booklet-info/booklet-info.dto';
 import { BookletInfoDialogComponent } from '../booklet-info-dialog/booklet-info-dialog.component';
+import { UnitInfoDialogComponent } from '../unit-info-dialog/unit-info-dialog.component';
+import { UnitInfoDto } from '../../../../../../../api-dto/unit-info/unit-info.dto';
 
 interface BookletLog {
   id: number;
@@ -1037,8 +1039,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   }
 
   private updateTable(data: Record<string, unknown>[], total: number): void {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    this.data = data as any;
+    this.data = data as unknown as P[];
     const mappedResults = data.map((result: Record<string, unknown>) => ({
       id: result.id as number,
       code: result.code as string,
@@ -1396,7 +1397,9 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
   openValidationDialog(): void {
     const dialogRef = this.dialog.open(ValidationDialogComponent, {
-      width: '800px'
+      width: '1000px',
+      maxHeight: '90vh',
+      autoFocus: false
     });
 
     dialogRef.afterClosed().subscribe(result => {
@@ -1485,6 +1488,48 @@ export class TestResultsComponent implements OnInit, OnDestroy {
         loadingSnackBar.dismiss();
         this.snackBar.open(
           'Fehler beim Laden der Booklet-Informationen',
+          'Fehler',
+          { duration: 3000 }
+        );
+      }
+    });
+  }
+
+  openUnitInfoDialog(): void {
+    if (!this.selectedUnit || !this.selectedUnit.name) {
+      this.snackBar.open(
+        'Keine Unit ausgewählt',
+        'Info',
+        { duration: 3000 }
+      );
+      return;
+    }
+
+    const loadingSnackBar = this.snackBar.open(
+      'Lade Unit-Informationen...',
+      '',
+      { duration: 3000 }
+    );
+
+    this.backendService.getUnitInfo(
+      this.appService.selectedWorkspaceId,
+      this.selectedUnit.name
+    ).subscribe({
+      next: (unitInfo: UnitInfoDto) => {
+        loadingSnackBar.dismiss();
+
+        this.dialog.open(UnitInfoDialogComponent, {
+          width: '800px',
+          data: {
+            unitInfo,
+            unitId: this.selectedUnit?.name
+          }
+        });
+      },
+      error: () => {
+        loadingSnackBar.dismiss();
+        this.snackBar.open(
+          'Fehler beim Laden der Unit-Informationen',
           'Fehler',
           { duration: 3000 }
         );

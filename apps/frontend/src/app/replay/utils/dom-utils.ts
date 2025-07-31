@@ -80,7 +80,7 @@ export function findElementsByDataAlias(iframe: HTMLIFrameElement): Record<strin
       });
     }
   } catch (error) {
-    console.error('Error searching for elements with data-element-alias:', error);
+    // Error occurred while searching for elements with data-element-alias
   }
 
   return result;
@@ -99,7 +99,7 @@ export function scrollToElementByAlias(
       return true;
     }
   } catch (error) {
-    console.error(`Error scrolling to element with alias "${alias}":`, error);
+    // Error occurred while scrolling to element with the specified alias
   }
 
   return false;

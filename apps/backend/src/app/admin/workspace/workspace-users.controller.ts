@@ -132,4 +132,45 @@ export class WorkspaceUsersController {
     @Param('workspaceId') workspaceId: number) {
     return this.workspaceUsersService.setWorkspaceUsers(workspaceId, userIds);
   }
+
+  @Get(':workspace_id/coders')
+  @ApiTags('admin workspace users')
+  @ApiBearerAuth()
+  @ApiParam({
+    name: 'workspace_id',
+    type: Number,
+    required: true,
+    description: 'Unique identifier for the workspace'
+  })
+  @ApiOkResponse({
+    description: 'List of coders (users with accessLevel 1) retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        data: { type: 'array', items: { $ref: '#/components/schemas/WorkspaceUser' } },
+        total: { type: 'number' }
+      }
+    }
+  })
+  @ApiNotFoundResponse({
+    description: 'Workspace not found or no coders available'
+  })
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  async findCoders(
+    @Param('workspace_id') workspaceId: number
+  ): Promise<{ data: WorkspaceUser[]; total: number }> {
+    try {
+      const [coders, total] = await this.workspaceUsersService.findCoders(workspaceId);
+      return {
+        data: coders,
+        total
+      };
+    } catch (error) {
+      logger.error(`Error retrieving coders for workspace ${workspaceId}`);
+      return {
+        data: [],
+        total: 0
+      };
+    }
+  }
 }

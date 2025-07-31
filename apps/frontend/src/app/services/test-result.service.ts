@@ -9,6 +9,7 @@ import {
 } from 'rxjs';
 import { logger } from 'nx/src/utils/logger';
 import { SERVER_URL } from '../injection-tokens';
+import { TestResultCacheService } from './test-result-cache.service';
 
 @Injectable({
   providedIn: 'root'
@@ -16,6 +17,7 @@ import { SERVER_URL } from '../injection-tokens';
 export class TestResultService {
   readonly serverUrl = inject(SERVER_URL);
   private http = inject(HttpClient);
+  private cacheService = inject(TestResultCacheService);
 
   get authHeader() {
     return { Authorization: `Bearer ${localStorage.getItem('id_token')}` };
@@ -29,38 +31,23 @@ export class TestResultService {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   getTestResults(workspaceId: number, page: number, limit: number, searchText?: string): Observable<any> {
-    const params: { [key: string]: string } = {
-      page: page.toString(),
-      limit: limit.toString()
-    };
-
-    if (searchText && searchText.trim() !== '') {
-      params.searchText = searchText.trim();
-    }
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return this.http.get<any>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/test-results/`,
-      {
-        headers: this.authHeader,
-        params: params
-      }
-    ).pipe(
-      catchError(() => {
-        logger.error('Error fetching test data');
-        return of({ results: [], total: 0 });
-      }),
-      map(result => result || { results: [], total: 0 })
-    );
+    // Use the cache service to get test results
+    return this.cacheService.getTestResults(workspaceId, page, limit, searchText);
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   getPersonTestResults(workspaceId: number, personId: number): Observable<any[]> {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return this.http.get<any[]>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/test-results/${personId}`,
-      { headers: this.authHeader }
-    );
+    // Use the cache service to get person test results
+    return this.cacheService.getPersonTestResults(workspaceId, personId);
+  }
+
+  /**
+   * Invalidate the cache for a specific workspace
+   * This should be called whenever test results are modified
+   * @param workspaceId The workspace ID
+   */
+  invalidateCache(workspaceId: number): void {
+    this.cacheService.invalidateWorkspaceCache(workspaceId);
   }
 
   searchUnitsByName(

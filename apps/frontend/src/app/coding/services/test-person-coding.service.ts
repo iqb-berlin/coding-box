@@ -182,6 +182,22 @@ export class TestPersonCodingService {
   }
 
   /**
+   * Delete job
+   * @param workspaceId Workspace ID
+   * @param jobId Job ID
+   */
+  deleteJob(workspaceId: number, jobId: string): Observable<{ success: boolean; message: string }> {
+    return this.http
+      .get<{ success: boolean; message: string }>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/coding/job/${jobId}/delete`,
+      { headers: this.authHeader }
+    )
+      .pipe(
+        catchError(() => of({ success: false, message: `Failed to delete job ${jobId}` }))
+      );
+  }
+
+  /**
    * Export coding list as CSV
    * @param workspaceId Workspace ID
    */

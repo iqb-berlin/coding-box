@@ -1,5 +1,7 @@
 import { Injectable, inject } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { VariableInfo } from '@iqbspecs/variable-info/variable-info.interface';
 import { FilesInListDto } from 'api-dto/files/files-in-list.dto';
 import { UnitNoteDto } from 'api-dto/unit-notes/unit-note.dto';
 import { UpdateUnitTagDto } from 'api-dto/unit-tags/update-unit-tag.dto';
@@ -45,6 +47,27 @@ import { UpdateUnitNoteDto } from '../../../../../api-dto/unit-notes/update-unit
 import { ResponseDto } from '../../../../../api-dto/responses/response-dto';
 import { InvalidVariableDto } from '../../../../../api-dto/files/variable-validation.dto';
 import { BookletInfoDto } from '../../../../../api-dto/booklet-info/booklet-info.dto';
+import { UnitInfoDto } from '../../../../../api-dto/unit-info/unit-info.dto';
+import { CodeBookContentSetting } from '../../../../../api-dto/coding/codebook-content-setting';
+import { MissingsProfilesDto } from '../../../../../api-dto/coding/missings-profiles.dto';
+import { VariableAnalysisItemDto } from '../../../../../api-dto/coding/variable-analysis-item.dto';
+
+/**
+ * Response type for replay statistics
+ */
+type ReplayStatisticsResponse = {
+  id: number;
+  timestamp: string;
+  workspaceId: number;
+  unitId: string;
+  bookletId?: string;
+  testPersonLogin?: string;
+  testPersonCode?: string;
+  durationMilliseconds: number;
+  replayUrl?: string;
+  success?: boolean;
+  errorMessage?: string;
+};
 
 interface PaginatedResponse<T> {
   data: T[];
@@ -96,8 +119,7 @@ interface ResponseEntity {
 export class BackendService {
   readonly serverUrl = inject(SERVER_URL);
   appService = inject(AppService);
-
-  // Inject specialized services
+  private http = inject(HttpClient);
   private userService = inject(UserService);
   private workspaceService = inject(WorkspaceService);
   private fileService = inject(FileService);
@@ -244,6 +266,17 @@ export class BackendService {
     return this.codingService.getCodingStatistics(workspace_id);
   }
 
+  getVariableAnalysis(
+    workspace_id: number,
+    page: number = 1,
+    limit: number = 100,
+    unitId?: string,
+    variableId?: string,
+    derivation?: string
+  ): Observable<PaginatedResponse<VariableAnalysisItemDto>> {
+    return this.codingService.getVariableAnalysis(workspace_id, page, limit, unitId, variableId, derivation);
+  }
+
   getResponsesByStatus(workspace_id: number, status: string, page: number = 1, limit: number = 100): Observable<PaginatedResponse<ResponseEntity>> {
     return this.codingService.getResponsesByStatus(workspace_id, status, page, limit);
   }
@@ -252,7 +285,7 @@ export class BackendService {
     return this.workspaceService.changeWorkspace(workspaceData);
   }
 
-  uploadTestFiles(workspaceId: number, files: FileList | null): Observable<number> {
+  uploadTestFiles(workspaceId: number, files: FileList | FormData | null): Observable<number> {
     return this.fileService.uploadTestFiles(workspaceId, files);
   }
 
@@ -352,6 +385,10 @@ export class BackendService {
 
   getBookletInfo(workspaceId: number, bookletId: string, authToken?: string): Observable<BookletInfoDto> {
     return this.fileService.getBookletInfo(workspaceId, bookletId, authToken);
+  }
+
+  getUnitInfo(workspaceId: number, unitId: string, authToken?: string): Observable<UnitInfoDto> {
+    return this.fileService.getUnitInfo(workspaceId, unitId, authToken);
   }
 
   getTestPersons(workspaceId: number): Observable<number[]> {
@@ -637,5 +674,153 @@ export class BackendService {
 
   createDummyTestTakerFile(workspaceId: number): Observable<boolean> {
     return this.fileService.createDummyTestTakerFile(workspaceId);
+  }
+
+  getMissingsProfiles(workspaceId: number): Observable<{ label: string }[]> {
+    return this.codingService.getMissingsProfiles(workspaceId);
+  }
+
+  getMissingsProfileDetails(workspaceId: number, label: string): Observable<MissingsProfilesDto | null> {
+    return this.codingService.getMissingsProfileDetails(workspaceId, label);
+  }
+
+  createMissingsProfile(workspaceId: number, profile: MissingsProfilesDto): Observable<MissingsProfilesDto | null> {
+    return this.codingService.createMissingsProfile(workspaceId, profile);
+  }
+
+  updateMissingsProfile(workspaceId: number, label: string, profile: MissingsProfilesDto): Observable<MissingsProfilesDto | null> {
+    return this.codingService.updateMissingsProfile(workspaceId, label, profile);
+  }
+
+  deleteMissingsProfile(workspaceId: number, label: string): Observable<boolean> {
+    return this.codingService.deleteMissingsProfile(workspaceId, label);
+  }
+
+  getCodingBook(
+    workspaceId: number,
+    missingsProfile: string,
+    contentOptions: CodeBookContentSetting,
+    unitList: number[]
+  ): Observable<Blob | null> {
+    return this.codingService.getCodingBook(workspaceId, missingsProfile, contentOptions, unitList);
+  }
+
+  getUnitsWithFileIds(workspaceId: number): Observable<{ id: number; unitId: string; fileName: string; data: string }[]> {
+    return this.fileService.getUnitsWithFileIds(workspaceId);
+  }
+
+  getVariableInfoForScheme(workspaceId: number, schemeFileId: string): Observable<VariableInfo[]> {
+    const fileId = schemeFileId.endsWith('.vocs') ?
+      schemeFileId.slice(0, -5) :
+      schemeFileId;
+
+    return this.fileService.getVariableInfoForScheme(workspaceId, fileId);
+  }
+
+  storeReplayStatistics(
+    workspaceId: number,
+    data: {
+      unitId: string;
+      bookletId?: string;
+      testPersonLogin?: string;
+      testPersonCode?: string;
+      durationMilliseconds: number;
+      replayUrl?: string;
+      success?: boolean;
+      errorMessage?: string;
+    }
+  ): Observable<ReplayStatisticsResponse> {
+    const url = `${this.serverUrl}/admin/workspace/${workspaceId}/replay-statistics`;
+    return this.http.post<ReplayStatisticsResponse>(url, data);
+  }
+
+  getReplayFrequencyByUnit(workspaceId: number): Observable<Record<string, number>> {
+    const url = `${this.serverUrl}/admin/workspace/${workspaceId}/replay-statistics/frequency`;
+    return this.http.get<Record<string, number>>(url);
+  }
+
+  getReplayDurationStatistics(
+    workspaceId: number,
+    unitId?: string
+  ): Observable<{
+      min: number;
+      max: number;
+      average: number;
+      distribution: Record<string, number>;
+      unitAverages?: Record<string, number>;
+    }> {
+    let url = `${this.serverUrl}/admin/workspace/${workspaceId}/replay-statistics/duration`;
+    if (unitId) {
+      url += `?unitId=${encodeURIComponent(unitId)}`;
+    }
+    return this.http.get<{
+      min: number;
+      max: number;
+      average: number;
+      distribution: Record<string, number>;
+      unitAverages?: Record<string, number>;
+    }>(url);
+  }
+
+  getReplayDistributionByDay(workspaceId: number): Observable<Record<string, number>> {
+    const url = `${this.serverUrl}/admin/workspace/${workspaceId}/replay-statistics/distribution/day`;
+    return this.http.get<Record<string, number>>(url);
+  }
+
+  getReplayDistributionByHour(workspaceId: number): Observable<Record<string, number>> {
+    const url = `${this.serverUrl}/admin/workspace/${workspaceId}/replay-statistics/distribution/hour`;
+    return this.http.get<Record<string, number>>(url);
+  }
+
+  /**
+   * Get replay error statistics
+   * @param workspaceId The ID of the workspace
+   * @returns Observable of replay error statistics
+   */
+  getReplayErrorStatistics(workspaceId: number): Observable<{
+    successRate: number;
+    totalReplays: number;
+    successfulReplays: number;
+    failedReplays: number;
+    commonErrors: Array<{ message: string; count: number }>;
+  }> {
+    const url = `${this.serverUrl}/admin/workspace/${workspaceId}/replay-statistics/errors`;
+    return this.http.get<{
+      successRate: number;
+      totalReplays: number;
+      successfulReplays: number;
+      failedReplays: number;
+      commonErrors: Array<{ message: string; count: number }>;
+    }>(url);
+  }
+
+  /**
+   * Get failure distribution by unit
+   * @param workspaceId The ID of the workspace
+   * @returns Observable of failure distribution by unit
+   */
+  getFailureDistributionByUnit(workspaceId: number): Observable<Record<string, number>> {
+    const url = `${this.serverUrl}/admin/workspace/${workspaceId}/replay-statistics/failures/unit`;
+    return this.http.get<Record<string, number>>(url);
+  }
+
+  /**
+   * Get failure distribution by day
+   * @param workspaceId The ID of the workspace
+   * @returns Observable of failure distribution by day
+   */
+  getFailureDistributionByDay(workspaceId: number): Observable<Record<string, number>> {
+    const url = `${this.serverUrl}/admin/workspace/${workspaceId}/replay-statistics/failures/day`;
+    return this.http.get<Record<string, number>>(url);
+  }
+
+  /**
+   * Get failure distribution by hour
+   * @param workspaceId The ID of the workspace
+   * @returns Observable of failure distribution by hour
+   */
+  getFailureDistributionByHour(workspaceId: number): Observable<Record<string, number>> {
+    const url = `${this.serverUrl}/admin/workspace/${workspaceId}/replay-statistics/failures/hour`;
+    return this.http.get<Record<string, number>>(url);
   }
 }

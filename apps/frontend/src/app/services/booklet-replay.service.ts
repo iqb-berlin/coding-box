@@ -43,13 +43,13 @@ export class BookletReplayService {
             bookletName = bookletFile.file_id;
           }
         } catch (error) {
-          console.error('Error extracting basic booklet information:', error);
+          // Error occurred while extracting basic booklet information
         }
 
         return this.backendService.getBookletUnits(workspaceId, bookletFileId).pipe(
           map(units => {
             if (!units || units.length === 0) {
-              console.warn(`No units found in booklet ${bookletFileId}`);
+              // No units found in the specified booklet
               return null;
             }
 

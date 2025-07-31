@@ -1,0 +1,144 @@
+<div class="dialog-container">
+  <h2 class="dialog-title">Item/Variablenanalyse</h2>
+  <mat-divider></mat-divider>
+
+  <div class="dialog-content">
+    <!-- Filter controls for variable analysis -->
+    <div class="filter-container">
+      <div class="filter-row">
+        <mat-form-field class="filter-field">
+          <mat-label>Aufgaben-ID Filter</mat-label>
+          <input matInput [(ngModel)]="unitIdFilter" placeholder="Filter nach Aufgaben-ID" (input)="onVariableAnalysisFilterChange()">
+          <button *ngIf="unitIdFilter" matSuffix mat-icon-button aria-label="Clear" (click)="unitIdFilter=''; onVariableAnalysisFilterChange()">
+            <mat-icon>close</mat-icon>
+          </button>
+        </mat-form-field>
+
+        <mat-form-field class="filter-field">
+          <mat-label>Variablen-ID Filter</mat-label>
+          <input matInput [(ngModel)]="variableIdFilter" placeholder="Filter nach Variablen-ID" (input)="onVariableAnalysisFilterChange()">
+          <button *ngIf="variableIdFilter" matSuffix mat-icon-button aria-label="Clear" (click)="variableIdFilter=''; onVariableAnalysisFilterChange()">
+            <mat-icon>close</mat-icon>
+          </button>
+        </mat-form-field>
+
+
+        <button mat-raised-button color="primary" (click)="fetchVariableAnalysis(1, variableAnalysisPageSize)">
+          <mat-icon>filter_list</mat-icon>
+          Filter anwenden
+        </button>
+
+        <button mat-raised-button (click)="clearVariableAnalysisFilters()">
+          <mat-icon>clear</mat-icon>
+          Filter zurücksetzen
+        </button>
+      </div>
+    </div>
+
+    @if (isLoadingVariableAnalysis) {
+      <div class="loading-container">
+        <mat-spinner diameter="40"></mat-spinner>
+        <p class="loading-text">Lade Variablenanalyse...</p>
+      </div>
+    }
+
+    @if (!isLoadingVariableAnalysis && variableAnalysisData.length > 0) {
+      <div class="table-container">
+        <table mat-table [dataSource]="variableAnalysisDataSource" matSort class="coding-table">
+
+          <!-- Replay URL Column -->
+          <ng-container matColumnDef="replayUrl">
+            <th mat-header-cell *matHeaderCellDef mat-sort-header>Replay</th>
+            <td mat-cell *matCellDef="let element">
+              <a mat-icon-button color="primary" [href]="element.replayUrl" target="_blank" matTooltip="Im Replay anzeigen">
+                <mat-icon>play_circle_filled</mat-icon>
+              </a>
+            </td>
+          </ng-container>
+
+          <!-- Unit ID Column -->
+          <ng-container matColumnDef="unitId">
+            <th mat-header-cell *matHeaderCellDef mat-sort-header>Aufgaben-ID</th>
+            <td mat-cell *matCellDef="let element">{{ element.unitId }}</td>
+          </ng-container>
+
+          <!-- Variable ID Column -->
+          <ng-container matColumnDef="variableId">
+            <th mat-header-cell *matHeaderCellDef mat-sort-header>Variablen-ID</th>
+            <td mat-cell *matCellDef="let element">{{ element.variableId }}</td>
+          </ng-container>
+
+
+          <!-- Code Column -->
+          <ng-container matColumnDef="code">
+            <th mat-header-cell *matHeaderCellDef mat-sort-header>Code</th>
+            <td mat-cell *matCellDef="let element">{{ element.code }}</td>
+          </ng-container>
+
+          <!-- Description Column -->
+          <ng-container matColumnDef="description">
+            <th mat-header-cell *matHeaderCellDef mat-sort-header>Beschreibung</th>
+            <td mat-cell *matCellDef="let element">{{ element.description }}</td>
+          </ng-container>
+
+          <!-- Score Column -->
+          <ng-container matColumnDef="score">
+            <th mat-header-cell *matHeaderCellDef mat-sort-header>Score</th>
+            <td mat-cell *matCellDef="let element">{{ element.score }}</td>
+          </ng-container>
+
+          <!-- Occurrence Count Column -->
+          <ng-container matColumnDef="occurrenceCount">
+            <th mat-header-cell *matHeaderCellDef mat-sort-header>Anzahl Vorkommen</th>
+            <td mat-cell *matCellDef="let element">{{ element.occurrenceCount }}</td>
+          </ng-container>
+
+          <!-- Total Count Column -->
+          <ng-container matColumnDef="totalCount">
+            <th mat-header-cell *matHeaderCellDef mat-sort-header>Gesamtanzahl</th>
+            <td mat-cell *matCellDef="let element">{{ element.totalCount }}</td>
+          </ng-container>
+
+          <!-- Relative Occurrence Column with Bar Chart -->
+          <ng-container matColumnDef="relativeOccurrence">
+            <th mat-header-cell *matHeaderCellDef mat-sort-header>Relatives Vorkommen</th>
+            <td mat-cell *matCellDef="let element">
+              <div class="bar-chart-container">
+                <div class="bar-chart-value">{{ (element.relativeOccurrence * 100).toFixed(1) }}%</div>
+                <div class="bar-chart">
+                  <div class="bar-chart-bar" [style.width.%]="element.relativeOccurrence * 100"></div>
+                </div>
+              </div>
+            </td>
+          </ng-container>
+
+          <tr mat-header-row *matHeaderRowDef="variableAnalysisColumns; sticky: true"></tr>
+          <tr mat-row *matRowDef="let row; columns: variableAnalysisColumns;" class="data-row"></tr>
+        </table>
+
+        <!-- Pagination for Variable Analysis -->
+        <mat-paginator
+          [length]="totalVariableAnalysisRecords"
+          [pageSize]="variableAnalysisPageSize"
+          [pageIndex]="variableAnalysisPageIndex"
+          [pageSizeOptions]="variableAnalysisPageSizeOptions"
+          showFirstLastButtons
+          (page)="onVariableAnalysisPaginatorChange($event)"
+          aria-label="Seiten auswählen">
+        </mat-paginator>
+      </div>
+    }
+
+    @if (!isLoadingVariableAnalysis && variableAnalysisData.length === 0) {
+      <div class="empty-state">
+        <mat-icon class="empty-icon">analytics</mat-icon>
+        <h3>Keine Variablenanalyse-Daten verfügbar</h3>
+        <p class="empty-text">Es wurden keine Daten für die Variablenanalyse gefunden.</p>
+      </div>
+    }
+  </div>
+
+  <div class="dialog-actions">
+    <button mat-raised-button color="primary" (click)="close()">Schließen</button>
+  </div>
+</div>

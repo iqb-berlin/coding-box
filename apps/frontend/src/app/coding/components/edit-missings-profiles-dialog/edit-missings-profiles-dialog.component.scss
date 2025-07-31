@@ -1,0 +1,120 @@
+.dialog-content {
+  min-width: 800px;
+  max-width: 1200px;
+  max-height: 80vh;
+  overflow: auto;
+}
+
+.dialog-layout {
+  display: flex;
+  flex-direction: row;
+  gap: 24px;
+
+  @media (max-width: 768px) {
+    flex-direction: column;
+  }
+}
+
+.profiles-list {
+  width: 250px;
+  min-width: 200px;
+
+  @media (max-width: 768px) {
+    width: 100%;
+  }
+
+  h3 {
+    margin-top: 0;
+    margin-bottom: 16px;
+  }
+
+  mat-list {
+    max-height: 300px;
+    overflow-y: auto;
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    border-radius: 4px;
+
+    mat-list-item {
+      cursor: pointer;
+      transition: background-color 0.2s;
+
+      &:hover {
+        background-color: rgba(0, 0, 0, 0.04);
+      }
+
+      &.selected {
+        background-color: rgba(0, 0, 0, 0.08);
+        font-weight: 500;
+      }
+    }
+  }
+
+  .list-actions {
+    margin-top: 16px;
+  }
+}
+
+.profile-details {
+  flex: 1;
+
+  h3 {
+    margin-top: 0;
+    margin-bottom: 16px;
+  }
+
+  h4 {
+    margin-top: 16px;
+    margin-bottom: 8px;
+  }
+
+  .profile-form, .profile-info {
+    mat-form-field {
+      width: 100%;
+    }
+  }
+
+  .missings-table {
+    width: 100%;
+    margin-bottom: 16px;
+
+    .mat-column-id {
+      width: 15%;
+    }
+
+    .mat-column-label {
+      width: 20%;
+    }
+
+    .mat-column-description {
+      width: 45%;
+    }
+
+    .mat-column-code {
+      width: 10%;
+    }
+
+    .mat-column-actions {
+      width: 10%;
+      text-align: center;
+    }
+
+    mat-form-field {
+      width: 100%;
+      margin: -16px 0;
+    }
+  }
+
+  .add-missing-button {
+    margin-top: 16px;
+    display: flex;
+    justify-content: center;
+  }
+}
+
+mat-dialog-actions {
+  padding: 16px 0;
+
+  button {
+    margin-left: 8px;
+  }
+}

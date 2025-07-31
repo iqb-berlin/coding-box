@@ -20,8 +20,12 @@ import { VariableAnalysisController } from './variable-analysis/variable-analysi
 import { JobsController } from './jobs/jobs.controller';
 import { ValidationTaskController } from './workspace/validation-task.controller';
 import { BookletInfoController } from './workspace/booklet-info.controller';
+import { UnitInfoController } from './workspace/unit-info.controller';
+import { MissingsProfilesController } from './workspace/missings-profiles.controller';
 import { BookletInfoService } from '../database/services/booklet-info.service';
+import { UnitInfoService } from '../database/services/unit-info.service';
 import FileUpload from '../database/entities/file_upload.entity';
+import { ReplayStatisticsController } from './replay-statistics/replay-statistics.controller';
 
 @Module({
   imports: [
@@ -47,10 +51,14 @@ import FileUpload from '../database/entities/file_upload.entity';
     VariableAnalysisController,
     JobsController,
     ValidationTaskController,
-    BookletInfoController
+    BookletInfoController,
+    UnitInfoController,
+    MissingsProfilesController,
+    ReplayStatisticsController
   ],
   providers: [
-    BookletInfoService
+    BookletInfoService,
+    UnitInfoService
   ]
 })
 export class AdminModule {}

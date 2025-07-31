@@ -12,6 +12,7 @@ import {
 } from '@nestjs/swagger';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { logger } from 'nx/src/utils/logger';
+import { VariableInfo } from '@iqb/responses';
 import { FilesDto } from '../../../../../../api-dto/files/files.dto';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
@@ -651,5 +652,65 @@ export class WorkspaceFilesController {
   async createDummyTestTakerFile(
     @Param('workspace_id') workspace_id: number): Promise<boolean> {
     return this.workspaceFilesService.createDummyTestTakerFile(workspace_id);
+  }
+
+  @Get(':workspace_id/files/units-with-file-ids')
+  @ApiTags('admin workspace')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiOperation({ summary: 'Get units with file IDs', description: 'Retrieves a list of units with file_type "Unit" and their file IDs' })
+  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
+  @ApiOkResponse({
+    description: 'Units with file IDs retrieved successfully',
+    schema: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          unitId: { type: 'string' },
+          fileName: { type: 'string' }
+        }
+      }
+    }
+  })
+  @ApiBadRequestResponse({
+    description: 'Failed to retrieve units with file IDs'
+  })
+  async getUnitsWithFileIds(
+    @Param('workspace_id') workspace_id: number): Promise<{ unitId: string; fileName: string }[]> {
+    return this.workspaceFilesService.getUnitsWithFileIds(workspace_id);
+  }
+
+  @Get(':workspace_id/files/variable-info/:scheme_file_id')
+  @ApiTags('admin workspace')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiOperation({ summary: 'Get variable info for scheme', description: 'Retrieves variable information from Unit files for a specific scheme file ID' })
+  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
+  @ApiParam({ name: 'scheme_file_id', type: String, description: 'ID of the scheme file' })
+  @ApiOkResponse({
+    description: 'Variable information retrieved successfully',
+    schema: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          alias: { type: 'string' },
+          type: { type: 'string' },
+          multiple: { type: 'boolean' },
+          nullable: { type: 'boolean' },
+          values: { type: 'array', items: { type: 'string' } },
+          valuesComplete: { type: 'boolean' },
+          page: { type: 'string' }
+        }
+      }
+    }
+  })
+  @ApiBadRequestResponse({
+    description: 'Failed to retrieve variable information'
+  })
+  async getVariableInfoForScheme(
+    @Param('workspace_id') workspace_id: number, @Param('scheme_file_id') scheme_file_id: string
+  ): Promise<VariableInfo[]> {
+    return this.workspaceFilesService.getVariableInfoForScheme(workspace_id, scheme_file_id);
   }
 }

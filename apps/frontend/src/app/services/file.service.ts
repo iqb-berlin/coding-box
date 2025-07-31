@@ -5,14 +5,17 @@ import {
   map,
   Observable,
   of,
-  switchMap, throwError
+  switchMap, throwError, tap
 } from 'rxjs';
+import { VariableInfo } from '@iqbspecs/variable-info/variable-info.interface';
 import { FilesInListDto } from '../../../../../api-dto/files/files-in-list.dto';
 import { FilesDto } from '../../../../../api-dto/files/files.dto';
 import { FileValidationResultDto } from '../../../../../api-dto/files/file-validation-result.dto';
 import { FileDownloadDto } from '../../../../../api-dto/files/file-download.dto';
 import { BookletInfoDto } from '../../../../../api-dto/booklet-info/booklet-info.dto';
+import { UnitInfoDto } from '../../../../../api-dto/unit-info/unit-info.dto';
 import { SERVER_URL } from '../injection-tokens';
+import { TestResultService } from './test-result.service';
 
 export interface BookletUnit {
   id: number;
@@ -34,6 +37,7 @@ interface PaginatedResponse<T> {
 export class FileService {
   readonly serverUrl = inject(SERVER_URL);
   private http = inject(HttpClient);
+  private testResultService = inject(TestResultService);
 
   get authHeader() {
     return { Authorization: `Bearer ${localStorage.getItem('id_token')}` };
@@ -101,13 +105,20 @@ export class FileService {
       );
   }
 
-  uploadTestFiles(workspaceId: number, files: FileList | null): Observable<number> {
-    const formData = new FormData();
-    if (files) {
-      for (let i = 0; i < files.length; i++) {
-        formData.append('files', files[i]);
+  uploadTestFiles(workspaceId: number, files: FileList | FormData | null): Observable<number> {
+    let formData: FormData;
+
+    if (files instanceof FormData) {
+      formData = files;
+    } else {
+      formData = new FormData();
+      if (files) {
+        for (let i = 0; i < files.length; i++) {
+          formData.append('files', files[i]);
+        }
       }
     }
+
     return this.http.post<never>(`${this.serverUrl}admin/workspace/${workspaceId}/upload`, formData, {
       headers: this.authHeader
     });
@@ -128,7 +139,12 @@ export class FileService {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/upload/results/${resultType}?overwriteExisting=${overwriteExisting}`;
     return this.http.post<never>(url, formData, {
       headers: this.authHeader
-    });
+    }).pipe(
+      tap(() => {
+        // Invalidate cache after uploading test results
+        this.testResultService.invalidateCache(workspaceId);
+      })
+    );
   }
 
   getUnitDef(workspaceId: number, unit: string, authToken?: string): Observable<FilesDto[]> {
@@ -190,10 +206,7 @@ export class FileService {
       `${this.serverUrl}admin/workspace/${workspaceId}/booklet/${bookletId}/units`,
       { headers }
     ).pipe(
-      catchError(error => {
-        console.error(`Error retrieving booklet units for ${bookletId}:`, error);
-        return of([]);
-      })
+      catchError(() => of([]))
     );
   }
 
@@ -203,10 +216,35 @@ export class FileService {
       `${this.serverUrl}admin/workspace/${workspaceId}/booklet/${bookletId}/info`,
       { headers }
     ).pipe(
-      catchError(error => {
-        console.error(`Error retrieving booklet info for ${bookletId}:`, error);
-        return throwError(() => error);
-      })
+      catchError(error => throwError(() => error))
+    );
+  }
+
+  getUnitInfo(workspaceId: number, unitId: string, authToken?: string): Observable<UnitInfoDto> {
+    const headers = authToken ? { Authorization: `Bearer ${authToken}` } : this.authHeader;
+    return this.http.get<UnitInfoDto>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/unit/${unitId}/info`,
+      { headers }
+    ).pipe(
+      catchError(error => throwError(() => error))
+    );
+  }
+
+  getUnitsWithFileIds(workspaceId: number): Observable<{ id: number; unitId: string; fileName: string; data: string }[]> {
+    return this.http.get<{ id: number; unitId: string; fileName: string; data: string }[]>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/files/units-with-file-ids`,
+      { headers: this.authHeader }
+    ).pipe(
+      catchError(() => of([]))
+    );
+  }
+
+  getVariableInfoForScheme(workspaceId: number, schemeFileId: string): Observable<VariableInfo[]> {
+    return this.http.get<VariableInfo[]>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/files/variable-info/${schemeFileId}`,
+      { headers: this.authHeader }
+    ).pipe(
+      catchError(() => of([]))
     );
   }
 }
