@@ -176,6 +176,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
 
   applyFilters(): void {
     this.page = 1;
+    this.tableCheckboxSelection.clear();
     this.loadTestFiles();
   }
 
@@ -268,6 +269,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
       { duration: 1000 }
     );
     if (success) {
+      this.tableCheckboxSelection.clear();
       this.loadTestFiles();
     }
   }
@@ -368,6 +370,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   onPageChange(event: PageEvent): void {
     this.page = event.pageIndex + 1;
     this.limit = event.pageSize;
+    this.tableCheckboxSelection.clear();
     this.loadTestFiles();
   }
 
