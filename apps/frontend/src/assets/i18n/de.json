@@ -158,7 +158,19 @@
     "test-groups": "Testgruppen",
     "test-results": "Testergebnisse",
     "select-unit-play": "Replay",
-    "coding": "Kodierung"
+    "coding": "Kodierung",
+    "cleaning": "Datenbereinigung",
+    "cleaning-title": "Datenbereinigung",
+    "cleaning-subtitle": "Bereinigung der Daten nach automatischer und manueller Kodierung",
+    "cleaning-description": "Diese Komponente wird für die Bereinigung der Daten nach automatischer und manueller Kodierung verwendet.",
+    "cleaning-placeholder": "Die Funktionalität zur Datenbereinigung wird in einer zukünftigen Version implementiert.",
+    "cleaning-action-button": "Datenbereinigung starten",
+    "export": "Datenexport",
+    "export-title": "Datenexport",
+    "export-subtitle": "Export der Daten nach Kodierung und Bereinigung",
+    "export-description": "Diese Komponente wird für den Export der Daten nach Kodierung und Bereinigung verwendet.",
+    "export-placeholder": "Die Funktionalität zum Datenexport wird in einer zukünftigen Version implementiert.",
+    "export-action-button": "Datenexport starten"
   },
   "search-filter": {
     "filter-users": "Suche nach Nutzer:innen",
