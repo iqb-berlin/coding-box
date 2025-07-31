@@ -112,6 +112,42 @@ interface ReplayFrequencyData {
               </div>
             </div>
           </mat-tab>
+
+          <!-- Day Distribution Tab -->
+          <mat-tab label="{{ 'workspace.replay-distribution-by-day' | translate }}">
+            <div class="chart-container">
+              <h3>{{ 'workspace.replay-distribution-by-day' | translate }}</h3>
+              <ngx-charts-bar-vertical
+                [results]="dayDistributionData"
+                [xAxis]="true"
+                [yAxis]="true"
+                [showXAxisLabel]="true"
+                [showYAxisLabel]="true"
+                [xAxisLabel]="'workspace.date' | translate"
+                [yAxisLabel]="'workspace.replay-count' | translate"
+                [scheme]="colorScheme"
+                [showDataLabel]="true"
+              ></ngx-charts-bar-vertical>
+            </div>
+          </mat-tab>
+
+          <!-- Hour Distribution Tab -->
+          <mat-tab label="{{ 'workspace.replay-distribution-by-hour' | translate }}">
+            <div class="chart-container">
+              <h3>{{ 'workspace.replay-distribution-by-hour' | translate }}</h3>
+              <ngx-charts-bar-vertical
+                [results]="hourDistributionData"
+                [xAxis]="true"
+                [yAxis]="true"
+                [showXAxisLabel]="true"
+                [showYAxisLabel]="true"
+                [xAxisLabel]="'workspace.hour' | translate"
+                [yAxisLabel]="'workspace.replay-count' | translate"
+                [scheme]="colorScheme"
+                [showDataLabel]="true"
+              ></ngx-charts-bar-vertical>
+            </div>
+          </mat-tab>
         </mat-tab-group>
       </div>
     </mat-dialog-content>
@@ -177,6 +213,8 @@ export class ReplayStatisticsDialogComponent implements OnInit {
   frequencyData: ReplayFrequencyData[] = [];
   durationDistributionData: { name: string; value: number }[] = [];
   unitDurationData: ReplayFrequencyData[] = [];
+  dayDistributionData: ReplayFrequencyData[] = [];
+  hourDistributionData: ReplayFrequencyData[] = [];
 
   // Duration statistics
   durationStats = {
@@ -221,11 +259,59 @@ export class ReplayStatisticsDialogComponent implements OnInit {
           // Sort by frequency (highest first)
           this.frequencyData.sort((a, b) => b.value - a.value);
 
+          // Load day distribution data
+          this.loadDayDistribution();
+        },
+        error: () => {
+          this.loading = false;
+        }
+      });
+  }
+
+  private loadDayDistribution(): void {
+    this.backendService.getReplayDistributionByDay(this.workspaceId)
+      .subscribe({
+        next: data => {
+          this.dayDistributionData = Object.entries(data).map(([day, count]) => ({
+            name: day,
+            value: count
+          }));
+
+          // Sort by date (oldest first)
+          this.dayDistributionData.sort((a, b) => a.name.localeCompare(b.name));
+
+          // Load hour distribution data
+          this.loadHourDistribution();
+        },
+        error: () => {
+          // Continue with duration statistics even if day distribution fails
+          this.loadHourDistribution();
+        }
+      });
+  }
+
+  private loadHourDistribution(): void {
+    this.backendService.getReplayDistributionByHour(this.workspaceId)
+      .subscribe({
+        next: data => {
+          this.hourDistributionData = Object.entries(data).map(([hour, count]) => ({
+            name: `${hour}:00`,
+            value: count
+          }));
+
+          // Sort by hour (earliest first)
+          this.hourDistributionData.sort((a, b) => {
+            const hourA = parseInt(a.name.split(':')[0], 10);
+            const hourB = parseInt(b.name.split(':')[0], 10);
+            return hourA - hourB;
+          });
+
           // Load duration statistics
           this.loadDurationStatistics();
         },
         error: () => {
-          this.loading = false;
+          // Continue with duration statistics even if hour distribution fails
+          this.loadDurationStatistics();
         }
       });
   }

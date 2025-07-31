@@ -715,12 +715,6 @@ export class BackendService {
     return this.fileService.getVariableInfoForScheme(workspaceId, fileId);
   }
 
-  /**
-   * Store replay statistics
-   * @param workspaceId The ID of the workspace
-   * @param data Replay statistics data
-   * @returns Observable of the stored replay statistics
-   */
   storeReplayStatistics(
     workspaceId: number,
     data: {
@@ -736,32 +730,11 @@ export class BackendService {
     return this.http.post<ReplayStatisticsResponse>(url, data);
   }
 
-  /**
-   * Get replay frequency by unit
-   * @param workspaceId The ID of the workspace
-   * @returns Observable of replay frequency data
-   */
   getReplayFrequencyByUnit(workspaceId: number): Observable<Record<string, number>> {
     const url = `${this.serverUrl}/admin/workspace/${workspaceId}/replay-statistics/frequency`;
     return this.http.get<Record<string, number>>(url);
   }
 
-  /**
-   * Get all replay statistics for a workspace
-   * @param workspaceId The ID of the workspace
-   * @returns Observable of replay statistics
-   */
-  getReplayStatistics(workspaceId: number): Observable<ReplayStatisticsResponse[]> {
-    const url = `${this.serverUrl}/admin/workspace/${workspaceId}/replay-statistics`;
-    return this.http.get<ReplayStatisticsResponse[]>(url);
-  }
-
-  /**
-   * Get replay duration statistics
-   * @param workspaceId The ID of the workspace
-   * @param unitId Optional unit ID to filter by
-   * @returns Observable of replay duration statistics
-   */
   getReplayDurationStatistics(
     workspaceId: number,
     unitId?: string
@@ -783,5 +756,15 @@ export class BackendService {
       distribution: Record<string, number>;
       unitAverages?: Record<string, number>;
     }>(url);
+  }
+
+  getReplayDistributionByDay(workspaceId: number): Observable<Record<string, number>> {
+    const url = `${this.serverUrl}/admin/workspace/${workspaceId}/replay-statistics/distribution/day`;
+    return this.http.get<Record<string, number>>(url);
+  }
+
+  getReplayDistributionByHour(workspaceId: number): Observable<Record<string, number>> {
+    const url = `${this.serverUrl}/admin/workspace/${workspaceId}/replay-statistics/distribution/hour`;
+    return this.http.get<Record<string, number>>(url);
   }
 }

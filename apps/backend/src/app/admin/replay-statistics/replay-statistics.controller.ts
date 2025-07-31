@@ -101,4 +101,32 @@ export class ReplayStatisticsController {
       unitId
     );
   }
+
+  /**
+   * Get replay distribution by day
+   */
+  @ApiOperation({ summary: 'Get replay distribution by day' })
+  @ApiParam({ name: 'workspace_id', description: 'ID of the workspace' })
+  @ApiResponse({ status: 200, description: 'Replay distribution by day retrieved successfully' })
+  @Get('distribution/day')
+  @UseGuards(JwtAuthGuard)
+  async getReplayDistributionByDay(
+    @Param('workspace_id') workspaceId: string
+  ): Promise<Record<string, number>> {
+    return this.replayStatisticsService.getReplayDistributionByDay(Number(workspaceId));
+  }
+
+  /**
+   * Get replay distribution by hour
+   */
+  @ApiOperation({ summary: 'Get replay distribution by hour' })
+  @ApiParam({ name: 'workspace_id', description: 'ID of the workspace' })
+  @ApiResponse({ status: 200, description: 'Replay distribution by hour retrieved successfully' })
+  @Get('distribution/hour')
+  @UseGuards(JwtAuthGuard)
+  async getReplayDistributionByHour(
+    @Param('workspace_id') workspaceId: string
+  ): Promise<Record<string, number>> {
+    return this.replayStatisticsService.getReplayDistributionByHour(Number(workspaceId));
+  }
 }
