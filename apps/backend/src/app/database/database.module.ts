@@ -49,17 +49,9 @@ import { ReplayStatistics } from './entities/replay-statistics.entity';
 import { ReplayStatisticsService } from './services/replay-statistics.service';
 // eslint-disable-next-line import/no-cycle
 import { JobQueueModule } from '../job-queue/job-queue.module';
+// eslint-disable-next-line import/no-cycle
+import { CacheModule } from '../cache/cache.module';
 
-/**
- * DatabaseModule provides database access and services for the application.
- *
- * Note: This module has a circular dependency with JobQueueModule because:
- * - DatabaseModule exports WorkspaceCodingService which is used by JobQueueModule
- * - DatabaseModule imports JobQueueModule for job queue functionality
- *
- * This circular dependency is resolved using forwardRef() both at the module level
- * and at the injection point in the TestPersonCodingProcessor.
- */
 @Module({
   imports: [
     User,
@@ -79,6 +71,7 @@ import { JobQueueModule } from '../job-queue/job-queue.module';
     WorkspaceUser,
     HttpModule,
     forwardRef(() => JobQueueModule),
+    forwardRef(() => CacheModule),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => ({

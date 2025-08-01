@@ -11,6 +11,7 @@ import { UnitLog } from '../entities/unitLog.entity';
 import { Session } from '../entities/session.entity';
 import { UnitTagService } from './unit-tag.service';
 import { JournalService } from './journal.service';
+import { CacheService } from '../../cache/cache.service';
 
 @Injectable()
 export class WorkspaceTestResultsService {
@@ -35,7 +36,8 @@ export class WorkspaceTestResultsService {
     private sessionRepository: Repository<Session>,
     private readonly connection: Connection,
     private readonly unitTagService: UnitTagService,
-    private readonly journalService: JournalService
+    private readonly journalService: JournalService,
+    private readonly cacheService: CacheService
   ) {}
 
   async findPersonTestResults(personId: number, workspaceId: number): Promise<{
@@ -58,6 +60,35 @@ export class WorkspaceTestResultsService {
     if (!personId || !workspaceId) {
       throw new Error('Both personId and workspaceId are required.');
     }
+
+    // Generate a cache key for booklet data
+    const cacheKey = `booklets:${workspaceId}:${personId}`;
+
+    // Check if data is in Redis cache
+    const cachedResult = await this.cacheService.get<{
+      id: number;
+      personid: number;
+      name: string;
+      size: number;
+      logs: { id: number; bookletid: number; ts: string; parameter: string, key: string }[];
+      sessions: { id: number; browser: string; os: string; screen: string; ts: string }[];
+      units: {
+        id: number;
+        bookletid: number;
+        name: string;
+        alias: string | null;
+        results: { id: number; unitid: number }[];
+        logs: { id: number; unitid: number; ts: string; key: string; parameter: string }[];
+        tags: { id: number; unitId: number; tag: string; color?: string; createdAt: Date }[];
+      }[];
+    }[]>(cacheKey);
+
+    if (cachedResult) {
+      this.logger.log(`Cache hit: Returning cached booklet data for person ${personId} in workspace ${workspaceId}`);
+      return cachedResult;
+    }
+
+    this.logger.log(`Cache miss for booklet data for person ${personId} in workspace ${workspaceId}`);
 
     try {
       this.logger.log(
@@ -203,7 +234,7 @@ export class WorkspaceTestResultsService {
         unitsMap.get(unit.bookletid)?.push(unit);
       });
 
-      return booklets.map(booklet => ({
+      const result = booklets.map(booklet => ({
         id: booklet.id,
         personid: booklet.personid,
         name: booklet.bookletinfo.name,
@@ -220,6 +251,13 @@ export class WorkspaceTestResultsService {
           tags: unitTagsMap.get(unit.id) || []
         }))
       }));
+
+      // Store the result in Redis cache (24 hours TTL for booklet data)
+      const ONE_DAY_SECONDS = 24 * 60 * 60;
+      await this.cacheService.set(cacheKey, result, ONE_DAY_SECONDS);
+      this.logger.log(`Cached booklet data for person ${personId} in workspace ${workspaceId}`);
+
+      return result;
     } catch (error) {
       this.logger.error(
         `Failed to fetch booklets, bookletInfo, units, and results for personId: ${personId} and workspaceId: ${workspaceId}`,
@@ -239,6 +277,18 @@ export class WorkspaceTestResultsService {
     const MAX_LIMIT = 500;
     const validPage = Math.max(1, page); // minimum 1
     const validLimit = Math.min(Math.max(1, limit), MAX_LIMIT); // Between 1 and MAX_LIMIT
+
+    // Generate a cache key based on the parameters
+    const cacheKey = `test-results:${workspace_id}:${validPage}:${validLimit}:${searchText || ''}`;
+
+    // Check if data is in Redis cache
+    const cachedResult = await this.cacheService.get<[Persons[], number]>(cacheKey);
+    if (cachedResult) {
+      this.logger.log(`Cache hit: Returning cached test results for workspace ${workspace_id} (page ${validPage}, limit ${validLimit})`);
+      return cachedResult;
+    }
+
+    this.logger.log(`Cache miss for test results in workspace ${workspace_id} (page ${validPage}, limit ${validLimit})`);
 
     try {
       const queryBuilder = this.personsRepository.createQueryBuilder('person')
@@ -267,7 +317,12 @@ export class WorkspaceTestResultsService {
 
       const [results, total] = await queryBuilder.getManyAndCount();
 
-      return [results, total];
+      // Store the result in Redis cache (30 seconds TTL for test results)
+      const result: [Persons[], number] = [results, total];
+      await this.cacheService.set(cacheKey, result, 30);
+      this.logger.log(`Cached test results for workspace ${workspace_id} (page ${validPage}, limit ${validLimit})`);
+
+      return result;
     } catch (error) {
       this.logger.error(`Failed to fetch test results for workspace_id ${workspace_id}: ${error.message}`, error.stack);
       throw new Error('An error occurred while fetching test results');
@@ -276,6 +331,20 @@ export class WorkspaceTestResultsService {
 
   async findWorkspaceResponses(workspace_id: number, options?: { page: number; limit: number }): Promise<[ResponseEntity[], number]> {
     this.logger.log('Returning responses for workspace', workspace_id);
+
+    // Generate a cache key based on the parameters
+    const cacheKey = `workspace-responses:${workspace_id}:${options?.page || 0}:${options?.limit || 0}`;
+
+    // Check if data is in Redis cache
+    const cachedResult = await this.cacheService.get<[ResponseEntity[], number]>(cacheKey);
+    if (cachedResult) {
+      this.logger.log(`Cache hit: Returning cached workspace responses for workspace ${workspace_id}`);
+      return cachedResult;
+    }
+
+    this.logger.log(`Cache miss for workspace responses in workspace ${workspace_id}`);
+
+    let result: [ResponseEntity[], number];
 
     if (options) {
       const { page, limit } = options;
@@ -290,18 +359,35 @@ export class WorkspaceTestResultsService {
       });
 
       this.logger.log(`Found ${responses.length} responses (page ${validPage}, limit ${validLimit}, total ${total}) for workspace ${workspace_id}`);
-      return [responses, total];
+      result = [responses, total];
+    } else {
+      const responses = await this.responseRepository.find({
+        order: { id: 'ASC' }
+      });
+
+      this.logger.log(`Found ${responses.length} responses for workspace ${workspace_id}`);
+      result = [responses, responses.length];
     }
 
-    const responses = await this.responseRepository.find({
-      order: { id: 'ASC' }
-    });
+    // Store the result in Redis cache (45 seconds TTL for workspace responses)
+    await this.cacheService.set(cacheKey, result, 45);
+    this.logger.log(`Cached workspace responses for workspace ${workspace_id}`);
 
-    this.logger.log(`Found ${responses.length} responses for workspace ${workspace_id}`);
-    return [responses, responses.length];
+    return result;
   }
 
   async findUnitResponse(workspaceId: number, connector: string, unitId: string): Promise<{ responses: { id: string, content: { id: string; value: string; status: string }[] }[] }> {
+    const cacheKey = this.cacheService.generateUnitResponseCacheKey(workspaceId, connector, unitId);
+    const cachedResponse = await this.cacheService.get<{ responses: { id: string, content: { id: string; value: string; status: string }[] }[] }>(cacheKey);
+
+    if (cachedResponse) {
+      this.logger.log(`Cache hit for responses: workspace=${workspaceId}, testPerson=${connector}, unitId=${unitId}`);
+      return cachedResponse;
+    }
+
+    this.logger.log(`Cache miss for responses: workspace=${workspaceId}, testPerson=${connector}, unitId=${unitId}`);
+
+    // If not in cache, fetch from database
     const [login, code, bookletId] = connector.split('@');
     const person = await this.personsRepository.findOne({
       where: {
@@ -389,24 +475,32 @@ export class WorkspaceTestResultsService {
       };
     });
 
-    return {
+    const result = {
       responses: responsesArray
     };
+
+    // Cache the result
+    await this.cacheService.set(cacheKey, result);
+    this.logger.log(`Cached responses for: workspace=${workspaceId}, testPerson=${connector}, unitId=${unitId}`);
+
+    return result;
   }
 
-  private responsesByStatusCache: Map<string, { data: [ResponseEntity[], number]; timestamp: number }> = new Map();
-  private readonly RESPONSES_CACHE_TTL_MS = 60 * 1000; // 1 minute cache TTL
+  private readonly RESPONSES_CACHE_TTL_SECONDS = 60; // 1 minute cache TTL
 
   async getResponsesByStatus(workspace_id: number, status: string, options?: { page: number; limit: number }): Promise<[ResponseEntity[], number]> {
     this.logger.log(`Getting responses with status ${status} for workspace ${workspace_id}`);
 
-    const cacheKey = `${workspace_id}-${status}-${options?.page || 0}-${options?.limit || 0}`;
+    const cacheKey = `responses:status:${workspace_id}:${status}:${options?.page || 0}:${options?.limit || 0}`;
 
-    const cachedResult = this.responsesByStatusCache.get(cacheKey);
-    if (cachedResult && (Date.now() - cachedResult.timestamp) < this.RESPONSES_CACHE_TTL_MS) {
-      this.logger.log(`Returning cached responses for status ${status} (workspace ${workspace_id})`);
-      return cachedResult.data;
+    // Check if data is in Redis cache
+    const cachedResult = await this.cacheService.get<[ResponseEntity[], number]>(cacheKey);
+    if (cachedResult) {
+      this.logger.log(`Cache hit: Returning cached responses for status ${status} (workspace ${workspace_id})`);
+      return cachedResult;
     }
+
+    this.logger.log(`Cache miss for responses with status ${status} (workspace ${workspace_id})`);
 
     try {
       const queryBuilder = this.responseRepository.createQueryBuilder('response')
@@ -444,10 +538,9 @@ export class WorkspaceTestResultsService {
         this.logger.log(`Found ${result[0].length} responses with status ${status} for workspace ${workspace_id}`);
       }
 
-      this.responsesByStatusCache.set(cacheKey, {
-        data: result,
-        timestamp: Date.now()
-      });
+      // Store the result in Redis cache
+      await this.cacheService.set(cacheKey, result, this.RESPONSES_CACHE_TTL_SECONDS);
+      this.logger.log(`Cached responses with status ${status} for workspace ${workspace_id}`);
 
       return result;
     } catch (error) {
@@ -772,6 +865,39 @@ export class WorkspaceTestResultsService {
     const limit = options.limit || 10;
     const skip = (page - 1) * limit;
 
+    // Generate a cache key based on the search parameters and pagination
+    const cacheKey = `search-responses:${workspaceId}:${JSON.stringify(searchParams)}:${page}:${limit}`;
+
+    // Check if data is in Redis cache
+    const cachedResult = await this.cacheService.get<{
+      data: {
+        responseId: number;
+        variableId: string;
+        value: string;
+        status: string;
+        code?: number;
+        score?: number;
+        codedStatus?: string;
+        unitId: number;
+        unitName: string;
+        unitAlias: string | null;
+        bookletId: number;
+        bookletName: string;
+        personId: number;
+        personLogin: string;
+        personCode: string;
+        personGroup: string;
+      }[];
+      total: number;
+    }>(cacheKey);
+
+    if (cachedResult) {
+      this.logger.log(`Cache hit: Returning cached search results for workspace ${workspaceId}`);
+      return cachedResult;
+    }
+
+    this.logger.log(`Cache miss for search results in workspace ${workspaceId}`);
+
     try {
       this.logger.log(
         `Searching for responses in workspace: ${workspaceId} with params: ${JSON.stringify(searchParams)} (page: ${page}, limit: ${limit})`
@@ -844,7 +970,13 @@ export class WorkspaceTestResultsService {
         personGroup: response.unit.booklet.person.group
       }));
 
-      return { data, total };
+      const result = { data, total };
+
+      const ONE_DAY_SECONDS = 24 * 60 * 60;
+      await this.cacheService.set(cacheKey, result, ONE_DAY_SECONDS);
+      this.logger.log(`Cached search results for workspace ${workspaceId}`);
+
+      return result;
     } catch (error) {
       this.logger.error(
         `Failed to search for responses in workspace: ${workspaceId}`,
@@ -881,6 +1013,34 @@ export class WorkspaceTestResultsService {
     const page = options.page || 1;
     const limit = options.limit || 10;
     const skip = (page - 1) * limit;
+
+    // Generate a cache key based on the parameters
+    const cacheKey = `units-by-name:${workspaceId}:${unitName}:${page}:${limit}`;
+
+    // Check if data is in Redis cache
+    const cachedResult = await this.cacheService.get<{
+      data: {
+        unitId: number;
+        unitName: string;
+        unitAlias: string | null;
+        bookletId: number;
+        bookletName: string;
+        personId: number;
+        personLogin: string;
+        personCode: string;
+        personGroup: string;
+        tags: { id: number; unitId: number; tag: string; color?: string; createdAt: Date }[];
+        responses: { variableId: string; value: string; status: string; code?: number; score?: number; codedStatus?: string }[];
+      }[];
+      total: number;
+    }>(cacheKey);
+
+    if (cachedResult) {
+      this.logger.log(`Cache hit: Returning cached units by name for workspace ${workspaceId}, unitName: ${unitName}`);
+      return cachedResult;
+    }
+
+    this.logger.log(`Cache miss for units by name in workspace ${workspaceId}, unitName: ${unitName}`);
 
     try {
       this.logger.log(
@@ -949,7 +1109,13 @@ export class WorkspaceTestResultsService {
       });
 
       data = Array.from(uniqueMap.values());
-      return { data, total: data.length };
+      const result = { data, total: data.length };
+
+      // Store the result in Redis cache (60 seconds TTL for units by name)
+      await this.cacheService.set(cacheKey, result, 60);
+      this.logger.log(`Cached units by name for workspace ${workspaceId}, unitName: ${unitName}`);
+
+      return result;
     } catch (error) {
       this.logger.error(
         `Failed to search for units with name: ${unitName} in workspace: ${workspaceId}`,
