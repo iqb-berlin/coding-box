@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Connection, In, Repository } from 'typeorm';
+import { Connection, Repository } from 'typeorm';
 import Persons from '../entities/persons.entity';
 import { Unit } from '../entities/unit.entity';
 import { Booklet } from '../entities/booklet.entity';
@@ -389,42 +389,53 @@ export class WorkspaceTestResultsService {
 
     // If not in cache, fetch from database
     const [login, code, bookletId] = connector.split('@');
-    const person = await this.personsRepository.findOne({
-      where: {
-        code, login, workspace_id: workspaceId, consider: true
+    const queryBuilder = this.unitRepository.createQueryBuilder('unit')
+      .innerJoinAndSelect('unit.responses', 'response')
+      .innerJoin('unit.booklet', 'booklet')
+      .innerJoin('booklet.person', 'person')
+      .innerJoin('booklet.bookletinfo', 'bookletinfo')
+      .where('person.login = :login', { login })
+      .andWhere('person.code = :code', { code })
+      .andWhere('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('person.consider = :consider', { consider: true })
+      .andWhere('bookletinfo.name = :bookletId', { bookletId })
+      .andWhere('unit.alias = :unitId', { unitId });
+
+    const unit = await queryBuilder.getOne();
+
+    if (!unit) {
+      // If no unit found, we need to determine which part of the query failed
+      const person = await this.personsRepository.findOne({
+        where: {
+          code, login, workspace_id: workspaceId, consider: true
+        }
+      });
+
+      if (!person) {
+        throw new Error(`Person mit Login ${login} und Code ${code} wurde nicht gefunden.`);
       }
-    });
-    if (!person) {
-      throw new Error(`Person mit ID ${person.id} wurde nicht gefunden.`);
-    }
 
-    const bookletInfo = await this.bookletInfoRepository.findOne({
-      where: { name: bookletId }
-    });
+      const bookletInfo = await this.bookletInfoRepository.findOne({
+        where: { name: bookletId }
+      });
 
-    if (!bookletInfo) {
-      throw new Error(`Kein Booklet mit der ID ${bookletId} gefunden.`);
-    }
-
-    const booklet = await this.bookletRepository.findOne({
-      where: {
-        personid: person.id,
-        infoid: bookletInfo.id
+      if (!bookletInfo) {
+        throw new Error(`Kein Booklet mit der ID ${bookletId} gefunden.`);
       }
-    });
 
-    if (!booklet) {
-      throw new Error(`Kein Booklet für die Person mit ID ${person.id} und Booklet ID ${bookletId} gefunden.`);
+      const booklet = await this.bookletRepository.findOne({
+        where: {
+          personid: person.id,
+          infoid: bookletInfo.id
+        }
+      });
+
+      if (!booklet) {
+        throw new Error(`Kein Booklet für die Person mit ID ${person.id} und Booklet ID ${bookletId} gefunden.`);
+      }
+
+      throw new Error(`Keine Unit mit der ID ${unitId} für das Booklet ${bookletId} gefunden.`);
     }
-
-    const booklets = [booklet];
-    const unit = await this.unitRepository.findOne({
-      where: {
-        bookletid: In(booklets.map(b => b.id)),
-        alias: unitId
-      },
-      relations: ['responses']
-    });
 
     const responsesBySubform = {};
 
