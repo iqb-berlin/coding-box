@@ -1,0 +1,284 @@
+<div class="dialog-container">
+  <h2 class="dialog-title">{{ data.isEdit ? 'Kodierjob bearbeiten' : 'Neuen Kodierjob erstellen' }}</h2>
+  <mat-divider></mat-divider>
+
+  <div class="dialog-content">
+    <form [formGroup]="codingJobForm" (ngSubmit)="onSubmit()">
+      <div class="form-section">
+        <h3>Allgemeine Informationen</h3>
+
+        <mat-form-field appearance="fill" class="full-width">
+          <mat-label>Name</mat-label>
+          <input matInput formControlName="name" placeholder="Name des Kodierjobs" required>
+          @if (codingJobForm.get('name')?.invalid && codingJobForm.get('name')?.touched) {
+            <mat-error>Name ist erforderlich</mat-error>
+          }
+        </mat-form-field>
+
+        <mat-form-field appearance="fill" class="full-width">
+          <mat-label>Beschreibung</mat-label>
+          <textarea matInput formControlName="description" placeholder="Beschreibung des Kodierjobs" rows="3"></textarea>
+        </mat-form-field>
+
+        <mat-form-field appearance="fill" class="full-width">
+          <mat-label>Status</mat-label>
+          <mat-select formControlName="status">
+            <mat-option value="pending">Ausstehend</mat-option>
+            <mat-option value="active">Aktiv</mat-option>
+            <mat-option value="completed">Abgeschlossen</mat-option>
+          </mat-select>
+        </mat-form-field>
+      </div>
+
+      <div class="form-section">
+        <h3>Variablenbündel</h3>
+        <p class="section-description">Wählen Sie die Variablen und Variablenbündel aus, die diesem Kodierjob zugeordnet werden sollen.</p>
+
+        <mat-tab-group>
+          <!-- Tab for individual variables -->
+          <mat-tab label="Einzelne Variablen">
+            <!-- Filter controls -->
+            <div class="filter-container">
+              <div class="filter-row">
+                <mat-form-field class="filter-field">
+                  <mat-label>Aufgaben-ID Filter</mat-label>
+                  <input matInput [(ngModel)]="unitNameFilter" [ngModelOptions]="{standalone: true}" placeholder="Filter nach Aufgaben-ID">
+                  <button *ngIf="unitNameFilter" matSuffix mat-icon-button aria-label="Clear" (click)="unitNameFilter=''; applyFilter()">
+                    <mat-icon>close</mat-icon>
+                  </button>
+                </mat-form-field>
+
+                <mat-form-field class="filter-field">
+                  <mat-label>Variablen-ID Filter</mat-label>
+                  <input matInput [(ngModel)]="variableIdFilter" [ngModelOptions]="{standalone: true}" placeholder="Filter nach Variablen-ID">
+                  <button *ngIf="variableIdFilter" matSuffix mat-icon-button aria-label="Clear" (click)="variableIdFilter=''; applyFilter()">
+                    <mat-icon>close</mat-icon>
+                  </button>
+                </mat-form-field>
+
+                <button mat-raised-button color="primary" (click)="applyFilter()">
+                  <mat-icon>filter_list</mat-icon>
+                  Filter anwenden
+                </button>
+
+                <button mat-raised-button (click)="clearFilters()">
+                  <mat-icon>clear</mat-icon>
+                  Filter zurücksetzen
+                </button>
+              </div>
+            </div>
+
+            @if (isLoadingVariableAnalysis) {
+              <div class="loading-container">
+                <mat-spinner diameter="40"></mat-spinner>
+                <p class="loading-text">Lade Variablen...</p>
+              </div>
+            }
+
+            @if (!isLoadingVariableAnalysis && variableBundles.length > 0) {
+              <div class="table-container">
+                <table mat-table [dataSource]="dataSource" class="variable-bundles-table">
+                  <!-- Checkbox Column -->
+                  <ng-container matColumnDef="select">
+                    <th mat-header-cell *matHeaderCellDef>
+                      <mat-checkbox (change)="$event ? masterToggle() : null"
+                                    [checked]="selectedVariableBundles.hasValue() && isAllSelected()"
+                                    [indeterminate]="selectedVariableBundles.hasValue() && !isAllSelected()"
+                                    [aria-label]="checkboxLabel()">
+                      </mat-checkbox>
+                    </th>
+                    <td mat-cell *matCellDef="let row">
+                      <mat-checkbox (click)="$event.stopPropagation()"
+                                    (change)="$event ? selectedVariableBundles.toggle(row) : null"
+                                    [checked]="selectedVariableBundles.isSelected(row)"
+                                    [aria-label]="checkboxLabel(row)">
+                      </mat-checkbox>
+                    </td>
+                  </ng-container>
+
+                  <!-- Unit Name Column -->
+                  <ng-container matColumnDef="unitName">
+                    <th mat-header-cell *matHeaderCellDef>Aufgaben-ID</th>
+                    <td mat-cell *matCellDef="let element">{{ element.unitName }}</td>
+                  </ng-container>
+
+                  <!-- Variable ID Column -->
+                  <ng-container matColumnDef="variableId">
+                    <th mat-header-cell *matHeaderCellDef>Variablen-ID</th>
+                    <td mat-cell *matCellDef="let element">{{ element.variableId }}</td>
+                  </ng-container>
+
+                  <tr mat-header-row *matHeaderRowDef="displayedColumns; sticky: true"></tr>
+                  <tr mat-row *matRowDef="let row; columns: displayedColumns;"
+                      (click)="selectedVariableBundles.toggle(row)"
+                      [class.selected-row]="selectedVariableBundles.isSelected(row)">
+                  </tr>
+                </table>
+
+                <mat-paginator
+                  [length]="totalVariableAnalysisRecords"
+                  [pageSize]="variableAnalysisPageSize"
+                  [pageIndex]="variableAnalysisPageIndex"
+                  [pageSizeOptions]="variableAnalysisPageSizeOptions"
+                  showFirstLastButtons
+                  (page)="onPageChange($event)"
+                  aria-label="Seiten auswählen">
+                </mat-paginator>
+              </div>
+
+              <div class="selection-summary">
+                <p>{{ selectedVariableBundles.selected.length }} Variablen ausgewählt</p>
+              </div>
+            }
+
+            @if (!isLoadingVariableAnalysis && variableBundles.length === 0) {
+              <div class="empty-state">
+                <mat-icon class="empty-icon">analytics</mat-icon>
+                <h3>Keine Variablen verfügbar</h3>
+                <p class="empty-text">Es wurden keine Variablen gefunden. Bitte überprüfen Sie Ihre Filter oder versuchen Sie es später erneut.</p>
+              </div>
+            }
+          </mat-tab>
+
+          <!-- Tab for variable bundle groups -->
+          <mat-tab label="Variablenbündel">
+            <!-- Filter controls -->
+            <div class="filter-container">
+              <div class="filter-row">
+                <mat-form-field class="filter-field">
+                  <mat-label>Name Filter</mat-label>
+                  <input matInput [(ngModel)]="bundleGroupNameFilter" [ngModelOptions]="{standalone: true}" placeholder="Filter nach Namen">
+                  <button *ngIf="bundleGroupNameFilter" matSuffix mat-icon-button aria-label="Clear" (click)="bundleGroupNameFilter=''; applyBundleGroupFilter()">
+                    <mat-icon>close</mat-icon>
+                  </button>
+                </mat-form-field>
+
+                <button mat-raised-button color="primary" (click)="applyBundleGroupFilter()">
+                  <mat-icon>filter_list</mat-icon>
+                  Filter anwenden
+                </button>
+
+                <button mat-raised-button (click)="clearBundleGroupFilter()">
+                  <mat-icon>clear</mat-icon>
+                  Filter zurücksetzen
+                </button>
+              </div>
+            </div>
+
+            @if (isLoadingBundleGroups) {
+              <div class="loading-container">
+                <mat-spinner diameter="40"></mat-spinner>
+                <p class="loading-text">Lade Variablenbündel...</p>
+              </div>
+            }
+
+            @if (!isLoadingBundleGroups && variableBundleGroups.length > 0) {
+              <div class="table-container">
+                <table mat-table [dataSource]="bundleGroupsDataSource" class="variable-bundles-table">
+                  <!-- Checkbox Column -->
+                  <ng-container matColumnDef="select">
+                    <th mat-header-cell *matHeaderCellDef>
+                      <mat-checkbox (change)="$event ? masterToggleBundleGroups() : null"
+                                    [checked]="selectedVariableBundleGroups.hasValue() && isAllBundleGroupsSelected()"
+                                    [indeterminate]="selectedVariableBundleGroups.hasValue() && !isAllBundleGroupsSelected()"
+                                    [aria-label]="bundleGroupCheckboxLabel()">
+                      </mat-checkbox>
+                    </th>
+                    <td mat-cell *matCellDef="let row">
+                      <mat-checkbox (click)="$event.stopPropagation()"
+                                    (change)="$event ? selectedVariableBundleGroups.toggle(row) : null"
+                                    [checked]="selectedVariableBundleGroups.isSelected(row)"
+                                    [aria-label]="bundleGroupCheckboxLabel(row)">
+                      </mat-checkbox>
+                    </td>
+                  </ng-container>
+
+                  <!-- Name Column -->
+                  <ng-container matColumnDef="name">
+                    <th mat-header-cell *matHeaderCellDef>Name</th>
+                    <td mat-cell *matCellDef="let element">{{ element.name }}</td>
+                  </ng-container>
+
+                  <!-- Description Column -->
+                  <ng-container matColumnDef="description">
+                    <th mat-header-cell *matHeaderCellDef>Beschreibung</th>
+                    <td mat-cell *matCellDef="let element">{{ element.description }}</td>
+                  </ng-container>
+
+                  <!-- Variable Count Column -->
+                  <ng-container matColumnDef="variableCount">
+                    <th mat-header-cell *matHeaderCellDef>Anzahl Variablen</th>
+                    <td mat-cell *matCellDef="let element">{{ getVariableCount(element) }}</td>
+                  </ng-container>
+
+                  <tr mat-header-row *matHeaderRowDef="bundleGroupsDisplayedColumns; sticky: true"></tr>
+                  <tr mat-row *matRowDef="let row; columns: bundleGroupsDisplayedColumns;"
+                      (click)="selectedVariableBundleGroups.toggle(row)"
+                      [class.selected-row]="selectedVariableBundleGroups.isSelected(row)">
+                  </tr>
+                </table>
+              </div>
+
+              <div class="selection-summary">
+                <p>{{ selectedVariableBundleGroups.selected.length }} Variablenbündel ausgewählt</p>
+              </div>
+
+              <!-- Preview of selected bundle groups -->
+              @if (selectedVariableBundleGroups.selected.length > 0) {
+                <div class="bundle-preview-container">
+                  <h4>Vorschau der ausgewählten Variablenbündel</h4>
+                  <mat-accordion>
+                    @for (bundleGroup of selectedVariableBundleGroups.selected; track bundleGroup.id) {
+                      <mat-expansion-panel>
+                        <mat-expansion-panel-header>
+                          <mat-panel-title>
+                            {{ bundleGroup.name }}
+                          </mat-panel-title>
+                          <mat-panel-description>
+                            {{ getVariableCount(bundleGroup) }} Variablen
+                          </mat-panel-description>
+                        </mat-expansion-panel-header>
+
+                        <table class="preview-table">
+                          <thead>
+                            <tr>
+                              <th>Aufgaben-ID</th>
+                              <th>Variablen-ID</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            @for (variable of bundleGroup.variables; track variable.unitName + variable.variableId) {
+                              <tr>
+                                <td>{{ variable.unitName }}</td>
+                                <td>{{ variable.variableId }}</td>
+                              </tr>
+                            }
+                          </tbody>
+                        </table>
+                      </mat-expansion-panel>
+                    }
+                  </mat-accordion>
+                </div>
+              }
+            }
+
+            @if (!isLoadingBundleGroups && variableBundleGroups.length === 0) {
+              <div class="empty-state">
+                <mat-icon class="empty-icon">analytics</mat-icon>
+                <h3>Keine Variablenbündel verfügbar</h3>
+                <p class="empty-text">Es wurden keine Variablenbündel gefunden. Bitte erstellen Sie zuerst Variablenbündel über die Variablenbündel-Verwaltung.</p>
+              </div>
+            }
+          </mat-tab>
+        </mat-tab-group>
+      </div>
+    </form>
+  </div>
+
+  <div class="dialog-actions">
+    <button mat-button (click)="onCancel()">Abbrechen</button>
+    <button mat-raised-button color="primary" (click)="onSubmit()" [disabled]="codingJobForm.invalid">
+      {{ data.isEdit ? 'Speichern' : 'Erstellen' }}
+    </button>
+  </div>
+</div>

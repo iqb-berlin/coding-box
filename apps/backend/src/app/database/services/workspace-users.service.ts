@@ -99,7 +99,7 @@ export class WorkspaceUsersService {
     this.logger.log(`Retrieving coders (users with accessLevel 1) for workspace ID: ${workspaceId}`);
 
     try {
-      const users = await this.workspaceUsersRepository.find({
+      const workspaceUsers = await this.workspaceUsersRepository.find({
         where: {
           workspaceId,
           accessLevel: 1
@@ -107,8 +107,32 @@ export class WorkspaceUsersService {
         order: { userId: 'ASC' }
       });
 
-      this.logger.log(`Found ${users.length} coder(s) for workspace ID: ${workspaceId}`);
-      return [users, users.length];
+      if (workspaceUsers.length === 0) {
+        this.logger.log(`No coders found for workspace ID: ${workspaceId}`);
+        return [workspaceUsers, 0];
+      }
+
+      const userIds = workspaceUsers.map(wu => wu.userId);
+
+      const users = await this.usersRepository.find({
+        where: { id: In(userIds) }
+      });
+
+      const userMap = new Map<number, string>();
+      users.forEach(user => {
+        userMap.set(user.id, user.username);
+      });
+
+      const enhancedUsers = workspaceUsers.map(wu => {
+        const username = userMap.get(wu.userId);
+        return {
+          ...wu,
+          username
+        };
+      });
+
+      this.logger.log(`Found ${enhancedUsers.length} coder(s) for workspace ID: ${workspaceId}`);
+      return [enhancedUsers as WorkspaceUser[], enhancedUsers.length];
     } catch (error) {
       this.logger.error(`Failed to retrieve coders for workspace ID: ${workspaceId}`, error.stack);
       throw new Error('Could not retrieve workspace coders');
