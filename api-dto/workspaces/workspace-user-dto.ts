@@ -8,5 +8,5 @@ export class WorkspaceUserDto {
     userId!: number;
 
   @ApiProperty({ nullable: true })
-    accessLevel!: string | null;
+    accessLevel!: number | null;
 }
