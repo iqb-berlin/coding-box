@@ -16,6 +16,10 @@
       <mat-icon>play_arrow</mat-icon>
       Kodierjob starten
     </a>
+    <a mat-raised-button color="accent" [disabled]="selection.selected.length === 0 || !selectedCoder" (click)="assignToCoder()">
+      <mat-icon>person_add</mat-icon>
+      Kodierer zuweisen
+    </a>
   </div>
 
   @if (isLoading) {
@@ -68,17 +72,24 @@
         </mat-cell>
       </ng-container>
 
-      <ng-container matColumnDef="created_at">
-        <mat-header-cell *matHeaderCellDef mat-sort-header>Erstellt am</mat-header-cell>
-        <mat-cell *matCellDef="let element">
-          {{element.created_at | date: 'dd.MM.yyyy HH:mm'}}
+      <ng-container matColumnDef="assignedCoders">
+        <mat-header-cell *matHeaderCellDef mat-sort-header>Zugewiesene Kodierer</mat-header-cell>
+        <mat-cell *matCellDef="let element" class="assigned-coders-cell" [matTooltip]="getFullCoderNames(element)">
+          {{getAssignedCoderNames(element)}}
         </mat-cell>
       </ng-container>
 
-      <ng-container matColumnDef="updated_at">
+      <ng-container matColumnDef="createdAt">
+        <mat-header-cell *matHeaderCellDef mat-sort-header>Erstellt am</mat-header-cell>
+        <mat-cell *matCellDef="let element">
+          {{element.createdAt | date: 'dd.MM.yyyy HH:mm'}}
+        </mat-cell>
+      </ng-container>
+
+      <ng-container matColumnDef="updatedAt">
         <mat-header-cell *matHeaderCellDef mat-sort-header>Aktualisiert am</mat-header-cell>
         <mat-cell *matCellDef="let element">
-          {{element.updated_at | date: 'dd.MM.yyyy HH:mm'}}
+          {{element.updatedAt | date: 'dd.MM.yyyy HH:mm'}}
         </mat-cell>
       </ng-container>
     </mat-table>

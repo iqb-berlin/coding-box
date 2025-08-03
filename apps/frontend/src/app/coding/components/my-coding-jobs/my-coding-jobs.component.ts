@@ -24,6 +24,7 @@ import { BackendService } from '../../../services/backend.service';
 import { SearchFilterComponent } from '../../../shared/search-filter/search-filter.component';
 import { CodingJob } from '../../models/coding-job.model';
 import { WorkspaceUserDto } from '../../../../../../../api-dto/workspaces/workspace-user-dto';
+import { CoderService } from '../../services/coder.service';
 
 @Component({
   selector: 'coding-box-my-coding-jobs',
@@ -57,6 +58,7 @@ export class MyCodingJobsComponent implements OnInit, AfterViewInit {
   backendService = inject(BackendService);
   private snackBar = inject(MatSnackBar);
   private router = inject(Router);
+  private coderService = inject(CoderService);
 
   displayedColumns: string[] = ['name', 'description', 'status', 'createdAt', 'updatedAt'];
   dataSource = new MatTableDataSource<CodingJob>([]);
@@ -103,41 +105,54 @@ export class MyCodingJobsComponent implements OnInit, AfterViewInit {
   loadMyCodingJobs(): void {
     this.isLoading = true;
 
-    setTimeout(() => {
-      const allJobs = [
-        {
-          id: 1,
-          name: 'Kodierjob 1',
-          description: 'Beschreibung für Kodierjob 1',
-          status: 'active',
-          createdAt: new Date('2023-01-01'),
-          updatedAt: new Date('2023-01-15'),
-          assignedCoders: [1, 2]
-        },
-        {
-          id: 2,
-          name: 'Kodierjob 2',
-          description: 'Beschreibung für Kodierjob 2',
-          status: 'completed',
-          createdAt: new Date('2023-02-01'),
-          updatedAt: new Date('2023-02-15'),
-          assignedCoders: [3]
-        },
-        {
-          id: 3,
-          name: 'Kodierjob 3',
-          description: 'Beschreibung für Kodierjob 3',
-          status: 'pending',
-          createdAt: new Date('2023-03-01'),
-          updatedAt: new Date('2023-03-15'),
-          assignedCoders: [1]
+    const sampleJobs = [
+      {
+        id: 1,
+        name: 'Kodierjob 1',
+        description: 'Beschreibung für Kodierjob 1',
+        status: 'active',
+        createdAt: new Date('2023-01-01'),
+        updatedAt: new Date('2023-01-15'),
+        assignedCoders: [1, 2]
+      },
+      {
+        id: 2,
+        name: 'Kodierjob 2',
+        description: 'Beschreibung für Kodierjob 2',
+        status: 'completed',
+        createdAt: new Date('2023-02-01'),
+        updatedAt: new Date('2023-02-15'),
+        assignedCoders: [3]
+      },
+      {
+        id: 3,
+        name: 'Kodierjob 3',
+        description: 'Beschreibung für Kodierjob 3',
+        status: 'pending',
+        createdAt: new Date('2023-03-01'),
+        updatedAt: new Date('2023-03-15'),
+        assignedCoders: [1]
+      }
+    ];
+
+    this.coderService.getCodersByJobId(this.currentUserId).subscribe({
+      next: coders => {
+        if (coders.length > 0) {
+          const currentCoder = coders[0];
+          const assignedJobIds = currentCoder.assignedJobs || [];
+
+          this.dataSource.data = sampleJobs.filter(job => assignedJobIds.includes(job.id));
+        } else {
+          this.dataSource.data = [];
         }
-      ];
 
-      this.dataSource.data = allJobs.filter(job => job.assignedCoders.includes(this.currentUserId));
-
-      this.isLoading = false;
-    }, 500);
+        this.isLoading = false;
+      },
+      error: () => {
+        this.snackBar.open('Fehler beim Laden der Kodierjobs', 'Schließen', { duration: 3000 });
+        this.isLoading = false;
+      }
+    });
   }
 
   applyFilter(filterValue: string): void {

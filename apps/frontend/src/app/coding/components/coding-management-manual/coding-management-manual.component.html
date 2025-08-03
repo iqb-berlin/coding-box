@@ -18,6 +18,16 @@
       <h2 class="section-title">Manuelle Kodierung planen</h2>
       <p class="section-description">Verwalten Sie Kodierer und Kodierjobs für die manuelle Kodierung von Antworten.</p>
       <hr>
+      <div class="coder-selection-container">
+        <mat-form-field appearance="fill" class="coder-select">
+          <mat-label>Kodierer auswählen</mat-label>
+          <mat-select (selectionChange)="onCoderSelected($event)">
+            <mat-option *ngFor="let coder of coders" [value]="coder.id">
+              {{ coder.displayName || coder.name }}
+            </mat-option>
+          </mat-select>
+        </mat-form-field>
+      </div>
       <div class="statistics-content">
         <div class="coder-list-container">
           <h3>Kodierer</h3>
@@ -25,7 +35,11 @@
         </div>
         <div class="coding-jobs-container">
           <h3>Kodierjobs</h3>
-          <coding-box-coding-jobs></coding-box-coding-jobs>
+          <coding-box-coding-jobs [selectedCoder]="selectedCoder"></coding-box-coding-jobs>
+        </div>
+        <div class="variable-bundle-groups-container">
+          <h3>Variablenbündel</h3>
+          <coding-box-variable-bundle-manager></coding-box-variable-bundle-manager>
         </div>
       </div>
     </div>
