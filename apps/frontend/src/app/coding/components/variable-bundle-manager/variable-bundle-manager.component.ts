@@ -20,7 +20,7 @@ import { SelectionModel } from '@angular/cdk/collections';
 import { MatIcon } from '@angular/material/icon';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { MatCheckbox } from '@angular/material/checkbox';
-import { MatAnchor, MatButton } from '@angular/material/button';
+import { MatAnchor, MatButton, MatIconButton } from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { SearchFilterComponent } from '../../../shared/search-filter/search-filter.component';
 import { VariableBundle } from '../../models/coding-job.model';
@@ -55,7 +55,8 @@ import { VariableBundleDialogComponent } from '../variable-bundle-dialog/variabl
     MatSortModule,
     MatButton,
     MatDialogModule,
-    MatTooltipModule
+    MatTooltipModule,
+    MatIconButton
   ]
 })
 export class VariableBundleManagerComponent implements OnInit, AfterViewInit {
