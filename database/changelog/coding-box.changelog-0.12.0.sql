@@ -2,18 +2,14 @@
 
 -- changeset jurei733:1
 CREATE TABLE IF NOT EXISTS "public"."coding_job" (
-  "id" INTEGER PRIMARY KEY REFERENCES "public"."job"("id") ON DELETE CASCADE,
+  "id" SERIAL PRIMARY KEY,
   "name" VARCHAR(255) NOT NULL,
   "description" TEXT NULL
 );
 -- rollback DROP TABLE IF EXISTS "public"."coding_job";
 
 -- changeset jurei733:2
-CREATE INDEX IF NOT EXISTS "idx_job_workspace_id" ON "public"."job"("workspace_id");
-CREATE INDEX IF NOT EXISTS "idx_job_type" ON "public"."job"("type");
 CREATE INDEX IF NOT EXISTS "idx_coding_job_name" ON "public"."coding_job"("name");
--- rollback DROP INDEX IF EXISTS "idx_job_workspace_id" ON "public"."job";
--- rollback DROP INDEX IF EXISTS "idx_job_type" ON "public"."job";
 -- rollback DROP INDEX IF EXISTS "idx_coding_job_name" ON "public"."coding_job";
 
 -- changeset jurei733:3
