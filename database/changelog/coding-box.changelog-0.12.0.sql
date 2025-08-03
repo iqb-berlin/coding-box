@@ -1,20 +1,6 @@
 -- liquibase formatted sql
 
 -- changeset jurei733:1
-CREATE TABLE IF NOT EXISTS "public"."job" (
-  "id" SERIAL PRIMARY KEY,
-  "workspace_id" INTEGER NOT NULL,
-  "status" VARCHAR(255) NOT NULL,
-  "progress" INTEGER NULL,
-  "error" VARCHAR(255) NULL,
-  "result" TEXT NULL,
-  "type" VARCHAR(255) NOT NULL,
-  "created_at" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "updated_at" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
--- rollback DROP TABLE IF EXISTS "public"."job";
-
--- changeset jurei733:2
 CREATE TABLE IF NOT EXISTS "public"."coding_job" (
   "id" INTEGER PRIMARY KEY REFERENCES "public"."job"("id") ON DELETE CASCADE,
   "name" VARCHAR(255) NOT NULL,
@@ -22,7 +8,7 @@ CREATE TABLE IF NOT EXISTS "public"."coding_job" (
 );
 -- rollback DROP TABLE IF EXISTS "public"."coding_job";
 
--- changeset jurei733:3
+-- changeset jurei733:2
 CREATE INDEX IF NOT EXISTS "idx_job_workspace_id" ON "public"."job"("workspace_id");
 CREATE INDEX IF NOT EXISTS "idx_job_type" ON "public"."job"("type");
 CREATE INDEX IF NOT EXISTS "idx_coding_job_name" ON "public"."coding_job"("name");
@@ -30,7 +16,7 @@ CREATE INDEX IF NOT EXISTS "idx_coding_job_name" ON "public"."coding_job"("name"
 -- rollback DROP INDEX IF EXISTS "idx_job_type" ON "public"."job";
 -- rollback DROP INDEX IF EXISTS "idx_coding_job_name" ON "public"."coding_job";
 
--- changeset jurei733:4
+-- changeset jurei733:3
 CREATE TABLE IF NOT EXISTS "public"."variable" (
   "id" SERIAL PRIMARY KEY,
   "workspace_id" INTEGER NOT NULL,
@@ -39,7 +25,7 @@ CREATE TABLE IF NOT EXISTS "public"."variable" (
 );
 -- rollback DROP TABLE IF EXISTS "public"."variable";
 
--- changeset jurei733:5
+-- changeset jurei733:4
 CREATE TABLE IF NOT EXISTS "public"."variable_bundle" (
   "id" SERIAL PRIMARY KEY,
   "workspace_id" INTEGER NOT NULL,
@@ -50,7 +36,7 @@ CREATE TABLE IF NOT EXISTS "public"."variable_bundle" (
 );
 -- rollback DROP TABLE IF EXISTS "public"."variable_bundle";
 
--- changeset jurei733:6
+-- changeset jurei733:5
 CREATE TABLE IF NOT EXISTS "public"."coding_job_variable" (
   "coding_job_id" INTEGER NOT NULL REFERENCES "public"."coding_job"("id") ON DELETE CASCADE,
   "variable_id" INTEGER NOT NULL REFERENCES "public"."variable"("id") ON DELETE CASCADE,
@@ -58,7 +44,7 @@ CREATE TABLE IF NOT EXISTS "public"."coding_job_variable" (
 );
 -- rollback DROP TABLE IF EXISTS "public"."coding_job_variable";
 
--- changeset jurei733:7
+-- changeset jurei733:6
 CREATE TABLE IF NOT EXISTS "public"."coding_job_variable_bundle" (
   "coding_job_id" INTEGER NOT NULL REFERENCES "public"."coding_job"("id") ON DELETE CASCADE,
   "variable_bundle_id" INTEGER NOT NULL REFERENCES "public"."variable_bundle"("id") ON DELETE CASCADE,
@@ -66,7 +52,7 @@ CREATE TABLE IF NOT EXISTS "public"."coding_job_variable_bundle" (
 );
 -- rollback DROP TABLE IF EXISTS "public"."coding_job_variable_bundle";
 
--- changeset jurei733:8
+-- changeset jurei733:7
 CREATE TABLE IF NOT EXISTS "public"."variable_bundle_variables" (
   "bundle_id" INTEGER NOT NULL REFERENCES "public"."variable_bundle"("id") ON DELETE CASCADE,
   "variable_bundle_id" INTEGER NOT NULL REFERENCES "public"."variable"("id") ON DELETE CASCADE,
@@ -74,13 +60,13 @@ CREATE TABLE IF NOT EXISTS "public"."variable_bundle_variables" (
 );
 -- rollback DROP TABLE IF EXISTS "public"."variable_bundle_variables";
 
--- changeset jurei733:9
+-- changeset jurei733:8
 CREATE INDEX IF NOT EXISTS "idx_variable_workspace_id" ON "public"."variable"("workspace_id");
 CREATE INDEX IF NOT EXISTS "idx_variable_bundle_workspace_id" ON "public"."variable_bundle"("workspace_id");
 -- rollback DROP INDEX IF EXISTS "idx_variable_workspace_id" ON "public"."variable";
 -- rollback DROP INDEX IF EXISTS "idx_variable_bundle_workspace_id" ON "public"."variable_bundle";
 
--- changeset jurei733:10
+-- changeset jurei733:9
 CREATE TABLE IF NOT EXISTS "public"."coding_job_coders" (
   "coding_job_id" INTEGER NOT NULL REFERENCES "public"."coding_job"("id") ON DELETE CASCADE,
   "coder_id" INTEGER NOT NULL,
@@ -88,7 +74,7 @@ CREATE TABLE IF NOT EXISTS "public"."coding_job_coders" (
 );
 -- rollback DROP TABLE IF EXISTS "public"."coding_job_coders";
 
--- changeset jurei733:11
+-- changeset jurei733:10
 ALTER TABLE "public"."variable_bundle_variables"
 RENAME COLUMN "variable_bundle_id" TO "variable_id";
 -- rollback ALTER TABLE "public"."variable_bundle_variables" RENAME COLUMN "variable_id" TO "variable_bundle_id";
