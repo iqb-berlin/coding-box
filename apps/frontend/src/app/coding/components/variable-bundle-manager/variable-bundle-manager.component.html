@@ -1,37 +1,32 @@
 <div class="fx-column-start-start fx-gap-10 container">
   <div class="fx-row-center-center-stretch fx-gap-20 action-buttons">
-    <a mat-raised-button color="primary" (click)="createCodingJob()">
+    <a mat-raised-button color="primary" (click)="createVariableBundleGroup()">
       <mat-icon>add</mat-icon>
-      Kodierjob erstellen
+      Variablenbündel erstellen
     </a>
-    <a mat-raised-button color="primary" (click)="editCodingJob()" [disabled]="selection.selected.length !== 1">
+    <a mat-raised-button color="primary" [disabled]="selection.selected.length !== 1"
+       (click)="selection.selected.length === 1 && editVariableBundleGroup(selection.selected[0])">
       <mat-icon>edit</mat-icon>
-      Kodierjob bearbeiten
+      Variablenbündel bearbeiten
     </a>
-    <a mat-raised-button color="primary" [disabled]="selection.selected.length === 0" (click)="deleteCodingJobs()">
+    <a mat-raised-button color="warn" [disabled]="selection.selected.length === 0" (click)="deleteSelectedVariableBundleGroups()">
       <mat-icon>delete</mat-icon>
-      Kodierjob(s) löschen
-    </a>
-    <a mat-raised-button color="primary" [disabled]="selection.selected.length !== 1" (click)="startCodingJob()">
-      <mat-icon>play_arrow</mat-icon>
-      Kodierjob starten
-    </a>
-    <a mat-raised-button color="accent" [disabled]="selection.selected.length === 0 || !selectedCoder" (click)="assignToCoder()">
-      <mat-icon>person_add</mat-icon>
-      Kodierer zuweisen
+      Variablenbündel löschen
     </a>
   </div>
 
   @if (isLoading) {
-    <mat-spinner></mat-spinner>
+    <div class="loading-container">
+      <mat-spinner></mat-spinner>
+    </div>
   }
   @if (!isLoading) {
     <coding-box-search-filter
-      [title]="'Kodierjobs filtern'"
+      [title]="'Variablenbündel filtern'"
       (valueChange)="applyFilter($event)">
     </coding-box-search-filter>
 
-    <mat-table [dataSource]="dataSource" matSort class="coding-jobs-table">
+    <mat-table [dataSource]="dataSource" matSort class="variable-bundle-table">
       <mat-header-row *matHeaderRowDef="displayedColumns; sticky: true"></mat-header-row>
       <mat-row *matRowDef="let row; columns: displayedColumns;" (click)="selectRow(row)">
       </mat-row>
@@ -65,17 +60,10 @@
         </mat-cell>
       </ng-container>
 
-      <ng-container matColumnDef="status">
-        <mat-header-cell *matHeaderCellDef mat-sort-header>Status</mat-header-cell>
+      <ng-container matColumnDef="variableCount">
+        <mat-header-cell *matHeaderCellDef mat-sort-header>Anzahl Variablen</mat-header-cell>
         <mat-cell *matCellDef="let element">
-          <span [ngClass]="getStatusClass(element.status)">{{getStatusText(element.status)}}</span>
-        </mat-cell>
-      </ng-container>
-
-      <ng-container matColumnDef="assignedCoders">
-        <mat-header-cell *matHeaderCellDef mat-sort-header>Zugewiesene Kodierer</mat-header-cell>
-        <mat-cell *matCellDef="let element" class="assigned-coders-cell" [matTooltip]="getFullCoderNames(element)">
-          {{getAssignedCoderNames(element)}}
+          {{getVariableCount(element)}}
         </mat-cell>
       </ng-container>
 
@@ -92,11 +80,23 @@
           {{element.updatedAt | date: 'dd.MM.yyyy HH:mm'}}
         </mat-cell>
       </ng-container>
+
+      <ng-container matColumnDef="actions">
+        <mat-header-cell *matHeaderCellDef>Aktionen</mat-header-cell>
+        <mat-cell *matCellDef="let element">
+          <button mat-icon-button color="primary" (click)="$event.stopPropagation(); editVariableBundleGroup(element)" matTooltip="Bearbeiten">
+            <mat-icon>edit</mat-icon>
+          </button>
+          <button mat-icon-button color="warn" (click)="$event.stopPropagation(); deleteVariableBundleGroup(element)" matTooltip="Löschen">
+            <mat-icon>delete</mat-icon>
+          </button>
+        </mat-cell>
+      </ng-container>
     </mat-table>
 
     @if (dataSource.data.length === 0) {
       <div class="no-data-message">
-        <p>Keine Kodierjobs vorhanden. Erstellen Sie einen neuen Kodierjob mit dem Button oben.</p>
+        <p>Keine Variablenbündel vorhanden. Erstellen Sie ein neues Variablenbündel mit dem Button oben.</p>
       </div>
     }
   }

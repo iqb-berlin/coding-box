@@ -7,12 +7,13 @@ import { MatButtonModule } from '@angular/material/button';
 import { ReactiveFormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 import { Subscription } from 'rxjs';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { AppService } from '../../services/app.service';
 import { AppInfoComponent } from '../app-info/app-info.component';
 import { UserWorkspacesAreaComponent } from '../../workspace/components/user-workspaces-area/user-workspaces-area.component';
 import { WorkspaceFullDto } from '../../../../../../api-dto/workspaces/workspace-full-dto';
+import { BackendService } from '../../services/backend.service';
 
 @Component({
   selector: 'coding-box-home',
@@ -32,10 +33,13 @@ import { WorkspaceFullDto } from '../../../../../../api-dto/workspaces/workspace
 export class HomeComponent implements OnInit, OnDestroy {
   readonly appService = inject(AppService);
   private route = inject(ActivatedRoute);
+  private router = inject(Router);
   private snackBar = inject(MatSnackBar);
+  private backendService = inject(BackendService);
 
   workspaces: WorkspaceFullDto[] = [];
   authData = AppService.defaultAuthData;
+  private isCoderChecked = false;
 
   private authSubscription?: Subscription;
 
@@ -45,12 +49,35 @@ export class HomeComponent implements OnInit, OnDestroy {
       if (authData) {
         this.authData = authData;
         this.workspaces = authData.workspaces;
+
+        // Check if user is a coder and redirect if needed
+        if (!this.isCoderChecked && authData.userId > 0) {
+          this.checkIfUserIsCoder(authData.userId);
+        }
       }
     });
 
     this.route.queryParams.subscribe(params => {
       if (params.error) {
         this.showErrorMessage(params.error);
+      }
+    });
+  }
+
+  private checkIfUserIsCoder(userId: number): void {
+    this.isCoderChecked = true;
+
+    if (!this.workspaces || this.workspaces.length === 0) {
+      return;
+    }
+
+    const firstWorkspaceId = this.workspaces[0].id;
+
+    this.backendService.getWorkspaceUsers(firstWorkspaceId).subscribe(response => {
+      const currentUser = response.data.find(user => user.userId === userId);
+
+      if (currentUser && currentUser.accessLevel === 1) {
+        this.router.navigate(['/coding']);
       }
     });
   }
