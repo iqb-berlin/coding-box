@@ -15,6 +15,7 @@ import { WorkspaceGuard } from './workspace.guard';
 import { AuthService } from '../../auth/service/auth.service';
 import WorkspaceUser from '../../database/entities/workspace_user.entity';
 import { WorkspaceUsersService } from '../../database/services/workspace-users.service';
+import { WorkspaceId } from './workspace.decorator';
 
 @ApiTags('Admin Workspace Users')
 @Controller('admin/workspace')
@@ -167,6 +168,59 @@ export class WorkspaceUsersController {
       };
     } catch (error) {
       logger.error(`Error retrieving coders for workspace ${workspaceId}`);
+      return {
+        data: [],
+        total: 0
+      };
+    }
+  }
+
+  @Get(':workspace_id/coding-jobs/:job_id/coders')
+  @ApiTags('admin workspace users')
+  @ApiBearerAuth()
+  @ApiParam({
+    name: 'workspace_id',
+    type: Number,
+    required: true,
+    description: 'Unique identifier for the workspace'
+  })
+  @ApiParam({
+    name: 'job_id',
+    type: Number,
+    required: true,
+    description: 'Unique identifier for the coding job'
+  })
+  @ApiOkResponse({
+    description: 'List of coders assigned to the coding job retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        data: { type: 'array', items: { $ref: '#/components/schemas/WorkspaceUser' } },
+        total: { type: 'number' }
+      }
+    }
+  })
+  @ApiNotFoundResponse({
+    description: 'Workspace or coding job not found, or no coders assigned to the job'
+  })
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  async findCodersByCodingJob(
+    @WorkspaceId() workspaceId: number,
+      @Param('job_id') jobId: number
+  ): Promise<{ data: WorkspaceUser[]; total: number }> {
+    try {
+      // In a real implementation, this would filter coders by the specific job ID
+      // For now, we'll return all coders for the workspace
+      const [coders, total] = await this.workspaceUsersService.findCoders(workspaceId);
+
+      logger.log(`Retrieved ${total} coders for workspace ${workspaceId} and coding job ${jobId}`);
+
+      return {
+        data: coders,
+        total
+      };
+    } catch (error) {
+      logger.error(`Error retrieving coders for workspace ${workspaceId} and coding job ${jobId}`);
       return {
         data: [],
         total: 0

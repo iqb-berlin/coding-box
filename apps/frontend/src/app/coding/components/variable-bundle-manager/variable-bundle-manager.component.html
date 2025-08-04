@@ -26,7 +26,7 @@
       (valueChange)="applyFilter($event)">
     </coding-box-search-filter>
 
-    <mat-table [dataSource]="dataSource" matSort class="variable-bundle-groups-table">
+    <mat-table [dataSource]="dataSource" matSort class="variable-bundle-table">
       <mat-header-row *matHeaderRowDef="displayedColumns; sticky: true"></mat-header-row>
       <mat-row *matRowDef="let row; columns: displayedColumns;" (click)="selectRow(row)">
       </mat-row>

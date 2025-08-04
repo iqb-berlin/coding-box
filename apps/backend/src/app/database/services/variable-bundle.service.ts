@@ -1,194 +1,160 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In } from 'typeorm';
-import { Variable } from '../entities/variable.entity';
+import { Repository } from 'typeorm';
+import { VariableBundle } from '../entities/variable-bundle.entity';
 
+/**
+ * Service for managing variable bundles
+ */
 @Injectable()
 export class VariableBundleService {
-  private readonly logger = new Logger(VariableBundleService.name);
-
   constructor(
-    @InjectRepository(Variable)
-    private variableRepository: Repository<Variable>
+    @InjectRepository(VariableBundle)
+    private variableBundleRepository: Repository<VariableBundle>
   ) {}
 
   /**
-   * Creates a new variable
+   * Get all variable bundles for a workspace
    * @param workspaceId The ID of the workspace
-   * @param unitName The name of the unit
-   * @param variableId The ID of the variable
+   * @returns Array of variable bundles
+   */
+  async getVariableBundles(workspaceId: number): Promise<VariableBundle[]> {
+    return this.variableBundleRepository.find({
+      where: { workspace_id: workspaceId },
+      order: { created_at: 'DESC' }
+    });
+  }
+
+  /**
+   * Get a variable bundle by ID
+   * @param id The ID of the variable bundle
+   * @param workspaceId Optional workspace ID to filter by
+   * @returns The variable bundle
+   * @throws NotFoundException if the variable bundle is not found
+   */
+  async getVariableBundle(id: number, workspaceId?: number): Promise<VariableBundle> {
+    const whereClause: { id: number; workspace_id?: number } = { id };
+
+    if (workspaceId !== undefined) {
+      whereClause.workspace_id = workspaceId;
+    }
+
+    const variableBundle = await this.variableBundleRepository.findOne({ where: whereClause });
+    if (!variableBundle) {
+      if (workspaceId !== undefined) {
+        throw new NotFoundException(`Variable bundle with ID ${id} not found in workspace ${workspaceId}`);
+      } else {
+        throw new NotFoundException(`Variable bundle with ID ${id} not found`);
+      }
+    }
+    return variableBundle;
+  }
+
+  /**
+   * Create a new variable bundle
+   * @param workspaceId The ID of the workspace
+   * @param data The variable bundle data
+   * @returns The created variable bundle
    */
   async createVariableBundle(
     workspaceId: number,
-    unitName: string,
-    variableId: string
-  ): Promise<Variable> {
-    this.logger.log(`Creating variable for workspace ${workspaceId}, unit ${unitName}, variable ${variableId}`);
-
-    // Check if the variable already exists
-    const existingVariable = await this.variableRepository.findOne({
-      where: {
-        workspaceId,
-        unitName,
-        variableId
-      }
+    data: Omit<VariableBundle, 'id' | 'workspace_id' | 'created_at' | 'updated_at'>
+  ): Promise<VariableBundle> {
+    const variableBundle = this.variableBundleRepository.create({
+      ...data,
+      workspace_id: workspaceId
     });
 
-    if (existingVariable) {
-      this.logger.log(`Variable already exists for workspace ${workspaceId}, unit ${unitName}, variable ${variableId}`);
-      return existingVariable;
+    return this.variableBundleRepository.save(variableBundle);
+  }
+
+  /**
+   * Update a variable bundle
+   * @param id The ID of the variable bundle
+   * @param workspaceId The ID of the workspace
+   * @param data The variable bundle data to update
+   * @returns The updated variable bundle
+   * @throws NotFoundException if the variable bundle is not found
+   */
+  async updateVariableBundle(
+    id: number,
+    workspaceId: number,
+    data: Partial<Omit<VariableBundle, 'id' | 'workspace_id' | 'created_at' | 'updated_at'>>
+  ): Promise<VariableBundle> {
+    const variableBundle = await this.getVariableBundle(id, workspaceId);
+
+    // Apply updates
+    Object.assign(variableBundle, data);
+
+    // Save the variable bundle
+    return this.variableBundleRepository.save(variableBundle);
+  }
+
+  /**
+   * Delete a variable bundle
+   * @param id The ID of the variable bundle
+   * @param workspaceId The ID of the workspace
+   * @returns Object with success flag
+   * @throws NotFoundException if the variable bundle is not found
+   */
+  async deleteVariableBundle(id: number, workspaceId: number): Promise<{ success: boolean }> {
+    const variableBundle = await this.getVariableBundle(id, workspaceId);
+
+    await this.variableBundleRepository.remove(variableBundle);
+
+    return { success: true };
+  }
+
+  /**
+   * Add a variable to a variable bundle
+   * @param id The ID of the variable bundle
+   * @param workspaceId The ID of the workspace
+   * @param variable The variable to add
+   * @returns The updated variable bundle
+   * @throws NotFoundException if the variable bundle is not found
+   */
+  async addVariableToBundle(
+    id: number,
+    workspaceId: number,
+    variable: { unitName: string; variableId: string }
+  ): Promise<VariableBundle> {
+    const variableBundle = await this.getVariableBundle(id, workspaceId);
+
+    // Check if the variable already exists in the bundle
+    const variableExists = variableBundle.variables.some(
+      v => v.unitName === variable.unitName && v.variableId === variable.variableId
+    );
+
+    if (!variableExists) {
+      variableBundle.variables.push(variable);
+      return this.variableBundleRepository.save(variableBundle);
     }
 
-    // Create the variable
-    const variable = this.variableRepository.create({
-      workspaceId,
-      unitName,
-      variableId
-    });
-
-    // Save the variable
-    return this.variableRepository.save(variable);
+    return variableBundle;
   }
 
   /**
-   * Gets a variable by ID
+   * Remove a variable from a variable bundle
+   * @param id The ID of the variable bundle
    * @param workspaceId The ID of the workspace
-   * @param id The ID of the variable
+   * @param unitName The unit name of the variable
+   * @param variableId The variable ID
+   * @returns The updated variable bundle
+   * @throws NotFoundException if the variable bundle is not found
    */
-  async getVariableBundle(workspaceId: number, id: number): Promise<Variable | undefined> {
-    this.logger.log(`Getting variable ${id} for workspace ${workspaceId}`);
-
-    return this.variableRepository.findOne({
-      where: {
-        id,
-        workspaceId
-      },
-      relations: ['bundles', 'codingJobs']
-    });
-  }
-
-  /**
-   * Gets all variables for a workspace
-   * @param workspaceId The ID of the workspace
-   * @param options Pagination options
-   */
-  async getVariableBundles(
-    workspaceId: number,
-    options?: { page: number; limit: number }
-  ): Promise<[Variable[], number]> {
-    this.logger.log(`Getting variables for workspace ${workspaceId}`);
-
-    try {
-      if (options) {
-        const { page, limit } = options;
-        const MAX_LIMIT = 500;
-        const validPage = Math.max(1, page); // minimum 1
-        const validLimit = Math.min(Math.max(1, limit), MAX_LIMIT); // Between 1 and MAX_LIMIT
-
-        const [variables, total] = await this.variableRepository.findAndCount({
-          where: { workspaceId },
-          skip: (validPage - 1) * validLimit,
-          take: validLimit,
-          order: { id: 'ASC' },
-          relations: ['bundles', 'codingJobs']
-        });
-
-        this.logger.log(`Found ${variables.length} variable(s) (page ${validPage}, limit ${validLimit}, total ${total}) for workspace ID: ${workspaceId}`);
-        return [variables, total];
-      }
-
-      const variables = await this.variableRepository.find({
-        where: { workspaceId },
-        order: { id: 'ASC' },
-        relations: ['bundles', 'codingJobs']
-      });
-
-      this.logger.log(`Found ${variables.length} variable(s) for workspace ID: ${workspaceId}`);
-      return [variables, variables.length];
-    } catch (error) {
-      this.logger.error(`Failed to retrieve variables for workspace ID: ${workspaceId}`, error.stack);
-      throw new Error('Could not retrieve variables');
-    }
-  }
-
-  /**
-   * Gets a variable by unit name and variable ID
-   * @param workspaceId The ID of the workspace
-   * @param unitName The name of the unit
-   * @param variableId The ID of the variable
-   */
-  async getVariableBundleByUnitAndVariable(
+  async removeVariableFromBundle(
+    id: number,
     workspaceId: number,
     unitName: string,
     variableId: string
-  ): Promise<Variable | undefined> {
-    this.logger.log(`Getting variable for workspace ${workspaceId}, unit ${unitName}, variable ${variableId}`);
+  ): Promise<VariableBundle> {
+    const variableBundle = await this.getVariableBundle(id, workspaceId);
 
-    return this.variableRepository.findOne({
-      where: {
-        workspaceId,
-        unitName,
-        variableId
-      },
-      relations: ['bundles', 'codingJobs']
-    });
-  }
+    // Filter out the variable to remove
+    variableBundle.variables = variableBundle.variables.filter(
+      v => !(v.unitName === unitName && v.variableId === variableId)
+    );
 
-  /**
-   * Gets variables by IDs
-   * @param workspaceId The ID of the workspace
-   * @param ids The IDs of the variables
-   */
-  async getVariableBundlesByIds(
-    workspaceId: number,
-    ids: number[]
-  ): Promise<Variable[]> {
-    this.logger.log(`Getting variables with IDs ${ids.join(', ')} for workspace ${workspaceId}`);
-
-    return this.variableRepository.find({
-      where: {
-        id: In(ids),
-        workspaceId
-      },
-      relations: ['bundles', 'codingJobs']
-    });
-  }
-
-  /**
-   * Deletes a variable
-   * @param workspaceId The ID of the workspace
-   * @param id The ID of the variable
-   */
-  async deleteVariableBundle(workspaceId: number, id: number): Promise<boolean> {
-    this.logger.log(`Deleting variable ${id} for workspace ${workspaceId}`);
-
-    const result = await this.variableRepository.delete({
-      id,
-      workspaceId
-    });
-
-    return result.affected > 0;
-  }
-
-  /**
-   * Deletes a variable by unit name and variable ID
-   * @param workspaceId The ID of the workspace
-   * @param unitName The name of the unit
-   * @param variableId The ID of the variable
-   */
-  async deleteVariableBundleByUnitAndVariable(
-    workspaceId: number,
-    unitName: string,
-    variableId: string
-  ): Promise<boolean> {
-    this.logger.log(`Deleting variable for workspace ${workspaceId}, unit ${unitName}, variable ${variableId}`);
-
-    const result = await this.variableRepository.delete({
-      workspaceId,
-      unitName,
-      variableId
-    });
-
-    return result.affected > 0;
+    return this.variableBundleRepository.save(variableBundle);
   }
 }
