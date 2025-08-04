@@ -47,6 +47,7 @@ import { ValidationTask } from './entities/validation-task.entity';
 import { Setting } from './entities/setting.entity';
 import { ReplayStatistics } from './entities/replay-statistics.entity';
 import { ReplayStatisticsService } from './services/replay-statistics.service';
+import { VariableBundle } from './entities/variable-bundle.entity';
 // eslint-disable-next-line import/no-cycle
 import { JobQueueModule } from '../job-queue/job-queue.module';
 // eslint-disable-next-line import/no-cycle
@@ -82,7 +83,7 @@ import { CacheModule } from '../cache/cache.module';
         password: configService.get('POSTGRES_PASSWORD'),
         database: configService.get('POSTGRES_DB'),
         entities: [BookletInfo, Booklet, Session, BookletLog, Unit, UnitLog, UnitLastState, ResponseEntity,
-          User, Workspace, WorkspaceAdmin, FileUpload, WorkspaceUser, ResourcePackage, Logs, Persons, ChunkEntity, BookletLog, Session, UnitLog, UnitTag, UnitNote, JournalEntry, Job, VariableAnalysisJob, ValidationTask, Setting, ReplayStatistics
+          User, Workspace, WorkspaceAdmin, FileUpload, WorkspaceUser, ResourcePackage, Logs, Persons, ChunkEntity, BookletLog, Session, UnitLog, UnitTag, UnitNote, JournalEntry, Job, VariableAnalysisJob, ValidationTask, Setting, ReplayStatistics, VariableBundle
         ],
         synchronize: false
       }),
@@ -113,7 +114,8 @@ import { CacheModule } from '../cache/cache.module';
       VariableAnalysisJob,
       ValidationTask,
       Setting,
-      ReplayStatistics
+      ReplayStatistics,
+      VariableBundle
     ])
   ],
   providers: [

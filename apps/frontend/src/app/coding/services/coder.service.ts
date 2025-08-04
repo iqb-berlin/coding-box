@@ -1,8 +1,10 @@
 import { Injectable, inject } from '@angular/core';
 import { BehaviorSubject, Observable, of } from 'rxjs';
 import { HttpClient } from '@angular/common/http';
+import { catchError, map } from 'rxjs/operators';
 import { Coder } from '../models/coder.model';
 import { SERVER_URL } from '../../injection-tokens';
+import { AppService } from '../../services/app.service';
 
 @Injectable({
   providedIn: 'root'
@@ -10,29 +12,23 @@ import { SERVER_URL } from '../../injection-tokens';
 export class CoderService {
   private http = inject(HttpClient);
   private readonly serverUrl = inject(SERVER_URL);
-
-  // Initialize with empty array
+  private appService = inject(AppService);
   private codersSubject = new BehaviorSubject<Coder[]>([]);
 
-  /**
-   * Gets all coders (users with accessLevel 1) for the current workspace
-   */
   getCoders(): Observable<Coder[]> {
-    // Get the current workspace ID from localStorage
-    const workspaceId = localStorage.getItem('workspace_id');
-
+    const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
-      console.error('No workspace ID found in localStorage');
+      console.error('No workspace ID available');
       return of([]);
     }
-
-    // Fetch coders from the API
-    const url = `${this.serverUrl}/admin/workspace/${workspaceId}/coders`;
+    const baseUrl = this.serverUrl.endsWith('/') ? this.serverUrl.slice(0, -1) : this.serverUrl;
+    const url = `${baseUrl}/admin/workspace/${workspaceId}/coders`;
 
     interface WorkspaceUser {
       userId: number;
       workspaceId: number;
       accessLevel: number;
+      username: string;
     }
 
     this.http.get<{ data: WorkspaceUser[], total: number }>(url).subscribe({
@@ -40,8 +36,8 @@ export class CoderService {
         // Map the workspace users with accessLevel 1 to Coder objects
         const coders: Coder[] = response.data.map(user => ({
           id: user.userId,
-          name: `User ${user.userId}`, // Default name if user details not available
-          displayName: `Coder ${user.userId}`, // Default display name
+          name: user.username || `User ${user.userId}`, // Use username if available, otherwise fallback to default
+          displayName: user.username || `Coder ${user.userId}`, // Use username if available, otherwise fallback to default
           assignedJobs: []
         }));
 
@@ -58,19 +54,6 @@ export class CoderService {
     return this.codersSubject.asObservable();
   }
 
-  /**
-   * Gets a coder by ID
-   * @param id The ID of the coder to get
-   */
-  getCoderById(id: number): Observable<Coder | undefined> {
-    const coder = this.codersSubject.value.find(c => c.id === id);
-    return of(coder);
-  }
-
-  /**
-   * Creates a new coder
-   * @param coder The coder to create
-   */
   createCoder(coder: Omit<Coder, 'id'>): Observable<Coder> {
     const newCoder: Coder = {
       ...coder,
@@ -83,11 +66,6 @@ export class CoderService {
     return of(newCoder);
   }
 
-  /**
-   * Updates an existing coder
-   * @param id The ID of the coder to update
-   * @param coder The updated coder data
-   */
   updateCoder(id: number, coder: Partial<Coder>): Observable<Coder | undefined> {
     const coders = this.codersSubject.value;
     const index = coders.findIndex(c => c.id === id);
@@ -132,32 +110,51 @@ export class CoderService {
    * @param jobId The ID of the coding job
    */
   assignJob(coderId: number, jobId: number): Observable<Coder | undefined> {
-    const coders = this.codersSubject.value;
-    const index = coders.findIndex(c => c.id === coderId);
-
-    if (index === -1) {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      console.error('No workspace ID available');
       return of(undefined);
     }
 
-    const coder = coders[index];
-    const assignedJobs = coder.assignedJobs || [];
+    // Remove trailing slash from serverUrl if present to avoid double slashes
+    const baseUrl = this.serverUrl.endsWith('/') ? this.serverUrl.slice(0, -1) : this.serverUrl;
+    const url = `${baseUrl}/admin/workspace/${workspaceId}/coding-jobs/${jobId}/assign/${coderId}`;
 
-    // Only add the job if it's not already assigned
-    if (!assignedJobs.includes(jobId)) {
-      const updatedCoder: Coder = {
-        ...coder,
-        assignedJobs: [...assignedJobs, jobId]
-      };
+    return this.http.post<{ success: boolean }>(url, {}).pipe(
+      map(() => {
+        // Update the local state after successful assignment
+        const coders = this.codersSubject.value;
+        const index = coders.findIndex(c => c.id === coderId);
 
-      const updatedCoders = [...coders];
-      updatedCoders[index] = updatedCoder;
+        if (index === -1) {
+          return undefined;
+        }
 
-      this.codersSubject.next(updatedCoders);
+        const coder = coders[index];
+        const assignedJobs = coder.assignedJobs || [];
 
-      return of(updatedCoder);
-    }
+        // Only add the job if it's not already assigned
+        if (!assignedJobs.includes(jobId)) {
+          const updatedCoder: Coder = {
+            ...coder,
+            assignedJobs: [...assignedJobs, jobId]
+          };
 
-    return of(coder);
+          const updatedCoders = [...coders];
+          updatedCoders[index] = updatedCoder;
+
+          this.codersSubject.next(updatedCoders);
+
+          return updatedCoder;
+        }
+
+        return coder;
+      }),
+      catchError(error => {
+        console.error(`Error assigning job ${jobId} to coder ${coderId}:`, error);
+        return of(undefined);
+      })
+    );
   }
 
   /**
@@ -166,27 +163,46 @@ export class CoderService {
    * @param jobId The ID of the coding job
    */
   unassignJob(coderId: number, jobId: number): Observable<Coder | undefined> {
-    const coders = this.codersSubject.value;
-    const index = coders.findIndex(c => c.id === coderId);
-
-    if (index === -1) {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      console.error('No workspace ID available');
       return of(undefined);
     }
 
-    const coder = coders[index];
-    const assignedJobs = coder.assignedJobs || [];
+    // Remove trailing slash from serverUrl if present to avoid double slashes
+    const baseUrl = this.serverUrl.endsWith('/') ? this.serverUrl.slice(0, -1) : this.serverUrl;
+    const url = `${baseUrl}/admin/workspace/${workspaceId}/coding-jobs/${jobId}/unassign/${coderId}`;
 
-    const updatedCoder: Coder = {
-      ...coder,
-      assignedJobs: assignedJobs.filter(id => id !== jobId)
-    };
+    return this.http.delete<{ success: boolean }>(url).pipe(
+      map(() => {
+        // Update the local state after successful unassignment
+        const coders = this.codersSubject.value;
+        const index = coders.findIndex(c => c.id === coderId);
 
-    const updatedCoders = [...coders];
-    updatedCoders[index] = updatedCoder;
+        if (index === -1) {
+          return undefined;
+        }
 
-    this.codersSubject.next(updatedCoders);
+        const coder = coders[index];
+        const assignedJobs = coder.assignedJobs || [];
 
-    return of(updatedCoder);
+        const updatedCoder: Coder = {
+          ...coder,
+          assignedJobs: assignedJobs.filter(id => id !== jobId)
+        };
+
+        const updatedCoders = [...coders];
+        updatedCoders[index] = updatedCoder;
+
+        this.codersSubject.next(updatedCoders);
+
+        return updatedCoder;
+      }),
+      catchError(error => {
+        console.error(`Error unassigning job ${jobId} from coder ${coderId}:`, error);
+        return of(undefined);
+      })
+    );
   }
 
   /**
@@ -194,10 +210,67 @@ export class CoderService {
    * @param jobId The ID of the coding job
    */
   getCodersByJobId(jobId: number): Observable<Coder[]> {
-    const coders = this.codersSubject.value.filter(
-      coder => coder.assignedJobs?.includes(jobId)
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      console.error('No workspace ID available');
+      return of([]);
+    }
+
+    // Remove trailing slash from serverUrl if present to avoid double slashes
+    const baseUrl = this.serverUrl.endsWith('/') ? this.serverUrl.slice(0, -1) : this.serverUrl;
+    const url = `${baseUrl}/admin/workspace/${workspaceId}/coding-jobs/${jobId}/coders`;
+
+    interface WorkspaceUser {
+      userId: number;
+      workspaceId: number;
+      accessLevel: number;
+      username: string;
+    }
+
+    return this.http.get<{ data: WorkspaceUser[], total: number }>(url).pipe(
+      map(response => {
+        // Map WorkspaceUser objects to Coder objects
+        const fetchedCoders: Coder[] = response.data.map(user => ({
+          id: user.userId,
+          name: user.username || `User ${user.userId}`,
+          displayName: user.username || `Coder ${user.userId}`,
+          assignedJobs: [jobId]
+        }));
+
+        // Merge with existing coders to maintain other properties
+        const existingCoders = this.codersSubject.value;
+        const mergedCoders = [...existingCoders];
+
+        fetchedCoders.forEach(fetchedCoder => {
+          const index = mergedCoders.findIndex(c => c.id === fetchedCoder.id);
+          if (index !== -1) {
+            // Update existing coder
+            mergedCoders[index] = {
+              ...mergedCoders[index],
+              ...fetchedCoder,
+              assignedJobs: [...(mergedCoders[index].assignedJobs || []), jobId]
+            };
+          } else {
+            // Add new coder
+            mergedCoders.push(fetchedCoder);
+          }
+        });
+
+        // Update the subject with the merged coders
+        this.codersSubject.next(mergedCoders);
+
+        return fetchedCoders;
+      }),
+      catchError(error => {
+        console.error(`Error fetching coders for job ${jobId}:`, error);
+
+        // Fallback to local data if API call fails
+        const coders = this.codersSubject.value.filter(
+          coder => coder.assignedJobs?.includes(jobId)
+        );
+        return of(coders);
+      })
     );
-    return of(coders);
   }
 
   /**

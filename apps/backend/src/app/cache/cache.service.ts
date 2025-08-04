@@ -5,8 +5,7 @@ import Redis from 'ioredis';
 @Injectable()
 export class CacheService {
   private readonly logger = new Logger(CacheService.name);
-  private readonly DEFAULT_TTL = 3600; // 1 hour in seconds
-
+  private readonly DEFAULT_TTL = 86400; // 24 Stunden in Sekunden
   constructor(
     @InjectRedis() private readonly redis: Redis
   ) {}
