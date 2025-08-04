@@ -31,7 +31,7 @@ export interface VariableBundleGroupDialogData {
 }
 
 @Component({
-  selector: 'coding-box-variable-bundle-group-dialog',
+  selector: 'coding-box-variable-bundle-dialog',
   templateUrl: './variable-bundle-dialog.component.html',
   styleUrls: ['./variable-bundle-dialog.component.scss'],
   standalone: true,

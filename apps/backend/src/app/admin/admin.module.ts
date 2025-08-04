@@ -26,13 +26,16 @@ import { BookletInfoService } from '../database/services/booklet-info.service';
 import { UnitInfoService } from '../database/services/unit-info.service';
 import FileUpload from '../database/entities/file_upload.entity';
 import { ReplayStatisticsController } from './replay-statistics/replay-statistics.controller';
+import { VariableBundleModule } from './variable-bundle/variable-bundle.module';
+import { VariableBundleController } from './variable-bundle/variable-bundle.controller';
 
 @Module({
   imports: [
     DatabaseModule,
     AuthModule,
     HttpModule,
-    TypeOrmModule.forFeature([FileUpload])
+    TypeOrmModule.forFeature([FileUpload]),
+    VariableBundleModule
   ],
   controllers: [
     UsersController,
@@ -54,7 +57,8 @@ import { ReplayStatisticsController } from './replay-statistics/replay-statistic
     BookletInfoController,
     UnitInfoController,
     MissingsProfilesController,
-    ReplayStatisticsController
+    ReplayStatisticsController,
+    VariableBundleController
   ],
   providers: [
     BookletInfoService,
