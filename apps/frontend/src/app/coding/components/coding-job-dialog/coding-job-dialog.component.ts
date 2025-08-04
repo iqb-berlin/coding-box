@@ -23,8 +23,10 @@ import { MatExpansionModule } from '@angular/material/expansion';
 import { TranslateModule } from '@ngx-translate/core';
 import { SelectionModel } from '@angular/cdk/collections';
 import { CodingJob, VariableBundle, Variable } from '../../models/coding-job.model';
+import { Coder } from '../../models/coder.model';
 import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
+import { CoderService } from '../../services/coder.service';
 import { VariableAnalysisItem } from '../../models/variable-analysis-item.model';
 
 export interface CodingJobDialogData {
@@ -63,6 +65,7 @@ export class CodingJobDialogComponent implements OnInit {
   private fb = inject(FormBuilder);
   private backendService = inject(BackendService);
   private appService = inject(AppService);
+  private coderService = inject(CoderService);
 
   codingJobForm!: FormGroup;
   isLoading = false;
@@ -72,6 +75,10 @@ export class CodingJobDialogComponent implements OnInit {
   selectedVariables = new SelectionModel<Variable>(true, []);
   displayedColumns: string[] = ['select', 'unitName', 'variableId'];
   dataSource = new MatTableDataSource<Variable>([]);
+
+  // Coders
+  coders: Coder[] = [];
+  isLoadingCoders = false;
 
   // Variable bundles
   variableBundles: VariableBundle[] = [];
@@ -102,6 +109,29 @@ export class CodingJobDialogComponent implements OnInit {
     this.initForm();
     this.loadVariableAnalysisItems();
     this.loadVariableBundles();
+
+    // Load coders if we're in edit mode and have a job ID
+    if (this.data.isEdit && this.data.codingJob?.id) {
+      this.loadCoders(this.data.codingJob.id);
+    }
+  }
+
+  /**
+   * Loads coders assigned to the current job
+   * @param jobId The ID of the job
+   */
+  loadCoders(jobId: number): void {
+    this.isLoadingCoders = true;
+
+    this.coderService.getCodersByJobId(jobId).subscribe({
+      next: coders => {
+        this.coders = coders;
+        this.isLoadingCoders = false;
+      },
+      error: () => {
+        this.isLoadingCoders = false;
+      }
+    });
   }
 
   initForm(): void {
@@ -182,6 +212,24 @@ export class CodingJobDialogComponent implements OnInit {
 
   loadVariableBundles(): void {
     this.isLoadingBundles = true;
+
+    // Get the current workspace ID from the app service
+    const workspaceId = this.appService.selectedWorkspaceId;
+
+    if (workspaceId) {
+      this.backendService.getVariableBundles(workspaceId).subscribe({
+        next: bundles => {
+          this.variableBundles = bundles;
+          this.bundlesDataSource.data = bundles;
+          this.isLoadingBundles = false;
+        },
+        error: () => {
+          this.isLoadingBundles = false;
+        }
+      });
+    } else {
+      this.isLoadingBundles = false;
+    }
   }
 
   onPageChange(event: PageEvent): void {

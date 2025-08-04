@@ -26,6 +26,7 @@ import { SearchFilterComponent } from '../../../shared/search-filter/search-filt
 import { VariableBundle } from '../../models/coding-job.model';
 import { VariableBundleService } from '../../services/variable-bundle.service';
 import { VariableBundleDialogComponent } from '../variable-bundle-dialog/variable-bundle-dialog.component';
+import { ConfirmDialogComponent, ConfirmDialogData } from '../../../shared/dialogs/confirm-dialog.component';
 
 @Component({
   selector: 'coding-box-variable-bundle-manager',
@@ -130,7 +131,7 @@ export class VariableBundleManagerComponent implements OnInit, AfterViewInit {
 
     dialogRef.afterClosed().subscribe(result => {
       if (result) {
-        this.variableBundleGroupService.createBundleGroup(result).subscribe({
+        this.variableBundleGroupService.createBundle(result).subscribe({
           next: newBundleGroup => {
             this.loadVariableBundleGroups();
             this.snackBar.open(`Variablenbündel "${newBundleGroup.name}" wurde erstellt`, 'Schließen', { duration: 3000 });
@@ -154,7 +155,7 @@ export class VariableBundleManagerComponent implements OnInit, AfterViewInit {
 
     dialogRef.afterClosed().subscribe(result => {
       if (result) {
-        this.variableBundleGroupService.updateBundleGroup(bundleGroup.id, result).subscribe({
+        this.variableBundleGroupService.updateBundle(bundleGroup.id, result).subscribe({
           next: updatedBundleGroup => {
             if (updatedBundleGroup) {
               this.loadVariableBundleGroups();
@@ -170,20 +171,30 @@ export class VariableBundleManagerComponent implements OnInit, AfterViewInit {
   }
 
   deleteVariableBundleGroup(bundleGroup: VariableBundle): void {
-    if (confirm(`Sind Sie sicher, dass Sie das Variablenbündel "${bundleGroup.name}" löschen möchten?`)) {
-      this.variableBundleGroupService.deleteBundleGroup(bundleGroup.id).subscribe({
-        next: success => {
-          if (success) {
-            this.loadVariableBundleGroups();
-            this.snackBar.open(`Variablenbündel "${bundleGroup.name}" wurde gelöscht`, 'Schließen', { duration: 3000 });
+    const dialogRef = this.dialog.open(ConfirmDialogComponent, {
+      data: {
+        title: 'Variablenbündel löschen',
+        content: `Sind Sie sicher, dass Sie das Variablenbündel "${bundleGroup.name}" löschen möchten?`,
+        confirmButtonLabel: 'Löschen',
+        showCancel: true
+      } as ConfirmDialogData
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result) {
+        this.variableBundleGroupService.deleteBundle(bundleGroup.id).subscribe({
+          next: success => {
+            if (success) {
+              this.loadVariableBundleGroups();
+              this.snackBar.open(`Variablenbündel "${bundleGroup.name}" wurde gelöscht`, 'Schließen', { duration: 3000 });
+            }
+          },
+          error: () => {
+            this.snackBar.open('Fehler beim Löschen des Variablenbündels', 'Schließen', { duration: 3000 });
           }
-        },
-        error: error => {
-          console.error('Error deleting variable bundle group:', error);
-          this.snackBar.open('Fehler beim Löschen des Variablenbündels', 'Schließen', { duration: 3000 });
-        }
-      });
-    }
+        });
+      }
+    });
   }
 
   deleteSelectedVariableBundleGroups(): void {
@@ -191,20 +202,29 @@ export class VariableBundleManagerComponent implements OnInit, AfterViewInit {
       return;
     }
 
-    if (confirm(`Sind Sie sicher, dass Sie ${this.selection.selected.length} ausgewählte Variablenbündel löschen möchten?`)) {
-      const deletePromises = this.selection.selected.map(bundleGroup => this.variableBundleGroupService.deleteBundleGroup(bundleGroup.id)
-      );
+    const dialogRef = this.dialog.open(ConfirmDialogComponent, {
+      data: {
+        title: 'Variablenbündel löschen',
+        content: `Sind Sie sicher, dass Sie ${this.selection.selected.length} ausgewählte Variablenbündel löschen möchten?`,
+        confirmButtonLabel: 'Löschen',
+        showCancel: true
+      } as ConfirmDialogData
+    });
 
-      // Wait for all delete operations to complete
-      Promise.all(deletePromises).then(() => {
-        this.loadVariableBundleGroups();
-        this.selection.clear();
-        this.snackBar.open(`${this.selection.selected.length} Variablenbündel wurden gelöscht`, 'Schließen', { duration: 3000 });
-      }).catch(error => {
-        console.error('Error deleting variable bundle groups:', error);
-        this.snackBar.open('Fehler beim Löschen der Variablenbündel', 'Schließen', { duration: 3000 });
-      });
-    }
+    dialogRef.afterClosed().subscribe(result => {
+      if (result) {
+        const deletePromises = this.selection.selected.map(bundleGroup => this.variableBundleGroupService.deleteBundle(bundleGroup.id)
+        );
+
+        Promise.all(deletePromises).then(() => {
+          this.loadVariableBundleGroups();
+          this.selection.clear();
+          this.snackBar.open(`${this.selection.selected.length} Variablenbündel wurden gelöscht`, 'Schließen', { duration: 3000 });
+        }).catch(() => {
+          this.snackBar.open('Fehler beim Löschen der Variablenbündel', 'Schließen', { duration: 3000 });
+        });
+      }
+    });
   }
 
   getVariableCount(bundleGroup: VariableBundle): number {
