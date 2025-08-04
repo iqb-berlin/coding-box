@@ -9,6 +9,7 @@ import { UnitTagDto } from 'api-dto/unit-tags/unit-tag.dto';
 import { CreateUnitTagDto } from 'api-dto/unit-tags/create-unit-tag.dto';
 import { CreateWorkspaceDto } from 'api-dto/workspaces/create-workspace-dto';
 import { PaginatedWorkspacesDto } from 'api-dto/workspaces/paginated-workspaces-dto';
+import { VariableBundle } from '../coding/models/coding-job.model';
 import { AppService } from './app.service';
 import { TestGroupsInfoDto } from '../../../../../api-dto/files/test-groups-info.dto';
 import { SERVER_URL } from '../injection-tokens';
@@ -822,5 +823,15 @@ export class BackendService {
   getFailureDistributionByHour(workspaceId: number): Observable<Record<string, number>> {
     const url = `${this.serverUrl}/admin/workspace/${workspaceId}/replay-statistics/failures/hour`;
     return this.http.get<Record<string, number>>(url);
+  }
+
+  /**
+   * Get all variable bundles for a workspace
+   * @param workspaceId The ID of the workspace
+   * @returns Observable of variable bundles
+   */
+  getVariableBundles(workspaceId: number): Observable<VariableBundle[]> {
+    const url = `${this.serverUrl}/admin/workspace/${workspaceId}/variable-bundle`;
+    return this.http.get<VariableBundle[]>(url);
   }
 }

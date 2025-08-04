@@ -97,7 +97,7 @@ export class VariableBundleController {
   })
   async getVariableBundle(
     @WorkspaceId() workspaceId: number,
-    @Param('id') id: number
+      @Param('id') id: number
   ): Promise<VariableBundleDto> {
     try {
       const variableBundle = await this.variableBundleService.getVariableBundle(id, workspaceId);
@@ -132,7 +132,7 @@ export class VariableBundleController {
   })
   async createVariableBundle(
     @WorkspaceId() workspaceId: number,
-    @Body() createVariableBundleDto: CreateVariableBundleDto
+      @Body() createVariableBundleDto: CreateVariableBundleDto
   ): Promise<VariableBundleDto> {
     try {
       const variableBundle = await this.variableBundleService.createVariableBundle(
@@ -176,8 +176,8 @@ export class VariableBundleController {
   })
   async updateVariableBundle(
     @WorkspaceId() workspaceId: number,
-    @Param('id') id: number,
-    @Body() updateVariableBundleDto: UpdateVariableBundleDto
+      @Param('id') id: number,
+      @Body() updateVariableBundleDto: UpdateVariableBundleDto
   ): Promise<VariableBundleDto> {
     try {
       const variableBundle = await this.variableBundleService.updateVariableBundle(
@@ -227,7 +227,7 @@ export class VariableBundleController {
   })
   async deleteVariableBundle(
     @WorkspaceId() workspaceId: number,
-    @Param('id') id: number
+      @Param('id') id: number
   ): Promise<{ success: boolean }> {
     try {
       return await this.variableBundleService.deleteVariableBundle(id, workspaceId);
@@ -270,8 +270,8 @@ export class VariableBundleController {
   })
   async addVariableToBundle(
     @WorkspaceId() workspaceId: number,
-    @Param('id') id: number,
-    @Body() variable: VariableDto
+      @Param('id') id: number,
+      @Body() variable: VariableDto
   ): Promise<VariableBundleDto> {
     try {
       const variableBundle = await this.variableBundleService.addVariableToBundle(
@@ -328,9 +328,9 @@ export class VariableBundleController {
   })
   async removeVariableFromBundle(
     @WorkspaceId() workspaceId: number,
-    @Param('id') id: number,
-    @Param('unitName') unitName: string,
-    @Param('variableId') variableId: string
+      @Param('id') id: number,
+      @Param('unitName') unitName: string,
+      @Param('variableId') variableId: string
   ): Promise<VariableBundleDto> {
     try {
       const variableBundle = await this.variableBundleService.removeVariableFromBundle(

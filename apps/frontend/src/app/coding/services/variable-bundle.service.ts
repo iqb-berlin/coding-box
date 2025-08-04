@@ -13,10 +13,9 @@ export class VariableBundleService {
   private http = inject(HttpClient);
   private readonly serverUrl = inject(SERVER_URL);
   private appService = inject(AppService);
-  private bundleGroupsSubject = new BehaviorSubject<VariableBundle[]>([]);
+  private bundlesSubject = new BehaviorSubject<VariableBundle[]>([]);
 
-  // Sample data for demonstration
-  private sampleBundleGroups: VariableBundle[] = [
+  private sampleBundles: VariableBundle[] = [
     {
       id: 1,
       name: 'Mathematische Fähigkeiten',
@@ -44,324 +43,269 @@ export class VariableBundleService {
   ];
 
   constructor() {
-    // Initialize with sample data
-    this.bundleGroupsSubject.next(this.sampleBundleGroups);
+    this.bundlesSubject.next(this.sampleBundles);
   }
 
-  /**
-   * Gets all variable bundle groups
-   */
   getBundleGroups(): Observable<VariableBundle[]> {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
       return of([]);
     }
-
-    // Remove trailing slash from serverUrl if present to avoid double slashes
     const baseUrl = this.serverUrl.endsWith('/') ? this.serverUrl.slice(0, -1) : this.serverUrl;
     const url = `${baseUrl}/admin/workspace/${workspaceId}/variable-bundle`;
 
     return this.http.get<{ data: VariableBundle[], total: number }>(url).pipe(
       map(response => {
-        const bundleGroups = response.data;
+        const bundles = response.data;
+        this.bundlesSubject.next(bundles);
 
-        // Update the subject with the fetched bundle groups
-        this.bundleGroupsSubject.next(bundleGroups);
-
-        return bundleGroups;
+        return bundles;
       }),
-      catchError(() => this.bundleGroupsSubject.asObservable().pipe(
+      catchError(() => this.bundlesSubject.asObservable().pipe(
         take(1)
       )
       )
     );
   }
 
-  /**
-   * Gets a variable bundle group by ID
-   * @param id The ID of the bundle group
-   */
-  getBundleGroupById(id: number): Observable<VariableBundle | undefined> {
-    const bundleGroups = this.bundleGroupsSubject.value;
-    const bundleGroup = bundleGroups.find(group => group.id === id);
-    return of(bundleGroup);
+  getBundleById(id: number): Observable<VariableBundle | undefined> {
+    const bundles = this.bundlesSubject.value;
+    const bundle = bundles.find(b => b.id === id);
+    return of(bundle);
   }
 
-  /**
-   * Creates a new variable bundle group
-   * @param bundleGroup The bundle group to create (without ID)
-   */
-  createBundleGroup(bundleGroup: Omit<VariableBundle, 'id'>): Observable<VariableBundle> {
+  createBundle(bundle: Omit<VariableBundle, 'id'>): Observable<VariableBundle> {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
       return of({
-        ...bundleGroup,
+        ...bundle,
         id: this.getNextId()
       } as VariableBundle);
     }
 
-    // Remove trailing slash from serverUrl if present to avoid double slashes
     const baseUrl = this.serverUrl.endsWith('/') ? this.serverUrl.slice(0, -1) : this.serverUrl;
     const url = `${baseUrl}/admin/workspace/${workspaceId}/variable-bundle`;
 
-    return this.http.post<VariableBundle>(url, bundleGroup).pipe(
-      map(newBundleGroup => {
-        // Update the local state with the new bundle group
-        const updatedBundleGroups = [...this.bundleGroupsSubject.value, newBundleGroup];
-        this.bundleGroupsSubject.next(updatedBundleGroups);
+    return this.http.post<VariableBundle>(url, bundle).pipe(
+      map(newBundle => {
+        const updatedBundles = [...this.bundlesSubject.value, newBundle];
+        this.bundlesSubject.next(updatedBundles);
 
-        return newBundleGroup;
+        return newBundle;
       }),
       catchError(() => {
-        // Fallback to local creation if API call fails
-        const newBundleGroup: VariableBundle = {
-          ...bundleGroup,
+        const newBundle: VariableBundle = {
+          ...bundle,
           id: this.getNextId()
         };
 
-        const updatedBundleGroups = [...this.bundleGroupsSubject.value, newBundleGroup];
-        this.bundleGroupsSubject.next(updatedBundleGroups);
+        const updatedBundle = [...this.bundlesSubject.value, newBundle];
+        this.bundlesSubject.next(updatedBundle);
 
-        return of(newBundleGroup);
+        return of(newBundle);
       })
     );
   }
 
-  /**
-   * Updates an existing variable bundle group
-   * @param id The ID of the bundle group to update
-   * @param bundleGroup The updated bundle group data
-   */
-  updateBundleGroup(id: number, bundleGroup: Partial<VariableBundle>): Observable<VariableBundle | undefined> {
+  updateBundle(id: number, bundle: Partial<VariableBundle>): Observable<VariableBundle | undefined> {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
       return of(undefined);
     }
 
-    // Remove trailing slash from serverUrl if present to avoid double slashes
     const baseUrl = this.serverUrl.endsWith('/') ? this.serverUrl.slice(0, -1) : this.serverUrl;
     const url = `${baseUrl}/admin/workspace/${workspaceId}/variable-bundle/${id}`;
 
-    // Ensure updatedAt is set to current date
     const updateData = {
-      ...bundleGroup,
+      ...bundle,
       updatedAt: new Date()
     };
 
     return this.http.put<VariableBundle>(url, updateData).pipe(
       map(updatedBundleGroup => {
         // Update the local state with the updated bundle group
-        const bundleGroups = this.bundleGroupsSubject.value;
-        const index = bundleGroups.findIndex(group => group.id === id);
+        const bundles = this.bundlesSubject.value;
+        const index = bundles.findIndex(b => b.id === id);
 
         if (index !== -1) {
-          const updatedBundleGroups = [...bundleGroups];
+          const updatedBundleGroups = [...bundles];
           updatedBundleGroups[index] = updatedBundleGroup;
-          this.bundleGroupsSubject.next(updatedBundleGroups);
+          this.bundlesSubject.next(updatedBundleGroups);
         }
 
         return updatedBundleGroup;
       }),
       catchError(() => {
-        // Fallback to local update if API call fails
-        const bundleGroups = this.bundleGroupsSubject.value;
-        const index = bundleGroups.findIndex(group => group.id === id);
+        const bundles = this.bundlesSubject.value;
+        const index = bundles.findIndex(b => b.id === id);
 
         if (index === -1) {
           return of(undefined);
         }
 
-        const updatedBundleGroup: VariableBundle = {
-          ...bundleGroups[index],
-          ...bundleGroup,
+        const updatedBundle: VariableBundle = {
+          ...bundles[index],
+          ...bundle,
           updatedAt: new Date()
         };
 
-        const updatedBundleGroups = [...bundleGroups];
-        updatedBundleGroups[index] = updatedBundleGroup;
+        const updatedBundleGroups = [...bundles];
+        updatedBundleGroups[index] = updatedBundle;
 
-        this.bundleGroupsSubject.next(updatedBundleGroups);
+        this.bundlesSubject.next(updatedBundleGroups);
 
-        return of(updatedBundleGroup);
+        return of(updatedBundle);
       })
     );
   }
 
-  /**
-   * Deletes a variable bundle group
-   * @param id The ID of the bundle group to delete
-   */
-  deleteBundleGroup(id: number): Observable<boolean> {
+  deleteBundle(id: number): Observable<boolean> {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
       return of(false);
     }
 
-    // Remove trailing slash from serverUrl if present to avoid double slashes
     const baseUrl = this.serverUrl.endsWith('/') ? this.serverUrl.slice(0, -1) : this.serverUrl;
     const url = `${baseUrl}/admin/workspace/${workspaceId}/variable-bundle/${id}`;
 
     return this.http.delete<{ success: boolean }>(url).pipe(
       map(response => {
         if (response.success) {
-          // Update the local state by removing the deleted bundle group
-          const bundleGroups = this.bundleGroupsSubject.value;
-          const updatedBundleGroups = bundleGroups.filter(group => group.id !== id);
-          this.bundleGroupsSubject.next(updatedBundleGroups);
+          const bundleGroups = this.bundlesSubject.value;
+          const updatedBundles = bundleGroups.filter(group => group.id !== id);
+          this.bundlesSubject.next(updatedBundles);
         }
 
         return response.success;
       }),
       catchError(() => {
-        // Fallback to local deletion if API call fails
-        const bundleGroups = this.bundleGroupsSubject.value;
-        const updatedBundleGroups = bundleGroups.filter(group => group.id !== id);
+        const bundles = this.bundlesSubject.value;
+        const updatedBundles = bundles.filter(b => b.id !== id);
 
-        if (updatedBundleGroups.length === bundleGroups.length) {
+        if (updatedBundles.length === bundles.length) {
           return of(false);
         }
 
-        this.bundleGroupsSubject.next(updatedBundleGroups);
+        this.bundlesSubject.next(updatedBundles);
 
         return of(true);
       })
     );
   }
 
-  /**
-   * Adds a variable to a bundle group
-   * @param groupId The ID of the bundle group
-   * @param variable The variable to add
-   */
-  addVariableToGroup(groupId: number, variable: Variable): Observable<VariableBundle | undefined> {
+  addVariableToBundle(bundleId: number, variable: Variable): Observable<VariableBundle | undefined> {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
       return of(undefined);
     }
 
-    // Remove trailing slash from serverUrl if present to avoid double slashes
     const baseUrl = this.serverUrl.endsWith('/') ? this.serverUrl.slice(0, -1) : this.serverUrl;
-    const url = `${baseUrl}/admin/workspace/${workspaceId}/variable-bundle/${groupId}/variables`;
+    const url = `${baseUrl}/admin/workspace/${workspaceId}/variable-bundle/${bundleId}/variables`;
 
     return this.http.post<VariableBundle>(url, variable).pipe(
-      map(updatedGroup => {
-        // Update the local state with the updated bundle group
-        const bundleGroups = this.bundleGroupsSubject.value;
-        const index = bundleGroups.findIndex(group => group.id === groupId);
+      map(updatedBundle => {
+        const bundles = this.bundlesSubject.value;
+        const index = bundles.findIndex(b => b.id === bundleId);
 
         if (index !== -1) {
-          const updatedBundleGroups = [...bundleGroups];
-          updatedBundleGroups[index] = updatedGroup;
-          this.bundleGroupsSubject.next(updatedBundleGroups);
+          const updatedBundles = [...bundles];
+          updatedBundles[index] = updatedBundle;
+          this.bundlesSubject.next(updatedBundles);
         }
 
-        return updatedGroup;
+        return updatedBundle;
       }),
       catchError(() => {
-        // Fallback to local addition if API call fails
-        const bundleGroups = this.bundleGroupsSubject.value;
-        const index = bundleGroups.findIndex(group => group.id === groupId);
+        const bundles = this.bundlesSubject.value;
+        const index = bundles.findIndex(b => b.id === bundleId);
 
         if (index === -1) {
           return of(undefined);
         }
 
-        const group = bundleGroups[index];
+        const bundle = bundles[index];
 
-        // Check if the variable already exists in the group
-        const variableExists = group.variables.some(
+        const variableExists = bundle.variables.some(
           v => v.unitName === variable.unitName && v.variableId === variable.variableId
         );
 
         if (variableExists) {
-          return of(group);
+          return of(bundle);
         }
 
-        const updatedGroup: VariableBundle = {
-          ...group,
-          variables: [...group.variables, variable as Variable],
+        const updatedBundle: VariableBundle = {
+          ...bundle,
+          variables: [...bundle.variables, variable as Variable],
           updatedAt: new Date()
         };
 
-        const updatedBundleGroups = [...bundleGroups];
-        updatedBundleGroups[index] = updatedGroup;
+        const updatedBundles = [...bundles];
+        updatedBundles[index] = updatedBundle;
 
-        this.bundleGroupsSubject.next(updatedBundleGroups);
+        this.bundlesSubject.next(updatedBundles);
 
-        return of(updatedGroup);
+        return of(updatedBundle);
       })
     );
   }
 
-  /**
-   * Removes a variable from a bundle group
-   * @param groupId The ID of the bundle group
-   * @param variable The variable to remove
-   */
-  removeVariableFromGroup(groupId: number, variable: Variable): Observable<VariableBundle | undefined> {
+  removeVariableFromBundle(groupId: number, variable: Variable): Observable<VariableBundle | undefined> {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
       return of(undefined);
     }
 
-    // Encode the variable parameters for the URL
     const encodedUnitName = encodeURIComponent((variable as Variable).unitName);
     const encodedVariableId = encodeURIComponent((variable as Variable).variableId);
 
-    // Remove trailing slash from serverUrl if present to avoid double slashes
     const baseUrl = this.serverUrl.endsWith('/') ? this.serverUrl.slice(0, -1) : this.serverUrl;
     const url = `${baseUrl}/admin/workspace/${workspaceId}/variable-bundle/${groupId}/variables/${encodedUnitName}/${encodedVariableId}`;
 
     return this.http.delete<VariableBundle>(url).pipe(
-      map(updatedGroup => {
-        // Update the local state with the updated bundle group
-        const bundleGroups = this.bundleGroupsSubject.value;
-        const index = bundleGroups.findIndex(group => group.id === groupId);
+      map(updatedBundle => {
+        const bundles = this.bundlesSubject.value;
+        const index = bundles.findIndex(group => group.id === groupId);
 
         if (index !== -1) {
-          const updatedBundleGroups = [...bundleGroups];
-          updatedBundleGroups[index] = updatedGroup;
-          this.bundleGroupsSubject.next(updatedBundleGroups);
+          const updatedBundles = [...bundles];
+          updatedBundles[index] = updatedBundle;
+          this.bundlesSubject.next(updatedBundles);
         }
 
-        return updatedGroup;
+        return updatedBundle;
       }),
       catchError(() => {
-        // Fallback to local removal if API call fails
-        const bundleGroups = this.bundleGroupsSubject.value;
-        const index = bundleGroups.findIndex(group => group.id === groupId);
+        const bundles = this.bundlesSubject.value;
+        const index = bundles.findIndex(group => group.id === groupId);
 
         if (index === -1) {
           return of(undefined);
         }
 
-        const group = bundleGroups[index];
+        const bundle = bundles[index];
 
-        const updatedVariables = group.variables.filter(
+        const updatedVariables = bundle.variables.filter(
           v => !(v.unitName === (variable as Variable).unitName && v.variableId === (variable as Variable).variableId)
         );
 
-        const updatedGroup: VariableBundle = {
-          ...group,
+        const updatedBundle: VariableBundle = {
+          ...bundle,
           variables: updatedVariables,
           updatedAt: new Date()
         };
 
-        const updatedBundleGroups = [...bundleGroups];
-        updatedBundleGroups[index] = updatedGroup;
+        const updatedBundles = [...bundles];
+        updatedBundles[index] = updatedBundle;
 
-        this.bundleGroupsSubject.next(updatedBundleGroups);
+        this.bundlesSubject.next(updatedBundles);
 
-        return of(updatedGroup);
+        return of(updatedBundle);
       })
     );
   }
 
-  /**
-   * Gets the next available ID for a new bundle group
-   */
   private getNextId(): number {
-    const bundleGroups = this.bundleGroupsSubject.value;
+    const bundleGroups = this.bundlesSubject.value;
     return bundleGroups.length > 0 ?
       Math.max(...bundleGroups.map(group => group.id)) + 1 :
       1;

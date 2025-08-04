@@ -35,6 +35,47 @@
         <p class="section-description">Wählen Sie die Variablen und Variablenbündel aus, die diesem Kodierjob zugeordnet werden sollen.</p>
 
         <mat-tab-group>
+          <!-- Tab for assigned coders -->
+          <mat-tab label="Kodierer">
+            @if (isLoadingCoders) {
+              <div class="loading-container">
+                <mat-spinner diameter="40"></mat-spinner>
+                <p class="loading-text">Lade Kodierer...</p>
+              </div>
+            }
+
+            @if (!isLoadingCoders && coders.length > 0) {
+              <div class="table-container">
+                <table class="coders-table">
+                  <thead>
+                    <tr>
+                      <th>ID</th>
+                      <th>Name</th>
+                      <th>Anzeigename</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (coder of coders; track coder.id) {
+                      <tr>
+                        <td>{{ coder.id }}</td>
+                        <td>{{ coder.name }}</td>
+                        <td>{{ coder.displayName || coder.name }}</td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            }
+
+            @if (!isLoadingCoders && coders.length === 0) {
+              <div class="empty-state">
+                <mat-icon class="empty-icon">person</mat-icon>
+                <h3>Keine Kodierer zugewiesen</h3>
+                <p class="empty-text">Diesem Kodierjob sind noch keine Kodierer zugewiesen. Kodierer können über die Kodierer-Verwaltung zugewiesen werden.</p>
+              </div>
+            }
+          </mat-tab>
+
           <!-- Tab for individual variables -->
           <mat-tab label="Einzelne Variablen">
             <!-- Filter controls -->

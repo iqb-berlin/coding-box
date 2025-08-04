@@ -55,7 +55,13 @@ export class VariableBundleDto {
     dto.workspace_id = entity.workspace_id;
     dto.name = entity.name;
     dto.description = entity.description;
-    dto.variables = entity.variables;
+    // Transform each variable to a VariableDto
+    dto.variables = entity.variables.map(v => {
+      const variableDto = new VariableDto();
+      variableDto.unitName = v.unitName;
+      variableDto.variableId = v.variableId;
+      return variableDto;
+    });
     dto.created_at = entity.created_at;
     dto.updated_at = entity.updated_at;
     return dto;
