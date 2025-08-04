@@ -26,7 +26,6 @@ import { CodingJob, VariableBundle, Variable } from '../../models/coding-job.mod
 import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
 import { VariableAnalysisItem } from '../../models/variable-analysis-item.model';
-import { VariableBundleService } from '../../services/variable-bundle.service';
 
 export interface CodingJobDialogData {
   codingJob?: CodingJob;
@@ -64,23 +63,22 @@ export class CodingJobDialogComponent implements OnInit {
   private fb = inject(FormBuilder);
   private backendService = inject(BackendService);
   private appService = inject(AppService);
-  private variableBundleGroupService = inject(VariableBundleService);
 
   codingJobForm!: FormGroup;
   isLoading = false;
 
   // Variables
-  variableBundles: Variable[] = [];
-  selectedVariableBundles = new SelectionModel<Variable>(true, []);
+  variables: Variable[] = [];
+  selectedVariables = new SelectionModel<Variable>(true, []);
   displayedColumns: string[] = ['select', 'unitName', 'variableId'];
   dataSource = new MatTableDataSource<Variable>([]);
 
-  // Variable bundle groups
-  variableBundleGroups: VariableBundle[] = [];
-  selectedVariableBundleGroups = new SelectionModel<VariableBundle>(true, []);
-  bundleGroupsDisplayedColumns: string[] = ['select', 'name', 'description', 'variableCount'];
-  bundleGroupsDataSource = new MatTableDataSource<VariableBundle>([]);
-  isLoadingBundleGroups = false;
+  // Variable bundles
+  variableBundles: VariableBundle[] = [];
+  selectedVariableBundles = new SelectionModel<VariableBundle>(true, []);
+  bundlesDisplayedColumns: string[] = ['select', 'name', 'description', 'variableCount'];
+  bundlesDataSource = new MatTableDataSource<VariableBundle>([]);
+  isLoadingBundles = false;
 
   // Variable analysis items
   variableAnalysisItems: VariableAnalysisItem[] = [];
@@ -93,7 +91,7 @@ export class CodingJobDialogComponent implements OnInit {
   // Filters
   unitNameFilter = '';
   variableIdFilter = '';
-  bundleGroupNameFilter = '';
+  bundleNameFilter = '';
 
   constructor(
     public dialogRef: MatDialogRef<CodingJobDialogComponent>,
@@ -103,7 +101,7 @@ export class CodingJobDialogComponent implements OnInit {
   ngOnInit(): void {
     this.initForm();
     this.loadVariableAnalysisItems();
-    this.loadVariableBundleGroups();
+    this.loadVariableBundles();
   }
 
   initForm(): void {
@@ -114,13 +112,13 @@ export class CodingJobDialogComponent implements OnInit {
     });
 
     if (this.data.codingJob?.variables) {
-      this.variableBundles = [...this.data.codingJob.variables];
-      this.dataSource.data = this.variableBundles;
-      this.selectedVariableBundles = new SelectionModel<Variable>(true, [...this.variableBundles]);
+      this.variables = [...this.data.codingJob.variables];
+      this.dataSource.data = this.variables;
+      this.selectedVariables = new SelectionModel<Variable>(true, [...this.variables]);
     }
 
     if (this.data.codingJob?.variableBundles) {
-      this.selectedVariableBundleGroups = new SelectionModel<VariableBundle>(true, [...this.data.codingJob.variableBundles]);
+      this.selectedVariableBundles = new SelectionModel<VariableBundle>(true, [...this.data.codingJob.variableBundles]);
     }
   }
 
@@ -157,17 +155,17 @@ export class CodingJobDialogComponent implements OnInit {
           }
         });
 
-        this.variableBundles = Array.from(uniqueVariables.values());
-        this.dataSource.data = this.variableBundles;
+        this.variables = Array.from(uniqueVariables.values());
+        this.dataSource.data = this.variables;
 
         // Pre-select variables that were already selected
         if (this.data.codingJob?.variables) {
           this.data.codingJob.variables.forEach(variable => {
-            const foundVariable = this.variableBundles.find(
+            const foundVariable = this.variables.find(
               b => b.unitName === variable.unitName && b.variableId === variable.variableId
             );
             if (foundVariable) {
-              this.selectedVariableBundles.select(foundVariable);
+              this.selectedVariables.select(foundVariable);
             }
           });
         }
@@ -182,30 +180,8 @@ export class CodingJobDialogComponent implements OnInit {
     });
   }
 
-  loadVariableBundleGroups(): void {
-    this.isLoadingBundleGroups = true;
-
-    this.variableBundleGroupService.getBundleGroups().subscribe({
-      next: bundleGroups => {
-        this.variableBundleGroups = bundleGroups;
-        this.bundleGroupsDataSource.data = bundleGroups;
-
-        // Pre-select bundle groups that were already selected
-        if (this.data.codingJob?.variableBundles) {
-          this.data.codingJob.variableBundles.forEach(group => {
-            const foundGroup = this.variableBundleGroups.find(g => g.id === group.id);
-            if (foundGroup) {
-              this.selectedVariableBundleGroups.select(foundGroup);
-            }
-          });
-        }
-
-        this.isLoadingBundleGroups = false;
-      },
-      error: () => {
-        this.isLoadingBundleGroups = false;
-      }
-    });
+  loadVariableBundles(): void {
+    this.isLoadingBundles = true;
   }
 
   onPageChange(event: PageEvent): void {
@@ -216,11 +192,11 @@ export class CodingJobDialogComponent implements OnInit {
     this.loadVariableAnalysisItems(1, this.variableAnalysisPageSize);
   }
 
-  applyBundleGroupFilter(): void {
-    if (this.bundleGroupNameFilter) {
-      this.bundleGroupsDataSource.filter = this.bundleGroupNameFilter.trim().toLowerCase();
+  applyBundleFilter(): void {
+    if (this.bundleNameFilter) {
+      this.bundlesDataSource.filter = this.bundleNameFilter.trim().toLowerCase();
     } else {
-      this.bundleGroupsDataSource.filter = '';
+      this.bundlesDataSource.filter = '';
     }
   }
 
@@ -230,38 +206,38 @@ export class CodingJobDialogComponent implements OnInit {
     this.loadVariableAnalysisItems(1, this.variableAnalysisPageSize);
   }
 
-  clearBundleGroupFilter(): void {
-    this.bundleGroupNameFilter = '';
-    this.bundleGroupsDataSource.filter = '';
+  clearBundleFilter(): void {
+    this.bundleNameFilter = '';
+    this.bundlesDataSource.filter = '';
   }
 
-  /** Whether the number of selected bundle groups matches the total number of rows. */
-  isAllBundleGroupsSelected(): boolean {
-    const numSelected = this.selectedVariableBundleGroups.selected.length;
-    const numRows = this.bundleGroupsDataSource.data.length;
+  /** Whether the number of selected bundle matches the total number of rows. */
+  isAllBundlesSelected(): boolean {
+    const numSelected = this.selectedVariableBundles.selected.length;
+    const numRows = this.bundlesDataSource.data.length;
     return numSelected === numRows;
   }
 
-  /** Selects all bundle groups if they are not all selected; otherwise clear selection. */
-  masterToggleBundleGroups(): void {
-    if (this.isAllBundleGroupsSelected()) {
-      this.selectedVariableBundleGroups.clear();
+  /** Selects all bundles if they are not all selected; otherwise clear selection. */
+  masterToggleBundle(): void {
+    if (this.isAllBundlesSelected()) {
+      this.selectedVariableBundles.clear();
     } else {
-      this.bundleGroupsDataSource.data.forEach(row => this.selectedVariableBundleGroups.select(row));
+      this.bundlesDataSource.data.forEach(row => this.selectedVariableBundles.select(row));
     }
   }
 
-  /** The label for the checkbox on the passed bundle group row */
-  bundleGroupCheckboxLabel(row?: VariableBundle): string {
+  /** The label for the checkbox on the passed bundles row */
+  bundleCheckboxLabel(row?: VariableBundle): string {
     if (!row) {
-      return `${this.isAllBundleGroupsSelected() ? 'deselect' : 'select'} all`;
+      return `${this.isAllBundlesSelected() ? 'deselect' : 'select'} all`;
     }
-    return `${this.selectedVariableBundleGroups.isSelected(row) ? 'deselect' : 'select'} row ${row.name}`;
+    return `${this.selectedVariableBundles.isSelected(row) ? 'deselect' : 'select'} row ${row.name}`;
   }
 
-  /** Gets the number of variables in a bundle group */
-  getVariableCount(bundleGroup: VariableBundle): number {
-    return bundleGroup.variables.length;
+  /** Gets the number of variables in a bundle */
+  getVariableCount(bundle: VariableBundle): number {
+    return bundle.variables.length;
   }
 
   /** Whether the number of selected elements matches the total number of rows. */
@@ -276,7 +252,7 @@ export class CodingJobDialogComponent implements OnInit {
     if (this.isAllSelected()) {
       this.selectedVariableBundles.clear();
     } else {
-      this.dataSource.data.forEach(row => this.selectedVariableBundles.select(row));
+      this.dataSource.data.forEach(row => this.selectedVariables.select(row));
     }
   }
 
@@ -285,7 +261,7 @@ export class CodingJobDialogComponent implements OnInit {
     if (!row) {
       return `${this.isAllSelected() ? 'deselect' : 'select'} all`;
     }
-    return `${this.selectedVariableBundles.isSelected(row) ? 'deselect' : 'select'} row ${row.unitName}`;
+    return `${this.selectedVariables.isSelected(row) ? 'deselect' : 'select'} row ${row.unitName}`;
   }
 
   onSubmit(): void {
@@ -299,8 +275,8 @@ export class CodingJobDialogComponent implements OnInit {
       createdAt: this.data.codingJob?.createdAt || new Date(),
       updatedAt: new Date(),
       assignedCoders: this.data.codingJob?.assignedCoders || [],
-      variables: this.selectedVariableBundles.selected,
-      variableBundles: this.selectedVariableBundleGroups.selected
+      variables: this.selectedVariables.selected,
+      variableBundles: this.selectedVariableBundles.selected
     };
 
     this.dialogRef.close(codingJob);

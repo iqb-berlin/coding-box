@@ -139,56 +139,54 @@
               </div>
             }
           </mat-tab>
-
-          <!-- Tab for variable bundle groups -->
           <mat-tab label="Variablenbündel">
             <!-- Filter controls -->
             <div class="filter-container">
               <div class="filter-row">
                 <mat-form-field class="filter-field">
                   <mat-label>Name Filter</mat-label>
-                  <input matInput [(ngModel)]="bundleGroupNameFilter" [ngModelOptions]="{standalone: true}" placeholder="Filter nach Namen">
-                  <button *ngIf="bundleGroupNameFilter" matSuffix mat-icon-button aria-label="Clear" (click)="bundleGroupNameFilter=''; applyBundleGroupFilter()">
+                  <input matInput [(ngModel)]="bundleNameFilter" [ngModelOptions]="{standalone: true}" placeholder="Filter nach Namen">
+                  <button *ngIf="bundleNameFilter" matSuffix mat-icon-button aria-label="Clear" (click)="bundleNameFilter=''; applyBundleFilter()">
                     <mat-icon>close</mat-icon>
                   </button>
                 </mat-form-field>
 
-                <button mat-raised-button color="primary" (click)="applyBundleGroupFilter()">
+                <button mat-raised-button color="primary" (click)="applyBundleFilter()">
                   <mat-icon>filter_list</mat-icon>
                   Filter anwenden
                 </button>
 
-                <button mat-raised-button (click)="clearBundleGroupFilter()">
+                <button mat-raised-button (click)="clearBundleFilter()">
                   <mat-icon>clear</mat-icon>
                   Filter zurücksetzen
                 </button>
               </div>
             </div>
 
-            @if (isLoadingBundleGroups) {
+            @if (isLoadingBundles) {
               <div class="loading-container">
                 <mat-spinner diameter="40"></mat-spinner>
                 <p class="loading-text">Lade Variablenbündel...</p>
               </div>
             }
 
-            @if (!isLoadingBundleGroups && variableBundleGroups.length > 0) {
+            @if (!isLoadingBundles && variableBundles.length > 0) {
               <div class="table-container">
-                <table mat-table [dataSource]="bundleGroupsDataSource" class="variable-bundles-table">
+                <table mat-table [dataSource]="bundlesDataSource" class="variable-bundles-table">
                   <!-- Checkbox Column -->
                   <ng-container matColumnDef="select">
                     <th mat-header-cell *matHeaderCellDef>
-                      <mat-checkbox (change)="$event ? masterToggleBundleGroups() : null"
-                                    [checked]="selectedVariableBundleGroups.hasValue() && isAllBundleGroupsSelected()"
-                                    [indeterminate]="selectedVariableBundleGroups.hasValue() && !isAllBundleGroupsSelected()"
-                                    [aria-label]="bundleGroupCheckboxLabel()">
+                      <mat-checkbox (change)="$event ? masterToggleBundle() : null"
+                                    [checked]="selectedVariableBundles.hasValue() && isAllBundlesSelected()"
+                                    [indeterminate]="selectedVariableBundles.hasValue() && !isAllBundlesSelected()"
+                                    [aria-label]="bundleCheckboxLabel()">
                       </mat-checkbox>
                     </th>
                     <td mat-cell *matCellDef="let row">
                       <mat-checkbox (click)="$event.stopPropagation()"
-                                    (change)="$event ? selectedVariableBundleGroups.toggle(row) : null"
-                                    [checked]="selectedVariableBundleGroups.isSelected(row)"
-                                    [aria-label]="bundleGroupCheckboxLabel(row)">
+                                    (change)="$event ? selectedVariableBundles.toggle(row) : null"
+                                    [checked]="selectedVariableBundles.isSelected(row)"
+                                    [aria-label]="bundleCheckboxLabel(row)">
                       </mat-checkbox>
                     </td>
                   </ng-container>
@@ -211,31 +209,30 @@
                     <td mat-cell *matCellDef="let element">{{ getVariableCount(element) }}</td>
                   </ng-container>
 
-                  <tr mat-header-row *matHeaderRowDef="bundleGroupsDisplayedColumns; sticky: true"></tr>
-                  <tr mat-row *matRowDef="let row; columns: bundleGroupsDisplayedColumns;"
-                      (click)="selectedVariableBundleGroups.toggle(row)"
-                      [class.selected-row]="selectedVariableBundleGroups.isSelected(row)">
+                  <tr mat-header-row *matHeaderRowDef="bundlesDisplayedColumns; sticky: true"></tr>
+                  <tr mat-row *matRowDef="let row; columns: bundlesDisplayedColumns;"
+                      (click)="selectedVariableBundles.toggle(row)"
+                      [class.selected-row]="selectedVariableBundles.isSelected(row)">
                   </tr>
                 </table>
               </div>
 
               <div class="selection-summary">
-                <p>{{ selectedVariableBundleGroups.selected.length }} Variablenbündel ausgewählt</p>
+                <p>{{ selectedVariableBundles.selected.length }} Variablenbündel ausgewählt</p>
               </div>
 
-              <!-- Preview of selected bundle groups -->
-              @if (selectedVariableBundleGroups.selected.length > 0) {
+              @if (selectedVariableBundles.selected.length > 0) {
                 <div class="bundle-preview-container">
                   <h4>Vorschau der ausgewählten Variablenbündel</h4>
                   <mat-accordion>
-                    @for (bundleGroup of selectedVariableBundleGroups.selected; track bundleGroup.id) {
+                    @for (bundle of selectedVariableBundles.selected; track bundle.id) {
                       <mat-expansion-panel>
                         <mat-expansion-panel-header>
                           <mat-panel-title>
-                            {{ bundleGroup.name }}
+                            {{ bundle.name }}
                           </mat-panel-title>
                           <mat-panel-description>
-                            {{ getVariableCount(bundleGroup) }} Variablen
+                            {{ getVariableCount(bundle) }} Variablen
                           </mat-panel-description>
                         </mat-expansion-panel-header>
 
@@ -247,7 +244,7 @@
                             </tr>
                           </thead>
                           <tbody>
-                            @for (variable of bundleGroup.variables; track variable.unitName + variable.variableId) {
+                            @for (variable of bundle.variables; track variable.unitName + variable.variableId) {
                               <tr>
                                 <td>{{ variable.unitName }}</td>
                                 <td>{{ variable.variableId }}</td>
@@ -262,7 +259,7 @@
               }
             }
 
-            @if (!isLoadingBundleGroups && variableBundleGroups.length === 0) {
+            @if (!isLoadingBundles && variableBundles.length === 0) {
               <div class="empty-state">
                 <mat-icon class="empty-icon">analytics</mat-icon>
                 <h3>Keine Variablenbündel verfügbar</h3>

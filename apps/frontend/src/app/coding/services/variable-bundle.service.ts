@@ -59,7 +59,7 @@ export class VariableBundleService {
 
     // Remove trailing slash from serverUrl if present to avoid double slashes
     const baseUrl = this.serverUrl.endsWith('/') ? this.serverUrl.slice(0, -1) : this.serverUrl;
-    const url = `${baseUrl}/admin/workspace/${workspaceId}/variable-bundle-groups`;
+    const url = `${baseUrl}/admin/workspace/${workspaceId}/variable-bundle`;
 
     return this.http.get<{ data: VariableBundle[], total: number }>(url).pipe(
       map(response => {
@@ -102,7 +102,7 @@ export class VariableBundleService {
 
     // Remove trailing slash from serverUrl if present to avoid double slashes
     const baseUrl = this.serverUrl.endsWith('/') ? this.serverUrl.slice(0, -1) : this.serverUrl;
-    const url = `${baseUrl}/admin/workspace/${workspaceId}/variable-bundle-groups`;
+    const url = `${baseUrl}/admin/workspace/${workspaceId}/variable-bundle`;
 
     return this.http.post<VariableBundle>(url, bundleGroup).pipe(
       map(newBundleGroup => {
@@ -140,7 +140,7 @@ export class VariableBundleService {
 
     // Remove trailing slash from serverUrl if present to avoid double slashes
     const baseUrl = this.serverUrl.endsWith('/') ? this.serverUrl.slice(0, -1) : this.serverUrl;
-    const url = `${baseUrl}/admin/workspace/${workspaceId}/variable-bundle-groups/${id}`;
+    const url = `${baseUrl}/admin/workspace/${workspaceId}/variable-bundle/${id}`;
 
     // Ensure updatedAt is set to current date
     const updateData = {
@@ -199,7 +199,7 @@ export class VariableBundleService {
 
     // Remove trailing slash from serverUrl if present to avoid double slashes
     const baseUrl = this.serverUrl.endsWith('/') ? this.serverUrl.slice(0, -1) : this.serverUrl;
-    const url = `${baseUrl}/admin/workspace/${workspaceId}/variable-bundle-groups/${id}`;
+    const url = `${baseUrl}/admin/workspace/${workspaceId}/variable-bundle/${id}`;
 
     return this.http.delete<{ success: boolean }>(url).pipe(
       map(response => {
@@ -241,7 +241,7 @@ export class VariableBundleService {
 
     // Remove trailing slash from serverUrl if present to avoid double slashes
     const baseUrl = this.serverUrl.endsWith('/') ? this.serverUrl.slice(0, -1) : this.serverUrl;
-    const url = `${baseUrl}/admin/workspace/${workspaceId}/variable-bundle-groups/${groupId}/variables`;
+    const url = `${baseUrl}/admin/workspace/${workspaceId}/variable-bundle/${groupId}/variables`;
 
     return this.http.post<VariableBundle>(url, variable).pipe(
       map(updatedGroup => {
@@ -310,7 +310,7 @@ export class VariableBundleService {
 
     // Remove trailing slash from serverUrl if present to avoid double slashes
     const baseUrl = this.serverUrl.endsWith('/') ? this.serverUrl.slice(0, -1) : this.serverUrl;
-    const url = `${baseUrl}/admin/workspace/${workspaceId}/variable-bundle-groups/${groupId}/variables/${encodedUnitName}/${encodedVariableId}`;
+    const url = `${baseUrl}/admin/workspace/${workspaceId}/variable-bundle/${groupId}/variables/${encodedUnitName}/${encodedVariableId}`;
 
     return this.http.delete<VariableBundle>(url).pipe(
       map(updatedGroup => {
