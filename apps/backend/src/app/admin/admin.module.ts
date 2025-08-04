@@ -25,20 +25,14 @@ import { MissingsProfilesController } from './workspace/missings-profiles.contro
 import { BookletInfoService } from '../database/services/booklet-info.service';
 import { UnitInfoService } from '../database/services/unit-info.service';
 import FileUpload from '../database/entities/file_upload.entity';
-import { Variable } from '../database/entities/variable.entity';
-import { VariableBundle } from '../database/entities/variable-bundle.entity';
 import { ReplayStatisticsController } from './replay-statistics/replay-statistics.controller';
-import { VariableBundleController } from './workspace/variable-bundle.controller';
-import { VariableBundleService } from '../database/services/variable-bundle.service';
-import { VariableBundleGroupService } from '../database/services/variable-bundle-group.service';
-import { CodingJobController } from './workspace/coding-job.controller';
 
 @Module({
   imports: [
     DatabaseModule,
     AuthModule,
     HttpModule,
-    TypeOrmModule.forFeature([FileUpload, Variable, VariableBundle])
+    TypeOrmModule.forFeature([FileUpload])
   ],
   controllers: [
     UsersController,
@@ -60,15 +54,11 @@ import { CodingJobController } from './workspace/coding-job.controller';
     BookletInfoController,
     UnitInfoController,
     MissingsProfilesController,
-    ReplayStatisticsController,
-    VariableBundleController,
-    CodingJobController
+    ReplayStatisticsController
   ],
   providers: [
     BookletInfoService,
-    UnitInfoService,
-    VariableBundleService,
-    VariableBundleGroupService
+    UnitInfoService
   ]
 })
 export class AdminModule {}
