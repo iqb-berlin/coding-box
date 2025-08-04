@@ -63,8 +63,3 @@ CREATE TABLE IF NOT EXISTS "public"."coding_job_coders" (
                                                           PRIMARY KEY ("coding_job_id", "coder_id")
 );
 -- rollback DROP TABLE IF EXISTS "public"."coding_job_coders";
-
--- changeset jurei733:9
-ALTER TABLE "public"."variable_bundle_variables"
-  RENAME COLUMN "variable_bundle_id" TO "variable_id";
--- rollback ALTER TABLE "public"."variable_bundle_variables" RENAME COLUMN "variable_id" TO "variable_bundle_id";
