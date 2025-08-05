@@ -32,4 +32,8 @@
       (invalidPage)="checkPageError($event)">
     </coding-box-unit-player>
   }
+
+  @if (testPerson && unitId) {
+    <div class="watermark">{{ testPerson }} - {{ unitId }}</div>
+  }
 </div>
