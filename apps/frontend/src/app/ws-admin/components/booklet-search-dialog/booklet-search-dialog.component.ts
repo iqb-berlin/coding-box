@@ -124,7 +124,7 @@ export class BookletSearchDialogComponent implements OnInit {
       this.currentPage,
       this.pageSize
     ).subscribe({
-      next: (response) => {
+      next: response => {
         this.bookletSearchResults = response.data;
         this.totalResults = response.total;
         this.isLoading = false;
@@ -162,14 +162,14 @@ export class BookletSearchDialogComponent implements OnInit {
       } as ConfirmDialogData
     });
 
-    dialogRef.afterClosed().subscribe((result) => {
+    dialogRef.afterClosed().subscribe(result => {
       if (result) {
         this.isLoading = true;
         this.backendService.deleteBooklet(
           this.appService.selectedWorkspaceId,
           booklet.bookletId
         ).subscribe({
-          next: (response) => {
+          next: response => {
             if (response.success) {
               // Remove the deleted booklet from the results
               this.bookletSearchResults = this.bookletSearchResults.filter(
@@ -218,12 +218,11 @@ export class BookletSearchDialogComponent implements OnInit {
       } as ConfirmDialogData
     });
 
-    dialogRef.afterClosed().subscribe((result) => {
+    dialogRef.afterClosed().subscribe(result => {
       if (result) {
         const bookletIds = this.bookletSearchResults.map(booklet => booklet.bookletId);
         let successCount = 0;
         let failCount = 0;
-        let processedCount = 0;
 
         this.isLoading = true;
 
@@ -246,18 +245,16 @@ export class BookletSearchDialogComponent implements OnInit {
             this.appService.selectedWorkspaceId,
             bookletIds[index]
           ).subscribe({
-            next: (response) => {
+            next: response => {
               if (response.success) {
-                successCount++;
+                successCount += 1;
               } else {
-                failCount++;
+                failCount += 1;
               }
-              processedCount++;
               processNextBooklet(index + 1);
             },
             error: () => {
-              failCount++;
-              processedCount++;
+              failCount += 1;
               processNextBooklet(index + 1);
             }
           });
