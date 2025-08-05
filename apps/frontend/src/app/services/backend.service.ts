@@ -500,6 +500,30 @@ export class BackendService {
     return this.responseService.searchResponses(workspaceId, searchParams, page, limit);
   }
 
+  searchBookletsByName(
+    workspaceId: number,
+    bookletName: string,
+    page?: number,
+    limit?: number
+  ): Observable<{
+      data: {
+        bookletId: number;
+        bookletName: string;
+        personId: number;
+        personLogin: string;
+        personCode: string;
+        personGroup: string;
+        units: {
+          unitId: number;
+          unitName: string;
+          unitAlias: string | null;
+        }[];
+      }[];
+      total: number;
+    }> {
+    return this.testResultService.searchBookletsByName(workspaceId, bookletName, page, limit);
+  }
+
   searchUnitsByName(
     workspaceId: number,
     unitName: string,
@@ -562,6 +586,16 @@ export class BackendService {
     };
   }> {
     return this.responseService.deleteMultipleResponses(workspaceId, responseIds);
+  }
+
+  deleteBooklet(workspaceId: number, bookletId: number): Observable<{
+    success: boolean;
+    report: {
+      deletedBooklet: number | null;
+      warnings: string[];
+    };
+  }> {
+    return this.testResultService.deleteBooklet(workspaceId, bookletId);
   }
 
   validateVariables(workspaceId: number, page: number = 1, limit: number = 10): Observable<PaginatedResponse<InvalidVariableDto>> {

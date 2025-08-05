@@ -533,6 +533,108 @@ export class WorkspaceTestResultsController {
     }
   }
 
+  @Get(':workspace_id/booklets/search')
+  @ApiOperation({
+    summary: 'Search for booklets by name',
+    description: 'Searches for booklets with a specific name across all test persons in a workspace'
+  })
+  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
+  @ApiQuery({
+    name: 'bookletName',
+    required: true,
+    description: 'Name of the booklet to search for',
+    type: String
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    description: 'Page number (1-based)',
+    type: Number
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    description: 'Number of items per page',
+    type: Number
+  })
+  @ApiOkResponse({
+    description: 'Booklets retrieved successfully.',
+    schema: {
+      type: 'object',
+      properties: {
+        data: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              bookletId: { type: 'number', description: 'ID of the booklet' },
+              bookletName: { type: 'string', description: 'Name of the booklet' },
+              personId: { type: 'number', description: 'ID of the person' },
+              personLogin: { type: 'string', description: 'Login of the person' },
+              personCode: { type: 'string', description: 'Code of the person' },
+              personGroup: { type: 'string', description: 'Group of the person' },
+              units: {
+                type: 'array',
+                description: 'Units in the booklet',
+                items: {
+                  type: 'object',
+                  properties: {
+                    unitId: { type: 'number', description: 'ID of the unit' },
+                    unitName: { type: 'string', description: 'Name of the unit' },
+                    unitAlias: { type: 'string', nullable: true, description: 'Alias of the unit' }
+                  }
+                }
+              }
+            }
+          }
+        },
+        total: { type: 'number', description: 'Total number of items' }
+      }
+    }
+  })
+  @ApiBadRequestResponse({ description: 'Failed to search for booklets' })
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  async findBookletsByName(
+    @Param('workspace_id') workspace_id: number,
+      @Query('bookletName') bookletName: string,
+      @Query('page') page?: number,
+      @Query('limit') limit?: number
+  ): Promise<{
+        data: {
+          bookletId: number;
+          bookletName: string;
+          personId: number;
+          personLogin: string;
+          personCode: string;
+          personGroup: string;
+          units: {
+            unitId: number;
+            unitName: string;
+            unitAlias: string | null;
+          }[];
+        }[];
+        total: number;
+      }> {
+    if (!workspace_id || Number.isNaN(workspace_id)) {
+      throw new BadRequestException('Invalid workspace_id.');
+    }
+
+    if (!bookletName) {
+      throw new BadRequestException('Booklet name is required.');
+    }
+
+    try {
+      return await this.workspaceTestResultsService.findBookletsByName(
+        workspace_id,
+        bookletName,
+        { page, limit }
+      );
+    } catch (error) {
+      logger.error(`Error searching for booklets: ${error}`);
+      throw new BadRequestException(`Failed to search for booklets. ${error.message}`);
+    }
+  }
+
   @Get(':workspace_id/units/search')
   @ApiOperation({
     summary: 'Search for units by name',

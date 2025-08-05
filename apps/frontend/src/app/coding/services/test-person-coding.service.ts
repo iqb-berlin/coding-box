@@ -264,4 +264,21 @@ export class TestPersonCodingService {
         catchError(() => of([]))
       );
   }
+
+  /**
+   * Restart a failed job
+   * @param workspaceId Workspace ID
+   * @param jobId Job ID to restart
+   * @returns Observable with restart result
+   */
+  restartJob(workspaceId: number, jobId: string): Observable<{ success: boolean; message: string; jobId?: string }> {
+    return this.http
+      .get<{ success: boolean; message: string; jobId?: string }>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/coding/job/${jobId}/restart`,
+      { headers: this.authHeader }
+    )
+      .pipe(
+        catchError(() => of({ success: false, message: `Failed to restart job ${jobId}` }))
+      );
+  }
 }

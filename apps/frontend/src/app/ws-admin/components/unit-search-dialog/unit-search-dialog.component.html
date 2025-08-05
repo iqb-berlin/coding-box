@@ -3,8 +3,9 @@
   <div mat-dialog-content>
     <!-- Search Mode Toggle -->
     <div class="search-mode-toggle">
-      <button mat-button [class.active]="searchMode === 'unit'" (click)="toggleSearchMode()">Aufgaben suchen</button>
-      <button mat-button [class.active]="searchMode === 'response'" (click)="toggleSearchMode()">Antworten suchen</button>
+      <button mat-button [class.active]="searchMode === 'unit'" (click)="setSearchMode('unit')">Aufgaben suchen</button>
+      <button mat-button [class.active]="searchMode === 'response'" (click)="setSearchMode('response')">Antworten suchen</button>
+      <button mat-button [class.active]="searchMode === 'booklet'" (click)="setSearchMode('booklet')">Booklets suchen</button>
     </div>
 
     <!-- Unit Search -->
@@ -65,6 +66,17 @@
       </div>
     }
 
+    <!-- Booklet Search -->
+    @if (searchMode === 'booklet') {
+      <div class="search-container">
+        <mat-form-field appearance="outline" class="search-field">
+          <mat-label>Booklet suchen</mat-label>
+          <input matInput [(ngModel)]="bookletSearchText" (ngModelChange)="onBookletSearchChange()" placeholder="Geben Sie den Namen des Booklets ein...">
+          <mat-icon matSuffix>search</mat-icon>
+        </mat-form-field>
+      </div>
+    }
+
     <div class="results-container">
       @if (isLoading) {
         <div class="loading-container">
@@ -84,10 +96,15 @@
           <mat-icon>search_off</mat-icon>
           <p>Keine Ergebnisse gefunden für die angegebenen Suchkriterien</p>
         </div>
+      } @else if (searchMode === 'booklet' && bookletSearchResults.length === 0 && bookletSearchText.trim().length > 2) {
+        <div class="no-results">
+          <mat-icon>search_off</mat-icon>
+          <p>Keine Ergebnisse gefunden für "{{ bookletSearchText }}"</p>
+        </div>
       } @else if (searchMode === 'unit' && searchText.trim().length <= 2) {
         <div class="search-hint">
           <mat-icon>info</mat-icon>
-          <p>Geben Sie Zeichen ein, um die Suche zu starten</p>
+          <p>Geben Sie mindestens 3 Zeichen ein, um die Suche zu starten</p>
         </div>
       } @else if (searchMode === 'response' &&
                  searchValue.trim() === '' &&
@@ -100,6 +117,11 @@
         <div class="search-hint">
           <mat-icon>info</mat-icon>
           <p>Geben Sie Zeichen in eines der Suchfelder ein, um die Suche zu starten</p>
+        </div>
+      } @else if (searchMode === 'booklet' && bookletSearchText.trim().length <= 2) {
+        <div class="search-hint">
+          <mat-icon>info</mat-icon>
+          <p>Geben Sie mindestens 3 Zeichen ein, um die Suche zu starten</p>
         </div>
       } @else {
         <!-- Unit Search Results -->
@@ -296,6 +318,66 @@
 
             <tr mat-header-row *matHeaderRowDef="responseDisplayedColumns; sticky: true"></tr>
             <tr mat-row *matRowDef="let row; columns: responseDisplayedColumns;" class="result-row"></tr>
+          </table>
+        }
+
+        <!-- Booklet Search Results -->
+        @if (searchMode === 'booklet') {
+          <!-- Delete All Button for Booklets -->
+          @if (bookletSearchResults.length > 0) {
+            <div class="delete-all-container">
+              <button mat-stroked-button (click)="deleteAllBooklets()">
+                <mat-icon>delete_sweep</mat-icon>
+                Alle {{ bookletSearchResults.length }} gefilterten Booklets löschen
+              </button>
+            </div>
+          }
+          <table mat-table [dataSource]="bookletSearchResults" class="results-table">
+            <!-- Booklet Name Column -->
+            <ng-container matColumnDef="bookletName">
+              <th mat-header-cell *matHeaderCellDef>Booklet Name</th>
+              <td mat-cell *matCellDef="let booklet">{{ booklet.bookletName }}</td>
+            </ng-container>
+
+            <!-- Person Code Column -->
+            <ng-container matColumnDef="personCode">
+              <th mat-header-cell *matHeaderCellDef>Code</th>
+              <td mat-cell *matCellDef="let booklet">{{ booklet.personCode }}</td>
+            </ng-container>
+
+            <!-- Person Login Column -->
+            <ng-container matColumnDef="personLogin">
+              <th mat-header-cell *matHeaderCellDef>Login</th>
+              <td mat-cell *matCellDef="let booklet">{{ booklet.personLogin }}</td>
+            </ng-container>
+
+            <!-- Person Group Column -->
+            <ng-container matColumnDef="personGroup">
+              <th mat-header-cell *matHeaderCellDef>Gruppe</th>
+              <td mat-cell *matCellDef="let booklet">{{ booklet.personGroup }}</td>
+            </ng-container>
+
+            <!-- Unit Count Column -->
+            <ng-container matColumnDef="unitCount">
+              <th mat-header-cell *matHeaderCellDef>Units</th>
+              <td mat-cell *matCellDef="let booklet">{{ booklet.units.length }}</td>
+            </ng-container>
+
+            <!-- Actions Column -->
+            <ng-container matColumnDef="actions">
+              <th mat-header-cell *matHeaderCellDef>Aktionen</th>
+              <td mat-cell *matCellDef="let booklet">
+                <button mat-icon-button color="primary" (click)="viewBookletInfo(booklet)" matTooltip="Booklet Info anzeigen">
+                  <mat-icon>info</mat-icon>
+                </button>
+                <button mat-icon-button color="warn" (click)="deleteBooklet(booklet)" matTooltip="Booklet löschen">
+                  <mat-icon>delete</mat-icon>
+                </button>
+              </td>
+            </ng-container>
+
+            <tr mat-header-row *matHeaderRowDef="bookletDisplayedColumns; sticky: true"></tr>
+            <tr mat-row *matRowDef="let row; columns: bookletDisplayedColumns;" class="result-row"></tr>
           </table>
         }
 

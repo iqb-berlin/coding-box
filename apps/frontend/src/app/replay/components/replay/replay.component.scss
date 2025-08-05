@@ -3,6 +3,7 @@
   background-color: white;
   display: flex;
   flex-direction: column;
+  position: relative;
 }
 
 .print-mode {
@@ -91,4 +92,21 @@
 
 .total-units {
   color: #757575;
+}
+
+// Watermark styles
+.watermark {
+  position: absolute;
+  bottom: 15px;
+  right: 15px;
+  font-size: 14px;
+  color: rgba(0, 0, 0, 0.35);
+  z-index: 100;
+  pointer-events: none;
+  user-select: none;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  max-width: 300px;
+  overflow: hidden;
+  font-weight: 500;
 }
