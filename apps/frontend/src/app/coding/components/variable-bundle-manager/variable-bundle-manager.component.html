@@ -28,7 +28,7 @@
 
     <mat-table [dataSource]="dataSource" matSort class="variable-bundle-table">
       <mat-header-row *matHeaderRowDef="displayedColumns; sticky: true"></mat-header-row>
-      <mat-row *matRowDef="let row; columns: displayedColumns;" (click)="selectRow(row)">
+      <mat-row *matRowDef="let row; columns: displayedColumns;" (click)="selectRow(row, $event)">
       </mat-row>
 
       <ng-container matColumnDef="selectCheckbox">
@@ -93,6 +93,15 @@
         </mat-cell>
       </ng-container>
     </mat-table>
+
+    <mat-paginator
+      [pageIndex]="currentPage - 1"
+      [pageSize]="pageSize"
+      [pageSizeOptions]="[5, 10, 25, 50]"
+      [length]="totalItems"
+      (page)="onPageChange($event)"
+      aria-label="Seite auswählen">
+    </mat-paginator>
 
     @if (dataSource.data.length === 0) {
       <div class="no-data-message">

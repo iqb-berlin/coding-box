@@ -238,6 +238,8 @@ build-cicd-base-image:
       entrypoint: [ "sh", "-c", "dockerd-entrypoint.sh $DOCKER_DAEMON_OPTIONS" ]
       alias: docker
   before_script:
+    - docker --version
+    - until docker info &> /dev/null; do println "Wait until docker daemon is started ...\n" && sleep 1; done
     - ip a | grep mtu
     - docker network inspect bridge | grep mtu
     - docker login -u $CI_DEPENDENCY_PROXY_USER -p $CI_DEPENDENCY_PROXY_PASSWORD $CI_DEPENDENCY_PROXY_SERVER
@@ -276,6 +278,8 @@ build-cicd-base-image:
 #      entrypoint: [ "sh", "-c", "dockerd-entrypoint.sh $DOCKER_DAEMON_OPTIONS" ]
 #      alias: docker
 #  before_script:
+#    - docker --version
+#    - until docker info &> /dev/null; do println "Wait until docker daemon is started ...\n" && sleep 1; done
 #    - ip a | grep mtu
 #    - docker network inspect bridge | grep mtu
 #    - docker login -u $CI_DEPENDENCY_PROXY_USER -p $CI_DEPENDENCY_PROXY_PASSWORD $CI_DEPENDENCY_PROXY_SERVER
@@ -322,6 +326,8 @@ build-db-image:
   variables:
     DB_IMAGE_NAME: "${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-db"
   before_script:
+    - docker --version
+    - until docker info &> /dev/null; do println "Wait until docker daemon is started ...\n" && sleep 1; done
     - ip a | grep mtu
     - docker network inspect bridge | grep mtu
     - docker login -u $CI_DEPENDENCY_PROXY_USER -p $CI_DEPENDENCY_PROXY_PASSWORD $CI_DEPENDENCY_PROXY_SERVER
@@ -357,6 +363,8 @@ build-liquibase-image:
   variables:
     LIQUIBASE_IMAGE_NAME: "${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-liquibase"
   before_script:
+    - docker --version
+    - until docker info &> /dev/null; do println "Wait until docker daemon is started ...\n" && sleep 1; done
     - ip a | grep mtu
     - docker network inspect bridge | grep mtu
     - docker login -u $CI_DEPENDENCY_PROXY_USER -p $CI_DEPENDENCY_PROXY_PASSWORD $CI_DEPENDENCY_PROXY_SERVER
@@ -406,6 +414,10 @@ test-db:
       entrypoint: [ "sh", "-c", "dockerd-entrypoint.sh $DOCKER_DAEMON_OPTIONS" ]
       alias: docker
   before_script:
+    - docker --version
+    - until docker info &> /dev/null; do println "Wait until docker daemon is started ...\n" && sleep 1; done
+    - ip a | grep mtu
+    - docker network inspect bridge | grep mtu
     - sed -i "s^REGISTRY_PATH=.*$^REGISTRY_PATH=${CI_REGISTRY_IMAGE}/^" .env.coding-box.template
     - sed -i "s/TAG=.*$/TAG=${CI_COMMIT_SHA}/" .env.coding-box.template
     - echo "$REGISTRY_PASSWORD" | docker login -u $REGISTRY_USER --password-stdin $REGISTRY
@@ -509,6 +521,8 @@ test-app:
 #      entrypoint: [ "sh", "-c", "dockerd-entrypoint.sh $DOCKER_DAEMON_OPTIONS" ]
 #      alias: docker
 #  before_script:
+#    - docker --version
+#    - until docker info &> /dev/null; do println "Wait until docker daemon is started ...\n" && sleep 1; done
 #    - docker network create app-net
 #    - echo "$REGISTRY_PASSWORD" | docker login -u $REGISTRY_USER --password-stdin $REGISTRY
 #    - docker pull --quiet ${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-db:${CI_COMMIT_SHA}
@@ -553,6 +567,8 @@ test-app:
 #      entrypoint: [ "sh", "-c", "dockerd-entrypoint.sh $DOCKER_DAEMON_OPTIONS" ]
 #      alias: docker
 #  before_script:
+#    - docker --version
+#    - until docker info &> /dev/null; do println "Wait until docker daemon is started ...\n" && sleep 1; done
 #    - docker network create app-net
 #    - echo "$REGISTRY_PASSWORD" | docker login -u $REGISTRY_USER --password-stdin $REGISTRY
 #    - docker pull --quiet ${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-db:${CI_COMMIT_SHA}
@@ -590,6 +606,8 @@ test-app:
 #      entrypoint: [ "sh", "-c", "dockerd-entrypoint.sh $DOCKER_DAEMON_OPTIONS" ]
 #      alias: docker
 #  before_script:
+#    - docker --version
+#    - until docker info &> /dev/null; do println "Wait until docker daemon is started ...\n" && sleep 1; done
 #    - docker network create app-net
 #    - echo "$REGISTRY_PASSWORD" | docker login -u $REGISTRY_USER --password-stdin $REGISTRY
 #    - docker pull --quiet ${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-db:${CI_COMMIT_SHA}
@@ -627,6 +645,8 @@ test-app:
 #      entrypoint: [ "sh", "-c", "dockerd-entrypoint.sh $DOCKER_DAEMON_OPTIONS" ]
 #      alias: docker
 #  before_script:
+#    - docker --version
+#    - until docker info &> /dev/null; do println "Wait until docker daemon is started ...\n" && sleep 1; done
 #    - docker network create app-net
 #    - echo "$REGISTRY_PASSWORD" | docker login -u $REGISTRY_USER --password-stdin $REGISTRY
 #    - docker pull --quiet ${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-db:${CI_COMMIT_SHA}
@@ -665,6 +685,8 @@ test-app:
 #      entrypoint: [ "sh", "-c", "dockerd-entrypoint.sh $DOCKER_DAEMON_OPTIONS" ]
 #      alias: docker
 #  before_script:
+#    - docker --version
+#    - until docker info &> /dev/null; do println "Wait until docker daemon is started ...\n" && sleep 1; done
 #    - docker network create app-net
 #    - echo "$REGISTRY_PASSWORD" | docker login -u $REGISTRY_USER --password-stdin $REGISTRY
 #    - docker pull --quiet ${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-db:${CI_COMMIT_SHA}
@@ -702,6 +724,8 @@ test-app:
 #      entrypoint: [ "sh", "-c", "dockerd-entrypoint.sh $DOCKER_DAEMON_OPTIONS" ]
 #      alias: docker
 #  before_script:
+#    - docker --version
+#    - until docker info &> /dev/null; do println "Wait until docker daemon is started ...\n" && sleep 1; done
 #    - docker network create app-net
 #    - echo "$REGISTRY_PASSWORD" | docker login -u $REGISTRY_USER --password-stdin $REGISTRY
 #    - docker pull --quiet ${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-db:${CI_COMMIT_SHA}
@@ -740,6 +764,8 @@ test-app:
 #      entrypoint: [ "sh", "-c", "dockerd-entrypoint.sh $DOCKER_DAEMON_OPTIONS" ]
 #      alias: docker
 #  before_script:
+#    - docker --version
+#    - until docker info &> /dev/null; do println "Wait until docker daemon is started ...\n" && sleep 1; done
 #    - docker network create app-net
 #    - echo "$REGISTRY_PASSWORD" | docker login -u $REGISTRY_USER --password-stdin $REGISTRY
 #    - docker pull --quiet ${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-db:${CI_COMMIT_SHA}
@@ -777,6 +803,8 @@ test-app:
 #      entrypoint: [ "sh", "-c", "dockerd-entrypoint.sh $DOCKER_DAEMON_OPTIONS" ]
 #      alias: docker
 #  before_script:
+#    - docker --version
+#    - until docker info &> /dev/null; do println "Wait until docker daemon is started ...\n" && sleep 1; done
 #    - docker network create app-net
 #    - echo "$REGISTRY_PASSWORD" | docker login -u $REGISTRY_USER --password-stdin $REGISTRY
 #    - docker pull --quiet ${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-db:${CI_COMMIT_SHA}
@@ -836,6 +864,8 @@ build-develop-commit-db-image:
   variables:
     DB_IMAGE_NAME: "${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-db"
   before_script:
+    - docker --version
+    - until docker info &> /dev/null; do println "Wait until docker daemon is started ...\n" && sleep 1; done
     - ip a | grep mtu
     - docker network inspect bridge | grep mtu
     - docker login -u $CI_DEPENDENCY_PROXY_USER -p $CI_DEPENDENCY_PROXY_PASSWORD $CI_DEPENDENCY_PROXY_SERVER
@@ -870,6 +900,8 @@ build-develop-commit-liquibase-image:
   variables:
     LIQUIBASE_IMAGE_NAME: "${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-liquibase"
   before_script:
+    - docker --version
+    - until docker info &> /dev/null; do println "Wait until docker daemon is started ...\n" && sleep 1; done
     - ip a | grep mtu
     - docker network inspect bridge | grep mtu
     - docker login -u $CI_DEPENDENCY_PROXY_USER -p $CI_DEPENDENCY_PROXY_PASSWORD $CI_DEPENDENCY_PROXY_SERVER
@@ -904,6 +936,8 @@ build-develop-commit-base-image:
   variables:
     BASE_IMAGE_NAME: "${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-base"
   before_script:
+    - docker --version
+    - until docker info &> /dev/null; do println "Wait until docker daemon is started ...\n" && sleep 1; done
     - ip a | grep mtu
     - docker network inspect bridge | grep mtu
     - docker login -u $CI_DEPENDENCY_PROXY_USER -p $CI_DEPENDENCY_PROXY_PASSWORD $CI_DEPENDENCY_PROXY_SERVER
@@ -938,6 +972,8 @@ build-develop-commit-backend-image:
     BASE_IMAGE_NAME: "${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-base"
     BACKEND_IMAGE_NAME: "${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-backend"
   before_script:
+    - docker --version
+    - until docker info &> /dev/null; do println "Wait until docker daemon is started ...\n" && sleep 1; done
     - ip a | grep mtu
     - docker network inspect bridge | grep mtu
     - docker login -u $CI_DEPENDENCY_PROXY_USER -p $CI_DEPENDENCY_PROXY_PASSWORD $CI_DEPENDENCY_PROXY_SERVER
@@ -978,6 +1014,8 @@ build-develop-commit-frontend-image:
     BASE_IMAGE_NAME: "${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-base"
     FRONTEND_IMAGE_NAME: "${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-frontend"
   before_script:
+    - docker --version
+    - until docker info &> /dev/null; do println "Wait until docker daemon is started ...\n" && sleep 1; done
     - ip a | grep mtu
     - docker network inspect bridge | grep mtu
     - docker login -u $CI_DEPENDENCY_PROXY_USER -p $CI_DEPENDENCY_PROXY_PASSWORD $CI_DEPENDENCY_PROXY_SERVER
@@ -1250,6 +1288,10 @@ build-pre-release:
     BACKEND_IMAGE_NAME: "${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-backend"
     FRONTEND_IMAGE_NAME: "${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-frontend"
   before_script:
+    - docker --version
+    - until docker info &> /dev/null; do println "Wait until docker daemon is started ...\n" && sleep 1; done
+    - ip a | grep mtu
+    - docker network inspect bridge | grep mtu
     - echo "$CI_REGISTRY_PASSWORD" | docker login -u $CI_REGISTRY_USER --password-stdin $CI_REGISTRY
     - echo "$DOCKERHUB_PASSWORD" | docker login -u $DOCKERHUB_USER --password-stdin
     - docker pull -q ${DB_IMAGE_NAME}:${CI_COMMIT_SHA}

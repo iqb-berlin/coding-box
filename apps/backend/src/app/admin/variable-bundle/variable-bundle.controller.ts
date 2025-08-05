@@ -2,12 +2,15 @@ import {
   BadRequestException,
   Body,
   Controller,
+  DefaultValuePipe,
   Delete,
   Get,
   NotFoundException,
   Param,
+  ParseIntPipe,
   Post,
   Put,
+  Query,
   UseGuards
 } from '@nestjs/common';
 import {
@@ -38,8 +41,8 @@ export class VariableBundleController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiBearerAuth()
   @ApiOperation({
-    summary: 'Get all variable bundles for a workspace',
-    description: 'Retrieves all variable bundles for a workspace'
+    summary: 'Get variable bundles for a workspace with pagination',
+    description: 'Retrieves variable bundles for a workspace with pagination support'
   })
   @ApiParam({
     name: 'workspace_id',
@@ -49,7 +52,18 @@ export class VariableBundleController {
   })
   @ApiOkResponse({
     description: 'The variable bundles have been successfully retrieved.',
-    type: [VariableBundleDto]
+    schema: {
+      type: 'object',
+      properties: {
+        data: {
+          type: 'array',
+          items: { $ref: '#/components/schemas/VariableBundleDto' }
+        },
+        total: { type: 'number' },
+        page: { type: 'number' },
+        limit: { type: 'number' }
+      }
+    }
   })
   @ApiBadRequestResponse({
     description: 'Invalid input data.'
@@ -57,10 +71,19 @@ export class VariableBundleController {
   @ApiNotFoundResponse({
     description: 'Workspace not found.'
   })
-  async getVariableBundles(@WorkspaceId() workspaceId: number): Promise<VariableBundleDto[]> {
+  async getVariableBundles(
+    @WorkspaceId() workspaceId: number,
+      @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
+      @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number
+  ): Promise<{ data: VariableBundleDto[]; total: number; page: number; limit: number }> {
     try {
-      const variableBundles = await this.variableBundleService.getVariableBundles(workspaceId);
-      return variableBundles.map(bundle => VariableBundleDto.fromEntity(bundle));
+      const result = await this.variableBundleService.getVariableBundles(workspaceId, page, limit);
+      return {
+        data: result.data.map(bundle => VariableBundleDto.fromEntity(bundle)),
+        total: result.total,
+        page: result.page,
+        limit: result.limit
+      };
     } catch (error) {
       if (error instanceof NotFoundException) {
         throw error;

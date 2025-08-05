@@ -991,4 +991,84 @@ export class WorkspaceTestResultsService {
       throw new Error(`An error occurred while searching for units with name: ${unitName}: ${error.message}`);
     }
   }
+
+  async findBookletsByName(
+    workspaceId: number,
+    bookletName: string,
+    options: { page?: number; limit?: number } = {}
+  ): Promise<{
+      data: {
+        bookletId: number;
+        bookletName: string;
+        personId: number;
+        personLogin: string;
+        personCode: string;
+        personGroup: string;
+        units: {
+          unitId: number;
+          unitName: string;
+          unitAlias: string | null;
+        }[];
+      }[];
+      total: number;
+    }> {
+    if (!workspaceId || !bookletName) {
+      throw new Error('Both workspaceId and bookletName are required.');
+    }
+
+    const page = options.page || 1;
+    const limit = options.limit || 10;
+    const skip = (page - 1) * limit;
+
+    this.logger.log(`Finding booklets by name for workspace ${workspaceId}, bookletName: ${bookletName}`);
+
+    try {
+      this.logger.log(
+        `Searching for booklets with name: ${bookletName} in workspace: ${workspaceId} (page: ${page}, limit: ${limit})`
+      );
+
+      // Create a query to find all booklets with the given name
+      const query = this.bookletRepository.createQueryBuilder('booklet')
+        .innerJoinAndSelect('booklet.person', 'person')
+        .innerJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
+        .leftJoinAndSelect('booklet.units', 'unit')
+        .where('bookletinfo.name ILIKE :bookletName', { bookletName: `%${bookletName}%` })
+        .andWhere('person.workspace_id = :workspaceId', { workspaceId });
+
+      const total = await query.getCount();
+
+      if (total === 0) {
+        this.logger.log(`No booklets found with name: ${bookletName} in workspace: ${workspaceId}`);
+        return { data: [], total: 0 };
+      }
+
+      query.skip(skip).take(limit);
+
+      const booklets = await query.getMany();
+
+      this.logger.log(`Found ${total} booklets with name: ${bookletName} in workspace: ${workspaceId}, returning ${booklets.length} for page ${page}`);
+
+      const data = booklets.map(booklet => ({
+        bookletId: booklet.id,
+        bookletName: booklet.bookletinfo.name,
+        personId: booklet.person.id,
+        personLogin: booklet.person.login,
+        personCode: booklet.person.code,
+        personGroup: booklet.person.group,
+        units: booklet.units ? booklet.units.map(unit => ({
+          unitId: unit.id,
+          unitName: unit.name,
+          unitAlias: unit.alias
+        })) : []
+      }));
+
+      return { data, total };
+    } catch (error) {
+      this.logger.error(
+        `Failed to search for booklets with name: ${bookletName} in workspace: ${workspaceId}`,
+        error.stack
+      );
+      throw new Error(`An error occurred while searching for booklets with name: ${bookletName}: ${error.message}`);
+    }
+  }
 }

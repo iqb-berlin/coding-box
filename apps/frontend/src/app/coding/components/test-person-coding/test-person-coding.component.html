@@ -120,6 +120,12 @@
                   <mat-icon>error</mat-icon>
                 </button>
 
+                <!-- Restart button for failed jobs -->
+                <button mat-icon-button color="primary" *ngIf="job.status === 'failed'"
+                        (click)="restartJob(job.jobId)" matTooltip="Auftrag neu starten">
+                  <mat-icon>replay</mat-icon>
+                </button>
+
                 <!-- Test person indicator if available -->
                 <span *ngIf="job.testPersonId" class="test-person-indicator" matTooltip="Testpersonen-ID: {{ job.testPersonId }}">
                   <mat-icon>person</mat-icon>
