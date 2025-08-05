@@ -1,10 +1,17 @@
 import { Injectable, inject } from '@angular/core';
 import { BehaviorSubject, Observable, of } from 'rxjs';
-import { HttpClient } from '@angular/common/http';
-import { catchError, map, take } from 'rxjs/operators';
+import { HttpClient, HttpParams } from '@angular/common/http';
+import { catchError, map } from 'rxjs/operators';
 import { SERVER_URL } from '../../injection-tokens';
 import { AppService } from '../../services/app.service';
-import { VariableBundle, Variable } from '../models/coding-job.model';
+import { VariableBundle } from '../models/coding-job.model';
+
+export interface PaginatedBundles {
+  bundles: VariableBundle[];
+  total: number;
+  page: number;
+  limit: number;
+}
 
 @Injectable({
   providedIn: 'root'
@@ -15,63 +22,64 @@ export class VariableBundleService {
   private appService = inject(AppService);
   private bundlesSubject = new BehaviorSubject<VariableBundle[]>([]);
 
-  private sampleBundles: VariableBundle[] = [
-    {
-      id: 1,
-      name: 'Mathematische Fähigkeiten',
-      description: 'Variablen zur Bewertung mathematischer Fähigkeiten',
-      createdAt: new Date('2023-01-01'),
-      updatedAt: new Date('2023-01-15'),
-      variables: [
-        { unitName: 'math101', variableId: 'addition' },
-        { unitName: 'math101', variableId: 'subtraction' },
-        { unitName: 'math102', variableId: 'multiplication' }
-      ]
-    },
-    {
-      id: 2,
-      name: 'Sprachliche Fähigkeiten',
-      description: 'Variablen zur Bewertung sprachlicher Fähigkeiten',
-      createdAt: new Date('2023-02-01'),
-      updatedAt: new Date('2023-02-15'),
-      variables: [
-        { unitName: 'lang101', variableId: 'grammar' },
-        { unitName: 'lang101', variableId: 'vocabulary' },
-        { unitName: 'lang102', variableId: 'comprehension' }
-      ]
-    }
-  ];
-
   constructor() {
-    this.bundlesSubject.next(this.sampleBundles);
+    this.bundlesSubject.next([]);
   }
 
-  getBundleGroups(): Observable<VariableBundle[]> {
+  getBundles(page: number = 1, limit: number = 10): Observable<PaginatedBundles> {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
-      return of([]);
+      return of({
+        bundles: [], total: 0, page, limit
+      });
     }
     const baseUrl = this.serverUrl.endsWith('/') ? this.serverUrl.slice(0, -1) : this.serverUrl;
     const url = `${baseUrl}/admin/workspace/${workspaceId}/variable-bundle`;
 
-    return this.http.get<{ data: VariableBundle[], total: number }>(url).pipe(
+    const params = new HttpParams()
+      .set('page', page.toString())
+      .set('limit', limit.toString());
+
+    interface BackendVariableBundle {
+      id: number;
+      workspace_id: number;
+      name: string;
+      description?: string;
+      variables: Array<{ unitName: string; variableId: string }>;
+      created_at: string;
+      updated_at: string;
+    }
+
+    return this.http.get<BackendVariableBundle[] | { data: BackendVariableBundle[], total: number, page: number, limit: number }>(url, { params }).pipe(
       map(response => {
-        const bundles = response.data;
+        const bundleData = Array.isArray(response) ? response : response.data;
+        const total = Array.isArray(response) ? bundleData.length : response.total;
+        const responsePage = Array.isArray(response) ? page : response.page;
+        const responseLimit = Array.isArray(response) ? limit : response.limit;
+
+        const bundles = bundleData.map(bundle => ({
+          id: bundle.id,
+          name: bundle.name,
+          description: bundle.description,
+          createdAt: new Date(bundle.created_at),
+          updatedAt: new Date(bundle.updated_at),
+          variables: bundle.variables || []
+        } as VariableBundle));
+
         this.bundlesSubject.next(bundles);
 
-        return bundles;
+        return {
+          bundles,
+          total,
+          page: responsePage,
+          limit: responseLimit
+        };
       }),
-      catchError(() => this.bundlesSubject.asObservable().pipe(
-        take(1)
-      )
-      )
+      catchError(error => {
+        console.error('Error fetching variable bundles:', error);
+        throw error;
+      })
     );
-  }
-
-  getBundleById(id: number): Observable<VariableBundle | undefined> {
-    const bundles = this.bundlesSubject.value;
-    const bundle = bundles.find(b => b.id === id);
-    return of(bundle);
   }
 
   createBundle(bundle: Omit<VariableBundle, 'id'>): Observable<VariableBundle> {
@@ -86,23 +94,40 @@ export class VariableBundleService {
     const baseUrl = this.serverUrl.endsWith('/') ? this.serverUrl.slice(0, -1) : this.serverUrl;
     const url = `${baseUrl}/admin/workspace/${workspaceId}/variable-bundle`;
 
-    return this.http.post<VariableBundle>(url, bundle).pipe(
-      map(newBundle => {
+    interface BackendVariableBundle {
+      id: number;
+      workspace_id: number;
+      name: string;
+      description?: string;
+      variables: Array<{ unitName: string; variableId: string }>;
+      created_at: string;
+      updated_at: string;
+    }
+
+    const requestPayload = {
+      name: bundle.name,
+      description: bundle.description,
+      variables: bundle.variables
+    };
+
+    return this.http.post<BackendVariableBundle>(url, requestPayload).pipe(
+      map(response => {
+        const newBundle: VariableBundle = {
+          id: response.id,
+          name: response.name,
+          description: response.description,
+          createdAt: new Date(response.created_at),
+          updatedAt: new Date(response.updated_at),
+          variables: response.variables || []
+        };
+
         const updatedBundles = [...this.bundlesSubject.value, newBundle];
         this.bundlesSubject.next(updatedBundles);
 
         return newBundle;
       }),
-      catchError(() => {
-        const newBundle: VariableBundle = {
-          ...bundle,
-          id: this.getNextId()
-        };
-
-        const updatedBundle = [...this.bundlesSubject.value, newBundle];
-        this.bundlesSubject.next(updatedBundle);
-
-        return of(newBundle);
+      catchError(error => {
+        throw error;
       })
     );
   }
@@ -117,13 +142,32 @@ export class VariableBundleService {
     const url = `${baseUrl}/admin/workspace/${workspaceId}/variable-bundle/${id}`;
 
     const updateData = {
-      ...bundle,
-      updatedAt: new Date()
+      name: bundle.name,
+      description: bundle.description,
+      variables: bundle.variables
     };
 
-    return this.http.put<VariableBundle>(url, updateData).pipe(
-      map(updatedBundleGroup => {
-        // Update the local state with the updated bundle group
+    interface BackendVariableBundle {
+      id: number;
+      workspace_id: number;
+      name: string;
+      description?: string;
+      variables: Array<{ unitName: string; variableId: string }>;
+      created_at: string;
+      updated_at: string;
+    }
+
+    return this.http.put<BackendVariableBundle>(url, updateData).pipe(
+      map(response => {
+        const updatedBundleGroup: VariableBundle = {
+          id: response.id,
+          name: response.name,
+          description: response.description,
+          createdAt: new Date(response.created_at),
+          updatedAt: new Date(response.updated_at),
+          variables: response.variables || []
+        };
+
         const bundles = this.bundlesSubject.value;
         const index = bundles.findIndex(b => b.id === id);
 
@@ -135,26 +179,8 @@ export class VariableBundleService {
 
         return updatedBundleGroup;
       }),
-      catchError(() => {
-        const bundles = this.bundlesSubject.value;
-        const index = bundles.findIndex(b => b.id === id);
-
-        if (index === -1) {
-          return of(undefined);
-        }
-
-        const updatedBundle: VariableBundle = {
-          ...bundles[index],
-          ...bundle,
-          updatedAt: new Date()
-        };
-
-        const updatedBundleGroups = [...bundles];
-        updatedBundleGroups[index] = updatedBundle;
-
-        this.bundlesSubject.next(updatedBundleGroups);
-
-        return of(updatedBundle);
+      catchError(error => {
+        throw error;
       })
     );
   }
@@ -178,128 +204,8 @@ export class VariableBundleService {
 
         return response.success;
       }),
-      catchError(() => {
-        const bundles = this.bundlesSubject.value;
-        const updatedBundles = bundles.filter(b => b.id !== id);
-
-        if (updatedBundles.length === bundles.length) {
-          return of(false);
-        }
-
-        this.bundlesSubject.next(updatedBundles);
-
-        return of(true);
-      })
-    );
-  }
-
-  addVariableToBundle(bundleId: number, variable: Variable): Observable<VariableBundle | undefined> {
-    const workspaceId = this.appService.selectedWorkspaceId;
-    if (!workspaceId) {
-      return of(undefined);
-    }
-
-    const baseUrl = this.serverUrl.endsWith('/') ? this.serverUrl.slice(0, -1) : this.serverUrl;
-    const url = `${baseUrl}/admin/workspace/${workspaceId}/variable-bundle/${bundleId}/variables`;
-
-    return this.http.post<VariableBundle>(url, variable).pipe(
-      map(updatedBundle => {
-        const bundles = this.bundlesSubject.value;
-        const index = bundles.findIndex(b => b.id === bundleId);
-
-        if (index !== -1) {
-          const updatedBundles = [...bundles];
-          updatedBundles[index] = updatedBundle;
-          this.bundlesSubject.next(updatedBundles);
-        }
-
-        return updatedBundle;
-      }),
-      catchError(() => {
-        const bundles = this.bundlesSubject.value;
-        const index = bundles.findIndex(b => b.id === bundleId);
-
-        if (index === -1) {
-          return of(undefined);
-        }
-
-        const bundle = bundles[index];
-
-        const variableExists = bundle.variables.some(
-          v => v.unitName === variable.unitName && v.variableId === variable.variableId
-        );
-
-        if (variableExists) {
-          return of(bundle);
-        }
-
-        const updatedBundle: VariableBundle = {
-          ...bundle,
-          variables: [...bundle.variables, variable as Variable],
-          updatedAt: new Date()
-        };
-
-        const updatedBundles = [...bundles];
-        updatedBundles[index] = updatedBundle;
-
-        this.bundlesSubject.next(updatedBundles);
-
-        return of(updatedBundle);
-      })
-    );
-  }
-
-  removeVariableFromBundle(groupId: number, variable: Variable): Observable<VariableBundle | undefined> {
-    const workspaceId = this.appService.selectedWorkspaceId;
-    if (!workspaceId) {
-      return of(undefined);
-    }
-
-    const encodedUnitName = encodeURIComponent((variable as Variable).unitName);
-    const encodedVariableId = encodeURIComponent((variable as Variable).variableId);
-
-    const baseUrl = this.serverUrl.endsWith('/') ? this.serverUrl.slice(0, -1) : this.serverUrl;
-    const url = `${baseUrl}/admin/workspace/${workspaceId}/variable-bundle/${groupId}/variables/${encodedUnitName}/${encodedVariableId}`;
-
-    return this.http.delete<VariableBundle>(url).pipe(
-      map(updatedBundle => {
-        const bundles = this.bundlesSubject.value;
-        const index = bundles.findIndex(group => group.id === groupId);
-
-        if (index !== -1) {
-          const updatedBundles = [...bundles];
-          updatedBundles[index] = updatedBundle;
-          this.bundlesSubject.next(updatedBundles);
-        }
-
-        return updatedBundle;
-      }),
-      catchError(() => {
-        const bundles = this.bundlesSubject.value;
-        const index = bundles.findIndex(group => group.id === groupId);
-
-        if (index === -1) {
-          return of(undefined);
-        }
-
-        const bundle = bundles[index];
-
-        const updatedVariables = bundle.variables.filter(
-          v => !(v.unitName === (variable as Variable).unitName && v.variableId === (variable as Variable).variableId)
-        );
-
-        const updatedBundle: VariableBundle = {
-          ...bundle,
-          variables: updatedVariables,
-          updatedAt: new Date()
-        };
-
-        const updatedBundles = [...bundles];
-        updatedBundles[index] = updatedBundle;
-
-        this.bundlesSubject.next(updatedBundles);
-
-        return of(updatedBundle);
+      catchError(error => {
+        throw error;
       })
     );
   }
