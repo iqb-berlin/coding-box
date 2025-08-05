@@ -50,6 +50,63 @@ export class TestResultService {
     this.cacheService.invalidateWorkspaceCache(workspaceId);
   }
 
+  searchBookletsByName(
+    workspaceId: number,
+    bookletName: string,
+    page?: number,
+    limit?: number
+  ): Observable<{
+      data: {
+        bookletId: number;
+        bookletName: string;
+        personId: number;
+        personLogin: string;
+        personCode: string;
+        personGroup: string;
+        units: {
+          unitId: number;
+          unitName: string;
+          unitAlias: string | null;
+        }[];
+      }[];
+      total: number;
+    }> {
+    let params = new HttpParams().set('bookletName', bookletName);
+
+    if (page !== undefined) {
+      params = params.set('page', page.toString());
+    }
+
+    if (limit !== undefined) {
+      params = params.set('limit', limit.toString());
+    }
+
+    return this.http.get<{
+      data: {
+        bookletId: number;
+        bookletName: string;
+        personId: number;
+        personLogin: string;
+        personCode: string;
+        personGroup: string;
+        units: {
+          unitId: number;
+          unitName: string;
+          unitAlias: string | null;
+        }[];
+      }[];
+      total: number;
+    }>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/booklets/search`,
+      { headers: this.authHeader, params }
+    ).pipe(
+      catchError(() => {
+        logger.error(`Error searching for booklets with name: ${bookletName}`);
+        return of({ data: [], total: 0 });
+      })
+    );
+  }
+
   searchUnitsByName(
     workspaceId: number,
     unitName: string,
@@ -182,6 +239,36 @@ export class TestResultService {
             warnings: ['Failed to delete units']
           }
         });
+      })
+    );
+  }
+
+  /**
+   * Delete a booklet and all its associated units and responses
+   * @param workspaceId The ID of the workspace
+   * @param bookletId The ID of the booklet to delete
+   * @returns An Observable of the deletion result
+   */
+  deleteBooklet(workspaceId: number, bookletId: number): Observable<{
+    success: boolean;
+    report: {
+      deletedBooklet: number | null;
+      warnings: string[];
+    };
+  }> {
+    return this.http.delete<{
+      success: boolean;
+      report: {
+        deletedBooklet: number | null;
+        warnings: string[];
+      };
+    }>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/booklets/${bookletId}`,
+      { headers: this.authHeader }
+    ).pipe(
+      catchError(() => {
+        logger.error(`Error deleting booklet with ID: ${bookletId}`);
+        return of({ success: false, report: { deletedBooklet: null, warnings: ['Failed to delete booklet'] } });
       })
     );
   }

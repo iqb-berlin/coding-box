@@ -44,7 +44,7 @@ import { LogDialogComponent } from '../booklet-log-dialog/log-dialog.component';
 import { UnitLogsDialogComponent } from '../unit-logs-dialog/unit-logs-dialog.component';
 import { TagDialogComponent } from '../tag-dialog/tag-dialog.component';
 import { NoteDialogComponent } from '../note-dialog/note-dialog.component';
-import { UnitSearchDialogComponent } from '../unit-search-dialog/unit-search-dialog.component';
+import { TestResultsSearchComponent } from '../test-results-search/test-results-search.component';
 import { ConfirmDialogComponent, ConfirmDialogData } from '../../../shared/dialogs/confirm-dialog.component';
 import { UnitTagDto } from '../../../../../../../api-dto/unit-tags/unit-tag.dto';
 import { CreateUnitTagDto } from '../../../../../../../api-dto/unit-tags/create-unit-tag.dto';
@@ -1261,11 +1261,11 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     );
   }
 
-  openUnitSearchDialog(): void {
-    this.dialog.open(UnitSearchDialogComponent, {
+  openTestResultsSearchDialog(): void {
+    this.dialog.open(TestResultsSearchComponent, {
       width: '1200px',
       data: {
-        title: 'Aufgaben suchen'
+        title: 'Testergebnisse suchen'
       }
     });
   }

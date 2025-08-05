@@ -75,9 +75,9 @@ interface BookletSearchResult {
 }
 
 @Component({
-  selector: 'coding-box-unit-search-dialog',
-  templateUrl: './unit-search-dialog.component.html',
-  styleUrls: ['./unit-search-dialog.component.scss'],
+  selector: 'coding-box-test-results-search',
+  templateUrl: './test-results-search.component.html',
+  styleUrls: ['./test-results-search.component.scss'],
   standalone: true,
   imports: [
     CommonModule,
@@ -94,7 +94,7 @@ interface BookletSearchResult {
     TranslateModule
   ]
 })
-export class UnitSearchDialogComponent implements OnInit {
+export class TestResultsSearchComponent implements OnInit {
   searchText: string = '';
   searchValue: string = '';
   searchVariableId: string = '';
@@ -129,7 +129,7 @@ export class UnitSearchDialogComponent implements OnInit {
   @ViewChild(MatPaginator) paginator!: MatPaginator;
 
   constructor(
-    private dialogRef: MatDialogRef<UnitSearchDialogComponent>,
+    private dialogRef: MatDialogRef<TestResultsSearchComponent>,
     @Inject(MAT_DIALOG_DATA) public data: { title: string },
     private backendService: BackendService,
     private appService: AppService,
