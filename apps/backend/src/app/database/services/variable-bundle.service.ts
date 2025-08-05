@@ -14,15 +14,39 @@ export class VariableBundleService {
   ) {}
 
   /**
-   * Get all variable bundles for a workspace
+   * Get variable bundles for a workspace with pagination
    * @param workspaceId The ID of the workspace
-   * @returns Array of variable bundles
+   * @param page The page number (1-based)
+   * @param limit The number of items per page
+   * @returns Paginated variable bundles with metadata
    */
-  async getVariableBundles(workspaceId: number): Promise<VariableBundle[]> {
-    return this.variableBundleRepository.find({
-      where: { workspace_id: workspaceId },
-      order: { created_at: 'DESC' }
+  async getVariableBundles(
+    workspaceId: number,
+    page: number = 1,
+    limit: number = 10
+  ): Promise<{ data: VariableBundle[]; total: number; page: number; limit: number }> {
+    const validPage = page > 0 ? page : 1;
+    const validLimit = limit > 0 ? limit : 10;
+
+    const skip = (validPage - 1) * validLimit;
+
+    const total = await this.variableBundleRepository.count({
+      where: { workspace_id: workspaceId }
     });
+
+    const data = await this.variableBundleRepository.find({
+      where: { workspace_id: workspaceId },
+      order: { created_at: 'DESC' },
+      skip,
+      take: validLimit
+    });
+
+    return {
+      data,
+      total,
+      page: validPage,
+      limit: validLimit
+    };
   }
 
   /**
@@ -149,8 +173,6 @@ export class VariableBundleService {
     variableId: string
   ): Promise<VariableBundle> {
     const variableBundle = await this.getVariableBundle(id, workspaceId);
-
-    // Filter out the variable to remove
     variableBundle.variables = variableBundle.variables.filter(
       v => !(v.unitName === unitName && v.variableId === variableId)
     );
