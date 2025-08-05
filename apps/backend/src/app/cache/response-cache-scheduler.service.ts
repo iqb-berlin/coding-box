@@ -20,7 +20,7 @@ export class ResponseCacheSchedulerService {
     private readonly unitRepository: Repository<Unit>
   ) {}
 
-  @Cron(CronExpression.EVERY_DAY_AT_4AM)
+  @Cron(CronExpression.EVERY_DAY_AT_1AM)
   async cacheAllResponses() {
     this.logger.log('Starting nightly task to cache all responses');
     const startTime = Date.now();
