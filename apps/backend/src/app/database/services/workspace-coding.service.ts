@@ -1741,6 +1741,50 @@ export class WorkspaceCodingService {
   }
 
   /**
+   * Restart a failed job
+   * @param jobId The job ID to restart
+   * @returns Success status and message, with new job ID if successful
+   */
+  async restartJob(jobId: string): Promise<{ success: boolean; message: string; jobId?: string }> {
+    try {
+      // Get job from Bull queue
+      const bullJob = await this.jobQueueService.getTestPersonCodingJob(jobId);
+      if (!bullJob) {
+        return { success: false, message: `Job with ID ${jobId} not found` };
+      }
+
+      // Check if job is failed
+      const state = await bullJob.getState();
+      if (state !== 'failed') {
+        return {
+          success: false,
+          message: `Job with ID ${jobId} is not failed and cannot be restarted`
+        };
+      }
+
+      // Create a new job with the same data
+      const newJob = await this.jobQueueService.addTestPersonCodingJob({
+        workspaceId: bullJob.data.workspaceId,
+        personIds: bullJob.data.personIds,
+        groupNames: bullJob.data.groupNames
+      });
+
+      // Delete the old job
+      await this.jobQueueService.deleteTestPersonCodingJob(jobId);
+
+      this.logger.log(`Job ${jobId} has been restarted as job ${newJob.id}`);
+      return {
+        success: true,
+        message: `Job ${jobId} has been restarted as job ${newJob.id}`,
+        jobId: newJob.id.toString()
+      };
+    } catch (error) {
+      this.logger.error(`Error restarting job: ${error.message}`, error.stack);
+      return { success: false, message: `Error restarting job: ${error.message}` };
+    }
+  }
+
+  /**
    * Get jobs only from Redis Bull queue for a workspace
    * @param workspaceId The workspace ID
    * @returns Array of jobs from Redis Bull

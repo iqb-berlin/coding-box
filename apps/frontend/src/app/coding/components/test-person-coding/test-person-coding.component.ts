@@ -311,6 +311,25 @@ export class TestPersonCodingComponent implements OnInit {
       });
   }
 
+  restartJob(jobId: string): void {
+    if (!jobId) return;
+
+    this.testPersonCodingService.restartJob(this.workspaceId, jobId)
+      .subscribe(result => {
+        if (result.success) {
+          this.snackBar.open(result.message || 'Auftrag wurde neu gestartet', 'Schließen', { duration: 3000 });
+          if (result.jobId) {
+            // If a new job was created, start polling its status
+            this.activeJobId = result.jobId;
+            this.startJobStatusPolling(result.jobId);
+          }
+          this.loadAllJobs();
+        } else {
+          this.snackBar.open(`Fehler beim Neustarten des Auftrags: ${result.message}`, 'Schließen', { duration: 5000 });
+        }
+      });
+  }
+
   showJobResult(job: JobInfo): void {
     if (!job.result) {
       this.snackBar.open('Keine Ergebnisse für diesen Auftrag verfügbar', 'Schließen', { duration: 3000 });

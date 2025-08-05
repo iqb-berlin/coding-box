@@ -487,6 +487,35 @@ export class WorkspaceCodingController {
     return this.workspaceCodingService.resumeJob(jobId);
   }
 
+  @Get(':workspace_id/coding/job/:jobId/restart')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiParam({ name: 'jobId', type: String, description: 'ID of the failed background job to restart' })
+  @ApiOkResponse({
+    description: 'Job restart request processed.',
+    schema: {
+      type: 'object',
+      properties: {
+        success: {
+          type: 'boolean',
+          description: 'Whether the restart request was successful'
+        },
+        message: {
+          type: 'string',
+          description: 'Message describing the result of the restart request'
+        },
+        jobId: {
+          type: 'string',
+          description: 'ID of the new job created from the restart'
+        }
+      }
+    }
+  })
+  async restartJob(@Param('jobId') jobId: string): Promise<{ success: boolean; message: string; jobId?: string }> {
+    return this.workspaceCodingService.restartJob(jobId);
+  }
+
   @Get(':workspace_id/coding/missings-profiles')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiTags('coding')
