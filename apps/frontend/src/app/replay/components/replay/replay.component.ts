@@ -101,13 +101,9 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     }
 
     try {
-      // Decode the Base64 string to get the JSON string
       const jsonString = atob(encodedData);
-
-      // Parse the JSON string to get the BookletReplay object
       return JSON.parse(jsonString) as BookletReplay;
     } catch (error) {
-      // Error occurred while deserializing booklet data
       return null;
     }
   }
@@ -121,14 +117,10 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
         const queryParams = await firstValueFrom(this.route.queryParams);
         this.isBookletMode = queryParams.mode === 'booklet';
-
-        // If in booklet mode and bookletData is provided, deserialize it
         if (this.isBookletMode && queryParams.bookletData) {
           const deserializedBooklet = this.deserializeBookletData(queryParams.bookletData);
           if (deserializedBooklet) {
-            // Successfully deserialized booklet data from URL
             this.bookletData = deserializedBooklet;
-            // Update the component state
             this.currentUnitIndex = deserializedBooklet.currentUnitIndex;
             this.totalUnits = deserializedBooklet.units.length;
           }
@@ -139,9 +131,13 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
           if (!tokenValidation.isValid) {
             this.setIsLoaded();
             if (tokenValidation.errorType === 'token_expired') {
-              this.openErrorSnackBar(this.getErrorMessages().tokenExpired, 'Schließen');
+              const errorMessage = this.getErrorMessages().tokenExpired;
+              this.openErrorSnackBar(errorMessage, 'Schließen');
+              this.storeErrorInStatistics(errorMessage);
             } else {
-              this.openErrorSnackBar(this.getErrorMessages().tokenInvalid, 'Schließen');
+              const errorMessage = this.getErrorMessages().tokenInvalid;
+              this.openErrorSnackBar(errorMessage, 'Schließen');
+              this.storeErrorInStatistics(errorMessage);
             }
             return;
           }
@@ -174,20 +170,19 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
                     if (this.anchor) {
                       highlightAspectSectionWithAnchor(this.unitPlayerComponent.hostingIframe.nativeElement, this.anchor);
                       scrollToElementByAlias(this.unitPlayerComponent.hostingIframe.nativeElement, this.anchor);
-                    } else {
-                      // When no anchor is provided, scroll to the top of the content
-                      // this.scrollToTop();
                     }
                   }
                 }, 1000);
               }
             } else {
+              this.storeErrorInStatistics('QueryError');
               ReplayComponent.throwError('QueryError');
             }
           } else if (testPersonInput && unitIdInput) {
             this.setTestPerson(testPersonInput);
             this.unitId = unitIdInput;
           } else if (Object.keys(params).length !== 4 && !this.isPrintMode) {
+            this.storeErrorInStatistics('ParamsError');
             ReplayComponent.throwError('ParamsError');
           }
         } catch (error) {
@@ -217,6 +212,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
   setTestPerson(testPerson: string): void {
     if (!isTestperson(testPerson)) {
+      this.storeErrorInStatistics('TestPersonError');
       ReplayComponent.throwError('TestPersonError');
     } else {
       this.testPerson = testPerson;
@@ -225,6 +221,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
   private checkUnitId(unitFile: FilesDto[]): void {
     if (!unitFile || !unitFile[0]) {
+      this.storeErrorInStatistics('UnitIdError');
       ReplayComponent.throwError('UnitIdError');
     } else {
       this.cacheUnitData(unitFile[0]);
@@ -232,7 +229,6 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   async ngOnChanges(changes: SimpleChanges): Promise<void> {
-    // Handle unitIdInput changes
     // eslint-disable-next-line @typescript-eslint/dot-notation
     if (typeof changes['unitIdInput']?.currentValue === 'undefined') {
       this.resetUnitData();
@@ -249,9 +245,13 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         if (!tokenValidation.isValid) {
           this.setIsLoaded();
           if (tokenValidation.errorType === 'token_expired') {
-            this.openErrorSnackBar(this.getErrorMessages().tokenExpired, 'Schließen');
+            const errorMessage = this.getErrorMessages().tokenExpired;
+            this.openErrorSnackBar(errorMessage, 'Schließen');
+            this.storeErrorInStatistics(errorMessage);
           } else {
-            this.openErrorSnackBar(this.getErrorMessages().tokenInvalid, 'Schließen');
+            const errorMessage = this.getErrorMessages().tokenInvalid;
+            this.openErrorSnackBar(errorMessage, 'Schließen');
+            this.storeErrorInStatistics(errorMessage);
           }
           return Promise.resolve();
         }
@@ -375,8 +375,6 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       ]));
     const endTime = performance.now();
     const duration = Math.floor(endTime - startTime);
-    logger.log(`Replay-Dauer: ${duration.toFixed(2)}ms`);
-
     if (duration) {
       if (duration >= 1) {
         try {
@@ -386,7 +384,6 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
           if (this.testPerson) {
             const parts = this.testPerson.split('@');
-            console.log('parts', parts);
             if (parts.length > 0) {
               testPersonLogin = parts[0];
               testPersonCode = parts[1];
@@ -426,7 +423,6 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         }
       }
 
-      // Reset the start time for the next unit
       this.replayStartTime = performance.now();
     }
 
@@ -447,7 +443,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       notCurrent: `Seite mit der ID "${this.page || ''}" kann nicht ausgewählt werden`,
       tokenExpired: 'Das Authentisierungs-Token ist abgelaufen',
       tokenInvalid: 'Das Authentisierungs-Token ist ungültig',
-      unknown: 'Unbekannter Fehler'
+      unknown: `Unbekannter Fehler für Aufgabe "${this.unitId || ''}" von Testperson "${this.testPerson || ''}"`
     };
   }
 
@@ -470,20 +466,15 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   private storeErrorInStatistics(errorMessage: string): void {
-    // Calculate duration from start time to now
     const duration = this.replayStartTime ? Math.round(performance.now() - this.replayStartTime) : 0;
-
-    // Get auth token from local storage
     const authToken = localStorage.getItem('authToken');
     if (!authToken) return;
 
     try {
-      // Extract workspace ID from token
       const decoded: JwtPayload & { workspace: string } = jwtDecode(authToken);
       const workspaceId = Number(decoded?.workspace);
       if (!workspaceId) return;
 
-      // Extract test person information
       let testPersonLogin = '';
       let testPersonCode = '';
       let bookletId = '';
@@ -496,11 +487,8 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
           bookletId = parts[2];
         }
       }
-
-      // Construct the replay URL
       const replayUrl = window.location.href;
 
-      // Store the replay statistics with error information
       this.backendService.storeReplayStatistics(workspaceId, {
         unitId: this.unitId || 'unknown',
         bookletId,
@@ -525,7 +513,9 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
   checkPageError(pageError: 'notInList' | 'notCurrent' | null): void {
     if (pageError) {
-      this.openPageErrorSnackBar(this.getErrorMessages()[pageError], 'Schließen');
+      const errorMessage = this.getErrorMessages()[pageError];
+      this.openPageErrorSnackBar(errorMessage, 'Schließen');
+      this.storeErrorInStatistics(errorMessage);
     } else if (this.pageErrorSnackbarRef) {
       this.pageErrorSnackBar.dismiss();
       this.pageErrorSnackbarRef = null;
