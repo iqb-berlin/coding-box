@@ -1,0 +1,17 @@
+<div class="booklet-navigation">
+  <div class="navigation-controls">
+    <button class="nav-button prev-button" [disabled]="!hasPreviousUnit()" (click)="previousUnit()">
+      <span class="nav-icon">←</span> Vorherige Aufgabe
+    </button>
+
+    <div class="unit-position">
+      <span class="current-position">{{ currentUnitIndex + 1 }}</span>
+      <span class="position-separator">/</span>
+      <span class="total-units">{{ totalUnits }}</span>
+    </div>
+
+    <button class="nav-button next-button" [disabled]="!hasNextUnit()" (click)="nextUnit()">
+      Nächste Aufgabe <span class="nav-icon">→</span>
+    </button>
+  </div>
+</div>

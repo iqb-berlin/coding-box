@@ -25,11 +25,22 @@ import { FilesDto } from '../../../../../../../api-dto/files/files.dto';
 import { ErrorMessages } from '../../models/error-messages.model';
 import { validateToken, isTestperson } from '../../utils/token-utils';
 import { scrollToElementByAlias, highlightAspectSectionWithAnchor } from '../../utils/dom-utils';
-import { BookletReplay } from '../../../services/booklet-replay.service';
+import { BookletReplay, BookletReplayUnit } from '../../../services/booklet-replay.service';
+import { BookletReplayComponent } from '../booklet-replay/booklet-replay.component';
 
 @Component({
   selector: 'coding-box-replay',
-  imports: [MatFormFieldModule, MatInputModule, MatButtonModule, ReactiveFormsModule, TranslateModule, UnitPlayerComponent, SpinnerComponent, FormsModule],
+  imports: [
+    MatFormFieldModule,
+    MatInputModule,
+    MatButtonModule,
+    ReactiveFormsModule,
+    TranslateModule,
+    UnitPlayerComponent,
+    SpinnerComponent,
+    FormsModule,
+    BookletReplayComponent
+  ],
   templateUrl: './replay.component.html',
   styleUrl: './replay.component.scss'
 })
@@ -62,7 +73,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   private routerSubscription: Subscription | null = null;
   readonly testPersonInput = input<string>();
   readonly unitIdInput = input<string>();
-  private bookletData: BookletReplay | null = null;
+  protected bookletData: BookletReplay | null = null;
   @ViewChild(UnitPlayerComponent) unitPlayerComponent: UnitPlayerComponent | undefined;
   private replayStartTime: number = 0; // Track when replay viewing starts
 
@@ -453,7 +464,6 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     if (error.status === 401) {
       messageKey = '401' as keyof ErrorMessages;
     } else if (error.status === 404 && this.unitId && this.testPerson) {
-      // If it's a 404 error and we have unitId and testPerson, it's likely a ResponsesError
       messageKey = 'ResponsesError' as keyof ErrorMessages;
     } else {
       messageKey = error.message as keyof ErrorMessages;
@@ -511,6 +521,33 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     }
   }
 
+  handleUnitChanged(unit: BookletReplayUnit): void {
+    if (unit && unit.name !== this.unitId) {
+      this.unitId = unit.name;
+
+      if (this.authToken) {
+        const decoded: JwtPayload & { workspace: string } = jwtDecode(this.authToken);
+        const workspace = decoded?.workspace;
+        if (workspace) {
+          this.getUnitData(Number(workspace), this.authToken).then(unitData => {
+            this.setUnitProperties(unitData);
+          });
+        }
+      }
+
+      if (this.bookletData) {
+        const newIndex = this.bookletData.units.findIndex(u => u.name === unit.name);
+        if (newIndex >= 0) {
+          this.bookletData = {
+            ...this.bookletData,
+            currentUnitIndex: newIndex
+          };
+          this.currentUnitIndex = newIndex;
+        }
+      }
+    }
+  }
+
   checkPageError(pageError: 'notInList' | 'notCurrent' | null): void {
     if (pageError) {
       const errorMessage = this.getErrorMessages()[pageError];
@@ -533,73 +570,6 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     this.unitDef = '';
     this.page = undefined;
     this.responses = undefined;
-  }
-
-  nextUnit(): void {
-    if (this.isBookletMode && this.bookletData) {
-      if (this.bookletData.currentUnitIndex < this.bookletData.units.length - 1) {
-        this.bookletData = {
-          ...this.bookletData,
-          currentUnitIndex: this.bookletData.currentUnitIndex + 1
-        };
-
-        this.currentUnitIndex = this.bookletData.currentUnitIndex;
-
-        const currentUnit = this.bookletData.units[this.bookletData.currentUnitIndex];
-        if (currentUnit && currentUnit.name !== this.unitId) {
-          this.unitId = currentUnit.name;
-          if (this.authToken) {
-            const decoded: JwtPayload & { workspace: string } = jwtDecode(this.authToken);
-            const workspace = decoded?.workspace;
-            if (workspace) {
-              this.getUnitData(Number(workspace), this.authToken).then(unitData => {
-                this.setUnitProperties(unitData);
-              });
-            }
-          }
-        }
-      }
-    }
-  }
-
-  previousUnit(): void {
-    if (this.isBookletMode && this.bookletData) {
-      if (this.bookletData.currentUnitIndex > 0) {
-        this.bookletData = {
-          ...this.bookletData,
-          currentUnitIndex: this.bookletData.currentUnitIndex - 1
-        };
-
-        this.currentUnitIndex = this.bookletData.currentUnitIndex;
-
-        const currentUnit = this.bookletData.units[this.bookletData.currentUnitIndex];
-        if (currentUnit && currentUnit.name !== this.unitId) {
-          this.unitId = currentUnit.name;
-
-          if (this.authToken) {
-            const decoded: JwtPayload & { workspace: string } = jwtDecode(this.authToken);
-            const workspace = decoded?.workspace;
-            if (workspace) {
-              this.getUnitData(Number(workspace), this.authToken).then(unitData => {
-                this.setUnitProperties(unitData);
-              });
-            }
-          }
-        }
-      }
-    }
-  }
-
-  hasNextUnit(): boolean {
-    if (!this.bookletData) return false;
-
-    return this.bookletData.currentUnitIndex < this.bookletData.units.length - 1;
-  }
-
-  hasPreviousUnit(): boolean {
-    if (!this.bookletData) return false;
-
-    return this.bookletData.currentUnitIndex > 0;
   }
 
   ngOnDestroy(): void {
