@@ -1,5 +1,5 @@
 import {
-  Component, Inject, OnInit, inject
+  Component, Inject, OnInit, OnDestroy, inject, ViewChild, ElementRef
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import {
@@ -18,8 +18,15 @@ import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { MatSortModule } from '@angular/material/sort';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatDividerModule } from '@angular/material/divider';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { TranslateModule } from '@ngx-translate/core';
 import { SelectionModel } from '@angular/cdk/collections';
+import {
+  Subject,
+  debounceTime,
+  distinctUntilChanged,
+  takeUntil, fromEvent
+} from 'rxjs';
 import { VariableBundle, Variable } from '../../models/coding-job.model';
 import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
@@ -52,13 +59,18 @@ export interface VariableBundleGroupDialogData {
     MatSortModule,
     MatProgressSpinnerModule,
     MatDividerModule,
-    TranslateModule
+    TranslateModule,
+    MatTooltipModule
   ]
 })
-export class VariableBundleDialogComponent implements OnInit {
+export class VariableBundleDialogComponent implements OnInit, OnDestroy {
+  @ViewChild('unitNameFilterInput') unitNameFilterInput!: ElementRef;
+  @ViewChild('variableIdFilterInput') variableIdFilterInput!: ElementRef;
+
   private fb = inject(FormBuilder);
   private backendService = inject(BackendService);
   private appService = inject(AppService);
+  private destroy$ = new Subject<void>();
 
   bundleGroupForm!: FormGroup;
   isLoading = false;
@@ -80,6 +92,7 @@ export class VariableBundleDialogComponent implements OnInit {
   // Filters
   unitNameFilter = '';
   variableIdFilter = '';
+  private readonly debounceTimeMs = 300;
 
   // Selected variables table
   selectedVariablesDataSource = new MatTableDataSource<Variable>([]);
@@ -97,6 +110,45 @@ export class VariableBundleDialogComponent implements OnInit {
     if (this.data.bundleGroup?.variables) {
       this.selectedVariablesDataSource.data = [...this.data.bundleGroup.variables];
     }
+
+    // Set up debounce for filter inputs after view is initialized
+    setTimeout(() => this.setupFilterDebounce(), 0);
+  }
+
+  ngOnDestroy(): void {
+    this.destroy$.next();
+    this.destroy$.complete();
+  }
+
+  private setupFilterDebounce(): void {
+    // Skip if the ViewChild elements aren't available yet
+    if (!this.unitNameFilterInput || !this.variableIdFilterInput) {
+      return;
+    }
+
+    // Set up debounce for unit name filter
+    fromEvent(this.unitNameFilterInput.nativeElement, 'input')
+      .pipe(
+        debounceTime(this.debounceTimeMs),
+        distinctUntilChanged(),
+        takeUntil(this.destroy$)
+      )
+      .subscribe(() => {
+        this.unitNameFilter = this.unitNameFilterInput.nativeElement.value;
+        this.applyFilter();
+      });
+
+    // Set up debounce for variable ID filter
+    fromEvent(this.variableIdFilterInput.nativeElement, 'input')
+      .pipe(
+        debounceTime(this.debounceTimeMs),
+        distinctUntilChanged(),
+        takeUntil(this.destroy$)
+      )
+      .subscribe(() => {
+        this.variableIdFilter = this.variableIdFilterInput.nativeElement.value;
+        this.applyFilter();
+      });
   }
 
   initForm(): void {
@@ -175,6 +227,15 @@ export class VariableBundleDialogComponent implements OnInit {
   clearFilters(): void {
     this.unitNameFilter = '';
     this.variableIdFilter = '';
+
+    // Reset the input field values
+    if (this.unitNameFilterInput) {
+      this.unitNameFilterInput.nativeElement.value = '';
+    }
+    if (this.variableIdFilterInput) {
+      this.variableIdFilterInput.nativeElement.value = '';
+    }
+
     this.loadVariableAnalysisItems(1, this.variableAnalysisPageSize);
   }
 

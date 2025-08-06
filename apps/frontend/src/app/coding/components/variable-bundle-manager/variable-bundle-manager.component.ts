@@ -130,7 +130,7 @@ export class VariableBundleManagerComponent implements OnInit, AfterViewInit {
     this.loadVariableBundleGroups(page, pageSize);
   }
 
-  private currentFilter: string = '';
+  currentFilter: string = '';
 
   applyFilter(filterValue: string): void {
     this.currentFilter = filterValue.trim().toLowerCase();

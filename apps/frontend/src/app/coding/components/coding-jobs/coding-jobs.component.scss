@@ -97,6 +97,46 @@ mat-cell {
   }
 }
 
+.mat-column-variables {
+  flex: 0 0 180px;
+}
+
+.variables-cell {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 180px;
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
+    color: #1976d2;
+  }
+}
+
+.mat-column-variableBundles {
+  flex: 0 0 180px;
+}
+
+.variable-bundles-cell {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 180px;
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
+    color: #1976d2;
+  }
+}
+
+.mat-column-createdAt,
+.mat-column-updatedAt {
+  flex: 0 0 160px;
+  justify-content: flex-start;
+}
+
 .mat-column-created_at, .mat-column-updated_at {
   flex: 0 0 150px;
 }

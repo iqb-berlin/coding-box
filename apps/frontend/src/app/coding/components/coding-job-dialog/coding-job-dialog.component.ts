@@ -20,6 +20,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatTabsModule } from '@angular/material/tabs';
 import { MatExpansionModule } from '@angular/material/expansion';
+import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateModule } from '@ngx-translate/core';
 import { SelectionModel } from '@angular/cdk/collections';
 import { CodingJob, VariableBundle, Variable } from '../../models/coding-job.model';
@@ -66,9 +67,11 @@ export class CodingJobDialogComponent implements OnInit {
   private backendService = inject(BackendService);
   private appService = inject(AppService);
   private coderService = inject(CoderService);
+  private snackBar = inject(MatSnackBar);
 
   codingJobForm!: FormGroup;
   isLoading = false;
+  isSaving = false;
 
   // Variables
   variables: Variable[] = [];
@@ -83,7 +86,6 @@ export class CodingJobDialogComponent implements OnInit {
   // Variable bundles
   variableBundles: VariableBundle[] = [];
   selectedVariableBundles = new SelectionModel<VariableBundle>(true, []);
-  bundlesDisplayedColumns: string[] = ['select', 'name', 'description', 'variableCount'];
   bundlesDataSource = new MatTableDataSource<VariableBundle>([]);
   isLoadingBundles = false;
 
@@ -152,7 +154,12 @@ export class CodingJobDialogComponent implements OnInit {
     }
   }
 
-  loadVariableAnalysisItems(page: number = 1, limit: number = 10): void {
+  loadVariableAnalysisItems(
+    page: number = 1,
+    limit: number = 10,
+    unitNameFilter?: string,
+    variableIdFilter?: string
+  ): void {
     this.isLoadingVariableAnalysis = true;
     const workspaceId = this.appService.selectedWorkspaceId;
 
@@ -165,8 +172,8 @@ export class CodingJobDialogComponent implements OnInit {
       workspaceId,
       page,
       limit,
-      this.unitNameFilter || undefined,
-      this.variableIdFilter || undefined
+      unitNameFilter || undefined,
+      variableIdFilter || undefined
     ).subscribe({
       next: response => {
         // Convert variable analysis items to variable bundles
@@ -233,11 +240,17 @@ export class CodingJobDialogComponent implements OnInit {
   }
 
   onPageChange(event: PageEvent): void {
-    this.loadVariableAnalysisItems(event.pageIndex + 1, event.pageSize);
+    // Preserve filters when changing pages
+    this.loadVariableAnalysisItems(
+      event.pageIndex + 1,
+      event.pageSize,
+      this.unitNameFilter || undefined,
+      this.variableIdFilter || undefined
+    );
   }
 
   applyFilter(): void {
-    this.loadVariableAnalysisItems(1, this.variableAnalysisPageSize);
+    this.loadVariableAnalysisItems(1, this.variableAnalysisPageSize, this.unitNameFilter, this.variableIdFilter);
   }
 
   applyBundleFilter(): void {
@@ -266,22 +279,6 @@ export class CodingJobDialogComponent implements OnInit {
     return numSelected === numRows;
   }
 
-  /** Selects all bundles if they are not all selected; otherwise clear selection. */
-  masterToggleBundle(): void {
-    if (this.isAllBundlesSelected()) {
-      this.selectedVariableBundles.clear();
-    } else {
-      this.bundlesDataSource.data.forEach(row => this.selectedVariableBundles.select(row));
-    }
-  }
-
-  /** The label for the checkbox on the passed bundles row */
-  bundleCheckboxLabel(row?: VariableBundle): string {
-    if (!row) {
-      return `${this.isAllBundlesSelected() ? 'deselect' : 'select'} all`;
-    }
-    return `${this.selectedVariableBundles.isSelected(row) ? 'deselect' : 'select'} row ${row.name}`;
-  }
 
   /** Gets the number of variables in a bundle */
   getVariableCount(bundle: VariableBundle): number {
@@ -290,30 +287,32 @@ export class CodingJobDialogComponent implements OnInit {
 
   /** Whether the number of selected elements matches the total number of rows. */
   isAllSelected(): boolean {
-    const numSelected = this.selectedVariableBundles.selected.length;
+    const numSelected = this.selectedVariables.selected.length;
     const numRows = this.dataSource.data.length;
-    return numSelected === numRows;
+    return numSelected === numRows && numRows > 0;
   }
 
   /** Selects all rows if they are not all selected; otherwise clear selection. */
   masterToggle(): void {
     if (this.isAllSelected()) {
-      this.selectedVariableBundles.clear();
+      this.selectedVariables.clear();
     } else {
       this.dataSource.data.forEach(row => this.selectedVariables.select(row));
     }
   }
 
-  /** The label for the checkbox on the passed row */
-  checkboxLabel(row?: Variable): string {
-    if (!row) {
-      return `${this.isAllSelected() ? 'deselect' : 'select'} all`;
-    }
-    return `${this.selectedVariables.isSelected(row) ? 'deselect' : 'select'} row ${row.unitName}`;
-  }
 
   onSubmit(): void {
     if (this.codingJobForm.invalid) {
+      return;
+    }
+
+    this.isSaving = true;
+
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      this.snackBar.open('No workspace selected', 'Close', { duration: 3000 });
+      this.isSaving = false;
       return;
     }
 
@@ -327,7 +326,32 @@ export class CodingJobDialogComponent implements OnInit {
       variableBundles: this.selectedVariableBundles.selected
     };
 
-    this.dialogRef.close(codingJob);
+    // If we're editing an existing coding job
+    if (this.data.isEdit && this.data.codingJob?.id) {
+      this.backendService.updateCodingJob(workspaceId, this.data.codingJob.id, codingJob).subscribe({
+        next: updatedJob => {
+          this.isSaving = false;
+          this.snackBar.open('Coding job updated successfully', 'Close', { duration: 3000 });
+          this.dialogRef.close(updatedJob);
+        },
+        error: error => {
+          this.isSaving = false;
+          this.snackBar.open(`Error updating coding job: ${error.message}`, 'Close', { duration: 5000 });
+        }
+      });
+    } else { // If we're creating a new coding job
+      this.backendService.createCodingJob(workspaceId, codingJob).subscribe({
+        next: createdJob => {
+          this.isSaving = false;
+          this.snackBar.open('Coding job created successfully', 'Close', { duration: 3000 });
+          this.dialogRef.close(createdJob);
+        },
+        error: error => {
+          this.isSaving = false;
+          this.snackBar.open(`Error creating coding job: ${error.message}`, 'Close', { duration: 5000 });
+        }
+      });
+    }
   }
 
   onCancel(): void {

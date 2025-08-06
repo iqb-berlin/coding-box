@@ -8,6 +8,7 @@ export interface CodingJob {
   assignedCoders: number[];
   variables?: Variable[];
   variableBundles?: VariableBundle[];
+  variableBundleIds?: number[]; // Added for backend compatibility
 }
 
 export interface Variable {

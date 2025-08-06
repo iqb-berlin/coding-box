@@ -8,13 +8,14 @@ import { AdminModule } from './admin/admin.module';
 import { JobQueueModule } from './job-queue/job-queue.module';
 import { HealthModule } from './health/health.module';
 import { CacheModule } from './cache/cache.module';
+import { WsgAdminModule } from './wsg-admin/wsg-admin.module';
 
 @Module({
   imports: [ConfigModule.forRoot({
     isGlobal: true,
     envFilePath: '.env.dev',
     cache: true
-  }), AuthModule, DatabaseModule, AdminModule, HttpModule, JobQueueModule, HealthModule, CacheModule],
+  }), AuthModule, DatabaseModule, AdminModule, HttpModule, JobQueueModule, HealthModule, CacheModule, WsgAdminModule],
   controllers: [AppController]
 })
 export class AppModule {}

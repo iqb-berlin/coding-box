@@ -48,6 +48,11 @@ import { Setting } from './entities/setting.entity';
 import { ReplayStatistics } from './entities/replay-statistics.entity';
 import { ReplayStatisticsService } from './services/replay-statistics.service';
 import { VariableBundle } from './entities/variable-bundle.entity';
+import { CodingJob } from './entities/coding-job.entity';
+import { CodingJobCoder } from './entities/coding-job-coder.entity';
+import { CodingJobVariable } from './entities/coding-job-variable.entity';
+import { CodingJobVariableBundle } from './entities/coding-job-variable-bundle.entity';
+import { CodingJobService } from './services/coding-job.service';
 // eslint-disable-next-line import/no-cycle
 import { JobQueueModule } from '../job-queue/job-queue.module';
 // eslint-disable-next-line import/no-cycle
@@ -83,7 +88,8 @@ import { CacheModule } from '../cache/cache.module';
         password: configService.get('POSTGRES_PASSWORD'),
         database: configService.get('POSTGRES_DB'),
         entities: [BookletInfo, Booklet, Session, BookletLog, Unit, UnitLog, UnitLastState, ResponseEntity,
-          User, Workspace, WorkspaceAdmin, FileUpload, WorkspaceUser, ResourcePackage, Logs, Persons, ChunkEntity, BookletLog, Session, UnitLog, UnitTag, UnitNote, JournalEntry, Job, VariableAnalysisJob, ValidationTask, Setting, ReplayStatistics, VariableBundle
+          User, Workspace, WorkspaceAdmin, FileUpload, WorkspaceUser, ResourcePackage, Logs, Persons, ChunkEntity, BookletLog, Session, UnitLog, UnitTag, UnitNote, JournalEntry, Job, VariableAnalysisJob, ValidationTask, Setting, ReplayStatistics, VariableBundle,
+          CodingJob, CodingJobCoder, CodingJobVariable, CodingJobVariableBundle
         ],
         synchronize: false
       }),
@@ -115,7 +121,11 @@ import { CacheModule } from '../cache/cache.module';
       ValidationTask,
       Setting,
       ReplayStatistics,
-      VariableBundle
+      VariableBundle,
+      CodingJob,
+      CodingJobCoder,
+      CodingJobVariable,
+      CodingJobVariableBundle
     ])
   ],
   providers: [
@@ -138,7 +148,8 @@ import { CacheModule } from '../cache/cache.module';
     VariableAnalysisService,
     JobService,
     ValidationTaskService,
-    ReplayStatisticsService
+    ReplayStatisticsService,
+    CodingJobService
   ],
   exports: [
     User,
@@ -167,7 +178,8 @@ import { CacheModule } from '../cache/cache.module';
     VariableAnalysisService,
     JobService,
     ValidationTaskService,
-    ReplayStatisticsService
+    ReplayStatisticsService,
+    CodingJobService
   ]
 })
 export class DatabaseModule {}
