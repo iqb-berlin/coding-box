@@ -1,6 +1,7 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { map } from 'rxjs/operators';
 import { VariableInfo } from '@iqbspecs/variable-info/variable-info.interface';
 import { FilesInListDto } from 'api-dto/files/files-in-list.dto';
 import { UnitNoteDto } from 'api-dto/unit-notes/unit-note.dto';
@@ -9,7 +10,7 @@ import { UnitTagDto } from 'api-dto/unit-tags/unit-tag.dto';
 import { CreateUnitTagDto } from 'api-dto/unit-tags/create-unit-tag.dto';
 import { CreateWorkspaceDto } from 'api-dto/workspaces/create-workspace-dto';
 import { PaginatedWorkspacesDto } from 'api-dto/workspaces/paginated-workspaces-dto';
-import { VariableBundle } from '../coding/models/coding-job.model';
+import { CodingJob, VariableBundle } from '../coding/models/coding-job.model';
 import { AppService } from './app.service';
 import { TestGroupsInfoDto } from '../../../../../api-dto/files/test-groups-info.dto';
 import { SERVER_URL } from '../injection-tokens';
@@ -865,7 +866,94 @@ export class BackendService {
    * @returns Observable of variable bundles
    */
   getVariableBundles(workspaceId: number): Observable<VariableBundle[]> {
-    const url = `${this.serverUrl}/admin/workspace/${workspaceId}/variable-bundle`;
-    return this.http.get<VariableBundle[]>(url);
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/variable-bundle`;
+    return this.http.get<PaginatedResponse<VariableBundle>>(url)
+      .pipe(
+        map(response => response.data)
+      );
+  }
+
+  /**
+   * Get all coding jobs for a workspace
+   * @param workspaceId The ID of the workspace
+   * @param page The page number (1-based)
+   * @param limit The number of items per page
+   * @returns Observable of paginated coding jobs
+   */
+  getCodingJobs(
+    workspaceId: number,
+    page: number = 1,
+    limit: number = 10
+  ): Observable<PaginatedResponse<CodingJob>> {
+    const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job`;
+    const params = new HttpParams()
+      .set('page', page.toString())
+      .set('limit', limit.toString());
+    return this.http.get<PaginatedResponse<CodingJob>>(url, { params });
+  }
+
+  /**
+   * Get a coding job by ID
+   * @param workspaceId The ID of the workspace
+   * @param codingJobId The ID of the coding job
+   * @returns Observable of the coding job
+   */
+  getCodingJob(workspaceId: number, codingJobId: number): Observable<CodingJob> {
+    const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job/${codingJobId}`;
+    return this.http.get<CodingJob>(url);
+  }
+
+  /**
+   * Create a new coding job
+   * @param workspaceId The ID of the workspace
+   * @param codingJob The coding job to create
+   * @returns Observable of the created coding job
+   */
+  createCodingJob(workspaceId: number, codingJob: Omit<CodingJob, 'id' | 'createdAt' | 'updatedAt'>): Observable<CodingJob> {
+    const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job`;
+    return this.http.post<CodingJob>(url, codingJob);
+  }
+
+  /**
+   * Update a coding job
+   * @param workspaceId The ID of the workspace
+   * @param codingJobId The ID of the coding job
+   * @param codingJob The coding job data to update
+   * @returns Observable of the updated coding job
+   */
+  updateCodingJob(
+    workspaceId: number,
+    codingJobId: number,
+    codingJob: Partial<Omit<CodingJob, 'id' | 'createdAt' | 'updatedAt'>>
+  ): Observable<CodingJob> {
+    const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job/${codingJobId}`;
+    return this.http.put<CodingJob>(url, codingJob);
+  }
+
+  /**
+   * Delete a coding job
+   * @param workspaceId The ID of the workspace
+   * @param codingJobId The ID of the coding job
+   * @returns Observable of the delete result
+   */
+  deleteCodingJob(workspaceId: number, codingJobId: number): Observable<{ success: boolean }> {
+    const url = `${this.serverUrl}/wsg-admin/workspace/${workspaceId}/coding-job/${codingJobId}`;
+    return this.http.delete<{ success: boolean }>(url);
+  }
+
+  /**
+   * Assign coders to a coding job
+   * @param workspaceId The ID of the workspace
+   * @param codingJobId The ID of the coding job
+   * @param userIds Array of user IDs to assign as coders
+   * @returns Observable of the assignment result
+   */
+  assignCodersToCodingJob(
+    workspaceId: number,
+    codingJobId: number,
+    userIds: number[]
+  ): Observable<{ success: boolean }> {
+    const url = `${this.serverUrl}/wsg-admin/workspace/${workspaceId}/coding-job/${codingJobId}/assign-coders`;
+    return this.http.post<{ success: boolean }>(url, { userIds });
   }
 }

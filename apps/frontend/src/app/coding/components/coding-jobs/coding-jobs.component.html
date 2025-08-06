@@ -4,21 +4,20 @@
       <mat-icon>add</mat-icon>
       Kodierjob erstellen
     </a>
-    <a mat-raised-button color="primary" (click)="editCodingJob()" [disabled]="selection.selected.length !== 1">
+    <a mat-raised-button color="primary" [disabled]="selection.selected.length !== 1"
+       (click)="selection.selected.length === 1 && editCodingJob()">
       <mat-icon>edit</mat-icon>
       Kodierjob bearbeiten
     </a>
-    <a mat-raised-button color="primary" [disabled]="selection.selected.length === 0" (click)="deleteCodingJobs()">
+    <a mat-raised-button color="primary" [disabled]="selection.selected.length === 0"
+       (click)="selection.selected.length > 0 && deleteCodingJobs()">
       <mat-icon>delete</mat-icon>
       Kodierjob(s) löschen
     </a>
-    <a mat-raised-button color="primary" [disabled]="selection.selected.length !== 1" (click)="startCodingJob()">
+    <a mat-raised-button color="primary" [disabled]="selection.selected.length !== 1"
+       (click)="selection.selected.length === 1 && startCodingJob()">
       <mat-icon>play_arrow</mat-icon>
       Kodierjob starten
-    </a>
-    <a mat-raised-button color="accent" [disabled]="selection.selected.length === 0 || !selectedCoder" (click)="assignToCoder()">
-      <mat-icon>person_add</mat-icon>
-      Kodierer zuweisen
     </a>
   </div>
 
@@ -33,7 +32,7 @@
 
     <mat-table [dataSource]="dataSource" matSort class="coding-jobs-table">
       <mat-header-row *matHeaderRowDef="displayedColumns; sticky: true"></mat-header-row>
-      <mat-row *matRowDef="let row; columns: displayedColumns;" (click)="selectRow(row)">
+      <mat-row *matRowDef="let row; columns: displayedColumns;" (click)="selectRow(row, $event)">
       </mat-row>
 
       <ng-container matColumnDef="selectCheckbox">
@@ -76,6 +75,20 @@
         <mat-header-cell *matHeaderCellDef mat-sort-header>Zugewiesene Kodierer</mat-header-cell>
         <mat-cell *matCellDef="let element" class="assigned-coders-cell" [matTooltip]="getFullCoderNames(element)">
           {{getAssignedCoderNames(element)}}
+        </mat-cell>
+      </ng-container>
+
+      <ng-container matColumnDef="variables">
+        <mat-header-cell *matHeaderCellDef mat-sort-header>Variablen</mat-header-cell>
+        <mat-cell *matCellDef="let element" class="variables-cell" [matTooltip]="getFullVariables(element)">
+          {{getVariables(element)}}
+        </mat-cell>
+      </ng-container>
+
+      <ng-container matColumnDef="variableBundles">
+        <mat-header-cell *matHeaderCellDef mat-sort-header>Variablenbündel</mat-header-cell>
+        <mat-cell *matCellDef="let element" class="variable-bundles-cell" [matTooltip]="getFullVariableBundles(element)">
+          {{getVariableBundles(element)}}
         </mat-cell>
       </ng-container>
 
