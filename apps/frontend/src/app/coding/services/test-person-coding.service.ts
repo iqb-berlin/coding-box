@@ -6,6 +6,13 @@ import {
   of
 } from 'rxjs';
 import { SERVER_URL } from '../../injection-tokens';
+import { ExpectedCombinationDto } from '../../../../../../api-dto/coding/expected-combination.dto';
+import {
+  ValidateCodingCompletenessResponseDto
+} from '../../../../../../api-dto/coding/validate-coding-completeness-response.dto';
+import {
+  ValidateCodingCompletenessRequestDto
+} from '../../../../../../api-dto/coding/validate-coding-completeness-request.dto';
 
 export interface CodingStatistics {
   totalResponses: number;
@@ -279,6 +286,35 @@ export class TestPersonCodingService {
     )
       .pipe(
         catchError(() => of({ success: false, message: `Failed to restart job ${jobId}` }))
+      );
+  }
+
+  /**
+   * Validate completeness of coding responses
+   * @param workspaceId Workspace ID
+   * @param expectedCombinations Expected combinations from Excel
+   * @returns Observable of validation results
+   */
+  validateCodingCompleteness(
+    workspaceId: number,
+    expectedCombinations: ExpectedCombinationDto[]
+  ): Observable<ValidateCodingCompletenessResponseDto> {
+    const request: ValidateCodingCompletenessRequestDto = {
+      expectedCombinations
+    };
+
+    return this.http
+      .post<ValidateCodingCompletenessResponseDto>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/coding/validate-completeness`,
+      request,
+      { headers: this.authHeader }
+    )
+      .pipe(
+        catchError(() => of({
+          results: [],
+          total: 0,
+          missing: 0
+        }))
       );
   }
 }
