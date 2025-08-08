@@ -14,6 +14,8 @@ import { WorkspaceId } from './workspace.decorator';
 import { WorkspaceCodingService } from '../../database/services/workspace-coding.service';
 import { PersonService } from '../../database/services/person.service';
 import { VariableAnalysisItemDto } from '../../../../../../api-dto/coding/variable-analysis-item.dto';
+import { ValidateCodingCompletenessRequestDto } from '../../../../../../api-dto/coding/validate-coding-completeness-request.dto';
+import { ValidateCodingCompletenessResponseDto } from '../../../../../../api-dto/coding/validate-coding-completeness-response.dto';
 
 @ApiTags('Admin Workspace Coding')
 @Controller('admin/workspace')
@@ -722,10 +724,6 @@ export class WorkspaceCodingController {
     const validPage = Math.max(1, page);
     const validLimit = Math.min(Math.max(1, limit), 500); // Set maximum limit to 500
 
-    if (unitId || variableId || derivation) {
-      console.log(`Applying filters - unitId: ${unitId || 'none'}, variableId: ${variableId || 'none'}, derivation: ${derivation || 'none'}`);
-    }
-
     return this.workspaceCodingService.getVariableAnalysis(
       workspace_id,
       authToken,
@@ -735,6 +733,28 @@ export class WorkspaceCodingController {
       unitId,
       variableId,
       derivation
+    );
+  }
+
+  @Post(':workspace_id/coding/validate-completeness')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiBody({
+    description: 'Expected combinations to validate',
+    type: ValidateCodingCompletenessRequestDto
+  })
+  @ApiOkResponse({
+    description: 'Validation results',
+    type: ValidateCodingCompletenessResponseDto
+  })
+  async validateCodingCompleteness(
+    @WorkspaceId() workspace_id: number,
+      @Body() request: ValidateCodingCompletenessRequestDto
+  ): Promise<ValidateCodingCompletenessResponseDto> {
+    return this.workspaceCodingService.validateCodingCompleteness(
+      workspace_id,
+      request.expectedCombinations
     );
   }
 }

@@ -10,6 +10,86 @@
         <mat-icon>school</mat-icon>
         Schulung starten
       </a>
+      <a mat-raised-button color="primary" (click)="fileInput.click()" [disabled]="isLoading">
+        <mat-icon>upload_file</mat-icon>
+        Validierungs-Kodierliste
+      </a>
+      <input #fileInput type="file" style="display: none;" accept=".xlsx, .xls" (change)="onFileSelected($event)">
+    </div>
+  </div>
+
+  <!-- Progress indicator -->
+  <div *ngIf="validationProgress && (validationProgress.status === 'loading' || validationProgress.status === 'processing')"
+       class="fx-column-start-start fx-gap-10 validation-progress">
+    <div class="statistics-card">
+      <h2 class="section-title">Validierung läuft</h2>
+      <p class="section-description">
+        {{validationProgress.message}}
+      </p>
+      <hr>
+      <div class="progress-container">
+        <mat-progress-bar mode="determinate" [value]="validationProgress.progress"></mat-progress-bar>
+        <p class="progress-text">{{validationProgress.progress}}%</p>
+      </div>
+      <p class="progress-note">Sie können andere Aufgaben erledigen, während die Validierung im Hintergrund läuft.</p>
+    </div>
+  </div>
+
+  <!-- Error message -->
+  <div *ngIf="validationProgress && validationProgress.status === 'error'"
+       class="fx-column-start-start fx-gap-10 validation-error">
+    <div class="statistics-card error-card">
+      <h2 class="section-title">Fehler bei der Validierung</h2>
+      <p class="section-description">
+        {{validationProgress.message}}
+      </p>
+      <p *ngIf="validationProgress.error" class="error-details">
+        {{validationProgress.error}}
+      </p>
+      <hr>
+      <div class="error-actions">
+        <button mat-button color="primary" (click)="fileInput.click()">
+          <mat-icon>refresh</mat-icon>
+          Erneut versuchen
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Validation results -->
+  <div *ngIf="validationResults && validationProgress && validationProgress.status === 'completed'"
+       class="fx-column-start-start fx-gap-10 validation-results">
+    <div class="statistics-card">
+      <h2 class="section-title">Validierungsergebnisse</h2>
+      <p class="section-description">
+        Insgesamt: {{validationResults.total}} |
+        Fehlend: {{validationResults.missing}}
+      </p>
+      <hr>
+      <div class="validation-content" *ngIf="validationResults.results.length > 0">
+        <table class="results-table">
+          <thead>
+            <tr>
+              <th>Unit Key</th>
+              <th>Login Name</th>
+              <th>Login Code</th>
+              <th>Booklet ID</th>
+              <th>Variable ID</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let result of validationResults.results" [class.missing]="result.status === 'MISSING'">
+              <td>{{result.combination.unit_key}}</td>
+              <td>{{result.combination.login_name}}</td>
+              <td>{{result.combination.login_code}}</td>
+              <td>{{result.combination.booklet_id}}</td>
+              <td>{{result.combination.variable_id}}</td>
+              <td>{{result.status === 'MISSING' ? 'Fehlend' : 'Vorhanden'}}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
 

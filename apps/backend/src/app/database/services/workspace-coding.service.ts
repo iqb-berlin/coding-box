@@ -17,6 +17,9 @@ import { CodebookGenerator } from '../../admin/code-book/codebook-generator.clas
 import { CodeBookContentSetting, UnitPropertiesForCodebook, Missing } from '../../admin/code-book/codebook.interfaces';
 import { MissingsProfilesDto } from '../../../../../../api-dto/coding/missings-profiles.dto';
 import { VariableAnalysisItemDto } from '../../../../../../api-dto/coding/variable-analysis-item.dto';
+import { ExpectedCombinationDto } from '../../../../../../api-dto/coding/expected-combination.dto';
+import { ValidationResultDto } from '../../../../../../api-dto/coding/validation-result.dto';
+import { ValidateCodingCompletenessResponseDto } from '../../../../../../api-dto/coding/validate-coding-completeness-response.dto';
 import { JobQueueService } from '../../job-queue/job-queue.service';
 
 interface CodedResponse {
@@ -2211,6 +2214,73 @@ export class WorkspaceCodingService {
     } catch (error) {
       this.logger.error(`Error getting variable analysis: ${error.message}`, error.stack);
       throw new Error('Could not retrieve variable analysis data. Please check the database connection or query.');
+    }
+  }
+
+  /**
+   * Validate completeness of coding responses
+   * @param workspaceId Workspace ID
+   * @param expectedCombinations Expected combinations from Excel
+   * @returns Validation results
+   */
+  async validateCodingCompleteness(
+    workspaceId: number,
+    expectedCombinations: ExpectedCombinationDto[]
+  ): Promise<ValidateCodingCompletenessResponseDto> {
+    try {
+      this.logger.log(`Validating coding completeness for workspace ${workspaceId} with ${expectedCombinations.length} expected combinations`);
+      const startTime = Date.now();
+
+      const results: ValidationResultDto[] = [];
+      let missingCount = 0;
+
+      // Process in batches to avoid overwhelming the database
+      const batchSize = 100;
+      for (let i = 0; i < expectedCombinations.length; i += batchSize) {
+        const batch = expectedCombinations.slice(i, i + batchSize);
+
+        // Create a query to check for each combination in the batch
+        for (const expected of batch) {
+          // Build a query to check if the response exists
+          const responseExists = await this.responseRepository
+            .createQueryBuilder('response')
+            .innerJoin('response.unit', 'unit')
+            .innerJoin('unit.booklet', 'booklet')
+            .innerJoin('booklet.person', 'person')
+            .innerJoin('booklet.bookletinfo', 'bookletinfo')
+            .where('unit.alias = :unitKey', { unitKey: expected.unit_key })
+            .andWhere('person.login = :loginName', { loginName: expected.login_name })
+            .andWhere('person.code = :loginCode', { loginCode: expected.login_code })
+            .andWhere('bookletinfo.name = :bookletId', { bookletId: expected.booklet_id })
+            .andWhere('response.variableid = :variableId', { variableId: expected.variable_id })
+            .andWhere('response.value IS NOT NULL')
+            .andWhere('response.value != :empty', { empty: '' })
+            .getCount();
+
+          // Add the result
+          const status = responseExists > 0 ? 'EXISTS' : 'MISSING';
+          if (status === 'MISSING') {
+            missingCount += 1;
+          }
+
+          results.push({
+            combination: expected,
+            status
+          });
+        }
+      }
+
+      const endTime = Date.now();
+      this.logger.log(`Validation completed in ${endTime - startTime}ms. Found ${missingCount} missing responses out of ${expectedCombinations.length} expected combinations.`);
+
+      return {
+        results,
+        total: expectedCombinations.length,
+        missing: missingCount
+      };
+    } catch (error) {
+      this.logger.error(`Error validating coding completeness: ${error.message}`, error.stack);
+      throw new Error('Could not validate coding completeness. Please check the database connection or query.');
     }
   }
 }
