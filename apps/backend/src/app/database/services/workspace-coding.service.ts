@@ -193,36 +193,15 @@ export class WorkspaceCodingService {
     }
   }
 
-  // In-memory job status map removed as we now use only Bull for job management
-
-  async getAllJobs(workspaceId?: number): Promise<{
-    jobId: string;
-    status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'paused';
-    progress: number;
-    result?: CodingStatistics;
-    error?: string;
-    workspaceId?: number;
-    createdAt?: Date;
-    groupNames?: string;
-    durationMs?: number;
-    completedAt?: Date;
-  }[]> {
-    // Use getBullJobs for all workspaces
-    if (workspaceId !== undefined) {
-      return this.getBullJobs(workspaceId);
-    }
-
-    // If no workspaceId is provided, we need to get jobs for all workspaces
-    // Since we don't have a way to get all jobs from Bull without a workspaceId,
-    // we'll return an empty array for now
-    this.logger.warn('getAllJobs called without workspaceId, returning empty array');
-    return [];
-  }
 
   async getJobStatus(jobId: string): Promise<{ status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'paused'; progress: number; result?: CodingStatistics; error?: string } | null> {
     try {
-      // Get job from Bull queue
-      const bullJob = await this.jobQueueService.getTestPersonCodingJob(jobId);
+      let bullJob = await this.jobQueueService.getTestPersonCodingJob(jobId);
+
+      if (!bullJob) {
+        bullJob = await this.jobQueueService.getCodingStatisticsJob(jobId) as any;
+      }
+
       if (bullJob) {
         // Get job state and progress
         const state = await bullJob.getState();
@@ -273,6 +252,17 @@ export class WorkspaceCodingService {
     } catch (error) {
       this.logger.error(`Error getting job status: ${error.message}`, error.stack);
       return null;
+    }
+  }
+
+  async createCodingStatisticsJob(workspaceId: number): Promise<{ jobId: string; message: string }> {
+    try {
+      const job = await this.jobQueueService.addCodingStatisticsJob(workspaceId);
+      this.logger.log(`Created coding statistics job ${job.id} for workspace ${workspaceId}`);
+      return { jobId: job.id.toString(), message: 'Coding statistics job created' };
+    } catch (error) {
+      this.logger.error(`Error creating coding statistics job: ${error.message}`, error.stack);
+      throw error;
     }
   }
 

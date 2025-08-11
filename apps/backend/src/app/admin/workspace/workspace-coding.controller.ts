@@ -180,6 +180,24 @@ export class WorkspaceCodingController {
     return this.workspaceCodingService.getCodingStatistics(workspace_id);
   }
 
+  @Post(':workspace_id/coding/statistics/job')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiOkResponse({
+    description: 'Coding statistics job created successfully.',
+    schema: {
+      type: 'object',
+      properties: {
+        jobId: { type: 'string' },
+        message: { type: 'string' }
+      }
+    }
+  })
+  async createCodingStatisticsJob(@WorkspaceId() workspace_id: number): Promise<{ jobId: string; message: string }> {
+    return this.workspaceCodingService.createCodingStatisticsJob(workspace_id);
+  }
+
   @Get(':workspace_id/coding/job/:jobId')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiTags('coding')
@@ -218,7 +236,7 @@ export class WorkspaceCodingController {
     }
   })
   async getJobStatus(@Param('jobId') jobId: string): Promise<{ status: string; progress: number; result?: CodingStatistics; error?: string } | { error: string }> {
-    const status = this.workspaceCodingService.getJobStatus(jobId);
+    const status = await this.workspaceCodingService.getJobStatus(jobId);
     if (!status) {
       return { error: `Job with ID ${jobId} not found` };
     }

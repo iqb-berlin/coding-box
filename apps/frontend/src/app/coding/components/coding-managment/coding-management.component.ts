@@ -7,9 +7,12 @@ import {
   catchError,
   finalize,
   debounceTime,
-  distinctUntilChanged
+  distinctUntilChanged,
+  switchMap,
+  takeUntil,
+  takeWhile
 } from 'rxjs/operators';
-import { of, Subject } from 'rxjs';
+import { of, Subject, timer } from 'rxjs';
 import {
   MatCell, MatCellDef,
   MatColumnDef,
@@ -104,6 +107,7 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
   totalRecords = 0;
   pageIndex = 0;
   filterTextChanged = new Subject<Event>();
+  private destroy$ = new Subject<void>();
   codingStatistics: CodingStatistics = {
     totalResponses: 0,
     statusCounts: {}
@@ -134,25 +138,51 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
     const workspaceId = this.appService.selectedWorkspaceId;
     this.isLoadingStatistics = true;
 
-    this.backendService.getCodingStatistics(workspaceId)
+    this.backendService.createCodingStatisticsJob(workspaceId)
       .pipe(
-        catchError(() => {
-          this.isLoadingStatistics = false;
-          this.snackBar.open('Fehler beim Abrufen der Kodierstatistiken', 'Schließen', {
-            duration: 5000,
-            panelClass: ['error-snackbar']
-          });
-          return of({
-            totalResponses: 0,
-            statusCounts: {}
-          });
-        }),
-        finalize(() => {
-          this.isLoadingStatistics = false;
-        })
+        catchError(() => of({ jobId: '' as string, message: 'Fehler beim Erstellen des Statistik-Jobs' }))
       )
-      .subscribe(statistics => {
-        this.codingStatistics = statistics;
+      .subscribe(({ jobId }) => {
+        if (!jobId) {
+          // Fallback: fetch directly
+          this.backendService.getCodingStatistics(workspaceId)
+            .pipe(
+              catchError(() => {
+                this.snackBar.open('Fehler beim Abrufen der Kodierstatistiken', 'Schließen', {
+                  duration: 5000,
+                  panelClass: ['error-snackbar']
+                });
+                return of({
+                  totalResponses: 0,
+                  statusCounts: {}
+                });
+              }),
+              finalize(() => {
+                this.isLoadingStatistics = false;
+              })
+            )
+            .subscribe(statistics => {
+              this.codingStatistics = statistics;
+            });
+          return;
+        }
+
+        timer(0, 2000)
+          .pipe(
+            takeUntil(this.destroy$),
+            switchMap(() => this.backendService.getCodingJobStatus(workspaceId, jobId)),
+            takeWhile(status => ['pending', 'processing'].includes(status.status), true),
+            finalize(() => {
+              this.isLoadingStatistics = false;
+            })
+          )
+          .subscribe(status => {
+            if (status.status === 'completed' && status.result) {
+              this.codingStatistics = status.result;
+            } else if (['failed', 'cancelled', 'paused'].includes(status.status)) {
+              this.snackBar.open(`Statistik-Job ${status.status}`, 'Schließen', { duration: 5000, panelClass: ['error-snackbar'] });
+            }
+          });
       });
   }
 
@@ -249,6 +279,8 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
   }
 
   ngOnDestroy(): void {
+    this.destroy$.next();
+    this.destroy$.complete();
     this.filterTextChanged.complete();
   }
 
