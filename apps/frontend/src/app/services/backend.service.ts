@@ -215,7 +215,7 @@ export class BackendService {
   }
 
   getCodingJobStatus(workspace_id: number, jobId: string): Observable<{
-    status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
+    status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'paused';
     progress: number;
     result?: {
       totalResponses: number;
@@ -237,7 +237,7 @@ export class BackendService {
 
   getAllCodingJobs(workspace_id: number): Observable<{
     jobId: string;
-    status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
+    status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'paused';
     progress: number;
     result?: {
       totalResponses: number;
@@ -266,6 +266,10 @@ export class BackendService {
 
   getCodingStatistics(workspace_id: number): Observable<CodingStatistics> {
     return this.codingService.getCodingStatistics(workspace_id);
+  }
+
+  createCodingStatisticsJob(workspace_id: number): Observable<{ jobId: string; message: string }> {
+    return this.codingService.createCodingStatisticsJob(workspace_id);
   }
 
   getVariableAnalysis(
