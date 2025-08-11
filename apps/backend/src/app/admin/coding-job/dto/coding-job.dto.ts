@@ -60,6 +60,22 @@ export class CodingJobDto {
     assigned_coders?: number[];
 
   @ApiProperty({
+    description: 'Variable IDs assigned to the coding job',
+    type: [String],
+    example: ['var1', 'var2', 'var3'],
+    required: false
+  })
+    assigned_variables?: string[];
+
+  @ApiProperty({
+    description: 'Variable bundle names assigned to the coding job',
+    type: [String],
+    example: ['Bundle A', 'Bundle B'],
+    required: false
+  })
+    assigned_variable_bundles?: string[];
+
+  @ApiProperty({
     description: 'Variables assigned to the coding job',
     type: [VariableDto],
     required: false
@@ -76,9 +92,17 @@ export class CodingJobDto {
   /**
    * Create a CodingJobDto from a CodingJob entity
    * @param entity The CodingJob entity
+   * @param assignedCoders Optional array of assigned coder IDs
+   * @param assignedVariables Optional array of assigned variable IDs
+   * @param assignedVariableBundles Optional array of assigned variable bundle names
    * @returns A CodingJobDto
    */
-  static fromEntity(entity: CodingJob): CodingJobDto {
+  static fromEntity(
+    entity: CodingJob,
+    assignedCoders?: number[],
+    assignedVariables?: string[],
+    assignedVariableBundles?: string[]
+  ): CodingJobDto {
     const dto = new CodingJobDto();
     dto.id = entity.id;
     dto.workspace_id = entity.workspace_id;
@@ -87,6 +111,17 @@ export class CodingJobDto {
     dto.status = entity.status;
     dto.created_at = entity.created_at;
     dto.updated_at = entity.updated_at;
+
+    if (assignedCoders) {
+      dto.assigned_coders = assignedCoders;
+    }
+    if (assignedVariables) {
+      dto.assigned_variables = assignedVariables;
+    }
+    if (assignedVariableBundles) {
+      dto.assigned_variable_bundles = assignedVariableBundles;
+    }
+
     return dto;
   }
 }

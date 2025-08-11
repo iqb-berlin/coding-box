@@ -193,7 +193,6 @@ export class WorkspaceCodingService {
     }
   }
 
-
   async getJobStatus(jobId: string): Promise<{ status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'paused'; progress: number; result?: CodingStatistics; error?: string } | null> {
     try {
       let bullJob = await this.jobQueueService.getTestPersonCodingJob(jobId);
@@ -2263,18 +2262,15 @@ export class WorkspaceCodingService {
       const validationResults = cachedData.results;
       this.logger.log(`Successfully retrieved ${validationResults.length} validation results from cache for export`);
 
-      // Validate that we have actual data
       if (!validationResults || validationResults.length === 0) {
         const errorMessage = 'No validation data available for export. Please run validation again.';
         this.logger.error('Cached data exists but contains no validation results');
         throw new Error(errorMessage);
       }
 
-      // Create a new workbook
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet('Validation Results');
 
-      // Define columns for comprehensive data
       worksheet.columns = [
         { header: 'Status', key: 'status', width: 10 },
         { header: 'Unit Key', key: 'unit_key', width: 15 },
@@ -2298,7 +2294,6 @@ export class WorkspaceCodingService {
         fgColor: { argb: 'FFE0E0E0' }
       };
 
-      // Process each validation result to get complete database content
       for (const result of validationResults) {
         const combination = result.combination;
         let responseData = null;
@@ -2306,7 +2301,6 @@ export class WorkspaceCodingService {
         let unitData = null;
         let bookletData = null;
 
-        // Get complete data from database if the response exists
         if (result.status === 'EXISTS') {
           const query = this.responseRepository
             .createQueryBuilder('response')
@@ -2341,7 +2335,6 @@ export class WorkspaceCodingService {
           }
         }
 
-        // Add row to worksheet
         worksheet.addRow({
           status: result.status,
           unit_key: combination.unit_key,
@@ -2358,7 +2351,6 @@ export class WorkspaceCodingService {
         });
       }
 
-      // Apply conditional formatting for status
       worksheet.eachRow((row, rowNumber) => {
         if (rowNumber > 1) { // Skip header row
           const statusCell = row.getCell(1);
@@ -2512,7 +2504,6 @@ export class WorkspaceCodingService {
         };
       }
 
-      // Fallback if cache retrieval fails - return direct pagination
       const totalPages = Math.ceil(expectedCombinations.length / pageSize);
       const startIndex = (page - 1) * pageSize;
       const endIndex = Math.min(startIndex + pageSize, expectedCombinations.length);
@@ -2532,6 +2523,51 @@ export class WorkspaceCodingService {
     } catch (error) {
       this.logger.error(`Error validating coding completeness: ${error.message}`, error.stack);
       throw new Error('Could not validate coding completeness. Please check the database connection or query.');
+    }
+  }
+
+  async getCodingIncompleteVariables(
+    workspaceId: number,
+    unitName?: string
+  ): Promise<{ unitName: string; variableId: string }[]> {
+    try {
+      this.logger.log(`Getting CODING_INCOMPLETE variables for workspace ${workspaceId}${unitName ? ` and unit ${unitName}` : ''}`);
+
+      const queryBuilder = this.responseRepository.createQueryBuilder('response')
+        .leftJoinAndSelect('response.unit', 'unit')
+        .leftJoinAndSelect('unit.booklet', 'booklet')
+        .leftJoinAndSelect('booklet.person', 'person')
+        .where('response.codedStatus = :status', { status: 'CODING_INCOMPLETE' })
+        .andWhere('person.workspace_id = :workspace_id', { workspace_id: workspaceId });
+
+      if (unitName) {
+        queryBuilder.andWhere('unit.name = :unitName', { unitName });
+      }
+
+      const responses = await queryBuilder.getMany();
+
+      const uniqueVariables = new Map<string, { unitName: string; variableId: string }>();
+
+      responses.forEach(response => {
+        const unit = response.unit;
+        if (unit && response.variableid) {
+          const key = `${unit.name}|${response.variableid}`;
+          if (!uniqueVariables.has(key)) {
+            uniqueVariables.set(key, {
+              unitName: unit.name,
+              variableId: response.variableid
+            });
+          }
+        }
+      });
+
+      const result = Array.from(uniqueVariables.values());
+      this.logger.log(`Found ${result.length} unique CODING_INCOMPLETE variables`);
+
+      return result;
+    } catch (error) {
+      this.logger.error(`Error getting CODING_INCOMPLETE variables: ${error.message}`, error.stack);
+      throw new Error('Could not get CODING_INCOMPLETE variables. Please check the database connection.');
     }
   }
 }

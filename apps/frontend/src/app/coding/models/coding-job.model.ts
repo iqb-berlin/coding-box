@@ -6,9 +6,11 @@ export interface CodingJob {
   createdAt: Date;
   updatedAt: Date;
   assignedCoders: number[];
+  assignedVariables?: Variable[];
+  assignedVariableBundles?: VariableBundle[];
   variables?: Variable[];
   variableBundles?: VariableBundle[];
-  variableBundleIds?: number[]; // Added for backend compatibility
+  variableBundleIds?: number[];
 }
 
 export interface Variable {
