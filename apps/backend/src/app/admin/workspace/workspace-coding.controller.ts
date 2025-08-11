@@ -16,6 +16,7 @@ import { PersonService } from '../../database/services/person.service';
 import { VariableAnalysisItemDto } from '../../../../../../api-dto/coding/variable-analysis-item.dto';
 import { ValidateCodingCompletenessRequestDto } from '../../../../../../api-dto/coding/validate-coding-completeness-request.dto';
 import { ValidateCodingCompletenessResponseDto } from '../../../../../../api-dto/coding/validate-coding-completeness-response.dto';
+import { ExportValidationResultsRequestDto } from '../../../../../../api-dto/coding/export-validation-results-request.dto';
 
 @ApiTags('Admin Workspace Coding')
 @Controller('admin/workspace')
@@ -741,20 +742,64 @@ export class WorkspaceCodingController {
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiBody({
-    description: 'Expected combinations to validate',
+    description: 'Expected combinations to validate with optional pagination',
     type: ValidateCodingCompletenessRequestDto
   })
   @ApiOkResponse({
-    description: 'Validation results',
+    description: 'Validation results with pagination support',
     type: ValidateCodingCompletenessResponseDto
   })
   async validateCodingCompleteness(
     @WorkspaceId() workspace_id: number,
       @Body() request: ValidateCodingCompletenessRequestDto
   ): Promise<ValidateCodingCompletenessResponseDto> {
+    // Extract and validate pagination parameters
+    const page = Math.max(1, request.page || 1);
+    const pageSize = Math.min(Math.max(1, request.pageSize || 50), 500); // Max 500 items per page
+
     return this.workspaceCodingService.validateCodingCompleteness(
       workspace_id,
-      request.expectedCombinations
+      request.expectedCombinations,
+      page,
+      pageSize
     );
+  }
+
+  @Post(':workspace_id/coding/validate-completeness/export-excel')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiBody({
+    description: 'Cache key to export validation results from Redis cache',
+    type: ExportValidationResultsRequestDto
+  })
+  @ApiOkResponse({
+    description: 'Validation results exported as Excel from cached data',
+    content: {
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': {
+        schema: {
+          type: 'string',
+          format: 'binary'
+        }
+      }
+    }
+  })
+  async validateAndExportCodingCompleteness(
+    @WorkspaceId() workspace_id: number,
+      @Body() request: ExportValidationResultsRequestDto,
+      @Res() res: Response
+  ): Promise<void> {
+    // Export the complete validation results from cache using cache key
+    const excelData = await this.workspaceCodingService.exportValidationResultsAsExcel(
+      workspace_id,
+      request.cacheKey
+    );
+
+    const timestamp = new Date().toISOString().slice(0, 10);
+    const filename = `validation-results-${timestamp}.xlsx`;
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(excelData);
   }
 }

@@ -290,17 +290,23 @@ export class TestPersonCodingService {
   }
 
   /**
-   * Validate completeness of coding responses
+   * Validate completeness of coding responses with pagination support
    * @param workspaceId Workspace ID
    * @param expectedCombinations Expected combinations from Excel
-   * @returns Observable of validation results
+   * @param page Page number (1-based, optional - defaults to 1)
+   * @param pageSize Number of items per page (optional - defaults to 50)
+   * @returns Observable of validation results with pagination metadata
    */
   validateCodingCompleteness(
     workspaceId: number,
-    expectedCombinations: ExpectedCombinationDto[]
+    expectedCombinations: ExpectedCombinationDto[],
+    page?: number,
+    pageSize?: number
   ): Observable<ValidateCodingCompletenessResponseDto> {
     const request: ValidateCodingCompletenessRequestDto = {
-      expectedCombinations
+      expectedCombinations,
+      page: page || 1,
+      pageSize: pageSize || 50
     };
 
     return this.http
@@ -313,8 +319,43 @@ export class TestPersonCodingService {
         catchError(() => of({
           results: [],
           total: 0,
-          missing: 0
+          missing: 0,
+          currentPage: page || 1,
+          pageSize: pageSize || 50,
+          totalPages: 0,
+          hasNextPage: false,
+          hasPreviousPage: false
         }))
+      );
+  }
+
+  /**
+   * Download validation results as Excel file using cache key
+   * @param workspaceId Workspace ID
+   * @param cacheKey Cache key from validation results
+   * @returns Observable of Excel file as Blob
+   */
+  downloadValidationResultsAsExcel(
+    workspaceId: number,
+    cacheKey: string
+  ): Observable<Blob> {
+    const request = {
+      cacheKey
+    };
+
+    return this.http
+      .post(
+        `${this.serverUrl}admin/workspace/${workspaceId}/coding/validate-completeness/export-excel`,
+        request,
+        {
+          headers: this.authHeader,
+          responseType: 'blob'
+        }
+      )
+      .pipe(
+        catchError(error => {
+          throw error;
+        })
       );
   }
 }

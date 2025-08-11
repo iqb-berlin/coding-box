@@ -60,12 +60,51 @@
   <div *ngIf="validationResults && validationProgress && validationProgress.status === 'completed'"
        class="fx-column-start-start fx-gap-10 validation-results">
     <div class="statistics-card">
-      <h2 class="section-title">Validierungsergebnisse</h2>
-      <p class="section-description">
-        Insgesamt: {{validationResults.total}} |
-        Fehlend: {{validationResults.missing}}
-      </p>
+      <div class="fx-row-space-between-center fx-gap-10">
+        <div>
+          <h2 class="section-title">Validierungsergebnisse</h2>
+          <p class="section-description">
+            Insgesamt: {{validationResults.total}} |
+            Fehlend: {{validationResults.missing}} |
+            Seite {{validationResults.currentPage}} von {{validationResults.totalPages}}
+          </p>
+        </div>
+        <div>
+          <button mat-raised-button color="accent" (click)="downloadExcel()" [disabled]="isLoading || !validationCacheKey">
+            <mat-icon>download</mat-icon>
+            Als Excel herunterladen
+          </button>
+        </div>
+      </div>
       <hr>
+
+      <!-- Pagination Controls -->
+      <div class="fx-row-space-between-center fx-gap-10 pagination-controls" *ngIf="validationResults.totalPages > 1">
+        <div class="fx-row-center-center fx-gap-10">
+          <button mat-button [disabled]="!hasPreviousPage" (click)="previousPage()">
+            <mat-icon>chevron_left</mat-icon>
+            Vorherige
+          </button>
+          <span class="pagination-info">
+            Seite {{currentPage}} von {{totalPages}}
+          </span>
+          <button mat-button [disabled]="!hasNextPage" (click)="nextPage()">
+            Nächste
+            <mat-icon>chevron_right</mat-icon>
+          </button>
+        </div>
+
+        <div class="fx-row-center-center fx-gap-10">
+          <label for="pageSize">Einträge pro Seite:</label>
+          <select id="pageSize" [value]="pageSize" (change)="changePageSize(+$any($event.target).value)">
+            <option value="25">25</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+            <option value="200">200</option>
+          </select>
+        </div>
+      </div>
+
       <div class="validation-content" *ngIf="validationResults.results.length > 0">
         <table class="results-table">
           <thead>
@@ -89,6 +128,21 @@
             </tr>
           </tbody>
         </table>
+      </div>
+
+      <!-- Bottom Pagination Controls (duplicate for better UX) -->
+      <div class="fx-row-center-center fx-gap-10 pagination-controls" *ngIf="validationResults.totalPages > 1">
+        <button mat-button [disabled]="!hasPreviousPage" (click)="previousPage()">
+          <mat-icon>chevron_left</mat-icon>
+          Vorherige
+        </button>
+        <span class="pagination-info">
+          Seite {{currentPage}} von {{totalPages}}
+        </span>
+        <button mat-button [disabled]="!hasNextPage" (click)="nextPage()">
+          Nächste
+          <mat-icon>chevron_right</mat-icon>
+        </button>
       </div>
     </div>
   </div>

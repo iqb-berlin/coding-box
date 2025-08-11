@@ -49,6 +49,25 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   validationProgress: ValidationProgress | null = null;
   isLoading = false;
 
+  // Pagination state
+  currentPage = 1;
+  pageSize = 50;
+  expectedCombinations: ExpectedCombinationDto[] = [];
+  validationCacheKey: string | null = null;
+
+  // Pagination helper properties
+  get totalPages(): number {
+    return this.validationResults?.totalPages || 0;
+  }
+
+  get hasNextPage(): boolean {
+    return this.validationResults?.hasNextPage || false;
+  }
+
+  get hasPreviousPage(): boolean {
+    return this.validationResults?.hasPreviousPage || false;
+  }
+
   ngOnInit(): void {
     // Subscribe to validation progress updates
     this.validationStateService.validationProgress$
@@ -69,6 +88,8 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         this.validationResults = results;
 
         if (results) {
+          // Store cache key for pagination and Excel export
+          this.validationCacheKey = results.cacheKey || null;
           this.showSuccess(`Validierung abgeschlossen. ${results.missing} von ${results.total} Kombinationen fehlen.`);
         }
       });
@@ -216,9 +237,20 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Validate coding completeness
+   * Validate coding completeness with pagination
    */
   private validateCodingCompleteness(expectedCombinations: ExpectedCombinationDto[]): void {
+    // Store expected combinations for pagination
+    this.expectedCombinations = expectedCombinations;
+    this.currentPage = 1; // Reset to first page
+
+    this.loadValidationPage(1);
+  }
+
+  /**
+   * Load a specific page of validation results
+   */
+  private loadValidationPage(page: number): void {
     const workspaceId = this.appService.selectedWorkspaceId;
 
     if (!workspaceId) {
@@ -226,17 +258,117 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.validationStateService.updateProgress(80, 'Validierung wird durchgeführt...');
+    this.validationStateService.updateProgress(80, `Validierung wird durchgeführt (Seite ${page})...`);
+    this.currentPage = page;
 
-    this.testPersonCodingService.validateCodingCompleteness(workspaceId, expectedCombinations)
-      .subscribe({
-        next: results => {
-          this.validationStateService.setValidationResults(results);
-        },
-        error: () => {
-          this.validationStateService.setValidationError('Fehler bei der Validierung');
+    this.testPersonCodingService.validateCodingCompleteness(
+      workspaceId,
+      this.expectedCombinations,
+      page,
+      this.pageSize
+    ).subscribe({
+      next: results => {
+        this.validationStateService.setValidationResults(results);
+      },
+      error: () => {
+        this.validationStateService.setValidationError('Fehler bei der Validierung');
+      }
+    });
+  }
+
+  /**
+   * Navigate to the next page
+   */
+  nextPage(): void {
+    if (this.hasNextPage) {
+      this.loadValidationPage(this.currentPage + 1);
+    }
+  }
+
+  /**
+   * Navigate to the previous page
+   */
+  previousPage(): void {
+    if (this.hasPreviousPage) {
+      this.loadValidationPage(this.currentPage - 1);
+    }
+  }
+
+  /**
+   * Navigate to a specific page
+   */
+  goToPage(page: number): void {
+    if (page >= 1 && page <= this.totalPages) {
+      this.loadValidationPage(page);
+    }
+  }
+
+  /**
+   * Change page size and reload current page
+   */
+  changePageSize(newPageSize: number): void {
+    this.pageSize = newPageSize;
+    this.loadValidationPage(1); // Reset to first page when changing page size
+  }
+
+  /**
+   * Download validation results as Excel file using cache key
+   */
+  downloadExcel(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+
+    if (!workspaceId || !this.validationCacheKey) {
+      this.showError('Keine Daten zum Herunterladen verfügbar. Bitte führen Sie zuerst eine Validierung durch.');
+      return;
+    }
+
+    this.isLoading = true;
+
+    this.testPersonCodingService.downloadValidationResultsAsExcel(
+      workspaceId,
+      this.validationCacheKey
+    ).subscribe({
+      next: blob => {
+        // Create download link
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+
+        // Generate filename with timestamp
+        const timestamp = new Date().toISOString().slice(0, 10);
+        link.download = `validation-results-${timestamp}.xlsx`;
+
+        // Trigger download
+        document.body.appendChild(link);
+        link.click();
+
+        // Cleanup
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+
+        this.showSuccess('Excel-Datei wurde erfolgreich heruntergeladen');
+        this.isLoading = false;
+      },
+      error: error => {
+        let errorMessage = 'Fehler beim Herunterladen der Excel-Datei';
+
+        // Provide more specific error messages
+        if (error.status === 404) {
+          errorMessage = 'Validierungsdaten nicht gefunden. Bitte führen Sie zuerst eine neue Validierung durch.';
+        } else if (error.status === 400) {
+          errorMessage = 'Ungültiger Cache-Schlüssel. Bitte führen Sie eine neue Validierung durch.';
+        } else if (error.status === 500) {
+          errorMessage = 'Server-Fehler beim Generieren der Excel-Datei. Bitte versuchen Sie es später erneut.';
+        } else if (error.status === 0) {
+          errorMessage = 'Netzwerk-Fehler. Bitte überprüfen Sie Ihre Internetverbindung.';
+        } else if (error.message && error.message.includes('cache')) {
+          errorMessage = 'Die Validierungsdaten sind nicht mehr verfügbar. Bitte führen Sie eine neue Validierung durch.';
         }
-      });
+
+        this.showError(errorMessage);
+        this.isLoading = false;
+      }
+    });
   }
 
   /**
