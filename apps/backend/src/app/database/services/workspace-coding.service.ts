@@ -389,7 +389,7 @@ export class WorkspaceCodingService {
           // Rollback transaction on error
           await queryRunner.rollbackTransaction();
           await queryRunner.release();
-          throw error;
+          return false;
         }
       }
 
@@ -430,8 +430,7 @@ export class WorkspaceCodingService {
     progressCallback?: (progress: number) => void
   ): Promise<{ allCodedResponses: CodedResponse[]; statistics: CodingStatistics }> {
     const allCodedResponses = [];
-    const estimatedResponseCount = allResponses.length;
-    allCodedResponses.length = estimatedResponseCount;
+    allCodedResponses.length = allResponses.length;
     let responseIndex = 0;
     const batchSize = 50;
     const emptyScheme = new Autocoder.CodingScheme({});
@@ -1264,25 +1263,24 @@ export class WorkspaceCodingService {
     };
 
     try {
-      // Optimized query: get total count and status counts in a single query
-      const statusCountResults = await this.responseRepository.createQueryBuilder('response')
-        .innerJoin('response.unit', 'unit')
-        .innerJoin('unit.booklet', 'booklet')
-        .innerJoin('booklet.person', 'person')
-        .where('response.status = :status', { status: 'VALUE_CHANGED' })
-        .andWhere('person.workspace_id = :workspace_id', { workspace_id })
-        .andWhere('person.consider = :consider', { consider: true })
-        .select('COALESCE(response.codedstatus, null)', 'statusValue')
-        .addSelect('COUNT(response.id)', 'count')
-        .groupBy('COALESCE(response.codedstatus, null)')
-        .getRawMany();
+      const statusCountResults = await this.responseRepository.query(`
+        SELECT
+          response.codedstatus as "statusValue",
+          COUNT(response.id) as count
+        FROM response
+        INNER JOIN unit ON response.unitid = unit.id
+        INNER JOIN booklet ON unit.bookletid = booklet.id
+        INNER JOIN persons person ON booklet.personid = person.id
+        WHERE response.status = $1
+          AND person.workspace_id = $2
+          AND person.consider = $3
+        GROUP BY response.codedstatus
+      `, ['VALUE_CHANGED', workspace_id, true]);
 
-      // Calculate total from the sum of all status counts
       let totalResponses = 0;
 
       statusCountResults.forEach(result => {
         const count = parseInt(result.count, 10);
-        // Ensure count is a valid number
         const validCount = Number.isNaN(count) ? 0 : count;
         statistics.statusCounts[result.statusValue] = validCount;
         totalResponses += validCount;
@@ -1290,7 +1288,6 @@ export class WorkspaceCodingService {
 
       statistics.totalResponses = totalResponses;
 
-      // Cache the result
       this.statisticsCache.set(workspace_id, {
         data: statistics,
         timestamp: Date.now()
@@ -1502,7 +1499,7 @@ export class WorkspaceCodingService {
     }
   }
 
-  async createMissingsProfile(workspaceId: number, profile: MissingsProfilesDto): Promise<MissingsProfilesDto> {
+  async createMissingsProfile(workspaceId: number, profile: MissingsProfilesDto): Promise<MissingsProfilesDto | null> {
     try {
       this.logger.log(`Creating missings profile for workspace ${workspaceId}`);
 
@@ -1525,7 +1522,8 @@ export class WorkspaceCodingService {
       // Check if a profile with the same label already exists
       const existingProfile = profiles.find(p => p.label === profile.label);
       if (existingProfile) {
-        throw new Error(`A missings profile with label '${profile.label}' already exists`);
+        this.logger.error(`A missings profile with label '${profile.label}' already exists`);
+        return null;
       }
 
       // Add the new profile
@@ -1541,7 +1539,7 @@ export class WorkspaceCodingService {
     }
   }
 
-  async updateMissingsProfile(workspaceId: number, label: string, profile: MissingsProfilesDto): Promise<MissingsProfilesDto> {
+  async updateMissingsProfile(workspaceId: number, label: string, profile: MissingsProfilesDto): Promise<MissingsProfilesDto | null> {
     try {
       this.logger.log(`Updating missings profile '${label}' for workspace ${workspaceId}`);
 
@@ -1551,7 +1549,8 @@ export class WorkspaceCodingService {
       });
 
       if (!setting) {
-        throw new Error('No missings profiles found');
+        this.logger.error('No missings profiles found');
+        return null;
       }
 
       let profiles: MissingsProfilesDto[] = [];
@@ -1564,7 +1563,8 @@ export class WorkspaceCodingService {
 
       const index = profiles.findIndex(p => p.label === label);
       if (index === -1) {
-        throw new Error(`Missings profile with label '${label}' not found`);
+        this.logger.error(`Missings profile with label '${label}' not found`);
+        return null;
       }
       profiles[index] = profile;
       await this.saveMissingsProfiles(profiles);
@@ -1901,6 +1901,9 @@ export class WorkspaceCodingService {
    * @param serverUrl Base server URL for replay links
    * @param page Page number for pagination (default: 1)
    * @param limit Number of items per page (default: 100)
+   * @param unitIdFilter Optional filter to search for specific unit IDs
+   * @param variableIdFilter Optional filter to search for specific variable IDs
+   * @param derivationFilter Optional filter to search for specific derivation values
    * @returns Paginated array of variable analysis items with all required information
    */
   async getVariableAnalysis(
@@ -2166,8 +2169,7 @@ export class WorkspaceCodingService {
 
         // Generate replay URL
         const variablePage = '0';
-        const variableAnchor = variableId;
-        const replayUrl = `${serverUrl}/#/replay/${loginName}@${loginCode}@${bookletId}/${unitId}/${variablePage}/${variableAnchor}?auth=${authToken}`;
+        const replayUrl = `${serverUrl}/#/replay/${loginName}@${loginCode}@${bookletId}/${unitId}/${variablePage}/${variableId}?auth=${authToken}`;
 
         // Add to result
         result.push({

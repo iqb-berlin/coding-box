@@ -58,3 +58,32 @@ CREATE INDEX "idx_coding_job_variable_bundle_coding_job_id" ON "public"."coding_
 CREATE INDEX "idx_coding_job_variable_bundle_variable_bundle_id" ON "public"."coding_job_variable_bundle" ("variable_bundle_id");
 
 -- rollback DROP TABLE IF EXISTS "public"."coding_job_variable_bundle";
+
+-- changeset jurei733:5
+
+-- Composite index for response table covering the main filters and join column
+CREATE INDEX IF NOT EXISTS "idx_response_status_codedstatus_unitid" ON "public"."response" ("status", "codedstatus", "unitid")
+  WHERE status = 'VALUE_CHANGED';
+
+-- Composite index for unit table covering the join columns
+CREATE INDEX IF NOT EXISTS "idx_unit_id_bookletid" ON "public"."unit" ("id", "bookletid");
+
+-- Composite index for booklet table covering the join columns
+CREATE INDEX IF NOT EXISTS "idx_booklet_id_personid" ON "public"."booklet" ("id", "personid");
+
+-- Composite index for persons table covering workspace filter and consider flag
+CREATE INDEX IF NOT EXISTS "idx_persons_workspace_consider_id" ON "public"."persons" ("workspace_id", "consider", "id")
+  WHERE consider = true;
+
+-- rollback DROP INDEX IF EXISTS "idx_response_status_codedstatus_unitid";
+-- rollback DROP INDEX IF EXISTS "idx_unit_id_bookletid";
+-- rollback DROP INDEX IF EXISTS "idx_booklet_id_personid";
+-- rollback DROP INDEX IF EXISTS "idx_persons_workspace_consider_id";
+
+-- changeset jurei733:6
+-- Additional optimization: Create covering index for the most common query pattern
+-- This index includes all columns needed for the statistics query to avoid table lookups
+CREATE INDEX IF NOT EXISTS "idx_response_statistics_covering" ON "public"."response" ("status", "unitid", "codedstatus", "id")
+  WHERE status = 'VALUE_CHANGED';
+
+-- rollback DROP INDEX IF EXISTS "idx_response_statistics_covering";
