@@ -4,7 +4,10 @@ import { In, Like, Repository } from 'typeorm';
 import * as Autocoder from '@iqb/responses';
 import * as cheerio from 'cheerio';
 import * as fastCsv from 'fast-csv';
+import * as ExcelJS from 'exceljs';
+import * as crypto from 'crypto';
 import { ResponseStatusType } from '@iqb/responses';
+import { CacheService } from '../../cache/cache.service';
 import FileUpload from '../entities/file_upload.entity';
 import Persons from '../entities/persons.entity';
 import { Unit } from '../entities/unit.entity';
@@ -46,7 +49,8 @@ export class WorkspaceCodingService {
     private responseRepository: Repository<ResponseEntity>,
     @InjectRepository(Setting)
     private settingRepository: Repository<Setting>,
-    private jobQueueService: JobQueueService
+    private jobQueueService: JobQueueService,
+    private cacheService: CacheService
   ) {}
 
   private codingSchemeCache: Map<string, { scheme: Autocoder.CodingScheme; timestamp: number }> = new Map();
@@ -54,6 +58,20 @@ export class WorkspaceCodingService {
 
   private testFileCache: Map<number, { files: Map<string, FileUpload>; timestamp: number }> = new Map();
   private readonly TEST_FILE_CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes cache TTL
+
+  /**
+   * Generate a hash for expected combinations to create unique cache keys
+   * @param expectedCombinations Array of expected combinations
+   * @returns Hash string for cache key generation
+   */
+  private generateExpectedCombinationsHash(expectedCombinations: ExpectedCombinationDto[]): string {
+    const sortedData = expectedCombinations
+      .map(combo => `${combo.unit_key}|${combo.login_name}|${combo.login_code}|${combo.booklet_id}|${combo.variable_id}`)
+      .sort()
+      .join('||');
+
+    return crypto.createHash('sha256').update(sortedData).digest('hex').substring(0, 16);
+  }
 
   private async getTestFilesWithCache(workspace_id: number, unitAliasesArray: string[]): Promise<Map<string, FileUpload>> {
     const cacheEntry = this.testFileCache.get(workspace_id);
@@ -2220,28 +2238,225 @@ export class WorkspaceCodingService {
   }
 
   /**
-   * Validate completeness of coding responses
+   * Export validation results as Excel with complete database content from Redis cache
+   * @param workspaceId Workspace ID
+   * @param cacheKey Cache key to retrieve complete validation results
+   * @returns Excel buffer with complete data
+   */
+  async exportValidationResultsAsExcel(
+    workspaceId: number,
+    cacheKey: string
+  ): Promise<Buffer> {
+    this.logger.log(`Exporting validation results as Excel for workspace ${workspaceId} using cache key ${cacheKey}`);
+
+    // Validate input parameters
+    if (!cacheKey || typeof cacheKey !== 'string') {
+      const errorMessage = 'Invalid cache key provided';
+      this.logger.error(`${errorMessage}: ${cacheKey}`);
+      throw new Error(errorMessage);
+    }
+
+    try {
+      // Retrieve complete validation results from cache
+      this.logger.log(`Attempting to retrieve cached data with key: ${cacheKey}`);
+      const cachedData = await this.cacheService.getCompleteValidationResults(cacheKey);
+
+      if (!cachedData) {
+        const errorMessage = 'Validation results not found in cache. Please run validation again.';
+        this.logger.error(`No cached validation results found for cache key ${cacheKey}`);
+        // Additional logging to help debug cache issues
+        this.logger.error('Cache key format: validation:{workspaceId}:{hash}');
+        this.logger.error(`Expected pattern: validation:${workspaceId}:*`);
+        throw new Error(errorMessage);
+      }
+
+      const validationResults = cachedData.results;
+      this.logger.log(`Successfully retrieved ${validationResults.length} validation results from cache for export`);
+
+      // Validate that we have actual data
+      if (!validationResults || validationResults.length === 0) {
+        const errorMessage = 'No validation data available for export. Please run validation again.';
+        this.logger.error('Cached data exists but contains no validation results');
+        throw new Error(errorMessage);
+      }
+
+      // Create a new workbook
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet('Validation Results');
+
+      // Define columns for comprehensive data
+      worksheet.columns = [
+        { header: 'Status', key: 'status', width: 10 },
+        { header: 'Unit Key', key: 'unit_key', width: 15 },
+        { header: 'Login Name', key: 'login_name', width: 15 },
+        { header: 'Login Code', key: 'login_code', width: 15 },
+        { header: 'Booklet ID', key: 'booklet_id', width: 15 },
+        { header: 'Variable ID', key: 'variable_id', width: 15 },
+        { header: 'Response Value', key: 'response_value', width: 20 },
+        { header: 'Response Status', key: 'response_status', width: 15 },
+        { header: 'Person ID', key: 'person_id', width: 12 },
+        { header: 'Unit Name', key: 'unit_name', width: 20 },
+        { header: 'Booklet Name', key: 'booklet_name', width: 20 },
+        { header: 'Last Modified', key: 'last_modified', width: 20 }
+      ];
+
+      // Add header style
+      worksheet.getRow(1).font = { bold: true };
+      worksheet.getRow(1).fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFE0E0E0' }
+      };
+
+      // Process each validation result to get complete database content
+      for (const result of validationResults) {
+        const combination = result.combination;
+        let responseData = null;
+        let personData = null;
+        let unitData = null;
+        let bookletData = null;
+
+        // Get complete data from database if the response exists
+        if (result.status === 'EXISTS') {
+          const query = this.responseRepository
+            .createQueryBuilder('response')
+            .leftJoin('response.unit', 'unit')
+            .leftJoin('unit.booklet', 'booklet')
+            .leftJoin('booklet.person', 'person')
+            .leftJoin('booklet.bookletinfo', 'bookletinfo')
+            .select([
+              'response.value',
+              'response.status',
+              'person.id',
+              'person.login',
+              'person.code',
+              'unit.name',
+              'unit.alias',
+              'bookletinfo.name'
+            ])
+            .where('unit.alias = :unitKey', { unitKey: combination.unit_key })
+            .andWhere('person.login = :loginName', { loginName: combination.login_name })
+            .andWhere('person.code = :loginCode', { loginCode: combination.login_code })
+            .andWhere('bookletinfo.name = :bookletId', { bookletId: combination.booklet_id })
+            .andWhere('response.variableid = :variableId', { variableId: combination.variable_id })
+            .andWhere('response.value IS NOT NULL')
+            .andWhere('response.value != :empty', { empty: '' });
+
+          const responseEntity = await query.getOne();
+          if (responseEntity) {
+            responseData = responseEntity;
+            personData = responseEntity.unit?.booklet?.person;
+            unitData = responseEntity.unit;
+            bookletData = responseEntity.unit?.booklet?.bookletinfo;
+          }
+        }
+
+        // Add row to worksheet
+        worksheet.addRow({
+          status: result.status,
+          unit_key: combination.unit_key,
+          login_name: combination.login_name,
+          login_code: combination.login_code,
+          booklet_id: combination.booklet_id,
+          variable_id: combination.variable_id,
+          response_value: responseData?.value || '',
+          response_status: responseData?.status || '',
+          person_id: personData?.id || '',
+          unit_name: unitData?.name || '',
+          booklet_name: bookletData?.name || '',
+          last_modified: '' // No timestamp field available in ResponseEntity
+        });
+      }
+
+      // Apply conditional formatting for status
+      worksheet.eachRow((row, rowNumber) => {
+        if (rowNumber > 1) { // Skip header row
+          const statusCell = row.getCell(1);
+          if (statusCell.value === 'EXISTS') {
+            statusCell.fill = {
+              type: 'pattern',
+              pattern: 'solid',
+              fgColor: { argb: 'FF90EE90' } // Light green
+            };
+          } else if (statusCell.value === 'MISSING') {
+            statusCell.fill = {
+              type: 'pattern',
+              pattern: 'solid',
+              fgColor: { argb: 'FFFFA0A0' } // Light red
+            };
+          }
+        }
+      });
+
+      // Auto-fit columns
+      worksheet.columns.forEach(column => {
+        if (column.header) {
+          column.width = Math.max(column.width || 10, column.header.length + 2);
+        }
+      });
+
+      // Generate Excel buffer
+      const buffer = await workbook.xlsx.writeBuffer();
+      return Buffer.from(buffer);
+    } catch (error) {
+      this.logger.error(`Error exporting validation results as Excel: ${error.message}`, error.stack);
+      throw new Error('Could not export validation results as Excel. Please check the database connection or query.');
+    }
+  }
+
+  /**
+   * Validate completeness of coding responses with Redis caching and complete backend processing
    * @param workspaceId Workspace ID
    * @param expectedCombinations Expected combinations from Excel
-   * @returns Validation results
+   * @param page Page number (1-based)
+   * @param pageSize Number of items per page
+   * @returns Validation results with pagination metadata
    */
   async validateCodingCompleteness(
     workspaceId: number,
-    expectedCombinations: ExpectedCombinationDto[]
+    expectedCombinations: ExpectedCombinationDto[],
+    page: number = 1,
+    pageSize: number = 50
   ): Promise<ValidateCodingCompletenessResponseDto> {
     try {
       this.logger.log(`Validating coding completeness for workspace ${workspaceId} with ${expectedCombinations.length} expected combinations`);
       const startTime = Date.now();
 
-      const results: ValidationResultDto[] = [];
-      let missingCount = 0;
+      // Generate cache key based on workspace and combinations hash
+      const combinationsHash = this.generateExpectedCombinationsHash(expectedCombinations);
+      const cacheKey = this.cacheService.generateValidationCacheKey(workspaceId, combinationsHash);
 
-      // Process in batches to avoid overwhelming the database
+      // Try to get paginated results from cache first
+      let cachedResults = await this.cacheService.getPaginatedValidationResults(cacheKey, page, pageSize);
+
+      if (cachedResults) {
+        this.logger.log(`Returning cached validation results for workspace ${workspaceId} (page ${page})`);
+        return {
+          results: cachedResults.results,
+          total: cachedResults.metadata.total,
+          missing: cachedResults.metadata.missing,
+          currentPage: cachedResults.metadata.currentPage,
+          pageSize: cachedResults.metadata.pageSize,
+          totalPages: cachedResults.metadata.totalPages,
+          hasNextPage: cachedResults.metadata.hasNextPage,
+          hasPreviousPage: cachedResults.metadata.hasPreviousPage,
+          cacheKey // Include cache key in response for subsequent requests
+        };
+      }
+
+      // No cache found - process ALL combinations and cache the complete results
+      this.logger.log(`No cached results found. Processing all ${expectedCombinations.length} combinations for workspace ${workspaceId}`);
+
+      const allResults: ValidationResultDto[] = [];
+      let totalMissingCount = 0;
+
+      // Process all combinations in batches to avoid overwhelming the database
       const batchSize = 100;
       for (let i = 0; i < expectedCombinations.length; i += batchSize) {
         const batch = expectedCombinations.slice(i, i + batchSize);
+        this.logger.log(`Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(expectedCombinations.length / batchSize)}`);
 
-        // Create a query to check for each combination in the batch
+        // Process each combination in the batch
         for (const expected of batch) {
           // Build a query to check if the response exists
           const responseExists = await this.responseRepository
@@ -2262,23 +2477,67 @@ export class WorkspaceCodingService {
           // Add the result
           const status = responseExists > 0 ? 'EXISTS' : 'MISSING';
           if (status === 'MISSING') {
-            missingCount += 1;
+            totalMissingCount += 1;
           }
 
-          results.push({
+          allResults.push({
             combination: expected,
             status
           });
         }
       }
 
+      // Cache the complete results
+      const metadata = {
+        total: expectedCombinations.length,
+        missing: totalMissingCount,
+        timestamp: Date.now()
+      };
+
+      const cacheSuccess = await this.cacheService.storeValidationResults(cacheKey, allResults, metadata);
+
+      if (cacheSuccess) {
+        this.logger.log(`Successfully cached validation results for workspace ${workspaceId}`);
+      } else {
+        this.logger.warn(`Failed to cache validation results for workspace ${workspaceId}`);
+      }
+
+      // Now get the paginated results from the complete data
+      cachedResults = await this.cacheService.getPaginatedValidationResults(cacheKey, page, pageSize);
+
       const endTime = Date.now();
-      this.logger.log(`Validation completed in ${endTime - startTime}ms. Found ${missingCount} missing responses out of ${expectedCombinations.length} expected combinations.`);
+      this.logger.log(`Validation completed in ${endTime - startTime}ms. Processed all ${expectedCombinations.length} combinations with ${totalMissingCount} missing responses.`);
+
+      if (cachedResults) {
+        return {
+          results: cachedResults.results,
+          total: cachedResults.metadata.total,
+          missing: cachedResults.metadata.missing,
+          currentPage: cachedResults.metadata.currentPage,
+          pageSize: cachedResults.metadata.pageSize,
+          totalPages: cachedResults.metadata.totalPages,
+          hasNextPage: cachedResults.metadata.hasNextPage,
+          hasPreviousPage: cachedResults.metadata.hasPreviousPage,
+          cacheKey // Include cache key in response for subsequent requests
+        };
+      }
+
+      // Fallback if cache retrieval fails - return direct pagination
+      const totalPages = Math.ceil(expectedCombinations.length / pageSize);
+      const startIndex = (page - 1) * pageSize;
+      const endIndex = Math.min(startIndex + pageSize, expectedCombinations.length);
+      const paginatedResults = allResults.slice(startIndex, endIndex);
 
       return {
-        results,
+        results: paginatedResults,
         total: expectedCombinations.length,
-        missing: missingCount
+        missing: totalMissingCount,
+        currentPage: page,
+        pageSize,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1,
+        cacheKey
       };
     } catch (error) {
       this.logger.error(`Error validating coding completeness: ${error.message}`, error.stack);
