@@ -49,7 +49,7 @@
               </div>
               <div class="count-item">
                 <span class="count-label">Kodierer:</span>
-                <span class="count-value">{{ coders.length }}</span>
+                <span class="count-value">{{ selectedCoders.selected.length }}</span>
               </div>
             </div>
 
@@ -98,35 +98,52 @@
         </div>
 
         <mat-tab-group>
-          <!-- Tab for assigned coders -->
+          <!-- Tab for coders selection -->
           <mat-tab label="Kodierer">
             <div class="coders-tab-content">
-              <div class="coders-info-panel">
-                <mat-icon class="info-icon">info</mat-icon>
-                <p class="info-text">
-                  Kodierer werden diesem Job über die Kodierer-Verwaltung zugewiesen.
-                  Hier sehen Sie eine Übersicht der bereits zugewiesenen Kodierer.
-                </p>
-              </div>
+              <p class="section-description">Wählen Sie die Kodierer aus, die diesem Job zugewiesen werden sollen.</p>
 
-              @if (isLoadingCoders) {
+              @if (isLoadingAvailableCoders) {
                 <div class="loading-container">
                   <mat-spinner diameter="40"></mat-spinner>
-                  <p class="loading-text">Lade Kodierer...</p>
+                  <p class="loading-text">Lade verfügbare Kodierer...</p>
                 </div>
               }
 
-              @if (!isLoadingCoders && coders.length > 0) {
+              @if (!isLoadingAvailableCoders && availableCoders.length > 0) {
+                <!-- Quick selection tools -->
+                <div class="quick-selection-tools">
+                  <button mat-stroked-button color="primary" (click)="masterCoderToggle()" class="select-all-button">
+                    <mat-icon>{{ isAllCodersSelected() ? 'deselect' : 'select_all' }}</mat-icon>
+                    {{ isAllCodersSelected() ? 'Alle abwählen' : 'Alle auswählen' }}
+                  </button>
+                  <div class="selection-count">
+                    {{ selectedCoders.selected.length }} von {{ availableCoders.length }} Kodierern ausgewählt
+                  </div>
+                </div>
+
+                <!-- Coders grid view -->
                 <div class="coders-grid-container">
                   <div class="coders-grid">
-                    @for (coder of coders; track coder.id) {
-                      <div class="coder-card">
+                    @for (coder of availableCoders; track coder.id) {
+                      <div class="coder-card"
+                           [class.selected]="selectedCoders.isSelected(coder)"
+                           (click)="selectedCoders.toggle(coder)">
+                        <div class="coder-card-header">
+                          <mat-checkbox [checked]="selectedCoders.isSelected(coder)"
+                                        (click)="$event.stopPropagation()"
+                                        (change)="$event ? selectedCoders.toggle(coder) : null">
+                          </mat-checkbox>
+                        </div>
                         <div class="coder-avatar">
                           <mat-icon class="avatar-icon">person</mat-icon>
                         </div>
                         <div class="coder-details">
                           <h3 class="coder-name">{{ coder.displayName || coder.name }}</h3>
                           <p class="coder-username">{{ coder.name }}</p>
+                          @if (coder.email) {
+                            <p class="coder-email">{{ coder.email }}</p>
+                          }
                           <div class="coder-id">ID: {{ coder.id }}</div>
                         </div>
                       </div>
@@ -135,11 +152,11 @@
                 </div>
               }
 
-              @if (!isLoadingCoders && coders.length === 0) {
+              @if (!isLoadingAvailableCoders && availableCoders.length === 0) {
                 <div class="empty-state">
                   <mat-icon class="empty-icon">person</mat-icon>
-                  <h3>Keine Kodierer zugewiesen</h3>
-                  <p class="empty-text">Diesem Kodierjob sind noch keine Kodierer zugewiesen. Kodierer können über die Kodierer-Verwaltung zugewiesen werden.</p>
+                  <h3>Keine Kodierer verfügbar</h3>
+                  <p class="empty-text">Im Arbeitsbereich sind keine Kodierer verfügbar. Fügen Sie zuerst Benutzer zum Arbeitsbereich hinzu.</p>
                 </div>
               }
             </div>
@@ -210,8 +227,12 @@
                                       (change)="$event ? selectedVariables.toggle(variable) : null">
                         </mat-checkbox>
                         <div class="variable-identifiers">
-                          <div class="variable-id">{{ variable.variableId }}</div>
-                          <div class="unit-name">Aufgabe: {{ variable.unitName }}</div>
+                          <div class="variable-id">
+                            {{ variable.unitName }}_{{ variable.variableId }}
+                            @if (data.isEdit && isVariableOriginallyAssigned(variable)) {
+                              <mat-icon class="assigned-indicator" matTooltip="Bereits diesem Kodierjob zugewiesen" matTooltipPosition="above">check_circle</mat-icon>
+                            }
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -225,7 +246,7 @@
                 [pageIndex]="variableAnalysisPageIndex"
                 [pageSizeOptions]="variableAnalysisPageSizeOptions"
                 showFirstLastButtons
-                (page)="onPageChange($event)"
+                (page)="onPageChange()"
                 aria-label="Seiten auswählen">
               </mat-paginator>
             }
@@ -281,7 +302,12 @@
                                       (click)="$event.stopPropagation()"
                                       (change)="$event ? selectedVariableBundles.toggle(bundle) : null">
                         </mat-checkbox>
-                        <h3 class="bundle-name">{{ bundle.name }}</h3>
+                        <h3 class="bundle-name">
+                          {{ bundle.name }}
+                          @if (data.isEdit && isBundleOriginallyAssigned(bundle)) {
+                            <mat-icon class="assigned-indicator" matTooltip="Bereits diesem Kodierjob zugewiesen" matTooltipPosition="above">check_circle</mat-icon>
+                          }
+                        </h3>
                       </div>
                       <div class="bundle-card-content">
                         <p class="bundle-description">{{ bundle.description || 'Keine Beschreibung' }}</p>

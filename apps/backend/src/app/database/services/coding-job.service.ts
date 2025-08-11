@@ -32,13 +32,17 @@ export class CodingJobService {
    * @param workspaceId The ID of the workspace
    * @param page The page number (1-based)
    * @param limit The number of items per page
-   * @returns Paginated coding jobs with metadata
+   * @returns Paginated coding jobs with metadata, assigned coders, variables, and variable bundles
    */
   async getCodingJobs(
     workspaceId: number,
     page: number = 1,
     limit: number = 10
-  ): Promise<{ data: CodingJob[]; total: number; page: number; limit: number }> {
+  ): Promise<{ data: (CodingJob & {
+      assignedCoders?: number[];
+      assignedVariables?: string[];
+      assignedVariableBundles?: string[]
+    })[]; total: number; page: number; limit: number }> {
     const validPage = page > 0 ? page : 1;
     const validLimit = limit > 0 ? limit : 10;
 
@@ -48,13 +52,61 @@ export class CodingJobService {
       where: { workspace_id: workspaceId }
     });
 
-    const data = await this.codingJobRepository.find({
+    const jobs = await this.codingJobRepository.find({
       where: { workspace_id: workspaceId },
       order: { created_at: 'DESC' },
       skip,
       take: validLimit
     });
 
+    const jobIds = jobs.map(job => job.id);
+
+    const [allCoders, allVariables, variableBundleEntities] = await Promise.all([
+      this.codingJobCoderRepository.find({
+        where: { coding_job_id: In(jobIds) }
+      }),
+      this.codingJobVariableRepository.find({
+        where: { coding_job_id: In(jobIds) }
+      }),
+      this.codingJobVariableBundleRepository.find({
+        where: { coding_job_id: In(jobIds) },
+        relations: ['variable_bundle']
+      })
+    ]);
+
+    const codersByJobId = new Map<number, number[]>();
+    allCoders.forEach(coder => {
+      if (!codersByJobId.has(coder.coding_job_id)) {
+        codersByJobId.set(coder.coding_job_id, []);
+      }
+      codersByJobId.get(coder.coding_job_id)!.push(coder.user_id);
+    });
+
+    const variablesByJobId = new Map<number, string[]>();
+    allVariables.forEach(variable => {
+      if (!variablesByJobId.has(variable.coding_job_id)) {
+        variablesByJobId.set(variable.coding_job_id, []);
+      }
+      variablesByJobId.get(variable.coding_job_id)!.push(variable.variable_id);
+    });
+
+    const variableBundlesByJobId = new Map<number, string[]>();
+    variableBundleEntities.forEach(bundleAssignment => {
+      if (!variableBundlesByJobId.has(bundleAssignment.coding_job_id)) {
+        variableBundlesByJobId.set(bundleAssignment.coding_job_id, []);
+      }
+      if (bundleAssignment.variable_bundle?.name) {
+        variableBundlesByJobId.get(bundleAssignment.coding_job_id)!.push(bundleAssignment.variable_bundle.name);
+      }
+    });
+
+    const data = jobs.map(job => ({
+      ...job,
+      assignedCoders: codersByJobId.get(job.id) || [],
+      assignedVariables: variablesByJobId.get(job.id) || [],
+      assignedVariableBundles: variableBundlesByJobId.get(job.id) || []
+    }));
+    console.log(data);
     return {
       data,
       total,
@@ -195,7 +247,6 @@ export class CodingJobService {
   ): Promise<CodingJob> {
     const codingJob = await this.getCodingJob(id, workspaceId);
 
-    // Update the coding job
     if (updateCodingJobDto.name !== undefined) {
       codingJob.codingJob.name = updateCodingJobDto.name;
     }
@@ -206,44 +257,31 @@ export class CodingJobService {
       codingJob.codingJob.status = updateCodingJobDto.status;
     }
 
-    // Save the coding job
     const savedCodingJob = await this.codingJobRepository.save(codingJob.codingJob);
 
-    // Update assigned coders if provided
     if (updateCodingJobDto.assignedCoders !== undefined) {
-      // Remove existing coders
       await this.codingJobCoderRepository.delete({ coding_job_id: id });
-      // Assign new coders
       if (updateCodingJobDto.assignedCoders.length > 0) {
         await this.assignCoders(id, updateCodingJobDto.assignedCoders);
       }
     }
 
-    // Update variables if provided
     if (updateCodingJobDto.variables !== undefined) {
-      // Remove existing variables
       await this.codingJobVariableRepository.delete({ coding_job_id: id });
-      // Assign new variables
       if (updateCodingJobDto.variables.length > 0) {
         await this.assignVariables(id, updateCodingJobDto.variables);
       }
     }
 
-    // Update variable bundles if provided
     if (updateCodingJobDto.variableBundleIds !== undefined) {
-      // Remove existing variable bundles
       await this.codingJobVariableBundleRepository.delete({ coding_job_id: id });
-      // Assign new variable bundles
       if (updateCodingJobDto.variableBundleIds.length > 0) {
         await this.assignVariableBundles(id, updateCodingJobDto.variableBundleIds);
       }
     } else if (updateCodingJobDto.variableBundles !== undefined) {
-      // Remove existing variable bundles
       await this.codingJobVariableBundleRepository.delete({ coding_job_id: id });
 
-      // Handle variable bundles without IDs by using their variables directly
       if (updateCodingJobDto.variableBundles.length > 0) {
-        // If the first bundle has an ID, use the IDs approach
         if (updateCodingJobDto.variableBundles[0].id) {
           const bundleIds = updateCodingJobDto.variableBundles
             .filter(bundle => bundle.id)
@@ -253,7 +291,6 @@ export class CodingJobService {
             await this.assignVariableBundles(id, bundleIds);
           }
         } else {
-          // Otherwise, extract variables and assign them directly
           const variables = updateCodingJobDto.variableBundles.flatMap(bundle => bundle.variables || []);
           if (variables.length > 0) {
             await this.assignVariables(id, variables);

@@ -91,7 +91,12 @@ export class CodingJobController {
     try {
       const result = await this.codingJobService.getCodingJobs(workspaceId, page, limit);
       return {
-        data: result.data.map(job => CodingJobDto.fromEntity(job)),
+        data: result.data.map(job => CodingJobDto.fromEntity(
+          job,
+          job.assignedCoders || [],
+          job.assignedVariables || [],
+          job.assignedVariableBundles || []
+        )),
         total: result.total,
         page: result.page,
         limit: result.limit

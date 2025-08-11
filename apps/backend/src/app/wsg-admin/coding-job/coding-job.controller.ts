@@ -31,8 +31,6 @@ import { CodingJobService } from '../../database/services/coding-job.service';
 import { CodingJobDto } from '../../admin/coding-job/dto/coding-job.dto';
 import { CreateCodingJobDto } from '../../admin/coding-job/dto/create-coding-job.dto';
 import { UpdateCodingJobDto } from '../../admin/coding-job/dto/update-coding-job.dto';
-import { VariableBundleDto } from '../../admin/variable-bundle/dto/variable-bundle.dto';
-import { VariableDto } from '../../admin/variable-bundle/dto/variable.dto';
 
 @ApiTags('WSG Admin Coding Jobs')
 @Controller('wsg-admin/workspace/:workspace_id/coding-job')
@@ -90,7 +88,7 @@ export class WsgCodingJobController {
     try {
       const result = await this.codingJobService.getCodingJobs(workspaceId, page, limit);
       return {
-        data: result.data.map(job => CodingJobDto.fromEntity(job)),
+        data: result.data,
         total: result.total,
         page: result.page,
         limit: result.limit
@@ -135,16 +133,7 @@ export class WsgCodingJobController {
   ): Promise<CodingJobDto> {
     try {
       const result = await this.codingJobService.getCodingJob(id, workspaceId);
-      const dto = CodingJobDto.fromEntity(result.codingJob);
-      dto.assigned_coders = result.assignedCoders;
-      dto.variables = result.variables.map(v => {
-        const variableDto = new VariableDto();
-        variableDto.unitName = v.unitName;
-        variableDto.variableId = v.variableId;
-        return variableDto;
-      });
-      dto.variable_bundles = result.variableBundles.map(vb => VariableBundleDto.fromEntity(vb));
-      return dto;
+      return result.codingJob;
     } catch (error) {
       if (error instanceof NotFoundException) {
         throw error;
@@ -228,7 +217,7 @@ export class WsgCodingJobController {
         workspaceId,
         updateCodingJobDto
       );
-      return CodingJobDto.fromEntity(codingJob);
+      return codingJob;
     } catch (error) {
       if (error instanceof NotFoundException) {
         throw error;

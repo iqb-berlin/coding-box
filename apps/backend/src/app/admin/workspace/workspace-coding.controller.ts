@@ -820,4 +820,37 @@ export class WorkspaceCodingController {
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.send(excelData);
   }
+
+  @Get(':workspace_id/coding/incomplete-variables')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiQuery({
+    name: 'unitName',
+    required: false,
+    description: 'Filter by unit name',
+    type: String
+  })
+  @ApiOkResponse({
+    description: 'CODING_INCOMPLETE variables retrieved successfully.',
+    schema: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          unitName: { type: 'string', description: 'Unit name' },
+          variableId: { type: 'string', description: 'Variable ID' }
+        }
+      }
+    }
+  })
+  async getCodingIncompleteVariables(
+    @WorkspaceId() workspace_id: number,
+      @Query('unitName') unitName?: string
+  ): Promise<{ unitName: string; variableId: string }[]> {
+    return this.workspaceCodingService.getCodingIncompleteVariables(
+      workspace_id,
+      unitName
+    );
+  }
 }

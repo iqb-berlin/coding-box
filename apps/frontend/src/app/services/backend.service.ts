@@ -812,11 +812,6 @@ export class BackendService {
     return this.http.get<Record<string, number>>(url);
   }
 
-  /**
-   * Get replay error statistics
-   * @param workspaceId The ID of the workspace
-   * @returns Observable of replay error statistics
-   */
   getReplayErrorStatistics(workspaceId: number): Observable<{
     successRate: number;
     totalReplays: number;
@@ -834,41 +829,21 @@ export class BackendService {
     }>(url);
   }
 
-  /**
-   * Get failure distribution by unit
-   * @param workspaceId The ID of the workspace
-   * @returns Observable of failure distribution by unit
-   */
   getFailureDistributionByUnit(workspaceId: number): Observable<Record<string, number>> {
     const url = `${this.serverUrl}/admin/workspace/${workspaceId}/replay-statistics/failures/unit`;
     return this.http.get<Record<string, number>>(url);
   }
 
-  /**
-   * Get failure distribution by day
-   * @param workspaceId The ID of the workspace
-   * @returns Observable of failure distribution by day
-   */
   getFailureDistributionByDay(workspaceId: number): Observable<Record<string, number>> {
     const url = `${this.serverUrl}/admin/workspace/${workspaceId}/replay-statistics/failures/day`;
     return this.http.get<Record<string, number>>(url);
   }
 
-  /**
-   * Get failure distribution by hour
-   * @param workspaceId The ID of the workspace
-   * @returns Observable of failure distribution by hour
-   */
   getFailureDistributionByHour(workspaceId: number): Observable<Record<string, number>> {
     const url = `${this.serverUrl}/admin/workspace/${workspaceId}/replay-statistics/failures/hour`;
     return this.http.get<Record<string, number>>(url);
   }
 
-  /**
-   * Get all variable bundles for a workspace
-   * @param workspaceId The ID of the workspace
-   * @returns Observable of variable bundles
-   */
   getVariableBundles(workspaceId: number): Observable<VariableBundle[]> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/variable-bundle`;
     return this.http.get<PaginatedResponse<VariableBundle>>(url)
@@ -877,13 +852,6 @@ export class BackendService {
       );
   }
 
-  /**
-   * Get all coding jobs for a workspace
-   * @param workspaceId The ID of the workspace
-   * @param page The page number (1-based)
-   * @param limit The number of items per page
-   * @returns Observable of paginated coding jobs
-   */
   getCodingJobs(
     workspaceId: number,
     page: number = 1,
@@ -896,35 +864,11 @@ export class BackendService {
     return this.http.get<PaginatedResponse<CodingJob>>(url, { params });
   }
 
-  /**
-   * Get a coding job by ID
-   * @param workspaceId The ID of the workspace
-   * @param codingJobId The ID of the coding job
-   * @returns Observable of the coding job
-   */
-  getCodingJob(workspaceId: number, codingJobId: number): Observable<CodingJob> {
-    const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job/${codingJobId}`;
-    return this.http.get<CodingJob>(url);
-  }
-
-  /**
-   * Create a new coding job
-   * @param workspaceId The ID of the workspace
-   * @param codingJob The coding job to create
-   * @returns Observable of the created coding job
-   */
   createCodingJob(workspaceId: number, codingJob: Omit<CodingJob, 'id' | 'createdAt' | 'updatedAt'>): Observable<CodingJob> {
     const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job`;
     return this.http.post<CodingJob>(url, codingJob);
   }
 
-  /**
-   * Update a coding job
-   * @param workspaceId The ID of the workspace
-   * @param codingJobId The ID of the coding job
-   * @param codingJob The coding job data to update
-   * @returns Observable of the updated coding job
-   */
   updateCodingJob(
     workspaceId: number,
     codingJobId: number,
@@ -934,30 +878,20 @@ export class BackendService {
     return this.http.put<CodingJob>(url, codingJob);
   }
 
-  /**
-   * Delete a coding job
-   * @param workspaceId The ID of the workspace
-   * @param codingJobId The ID of the coding job
-   * @returns Observable of the delete result
-   */
   deleteCodingJob(workspaceId: number, codingJobId: number): Observable<{ success: boolean }> {
     const url = `${this.serverUrl}/wsg-admin/workspace/${workspaceId}/coding-job/${codingJobId}`;
     return this.http.delete<{ success: boolean }>(url);
   }
 
-  /**
-   * Assign coders to a coding job
-   * @param workspaceId The ID of the workspace
-   * @param codingJobId The ID of the coding job
-   * @param userIds Array of user IDs to assign as coders
-   * @returns Observable of the assignment result
-   */
-  assignCodersToCodingJob(
+  getCodingIncompleteVariables(
     workspaceId: number,
-    codingJobId: number,
-    userIds: number[]
-  ): Observable<{ success: boolean }> {
-    const url = `${this.serverUrl}/wsg-admin/workspace/${workspaceId}/coding-job/${codingJobId}/assign-coders`;
-    return this.http.post<{ success: boolean }>(url, { userIds });
+    unitName?: string
+  ): Observable<{ unitName: string; variableId: string }[]> {
+    const url = `${this.serverUrl}/admin/workspace/${workspaceId}/coding/incomplete-variables`;
+    let params = new HttpParams();
+    if (unitName) {
+      params = params.set('unitName', unitName);
+    }
+    return this.http.get<{ unitName: string; variableId: string }[]>(url, { params });
   }
 }

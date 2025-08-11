@@ -14,7 +14,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatTableModule, MatTableDataSource } from '@angular/material/table';
 import { MatCheckboxModule } from '@angular/material/checkbox';
-import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
+import { MatPaginatorModule } from '@angular/material/paginator';
 import { MatSortModule } from '@angular/material/sort';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatDividerModule } from '@angular/material/divider';
@@ -23,6 +23,7 @@ import { MatExpansionModule } from '@angular/material/expansion';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateModule } from '@ngx-translate/core';
 import { SelectionModel } from '@angular/cdk/collections';
+import { MatTooltip } from '@angular/material/tooltip';
 import { CodingJob, VariableBundle, Variable } from '../../models/coding-job.model';
 import { Coder } from '../../models/coder.model';
 import { BackendService } from '../../../services/backend.service';
@@ -59,7 +60,8 @@ export interface CodingJobDialogData {
     MatDividerModule,
     MatTabsModule,
     MatExpansionModule,
-    TranslateModule
+    TranslateModule,
+    MatTooltip
   ]
 })
 export class CodingJobDialogComponent implements OnInit {
@@ -82,6 +84,9 @@ export class CodingJobDialogComponent implements OnInit {
   // Coders
   coders: Coder[] = [];
   isLoadingCoders = false;
+  availableCoders: Coder[] = [];
+  selectedCoders = new SelectionModel<Coder>(true, []);
+  isLoadingAvailableCoders = false;
 
   // Variable bundles
   variableBundles: VariableBundle[] = [];
@@ -109,13 +114,31 @@ export class CodingJobDialogComponent implements OnInit {
 
   ngOnInit(): void {
     this.initForm();
-    this.loadVariableAnalysisItems();
+    this.loadCodingIncompleteVariables();
     this.loadVariableBundles();
-
+    this.loadAvailableCoders();
+    console.log(this.data);
     // Load coders if we're in edit mode and have a job ID
     if (this.data.isEdit && this.data.codingJob?.id) {
       this.loadCoders(this.data.codingJob.id);
     }
+  }
+
+  /**
+   * Loads all available coders in the workspace for selection
+   */
+  loadAvailableCoders(): void {
+    this.isLoadingAvailableCoders = true;
+
+    this.coderService.getCoders().subscribe({
+      next: coders => {
+        this.availableCoders = coders;
+        this.isLoadingAvailableCoders = false;
+      },
+      error: () => {
+        this.isLoadingAvailableCoders = false;
+      }
+    });
   }
 
   /**
@@ -129,6 +152,8 @@ export class CodingJobDialogComponent implements OnInit {
       next: coders => {
         this.coders = coders;
         this.isLoadingCoders = false;
+        // Pre-select the assigned coders
+        this.selectedCoders = new SelectionModel<Coder>(true, coders);
       },
       error: () => {
         this.isLoadingCoders = false;
@@ -154,12 +179,7 @@ export class CodingJobDialogComponent implements OnInit {
     }
   }
 
-  loadVariableAnalysisItems(
-    page: number = 1,
-    limit: number = 10,
-    unitNameFilter?: string,
-    variableIdFilter?: string
-  ): void {
+  loadCodingIncompleteVariables(unitNameFilter?: string): void {
     this.isLoadingVariableAnalysis = true;
     const workspaceId = this.appService.selectedWorkspaceId;
 
@@ -168,34 +188,13 @@ export class CodingJobDialogComponent implements OnInit {
       return;
     }
 
-    this.backendService.getVariableAnalysis(
+    this.backendService.getCodingIncompleteVariables(
       workspaceId,
-      page,
-      limit,
-      unitNameFilter || undefined,
-      variableIdFilter || undefined
+      unitNameFilter || undefined
     ).subscribe({
-      next: response => {
-        // Convert variable analysis items to variable bundles
-        this.variableAnalysisItems = response.data;
-
-        // Create unique variables from the items
-        const uniqueVariables = new Map<string, Variable>();
-
-        this.variableAnalysisItems.forEach(item => {
-          const key = `${item.unitId}|${item.variableId}`;
-          if (!uniqueVariables.has(key)) {
-            uniqueVariables.set(key, {
-              unitName: item.unitId,
-              variableId: item.variableId
-            });
-          }
-        });
-
-        this.variables = Array.from(uniqueVariables.values());
+      next: variables => {
+        this.variables = variables;
         this.dataSource.data = this.variables;
-
-        // Pre-select variables that were already selected
         if (this.data.codingJob?.variables) {
           this.data.codingJob.variables.forEach(variable => {
             const foundVariable = this.variables.find(
@@ -207,8 +206,7 @@ export class CodingJobDialogComponent implements OnInit {
           });
         }
 
-        this.totalVariableAnalysisRecords = response.total;
-        this.variableAnalysisPageIndex = page - 1;
+        this.totalVariableAnalysisRecords = variables.length;
         this.isLoadingVariableAnalysis = false;
       },
       error: () => {
@@ -239,18 +237,13 @@ export class CodingJobDialogComponent implements OnInit {
     }
   }
 
-  onPageChange(event: PageEvent): void {
-    // Preserve filters when changing pages
-    this.loadVariableAnalysisItems(
-      event.pageIndex + 1,
-      event.pageSize,
-      this.unitNameFilter || undefined,
-      this.variableIdFilter || undefined
-    );
+  onPageChange(): void {
+    // Pagination not needed for CODING_INCOMPLETE variables
+    // This method can be removed or kept for future use
   }
 
   applyFilter(): void {
-    this.loadVariableAnalysisItems(1, this.variableAnalysisPageSize, this.unitNameFilter, this.variableIdFilter);
+    this.loadCodingIncompleteVariables(this.unitNameFilter);
   }
 
   applyBundleFilter(): void {
@@ -264,7 +257,7 @@ export class CodingJobDialogComponent implements OnInit {
   clearFilters(): void {
     this.unitNameFilter = '';
     this.variableIdFilter = '';
-    this.loadVariableAnalysisItems(1, this.variableAnalysisPageSize);
+    this.loadCodingIncompleteVariables();
   }
 
   clearBundleFilter(): void {
@@ -279,6 +272,35 @@ export class CodingJobDialogComponent implements OnInit {
     return numSelected === numRows;
   }
 
+  /**
+   * Check if a variable was originally assigned to this coding job
+   * @param variable The variable to check
+   * @returns true if the variable was originally assigned to this job
+   */
+  isVariableOriginallyAssigned(variable: Variable): boolean {
+    if (!this.data.codingJob?.variables) {
+      return false;
+    }
+
+    return this.data.codingJob.variables.some(
+      originalVar => originalVar.unitName === variable.unitName && originalVar.variableId === variable.variableId
+    );
+  }
+
+  /**
+   * Check if a variable bundle was originally assigned to this coding job
+   * @param bundle The variable bundle to check
+   * @returns true if the bundle was originally assigned to this job
+   */
+  isBundleOriginallyAssigned(bundle: VariableBundle): boolean {
+    if (!this.data.codingJob?.variableBundles) {
+      return false;
+    }
+
+    return this.data.codingJob.variableBundles.some(
+      originalBundle => originalBundle.id === bundle.id
+    );
+  }
 
   /** Gets the number of variables in a bundle */
   getVariableCount(bundle: VariableBundle): number {
@@ -301,6 +323,21 @@ export class CodingJobDialogComponent implements OnInit {
     }
   }
 
+  /** Whether all coders are selected. */
+  isAllCodersSelected(): boolean {
+    const numSelected = this.selectedCoders.selected.length;
+    const numRows = this.availableCoders.length;
+    return numSelected === numRows && numRows > 0;
+  }
+
+  /** Selects all coders if they are not all selected; otherwise clear selection. */
+  masterCoderToggle(): void {
+    if (this.isAllCodersSelected()) {
+      this.selectedCoders.clear();
+    } else {
+      this.availableCoders.forEach(coder => this.selectedCoders.select(coder));
+    }
+  }
 
   onSubmit(): void {
     if (this.codingJobForm.invalid) {
@@ -321,9 +358,11 @@ export class CodingJobDialogComponent implements OnInit {
       ...this.codingJobForm.value,
       createdAt: this.data.codingJob?.createdAt || new Date(),
       updatedAt: new Date(),
-      assignedCoders: this.data.codingJob?.assignedCoders || [],
+      assignedCoders: this.selectedCoders.selected.map(coder => coder.id),
       variables: this.selectedVariables.selected,
-      variableBundles: this.selectedVariableBundles.selected
+      variableBundles: this.selectedVariableBundles.selected,
+      assignedVariables: this.selectedVariables.selected,
+      assignedVariableBundles: this.selectedVariableBundles.selected
     };
 
     // If we're editing an existing coding job
