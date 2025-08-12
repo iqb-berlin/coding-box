@@ -198,7 +198,7 @@ export class WorkspaceCodingService {
       let bullJob = await this.jobQueueService.getTestPersonCodingJob(jobId);
 
       if (!bullJob) {
-        bullJob = await this.jobQueueService.getCodingStatisticsJob(jobId) as any;
+        bullJob = await this.jobQueueService.getCodingStatisticsJob(jobId) as never;
       }
 
       if (bullJob) {
