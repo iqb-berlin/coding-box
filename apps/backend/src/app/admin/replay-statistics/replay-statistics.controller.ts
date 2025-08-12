@@ -31,7 +31,6 @@ export class ReplayStatisticsController {
   @ApiParam({ name: 'workspace_id', description: 'ID of the workspace' })
   @ApiResponse({ status: 201, description: 'Replay statistics stored successfully' })
   @Post()
-  @UseGuards(JwtAuthGuard)
   async storeReplayStatistics(
     @Param('workspace_id') workspaceId: string,
       @Body() data: {

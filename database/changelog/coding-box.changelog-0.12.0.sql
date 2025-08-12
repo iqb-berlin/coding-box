@@ -13,4 +13,4 @@ CREATE TABLE "public"."variable_bundle" (
 
 CREATE INDEX "idx_variable_bundle_workspace_id" ON "public"."variable_bundle" ("workspace_id");
 
--- rollback DROP TABLE IF EXISTS "public"."variable_bundle";
+-- rollback DROP TABLE IF EXISTS "public"."variable_bundle" CASCADE;

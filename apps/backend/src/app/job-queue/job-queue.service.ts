@@ -9,6 +9,10 @@ export interface TestPersonCodingJobData {
   isPaused?: boolean;
 }
 
+export interface CodingStatisticsJobData {
+  workspaceId: number;
+}
+
 export interface RedisConnectionStatus {
   connected: boolean;
   message: string;
@@ -34,7 +38,8 @@ export class JobQueueService {
   private readonly logger = new Logger(JobQueueService.name);
 
   constructor(
-    @InjectQueue('test-person-coding') private testPersonCodingQueue: Queue
+    @InjectQueue('test-person-coding') private testPersonCodingQueue: Queue,
+    @InjectQueue('coding-statistics') private codingStatisticsQueue: Queue
   ) {}
 
   /**
@@ -58,6 +63,21 @@ export class JobQueueService {
    */
   async getTestPersonCodingJob(jobId: string): Promise<Job<TestPersonCodingJobData>> {
     return this.testPersonCodingQueue.getJob(jobId);
+  }
+
+  /**
+   * Add a coding statistics job to the queue
+   */
+  async addCodingStatisticsJob(workspaceId: number, options?: JobOptions): Promise<Job<{ workspaceId: number }>> {
+    this.logger.log(`Adding coding statistics job for workspace ${workspaceId}`);
+    return this.codingStatisticsQueue.add({ workspaceId }, options);
+  }
+
+  /**
+   * Get a coding statistics job by ID
+   */
+  async getCodingStatisticsJob(jobId: string): Promise<Job<{ workspaceId: number }>> {
+    return this.codingStatisticsQueue.getJob(jobId);
   }
 
   /**
