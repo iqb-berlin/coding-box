@@ -71,20 +71,21 @@
           <div class="filter-row">
             <mat-form-field class="filter-field">
               <mat-label>Aufgaben-ID Filter</mat-label>
-              <input matInput [(ngModel)]="unitNameFilter" [ngModelOptions]="{standalone: true}" placeholder="Filter nach Aufgaben-ID">
-              <button *ngIf="unitNameFilter" matSuffix mat-icon-button aria-label="Clear" (click)="unitNameFilter=''; applyFilter()">
+              <input #unitNameFilterInput matInput [(ngModel)]="unitNameFilter" [ngModelOptions]="{standalone: true}" placeholder="Filter nach Aufgaben-ID">
+              <button *ngIf="unitNameFilter" matSuffix mat-icon-button aria-label="Clear" (click)="unitNameFilter=''; unitNameFilterInput.value=''; applyFilter()">
                 <mat-icon>close</mat-icon>
               </button>
             </mat-form-field>
 
             <mat-form-field class="filter-field">
               <mat-label>Variablen-ID Filter</mat-label>
-              <input matInput [(ngModel)]="variableIdFilter" [ngModelOptions]="{standalone: true}" placeholder="Filter nach Variablen-ID">
-              <button *ngIf="variableIdFilter" matSuffix mat-icon-button aria-label="Clear" (click)="variableIdFilter=''; applyFilter()">
+              <input #variableIdFilterInput matInput [(ngModel)]="variableIdFilter" [ngModelOptions]="{standalone: true}" placeholder="Filter nach Variablen-ID">
+              <button *ngIf="variableIdFilter" matSuffix mat-icon-button aria-label="Clear" (click)="variableIdFilter=''; variableIdFilterInput.value=''; applyFilter()">
                 <mat-icon>close</mat-icon>
               </button>
             </mat-form-field>
 
+            <!-- Filter button is now optional since filtering happens automatically with debounce -->
             <button mat-raised-button color="primary" (click)="applyFilter()">
               <mat-icon>filter_list</mat-icon>
               Filter anwenden

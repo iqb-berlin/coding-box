@@ -95,7 +95,7 @@ export class CodingService {
   }
 
   getCodingJobStatus(workspace_id: number, jobId: string): Observable<{
-    status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
+    status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'paused';
     progress: number;
     result?: {
       totalResponses: number;
@@ -107,7 +107,7 @@ export class CodingService {
   }> {
     return this.http
       .get<{
-      status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
+      status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'paused';
       progress: number;
       result?: {
         totalResponses: number;
@@ -151,7 +151,7 @@ export class CodingService {
 
   getAllCodingJobs(workspace_id: number): Observable<{
     jobId: string;
-    status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
+    status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'paused';
     progress: number;
     result?: {
       totalResponses: number;
@@ -166,7 +166,7 @@ export class CodingService {
     return this.http
       .get<{
       jobId: string;
-      status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
+      status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'paused';
       progress: number;
       result?: {
         totalResponses: number;
@@ -241,6 +241,18 @@ export class CodingService {
       { headers: this.authHeader })
       .pipe(
         catchError(() => of({ totalResponses: 0, statusCounts: {} }))
+      );
+  }
+
+  createCodingStatisticsJob(workspace_id: number): Observable<{ jobId: string; message: string }> {
+    return this.http
+      .post<{ jobId: string; message: string }>(
+      `${this.serverUrl}admin/workspace/${workspace_id}/coding/statistics/job`,
+      {},
+      { headers: this.authHeader }
+    )
+      .pipe(
+        catchError(() => of({ jobId: '', message: 'Failed to create job' }))
       );
   }
 

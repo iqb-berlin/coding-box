@@ -14,6 +14,9 @@ import { WorkspaceId } from './workspace.decorator';
 import { WorkspaceCodingService } from '../../database/services/workspace-coding.service';
 import { PersonService } from '../../database/services/person.service';
 import { VariableAnalysisItemDto } from '../../../../../../api-dto/coding/variable-analysis-item.dto';
+import { ValidateCodingCompletenessRequestDto } from '../../../../../../api-dto/coding/validate-coding-completeness-request.dto';
+import { ValidateCodingCompletenessResponseDto } from '../../../../../../api-dto/coding/validate-coding-completeness-response.dto';
+import { ExportValidationResultsRequestDto } from '../../../../../../api-dto/coding/export-validation-results-request.dto';
 
 @ApiTags('Admin Workspace Coding')
 @Controller('admin/workspace')
@@ -177,6 +180,24 @@ export class WorkspaceCodingController {
     return this.workspaceCodingService.getCodingStatistics(workspace_id);
   }
 
+  @Post(':workspace_id/coding/statistics/job')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiOkResponse({
+    description: 'Coding statistics job created successfully.',
+    schema: {
+      type: 'object',
+      properties: {
+        jobId: { type: 'string' },
+        message: { type: 'string' }
+      }
+    }
+  })
+  async createCodingStatisticsJob(@WorkspaceId() workspace_id: number): Promise<{ jobId: string; message: string }> {
+    return this.workspaceCodingService.createCodingStatisticsJob(workspace_id);
+  }
+
   @Get(':workspace_id/coding/job/:jobId')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiTags('coding')
@@ -215,7 +236,7 @@ export class WorkspaceCodingController {
     }
   })
   async getJobStatus(@Param('jobId') jobId: string): Promise<{ status: string; progress: number; result?: CodingStatistics; error?: string } | { error: string }> {
-    const status = this.workspaceCodingService.getJobStatus(jobId);
+    const status = await this.workspaceCodingService.getJobStatus(jobId);
     if (!status) {
       return { error: `Job with ID ${jobId} not found` };
     }
@@ -722,10 +743,6 @@ export class WorkspaceCodingController {
     const validPage = Math.max(1, page);
     const validLimit = Math.min(Math.max(1, limit), 500); // Set maximum limit to 500
 
-    if (unitId || variableId || derivation) {
-      console.log(`Applying filters - unitId: ${unitId || 'none'}, variableId: ${variableId || 'none'}, derivation: ${derivation || 'none'}`);
-    }
-
     return this.workspaceCodingService.getVariableAnalysis(
       workspace_id,
       authToken,
@@ -735,6 +752,105 @@ export class WorkspaceCodingController {
       unitId,
       variableId,
       derivation
+    );
+  }
+
+  @Post(':workspace_id/coding/validate-completeness')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiBody({
+    description: 'Expected combinations to validate with optional pagination',
+    type: ValidateCodingCompletenessRequestDto
+  })
+  @ApiOkResponse({
+    description: 'Validation results with pagination support',
+    type: ValidateCodingCompletenessResponseDto
+  })
+  async validateCodingCompleteness(
+    @WorkspaceId() workspace_id: number,
+      @Body() request: ValidateCodingCompletenessRequestDto
+  ): Promise<ValidateCodingCompletenessResponseDto> {
+    // Extract and validate pagination parameters
+    const page = Math.max(1, request.page || 1);
+    const pageSize = Math.min(Math.max(1, request.pageSize || 50), 500); // Max 500 items per page
+
+    return this.workspaceCodingService.validateCodingCompleteness(
+      workspace_id,
+      request.expectedCombinations,
+      page,
+      pageSize
+    );
+  }
+
+  @Post(':workspace_id/coding/validate-completeness/export-excel')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiBody({
+    description: 'Cache key to export validation results from Redis cache',
+    type: ExportValidationResultsRequestDto
+  })
+  @ApiOkResponse({
+    description: 'Validation results exported as Excel from cached data',
+    content: {
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': {
+        schema: {
+          type: 'string',
+          format: 'binary'
+        }
+      }
+    }
+  })
+  async validateAndExportCodingCompleteness(
+    @WorkspaceId() workspace_id: number,
+      @Body() request: ExportValidationResultsRequestDto,
+      @Res() res: Response
+  ): Promise<void> {
+    // Export the complete validation results from cache using cache key
+    const excelData = await this.workspaceCodingService.exportValidationResultsAsExcel(
+      workspace_id,
+      request.cacheKey
+    );
+
+    const timestamp = new Date().toISOString().slice(0, 10);
+    const filename = `validation-results-${timestamp}.xlsx`;
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(excelData);
+  }
+
+  @Get(':workspace_id/coding/incomplete-variables')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiQuery({
+    name: 'unitName',
+    required: false,
+    description: 'Filter by unit name',
+    type: String
+  })
+  @ApiOkResponse({
+    description: 'CODING_INCOMPLETE variables retrieved successfully.',
+    schema: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          unitName: { type: 'string', description: 'Unit name' },
+          variableId: { type: 'string', description: 'Variable ID' }
+        }
+      }
+    }
+  })
+  async getCodingIncompleteVariables(
+    @WorkspaceId() workspace_id: number,
+      @Query('unitName') unitName?: string
+  ): Promise<{ unitName: string; variableId: string }[]> {
+    return this.workspaceCodingService.getCodingIncompleteVariables(
+      workspace_id,
+      unitName
     );
   }
 }

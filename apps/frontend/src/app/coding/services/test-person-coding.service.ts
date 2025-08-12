@@ -6,6 +6,13 @@ import {
   of
 } from 'rxjs';
 import { SERVER_URL } from '../../injection-tokens';
+import { ExpectedCombinationDto } from '../../../../../../api-dto/coding/expected-combination.dto';
+import {
+  ValidateCodingCompletenessResponseDto
+} from '../../../../../../api-dto/coding/validate-coding-completeness-response.dto';
+import {
+  ValidateCodingCompletenessRequestDto
+} from '../../../../../../api-dto/coding/validate-coding-completeness-request.dto';
 
 export interface CodingStatistics {
   totalResponses: number;
@@ -279,6 +286,76 @@ export class TestPersonCodingService {
     )
       .pipe(
         catchError(() => of({ success: false, message: `Failed to restart job ${jobId}` }))
+      );
+  }
+
+  /**
+   * Validate completeness of coding responses with pagination support
+   * @param workspaceId Workspace ID
+   * @param expectedCombinations Expected combinations from Excel
+   * @param page Page number (1-based, optional - defaults to 1)
+   * @param pageSize Number of items per page (optional - defaults to 50)
+   * @returns Observable of validation results with pagination metadata
+   */
+  validateCodingCompleteness(
+    workspaceId: number,
+    expectedCombinations: ExpectedCombinationDto[],
+    page?: number,
+    pageSize?: number
+  ): Observable<ValidateCodingCompletenessResponseDto> {
+    const request: ValidateCodingCompletenessRequestDto = {
+      expectedCombinations,
+      page: page || 1,
+      pageSize: pageSize || 50
+    };
+
+    return this.http
+      .post<ValidateCodingCompletenessResponseDto>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/coding/validate-completeness`,
+      request,
+      { headers: this.authHeader }
+    )
+      .pipe(
+        catchError(() => of({
+          results: [],
+          total: 0,
+          missing: 0,
+          currentPage: page || 1,
+          pageSize: pageSize || 50,
+          totalPages: 0,
+          hasNextPage: false,
+          hasPreviousPage: false
+        }))
+      );
+  }
+
+  /**
+   * Download validation results as Excel file using cache key
+   * @param workspaceId Workspace ID
+   * @param cacheKey Cache key from validation results
+   * @returns Observable of Excel file as Blob
+   */
+  downloadValidationResultsAsExcel(
+    workspaceId: number,
+    cacheKey: string
+  ): Observable<Blob> {
+    const request = {
+      cacheKey
+    };
+
+    return this.http
+      .post(
+        `${this.serverUrl}admin/workspace/${workspaceId}/coding/validate-completeness/export-excel`,
+        request,
+        {
+          headers: this.authHeader,
+          responseType: 'blob'
+        }
+      )
+      .pipe(
+        catchError(error => {
+          throw error;
+        })
       );
   }
 }

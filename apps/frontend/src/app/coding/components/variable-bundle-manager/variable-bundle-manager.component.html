@@ -23,6 +23,7 @@
   @if (!isLoading) {
     <coding-box-search-filter
       [title]="'Variablenbündel filtern'"
+      [initialValue]="currentFilter"
       (valueChange)="applyFilter($event)">
     </coding-box-search-filter>
 

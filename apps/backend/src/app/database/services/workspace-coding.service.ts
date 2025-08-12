@@ -4,7 +4,10 @@ import { In, Like, Repository } from 'typeorm';
 import * as Autocoder from '@iqb/responses';
 import * as cheerio from 'cheerio';
 import * as fastCsv from 'fast-csv';
+import * as ExcelJS from 'exceljs';
+import * as crypto from 'crypto';
 import { ResponseStatusType } from '@iqb/responses';
+import { CacheService } from '../../cache/cache.service';
 import FileUpload from '../entities/file_upload.entity';
 import Persons from '../entities/persons.entity';
 import { Unit } from '../entities/unit.entity';
@@ -17,6 +20,9 @@ import { CodebookGenerator } from '../../admin/code-book/codebook-generator.clas
 import { CodeBookContentSetting, UnitPropertiesForCodebook, Missing } from '../../admin/code-book/codebook.interfaces';
 import { MissingsProfilesDto } from '../../../../../../api-dto/coding/missings-profiles.dto';
 import { VariableAnalysisItemDto } from '../../../../../../api-dto/coding/variable-analysis-item.dto';
+import { ExpectedCombinationDto } from '../../../../../../api-dto/coding/expected-combination.dto';
+import { ValidationResultDto } from '../../../../../../api-dto/coding/validation-result.dto';
+import { ValidateCodingCompletenessResponseDto } from '../../../../../../api-dto/coding/validate-coding-completeness-response.dto';
 import { JobQueueService } from '../../job-queue/job-queue.service';
 
 interface CodedResponse {
@@ -43,7 +49,8 @@ export class WorkspaceCodingService {
     private responseRepository: Repository<ResponseEntity>,
     @InjectRepository(Setting)
     private settingRepository: Repository<Setting>,
-    private jobQueueService: JobQueueService
+    private jobQueueService: JobQueueService,
+    private cacheService: CacheService
   ) {}
 
   private codingSchemeCache: Map<string, { scheme: Autocoder.CodingScheme; timestamp: number }> = new Map();
@@ -51,6 +58,20 @@ export class WorkspaceCodingService {
 
   private testFileCache: Map<number, { files: Map<string, FileUpload>; timestamp: number }> = new Map();
   private readonly TEST_FILE_CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes cache TTL
+
+  /**
+   * Generate a hash for expected combinations to create unique cache keys
+   * @param expectedCombinations Array of expected combinations
+   * @returns Hash string for cache key generation
+   */
+  private generateExpectedCombinationsHash(expectedCombinations: ExpectedCombinationDto[]): string {
+    const sortedData = expectedCombinations
+      .map(combo => `${combo.unit_key}|${combo.login_name}|${combo.login_code}|${combo.booklet_id}|${combo.variable_id}`)
+      .sort()
+      .join('||');
+
+    return crypto.createHash('sha256').update(sortedData).digest('hex').substring(0, 16);
+  }
 
   private async getTestFilesWithCache(workspace_id: number, unitAliasesArray: string[]): Promise<Map<string, FileUpload>> {
     const cacheEntry = this.testFileCache.get(workspace_id);
@@ -172,36 +193,14 @@ export class WorkspaceCodingService {
     }
   }
 
-  // In-memory job status map removed as we now use only Bull for job management
-
-  async getAllJobs(workspaceId?: number): Promise<{
-    jobId: string;
-    status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'paused';
-    progress: number;
-    result?: CodingStatistics;
-    error?: string;
-    workspaceId?: number;
-    createdAt?: Date;
-    groupNames?: string;
-    durationMs?: number;
-    completedAt?: Date;
-  }[]> {
-    // Use getBullJobs for all workspaces
-    if (workspaceId !== undefined) {
-      return this.getBullJobs(workspaceId);
-    }
-
-    // If no workspaceId is provided, we need to get jobs for all workspaces
-    // Since we don't have a way to get all jobs from Bull without a workspaceId,
-    // we'll return an empty array for now
-    this.logger.warn('getAllJobs called without workspaceId, returning empty array');
-    return [];
-  }
-
   async getJobStatus(jobId: string): Promise<{ status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'paused'; progress: number; result?: CodingStatistics; error?: string } | null> {
     try {
-      // Get job from Bull queue
-      const bullJob = await this.jobQueueService.getTestPersonCodingJob(jobId);
+      let bullJob = await this.jobQueueService.getTestPersonCodingJob(jobId);
+
+      if (!bullJob) {
+        bullJob = await this.jobQueueService.getCodingStatisticsJob(jobId) as never;
+      }
+
       if (bullJob) {
         // Get job state and progress
         const state = await bullJob.getState();
@@ -252,6 +251,17 @@ export class WorkspaceCodingService {
     } catch (error) {
       this.logger.error(`Error getting job status: ${error.message}`, error.stack);
       return null;
+    }
+  }
+
+  async createCodingStatisticsJob(workspaceId: number): Promise<{ jobId: string; message: string }> {
+    try {
+      const job = await this.jobQueueService.addCodingStatisticsJob(workspaceId);
+      this.logger.log(`Created coding statistics job ${job.id} for workspace ${workspaceId}`);
+      return { jobId: job.id.toString(), message: 'Coding statistics job created' };
+    } catch (error) {
+      this.logger.error(`Error creating coding statistics job: ${error.message}`, error.stack);
+      throw error;
     }
   }
 
@@ -386,7 +396,7 @@ export class WorkspaceCodingService {
           // Rollback transaction on error
           await queryRunner.rollbackTransaction();
           await queryRunner.release();
-          throw error;
+          return false;
         }
       }
 
@@ -427,8 +437,7 @@ export class WorkspaceCodingService {
     progressCallback?: (progress: number) => void
   ): Promise<{ allCodedResponses: CodedResponse[]; statistics: CodingStatistics }> {
     const allCodedResponses = [];
-    const estimatedResponseCount = allResponses.length;
-    allCodedResponses.length = estimatedResponseCount;
+    allCodedResponses.length = allResponses.length;
     let responseIndex = 0;
     const batchSize = 50;
     const emptyScheme = new Autocoder.CodingScheme({});
@@ -1261,25 +1270,24 @@ export class WorkspaceCodingService {
     };
 
     try {
-      // Optimized query: get total count and status counts in a single query
-      const statusCountResults = await this.responseRepository.createQueryBuilder('response')
-        .innerJoin('response.unit', 'unit')
-        .innerJoin('unit.booklet', 'booklet')
-        .innerJoin('booklet.person', 'person')
-        .where('response.status = :status', { status: 'VALUE_CHANGED' })
-        .andWhere('person.workspace_id = :workspace_id', { workspace_id })
-        .andWhere('person.consider = :consider', { consider: true })
-        .select('COALESCE(response.codedstatus, null)', 'statusValue')
-        .addSelect('COUNT(response.id)', 'count')
-        .groupBy('COALESCE(response.codedstatus, null)')
-        .getRawMany();
+      const statusCountResults = await this.responseRepository.query(`
+        SELECT
+          response.codedstatus as "statusValue",
+          COUNT(response.id) as count
+        FROM response
+        INNER JOIN unit ON response.unitid = unit.id
+        INNER JOIN booklet ON unit.bookletid = booklet.id
+        INNER JOIN persons person ON booklet.personid = person.id
+        WHERE response.status = $1
+          AND person.workspace_id = $2
+          AND person.consider = $3
+        GROUP BY response.codedstatus
+      `, ['VALUE_CHANGED', workspace_id, true]);
 
-      // Calculate total from the sum of all status counts
       let totalResponses = 0;
 
       statusCountResults.forEach(result => {
         const count = parseInt(result.count, 10);
-        // Ensure count is a valid number
         const validCount = Number.isNaN(count) ? 0 : count;
         statistics.statusCounts[result.statusValue] = validCount;
         totalResponses += validCount;
@@ -1287,7 +1295,6 @@ export class WorkspaceCodingService {
 
       statistics.totalResponses = totalResponses;
 
-      // Cache the result
       this.statisticsCache.set(workspace_id, {
         data: statistics,
         timestamp: Date.now()
@@ -1499,7 +1506,7 @@ export class WorkspaceCodingService {
     }
   }
 
-  async createMissingsProfile(workspaceId: number, profile: MissingsProfilesDto): Promise<MissingsProfilesDto> {
+  async createMissingsProfile(workspaceId: number, profile: MissingsProfilesDto): Promise<MissingsProfilesDto | null> {
     try {
       this.logger.log(`Creating missings profile for workspace ${workspaceId}`);
 
@@ -1522,7 +1529,8 @@ export class WorkspaceCodingService {
       // Check if a profile with the same label already exists
       const existingProfile = profiles.find(p => p.label === profile.label);
       if (existingProfile) {
-        throw new Error(`A missings profile with label '${profile.label}' already exists`);
+        this.logger.error(`A missings profile with label '${profile.label}' already exists`);
+        return null;
       }
 
       // Add the new profile
@@ -1538,7 +1546,7 @@ export class WorkspaceCodingService {
     }
   }
 
-  async updateMissingsProfile(workspaceId: number, label: string, profile: MissingsProfilesDto): Promise<MissingsProfilesDto> {
+  async updateMissingsProfile(workspaceId: number, label: string, profile: MissingsProfilesDto): Promise<MissingsProfilesDto | null> {
     try {
       this.logger.log(`Updating missings profile '${label}' for workspace ${workspaceId}`);
 
@@ -1548,7 +1556,8 @@ export class WorkspaceCodingService {
       });
 
       if (!setting) {
-        throw new Error('No missings profiles found');
+        this.logger.error('No missings profiles found');
+        return null;
       }
 
       let profiles: MissingsProfilesDto[] = [];
@@ -1561,7 +1570,8 @@ export class WorkspaceCodingService {
 
       const index = profiles.findIndex(p => p.label === label);
       if (index === -1) {
-        throw new Error(`Missings profile with label '${label}' not found`);
+        this.logger.error(`Missings profile with label '${label}' not found`);
+        return null;
       }
       profiles[index] = profile;
       await this.saveMissingsProfiles(profiles);
@@ -1898,6 +1908,9 @@ export class WorkspaceCodingService {
    * @param serverUrl Base server URL for replay links
    * @param page Page number for pagination (default: 1)
    * @param limit Number of items per page (default: 100)
+   * @param unitIdFilter Optional filter to search for specific unit IDs
+   * @param variableIdFilter Optional filter to search for specific variable IDs
+   * @param derivationFilter Optional filter to search for specific derivation values
    * @returns Paginated array of variable analysis items with all required information
    */
   async getVariableAnalysis(
@@ -2163,8 +2176,7 @@ export class WorkspaceCodingService {
 
         // Generate replay URL
         const variablePage = '0';
-        const variableAnchor = variableId;
-        const replayUrl = `${serverUrl}/#/replay/${loginName}@${loginCode}@${bookletId}/${unitId}/${variablePage}/${variableAnchor}?auth=${authToken}`;
+        const replayUrl = `${serverUrl}/#/replay/${loginName}@${loginCode}@${bookletId}/${unitId}/${variablePage}/${variableId}?auth=${authToken}`;
 
         // Add to result
         result.push({
@@ -2211,6 +2223,351 @@ export class WorkspaceCodingService {
     } catch (error) {
       this.logger.error(`Error getting variable analysis: ${error.message}`, error.stack);
       throw new Error('Could not retrieve variable analysis data. Please check the database connection or query.');
+    }
+  }
+
+  /**
+   * Export validation results as Excel with complete database content from Redis cache
+   * @param workspaceId Workspace ID
+   * @param cacheKey Cache key to retrieve complete validation results
+   * @returns Excel buffer with complete data
+   */
+  async exportValidationResultsAsExcel(
+    workspaceId: number,
+    cacheKey: string
+  ): Promise<Buffer> {
+    this.logger.log(`Exporting validation results as Excel for workspace ${workspaceId} using cache key ${cacheKey}`);
+
+    // Validate input parameters
+    if (!cacheKey || typeof cacheKey !== 'string') {
+      const errorMessage = 'Invalid cache key provided';
+      this.logger.error(`${errorMessage}: ${cacheKey}`);
+      throw new Error(errorMessage);
+    }
+
+    try {
+      // Retrieve complete validation results from cache
+      this.logger.log(`Attempting to retrieve cached data with key: ${cacheKey}`);
+      const cachedData = await this.cacheService.getCompleteValidationResults(cacheKey);
+
+      if (!cachedData) {
+        const errorMessage = 'Validation results not found in cache. Please run validation again.';
+        this.logger.error(`No cached validation results found for cache key ${cacheKey}`);
+        // Additional logging to help debug cache issues
+        this.logger.error('Cache key format: validation:{workspaceId}:{hash}');
+        this.logger.error(`Expected pattern: validation:${workspaceId}:*`);
+        throw new Error(errorMessage);
+      }
+
+      const validationResults = cachedData.results;
+      this.logger.log(`Successfully retrieved ${validationResults.length} validation results from cache for export`);
+
+      if (!validationResults || validationResults.length === 0) {
+        const errorMessage = 'No validation data available for export. Please run validation again.';
+        this.logger.error('Cached data exists but contains no validation results');
+        throw new Error(errorMessage);
+      }
+
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet('Validation Results');
+
+      worksheet.columns = [
+        { header: 'Status', key: 'status', width: 10 },
+        { header: 'Unit Key', key: 'unit_key', width: 15 },
+        { header: 'Login Name', key: 'login_name', width: 15 },
+        { header: 'Login Code', key: 'login_code', width: 15 },
+        { header: 'Booklet ID', key: 'booklet_id', width: 15 },
+        { header: 'Variable ID', key: 'variable_id', width: 15 },
+        { header: 'Response Value', key: 'response_value', width: 20 },
+        { header: 'Response Status', key: 'response_status', width: 15 },
+        { header: 'Person ID', key: 'person_id', width: 12 },
+        { header: 'Unit Name', key: 'unit_name', width: 20 },
+        { header: 'Booklet Name', key: 'booklet_name', width: 20 },
+        { header: 'Last Modified', key: 'last_modified', width: 20 }
+      ];
+
+      // Add header style
+      worksheet.getRow(1).font = { bold: true };
+      worksheet.getRow(1).fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFE0E0E0' }
+      };
+
+      for (const result of validationResults) {
+        const combination = result.combination;
+        let responseData = null;
+        let personData = null;
+        let unitData = null;
+        let bookletData = null;
+
+        if (result.status === 'EXISTS') {
+          const query = this.responseRepository
+            .createQueryBuilder('response')
+            .leftJoin('response.unit', 'unit')
+            .leftJoin('unit.booklet', 'booklet')
+            .leftJoin('booklet.person', 'person')
+            .leftJoin('booklet.bookletinfo', 'bookletinfo')
+            .select([
+              'response.value',
+              'response.status',
+              'person.id',
+              'person.login',
+              'person.code',
+              'unit.name',
+              'unit.alias',
+              'bookletinfo.name'
+            ])
+            .where('unit.alias = :unitKey', { unitKey: combination.unit_key })
+            .andWhere('person.login = :loginName', { loginName: combination.login_name })
+            .andWhere('person.code = :loginCode', { loginCode: combination.login_code })
+            .andWhere('bookletinfo.name = :bookletId', { bookletId: combination.booklet_id })
+            .andWhere('response.variableid = :variableId', { variableId: combination.variable_id })
+            .andWhere('response.value IS NOT NULL')
+            .andWhere('response.value != :empty', { empty: '' });
+
+          const responseEntity = await query.getOne();
+          if (responseEntity) {
+            responseData = responseEntity;
+            personData = responseEntity.unit?.booklet?.person;
+            unitData = responseEntity.unit;
+            bookletData = responseEntity.unit?.booklet?.bookletinfo;
+          }
+        }
+
+        worksheet.addRow({
+          status: result.status,
+          unit_key: combination.unit_key,
+          login_name: combination.login_name,
+          login_code: combination.login_code,
+          booklet_id: combination.booklet_id,
+          variable_id: combination.variable_id,
+          response_value: responseData?.value || '',
+          response_status: responseData?.status || '',
+          person_id: personData?.id || '',
+          unit_name: unitData?.name || '',
+          booklet_name: bookletData?.name || '',
+          last_modified: '' // No timestamp field available in ResponseEntity
+        });
+      }
+
+      worksheet.eachRow((row, rowNumber) => {
+        if (rowNumber > 1) { // Skip header row
+          const statusCell = row.getCell(1);
+          if (statusCell.value === 'EXISTS') {
+            statusCell.fill = {
+              type: 'pattern',
+              pattern: 'solid',
+              fgColor: { argb: 'FF90EE90' } // Light green
+            };
+          } else if (statusCell.value === 'MISSING') {
+            statusCell.fill = {
+              type: 'pattern',
+              pattern: 'solid',
+              fgColor: { argb: 'FFFFA0A0' } // Light red
+            };
+          }
+        }
+      });
+
+      // Auto-fit columns
+      worksheet.columns.forEach(column => {
+        if (column.header) {
+          column.width = Math.max(column.width || 10, column.header.length + 2);
+        }
+      });
+
+      // Generate Excel buffer
+      const buffer = await workbook.xlsx.writeBuffer();
+      return Buffer.from(buffer);
+    } catch (error) {
+      this.logger.error(`Error exporting validation results as Excel: ${error.message}`, error.stack);
+      throw new Error('Could not export validation results as Excel. Please check the database connection or query.');
+    }
+  }
+
+  /**
+   * Validate completeness of coding responses with Redis caching and complete backend processing
+   * @param workspaceId Workspace ID
+   * @param expectedCombinations Expected combinations from Excel
+   * @param page Page number (1-based)
+   * @param pageSize Number of items per page
+   * @returns Validation results with pagination metadata
+   */
+  async validateCodingCompleteness(
+    workspaceId: number,
+    expectedCombinations: ExpectedCombinationDto[],
+    page: number = 1,
+    pageSize: number = 50
+  ): Promise<ValidateCodingCompletenessResponseDto> {
+    try {
+      this.logger.log(`Validating coding completeness for workspace ${workspaceId} with ${expectedCombinations.length} expected combinations`);
+      const startTime = Date.now();
+
+      // Generate cache key based on workspace and combinations hash
+      const combinationsHash = this.generateExpectedCombinationsHash(expectedCombinations);
+      const cacheKey = this.cacheService.generateValidationCacheKey(workspaceId, combinationsHash);
+
+      // Try to get paginated results from cache first
+      let cachedResults = await this.cacheService.getPaginatedValidationResults(cacheKey, page, pageSize);
+
+      if (cachedResults) {
+        this.logger.log(`Returning cached validation results for workspace ${workspaceId} (page ${page})`);
+        return {
+          results: cachedResults.results,
+          total: cachedResults.metadata.total,
+          missing: cachedResults.metadata.missing,
+          currentPage: cachedResults.metadata.currentPage,
+          pageSize: cachedResults.metadata.pageSize,
+          totalPages: cachedResults.metadata.totalPages,
+          hasNextPage: cachedResults.metadata.hasNextPage,
+          hasPreviousPage: cachedResults.metadata.hasPreviousPage,
+          cacheKey // Include cache key in response for subsequent requests
+        };
+      }
+
+      // No cache found - process ALL combinations and cache the complete results
+      this.logger.log(`No cached results found. Processing all ${expectedCombinations.length} combinations for workspace ${workspaceId}`);
+
+      const allResults: ValidationResultDto[] = [];
+      let totalMissingCount = 0;
+
+      // Process all combinations in batches to avoid overwhelming the database
+      const batchSize = 100;
+      for (let i = 0; i < expectedCombinations.length; i += batchSize) {
+        const batch = expectedCombinations.slice(i, i + batchSize);
+        this.logger.log(`Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(expectedCombinations.length / batchSize)}`);
+
+        // Process each combination in the batch
+        for (const expected of batch) {
+          // Build a query to check if the response exists
+          const responseExists = await this.responseRepository
+            .createQueryBuilder('response')
+            .innerJoin('response.unit', 'unit')
+            .innerJoin('unit.booklet', 'booklet')
+            .innerJoin('booklet.person', 'person')
+            .innerJoin('booklet.bookletinfo', 'bookletinfo')
+            .where('unit.alias = :unitKey', { unitKey: expected.unit_key })
+            .andWhere('person.login = :loginName', { loginName: expected.login_name })
+            .andWhere('person.code = :loginCode', { loginCode: expected.login_code })
+            .andWhere('bookletinfo.name = :bookletId', { bookletId: expected.booklet_id })
+            .andWhere('response.variableid = :variableId', { variableId: expected.variable_id })
+            .andWhere('response.value IS NOT NULL')
+            .andWhere('response.value != :empty', { empty: '' })
+            .getCount();
+
+          // Add the result
+          const status = responseExists > 0 ? 'EXISTS' : 'MISSING';
+          if (status === 'MISSING') {
+            totalMissingCount += 1;
+          }
+
+          allResults.push({
+            combination: expected,
+            status
+          });
+        }
+      }
+
+      // Cache the complete results
+      const metadata = {
+        total: expectedCombinations.length,
+        missing: totalMissingCount,
+        timestamp: Date.now()
+      };
+
+      const cacheSuccess = await this.cacheService.storeValidationResults(cacheKey, allResults, metadata);
+
+      if (cacheSuccess) {
+        this.logger.log(`Successfully cached validation results for workspace ${workspaceId}`);
+      } else {
+        this.logger.warn(`Failed to cache validation results for workspace ${workspaceId}`);
+      }
+
+      // Now get the paginated results from the complete data
+      cachedResults = await this.cacheService.getPaginatedValidationResults(cacheKey, page, pageSize);
+
+      const endTime = Date.now();
+      this.logger.log(`Validation completed in ${endTime - startTime}ms. Processed all ${expectedCombinations.length} combinations with ${totalMissingCount} missing responses.`);
+
+      if (cachedResults) {
+        return {
+          results: cachedResults.results,
+          total: cachedResults.metadata.total,
+          missing: cachedResults.metadata.missing,
+          currentPage: cachedResults.metadata.currentPage,
+          pageSize: cachedResults.metadata.pageSize,
+          totalPages: cachedResults.metadata.totalPages,
+          hasNextPage: cachedResults.metadata.hasNextPage,
+          hasPreviousPage: cachedResults.metadata.hasPreviousPage,
+          cacheKey // Include cache key in response for subsequent requests
+        };
+      }
+
+      const totalPages = Math.ceil(expectedCombinations.length / pageSize);
+      const startIndex = (page - 1) * pageSize;
+      const endIndex = Math.min(startIndex + pageSize, expectedCombinations.length);
+      const paginatedResults = allResults.slice(startIndex, endIndex);
+
+      return {
+        results: paginatedResults,
+        total: expectedCombinations.length,
+        missing: totalMissingCount,
+        currentPage: page,
+        pageSize,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1,
+        cacheKey
+      };
+    } catch (error) {
+      this.logger.error(`Error validating coding completeness: ${error.message}`, error.stack);
+      throw new Error('Could not validate coding completeness. Please check the database connection or query.');
+    }
+  }
+
+  async getCodingIncompleteVariables(
+    workspaceId: number,
+    unitName?: string
+  ): Promise<{ unitName: string; variableId: string }[]> {
+    try {
+      this.logger.log(`Getting CODING_INCOMPLETE variables for workspace ${workspaceId}${unitName ? ` and unit ${unitName}` : ''}`);
+
+      const queryBuilder = this.responseRepository.createQueryBuilder('response')
+        .leftJoinAndSelect('response.unit', 'unit')
+        .leftJoinAndSelect('unit.booklet', 'booklet')
+        .leftJoinAndSelect('booklet.person', 'person')
+        .where('response.codedStatus = :status', { status: 'CODING_INCOMPLETE' })
+        .andWhere('person.workspace_id = :workspace_id', { workspace_id: workspaceId });
+
+      if (unitName) {
+        queryBuilder.andWhere('unit.name = :unitName', { unitName });
+      }
+
+      const responses = await queryBuilder.getMany();
+
+      const uniqueVariables = new Map<string, { unitName: string; variableId: string }>();
+
+      responses.forEach(response => {
+        const unit = response.unit;
+        if (unit && response.variableid) {
+          const key = `${unit.name}|${response.variableid}`;
+          if (!uniqueVariables.has(key)) {
+            uniqueVariables.set(key, {
+              unitName: unit.name,
+              variableId: response.variableid
+            });
+          }
+        }
+      });
+
+      const result = Array.from(uniqueVariables.values());
+      this.logger.log(`Found ${result.length} unique CODING_INCOMPLETE variables`);
+
+      return result;
+    } catch (error) {
+      this.logger.error(`Error getting CODING_INCOMPLETE variables: ${error.message}`, error.stack);
+      throw new Error('Could not get CODING_INCOMPLETE variables. Please check the database connection.');
     }
   }
 }
