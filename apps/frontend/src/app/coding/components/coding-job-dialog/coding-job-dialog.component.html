@@ -139,7 +139,12 @@
                           <mat-icon class="avatar-icon">person</mat-icon>
                         </div>
                         <div class="coder-details">
-                          <h3 class="coder-name">{{ coder.displayName || coder.name }}</h3>
+                          <h3 class="coder-name">
+                            {{ coder.displayName || coder.name }}
+                            @if (data.isEdit && isCoderOriginallyAssigned(coder)) {
+                              <mat-icon class="assigned-indicator" matTooltip="Bereits diesem Kodierjob zugewiesen" matTooltipPosition="above">check_circle</mat-icon>
+                            }
+                          </h3>
                           <p class="coder-username">{{ coder.name }}</p>
                           @if (coder.email) {
                             <p class="coder-email">{{ coder.email }}</p>

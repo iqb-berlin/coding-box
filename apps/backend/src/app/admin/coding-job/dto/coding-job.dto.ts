@@ -60,20 +60,28 @@ export class CodingJobDto {
     assigned_coders?: number[];
 
   @ApiProperty({
-    description: 'Variable IDs assigned to the coding job',
-    type: [String],
-    example: ['var1', 'var2', 'var3'],
+    description: 'Variables assigned to the coding job with unit and variable IDs',
+    type: [Object],
+    example: [{ unitName: 'Unit1', variableId: 'var1' }, { unitName: 'Unit2', variableId: 'var2' }],
     required: false
   })
-    assigned_variables?: string[];
+    assigned_variables?: { unitName: string; variableId: string }[];
 
   @ApiProperty({
-    description: 'Variable bundle names assigned to the coding job',
-    type: [String],
-    example: ['Bundle A', 'Bundle B'],
+    description: 'Variable bundles assigned to the coding job with their variables',
+    type: [Object],
+    example: [
+      {
+        name: 'Bundle A',
+        variables: [
+          { unitName: 'Unit1', variableId: 'var1' },
+          { unitName: 'Unit2', variableId: 'var2' }
+        ]
+      }
+    ],
     required: false
   })
-    assigned_variable_bundles?: string[];
+    assigned_variable_bundles?: { name: string; variables: { unitName: string; variableId: string }[] }[];
 
   @ApiProperty({
     description: 'Variables assigned to the coding job',
@@ -93,15 +101,15 @@ export class CodingJobDto {
    * Create a CodingJobDto from a CodingJob entity
    * @param entity The CodingJob entity
    * @param assignedCoders Optional array of assigned coder IDs
-   * @param assignedVariables Optional array of assigned variable IDs
-   * @param assignedVariableBundles Optional array of assigned variable bundle names
+   * @param assignedVariables Optional array of assigned variable objects with unit and variable IDs
+   * @param assignedVariableBundles Optional array of assigned variable bundle objects with name and variables
    * @returns A CodingJobDto
    */
   static fromEntity(
     entity: CodingJob,
     assignedCoders?: number[],
-    assignedVariables?: string[],
-    assignedVariableBundles?: string[]
+    assignedVariables?: { unitName: string; variableId: string }[],
+    assignedVariableBundles?: { name: string; variables: { unitName: string; variableId: string }[] }[]
   ): CodingJobDto {
     const dto = new CodingJobDto();
     dto.id = entity.id;

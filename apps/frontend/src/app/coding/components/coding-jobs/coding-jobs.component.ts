@@ -166,7 +166,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
     if (job.assignedVariableBundles && job.assignedVariableBundles.length > 0) {
       const count = job.assignedVariableBundles.length;
       const maxToShow = 2;
-      const bundleNames = job.assignedVariableBundles.map(b => b.name);
+      const bundleNames = job.assignedVariableBundles.map(b => b.name || 'unbekannt');
 
       if (bundleNames.length <= maxToShow) {
         return `${count} (${bundleNames.join(', ')})`;
@@ -185,7 +185,11 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
     }
 
     const maxToShow = 3;
-    const variableNames = assignedVariables.map(v => `${v.unitName}_${v.variableId}`);
+    const variableNames = assignedVariables.map(v => {
+      const unitName = v.unitName || 'unbekannt';
+      const variableId = v.variableId || 'unbekannt';
+      return `${unitName}_${variableId}`;
+    });
 
     if (variableNames.length <= maxToShow) {
       return variableNames.join(', ');
@@ -199,7 +203,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
       return 'Keine Variablenbündel';
     }
     const maxToShow = 3;
-    const bundleNames = bundles.map(b => b.name);
+    const bundleNames = bundles.map(b => b.name || 'unbekannt');
 
     if (bundleNames.length <= maxToShow) {
       return bundleNames.join(', ');
@@ -210,15 +214,27 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
 
   getFullVariables(job: CodingJob): string {
     if (job.assignedVariables && job.assignedVariables.length > 0) {
-      const variableNames = job.assignedVariables.map(v => `${v.unitName}_${v.variableId}`);
+      const variableNames = job.assignedVariables.map(v => {
+        const unitName = v.unitName || 'unbekannt';
+        const variableId = v.variableId || 'unbekannt';
+        return `${unitName}_${variableId}`;
+      });
       return `Variablen (${job.assignedVariables.length}): ${variableNames.join(', ')}`;
     }
     if (job.variables && job.variables.length > 0) {
-      return job.variables.map(v => `${v.unitName}_${v.variableId}`).join(', ');
+      return job.variables.map(v => {
+        const unitName = v.unitName || 'unbekannt';
+        const variableId = v.variableId || 'unbekannt';
+        return `${unitName}_${variableId}`;
+      }).join(', ');
     }
     const cachedDetails = this.jobDetailsCache.get(job.id);
     if (cachedDetails && cachedDetails.variables && cachedDetails.variables.length > 0) {
-      return cachedDetails.variables.map(v => `${v.unitName}_${v.variableId}`).join(', ');
+      return cachedDetails.variables.map(v => {
+        const unitName = v.unitName || 'unbekannt';
+        const variableId = v.variableId || 'unbekannt';
+        return `${unitName}_${variableId}`;
+      }).join(', ');
     }
 
     return 'Keine Variablen zugewiesen';
@@ -226,17 +242,17 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
 
   getFullVariableBundles(job: CodingJob): string {
     if (job.assignedVariableBundles && job.assignedVariableBundles.length > 0) {
-      const bundleNames = job.assignedVariableBundles.map(b => b.name);
+      const bundleNames = job.assignedVariableBundles.map(b => b.name || 'unbekannt');
       return `Variablen-Bündel (${job.assignedVariableBundles.length}): ${bundleNames.join(', ')}`;
     }
 
     if (job.variableBundles && job.variableBundles.length > 0) {
-      return job.variableBundles.map(b => b.name).join(', ');
+      return job.variableBundles.map(b => b.name || 'unbekannt').join(', ');
     }
 
     const cachedDetails = this.jobDetailsCache.get(job.id);
     if (cachedDetails && cachedDetails.variableBundles && cachedDetails.variableBundles.length > 0) {
-      return cachedDetails.variableBundles.map(b => b.name).join(', ');
+      return cachedDetails.variableBundles.map(b => b.name || 'unbekannt').join(', ');
     }
 
     return 'Keine Variablen-Bündel zugewiesen';
@@ -282,32 +298,20 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
 
       dialogRef.afterClosed().subscribe(result => {
         if (result) {
-          const currentData = this.dataSource.data;
-          const index = currentData.findIndex(job => job.id === result.id);
-
-          if (index !== -1) {
-            // Preserve the original createdAt and ensure updatedAt is a Date object
-            const updatedData = [...currentData];
-            const now = new Date();
-
-            // Handle createdAt date properly
-            let createdAtDate = now;
-            if (selectedJob.createdAt instanceof Date) {
-              createdAtDate = selectedJob.createdAt;
-            } else if (selectedJob.createdAt) {
-              createdAtDate = new Date(selectedJob.createdAt);
-            }
-
-            updatedData[index] = {
-              ...result,
-              createdAt: createdAtDate,
-              updatedAt: now
-            };
-
-            this.dataSource.data = updatedData;
-
-            this.snackBar.open(`Kodierjob "${result.name}" wurde aktualisiert`, 'Schließen', { duration: 3000 });
+          const workspaceId = this.appService.selectedWorkspaceId;
+          if (!workspaceId) {
+            this.snackBar.open('Kein Workspace ausgewählt', 'Schließen', { duration: 3000 });
+            return;
           }
+          this.backendService.updateCodingJob(workspaceId, result.id, result).subscribe({
+            next: updatedJob => {
+              this.loadCodingJobs();
+              this.snackBar.open(`Kodierjob "${updatedJob.name}" wurde aktualisiert`, 'Schließen', { duration: 3000 });
+            },
+            error: () => {
+              this.snackBar.open(`Fehler beim Aktualisieren von Kodierjob "${result.name}"`, 'Schließen', { duration: 3000 });
+            }
+          });
         }
       });
     }
