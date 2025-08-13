@@ -134,6 +134,10 @@ export class CodingJobDialogComponent implements OnInit {
       next: coders => {
         this.availableCoders = coders;
         this.isLoadingAvailableCoders = false;
+        if (this.data.isEdit && this.data.codingJob?.assignedCoders) {
+          const preSelectedCoders = coders.filter(coder => this.data.codingJob?.assignedCoders?.includes(coder.id));
+          this.selectedCoders = new SelectionModel<Coder>(true, preSelectedCoders);
+        }
       },
       error: () => {
         this.isLoadingAvailableCoders = false;
@@ -300,6 +304,14 @@ export class CodingJobDialogComponent implements OnInit {
     return this.data.codingJob.variableBundles.some(
       originalBundle => originalBundle.id === bundle.id
     );
+  }
+
+  isCoderOriginallyAssigned(coder: Coder): boolean {
+    if (!this.data.codingJob?.assignedCoders) {
+      return false;
+    }
+
+    return this.data.codingJob.assignedCoders.includes(coder.id);
   }
 
   /** Gets the number of variables in a bundle */

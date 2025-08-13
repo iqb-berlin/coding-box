@@ -40,8 +40,8 @@ export class CodingJobService {
     limit: number = 10
   ): Promise<{ data: (CodingJob & {
       assignedCoders?: number[];
-      assignedVariables?: string[];
-      assignedVariableBundles?: string[]
+      assignedVariables?: { unitName: string; variableId: string }[];
+      assignedVariableBundles?: { name: string; variables: { unitName: string; variableId: string }[] }[]
     })[]; total: number; page: number; limit: number }> {
     const validPage = page > 0 ? page : 1;
     const validLimit = limit > 0 ? limit : 10;
@@ -82,21 +82,27 @@ export class CodingJobService {
       codersByJobId.get(coder.coding_job_id)!.push(coder.user_id);
     });
 
-    const variablesByJobId = new Map<number, string[]>();
+    const variablesByJobId = new Map<number, { unitName: string; variableId: string }[]>();
     allVariables.forEach(variable => {
       if (!variablesByJobId.has(variable.coding_job_id)) {
         variablesByJobId.set(variable.coding_job_id, []);
       }
-      variablesByJobId.get(variable.coding_job_id)!.push(variable.variable_id);
+      variablesByJobId.get(variable.coding_job_id)!.push({
+        unitName: variable.unit_name,
+        variableId: variable.variable_id
+      });
     });
 
-    const variableBundlesByJobId = new Map<number, string[]>();
+    const variableBundlesByJobId = new Map<number, { name: string; variables: { unitName: string; variableId: string }[] }[]>();
     variableBundleEntities.forEach(bundleAssignment => {
       if (!variableBundlesByJobId.has(bundleAssignment.coding_job_id)) {
         variableBundlesByJobId.set(bundleAssignment.coding_job_id, []);
       }
       if (bundleAssignment.variable_bundle?.name) {
-        variableBundlesByJobId.get(bundleAssignment.coding_job_id)!.push(bundleAssignment.variable_bundle.name);
+        variableBundlesByJobId.get(bundleAssignment.coding_job_id)!.push({
+          name: bundleAssignment.variable_bundle.name,
+          variables: bundleAssignment.variable_bundle.variables || []
+        });
       }
     });
 
