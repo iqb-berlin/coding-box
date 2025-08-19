@@ -3,21 +3,21 @@ CMD ?= status
 
 include $(CODING_BOX_BASE_DIR)/.env.coding-box
 
-## exports all variables (especially those of the included .env.coding-box file!)
+# exports all variables (especially those of the included .env.coding-box file!)
 .EXPORT_ALL_VARIABLES:
 
-## prevents collisions of make target names with possible file names
+# prevents collisions of make target names with possible file names
 .PHONY: coding-box-up coding-box-down coding-box-start coding-box-stop coding-box-status coding-box-logs\
 	coding-box-config coding-box-system-prune coding-box-volumes-prune coding-box-images-clean\
 	coding-box-liquibase-status coding-box-connect-db coding-box-dump-all coding-box-restore-all coding-box-dump-db\
-	coding-box-restore-db coding-box-dump-db-data-only coding-box-restore-db-data-only coding-box-update\
-	coding-box-redis-monitor coding-box-redis-info coding-box-redis-stats coding-box-redis-ping\
-	coding-box-redis-flush-all coding-box-redis-flush-db coding-box-redis-cli
+	coding-box-restore-db coding-box-dump-db-data-only coding-box-restore-db-data-only coding-box-export-backend-vol\
+	coding-box-import-backend-vol coding-box-redis-monitor coding-box-redis-info coding-box-redis-stats\
+	coding-box-redis-ping coding-box-redis-flush-all coding-box-redis-flush-db coding-box-redis-cli coding-box-update
 
-## disables printing the recipe of a make target before executing it
+# disables printing the recipe of a make target before executing it
 .SILENT: prod-images-clean
 
-## Pull newest images, create and start docker containers
+# Pull newest images, create and start docker containers
 coding-box-up:
 	@if [ ! -f $(CODING_BOX_BASE_DIR)/config/frontend/default.conf.template ]; then\
 		cp\
@@ -29,92 +29,92 @@ coding-box-up:
 	fi
 	@if test $(REGISTRY_PATH); then printf "Login %s\n" $(REGISTRY_PATH); docker login $(REGISTRY_PATH); fi
 	docker compose\
+			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.prod.yaml\
-			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 		pull
 	@if test $(REGISTRY_PATH); then docker logout $(REGISTRY_PATH); fi
 	docker compose\
+			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.prod.yaml\
-			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 		up -d
 
-## Stop and remove docker containers
+# Stop and remove docker containers
 coding-box-down:
 	docker compose\
+			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.prod.yaml\
-			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 		down
 
-## Start docker containers
-# Param (optional): SERVICE - Start the specified service only, e.g. `make coding-box-start SERVICE=db`
+# Start docker containers
+## Param (optional): SERVICE - Start the specified service only, e.g. `make coding-box-start SERVICE=db`
 coding-box-start:
 	docker compose\
+			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.prod.yaml\
-			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 		start $(SERVICE)
 
-## Stop docker containers
-# Param (optional): SERVICE - Stop the specified service only, e.g. `make coding-box-stop SERVICE=db`
+# Stop docker containers
+## Param (optional): SERVICE - Stop the specified service only, e.g. `make coding-box-stop SERVICE=db`
 coding-box-stop:
 	docker compose\
+			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.prod.yaml\
-			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 		stop $(SERVICE)
 
-## Show status of containers
-# Param (optional): SERVICE - Show status of the specified service only, e.g. `make coding-box-status SERVICE=db`
+# Show status of containers
+## Param (optional): SERVICE - Show status of the specified service only, e.g. `make coding-box-status SERVICE=db`
 coding-box-status:
 	docker compose\
+			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.prod.yaml\
-			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 		ps -a $(SERVICE)
 
-## Show service logs
-# Param (optional): SERVICE - Show log of the specified service only, e.g. `make coding-box-logs SERVICE=db`
+# Show service logs
+## Param (optional): SERVICE - Show log of the specified service only, e.g. `make coding-box-logs SERVICE=db`
 coding-box-logs:
 	docker compose\
+			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.prod.yaml\
-			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 		logs -f $(SERVICE)
 
-## Show services configuration
-# Param (optional): SERVICE - Show config of the specified service only, e.g. `make coding-box-config SERVICE=db`
+# Show services configuration
+## Param (optional): SERVICE - Show config of the specified service only, e.g. `make coding-box-config SERVICE=db`
 coding-box-config:
 	docker compose\
+			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.prod.yaml\
-			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 		config $(SERVICE)
 
-## Remove unused dangling images, containers, networks, etc. Data volumes will stay untouched!
+# Remove unused dangling images, containers, networks, etc. Data volumes will stay untouched!
 coding-box-system-prune:
 	docker system prune
 
-## Remove all anonymous local volumes not used by at least one container.
+# Remove all anonymous local volumes not used by at least one container.
 coding-box-volumes-prune:
 	docker volume prune
 
-## Remove all unused (not just dangling) images!
+# Remove all unused (not just dangling) images!
 coding-box-images-clean: .EXPORT_ALL_VARIABLES
 	if test "$(shell docker images -f reference=${REGISTRY_PATH}iqbberlin/coding-box-* -q)";\
 		then docker rmi $(shell docker images -f reference=${REGISTRY_PATH}iqbberlin/coding-box-* -q);\
 	fi
 
-## Outputs the count of changesets that have not been deployed
-# (https://docs.liquibase.com/commands/status/status.html)
+# Outputs the count of changesets that have not been deployed
+## (https://docs.liquibase.com/commands/status/status.html)
 coding-box-liquibase-status: .EXPORT_ALL_VARIABLES
 	cd $(CODING_BOX_BASE_DIR) &&\
 	docker compose\
+			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.prod.yaml\
-			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 		run --rm liquibase\
 			liquibase\
 					--changelogFile=coding-box.changelog-root.xml\
@@ -125,105 +125,108 @@ coding-box-liquibase-status: .EXPORT_ALL_VARIABLES
 					--logLevel=info\
 				$(CMD)
 
-## Open DB console
+# Open DB console
 coding-box-connect-db: .EXPORT_ALL_VARIABLES
 	docker compose\
+			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.prod.yaml\
-			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 		exec -it db\
 			psql --username=$(POSTGRES_USER) --dbname=$(POSTGRES_DB)
 
-## Extract a database cluster into a script file
-# (https://www.postgresql.org/docs/current/app-pg-dumpall.html)
+# Extract a database cluster into a script file
+## (https://www.postgresql.org/docs/current/app-pg-dumpall.html)
 coding-box-dump-all: coding-box-down .EXPORT_ALL_VARIABLES
 	docker compose\
+			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.prod.yaml\
-			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 		up -d db
 	sleep 5 ## wait until db startup is completed
 	docker compose\
+			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.prod.yaml\
-			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 		exec -it db\
-			pg_dumpall --verbose --username=$(POSTGRES_USER) > $(CODING_BOX_BASE_DIR)/backup/database_dump/all.sql
+			pg_dumpall --verbose --username=$(POSTGRES_USER) > $(CODING_BOX_BASE_DIR)/backup/temp/all.sql
 	docker compose\
+			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.prod.yaml\
-			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 		down
 
-## PostgreSQL interactive terminal reads commands from the dump file all.sql
-# (https://www.postgresql.org/docs/14/app-psql.html)
+# PostgreSQL interactive terminal reads commands from the dump file all.sql
+## (https://www.postgresql.org/docs/14/app-psql.html)
+## Before restoring, delete the DB volume and any existing block storage.
+## Check whether the database already exists and drop it if necessary.
 coding-box-restore-all: coding-box-down .EXPORT_ALL_VARIABLES
 	docker compose\
+			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.prod.yaml\
-			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 		up -d db
 	docker compose\
+			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.prod.yaml\
-			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
-		cp $(CODING_BOX_BASE_DIR)/backup/database_dump/all.sql db:/tmp/
+		cp $(CODING_BOX_BASE_DIR)/backup/temp/all.sql db:/tmp/
 	sleep 10	## wait until file upload is completed
 	docker compose\
+			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.prod.yaml\
-			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 		exec -it db\
 			psql --username=$(POSTGRES_USER) --file=/tmp/all.sql postgres
 	docker compose\
+			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.prod.yaml\
-			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 		down
 
-## Extract a database into a script file or other archive file
-# (https://www.postgresql.org/docs/current/app-pgdump.html)
+# Extract a database into a script file or other archive file
+## (https://www.postgresql.org/docs/current/app-pgdump.html)
 coding-box-dump-db: coding-box-down .EXPORT_ALL_VARIABLES
 	docker compose\
+			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.prod.yaml\
-			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 		up -d db
 	sleep 5 ## wait until db startup is completed
 	docker compose\
+			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.prod.yaml\
-			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 		exec -it db\
 			pg_dump\
 					--verbose\
 					--username=$(POSTGRES_USER)\
-					--format=t\
-				$(POSTGRES_DB) > $(CODING_BOX_BASE_DIR)/backup/database_dump/$(POSTGRES_DB).tar
+					--format=c\
+				$(POSTGRES_DB) > $(CODING_BOX_BASE_DIR)/backup/temp/$(POSTGRES_DB)_dump
 	docker compose\
+			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.prod.yaml\
-			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 		down
 
-## Restore a database from an archive file created by pg_dump
-# (https://www.postgresql.org/docs/current/app-pgrestore.html)
+# Restore a database from an archive file created by pg_dump
+## (https://www.postgresql.org/docs/current/app-pgrestore.html)
+## Before restoring, delete the DB volume and any existing block storage.
 coding-box-restore-db: coding-box-down .EXPORT_ALL_VARIABLES
 	docker compose\
+			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.prod.yaml\
-			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 		up -d db
 	docker compose\
+			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.prod.yaml\
-			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
-		cp $(CODING_BOX_BASE_DIR)/backup/database_dump/$(POSTGRES_DB).tar db:/tmp/
+		cp $(CODING_BOX_BASE_DIR)/backup/temp/$(POSTGRES_DB)_dump db:/tmp/
 	sleep 10	## wait until file upload is completed
 	docker compose\
+			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.prod.yaml\
-			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 		exec -it db\
 			pg_restore\
 					--verbose\
@@ -232,25 +235,25 @@ coding-box-restore-db: coding-box-down .EXPORT_ALL_VARIABLES
 					--dbname=$(POSTGRES_DB)\
 					--clean\
 					--if-exists\
-				/tmp/$(POSTGRES_DB).tar
+				/tmp/$(POSTGRES_DB)_dump
 	docker compose\
+			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.prod.yaml\
-			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 		down
 
-## Extract a database data into a script file or other archive file
-# (https://www.postgresql.org/docs/current/app-pgdump.html)
+# Extract a database data into a script file or other archive file
+## (https://www.postgresql.org/docs/current/app-pgdump.html)
 coding-box-dump-db-data-only: coding-box-down .EXPORT_ALL_VARIABLES
 	docker compose\
+			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.prod.yaml\
-			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 		up -d db liquibase
 	docker compose\
+			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.prod.yaml\
-			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 		exec -it db\
 			pg_dump\
 					--verbose\
@@ -258,32 +261,32 @@ coding-box-dump-db-data-only: coding-box-down .EXPORT_ALL_VARIABLES
 					--exclude-table=public.databasechangelog\
 					--exclude-table=public.databasechangeloglock\
 					--username=$(POSTGRES_USER)\
-					--format=t\
-			$(POSTGRES_DB) > $(CODING_BOX_BASE_DIR)/backup/database_dump/$(POSTGRES_DB)_data.tar
+					--format=c\
+			$(POSTGRES_DB) > $(CODING_BOX_BASE_DIR)/backup/temp/$(POSTGRES_DB)_data_dump
 	docker compose\
+			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.prod.yaml\
-			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 		down
 
-## Restore a database data from an archive file created by pg_dump
-# (https://www.postgresql.org/docs/current/app-pgrestore.html)
+# Restore a database data from an archive file created by pg_dump
+## (https://www.postgresql.org/docs/current/app-pgrestore.html)
 coding-box-restore-db-data-only: coding-box-down .EXPORT_ALL_VARIABLES
 	docker compose\
+			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.prod.yaml\
-			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 		up -d db liquibase
 	docker compose\
+			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.prod.yaml\
-			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
-		cp $(CODING_BOX_BASE_DIR)/backup/database_dump/$(POSTGRES_DB)_data.tar db:/tmp/
+		cp $(CODING_BOX_BASE_DIR)/backup/temp/$(POSTGRES_DB)_data_dump db:/tmp/
 	sleep 10	## wait until file upload is completed
 	docker compose\
+			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.prod.yaml\
-			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 		exec -it db\
 			pg_restore\
 					--verbose\
@@ -292,14 +295,41 @@ coding-box-restore-db-data-only: coding-box-down .EXPORT_ALL_VARIABLES
 					--disable-triggers\
 					--username=$(POSTGRES_USER)\
 					--dbname=$(POSTGRES_DB)\
-				/tmp/$(POSTGRES_DB)_data.tar
+				/tmp/$(POSTGRES_DB)_data_dump
 	docker compose\
+			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.prod.yaml\
-			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 		down
 
-## Monitor Redis in real-time
+# Creates a gzip'ed tarball in temporary backup directory from backend data (backend has to be up!)
+coding-box-export-backend-vol:
+	docker compose\
+			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
+			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
+			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.prod.yaml\
+		up -d backend
+	sleep 5 ## wait until backend startup is completed
+	docker run --rm\
+			--volumes-from $(notdir $(CURDIR))-backend-1\
+			--volume $(CODING_BOX_BASE_DIR)/backup/temp:/tmp\
+		busybox tar cvzf /tmp/backend_vol.tar.gz /usr/src/coding-box-api/packages
+
+# Extracts a gzip'ed tarball from temporary backup directory into backend data volume (backend has to be up!)
+coding-box-import-backend-vol:
+	docker compose\
+			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
+			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
+			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.prod.yaml\
+		up -d backend
+	sleep 5 ## wait until backend startup is completed
+	docker run --rm\
+			--volumes-from $(notdir $(CURDIR))-backend-1\
+			--volume $(CODING_BOX_BASE_DIR)/backup/temp:/tmp\
+		busybox sh\
+			-c "cd /usr/src/coding-box-api/packages && tar xvzf /tmp/backend_vol.tar.gz --strip-components 4"
+
+# Monitor Redis in real-time
 coding-box-redis-monitor:
 	docker compose\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
@@ -307,7 +337,7 @@ coding-box-redis-monitor:
 			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 		exec redis redis-cli monitor
 
-## Display Redis server information
+# Display Redis server information
 coding-box-redis-info:
 	docker compose\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
@@ -315,7 +345,7 @@ coding-box-redis-info:
 			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 		exec redis redis-cli info
 
-## Display Redis statistics
+# Display Redis statistics
 coding-box-redis-stats:
 	docker compose\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
@@ -323,7 +353,7 @@ coding-box-redis-stats:
 			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 		exec redis redis-cli info stats
 
-## Check Redis connection status
+# Check Redis connection status
 coding-box-redis-ping:
 	docker compose\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
@@ -331,7 +361,7 @@ coding-box-redis-ping:
 			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 		exec redis redis-cli ping
 
-## Flush all Redis databases
+# Flush all Redis databases
 coding-box-redis-flush-all:
 	docker compose\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
@@ -339,7 +369,7 @@ coding-box-redis-flush-all:
 			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 		exec redis redis-cli flushall
 
-## Flush the current Redis database
+# Flush the current Redis database
 coding-box-redis-flush-db:
 	docker compose\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
@@ -347,7 +377,7 @@ coding-box-redis-flush-db:
 			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 		exec redis redis-cli flushdb
 
-## Open Redis CLI
+# Open Redis CLI
 coding-box-redis-cli:
 	docker compose\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
@@ -355,5 +385,6 @@ coding-box-redis-cli:
 			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 		exec -it redis redis-cli
 
+# Start application update procedure
 coding-box-update:
 	bash $(CODING_BOX_BASE_DIR)/scripts/update.sh
