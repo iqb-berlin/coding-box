@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 
+declare UPDATE_OPTION
 declare SOURCE_VERSION
-declare TARGET_VERSION="${1}"
+declare TARGET_VERSION
 
 declare APP_NAME='coding-box'
 declare APP_DIR="${PWD}"
@@ -94,7 +95,6 @@ create_app_dir_backup() {
 load_docker_environment_variables() {
   # shellcheck source=.env.studio-lite
   source ".env.${APP_NAME}"
-  SOURCE_VERSION=${TAG}
 }
 
 data_services_up() {
@@ -410,9 +410,8 @@ run_update_script_in_selected_version() {
       printf "compare it with the old one\n(e.g.: 'diff %s %s').\n\n" \
         "scripts/update_${APP_NAME}.sh" "backup/release/${SOURCE_VERSION}/scripts/update_${APP_NAME}.sh"
 
-      printf "  If you want to resume this update process, please type: 'bash scripts/update_%s.sh %s'\n\n" \
-        "${APP_NAME}" "${TARGET_VERSION}"
-
+      printf "  If you want to resume this update process, please type: 'bash scripts/update_%s.sh -s %s -t %s'\n\n" \
+        "${APP_NAME}" "${SOURCE_VERSION}" "${TARGET_VERSION}"
       printf "'%s' update script finished.\n\n" "${APP_NAME}"
 
       exit 0
@@ -420,7 +419,7 @@ run_update_script_in_selected_version() {
 
     printf "Update script modification check done.\n\n"
 
-    bash "${APP_DIR}/scripts/update_${APP_NAME}.sh" "${TARGET_VERSION}"
+    bash "${APP_DIR}/scripts/update_${APP_NAME}.sh" -s "${SOURCE_VERSION}" -t "${TARGET_VERSION}"
     exit ${?}
 
   else
@@ -800,16 +799,15 @@ main() {
       if [ "${choice}" = 1 ]; then
         printf "\n=== UPDATE '%s' application ===\n\n" "${APP_NAME}"
 
-        load_docker_environment_variables
         get_new_release_version
         create_app_dir_backup
+        load_docker_environment_variables
         create_data_backup
         run_complementary_migration_scripts
         run_update_script_in_selected_version
         prepare_installation_dir
         update_files
         check_environment_file_modifications
-        run_complementary_migration_scripts
         check_config_files_modifications
         customize_settings
         finalize_update
@@ -843,5 +841,57 @@ main() {
     finalize_update
   fi
 }
+
+display_usage() {
+  printf "Usage: %s <-s source_release> [-t <target_release>]\n" "${0}"
+  printf "Try '%s -h' for more information.\n\n" "${0}"
+
+  exit 1
+}
+
+display_help() {
+  printf "Usage: %s <-s source_release> [-t <target_release>]\n\n" "${0}"
+  printf "Options:\n"
+  printf "  -s  Specify the current source release tag to be updated from.\n"
+  printf "  -t  Specify the upcoming target release tag to be updated to.\n"
+  printf "      WARNING: Only set the '-t' option if you want to resume an interrupted update process!\n"
+  printf "  -h  Display this help information.\n\n"
+
+  exit 0
+}
+
+while getopts s:t:h UPDATE_OPTION; do
+  case "${UPDATE_OPTION}" in
+  s)
+    if check_version_tag_exists "${OPTARG}"; then
+      SOURCE_VERSION="${OPTARG}"
+    else
+      printf "This source release tag does not exist.\n"
+      exit 1
+    fi
+    ;;
+  t)
+    if check_version_tag_exists "${OPTARG}"; then
+      TARGET_VERSION="${OPTARG}"
+    else
+      printf "This target release tag does not exist.\n"
+      exit 1
+    fi
+    ;;
+  h)
+    display_help
+    ;;
+  \?)
+    display_usage
+    ;;
+  esac
+done
+
+shift $((OPTIND - 1))
+
+if [ -z "${SOURCE_VERSION}" ]; then
+  printf "Error: '-s' or '-h' option is required.\n\n"
+  display_usage
+fi
 
 main
