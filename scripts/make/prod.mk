@@ -387,4 +387,4 @@ coding-box-redis-cli:
 
 # Start application update procedure
 coding-box-update:
-	bash $(CODING_BOX_BASE_DIR)/scripts/update.sh
+	bash $(CODING_BOX_BASE_DIR)/scripts/update.sh -s $(TAG)
