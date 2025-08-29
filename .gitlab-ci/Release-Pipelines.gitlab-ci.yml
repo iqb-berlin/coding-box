@@ -25,7 +25,7 @@
 
 .release_rules:
   rules:
-    - if: $CI_COMMIT_TAG =~ /^(?<MAJOR>(?:0|(?:[1-9]\d*)))\.(?<MINOR>(?:0|(?:[1-9]\d*)))\.(?<PATCH>(?:0|(?:[1-9]\d*)))$/
+    - if: "$CI_COMMIT_TAG =~ $RELEASE_RULES_REGEX"
 
 
 check-main-pr-rules:
@@ -97,11 +97,9 @@ check-release-rules:
   allow_failure: true
   rules:
     - !reference [ .release_rules, rules ]
-  before_script:
-    - RELEASE_REGEX="^((0|([1-9][0-9]*)))\.((0|([1-9][0-9]*)))\.((0|([1-9][0-9]*)))$"
   script:
-    - echo ${RELEASE_REGEX}
-    - if [[ ${CI_COMMIT_TAG} =~ ${RELEASE_REGEX} ]];
+    - echo ${RELEASE_SCRIPT_REGEX}
+    - if [[ ${CI_COMMIT_TAG} =~ ${RELEASE_SCRIPT_REGEX} ]];
       then echo "${CI_COMMIT_TAG} is a valid release tag.";
       else echo "${CI_COMMIT_TAG} is not a valid release tag!"; fi
 
