@@ -5,7 +5,7 @@ export function initializer(keycloak: KeycloakService): () => Promise<boolean> {
   if (environment.production) {
     const options: KeycloakOptions = {
       config: {
-        url: 'https://www.iqb-login.de',
+        url: 'https://keycloak.iqb-kodierbox.de',
         realm: 'iqb',
         clientId: 'coding-box'
       },
@@ -22,7 +22,7 @@ export function initializer(keycloak: KeycloakService): () => Promise<boolean> {
   }
   const options: KeycloakOptions = {
     config: {
-      url: 'https://www.iqb-login.de',
+      url: 'https://keycloak.iqb-kodierbox.de',
       realm: 'iqb',
       clientId: 'coding-box'
     },
