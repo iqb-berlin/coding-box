@@ -1,7 +1,10 @@
 import { inject, Injectable } from '@angular/core';
 import Keycloak, { KeycloakProfile, KeycloakTokenParsed } from 'keycloak-js';
 
-@Injectable()
+@Injectable({
+  providedIn: 'root'
+})
+
 export class AuthService {
   private readonly keycloak = inject(Keycloak);
   getLoggedUser(): KeycloakTokenParsed | undefined {
