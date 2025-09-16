@@ -33,7 +33,6 @@ export class ReplayStatisticsService {
     errorMessage?: string;
   }): Promise<ReplayStatistics> {
     try {
-      // Map camelCase properties to snake_case properties to match the entity
       const mappedData = {
         workspace_id: data.workspaceId,
         unit_id: data.unitId,
@@ -78,11 +77,21 @@ export class ReplayStatisticsService {
    */
   async getReplayFrequencyByUnit(workspaceId: number): Promise<Record<string, number>> {
     try {
-      const statistics = await this.getReplayStatistics(workspaceId);
-      return statistics.reduce((acc, stat) => {
-        acc[stat.unit_id] = (acc[stat.unit_id] || 0) + 1;
-        return acc;
-      }, {} as Record<string, number>);
+      const result = await this.replayStatisticsRepository.createQueryBuilder('stats')
+        .select([
+          'stats.unit_id',
+          'COUNT(*) as count'
+        ])
+        .where('stats.workspace_id = :workspaceId', { workspaceId })
+        .groupBy('stats.unit_id')
+        .getRawMany();
+
+      const frequency: Record<string, number> = {};
+      result.forEach(row => {
+        frequency[row.stats_unit_id] = parseInt(row.count, 10);
+      });
+
+      return frequency;
     } catch (error) {
       this.logger.error(`Error calculating replay frequency: ${error.message}`, error.stack);
       throw error;
@@ -106,16 +115,24 @@ export class ReplayStatisticsService {
       unitAverages?: Record<string, number>;
     }> {
     try {
-      const query = this.replayStatisticsRepository.createQueryBuilder('stats')
+      const baseQuery = this.replayStatisticsRepository.createQueryBuilder('stats')
         .where('stats.workspace_id = :workspaceId', { workspaceId });
 
       if (unitId) {
-        query.andWhere('stats.unit_id = :unitId', { unitId });
+        baseQuery.andWhere('stats.unit_id = :unitId', { unitId });
       }
 
-      const statistics = await query.getMany();
+      const aggregateQuery = baseQuery.clone()
+        .select([
+          'MIN(stats.duration_milliseconds) as min',
+          'MAX(stats.duration_milliseconds) as max',
+          'AVG(stats.duration_milliseconds) as average',
+          'COUNT(*) as count'
+        ]);
 
-      if (statistics.length === 0) {
+      const aggregateResult = await aggregateQuery.getRawOne();
+
+      if (!aggregateResult || aggregateResult.count === '0') {
         return {
           min: 0,
           max: 0,
@@ -125,35 +142,55 @@ export class ReplayStatisticsService {
         };
       }
 
-      // Calculate min, max, and average
-      const durations = statistics.map(stat => stat.duration_milliseconds);
-      const min = Math.min(...durations);
-      const max = Math.max(...durations);
-      const average = durations.reduce((sum, duration) => sum + duration, 0) / durations.length;
+      const min = parseInt(aggregateResult.min, 10);
+      const max = parseInt(aggregateResult.max, 10);
+      const average = parseFloat(aggregateResult.average);
 
-      // Create duration distribution (in 10-second buckets)
       const distribution: Record<string, number> = {};
-      durations.forEach(duration => {
-        const bucket = Math.floor(duration / 10) * 10;
-        const bucketKey = `${bucket}-${bucket + 10}`;
-        distribution[bucketKey] = (distribution[bucketKey] || 0) + 1;
-      });
+      const chunkSize = 10000; // Process 10k records at a time
+      let offset = 0;
+      let hasMore = true;
 
-      // Calculate average duration per unit if not filtering by unit
-      let unitAverages: Record<string, number> | undefined;
-      if (!unitId) {
-        unitAverages = {};
-        const unitDurations: Record<string, number[]> = {};
+      while (hasMore) {
+        const chunk = await baseQuery.clone()
+          .select(['stats.duration_milliseconds'])
+          .limit(chunkSize)
+          .offset(offset)
+          .getRawMany();
 
-        statistics.forEach(stat => {
-          if (!unitDurations[stat.unit_id]) {
-            unitDurations[stat.unit_id] = [];
-          }
-          unitDurations[stat.unit_id].push(stat.duration_milliseconds);
+        if (chunk.length === 0) {
+          hasMore = false;
+          break;
+        }
+
+        chunk.forEach(row => {
+          const duration = parseInt(row.stats_duration_milliseconds, 10);
+          const bucket = Math.floor(duration / 10000) * 10000; // 10-second buckets in milliseconds
+          const bucketKey = `${bucket}-${bucket + 10000}`;
+          distribution[bucketKey] = (distribution[bucketKey] || 0) + 1;
         });
 
-        Object.entries(unitDurations).forEach(([unitKey, durationArray]) => {
-          unitAverages![unitKey] = durationArray.reduce((sum, duration) => sum + duration, 0) / durationArray.length;
+        offset += chunkSize;
+        if (chunk.length < chunkSize) {
+          hasMore = false;
+        }
+      }
+
+      let unitAverages: Record<string, number> | undefined;
+      if (!unitId) {
+        const unitAveragesQuery = this.replayStatisticsRepository.createQueryBuilder('stats')
+          .select([
+            'stats.unit_id',
+            'AVG(stats.duration_milliseconds) as average'
+          ])
+          .where('stats.workspace_id = :workspaceId', { workspaceId })
+          .groupBy('stats.unit_id');
+
+        const unitAveragesResult = await unitAveragesQuery.getRawMany();
+
+        unitAverages = {};
+        unitAveragesResult.forEach(row => {
+          unitAverages![row.stats_unit_id] = parseFloat(row.average);
         });
       }
 
@@ -177,15 +214,22 @@ export class ReplayStatisticsService {
    */
   async getReplayDistributionByDay(workspaceId: number): Promise<Record<string, number>> {
     try {
-      const statistics = await this.getReplayStatistics(workspaceId);
+      const result = await this.replayStatisticsRepository.createQueryBuilder('stats')
+        .select([
+          'DATE(stats.timestamp) as day',
+          'COUNT(*) as count'
+        ])
+        .where('stats.workspace_id = :workspaceId', { workspaceId })
+        .groupBy('DATE(stats.timestamp)')
+        .orderBy('day', 'ASC')
+        .getRawMany();
 
-      // Group replays by day (YYYY-MM-DD format)
-      return statistics.reduce((acc, stat) => {
-        // Format the date as YYYY-MM-DD
-        const day = stat.timestamp.toISOString().split('T')[0];
-        acc[day] = (acc[day] || 0) + 1;
-        return acc;
-      }, {} as Record<string, number>);
+      const distribution: Record<string, number> = {};
+      result.forEach(row => {
+        distribution[row.day] = parseInt(row.count, 10);
+      });
+
+      return distribution;
     } catch (error) {
       this.logger.error(`Error calculating replay distribution by day: ${error.message}`, error.stack);
       throw error;
@@ -199,18 +243,23 @@ export class ReplayStatisticsService {
    */
   async getReplayDistributionByHour(workspaceId: number): Promise<Record<string, number>> {
     try {
-      const statistics = await this.getReplayStatistics(workspaceId);
-
       // Initialize all hours with 0 count
       const hourDistribution: Record<string, number> = {};
       for (let i = 0; i < 24; i++) {
         hourDistribution[i.toString()] = 0;
       }
 
-      // Count replays by hour
-      statistics.forEach(stat => {
-        const hour = stat.timestamp.getHours().toString();
-        hourDistribution[hour] += 1;
+      const result = await this.replayStatisticsRepository.createQueryBuilder('stats')
+        .select([
+          'EXTRACT(HOUR FROM stats.timestamp) as hour',
+          'COUNT(*) as count'
+        ])
+        .where('stats.workspace_id = :workspaceId', { workspaceId })
+        .groupBy('EXTRACT(HOUR FROM stats.timestamp)')
+        .getRawMany();
+
+      result.forEach(row => {
+        hourDistribution[row.hour.toString()] = parseInt(row.count, 10);
       });
 
       return hourDistribution;
@@ -233,9 +282,16 @@ export class ReplayStatisticsService {
     commonErrors: Array<{ message: string; count: number }>;
   }> {
     try {
-      const statistics = await this.getReplayStatistics(workspaceId);
+      const overallStats = await this.replayStatisticsRepository.createQueryBuilder('stats')
+        .select([
+          'COUNT(*) as total',
+          'COUNT(CASE WHEN stats.success = true THEN 1 END) as successful',
+          'COUNT(CASE WHEN stats.success = false THEN 1 END) as failed'
+        ])
+        .where('stats.workspace_id = :workspaceId', { workspaceId })
+        .getRawOne();
 
-      if (statistics.length === 0) {
+      if (!overallStats || overallStats.total === '0') {
         return {
           successRate: 0,
           totalReplays: 0,
@@ -245,24 +301,29 @@ export class ReplayStatisticsService {
         };
       }
 
-      const totalReplays = statistics.length;
-      const successfulReplays = statistics.filter(stat => stat.success).length;
-      const failedReplays = totalReplays - successfulReplays;
+      const totalReplays = parseInt(overallStats.total, 10);
+      const successfulReplays = parseInt(overallStats.successful, 10);
+      const failedReplays = parseInt(overallStats.failed, 10);
       const successRate = (successfulReplays / totalReplays) * 100;
 
-      // Count occurrences of each error message
-      const errorCounts: Record<string, number> = {};
-      statistics.forEach(stat => {
-        if (!stat.success && stat.error_message) {
-          errorCounts[stat.error_message] = (errorCounts[stat.error_message] || 0) + 1;
-        }
-      });
+      const errorResult = await this.replayStatisticsRepository.createQueryBuilder('stats')
+        .select([
+          'stats.error_message as message',
+          'COUNT(*) as count'
+        ])
+        .where('stats.workspace_id = :workspaceId', { workspaceId })
+        .andWhere('stats.success = false')
+        .andWhere('stats.error_message IS NOT NULL')
+        .andWhere('stats.error_message != \'\'')
+        .groupBy('stats.error_message')
+        .orderBy('count', 'DESC')
+        .limit(10)
+        .getRawMany();
 
-      // Convert to array and sort by count (descending)
-      const commonErrors = Object.entries(errorCounts)
-        .map(([message, count]) => ({ message, count }))
-        .sort((a, b) => b.count - a.count)
-        .slice(0, 10); // Get top 10 most common errors
+      const commonErrors = errorResult.map(row => ({
+        message: row.message,
+        count: parseInt(row.count, 10)
+      }));
 
       return {
         successRate,
@@ -284,17 +345,22 @@ export class ReplayStatisticsService {
    */
   async getFailureDistributionByUnit(workspaceId: number): Promise<Record<string, number>> {
     try {
-      const statistics = await this.getReplayStatistics(workspaceId);
+      const result = await this.replayStatisticsRepository.createQueryBuilder('stats')
+        .select([
+          'stats.unit_id',
+          'COUNT(*) as count'
+        ])
+        .where('stats.workspace_id = :workspaceId', { workspaceId })
+        .andWhere('stats.success = false')
+        .groupBy('stats.unit_id')
+        .getRawMany();
 
-      // Filter for failed replays only
-      const failedReplays = statistics.filter(stat => !stat.success);
+      const distribution: Record<string, number> = {};
+      result.forEach(row => {
+        distribution[row.stats_unit_id] = parseInt(row.count, 10);
+      });
 
-      // Group failures by unit
-      return failedReplays.reduce((acc, stat) => {
-        const unitId = stat.unit_id;
-        acc[unitId] = (acc[unitId] || 0) + 1;
-        return acc;
-      }, {} as Record<string, number>);
+      return distribution;
     } catch (error) {
       this.logger.error(`Error calculating failure distribution by unit: ${error.message}`, error.stack);
       throw error;
@@ -308,18 +374,23 @@ export class ReplayStatisticsService {
    */
   async getFailureDistributionByDay(workspaceId: number): Promise<Record<string, number>> {
     try {
-      const statistics = await this.getReplayStatistics(workspaceId);
+      const result = await this.replayStatisticsRepository.createQueryBuilder('stats')
+        .select([
+          'DATE(stats.timestamp) as day',
+          'COUNT(*) as count'
+        ])
+        .where('stats.workspace_id = :workspaceId', { workspaceId })
+        .andWhere('stats.success = false')
+        .groupBy('DATE(stats.timestamp)')
+        .orderBy('day', 'ASC')
+        .getRawMany();
 
-      // Filter for failed replays only
-      const failedReplays = statistics.filter(stat => !stat.success);
+      const distribution: Record<string, number> = {};
+      result.forEach(row => {
+        distribution[row.day] = parseInt(row.count, 10);
+      });
 
-      // Group failures by day (YYYY-MM-DD format)
-      return failedReplays.reduce((acc, stat) => {
-        // Format the date as YYYY-MM-DD
-        const day = stat.timestamp.toISOString().split('T')[0];
-        acc[day] = (acc[day] || 0) + 1;
-        return acc;
-      }, {} as Record<string, number>);
+      return distribution;
     } catch (error) {
       this.logger.error(`Error calculating failure distribution by day: ${error.message}`, error.stack);
       throw error;
@@ -333,21 +404,24 @@ export class ReplayStatisticsService {
    */
   async getFailureDistributionByHour(workspaceId: number): Promise<Record<string, number>> {
     try {
-      const statistics = await this.getReplayStatistics(workspaceId);
-
-      // Filter for failed replays only
-      const failedReplays = statistics.filter(stat => !stat.success);
-
       // Initialize all hours with 0 count
       const hourDistribution: Record<string, number> = {};
       for (let i = 0; i < 24; i++) {
         hourDistribution[i.toString()] = 0;
       }
 
-      // Count failures by hour
-      failedReplays.forEach(stat => {
-        const hour = stat.timestamp.getHours().toString();
-        hourDistribution[hour] += 1;
+      const result = await this.replayStatisticsRepository.createQueryBuilder('stats')
+        .select([
+          'EXTRACT(HOUR FROM stats.timestamp) as hour',
+          'COUNT(*) as count'
+        ])
+        .where('stats.workspace_id = :workspaceId', { workspaceId })
+        .andWhere('stats.success = false')
+        .groupBy('EXTRACT(HOUR FROM stats.timestamp)')
+        .getRawMany();
+
+      result.forEach(row => {
+        hourDistribution[row.hour.toString()] = parseInt(row.count, 10);
       });
 
       return hourDistribution;
