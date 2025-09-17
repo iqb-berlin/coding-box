@@ -39,10 +39,19 @@
     </div>
   </div>
 
-  <!-- Regular Coding Management Content -->
   @if (!showManualCoding) {
     <div class="fx-row-space-between-stretch">
-      @if (!isLoadingStatistics) {
+      @if (!statisticsLoaded && !isLoadingStatistics) {
+        <div class="statistics-placeholder">
+          <div class="statistics-icon-container">
+            <button mat-fab color="primary" (click)="fetchCodingStatistics()" matTooltip="Kodierstatistiken laden" class="statistics-load-button">
+              <mat-icon>analytics</mat-icon>
+            </button>
+            <p class="statistics-placeholder-text">Klicken Sie hier, um die Kodierstatistiken zu laden</p>
+          </div>
+        </div>
+      }
+      @if (statisticsLoaded && !isLoadingStatistics) {
         <div class="statistics-card">
           <h2 class="section-title">Kodierstatistiken</h2>
           <p class="section-description">Übersicht über den Status der Kodierung und Antworten</p>
@@ -84,7 +93,7 @@
 
       @if (isLoadingStatistics) {
         <div class="loading-container">
-          <mat-spinner diameter="40"></mat-spinner>
+          <mat-spinner diameter="80" class="large-transparent-spinner"></mat-spinner>
           <p class="loading-text">Lade Kodierstatistiken...</p>
         </div>
       }

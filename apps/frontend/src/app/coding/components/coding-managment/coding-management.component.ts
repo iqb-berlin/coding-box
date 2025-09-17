@@ -28,7 +28,9 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatIcon } from '@angular/material/icon';
-import { MatAnchor, MatButton, MatIconButton } from '@angular/material/button';
+import {
+  MatAnchor, MatButton, MatFabButton, MatIconButton
+} from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { ScrollingModule } from '@angular/cdk/scrolling';
 import { MatDivider } from '@angular/material/divider';
@@ -37,6 +39,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { ContentDialogComponent } from '../../../shared/dialogs/content-dialog/content-dialog.component';
 import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
+import { WorkspaceSettingsService } from '../../../ws-admin/services/workspace-settings.service';
 import { CodingStatistics } from '../../../../../../../api-dto/coding/coding-statistics';
 import { ExportDialogComponent, ExportFormat } from '../export-dialog/export-dialog.component';
 import { Success } from '../../models/success.model';
@@ -73,6 +76,7 @@ import { VariableAnalysisDialogComponent } from '../variable-analysis-dialog/var
     MatIcon,
     MatAnchor,
     MatIconButton,
+    MatFabButton,
     MatTooltipModule,
     MatDivider,
     MatButton,
@@ -85,6 +89,7 @@ import { VariableAnalysisDialogComponent } from '../variable-analysis-dialog/var
 export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestroy {
   private backendService = inject(BackendService);
   private appService = inject(AppService);
+  private workspaceSettingsService = inject(WorkspaceSettingsService);
   private snackBar = inject(MatSnackBar);
   private dialog = inject(MatDialog);
 
@@ -101,6 +106,7 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
   isLoadingStatistics = false;
   isAutoCoding = false;
   showManualCoding = false;
+  statisticsLoaded = false;
   currentStatusFilter: string | null = null;
   pageSizeOptions = [100, 200, 500];
   pageSize = 100;
@@ -118,7 +124,16 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
   }
 
   ngOnInit(): void {
-    this.fetchCodingStatistics();
+    // Check workspace setting to decide whether to auto-fetch coding statistics
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (workspaceId) {
+      this.workspaceSettingsService.getAutoFetchCodingStatistics(workspaceId)
+        .subscribe(autoFetch => {
+          if (autoFetch) {
+            this.fetchCodingStatistics();
+          }
+        });
+    }
 
     this.filterTextChanged
       .pipe(
@@ -163,6 +178,7 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
             )
             .subscribe(statistics => {
               this.codingStatistics = statistics;
+              this.statisticsLoaded = true;
             });
           return;
         }
@@ -179,6 +195,7 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
           .subscribe(status => {
             if (status.status === 'completed' && status.result) {
               this.codingStatistics = status.result;
+              this.statisticsLoaded = true;
             } else if (['failed', 'cancelled', 'paused'].includes(status.status)) {
               this.snackBar.open(`Statistik-Job ${status.status}`, 'Schließen', { duration: 5000, panelClass: ['error-snackbar'] });
             }

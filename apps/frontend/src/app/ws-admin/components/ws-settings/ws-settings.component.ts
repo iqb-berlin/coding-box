@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatButtonModule } from '@angular/material/button';
@@ -8,6 +8,7 @@ import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { CdkTextareaAutosize } from '@angular/cdk/text-field';
 import { Clipboard } from '@angular/cdk/clipboard';
 
@@ -16,6 +17,7 @@ import { WsAccessRightsComponent } from '../ws-access-rights/ws-access-rights.co
 import { JournalComponent } from '../journal/journal.component';
 import { EditMissingsProfilesDialogComponent } from '../../../coding/components/edit-missings-profiles-dialog/edit-missings-profiles-dialog.component';
 import { ReplayStatisticsDialogComponent } from '../replay-statistics-dialog/replay-statistics-dialog.component';
+import { WorkspaceSettingsService } from '../../services/workspace-settings.service';
 
 @Component({
   selector: 'coding-box-ws-settings',
@@ -31,19 +33,33 @@ import { ReplayStatisticsDialogComponent } from '../replay-statistics-dialog/rep
     MatCardModule,
     MatIconModule,
     MatDialogModule,
+    MatSlideToggleModule,
     CdkTextareaAutosize,
     WsAccessRightsComponent,
     JournalComponent
   ]
 })
-export class WsSettingsComponent {
+export class WsSettingsComponent implements OnInit {
   private appService = inject(AppService);
+  private workspaceSettingsService = inject(WorkspaceSettingsService);
   private clipboard = inject(Clipboard);
   private snackBar = inject(MatSnackBar);
   private dialog = inject(MatDialog);
 
   authToken: string | null = null;
   duration = 60;
+  autoFetchCodingStatistics = true; // Default to true for backward compatibility
+
+  ngOnInit(): void {
+    // Load current setting value
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (workspaceId) {
+      this.workspaceSettingsService.getAutoFetchCodingStatistics(workspaceId)
+        .subscribe(enabled => {
+          this.autoFetchCodingStatistics = enabled;
+        });
+    }
+  }
 
   openReplayStatistics(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
@@ -78,6 +94,34 @@ export class WsSettingsComponent {
         width: '900px',
         data: { workspaceId }
       });
+    }
+  }
+
+  toggleAutoFetchCodingStatistics(toggleEvent: { checked: boolean }
+  ): void {
+    this.autoFetchCodingStatistics = toggleEvent.checked;
+    const workspaceId = this.appService.selectedWorkspaceId;
+
+    if (workspaceId) {
+      this.workspaceSettingsService.setAutoFetchCodingStatistics(workspaceId, this.autoFetchCodingStatistics)
+        .subscribe({
+          next: () => {
+            this.snackBar.open(
+              this.autoFetchCodingStatistics ?
+                'Automatisches Laden der Kodierstatistiken aktiviert' :
+                'Automatisches Laden der Kodierstatistiken deaktiviert',
+              'Schließen',
+              { duration: 3000 }
+            );
+          },
+          error: () => {
+            this.snackBar.open('Fehler beim Speichern der Einstellung', 'Schließen', {
+              duration: 3000,
+              panelClass: ['error-snackbar']
+            });
+            this.autoFetchCodingStatistics = !this.autoFetchCodingStatistics;
+          }
+        });
     }
   }
 }
