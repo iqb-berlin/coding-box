@@ -1,4 +1,112 @@
 .replay-container {
   height: 100vh;
   background-color: white;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.print-mode {
+  height: auto;
+  min-height: 100vh;
+}
+
+.booklet-mode {
+  // Add any specific styles for booklet mode here
+}
+
+// Booklet navigation styles
+.booklet-navigation {
+  background-color: #f5f9ff;
+  padding: 12px 20px;
+  border-bottom: 1px solid #e0e0e0;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  z-index: 10;
+}
+
+.navigation-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.nav-button {
+  background-color: #1976d2;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  transition: background-color 0.2s ease;
+
+  &:hover {
+    background-color: #1565c0;
+  }
+
+  &:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
+  }
+}
+
+.prev-button {
+  .nav-icon {
+    margin-right: 8px;
+  }
+}
+
+.next-button {
+  .nav-icon {
+    margin-left: 8px;
+  }
+}
+
+.unit-position {
+  display: flex;
+  align-items: center;
+  font-size: 16px;
+  font-weight: 500;
+  color: #333;
+  background-color: white;
+  padding: 6px 16px;
+  border-radius: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.current-position {
+  color: #1976d2;
+  font-weight: 700;
+}
+
+.position-separator {
+  margin: 0 4px;
+  color: #757575;
+}
+
+.total-units {
+  color: #757575;
+}
+
+// Watermark styles
+.watermark {
+  position: absolute;
+  bottom: 15px;
+  right: 15px;
+  font-size: 14px;
+  color: rgba(0, 0, 0, 0.35);
+  z-index: 100;
+  pointer-events: none;
+  user-select: none;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  max-width: 300px;
+  overflow: hidden;
+  font-weight: 500;
 }

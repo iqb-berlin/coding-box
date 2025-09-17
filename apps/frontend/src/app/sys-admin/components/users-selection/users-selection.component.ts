@@ -13,42 +13,32 @@ import {
   MatTableDataSource
 } from '@angular/material/table';
 import {
-  ViewChild, Component, OnInit, Output, EventEmitter, Input
+  ViewChild, Component, OnInit, SimpleChanges, inject,
+  input,
+  output
 } from '@angular/core';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatSort, MatSortHeader } from '@angular/material/sort';
 import { FormsModule } from '@angular/forms';
-import { TranslateService, TranslateModule } from '@ngx-translate/core';
-import { MatTooltip } from '@angular/material/tooltip';
-import { MatButton } from '@angular/material/button';
+import { TranslateModule } from '@ngx-translate/core';
 import { MatCheckbox } from '@angular/material/checkbox';
 import { SelectionModel } from '@angular/cdk/collections';
-import { JsonPipe } from '@angular/common';
-import { MatIcon } from '@angular/material/icon';
-import { UsersMenuComponent } from '../users-menu/users-menu.component';
 import { HasSelectionValuePipe } from '../../../shared/pipes/hasSelectionValue.pipe';
 import { IsSelectedPipe } from '../../../shared/pipes/isSelected.pipe';
 import { IsAllSelectedPipe } from '../../../shared/pipes/isAllSelected.pipe';
-// eslint-disable-next-line import/no-cycle
-import { WorkspacesComponent } from '../workspaces/workspaces.component';
-import { IsSelectedIdPipe } from '../../../shared/pipes/isSelectedId.pipe';
-import { WorkspacesSelectionComponent } from '../workspaces-selection/workspaces-selection.component';
 import { UserFullDto } from '../../../../../../../api-dto/user/user-full-dto';
 import { WorkspaceInListDto } from '../../../../../../../api-dto/workspaces/workspace-in-list-dto';
 import { BackendService } from '../../../services/backend.service';
-import { AppService } from '../../../services/app.service';
-import { WrappedIconComponent } from '../../../shared/wrapped-icon/wrapped-icon.component';
 import { SearchFilterComponent } from '../../../shared/search-filter/search-filter.component';
 
 @Component({
   selector: 'coding-box-users-selection',
   templateUrl: './users-selection.component.html',
   styleUrls: ['./users-selection.component.scss'],
-  standalone: true,
-  // eslint-disable-next-line max-len
-  imports: [MatTable, MatSort, MatColumnDef, MatHeaderCellDef, MatHeaderCell, MatCheckbox, MatCellDef, MatCell, MatSortHeader, MatHeaderRowDef, MatHeaderRow, MatRowDef, MatRow, MatButton, MatTooltip, WrappedIconComponent, FormsModule, TranslateModule, UsersMenuComponent, HasSelectionValuePipe, IsSelectedPipe, IsAllSelectedPipe, SearchFilterComponent, JsonPipe, WorkspacesComponent, IsSelectedIdPipe, WorkspacesSelectionComponent, MatIcon]
+  imports: [MatTable, MatSort, MatColumnDef, MatHeaderCellDef, MatHeaderCell, MatCheckbox, MatCellDef, MatCell, MatSortHeader, MatHeaderRowDef, MatHeaderRow, MatRowDef, MatRow, FormsModule, TranslateModule, HasSelectionValuePipe, IsSelectedPipe, IsAllSelectedPipe, SearchFilterComponent]
 })
 export class UsersSelectionComponent implements OnInit {
+  private backendService = inject(BackendService);
+
   userObjectsDatasource = new MatTableDataSource<UserFullDto>();
   displayedUserColumns = ['selectCheckbox', 'username', 'displayName'];
   tableSelectionRow = new SelectionModel<UserFullDto>(false, []);
@@ -57,22 +47,18 @@ export class UsersSelectionComponent implements OnInit {
   filteredUserWorkspaces: WorkspaceInListDto[] = [];
 
   @ViewChild(MatSort) sort = new MatSort();
-  @Output() userSelectionChanged: EventEmitter< UserFullDto[]> = new EventEmitter< UserFullDto[]>();
+  readonly userSelectionChanged = output<UserFullDto[]>();
+  readonly selectedUserIds = input.required<number[]>();
 
-  constructor(
-    private backendService: BackendService,
-    private appService: AppService,
-    private snackBar: MatSnackBar,
-    private translateService: TranslateService
-  ) {}
-
-  @Input() selectedUserIds!: number[];
+  ngOnChanges(changes: SimpleChanges) {
+    if (changes) {
+      this.setCheckboxes();
+    }
+  }
 
   ngOnInit(): void {
-    setTimeout(() => {
-      this.createWorkspaceList();
-      this.updateUserList();
-    });
+    this.createWorkspaceList();
+    this.updateUserList();
   }
 
   private setObjectsDatasource(users: UserFullDto[]): void {
@@ -87,18 +73,14 @@ export class UsersSelectionComponent implements OnInit {
   }
 
   updateUserList(): void {
-    this.appService.dataLoading = true;
     this.backendService.getUsersFull().subscribe(
       (users: UserFullDto[]) => {
         if (users.length > 0) {
           this.setObjectsDatasource(users);
-          this.tableSelectionCheckboxes.clear();
-          this.tableSelectionRow.clear();
-          this.appService.dataLoading = false;
+          this.setCheckboxes();
         } else {
           this.tableSelectionCheckboxes.clear();
           this.tableSelectionRow.clear();
-          this.appService.dataLoading = false;
         }
       }
     );
@@ -106,7 +88,20 @@ export class UsersSelectionComponent implements OnInit {
 
   createWorkspaceList(): void {
     this.backendService.getAllWorkspacesList().subscribe(workspaces => {
-      if (workspaces.length > 0) { this.userWorkspaces = workspaces; }
+      if (workspaces.data.length > 0) { this.userWorkspaces = workspaces.data; }
+    });
+  }
+
+  setCheckboxes(): void {
+    const foundUserIds:UserFullDto[] = [];
+    this.selectedUserIds()?.forEach(userId => {
+      const foundUserId = this.userObjectsDatasource.data.find(user => user.id === userId);
+      if (foundUserId) {
+        foundUserIds.push(foundUserId);
+      }
+      if (foundUserIds) {
+        this.tableSelectionCheckboxes.select(...foundUserIds);
+      }
     });
   }
 

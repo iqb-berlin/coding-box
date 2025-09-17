@@ -1,0 +1,655 @@
+<h1 mat-dialog-title>Antworten validieren</h1>
+<div class="info-banner" *ngIf="isAnyValidationRunning()">
+  <mat-icon>info</mat-icon>
+  <span>Validierungen laufen im Hintergrund weiter, auch wenn Sie diesen Dialog schließen.</span>
+</div>
+
+<!-- Validation Summary -->
+<div class="validation-summary">
+  <div class="validation-summary-title">Validierungsstatus</div>
+
+  <!-- TestTakers Validation -->
+  <div class="validation-summary-item"
+       [ngClass]="{
+         'validation-running': getValidationStatus('testTakers') === 'running',
+         'validation-error': getValidationStatus('testTakers') === 'failed',
+         'validation-success': getValidationStatus('testTakers') === 'success',
+         'validation-not-run': getValidationStatus('testTakers') === 'not-run'
+       }">
+    <mat-icon *ngIf="getValidationStatus('testTakers') === 'running'">hourglass_empty</mat-icon>
+    <mat-icon *ngIf="getValidationStatus('testTakers') === 'failed'">error</mat-icon>
+    <mat-icon *ngIf="getValidationStatus('testTakers') === 'success'">check_circle</mat-icon>
+    <mat-icon *ngIf="getValidationStatus('testTakers') === 'not-run'">radio_button_unchecked</mat-icon>
+    <span class="validation-summary-item-label">{{ getValidationLabel('testTakers') }}</span>
+    <span *ngIf="getValidationStatus('testTakers') === 'running'">Läuft...</span>
+    <span *ngIf="getValidationStatus('testTakers') === 'failed' && testTakersValidationResult">
+      {{ testTakersValidationResult.missingPersons.length }} fehlende Testpersonen
+    </span>
+    <span *ngIf="getValidationStatus('testTakers') === 'success'">OK</span>
+    <span *ngIf="getValidationStatus('testTakers') === 'not-run'">Nicht ausgeführt</span>
+  </div>
+
+  <!-- Variables Validation -->
+  <div class="validation-summary-item"
+       [ngClass]="{
+         'validation-running': getValidationStatus('variables') === 'running',
+         'validation-error': getValidationStatus('variables') === 'failed',
+         'validation-success': getValidationStatus('variables') === 'success',
+         'validation-not-run': getValidationStatus('variables') === 'not-run'
+       }">
+    <mat-icon *ngIf="getValidationStatus('variables') === 'running'">hourglass_empty</mat-icon>
+    <mat-icon *ngIf="getValidationStatus('variables') === 'failed'">error</mat-icon>
+    <mat-icon *ngIf="getValidationStatus('variables') === 'success'">check_circle</mat-icon>
+    <mat-icon *ngIf="getValidationStatus('variables') === 'not-run'">radio_button_unchecked</mat-icon>
+    <span class="validation-summary-item-label">{{ getValidationLabel('variables') }}</span>
+    <span *ngIf="getValidationStatus('variables') === 'running'">Läuft...</span>
+    <span *ngIf="getValidationStatus('variables') === 'failed'">
+      {{ totalInvalidVariables }} ungültige Variablen
+    </span>
+    <span *ngIf="getValidationStatus('variables') === 'success'">OK</span>
+    <span *ngIf="getValidationStatus('variables') === 'not-run'">Nicht ausgeführt</span>
+  </div>
+
+  <!-- Variable Types Validation -->
+  <div class="validation-summary-item"
+       [ngClass]="{
+         'validation-running': getValidationStatus('variableTypes') === 'running',
+         'validation-error': getValidationStatus('variableTypes') === 'failed',
+         'validation-success': getValidationStatus('variableTypes') === 'success',
+         'validation-not-run': getValidationStatus('variableTypes') === 'not-run'
+       }">
+    <mat-icon *ngIf="getValidationStatus('variableTypes') === 'running'">hourglass_empty</mat-icon>
+    <mat-icon *ngIf="getValidationStatus('variableTypes') === 'failed'">error</mat-icon>
+    <mat-icon *ngIf="getValidationStatus('variableTypes') === 'success'">check_circle</mat-icon>
+    <mat-icon *ngIf="getValidationStatus('variableTypes') === 'not-run'">radio_button_unchecked</mat-icon>
+    <span class="validation-summary-item-label">{{ getValidationLabel('variableTypes') }}</span>
+    <span *ngIf="getValidationStatus('variableTypes') === 'running'">Läuft...</span>
+    <span *ngIf="getValidationStatus('variableTypes') === 'failed'">
+      {{ totalInvalidTypeVariables }} ungültige Variablentypen
+    </span>
+    <span *ngIf="getValidationStatus('variableTypes') === 'success'">OK</span>
+    <span *ngIf="getValidationStatus('variableTypes') === 'not-run'">Nicht ausgeführt</span>
+  </div>
+
+  <!-- Response Status Validation -->
+  <div class="validation-summary-item"
+       [ngClass]="{
+         'validation-running': getValidationStatus('responseStatus') === 'running',
+         'validation-error': getValidationStatus('responseStatus') === 'failed',
+         'validation-success': getValidationStatus('responseStatus') === 'success',
+         'validation-not-run': getValidationStatus('responseStatus') === 'not-run'
+       }">
+    <mat-icon *ngIf="getValidationStatus('responseStatus') === 'running'">hourglass_empty</mat-icon>
+    <mat-icon *ngIf="getValidationStatus('responseStatus') === 'failed'">error</mat-icon>
+    <mat-icon *ngIf="getValidationStatus('responseStatus') === 'success'">check_circle</mat-icon>
+    <mat-icon *ngIf="getValidationStatus('responseStatus') === 'not-run'">radio_button_unchecked</mat-icon>
+    <span class="validation-summary-item-label">{{ getValidationLabel('responseStatus') }}</span>
+    <span *ngIf="getValidationStatus('responseStatus') === 'running'">Läuft...</span>
+    <span *ngIf="getValidationStatus('responseStatus') === 'failed'">
+      {{ totalInvalidStatusVariables }} ungültige Antwortstatus
+    </span>
+    <span *ngIf="getValidationStatus('responseStatus') === 'success'">OK</span>
+    <span *ngIf="getValidationStatus('responseStatus') === 'not-run'">Nicht ausgeführt</span>
+  </div>
+
+  <!-- Group Responses Validation -->
+  <div class="validation-summary-item"
+       [ngClass]="{
+         'validation-running': getValidationStatus('groupResponses') === 'running',
+         'validation-error': getValidationStatus('groupResponses') === 'failed',
+         'validation-success': getValidationStatus('groupResponses') === 'success',
+         'validation-not-run': getValidationStatus('groupResponses') === 'not-run'
+       }">
+    <mat-icon *ngIf="getValidationStatus('groupResponses') === 'running'">hourglass_empty</mat-icon>
+    <mat-icon *ngIf="getValidationStatus('groupResponses') === 'failed'">error</mat-icon>
+    <mat-icon *ngIf="getValidationStatus('groupResponses') === 'success'">check_circle</mat-icon>
+    <mat-icon *ngIf="getValidationStatus('groupResponses') === 'not-run'">radio_button_unchecked</mat-icon>
+    <span class="validation-summary-item-label">{{ getValidationLabel('groupResponses') }}</span>
+    <span *ngIf="getValidationStatus('groupResponses') === 'running'">Läuft...</span>
+    <span *ngIf="getValidationStatus('groupResponses') === 'failed' && groupResponsesResult">
+      Nicht alle Gruppen haben Antworten
+    </span>
+    <span *ngIf="getValidationStatus('groupResponses') === 'success'">OK</span>
+    <span *ngIf="getValidationStatus('groupResponses') === 'not-run'">Nicht ausgeführt</span>
+  </div>
+
+  <!-- Duplicate Responses Validation -->
+  <div class="validation-summary-item"
+       [ngClass]="{
+         'validation-running': getValidationStatus('duplicateResponses') === 'running',
+         'validation-error': getValidationStatus('duplicateResponses') === 'failed',
+         'validation-success': getValidationStatus('duplicateResponses') === 'success',
+         'validation-not-run': getValidationStatus('duplicateResponses') === 'not-run'
+       }">
+    <mat-icon *ngIf="getValidationStatus('duplicateResponses') === 'running'">hourglass_empty</mat-icon>
+    <mat-icon *ngIf="getValidationStatus('duplicateResponses') === 'failed'">error</mat-icon>
+    <mat-icon *ngIf="getValidationStatus('duplicateResponses') === 'success'">check_circle</mat-icon>
+    <mat-icon *ngIf="getValidationStatus('duplicateResponses') === 'not-run'">radio_button_unchecked</mat-icon>
+    <span class="validation-summary-item-label">{{ getValidationLabel('duplicateResponses') }}</span>
+    <span *ngIf="getValidationStatus('duplicateResponses') === 'running'">Läuft...</span>
+    <span *ngIf="getValidationStatus('duplicateResponses') === 'failed' && duplicateResponsesResult">
+      {{ totalDuplicateResponses }} doppelte Antworten gefunden
+    </span>
+    <span *ngIf="getValidationStatus('duplicateResponses') === 'success'">OK</span>
+    <span *ngIf="getValidationStatus('duplicateResponses') === 'not-run'">Nicht ausgeführt</span>
+  </div>
+</div>
+<mat-dialog-content>
+  <mat-stepper orientation="vertical" [linear]="true" #stepper>
+    <mat-step label="Testperson definiert" >
+      <p>Prüft, ob für jede Testperson in der Datenbank ein entsprechender Eintrag in den TestTakers XML-Dateien existiert.</p>
+      <button mat-button (click)="validateTestTakers()">TestTakers validieren</button>
+      @if (isTestTakersValidationRunning) {
+        <div class="loading-container">
+          <mat-spinner class="mat-spinner"></mat-spinner>
+          <p class="loading-text">TestTakers werden validiert...</p>
+        </div>
+      }
+      @if (testTakersValidationResult) {
+        <div>
+          @if (!testTakersValidationResult.testTakersFound) {
+            <div class="validation-result validation-error">
+              <mat-icon>error</mat-icon>
+              <span>Prüfung fehlgeschlagen: Keine TestTakers gefunden.</span>
+            </div>
+          }
+          @if (testTakersValidationResult.missingPersons.length > 0) {
+            <div class="validation-result validation-error">
+              <mat-icon>error</mat-icon>
+              <span>Prüfung fehlgeschlagen: {{ testTakersValidationResult.missingPersons.length }} Testpersonen wurden nicht in den TestTakers XML-Dateien gefunden.</span>
+            </div>
+            <div class="actions-container">
+              <button mat-button (click)="toggleMissingPersonsExpansion()">
+                {{ expandedMissingPersonsPanel ? 'Liste einklappen' : 'Liste ausklappen' }}
+              </button>
+            </div>
+
+            <mat-expansion-panel [expanded]="expandedMissingPersonsPanel">
+              <table mat-table [dataSource]="paginatedMissingPersons">
+                <ng-container matColumnDef="group">
+                  <th mat-header-cell *matHeaderCellDef>Gruppe</th>
+                  <td mat-cell *matCellDef="let element">{{ element.group }}</td>
+                </ng-container>
+                <ng-container matColumnDef="login">
+                  <th mat-header-cell *matHeaderCellDef>Login</th>
+                  <td mat-cell *matCellDef="let element">{{ element.login }}</td>
+                </ng-container>
+                <ng-container matColumnDef="code">
+                  <th mat-header-cell *matHeaderCellDef>Code</th>
+                  <td mat-cell *matCellDef="let element">{{ element.code }}</td>
+                </ng-container>
+                <ng-container matColumnDef="reason">
+                  <th mat-header-cell *matHeaderCellDef>Grund</th>
+                  <td mat-cell *matCellDef="let element">{{ element.reason }}</td>
+                </ng-container>
+                <tr mat-header-row *matHeaderRowDef="['group', 'login', 'code', 'reason']"></tr>
+                <tr mat-row *matRowDef="let row; columns: ['group', 'login', 'code', 'reason'];"></tr>
+              </table>
+            </mat-expansion-panel>
+          } @else if (testTakersValidationWasRun) {
+            <div class="validation-result validation-success">
+              <mat-icon>check_circle</mat-icon>
+              <span>Prüfung bestanden: Alle Testpersonen wurden in den TestTakers XML-Dateien gefunden.</span>
+            </div>
+          }
+        </div>
+      }
+      <div>
+        <button mat-button matStepperNext>Weiter</button>
+      </div>
+    </mat-step>
+    <mat-step label="Variable definiert">
+      <p>Prüft, ob die Variable in der Unit.xml definiert ist.</p>
+      <button mat-button (click)="validateVariables()">Variablen validieren</button>
+      @if (isVariableValidationRunning) {
+        <div class="loading-container">
+          <mat-spinner class="mat-spinner"></mat-spinner>
+          <p class="loading-text">Variablen werden validiert...</p>
+        </div>
+      }
+      @if (invalidVariables.length > 0 || totalInvalidVariables > 0) {
+        <div class="validation-result validation-error">
+          <mat-icon>error</mat-icon>
+          <span>Prüfung fehlgeschlagen: {{ totalInvalidVariables }} ungültige Variablen gefunden.</span>
+        </div>
+        @if (invalidVariables.length > 0) {
+          <div class="actions-container">
+            <button mat-button (click)="toggleExpansion()">
+              {{ expandedPanel ? 'Liste einklappen' : 'Liste ausklappen' }}
+            </button>
+            <button mat-button (click)="selectAllResponses()">Alle auswählen</button>
+            <button mat-button (click)="deselectAllResponses()">Auswahl aufheben</button>
+            <button mat-button color="warn" (click)="deleteSelectedResponses()" [disabled]="isDeletingResponses || selectedResponses.size === 0">
+              @if (isDeletingResponses) {
+                <mat-spinner diameter="20"></mat-spinner> Löschen...
+              } @else {
+                Ausgewählte löschen ({{ selectedResponses.size }})
+              }
+            </button>
+            <button mat-button color="warn" (click)="deleteAllResponses()" [disabled]="isDeletingResponses || invalidVariables.length === 0">
+              @if (isDeletingResponses) {
+                <mat-spinner diameter="20"></mat-spinner> Löschen...
+              } @else {
+                Alle löschen ({{ totalInvalidVariables }})
+              }
+            </button>
+          </div>
+
+          <mat-expansion-panel [expanded]="expandedPanel">
+            <table mat-table [dataSource]="paginatedVariables">
+              <ng-container matColumnDef="select">
+                <th mat-header-cell *matHeaderCellDef>Auswählen</th>
+                <td mat-cell *matCellDef="let element">
+                  <input type="checkbox"
+                         [checked]="isResponseSelected(element.responseId)"
+                         (change)="toggleResponseSelection(element.responseId)"
+                         [disabled]="!element.responseId">
+                </td>
+              </ng-container>
+              <ng-container matColumnDef="fileName">
+                <th mat-header-cell *matHeaderCellDef>Dateiname</th>
+                <td mat-cell *matCellDef="let element">
+                  <a href="javascript:void(0)" (click)="showUnitXml(element.fileName)">{{ element.fileName }}</a>
+                </td>
+              </ng-container>
+              <ng-container matColumnDef="variableId">
+                <th mat-header-cell *matHeaderCellDef>Variablen-ID</th>
+                <td mat-cell *matCellDef="let element">{{ element.variableId }}</td>
+              </ng-container>
+              <ng-container matColumnDef="value">
+                <th mat-header-cell *matHeaderCellDef>Wert</th>
+                <td mat-cell *matCellDef="let element">{{ element.value }}</td>
+              </ng-container>
+              <tr mat-header-row *matHeaderRowDef="['select', 'fileName', 'variableId', 'value']"></tr>
+              <tr mat-row *matRowDef="let row; columns: ['select', 'fileName', 'variableId', 'value'];"></tr>
+            </table>
+            <mat-paginator #variablePaginator
+                           [pageSize]="variablePageSize"
+                           [pageSizeOptions]="pageSizeOptions"
+                           [length]="totalInvalidVariables"
+                           [pageIndex]="currentVariablePage - 1"
+                           (page)="onVariablePageChange($event)"
+                           aria-label="Seite auswählen">
+            </mat-paginator>
+          </mat-expansion-panel>
+        }
+      } @else if (!isVariableValidationRunning && invalidVariables.length === 0 && totalInvalidVariables === 0 && validateVariablesWasRun) {
+        <div class="validation-result validation-success">
+          <mat-icon>check_circle</mat-icon>
+          <span>Prüfung bestanden: Keine ungültigen Variablen gefunden.</span>
+        </div>
+      }
+      <div>
+        <button mat-button matStepperNext>Weiter</button>
+      </div>
+    </mat-step>
+    <mat-step label="Variable ist gültig">
+      <p>Prüft, ob der Wert der Variable dem definierten Typ entspricht (string, integer, number, boolean, json).</p>
+      <button mat-button (click)="validateVariableTypes()">Variablentypen validieren</button>
+      @if (isVariableTypeValidationRunning) {
+        <div class="loading-container">
+          <mat-spinner class="mat-spinner"></mat-spinner>
+          <p class="loading-text">Variablentypen werden validiert...</p>
+        </div>
+      }
+      @if (invalidTypeVariables.length > 0 || totalInvalidTypeVariables > 0) {
+        <div class="validation-result validation-error">
+          <mat-icon>error</mat-icon>
+          <span>Prüfung fehlgeschlagen: {{ totalInvalidTypeVariables }} ungültige Variablenwerte gefunden.</span>
+        </div>
+        @if (invalidTypeVariables.length > 0) {
+          <div class="actions-container">
+            <button mat-button (click)="toggleTypeExpansion()">
+              {{ expandedTypePanel ? 'Liste einklappen' : 'Liste ausklappen' }}
+            </button>
+            <button mat-button (click)="selectAllTypeResponses()">Alle auswählen</button>
+            <button mat-button (click)="deselectAllTypeResponses()">Auswahl aufheben</button>
+            <button mat-button color="warn" (click)="deleteSelectedTypeResponses()" [disabled]="isDeletingResponses || selectedTypeResponses.size === 0">
+              @if (isDeletingResponses) {
+                <mat-spinner diameter="20"></mat-spinner> Löschen...
+              } @else {
+                Ausgewählte löschen ({{ selectedTypeResponses.size }})
+              }
+            </button>
+            <button mat-button color="warn" (click)="deleteAllTypeResponses()" [disabled]="isDeletingResponses || invalidTypeVariables.length === 0">
+              @if (isDeletingResponses) {
+                <mat-spinner diameter="20"></mat-spinner> Löschen...
+              } @else {
+                Alle löschen ({{ totalInvalidTypeVariables }})
+              }
+            </button>
+          </div>
+
+          <mat-expansion-panel [expanded]="expandedTypePanel">
+            <table mat-table [dataSource]="paginatedTypeVariables">
+              <ng-container matColumnDef="select">
+                <th mat-header-cell *matHeaderCellDef>Auswählen</th>
+                <td mat-cell *matCellDef="let element">
+                  <input type="checkbox"
+                         [checked]="isTypeResponseSelected(element.responseId)"
+                         (change)="toggleTypeResponseSelection(element.responseId)"
+                         [disabled]="!element.responseId">
+                </td>
+              </ng-container>
+              <ng-container matColumnDef="fileName">
+                <th mat-header-cell *matHeaderCellDef>Dateiname</th>
+                <td mat-cell *matCellDef="let element">
+                  <a href="javascript:void(0)" (click)="showUnitXml(element.fileName)">{{ element.fileName }}</a>
+                </td>
+              </ng-container>
+              <ng-container matColumnDef="variableId">
+                <th mat-header-cell *matHeaderCellDef>Variablen-ID</th>
+                <td mat-cell *matCellDef="let element">{{ element.variableId }}</td>
+              </ng-container>
+              <ng-container matColumnDef="value">
+                <th mat-header-cell *matHeaderCellDef>Wert</th>
+                <td mat-cell *matCellDef="let element">{{ element.value }}</td>
+              </ng-container>
+              <ng-container matColumnDef="expectedType">
+                <th mat-header-cell *matHeaderCellDef>Erwarteter Typ</th>
+                <td mat-cell *matCellDef="let element">{{ element.expectedType }}</td>
+              </ng-container>
+              <ng-container matColumnDef="errorReason">
+                <th mat-header-cell *matHeaderCellDef>Fehlergrund</th>
+                <td mat-cell *matCellDef="let element">{{ element.errorReason }}</td>
+              </ng-container>
+              <tr mat-header-row *matHeaderRowDef="['select', 'fileName', 'variableId', 'value', 'expectedType', 'errorReason']"></tr>
+              <tr mat-row *matRowDef="let row; columns: ['select', 'fileName', 'variableId', 'value', 'expectedType', 'errorReason'];"></tr>
+            </table>
+            <mat-paginator #variableTypePaginator
+                           [pageSize]="typeVariablePageSize"
+                           [pageSizeOptions]="pageSizeOptions"
+                           [length]="totalInvalidTypeVariables"
+                           [pageIndex]="currentTypeVariablePage - 1"
+                           (page)="onTypeVariablePageChange($event)"
+                           aria-label="Seite auswählen">
+            </mat-paginator>
+          </mat-expansion-panel>
+        }
+      } @else if (!isVariableTypeValidationRunning && invalidTypeVariables.length === 0 && totalInvalidTypeVariables === 0 && validateVariableTypesWasRun) {
+        <div class="validation-result validation-success">
+          <mat-icon>check_circle</mat-icon>
+          <span>Prüfung bestanden: Keine ungültigen Variablenwerte gefunden.</span>
+        </div>
+      }
+      <div>
+        <button mat-button matStepperNext>Weiter</button>
+      </div>
+    </mat-step>
+    <mat-step label="Status ist gültig">
+      <p>Prüft, ob der Status der Antwort gültig ist (gemäß Unit.xml).</p>
+      <button mat-button (click)="validateResponseStatus()">Antwortstatus validieren</button>
+      @if (isResponseStatusValidationRunning) {
+        <div class="loading-container">
+          <mat-spinner class="mat-spinner"></mat-spinner>
+          <p class="loading-text">Antwortstatus wird validiert...</p>
+        </div>
+      }
+      @if (invalidStatusVariables.length > 0 || totalInvalidStatusVariables > 0) {
+        <div class="validation-result validation-error">
+          <mat-icon>error</mat-icon>
+          <span>Prüfung fehlgeschlagen: {{ totalInvalidStatusVariables }} ungültige Antwortstatus gefunden.</span>
+        </div>
+        @if (invalidStatusVariables.length > 0) {
+          <div class="actions-container">
+            <button mat-button (click)="toggleStatusExpansion()">
+              {{ expandedStatusPanel ? 'Liste einklappen' : 'Liste ausklappen' }}
+            </button>
+            <button mat-button (click)="selectAllStatusResponses()">Alle auswählen</button>
+            <button mat-button (click)="deselectAllStatusResponses()">Auswahl aufheben</button>
+            <button mat-button color="warn" (click)="deleteSelectedStatusResponses()" [disabled]="isDeletingResponses || selectedStatusResponses.size === 0">
+              @if (isDeletingResponses) {
+                <mat-spinner diameter="20"></mat-spinner> Löschen...
+              } @else {
+                Ausgewählte löschen ({{ selectedStatusResponses.size }})
+              }
+            </button>
+            <button mat-button color="warn" (click)="deleteAllStatusResponses()" [disabled]="isDeletingResponses || invalidStatusVariables.length === 0">
+              @if (isDeletingResponses) {
+                <mat-spinner diameter="20"></mat-spinner> Löschen...
+              } @else {
+                Alle löschen ({{ totalInvalidStatusVariables }})
+              }
+            </button>
+          </div>
+
+          <mat-expansion-panel [expanded]="expandedStatusPanel">
+            <table mat-table [dataSource]="paginatedStatusVariables">
+              <ng-container matColumnDef="select">
+                <th mat-header-cell *matHeaderCellDef>Auswählen</th>
+                <td mat-cell *matCellDef="let element">
+                  <input type="checkbox"
+                         [checked]="isStatusResponseSelected(element.responseId)"
+                         (change)="toggleStatusResponseSelection(element.responseId)"
+                         [disabled]="!element.responseId">
+                </td>
+              </ng-container>
+              <ng-container matColumnDef="fileName">
+                <th mat-header-cell *matHeaderCellDef>Dateiname</th>
+                <td mat-cell *matCellDef="let element">
+                  <a href="javascript:void(0)" (click)="showUnitXml(element.fileName)">{{ element.fileName }}</a>
+                </td>
+              </ng-container>
+              <ng-container matColumnDef="variableId">
+                <th mat-header-cell *matHeaderCellDef>Variablen-ID</th>
+                <td mat-cell *matCellDef="let element">{{ element.variableId }}</td>
+              </ng-container>
+              <ng-container matColumnDef="value">
+                <th mat-header-cell *matHeaderCellDef>Wert</th>
+                <td mat-cell *matCellDef="let element">{{ element.value }}</td>
+              </ng-container>
+              <ng-container matColumnDef="errorReason">
+                <th mat-header-cell *matHeaderCellDef>Fehlergrund</th>
+                <td mat-cell *matCellDef="let element">{{ element.errorReason }}</td>
+              </ng-container>
+              <tr mat-header-row *matHeaderRowDef="['select', 'fileName', 'variableId', 'value', 'errorReason']"></tr>
+              <tr mat-row *matRowDef="let row; columns: ['select', 'fileName', 'variableId', 'value', 'errorReason'];"></tr>
+            </table>
+            <mat-paginator #statusVariablePaginator
+                           [pageSize]="statusVariablePageSize"
+                           [pageSizeOptions]="pageSizeOptions"
+                           [length]="totalInvalidStatusVariables"
+                           [pageIndex]="currentStatusVariablePage - 1"
+                           (page)="onStatusVariablePageChange($event)"
+                           aria-label="Seite auswählen">
+            </mat-paginator>
+          </mat-expansion-panel>
+        }
+      } @else if (!isResponseStatusValidationRunning && invalidStatusVariables.length === 0 && totalInvalidStatusVariables === 0 && validateResponseStatusWasRun) {
+        <div class="validation-result validation-success">
+          <mat-icon>check_circle</mat-icon>
+          <span>Prüfung bestanden: Keine ungültigen Antwortstatus gefunden.</span>
+        </div>
+      }
+      <div>
+        <button mat-button matStepperNext>Weiter</button>
+      </div>
+    </mat-step>
+    <mat-step label="Doppelte Antworten">
+      <p>Prüft, ob doppelte Antworten für die gleiche Variable, Unit und Testperson existieren.</p>
+      <button mat-button (click)="validateDuplicateResponses()">Doppelte Antworten validieren</button>
+      @if (isDuplicateResponsesValidationRunning) {
+        <div class="loading-container">
+          <mat-spinner class="mat-spinner"></mat-spinner>
+          <p class="loading-text">Doppelte Antworten werden validiert...</p>
+        </div>
+      }
+      @if (duplicateResponses.length > 0 || totalDuplicateResponses > 0) {
+        <div class="validation-result validation-error">
+          <mat-icon>error</mat-icon>
+          <span>Prüfung fehlgeschlagen: {{ totalDuplicateResponses }} doppelte Antworten gefunden.</span>
+        </div>
+        @if (duplicateResponses.length > 0) {
+          <div class="actions-container">
+            <button mat-button (click)="toggleDuplicateResponsesExpansion()">
+              {{ expandedDuplicateResponsesPanel ? 'Liste einklappen' : 'Liste ausklappen' }}
+            </button>
+            <button mat-button color="primary" (click)="resolveDuplicateResponses()" [disabled]="isResolvingDuplicateResponses || !hasSelectedDuplicateResponses()">
+              @if (isResolvingDuplicateResponses) {
+                <mat-spinner diameter="20"></mat-spinner> Wird bearbeitet...
+              } @else {
+                Ausgewählte behalten ({{ getSelectedDuplicateResponsesCount() }})
+              }
+            </button>
+            <button mat-button color="warn" (click)="resolveAllDuplicateResponses()" [disabled]="isResolvingDuplicateResponses || duplicateResponses.length === 0">
+              @if (isResolvingDuplicateResponses) {
+                <mat-spinner diameter="20"></mat-spinner> Wird bearbeitet...
+              } @else {
+                Alle automatisch auflösen ({{ totalDuplicateResponses }})
+              }
+            </button>
+          </div>
+
+          <mat-expansion-panel [expanded]="expandedDuplicateResponsesPanel">
+            <div class="duplicate-responses-container">
+              @for (duplicate of paginatedDuplicateResponses; track duplicate.unitId + '_' + duplicate.variableId + '_' + duplicate.testTakerLogin) {
+                <div class="duplicate-response-item">
+                  <div class="duplicate-response-header">
+                    <div class="duplicate-response-info">
+                      <strong>Unit:</strong> {{ duplicate.unitName }} |
+                      <strong>Variable:</strong> {{ duplicate.variableId }} |
+                      <strong>Testperson:</strong> {{ duplicate.testTakerLogin }} |
+                      <strong>Booklet:</strong> {{ duplicate.bookletName }}
+                    </div>
+                  </div>
+                  <div class="duplicate-response-duplicates">
+                    <table class="duplicate-response-table">
+                      <thead>
+                        <tr>
+                          <th>Auswählen</th>
+                          <th>Antwort-ID</th>
+                          <th>Wert</th>
+                          <th>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        @for (responseDuplicate of duplicate.duplicates; track responseDuplicate.responseId) {
+                          <tr>
+                            <td>
+                              <input type="radio"
+                                     name="duplicate_{{ duplicate.unitId }}_{{ duplicate.variableId }}_{{ duplicate.testTakerLogin }}"
+                                     [value]="responseDuplicate.responseId"
+                                     [checked]="isSelectedDuplicateResponse(duplicate, responseDuplicate.responseId)"
+                                     (change)="selectDuplicateResponse(duplicate, responseDuplicate.responseId)">
+                            </td>
+                            <td>{{ responseDuplicate.responseId }}</td>
+                            <td>{{ responseDuplicate.value }}</td>
+                            <td>{{ responseDuplicate.status }}</td>
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              }
+            </div>
+            <mat-paginator #duplicateResponsesPaginator
+                           [pageSize]="duplicateResponsesPageSize"
+                           [pageSizeOptions]="pageSizeOptions"
+                           [length]="totalDuplicateResponses"
+                           [pageIndex]="currentDuplicateResponsesPage - 1"
+                           (page)="onDuplicateResponsesPageChange($event)"
+                           aria-label="Seite auswählen">
+            </mat-paginator>
+          </mat-expansion-panel>
+        }
+      } @else if (!isDuplicateResponsesValidationRunning && duplicateResponses.length === 0 && totalDuplicateResponses === 0 && validateDuplicateResponsesWasRun) {
+        <div class="validation-result validation-success">
+          <mat-icon>check_circle</mat-icon>
+          <span>Prüfung bestanden: Keine doppelten Antworten gefunden.</span>
+        </div>
+      }
+      <div>
+        <button mat-button matStepperNext>Weiter</button>
+      </div>
+    </mat-step>
+    <mat-step label="Antwort vorgesehen">
+      <p>Prüft, ob die Antwort für die Kombination Testperson x Booklet x Unit vorgesehen ist.</p>
+      <div>
+        <button mat-button matStepperNext>Daten bereinigen</button>
+        <button mat-button matStepperNext>Daten behalten</button>
+      </div>
+    </mat-step>
+    <mat-step label="Antworten für alle Gruppen">
+      <p>Prüft, ob Antworten für alle Testperson-Gruppen vorliegen.</p>
+      <button mat-button (click)="validateGroupResponses()">Gruppenantworten validieren</button>
+      @if (isGroupResponsesValidationRunning) {
+        <div class="loading-container">
+          <mat-spinner class="mat-spinner"></mat-spinner>
+          <p class="loading-text">Gruppenantworten werden validiert...</p>
+        </div>
+      }
+      @if (groupResponsesResult) {
+        <div>
+          @if (groupResponsesResult.testTakersFound) {
+            <p>TestTakers gefunden und analysiert.</p>
+          } @else {
+            <div class="validation-result validation-error">
+              <mat-icon>error</mat-icon>
+              <span>Prüfung fehlgeschlagen: Keine TestTakers gefunden.</span>
+            </div>
+          }
+          @if (groupResponsesResult.groupsWithResponses.length > 0) {
+            @if (groupResponsesResult.allGroupsHaveResponses) {
+              <div class="validation-result validation-success">
+                <mat-icon>check_circle</mat-icon>
+                <span>Prüfung bestanden: Alle Gruppen haben mindestens eine Antwort.</span>
+              </div>
+            } @else {
+              <div class="validation-result validation-error">
+                <mat-icon>error</mat-icon>
+                <span>Prüfung fehlgeschlagen: Einige Gruppen haben keine Antworten.</span>
+              </div>
+            }
+            <div class="actions-container">
+              <button mat-button (click)="toggleGroupResponsesExpansion()">
+                {{ expandedGroupResponsesPanel ? 'Liste einklappen' : 'Liste ausklappen' }}
+              </button>
+            </div>
+
+            <mat-expansion-panel [expanded]="expandedGroupResponsesPanel">
+              <table mat-table [dataSource]="paginatedGroupResponses">
+                <ng-container matColumnDef="group">
+                  <th mat-header-cell *matHeaderCellDef>Gruppe</th>
+                  <td mat-cell *matCellDef="let element">{{ element.group }}</td>
+                </ng-container>
+                <ng-container matColumnDef="hasResponse">
+                  <th mat-header-cell *matHeaderCellDef>Hat Antwort</th>
+                  <td mat-cell *matCellDef="let element">
+                    @if (element.hasResponse) {
+                      <mat-icon color="primary">check_circle</mat-icon>
+                    } @else {
+                      <mat-icon color="warn">error</mat-icon>
+                    }
+                  </td>
+                </ng-container>
+                <tr mat-header-row *matHeaderRowDef="['group', 'hasResponse']"></tr>
+                <tr mat-row *matRowDef="let row; columns: ['group', 'hasResponse'];"></tr>
+              </table>
+              <mat-paginator #groupResponsesPaginator
+                           [pageSize]="groupResponsesPageSize"
+                           [pageSizeOptions]="pageSizeOptions"
+                           [length]="totalGroupResponses"
+                           [pageIndex]="currentGroupResponsesPage - 1"
+                           (page)="onGroupResponsesPageChange($event)"
+                           aria-label="Seite auswählen">
+              </mat-paginator>
+            </mat-expansion-panel>
+          } @else if (groupResponsesValidationWasRun) {
+            <div class="validation-result validation-error">
+              <mat-icon>error</mat-icon>
+              <span>Prüfung fehlgeschlagen: Keine gültigen Gruppen gefunden.</span>
+            </div>
+          }
+        </div>
+      }
+      <div>
+        <button mat-button matStepperNext>Weiter</button>
+      </div>
+    </mat-step>
+  </mat-stepper>
+</mat-dialog-content>
+<mat-dialog-actions align="end">
+  <button mat-button mat-dialog-close>Abbrechen</button>
+  <button mat-button color="primary" (click)="closeWithResults()">Übernehmen</button>
+</mat-dialog-actions>

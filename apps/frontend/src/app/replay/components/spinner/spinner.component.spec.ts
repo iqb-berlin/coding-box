@@ -15,7 +15,8 @@ describe('SpinnerComponent', () => {
 
     fixture = TestBed.createComponent(SpinnerComponent);
     component = fixture.componentInstance;
-    component.isLoaded = new Subject<boolean>();
+    fixture.componentRef.setInput('isLoaded', new Subject<boolean>());
+
     fixture.detectChanges();
   });
 

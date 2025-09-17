@@ -5,12 +5,29 @@ x-env-postgres: &env-postgres
   POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
   POSTGRES_DB: ${POSTGRES_DB}
 
+x-env-redis: &env-redis
+  REDIS_HOST: redis
+  REDIS_PORT: 6379
+  REDIS_PREFIX: coding-box
+
 services:
+  redis:
+    image: redis:alpine
+    volumes:
+      - "redis_data:/data"
+    networks:
+      - application-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   db:
     environment:
       <<: *env-postgres
     volumes:
-      - db_vol:/var/lib/postgresql/data
+      - "db_vol:/var/lib/postgresql/data"
     networks:
       - application-network
 
@@ -38,10 +55,12 @@ services:
         condition: service_healthy
       liquibase:
         condition: service_completed_successfully
+      redis:
+        condition: service_healthy
     environment:
       API_HOST: backend
       JWT_SECRET: ${JWT_SECRET}
-      <<: *env-postgres
+      <<: [ *env-redis, *env-postgres ]
     networks:
       - application-network
 
@@ -53,12 +72,18 @@ services:
         condition: service_completed_successfully
       backend:
         condition: service_started
+    environment:
+      - KEYCLOAK_URL=${KEYCLOAK_URL:-https://keycloak.kodierbox.iqb.hu-berlin.de/}
+      - KEYCLOAK_REALM=${KEYCLOAK_REALM:-iqb}
+      - KEYCLOAK_CLIENT_ID=${KEYCLOAK_CLIENT_ID:-coding-box}
+      - BACKEND_URL=${BACKEND_URL:-api/}
     networks:
       - application-network
 
 volumes:
   db_vol:
   backend_vol:
+  redis_data:
 
 networks:
   application-network:

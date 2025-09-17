@@ -2,11 +2,11 @@
 
 # custom folders
 /database/changelogDocs
-/backup
 
 # Caches
 .angular
 .nx/cache
+.nx/workspace-data
 /.sass-cache
 
 # secret files
@@ -67,3 +67,5 @@ testem.log
 /typings
 
 /packages
+.cursor/rules/nx-rules.mdc
+.github/instructions/nx.instructions.md

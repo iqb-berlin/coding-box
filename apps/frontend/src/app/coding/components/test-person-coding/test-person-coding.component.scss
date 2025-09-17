@@ -1,0 +1,215 @@
+// All styles consolidated into a single .test-person-coding-container
+
+.test-person-coding-container {
+  padding: 16px;
+
+  .header-section {
+    margin-bottom: 16px;
+
+    .page-title {
+      margin: 0;
+      font-size: 24px;
+      font-weight: 500;
+    }
+
+    .page-description {
+      margin: 8px 0 0;
+      color: rgba(0, 0, 0, 0.6);
+    }
+  }
+
+  .statistics-card,
+  .code-test-persons-card,
+  .jobs-card,
+  .job-status-card {
+    margin-bottom: 16px;
+  }
+
+  .form-container {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+
+    .group-selection-container {
+      width: 100%;
+
+      .full-width {
+        width: 100%;
+      }
+    }
+
+    .button-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 8px;
+    }
+  }
+
+  .loading-indicator {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 16px;
+
+    span {
+      margin-top: 8px;
+    }
+  }
+
+  .table-container {
+    margin-top: 16px;
+    overflow-x: auto;
+
+    table {
+      width: 100%;
+      table-layout: fixed;
+    }
+
+    // Column width definitions
+    ::ng-deep {
+      .mat-column-jobId {
+        width: 80px;
+      }
+
+      .mat-column-status {
+        width: 100px;
+      }
+
+      .mat-column-progress {
+        width: 120px;
+      }
+
+      .mat-column-createdAt {
+        width: 160px;
+      }
+
+      .mat-column-groups {
+        width: 120px;
+      }
+
+      .mat-column-duration {
+        width: 100px;
+      }
+
+      .mat-column-actions {
+        width: 100px;
+      }
+    }
+
+    .no-data {
+      color: rgba(0, 0, 0, 0.38);
+      font-style: italic;
+    }
+
+    .progress-container {
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+
+      .progress-value {
+        margin-bottom: 4px;
+        font-size: 12px;
+      }
+    }
+
+    .job-actions {
+      display: flex;
+      gap: 4px;
+    }
+
+    .test-person-indicator {
+      display: flex;
+      align-items: center;
+      font-size: 12px;
+
+      mat-icon {
+        font-size: 16px;
+        height: 16px;
+        width: 16px;
+        margin-right: 4px;
+      }
+    }
+  }
+
+  .no-data {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 32px;
+    color: rgba(0, 0, 0, 0.5);
+
+    mat-icon {
+      font-size: 48px;
+      height: 48px;
+      width: 48px;
+      margin-bottom: 8px;
+    }
+  }
+
+  .truncated-text {
+    display: inline-block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: help;
+  }
+
+  .job-status-content {
+    .status-row {
+      display: flex;
+      margin-bottom: 8px;
+
+      .status-label {
+        font-weight: 500;
+        margin-right: 8px;
+        min-width: 80px;
+      }
+
+      .status-value {
+        &.error {
+          color: #f44336;
+        }
+
+        &.truncated-text {
+          max-width: calc(100% - 90px); // Subtract the width of the label
+        }
+      }
+    }
+
+    mat-progress-bar {
+      margin-bottom: 16px;
+    }
+
+    .button-container {
+      margin-top: 16px;
+    }
+  }
+
+  .status-value {
+    &.status-pending {
+      color: #ff9800;
+    }
+
+    &.status-processing {
+      color: #2196f3;
+    }
+
+    &.status-completed {
+      color: #4caf50;
+    }
+
+    &.status-failed {
+      color: #f44336;
+    }
+
+    &.status-cancelled {
+      color: #9e9e9e;
+    }
+
+    &.status-paused {
+      color: #9c27b0;
+    }
+  }
+}

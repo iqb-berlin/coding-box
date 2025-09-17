@@ -1,12 +1,11 @@
-/* eslint-disable  @typescript-eslint/no-explicit-any */
 import {
-  Component, Input, OnChanges, OnDestroy, OnInit, SimpleChanges
+  Component, OnChanges, OnDestroy, OnInit, SimpleChanges, ViewChild, inject,
+  input
 } from '@angular/core';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
-import { ReactiveFormsModule } from '@angular/forms';
-import { NgIf } from '@angular/common';
+import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 import { ActivatedRoute, Params } from '@angular/router';
 import {
@@ -16,42 +15,55 @@ import * as xml2js from 'xml2js';
 import { jwtDecode, JwtPayload } from 'jwt-decode';
 import { MatSnackBar, MatSnackBarRef, TextOnlySnackBar } from '@angular/material/snack-bar';
 import { HttpErrorResponse } from '@angular/common/http';
+import { logger } from 'nx/src/utils/logger';
 import { UnitPlayerComponent } from '../unit-player/unit-player.component';
 import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
 import { ResponseDto } from '../../../../../../../api-dto/responses/response-dto';
 import { SpinnerComponent } from '../spinner/spinner.component';
 import { FilesDto } from '../../../../../../../api-dto/files/files.dto';
-
-interface ErrorMessages {
-  QueryError: string;
-  ParamsError: string;
-  401: string;
-  UnitIdError: string;
-  TestPersonError: string;
-  PlayerError: string;
-  ResponsesError: string;
-  notInList: string;
-  notCurrent: string;
-  unknown: string;
-}
+import { ErrorMessages } from '../../models/error-messages.model';
+import { validateToken, isTestperson } from '../../utils/token-utils';
+import { scrollToElementByAlias, highlightAspectSectionWithAnchor } from '../../utils/dom-utils';
+import { BookletReplay, BookletReplayUnit } from '../../../services/booklet-replay.service';
+import { BookletReplayComponent } from '../booklet-replay/booklet-replay.component';
 
 @Component({
   selector: 'coding-box-replay',
-  standalone: true,
-  // eslint-disable-next-line max-len
-  imports: [MatFormFieldModule, MatInputModule, MatButtonModule, ReactiveFormsModule, NgIf, TranslateModule, UnitPlayerComponent, SpinnerComponent],
+  imports: [
+    MatFormFieldModule,
+    MatInputModule,
+    MatButtonModule,
+    ReactiveFormsModule,
+    TranslateModule,
+    UnitPlayerComponent,
+    SpinnerComponent,
+    FormsModule,
+    BookletReplayComponent
+  ],
   templateUrl: './replay.component.html',
   styleUrl: './replay.component.scss'
 })
 export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
+  private backendService = inject(BackendService);
+  private appService = inject(AppService);
+  private route = inject(ActivatedRoute);
+  private errorSnackBar = inject(MatSnackBar);
+  private pageErrorSnackBar = inject(MatSnackBar);
+
   player: string = '';
   unitDef: string = '';
   isLoaded: Subject<boolean> = new Subject<boolean>();
   page: string | undefined;
-  responses: ResponseDto | undefined = undefined;
-  private testPerson: string = '';
-  private unitId: string = '';
+  anchor: string | undefined;
+  /* eslint-disable  @typescript-eslint/no-explicit-any */
+  responses: any | undefined = undefined;
+  isPrintMode: boolean = false;
+  testPerson: string = '';
+  unitId: string = '';
+  isBookletMode: boolean = false;
+  currentUnitIndex: number = 0;
+  totalUnits: number = 0;
   private authToken: string = '';
   private errorSnackbarRef: MatSnackBarRef<TextOnlySnackBar> | null = null;
   private pageErrorSnackbarRef: MatSnackBarRef<TextOnlySnackBar> | null = null;
@@ -59,16 +71,15 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   private lastUnitDef: { id: string, data: string } = { id: '', data: '' };
   private lastUnit: { id: string, data: string } = { id: '', data: '' };
   private routerSubscription: Subscription | null = null;
-  @Input() testPersonInput: string | undefined;
-  @Input() unitIdInput: string | undefined;
-  constructor(private backendService:BackendService,
-              private appService:AppService,
-              private route:ActivatedRoute,
-              private errorSnackBar: MatSnackBar,
-              private pageErrorSnackBar: MatSnackBar) {
-  }
+  readonly testPersonInput = input<string>();
+  readonly unitIdInput = input<string>();
+  protected bookletData: BookletReplay | null = null;
+  @ViewChild(UnitPlayerComponent) unitPlayerComponent: UnitPlayerComponent | undefined;
+  private replayStartTime: number = 0; // Track when replay viewing starts
 
   ngOnInit(): void {
+    // Record the start time when the component is initialized
+    this.replayStartTime = performance.now();
     this.subscribeRouter();
   }
 
@@ -95,14 +106,68 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     return auth;
   }
 
-  private subscribeRouter(): void {
+  private deserializeBookletData(encodedData: string): BookletReplay | null {
+    if (!encodedData) {
+      return null;
+    }
+
+    try {
+      const jsonString = atob(encodedData);
+      return JSON.parse(jsonString) as BookletReplay;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  subscribeRouter(): void {
     this.routerSubscription = this.route.params
-      .subscribe(async params => {
+      ?.subscribe(async params => {
         this.resetSnackBars();
         this.resetUnitData();
+        this.authToken = await this.getAuthToken();
+
+        const queryParams = await firstValueFrom(this.route.queryParams);
+        this.isBookletMode = queryParams.mode === 'booklet';
+        if (this.isBookletMode && queryParams.bookletData) {
+          const deserializedBooklet = this.deserializeBookletData(queryParams.bookletData);
+          if (deserializedBooklet) {
+            this.bookletData = deserializedBooklet;
+            this.currentUnitIndex = deserializedBooklet.currentUnitIndex;
+            this.totalUnits = deserializedBooklet.units.length;
+          }
+        }
+
+        if (this.authToken) {
+          const tokenValidation = validateToken(this.authToken);
+          if (!tokenValidation.isValid) {
+            this.setIsLoaded();
+            if (tokenValidation.errorType === 'token_expired') {
+              const errorMessage = this.getErrorMessages().tokenExpired;
+              this.openErrorSnackBar(errorMessage, 'Schließen');
+              this.storeErrorInStatistics(errorMessage);
+            } else {
+              const errorMessage = this.getErrorMessages().tokenInvalid;
+              this.openErrorSnackBar(errorMessage, 'Schließen');
+              this.storeErrorInStatistics(errorMessage);
+            }
+            return;
+          }
+        }
+
         try {
-          if (Object.keys(params).length === 3) {
-            this.authToken = await this.getAuthToken();
+          const url = this.route.snapshot.url;
+          this.isPrintMode = url.length > 0 && url[0].path === 'print-view';
+
+          const testPersonInput = this.testPersonInput();
+          const unitIdInput = this.unitIdInput();
+
+          if (this.isPrintMode && params.unitId) {
+            this.unitId = params.unitId;
+            const decoded: JwtPayload & { workspace: string } = jwtDecode(this.authToken);
+            const workspace = decoded?.workspace;
+            const unitData = await this.getUnitData(Number(workspace), this.authToken);
+            this.setUnitProperties(unitData);
+          } else if (Object.keys(params).length >= 3 && Object.keys(params).length <= 4) {
             this.setUnitParams(params);
             if (this.authToken) {
               const decoded: JwtPayload & { workspace: string } = jwtDecode(this.authToken);
@@ -110,14 +175,25 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
               if (workspace) {
                 const unitData = await this.getUnitData(Number(workspace), this.authToken);
                 this.setUnitProperties(unitData);
+
+                setTimeout(() => {
+                  if (this.unitPlayerComponent?.hostingIframe?.nativeElement) {
+                    if (this.anchor) {
+                      highlightAspectSectionWithAnchor(this.unitPlayerComponent.hostingIframe.nativeElement, this.anchor);
+                      scrollToElementByAlias(this.unitPlayerComponent.hostingIframe.nativeElement, this.anchor);
+                    }
+                  }
+                }, 1000);
               }
             } else {
+              this.storeErrorInStatistics('QueryError');
               ReplayComponent.throwError('QueryError');
             }
-          } else if (this.testPersonInput && this.unitIdInput) {
-            this.setTestPerson(this.testPersonInput);
-            this.unitId = this.unitIdInput;
-          } else if (Object.keys(params).length !== 3) {
+          } else if (testPersonInput && unitIdInput) {
+            this.setTestPerson(testPersonInput);
+            this.unitId = unitIdInput;
+          } else if (Object.keys(params).length !== 4 && !this.isPrintMode) {
+            this.storeErrorInStatistics('ParamsError');
             ReplayComponent.throwError('ParamsError');
           }
         } catch (error) {
@@ -135,35 +211,28 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     setTimeout(() => this.isLoaded.next(true));
   }
 
-  private setUnitParams(params: Params): void {
+  setUnitParams(params: Params): void {
     const {
-      page, testPerson, unitId
+      page, testPerson, unitId, anchor
     } = params;
     this.page = page;
+    this.anchor = anchor;
     this.unitId = unitId;
     this.setTestPerson(testPerson);
   }
 
-  private setTestPerson(testPerson: string): void {
-    if (!ReplayComponent.isTestperson(testPerson)) {
+  setTestPerson(testPerson: string): void {
+    if (!isTestperson(testPerson)) {
+      this.storeErrorInStatistics('TestPersonError');
       ReplayComponent.throwError('TestPersonError');
     } else {
       this.testPerson = testPerson;
     }
   }
 
-  private static isTestperson(testperson: string): boolean {
-    if (testperson.split('@').length !== 3) return false;
-    const reg = /^.+(@.+){2}$/;
-    return reg.test(testperson);
-  }
-
-  private static hasResponses(response: ResponseDto): boolean {
-    return !!response;
-  }
-
   private checkUnitId(unitFile: FilesDto[]): void {
     if (!unitFile || !unitFile[0]) {
+      this.storeErrorInStatistics('UnitIdError');
       ReplayComponent.throwError('UnitIdError');
     } else {
       this.cacheUnitData(unitFile[0]);
@@ -177,18 +246,40 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       this.resetSnackBars();
       return Promise.resolve();
     }
-    this.resetUnitData();
-    this.resetSnackBars();
-    const { unitIdInput } = changes;
-    try {
-      this.unitId = unitIdInput.currentValue;
-      this.setTestPerson(this.testPersonInput || '');
-      const unitData = await this.getUnitData(this.appService.selectedWorkspaceId);
-      this.setUnitProperties(unitData);
-    } catch (error) {
-      this.setIsLoaded();
-      this.catchError(error as HttpErrorResponse);
+
+    if (changes.unitIdInput) {
+      this.resetUnitData();
+      this.resetSnackBars();
+
+      if (this.authToken) {
+        const tokenValidation = validateToken(this.authToken);
+        if (!tokenValidation.isValid) {
+          this.setIsLoaded();
+          if (tokenValidation.errorType === 'token_expired') {
+            const errorMessage = this.getErrorMessages().tokenExpired;
+            this.openErrorSnackBar(errorMessage, 'Schließen');
+            this.storeErrorInStatistics(errorMessage);
+          } else {
+            const errorMessage = this.getErrorMessages().tokenInvalid;
+            this.openErrorSnackBar(errorMessage, 'Schließen');
+            this.storeErrorInStatistics(errorMessage);
+          }
+          return Promise.resolve();
+        }
+      }
+
+      const { unitIdInput } = changes;
+      try {
+        this.unitId = unitIdInput.currentValue;
+        this.setTestPerson(this.testPersonInput() || '');
+        const unitData = await this.getUnitData(this.appService.selectedWorkspaceId, this.authToken);
+        this.setUnitProperties(unitData);
+      } catch (error) {
+        this.setIsLoaded();
+        this.catchError(error as HttpErrorResponse);
+      }
     }
+
     return Promise.resolve();
   }
 
@@ -199,11 +290,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     this.cacheUnitDefData(unitData.unitDef[0]);
     this.player = unitData.player[0].data;
     this.unitDef = unitData.unitDef[0].data;
-    if (ReplayComponent.hasResponses(unitData.response[0])) {
-      this.responses = unitData.response[0];
-    } else {
-      ReplayComponent.throwError('ResponsesError');
-    }
+    this.responses = unitData.response;
   }
 
   private cacheUnitData(unit: FilesDto) {
@@ -221,7 +308,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     this.lastPlayer.id = playerData.file_id;
   }
 
-  private static getNormalizedPlayerId(name: string): string {
+  static getNormalizedPlayerId(name: string): string {
     const reg = /^(\D+?)[@V-]?((\d+)(\.\d+)?(\.\d+)?(-\S+?)?)?(.\D{3,4})?$/;
     const matches = name.match(reg);
     if (matches) {
@@ -250,6 +337,10 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   private getResponses(workspace: number, authToken?:string): Observable<ResponseDto[]> {
+    // In print mode, we don't need responses, so return an empty array
+    if (this.isPrintMode) {
+      return of([]);
+    }
     return this.backendService
       .getResponses(workspace, this.testPerson, this.unitId, authToken);
   }
@@ -261,7 +352,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         file_id: this.lastUnit.id
       }]);
     }
-    return this.backendService.getUnit(workspace, this.testPerson, this.unitId, authToken);
+    return this.backendService.getUnit(workspace, this.unitId, authToken);
   }
 
   private getPlayer(
@@ -272,11 +363,12 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     }
     return this.backendService.getPlayer(
       workspace,
-      player.replace('@', '-'),
+      player,
       authToken);
   }
 
   private async getUnitData(workspace: number, authToken?:string) {
+    const startTime = performance.now();
     this.isLoaded.next(false);
     const unitData = await firstValueFrom(
       combineLatest([
@@ -292,6 +384,59 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
             return this.getPlayer(workspace, ReplayComponent.getNormalizedPlayerId(player), authToken);
           }))
       ]));
+    const endTime = performance.now();
+    const duration = Math.floor(endTime - startTime);
+    if (duration) {
+      if (duration >= 1) {
+        try {
+          let testPersonLogin: string | undefined;
+          let testPersonCode: string | undefined;
+          let bookletId: string | undefined;
+
+          if (this.testPerson) {
+            const parts = this.testPerson.split('@');
+            if (parts.length > 0) {
+              testPersonLogin = parts[0];
+              testPersonCode = parts[1];
+              bookletId = parts[2];
+            }
+          }
+          if (authToken) {
+            try {
+              const decoded: JwtPayload & { workspace: string } = jwtDecode(authToken);
+              const workspaceId = Number(decoded?.workspace);
+              if (workspaceId) {
+                const replayUrl = window.location.href;
+
+                this.backendService.storeReplayStatistics(workspaceId, {
+                  unitId: this.unitId,
+                  bookletId,
+                  testPersonLogin,
+                  testPersonCode,
+                  durationMilliseconds: duration,
+                  replayUrl,
+                  success: true
+                }).subscribe({
+                  next: () => {
+                    logger.log(`Replay statistics stored successfully. Duration: ${duration}ms`);
+                  },
+                  error: error => {
+                    logger.error(`Error storing replay statistics: ${error}`);
+                  }
+                });
+              }
+            } catch (error) {
+              logger.error(`Error decoding auth token: ${error}`);
+            }
+          }
+        } catch (error) {
+          logger.error(`Error storing replay statistics: ${error}`);
+        }
+      }
+
+      this.replayStartTime = performance.now();
+    }
+
     this.setIsLoaded();
     return { unitDef: unitData[0], response: unitData[1], player: unitData[2] };
   }
@@ -304,22 +449,110 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       UnitIdError: 'Unbekannte Unit-ID',
       TestPersonError: 'Ungültige ID für Testperson',
       PlayerError: 'Ungültiger Player-Name',
-      ResponsesError: `Keine Antworten für Aufgabe "${this.unitId}" von Testperson "${this.testPerson}" gefunden`,
-      notInList: `Keine valide Seite mit ID "${this.page}" gefunden`,
-      notCurrent: `Seite mit ID "${this.page}" kann nicht ausgewählt werden`,
-      unknown: 'Unbekannter Fehler'
+      ResponsesError: `Fehler beim Laden der Antworten für Aufgabe "${this.unitId}" von Testperson "${this.testPerson}"`,
+      notInList: `Keine valide Seite mit der ID "${this.page || ''}" gefunden`,
+      notCurrent: `Seite mit der ID "${this.page || ''}" kann nicht ausgewählt werden`,
+      tokenExpired: 'Das Authentisierungs-Token ist abgelaufen',
+      tokenInvalid: 'Das Authentisierungs-Token ist ungültig',
+      unknown: `Unbekannter Fehler für Aufgabe "${this.unitId || ''}" von Testperson "${this.testPerson || ''}"`
     };
   }
 
   private catchError(error: HttpErrorResponse): void {
-    const messageKey = error.status === 401 ? '401' : error.message as keyof ErrorMessages;
+    let messageKey: keyof ErrorMessages;
+
+    if (error.status === 401) {
+      messageKey = '401' as keyof ErrorMessages;
+    } else if (error.status === 404 && this.unitId && this.testPerson) {
+      messageKey = 'ResponsesError' as keyof ErrorMessages;
+    } else {
+      messageKey = error.message as keyof ErrorMessages;
+    }
+
     const message = this.getErrorMessages()[messageKey] || this.getErrorMessages().unknown;
     this.openErrorSnackBar(message, 'Schließen');
+
+    this.storeErrorInStatistics(message);
+  }
+
+  private storeErrorInStatistics(errorMessage: string): void {
+    const duration = this.replayStartTime ? Math.round(performance.now() - this.replayStartTime) : 0;
+    const authToken = localStorage.getItem('authToken');
+    if (!authToken) return;
+
+    try {
+      const decoded: JwtPayload & { workspace: string } = jwtDecode(authToken);
+      const workspaceId = Number(decoded?.workspace);
+      if (!workspaceId) return;
+
+      let testPersonLogin = '';
+      let testPersonCode = '';
+      let bookletId = '';
+
+      if (this.testPerson) {
+        const parts = this.testPerson.split(':');
+        if (parts.length > 0) {
+          testPersonLogin = parts[0];
+          testPersonCode = parts[1];
+          bookletId = parts[2];
+        }
+      }
+      const replayUrl = window.location.href;
+
+      this.backendService.storeReplayStatistics(workspaceId, {
+        unitId: this.unitId || 'unknown',
+        bookletId,
+        testPersonLogin,
+        testPersonCode,
+        durationMilliseconds: duration,
+        replayUrl,
+        success: false,
+        errorMessage: errorMessage
+      }).subscribe({
+        next: () => {
+          logger.log('Error replay statistics stored successfully.');
+        },
+        error: error => {
+          logger.error(`Error storing replay error statistics: ${error}`);
+        }
+      });
+    } catch (error) {
+      logger.error(`Error storing replay error statistics: ${error}`);
+    }
+  }
+
+  handleUnitChanged(unit: BookletReplayUnit): void {
+    if (unit && unit.name !== this.unitId) {
+      this.unitId = unit.name;
+
+      if (this.authToken) {
+        const decoded: JwtPayload & { workspace: string } = jwtDecode(this.authToken);
+        const workspace = decoded?.workspace;
+        if (workspace) {
+          this.getUnitData(Number(workspace), this.authToken).then(unitData => {
+            this.setUnitProperties(unitData);
+          });
+        }
+      }
+
+      if (this.bookletData) {
+        const newIndex = this.bookletData.units.findIndex(u => u.name === unit.name);
+        if (newIndex >= 0) {
+          this.bookletData = {
+            ...this.bookletData,
+            currentUnitIndex: newIndex
+          };
+          this.currentUnitIndex = newIndex;
+        }
+      }
+    }
   }
 
   checkPageError(pageError: 'notInList' | 'notCurrent' | null): void {
     if (pageError) {
-      this.openPageErrorSnackBar(this.getErrorMessages()[pageError], 'Schließen');
+      const errorMessage = this.getErrorMessages()[pageError];
+      this.openPageErrorSnackBar(errorMessage, 'Schließen');
+      this.storeErrorInStatistics(errorMessage);
     } else if (this.pageErrorSnackbarRef) {
       this.pageErrorSnackBar.dismiss();
       this.pageErrorSnackbarRef = null;

@@ -1,70 +1,50 @@
 import {
-  MatTable,
-  MatColumnDef,
-  MatHeaderCellDef,
-  MatHeaderCell,
-  MatCellDef,
-  MatCell,
-  MatHeaderRowDef,
-  MatHeaderRow,
-  MatRowDef,
-  MatRow,
   MatTableDataSource
 } from '@angular/material/table';
-import { ViewChild, Component, OnInit } from '@angular/core';
+import {
+  ViewChild, Component, OnInit, inject
+} from '@angular/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { MatSort, MatSortHeader } from '@angular/material/sort';
-import { FormsModule, UntypedFormGroup } from '@angular/forms';
-import { TranslateService, TranslateModule } from '@ngx-translate/core';
-import { MatTooltip } from '@angular/material/tooltip';
-import { MatButton } from '@angular/material/button';
-import { MatCheckbox } from '@angular/material/checkbox';
+import { MatSort } from '@angular/material/sort';
+import { UntypedFormGroup } from '@angular/forms';
+import { TranslateService } from '@ngx-translate/core';
 import { SelectionModel } from '@angular/cdk/collections';
-import { JsonPipe } from '@angular/common';
-import { UsersMenuComponent } from '../users-menu/users-menu.component';
-import { HasSelectionValuePipe } from '../../../shared/pipes/hasSelectionValue.pipe';
-import { IsSelectedPipe } from '../../../shared/pipes/isSelected.pipe';
-import { IsAllSelectedPipe } from '../../../shared/pipes/isAllSelected.pipe';
-import { WorkspacesComponent } from '../workspaces/workspaces.component';
-import { IsSelectedIdPipe } from '../../../shared/pipes/isSelectedId.pipe';
-import { WorkspacesSelectionComponent } from '../workspaces-selection/workspaces-selection.component';
 import { UsersSelectionComponent } from '../users-selection/users-selection.component';
 import { UserFullDto } from '../../../../../../../api-dto/user/user-full-dto';
 import { WorkspaceInListDto } from '../../../../../../../api-dto/workspaces/workspace-in-list-dto';
 import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
 import { CreateUserDto } from '../../../../../../../api-dto/user/create-user-dto';
-import { WrappedIconComponent } from '../../../shared/wrapped-icon/wrapped-icon.component';
-import { SearchFilterComponent } from '../../../shared/search-filter/search-filter.component';
+import { UsersMenuComponent } from '../users-menu/users-menu.component';
 
 @Component({
   selector: 'coding-box-users',
   templateUrl: './users.component.html',
   styleUrls: ['./users.component.scss'],
-  standalone: true,
-  // eslint-disable-next-line max-len
-  imports: [MatTable, MatSort, MatColumnDef, MatHeaderCellDef, MatHeaderCell, MatCheckbox, MatCellDef, MatCell, MatSortHeader, MatHeaderRowDef, MatHeaderRow, MatRowDef, MatRow, MatButton, MatTooltip, WrappedIconComponent, FormsModule, TranslateModule, UsersMenuComponent, HasSelectionValuePipe, IsSelectedPipe, IsAllSelectedPipe, SearchFilterComponent, JsonPipe, WorkspacesComponent, IsSelectedIdPipe, WorkspacesSelectionComponent, UsersSelectionComponent]
+  imports: [UsersSelectionComponent, UsersMenuComponent]
 })
 export class UsersComponent implements OnInit {
+  private backendService = inject(BackendService);
+  private appService = inject(AppService);
+  private snackBar = inject(MatSnackBar);
+  private translateService = inject(TranslateService);
+
   selectedUsers : number[] = [];
   selectedRows : UserFullDto[] = [];
   userObjectsDatasource = new MatTableDataSource<UserFullDto>();
   tableSelectionRow = new SelectionModel<UserFullDto>(false, []);
   tableSelectionCheckboxes = new SelectionModel<UserFullDto>(true, []);
   userWorkspaces :WorkspaceInListDto[] = [];
-  filteredUserWorkspaces: WorkspaceInListDto[] = [];
 
   @ViewChild(MatSort) sort = new MatSort();
 
-  constructor(
-    private backendService: BackendService,
-    private appService: AppService,
-    private snackBar: MatSnackBar,
-    private translateService: TranslateService
-  ) {
-  }
-
+  authData = AppService.defaultAuthData;
   ngOnInit(): void {
+    this.appService.authData$.subscribe(
+      authData => {
+        this.authData = authData;
+      }
+    );
     setTimeout(() => {
       this.createWorkspaceList();
       this.updateUserList();
@@ -140,7 +120,7 @@ export class UsersComponent implements OnInit {
       username: value.user.get('username')?.value,
       isAdmin: value.user.get('isAdmin')?.value
     };
-    this.backendService.changeUserData(this.appService.authData.userId, changedData).subscribe(
+    this.backendService.changeUserData(this.authData.userId, changedData).subscribe(
       respOk => {
         this.updateUserList();
         if (respOk) {
@@ -203,7 +183,7 @@ export class UsersComponent implements OnInit {
 
   createWorkspaceList(): void {
     this.backendService.getAllWorkspacesList().subscribe(workspaces => {
-      if (workspaces.length > 0) { this.userWorkspaces = workspaces; }
+      if (workspaces.data.length > 0) { this.userWorkspaces = workspaces.data; }
     });
   }
 }

@@ -1,0 +1,56 @@
+<div class="wrapper">
+  <div class="fx-row-end-end">
+    <button mat-raised-button
+            [matTooltip]="'save' | translate"
+            matTooltipPosition="above"
+            [disabled]="!workspaceUsers.hasChanged"
+            (click)="save()">
+      <mat-icon>save</mat-icon>
+      {{'save' | translate}}
+    </button>
+  </div>
+
+  <div class="scroll-area">
+    <table class="access-rights-table">
+      <thead>
+        <tr>
+          <th class="user-column">Benutzer</th>
+          <th class="access-level-column">
+            <mat-icon color="primary"
+                      [matTooltip]="'access-rights.access-level-1' | translate"
+                      fontIcon="person">
+            </mat-icon>
+          </th>
+          <th class="access-level-column">
+            <mat-icon color="primary"
+                      [matTooltip]="'access-rights.access-level-2' | translate"
+                      fontIcon="supervisor_account">
+            </mat-icon>
+          </th>
+          <th class="access-level-column">
+            <mat-icon color="primary"
+                      [matTooltip]="'access-rights.access-level-3' | translate"
+                      fontIcon="account_circle">
+            </mat-icon>
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (u of workspaceUsers.entries; track u) {
+          <tr>
+            <td class="user-column" data-cy="access-rights">{{u.name}}</td>
+            @for (level of [1,2,3]; track level) {
+              <td class="access-level-column">
+                <mat-checkbox
+                  [checked]="u.accessLevel === level"
+                  [matTooltip]="'access-rights.access-level-'+level | translate"
+                  (change)="changeAccessLevel($event.checked, u, level)">
+                </mat-checkbox>
+              </td>
+            }
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+</div>

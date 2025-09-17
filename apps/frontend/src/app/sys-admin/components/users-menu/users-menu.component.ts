@@ -1,5 +1,7 @@
 import {
-  Component, EventEmitter, Input, Output
+  Component, inject,
+  input,
+  output
 } from '@angular/core';
 import { UntypedFormGroup } from '@angular/forms';
 import { MatDialog } from '@angular/material/dialog';
@@ -26,30 +28,31 @@ import {
   selector: 'coding-box-users-menu',
   templateUrl: './users-menu.component.html',
   styleUrls: ['./users-menu.component.scss'],
-  standalone: true,
   imports: [MatButton, MatTooltip, WrappedIconComponent, TranslateModule, WrappedIconComponent]
 })
 export class UsersMenuComponent {
-  @Input() selectedUser!: number[];
-  @Input() selectedRows!: UserFullDto[];
-  @Input() checkedRows!: UserFullDto[];
-  @Output() userAdded: EventEmitter<UntypedFormGroup> = new EventEmitter<UntypedFormGroup>();
-  @Output() usersDeleted: EventEmitter< UserFullDto[]> = new EventEmitter< UserFullDto[]>();
-  @Output() userEdited: EventEmitter<{ selection: UserFullDto[], user: UntypedFormGroup }> =
-    new EventEmitter<{ selection: UserFullDto[], user: UntypedFormGroup }>();
+  private editUserDialog = inject(MatDialog);
+  private messageDialog = inject(MatDialog);
+  private editUserAccessRightsDialog = inject(MatDialog);
+  private deleteConfirmDialog = inject(MatDialog);
+  private translateService = inject(TranslateService);
 
-  @Output() setUserWorkspaceAccessRights: EventEmitter<number[]> = new EventEmitter<number[]>();
+  readonly selectedUser = input.required<number[]>();
+  readonly selectedRows = input.required<UserFullDto[]>();
+  readonly checkedRows = input.required<UserFullDto[]>();
+  readonly userAdded = output<UntypedFormGroup>();
+  readonly usersDeleted = output<UserFullDto[]>();
+  readonly userEdited = output<{
+    selection: UserFullDto[];
+    user: UntypedFormGroup;
+  }>();
 
-  constructor(private editUserDialog: MatDialog,
-              private messageDialog: MatDialog,
-              private editUserAccessRightsDialog: MatDialog,
-              private deleteConfirmDialog: MatDialog,
-              private translateService: TranslateService) {}
+  readonly setUserWorkspaceAccessRights = output<number[]>();
 
   editUser(): void {
-    let selectedRows = this.selectedRows;
+    let selectedRows = this.selectedRows();
     if (!selectedRows.length) {
-      selectedRows = this.checkedRows;
+      selectedRows = this.checkedRows();
     }
     if (!selectedRows?.length) {
       this.messageDialog.open(MessageDialogComponent, {
@@ -80,9 +83,9 @@ export class UsersMenuComponent {
   }
 
   deleteUsers(): void {
-    let selectedRows = this.selectedRows;
+    let selectedRows = this.selectedRows();
     if (!selectedRows.length) {
-      selectedRows = this.checkedRows;
+      selectedRows = this.checkedRows();
     }
     if (!selectedRows.length) {
       this.messageDialog.open(MessageDialogComponent, {
@@ -116,9 +119,9 @@ export class UsersMenuComponent {
   }
 
   setUserWorkspaceAccessRight(): void {
-    let selectedRows = this.selectedRows;
+    let selectedRows = this.selectedRows();
     if (!selectedRows.length) {
-      selectedRows = this.checkedRows;
+      selectedRows = this.checkedRows();
     }
     if (!selectedRows.length) {
       this.messageDialog.open(MessageDialogComponent, {
@@ -134,11 +137,13 @@ export class UsersMenuComponent {
         width: '600px',
         minHeight: '600px',
         data: {
-          selectedUser: this.selectedRows
+          selectedUser: this.selectedRows()
         }
       });
       dialogRef.afterClosed().subscribe((result: number[]) => {
-        this.setUserWorkspaceAccessRights.emit(result);
+        if (result) {
+          this.setUserWorkspaceAccessRights.emit(result);
+        }
       });
     }
   }

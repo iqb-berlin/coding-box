@@ -2,15 +2,14 @@ import { Injectable } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import * as https from 'https';
 import { catchError, firstValueFrom } from 'rxjs';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { WorkspaceService } from './workspace.service';
-import Responses from '../entities/responses.entity';
+import { logger } from 'nx/src/utils/logger';
+import { Person, Response } from './shared-types';
 import {
   ImportOptions
-} from '../../../../../frontend/src/app/ws-admin/test-center-import/test-center-import.component';
-import FileUpload from '../entities/file_upload.entity';
-import { ResponseDto } from '../../../../../../api-dto/responses/response-dto';
+} from '../../../../../frontend/src/app/ws-admin/components/test-center-import/test-center-import.component';
+import { TestGroupsInfoDto } from '../../../../../../api-dto/files/test-groups-info.dto';
+import { PersonService } from './person.service';
+import { WorkspaceFilesService } from './workspace-files.service';
 
 const agent = new https.Agent({
   rejectUnauthorized: false
@@ -21,17 +20,6 @@ type ServerFilesResponse = {
   Resource:File[],
   Unit:File[],
   Testtakers:[],
-};
-
-type TestserverResponse = {
-  groupName: string,
-  groupLabel: string,
-  bookletsStarted: number,
-  numUnitsMin: number,
-  numUnitsMax: number,
-  numUnitsTotal: number,
-  numUnitsAvg: number,
-  lastChange: number,
 };
 
 type File = {
@@ -48,203 +36,416 @@ type File = {
   data: string
 };
 
-export type UnitResponse = {
+export type Log = {
   groupname:string,
   loginname : string,
   code : string,
   bookletname : string,
   unitname : string,
-  responses : Array<{ id: string; content: string; ts: number; responseType: string }>,
-  laststate : string,
+  timestamp: number,
+  logentry : string,
+};
+
+export type Result = {
+  success: boolean,
+  testFiles: number,
+  responses: number,
+  logs: number,
+  booklets: number,
+  units: number,
+  persons: number,
+  importedGroups: string
 };
 
 @Injectable()
 export class TestcenterService {
   constructor(
+    private readonly personService: PersonService,
     private readonly httpService: HttpService,
-    private workspaceService: WorkspaceService,
-    @InjectRepository(Responses)
-    private responsesRepository:Repository<Responses>
-
+    private workspaceFilesService: WorkspaceFilesService
   ) {
   }
 
-  async authenticate(credentials: { username: string, password: string, server:string }): Promise<string> {
-    const { data } = await firstValueFrom(
-      this.httpService.put(`http://iqb-testcenter${credentials.server}.de/api/session/admin`, {
-        name: credentials.username,
-        password: credentials.password
-      }, {
-        httpsAgent: agent
-      }).pipe(
-        catchError(error => {
-          throw new Error(error);
-        })
-      )
+  persons: Person[] = [];
+
+  async authenticate(credentials: { username: string; password: string; server: string; url: string }): Promise<Record<string, unknown>> {
+    const endpoint = credentials.url && !credentials.server ?
+      `${credentials.url}/api/session/admin` :
+      `http://iqb-testcenter${credentials.server}.de/api/session/admin`;
+
+    try {
+      const { data } = await firstValueFrom(
+        this.httpService.put(endpoint,
+          {
+            name: credentials.username,
+            password: credentials.password
+          },
+          {
+            httpsAgent: agent
+          }).pipe(
+          catchError(error => {
+            throw new Error(`Authentication failed: ${error?.message || error}`);
+          })
+        )
+      );
+      return data;
+    } catch (error) {
+      throw new Error(`Authentication error: ${error.message || 'Unknown error'}`);
+    }
+  }
+
+  async getTestgroups(
+    workspace_id: string,
+    tc_workspace: string,
+    server: string,
+    url: string,
+    authToken: string
+  ): Promise<TestGroupsInfoDto[]> {
+    const headersRequest = {
+      Authtoken: authToken
+    };
+    try {
+      const response = await this.httpService.axiosRef.get<TestGroupsInfoDto[]>(
+        url ?
+          `${url}/api/workspace/${tc_workspace}/results` :
+          `https://iqb-testcenter${server}.de/api/workspace/${tc_workspace}/results`,
+        {
+          httpsAgent: agent,
+          headers: headersRequest
+        }
+      );
+      const existingGroups = await this.personService.getWorkspaceGroups(Number(workspace_id));
+      const groupsWithLogs = await this.personService.getGroupsWithBookletLogs(Number(workspace_id));
+
+      const testGroups = response.data.map(group => ({
+        ...group,
+        existsInDatabase: existingGroups.includes(group.groupName),
+        hasBookletLogs: groupsWithLogs.get(group.groupName) || false
+      }));
+
+      return testGroups;
+    } catch (error) {
+      logger.error(`Error fetching test groups: ${error.message}`);
+      return [];
+    }
+  }
+
+  private createChunks<T>(array: T[], size: number): T[][] {
+    return Array.from(
+      { length: Math.ceil(array.length / size) },
+      (_, i) => array.slice(i * size, i * size + size)
     );
-    return data;
+  }
+
+  private createHeaders(authToken: string): { Authtoken: string } {
+    return { Authtoken: authToken };
+  }
+
+  private async importResponses(
+    workspace_id: string,
+    tc_workspace: string,
+    server: string,
+    url: string,
+    authToken: string,
+    testGroups: string
+  ): Promise<Promise<void>[]> {
+    logger.log('Import response data from TC');
+    const headersRequest = this.createHeaders(authToken);
+    const chunks = this.createChunks(testGroups.split(','), 2);
+
+    return chunks.map(async chunk => {
+      const endpoint = url ?
+        `${url}/api/workspace/${tc_workspace}/report/response?dataIds=${chunk.join(',')}` :
+        `https://www.iqb-testcenter${server}.de/api/workspace/${tc_workspace}/report/response?dataIds=${chunk.join(',')}`;
+
+      try {
+        const { data: rawResponses } = await this.httpService.axiosRef.get<Response[]>(endpoint, {
+          httpsAgent: agent,
+          headers: headersRequest
+        });
+
+        this.persons = await this.personService.createPersonList(rawResponses, Number(workspace_id));
+
+        const personList = await Promise.all(
+          this.persons.map(async person => {
+            const personWithBooklets = await this.personService.assignBookletsToPerson(person, rawResponses);
+            return this.personService.assignUnitsToBookletAndPerson(personWithBooklets, rawResponses);
+          })
+        );
+        await this.personService.processPersonBooklets(personList, Number(workspace_id));
+      } catch (error) {
+        logger.error('Error processing response chunk:');
+        throw error;
+      }
+    });
+  }
+
+  private async importLogs(
+    workspace_id: string,
+    tc_workspace: string,
+    server: string,
+    url: string,
+    authToken: string,
+    testGroups: string,
+    overwriteExistingLogs: boolean = true
+  ): Promise<Promise<void>[]> {
+    logger.log('Import logs data from TC');
+    const headersRequest = this.createHeaders(authToken);
+    const logsChunks = this.createChunks(testGroups.split(','), 2);
+    const logsPromises = logsChunks.map(async chunk => {
+      const logsUrl = url ?
+        `${url}/api/workspace/${tc_workspace}/report/log?dataIds=${chunk.join(',')}` :
+        `https://iqb-testcenter${server}.de/api/workspace/${tc_workspace}/report/log?dataIds=${chunk.join(',')}`;
+      try {
+        const { data: logData } = await this.httpService.axiosRef.get<Log[]>(logsUrl, {
+          httpsAgent: agent,
+          headers: headersRequest
+        });
+        const { bookletLogs, unitLogs } = this.separateLogsByType(logData);
+
+        const persons = await this.personService.createPersonList(logData, Number(workspace_id));
+
+        // Process logs with overwrite flag
+        const result = await this.personService.processPersonLogs(
+          persons,
+          unitLogs,
+          bookletLogs,
+          overwriteExistingLogs
+        );
+
+        logger.log(`Logs import result: ${JSON.stringify(result)}`);
+      } catch (error) {
+        logger.error(`Error processing logs: ${error.message}`);
+        throw error;
+      }
+    });
+
+    return logsPromises;
+  }
+
+  private separateLogsByType(logData: Log[]): { bookletLogs: Log[], unitLogs: Log[] } {
+    return logData.reduce(
+      (acc, row) => {
+        row.unitname === '' ? acc.bookletLogs.push(row) : acc.unitLogs.push(row);
+        return acc;
+      },
+      { bookletLogs: [] as Log[], unitLogs: [] as Log[] }
+    );
+  }
+
+  private async importFiles(
+    workspace_id: string,
+    tc_workspace: string,
+    server: string,
+    url: string,
+    authToken: string,
+    importOptions: ImportOptions
+  ): Promise<{ success: boolean, testFiles: number }> {
+    const headersRequest = this.createHeaders(authToken);
+    const filesEndpoint = url ?
+      `${url}/api/workspace/${tc_workspace}/files` :
+      `http://iqb-testcenter${server}.de/api/workspace/${tc_workspace}/files`;
+
+    try {
+      const { data: files } = await this.httpService.axiosRef.get<ServerFilesResponse>(filesEndpoint, {
+        httpsAgent: agent,
+        headers: headersRequest
+      });
+
+      const filePromises = this.createFilePromises(files, importOptions);
+
+      const fetchedFiles = await Promise.all(filePromises.map(async filePromise => {
+        const file = await filePromise;
+        return this.getFile(file, server, tc_workspace, authToken, url);
+      }));
+
+      const dbEntries = this.createDatabaseEntries(fetchedFiles, workspace_id);
+
+      await this.workspaceFilesService.testCenterImport(dbEntries);
+      return {
+        success: fetchedFiles.length > 0,
+        testFiles: fetchedFiles.length
+      };
+    } catch (error) {
+      logger.error('Error fetching files:');
+      return { success: false, testFiles: 0 };
+    }
+  }
+
+  private createFilePromises(files: ServerFilesResponse, importOptions: ImportOptions): Promise<File>[] {
+    const {
+      units,
+      definitions,
+      player,
+      codings,
+      testTakers,
+      booklets
+    } = importOptions;
+    const filePromises: Promise<File>[] = [];
+
+    if (player === 'true') {
+      filePromises.push(...files.Resource.filter(f => f.name.includes('.html')).map(file => Promise.resolve(file)));
+    }
+    if (units === 'true') {
+      filePromises.push(...files.Unit.map(file => Promise.resolve(file)));
+    }
+    if (definitions === 'true') {
+      filePromises.push(...files.Resource.filter(f => f.name.includes('.voud')).map(file => Promise.resolve(file)));
+    }
+    if (codings === 'true') {
+      filePromises.push(...files.Resource.filter(f => f.name.includes('.vocs')).map(file => Promise.resolve(file)));
+    }
+    if (booklets === 'true') {
+      filePromises.push(...files.Booklet.map(file => Promise.resolve(file)));
+    }
+    if (testTakers === 'true') {
+      filePromises.push(...files.Testtakers.map(file => Promise.resolve(file)));
+    }
+
+    return filePromises;
+  }
+
+  private createDatabaseEntries(
+    fetchedFiles: Array<{
+      data: File;
+      name: string;
+      type: string;
+      size: number;
+      id: string;
+    }>,
+    workspace_id: string
+  ): Record<string, unknown>[] {
+    return fetchedFiles.map(res => ({
+      filename: res.name,
+      file_id: res.id,
+      file_type: res.type,
+      file_size: res.size,
+      workspace_id: workspace_id,
+      data: res.data
+    }));
   }
 
   async importWorkspaceFiles(
-    workspace_id:string,
-    tc_workspace:string,
-    server:string,
-    authToken:string,
-    importOptions:ImportOptions
-  ): Promise<boolean> {
+    workspace_id: string,
+    tc_workspace: string,
+    server: string,
+    url: string,
+    authToken: string,
+    importOptions: ImportOptions,
+    testGroups: string,
+    overwriteExistingLogs: boolean = true
+  ): Promise<Result> {
+    const { responses, logs } = importOptions;
+    const result: Result = {
+      success: false,
+      testFiles: 0,
+      responses: 0,
+      logs: 0,
+      booklets: 0,
+      units: 0,
+      persons: 0,
+      importedGroups: testGroups
+    };
+
+    const promises: Promise<void>[] = [];
+
+    try {
+      if (responses === 'true') {
+        const responsePromises = await this.importResponses(
+          workspace_id, tc_workspace, server, url, authToken, testGroups
+        );
+        promises.push(...responsePromises);
+        result.responses = responsePromises.length;
+
+        try {
+          const stats = await this.personService.getImportStatistics(Number(workspace_id));
+          result.persons = stats.persons || 0;
+          result.booklets = stats.booklets || 0;
+          result.units = stats.units || 0;
+        } catch (statsError) {
+          logger.warn(`Could not get import statistics: ${statsError.message}`);
+        }
+      }
+
+      if (logs === 'true') {
+        const logsPromises = await this.importLogs(
+          workspace_id, tc_workspace, server, url, authToken, testGroups, overwriteExistingLogs
+        );
+        promises.push(...logsPromises);
+        result.logs = logsPromises.length;
+      }
+
+      const shouldImportFiles = this.shouldImportFiles(importOptions);
+      if (shouldImportFiles) {
+        const filesResult = await this.importFiles(
+          workspace_id, tc_workspace, server, url, authToken, importOptions
+        );
+        result.testFiles = filesResult.testFiles;
+        result.success = filesResult.success;
+      }
+
+      // Wait for all promises to complete
+      await Promise.all(promises);
+      result.success = true;
+      return result;
+    } catch (error) {
+      logger.error('Error during importWorkspaceFiles:');
+      result.success = false;
+      return result;
+    }
+  }
+
+  private shouldImportFiles(importOptions: ImportOptions): boolean {
     const {
-      units, responses, definitions, player, codings
+      definitions,
+      player,
+      units,
+      codings,
+      testTakers,
+      booklets
     } = importOptions;
+    return definitions === 'true' || player === 'true' || units === 'true' ||
+      codings === 'true' || testTakers === 'true' || booklets === 'true';
+  }
 
-    const headersRequest = {
-      Authtoken: authToken
-    };
-    if (responses === 'true') {
-      const resultsPromise = this.httpService.axiosRef
-        .get<TestserverResponse[]>(`http://iqb-testcenter${server}.de/api/workspace/${tc_workspace}/results`, {
-        httpsAgent: agent,
+  async getFile(
+    file: File,
+    server: string,
+    tcWorkspace: string,
+    authToken: string,
+    url?: string
+  ): Promise<{
+      data: File;
+      name: string;
+      type: string;
+      size: number;
+      id: string;
+    }> {
+    const headersRequest = this.createHeaders(authToken);
+    const requestUrl = this.buildFileRequestUrl(file, server, tcWorkspace, url);
+
+    try {
+      const response = await this.httpService.axiosRef.get<File>(requestUrl, {
+        httpsAgent: agent, // Disable SSL validation for HTTPS requests
         headers: headersRequest
       });
-      const report = await resultsPromise.then(res => res);
-      if (!report) {
-        throw new Error('could not obtain information about groups from TC');
-      }
-      const resultGroupNames = report.data.map(group => group.groupName);
-      const createChunks = (a, size) => Array.from(
-        new Array(Math.ceil(a.length / size)),
-        (_, i) => a.slice(i * size, i * size + size)
-      );
 
-      const chunks = createChunks(resultGroupNames, 2);
-      const unitResponsesPromises = chunks.map(chunk => {
-        const unitResponsesPromise = this.httpService.axiosRef
-          .get<UnitResponse[]>(`http://iqb-testcenter${server}.de/api/workspace/
-        ${tc_workspace}/report/response?dataIds=${chunk.join(',')}`,
-        {
-          httpsAgent: agent,
-          headers: headersRequest
-        });
-        return unitResponsesPromise
-          .then(callResponse => {
-            const rows: ResponseDto[] = callResponse.data
-              .map((unitResponse: UnitResponse) => ({
-                test_person: TestcenterService.getTestPersonName(unitResponse),
-                unit_id: unitResponse.unitname,
-                responses: unitResponse.responses,
-                test_group: unitResponse.groupname,
-                workspace_id: Number(workspace_id),
-                unit_state: JSON.parse(unitResponse.laststate),
-                booklet_id: unitResponse.bookletname,
-                id: undefined,
-                created_at: undefined
-              }));
-            const cleanedRows = WorkspaceService.cleanResponses(rows);
-            this.responsesRepository.upsert(cleanedRows, ['test_person', 'unit_id']);
-          });
-      });
-      await Promise.all(unitResponsesPromises);
+      return {
+        data: response.data,
+        name: file.name,
+        type: file.type,
+        size: file.size,
+        id: file.id
+      };
+    } catch (error) {
+      logger.error(`Failed to fetch file: ${file.name} ${error}`);
+      throw new Error('Unable to fetch the file from server.');
     }
-
-    if (definitions === 'true' || player === 'true' || units === 'true' || codings === 'true') {
-      const filesPromise = this.httpService.axiosRef
-        .get<ServerFilesResponse>(
-        `http://iqb-testcenter${server}.de/api/workspace/${tc_workspace}/files`,
-        {
-          httpsAgent: agent,
-          headers: headersRequest
-        });
-      const files = await filesPromise.then(res => res.data);
-      if (files) {
-        // const zipFiles = files.Resource.filter(file => file.name.includes('.zip'));
-        const unitDefFiles = files.Resource.filter(file => file.name.includes('.voud'));
-        const playerFiles = files.Resource.filter(file => file.name.includes('.html'));
-        const codingSchemeFiles = files.Resource.filter(file => file.name.includes('.vocs'));
-        const unitFiles = files.Unit;
-        let promises = [];
-        // const zipPromises = zipFiles
-        //   .map(file => this.getPackage(file, server, tc_workspace, authToken));
-        // promises = [...promises, ...packagesPromises];
-
-        // TODO: Chunks!
-        if (player === 'true' && playerFiles.length > 0) {
-          const playerPromises = playerFiles
-            .map(file => this.getFile(file, server, tc_workspace, authToken));
-          promises = [...promises, ...playerPromises];
-        }
-        if (units === 'true' && unitFiles.length > 0) {
-          const unitFilesPromises = unitFiles
-            .map(file => this.getFile(file, server, tc_workspace, authToken));
-          promises = [...promises, ...unitFilesPromises];
-        }
-        if (definitions === 'true' && unitDefFiles.length > 0) {
-          const unitDefPromises = unitDefFiles
-            .map(file => this.getFile(file, server, tc_workspace, authToken));
-          promises = [...promises, ...unitDefPromises];
-        }
-        if (codings === 'true' && codingSchemeFiles.length > 0) {
-          const codingSchemePromises = codingSchemeFiles
-            .map(file => this.getFile(file, server, tc_workspace, authToken));
-          promises = [...promises, ...codingSchemePromises];
-        }
-        const results :File[] = await Promise.all(promises);
-        if (results.length > 0) {
-          const dbEntries: unknown = results.map(result => ({
-            filename: result.name || '',
-            file_id: result.id,
-            file_type: result.type,
-            file_size: result.size,
-            workspace_id: workspace_id,
-            data: result.data
-          }));
-          await this.workspaceService.testCenterImport(dbEntries as FileUpload[]);
-          return true;
-        }
-        return false;
-      }
-      return false;
-    }
-    return true;
   }
 
-  private static getTestPersonName(unitResponse: UnitResponse): string {
-    return `${unitResponse.loginname}@${unitResponse.code}@${unitResponse.bookletname}`;
+  private buildFileRequestUrl(file: File, server: string, tcWorkspace: string, url?: string): string {
+    return url ?
+      `${url}/api/workspace/${tcWorkspace}/file/${file.type}/${file.name}` :
+      `http://iqb-testcenter${server}.de/api/workspace/${tcWorkspace}/file/${file.type}/${file.name}`;
   }
-
-  async getFile(file:File, server:string, tc_workspace:string, authToken:string):
-  Promise<{
-    data: File, name: string, type: string, size: number, id: string
-  }> {
-    const headersRequest = {
-      Authtoken: authToken
-    };
-    const filePromise = this.httpService.axiosRef
-      .get<File>(`http://iqb-testcenter${server}.de/api/workspace/${tc_workspace}/file/${file.type}/${file.name}`,
-      {
-        httpsAgent: agent,
-        headers: headersRequest
-      });
-    const fileData = await filePromise.then(res => res.data);
-    return {
-      data: fileData, name: file.name, type: file.type, size: file.size, id: file.id
-    };
-  }
-
-  // async getPackage(res:File, server:string, tc_workspace:string, authToken:string): Promise<any> {
-  //   const headersRequest = {
-  //     Authtoken: authToken
-  //   };
-  //   const filePromise = this.httpService.axiosRef
-  //     .get(`http://iqb-testcenter${server}.de/api/workspace/${tc_workspace}/file/${res.type}/${res.name}`,
-  //       {
-  //         httpsAgent: agent,
-  //         headers: headersRequest
-  //       });
-  //   //const fileData = await filePromise.then(res => res.data);
-  //   //const zip = new AdmZip(Buffer.from(fileData));
-  //   //const packageFiles = zip.getEntries().map(entry => entry.entryName);
-  //
-  //   // return {
-  //   //   data: fileData, name: res.name, type: res.type, size: res.size, id: res.id
-  //   // };
-  // }
 }

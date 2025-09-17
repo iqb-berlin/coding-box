@@ -1,0 +1,404 @@
+<div class="dialog-container">
+  <h2 class="dialog-title">{{ data.isEdit ? 'Kodierjob bearbeiten' : 'Neuen Kodierjob erstellen' }}</h2>
+  <mat-divider></mat-divider>
+
+  <div class="dialog-content">
+    <form [formGroup]="codingJobForm" (ngSubmit)="onSubmit()">
+      <div class="form-section">
+        <h3>Allgemeine Informationen</h3>
+
+        <mat-form-field appearance="fill" class="full-width">
+          <mat-label>Name</mat-label>
+          <input matInput formControlName="name" placeholder="Name des Kodierjobs" required>
+          @if (codingJobForm.get('name')?.invalid && codingJobForm.get('name')?.touched) {
+            <mat-error>Name ist erforderlich</mat-error>
+          }
+        </mat-form-field>
+
+        <mat-form-field appearance="fill" class="full-width">
+          <mat-label>Beschreibung</mat-label>
+          <textarea matInput formControlName="description" placeholder="Beschreibung des Kodierjobs" rows="3"></textarea>
+        </mat-form-field>
+
+        <mat-form-field appearance="fill" class="full-width">
+          <mat-label>Status</mat-label>
+          <mat-select formControlName="status">
+            <mat-option value="pending">Ausstehend</mat-option>
+            <mat-option value="active">Aktiv</mat-option>
+            <mat-option value="completed">Abgeschlossen</mat-option>
+          </mat-select>
+        </mat-form-field>
+      </div>
+
+      <div class="form-section">
+        <h3>Variablenbündel</h3>
+        <p class="section-description">Wählen Sie die Variablen und Variablenbündel aus, die diesem Kodierjob zugeordnet werden sollen.</p>
+
+        <!-- Selection summary section that's always visible -->
+        <div class="selection-summary-container">
+          <div class="selection-card">
+            <h4>Ausgewählte Elemente</h4>
+            <div class="selection-counts">
+              <div class="count-item">
+                <span class="count-label">Variablen:</span>
+                <span class="count-value">{{ selectedVariables.selected.length }}</span>
+              </div>
+              <div class="count-item">
+                <span class="count-label">Variablenbündel:</span>
+                <span class="count-value">{{ selectedVariableBundles.selected.length }}</span>
+              </div>
+              <div class="count-item">
+                <span class="count-label">Kodierer:</span>
+                <span class="count-value">{{ selectedCoders.selected.length }}</span>
+              </div>
+            </div>
+
+            @if (selectedVariables.selected.length > 0 || selectedVariableBundles.selected.length > 0) {
+              <mat-expansion-panel class="selection-details">
+                <mat-expansion-panel-header>
+                  <mat-panel-title>
+                    Auswahldetails anzeigen
+                  </mat-panel-title>
+                </mat-expansion-panel-header>
+
+                @if (selectedVariables.selected.length > 0) {
+                  <div class="selection-section">
+                    <h5>Ausgewählte Variablen</h5>
+                    <div class="chip-container">
+                      @for (variable of selectedVariables.selected.slice(0, 10); track variable.unitName + variable.variableId) {
+                        <span class="selection-chip">
+                          {{ variable.unitName }}: {{ variable.variableId }}
+                        </span>
+                      }
+                      @if (selectedVariables.selected.length > 10) {
+                        <span class="more-chip">+{{ selectedVariables.selected.length - 10 }} weitere</span>
+                      }
+                    </div>
+                  </div>
+                }
+
+                @if (selectedVariableBundles.selected.length > 0) {
+                  <div class="selection-section">
+                    <h5>Ausgewählte Variablenbündel</h5>
+                    <div class="chip-container">
+                      @for (bundle of selectedVariableBundles.selected.slice(0, 10); track bundle.id) {
+                        <span class="selection-chip">
+                          {{ bundle.name }} ({{ getVariableCount(bundle) }} Variablen)
+                        </span>
+                      }
+                      @if (selectedVariableBundles.selected.length > 10) {
+                        <span class="more-chip">+{{ selectedVariableBundles.selected.length - 10 }} weitere</span>
+                      }
+                    </div>
+                  </div>
+                }
+              </mat-expansion-panel>
+            }
+          </div>
+        </div>
+
+        <mat-tab-group>
+          <!-- Tab for coders selection -->
+          <mat-tab label="Kodierer">
+            <div class="coders-tab-content">
+              <p class="section-description">Wählen Sie die Kodierer aus, die diesem Job zugewiesen werden sollen.</p>
+
+              @if (isLoadingAvailableCoders) {
+                <div class="loading-container">
+                  <mat-spinner diameter="40"></mat-spinner>
+                  <p class="loading-text">Lade verfügbare Kodierer...</p>
+                </div>
+              }
+
+              @if (!isLoadingAvailableCoders && availableCoders.length > 0) {
+                <!-- Quick selection tools -->
+                <div class="quick-selection-tools">
+                  <button mat-stroked-button color="primary" (click)="masterCoderToggle()" class="select-all-button">
+                    <mat-icon>{{ isAllCodersSelected() ? 'deselect' : 'select_all' }}</mat-icon>
+                    {{ isAllCodersSelected() ? 'Alle abwählen' : 'Alle auswählen' }}
+                  </button>
+                  <div class="selection-count">
+                    {{ selectedCoders.selected.length }} von {{ availableCoders.length }} Kodierern ausgewählt
+                  </div>
+                </div>
+
+                <!-- Coders grid view -->
+                <div class="coders-grid-container">
+                  <div class="coders-grid">
+                    @for (coder of availableCoders; track coder.id) {
+                      <div class="coder-card"
+                           [class.selected]="selectedCoders.isSelected(coder)"
+                           (click)="selectedCoders.toggle(coder)">
+                        <div class="coder-card-header">
+                          <mat-checkbox [checked]="selectedCoders.isSelected(coder)"
+                                        (click)="$event.stopPropagation()"
+                                        (change)="$event ? selectedCoders.toggle(coder) : null">
+                          </mat-checkbox>
+                        </div>
+                        <div class="coder-avatar">
+                          <mat-icon class="avatar-icon">person</mat-icon>
+                        </div>
+                        <div class="coder-details">
+                          <h3 class="coder-name">{{ coder.displayName || coder.name }}</h3>
+                          <p class="coder-username">{{ coder.name }}</p>
+                          @if (coder.email) {
+                            <p class="coder-email">{{ coder.email }}</p>
+                          }
+                          <div class="coder-id">ID: {{ coder.id }}</div>
+                        </div>
+                      </div>
+                    }
+                  </div>
+                </div>
+              }
+
+              @if (!isLoadingAvailableCoders && availableCoders.length === 0) {
+                <div class="empty-state">
+                  <mat-icon class="empty-icon">person</mat-icon>
+                  <h3>Keine Kodierer verfügbar</h3>
+                  <p class="empty-text">Im Arbeitsbereich sind keine Kodierer verfügbar. Fügen Sie zuerst Benutzer zum Arbeitsbereich hinzu.</p>
+                </div>
+              }
+            </div>
+          </mat-tab>
+
+          <!-- Tab for individual variables -->
+          <mat-tab label="Einzelne Variablen">
+            <!-- Filter controls -->
+            <div class="filter-container">
+              <div class="filter-row">
+                <mat-form-field class="filter-field">
+                  <mat-label>Aufgaben-ID Filter</mat-label>
+                  <input matInput [(ngModel)]="unitNameFilter" [ngModelOptions]="{standalone: true}" placeholder="Filter nach Aufgaben-ID">
+                  <button *ngIf="unitNameFilter" matSuffix mat-icon-button aria-label="Clear" (click)="unitNameFilter=''; applyFilter()">
+                    <mat-icon>close</mat-icon>
+                  </button>
+                </mat-form-field>
+
+                <mat-form-field class="filter-field">
+                  <mat-label>Variablen-ID Filter</mat-label>
+                  <input matInput [(ngModel)]="variableIdFilter" [ngModelOptions]="{standalone: true}" placeholder="Filter nach Variablen-ID">
+                  <button *ngIf="variableIdFilter" matSuffix mat-icon-button aria-label="Clear" (click)="variableIdFilter=''; applyFilter()">
+                    <mat-icon>close</mat-icon>
+                  </button>
+                </mat-form-field>
+
+                <button mat-raised-button color="primary" (click)="applyFilter()">
+                  <mat-icon>filter_list</mat-icon>
+                  Filter anwenden
+                </button>
+
+                <button mat-raised-button (click)="clearFilters()">
+                  <mat-icon>clear</mat-icon>
+                  Filter zurücksetzen
+                </button>
+              </div>
+            </div>
+
+            @if (isLoadingVariableAnalysis) {
+              <div class="loading-container">
+                <mat-spinner diameter="40"></mat-spinner>
+                <p class="loading-text">Lade Variablen...</p>
+              </div>
+            }
+
+            @if (!isLoadingVariableAnalysis && variables.length > 0) {
+              <!-- Quick selection tools -->
+              <div class="quick-selection-tools">
+                <button mat-stroked-button color="primary" (click)="masterToggle()" class="select-all-button">
+                  <mat-icon>{{ isAllSelected() ? 'deselect' : 'select_all' }}</mat-icon>
+                  {{ isAllSelected() ? 'Alle abwählen' : 'Alle auswählen' }}
+                </button>
+                <div class="selection-count">
+                  {{ selectedVariables.selected.length }} von {{ dataSource.filteredData.length }} Variablen ausgewählt
+                </div>
+              </div>
+
+              <!-- Variables grid view -->
+              <div class="variables-grid-container">
+                <div class="variables-grid">
+                  @for (variable of dataSource.filteredData; track variable.unitName + variable.variableId) {
+                    <div class="variable-card"
+                         [class.selected]="selectedVariables.isSelected(variable)"
+                         (click)="selectedVariables.toggle(variable)">
+                      <div class="variable-card-header">
+                        <mat-checkbox [checked]="selectedVariables.isSelected(variable)"
+                                      (click)="$event.stopPropagation()"
+                                      (change)="$event ? selectedVariables.toggle(variable) : null">
+                        </mat-checkbox>
+                        <div class="variable-identifiers">
+                          <div class="variable-id">
+                            {{ variable.unitName }}_{{ variable.variableId }}
+                            @if (data.isEdit && isVariableOriginallyAssigned(variable)) {
+                              <mat-icon class="assigned-indicator" matTooltip="Bereits diesem Kodierjob zugewiesen" matTooltipPosition="above">check_circle</mat-icon>
+                            }
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  }
+                </div>
+              </div>
+
+              <mat-paginator
+                [length]="totalVariableAnalysisRecords"
+                [pageSize]="variableAnalysisPageSize"
+                [pageIndex]="variableAnalysisPageIndex"
+                [pageSizeOptions]="variableAnalysisPageSizeOptions"
+                showFirstLastButtons
+                (page)="onPageChange()"
+                aria-label="Seiten auswählen">
+              </mat-paginator>
+            }
+
+            @if (!isLoadingVariableAnalysis && variables.length === 0) {
+              <div class="empty-state">
+                <mat-icon class="empty-icon">analytics</mat-icon>
+                <h3>Keine Variablen verfügbar</h3>
+                <p class="empty-text">Es wurden keine Variablen gefunden. Bitte überprüfen Sie Ihre Filter oder versuchen Sie es später erneut.</p>
+              </div>
+            }
+          </mat-tab>
+          <mat-tab label="Variablenbündel">
+            <!-- Filter controls -->
+            <div class="filter-container">
+              <div class="filter-row">
+                <mat-form-field class="filter-field">
+                  <mat-label>Name Filter</mat-label>
+                  <input matInput [(ngModel)]="bundleNameFilter" [ngModelOptions]="{standalone: true}" placeholder="Filter nach Namen">
+                  <button *ngIf="bundleNameFilter" matSuffix mat-icon-button aria-label="Clear" (click)="bundleNameFilter=''; applyBundleFilter()">
+                    <mat-icon>close</mat-icon>
+                  </button>
+                </mat-form-field>
+
+                <button mat-raised-button color="primary" (click)="applyBundleFilter()">
+                  <mat-icon>filter_list</mat-icon>
+                  Filter anwenden
+                </button>
+
+                <button mat-raised-button (click)="clearBundleFilter()">
+                  <mat-icon>clear</mat-icon>
+                  Filter zurücksetzen
+                </button>
+              </div>
+            </div>
+
+            @if (isLoadingBundles) {
+              <div class="loading-container">
+                <mat-spinner diameter="40"></mat-spinner>
+                <p class="loading-text">Lade Variablenbündel...</p>
+              </div>
+            }
+
+            @if (!isLoadingBundles && variableBundles.length > 0) {
+              <div class="bundles-grid-container">
+                <div class="bundles-grid">
+                  @for (bundle of bundlesDataSource.filteredData; track bundle.id) {
+                    <div class="bundle-card"
+                         [class.selected]="selectedVariableBundles.isSelected(bundle)"
+                         (click)="selectedVariableBundles.toggle(bundle)">
+                      <div class="bundle-card-header">
+                        <mat-checkbox [checked]="selectedVariableBundles.isSelected(bundle)"
+                                      (click)="$event.stopPropagation()"
+                                      (change)="$event ? selectedVariableBundles.toggle(bundle) : null">
+                        </mat-checkbox>
+                        <h3 class="bundle-name">
+                          {{ bundle.name }}
+                          @if (data.isEdit && isBundleOriginallyAssigned(bundle)) {
+                            <mat-icon class="assigned-indicator" matTooltip="Bereits diesem Kodierjob zugewiesen" matTooltipPosition="above">check_circle</mat-icon>
+                          }
+                        </h3>
+                      </div>
+                      <div class="bundle-card-content">
+                        <p class="bundle-description">{{ bundle.description || 'Keine Beschreibung' }}</p>
+                        <div class="bundle-stats">
+                          <span class="variable-count">{{ getVariableCount(bundle) }} Variablen</span>
+                        </div>
+                        <div class="bundle-variables-preview">
+                          @if (getVariableCount(bundle) > 0) {
+                            <div class="variables-preview-header">Enthaltene Variablen:</div>
+                            <div class="variables-preview-list">
+                              @for (variable of bundle.variables.slice(0, 3); track variable.unitName + variable.variableId) {
+                                <div class="variable-preview-item">
+                                  {{ variable.unitName }}: {{ variable.variableId }}
+                                </div>
+                              }
+                              @if (getVariableCount(bundle) > 3) {
+                                <div class="variable-preview-more">
+                                  +{{ getVariableCount(bundle) - 3 }} weitere
+                                </div>
+                              }
+                            </div>
+                          }
+                          @if (getVariableCount(bundle) === 0) {
+                            <div class="variables-preview-empty">Keine Variablen enthalten</div>
+                          }
+                        </div>
+                      </div>
+                    </div>
+                  }
+                </div>
+              </div>
+
+              <div class="selection-summary">
+                <p>{{ selectedVariableBundles.selected.length }} Variablenbündel ausgewählt</p>
+              </div>
+
+              @if (selectedVariableBundles.selected.length > 0) {
+                <div class="bundle-preview-container">
+                  <h4>Vorschau der ausgewählten Variablenbündel</h4>
+                  <mat-accordion>
+                    @for (bundle of selectedVariableBundles.selected; track bundle.id) {
+                      <mat-expansion-panel>
+                        <mat-expansion-panel-header>
+                          <mat-panel-title>
+                            {{ bundle.name }}
+                          </mat-panel-title>
+                          <mat-panel-description>
+                            {{ getVariableCount(bundle) }} Variablen
+                          </mat-panel-description>
+                        </mat-expansion-panel-header>
+
+                        <table class="preview-table">
+                          <thead>
+                            <tr>
+                              <th>Aufgaben-ID</th>
+                              <th>Variablen-ID</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            @for (variable of bundle.variables; track variable.unitName + variable.variableId) {
+                              <tr>
+                                <td>{{ variable.unitName }}</td>
+                                <td>{{ variable.variableId }}</td>
+                              </tr>
+                            }
+                          </tbody>
+                        </table>
+                      </mat-expansion-panel>
+                    }
+                  </mat-accordion>
+                </div>
+              }
+            }
+
+            @if (!isLoadingBundles && variableBundles.length === 0) {
+              <div class="empty-state">
+                <mat-icon class="empty-icon">analytics</mat-icon>
+                <h3>Keine Variablenbündel verfügbar</h3>
+                <p class="empty-text">Es wurden keine Variablenbündel gefunden. Bitte erstellen Sie zuerst Variablenbündel über die Variablenbündel-Verwaltung.</p>
+              </div>
+            }
+          </mat-tab>
+        </mat-tab-group>
+      </div>
+    </form>
+  </div>
+
+  <div class="dialog-actions">
+    <button mat-button (click)="onCancel()">Abbrechen</button>
+    <button mat-raised-button color="primary" (click)="onSubmit()" [disabled]="codingJobForm.invalid">
+      {{ data.isEdit ? 'Speichern' : 'Erstellen' }}
+    </button>
+  </div>
+</div>

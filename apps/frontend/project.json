@@ -7,15 +7,25 @@
   "targets": {
     "build": {
       "executor": "@angular-devkit/build-angular:browser",
-      "outputs": ["{options.outputPath}"],
+      "outputs": [
+        "{options.outputPath}"
+      ],
       "options": {
+        "allowedCommonJsDependencies": [
+          "xml2js",
+          "base64-js",
+          "js-sha256",
+          "nx/src/utils/logger"
+        ],
         "outputPath": "dist/apps/frontend",
         "index": "apps/frontend/src/index.html",
         "main": "apps/frontend/src/main.ts",
         "polyfills": "apps/frontend/src/polyfills.ts",
         "tsConfig": "apps/frontend/tsconfig.app.json",
         "inlineStyleLanguage": "scss",
-        "assets": ["apps/frontend/src/assets"],
+        "assets": [
+          "apps/frontend/src/assets"
+        ],
         "styles": [
           "./node_modules/@angular/material/prebuilt-themes/purple-green.css",
           "apps/frontend/src/styles.scss"
@@ -27,12 +37,12 @@
           "budgets": [
             {
               "type": "initial",
-              "maximumWarning": "500kb",
-              "maximumError": "2mb"
+              "maximumWarning": "2mb",
+              "maximumError": "3mb"
             },
             {
               "type": "anyComponentStyle",
-              "maximumWarning": "2kb",
+              "maximumWarning": "50kb",
               "maximumError": "100kb"
             }
           ],
@@ -78,7 +88,7 @@
       }
     },
     "lint": {
-      "executor": "@nx/linter:eslint",
+      "executor": "@nx/eslint:lint",
       "options": {
         "lintFilePatterns": [
           "apps/frontend/src/**/*.ts",
@@ -88,7 +98,9 @@
     },
     "test": {
       "executor": "@nx/jest:jest",
-      "outputs": ["{workspaceRoot}/coverage/apps/frontend"],
+      "outputs": [
+        "{workspaceRoot}/coverage/apps/frontend"
+      ],
       "options": {
         "jestConfig": "apps/frontend/jest.config.ts",
         "passWithNoTests": true

@@ -6,8 +6,18 @@
   "targets": {
     "build": {
       "executor": "@nx/webpack:webpack",
-      "outputs": ["{options.outputPath}"],
+      "outputs": [
+        "{options.outputPath}"
+      ],
       "options": {
+        "assets": [
+          {
+            "glob": "**/*",
+            "input": "schemas",
+            "output": "schemas"
+          }
+        ],
+
         "webpackConfig": "apps/backend/webpack.config.js",
         "outputPath": "dist/apps/backend",
         "main": "apps/backend/src/main.ts",
@@ -37,15 +47,21 @@
       }
     },
     "lint": {
-      "executor": "@nx/linter:eslint",
-      "outputs": ["{options.outputFile}"],
+      "executor": "@nx/eslint:lint",
+      "outputs": [
+        "{options.outputFile}"
+      ],
       "options": {
-        "lintFilePatterns": ["apps/backend/**/*.ts"]
+        "lintFilePatterns": [
+          "apps/backend/**/*.ts"
+        ]
       }
     },
     "test": {
       "executor": "@nx/jest:jest",
-      "outputs": ["{workspaceRoot}/coverage/apps/backend"],
+      "outputs": [
+        "{workspaceRoot}/coverage/apps/backend"
+      ],
       "options": {
         "jestConfig": "apps/backend/jest.config.ts",
         "passWithNoTests": true

@@ -1,6 +1,5 @@
 {
   "compileOnSave": false,
-
   "compilerOptions": {
     "rootDir": ".",
     "sourceMap": true,
@@ -16,9 +15,14 @@
       "es2017",
       "dom"
     ],
+    "paths": {
+      "@coding-box-lib/api-dto": [
+        "libs/api-dto/src/index.ts"
+      ]
+    },
     "skipLibCheck": true,
     "skipDefaultLibCheck": true,
-    "baseUrl": ".",
+    "baseUrl": "."
   },
   "exclude": [
     "node_modules",

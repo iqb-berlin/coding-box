@@ -12,15 +12,14 @@ import {
   MatTableDataSource
 } from '@angular/material/table';
 import {
-  Component, EventEmitter, Input, OnInit, Output, ViewChild
+  Component, OnInit, SimpleChanges, ViewChild, inject,
+  input,
+  output
 } from '@angular/core';
 import { MatSort, MatSortHeader } from '@angular/material/sort';
 import { FormsModule } from '@angular/forms';
 import { SelectionModel } from '@angular/cdk/collections';
-import { JsonPipe, NgFor, NgIf } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
-import { MatTooltip } from '@angular/material/tooltip';
-import { MatButton } from '@angular/material/button';
 import { MatCheckbox } from '@angular/material/checkbox';
 import { HasSelectionValuePipe } from '../../../shared/pipes/hasSelectionValue.pipe';
 import { IsAllSelectedPipe } from '../../../shared/pipes/isAllSelected.pipe';
@@ -28,19 +27,18 @@ import { IsSelectedPipe } from '../../../shared/pipes/isSelected.pipe';
 import { IsSelectedIdPipe } from '../../../shared/pipes/isSelectedId.pipe';
 import { SearchFilterComponent } from '../../../shared/search-filter/search-filter.component';
 import { WorkspaceInListDto } from '../../../../../../../api-dto/workspaces/workspace-in-list-dto';
-import { AppService } from '../../../services/app.service';
 import { BackendService } from '../../../services/backend.service';
-import { WrappedIconComponent } from '../../../shared/wrapped-icon/wrapped-icon.component';
 
 @Component({
   selector: 'coding-box-workspaces-selection',
   templateUrl: './workspaces-selection.component.html',
   styleUrls: ['./workspaces-selection.component.scss'],
-  standalone: true,
   // eslint-disable-next-line max-len
-  imports: [NgIf, SearchFilterComponent, MatTable, MatSort, MatColumnDef, MatHeaderCellDef, MatHeaderCell, MatCheckbox, MatCellDef, MatCell, MatSortHeader, MatHeaderRowDef, MatHeaderRow, MatRowDef, MatRow, MatButton, MatTooltip, WrappedIconComponent, NgFor, FormsModule, TranslateModule, IsSelectedPipe, IsAllSelectedPipe, HasSelectionValuePipe, IsSelectedIdPipe, JsonPipe]
+  imports: [SearchFilterComponent, MatTable, MatSort, MatColumnDef, MatHeaderCellDef, MatHeaderCell, MatCheckbox, MatCellDef, MatCell, MatSortHeader, MatHeaderRowDef, MatHeaderRow, MatRowDef, MatRow, FormsModule, TranslateModule, IsSelectedPipe, IsAllSelectedPipe, HasSelectionValuePipe, IsSelectedIdPipe]
 })
 export class WorkspacesSelectionComponent implements OnInit {
+  private backendService = inject(BackendService);
+
   objectsDatasource = new MatTableDataSource<WorkspaceInListDto>();
   displayedColumns = ['selectCheckbox', 'name'];
   tableSelectionCheckboxes = new SelectionModel<WorkspaceInListDto>(true, []);
@@ -48,33 +46,32 @@ export class WorkspacesSelectionComponent implements OnInit {
   selectedWorkspaceId = 0;
 
   @ViewChild(MatSort) sort = new MatSort();
-  @Input() selectedWorkspacesIds!: number[];
-  @Output() workspaceSelectionChanged: EventEmitter<WorkspaceInListDto[]> = new EventEmitter<WorkspaceInListDto[]>();
-  @Output() selectionChanged: EventEmitter<WorkspaceInListDto[]> = new EventEmitter<WorkspaceInListDto[]>();
+  readonly selectedWorkspacesIds = input.required<number[]>();
+  readonly workspaceSelectionChanged = output<WorkspaceInListDto[]>();
+  readonly selectionChanged = output<WorkspaceInListDto[]>();
+  readonly workspacesUpdated = output<boolean>();
+  readonly workspacesChanged = input.required<boolean>();
 
-  constructor(
-    private appService: AppService,
-    private backendService: BackendService
-  ) {
+  ngOnChanges(changes: SimpleChanges) {
+    if (changes) {
+      this.updateWorkspaceList();
+    }
   }
 
   ngOnInit(): void {
-    setTimeout(() => {
-      this.updateWorkspaceList();
-    });
+    this.updateWorkspaceList();
   }
 
   private updateWorkspaceList(): void {
     this.selectedWorkspaceId = 0;
-    this.appService.dataLoading = true;
     this.backendService.getAllWorkspacesList().subscribe(workspaces => {
-      this.setObjectsDatasource(workspaces);
+      this.workspacesUpdated.emit(this.workspacesChanged());
+      this.setObjectsDatasource(workspaces.data);
       this.tableSelectionCheckboxes.clear();
       this.tableSelectionRow.clear();
-      this.appService.dataLoading = false;
-      if (this.selectedWorkspacesIds?.length > 0) {
-        this.tableSelectionCheckboxes.select(...workspaces
-          .filter(workspace => this.selectedWorkspacesIds.includes(workspace.id)));
+      if (this.selectedWorkspacesIds()?.length > 0) {
+        this.tableSelectionCheckboxes.select(...workspaces.data
+          .filter(workspace => this.selectedWorkspacesIds().includes(workspace.id)));
         this.workspaceSelectionChanged.emit(this.tableSelectionCheckboxes.selected);
       }
     });

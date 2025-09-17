@@ -1,8 +1,6 @@
 @if (objectsDatasource.data.length) {
-      <coding-box-search-filter
-        [title]="'search-filter.filter-workspaces' | translate"
-        (valueChange)="objectsDatasource.filter = $event.trim().toLowerCase()">
-      </coding-box-search-filter>
+      <coding-box-search-filter [title]="'search-filter.filter-workspaces' | translate"
+        (valueChange)="objectsDatasource.filter = $event.trim().toLowerCase()" />
     }
 
     <mat-table [dataSource]="objectsDatasource"
@@ -13,14 +11,12 @@
         <mat-header-cell *matHeaderCellDef class="fx-flex-row-fix-70">
           <mat-checkbox [checked]="(tableSelectionCheckboxes | hasSelectionValue : tableSelectionCheckboxes.selected.length) &&  (tableSelectionCheckboxes.selected.length | isAllSelected : objectsDatasource.data.length)"
             [indeterminate]="(tableSelectionCheckboxes | hasSelectionValue : tableSelectionCheckboxes.selected.length) && !(tableSelectionCheckboxes.selected.length | isAllSelected : objectsDatasource.data.length)"
-            (change)="$event ? masterToggle() : null">
-          </mat-checkbox>
+            (change)="$event ? masterToggle() : null" />
         </mat-header-cell>
         <mat-cell *matCellDef="let row" class="fx-flex-row-fix-70">
           <mat-checkbox [checked]="tableSelectionCheckboxes | isSelected: row : tableSelectionCheckboxes.selected.length"
             (click)="$event.stopPropagation()"
-            (change)="$event ? selectCheckbox(row) : null">
-          </mat-checkbox>
+            (change)="$event ? selectCheckbox(row) : null" />
         </mat-cell>
       </ng-container>
 
@@ -32,9 +28,8 @@
         <mat-cell *matCellDef="let element"> {{element.name}} </mat-cell>
       </ng-container>
 
-      <mat-header-row *matHeaderRowDef="displayedColumns"></mat-header-row>
+      <mat-header-row *matHeaderRowDef="displayedColumns" />
       <mat-row *matRowDef="let row; columns: displayedColumns;"
         [class.selected] = "row | isSelectedId: selectedWorkspaceId"
-        (click)="toggleRowSelection(row)">
-      </mat-row>
+        (click)="toggleRowSelection(row)" />
     </mat-table>

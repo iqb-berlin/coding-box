@@ -1,4 +1,4 @@
-import { Component, Input } from '@angular/core';
+import { Component, input } from '@angular/core';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatIcon } from '@angular/material/icon';
 import { MatMenuItem } from '@angular/material/menu';
@@ -7,10 +7,9 @@ import { MatMenuItem } from '@angular/material/menu';
   selector: 'coding-box-account-action',
   templateUrl: './account-action.component.html',
   styleUrls: ['./account-action.component.scss'],
-  standalone: true,
   imports: [MatMenuItem, MatIcon, TranslateModule]
 })
 export class AccountActionComponent {
-  @Input() type!: 'changePassword' | 'logout' | 'editMyData';
-  @Input() iconName!: string;
+  readonly type = input.required<'changePassword' | 'logout' | 'editMyData'>();
+  readonly iconName = input.required<string>();
 }

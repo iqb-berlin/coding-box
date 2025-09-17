@@ -1,0 +1,253 @@
+.dialog-container {
+  display: flex;
+  flex-direction: column;
+  min-width: 600px;
+  max-width: 800px;
+  max-height: 80vh;
+}
+
+.dialog-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 24px;
+}
+
+.dialog-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 500;
+}
+
+.dialog-content {
+  flex: 1;
+  padding: 24px;
+  overflow-y: auto;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding: 16px 24px;
+}
+
+.loading-container, .error-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  text-align: center;
+}
+
+.error-container {
+  color: #f44336;
+}
+
+.error-container mat-icon {
+  font-size: 48px;
+  height: 48px;
+  width: 48px;
+  margin-bottom: 16px;
+}
+
+.tab-content {
+  padding: 24px 0;
+}
+
+.info-section {
+  margin-bottom: 24px;
+}
+
+.info-section h3 {
+  margin-top: 0;
+  margin-bottom: 16px;
+  font-size: 16px;
+  font-weight: 500;
+  color: #333;
+}
+
+.info-item {
+  display: flex;
+  margin-bottom: 8px;
+  line-height: 1.5;
+}
+
+.info-label {
+  font-weight: 500;
+  min-width: 120px;
+  color: #555;
+}
+
+.info-value {
+  flex: 1;
+}
+
+.units-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.unit-item {
+  padding: 12px;
+  border-radius: 4px;
+  background-color: #f5f5f5;
+  border-left: 4px solid #3f51b5;
+}
+
+.unit-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.unit-position {
+  background-color: #3f51b5;
+  color: white;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.unit-id {
+  font-weight: 500;
+  color: #333;
+}
+
+.unit-alias {
+  color: #666;
+  font-size: 14px;
+}
+
+.unit-label {
+  color: #666;
+  font-size: 14px;
+  margin-left: 32px;
+}
+
+// Config styles
+.config-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.config-item {
+  display: flex;
+  padding: 8px 12px;
+  background-color: #f5f5f5;
+  border-radius: 4px;
+  border-left: 4px solid #4caf50;
+}
+
+.config-key {
+  font-weight: 500;
+  color: #333;
+  min-width: 180px;
+}
+
+.config-value {
+  color: #666;
+}
+
+// Testlet styles
+.testlets-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.testlet-item {
+  padding: 16px;
+  border-radius: 4px;
+  background-color: #f0f0f0;
+  border-left: 4px solid #ff9800;
+}
+
+.testlet-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.testlet-id {
+  font-weight: 500;
+  font-size: 16px;
+  color: #333;
+}
+
+.testlet-label {
+  color: #666;
+}
+
+.testlet-restrictions {
+  margin-bottom: 16px;
+  padding: 12px;
+  background-color: #fff3e0;
+  border-radius: 4px;
+}
+
+.testlet-restrictions h4 {
+  margin-top: 0;
+  margin-bottom: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #e65100;
+}
+
+.testlet-restriction {
+  display: flex;
+  margin-bottom: 4px;
+}
+
+.restriction-type {
+  font-weight: 500;
+  min-width: 120px;
+  color: #555;
+}
+
+.testlet-units {
+  margin-top: 12px;
+}
+
+.testlet-units h4 {
+  margin-top: 0;
+  margin-bottom: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+}
+
+// Make the units inside testlets slightly different
+.testlet-units .unit-item {
+  background-color: #ffffff;
+  border-left-color: #7986cb;
+}
+
+// XML display styles
+.xml-content {
+  max-height: 500px;
+  overflow: auto;
+  background-color: #f5f5f5;
+  border-radius: 4px;
+  border: 1px solid #e0e0e0;
+}
+
+.xml-content pre {
+  margin: 0;
+  padding: 16px;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 14px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: #333;
+}

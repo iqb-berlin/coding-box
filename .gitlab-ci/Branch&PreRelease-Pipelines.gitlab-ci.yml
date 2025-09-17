@@ -8,9 +8,9 @@
   rules:
     - if: $CI_EXTERNAL_PULL_REQUEST_TARGET_BRANCH_NAME == "develop"
     - if: $CI_COMMIT_BRANCH &&
-          ($CI_COMMIT_BRANCH != "main") &&
-          ($CI_COMMIT_BRANCH != "develop") &&
-          ($CI_PIPELINE_SOURCE != "external_pull_request_event")
+        $CI_COMMIT_BRANCH != "main" &&
+        $CI_COMMIT_BRANCH != "develop" &&
+        $CI_PIPELINE_SOURCE != "external_pull_request_event"
     - if: $CI_COMMIT_TAG
       when: never
 
@@ -18,9 +18,9 @@
   rules:
     - if: $CI_EXTERNAL_PULL_REQUEST_TARGET_BRANCH_NAME == "develop"
     - if: $CI_COMMIT_BRANCH &&
-          ($CI_COMMIT_BRANCH != "main") &&
-          ($CI_COMMIT_BRANCH != "develop") &&
-          ($CI_PIPELINE_SOURCE != "external_pull_request_event")
+        $CI_COMMIT_BRANCH != "main" &&
+        $CI_COMMIT_BRANCH != "develop" &&
+        $CI_PIPELINE_SOURCE != "external_pull_request_event"
       changes:
         - database/*
     - if: $CI_COMMIT_TAG
@@ -42,14 +42,15 @@
 .develop_commit_rules:
   rules:
     - if: $CI_COMMIT_BRANCH &&
-          ($CI_COMMIT_BRANCH == "develop") &&
-          ($CI_PIPELINE_SOURCE != "external_pull_request_event")
+        $CI_COMMIT_BRANCH == "develop" &&
+        $CI_PIPELINE_SOURCE != "external_pull_request_event"
     - if: $CI_COMMIT_TAG
       when: never
 
 .pre-release_rules:
   rules:
-    - if: $CI_COMMIT_TAG =~ /^(?<MAJOR>(?:0|(?:[1-9]\d*)))\.(?<MINOR>(?:0|(?:[1-9]\d*)))\.(?<PATCH>(?:0|(?:[1-9]\d*)))(?:-(?<prerelease>(alpha|beta|rc)((\.)?(\d+))?))$/
+    - if: "$CI_COMMIT_TAG =~ $PRERELEASE_RULES_REGEX"
+
 
 check-default-rules:
   stage: .pre
@@ -58,59 +59,59 @@ check-default-rules:
   rules:
     - !reference [ .default_rules, rules ]
   script:
-    - echo $CI_EXTERNAL_PULL_REQUEST_TARGET_BRANCH_NAME
-    - echo $CI_COMMIT_TAG
-    - if [ "$CI_EXTERNAL_PULL_REQUEST_TARGET_BRANCH_NAME" == "develop" ];
+    - echo ${CI_EXTERNAL_PULL_REQUEST_TARGET_BRANCH_NAME}
+    - echo ${CI_COMMIT_TAG}
+    - if [ "${CI_EXTERNAL_PULL_REQUEST_TARGET_BRANCH_NAME}" == "develop" ];
       then echo "external pull request target branch is 'develop'";
-      else echo "external pull request target branch '$CI_EXTERNAL_PULL_REQUEST_TARGET_BRANCH_NAME' != 'develop'"; fi
-    - if [ "$CI_EXTERNAL_PULL_REQUEST_TARGET_BRANCH_NAME" != "develop" ];
+      else echo "external pull request target branch '${CI_EXTERNAL_PULL_REQUEST_TARGET_BRANCH_NAME}' != 'develop'"; fi
+    - if [ "${CI_EXTERNAL_PULL_REQUEST_TARGET_BRANCH_NAME}" != "develop" ];
       then echo "external pull request target branch is not 'develop'";
-      else echo "external pull request target branch '$CI_EXTERNAL_PULL_REQUEST_TARGET_BRANCH_NAME' == 'develop'"; fi
-    - echo $CI_COMMIT_BRANCH
-    - echo $CI_PIPELINE_SOURCE
-    - echo $CI_COMMIT_TAG
-    - if [ -n "$CI_COMMIT_BRANCH" ];
+      else echo "external pull request target branch '${CI_EXTERNAL_PULL_REQUEST_TARGET_BRANCH_NAME}' == 'develop'"; fi
+    - echo ${CI_COMMIT_BRANCH}
+    - echo ${CI_PIPELINE_SOURCE}
+    - echo ${CI_COMMIT_TAG}
+    - if [ -n "${CI_COMMIT_BRANCH}" ];
       then echo "commit branch string length is nonzero";
-      else echo "commit branch = '$CI_COMMIT_BRANCH'"; fi
-    - if [ -z "$CI_COMMIT_BRANCH" ];
+      else echo "commit branch = '${CI_COMMIT_BRANCH}'"; fi
+    - if [ -z "${CI_COMMIT_BRANCH}" ];
       then echo "commit branch string length is zero";
-      else echo "commit branch = '$CI_COMMIT_BRANCH'"; fi
-    - if [ "$CI_COMMIT_BRANCH" != "main" ];
+      else echo "commit branch = '${CI_COMMIT_BRANCH}'"; fi
+    - if [ "${CI_COMMIT_BRANCH}" != "main" ];
       then echo "commit branch is not 'main'";
-      else echo "'$CI_COMMIT_BRANCH' == 'main'"; fi
-    - if [ "$CI_COMMIT_BRANCH" = "main" ];
+      else echo "'${CI_COMMIT_BRANCH}' == 'main'"; fi
+    - if [ "${CI_COMMIT_BRANCH}" = "main" ];
       then echo "commit branch is 'main'";
-      else echo "'$CI_COMMIT_BRANCH' != 'main'"; fi
-    - if [ "$CI_COMMIT_BRANCH" != "develop" ];
+      else echo "'${CI_COMMIT_BRANCH}' != 'main'"; fi
+    - if [ "${CI_COMMIT_BRANCH}" != "develop" ];
       then echo "commit branch is not 'develop'";
-      else echo "'$CI_COMMIT_BRANCH' == 'develop'"; fi
-    - if [ "$CI_COMMIT_BRANCH" = "develop" ];
+      else echo "'${CI_COMMIT_BRANCH}' == 'develop'"; fi
+    - if [ "${CI_COMMIT_BRANCH}" = "develop" ];
       then echo "commit branch is 'develop'";
-      else echo "'$CI_COMMIT_BRANCH' != 'develop'"; fi
-    - if [ "$CI_PIPELINE_SOURCE" != "external_pull_request_event" ];
+      else echo "'${CI_COMMIT_BRANCH}' != 'develop'"; fi
+    - if [ "${CI_PIPELINE_SOURCE}" != "external_pull_request_event" ];
       then echo "pipeline source is not 'external_pull_request_event'";
-      else echo "'$CI_PIPELINE_SOURCE' == 'external_pull_request_event'"; fi
-    - if [ "$CI_PIPELINE_SOURCE" = "external_pull_request_event" ];
+      else echo "'${CI_PIPELINE_SOURCE}' == 'external_pull_request_event'"; fi
+    - if [ "${CI_PIPELINE_SOURCE}" = "external_pull_request_event" ];
       then echo "pipeline source is 'external_pull_request_event'" ;
-      else echo "'$CI_PIPELINE_SOURCE' != 'external_pull_request_event'"; fi
-    - if [ -n "$CI_COMMIT_BRANCH" ] &&
-          [ "$CI_COMMIT_BRANCH" != "main" ] &&
-          [ "$CI_COMMIT_BRANCH" != "develop" ] &&
-          [ "$CI_PIPELINE_SOURCE" != "external_pull_request_event" ];
+      else echo "'${CI_PIPELINE_SOURCE}' != 'external_pull_request_event'"; fi
+    - if [ -n "${CI_COMMIT_BRANCH}" ] &&
+        [ "${CI_COMMIT_BRANCH}" != "main" ] &&
+        [ "${CI_COMMIT_BRANCH}" != "develop" ] &&
+        [ "${CI_PIPELINE_SOURCE}" != "external_pull_request_event" ];
       then echo "commit branch exists, isn't 'main', isn't 'develop', and it's not an external pull request";
-      else echo "commit branch = '$CI_COMMIT_BRANCH', pipeline source = '$CI_PIPELINE_SOURCE'"; fi
-    - if [ -z "$CI_COMMIT_BRANCH" ] ||
-          [ "$CI_COMMIT_BRANCH" = "main" ] ||
-          [ "$CI_COMMIT_BRANCH" = "develop" ] ||
-          [ "$CI_PIPELINE_SOURCE" = "external_pull_request_event" ];
+      else echo "commit branch = '${CI_COMMIT_BRANCH}', pipeline source = '${CI_PIPELINE_SOURCE}'"; fi
+    - if [ -z "${CI_COMMIT_BRANCH}" ] ||
+        [ "${CI_COMMIT_BRANCH}" = "main" ] ||
+        [ "${CI_COMMIT_BRANCH}" = "develop" ] ||
+        [ "${CI_PIPELINE_SOURCE}" = "external_pull_request_event" ];
       then echo "commit branch doesn't exist or is 'main' or is 'develop' or it's an external pull request";
-      else echo "commit branch = '$CI_COMMIT_BRANCH', pipeline source = '$CI_PIPELINE_SOURCE'"; fi
-    - if [ -z "$CI_COMMIT_TAG" ];
+      else echo "commit branch = '${CI_COMMIT_BRANCH}', pipeline source = '${CI_PIPELINE_SOURCE}'"; fi
+    - if [ -z "${CI_COMMIT_TAG}" ];
       then echo "commit tag string length is zero";
-      else echo "commit tag = '$CI_COMMIT_TAG'"; fi
-    - if [ -n "$CI_COMMIT_TAG" ];
+      else echo "commit tag = '${CI_COMMIT_TAG}'"; fi
+    - if [ -n "${CI_COMMIT_TAG}" ];
       then echo "commit tag string length is nonzero";
-      else echo "commit tag = '$CI_COMMIT_TAG'"; fi
+      else echo "commit tag = '${CI_COMMIT_TAG}'"; fi
 
 check-develop-pr-rules:
   stage: .pre
@@ -119,20 +120,20 @@ check-develop-pr-rules:
   rules:
     - !reference [ .develop_pr_rules, rules ]
   script:
-    - echo $CI_EXTERNAL_PULL_REQUEST_TARGET_BRANCH_NAME
-    - echo $CI_COMMIT_TAG
-    - if [ "$CI_EXTERNAL_PULL_REQUEST_TARGET_BRANCH_NAME" == "develop" ];
+    - echo "${CI_EXTERNAL_PULL_REQUEST_TARGET_BRANCH_NAME}"
+    - echo "${CI_COMMIT_TAG}"
+    - if [ "${CI_EXTERNAL_PULL_REQUEST_TARGET_BRANCH_NAME}" == "develop" ];
       then echo "external pull request target branch is 'develop'";
-      else echo "external pull request target branch '$CI_EXTERNAL_PULL_REQUEST_TARGET_BRANCH_NAME' != 'develop'"; fi
-    - if [ "$CI_EXTERNAL_PULL_REQUEST_TARGET_BRANCH_NAME" != "develop" ];
+      else echo "external pull request target branch '${CI_EXTERNAL_PULL_REQUEST_TARGET_BRANCH_NAME}' != 'develop'"; fi
+    - if [ "${CI_EXTERNAL_PULL_REQUEST_TARGET_BRANCH_NAME}" != "develop" ];
       then echo "external pull request target branch is not 'develop'";
-      else echo "external pull request target branch '$CI_EXTERNAL_PULL_REQUEST_TARGET_BRANCH_NAME' == 'develop'"; fi
-    - if [ -z "$CI_COMMIT_TAG" ];
+      else echo "external pull request target branch '${CI_EXTERNAL_PULL_REQUEST_TARGET_BRANCH_NAME}' == 'develop'"; fi
+    - if [ -z "${CI_COMMIT_TAG}" ];
       then echo "commit tag string length is zero";
-      else echo "commit tag = '$CI_COMMIT_TAG'"; fi
-    - if [ -n "$CI_COMMIT_TAG" ];
+      else echo "commit tag = '${CI_COMMIT_TAG}'"; fi
+    - if [ -n "${CI_COMMIT_TAG}" ];
       then echo "commit tag string length is nonzero";
-      else echo "commit tag = '$CI_COMMIT_TAG'"; fi
+      else echo "commit tag = '${CI_COMMIT_TAG}'"; fi
 
 check-develop-commit-rules:
   stage: .pre
@@ -141,43 +142,43 @@ check-develop-commit-rules:
   rules:
     - !reference [ .develop_commit_rules, rules ]
   script:
-    - echo $CI_COMMIT_BRANCH
-    - echo $CI_PIPELINE_SOURCE
-    - echo $CI_COMMIT_TAG
-    - if [ -n "$CI_COMMIT_BRANCH" ];
+    - echo ${CI_COMMIT_BRANCH}
+    - echo ${CI_PIPELINE_SOURCE}
+    - echo ${CI_COMMIT_TAG}
+    - if [ -n "${CI_COMMIT_BRANCH}" ];
       then echo "commit branch string length is nonzero";
-      else echo "commit branch = '$CI_COMMIT_BRANCH'"; fi
-    - if [ -z "$CI_COMMIT_BRANCH" ];
+      else echo "commit branch = '${CI_COMMIT_BRANCH}'"; fi
+    - if [ -z "${CI_COMMIT_BRANCH}" ];
       then echo "commit branch string length is zero";
-      else echo "commit branch = '$CI_COMMIT_BRANCH'"; fi
-    - if [ "$CI_COMMIT_BRANCH" = "develop" ];
+      else echo "commit branch = '${CI_COMMIT_BRANCH}'"; fi
+    - if [ "${CI_COMMIT_BRANCH}" = "develop" ];
       then echo "commit branch is 'develop'";
-      else echo "'$CI_COMMIT_BRANCH' != 'develop'"; fi
-    - if [ "$CI_COMMIT_BRANCH" != "develop" ];
+      else echo "'${CI_COMMIT_BRANCH}' != 'develop'"; fi
+    - if [ "${CI_COMMIT_BRANCH}" != "develop" ];
       then echo "commit branch is not 'develop'";
-      else echo "'$CI_COMMIT_BRANCH' == 'develop'"; fi
-    - if [ "$CI_PIPELINE_SOURCE" != "external_pull_request_event" ];
+      else echo "'${CI_COMMIT_BRANCH}' == 'develop'"; fi
+    - if [ "${CI_PIPELINE_SOURCE}" != "external_pull_request_event" ];
       then echo "pipeline source is not 'external_pull_request_event'";
-      else echo "'$CI_PIPELINE_SOURCE' == 'external_pull_request_event'"; fi
-    - if [ "$CI_PIPELINE_SOURCE" = "external_pull_request_event" ];
+      else echo "'${CI_PIPELINE_SOURCE}' == 'external_pull_request_event'"; fi
+    - if [ "${CI_PIPELINE_SOURCE}" = "external_pull_request_event" ];
       then echo "pipeline source is 'external_pull_request_event'";
-      else echo "'$CI_PIPELINE_SOURCE' != 'external_pull_request_event'"; fi
-    - if [ -n "$CI_COMMIT_BRANCH" ] &&
-          [ "$CI_COMMIT_BRANCH" = "develop" ] &&
-          [ "$CI_PIPELINE_SOURCE" != "external_pull_request_event" ];
+      else echo "'${CI_PIPELINE_SOURCE}' != 'external_pull_request_event'"; fi
+    - if [ -n "${CI_COMMIT_BRANCH}" ] &&
+        [ "${CI_COMMIT_BRANCH}" = "develop" ] &&
+        [ "${CI_PIPELINE_SOURCE}" != "external_pull_request_event" ];
       then echo "commit branch exists, is 'develop', and it's not an external pull request";
-      else echo "commit branch = '$CI_COMMIT_BRANCH', pipeline source = '$CI_PIPELINE_SOURCE'"; fi
-    - if [ -z "$CI_COMMIT_BRANCH" ] ||
-          [ "$CI_COMMIT_BRANCH" != "develop" ] ||
-          [ "$CI_PIPELINE_SOURCE" = "external_pull_request_event" ];
+      else echo "commit branch = '${CI_COMMIT_BRANCH}', pipeline source = '${CI_PIPELINE_SOURCE}'"; fi
+    - if [ -z "${CI_COMMIT_BRANCH}" ] ||
+        [ "${CI_COMMIT_BRANCH}" != "develop" ] ||
+        [ "${CI_PIPELINE_SOURCE}" = "external_pull_request_event" ];
       then echo "commit branch doesn't exist or isn't 'develop' or it's an external pull request";
-      else echo "commit branch = '$CI_COMMIT_BRANCH', pipeline source = '$CI_PIPELINE_SOURCE'"; fi
-    - if [ -z "$CI_COMMIT_TAG" ];
+      else echo "commit branch = '${CI_COMMIT_BRANCH}', pipeline source = '${CI_PIPELINE_SOURCE}'"; fi
+    - if [ -z "${CI_COMMIT_TAG}" ];
       then echo "commit tag string length is zero";
-      else echo "commit tag = '$CI_COMMIT_TAG'"; fi
-    - if [ -n "$CI_COMMIT_TAG" ];
+      else echo "commit tag = '${CI_COMMIT_TAG}'"; fi
+    - if [ -n "${CI_COMMIT_TAG}" ];
       then echo "commit tag string length is nonzero";
-      else echo "commit tag = '$CI_COMMIT_TAG'"; fi
+      else echo "commit tag = '${CI_COMMIT_TAG}'"; fi
 
 check-pre-release-rules:
   stage: .pre
@@ -185,13 +186,11 @@ check-pre-release-rules:
   allow_failure: true
   rules:
     - !reference [ .pre-release_rules, rules ]
-  before_script:
-    - PRERELEASE_REGEX="^(0|([1-9][0-9]*))\.(0|([1-9][0-9]*))\.(0|([1-9][0-9]*))(-((alpha|beta|rc)((\.)?([0-9]+))?))$"
   script:
-    - echo $PRERELEASE_REGEX
-    - if [[ $CI_COMMIT_TAG =~ $PRERELEASE_REGEX ]];
-      then echo "$CI_COMMIT_TAG is a valid pre-release tag.";
-      else echo "$CI_COMMIT_TAG is not a valid pre-release tag!"; fi
+    - echo ${PRERELEASE_SCRIPT_REGEX}
+    - if [[ ${CI_COMMIT_TAG} =~ ${PRERELEASE_SCRIPT_REGEX} ]];
+      then echo "${CI_COMMIT_TAG} is a valid pre-release tag.";
+      else echo "${CI_COMMIT_TAG} is not a valid pre-release tag!"; fi
 
 install-dependencies:
   stage: build
@@ -206,13 +205,11 @@ install-dependencies:
     paths:
       - node_modules
       - .npm/
-#      - cache/Cypress
   script:
     - npm ci --cache .npm --prefer-offline --no-fund
   artifacts:
     paths:
       - node_modules
-#      - cache/Cypress
 
 build-cicd-base-image:
   stage: build
@@ -221,25 +218,29 @@ build-cicd-base-image:
       changes:
         - .gitlab-ci/CICD.Dockerfile
     - if: $CI_COMMIT_BRANCH &&
-        ($CI_COMMIT_BRANCH != "main") &&
-        ($CI_COMMIT_BRANCH != "develop") &&
-        ($CI_PIPELINE_SOURCE != "external_pull_request_event")
+        $CI_COMMIT_BRANCH != "main" &&
+        $CI_COMMIT_BRANCH != "develop" &&
+        $CI_PIPELINE_SOURCE != "external_pull_request_event"
       changes:
         - .gitlab-ci.yml
         - .gitlab-ci/CICD.Dockerfile
     - if: $CI_COMMIT_TAG
       when: never
   needs: []
-  image: $DOCKER_IMAGE
+  image: ${DOCKER_IMAGE}
   services:
-    - name: $DOCKER_SERVICE
-      entrypoint: [ "sh", "-c", "dockerd-entrypoint.sh $DOCKER_DAEMON_OPTIONS" ]
+    - name: ${DOCKER_SERVICE}
+      variables:
+        HEALTHCHECK_TCP_PORT: "2375"
+      entrypoint: [ "sh", "-c", "dockerd-entrypoint.sh ${DOCKER_DAEMON_OPTIONS}" ]
       alias: docker
   before_script:
+    - docker --version
+    - until docker info &> /dev/null; do println "Wait until docker daemon is started ...\n" && sleep 1; done
     - ip a | grep mtu
     - docker network inspect bridge | grep mtu
-    - docker login -u $CI_DEPENDENCY_PROXY_USER -p $CI_DEPENDENCY_PROXY_PASSWORD $CI_DEPENDENCY_PROXY_SERVER
-    - echo "$REGISTRY_PASSWORD" | docker login -u $REGISTRY_USER --password-stdin $REGISTRY
+    - docker login -u ${CI_DEPENDENCY_PROXY_USER} -p ${CI_DEPENDENCY_PROXY_PASSWORD} ${CI_DEPENDENCY_PROXY_SERVER}
+    - echo "${REGISTRY_PASSWORD}" | docker login -u ${REGISTRY_USER} --password-stdin ${REGISTRY}
   script:
     - docker build
           --progress plain
@@ -248,49 +249,13 @@ build-cicd-base-image:
           --build-arg BASE_IMAGE=${BASE_IMAGE}
           --build-arg BUILDKIT_INLINE_CACHE=1
           --cache-from ${CI_REGISTRY_IMAGE}/${CICD_BASE_IMAGE}
-          -f .gitlab-ci/CICD.Dockerfile
-          -t ${CI_REGISTRY_IMAGE}/${CICD_BASE_IMAGE}
+          --file .gitlab-ci/CICD.Dockerfile
+          --tag ${CI_REGISTRY_IMAGE}/${CICD_BASE_IMAGE}
         .
     - docker push -q ${CI_REGISTRY_IMAGE}/${CICD_BASE_IMAGE}
   after_script:
-    - docker logout $CI_DEPENDENCY_PROXY_SERVER
-    - docker logout $REGISTRY
-
-#build-e2e-base-image:
-#  stage: build
-#  rules:
-#    - if: $CI_EXTERNAL_PULL_REQUEST_TARGET_BRANCH_NAME == "develop"
-#      changes:
-#        - .gitlab-ci.yml
-#        - .gitlab-ci/E2E.Dockerfile
-#    - if: $CI_COMMIT_TAG
-#      when: never
-#  needs: []
-#  image: $DOCKER_IMAGE
-#  services:
-#    - name: $DOCKER_SERVICE
-#      entrypoint: [ "sh", "-c", "dockerd-entrypoint.sh $DOCKER_DAEMON_OPTIONS" ]
-#      alias: docker
-#  before_script:
-#    - ip a | grep mtu
-#    - docker network inspect bridge | grep mtu
-#    - docker login -u $CI_DEPENDENCY_PROXY_USER -p $CI_DEPENDENCY_PROXY_PASSWORD $CI_DEPENDENCY_PROXY_SERVER
-#    - echo "$REGISTRY_PASSWORD" | docker login -u $REGISTRY_USER --password-stdin $REGISTRY
-#  script:
-#    - docker build
-#          --progress plain
-#          --pull
-#          --build-arg REGISTRY_PATH=${DOCKER_HUB_PROXY}
-#          --build-arg BASE_IMAGE=${CYPRESS_IMAGE}
-#          --build-arg BUILDKIT_INLINE_CACHE=1
-#          --cache-from ${CI_REGISTRY_IMAGE}/${E2E_BASE_IMAGE}
-#          -f .gitlab-ci/E2E.Dockerfile
-#          -t ${CI_REGISTRY_IMAGE}/${E2E_BASE_IMAGE}
-#        .
-#    - docker push -q ${CI_REGISTRY_IMAGE}/${E2E_BASE_IMAGE}
-#  after_script:
-#    - docker logout $CI_DEPENDENCY_PROXY_SERVER
-#    - docker logout $REGISTRY
+    - docker logout ${CI_DEPENDENCY_PROXY_SERVER}
+    - docker logout ${REGISTRY}
 
 .distributed:
   interruptible: true
@@ -301,25 +266,28 @@ build-cicd-base-image:
   artifacts:
     paths:
       - node_modules/.cache/nx
-#      - cache/Cypress
 
 build-db-image:
   stage: build
   interruptible: true
   rules:
     - !reference [ .default_db_rules, rules ]
-  image: $DOCKER_IMAGE
+  image: ${DOCKER_IMAGE}
   services:
-    - name: $DOCKER_SERVICE
-      entrypoint: [ "sh", "-c", "dockerd-entrypoint.sh $DOCKER_DAEMON_OPTIONS" ]
+    - name: ${DOCKER_SERVICE}
+      variables:
+        HEALTHCHECK_TCP_PORT: "2375"
+      entrypoint: [ "sh", "-c", "dockerd-entrypoint.sh ${DOCKER_DAEMON_OPTIONS}" ]
       alias: docker
   variables:
     DB_IMAGE_NAME: "${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-db"
   before_script:
+    - docker --version
+    - until docker info &> /dev/null; do println "Wait until docker daemon is started ...\n" && sleep 1; done
     - ip a | grep mtu
     - docker network inspect bridge | grep mtu
-    - docker login -u $CI_DEPENDENCY_PROXY_USER -p $CI_DEPENDENCY_PROXY_PASSWORD $CI_DEPENDENCY_PROXY_SERVER
-    - echo "$REGISTRY_PASSWORD" | docker login -u $REGISTRY_USER --password-stdin $REGISTRY
+    - docker login -u ${CI_DEPENDENCY_PROXY_USER} -p ${CI_DEPENDENCY_PROXY_PASSWORD} ${CI_DEPENDENCY_PROXY_SERVER}
+    - echo "${REGISTRY_PASSWORD}" | docker login -u ${REGISTRY_USER} --password-stdin ${REGISTRY}
   script:
     - docker build
           --progress plain
@@ -327,32 +295,36 @@ build-db-image:
           --build-arg REGISTRY_PATH=${DOCKER_HUB_PROXY}
           --build-arg BUILDKIT_INLINE_CACHE=1
           --cache-from ${DB_IMAGE_NAME}:latest
-          -f database/Postgres.Dockerfile
-          -t ${DB_IMAGE_NAME}:${CI_COMMIT_SHA}
-          -t ${DB_IMAGE_NAME}:latest
+          --file database/Postgres.Dockerfile
+          --tag ${DB_IMAGE_NAME}:${CI_COMMIT_SHA}
+          --tag ${DB_IMAGE_NAME}:latest
         .
     - docker push -q -a ${DB_IMAGE_NAME}
   after_script:
-    - docker logout $CI_DEPENDENCY_PROXY_SERVER
-    - docker logout $REGISTRY
+    - docker logout ${CI_DEPENDENCY_PROXY_SERVER}
+    - docker logout ${REGISTRY}
 
 build-liquibase-image:
   stage: build
   interruptible: true
   rules:
     - !reference [ .default_db_rules, rules ]
-  image: $DOCKER_IMAGE
+  image: ${DOCKER_IMAGE}
   services:
-    - name: $DOCKER_SERVICE
-      entrypoint: [ "sh", "-c", "dockerd-entrypoint.sh $DOCKER_DAEMON_OPTIONS" ]
+    - name: ${DOCKER_SERVICE}
+      variables:
+        HEALTHCHECK_TCP_PORT: "2375"
+      entrypoint: [ "sh", "-c", "dockerd-entrypoint.sh ${DOCKER_DAEMON_OPTIONS}" ]
       alias: docker
   variables:
     LIQUIBASE_IMAGE_NAME: "${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-liquibase"
   before_script:
+    - docker --version
+    - until docker info &> /dev/null; do println "Wait until docker daemon is started ...\n" && sleep 1; done
     - ip a | grep mtu
     - docker network inspect bridge | grep mtu
-    - docker login -u $CI_DEPENDENCY_PROXY_USER -p $CI_DEPENDENCY_PROXY_PASSWORD $CI_DEPENDENCY_PROXY_SERVER
-    - echo "$REGISTRY_PASSWORD" | docker login -u $REGISTRY_USER --password-stdin $REGISTRY
+    - docker login -u ${CI_DEPENDENCY_PROXY_USER} -p ${CI_DEPENDENCY_PROXY_PASSWORD} ${CI_DEPENDENCY_PROXY_SERVER}
+    - echo "${REGISTRY_PASSWORD}" | docker login -u ${REGISTRY_USER} --password-stdin ${REGISTRY}
   script:
     - docker build
           --progress plain
@@ -360,14 +332,14 @@ build-liquibase-image:
           --build-arg REGISTRY_PATH=${DOCKER_HUB_PROXY}
           --build-arg BUILDKIT_INLINE_CACHE=1
           --cache-from ${LIQUIBASE_IMAGE_NAME}:latest
-          -f database/Liquibase.Dockerfile
-          -t ${LIQUIBASE_IMAGE_NAME}:${CI_COMMIT_SHA}
-          -t ${LIQUIBASE_IMAGE_NAME}:latest
+          --file database/Liquibase.Dockerfile
+          --tag ${LIQUIBASE_IMAGE_NAME}:${CI_COMMIT_SHA}
+          --tag ${LIQUIBASE_IMAGE_NAME}:latest
         .
     - docker push -q -a ${LIQUIBASE_IMAGE_NAME}
   after_script:
-    - docker logout $CI_DEPENDENCY_PROXY_SERVER
-    - docker logout $REGISTRY
+    - docker logout ${CI_DEPENDENCY_PROXY_SERVER}
+    - docker logout ${REGISTRY}
 
 build-app:
   stage: build
@@ -390,30 +362,36 @@ test-db:
   needs:
     - build-db-image
     - build-liquibase-image
-  image: $DOCKER_IMAGE
+  image: ${DOCKER_IMAGE}
   services:
-    - name: $DOCKER_SERVICE
-      entrypoint: [ "sh", "-c", "dockerd-entrypoint.sh $DOCKER_DAEMON_OPTIONS" ]
+    - name: ${DOCKER_SERVICE}
+      variables:
+        HEALTHCHECK_TCP_PORT: "2375"
+      entrypoint: [ "sh", "-c", "dockerd-entrypoint.sh ${DOCKER_DAEMON_OPTIONS}" ]
       alias: docker
   before_script:
+    - docker --version
+    - until docker info &> /dev/null; do println "Wait until docker daemon is started ...\n" && sleep 1; done
+    - ip a | grep mtu
+    - docker network inspect bridge | grep mtu
     - sed -i "s^REGISTRY_PATH=.*$^REGISTRY_PATH=${CI_REGISTRY_IMAGE}/^" .env.coding-box.template
     - sed -i "s/TAG=.*$/TAG=${CI_COMMIT_SHA}/" .env.coding-box.template
-    - echo "$REGISTRY_PASSWORD" | docker login -u $REGISTRY_USER --password-stdin $REGISTRY
+    - echo "${REGISTRY_PASSWORD}" | docker login -u ${REGISTRY_USER} --password-stdin ${REGISTRY}
     - docker network create app-net
     - docker compose
-          -f docker-compose.coding-box.yaml
-          -f docker-compose.coding-box.prod.yaml
+          --file docker-compose.coding-box.yaml
+          --file docker-compose.coding-box.prod.yaml
           --env-file .env.coding-box.template
         pull --quiet db liquibase
     - docker compose
-          -f docker-compose.yaml
-          -f docker-compose.coding-box.prod.yaml
+          --file docker-compose.coding-box.yaml
+          --file docker-compose.coding-box.prod.yaml
           --env-file .env.coding-box.template
         up -d db
     - export $(grep -v '^#' .env.coding-box.template | xargs)
     - docker compose
-          -f docker-compose.coding-box.yaml
-          -f docker-compose.coding-box.prod.yaml
+          --file docker-compose.coding-box.yaml
+          --file docker-compose.coding-box.prod.yaml
           --env-file .env.coding-box.template
         run --rm liquibase
           liquibase
@@ -424,8 +402,8 @@ test-db:
               --classpath changelog
             status
     - docker compose
-          -f docker-compose.coding-box.yaml
-          -f docker-compose.coding-box.prod.yaml
+          --file docker-compose.coding-box.yaml
+          --file docker-compose.coding-box.prod.yaml
           --env-file .env.coding-box.template
         run --rm liquibase
           liquibase
@@ -436,8 +414,8 @@ test-db:
               --classpath changelog
             validate
     - docker compose
-          -f docker-compose.coding-box.yaml
-          -f docker-compose.coding-box.prod.yaml
+          --file docker-compose.coding-box.yaml
+          --file docker-compose.coding-box.prod.yaml
           --env-file .env.coding-box.template
         run --rm liquibase
           liquibase
@@ -449,8 +427,8 @@ test-db:
             updateSQL
   script:
     - docker compose
-          -f docker-compose.coding-box.yaml
-          -f docker-compose.coding-box.prod.yaml
+          --file docker-compose.coding-box.yaml
+          --file docker-compose.coding-box.prod.yaml
           --env-file .env.coding-box.template
         run --rm liquibase
           liquibase
@@ -461,8 +439,8 @@ test-db:
               --classpath changelog
             updateTestingRollback
     - docker compose
-          -f docker-compose.coding-box.yaml
-          -f docker-compose.coding-box.prod.yaml
+          --file docker-compose.coding-box.yaml
+          --file docker-compose.coding-box.prod.yaml
           --env-file .env.coding-box.template
         run --rm liquibase
           liquibase
@@ -483,296 +461,6 @@ test-app:
   image: ${CI_REGISTRY_IMAGE}/${CICD_BASE_IMAGE}
   script:
     - npx nx affected --base=HEAD~1 --target=test --parallel=2
-
-#test-app-e2e:
-#  stage: test-e2e
-#  interruptible: true
-#  allow_failure: true
-#  extends: .distributed
-#  rules:
-#    - !reference [ .develop_pr_rules, rules ]
-#  image: ${CI_REGISTRY_IMAGE}/${E2E_BASE_IMAGE}
-#  services:
-#    - name: $DOCKER_SERVICE
-#      entrypoint: [ "sh", "-c", "dockerd-entrypoint.sh $DOCKER_DAEMON_OPTIONS" ]
-#      alias: docker
-#  before_script:
-#    - docker network create app-net
-#    - echo "$REGISTRY_PASSWORD" | docker login -u $REGISTRY_USER --password-stdin $REGISTRY
-#    - docker pull --quiet ${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-db:${CI_COMMIT_SHA}
-#    - docker pull --quiet ${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-liquibase:${CI_COMMIT_SHA}
-#    - docker tag ${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-db:${CI_COMMIT_SHA} coding-box-db:latest
-#    - docker tag ${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-liquibase:${CI_COMMIT_SHA} coding-box-liquibase:latest
-#    - mv .env.dev.template .env.dev
-#    - docker compose --env-file .env.dev up -d --no-build --pull never db liquibase
-#    - npx cypress cache path # show where the Cypress test runner binaries are cached
-#    - npx cypress cache list # show all installed versions of Cypress binary
-#    - npx cypress verify
-#    - export POSTGRES_HOST=docker
-#  script:
-#    - npx nx serve api --verbose --watch=false & # start backend
-#    - npx nx e2e frontend-e2e --prod --browser chrome || ( pkill npx && exit 1 )
-#  after_script:
-#    - docker logout $REGISTRY
-#
-#  test-e2e-electron:
-#    image: ${REGISTRY_PATH}iqbberlin/coding-box-frontend-e2e:${TAG}
-#    command:
-#      - "e2e"
-#      - "frontend-e2e"
-#      - "--baseUrl=http://frontend:8080"
-#    volumes:
-#      - ./apps/frontend-e2e:/usr/src/coding-box/apps/frontend-e2e
-#    networks:
-#      - application-network
-#
-#test-app-e2e-api:
-#  stage: test-e2e
-#  interruptible: true
-#  allow_failure: true
-#  extends: .distributed
-#  rules:
-#    - !reference [ .develop_pr_manual_rules, rules ]
-#  image: ${CI_REGISTRY_IMAGE}/${E2E_BASE_IMAGE}
-#  services:
-#    - name: $DOCKER_SERVICE
-#      entrypoint: [ "sh", "-c", "dockerd-entrypoint.sh $DOCKER_DAEMON_OPTIONS" ]
-#      alias: docker
-#  before_script:
-#    - docker network create app-net
-#    - echo "$REGISTRY_PASSWORD" | docker login -u $REGISTRY_USER --password-stdin $REGISTRY
-#    - docker pull --quiet ${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-db:${CI_COMMIT_SHA}
-#    - docker pull --quiet ${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-liquibase:${CI_COMMIT_SHA}
-#    - docker tag ${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-db:${CI_COMMIT_SHA} coding-box-db:latest
-#    - docker tag ${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-liquibase:${CI_COMMIT_SHA} coding-box-liquibase:latest
-#    - mv .env.dev.template .env.dev
-#    - docker compose --env-file .env.dev up -d --no-build --pull never db liquibase
-#    - npx cypress cache path # show where the Cypress test runner binaries are cached
-#    - npx cypress cache list # show all installed versions of Cypress binary
-#    - npx cypress verify
-#    - export POSTGRES_HOST=docker
-#  script:
-#    - npx nx serve api --verbose --watch=false & # start backend
-#    - npx nx e2e frontend-e2e
-#      --prod
-#      --browser chrome
-#      --spec "./apps/frontend-e2e/src/e2e/api/*" ||
-#      ( pkill npx && exit 1 )
-#  after_script:
-#    - docker logout $REGISTRY
-#
-#test-app-e2e-ui-chrome:
-#  stage: test-e2e
-#  interruptible: true
-#  allow_failure: true
-#  extends: .distributed
-#  rules:
-#    - !reference [ .develop_pr_manual_rules, rules ]
-#  image: ${CI_REGISTRY_IMAGE}/${E2E_BASE_IMAGE}
-#  services:
-#    - name: $DOCKER_SERVICE
-#      entrypoint: [ "sh", "-c", "dockerd-entrypoint.sh $DOCKER_DAEMON_OPTIONS" ]
-#      alias: docker
-#  before_script:
-#    - docker network create app-net
-#    - echo "$REGISTRY_PASSWORD" | docker login -u $REGISTRY_USER --password-stdin $REGISTRY
-#    - docker pull --quiet ${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-db:${CI_COMMIT_SHA}
-#    - docker pull --quiet ${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-liquibase:${CI_COMMIT_SHA}
-#    - docker tag ${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-db:${CI_COMMIT_SHA} coding-box-db:latest
-#    - docker tag ${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-liquibase:${CI_COMMIT_SHA} coding-box-liquibase:latest
-#    - mv .env.dev.template .env.dev
-#    - docker compose --env-file .env.dev up -d --no-build --pull never db liquibase
-#    - npx cypress cache path # show where the Cypress test runner binaries are cached
-#    - npx cypress cache list # show all installed versions of Cypress binary
-#    - npx cypress verify
-#    - export POSTGRES_HOST=docker
-#  script:
-#    - npx nx serve api --watch=false & # start backend
-#    - npx nx e2e frontend-e2e
-#      --prod
-#      --browser chrome
-#      --spec "./apps/frontend-e2e/src/e2e/ui/*" ||
-#      ( pkill npx && exit 1 )
-#  after_script:
-#    - docker logout $REGISTRY
-#
-#test-app-e2e-ui-chrome-mobile:
-#  stage: test-e2e
-#  interruptible: true
-#  allow_failure: true
-#  extends: .distributed
-#  rules:
-#    - !reference [ .develop_pr_manual_rules, rules ]
-#  image: ${CI_REGISTRY_IMAGE}/${E2E_BASE_IMAGE}
-#  services:
-#    - name: $DOCKER_SERVICE
-#      entrypoint: [ "sh", "-c", "dockerd-entrypoint.sh $DOCKER_DAEMON_OPTIONS" ]
-#      alias: docker
-#  before_script:
-#    - docker network create app-net
-#    - echo "$REGISTRY_PASSWORD" | docker login -u $REGISTRY_USER --password-stdin $REGISTRY
-#    - docker pull --quiet ${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-db:${CI_COMMIT_SHA}
-#    - docker pull --quiet ${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-liquibase:${CI_COMMIT_SHA}
-#    - docker tag ${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-db:${CI_COMMIT_SHA} coding-box-db:latest
-#    - docker tag ${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-liquibase:${CI_COMMIT_SHA} coding-box-liquibase:latest
-#    - mv .env.dev.template .env.dev
-#    - docker compose --env-file .env.dev up -d --no-build --pull never db liquibase
-#    - npx cypress cache path # show where the Cypress test runner binaries are cached
-#    - npx cypress cache list # show all installed versions of Cypress binary
-#    - npx cypress verify
-#    - export POSTGRES_HOST=docker
-#  script:
-#    - npx nx serve api --watch=false & # start backend
-#    - npx nx e2e frontend-e2e
-#      --prod
-#      --browser chrome
-#      --spec "./apps/frontend-e2e/src/e2e/ui/*"
-#      --config "viewportWidth=375,viewportHeight=667" ||
-#      ( pkill npx && exit 1 )
-#  after_script:
-#    - docker logout $REGISTRY
-#
-#test-app-e2e-ui-firefox:
-#  stage: test-e2e
-#  interruptible: true
-#  allow_failure: true
-#  extends: .distributed
-#  rules:
-#    - !reference [ .develop_pr_manual_rules, rules ]
-#  image: ${CI_REGISTRY_IMAGE}/${E2E_BASE_IMAGE}
-#  services:
-#    - name: $DOCKER_SERVICE
-#      entrypoint: [ "sh", "-c", "dockerd-entrypoint.sh $DOCKER_DAEMON_OPTIONS" ]
-#      alias: docker
-#  before_script:
-#    - docker network create app-net
-#    - echo "$REGISTRY_PASSWORD" | docker login -u $REGISTRY_USER --password-stdin $REGISTRY
-#    - docker pull --quiet ${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-db:${CI_COMMIT_SHA}
-#    - docker pull --quiet ${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-liquibase:${CI_COMMIT_SHA}
-#    - docker tag ${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-db:${CI_COMMIT_SHA} coding-box-db:latest
-#    - docker tag ${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-liquibase:${CI_COMMIT_SHA} coding-box-liquibase:latest
-#    - mv .env.dev.template .env.dev
-#    - docker compose --env-file .env.dev up -d --no-build --pull never db liquibase
-#    - npx cypress cache path # show where the Cypress test runner binaries are cached
-#    - npx cypress cache list # show all installed versions of Cypress binary
-#    - npx cypress verify
-#    - export POSTGRES_HOST=docker
-#  script:
-#    - npx nx serve api --watch=false & # start backend
-#    - npx nx e2e frontend-e2e
-#      --prod
-#      --browser firefox
-#      --spec "./apps/frontend-e2e/src/e2e/ui/*" ||
-#      ( pkill npx && exit 1 )
-#  after_script:
-#    - docker logout $REGISTRY
-#
-#test-app-e2e-ui-firefox-mobile:
-#  stage: test-e2e
-#  interruptible: true
-#  allow_failure: true
-#  extends: .distributed
-#  rules:
-#    - !reference [ .develop_pr_manual_rules, rules ]
-#  image: ${CI_REGISTRY_IMAGE}/${E2E_BASE_IMAGE}
-#  services:
-#    - name: $DOCKER_SERVICE
-#      entrypoint: [ "sh", "-c", "dockerd-entrypoint.sh $DOCKER_DAEMON_OPTIONS" ]
-#      alias: docker
-#  before_script:
-#    - docker network create app-net
-#    - echo "$REGISTRY_PASSWORD" | docker login -u $REGISTRY_USER --password-stdin $REGISTRY
-#    - docker pull --quiet ${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-db:${CI_COMMIT_SHA}
-#    - docker pull --quiet ${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-liquibase:${CI_COMMIT_SHA}
-#    - docker tag ${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-db:${CI_COMMIT_SHA} coding-box-db:latest
-#    - docker tag ${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-liquibase:${CI_COMMIT_SHA} coding-box-liquibase:latest
-#    - mv .env.dev.template .env.dev
-#    - docker compose --env-file .env.dev up -d --no-build --pull never db liquibase
-#    - npx cypress cache path # show where the Cypress test runner binaries are cached
-#    - npx cypress cache list # show all installed versions of Cypress binary
-#    - npx cypress verify
-#    - export POSTGRES_HOST=docker
-#  script:
-#    - npx nx serve api --watch=false & # start backend
-#    - npx nx e2e frontend-e2e
-#      --prod
-#      --browser firefox
-#      --spec "./apps/frontend-e2e/src/e2e/ui/*"
-#      --config "viewportWidth=375,viewportHeight=667" ||
-#      ( pkill npx && exit 1 )
-#  after_script:
-#    - docker logout $REGISTRY
-#
-#test-app-e2e-ui-edge:
-#  stage: test-e2e
-#  interruptible: true
-#  allow_failure: true
-#  extends: .distributed
-#  rules:
-#    - !reference [ .develop_pr_manual_rules, rules ]
-#  image: ${CI_REGISTRY_IMAGE}/${E2E_BASE_IMAGE}
-#  services:
-#    - name: $DOCKER_SERVICE
-#      entrypoint: [ "sh", "-c", "dockerd-entrypoint.sh $DOCKER_DAEMON_OPTIONS" ]
-#      alias: docker
-#  before_script:
-#    - docker network create app-net
-#    - echo "$REGISTRY_PASSWORD" | docker login -u $REGISTRY_USER --password-stdin $REGISTRY
-#    - docker pull --quiet ${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-db:${CI_COMMIT_SHA}
-#    - docker pull --quiet ${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-liquibase:${CI_COMMIT_SHA}
-#    - docker tag ${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-db:${CI_COMMIT_SHA} coding-box-db:latest
-#    - docker tag ${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-liquibase:${CI_COMMIT_SHA} coding-box-liquibase:latest
-#    - mv .env.dev.template .env.dev
-#    - docker compose --env-file .env.dev up -d --no-build --pull never db liquibase
-#    - npx cypress cache path # show where the Cypress test runner binaries are cached
-#    - npx cypress cache list # show all installed versions of Cypress binary
-#    - npx cypress verify
-#    - export POSTGRES_HOST=docker
-#  script:
-#    - npx nx serve api --watch=false & # start backend
-#    - npx nx e2e frontend-e2e
-#      --prod
-#      --browser edge
-#      --spec "./apps/frontend-e2e/src/e2e/ui/*" ||
-#      ( pkill npx && exit 1 )
-#  after_script:
-#    - docker logout $REGISTRY
-#
-#test-app-e2e-ui-edge-mobile:
-#  stage: test-e2e
-#  interruptible: true
-#  allow_failure: true
-#  extends: .distributed
-#  rules:
-#    - !reference [ .develop_pr_manual_rules, rules ]
-#  image: ${CI_REGISTRY_IMAGE}/${E2E_BASE_IMAGE}
-#  services:
-#    - name: $DOCKER_SERVICE
-#      entrypoint: [ "sh", "-c", "dockerd-entrypoint.sh $DOCKER_DAEMON_OPTIONS" ]
-#      alias: docker
-#  before_script:
-#    - docker network create app-net
-#    - echo "$REGISTRY_PASSWORD" | docker login -u $REGISTRY_USER --password-stdin $REGISTRY
-#    - docker pull --quiet ${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-db:${CI_COMMIT_SHA}
-#    - docker pull --quiet ${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-liquibase:${CI_COMMIT_SHA}
-#    - docker tag ${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-db:${CI_COMMIT_SHA} coding-box-db:latest
-#    - docker tag ${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-liquibase:${CI_COMMIT_SHA} coding-box-liquibase:latest
-#    - mv .env.dev.template .env.dev
-#    - docker compose --env-file .env.dev up -d --no-build --pull never db liquibase
-#    - npx cypress cache path # show where the Cypress test runner binaries are cached
-#    - npx cypress cache list # show all installed versions of Cypress binary
-#    - npx cypress verify
-#    - export POSTGRES_HOST=docker
-#  script:
-#    - npx nx serve api --watch=false & # start backend
-#    - npx nx e2e frontend-e2e
-#      --prod
-#      --browser edge
-#      --spec "./apps/frontend-e2e/src/e2e/ui/*"
-#      --config "viewportWidth=375,viewportHeight=667" ||
-#      ( pkill npx && exit 1 )
-#  after_script:
-#    - docker logout $REGISTRY
 
 lint-app:
   stage: lint
@@ -800,18 +488,22 @@ build-develop-commit-db-image:
   stage: build-images
   rules:
     - !reference [ .develop_commit_rules, rules ]
-  image: $DOCKER_IMAGE
+  image: ${DOCKER_IMAGE}
   services:
-    - name: $DOCKER_SERVICE
-      entrypoint: [ "sh", "-c", "dockerd-entrypoint.sh $DOCKER_DAEMON_OPTIONS" ]
+    - name: ${DOCKER_SERVICE}
+      variables:
+        HEALTHCHECK_TCP_PORT: "2375"
+      entrypoint: [ "sh", "-c", "dockerd-entrypoint.sh ${DOCKER_DAEMON_OPTIONS}" ]
       alias: docker
   variables:
     DB_IMAGE_NAME: "${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-db"
   before_script:
+    - docker --version
+    - until docker info &> /dev/null; do println "Wait until docker daemon is started ...\n" && sleep 1; done
     - ip a | grep mtu
     - docker network inspect bridge | grep mtu
-    - docker login -u $CI_DEPENDENCY_PROXY_USER -p $CI_DEPENDENCY_PROXY_PASSWORD $CI_DEPENDENCY_PROXY_SERVER
-    - echo "$CI_REGISTRY_PASSWORD" | docker login -u $CI_REGISTRY_USER --password-stdin $CI_REGISTRY
+    - docker login -u ${CI_DEPENDENCY_PROXY_USER} -p ${CI_DEPENDENCY_PROXY_PASSWORD} ${CI_DEPENDENCY_PROXY_SERVER}
+    - echo "${CI_REGISTRY_PASSWORD}" | docker login -u ${CI_REGISTRY_USER} --password-stdin ${CI_REGISTRY}
   script:
     - docker build
           --progress plain
@@ -819,31 +511,35 @@ build-develop-commit-db-image:
           --build-arg REGISTRY_PATH=${DOCKER_HUB_PROXY}
           --build-arg BUILDKIT_INLINE_CACHE=1
           --cache-from ${DB_IMAGE_NAME}:latest
-          -f database/Postgres.Dockerfile
-          -t ${DB_IMAGE_NAME}:${CI_COMMIT_SHA}
-          -t ${DB_IMAGE_NAME}:latest
+          --file database/Postgres.Dockerfile
+          --tag ${DB_IMAGE_NAME}:${CI_COMMIT_SHA}
+          --tag ${DB_IMAGE_NAME}:latest
         .
-    - docker push -q -a ${DB_IMAGE_NAME}
+    - docker push --quiet --all-tags ${DB_IMAGE_NAME}
   after_script:
-    - docker logout $CI_DEPENDENCY_PROXY_SERVER
-    - docker logout $CI_REGISTRY
+    - docker logout ${CI_DEPENDENCY_PROXY_SERVER}
+    - docker logout ${CI_REGISTRY}
 
 build-develop-commit-liquibase-image:
   stage: build-images
   rules:
     - !reference [ .develop_commit_rules, rules ]
-  image: $DOCKER_IMAGE
+  image: ${DOCKER_IMAGE}
   services:
-    - name: $DOCKER_SERVICE
-      entrypoint: [ "sh", "-c", "dockerd-entrypoint.sh $DOCKER_DAEMON_OPTIONS" ]
+    - name: ${DOCKER_SERVICE}
+      variables:
+        HEALTHCHECK_TCP_PORT: "2375"
+      entrypoint: [ "sh", "-c", "dockerd-entrypoint.sh ${DOCKER_DAEMON_OPTIONS}" ]
       alias: docker
   variables:
     LIQUIBASE_IMAGE_NAME: "${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-liquibase"
   before_script:
+    - docker --version
+    - until docker info &> /dev/null; do println "Wait until docker daemon is started ...\n" && sleep 1; done
     - ip a | grep mtu
     - docker network inspect bridge | grep mtu
-    - docker login -u $CI_DEPENDENCY_PROXY_USER -p $CI_DEPENDENCY_PROXY_PASSWORD $CI_DEPENDENCY_PROXY_SERVER
-    - echo "$CI_REGISTRY_PASSWORD" | docker login -u $CI_REGISTRY_USER --password-stdin $CI_REGISTRY
+    - docker login -u ${CI_DEPENDENCY_PROXY_USER} -p ${CI_DEPENDENCY_PROXY_PASSWORD} ${CI_DEPENDENCY_PROXY_SERVER}
+    - echo "${CI_REGISTRY_PASSWORD}" | docker login -u ${CI_REGISTRY_USER} --password-stdin ${CI_REGISTRY}
   script:
     - docker build
           --progress plain
@@ -851,31 +547,35 @@ build-develop-commit-liquibase-image:
           --build-arg REGISTRY_PATH=${DOCKER_HUB_PROXY}
           --build-arg BUILDKIT_INLINE_CACHE=1
           --cache-from ${LIQUIBASE_IMAGE_NAME}:latest
-          -f database/Liquibase.Dockerfile
-          -t ${LIQUIBASE_IMAGE_NAME}:${CI_COMMIT_SHA}
-          -t ${LIQUIBASE_IMAGE_NAME}:latest
+          --file database/Liquibase.Dockerfile
+          --tag ${LIQUIBASE_IMAGE_NAME}:${CI_COMMIT_SHA}
+          --tag ${LIQUIBASE_IMAGE_NAME}:latest
         .
-    - docker push -q -a ${LIQUIBASE_IMAGE_NAME}
+    - docker push --quiet --all-tags ${LIQUIBASE_IMAGE_NAME}
   after_script:
-    - docker logout $CI_DEPENDENCY_PROXY_SERVER
-    - docker logout $CI_REGISTRY
+    - docker logout ${CI_DEPENDENCY_PROXY_SERVER}
+    - docker logout ${CI_REGISTRY}
 
 build-develop-commit-base-image:
   stage: build-images
   rules:
     - !reference [ .develop_commit_rules, rules ]
-  image: $DOCKER_IMAGE
+  image: ${DOCKER_IMAGE}
   services:
-    - name: $DOCKER_SERVICE
-      entrypoint: [ "sh", "-c", "dockerd-entrypoint.sh $DOCKER_DAEMON_OPTIONS" ]
+    - name: ${DOCKER_SERVICE}
+      variables:
+        HEALTHCHECK_TCP_PORT: "2375"
+      entrypoint: [ "sh", "-c", "dockerd-entrypoint.sh ${DOCKER_DAEMON_OPTIONS}" ]
       alias: docker
   variables:
     BASE_IMAGE_NAME: "${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-base"
   before_script:
+    - docker --version
+    - until docker info &> /dev/null; do println "Wait until docker daemon is started ...\n" && sleep 1; done
     - ip a | grep mtu
     - docker network inspect bridge | grep mtu
-    - docker login -u $CI_DEPENDENCY_PROXY_USER -p $CI_DEPENDENCY_PROXY_PASSWORD $CI_DEPENDENCY_PROXY_SERVER
-    - echo "$CI_REGISTRY_PASSWORD" | docker login -u $CI_REGISTRY_USER --password-stdin $CI_REGISTRY
+    - docker login -u ${CI_DEPENDENCY_PROXY_USER} -p ${CI_DEPENDENCY_PROXY_PASSWORD} ${CI_DEPENDENCY_PROXY_SERVER}
+    - echo "${CI_REGISTRY_PASSWORD}" | docker login -u ${CI_REGISTRY_USER} --password-stdin ${CI_REGISTRY}
   script:
     - docker build
           --progress plain
@@ -884,10 +584,10 @@ build-develop-commit-base-image:
           --tag ${BASE_IMAGE_NAME}:${CI_COMMIT_SHA}
           --tag ${BASE_IMAGE_NAME}:latest
         .
-    - docker push -q -a ${BASE_IMAGE_NAME}
+    - docker push --quiet --all-tags ${BASE_IMAGE_NAME}
   after_script:
-    - docker logout $CI_DEPENDENCY_PROXY_SERVER
-    - docker logout $CI_REGISTRY
+    - docker logout ${CI_DEPENDENCY_PROXY_SERVER}
+    - docker logout ${CI_REGISTRY}
 
 build-develop-commit-backend-image:
   stage: build-images
@@ -895,19 +595,23 @@ build-develop-commit-backend-image:
     - !reference [ .develop_commit_rules, rules ]
   needs:
     - build-develop-commit-base-image
-  image: $DOCKER_IMAGE
+  image: ${DOCKER_IMAGE}
   services:
-    - name: $DOCKER_SERVICE
-      entrypoint: [ "sh", "-c", "dockerd-entrypoint.sh $DOCKER_DAEMON_OPTIONS" ]
+    - name: ${DOCKER_SERVICE}
+      variables:
+        HEALTHCHECK_TCP_PORT: "2375"
+      entrypoint: [ "sh", "-c", "dockerd-entrypoint.sh ${DOCKER_DAEMON_OPTIONS}" ]
       alias: docker
   variables:
     BASE_IMAGE_NAME: "${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-base"
     BACKEND_IMAGE_NAME: "${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-backend"
   before_script:
+    - docker --version
+    - until docker info &> /dev/null; do println "Wait until docker daemon is started ...\n" && sleep 1; done
     - ip a | grep mtu
     - docker network inspect bridge | grep mtu
-    - docker login -u $CI_DEPENDENCY_PROXY_USER -p $CI_DEPENDENCY_PROXY_PASSWORD $CI_DEPENDENCY_PROXY_SERVER
-    - echo "$CI_REGISTRY_PASSWORD" | docker login -u $CI_REGISTRY_USER --password-stdin $CI_REGISTRY
+    - docker login -u ${CI_DEPENDENCY_PROXY_USER} -p ${CI_DEPENDENCY_PROXY_PASSWORD} ${CI_DEPENDENCY_PROXY_SERVER}
+    - echo "${CI_REGISTRY_PASSWORD}" | docker login -u ${CI_REGISTRY_USER} --password-stdin ${CI_REGISTRY}
   script:
     - docker build
           --progress plain
@@ -918,14 +622,14 @@ build-develop-commit-backend-image:
           --build-arg BASE_IMAGE_NAME=${BASE_IMAGE_NAME}:${CI_COMMIT_SHA}
           --build-arg BUILDKIT_INLINE_CACHE=1
           --cache-from ${BACKEND_IMAGE_NAME}:latest
-          -f apps/backend/Dockerfile
-          -t ${BACKEND_IMAGE_NAME}:${CI_COMMIT_SHA}
-          -t ${BACKEND_IMAGE_NAME}:latest
+          --file apps/backend/Dockerfile
+          --tag ${BACKEND_IMAGE_NAME}:${CI_COMMIT_SHA}
+          --tag ${BACKEND_IMAGE_NAME}:latest
         .
-    - docker push -q -a ${BACKEND_IMAGE_NAME}
+    - docker push --quiet --all-tags ${BACKEND_IMAGE_NAME}
   after_script:
-    - docker logout $CI_DEPENDENCY_PROXY_SERVER
-    - docker logout $CI_REGISTRY
+    - docker logout ${CI_DEPENDENCY_PROXY_SERVER}
+    - docker logout ${CI_REGISTRY}
 
 build-develop-commit-frontend-image:
   stage: build-images
@@ -933,19 +637,23 @@ build-develop-commit-frontend-image:
     - !reference [ .develop_commit_rules, rules ]
   needs:
     - build-develop-commit-base-image
-  image: $DOCKER_IMAGE
+  image: ${DOCKER_IMAGE}
   services:
-    - name: $DOCKER_SERVICE
-      entrypoint: [ "sh", "-c", "dockerd-entrypoint.sh $DOCKER_DAEMON_OPTIONS" ]
+    - name: ${DOCKER_SERVICE}
+      variables:
+        HEALTHCHECK_TCP_PORT: "2375"
+      entrypoint: [ "sh", "-c", "dockerd-entrypoint.sh ${DOCKER_DAEMON_OPTIONS}" ]
       alias: docker
   variables:
     BASE_IMAGE_NAME: "${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-base"
     FRONTEND_IMAGE_NAME: "${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-frontend"
   before_script:
+    - docker --version
+    - until docker info &> /dev/null; do println "Wait until docker daemon is started ...\n" && sleep 1; done
     - ip a | grep mtu
     - docker network inspect bridge | grep mtu
-    - docker login -u $CI_DEPENDENCY_PROXY_USER -p $CI_DEPENDENCY_PROXY_PASSWORD $CI_DEPENDENCY_PROXY_SERVER
-    - echo "$CI_REGISTRY_PASSWORD" | docker login -u $CI_REGISTRY_USER --password-stdin $CI_REGISTRY
+    - docker login -u ${CI_DEPENDENCY_PROXY_USER} -p ${CI_DEPENDENCY_PROXY_PASSWORD} ${CI_DEPENDENCY_PROXY_SERVER}
+    - echo "${CI_REGISTRY_PASSWORD}" | docker login -u ${CI_REGISTRY_USER} --password-stdin ${CI_REGISTRY}
   script:
     - docker build
           --progress plain
@@ -960,10 +668,10 @@ build-develop-commit-frontend-image:
           -t ${FRONTEND_IMAGE_NAME}:${CI_COMMIT_SHA}
           -t ${FRONTEND_IMAGE_NAME}:latest
         .
-    - docker push -q -a ${FRONTEND_IMAGE_NAME}
+    - docker push --quiet --all-tags ${FRONTEND_IMAGE_NAME}
   after_script:
-    - docker logout $CI_DEPENDENCY_PROXY_SERVER
-    - docker logout $CI_REGISTRY
+    - docker logout ${CI_DEPENDENCY_PROXY_SERVER}
+    - docker logout ${CI_REGISTRY}
 
 scan-develop-commit-db-image:
   stage: scan-images
@@ -973,15 +681,15 @@ scan-develop-commit-db-image:
   needs:
     - build-develop-commit-db-image
   image:
-    name: $TRIVY_IMAGE
+    name: ${TRIVY_IMAGE}
     entrypoint: [ "" ]
   variables:
     # No need to clone the repo, we exclusively work on artifacts.  See
     # https://docs.gitlab.com/ee/ci/runners/README.html#git-strategy
     GIT_STRATEGY: none
-    TRIVY_USERNAME: "$CI_REGISTRY_USER"
-    TRIVY_PASSWORD: "$CI_REGISTRY_PASSWORD"
-    TRIVY_AUTH_URL: "$CI_REGISTRY"
+    TRIVY_USERNAME: "${CI_REGISTRY_USER}"
+    TRIVY_PASSWORD: "${CI_REGISTRY_PASSWORD}"
+    TRIVY_AUTH_URL: "${CI_REGISTRY}"
     TRIVY_NO_PROGRESS: "true"
     TRIVY_CACHE_DIR: ".trivycache/"
     FULL_IMAGE_NAME: "${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-db:${CI_COMMIT_SHA}"
@@ -991,21 +699,21 @@ scan-develop-commit-db-image:
     - trivy clean --scan-cache
     # update vulnerabilities db
     - trivy image --download-db-only --no-progress
-    # Builds report and puts it in the default workdir $CI_PROJECT_DIR, so `artifacts:` can take it from there
+    # Builds report and puts it in the default workdir ${CI_PROJECT_DIR}, so `artifacts:` can take it from there
     - trivy image
           --exit-code 0
           --timeout 30m
           --scanners vuln
           --format template
           --template "@/contrib/gitlab.tpl"
-          --output "$CI_PROJECT_DIR/gl-container-scanning-report.json"
-        "$FULL_IMAGE_NAME"
+          --output "${CI_PROJECT_DIR}/gl-container-scanning-report.json"
+        "${FULL_IMAGE_NAME}"
     # Prints full report
     - trivy image
           --exit-code 0
           --timeout 30m
           --scanners vuln
-        "$FULL_IMAGE_NAME"
+        "${FULL_IMAGE_NAME}"
     # Fail on critical vulnerabilities
     - trivy image
           --exit-code 1
@@ -1013,7 +721,7 @@ scan-develop-commit-db-image:
           --scanners vuln
           --ignore-unfixed
           --severity CRITICAL
-        $FULL_IMAGE_NAME
+        ${FULL_IMAGE_NAME}
   cache:
     paths:
       - .trivycache/
@@ -1031,15 +739,15 @@ scan-develop-commit-liquibase-image:
   needs:
     - build-develop-commit-liquibase-image
   image:
-    name: $TRIVY_IMAGE
+    name: ${TRIVY_IMAGE}
     entrypoint: [ "" ]
   variables:
     # No need to clone the repo, we exclusively work on artifacts.  See
     # https://docs.gitlab.com/ee/ci/runners/README.html#git-strategy
     GIT_STRATEGY: none
-    TRIVY_USERNAME: "$CI_REGISTRY_USER"
-    TRIVY_PASSWORD: "$CI_REGISTRY_PASSWORD"
-    TRIVY_AUTH_URL: "$CI_REGISTRY"
+    TRIVY_USERNAME: "${CI_REGISTRY_USER}"
+    TRIVY_PASSWORD: "${CI_REGISTRY_PASSWORD}"
+    TRIVY_AUTH_URL: "${CI_REGISTRY}"
     TRIVY_NO_PROGRESS: "true"
     TRIVY_CACHE_DIR: ".trivycache/"
     FULL_IMAGE_NAME: "${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-liquibase:${CI_COMMIT_SHA}"
@@ -1049,21 +757,21 @@ scan-develop-commit-liquibase-image:
     - trivy clean --scan-cache
     # update vulnerabilities db
     - trivy image --download-db-only --no-progress
-    # Builds report and puts it in the default workdir $CI_PROJECT_DIR, so `artifacts:` can take it from there
+    # Builds report and puts it in the default workdir ${CI_PROJECT_DIR}, so `artifacts:` can take it from there
     - trivy image
           --exit-code 0
           --timeout 30m
           --scanners vuln
           --format template
           --template "@/contrib/gitlab.tpl"
-          --output "$CI_PROJECT_DIR/gl-container-scanning-report.json"
-        "$FULL_IMAGE_NAME"
+          --output "${CI_PROJECT_DIR}/gl-container-scanning-report.json"
+        "${FULL_IMAGE_NAME}"
     # Prints full report
     - trivy image
           --exit-code 0
           --timeout 30m
           --scanners vuln
-        "$FULL_IMAGE_NAME"
+        "${FULL_IMAGE_NAME}"
     # Fail on critical vulnerabilities
     - trivy image
           --exit-code 1
@@ -1071,7 +779,7 @@ scan-develop-commit-liquibase-image:
           --scanners vuln
           --ignore-unfixed
           --severity CRITICAL
-        "$FULL_IMAGE_NAME"
+        "${FULL_IMAGE_NAME}"
   cache:
     paths:
       - .trivycache/
@@ -1089,15 +797,15 @@ scan-develop-commit-backend-image:
   needs:
     - build-develop-commit-backend-image
   image:
-    name: $TRIVY_IMAGE
+    name: ${TRIVY_IMAGE}
     entrypoint: [ "" ]
   variables:
     # No need to clone the repo, we exclusively work on artifacts.  See
     # https://docs.gitlab.com/ee/ci/runners/README.html#git-strategy
     GIT_STRATEGY: none
-    TRIVY_USERNAME: "$CI_REGISTRY_USER"
-    TRIVY_PASSWORD: "$CI_REGISTRY_PASSWORD"
-    TRIVY_AUTH_URL: "$CI_REGISTRY"
+    TRIVY_USERNAME: "${CI_REGISTRY_USER}"
+    TRIVY_PASSWORD: "${CI_REGISTRY_PASSWORD}"
+    TRIVY_AUTH_URL: "${CI_REGISTRY}"
     TRIVY_NO_PROGRESS: "true"
     TRIVY_CACHE_DIR: ".trivycache/"
     FULL_IMAGE_NAME: "${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-backend:${CI_COMMIT_SHA}"
@@ -1107,21 +815,21 @@ scan-develop-commit-backend-image:
     - trivy clean --scan-cache
     # update vulnerabilities db
     - trivy image --download-db-only --no-progress
-    # Builds report and puts it in the default workdir $CI_PROJECT_DIR, so `artifacts:` can take it from there
+    # Builds report and puts it in the default workdir ${CI_PROJECT_DIR}, so `artifacts:` can take it from there
     - trivy image
           --exit-code 0
           --timeout 30m
           --scanners vuln
           --format template
           --template "@/contrib/gitlab.tpl"
-          --output "$CI_PROJECT_DIR/gl-container-scanning-report.json"
-        "$FULL_IMAGE_NAME"
+          --output "${CI_PROJECT_DIR}/gl-container-scanning-report.json"
+        "${FULL_IMAGE_NAME}"
     # Prints full report
     - trivy image
           --exit-code 0
           --timeout 30m
           --scanners vuln
-        "$FULL_IMAGE_NAME"
+        "${FULL_IMAGE_NAME}"
     # Fail on critical vulnerabilities
     - trivy image
           --exit-code 1
@@ -1129,7 +837,7 @@ scan-develop-commit-backend-image:
           --scanners vuln
           --ignore-unfixed
           --severity CRITICAL
-        "$FULL_IMAGE_NAME"
+        "${FULL_IMAGE_NAME}"
   cache:
     paths:
       - .trivycache/
@@ -1147,15 +855,15 @@ scan-develop-commit-frontend-image:
   needs:
     - build-develop-commit-frontend-image
   image:
-    name: $TRIVY_IMAGE
+    name: ${TRIVY_IMAGE}
     entrypoint: [ "" ]
   variables:
     # No need to clone the repo, we exclusively work on artifacts.  See
     # https://docs.gitlab.com/ee/ci/runners/README.html#git-strategy
     GIT_STRATEGY: none
-    TRIVY_USERNAME: "$CI_REGISTRY_USER"
-    TRIVY_PASSWORD: "$CI_REGISTRY_PASSWORD"
-    TRIVY_AUTH_URL: "$CI_REGISTRY"
+    TRIVY_USERNAME: "${CI_REGISTRY_USER}"
+    TRIVY_PASSWORD: "${CI_REGISTRY_PASSWORD}"
+    TRIVY_AUTH_URL: "${CI_REGISTRY}"
     TRIVY_NO_PROGRESS: "true"
     TRIVY_CACHE_DIR: ".trivycache/"
     FULL_IMAGE_NAME: "${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-frontend:${CI_COMMIT_SHA}"
@@ -1165,21 +873,21 @@ scan-develop-commit-frontend-image:
     - trivy clean --scan-cache
     # update vulnerabilities db
     - trivy image --download-db-only --no-progress
-    # Builds report and puts it in the default workdir $CI_PROJECT_DIR, so `artifacts:` can take it from there
+    # Builds report and puts it in the default workdir ${CI_PROJECT_DIR}, so `artifacts:` can take it from there
     - trivy image
           --exit-code 0
           --timeout 30m
           --scanners vuln
           --format template
           --template "@/contrib/gitlab.tpl"
-          --output "$CI_PROJECT_DIR/gl-container-scanning-report.json"
-        "$FULL_IMAGE_NAME"
+          --output "${CI_PROJECT_DIR}/gl-container-scanning-report.json"
+        "${FULL_IMAGE_NAME}"
     # Prints full report
     - trivy image
           --exit-code 0
           --timeout 30m
           --scanners vuln
-        "$FULL_IMAGE_NAME"
+        "${FULL_IMAGE_NAME}"
     # Fail on critical vulnerabilities
     - trivy image
           --exit-code 1
@@ -1187,7 +895,7 @@ scan-develop-commit-frontend-image:
           --scanners vuln
           --ignore-unfixed
           --severity CRITICAL
-        "$FULL_IMAGE_NAME"
+        "${FULL_IMAGE_NAME}"
   cache:
     paths:
       - .trivycache/
@@ -1197,14 +905,75 @@ scan-develop-commit-frontend-image:
     reports:
       container_scanning: gl-container-scanning-report.json
 
+scan-develop-commit-traefik-image:
+  stage: scan-images
+  allow_failure: true
+  rules:
+    - !reference [ .develop_commit_rules, rules ]
+  needs:
+    - build-develop-commit-frontend-image
+  image:
+    name: ${TRIVY_IMAGE}
+    entrypoint: [ "" ]
+  variables:
+    # No need to clone the repo, we exclusively work on artifacts.  See
+    # https://docs.gitlab.com/ee/ci/runners/README.html#git-strategy
+    GIT_STRATEGY: none
+    TRIVY_USERNAME: "${CI_REGISTRY_USER}"
+    TRIVY_PASSWORD: "${CI_REGISTRY_PASSWORD}"
+    TRIVY_AUTH_URL: "${CI_REGISTRY}"
+    TRIVY_NO_PROGRESS: "true"
+    TRIVY_CACHE_DIR: ".trivycache/"
+    FULL_IMAGE_NAME: "${TRAEFIK_BASE_IMAGE}"
+  script:
+    - trivy --version
+    # cache cleanup is needed when scanning images with the same tags, it does not remove the database
+    - trivy clean --scan-cache
+    # update vulnerabilities db
+    - trivy image --download-db-only --no-progress
+    # Builds report and puts it in the default workdir ${CI_PROJECT_DIR}, so `artifacts:` can take it from there
+    - trivy image
+          --exit-code 0
+          --timeout 30m
+          --scanners vuln
+          --format template
+          --template "@/contrib/gitlab.tpl"
+          --output "${CI_PROJECT_DIR}/gl-container-scanning-report.json"
+        "${FULL_IMAGE_NAME}"
+    # Prints full report
+    - trivy image
+          --exit-code 0
+          --timeout 30m
+          --scanners vuln
+        "${FULL_IMAGE_NAME}"
+    # Fail on critical vulnerabilities
+    - trivy image
+          --exit-code 1
+          --timeout 30m
+          --scanners vuln
+          --ignore-unfixed
+          --severity CRITICAL
+        "${FULL_IMAGE_NAME}"
+  cache:
+    paths:
+      - .trivycache/
+  # Enables https://docs.gitlab.com/ee/user/application_security/container_scanning/
+  artifacts:
+    when: always
+    reports:
+      container_scanning: gl-container-scanning-report.json
+
+
 build-pre-release:
   stage: build-images
   rules:
     - !reference [ .pre-release_rules, rules ]
-  image: $DOCKER_IMAGE
+  image: ${DOCKER_IMAGE}
   services:
-    - name: $DOCKER_SERVICE
-      entrypoint: [ "sh", "-c", "dockerd-entrypoint.sh $DOCKER_DAEMON_OPTIONS" ]
+    - name: ${DOCKER_SERVICE}
+      variables:
+        HEALTHCHECK_TCP_PORT: "2375"
+      entrypoint: [ "sh", "-c", "dockerd-entrypoint.sh ${DOCKER_DAEMON_OPTIONS}" ]
       alias: docker
   variables:
     DB_IMAGE_NAME: "${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-db"
@@ -1212,21 +981,25 @@ build-pre-release:
     BACKEND_IMAGE_NAME: "${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-backend"
     FRONTEND_IMAGE_NAME: "${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-frontend"
   before_script:
-    - echo "$CI_REGISTRY_PASSWORD" | docker login -u $CI_REGISTRY_USER --password-stdin $CI_REGISTRY
-    - echo "$DOCKERHUB_PASSWORD" | docker login -u $DOCKERHUB_USER --password-stdin
-    - docker pull -q ${DB_IMAGE_NAME}:${CI_COMMIT_SHA}
-    - docker pull -q ${LIQUIBASE_IMAGE_NAME}:${CI_COMMIT_SHA}
-    - docker pull -q ${BACKEND_IMAGE_NAME}:${CI_COMMIT_SHA}
-    - docker pull -q ${FRONTEND_IMAGE_NAME}:${CI_COMMIT_SHA}
+    - docker --version
+    - until docker info &> /dev/null; do println "Wait until docker daemon is started ...\n" && sleep 1; done
+    - ip a | grep mtu
+    - docker network inspect bridge | grep mtu
+    - echo "${CI_REGISTRY_PASSWORD}" | docker login -u ${CI_REGISTRY_USER} --password-stdin ${CI_REGISTRY}
+    - echo "${DOCKERHUB_PASSWORD}" | docker login -u ${DOCKERHUB_USER} --password-stdin
+    - docker pull --quiet ${DB_IMAGE_NAME}:${CI_COMMIT_SHA}
+    - docker pull --quiet ${LIQUIBASE_IMAGE_NAME}:${CI_COMMIT_SHA}
+    - docker pull --quiet ${BACKEND_IMAGE_NAME}:${CI_COMMIT_SHA}
+    - docker pull --quiet ${FRONTEND_IMAGE_NAME}:${CI_COMMIT_SHA}
   script:
     - docker tag ${DB_IMAGE_NAME}:${CI_COMMIT_SHA} iqbberlin/coding-box-db:${CI_COMMIT_TAG}
     - docker tag ${LIQUIBASE_IMAGE_NAME}:${CI_COMMIT_SHA} iqbberlin/coding-box-liquibase:${CI_COMMIT_TAG}
     - docker tag ${BACKEND_IMAGE_NAME}:${CI_COMMIT_SHA} iqbberlin/coding-box-backend:${CI_COMMIT_TAG}
     - docker tag ${FRONTEND_IMAGE_NAME}:${CI_COMMIT_SHA} iqbberlin/coding-box-frontend:${CI_COMMIT_TAG}
-    - docker push -q iqbberlin/coding-box-db:${CI_COMMIT_TAG}
-    - docker push -q iqbberlin/coding-box-liquibase:${CI_COMMIT_TAG}
-    - docker push -q iqbberlin/coding-box-backend:${CI_COMMIT_TAG}
-    - docker push -q iqbberlin/coding-box-frontend:${CI_COMMIT_TAG}
+    - docker push --quiet iqbberlin/coding-box-db:${CI_COMMIT_TAG}
+    - docker push --quiet iqbberlin/coding-box-liquibase:${CI_COMMIT_TAG}
+    - docker push --quiet iqbberlin/coding-box-backend:${CI_COMMIT_TAG}
+    - docker push --quiet iqbberlin/coding-box-frontend:${CI_COMMIT_TAG}
   after_script:
-    - docker logout $CI_REGISTRY
+    - docker logout ${CI_REGISTRY}
     - docker logout
