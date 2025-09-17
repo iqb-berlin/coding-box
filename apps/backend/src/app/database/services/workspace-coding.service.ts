@@ -371,17 +371,21 @@ export class WorkspaceCodingService {
 
         try {
           if (batch.length > 0) {
-            const updatePromises = batch.map(response => queryRunner.manager.update(
-              ResponseEntity,
-              response.id,
-              {
-                code: response.code,
-                codedstatus: response.codedstatus,
-                score: response.score
-              }
-            ));
+            // Use bulk update with CASE statements for better performance
+            const ids = batch.map(r => r.id);
+            const codeCase = batch.map((r, idx) => `WHEN ${r.id} THEN '${r.code || ''}'`).join(' ');
+            const codedstatusCase = batch.map((r, idx) => `WHEN ${r.id} THEN '${r.codedstatus || ''}'`).join(' ');
+            const scoreCase = batch.map((r, idx) => `WHEN ${r.id} THEN ${r.score || 'NULL'}`).join(' ');
 
-            await Promise.all(updatePromises);
+            const updateQuery = `
+              UPDATE responses SET
+                code = CASE id ${codeCase} END,
+                codedstatus = CASE id ${codedstatusCase} END,
+                score = CASE id ${scoreCase} END
+              WHERE id IN (${ids.join(',')})
+            `;
+
+            await queryRunner.query(updateQuery);
           }
 
           this.logger.log(`Batch #${index + 1} (Größe: ${batch.length}) erfolgreich aktualisiert.`);
