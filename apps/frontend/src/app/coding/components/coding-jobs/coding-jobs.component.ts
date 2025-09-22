@@ -27,6 +27,8 @@ import { SearchFilterComponent } from '../../../shared/search-filter/search-filt
 import { CodingJob, Variable, VariableBundle } from '../../models/coding-job.model';
 import { CodingJobDialogComponent } from '../coding-job-dialog/coding-job-dialog.component';
 import { ConfirmDialogComponent } from '../../../shared/confirm-dialog/confirm-dialog.component';
+import { Coder } from '../../models/coder.model';
+import { CoderService } from '../../services/coder.service';
 
 @Component({
   selector: 'coding-box-coding-jobs',
@@ -63,8 +65,10 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
   backendService = inject(BackendService);
   private snackBar = inject(MatSnackBar);
   private dialog = inject(MatDialog);
+  private coderService = inject(CoderService);
 
   private coderNamesByJobId = new Map<number, string>();
+  private allCoders: Coder[] = [];
 
   private jobDetailsCache = new Map<number, { variables?: Variable[], variableBundles?: VariableBundle[] }>();
 
@@ -76,6 +80,11 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
   @ViewChild(MatSort) sort!: MatSort;
 
   ngOnInit(): void {
+    this.coderService.getCoders().subscribe(coders => {
+      this.allCoders = coders;
+      this.updateCoderNamesMap(this.dataSource.data);
+    });
+
     this.loadCodingJobs();
   }
 
@@ -95,21 +104,16 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
     this.backendService.getCodingJobs(workspaceId).subscribe({
       next: response => {
         this.coderNamesByJobId.clear();
-        const processedData = response.data.map(job => {
-          if (job.assignedCoders && job.assignedCoders.length > 0) {
-            this.coderNamesByJobId.set(job.id, `${job.assignedCoders.length} Kodierer`);
-          } else {
-            this.coderNamesByJobId.set(job.id, 'Keine');
-          }
-
-          return {
-            ...job,
-            createdAt: job.createdAt ? new Date(job.createdAt) : new Date(),
-            updatedAt: job.updatedAt ? new Date(job.updatedAt) : new Date()
-          };
-        });
+        const processedData = response.data.map(job => ({
+          ...job,
+          createdAt: job.createdAt ? new Date(job.createdAt) : new Date(),
+          updatedAt: job.updatedAt ? new Date(job.updatedAt) : new Date()
+        }));
 
         this.dataSource.data = processedData;
+        // Namen der Codierer für die Liste aktualisieren
+        this.updateCoderNamesMap(processedData);
+
         this.jobDetailsCache.clear();
         this.isLoading = false;
       },
@@ -159,6 +163,15 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
     if (job.assignedVariables && job.assignedVariables.length > 0) {
       return this.formatAssignedVariables(job.assignedVariables);
     }
+    // Fallback: falls Variablen unter "variables" statt "assignedVariables" geliefert werden
+    if (job.variables && job.variables.length > 0) {
+      return this.formatAssignedVariables(job.variables);
+    }
+    // Letzter Fallback: ggf. aus Cache (z. B. nach Lazy-Load)
+    const cachedDetails = this.jobDetailsCache.get(job.id);
+    if (cachedDetails && cachedDetails.variables && cachedDetails.variables.length > 0) {
+      return this.formatAssignedVariables(cachedDetails.variables);
+    }
     return 'Keine Variablen';
   }
 
@@ -196,20 +209,6 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
     }
 
     return `${variableNames.slice(0, maxToShow).join(', ')} +${variableNames.length - maxToShow} weitere`;
-  }
-
-  private formatVariableBundles(bundles: VariableBundle[]): string {
-    if (!bundles || bundles.length === 0) {
-      return 'Keine Variablenbündel';
-    }
-    const maxToShow = 3;
-    const bundleNames = bundles.map(b => b.name || 'unbekannt');
-
-    if (bundleNames.length <= maxToShow) {
-      return bundleNames.join(', ');
-    }
-
-    return `${bundleNames.slice(0, maxToShow).join(', ')} +${bundleNames.length - maxToShow} weitere`;
   }
 
   getFullVariables(job: CodingJob): string {
@@ -273,6 +272,8 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
         const now = new Date();
         const newCodingJob: CodingJob = {
           ...result,
+          // Normalisierung: damit die Liste sofort die Variablen anzeigt
+          assignedVariables: result.assignedVariables ?? result.variables ?? [],
           id: newId,
           createdAt: now,
           updatedAt: now
@@ -280,6 +281,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
         const currentData = this.dataSource.data;
         this.dataSource.data = [...currentData, newCodingJob];
         this.snackBar.open(`Kodierjob "${newCodingJob.name}" wurde erstellt`, 'Schließen', { duration: 3000 });
+        this.loadCodingJobs();
       }
     });
   }
@@ -424,32 +426,61 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
 
   getAssignedCoderNames(job: CodingJob): string {
     if (this.coderNamesByJobId.has(job.id)) {
-      const coderNames = this.coderNamesByJobId.get(job.id)!;
-
-      if (coderNames !== 'Keine' && coderNames.includes(',') && job.assignedCoders && job.assignedCoders.length > 2) {
-        const namesList = coderNames.split(', ');
-        return `${namesList[0]}, ${namesList[1]} +${job.assignedCoders.length - 2} weitere`;
+      const full = this.coderNamesByJobId.get(job.id)!;
+      if (full === 'Keine') {
+        return full;
       }
-
-      return coderNames;
+      const names = full.split(', ').filter(n => n && n.trim().length > 0);
+      if (names.length > 2) {
+        return `${names[0]}, ${names[1]} +${names.length - 2} weitere`;
+      }
+      return names.join(', ');
     }
 
     if (!job.assignedCoders || job.assignedCoders.length === 0) {
       return 'Keine';
     }
 
+    // Fallback, falls Map noch nicht gefüllt ist
     return `${job.assignedCoders.length} Kodierer`;
   }
 
   getFullCoderNames(job: CodingJob): string {
     if (this.coderNamesByJobId.has(job.id)) {
-      return this.coderNamesByJobId.get(job.id) || `${job.assignedCoders?.length || 0} Kodierer`;
+      const full = this.coderNamesByJobId.get(job.id)!;
+      return full === 'Keine' ? 'Keine Kodierer zugewiesen' : full;
     }
 
     if (!job.assignedCoders || job.assignedCoders.length === 0) {
       return 'Keine Kodierer zugewiesen';
     }
 
+    // Fallback
     return `${job.assignedCoders.length} Kodierer`;
+  }
+
+  private updateCoderNamesMap(jobs: CodingJob[]): void {
+    if (!jobs || jobs.length === 0) {
+      return;
+    }
+
+    const byId = new Map<number, Coder>(this.allCoders.map(c => [c.id, c]));
+    jobs.forEach(job => {
+      const ids = job.assignedCoders || [];
+      if (ids.length === 0) {
+        this.coderNamesByJobId.set(job.id, 'Keine');
+        return;
+      }
+      const names = ids
+        .map(id => byId.get(id))
+        .filter((c): c is Coder => !!c)
+        .map(c => c.displayName || c.name || `Coder ${c.id}`);
+
+      if (names.length === 0) {
+        this.coderNamesByJobId.set(job.id, `${ids.length} Kodierer`);
+      } else {
+        this.coderNamesByJobId.set(job.id, names.join(', '));
+      }
+    });
   }
 }
