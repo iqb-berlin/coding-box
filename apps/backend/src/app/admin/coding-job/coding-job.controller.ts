@@ -342,4 +342,88 @@ export class CodingJobController {
       throw new BadRequestException(`Failed to assign coders: ${error.message}`);
     }
   }
+
+  @Get('/coder/:coderId')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get coding jobs by coder',
+    description: 'Gets all coding jobs assigned to a specific coder'
+  })
+  @ApiParam({
+    name: 'coderId',
+    type: Number,
+    required: true,
+    description: 'The ID of the coder'
+  })
+  @ApiOkResponse({
+    description: 'The coding jobs assigned to the coder.',
+    schema: {
+      type: 'object',
+      properties: {
+        data: {
+          type: 'array',
+          items: { $ref: '#/components/schemas/CodingJobDto' }
+        }
+      }
+    }
+  })
+  async getCodingJobsByCoder(
+    @Param('coderId', ParseIntPipe) coderId: number
+  ): Promise<{ data: CodingJobDto[] }> {
+    try {
+      const codingJobs = await this.codingJobService.getCodingJobsByCoder(coderId);
+      return {
+        data: codingJobs.map(job => CodingJobDto.fromEntity(job))
+      };
+    } catch (error) {
+      throw new BadRequestException(`Failed to get coding jobs for coder: ${error.message}`);
+    }
+  }
+
+  @Get(':jobId/coders')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get coders by job ID',
+    description: 'Gets all coders assigned to a specific coding job'
+  })
+  @ApiParam({
+    name: 'jobId',
+    type: Number,
+    required: true,
+    description: 'The ID of the coding job'
+  })
+  @ApiOkResponse({
+    description: 'The coders assigned to the coding job.',
+    schema: {
+      type: 'object',
+      properties: {
+        data: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              userId: { type: 'number' }
+            }
+          }
+        },
+        total: { type: 'number' }
+      }
+    }
+  })
+  async getCodersByJobId(
+    @Param('jobId', ParseIntPipe) jobId: number
+  ): Promise<{ data: { userId: number }[], total: number }> {
+    try {
+      const coderIds = await this.codingJobService.getCodersByJobId(jobId);
+      const data = coderIds.map(userId => ({ userId }));
+      return {
+        data,
+        total: data.length
+      };
+    } catch (error) {
+      throw new BadRequestException(`Failed to get coders for job: ${error.message}`);
+    }
+  }
 }
