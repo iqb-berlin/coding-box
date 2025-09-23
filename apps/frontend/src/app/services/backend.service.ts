@@ -45,7 +45,6 @@ import { UserInListDto } from '../../../../../api-dto/user/user-in-list-dto';
 import { ResourcePackageDto } from '../../../../../api-dto/resource-package/resource-package-dto';
 import { TestTakersValidationDto } from '../../../../../api-dto/files/testtakers-validation.dto';
 import { ImportOptions, Result } from '../ws-admin/components/test-center-import/test-center-import.component';
-import { UpdateUnitNoteDto } from '../../../../../api-dto/unit-notes/update-unit-note.dto';
 import { ResponseDto } from '../../../../../api-dto/responses/response-dto';
 import { InvalidVariableDto } from '../../../../../api-dto/files/variable-validation.dto';
 import { BookletInfoDto } from '../../../../../api-dto/booklet-info/booklet-info.dto';
@@ -54,9 +53,6 @@ import { CodeBookContentSetting } from '../../../../../api-dto/coding/codebook-c
 import { MissingsProfilesDto } from '../../../../../api-dto/coding/missings-profiles.dto';
 import { VariableAnalysisItemDto } from '../../../../../api-dto/coding/variable-analysis-item.dto';
 
-/**
- * Response type for replay statistics
- */
 type ReplayStatisticsResponse = {
   id: number;
   timestamp: string;
@@ -228,30 +224,6 @@ export class BackendService {
     return this.codingService.getCodingJobStatus(workspace_id, jobId);
   }
 
-  cancelCodingJob(workspace_id: number, jobId: string): Observable<{
-    success: boolean;
-    message: string;
-  }> {
-    return this.codingService.cancelCodingJob(workspace_id, jobId);
-  }
-
-  getAllCodingJobs(workspace_id: number): Observable<{
-    jobId: string;
-    status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'paused';
-    progress: number;
-    result?: {
-      totalResponses: number;
-      statusCounts: {
-        [key: string]: number;
-      };
-    };
-    error?: string;
-    workspaceId?: number;
-    createdAt?: Date;
-  }[]> {
-    return this.codingService.getAllCodingJobs(workspace_id);
-  }
-
   getCodingList(workspace_id: number, page: number = 1, limit: number = 100): Observable<PaginatedResponse<CodingListItem>> {
     return this.codingService.getCodingList(workspace_id, page, limit);
   }
@@ -308,18 +280,8 @@ export class BackendService {
     return this.userService.setUserWorkspaceAccessRight(userId, workspaceIds);
   }
 
-  // Unit Tags API methods
-
   createUnitTag(workspaceId: number, createUnitTagDto: CreateUnitTagDto): Observable<UnitTagDto> {
     return this.unitTagService.createUnitTag(workspaceId, createUnitTagDto);
-  }
-
-  getUnitTags(workspaceId: number, unitId: number): Observable<UnitTagDto[]> {
-    return this.unitTagService.getUnitTags(workspaceId, unitId);
-  }
-
-  getUnitTag(workspaceId: number, tagId: number): Observable<UnitTagDto> {
-    return this.unitTagService.getUnitTag(workspaceId, tagId);
   }
 
   updateUnitTag(workspaceId: number, tagId: number, updateUnitTagDto: UpdateUnitTagDto): Observable<UnitTagDto> {
@@ -340,14 +302,6 @@ export class BackendService {
 
   getNotesForMultipleUnits(workspaceId: number, unitIds: number[]): Observable<{ [unitId: number]: UnitNoteDto[] }> {
     return this.unitNoteService.getNotesForMultipleUnits(workspaceId, unitIds);
-  }
-
-  getUnitNote(workspaceId: number, noteId: number): Observable<UnitNoteDto> {
-    return this.unitNoteService.getUnitNote(workspaceId, noteId);
-  }
-
-  updateUnitNote(workspaceId: number, noteId: number, updateUnitNoteDto: UpdateUnitNoteDto): Observable<UnitNoteDto> {
-    return this.unitNoteService.updateUnitNote(workspaceId, noteId, updateUnitNoteDto);
   }
 
   deleteUnitNote(workspaceId: number, noteId: number): Observable<boolean> {
@@ -583,16 +537,6 @@ export class BackendService {
     return this.responseService.deleteResponse(workspaceId, responseId);
   }
 
-  deleteMultipleResponses(workspaceId: number, responseIds: number[]): Observable<{
-    success: boolean;
-    report: {
-      deletedResponses: number[];
-      warnings: string[];
-    };
-  }> {
-    return this.responseService.deleteMultipleResponses(workspaceId, responseIds);
-  }
-
   deleteBooklet(workspaceId: number, bookletId: number): Observable<{
     success: boolean;
     report: {
@@ -630,14 +574,6 @@ export class BackendService {
     return this.validationService.validateGroupResponses(workspaceId, page, limit);
   }
 
-  deleteInvalidResponses(workspaceId: number, responseIds: number[]): Observable<number> {
-    return this.validationService.deleteInvalidResponses(workspaceId, responseIds);
-  }
-
-  deleteAllInvalidResponses(workspaceId: number, validationType: 'variables' | 'variableTypes' | 'responseStatus' | 'duplicateResponses'): Observable<number> {
-    return this.validationService.deleteAllInvalidResponses(workspaceId, validationType);
-  }
-
   createVariableAnalysisJob(
     workspaceId: number,
     unitId?: number,
@@ -648,13 +584,6 @@ export class BackendService {
       unitId,
       variableId
     );
-  }
-
-  getVariableAnalysisJob(
-    workspaceId: number,
-    jobId: number
-  ): Observable<VariableAnalysisJobDto> {
-    return this.variableAnalysisService.getAnalysisJob(workspaceId, jobId);
   }
 
   getVariableAnalysisResults(
