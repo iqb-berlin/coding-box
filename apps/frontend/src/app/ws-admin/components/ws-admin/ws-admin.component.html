@@ -21,6 +21,10 @@
         <router-outlet></router-outlet>
       </mat-tab-nav-panel>
       </div>
+    } @else {
+      <div class="no-access-message">
+        <p>{{ 'ws-admin.no-access' | translate }}</p>
+      </div>
     }
   </div>
 </div>
