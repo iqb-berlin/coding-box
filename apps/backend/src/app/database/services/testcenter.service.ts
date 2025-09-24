@@ -4,12 +4,11 @@ import * as https from 'https';
 import { catchError, firstValueFrom } from 'rxjs';
 import { logger } from 'nx/src/utils/logger';
 import { Person, Response, Log } from './shared-types';
-import {
-  ImportOptions
-} from '../../../../../frontend/src/app/ws-admin/components/test-center-import/test-center-import.component';
+
 import { TestGroupsInfoDto } from '../../../../../../api-dto/files/test-groups-info.dto';
 import { PersonService } from './person.service';
 import { WorkspaceFilesService } from './workspace-files.service';
+import { ImportOptions } from '../../../../../frontend/src/app/services/import.service';
 
 const agent = new https.Agent({
   rejectUnauthorized: false
