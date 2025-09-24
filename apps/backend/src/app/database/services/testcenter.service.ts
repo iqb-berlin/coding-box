@@ -3,7 +3,7 @@ import { HttpService } from '@nestjs/axios';
 import * as https from 'https';
 import { catchError, firstValueFrom } from 'rxjs';
 import { logger } from 'nx/src/utils/logger';
-import { Person, Response } from './shared-types';
+import { Person, Response, Log } from './shared-types';
 import {
   ImportOptions
 } from '../../../../../frontend/src/app/ws-admin/components/test-center-import/test-center-import.component';
@@ -34,16 +34,6 @@ type File = {
     description: string
   },
   data: string
-};
-
-export type Log = {
-  groupname:string,
-  loginname : string,
-  code : string,
-  bookletname : string,
-  unitname : string,
-  timestamp: number,
-  logentry : string,
 };
 
 export type Result = {
@@ -205,7 +195,6 @@ export class TestcenterService {
 
         const persons = await this.personService.createPersonList(logData, Number(workspace_id));
 
-        // Process logs with overwrite flag
         const result = await this.personService.processPersonLogs(
           persons,
           unitLogs,
@@ -384,7 +373,6 @@ export class TestcenterService {
         result.success = filesResult.success;
       }
 
-      // Wait for all promises to complete
       await Promise.all(promises);
       result.success = true;
       return result;
@@ -426,7 +414,7 @@ export class TestcenterService {
 
     try {
       const response = await this.httpService.axiosRef.get<File>(requestUrl, {
-        httpsAgent: agent, // Disable SSL validation for HTTPS requests
+        httpsAgent: agent,
         headers: headersRequest
       });
 
