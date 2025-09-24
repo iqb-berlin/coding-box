@@ -12,6 +12,7 @@ import { AppService } from './app.service';
 import { CodeBookContentSetting } from '../../../../../api-dto/coding/codebook-content-setting';
 import { MissingsProfilesDto } from '../../../../../api-dto/coding/missings-profiles.dto';
 import { VariableAnalysisItemDto } from '../../../../../api-dto/coding/variable-analysis-item.dto';
+import { ResponseEntity } from '../shared/models/response-entity.model';
 
 interface PaginatedResponse<T> {
   data: T[];
@@ -30,31 +31,6 @@ export interface CodingListItem {
   variable_page: string;
   variable_anchor: string;
   url: string;
-}
-
-interface ResponseEntity {
-  id: number;
-  unitId: number;
-  variableId: string;
-  status: string;
-  value: string;
-  subform: string;
-  code: number;
-  score: number;
-  codedStatus: string;
-  unit?: {
-    name: string;
-    alias: string;
-    booklet?: {
-      person?: {
-        login: string;
-        code: string;
-      };
-      bookletinfo?: {
-        name: string;
-      };
-    };
-  };
 }
 
 @Injectable({
