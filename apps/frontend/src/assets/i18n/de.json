@@ -170,7 +170,8 @@
     "export-subtitle": "Export der Daten nach Kodierung und Bereinigung",
     "export-description": "Diese Komponente wird für den Export der Daten nach Kodierung und Bereinigung verwendet.",
     "export-placeholder": "Die Funktionalität zum Datenexport wird in einer zukünftigen Version implementiert.",
-    "export-action-button": "Datenexport starten"
+    "export-action-button": "Datenexport starten",
+    "no-access": "Sie haben keinen Zugriff auf diesen Arbeitsbereich. Bitte kontaktieren Sie den Studienadministrator für Zugriff."
   },
   "search-filter": {
     "filter-users": "Suche nach Nutzer:innen",
