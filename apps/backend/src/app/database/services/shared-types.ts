@@ -1,5 +1,4 @@
-// This file contains shared types used across multiple services
-// to prevent circular dependencies
+import { ResponseStatusType, ResponseValueType } from '@iqbspecs/response/response.interface';
 
 export type Response = {
   groupname: string,
@@ -7,9 +6,8 @@ export type Response = {
   code: string,
   bookletname: string,
   unitname: string,
-  originalUnitId: string
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  responses: any,
+  originalUnitId: string,
+  responses: string | Chunk[],
   laststate: string,
 };
 
@@ -92,9 +90,11 @@ export type TcMergeSubForms = {
 
 export type TcMergeResponse = {
   id: string,
-  ts: number,
-  content: string,
-  responseType: string
+  value: ResponseValueType,
+  status: ResponseStatusType
+  subform?: string;
+  code?: number;
+  score?: number;
 };
 
 export type TcMergeLastState = {

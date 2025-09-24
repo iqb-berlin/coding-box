@@ -203,8 +203,8 @@ export class PersonService {
 
   async assignBookletsToPerson(person: Person, rows: Response[]): Promise<Person> {
     const logger = new Logger('assignBookletsToPerson');
-    const bookletIds = new Set<string>(); // To avoid duplicate booklets
-    const booklets: TcMergeBooklet[] = []; // List of booklets to be assigned
+    const bookletIds = new Set<string>();
+    const booklets: TcMergeBooklet[] = [];
 
     for (const row of rows) {
       try {
@@ -394,8 +394,7 @@ export class PersonService {
       });
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private extractVariablesFromSubforms(subforms: any[]): Set<string> {
+  private extractVariablesFromSubforms(subforms: TcMergeSubForms[]): Set<string> {
     const variables = new Set<string>();
     subforms.forEach(subform => subform.responses.forEach(response => variables.add(response.id))
     );
@@ -487,11 +486,11 @@ export class PersonService {
 
       for (const person of persons) {
         if (!person.booklets || person.booklets.length === 0) {
-          continue; // Skip silently to reduce log noise
+          continue;
         }
         for (const booklet of person.booklets) {
           if (!booklet || !booklet.id) {
-            continue; // Skip silently to reduce log noise
+            continue;
           }
 
           try {
@@ -505,7 +504,6 @@ export class PersonService {
                 if (unit.subforms) {
                   for (const subform of unit.subforms) {
                     if (subform.responses) {
-                      // This is just an estimate as we don't have the actual count of saved vs skipped
                       totalResponsesProcessed += subform.responses.length;
                     }
                   }
@@ -544,7 +542,6 @@ export class PersonService {
       );
     }
 
-    // Find or create booklet
     let savedBooklet = await this.bookletRepository.findOne({
       where: {
         personid: person.id,
@@ -569,14 +566,13 @@ export class PersonService {
     }
 
     if (Array.isArray(booklet.units) && booklet.units.length > 0) {
-      // Process units in batches to improve performance
       const batchSize = 10;
       for (let i = 0; i < booklet.units.length; i += batchSize) {
         const unitBatch = booklet.units.slice(i, i + batchSize);
         await Promise.all(
           unitBatch.map(async unit => {
             if (!unit || !unit.id) {
-              return; // Skip invalid units silently
+              return;
             }
 
             try {
@@ -618,7 +614,6 @@ export class PersonService {
         where: { unitid: savedUnit.id }
       });
 
-      // Only save if no last state exists and we have data to save
       if (currentLastState.length === 0 && unit.laststate) {
         const lastStateEntries = Object.entries(unit.laststate).map(([key]) => ({
           unitid: savedUnit.id,
@@ -626,10 +621,8 @@ export class PersonService {
           value: unit.laststate[key].value
         }));
 
-        // Only proceed if we have entries to insert
         if (lastStateEntries.length > 0) {
           await this.unitLastStateRepository.insert(lastStateEntries);
-          // Only log if we actually saved something
           if (lastStateEntries.length > 10) {
             this.logger.log(`Saved ${lastStateEntries.length} laststate entries for unit ${unit.id}`);
           }
@@ -675,30 +668,35 @@ export class PersonService {
         }
       }
     } catch (error) {
-      // Include booklet ID in error message for better context
       this.logger.error(`Failed to save chunks for unit ${unit.id} in booklet ${booklet.id}: ${error.message}`);
     }
   }
 
   async saveSubformResponsesForUnit(
     savedUnit: Unit,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    subforms: any[]
+    subforms: TcMergeSubForms[]
   ): Promise<{ success: boolean; saved: number; skipped: number }> {
     try {
       let totalResponsesSaved = 0;
       for (const subform of subforms) {
         if (subform.responses && subform.responses.length > 0) {
           const responseEntries = subform.responses.map(response => {
-            let value = response.value;
-            if (typeof value === 'string' && value.startsWith('{') && value.endsWith('}')) {
-              value = `[${value.substring(1, value.length - 1)}]`;
+            let value: string | null;
+            if (response.value === null) {
+              value = null;
+            } else if (typeof response.value === 'string') {
+              value = response.value;
+              if (value.startsWith('{') && value.endsWith('}')) {
+                value = `[${value.substring(1, value.length - 1)}]`;
+              }
+            } else {
+              value = JSON.stringify(response.value);
             }
 
             return {
               unitid: Number(savedUnit.id),
               variableid: response.id,
-              status: response.status,
+              status: response.status as string,
               value: value,
               subform: subform.id
             };
@@ -794,10 +792,8 @@ export class PersonService {
 
   async processPersonLogs(
     persons: Person[],
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    unitLogs: any,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    bookletLogs: any,
+    unitLogs: Log[],
+    bookletLogs: Log[],
     overwriteExistingLogs: boolean = true
   ): Promise<{
       success: boolean;
@@ -905,8 +901,6 @@ export class PersonService {
 
           try {
             totalBooklets += 1;
-
-            // Store booklet logs with overwrite flag
             const logsResult = await this.storeBookletLogs(
               booklet,
               existingBooklet.id,
@@ -965,18 +959,15 @@ export class PersonService {
     }
 
     try {
-      // Check if logs already exist for this booklet
       const existingLogsCount = await this.bookletLogRepository.count({
         where: { bookletid: bookletId }
       });
 
-      // If logs exist and we're not supposed to overwrite, skip
       if (existingLogsCount > 0 && !overwriteExisting) {
         this.logger.log(`Skipping ${booklet.logs.length} logs for booklet ${booklet.id} (logs already exist)`);
         return { success: true, saved: 0, skipped: booklet.logs.length };
       }
 
-      // If logs exist and we're supposed to overwrite, delete existing logs first
       if (existingLogsCount > 0 && overwriteExisting) {
         await this.bookletLogRepository.delete({ bookletid: bookletId });
         this.logger.log(`Deleted ${existingLogsCount} existing logs for booklet ${booklet.id}`);
@@ -1107,7 +1098,6 @@ export class PersonService {
         ts: Number(log.ts)
       }));
 
-      // Use batch processing for better performance with large datasets
       const BATCH_SIZE = 1000;
       for (let i = 0; i < unitLogEntries.length; i += BATCH_SIZE) {
         const batch = unitLogEntries.slice(i, i + BATCH_SIZE);
