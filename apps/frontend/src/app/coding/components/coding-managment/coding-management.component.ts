@@ -22,7 +22,9 @@ import {
   MatTableDataSource
 } from '@angular/material/table';
 import { MatSort, MatSortModule, MatSortHeader } from '@angular/material/sort';
-import { MatPaginator, MatPaginatorModule, PageEvent } from '@angular/material/paginator';
+import {
+  MatPaginator, MatPaginatorModule, MatPaginatorIntl, PageEvent
+} from '@angular/material/paginator';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
@@ -44,14 +46,20 @@ import { CodingStatistics } from '../../../../../../../api-dto/coding/coding-sta
 import { ExportDialogComponent, ExportFormat } from '../export-dialog/export-dialog.component';
 import { Success } from '../../models/success.model';
 import { CodingListItem } from '../../models/coding-list-item.model';
+import { ResponseEntity } from '../../../shared/models/response-entity.model';
 import { TestPersonCodingDialogComponent } from '../test-person-coding-dialog/test-person-coding-dialog.component';
 import { ExportCodingBookComponent } from '../export-coding-book/export-coding-book.component';
 import { CodingManagementManualComponent } from '../coding-management-manual/coding-management-manual.component';
 import { VariableAnalysisDialogComponent } from '../variable-analysis-dialog/variable-analysis-dialog.component';
+import { GermanPaginatorIntl } from '../../../shared/services/german-paginator-intl.service';
 
 @Component({
   selector: 'app-coding-management',
   templateUrl: './coding-management.component.html',
+  standalone: true,
+  providers: [
+    { provide: MatPaginatorIntl, useClass: GermanPaginatorIntl }
+  ],
   imports: [
     NgClass,
     MatTable,
@@ -96,11 +104,9 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
   @ViewChild(MatSort) sort!: MatSort;
   @ViewChild(MatPaginator) paginator!: MatPaginator;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  data: any[] = [];
-  dataSource = new MatTableDataSource<CodingListItem>(this.data);
+  data: Success[] = [];
+  dataSource = new MatTableDataSource<Success>(this.data);
   displayedColumns: string[] = ['unitname', 'variableid', 'value', 'codedstatus', 'actions'];
-
   isLoading = false;
   isFilterLoading = false;
   isLoadingStatistics = false;
@@ -124,7 +130,6 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
   }
 
   ngOnInit(): void {
-    // Check workspace setting to decide whether to auto-fetch coding statistics
     const workspaceId = this.appService.selectedWorkspaceId;
     if (workspaceId) {
       this.workspaceSettingsService.getAutoFetchCodingStatistics(workspaceId)
@@ -159,7 +164,6 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
       )
       .subscribe(({ jobId }) => {
         if (!jobId) {
-          // Fallback: fetch directly
           this.backendService.getCodingStatistics(workspaceId)
             .pipe(
               catchError(() => {
@@ -214,31 +218,6 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
     return Math.round((this.codingStatistics.statusCounts[status] / this.codingStatistics.totalResponses) * 100);
   }
 
-  getStatusColor(status: string): string {
-    const colorMap: { [key: string]: string } = {
-      CODING_COMPLETE: '#4CAF50', // Green
-      CODING_INCOMPLETE: '#FFC107', // Amber
-      NOT_REACHED: '#9E9E9E', // Grey
-      INVALID: '#F44336', // Red
-      INTENDED_INCOMPLETE: '#2196F3' // Blue
-    };
-    return colorMap[status] || '#9C27B0'; // Default to purple for unknown statuses
-  }
-
-  getChartData(): { status: string; count: number; percentage: number; color: string }[] {
-    if (!this.codingStatistics.totalResponses) {
-      return [];
-    }
-
-    return Object.keys(this.codingStatistics.statusCounts)
-      .map(status => ({
-        status,
-        count: this.codingStatistics.statusCounts[status],
-        percentage: this.getStatusPercentage(status),
-        color: this.getStatusColor(status)
-      }));
-  }
-
   fetchResponsesByStatus(status: string, page: number = 1, limit: number = this.pageSize): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     this.isLoading = true;
@@ -264,22 +243,20 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
         })
       )
       .subscribe(response => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        this.data = response.data.map((item: any) => ({
+        this.data = response.data.map((item: ResponseEntity) => ({
           id: item.id,
-          unitid: item.unitid,
-          variableid: item.variableid || '',
+          unitid: item.unitId,
+          variableid: item.variableId || '',
           status: item.status || '',
           value: item.value || '',
           subform: item.subform || '',
-          code: item.code,
-          score: item.score,
+          code: item.code?.toString() || null,
+          score: item.score?.toString() || null,
           unit: item.unit,
-          codedstatus: item.codedstatus || '',
+          codedstatus: item.codedStatus || '',
           unitname: item.unit?.name || '',
-          // Extract information for replay URL
           login_name: item.unit?.booklet?.person?.login || '',
-          login_group: item.unit?.booklet?.person?.group || '',
+          login_group: (item.unit?.booklet?.person as { login: string; code: string; group?: string })?.group || '',
           login_code: item.unit?.booklet?.person?.code || '',
           booklet_id: item.unit?.booklet?.bookletinfo?.name || ''
         }));
@@ -536,8 +513,6 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
           .slice(0, 10)}.xlsx`;
         document.body.appendChild(a);
         a.click();
-
-        // Clean up
         window.URL.revokeObjectURL(url);
         document.body.removeChild(a);
 
@@ -672,9 +647,6 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
       });
   }
 
-  /**
-   * Opens the export coding book dialog
-   */
   openExportCodingBook(): void {
     this.dialog.open(ExportCodingBookComponent, {
       width: '80%',

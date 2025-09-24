@@ -16,7 +16,9 @@ import { MatInputModule } from '@angular/material/input';
 import { MatTableModule } from '@angular/material/table';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { MatPaginator, MatPaginatorModule, PageEvent } from '@angular/material/paginator';
+import {
+  MatPaginator, MatPaginatorModule, MatPaginatorIntl, PageEvent
+} from '@angular/material/paginator';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateModule } from '@ngx-translate/core';
 import { Router } from '@angular/router';
@@ -26,6 +28,7 @@ import { AppService } from '../../../services/app.service';
 import { ConfirmDialogComponent, ConfirmDialogData } from '../../../shared/dialogs/confirm-dialog.component';
 import { BookletInfoDialogComponent } from '../booklet-info-dialog/booklet-info-dialog.component';
 import { BookletInfoDto } from '../../../../../../../api-dto/booklet-info/booklet-info.dto';
+import { GermanPaginatorIntl } from '../../../shared/services/german-paginator-intl.service';
 
 interface UnitSearchResult {
   unitId: number;
@@ -79,6 +82,9 @@ interface BookletSearchResult {
   templateUrl: './test-results-search.component.html',
   styleUrls: ['./test-results-search.component.scss'],
   standalone: true,
+  providers: [
+    { provide: MatPaginatorIntl, useClass: GermanPaginatorIntl }
+  ],
   imports: [
     CommonModule,
     FormsModule,
@@ -143,7 +149,7 @@ export class TestResultsSearchComponent implements OnInit {
       debounceTime(this.SEARCH_DEBOUNCE_TIME),
       distinctUntilChanged()
     ).subscribe(searchText => {
-      this.pageIndex = 0; // Reset to first page on new search
+      this.pageIndex = 0;
       this.searchUnits(searchText);
     });
 
@@ -151,7 +157,7 @@ export class TestResultsSearchComponent implements OnInit {
       debounceTime(this.SEARCH_DEBOUNCE_TIME),
       distinctUntilChanged((prev, curr) => prev.value === curr.value && prev.variableId === curr.variableId && prev.unitName === curr.unitName && prev.status === curr.status && prev.codedStatus === curr.codedStatus && prev.group === curr.group && prev.code === curr.code)
     ).subscribe(searchParams => {
-      this.pageIndex = 0; // Reset to first page on new search
+      this.pageIndex = 0;
       this.searchResponses(searchParams);
     });
 
@@ -159,7 +165,7 @@ export class TestResultsSearchComponent implements OnInit {
       debounceTime(this.SEARCH_DEBOUNCE_TIME),
       distinctUntilChanged()
     ).subscribe(searchText => {
-      this.pageIndex = 0; // Reset to first page on new search
+      this.pageIndex = 0;
       this.searchBooklets(searchText);
     });
   }
@@ -231,7 +237,6 @@ export class TestResultsSearchComponent implements OnInit {
     }
 
     this.isLoading = true;
-    // Add 1 to pageIndex because backend uses 1-based indexing
     this.backendService.searchUnitsByName(
       this.appService.selectedWorkspaceId,
       unitName,
@@ -253,7 +258,6 @@ export class TestResultsSearchComponent implements OnInit {
 
   searchResponses(searchParams: { value?: string; variableId?: string; unitName?: string; status?: string; codedStatus?: string; group?: string; code?: string }): void {
     this.isLoading = true;
-    // Add 1 to pageIndex because backend uses 1-based indexing
     this.backendService.searchResponses(
       this.appService.selectedWorkspaceId,
       searchParams,
@@ -282,7 +286,6 @@ export class TestResultsSearchComponent implements OnInit {
     }
 
     this.isLoading = true;
-    // Add 1 to pageIndex because backend uses 1-based indexing
     this.backendService.searchBookletsByName(
       this.appService.selectedWorkspaceId,
       bookletName,
@@ -508,20 +511,15 @@ export class TestResultsSearchComponent implements OnInit {
         const responseIds = this.responseSearchResults.map(response => response.responseId);
         let successCount = 0;
         let failCount = 0;
-
         this.isLoading = true;
-
-        // Process each response deletion sequentially
         const processNextResponse = (index: number) => {
           if (index >= responseIds.length) {
-            // All responses processed
             this.isLoading = false;
             this.snackBar.open(
               `${successCount} Antworten gelöscht, ${failCount} fehlgeschlagen.`,
               'OK',
               { duration: 5000 }
             );
-            // Refresh the search results
             this.searchResponses({
               value: this.searchValue.trim() !== '' ? this.searchValue : undefined,
               variableId: this.searchVariableId.trim() !== '' ? this.searchVariableId : undefined,
@@ -552,8 +550,6 @@ export class TestResultsSearchComponent implements OnInit {
             }
           });
         };
-
-        // Start processing
         processNextResponse(0);
       }
     });
@@ -612,7 +608,6 @@ export class TestResultsSearchComponent implements OnInit {
         ).subscribe({
           next: response => {
             if (response.success) {
-              // Remove the deleted booklet from the results
               this.bookletSearchResults = this.bookletSearchResults.filter(
                 b => b.bookletId !== booklet.bookletId
               );
@@ -670,20 +665,15 @@ export class TestResultsSearchComponent implements OnInit {
         const bookletIds = this.bookletSearchResults.map(booklet => booklet.bookletId);
         let successCount = 0;
         let failCount = 0;
-
         this.isLoading = true;
-
-        // Process each booklet deletion sequentially
         const processNextBooklet = (index: number) => {
           if (index >= bookletIds.length) {
-            // All booklets processed
             this.isLoading = false;
             this.snackBar.open(
               `${successCount} Booklets gelöscht, ${failCount} fehlgeschlagen.`,
               'OK',
               { duration: 5000 }
             );
-            // Refresh the search results
             this.searchBooklets(this.bookletSearchText);
             return;
           }
@@ -706,8 +696,6 @@ export class TestResultsSearchComponent implements OnInit {
             }
           });
         };
-
-        // Start processing
         processNextBooklet(0);
       }
     });

@@ -327,5 +327,14 @@
     "failure-distribution-by-hour": "Verteilung der Fehler nach Stunde",
     "failure-count": "Anzahl der Fehler",
     "no-failures": "Keine Fehler vorhanden"
+  },
+
+  "paginator": {
+    "itemsPerPageLabel": "Elemente pro Seite:",
+    "nextPageLabel": "Nächste Seite",
+    "previousPageLabel": "Vorherige Seite",
+    "firstPageLabel": "Erste Seite",
+    "lastPageLabel": "Letzte Seite",
+    "getRangeLabel": "{{startIndex}} - {{endIndex}} von {{length}}"
   }
 }
