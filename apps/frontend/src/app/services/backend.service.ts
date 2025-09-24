@@ -5,7 +5,6 @@ import { map } from 'rxjs/operators';
 import { VariableInfo } from '@iqbspecs/variable-info/variable-info.interface';
 import { FilesInListDto } from 'api-dto/files/files-in-list.dto';
 import { UnitNoteDto } from 'api-dto/unit-notes/unit-note.dto';
-import { UpdateUnitTagDto } from 'api-dto/unit-tags/update-unit-tag.dto';
 import { UnitTagDto } from 'api-dto/unit-tags/unit-tag.dto';
 import { CreateUnitTagDto } from 'api-dto/unit-tags/create-unit-tag.dto';
 import { CreateWorkspaceDto } from 'api-dto/workspaces/create-workspace-dto';
@@ -25,8 +24,7 @@ import { TestResultService } from './test-result.service';
 import { ResourcePackageService } from './resource-package.service';
 import { ValidationService } from './validation.service';
 import { UnitService } from './unit.service';
-// eslint-disable-next-line import/no-cycle
-import { ImportService } from './import.service';
+import { ImportService, ImportOptions, Result } from './import.service';
 import { AuthenticationService } from './authentication.service';
 import { VariableAnalysisService, VariableAnalysisResultDto } from './variable-analysis.service';
 import { VariableAnalysisJobDto } from '../models/variable-analysis-job.dto';
@@ -44,7 +42,6 @@ import { UserWorkspaceAccessDto } from '../../../../../api-dto/workspaces/user-w
 import { UserInListDto } from '../../../../../api-dto/user/user-in-list-dto';
 import { ResourcePackageDto } from '../../../../../api-dto/resource-package/resource-package-dto';
 import { TestTakersValidationDto } from '../../../../../api-dto/files/testtakers-validation.dto';
-import { ImportOptions, Result } from '../ws-admin/components/test-center-import/test-center-import.component';
 import { ResponseDto } from '../../../../../api-dto/responses/response-dto';
 import { InvalidVariableDto } from '../../../../../api-dto/files/variable-validation.dto';
 import { BookletInfoDto } from '../../../../../api-dto/booklet-info/booklet-info.dto';
@@ -52,6 +49,7 @@ import { UnitInfoDto } from '../../../../../api-dto/unit-info/unit-info.dto';
 import { CodeBookContentSetting } from '../../../../../api-dto/coding/codebook-content-setting';
 import { MissingsProfilesDto } from '../../../../../api-dto/coding/missings-profiles.dto';
 import { VariableAnalysisItemDto } from '../../../../../api-dto/coding/variable-analysis-item.dto';
+import { ResponseEntity } from '../shared/models/response-entity.model';
 
 type ReplayStatisticsResponse = {
   id: number;
@@ -84,31 +82,6 @@ export interface CodingListItem {
   variable_page: string;
   variable_anchor: string;
   url: string;
-}
-
-interface ResponseEntity {
-  id: number;
-  unitId: number;
-  variableId: string;
-  status: string;
-  value: string;
-  subform: string;
-  code: number;
-  score: number;
-  codedStatus: string;
-  unit?: {
-    name: string;
-    alias: string;
-    booklet?: {
-      person?: {
-        login: string;
-        code: string;
-      };
-      bookletinfo?: {
-        name: string;
-      };
-    };
-  };
 }
 
 @Injectable({
@@ -282,10 +255,6 @@ export class BackendService {
 
   createUnitTag(workspaceId: number, createUnitTagDto: CreateUnitTagDto): Observable<UnitTagDto> {
     return this.unitTagService.createUnitTag(workspaceId, createUnitTagDto);
-  }
-
-  updateUnitTag(workspaceId: number, tagId: number, updateUnitTagDto: UpdateUnitTagDto): Observable<UnitTagDto> {
-    return this.unitTagService.updateUnitTag(workspaceId, tagId, updateUnitTagDto);
   }
 
   deleteUnitTag(workspaceId: number, tagId: number): Observable<boolean> {

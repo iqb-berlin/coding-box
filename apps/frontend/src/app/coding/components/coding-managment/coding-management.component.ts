@@ -246,21 +246,20 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
         this.data = response.data.map((item: ResponseEntity) => ({
           id: item.id,
           unitid: item.unitId,
-          variableid: item.variableId || '',
+          variableid: item.variableid || '',
           status: item.status || '',
           value: item.value || '',
           subform: item.subform || '',
           code: item.code?.toString() || null,
           score: item.score?.toString() || null,
           unit: item.unit,
-          codedstatus: item.codedStatus || '',
+          codedstatus: item.codedstatus || '',
           unitname: item.unit?.name || '',
           login_name: item.unit?.booklet?.person?.login || '',
           login_group: (item.unit?.booklet?.person as { login: string; code: string; group?: string })?.group || '',
           login_code: item.unit?.booklet?.person?.code || '',
           booklet_id: item.unit?.booklet?.bookletinfo?.name || ''
         }));
-
         this.dataSource.data = this.data;
         this.totalRecords = response.total;
 
@@ -548,7 +547,7 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
         if (codingSchemeRef) {
           this.showCodingScheme(codingSchemeRef);
         } else {
-          this.snackBar.open(`Kein Kodierschema-Verweis in der Unit ${unitId} gefunden.`, 'Schließen', {
+          this.snackBar.open(`Kein Kodierschema in Kodierdaten für die Unit ${unitId} gefunden.`, 'Schließen', {
             duration: 5000
           });
         }
@@ -589,7 +588,7 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
       )
       .subscribe(fileData => {
         if (!fileData || !fileData.base64Data) {
-          this.snackBar.open(`Kodierschema '${codingSchemeRef}' wurde nicht gefunden.`, 'Schließen', {
+          this.snackBar.open(`Kodierschema '${codingSchemeRef}' in Kodierdaten nicht gefunden.`, 'Schließen', {
             duration: 5000,
             panelClass: ['error-snackbar']
           });

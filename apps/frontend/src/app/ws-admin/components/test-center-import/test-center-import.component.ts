@@ -21,12 +21,11 @@ import {
   MatCell,
   MatCellDef, MatColumnDef, MatHeaderCell, MatHeaderCellDef, MatHeaderRow, MatHeaderRowDef, MatRow, MatRowDef, MatTable
 } from '@angular/material/table';
-// eslint-disable-next-line import/no-cycle
 import { MatTooltip } from '@angular/material/tooltip';
-// eslint-disable-next-line import/no-cycle
 import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
 import { WorkspaceAdminService } from '../../services/workspace-admin.service';
+import { ImportOptions, Result } from '../../../services/import.service';
 import { TestGroupsInfoDto } from '../../../../../../../api-dto/files/test-groups-info.dto';
 import { ConfirmDialogComponent, ConfirmDialogData } from '../../../shared/dialogs/confirm-dialog.component';
 
@@ -39,31 +38,9 @@ export type WorkspaceAdmin = {
   }
 };
 
-export type ImportOptions = {
-  responses:string,
-  definitions:string,
-  units:string,
-  player:string,
-  codings:string,
-  logs:string,
-  testTakers:string,
-  booklets:string
-};
-
 export type Testcenter = {
   id:number,
   label:string
-};
-
-export type Result = {
-  success: boolean,
-  testFiles: number,
-  responses: number,
-  logs: number,
-  booklets: number,
-  units: number,
-  persons: number,
-  importedGroups: string[]
 };
 
 export interface ImportFormValues {
@@ -277,9 +254,6 @@ export class TestCenterImportComponent {
     this.showTestGroups = true;
   }
 
-  /**
-   * Refreshes the test groups list to update status after import
-   */
   refreshTestGroups(): void {
     const formValues = {
       testCenter: this.loginForm.get('testCenter')?.value,
@@ -310,24 +284,15 @@ export class TestCenterImportComponent {
       });
   }
 
-  /**
-   * Check if any selected groups have logs
-   * @returns True if any selected group has logs
-   */
   private hasSelectedGroupsWithLogs(): boolean {
     return this.selectedRows.some(group => group.hasBookletLogs);
   }
 
-  /**
-   * Show confirmation dialog for overwriting logs
-   * @returns Promise that resolves to true if user confirms, false otherwise
-   */
   private async confirmOverwriteLogs(): Promise<boolean> {
-    // Count groups with logs
     const groupsWithLogs = this.selectedRows.filter(group => group.hasBookletLogs);
 
     if (groupsWithLogs.length === 0) {
-      return true; // No confirmation needed
+      return true;
     }
 
     const dialogRef = this.dialog.open(ConfirmDialogComponent, {
@@ -388,12 +353,6 @@ export class TestCenterImportComponent {
     }
   }
 
-  /**
-   * Perform the actual import
-   * @param formValues The form values
-   * @param selectedGroupNames The selected group names
-   * @param overwriteExistingLogs Whether to overwrite existing logs
-   */
   private performImport(
     formValues: ImportFormValues,
     selectedGroupNames: string[],

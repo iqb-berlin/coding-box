@@ -1,4 +1,3 @@
-// Main container styles
 .coding-container {
   padding: 24px;
   width: 100%;
@@ -9,12 +8,29 @@
   animation: fadeIn 0.3s ease-in-out;
 }
 
+.content-row {
+  width: 100%;
+}
+
+.statistics-section {
+  flex: 0 0 400px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.data-section {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
 }
 
-// Header section styles
 .header-section {
   margin-bottom: 24px;
 
@@ -34,7 +50,6 @@
   }
 }
 
-// Card styles
 .action-card, .data-card, .statistics-card {
   background-color: white;
   border-radius: 12px;
@@ -49,18 +64,7 @@
     box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1);
   }
 
-  // Horizontal layout for statistics and data cards
-  @media (min-width: 1200px) {
-    &.statistics-card, &.data-card {
-      display: inline-block;
-      vertical-align: top;
-      width: calc(50% - 12px);
-    }
 
-    &.statistics-card {
-      margin-right: 24px;
-    }
-  }
 
   .section-title {
     font-size: 22px;
@@ -111,7 +115,6 @@
   }
 }
 
-// Action buttons styles
 .action-buttons {
   display: flex;
   flex-wrap: wrap;
@@ -162,7 +165,6 @@
   }
 }
 
-// Loading container styles
 .loading-container {
   display: flex;
   flex-direction: column;
@@ -184,12 +186,10 @@
   }
 }
 
-// Large transparent spinner for coding statistics
 .large-transparent-spinner {
   opacity: 0.7;
 }
 
-// Statistics card styles
 .statistics-card {
   .statistics-content {
     margin: 20px 0;
@@ -449,7 +449,7 @@
   position: relative;
   overflow-x: auto;
   overflow-y: auto;
-  max-height: 400px; /* Default max height for smaller screens */
+  max-height: 60vh;
   border-radius: 8px;
   border: 1px solid rgba(0, 0, 0, 0.08);
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
@@ -475,13 +475,12 @@
     background: #a3c0e0;
   }
 
-  /* Responsive max-height adjustments */
   @media (min-height: 768px) {
-    max-height: 500px; /* Medium screens */
+    max-height: 70vh;
   }
 
   @media (min-height: 1024px) {
-    max-height: 600px; /* Larger screens */
+    max-height: 80vh;
   }
 
   mat-paginator {
@@ -498,7 +497,7 @@
 
 .coding-table {
   width: 100%;
-  min-width: 600px; /* Ensures table doesn't get too narrow */
+  min-width: 600px;
 
   th, td {
     padding: 14px 18px;
@@ -506,7 +505,7 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 200px; /* Prevents cells from getting too wide */
+    max-width: 200px;
   }
 
   th {
@@ -604,7 +603,6 @@
   border: 1px solid rgba(255, 152, 0, 0.2);
 }
 
-// Empty state styles
 .empty-state {
   display: flex;
   flex-direction: column;
@@ -643,7 +641,6 @@
   }
 }
 
-// Snackbar styles
 ::ng-deep .error-snackbar {
   background-color: #f44336;
   color: white;
@@ -713,15 +710,14 @@
 
 .clickable-cell {
   cursor: pointer;
-  color: #3f51b5; /* Primärfarbe für bessere Sichtbarkeit als Link */
+  color: #3f51b5;
   text-decoration: underline;
 
   &:hover {
-    color: #283593; /* Dunklere Farbe beim Hover */
+    color: #283593;
   }
 }
 
-// Variable Analysis Bar Chart styles
 .bar-chart-container {
   display: flex;
   align-items: center;
@@ -755,7 +751,6 @@
   }
 }
 
-// Dialog styles for test person coding
 ::ng-deep .full-screen-dialog {
   .mat-mdc-dialog-container {
     padding: 0 !important;
