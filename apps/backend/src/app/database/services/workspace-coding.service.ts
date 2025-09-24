@@ -59,11 +59,6 @@ export class WorkspaceCodingService {
   private testFileCache: Map<number, { files: Map<string, FileUpload>; timestamp: number }> = new Map();
   private readonly TEST_FILE_CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes cache TTL
 
-  /**
-   * Generate a hash for expected combinations to create unique cache keys
-   * @param expectedCombinations Array of expected combinations
-   * @returns Hash string for cache key generation
-   */
   private generateExpectedCombinationsHash(expectedCombinations: ExpectedCombinationDto[]): string {
     const sortedData = expectedCombinations
       .map(combo => `${combo.unit_key}|${combo.login_name}|${combo.login_code}|${combo.booklet_id}|${combo.variable_id}`)
@@ -79,49 +74,38 @@ export class WorkspaceCodingService {
 
     if (cacheEntry && (now - cacheEntry.timestamp) < this.TEST_FILE_CACHE_TTL_MS) {
       this.logger.log(`Using cached test files for workspace ${workspace_id}`);
-
-      // Check if all requested unit aliases are in the cache
       const missingAliases = unitAliasesArray.filter(alias => !cacheEntry.files.has(alias));
-
       if (missingAliases.length === 0) {
-        // All files are in the cache, return the cached files
         return cacheEntry.files;
       }
 
-      // Some files are missing, fetch only the missing ones
       this.logger.log(`Fetching ${missingAliases.length} missing test files for workspace ${workspace_id}`);
       const missingFiles = await this.fileUploadRepository.find({
         where: { workspace_id, file_id: In(missingAliases) },
         select: ['file_id', 'data', 'filename']
       });
 
-      // Add the missing files to the cache
       missingFiles.forEach(file => {
         cacheEntry.files.set(file.file_id, file);
       });
 
-      // Update the timestamp
       cacheEntry.timestamp = now;
 
       return cacheEntry.files;
     }
 
-    // No valid cache entry, fetch all files
     this.logger.log(`Fetching all test files for workspace ${workspace_id}`);
     const testFiles = await this.fileUploadRepository.find({
       where: { workspace_id, file_id: In(unitAliasesArray) },
       select: ['file_id', 'data', 'filename']
     });
 
-    // Create a new cache entry
     const fileMap = new Map<string, FileUpload>();
     testFiles.forEach(file => {
       fileMap.set(file.file_id, file);
     });
 
-    // Store in cache
     this.testFileCache.set(workspace_id, { files: fileMap, timestamp: now });
-
     return fileMap;
   }
 
@@ -130,11 +114,9 @@ export class WorkspaceCodingService {
     const result = new Map<string, Autocoder.CodingScheme>();
     const emptyScheme = new Autocoder.CodingScheme({});
 
-    // Check which schemes are in the cache and still valid
     const missingSchemeRefs = codingSchemeRefs.filter(ref => {
       const cacheEntry = this.codingSchemeCache.get(ref);
       if (cacheEntry && (now - cacheEntry.timestamp) < this.SCHEME_CACHE_TTL_MS) {
-        // Scheme is in cache and still valid
         result.set(ref, cacheEntry.scheme);
         return false;
       }
@@ -142,32 +124,24 @@ export class WorkspaceCodingService {
     });
 
     if (missingSchemeRefs.length === 0) {
-      // All schemes are in the cache
       this.logger.log('Using all cached coding schemes');
       return result;
     }
 
-    // Fetch missing schemes
     this.logger.log(`Fetching ${missingSchemeRefs.length} missing coding schemes`);
     const codingSchemeFiles = await this.fileUploadRepository.find({
       where: { file_id: In(missingSchemeRefs) },
       select: ['file_id', 'data', 'filename']
     });
 
-    // Parse and cache the schemes
     codingSchemeFiles.forEach(file => {
       try {
         const data = typeof file.data === 'string' ? JSON.parse(file.data) : file.data;
         const scheme = new Autocoder.CodingScheme(data);
-
-        // Store in result map
         result.set(file.file_id, scheme);
-
-        // Store in cache
         this.codingSchemeCache.set(file.file_id, { scheme, timestamp: now });
       } catch (error) {
         this.logger.error(`--- Fehler beim Verarbeiten des Kodierschemas ${file.filename}: ${error.message}`);
-        // Use empty scheme for invalid schemes
         result.set(file.file_id, emptyScheme);
       }
     });
@@ -177,15 +151,11 @@ export class WorkspaceCodingService {
 
   private cleanupCaches(): void {
     const now = Date.now();
-
-    // Clean up coding scheme cache
     for (const [key, entry] of this.codingSchemeCache.entries()) {
       if (now - entry.timestamp > this.SCHEME_CACHE_TTL_MS) {
         this.codingSchemeCache.delete(key);
       }
     }
-
-    // Clean up test file cache
     for (const [key, entry] of this.testFileCache.entries()) {
       if (now - entry.timestamp > this.TEST_FILE_CACHE_TTL_MS) {
         this.testFileCache.delete(key);
@@ -202,11 +172,9 @@ export class WorkspaceCodingService {
       }
 
       if (bullJob) {
-        // Get job state and progress
         const state = await bullJob.getState();
         const progress = await bullJob.progress() || 0;
 
-        // Map Bull job state to our job status
         let status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'paused';
         switch (state) {
           case 'active':
@@ -229,7 +197,6 @@ export class WorkspaceCodingService {
             status = 'pending';
         }
 
-        // Get result from job return value if completed
         let result: CodingStatistics | undefined;
         let error: string | undefined;
 
@@ -272,7 +239,6 @@ export class WorkspaceCodingService {
         return { success: false, message: `Job with ID ${jobId} not found` };
       }
 
-      // Check if job can be cancelled
       const state = await bullJob.getState();
       if (state === 'completed' || state === 'failed') {
         return {
@@ -281,7 +247,6 @@ export class WorkspaceCodingService {
         };
       }
 
-      // Cancel the job
       const result = await this.jobQueueService.cancelTestPersonCodingJob(jobId);
       if (result) {
         this.logger.log(`Job ${jobId} has been cancelled successfully`);
@@ -301,7 +266,6 @@ export class WorkspaceCodingService {
         return { success: false, message: `Job with ID ${jobId} not found` };
       }
 
-      // Delete the job
       const result = await this.jobQueueService.deleteTestPersonCodingJob(jobId);
       if (result) {
         this.logger.log(`Job ${jobId} has been deleted successfully`);
@@ -316,22 +280,18 @@ export class WorkspaceCodingService {
 
   private async isJobCancelled(jobId: string | number): Promise<boolean> {
     try {
-      // Check Redis queue
       const bullJob = await this.jobQueueService.getTestPersonCodingJob(jobId.toString());
       if (bullJob) {
-        // Check if job is paused via our custom isPaused property
         if (bullJob.data.isPaused) {
           return true;
         }
-
-        // Also check Bull's native state
         const state = await bullJob.getState();
         return state === 'paused';
       }
       return false;
     } catch (error) {
       this.logger.error(`Error checking job cancellation or pause: ${error.message}`, error.stack);
-      return false; // Assume not cancelled or paused on error
+      return false;
     }
   }
 
@@ -361,7 +321,6 @@ export class WorkspaceCodingService {
         const batch = batches[index];
         this.logger.log(`Starte Aktualisierung für Batch #${index + 1} (Größe: ${batch.length}).`);
 
-        // Check for cancellation or pause before updating batch
         if (jobId && await this.isJobCancelled(jobId)) {
           this.logger.log(`Job ${jobId} was cancelled or paused before updating batch #${index + 1}`);
           await queryRunner.rollbackTransaction();
@@ -371,40 +330,33 @@ export class WorkspaceCodingService {
 
         try {
           if (batch.length > 0) {
-            // Use bulk update with CASE statements for better performance
-            const ids = batch.map(r => r.id);
-            const codeCase = batch.map((r, idx) => `WHEN ${r.id} THEN '${r.code || ''}'`).join(' ');
-            const codedstatusCase = batch.map((r, idx) => `WHEN ${r.id} THEN '${r.codedstatus || ''}'`).join(' ');
-            const scoreCase = batch.map((r, idx) => `WHEN ${r.id} THEN ${r.score || 'NULL'}`).join(' ');
+            const updatePromises = batch.map(response => queryRunner.manager.update(
+              ResponseEntity,
+              response.id,
+              {
+                code: response.code,
+                codedstatus: response.codedstatus,
+                score: response.score
+              }
+            ));
 
-            const updateQuery = `
-              UPDATE responses SET
-                code = CASE id ${codeCase} END,
-                codedstatus = CASE id ${codedstatusCase} END,
-                score = CASE id ${scoreCase} END
-              WHERE id IN (${ids.join(',')})
-            `;
-
-            await queryRunner.query(updateQuery);
+            await Promise.all(updatePromises);
           }
 
           this.logger.log(`Batch #${index + 1} (Größe: ${batch.length}) erfolgreich aktualisiert.`);
 
-          // Update progress during batch updates
           if (progressCallback) {
             const batchProgress = 95 + (5 * ((index + 1) / batches.length));
             progressCallback(Math.round(Math.min(batchProgress, 99))); // Cap at 99% until fully complete and round to integer
           }
         } catch (error) {
           this.logger.error(`Fehler beim Aktualisieren von Batch #${index + 1} (Größe: ${batch.length}):`, error.message);
-          // Rollback transaction on error
           await queryRunner.rollbackTransaction();
           await queryRunner.release();
           return false;
         }
       }
 
-      // Commit transaction if all updates were successful
       await queryRunner.commitTransaction();
       this.logger.log(`${allCodedResponses.length} Responses wurden erfolgreich aktualisiert.`);
 
@@ -412,18 +364,15 @@ export class WorkspaceCodingService {
         metrics.update = Date.now() - updateStart;
       }
 
-      // Always release the query runner
       await queryRunner.release();
       return true;
     } catch (error) {
       this.logger.error('Fehler beim Aktualisieren der Responses:', error.message);
-      // Ensure transaction is rolled back on error
       try {
         await queryRunner.rollbackTransaction();
       } catch (rollbackError) {
         this.logger.error('Fehler beim Rollback der Transaktion:', rollbackError.message);
       }
-      // Always release the query runner
       await queryRunner.release();
       return false;
     }
@@ -483,7 +432,6 @@ export class WorkspaceCodingService {
         }
       }
 
-      // Check for cancellation or pause during response processing
       if (jobId && await this.isJobCancelled(jobId)) {
         this.logger.log(`Job ${jobId} was cancelled or paused during response processing`);
         if (queryRunner) {
@@ -495,7 +443,6 @@ export class WorkspaceCodingService {
 
     allCodedResponses.length = responseIndex;
 
-    // Report progress after processing
     if (progressCallback) {
       progressCallback(95);
     }
@@ -508,10 +455,7 @@ export class WorkspaceCodingService {
     jobId?: string,
     queryRunner?: import('typeorm').QueryRunner
   ): Promise<Map<string, Autocoder.CodingScheme>> {
-    // Use cache for coding schemes
     const fileIdToCodingSchemeMap = await this.getCodingSchemesWithCache([...codingSchemeRefs]);
-
-    // Check for cancellation or pause
     if (jobId && await this.isJobCancelled(jobId)) {
       this.logger.log(`Job ${jobId} was cancelled or paused after getting coding scheme files`);
       if (queryRunner) {
@@ -551,8 +495,6 @@ export class WorkspaceCodingService {
           this.logger.error(`--- Fehler beim Verarbeiten der Datei ${testFile.filename}: ${error.message}`);
         }
       }
-
-      // Check for cancellation or pause during scheme extraction
       if (jobId && await this.isJobCancelled(jobId)) {
         this.logger.log(`Job ${jobId} was cancelled or paused during scheme extraction`);
         if (queryRunner) {
@@ -571,7 +513,6 @@ export class WorkspaceCodingService {
     progressCallback?: (progress: number) => void,
     jobId?: string
   ): Promise<CodingStatistics> {
-    // Clean up expired cache entries
     this.cleanupCaches();
 
     const startTime = Date.now();
@@ -586,7 +527,6 @@ export class WorkspaceCodingService {
       progressCallback(0);
     }
 
-    // Check for cancellation or pause before starting work
     if (jobId && await this.isJobCancelled(jobId)) {
       this.logger.log(`Job ${jobId} was cancelled or paused before processing started`);
       return statistics;
@@ -2149,13 +2089,10 @@ export class WorkspaceCodingService {
         const occurrenceCount = parseInt(item.occurrenceCount, 10);
         const score = parseFloat(item.score) || 0;
 
-        // Get total count for this unit-variable combination
         const variableTotalCount = unitVariableCounts.get(unitId)?.get(variableId) || 0;
 
-        // Calculate relative occurrence
         const relativeOccurrence = variableTotalCount > 0 ? occurrenceCount / variableTotalCount : 0;
 
-        // Get coding scheme information
         let derivation = '';
         let description = '';
         const codingScheme = codingSchemeMap.get(unitId);
@@ -2167,22 +2104,18 @@ export class WorkspaceCodingService {
           }
         }
 
-        // Skip items where derivation is BASE_NO_VALUE or empty
         if (derivation === 'BASE_NO_VALUE' || derivation === '') {
           continue;
         }
 
-        // Get sample info for replay URL
         const sampleInfo = sampleInfoMap.get(`${unitId}|${variableId}`);
         const loginName = sampleInfo?.loginName || '';
         const loginCode = sampleInfo?.loginCode || '';
         const bookletId = sampleInfo?.bookletId || '';
 
-        // Generate replay URL
         const variablePage = '0';
         const replayUrl = `${serverUrl}/#/replay/${loginName}@${loginCode}@${bookletId}/${unitId}/${variablePage}/${variableId}?auth=${authToken}`;
 
-        // Add to result
         result.push({
           replayUrl,
           unitId,
@@ -2197,7 +2130,6 @@ export class WorkspaceCodingService {
         });
       }
 
-      // Apply derivation filter if provided
       if (derivationFilter && derivationFilter.trim() !== '') {
         const filteredResult = result.filter(item => item.derivation.toLowerCase().includes(derivationFilter.toLowerCase()));
 
@@ -2209,7 +2141,7 @@ export class WorkspaceCodingService {
 
         return {
           data: filteredResult,
-          total: filteredCount, // Update total count to reflect filtered results
+          total: filteredCount,
           page,
           limit
         };
@@ -2230,19 +2162,12 @@ export class WorkspaceCodingService {
     }
   }
 
-  /**
-   * Export validation results as Excel with complete database content from Redis cache
-   * @param workspaceId Workspace ID
-   * @param cacheKey Cache key to retrieve complete validation results
-   * @returns Excel buffer with complete data
-   */
   async exportValidationResultsAsExcel(
     workspaceId: number,
     cacheKey: string
   ): Promise<Buffer> {
     this.logger.log(`Exporting validation results as Excel for workspace ${workspaceId} using cache key ${cacheKey}`);
 
-    // Validate input parameters
     if (!cacheKey || typeof cacheKey !== 'string') {
       const errorMessage = 'Invalid cache key provided';
       this.logger.error(`${errorMessage}: ${cacheKey}`);
@@ -2250,26 +2175,20 @@ export class WorkspaceCodingService {
     }
 
     try {
-      // Retrieve complete validation results from cache
       this.logger.log(`Attempting to retrieve cached data with key: ${cacheKey}`);
       const cachedData = await this.cacheService.getCompleteValidationResults(cacheKey);
 
       if (!cachedData) {
-        const errorMessage = 'Validation results not found in cache. Please run validation again.';
         this.logger.error(`No cached validation results found for cache key ${cacheKey}`);
-        // Additional logging to help debug cache issues
         this.logger.error('Cache key format: validation:{workspaceId}:{hash}');
         this.logger.error(`Expected pattern: validation:${workspaceId}:*`);
-        throw new Error(errorMessage);
       }
 
       const validationResults = cachedData.results;
       this.logger.log(`Successfully retrieved ${validationResults.length} validation results from cache for export`);
 
       if (!validationResults || validationResults.length === 0) {
-        const errorMessage = 'No validation data available for export. Please run validation again.';
         this.logger.error('Cached data exists but contains no validation results');
-        throw new Error(errorMessage);
       }
 
       const workbook = new ExcelJS.Workbook();
@@ -2290,7 +2209,6 @@ export class WorkspaceCodingService {
         { header: 'Last Modified', key: 'last_modified', width: 20 }
       ];
 
-      // Add header style
       worksheet.getRow(1).font = { bold: true };
       worksheet.getRow(1).fill = {
         type: 'pattern',
@@ -2390,14 +2308,6 @@ export class WorkspaceCodingService {
     }
   }
 
-  /**
-   * Validate completeness of coding responses with Redis caching and complete backend processing
-   * @param workspaceId Workspace ID
-   * @param expectedCombinations Expected combinations from Excel
-   * @param page Page number (1-based)
-   * @param pageSize Number of items per page
-   * @returns Validation results with pagination metadata
-   */
   async validateCodingCompleteness(
     workspaceId: number,
     expectedCombinations: ExpectedCombinationDto[],
@@ -2408,7 +2318,6 @@ export class WorkspaceCodingService {
       this.logger.log(`Validating coding completeness for workspace ${workspaceId} with ${expectedCombinations.length} expected combinations`);
       const startTime = Date.now();
 
-      // Generate cache key based on workspace and combinations hash
       const combinationsHash = this.generateExpectedCombinationsHash(expectedCombinations);
       const cacheKey = this.cacheService.generateValidationCacheKey(workspaceId, combinationsHash);
 
@@ -2430,21 +2339,17 @@ export class WorkspaceCodingService {
         };
       }
 
-      // No cache found - process ALL combinations and cache the complete results
       this.logger.log(`No cached results found. Processing all ${expectedCombinations.length} combinations for workspace ${workspaceId}`);
 
       const allResults: ValidationResultDto[] = [];
       let totalMissingCount = 0;
 
-      // Process all combinations in batches to avoid overwhelming the database
       const batchSize = 100;
       for (let i = 0; i < expectedCombinations.length; i += batchSize) {
         const batch = expectedCombinations.slice(i, i + batchSize);
         this.logger.log(`Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(expectedCombinations.length / batchSize)}`);
 
-        // Process each combination in the batch
         for (const expected of batch) {
-          // Build a query to check if the response exists
           const responseExists = await this.responseRepository
             .createQueryBuilder('response')
             .innerJoin('response.unit', 'unit')
@@ -2460,7 +2365,6 @@ export class WorkspaceCodingService {
             .andWhere('response.value != :empty', { empty: '' })
             .getCount();
 
-          // Add the result
           const status = responseExists > 0 ? 'EXISTS' : 'MISSING';
           if (status === 'MISSING') {
             totalMissingCount += 1;
@@ -2473,7 +2377,6 @@ export class WorkspaceCodingService {
         }
       }
 
-      // Cache the complete results
       const metadata = {
         total: expectedCombinations.length,
         missing: totalMissingCount,
@@ -2488,7 +2391,6 @@ export class WorkspaceCodingService {
         this.logger.warn(`Failed to cache validation results for workspace ${workspaceId}`);
       }
 
-      // Now get the paginated results from the complete data
       cachedResults = await this.cacheService.getPaginatedValidationResults(cacheKey, page, pageSize);
 
       const endTime = Date.now();
@@ -2504,7 +2406,7 @@ export class WorkspaceCodingService {
           totalPages: cachedResults.metadata.totalPages,
           hasNextPage: cachedResults.metadata.hasNextPage,
           hasPreviousPage: cachedResults.metadata.hasPreviousPage,
-          cacheKey // Include cache key in response for subsequent requests
+          cacheKey
         };
       }
 
