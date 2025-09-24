@@ -16,7 +16,9 @@ import { MatInputModule } from '@angular/material/input';
 import { MatTableModule } from '@angular/material/table';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { MatPaginator, MatPaginatorModule, PageEvent } from '@angular/material/paginator';
+import {
+  MatPaginator, MatPaginatorModule, MatPaginatorIntl, PageEvent
+} from '@angular/material/paginator';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateModule } from '@ngx-translate/core';
 import { Router } from '@angular/router';
@@ -25,6 +27,7 @@ import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
 import { ConfirmDialogComponent, ConfirmDialogData } from '../../../shared/dialogs/confirm-dialog.component';
 import { BookletInfoDialogComponent } from '../booklet-info-dialog/booklet-info-dialog.component';
+import { GermanPaginatorIntl } from '../../../shared/services/german-paginator-intl.service';
 
 interface BookletSearchResult {
   bookletId: number;
@@ -45,6 +48,9 @@ interface BookletSearchResult {
   templateUrl: './booklet-search-dialog.component.html',
   styleUrls: ['./booklet-search-dialog.component.scss'],
   standalone: true,
+  providers: [
+    { provide: MatPaginatorIntl, useClass: GermanPaginatorIntl }
+  ],
   imports: [
     CommonModule,
     FormsModule,

@@ -13,7 +13,9 @@ import { MatDividerModule } from '@angular/material/divider';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTableDataSource, MatTableModule } from '@angular/material/table';
 import { MatSort, MatSortModule } from '@angular/material/sort';
-import { MatPaginator, MatPaginatorModule, PageEvent } from '@angular/material/paginator';
+import {
+  MatPaginator, MatPaginatorModule, MatPaginatorIntl, PageEvent
+} from '@angular/material/paginator';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
@@ -24,6 +26,7 @@ import { debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
 import { VariableAnalysisItemDto } from '../../../../../../../api-dto/coding/variable-analysis-item.dto';
+import { GermanPaginatorIntl } from '../../../shared/services/german-paginator-intl.service';
 
 export interface VariableAnalysisDialogData {
   workspaceId: number;
@@ -40,6 +43,9 @@ export interface VariableAnalysisDialogData {
   templateUrl: './variable-analysis-dialog.component.html',
   styleUrls: ['./variable-analysis-dialog.component.scss'],
   standalone: true,
+  providers: [
+    { provide: MatPaginatorIntl, useClass: GermanPaginatorIntl }
+  ],
   imports: [
     CommonModule,
     FormsModule,
@@ -58,7 +64,6 @@ export interface VariableAnalysisDialogData {
   ]
 })
 export class VariableAnalysisDialogComponent implements OnInit {
-  // Variable analysis data
   variableAnalysisData: VariableAnalysisItemDto[] = [];
   variableAnalysisDataSource = new MatTableDataSource<VariableAnalysisItemDto>([]);
   variableAnalysisColumns: string[] = [
@@ -68,22 +73,12 @@ export class VariableAnalysisDialogComponent implements OnInit {
   ];
 
   totalVariableAnalysisRecords = 0;
-
   variableAnalysisPageIndex = 0;
-
   variableAnalysisPageSize = 100;
-
   variableAnalysisPageSizeOptions = [10, 25, 50, 100, 200];
-
-  // Filters
   unitIdFilter = '';
-
   variableIdFilter = '';
-
-  // Loading state
   isLoadingVariableAnalysis = false;
-
-  // Filter debounce
   variableAnalysisFilterChanged = new Subject<void>();
 
   @ViewChild(MatSort) sort!: MatSort;
@@ -99,7 +94,6 @@ export class VariableAnalysisDialogComponent implements OnInit {
   ) {}
 
   ngOnInit(): void {
-    // Set up filter debounce
     this.variableAnalysisFilterChanged.pipe(
       debounceTime(500),
       distinctUntilChanged()
@@ -107,7 +101,6 @@ export class VariableAnalysisDialogComponent implements OnInit {
       this.fetchVariableAnalysis(1, this.variableAnalysisPageSize);
     });
 
-    // If initial data is provided, use it
     if (this.data.initialData) {
       this.variableAnalysisData = this.data.initialData.data;
       this.variableAnalysisDataSource.data = this.data.initialData.data;
@@ -115,7 +108,6 @@ export class VariableAnalysisDialogComponent implements OnInit {
       this.variableAnalysisPageIndex = this.data.initialData.page - 1; // MatPaginator uses 0-based index
       this.variableAnalysisPageSize = this.data.initialData.limit;
     } else {
-      // Otherwise fetch the data
       this.fetchVariableAnalysis(1, this.variableAnalysisPageSize);
     }
   }
@@ -124,7 +116,6 @@ export class VariableAnalysisDialogComponent implements OnInit {
     const workspaceId = this.data.workspaceId;
     this.isLoadingVariableAnalysis = true;
 
-    // Get filter values, trimming whitespace and only passing non-empty values
     const unitId = this.unitIdFilter.trim() || undefined;
     const variableId = this.variableIdFilter.trim() || undefined;
 
@@ -143,7 +134,6 @@ export class VariableAnalysisDialogComponent implements OnInit {
           this.variableAnalysisPageIndex = response.page - 1; // MatPaginator uses 0-based index
           this.variableAnalysisPageSize = response.limit;
 
-          // Set up sorting for the variable analysis table
           setTimeout(() => {
             if (this.sort) {
               this.variableAnalysisDataSource.sort = this.sort;
@@ -171,8 +161,6 @@ export class VariableAnalysisDialogComponent implements OnInit {
   clearVariableAnalysisFilters(): void {
     this.unitIdFilter = '';
     this.variableIdFilter = '';
-
-    // Reset to first page and refresh data
     this.fetchVariableAnalysis(1, this.variableAnalysisPageSize);
   }
 

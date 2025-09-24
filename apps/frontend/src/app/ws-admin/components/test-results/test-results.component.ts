@@ -12,7 +12,9 @@ import {
 import { MatSort, MatSortHeader } from '@angular/material/sort';
 import { FormsModule, UntypedFormGroup } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { MatPaginator, MatPaginatorModule, PageEvent } from '@angular/material/paginator';
+import {
+  MatPaginator, MatPaginatorModule, MatPaginatorIntl, PageEvent
+} from '@angular/material/paginator';
 import {
   Subject,
   Subscription,
@@ -47,8 +49,6 @@ import { NoteDialogComponent } from '../note-dialog/note-dialog.component';
 import { TestResultsSearchComponent } from '../test-results-search/test-results-search.component';
 import { ConfirmDialogComponent, ConfirmDialogData } from '../../../shared/dialogs/confirm-dialog.component';
 import { UnitTagDto } from '../../../../../../../api-dto/unit-tags/unit-tag.dto';
-import { CreateUnitTagDto } from '../../../../../../../api-dto/unit-tags/create-unit-tag.dto';
-import { UpdateUnitTagDto } from '../../../../../../../api-dto/unit-tags/update-unit-tag.dto';
 import { UnitNoteDto } from '../../../../../../../api-dto/unit-notes/unit-note.dto';
 import { ValidationDialogComponent } from '../validation-dialog/validation-dialog.component';
 import { VariableValidationDto } from '../../../../../../../api-dto/files/variable-validation.dto';
@@ -59,6 +59,7 @@ import { BookletInfoDto } from '../../../../../../../api-dto/booklet-info/bookle
 import { BookletInfoDialogComponent } from '../booklet-info-dialog/booklet-info-dialog.component';
 import { UnitInfoDialogComponent } from '../unit-info-dialog/unit-info-dialog.component';
 import { UnitInfoDto } from '../../../../../../../api-dto/unit-info/unit-info.dto';
+import { GermanPaginatorIntl } from '../../../shared/services/german-paginator-intl.service';
 
 interface BookletLog {
   id: number;
@@ -145,7 +146,10 @@ interface P {
   templateUrl: './test-results.component.html',
   styleUrls: ['./test-results.component.scss'],
   standalone: true,
-  providers: [DatePipe],
+  providers: [
+    DatePipe,
+    { provide: MatPaginatorIntl, useClass: GermanPaginatorIntl }
+  ],
   imports: [CommonModule,
     FormsModule,
     MatExpansionPanelHeader,
@@ -212,7 +216,6 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   isSearching: boolean = false;
   isLoadingBooklets: boolean = false;
   unitTags: UnitTagDto[] = [];
-  newTagText: string = '';
   unitTagsMap: Map<number, UnitTagDto[]> = new Map();
   unitNotes: UnitNoteDto[] = [];
   unitNotesMap: Map<number, UnitNoteDto[]> = new Map();
@@ -244,26 +247,17 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       this.searchSubscription = null;
     }
 
-    // Stop interval when component is destroyed
     this.stopValidationStatusCheck();
   }
 
-  /**
-   * Start interval to check validation status
-   */
   private startValidationStatusCheck(): void {
-    // Check immediately
     this.checkValidationStatus();
 
-    // Then check every 5 seconds
     this.validationStatusInterval = window.setInterval(() => {
       this.checkValidationStatus();
     }, 5000);
   }
 
-  /**
-   * Stop interval for checking validation status
-   */
   private stopValidationStatusCheck(): void {
     if (this.validationStatusInterval !== null) {
       window.clearInterval(this.validationStatusInterval);
@@ -271,9 +265,6 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     }
   }
 
-  /**
-   * Check validation status by querying active tasks
-   */
   private checkValidationStatus(): void {
     if (!this.isInitialized || !this.appService.selectedWorkspaceId) {
       return;
@@ -281,13 +272,11 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
     const taskIds = this.validationTaskStateService.getAllTaskIds(this.appService.selectedWorkspaceId);
 
-    // If there are active tasks, check their status
     if (Object.keys(taskIds).length > 0) {
       for (const [type, taskId] of Object.entries(taskIds)) {
         this.backendService.getValidationTask(this.appService.selectedWorkspaceId, taskId)
           .subscribe({
             next: task => {
-              // If task is completed or failed, remove it from the service
               if (task.status === 'completed' || task.status === 'failed') {
                 this.validationTaskStateService.removeTaskId(
                   this.appService.selectedWorkspaceId,
@@ -296,7 +285,6 @@ export class TestResultsComponent implements OnInit, OnDestroy {
               }
             },
             error: () => {
-              // If there's an error, remove the task from the service
               this.validationTaskStateService.removeTaskId(
                 this.appService.selectedWorkspaceId,
                 type as 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'groupResponses'
@@ -307,10 +295,6 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     }
   }
 
-  /**
-   * Check if any validation task is running
-   * @returns True if any validation task is running
-   */
   isAnyValidationRunning(): boolean {
     if (!this.appService.selectedWorkspaceId) {
       return false;
@@ -320,10 +304,6 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     return Object.keys(taskIds).length > 0;
   }
 
-  /**
-   * Get the overall validation status
-   * @returns The status: 'running', 'failed', 'success', or 'not-run'
-   */
   getOverallValidationStatus(): 'running' | 'failed' | 'success' | 'not-run' {
     if (this.isAnyValidationRunning()) {
       return 'running';
@@ -364,8 +344,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       .subscribe({
         next: booklets => {
           this.selectedBooklet = row.group;
-          const uniqueBooklets = this.filterUniqueBooklets(booklets);
-          this.booklets = uniqueBooklets;
+          this.booklets = this.filterUniqueBooklets(booklets);
           this.sortBooklets();
           this.sortBookletUnits();
           this.loadAllUnitTags();
@@ -408,7 +387,6 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
     this.booklets.forEach(booklet => {
       if (booklet.units && Array.isArray(booklet.units)) {
-        // Sort units by alias (or name if alias is not available)
         booklet.units.sort((a, b) => {
           const aliasA = a.alias || a.name || '';
           const aliasB = b.alias || b.name || '';
@@ -426,9 +404,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     if (!this.booklets || this.booklets.length === 0) {
       return;
     }
-
     this.unitTagsMap.clear();
-
     this.booklets.forEach(booklet => {
       if (booklet.units && Array.isArray(booklet.units)) {
         booklet.units.forEach(unit => {
@@ -444,10 +420,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     if (!this.booklets || this.booklets.length === 0) {
       return;
     }
-
     this.unitNotesMap.clear();
-
-    // Extract all unit IDs from the booklets
     const unitIds: number[] = [];
     this.booklets.forEach(booklet => {
       if (booklet.units && Array.isArray(booklet.units)) {
@@ -492,14 +465,12 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       return;
     }
 
-    // Show loading indicator
     const loadingSnackBar = this.snackBar.open(
       'Lade Testheft...',
       '',
       { duration: 3000 }
     );
 
-    // Get the booklet from file_upload using the new method
     this.bookletReplayService.getBookletFromFileUpload(
       this.appService.selectedWorkspaceId,
       booklet.name
@@ -515,10 +486,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           );
           return;
         }
-
-        // Serialize the booklet data for URL transmission
         const serializedBooklet = this.serializeBookletData(bookletReplay);
-
         const firstUnit = bookletReplay.units[0];
 
         this.appService
@@ -530,7 +498,6 @@ export class TestResultsComponent implements OnInit, OnDestroy {
               bookletData: serializedBooklet
             };
 
-            // Construct the URL with the first unit
             const url = this.router
               .serializeUrl(
                 this.router.createUrlTree(
@@ -538,7 +505,6 @@ export class TestResultsComponent implements OnInit, OnDestroy {
                   { queryParams: queryParams })
               );
 
-            // Open the replay in a new tab
             window.open(`#/${url}`, '_blank');
           });
       },
@@ -683,26 +649,20 @@ export class TestResultsComponent implements OnInit, OnDestroy {
         uniqueMap.set(key, response);
       }
     });
-
-    const uniqueResponses = Array.from(uniqueMap.values());
-
-    this.responses = uniqueResponses;
+    this.responses = Array.from(uniqueMap.values());
     this.selectedBooklet = booklet.name;
 
     this.responses.sort((a: Response, b: Response) => {
-      // First prioritize VALUE_CHANGED status
       if (a.status === 'VALUE_CHANGED' && b.status !== 'VALUE_CHANGED') {
         return -1;
       }
       if (a.status !== 'VALUE_CHANGED' && b.status === 'VALUE_CHANGED') {
         return 1;
       }
-      // Then sort alphabetically by variableid
       return a.variableid.localeCompare(b.variableid);
     });
 
     this.logs = unit.logs;
-    // this.logs = this.createUnitHistory(unit);
     this.selectedUnit = unit;
 
     this.loadUnitTags();
@@ -711,8 +671,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
   loadUnitTags(): void {
     if (this.selectedUnit && this.selectedUnit.id) {
-      const tags = this.unitTagsMap.get(this.selectedUnit.id as number) || [];
-      this.unitTags = tags;
+      this.unitTags = this.unitTagsMap.get(this.selectedUnit.id as number) || [];
     } else {
       this.unitTags = [];
     }
@@ -722,7 +681,6 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     if (this.selectedUnit && this.selectedUnit.id) {
       const unitId = this.selectedUnit.id as number;
       if (this.unitNotesMap.has(unitId)) {
-        // Use the pre-fetched notes
         this.unitNotes = this.unitNotesMap.get(unitId) || [];
       } else {
         this.backendService.getUnitNotes(
@@ -755,159 +713,8 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     return notes.length > 0;
   }
 
-  addUnitTag(): void {
-    if (!this.newTagText.trim()) {
-      this.snackBar.open(
-        'Bitte geben Sie einen Tag-Text ein',
-        'Fehler',
-        { duration: 3000 }
-      );
-      return;
-    }
-
-    if (this.selectedUnit && this.selectedUnit.id) {
-      this.addTagToUnit(this.selectedUnit.id as number, this.newTagText.trim());
-      this.newTagText = ''; // Clear the input field
-    }
-  }
-
-  addTagToUnit(unitId: number, tagText: string): void {
-    if (!tagText.trim()) {
-      this.snackBar.open(
-        'Bitte geben Sie einen Tag-Text ein',
-        'Fehler',
-        { duration: 3000 }
-      );
-      return;
-    }
-
-    const createTagDto: CreateUnitTagDto = {
-      unitId: unitId,
-      tag: tagText.trim()
-    };
-
-    this.backendService.createUnitTag(
-      this.appService.selectedWorkspaceId,
-      createTagDto
-    ).subscribe({
-      next: tag => {
-        // If this is the selected unit, update the unitTags array
-        if (this.selectedUnit && this.selectedUnit.id === unitId) {
-          this.unitTags.push(tag);
-        }
-
-        // Update the unitTagsMap
-        const tags = this.unitTagsMap.get(unitId) || [];
-        tags.push(tag);
-        this.unitTagsMap.set(unitId, tags);
-
-        this.snackBar.open(
-          'Tag erfolgreich hinzugefügt',
-          'Erfolg',
-          { duration: 3000 }
-        );
-      },
-      error: () => {
-        this.snackBar.open(
-          'Fehler beim Hinzufügen des Tags',
-          'Fehler',
-          { duration: 3000 }
-        );
-      }
-    });
-  }
-
-  updateUnitTag(tagId: number, newText: string): void {
-    if (!newText.trim()) {
-      this.snackBar.open(
-        'Bitte geben Sie einen Tag-Text ein',
-        'Fehler',
-        { duration: 3000 }
-      );
-      return;
-    }
-
-    const updateTagDto: UpdateUnitTagDto = {
-      tag: newText.trim()
-    };
-
-    this.backendService.updateUnitTag(
-      this.appService.selectedWorkspaceId,
-      tagId,
-      updateTagDto
-    ).subscribe({
-      next: updatedTag => {
-        const index = this.unitTags.findIndex(tag => tag.id === tagId);
-        if (index !== -1) {
-          this.unitTags[index] = updatedTag;
-        }
-
-        this.snackBar.open(
-          'Tag erfolgreich aktualisiert',
-          'Erfolg',
-          { duration: 3000 }
-        );
-      },
-      error: () => {
-        this.snackBar.open(
-          'Fehler beim Aktualisieren des Tags',
-          'Fehler',
-          { duration: 3000 }
-        );
-      }
-    });
-  }
-
-  deleteUnitTag(tagId: number): void {
-    if (this.selectedUnit && this.selectedUnit.id) {
-      this.deleteTagFromUnit(tagId, this.selectedUnit.id as number);
-    }
-  }
-
-  deleteTagFromUnit(tagId: number, unitId: number): void {
-    this.backendService.deleteUnitTag(
-      this.appService.selectedWorkspaceId,
-      tagId
-    ).subscribe({
-      next: success => {
-        if (success) {
-          if (this.selectedUnit && this.selectedUnit.id === unitId) {
-            this.unitTags = this.unitTags.filter(tag => tag.id !== tagId);
-          }
-
-          const tags = this.unitTagsMap.get(unitId) || [];
-          this.unitTagsMap.set(unitId, tags.filter(tag => tag.id !== tagId));
-
-          this.snackBar.open(
-            'Tag erfolgreich gelöscht',
-            'Erfolg',
-            { duration: 3000 }
-          );
-        } else {
-          this.snackBar.open(
-            'Fehler beim Löschen des Tags',
-            'Fehler',
-            { duration: 3000 }
-          );
-        }
-      },
-      error: () => {
-        this.snackBar.open(
-          'Fehler beim Löschen des Tags',
-          'Fehler',
-          { duration: 3000 }
-        );
-      }
-    });
-  }
-
   setSelectedBooklet(booklet: Booklet) {
     this.selectedBooklet = booklet.name;
-  }
-
-  formatTimestamp(timestamp: string): string {
-    const date = new Date(Number(timestamp));
-    return date.toLocaleString();
   }
 
   calculateBookletProcessingTime(booklet: Booklet): number | null {
@@ -927,14 +734,6 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     }
 
     return null;
-  }
-
-  formatDuration(durationMs: number | null): string {
-    if (durationMs === null || durationMs < 0) return '00:00';
-    const totalSeconds = Math.floor(durationMs / 1000);
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
-    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
   }
 
   isBookletComplete(booklet: Booklet): boolean {
@@ -1092,7 +891,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
               this.appService.selectedWorkspaceId,
               inputElement.files,
               resultType,
-              overwriteExisting // Pass the user's choice
+              overwriteExisting
             ).subscribe(() => {
               setTimeout(() => {
                 this.createTestResultsList(this.pageIndex, this.pageSize, this.getCurrentSearchText());
@@ -1158,7 +957,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           );
 
           this.pollCodingJobStatus(result.jobId);
-        } else if (result.totalResponses > 0) { // Handle synchronous result (backward compatibility)
+        } else if (result.totalResponses > 0) {
           this.snackBar.open(
             this.translateService.instant('ws-admin.test-group-coded'),
             '',
@@ -1189,33 +988,26 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
   private pollCodingJobStatus(jobId: string): void {
     const pollingInterval = 5000;
-
-    // Set up a timer to check job status
     const timer = setInterval(() => {
       this.backendService.getCodingJobStatus(
         this.appService.selectedWorkspaceId,
         jobId
       ).subscribe({
         next: job => {
-          // Check if the job is completed or failed
           if (job.status === 'completed') {
-            // Stop polling
             clearInterval(timer);
 
-            // Show success notification
             const snackBarRef = this.snackBar.open(
               'Kodierung abgeschlossen',
               'Ergebnisse anzeigen',
               { duration: 10000 }
             );
 
-            // Handle click on action button
             snackBarRef.onAction().subscribe(() => {
               this.showCodingResults(job.result);
               this.createTestResultsList(this.pageIndex, this.pageSize, this.getCurrentSearchText());
             });
           } else if (job.status === 'failed') {
-            // Stop polling
             clearInterval(timer);
 
             this.snackBar.open(
@@ -1224,10 +1016,8 @@ export class TestResultsComponent implements OnInit, OnDestroy {
               { duration: 5000 }
             );
           }
-          // If status is 'pending' or 'processing', continue polling
         },
         error: () => {
-          // Stop polling on error
           clearInterval(timer);
 
           this.snackBar.open(
@@ -1298,13 +1088,11 @@ export class TestResultsComponent implements OnInit, OnDestroy {
         ).subscribe({
           next: result => {
             if (result.success) {
-              // Remove the unit from the booklet's units array
               const unitIndex = booklet.units.findIndex(u => u.id === unit.id);
               if (unitIndex !== -1) {
                 booklet.units.splice(unitIndex, 1);
               }
 
-              // If this was the selected unit, clear the selection
               if (this.selectedUnit && this.selectedUnit.id === unit.id) {
                 this.selectedUnit = undefined;
                 this.responses = [];
@@ -1364,7 +1152,6 @@ export class TestResultsComponent implements OnInit, OnDestroy {
         ).subscribe({
           next: result => {
             if (result.success) {
-              // Remove the response from the responses array
               const responseIndex = this.responses.findIndex(r => r.id === response.id);
               if (responseIndex !== -1) {
                 this.responses.splice(responseIndex, 1);
@@ -1416,10 +1203,8 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
   private serializeBookletData(booklet: BookletReplay): string {
     try {
-      // Convert the booklet to a JSON string
       const jsonString = JSON.stringify(booklet);
 
-      // Base64 encode the JSON string to make it URL-safe
       return btoa(jsonString);
     } catch (error) {
       return '';
@@ -1444,7 +1229,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
         this.dialog.open(VariableAnalysisDialogComponent, {
           width: '900px',
           data: {
-            unitId: this.selectedUnit?.id, // Optional unit ID, may be undefined
+            unitId: this.selectedUnit?.id,
             title: 'Item/Variablen Analyse',
             workspaceId: this.appService.selectedWorkspaceId,
             jobs: variableAnalysisJobs

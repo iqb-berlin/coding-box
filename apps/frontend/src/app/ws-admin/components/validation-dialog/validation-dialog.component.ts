@@ -12,7 +12,9 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTableModule, MatTableDataSource } from '@angular/material/table';
 import { MatExpansionModule } from '@angular/material/expansion';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
-import { MatPaginator, MatPaginatorModule, PageEvent } from '@angular/material/paginator';
+import {
+  MatPaginator, MatPaginatorModule, MatPaginatorIntl, PageEvent
+} from '@angular/material/paginator';
 import { MatIconModule } from '@angular/material/icon';
 import { Subscription } from 'rxjs';
 import { BackendService } from '../../../services/backend.service';
@@ -25,11 +27,15 @@ import { DuplicateResponsesResultDto } from '../../../../../../../api-dto/files/
 import { DuplicateResponseSelectionDto } from '../../../models/duplicate-response-selection.dto';
 import { ContentDialogComponent } from '../../../shared/dialogs/content-dialog/content-dialog.component';
 import { ValidationTaskDto } from '../../../models/validation-task.dto';
+import { GermanPaginatorIntl } from '../../../shared/services/german-paginator-intl.service';
 
 @Component({
   selector: 'coding-box-validation-dialog',
   templateUrl: './validation-dialog.component.html',
   standalone: true,
+  providers: [
+    { provide: MatPaginatorIntl, useClass: GermanPaginatorIntl }
+  ],
   imports: [
     CommonModule,
     MatDialogModule,
@@ -170,38 +176,31 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
   validationTaskStateService = inject(ValidationTaskStateService);
   validationService = inject(ValidationService);
 
-  // Subscriptions
   private subscriptions: Subscription[] = [];
 
-  // Flag to indicate if we're closing the dialog
   private isClosing = false;
 
-  // Validation tasks
   private variableValidationTask: ValidationTaskDto | null = null;
   private variableTypeValidationTask: ValidationTaskDto | null = null;
   private responseStatusValidationTask: ValidationTaskDto | null = null;
   private testTakersValidationTask: ValidationTaskDto | null = null;
   private groupResponsesValidationTask: ValidationTaskDto | null = null;
 
-  // Variable validation properties
   invalidVariables: InvalidVariableDto[] = [];
   totalInvalidVariables: number = 0;
   currentVariablePage: number = 1;
   variablePageSize: number = 10;
 
-  // Variable type validation properties
   invalidTypeVariables: InvalidVariableDto[] = [];
   totalInvalidTypeVariables: number = 0;
   currentTypeVariablePage: number = 1;
   typeVariablePageSize: number = 10;
 
-  // Response status validation properties
   invalidStatusVariables: InvalidVariableDto[] = [];
   totalInvalidStatusVariables: number = 0;
   currentStatusVariablePage: number = 1;
   statusVariablePageSize: number = 10;
 
-  // Group responses validation properties
   groupResponsesResult: {
     testTakersFound: boolean;
     groupsWithResponses: { group: string; hasResponse: boolean }[];
@@ -216,25 +215,21 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
 
   paginatedGroupResponses = new MatTableDataSource<{ group: string; hasResponse: boolean }>([]);
 
-  // Group responses pagination properties
   currentGroupResponsesPage: number = 1;
   groupResponsesPageSize: number = 10;
   totalGroupResponses: number = 0;
 
-  // TestTakers validation properties
   testTakersValidationResult: TestTakersValidationDto | null = null;
   isTestTakersValidationRunning: boolean = false;
   testTakersValidationWasRun: boolean = false;
   expandedMissingPersonsPanel: boolean = false;
   paginatedMissingPersons = new MatTableDataSource<MissingPersonDto>([]);
 
-  // Validation running flags
   isVariableValidationRunning: boolean = false;
   isVariableTypeValidationRunning: boolean = false;
   isResponseStatusValidationRunning: boolean = false;
   isDuplicateResponsesValidationRunning: boolean = false;
 
-  // Validation was run flags
   validateVariablesWasRun: boolean = false;
   validateVariableTypesWasRun: boolean = false;
   validateResponseStatusWasRun: boolean = false;
@@ -248,7 +243,7 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
   selectedResponses: Set<number> = new Set<number>();
   selectedTypeResponses: Set<number> = new Set<number>();
   selectedStatusResponses: Set<number> = new Set<number>();
-  duplicateResponseSelections: Map<string, number> = new Map<string, number>(); // Maps duplicate key to selected response ID
+  duplicateResponseSelections: Map<string, number> = new Map<string, number>();
 
   pageSizeOptions = [25, 50, 100, 200];
 
@@ -256,7 +251,6 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
   paginatedTypeVariables = new MatTableDataSource<InvalidVariableDto>([]);
   paginatedStatusVariables = new MatTableDataSource<InvalidVariableDto>([]);
 
-  // Duplicate responses validation properties
   duplicateResponses: DuplicateResponseSelectionDto[] = [];
   duplicateResponsesResult: DuplicateResponsesResultDto | null = null;
   totalDuplicateResponses: number = 0;
@@ -272,15 +266,11 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
   ) {}
 
   ngOnInit(): void {
-    // Check for existing validation tasks
     this.checkForExistingTasks();
-
-    // Load previous validation results
     this.loadPreviousValidationResults();
   }
 
   ngAfterViewInit(): void {
-    // Set up paginators after view is initialized
     this.paginatedVariables.paginator = this.variablePaginator;
     this.paginatedTypeVariables.paginator = this.variableTypePaginator;
     this.paginatedStatusVariables.paginator = this.statusVariablePaginator;
@@ -288,27 +278,18 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
   }
 
   ngOnDestroy(): void {
-    // If we're closing the dialog, don't cancel running tasks
     if (this.isClosing) {
-      // Store running task IDs in the service
       this.storeRunningTasks();
-
-      // Only unsubscribe from subscriptions, don't cancel tasks
       this.subscriptions.forEach(sub => sub.unsubscribe());
     } else {
-      // Clean up subscriptions to prevent memory leaks
       this.subscriptions.forEach(sub => sub.unsubscribe());
     }
   }
 
-  /**
-   * Check for existing validation tasks and load them if they exist
-   */
   private checkForExistingTasks(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     const taskIds = this.validationTaskStateService.getAllTaskIds(workspaceId);
 
-    // Check for each type of validation task
     if (taskIds.variables) {
       this.loadExistingTask('variables', taskIds.variables);
     }
@@ -330,18 +311,12 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
     }
   }
 
-  /**
-   * Load an existing validation task
-   * @param type The type of validation task
-   * @param taskId The task ID
-   */
   private loadExistingTask(
     type: 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'groupResponses',
     taskId: number
   ): void {
     const workspaceId = this.appService.selectedWorkspaceId;
 
-    // Set the appropriate task object
     switch (type) {
       case 'variables':
         this.isVariableValidationRunning = true;
@@ -359,11 +334,9 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
         this.isGroupResponsesValidationRunning = true;
         break;
       default:
-        // No action needed for unknown types
         break;
     }
 
-    // Get the task status
     const subscription = this.backendService.getValidationTask(workspaceId, taskId)
       .subscribe({
         next: task => {
@@ -387,18 +360,14 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
               break;
           }
 
-          // If the task is still running, poll for updates
           if (task.status === 'pending' || task.status === 'processing') {
             this.pollExistingTask(type, taskId);
           } else if (task.status === 'completed') {
-            // If the task is completed, get the results
             this.loadTaskResults(type, taskId);
           } else if (task.status === 'failed') {
-            // If the task failed, show an error message
             this.snackBar.open(`Validierung fehlgeschlagen: ${task.error || 'Unbekannter Fehler'}`, 'Schließen', { duration: 5000 });
             this.validationTaskStateService.removeTaskId(workspaceId, type);
 
-            // Reset the running flag
             switch (type) {
               case 'variables':
                 this.isVariableValidationRunning = false;
@@ -424,7 +393,6 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
           this.snackBar.open('Fehler beim Abrufen des Validierungsstatus', 'Schließen', { duration: 5000 });
           this.validationTaskStateService.removeTaskId(workspaceId, type);
 
-          // Reset the running flag
           switch (type) {
             case 'variables':
               this.isVariableValidationRunning = false;
@@ -450,11 +418,6 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
     this.subscriptions.push(subscription);
   }
 
-  /**
-   * Poll for updates on an existing validation task
-   * @param type The type of validation task
-   * @param taskId The task ID
-   */
   private pollExistingTask(
     type: 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'groupResponses',
     taskId: number
@@ -466,14 +429,12 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
       taskId
     ).subscribe({
       next: updatedTask => {
-        // If task is completed, get the results
         if (updatedTask.status === 'completed') {
           this.loadTaskResults(type, taskId);
         } else if (updatedTask.status === 'failed') {
           this.snackBar.open(`Validierung fehlgeschlagen: ${updatedTask.error || 'Unbekannter Fehler'}`, 'Schließen', { duration: 5000 });
           this.validationTaskStateService.removeTaskId(workspaceId, type);
 
-          // Reset the running flag
           switch (type) {
             case 'variables':
               this.isVariableValidationRunning = false;
@@ -499,7 +460,6 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
         this.snackBar.open('Fehler beim Abrufen des Validierungsstatus', 'Schließen', { duration: 5000 });
         this.validationTaskStateService.removeTaskId(workspaceId, type);
 
-        // Reset the running flag
         switch (type) {
           case 'variables':
             this.isVariableValidationRunning = false;
@@ -525,11 +485,6 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
     this.subscriptions.push(pollSubscription);
   }
 
-  /**
-   * Load the results of a validation task
-   * @param type The type of validation task
-   * @param taskId The task ID
-   */
   private loadTaskResults(
     type: 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'groupResponses',
     taskId: number
@@ -541,7 +496,6 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
       taskId
     ).subscribe({
       next: result => {
-        // Define result type interfaces outside of switch
         interface PaginatedResult {
           data: InvalidVariableDto[];
           total: number;
@@ -558,7 +512,6 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
           limit: number;
         }
 
-        // Process results based on type
         switch (type) {
           case 'variables': {
             const typedResult = result as PaginatedResult;
@@ -569,8 +522,6 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
             this.updatePaginatedVariables();
             this.isVariableValidationRunning = false;
             this.validateVariablesWasRun = true;
-
-            // Save validation result to the service
             this.saveValidationResult(type);
             break;
           }
@@ -584,8 +535,6 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
             this.updatePaginatedTypeVariables();
             this.isVariableTypeValidationRunning = false;
             this.validateVariableTypesWasRun = true;
-
-            // Save validation result to the service
             this.saveValidationResult(type);
             break;
           }
@@ -599,8 +548,6 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
             this.updatePaginatedStatusVariables();
             this.isResponseStatusValidationRunning = false;
             this.validateResponseStatusWasRun = true;
-
-            // Save validation result to the service
             this.saveValidationResult(type);
             break;
           }
@@ -610,8 +557,6 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
             this.updatePaginatedMissingPersons();
             this.isTestTakersValidationRunning = false;
             this.testTakersValidationWasRun = true;
-
-            // Save validation result to the service
             this.saveValidationResult(type);
             break;
           }
@@ -624,7 +569,6 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
             this.isGroupResponsesValidationRunning = false;
             this.groupResponsesValidationWasRun = true;
 
-            // Save validation result to the service
             this.saveValidationResult(type);
             break;
           }
@@ -633,14 +577,12 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
             break;
         }
 
-        // Remove the task ID from the service since we've loaded the results
         this.validationTaskStateService.removeTaskId(workspaceId, type);
       },
       error: () => {
         this.snackBar.open('Fehler beim Abrufen der Validierungsergebnisse', 'Schließen', { duration: 5000 });
         this.validationTaskStateService.removeTaskId(workspaceId, type);
 
-        // Reset the running flag
         switch (type) {
           case 'variables':
             this.isVariableValidationRunning = false;
@@ -658,7 +600,6 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
             this.isGroupResponsesValidationRunning = false;
             break;
           default:
-            // No action needed for unknown types
             break;
         }
       }
@@ -667,13 +608,9 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
     this.subscriptions.push(subscription);
   }
 
-  /**
-   * Store running tasks in the service
-   */
   private storeRunningTasks(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
 
-    // Store each running task
     if (this.variableValidationTask && (this.variableValidationTask.status === 'pending' || this.variableValidationTask.status === 'processing')) {
       this.validationTaskStateService.setTaskId(workspaceId, 'variables', this.variableValidationTask.id);
     }
@@ -708,22 +645,15 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
   updatePaginatedGroupResponses(): void {
     if (this.groupResponsesResult) {
       this.paginatedGroupResponses.data = this.groupResponsesResult.groupsWithResponses;
-      // totalGroupResponses is now set from the server response
     }
   }
 
   onGroupResponsesPageChange(event: PageEvent): void {
     this.currentGroupResponsesPage = event.pageIndex + 1;
     this.groupResponsesPageSize = event.pageSize;
-
-    // Reload data from server with new pagination parameters using background task
     this.isGroupResponsesValidationRunning = true;
-
-    // Cancel any existing subscription
     this.subscriptions.forEach(sub => sub.unsubscribe());
     this.subscriptions = [];
-
-    // Create a background validation task
     const subscription = this.backendService.createValidationTask(
       this.appService.selectedWorkspaceId,
       'groupResponses',
@@ -731,20 +661,16 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
       this.groupResponsesPageSize
     ).subscribe(task => {
       this.groupResponsesValidationTask = task;
-
-      // Poll for task completion
       const pollSubscription = this.backendService.pollValidationTask(
         this.appService.selectedWorkspaceId,
         task.id
       ).subscribe({
         next: updatedTask => {
-          // If task is completed, get the results
           if (updatedTask.status === 'completed') {
             this.backendService.getValidationResults(
               this.appService.selectedWorkspaceId,
               updatedTask.id
             ).subscribe(result => {
-              // Type the result
               const typedResult = result as {
                 testTakersFound: boolean;
                 groupsWithResponses: { group: string; hasResponse: boolean }[];
@@ -780,44 +706,31 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
     this.isTestTakersValidationRunning = true;
     this.testTakersValidationResult = null;
     this.testTakersValidationWasRun = false;
-
-    // Cancel any existing subscription
     this.subscriptions.forEach(sub => sub.unsubscribe());
     this.subscriptions = [];
 
-    // Create a background validation task
     const subscription = this.backendService.createValidationTask(
       this.appService.selectedWorkspaceId,
       'testTakers'
     ).subscribe(task => {
       this.testTakersValidationTask = task;
 
-      // Poll for task completion
       const pollSubscription = this.backendService.pollValidationTask(
         this.appService.selectedWorkspaceId,
         task.id
       ).subscribe({
         next: updatedTask => {
-          // Update progress if available
-          if (updatedTask.progress) {
-            // Could show progress here if needed
-          }
-
-          // If task is completed, get the results
           if (updatedTask.status === 'completed') {
             this.backendService.getValidationResults(
               this.appService.selectedWorkspaceId,
               updatedTask.id
             ).subscribe(result => {
-              // Type the result as TestTakersValidationDto
               this.testTakersValidationResult = result as TestTakersValidationDto;
 
-              // Check if the result indicates errors
               const hasErrors =
                 !this.testTakersValidationResult.testTakersFound ||
                 this.testTakersValidationResult.missingPersons.length > 0;
 
-              // Create a validation result with the appropriate status
               const validationResult: ValidationResult = {
                 status: hasErrors ? 'failed' : 'success',
                 timestamp: Date.now(),
@@ -828,7 +741,6 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
                 }
               };
 
-              // Store the result in the validation task state service
               this.validationTaskStateService.setValidationResult(
                 this.appService.selectedWorkspaceId,
                 'testTakers',
@@ -875,12 +787,8 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
     this.groupResponsesResult = null;
     this.groupResponsesValidationWasRun = false;
     this.currentGroupResponsesPage = 1;
-
-    // Cancel any existing subscription
     this.subscriptions.forEach(sub => sub.unsubscribe());
     this.subscriptions = [];
-
-    // Create a background validation task
     const subscription = this.backendService.createValidationTask(
       this.appService.selectedWorkspaceId,
       'groupResponses',
@@ -889,24 +797,16 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
     ).subscribe(task => {
       this.groupResponsesValidationTask = task;
 
-      // Poll for task completion
       const pollSubscription = this.backendService.pollValidationTask(
         this.appService.selectedWorkspaceId,
         task.id
       ).subscribe({
         next: updatedTask => {
-          // Update progress if available
-          if (updatedTask.progress) {
-            // Could show progress here if needed
-          }
-
-          // If task is completed, get the results
           if (updatedTask.status === 'completed') {
             this.backendService.getValidationResults(
               this.appService.selectedWorkspaceId,
               updatedTask.id
             ).subscribe(result => {
-              // Type the result
               const typedResult = result as {
                 testTakersFound: boolean;
                 groupsWithResponses: { group: string; hasResponse: boolean }[];
@@ -915,12 +815,9 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
                 page: number;
                 limit: number;
               };
-
-              // Check if the result indicates errors
               const hasErrors =
                 !typedResult.testTakersFound || !typedResult.allGroupsHaveResponses;
 
-              // Create a validation result with the appropriate status
               const validationResult: ValidationResult = {
                 status: hasErrors ? 'failed' : 'success',
                 timestamp: Date.now(),
@@ -930,8 +827,6 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
                   hasErrors: hasErrors
                 }
               };
-
-              // Store the result in the validation task state service
               this.validationTaskStateService.setValidationResult(
                 this.appService.selectedWorkspaceId,
                 'groupResponses',
@@ -943,8 +838,6 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
               this.updatePaginatedGroupResponses();
               this.isGroupResponsesValidationRunning = false;
               this.groupResponsesValidationWasRun = true;
-
-              // Save the validation result to the service
               this.saveValidationResult('groupResponses');
             });
           } else if (updatedTask.status === 'failed') {
@@ -972,42 +865,27 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
     this.validateDuplicateResponsesWasRun = false;
     this.currentDuplicateResponsesPage = 1;
     this.duplicateResponseSelections.clear();
-
-    // Cancel any existing subscription
     this.subscriptions.forEach(sub => sub.unsubscribe());
     this.subscriptions = [];
 
-    // Create a background validation task
     const subscription = this.backendService.createValidationTask(
       this.appService.selectedWorkspaceId,
       'duplicateResponses',
       this.currentDuplicateResponsesPage,
       this.duplicateResponsesPageSize
     ).subscribe(task => {
-      // Poll for task completion
       const pollSubscription = this.backendService.pollValidationTask(
         this.appService.selectedWorkspaceId,
         task.id
       ).subscribe({
         next: updatedTask => {
-          // Update progress if available
-          if (updatedTask.progress) {
-            // Could show progress here if needed
-          }
-
-          // If task is completed, get the results
           if (updatedTask.status === 'completed') {
             this.backendService.getValidationResults(
               this.appService.selectedWorkspaceId,
               updatedTask.id
             ).subscribe(result => {
-              // Type the result as DuplicateResponsesResultDto
               const typedResult = result as DuplicateResponsesResultDto;
-
-              // Check if the result indicates errors (duplicate responses found)
               const hasErrors = typedResult.total > 0;
-
-              // Create a validation result with the appropriate status
               const validationResult: ValidationResult = {
                 status: hasErrors ? 'failed' : 'success',
                 timestamp: Date.now(),
@@ -1017,16 +895,13 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
                 }
               };
 
-              // Store the result in the validation task state service
               this.validationTaskStateService.setValidationResult(
                 this.appService.selectedWorkspaceId,
                 'duplicateResponses',
                 validationResult
               );
 
-              // Convert to DuplicateResponseSelectionDto[] and initialize selections
               this.duplicateResponses = typedResult.data.map(duplicate => {
-                // For each duplicate, select the first response by default
                 const defaultSelectedId = duplicate.duplicates.length > 0 ?
                   duplicate.duplicates[0].responseId : undefined;
 
@@ -1047,7 +922,6 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
               this.isDuplicateResponsesValidationRunning = false;
               this.validateDuplicateResponsesWasRun = true;
 
-              // Save the validation result to the service
               this.saveValidationResult('duplicateResponses');
             });
           } else if (updatedTask.status === 'failed') {
@@ -1082,37 +956,18 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
     );
   }
 
-  /**
-   * Checks if a specific response is selected for a duplicate
-   * @param duplicate The duplicate response
-   * @param responseId The response ID to check
-   * @returns True if the response is selected, false otherwise
-   */
   isSelectedDuplicateResponse(duplicate: DuplicateResponseSelectionDto, responseId: number): boolean {
     return this.duplicateResponseSelections.get(duplicate.key) === responseId;
   }
 
-  /**
-   * Selects a specific response for a duplicate
-   * @param duplicate The duplicate response
-   * @param responseId The response ID to select
-   */
   selectDuplicateResponse(duplicate: DuplicateResponseSelectionDto, responseId: number): void {
     this.duplicateResponseSelections.set(duplicate.key, responseId);
   }
 
-  /**
-   * Checks if any duplicate responses are selected
-   * @returns True if any duplicate responses are selected, false otherwise
-   */
   hasSelectedDuplicateResponses(): boolean {
     return this.duplicateResponseSelections.size > 0;
   }
 
-  /**
-   * Gets the count of selected duplicate responses
-   * @returns The count of selected duplicate responses
-   */
   getSelectedDuplicateResponsesCount(): number {
     return this.duplicateResponseSelections.size;
   }
@@ -1120,41 +975,29 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
   onDuplicateResponsesPageChange(event: PageEvent): void {
     this.currentDuplicateResponsesPage = event.pageIndex + 1;
     this.duplicateResponsesPageSize = event.pageSize;
-
-    // Reload data from server with new pagination parameters using background task
     this.isDuplicateResponsesValidationRunning = true;
-
-    // Cancel any existing subscription
     this.subscriptions.forEach(sub => sub.unsubscribe());
     this.subscriptions = [];
-
-    // Create a background validation task
     const subscription = this.backendService.createValidationTask(
       this.appService.selectedWorkspaceId,
       'duplicateResponses',
       this.currentDuplicateResponsesPage,
       this.duplicateResponsesPageSize
     ).subscribe(task => {
-      // Poll for task completion
       const pollSubscription = this.backendService.pollValidationTask(
         this.appService.selectedWorkspaceId,
         task.id
       ).subscribe({
         next: updatedTask => {
-          // If task is completed, get the results
           if (updatedTask.status === 'completed') {
             this.backendService.getValidationResults(
               this.appService.selectedWorkspaceId,
               updatedTask.id
             ).subscribe(result => {
-              // Type the result as DuplicateResponsesResultDto
               const typedResult = result as DuplicateResponsesResultDto;
-
-              // Convert to DuplicateResponseSelectionDto[] and preserve selections
               this.duplicateResponses = typedResult.data.map(duplicate => {
                 const key = `${duplicate.unitId}_${duplicate.variableId}_${duplicate.testTakerLogin}`;
 
-                // If we don't have a selection for this duplicate yet, select the first response by default
                 if (!this.duplicateResponseSelections.has(key) && duplicate.duplicates.length > 0) {
                   this.duplicateResponseSelections.set(key, duplicate.duplicates[0].responseId);
                 }
@@ -1187,26 +1030,17 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
     this.subscriptions.push(subscription);
   }
 
-  /**
-   * Resolves duplicate responses by keeping the selected responses
-   * This method sends the selected responses to the backend for resolution
-   */
   resolveDuplicateResponses(): void {
     if (this.isResolvingDuplicateResponses || !this.hasSelectedDuplicateResponses()) {
       return;
     }
 
     this.isResolvingDuplicateResponses = true;
-
-    // Create a map of response IDs to keep
     const responseIdsToKeep: Record<string, number> = {};
-
-    // Convert the Map to a Record for the API request
     this.duplicateResponseSelections.forEach((responseId, key) => {
       responseIdsToKeep[key] = responseId;
     });
 
-    // Call the validation service to resolve duplicates
     const request = {
       resolutionMap: responseIdsToKeep
     };
@@ -1243,18 +1077,11 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
       });
   }
 
-  /**
-   * Resolves all duplicate responses automatically by keeping the first response for each duplicate
-   * This method uses the deleteAllInvalidResponses endpoint with 'duplicateResponses' type
-   */
   resolveAllDuplicateResponses(): void {
     if (this.isResolvingDuplicateResponses || this.duplicateResponses.length === 0) {
       return;
     }
-
     this.isResolvingDuplicateResponses = true;
-
-    // Create a background task to delete all duplicate responses except the first one
     const subscription = this.backendService.createValidationTask(
       this.appService.selectedWorkspaceId,
       'deleteAllResponses',
@@ -1262,7 +1089,6 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
       undefined,
       { validationType: 'duplicateResponses' }
     ).subscribe(task => {
-      // Poll for task completion
       const pollSubscription = this.backendService.pollValidationTask(
         this.appService.selectedWorkspaceId,
         task.id
@@ -1281,7 +1107,6 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
                 { duration: 3000 }
               );
 
-              // Refresh the duplicate responses list
               this.validateDuplicateResponses();
               this.isResolvingDuplicateResponses = false;
             });
@@ -1317,11 +1142,8 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
     this.validateVariablesWasRun = false;
     this.selectedResponses.clear();
 
-    // Cancel any existing subscription
     this.subscriptions.forEach(sub => sub.unsubscribe());
     this.subscriptions = [];
-
-    // Create a background validation task
     const subscription = this.backendService.createValidationTask(
       this.appService.selectedWorkspaceId,
       'variables',
@@ -1329,25 +1151,16 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
       this.variablePageSize
     ).subscribe(task => {
       this.variableValidationTask = task;
-
-      // Poll for task completion
       const pollSubscription = this.backendService.pollValidationTask(
         this.appService.selectedWorkspaceId,
         task.id
       ).subscribe({
         next: updatedTask => {
-          // Update progress if available
-          if (updatedTask.progress) {
-            // Could show progress here if needed
-          }
-
-          // If task is completed, get the results
           if (updatedTask.status === 'completed') {
             this.backendService.getValidationResults(
               this.appService.selectedWorkspaceId,
               updatedTask.id
             ).subscribe(result => {
-              // Type the result as a PaginatedResponse<InvalidVariableDto>
               const typedResult = result as {
                 data: InvalidVariableDto[];
                 total: number;
@@ -1355,10 +1168,7 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
                 limit: number;
               };
 
-              // Check if the result indicates errors
               const hasErrors = typedResult.total > 0;
-
-              // Create a validation result with the appropriate status
               const validationResult: ValidationResult = {
                 status: hasErrors ? 'failed' : 'success',
                 timestamp: Date.now(),
@@ -1367,8 +1177,6 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
                   hasErrors: hasErrors
                 }
               };
-
-              // Store the result in the validation task state service
               this.validationTaskStateService.setValidationResult(
                 this.appService.selectedWorkspaceId,
                 'variables',
@@ -1382,8 +1190,6 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
               this.updatePaginatedVariables();
               this.isVariableValidationRunning = false;
               this.validateVariablesWasRun = true;
-
-              // Save the validation result to the service
               this.saveValidationResult('variables');
             });
           } else if (updatedTask.status === 'failed') {
@@ -1406,15 +1212,9 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
   onVariablePageChange(event: PageEvent): void {
     this.currentVariablePage = event.pageIndex + 1;
     this.variablePageSize = event.pageSize;
-
-    // Reload data from server with new pagination parameters using background task
     this.isVariableValidationRunning = true;
-
-    // Cancel any existing subscription
     this.subscriptions.forEach(sub => sub.unsubscribe());
     this.subscriptions = [];
-
-    // Create a background validation task
     const subscription = this.backendService.createValidationTask(
       this.appService.selectedWorkspaceId,
       'variables',
@@ -1422,20 +1222,16 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
       this.variablePageSize
     ).subscribe(task => {
       this.variableValidationTask = task;
-
-      // Poll for task completion
       const pollSubscription = this.backendService.pollValidationTask(
         this.appService.selectedWorkspaceId,
         task.id
       ).subscribe({
         next: updatedTask => {
-          // If task is completed, get the results
           if (updatedTask.status === 'completed') {
             this.backendService.getValidationResults(
               this.appService.selectedWorkspaceId,
               updatedTask.id
             ).subscribe(result => {
-              // Type the result as a PaginatedResponse<InvalidVariableDto>
               const typedResult = result as {
                 data: InvalidVariableDto[];
                 total: number;
@@ -1499,26 +1295,19 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
       this.snackBar.open('Keine Antworten ausgewählt', 'Schließen', { duration: 3000 });
       return;
     }
-
     this.isDeletingResponses = true;
     const responseIds = Array.from(this.selectedResponses);
-
-    // Cancel any existing subscription
     this.subscriptions.forEach(sub => sub.unsubscribe());
     this.subscriptions = [];
-
-    // Create a background deletion task
     const subscription = this.backendService.createDeleteResponsesTask(
       this.appService.selectedWorkspaceId,
       responseIds
     ).subscribe(task => {
-      // Poll for task completion
       const pollSubscription = this.backendService.pollValidationTask(
         this.appService.selectedWorkspaceId,
         task.id
       ).subscribe({
         next: updatedTask => {
-          // If task is completed, get the results
           if (updatedTask.status === 'completed') {
             this.backendService.getValidationResults(
               this.appService.selectedWorkspaceId,
@@ -1527,11 +1316,7 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
               const typedResult = result as { deletedCount: number };
               this.isDeletingResponses = false;
               this.snackBar.open(`${typedResult.deletedCount} Antworten gelöscht`, 'Schließen', { duration: 3000 });
-
-              // Start background validation task to refresh the data
               this.isVariableValidationRunning = true;
-
-              // Create a background validation task
               const validationSubscription = this.backendService.createValidationTask(
                 this.appService.selectedWorkspaceId,
                 'variables',
@@ -1539,20 +1324,16 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
                 this.variablePageSize
               ).subscribe(validationTask => {
                 this.variableValidationTask = validationTask;
-
-                // Poll for validation task completion
                 const validationPollSubscription = this.backendService.pollValidationTask(
                   this.appService.selectedWorkspaceId,
                   validationTask.id
                 ).subscribe({
                   next: updatedValidationTask => {
-                    // If task is completed, get the results
                     if (updatedValidationTask.status === 'completed') {
                       this.backendService.getValidationResults(
                         this.appService.selectedWorkspaceId,
                         updatedValidationTask.id
                       ).subscribe(validationResult => {
-                        // Type the result as a PaginatedResponse<InvalidVariableDto>
                         const typedValidationResult = validationResult as {
                           data: InvalidVariableDto[];
                           total: number;
@@ -1622,23 +1403,17 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
     dialogRef.afterClosed().subscribe(deleteFromDb => {
       if (deleteFromDb) {
         this.isDeletingResponses = true;
-
-        // Cancel any existing subscription
         this.subscriptions.forEach(sub => sub.unsubscribe());
         this.subscriptions = [];
-
-        // Create a background deletion task
         const subscription = this.backendService.createDeleteAllResponsesTask(
           this.appService.selectedWorkspaceId,
           'variables'
         ).subscribe(task => {
-          // Poll for task completion
           const pollSubscription = this.backendService.pollValidationTask(
             this.appService.selectedWorkspaceId,
             task.id
           ).subscribe({
             next: updatedTask => {
-              // If task is completed, get the results
               if (updatedTask.status === 'completed') {
                 this.backendService.getValidationResults(
                   this.appService.selectedWorkspaceId,
@@ -1647,11 +1422,7 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
                   const typedResult = result as { deletedCount: number };
                   this.isDeletingResponses = false;
                   this.snackBar.open(`${typedResult.deletedCount} Antworten gelöscht`, 'Schließen', { duration: 3000 });
-
-                  // Start background validation task to refresh the data
                   this.isVariableValidationRunning = true;
-
-                  // Create a background validation task
                   const validationSubscription = this.backendService.createValidationTask(
                     this.appService.selectedWorkspaceId,
                     'variables',
@@ -1659,20 +1430,16 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
                     this.variablePageSize
                   ).subscribe(validationTask => {
                     this.variableValidationTask = validationTask;
-
-                    // Poll for validation task completion
                     const validationPollSubscription = this.backendService.pollValidationTask(
                       this.appService.selectedWorkspaceId,
                       validationTask.id
                     ).subscribe({
                       next: updatedValidationTask => {
-                        // If task is completed, get the results
                         if (updatedValidationTask.status === 'completed') {
                           this.backendService.getValidationResults(
                             this.appService.selectedWorkspaceId,
                             updatedValidationTask.id
                           ).subscribe(validationResult => {
-                            // Type the result as a PaginatedResponse<InvalidVariableDto>
                             const typedValidationResult = validationResult as {
                               data: InvalidVariableDto[];
                               total: number;
@@ -1733,12 +1500,8 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
     this.totalInvalidTypeVariables = 0;
     this.validateVariableTypesWasRun = false;
     this.selectedTypeResponses.clear();
-
-    // Cancel any existing subscription
     this.subscriptions.forEach(sub => sub.unsubscribe());
     this.subscriptions = [];
-
-    // Create a background validation task
     const subscription = this.backendService.createValidationTask(
       this.appService.selectedWorkspaceId,
       'variableTypes',
@@ -1746,25 +1509,16 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
       this.typeVariablePageSize
     ).subscribe(task => {
       this.variableTypeValidationTask = task;
-
-      // Poll for task completion
       const pollSubscription = this.backendService.pollValidationTask(
         this.appService.selectedWorkspaceId,
         task.id
       ).subscribe({
         next: updatedTask => {
-          // Update progress if available
-          if (updatedTask.progress) {
-            // Could show progress here if needed
-          }
-
-          // If task is completed, get the results
           if (updatedTask.status === 'completed') {
             this.backendService.getValidationResults(
               this.appService.selectedWorkspaceId,
               updatedTask.id
             ).subscribe(result => {
-              // Type the result as a PaginatedResponse<InvalidVariableDto>
               const typedResult = result as {
                 data: InvalidVariableDto[];
                 total: number;
@@ -1772,10 +1526,7 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
                 limit: number;
               };
 
-              // Check if the result indicates errors
               const hasErrors = typedResult.total > 0;
-
-              // Create a validation result with the appropriate status
               const validationResult: ValidationResult = {
                 status: hasErrors ? 'failed' : 'success',
                 timestamp: Date.now(),
@@ -1785,7 +1536,6 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
                 }
               };
 
-              // Store the result in the validation task state service
               this.validationTaskStateService.setValidationResult(
                 this.appService.selectedWorkspaceId,
                 'variableTypes',
@@ -1799,8 +1549,6 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
               this.updatePaginatedTypeVariables();
               this.isVariableTypeValidationRunning = false;
               this.validateVariableTypesWasRun = true;
-
-              // Save the validation result to the service
               this.saveValidationResult('variableTypes');
             });
           } else if (updatedTask.status === 'failed') {
@@ -1826,12 +1574,8 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
     this.totalInvalidStatusVariables = 0;
     this.validateResponseStatusWasRun = false;
     this.selectedStatusResponses.clear();
-
-    // Cancel any existing subscription
     this.subscriptions.forEach(sub => sub.unsubscribe());
     this.subscriptions = [];
-
-    // Create a background validation task
     const subscription = this.backendService.createValidationTask(
       this.appService.selectedWorkspaceId,
       'responseStatus',
@@ -1839,36 +1583,23 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
       this.statusVariablePageSize
     ).subscribe(task => {
       this.responseStatusValidationTask = task;
-
-      // Poll for task completion
       const pollSubscription = this.backendService.pollValidationTask(
         this.appService.selectedWorkspaceId,
         task.id
       ).subscribe({
         next: updatedTask => {
-          // Update progress if available
-          if (updatedTask.progress) {
-            // Could show progress here if needed
-          }
-
-          // If task is completed, get the results
           if (updatedTask.status === 'completed') {
             this.backendService.getValidationResults(
               this.appService.selectedWorkspaceId,
               updatedTask.id
             ).subscribe(result => {
-              // Type the result as a PaginatedResponse<InvalidVariableDto>
               const typedResult = result as {
                 data: InvalidVariableDto[];
                 total: number;
                 page: number;
                 limit: number;
               };
-
-              // Check if the result indicates errors
               const hasErrors = typedResult.total > 0;
-
-              // Create a validation result with the appropriate status
               const validationResult: ValidationResult = {
                 status: hasErrors ? 'failed' : 'success',
                 timestamp: Date.now(),
@@ -1877,8 +1608,6 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
                   hasErrors: hasErrors
                 }
               };
-
-              // Store the result in the validation task state service
               this.validationTaskStateService.setValidationResult(
                 this.appService.selectedWorkspaceId,
                 'responseStatus',
@@ -1892,8 +1621,6 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
               this.updatePaginatedStatusVariables();
               this.isResponseStatusValidationRunning = false;
               this.validateResponseStatusWasRun = true;
-
-              // Save the validation result to the service
               this.saveValidationResult('responseStatus');
             });
           } else if (updatedTask.status === 'failed') {
@@ -1916,15 +1643,9 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
   onTypeVariablePageChange(event: PageEvent): void {
     this.currentTypeVariablePage = event.pageIndex + 1;
     this.typeVariablePageSize = event.pageSize;
-
-    // Reload data from server with new pagination parameters using background task
     this.isVariableTypeValidationRunning = true;
-
-    // Cancel any existing subscription
     this.subscriptions.forEach(sub => sub.unsubscribe());
     this.subscriptions = [];
-
-    // Create a background validation task
     const subscription = this.backendService.createValidationTask(
       this.appService.selectedWorkspaceId,
       'variableTypes',
@@ -1932,20 +1653,16 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
       this.typeVariablePageSize
     ).subscribe(task => {
       this.variableTypeValidationTask = task;
-
-      // Poll for task completion
       const pollSubscription = this.backendService.pollValidationTask(
         this.appService.selectedWorkspaceId,
         task.id
       ).subscribe({
         next: updatedTask => {
-          // If task is completed, get the results
           if (updatedTask.status === 'completed') {
             this.backendService.getValidationResults(
               this.appService.selectedWorkspaceId,
               updatedTask.id
             ).subscribe(result => {
-              // Type the result as a PaginatedResponse<InvalidVariableDto>
               const typedResult = result as {
                 data: InvalidVariableDto[];
                 total: number;
@@ -1981,15 +1698,9 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
   onStatusVariablePageChange(event: PageEvent): void {
     this.currentStatusVariablePage = event.pageIndex + 1;
     this.statusVariablePageSize = event.pageSize;
-
-    // Reload data from server with new pagination parameters using background task
     this.isResponseStatusValidationRunning = true;
-
-    // Cancel any existing subscription
     this.subscriptions.forEach(sub => sub.unsubscribe());
     this.subscriptions = [];
-
-    // Create a background validation task
     const subscription = this.backendService.createValidationTask(
       this.appService.selectedWorkspaceId,
       'responseStatus',
@@ -1997,20 +1708,16 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
       this.statusVariablePageSize
     ).subscribe(task => {
       this.responseStatusValidationTask = task;
-
-      // Poll for task completion
       const pollSubscription = this.backendService.pollValidationTask(
         this.appService.selectedWorkspaceId,
         task.id
       ).subscribe({
         next: updatedTask => {
-          // If task is completed, get the results
           if (updatedTask.status === 'completed') {
             this.backendService.getValidationResults(
               this.appService.selectedWorkspaceId,
               updatedTask.id
             ).subscribe(result => {
-              // Type the result as a PaginatedResponse<InvalidVariableDto>
               const typedResult = result as {
                 data: InvalidVariableDto[];
                 total: number;
@@ -2074,26 +1781,19 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
       this.snackBar.open('Keine Antworten ausgewählt', 'Schließen', { duration: 3000 });
       return;
     }
-
     this.isDeletingResponses = true;
     const responseIds = Array.from(this.selectedTypeResponses);
-
-    // Cancel any existing subscription
     this.subscriptions.forEach(sub => sub.unsubscribe());
     this.subscriptions = [];
-
-    // Create a background deletion task
     const subscription = this.backendService.createDeleteResponsesTask(
       this.appService.selectedWorkspaceId,
       responseIds
     ).subscribe(task => {
-      // Poll for task completion
       const pollSubscription = this.backendService.pollValidationTask(
         this.appService.selectedWorkspaceId,
         task.id
       ).subscribe({
         next: updatedTask => {
-          // If task is completed, get the results
           if (updatedTask.status === 'completed') {
             this.backendService.getValidationResults(
               this.appService.selectedWorkspaceId,
@@ -2102,11 +1802,7 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
               const typedResult = result as { deletedCount: number };
               this.isDeletingResponses = false;
               this.snackBar.open(`${typedResult.deletedCount} Antworten gelöscht`, 'Schließen', { duration: 3000 });
-
-              // Start background validation task to refresh the data
               this.isVariableTypeValidationRunning = true;
-
-              // Create a background validation task
               const validationSubscription = this.backendService.createValidationTask(
                 this.appService.selectedWorkspaceId,
                 'variableTypes',
@@ -2114,20 +1810,16 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
                 this.typeVariablePageSize
               ).subscribe(validationTask => {
                 this.variableTypeValidationTask = validationTask;
-
-                // Poll for validation task completion
                 const validationPollSubscription = this.backendService.pollValidationTask(
                   this.appService.selectedWorkspaceId,
                   validationTask.id
                 ).subscribe({
                   next: updatedValidationTask => {
-                    // If task is completed, get the results
                     if (updatedValidationTask.status === 'completed') {
                       this.backendService.getValidationResults(
                         this.appService.selectedWorkspaceId,
                         updatedValidationTask.id
                       ).subscribe(validationResult => {
-                        // Type the result as a PaginatedResponse<InvalidVariableDto>
                         const typedValidationResult = validationResult as {
                           data: InvalidVariableDto[];
                           total: number;
@@ -2197,23 +1889,17 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
     dialogRef.afterClosed().subscribe(deleteFromDb => {
       if (deleteFromDb) {
         this.isDeletingResponses = true;
-
-        // Cancel any existing subscription
         this.subscriptions.forEach(sub => sub.unsubscribe());
         this.subscriptions = [];
-
-        // Create a background deletion task
         const subscription = this.backendService.createDeleteAllResponsesTask(
           this.appService.selectedWorkspaceId,
           'variableTypes'
         ).subscribe(task => {
-          // Poll for task completion
           const pollSubscription = this.backendService.pollValidationTask(
             this.appService.selectedWorkspaceId,
             task.id
           ).subscribe({
             next: updatedTask => {
-              // If task is completed, get the results
               if (updatedTask.status === 'completed') {
                 this.backendService.getValidationResults(
                   this.appService.selectedWorkspaceId,
@@ -2222,11 +1908,7 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
                   const typedResult = result as { deletedCount: number };
                   this.isDeletingResponses = false;
                   this.snackBar.open(`${typedResult.deletedCount} Antworten gelöscht`, 'Schließen', { duration: 3000 });
-
-                  // Start background validation task to refresh the data
                   this.isVariableTypeValidationRunning = true;
-
-                  // Create a background validation task
                   const validationSubscription = this.backendService.createValidationTask(
                     this.appService.selectedWorkspaceId,
                     'variableTypes',
@@ -2235,19 +1917,16 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
                   ).subscribe(validationTask => {
                     this.variableTypeValidationTask = validationTask;
 
-                    // Poll for validation task completion
                     const validationPollSubscription = this.backendService.pollValidationTask(
                       this.appService.selectedWorkspaceId,
                       validationTask.id
                     ).subscribe({
                       next: updatedValidationTask => {
-                        // If task is completed, get the results
                         if (updatedValidationTask.status === 'completed') {
                           this.backendService.getValidationResults(
                             this.appService.selectedWorkspaceId,
                             updatedValidationTask.id
                           ).subscribe(validationResult => {
-                            // Type the result as a PaginatedResponse<InvalidVariableDto>
                             const typedValidationResult = validationResult as {
                               data: InvalidVariableDto[];
                               total: number;
@@ -2336,23 +2015,17 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
 
     this.isDeletingResponses = true;
     const responseIds = Array.from(this.selectedStatusResponses);
-
-    // Cancel any existing subscription
     this.subscriptions.forEach(sub => sub.unsubscribe());
     this.subscriptions = [];
-
-    // Create a background deletion task
     const subscription = this.backendService.createDeleteResponsesTask(
       this.appService.selectedWorkspaceId,
       responseIds
     ).subscribe(task => {
-      // Poll for task completion
       const pollSubscription = this.backendService.pollValidationTask(
         this.appService.selectedWorkspaceId,
         task.id
       ).subscribe({
         next: updatedTask => {
-          // If task is completed, get the results
           if (updatedTask.status === 'completed') {
             this.backendService.getValidationResults(
               this.appService.selectedWorkspaceId,
@@ -2361,11 +2034,7 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
               const typedResult = result as { deletedCount: number };
               this.isDeletingResponses = false;
               this.snackBar.open(`${typedResult.deletedCount} Antworten gelöscht`, 'Schließen', { duration: 3000 });
-
-              // Start background validation task to refresh the data
               this.isResponseStatusValidationRunning = true;
-
-              // Create a background validation task
               const validationSubscription = this.backendService.createValidationTask(
                 this.appService.selectedWorkspaceId,
                 'responseStatus',
@@ -2374,19 +2043,16 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
               ).subscribe(validationTask => {
                 this.responseStatusValidationTask = validationTask;
 
-                // Poll for validation task completion
                 const validationPollSubscription = this.backendService.pollValidationTask(
                   this.appService.selectedWorkspaceId,
                   validationTask.id
                 ).subscribe({
                   next: updatedValidationTask => {
-                    // If task is completed, get the results
                     if (updatedValidationTask.status === 'completed') {
                       this.backendService.getValidationResults(
                         this.appService.selectedWorkspaceId,
                         updatedValidationTask.id
                       ).subscribe(validationResult => {
-                        // Type the result as a PaginatedResponse<InvalidVariableDto>
                         const typedValidationResult = validationResult as {
                           data: InvalidVariableDto[];
                           total: number;
@@ -2456,23 +2122,17 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
     dialogRef.afterClosed().subscribe(deleteFromDb => {
       if (deleteFromDb) {
         this.isDeletingResponses = true;
-
-        // Cancel any existing subscription
         this.subscriptions.forEach(sub => sub.unsubscribe());
         this.subscriptions = [];
-
-        // Create a background deletion task
         const subscription = this.backendService.createDeleteAllResponsesTask(
           this.appService.selectedWorkspaceId,
           'responseStatus'
         ).subscribe(task => {
-          // Poll for task completion
           const pollSubscription = this.backendService.pollValidationTask(
             this.appService.selectedWorkspaceId,
             task.id
           ).subscribe({
             next: updatedTask => {
-              // If task is completed, get the results
               if (updatedTask.status === 'completed') {
                 this.backendService.getValidationResults(
                   this.appService.selectedWorkspaceId,
@@ -2481,11 +2141,7 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
                   const typedResult = result as { deletedCount: number };
                   this.isDeletingResponses = false;
                   this.snackBar.open(`${typedResult.deletedCount} Antworten gelöscht`, 'Schließen', { duration: 3000 });
-
-                  // Start background validation task to refresh the data
                   this.isResponseStatusValidationRunning = true;
-
-                  // Create a background validation task
                   const validationSubscription = this.backendService.createValidationTask(
                     this.appService.selectedWorkspaceId,
                     'responseStatus',
@@ -2493,20 +2149,16 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
                     this.statusVariablePageSize
                   ).subscribe(validationTask => {
                     this.responseStatusValidationTask = validationTask;
-
-                    // Poll for validation task completion
                     const validationPollSubscription = this.backendService.pollValidationTask(
                       this.appService.selectedWorkspaceId,
                       validationTask.id
                     ).subscribe({
                       next: updatedValidationTask => {
-                        // If task is completed, get the results
                         if (updatedValidationTask.status === 'completed') {
                           this.backendService.getValidationResults(
                             this.appService.selectedWorkspaceId,
                             updatedValidationTask.id
                           ).subscribe(validationResult => {
-                            // Type the result as a PaginatedResponse<InvalidVariableDto>
                             const typedValidationResult = validationResult as {
                               data: InvalidVariableDto[];
                               total: number;
@@ -2684,17 +2336,12 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
   private saveValidationResult(type: 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'groupResponses' | 'duplicateResponses'): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     const status = this.getValidationStatus(type);
-
-    // Only save completed results (success or failed)
     if (status === 'success' || status === 'failed') {
-      // Create validation result object
       const validationResult = {
         status: status as 'success' | 'failed',
         timestamp: Date.now(),
         details: this.getValidationDetails(type)
       };
-
-      // Save to service
       this.validationTaskStateService.setValidationResult(workspaceId, type, validationResult);
     }
   }
@@ -2744,12 +2391,7 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
 
   private loadPreviousValidationResults(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
-
-    // First load any in-memory results
     const inMemoryResults = this.validationTaskStateService.getAllValidationResults(workspaceId);
-
-    // Process each type of in-memory validation result
-    // Pass false for fromCurrentSession since these are from previous sessions
     if (inMemoryResults.variables) {
       this.processVariablesResult(inMemoryResults.variables, false);
     }
@@ -2770,11 +2412,9 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
       this.processGroupResponsesResult(inMemoryResults.groupResponses, false);
     }
 
-    // Then fetch and process the last validation results from the backend
     const subscription = this.validationService.getLastValidationResults(workspaceId)
       .subscribe({
         next: results => {
-          // Process each type of validation result from the backend
           if (results.variables) {
             const { task, result } = results.variables;
             let status: 'success' | 'failed' | 'not-run' = 'not-run';
@@ -2787,8 +2427,6 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
               details: result
             };
             this.processVariablesResult(validationResult, false);
-
-            // Store the result in the validation task state service
             this.validationTaskStateService.setValidationResult(workspaceId, 'variables', validationResult);
           }
 
@@ -2804,8 +2442,6 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
               details: result
             };
             this.processVariableTypesResult(validationResult, false);
-
-            // Store the result in the validation task state service
             this.validationTaskStateService.setValidationResult(workspaceId, 'variableTypes', validationResult);
           }
 
@@ -2821,8 +2457,6 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
               details: result
             };
             this.processResponseStatusResult(validationResult, false);
-
-            // Store the result in the validation task state service
             this.validationTaskStateService.setValidationResult(workspaceId, 'responseStatus', validationResult);
           }
 
@@ -2838,8 +2472,6 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
               details: result
             };
             this.processTestTakersResult(validationResult, false);
-
-            // Store the result in the validation task state service
             this.validationTaskStateService.setValidationResult(workspaceId, 'testTakers', validationResult);
           }
 
@@ -2855,13 +2487,10 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
               details: result
             };
             this.processGroupResponsesResult(validationResult, false);
-
-            // Store the result in the validation task state service
             this.validationTaskStateService.setValidationResult(workspaceId, 'groupResponses', validationResult);
           }
         },
         error: () => {
-          // Error occurred while loading previous validation results
         }
       });
 
@@ -2870,7 +2499,6 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
 
   private processVariablesResult(result: ValidationResult, fromCurrentSession: boolean = false): void {
     if (result.status === 'success') {
-      // Only set validateVariablesWasRun to true if the result is from the current session
       if (fromCurrentSession) {
         this.validateVariablesWasRun = true;
       }
@@ -2878,14 +2506,12 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
       this.invalidVariables = [];
       this.updatePaginatedVariables();
     } else if (result.status === 'failed' && result.details) {
-      // Only set validateVariablesWasRun to true if the result is from the current session
       if (fromCurrentSession) {
         this.validateVariablesWasRun = true;
       }
       const details = result.details as { total: number; hasErrors: boolean };
       this.totalInvalidVariables = details.total;
 
-      // If we have details but no data, we need to fetch the data
       if (details.total > 0 && this.invalidVariables.length === 0) {
         this.validateVariables();
       }
@@ -2894,7 +2520,6 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
 
   private processVariableTypesResult(result: ValidationResult, fromCurrentSession: boolean = false): void {
     if (result.status === 'success') {
-      // Only set validateVariableTypesWasRun to true if the result is from the current session
       if (fromCurrentSession) {
         this.validateVariableTypesWasRun = true;
       }
@@ -2902,14 +2527,12 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
       this.invalidTypeVariables = [];
       this.updatePaginatedTypeVariables();
     } else if (result.status === 'failed' && result.details) {
-      // Only set validateVariableTypesWasRun to true if the result is from the current session
       if (fromCurrentSession) {
         this.validateVariableTypesWasRun = true;
       }
       const details = result.details as { total: number; hasErrors: boolean };
       this.totalInvalidTypeVariables = details.total;
 
-      // If we have details but no data, we need to fetch the data
       if (details.total > 0 && this.invalidTypeVariables.length === 0) {
         this.validateVariableTypes();
       }
@@ -2918,7 +2541,6 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
 
   private processResponseStatusResult(result: ValidationResult, fromCurrentSession: boolean = false): void {
     if (result.status === 'success') {
-      // Only set validateResponseStatusWasRun to true if the result is from the current session
       if (fromCurrentSession) {
         this.validateResponseStatusWasRun = true;
       }
@@ -2926,14 +2548,12 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
       this.invalidStatusVariables = [];
       this.updatePaginatedStatusVariables();
     } else if (result.status === 'failed' && result.details) {
-      // Only set validateResponseStatusWasRun to true if the result is from the current session
       if (fromCurrentSession) {
         this.validateResponseStatusWasRun = true;
       }
       const details = result.details as { total: number; hasErrors: boolean };
       this.totalInvalidStatusVariables = details.total;
 
-      // If we have details but no data, we need to fetch the data
       if (details.total > 0 && this.invalidStatusVariables.length === 0) {
         this.validateResponseStatus();
       }
@@ -2942,7 +2562,6 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
 
   private processTestTakersResult(result: ValidationResult, fromCurrentSession: boolean = false): void {
     if (result.status === 'success') {
-      // Only set testTakersValidationWasRun to true if the result is from the current session
       if (fromCurrentSession) {
         this.testTakersValidationWasRun = true;
       }
@@ -2955,7 +2574,6 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
       };
       this.updatePaginatedMissingPersons();
     } else if (result.status === 'failed' && result.details) {
-      // Only set testTakersValidationWasRun to true if the result is from the current session
       if (fromCurrentSession) {
         this.testTakersValidationWasRun = true;
       }
@@ -2965,7 +2583,6 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
         hasErrors: boolean
       };
 
-      // If we have details but no data, we need to fetch the data
       if (details.hasErrors && (!this.testTakersValidationResult || this.testTakersValidationResult.missingPersons.length === 0)) {
         this.validateTestTakers();
       }
@@ -2974,7 +2591,6 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
 
   private processGroupResponsesResult(result: ValidationResult, fromCurrentSession: boolean = false): void {
     if (result.status === 'success') {
-      // Only set groupResponsesValidationWasRun to true if the result is from the current session
       if (fromCurrentSession) {
         this.groupResponsesValidationWasRun = true;
       }
@@ -2985,7 +2601,6 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
       };
       this.updatePaginatedGroupResponses();
     } else if (result.status === 'failed' && result.details) {
-      // Only set groupResponsesValidationWasRun to true if the result is from the current session
       if (fromCurrentSession) {
         this.groupResponsesValidationWasRun = true;
       }
@@ -2995,7 +2610,6 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
         hasErrors: boolean
       };
 
-      // If we have details but no data, we need to fetch the data
       if (details.hasErrors && (!this.groupResponsesResult || this.groupResponsesResult.groupsWithResponses.length === 0)) {
         this.validateGroupResponses();
       }
