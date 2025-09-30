@@ -147,8 +147,9 @@ export class TestcenterService {
     logger.log('Import response data from TC');
     const headersRequest = this.createHeaders(authToken);
     const chunks = this.createChunks(testGroups.split(','), 2);
+    const allRawResponses: Response[] = [];
 
-    return chunks.map(async chunk => {
+    for (const chunk of chunks) {
       const endpoint = url ?
         `${url}/api/workspace/${tc_workspace}/report/response?dataIds=${chunk.join(',')}` :
         `https://www.iqb-testcenter${server}.de/api/workspace/${tc_workspace}/report/response?dataIds=${chunk.join(',')}`;
@@ -158,21 +159,29 @@ export class TestcenterService {
           httpsAgent: agent,
           headers: headersRequest
         });
+        allRawResponses.push(...rawResponses);
+      } catch (error) {
+        logger.error('Error fetching response chunk:');
+        throw error;
+      }
+    }
 
-        this.persons = await this.personService.createPersonList(rawResponses, Number(workspace_id));
+    return [Promise.resolve().then(async () => {
+      try {
+        this.persons = await this.personService.createPersonList(allRawResponses, Number(workspace_id));
 
         const personList = await Promise.all(
           this.persons.map(async person => {
-            const personWithBooklets = await this.personService.assignBookletsToPerson(person, rawResponses);
-            return this.personService.assignUnitsToBookletAndPerson(personWithBooklets, rawResponses);
+            const personWithBooklets = await this.personService.assignBookletsToPerson(person, allRawResponses);
+            return this.personService.assignUnitsToBookletAndPerson(personWithBooklets, allRawResponses);
           })
         );
         await this.personService.processPersonBooklets(personList, Number(workspace_id));
       } catch (error) {
-        logger.error('Error processing response chunk:');
+        logger.error('Error processing consolidated response data:');
         throw error;
       }
-    });
+    })];
   }
 
   private async importLogs(
@@ -187,18 +196,29 @@ export class TestcenterService {
     logger.log('Import logs data from TC');
     const headersRequest = this.createHeaders(authToken);
     const logsChunks = this.createChunks(testGroups.split(','), 2);
-    const logsPromises = logsChunks.map(async chunk => {
+    const allLogData: Log[] = [];
+    for (const chunk of logsChunks) {
       const logsUrl = url ?
         `${url}/api/workspace/${tc_workspace}/report/log?dataIds=${chunk.join(',')}` :
         `https://iqb-testcenter${server}.de/api/workspace/${tc_workspace}/report/log?dataIds=${chunk.join(',')}`;
+
       try {
         const { data: logData } = await this.httpService.axiosRef.get<Log[]>(logsUrl, {
           httpsAgent: agent,
           headers: headersRequest
         });
-        const { bookletLogs, unitLogs } = this.separateLogsByType(logData);
+        allLogData.push(...logData);
+      } catch (error) {
+        logger.error(`Error fetching log chunk: ${error.message}`);
+        throw error;
+      }
+    }
 
-        const persons = await this.personService.createPersonList(logData, Number(workspace_id));
+    return [Promise.resolve().then(async () => {
+      try {
+        const { bookletLogs, unitLogs } = this.separateLogsByType(allLogData);
+
+        const persons = await this.personService.createPersonList(allLogData, Number(workspace_id));
 
         const result = await this.personService.processPersonLogs(
           persons,
@@ -209,12 +229,10 @@ export class TestcenterService {
 
         logger.log(`Logs import result: ${JSON.stringify(result)}`);
       } catch (error) {
-        logger.error(`Error processing logs: ${error.message}`);
+        logger.error(`Error processing consolidated log data: ${error.message}`);
         throw error;
       }
-    });
-
-    return logsPromises;
+    })];
   }
 
   private separateLogsByType(logData: Log[]): { bookletLogs: Log[], unitLogs: Log[] } {
