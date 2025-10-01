@@ -98,7 +98,9 @@ h4 {
   justify-content: flex-end;
 }
 
-.missings-profiles-container {
+.missings-profiles-container,
+.replay-statistics-container,
+.coding-settings-container {
   background-color: #f9f9f9;
   border-radius: 6px;
   padding: 20px;
@@ -108,7 +110,7 @@ h4 {
 .missings-profiles-actions {
   display: flex;
   margin-top: 20px;
-  justify-content: center;
+  justify-content: flex-start;
 }
 
 button mat-icon {
