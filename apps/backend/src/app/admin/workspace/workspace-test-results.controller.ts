@@ -2,15 +2,16 @@ import {
   BadRequestException,
   Controller,
   Delete,
-  Get, Param, Post, Query, UseGuards, UseInterceptors, UploadedFiles
+  Get, Param, Post, Query, UseGuards, UseInterceptors, UploadedFiles, Res
 } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiBearerAuth, ApiBody, ApiConsumes, ApiOkResponse, ApiOperation,
-  ApiParam, ApiQuery, ApiTags
+  ApiParam, ApiQuery, ApiResponse, ApiTags
 } from '@nestjs/swagger';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { logger } from 'nx/src/utils/logger';
+import { Response } from 'express';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
@@ -18,13 +19,15 @@ import { UploadResultsService } from '../../database/services/upload-results.ser
 import Persons from '../../database/entities/persons.entity';
 import { ResponseEntity } from '../../database/entities/response.entity';
 import { WorkspaceTestResultsService } from '../../database/services/workspace-test-results.service';
+import { DatabaseExportService } from '../database/database-export.service';
 
 @ApiTags('Admin Workspace Test Results')
 @Controller('admin/workspace')
 export class WorkspaceTestResultsController {
   constructor(
     private workspaceTestResultsService: WorkspaceTestResultsService,
-    private uploadResults: UploadResultsService
+    private uploadResults: UploadResultsService,
+    private databaseExportService: DatabaseExportService
   ) {}
 
   @Get(':workspace_id/test-results')
@@ -827,6 +830,42 @@ export class WorkspaceTestResultsController {
     } catch (error) {
       logger.error('Error uploading test results!');
       throw new BadRequestException('Uploading test results failed. Please try again.');
+    }
+  }
+
+  @Get(':workspace_id/export/sqlite')
+  @ApiOperation({
+    summary: 'Export workspace test results to SQLite',
+    description: 'Exports workspace-specific test results data to SQLite format with streaming support'
+  })
+  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
+  @ApiResponse({
+    status: 200,
+    description: 'SQLite database file downloaded successfully',
+    content: {
+      'application/x-sqlite3': {
+        schema: {
+          type: 'string',
+          format: 'binary'
+        }
+      }
+    }
+  })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  async exportWorkspaceToSqlite(
+    @Param('workspace_id') workspace_id: number,
+      @Res() response: Response
+  ): Promise<void> {
+    try {
+      response.setHeader('Content-Type', 'application/x-sqlite3');
+      response.setHeader('Content-Disposition', `attachment; filename=workspace-${workspace_id}-export-${new Date().toISOString().split('T')[0]}.sqlite`);
+
+      await this.databaseExportService.exportWorkspaceToSqliteStream(response, workspace_id);
+    } catch (error) {
+      if (!response.headersSent) {
+        response.status(500).json({ error: 'Failed to export workspace database to SQLite' });
+      }
     }
   }
 }

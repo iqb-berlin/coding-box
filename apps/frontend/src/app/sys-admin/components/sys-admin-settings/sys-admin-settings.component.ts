@@ -7,6 +7,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { AppService, standardLogo } from '../../../services/app.service';
 import { LogoService } from '../../../services/logo.service';
 import { AppLogoDto } from '../../../../../../../api-dto/app-logo-dto';
@@ -22,7 +23,8 @@ import { AppLogoDto } from '../../../../../../../api-dto/app-logo-dto';
     MatCardModule,
     MatFormFieldModule,
     MatIconModule,
-    MatInputModule
+    MatInputModule,
+    MatProgressBarModule
   ]
 })
 export class SysAdminSettingsComponent {
@@ -35,6 +37,7 @@ export class SysAdminSettingsComponent {
   isDefaultLogo = true;
   logoAltText = '';
   backgroundColorValue = '';
+  isExporting = false;
   private readonly ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/svg+xml', 'image/webp'];
 
   constructor() {
@@ -43,10 +46,6 @@ export class SysAdminSettingsComponent {
     this.backgroundColorValue = this.appService.appLogo.bodyBackground || '';
   }
 
-  /**
-   * Handles file selection for logo upload
-   * @param event The file input change event
-   */
   onFileSelected(event: Event): void {
     const input = event.target as HTMLInputElement;
     if (input.files && input.files.length > 0) {
@@ -64,14 +63,10 @@ export class SysAdminSettingsComponent {
         return;
       }
 
-      // Create preview
       this.createImagePreview();
     }
   }
 
-  /**
-   * Creates a preview of the selected image
-   */
   private createImagePreview(): void {
     if (!this.selectedFile) return;
 
@@ -82,13 +77,9 @@ export class SysAdminSettingsComponent {
     reader.readAsDataURL(this.selectedFile);
   }
 
-  /**
-   * Resets the file input
-   */
   resetFileInput(): void {
     this.selectedFile = null;
     this.previewUrl = null;
-    // Reset the file input element
     const fileInput = document.getElementById('logo-upload') as HTMLInputElement;
     if (fileInput) {
       fileInput.value = '';
@@ -172,14 +163,6 @@ export class SysAdminSettingsComponent {
     });
   }
 
-  updateBackgroundPreview(): void {
-    // The preview is automatically updated through data binding
-    // This method is called when the input changes
-  }
-
-  /**
-   * Saves the background color for the application
-   */
   saveBackgroundColor(): void {
     const updatedLogo = {
       ...this.appService.appLogo,
@@ -201,9 +184,6 @@ export class SysAdminSettingsComponent {
     });
   }
 
-  /**
-   * Resets the background color to the standard linear gradient
-   */
   resetToDefaultBackground(): void {
     this.backgroundColorValue = standardLogo.bodyBackground || '';
     const updatedLogo = {
@@ -223,5 +203,57 @@ export class SysAdminSettingsComponent {
         this.snackBar.open('Fehler beim Zurücksetzen der Hintergrundfarbe', 'Schließen', { duration: 3000 });
       }
     });
+  }
+
+  exportDatabase(): void {
+    if (this.isExporting) {
+      return;
+    }
+
+    this.isExporting = true;
+    const anchor = document.createElement('a');
+    anchor.style.display = 'none';
+    document.body.appendChild(anchor);
+    const apiUrl = `${window.location.origin}/api/admin/database/export/sqlite`;
+    const token = localStorage.getItem('id_token');
+
+    if (!token) {
+      this.snackBar.open('Nicht authentifiziert. Bitte melden Sie sich erneut an.', 'Schließen', { duration: 5000 });
+      this.isExporting = false;
+      return;
+    }
+
+    fetch(apiUrl, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/x-sqlite3'
+      }
+    })
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.blob();
+      })
+      .then(blob => {
+        const url = window.URL.createObjectURL(blob);
+        anchor.href = url;
+        anchor.download = `database-export-${new Date().toISOString().split('T')[0]}.sqlite`;
+        anchor.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(anchor);
+
+        this.snackBar.open('Datenbank erfolgreich exportiert', 'Schließen', { duration: 3000 });
+      })
+      .catch(() => {
+        this.snackBar.open('Fehler beim Exportieren der Datenbank. Bitte versuchen Sie es erneut.', 'Schließen', { duration: 5000 });
+        if (document.body.contains(anchor)) {
+          document.body.removeChild(anchor);
+        }
+      })
+      .finally(() => {
+        this.isExporting = false;
+      });
   }
 }
