@@ -83,7 +83,7 @@
       <div class="background-color-container">
         <mat-form-field class="full-width">
           <mat-label>Hintergrundfarbe</mat-label>
-          <input matInput [(ngModel)]="backgroundColorValue" (input)="updateBackgroundPreview()" placeholder="z.B. #ff0000, rgb(255,0,0), oder linear-gradient(...)">
+          <input matInput [(ngModel)]="backgroundColorValue" placeholder="z.B. #ff0000, rgb(255,0,0), oder linear-gradient(...)">
           <mat-hint>Geben Sie eine Farbe oder einen Farbverlauf im CSS-Format ein</mat-hint>
         </mat-form-field>
         <div class="background-color-actions">
@@ -94,6 +94,36 @@
             <mat-icon>restore</mat-icon> Standard-Farbverlauf wiederherstellen
           </button>
         </div>
+      </div>
+    </mat-card-content>
+  </mat-card>
+
+  <mat-card class="database-export-card">
+    <mat-card-header>
+      <mat-card-title>Datenbank-Export</mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      <div class="database-export-container">
+        <p class="export-description">
+          Exportieren Sie die gesamte PostgreSQL-Datenbank als SQLite-Datei.
+          Diese Funktion unterstützt auch große Datenbanken mit mehreren GB.
+        </p>
+        <div class="export-actions">
+          <button
+            mat-raised-button
+            color="primary"
+            (click)="exportDatabase()"
+            [disabled]="isExporting">
+            <mat-icon>{{isExporting ? 'hourglass_empty' : 'download'}}</mat-icon>
+            {{isExporting ? 'Exportiere Datenbank...' : 'Datenbank als SQLite exportieren'}}
+          </button>
+        </div>
+        @if (isExporting) {
+          <div class="export-progress">
+            <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+            <p class="progress-text">Dies kann bei großen Datenbanken einige Minuten dauern...</p>
+          </div>
+        }
       </div>
     </mat-card-content>
   </mat-card>
