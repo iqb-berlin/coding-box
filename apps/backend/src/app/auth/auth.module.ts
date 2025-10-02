@@ -4,6 +4,10 @@ import { JwtModule } from '@nestjs/jwt';
 import { HttpModule } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { AuthService } from './service/auth.service';
+import { OAuth2ClientCredentialsService } from './service/oauth2-client-credentials.service';
+import { KeycloakAuthService } from './service/keycloak-auth.service';
+import { AuthController } from './auth.controller';
+import { DatabaseModule } from '../database/database.module';
 import { UserModule } from '../user/user.module';
 import { JwtStrategy } from './jwt.strategy';
 import { KeycloakJwksService } from './keycloak-jwks.service';
@@ -21,7 +25,10 @@ import { KeycloakJwksService } from './keycloak-jwks.service';
       inject: [ConfigService]
     })
   ],
-  providers: [AuthService, JwtStrategy, KeycloakJwksService],
+  controllers: [AuthController],
+  providers: [AuthService, OAuth2ClientCredentialsService, KeycloakAuthService, JwtStrategy],
+  exports: [AuthService, OAuth2ClientCredentialsService, KeycloakAuthService]
+  providers: [AuthService, JwtStrategy],
   exports: [AuthService, UserModule]
 })
 export class AuthModule { }

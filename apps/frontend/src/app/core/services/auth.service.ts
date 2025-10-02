@@ -1,66 +1,155 @@
 import { inject, Injectable } from '@angular/core';
-import Keycloak, { KeycloakProfile, KeycloakTokenParsed } from 'keycloak-js';
+import { HttpClient } from '@angular/common/http';
+import { BehaviorSubject } from 'rxjs';
+import { jwtDecode } from 'jwt-decode';
 import { AppService } from './app.service';
+
+export interface UserProfile {
+  id?: string;
+  username?: string;
+  email?: string;
+  firstName?: string;
+  lastName?: string;
+}
+
+export interface DecodedToken {
+  sub?: string;
+  email?: string;
+  preferred_username?: string;
+  given_name?: string;
+  family_name?: string;
+  realm_access?: {
+    roles: string[];
+  };
+  exp?: number;
+}
 
 @Injectable({
   providedIn: 'root'
 })
 export class AuthService {
-  private readonly keycloak = inject(Keycloak);
+  private readonly http = inject(HttpClient);
   private readonly appService = inject(AppService);
-  getLoggedUser(): KeycloakTokenParsed | undefined {
-    try {
-      return this.keycloak.tokenParsed || this.keycloak.idTokenParsed;
-    } catch (e) {
-      return undefined;
+  private readonly tokenKey = 'auth_token';
+  private readonly idTokenKey = 'id_token';
+  private readonly refreshTokenKey = 'refresh_token';
+  private isAuthenticatedSubject = new BehaviorSubject<boolean>(this.hasValidToken());
+
+  constructor() {
+    this.checkTokenValidity();
+  }
+
+  getLoggedUser(): DecodedToken | undefined {
+    const token = this.getToken();
+    if (token) {
+      try {
+        return jwtDecode<DecodedToken>(token);
+      } catch {
+        return undefined;
+      }
     }
+    return undefined;
   }
 
-  getToken() {
-    const token = this.keycloak.token;
-    return token;
+  getToken(): string | null {
+    return localStorage.getItem(this.tokenKey);
   }
 
-  async getValidToken(minValidity = 30): Promise<string | undefined> {
-    if (!this.keycloak.authenticated) {
-      return undefined;
+  getIdToken(): string | null {
+    return localStorage.getItem(this.idTokenKey);
+  }
+
+  getRefreshToken(): string | null {
+    return localStorage.getItem(this.refreshTokenKey);
+  }
+
+  isLoggedIn(): boolean {
+    return this.isAuthenticatedSubject.value;
+  }
+
+  loadUserProfile(): Promise<UserProfile> {
+    const decodedToken = this.getLoggedUser();
+    if (decodedToken) {
+      return Promise.resolve({
+        id: decodedToken.sub,
+        username: decodedToken.preferred_username,
+        email: decodedToken.email,
+        firstName: decodedToken.given_name,
+        lastName: decodedToken.family_name
+      });
     }
-
-    await this.keycloak.updateToken(minValidity);
-    return this.keycloak.token;
+    return Promise.reject(new Error('No valid token found'));
   }
 
-  getIdentity(): string | undefined {
-    return this.keycloak.tokenParsed?.sub || this.keycloak.idTokenParsed?.sub;
-  }
-
-  isLoggedIn(): boolean | undefined {
-    return this.keycloak.authenticated;
-  }
-
-  loadUserProfile(): Promise<KeycloakProfile> {
-    return this.keycloak.loadUserProfile();
-  }
-
-  async login(returnUrl?: string): Promise<void> {
+  login(returnUrl?: string): void {
     const redirectUri = this.appService.createLoginRedirectUri(returnUrl || this.appService.reAuthenticationReturnUrl);
-    await this.keycloak.login(redirectUri ? { redirectUri } : undefined);
+    window.location.href = `${this.appService.serverUrl}auth/login?redirect_uri=${encodeURIComponent(redirectUri)}`;
   }
 
-  async logout(): Promise<void> {
+  logout(): void {
+    const refreshToken = this.getRefreshToken();
     this.appService.markExplicitLogoutInProgress();
     this.appService.clearAuthState({ clearReAuthentication: true });
-    await this.keycloak.logout({ redirectUri: window.location.origin });
+    this.isAuthenticatedSubject.next(false);
+
+    if (refreshToken) {
+      this.http.post(`${this.appService.serverUrl}auth/logout`, { refresh_token: refreshToken }).subscribe({
+        next: () => {
+          window.location.href = window.location.origin;
+        },
+        error: () => {
+          window.location.href = window.location.origin;
+        }
+      });
+    } else {
+      window.location.href = window.location.origin;
+    }
   }
 
-  async redirectToProfile(): Promise<void> {
-    await this.keycloak.accountManagement();
+  redirectToProfile(): void {
+    const redirectUri = encodeURIComponent(window.location.origin);
+    window.location.href = `${this.appService.serverUrl}auth/profile?redirect_uri=${redirectUri}`;
   }
 
   getRoles(): string[] {
-    if (this.keycloak.realmAccess) {
-      return this.keycloak.realmAccess.roles;
+    const decodedToken = this.getLoggedUser();
+    return decodedToken?.realm_access?.roles || [];
+  }
+
+  setToken(token: string): void {
+    localStorage.setItem(this.tokenKey, token);
+    this.isAuthenticatedSubject.next(true);
+  }
+
+  setIdToken(idToken: string): void {
+    localStorage.setItem(this.idTokenKey, idToken);
+  }
+
+  setRefreshToken(refreshToken: string): void {
+    localStorage.setItem(this.refreshTokenKey, refreshToken);
+  }
+
+  hasValidToken(): boolean {
+    const token = this.getToken();
+    if (!token) {
+      return false;
     }
-    return [];
+
+    try {
+      const decoded = jwtDecode<DecodedToken>(token);
+      const now = Date.now() / 1000;
+      return decoded.exp ? decoded.exp > now : false;
+    } catch {
+      return false;
+    }
+  }
+
+  private checkTokenValidity(): void {
+    if (!this.hasValidToken()) {
+      localStorage.removeItem(this.tokenKey);
+      localStorage.removeItem(this.idTokenKey);
+      localStorage.removeItem(this.refreshTokenKey);
+      this.isAuthenticatedSubject.next(false);
+    }
   }
 }

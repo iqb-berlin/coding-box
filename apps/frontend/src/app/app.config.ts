@@ -9,17 +9,9 @@ import {
   provideHttpClient,
   withInterceptors
 } from '@angular/common/http';
-import { registerLocaleData, HashLocationStrategy, LocationStrategy } from '@angular/common';
-import localeDeAt from '@angular/common/locales/de-AT';
+import { TranslateHttpLoader } from '@ngx-translate/http-loader';
 import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
-import {
-  AutoRefreshTokenService, createInterceptorCondition,
-  INCLUDE_BEARER_TOKEN_INTERCEPTOR_CONFIG, IncludeBearerTokenCondition,
-  provideKeycloak,
-  UserActivityService,
-  withAutoRefreshToken
-} from 'keycloak-angular';
-import { Observable } from 'rxjs';
+import { HashLocationStrategy, LocationStrategy } from '@angular/common';
 import { routes } from './app.routes';
 import { environment } from '../environments/environment';
 import { authInterceptor } from './core/interceptors/auth.interceptor';
@@ -43,37 +35,6 @@ export function createTranslateLoader(http: HttpClient): CacheBustingTranslateLo
   return new CacheBustingTranslateLoader(http);
 }
 
-const allUrlsCondition = createInterceptorCondition<IncludeBearerTokenCondition>({
-  urlPattern: /^(https?:\/\/.*)(\/.*)?$/i // Match all URLs starting with http or https
-});
-
-export const provideKeycloakAngular = () => provideKeycloak({
-  config: {
-    url: environment.keycloak.url,
-    realm: environment.keycloak.realm,
-    clientId: environment.keycloak.clientId
-  },
-  initOptions: {
-    onLoad: 'check-sso',
-    checkLoginIframe: false
-  },
-  features: [
-    withAutoRefreshToken({
-      onInactivityTimeout: 'none',
-      sessionTimeout: AUTH_SESSION_IDLE_TIMEOUT_MS
-    })
-  ],
-
-  providers: [
-    {
-      provide: INCLUDE_BEARER_TOKEN_INTERCEPTOR_CONFIG,
-      useValue: allUrlsCondition
-    },
-    AutoRefreshTokenService, UserActivityService]
-});
-
-registerLocaleData(localeDeAt);
-
 export const appConfig: ApplicationConfig = {
   providers: [
     provideHttpClient(
@@ -87,7 +48,6 @@ export const appConfig: ApplicationConfig = {
         deps: [HttpClient]
       }
     })),
-    provideKeycloakAngular(),
     provideRouter(routes),
     provideAnimationsAsync(),
     {

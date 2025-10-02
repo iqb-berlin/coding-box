@@ -3,18 +3,16 @@ import {
   HttpEvent,
   HttpHandlerFn,
   HttpInterceptorFn,
-  HttpRequest
+  HttpRequest,
+  HttpErrorResponse
 } from '@angular/common/http';
 import { Router } from '@angular/router';
 import {
+  Observable,
   catchError,
   finalize,
-  from,
-  map,
-  Observable,
-  of,
-  switchMap,
-  tap
+  tap,
+  throwError
 } from 'rxjs';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { AppHttpError } from './app-http-error.class';
@@ -24,16 +22,12 @@ import {
 } from './http-error-context';
 import { AppService } from '../services/app.service';
 import { AuthService } from '../services/auth.service';
-import { SERVER_URL } from '../../injection-tokens';
 
-/**
- * Functional interceptor for adding authentication headers and handling errors
- */
 export const authInterceptor: HttpInterceptorFn = (
   req: HttpRequest<unknown>,
   next: HttpHandlerFn
 ): Observable<HttpEvent<unknown>> => {
-  const appService: AppService = inject(AppService);
+  const appService = inject(AppService);
   const authService = inject(AuthService);
   const snackBar = inject(MatSnackBar);
   const router = inject(Router);
@@ -41,27 +35,46 @@ export const authInterceptor: HttpInterceptorFn = (
   let httpErrorInfo: AppHttpError | null = null;
   let suppressGlobalErrorMessage = false;
 
-  return getRequestWithAuthHeader(req, authService, appService, router, serverUrl)
+  let modifiedReq = req;
+
+  if (!req.headers.has('Authorization')) {
+    const token = authService.getToken();
+    if (token) {
+      const headers = new HttpHeaders({ Authorization: `Bearer ${token}` });
+      modifiedReq = req.clone({ headers });
+    }
+  }
+
+  return next(modifiedReq)
     .pipe(
-      switchMap(modifiedReq => next(modifiedReq)
-        .pipe(
-          tap({
-            error: error => {
-              httpErrorInfo = new AppHttpError(error);
-              const suppressBackendLoginAuthDataError = shouldSuppressBackendLoginAuthDataError(req, error, appService);
-              suppressGlobalErrorMessage = req.context.get(SUPPRESS_GLOBAL_HTTP_ERROR) ||
-                suppressBackendLoginAuthDataError;
+      catchError((error: HttpErrorResponse) => {
+        httpErrorInfo = new AppHttpError(error);
+        return throwError(() => error);
+      }),
+      tap({
+        error: error => {
+          httpErrorInfo = new AppHttpError(error);
+          const suppressBackendLoginAuthDataError = shouldSuppressBackendLoginAuthDataError(req, error, appService);
+          suppressGlobalErrorMessage = req.context.get(SUPPRESS_GLOBAL_HTTP_ERROR) ||
+            suppressBackendLoginAuthDataError;
 
               if (suppressBackendLoginAuthDataError) {
                 return;
               }
 
-              if (
-                (error.status === 401 || error.status === 403) &&
-                !req.context.get(SUPPRESS_AUTH_ERROR_REDIRECT)
-              ) {
-                suppressGlobalErrorMessage = true;
-                const errorMessage = error.error?.message || error.message || '';
+          if (error.status === 500 || error.status === 999) {
+            appService.setBackendUnavailable(true);
+            snackBar.open(
+              'Backend ist nicht verfügbar. Bitte versuchen Sie es später erneut.',
+              'Schließen',
+              {
+                duration: 0,
+                panelClass: ['error-snackbar']
+              }
+            );
+          } else if (error.status === 401 || error.status === 403) {
+            suppressGlobalErrorMessage = true;
+            const errorMessage = error.error?.message || error.message || '';
 
                 if (errorMessage.includes('Access level')) {
                   snackBar.open(
@@ -86,15 +99,19 @@ export const authInterceptor: HttpInterceptorFn = (
                 }
               }
             }
-          }),
-          finalize(() => {
-            if (httpErrorInfo && !suppressGlobalErrorMessage) {
-              httpErrorInfo.method = req.method;
-              httpErrorInfo.urlWithParams = req.urlWithParams;
-              appService.addErrorMessage(httpErrorInfo);
-            }
-          })
-        ))
+          }
+          if (!httpErrorInfo) {
+            httpErrorInfo = new AppHttpError(error);
+          }
+        }
+      }),
+      finalize(() => {
+        if (httpErrorInfo && !suppressGlobalErrorMessage) {
+          httpErrorInfo.method = req.method;
+          httpErrorInfo.urlWithParams = req.urlWithParams;
+          appService.addErrorMessage(httpErrorInfo);
+        }
+      })
     );
 };
 

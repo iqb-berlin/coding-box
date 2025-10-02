@@ -330,7 +330,6 @@ export class UsersService {
       });
 
       this.logger.log(`Workspaces successfully set for user with ID: ${userId}`);
-      // Return true if at least one entry was saved
       return savedEntries.length > 0;
     } catch (error) {
       if (error instanceof BadRequestException) {

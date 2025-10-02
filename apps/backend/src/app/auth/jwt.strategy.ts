@@ -2,85 +2,25 @@ import { ExtractJwt, Strategy } from 'passport-jwt';
 import { PassportStrategy } from '@nestjs/passport';
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { KeycloakJwksService } from './keycloak-jwks.service';
-import { UsersService } from '../database/services/users';
-import {
-  ALLOW_LEGACY_WORKSPACE_REPLAY_TOKENS_ENV,
-  WORKSPACE_API_TOKEN_TYPE,
-  WORKSPACE_TOKEN_SCOPE_REPLAY_READ,
-  WorkspaceTokenScope
-} from './workspace-token';
-
-type JwtSubject = string | number | {
-  identity?: string;
-};
-
-type JwtPayload = {
-  userId?: string | number;
-  sub?: JwtSubject;
-  username?: string;
-  workspace?: string | number;
-  tokenType?: string;
-  scopes?: unknown;
-  iss?: string;
-  aud?: string | string[];
-  azp?: string;
-  preferred_username?: string;
-  email?: string;
-  given_name?: string;
-  family_name?: string;
-  realm_access?: {
-    roles?: string[];
-  };
-  resource_access?: Record<string, {
-    roles?: string[];
-  }>;
-};
-
-type JwtHeader = {
-  alg?: string;
-  kid?: string;
-};
-
-const ADMIN_ROLES = ['admin', 'system-admin', 'sys-admin', 'administrator'];
+import { passportJwtSecret } from 'jwks-rsa';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
-  private readonly expectedIssuer?: string;
-  private readonly keycloakClientId?: string;
-  private readonly allowLegacyWorkspaceReplayTokens: boolean;
-
-  constructor(
-    configService: ConfigService,
-    keycloakJwksService: KeycloakJwksService,
-    private readonly usersService: UsersService
-  ) {
-    const jwtSecret = configService.get<string>('JWT_SECRET');
-    const expectedIssuer = resolveExpectedIssuer(configService);
-    const keycloakClientId = configService.get<string>('KEYCLOAK_CLIENT_ID')?.trim();
+  constructor(configService: ConfigService) {
+    const keycloakUrl = configService.get('KEYCLOAK_URL');
+    const keycloakRealm = configService.get('KEYCLOAK_REALM');
 
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      algorithms: ['RS256', 'HS256'],
-      secretOrKeyProvider: async (_request, token, done) => {
-        try {
-          const header = decodeJwtPart<JwtHeader>(token, 0);
-          if (header.alg === 'RS256') {
-            done(null, await keycloakJwksService.getSigningKey(header.kid));
-            return;
-          }
-
-          if (header.alg === 'HS256' && jwtSecret) {
-            done(null, jwtSecret);
-            return;
-          }
-
-          done(new UnauthorizedException('Unsupported JWT signing algorithm'));
-        } catch (error) {
-          done(error);
-        }
-      }
+      secretOrKeyProvider: passportJwtSecret({
+        cache: true,
+        rateLimit: true,
+        jwksRequestsPerMinute: 5,
+        jwksUri: `${keycloakUrl}realms/${keycloakRealm}/protocol/openid-connect/certs`
+      }),
+      issuer: `${keycloakUrl}realms/${keycloakRealm}`,
+      algorithms: ['RS256']
     });
 
     this.expectedIssuer = expectedIssuer;
@@ -89,7 +29,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(
-    payload: JwtPayload
+    payload: { sub: string, preferred_username: string, given_name?: string, family_name?: string, email?: string, realm_access?: { roles: string[] } }
   ) {
     if (this.isKeycloakPayload(payload)) {
       return this.validateKeycloakPayload(payload);
@@ -100,13 +40,14 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     }
 
     return {
-      userId: payload.userId,
-      id: payload.userId,
-      name: payload.username,
-      workspace: payload.workspace || '',
-      identity: this.getIdentity(payload.sub),
-      tokenType: WORKSPACE_API_TOKEN_TYPE,
-      scopes: this.getWorkspaceTokenScopes(payload.scopes)
+      userId: payload.sub,
+      id: payload.sub,
+      name: payload.preferred_username,
+      firstName: payload.given_name,
+      lastName: payload.family_name,
+      email: payload.email,
+      isAdmin: payload.realm_access?.roles?.includes('admin') || false,
+      sub: payload.sub
     };
   }
 
