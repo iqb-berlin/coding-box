@@ -11,7 +11,7 @@ window.RUNTIME_CONFIG = {
     realm: "${KEYCLOAK_REALM:-coding-box}",
     clientId: "${KEYCLOAK_CLIENT_ID:-coding-box}"
   },
-  backendUrl: "${BACKEND_URL:-api/}"
+  backendUrl: "${BACKEND_URL:-api}"
 };
 EOF
 
