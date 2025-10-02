@@ -1,28 +1,26 @@
-import {
-  ActivatedRouteSnapshot, RouterStateSnapshot, CanActivateFn, UrlTree
-} from '@angular/router';
-import { createAuthGuard, AuthGuardData } from 'keycloak-angular';
 import { inject } from '@angular/core';
+import { CanActivateFn, Router } from '@angular/router';
 import { AuthService } from '../services/auth.service';
 
-const isAdminAccessAllowed = async (
-  route: ActivatedRouteSnapshot,
-  state: RouterStateSnapshot,
-  authData: AuthGuardData
-): Promise<boolean | UrlTree> => {
-  const { authenticated } = authData;
-  if (!authenticated) {
+export const canActivateAdmin: CanActivateFn = () => {
+  const authService = inject(AuthService);
+  const router = inject(Router);
+
+  if (!authService.isLoggedIn()) {
+    authService.login();
     return false;
   }
 
-  const authService = inject(AuthService);
   const userRoles = authService.getRoles();
-
   const adminRoles = ['admin', 'system-admin', 'sys-admin', 'administrator'];
-  const hasAdminRole = userRoles.some((role : string) => adminRoles.includes(role.toLowerCase())
+  const hasAdminRole = userRoles.some((role: string) => adminRoles.includes(role.toLowerCase())
   );
 
-  return hasAdminRole;
-};
+  if (!hasAdminRole) {
+    // Redirect to unauthorized page or home
+    router.navigate(['/']);
+    return false;
+  }
 
-export const canActivateAdmin = createAuthGuard<CanActivateFn>(isAdminAccessAllowed);
+  return true;
+};

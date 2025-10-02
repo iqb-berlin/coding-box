@@ -11,13 +11,6 @@ import {
 } from '@angular/common/http';
 import { TranslateHttpLoader } from '@ngx-translate/http-loader';
 import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
-import {
-  AutoRefreshTokenService, createInterceptorCondition,
-  INCLUDE_BEARER_TOKEN_INTERCEPTOR_CONFIG, IncludeBearerTokenCondition,
-  provideKeycloak,
-  UserActivityService,
-  withAutoRefreshToken
-} from 'keycloak-angular';
 import { HashLocationStrategy, LocationStrategy } from '@angular/common';
 import { routes } from './app.routes';
 import { environment } from '../environments/environment';
@@ -28,35 +21,6 @@ import { SERVER_URL } from './injection-tokens';
 export function createTranslateLoader(http: HttpClient): TranslateHttpLoader {
   return new TranslateHttpLoader(http, './assets/i18n/', '.json');
 }
-
-const allUrlsCondition = createInterceptorCondition<IncludeBearerTokenCondition>({
-  urlPattern: /^(https?:\/\/.*)(\/.*)?$/i // Match all URLs starting with http or https
-});
-
-export const provideKeycloakAngular = () => provideKeycloak({
-  config: {
-    url: environment.keycloak.url,
-    realm: environment.keycloak.realm,
-    clientId: environment.keycloak.clientId
-  },
-  initOptions: {
-    onLoad: 'check-sso',
-    checkLoginIframe: false
-  },
-  features: [
-    withAutoRefreshToken({
-      onInactivityTimeout: 'logout',
-      sessionTimeout: 300000
-    })
-  ],
-
-  providers: [
-    {
-      provide: INCLUDE_BEARER_TOKEN_INTERCEPTOR_CONFIG,
-      useValue: allUrlsCondition
-    },
-    AutoRefreshTokenService, UserActivityService]
-});
 
 export const appConfig: ApplicationConfig = {
   providers: [
@@ -71,7 +35,6 @@ export const appConfig: ApplicationConfig = {
         deps: [HttpClient]
       }
     })),
-    provideKeycloakAngular(),
     provideRouter(routes),
     provideAnimationsAsync(),
     {

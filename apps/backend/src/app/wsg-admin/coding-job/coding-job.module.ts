@@ -10,6 +10,7 @@ import { VariableBundle } from '../../database/entities/variable-bundle.entity';
 import { ResponseEntity } from '../../database/entities/response.entity';
 import { Unit } from '../../database/entities/unit.entity';
 import { AuthModule } from '../../auth/auth.module';
+import { DatabaseModule } from '../../database/database.module';
 
 @Module({
   imports: [
@@ -22,7 +23,8 @@ import { AuthModule } from '../../auth/auth.module';
       ResponseEntity,
       Unit
     ]),
-    AuthModule
+    AuthModule,
+    DatabaseModule
   ],
   controllers: [WsgCodingJobController],
   providers: [CodingJobService],

@@ -120,7 +120,7 @@ export class UsersService {
 
   async setUserWorkspaces(userId: number, workspaceIds: number[]): Promise<boolean> {
     this.logger.log(`Setting workspaces for user with ID: ${userId}`);
-    const entries = workspaceIds.map(workspaceId => ({ userId, workspaceId }));
+    const entries = workspaceIds.map(workspaceId => ({ userId, workspaceId, accessLevel: 3 }));
     try {
       const hasRights = await this.workspaceUserRepository.findOne({ where: { userId } });
       if (hasRights) {
@@ -130,7 +130,6 @@ export class UsersService {
       const savedEntries = await this.workspaceUserRepository.save(entries);
 
       this.logger.log(`Workspaces successfully set for user with ID: ${userId}`);
-      // Return true if at least one entry was saved
       return savedEntries.length > 0;
     } catch (error) {
       this.logger.error(

@@ -1,6 +1,6 @@
 import {
   Body,
-  Controller, Get, Post, Query, UseGuards
+  Controller, Get, Post, Req, UseGuards
 } from '@nestjs/common';
 
 import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
@@ -23,8 +23,14 @@ export class AppController {
   @UseGuards(JwtAuthGuard)
   @ApiOkResponse({ description: 'User auth data successfully retrieved.' })
   @ApiTags('auth')
-  async findCanDos(@Query('identity')identity:string): Promise<AuthDataDto> {
+  async findCanDos(@Req() req): Promise<AuthDataDto> {
+    const identity = req.user.sub || req.user.userId;
     const user = await this.usersService.findUserByIdentity(identity);
+
+    if (!user) {
+      throw new Error(`User with identity ${identity} not found`);
+    }
+
     const workspaces = await this.workspaceUsersService.findAllUserWorkspaces(identity);
     return <AuthDataDto><unknown>{
       userId: user.id,

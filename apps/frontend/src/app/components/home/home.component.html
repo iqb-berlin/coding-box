@@ -11,8 +11,7 @@
     [appName]="'IQB-Kodierbox'"
     [appVersion]="'1.0.0'"
     [userName]="authData.userName"
-    [userLongName]="appService.userProfile.firstName + ' ' + appService.userProfile.lastName"
     [isUserLoggedIn]="Number(authData.userId) > 0"
-    [isAdmin]="authData.isAdmin">
+    [isAdmin]="authData.isAdmin" [userLongName]="">
   </coding-box-app-info>
 </div>
