@@ -7,6 +7,20 @@ import { CacheModule } from '../../cache/cache.module';
 
 @Module({
   imports: [
+    TypeOrmModule.forFeature([
+      CodingJob,
+      CodingJobCoder,
+      CodingJobVariable,
+      CodingJobVariableBundle,
+      CodingJobUnit,
+      JobDefinition,
+      VariableBundle,
+      ResponseEntity,
+      Unit,
+      FileUpload,
+      Setting
+    ]),
+    AuthModule,
     AuthModule,
     CodingModule,
     WorkspaceModule,
