@@ -12,10 +12,7 @@ import { MatButton } from '@angular/material/button';
 import { LocationStrategy, Location } from '@angular/common';
 import { filter, firstValueFrom, Subscription } from 'rxjs';
 import { UserProfile, AuthService } from './core/services/auth.service';
-
-import { AppService } from './services/app.service';
 import { LocationStrategy } from '@angular/common';
-import { KeycloakProfile } from 'keycloak-js';
 import { Subscription, filter } from 'rxjs';
 import { AppService } from './core/services/app.service';
 import { AuthService } from './core/services/auth.service';
@@ -83,7 +80,7 @@ export class AppComponent implements OnInit, OnDestroy {
     this.routerSubscription?.unsubscribe();
   }
 
-  async backendLogin(): Promise<void> {
+  async backendLogin(user: CreateUserDto): Promise<void> {
     this.errorMessage = '';
     this.appService.errorMessagesDisabled = true;
     if (this.authService.isLoggedIn()) {
