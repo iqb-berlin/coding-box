@@ -32,6 +32,8 @@ import { Session } from './entities/session.entity';
 import { UnitTag } from './entities/unitTag.entity';
 import { UnitNote } from './entities/unitNote.entity';
 import { PersonService } from './services/person.service';
+import { AuthService } from '../auth/service/auth.service';
+import { OAuth2ClientCredentialsService } from '../auth/service/oauth2-client-credentials.service';
 import { UnitTagService } from './services/unit-tag.service';
 import { UnitNoteService } from './services/unit-note.service';
 import { ResourcePackageService } from './services/resource-package.service';
@@ -158,6 +160,8 @@ import { CodingExportService } from './services/coding-export.service';
     TestcenterService,
     UploadResultsService,
     PersonService,
+    AuthService,
+    OAuth2ClientCredentialsService,
     JwtService,
     UnitTagService,
     UnitNoteService,
