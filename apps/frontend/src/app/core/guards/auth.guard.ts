@@ -1,35 +1,16 @@
-import {
-  ActivatedRouteSnapshot, RouterStateSnapshot, CanActivateFn, UrlTree
-} from '@angular/router';
 import { inject } from '@angular/core';
-import { filter, firstValueFrom, timeout } from 'rxjs';
-import { createAuthGuard, AuthGuardData } from 'keycloak-angular';
-import { AppService } from '../services/app.service';
+import { CanActivateFn } from '@angular/router';
+import { AuthService } from '../services/auth.service';
 
-const isAccessAllowed = async (
-  route: ActivatedRouteSnapshot,
-  _: RouterStateSnapshot,
-  authData: AuthGuardData
-): Promise<boolean | UrlTree> => {
-  const { authenticated } = authData;
+export const canActivateAuth: CanActivateFn = () => {
+  const authService = inject(AuthService);
 
-  if (!authenticated) {
-    return false;
-  }
-
-  const appService = inject(AppService);
-
-  try {
-    await firstValueFrom(
-      appService.authData$.pipe(
-        filter(data => data.userId > 0),
-        timeout(5000)
-      )
-    );
+  // If user is logged in with valid token, allow access
+  if (authService.isLoggedIn()) {
     return true;
-  } catch (error) {
-    return false;
   }
-};
 
-export const canActivateAuth = createAuthGuard<CanActivateFn>(isAccessAllowed);
+  // No valid token, redirect to login
+  authService.login();
+  return false;
+};
