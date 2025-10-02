@@ -107,6 +107,13 @@ export class BackendService {
   private workspaceFacade = inject(WorkspaceFacadeService);
   private validationFacade = inject(ValidationFacadeService);
 
+  getAuthData(): Observable<import('../../../../../api-dto/auth-data-dto').AuthDataDto> {
+    return this.http.get<import('../../../../../api-dto/auth-data-dto').AuthDataDto>(
+      `${this.serverUrl}auth-data`,
+    { headers: this.authHeader }
+    );
+  }
+
   getDirectDownloadLink(): string {
     return this.workspaceFacade.getDirectDownloadLink();
   }
