@@ -1,15 +1,36 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { UsersService } from '../../database/services/users';
+import { ConfigService } from '@nestjs/config';
+import { UsersService } from '../../database/services/users.service';
 import { CreateUserDto } from '../../../../../../api-dto/user/create-user-dto';
+import { OAuth2ClientCredentialsService } from './oauth2-client-credentials.service';
 
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
   constructor(
     private usersService: UsersService,
-    private jwtService: JwtService
+    private jwtService: JwtService,
+    private configService: ConfigService,
+    private oauth2ClientCredentialsService: OAuth2ClientCredentialsService
   ) {
+  }
+
+  async storeKeycloakUser(user: CreateUserDto) {
+    const {
+      username, lastName, firstName, email, identity, issuer, isAdmin
+    } = user;
+    const userId = await this.usersService.createKeycloakUser({
+      identity: identity,
+      username: username,
+      email: email,
+      lastName: lastName,
+      firstName: firstName,
+      issuer: issuer,
+      isAdmin: isAdmin
+    });
+    this.logger.log(`Keycloak User with id '${userId}' stored in database.`);
+    return userId;
   }
 
   async keycloakLogin(user: CreateUserDto) {
