@@ -11,7 +11,7 @@ import {
   throwError,
   timer
 } from 'rxjs';
-import { KeycloakProfile, KeycloakTokenParsed } from 'keycloak-js';
+import { DecodedToken } from './auth.service';
 import { AppLogoDto } from '../../../../../../api-dto/app-logo-dto';
 import { AuthDataDto } from '../../../../../../api-dto/auth-data-dto';
 import {
@@ -57,15 +57,15 @@ export class AppService {
     workspaces: []
   };
 
-  keycloakIdentity?: string;
-  userProfile: KeycloakProfile = {};
-  isLoggedInKeycloak = false;
+  user?: CreateUserDto;
+  userProfile: Partial<CreateUserDto> = {};
+  isLoggedIn = false;
   errorMessagesDisabled = false;
   selectedWorkspaceId = 0;
   dataLoading: boolean | number = false;
   appLogo: AppLogoDto = standardLogo;
   postMessage$ = new Subject<MessageEvent>();
-  loggedUser: KeycloakTokenParsed | undefined;
+  loggedUser: DecodedToken | undefined;
   errorMessages: AppHttpError[] = [];
   errorMessageCounter = 0;
   backendUnavailable = false;
@@ -74,77 +74,54 @@ export class AppService {
   reAuthenticationReturnUrl?: string;
   private explicitLogoutInProgress = false;
   private authBootstrapStatusSubject = new BehaviorSubject<AuthBootstrapStatus>('checking');
+  private authDataSubject = new BehaviorSubject<AuthDataDto>(AppService.defaultAuthData);
 
   constructor() {
     this.loadLogoSettings();
   }
 
-  createOwnToken(
-    workspace_id: number,
-    duration: number,
-    scopes: WorkspaceTokenScope[]
-  ): Observable<string> {
+  createOwnToken(workspaceId: number, duration: number): Observable<string> {
     return this.http.get<string>(
-      `${this.serverUrl}admin/workspace/${workspace_id}/token/${duration}`,
-      { params: this.createTokenScopeParams(scopes) }
+      `${this.serverUrl}admin/workspace/${workspaceId}/token/${duration}`
     );
   }
 
-  createTokenForIdentity(
-    workspace_id: number,
-    identity: string,
-    duration: number,
-    scopes: WorkspaceTokenScope[]
-  ): Observable<string> {
+  createTokenForIdentity(workspaceId: number, identity: string, duration: number): Observable<string> {
     const encodedIdentity = encodeURIComponent(identity);
     return this.http.get<string>(
-      `${this.serverUrl}admin/workspace/${workspace_id}/${encodedIdentity}/token/${duration}`,
-      { params: this.createTokenScopeParams(scopes) }
+      `${this.serverUrl}admin/workspace/${workspaceId}/${encodedIdentity}/token/${duration}`
     );
   }
 
-  getWorkspaceTokenPolicy(): Observable<WorkspaceTokenPolicy> {
-    return this.http.get<WorkspaceTokenPolicy>(
-      `${this.serverUrl}admin/workspace/token-policy`
-    );
-  }
-
-  loadAuthenticatedUser(identity: string): Observable<boolean> {
-    this.setAuthBootstrapStatus('backend-login-running');
-    this.keycloakIdentity = identity;
-
-    return this.getAuthDataWithRetry(identity)
-      .pipe(
-        map(authData => {
-          this.updateAuthData(authData);
-          return true;
-        }),
-        catchError(() => of(false)),
-        map(success => {
-          if (success) {
-            this.completeBackendLogin();
-          } else {
-            this.markAuthDataFailed();
-          }
-          return success;
-        })
-      );
-  }
-
-  getAuthData(id: string): Observable<AuthDataDto> {
+  getAuthData(identity: string): Observable<AuthDataDto> {
     return this.http.get<AuthDataDto>(
-      this.createAuthDataUrl(id)
+      `${this.serverUrl}auth-data?identity=${encodeURIComponent(identity)}`
     );
   }
 
   retryAuthDataLoad(): Observable<boolean> {
-    const identity = this.loggedUser?.sub || this.keycloakIdentity || '';
-    if (!identity) {
+    const identity = this.loggedUser?.sub || '';
+    if (!identity || !this.hasStoredAuthToken()) {
       this.markAuthDataFailed();
       return of(false);
     }
 
+    return this.loadAuthData(identity);
+  }
+
+  refreshAuthData(): void {
+    const identity = this.loggedUser?.sub;
+    if (!identity) {
+      this.markAuthDataFailed();
+      return;
+    }
+
+    this.loadAuthData(identity).subscribe();
+  }
+
+  private loadAuthData(identity: string): Observable<boolean> {
     this.setAuthBootstrapStatus('backend-login-running');
+
     return this.getAuthDataWithRetry(identity)
       .pipe(
         map(authData => {
@@ -159,27 +136,10 @@ export class AppService {
       );
   }
 
-  refreshAuthData(): void {
-    if (this.authBootstrapStatus !== 'ready') {
-      return;
-    }
-
-    if (this.loggedUser?.sub) {
-      this.getAuthDataWithRetry(this.loggedUser.sub).subscribe({
-        next: authData => {
-          this.updateAuthData(authData);
-        },
-        error: () => {
-          this.markAuthDataFailed();
-        }
-      });
-    }
-  }
-
-  private getAuthDataWithRetry(id: string): Observable<AuthDataDto> {
+  private getAuthDataWithRetry(identity: string): Observable<AuthDataDto> {
     return this.withAuthBootstrapRetry(
       this.http.get<AuthDataDto>(
-        this.createAuthDataUrl(id),
+        `${this.serverUrl}auth-data?identity=${encodeURIComponent(identity)}`,
         { context: suppressGlobalHttpErrorContext() }
       )
     );
@@ -215,8 +175,6 @@ export class AppService {
       }
     });
   }
-
-  private authDataSubject = new BehaviorSubject<AuthDataDto>(AppService.defaultAuthData);
 
   get authData$() {
     return this.authDataSubject.asObservable();
@@ -295,7 +253,7 @@ export class AppService {
   }
 
   hasStoredAuthToken(): boolean {
-    return !!(this.loggedUser?.sub || this.keycloakIdentity || this.isLoggedInKeycloak);
+    return !!localStorage.getItem('auth_token');
   }
 
   isBackendLoginRunning(): boolean {
@@ -329,10 +287,10 @@ export class AppService {
     return returnUrl;
   }
 
-  createLoginRedirectUri(returnUrl?: string): string | undefined {
+  createLoginRedirectUri(returnUrl?: string): string {
     const normalizedReturnUrl = this.normalizeInternalRoute(returnUrl);
     if (!normalizedReturnUrl) {
-      return undefined;
+      return `${window.location.origin}${window.location.pathname}${window.location.search}`;
     }
 
     return `${window.location.origin}${window.location.pathname}${window.location.search}#${normalizedReturnUrl}`;
@@ -349,10 +307,12 @@ export class AppService {
   }
 
   clearAuthState(options: { clearReAuthentication?: boolean; clearReturnUrl?: boolean } = {}): void {
+    localStorage.removeItem('auth_token');
     localStorage.removeItem('id_token');
-    this.keycloakIdentity = undefined;
+    localStorage.removeItem('refresh_token');
+    this.user = undefined;
     this.userProfile = {};
-    this.isLoggedInKeycloak = false;
+    this.isLoggedIn = false;
     this.loggedUser = undefined;
     this.updateAuthData(AppService.defaultAuthData);
 

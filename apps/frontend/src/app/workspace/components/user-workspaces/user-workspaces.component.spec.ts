@@ -5,17 +5,6 @@ import { UserWorkspacesComponent } from './user-workspaces.component';
 import { AuthService } from '../../../core/services/auth.service';
 import { AppService } from '../../../core/services/app.service';
 
-const mockKeycloak = {
-  idTokenParsed: { sub: 'test-user-id', preferred_username: 'test-user' },
-  token: 'mock-token',
-  authenticated: true,
-  loadUserProfile: jest.fn().mockResolvedValue({ username: 'test-user' }),
-  login: jest.fn(),
-  logout: jest.fn(),
-  accountManagement: jest.fn(),
-  realmAccess: { roles: ['user'] }
-};
-
 const mockAuthService = {
   isLoggedIn: jest.fn().mockReturnValue(true),
   login: jest.fn()
@@ -30,6 +19,7 @@ const mockAppService = {
 describe('UserWorkspacesComponent', () => {
   let component: UserWorkspacesComponent;
   let fixture: ComponentFixture<UserWorkspacesComponent>;
+
   beforeEach(async () => {
     jest.clearAllMocks();
     mockAuthService.isLoggedIn.mockReturnValue(true);
@@ -39,8 +29,7 @@ describe('UserWorkspacesComponent', () => {
     await TestBed.configureTestingModule({
       providers: [
         { provide: AuthService, useValue: mockAuthService },
-        { provide: AppService, useValue: mockAppService },
-        { provide: 'Keycloak', useValue: mockKeycloak }
+        { provide: AppService, useValue: mockAppService }
       ],
       imports: [TranslateModule.forRoot()]
     }).compileComponents();
@@ -104,7 +93,7 @@ describe('UserWorkspacesComponent', () => {
     expect(mockAuthService.login).toHaveBeenCalledWith('/coding');
   });
 
-  it('should show reauthentication instead of loading when the session expires while Keycloak is still authenticated', () => {
+  it('should show reauthentication instead of loading when the session expires while authenticated', () => {
     component.authBootstrapStatus = 'session-expired';
     component.authDataLoaded = false;
 
