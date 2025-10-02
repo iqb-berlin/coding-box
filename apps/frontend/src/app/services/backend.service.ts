@@ -138,6 +138,13 @@ export class BackendService {
 
   authHeader = { Authorization: `Bearer ${localStorage.getItem('id_token')}` };
 
+  getAuthData(): Observable<import('../../../../../api-dto/auth-data-dto').AuthDataDto> {
+    return this.http.get<import('../../../../../api-dto/auth-data-dto').AuthDataDto>(
+      `${this.serverUrl}auth-data`,
+    { headers: this.authHeader }
+    );
+  }
+
   getDirectDownloadLink(): string {
     return this.fileService.getDirectDownloadLink();
   }
