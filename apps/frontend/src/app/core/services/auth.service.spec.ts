@@ -13,10 +13,7 @@ describe('AuthService', () => {
       ],
       providers: [
         provideHttpClient(),
-        {
-          provide: AuthService,
-          useValue: true
-        }
+        AuthService
       ]
     });
     service = TestBed.inject(AuthService);
