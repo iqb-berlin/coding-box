@@ -390,7 +390,13 @@ export class TestCenterImportComponent {
             booklets: 0,
             units: 0,
             persons: 0,
-            importedGroups: selectedGroupNames
+            importedGroups: selectedGroupNames,
+            filesPlayer: 0,
+            filesUnits: 0,
+            filesDefinitions: 0,
+            filesCodings: 0,
+            filesBooklets: 0,
+            filesTestTakers: 0
           };
           this.isUploadingTestFiles = false;
           this.isUploadingTestResults = false;
