@@ -27,7 +27,13 @@ export type Result = {
   booklets: number,
   units: number,
   persons: number,
-  importedGroups: string[]
+  importedGroups: string[],
+  filesPlayer?: number,
+  filesUnits?: number,
+  filesDefinitions?: number,
+  filesCodings?: number,
+  filesBooklets?: number,
+  filesTestTakers?: number
 };
 
 @Injectable({
@@ -81,7 +87,13 @@ export class ImportService {
           booklets: 0,
           units: 0,
           persons: 0,
-          importedGroups: []
+          importedGroups: [],
+          filesPlayer: 0,
+          filesUnits: 0,
+          filesDefinitions: 0,
+          filesCodings: 0,
+          filesBooklets: 0,
+          filesTestTakers: 0
         }))
       );
   }

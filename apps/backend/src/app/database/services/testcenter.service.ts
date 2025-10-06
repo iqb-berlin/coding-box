@@ -43,7 +43,13 @@ export type Result = {
   booklets: number,
   units: number,
   persons: number,
-  importedGroups: string
+  importedGroups: string,
+  filesPlayer?: number,
+  filesUnits?: number,
+  filesDefinitions?: number,
+  filesCodings?: number,
+  filesBooklets?: number,
+  filesTestTakers?: number
 };
 
 @Injectable()
@@ -228,7 +234,7 @@ export class TestcenterService {
     url: string,
     authToken: string,
     importOptions: ImportOptions
-  ): Promise<{ success: boolean, testFiles: number }> {
+  ): Promise<{ success: boolean, testFiles: number, filesPlayer: number, filesUnits: number, filesDefinitions: number, filesCodings: number, filesBooklets: number, filesTestTakers: number }> {
     const headersRequest = this.createHeaders(authToken);
     const filesEndpoint = url ?
       `${url}/api/workspace/${tc_workspace}/files` :
@@ -240,7 +246,30 @@ export class TestcenterService {
         headers: headersRequest
       });
 
-      const filePromises = this.createFilePromises(files, importOptions);
+      const {
+        units,
+        definitions,
+        player,
+        codings,
+        testTakers,
+        booklets
+      } = importOptions;
+
+      const playerArr: File[] = player === 'true' ? files.Resource.filter(f => f.name.includes('.html')) : [];
+      const unitsArr: File[] = units === 'true' ? files.Unit : [];
+      const definitionsArr: File[] = definitions === 'true' ? files.Resource.filter(f => f.name.includes('.voud')) : [];
+      const codingsArr: File[] = codings === 'true' ? files.Resource.filter(f => f.name.includes('.vocs')) : [];
+      const bookletsArr: File[] = booklets === 'true' ? files.Booklet as unknown as File[] : [];
+      const testTakersArr: File[] = testTakers === 'true' ? files.Testtakers as unknown as File[] : [];
+
+      const filePromises: Promise<File>[] = [
+        ...playerArr.map(file => Promise.resolve(file)),
+        ...unitsArr.map(file => Promise.resolve(file)),
+        ...definitionsArr.map(file => Promise.resolve(file)),
+        ...codingsArr.map(file => Promise.resolve(file)),
+        ...bookletsArr.map(file => Promise.resolve(file)),
+        ...testTakersArr.map(file => Promise.resolve(file))
+      ];
 
       const fetchedFiles = await Promise.all(filePromises.map(async filePromise => {
         const file = await filePromise;
@@ -252,45 +281,27 @@ export class TestcenterService {
       await this.workspaceFilesService.testCenterImport(dbEntries);
       return {
         success: fetchedFiles.length > 0,
-        testFiles: fetchedFiles.length
+        testFiles: fetchedFiles.length,
+        filesPlayer: playerArr.length,
+        filesUnits: unitsArr.length,
+        filesDefinitions: definitionsArr.length,
+        filesCodings: codingsArr.length,
+        filesBooklets: bookletsArr.length,
+        filesTestTakers: testTakersArr.length
       };
     } catch (error) {
       logger.error('Error fetching files:');
-      return { success: false, testFiles: 0 };
+      return {
+        success: false,
+        testFiles: 0,
+        filesPlayer: 0,
+        filesUnits: 0,
+        filesDefinitions: 0,
+        filesCodings: 0,
+        filesBooklets: 0,
+        filesTestTakers: 0
+      };
     }
-  }
-
-  private createFilePromises(files: ServerFilesResponse, importOptions: ImportOptions): Promise<File>[] {
-    const {
-      units,
-      definitions,
-      player,
-      codings,
-      testTakers,
-      booklets
-    } = importOptions;
-    const filePromises: Promise<File>[] = [];
-
-    if (player === 'true') {
-      filePromises.push(...files.Resource.filter(f => f.name.includes('.html')).map(file => Promise.resolve(file)));
-    }
-    if (units === 'true') {
-      filePromises.push(...files.Unit.map(file => Promise.resolve(file)));
-    }
-    if (definitions === 'true') {
-      filePromises.push(...files.Resource.filter(f => f.name.includes('.voud')).map(file => Promise.resolve(file)));
-    }
-    if (codings === 'true') {
-      filePromises.push(...files.Resource.filter(f => f.name.includes('.vocs')).map(file => Promise.resolve(file)));
-    }
-    if (booklets === 'true') {
-      filePromises.push(...files.Booklet.map(file => Promise.resolve(file)));
-    }
-    if (testTakers === 'true') {
-      filePromises.push(...files.Testtakers.map(file => Promise.resolve(file)));
-    }
-
-    return filePromises;
   }
 
   private createDatabaseEntries(
@@ -370,6 +381,12 @@ export class TestcenterService {
         );
         result.testFiles = filesResult.testFiles;
         result.success = filesResult.success;
+        result.filesPlayer = filesResult.filesPlayer;
+        result.filesUnits = filesResult.filesUnits;
+        result.filesDefinitions = filesResult.filesDefinitions;
+        result.filesCodings = filesResult.filesCodings;
+        result.filesBooklets = filesResult.filesBooklets;
+        result.filesTestTakers = filesResult.filesTestTakers;
       }
 
       await Promise.all(promises);
