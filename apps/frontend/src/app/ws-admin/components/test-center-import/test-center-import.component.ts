@@ -111,7 +111,7 @@ export class TestCenterImportComponent {
   authenticated: boolean = false;
   isUploadingTestFiles: boolean = false;
   isUploadingTestResults: boolean = false;
-  uploadData!: Result;
+  uploadData: Result | null = null;
   testCenterInstance: Testcenter[] = [];
   showTestGroups: boolean = false;
   constructor() {
@@ -239,7 +239,7 @@ export class TestCenterImportComponent {
   }
 
   startNewImport(): void {
-    this.uploadData = {} as Result;
+    this.uploadData = null;
     this.showTestGroups = false;
     this.selectedRows = [];
 
@@ -249,7 +249,7 @@ export class TestCenterImportComponent {
   }
 
   goBackToTestGroups(): void {
-    this.uploadData = {} as Result;
+    this.uploadData = null;
     this.selectedRows = [];
     this.showTestGroups = true;
   }
@@ -326,7 +326,7 @@ export class TestCenterImportComponent {
       }
     };
 
-    this.uploadData = {} as Result;
+    this.uploadData = null;
     this.isUploadingTestFiles = true;
     this.isUploadingTestResults = this.data.importType === 'testResults';
     const selectedGroupNames = this.selectedRows.map(group => group.groupName);
