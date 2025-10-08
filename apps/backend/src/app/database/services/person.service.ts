@@ -174,18 +174,19 @@ export class PersonService {
     const personMap = new Map<string, Person>();
     rows.forEach((row, index) => {
       try {
-        if (!row.groupname || !row.loginname || !row.code) {
-          this.logger.warn(`Skipping incomplete row at index ${index}: ${JSON.stringify(row)}`);
-          return;
-        }
+        // Allow empty values for groupname, loginname, and code
+        // Use empty string as fallback for missing values
+        const groupname = row.groupname || '';
+        const loginname = row.loginname || '';
+        const code = row.code || '';
 
-        const mapKey = `${row.groupname}-${row.loginname}-${row.code}`;
+        const mapKey = `${groupname}-${loginname}-${code}`;
         if (!personMap.has(mapKey)) {
           personMap.set(mapKey, {
             workspace_id,
-            group: row.groupname,
-            login: row.loginname,
-            code: row.code,
+            group: groupname,
+            login: loginname,
+            code: code,
             booklets: []
           });
         }
