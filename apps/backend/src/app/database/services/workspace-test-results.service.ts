@@ -705,6 +705,7 @@ export class WorkspaceTestResultsService {
       const booklet = await manager
         .createQueryBuilder(Booklet, 'booklet')
         .leftJoinAndSelect('booklet.person', 'person')
+        .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
         .where('booklet.id = :bookletId', { bookletId })
         .andWhere('person.workspace_id = :workspaceId', { workspaceId })
         .getOne();
@@ -734,6 +735,7 @@ export class WorkspaceTestResultsService {
           bookletId,
           {
             bookletId,
+            bookletName: booklet.bookletinfo?.name || 'Unknown',
             personId: booklet.personid,
             personLogin: booklet.person?.login || 'Unknown',
             personCode: booklet.person?.code,
