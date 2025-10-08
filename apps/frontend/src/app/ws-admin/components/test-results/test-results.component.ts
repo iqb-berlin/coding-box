@@ -344,7 +344,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       .subscribe({
         next: booklets => {
           this.selectedBooklet = row.group;
-          this.booklets = this.filterUniqueBooklets(booklets);
+          this.booklets = booklets;
           this.sortBooklets();
           this.sortBookletUnits();
           this.loadAllUnitTags();
@@ -355,18 +355,6 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           this.isLoadingBooklets = false;
         }
       });
-  }
-
-  filterUniqueBooklets(booklets: Booklet[]): Booklet[] {
-    const uniqueBookletsMap = new Map<string, Booklet>();
-
-    booklets.forEach(booklet => {
-      if (!uniqueBookletsMap.has(booklet.name)) {
-        uniqueBookletsMap.set(booklet.name, booklet);
-      }
-    });
-
-    return Array.from(uniqueBookletsMap.values());
   }
 
   sortBooklets(): void {
@@ -640,16 +628,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       ...response,
       expanded: false
     }));
-    const getUniqueKey = (r: Response) => `${r.variableid}|${r.unitid}|${r.value}`;
-
-    const uniqueMap = new Map<string, Response>();
-    mappedResponses.forEach(response => {
-      const key = getUniqueKey(response);
-      if (!uniqueMap.has(key)) {
-        uniqueMap.set(key, response);
-      }
-    });
-    this.responses = Array.from(uniqueMap.values());
+    this.responses = Array.from(mappedResponses);
     this.selectedBooklet = booklet.name;
 
     this.responses.sort((a: Response, b: Response) => {
