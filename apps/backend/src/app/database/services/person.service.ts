@@ -542,7 +542,7 @@ export class PersonService {
       );
     }
 
-    let savedBooklet = await this.bookletRepository.findOne({
+    const existingBooklet = await this.bookletRepository.findOne({
       where: {
         personid: person.id,
         infoid: bookletInfo.id
@@ -554,16 +554,20 @@ export class PersonService {
       return;
     }
 
-    if (!savedBooklet) {
-      savedBooklet = await this.bookletRepository.save(
-        this.bookletRepository.create({
-          personid: person.id,
-          infoid: bookletInfo.id,
-          lastts: Date.now(),
-          firstts: Date.now()
-        })
-      );
+    // Prevent duplicate entries - return early if booklet already exists
+    if (existingBooklet) {
+      this.logger.log(`Booklet ${booklet.id} already exists for person ${person.id}, skipping duplicate`);
+      return;
     }
+
+    const newBooklet = await this.bookletRepository.save(
+      this.bookletRepository.create({
+        personid: person.id,
+        infoid: bookletInfo.id,
+        lastts: Date.now(),
+        firstts: Date.now()
+      })
+    );
 
     if (Array.isArray(booklet.units) && booklet.units.length > 0) {
       const batchSize = 10;
@@ -574,28 +578,26 @@ export class PersonService {
             if (!unit || !unit.id) {
               return;
             }
-
             try {
-              let savedUnit = await this.unitRepository.findOne({
-                where: { alias: unit.alias, name: unit.id, bookletid: savedBooklet.id }
+              const existingUnit = await this.unitRepository.findOne({
+                where: { alias: unit.alias, name: unit.id, bookletid: newBooklet.id }
               });
 
-              if (!savedUnit) {
-                savedUnit = await this.unitRepository.save(
+              if (!existingUnit) {
+                const newUnit = await this.unitRepository.save(
                   this.unitRepository.create({
                     alias: unit.alias,
                     name: unit.id,
-                    bookletid: savedBooklet.id
+                    bookletid: newBooklet.id
                   })
                 );
-              }
-
-              if (savedUnit) {
-                await Promise.all([
-                  this.saveUnitLastState(unit, savedUnit),
-                  this.processSubforms(unit, savedUnit),
-                  this.processChunks(unit, savedUnit, booklet)
-                ]);
+                if (newUnit) {
+                  await Promise.all([
+                    this.saveUnitLastState(unit, newUnit),
+                    this.processSubforms(unit, newUnit),
+                    this.processChunks(unit, newUnit, booklet)
+                  ]);
+                }
               }
             } catch (unitError) {
               this.logger.error(
@@ -684,11 +686,6 @@ export class PersonService {
             let value: string | null;
             if (response.value === null) {
               value = null;
-            } else if (typeof response.value === 'string') {
-              value = response.value;
-              if (value.startsWith('{') && value.endsWith('}')) {
-                value = `[${value.substring(1, value.length - 1)}]`;
-              }
             } else {
               value = JSON.stringify(response.value);
             }

@@ -381,8 +381,8 @@ export class TestFilesComponent implements OnInit, OnDestroy {
 
       if (file.file_type === 'Resource' && file.filename.toLowerCase().endsWith('.vocs')) {
         const dialogRef = this.dialog.open(SchemeEditorDialogComponent, {
-          width: '90%',
-          height: '90%',
+          width: '100vw',
+          height: '90vh',
           data: {
             workspaceId: this.appService.selectedWorkspaceId,
             fileId: file.id,
