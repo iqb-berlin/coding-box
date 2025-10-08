@@ -471,7 +471,8 @@ export class WorkspaceTestResultsService {
 
   async deleteTestPersons(
     workspaceId: number,
-    testPersonIds: string
+    testPersonIds: string,
+    userId: string
   ): Promise<{
       success: boolean;
       report: {
@@ -521,7 +522,7 @@ export class WorkspaceTestResultsService {
       for (const person of existingPersons) {
         try {
           await this.journalService.createEntry(
-            'system',
+            userId,
             workspaceId,
             'delete',
             'test-person',
@@ -547,7 +548,8 @@ export class WorkspaceTestResultsService {
 
   async deleteUnit(
     workspaceId: number,
-    unitId: number
+    unitId: number,
+    userId: string
   ): Promise<{
       success: boolean;
       report: {
@@ -587,7 +589,7 @@ export class WorkspaceTestResultsService {
 
       try {
         await this.journalService.createEntry(
-          'system',
+          userId,
           workspaceId,
           'delete',
           'unit',
@@ -616,7 +618,8 @@ export class WorkspaceTestResultsService {
 
   async deleteResponse(
     workspaceId: number,
-    responseId: number
+    responseId: number,
+    userId: string
   ): Promise<{
       success: boolean;
       report: {
@@ -657,7 +660,7 @@ export class WorkspaceTestResultsService {
 
       try {
         await this.journalService.createEntry(
-          'system', // userId
+          userId,
           workspaceId,
           'delete',
           'response',
@@ -688,7 +691,8 @@ export class WorkspaceTestResultsService {
 
   async deleteBooklet(
     workspaceId: number,
-    bookletId: number
+    bookletId: number,
+    userId: string
   ): Promise<{
       success: boolean;
       report: {
@@ -728,7 +732,7 @@ export class WorkspaceTestResultsService {
 
       try {
         await this.journalService.createEntry(
-          'system', // userId
+          userId,
           workspaceId,
           'delete',
           'booklet',

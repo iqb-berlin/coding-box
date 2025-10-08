@@ -2,7 +2,7 @@ import {
   BadRequestException,
   Controller,
   Delete,
-  Get, Param, Post, Query, UseGuards, UseInterceptors, UploadedFiles, Res
+  Get, Param, Post, Query, Req, UseGuards, UseInterceptors, UploadedFiles, Res
 } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
@@ -176,14 +176,15 @@ export class WorkspaceTestResultsController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async deleteTestGroups(
     @Query('testPersons')testPersonIds:string,
-      @Param('workspace_id')workspaceId:string): Promise<{
+      @Param('workspace_id')workspaceId:string,
+      @Req() req): Promise<{
         success: boolean;
         report: {
           deletedPersons: string[];
           warnings: string[];
         };
       }> {
-    return this.workspaceTestResultsService.deleteTestPersons(Number(workspaceId), testPersonIds);
+    return this.workspaceTestResultsService.deleteTestPersons(Number(workspaceId), testPersonIds, req.user.id);
   }
 
   @Delete(':workspace_id/units/:unitId')
@@ -213,7 +214,8 @@ export class WorkspaceTestResultsController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async deleteUnit(
     @Param('workspace_id') workspaceId: number,
-      @Param('unitId') unitId: number
+      @Param('unitId') unitId: number,
+      @Req() req
   ): Promise<{
         success: boolean;
         report: {
@@ -221,7 +223,7 @@ export class WorkspaceTestResultsController {
           warnings: string[];
         };
       }> {
-    return this.workspaceTestResultsService.deleteUnit(workspaceId, unitId);
+    return this.workspaceTestResultsService.deleteUnit(workspaceId, unitId, req.user.id);
   }
 
   @Delete(':workspace_id/responses/:responseId')
@@ -251,7 +253,8 @@ export class WorkspaceTestResultsController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async deleteResponse(
     @Param('workspace_id') workspaceId: number,
-      @Param('responseId') responseId: number
+      @Param('responseId') responseId: number,
+      @Req() req
   ): Promise<{
         success: boolean;
         report: {
@@ -259,7 +262,7 @@ export class WorkspaceTestResultsController {
           warnings: string[];
         };
       }> {
-    return this.workspaceTestResultsService.deleteResponse(workspaceId, responseId);
+    return this.workspaceTestResultsService.deleteResponse(workspaceId, responseId, req.user.id);
   }
 
   @Delete(':workspace_id/booklets/:bookletId')
@@ -289,7 +292,8 @@ export class WorkspaceTestResultsController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async deleteBooklet(
     @Param('workspace_id') workspaceId: number,
-      @Param('bookletId') bookletId: number
+      @Param('bookletId') bookletId: number,
+      @Req() req
   ): Promise<{
         success: boolean;
         report: {
@@ -297,7 +301,7 @@ export class WorkspaceTestResultsController {
           warnings: string[];
         };
       }> {
-    return this.workspaceTestResultsService.deleteBooklet(workspaceId, bookletId);
+    return this.workspaceTestResultsService.deleteBooklet(workspaceId, bookletId, req.user.id);
   }
 
   @Get(':workspace_id/responses')
@@ -819,8 +823,6 @@ export class WorkspaceTestResultsController {
     if (!files || files.length === 0) {
       throw new BadRequestException('No files were uploaded.');
     }
-
-    // Convert the query parameter to a boolean
     const shouldOverwrite = overwriteExisting !== 'false';
 
     logger.log(`Uploading test results with overwriteExisting=${shouldOverwrite}`);
