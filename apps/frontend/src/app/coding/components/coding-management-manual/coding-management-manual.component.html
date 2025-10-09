@@ -2,10 +2,11 @@
 
   <div>
     <div class="fx-row-center-center-stretch fx-gap-20 action-buttons">
-      <a mat-raised-button color="primary">
+      <a mat-raised-button color="primary" (click)="externalCodingFileInput.click()" [disabled]="isLoading">
         <mat-icon>link</mat-icon>
         Externe Kodierung einbinden
       </a>
+      <input #externalCodingFileInput type="file" style="display: none;" accept=".csv, .xlsx, .xls" (change)="onExternalCodingFileSelected($event)">
       <a mat-raised-button color="primary">
         <mat-icon>school</mat-icon>
         Schulung starten
@@ -18,7 +19,6 @@
     </div>
   </div>
 
-  <!-- Progress indicator -->
   <div *ngIf="validationProgress && (validationProgress.status === 'loading' || validationProgress.status === 'processing')"
        class="fx-column-start-start fx-gap-10 validation-progress">
     <div class="statistics-card">
@@ -35,7 +35,6 @@
     </div>
   </div>
 
-  <!-- Error message -->
   <div *ngIf="validationProgress && validationProgress.status === 'error'"
        class="fx-column-start-start fx-gap-10 validation-error">
     <div class="statistics-card error-card">
@@ -56,7 +55,6 @@
     </div>
   </div>
 
-  <!-- Validation results -->
   <div *ngIf="validationResults && validationProgress && validationProgress.status === 'completed'"
        class="fx-column-start-start fx-gap-10 validation-results">
     <div class="statistics-card">
@@ -78,7 +76,6 @@
       </div>
       <hr>
 
-      <!-- Pagination Controls -->
       <div class="fx-row-space-between-center fx-gap-10 pagination-controls" *ngIf="validationResults.totalPages > 1">
         <div class="fx-row-center-center fx-gap-10">
           <button mat-button [disabled]="!hasPreviousPage" (click)="previousPage()">
@@ -130,7 +127,6 @@
         </table>
       </div>
 
-      <!-- Bottom Pagination Controls (duplicate for better UX) -->
       <div class="fx-row-center-center fx-gap-10 pagination-controls" *ngIf="validationResults.totalPages > 1">
         <button mat-button [disabled]="!hasPreviousPage" (click)="previousPage()">
           <mat-icon>chevron_left</mat-icon>
@@ -143,6 +139,119 @@
           Nächste
           <mat-icon>chevron_right</mat-icon>
         </button>
+      </div>
+    </div>
+  </div>
+
+  <div *ngIf="showComparisonTable && importResults"
+       class="fx-column-start-start fx-gap-10 comparison-results">
+    <div class="statistics-card">
+      <div class="fx-row-space-between-center fx-gap-10">
+        <div>
+          <h2 class="section-title">Import-Vergleichstabelle</h2>
+          <p class="section-description">
+            {{importResults.message}} |
+            Betroffene Zeilen: {{importResults.affectedRows.length}} |
+            Seite {{comparisonCurrentPage}} von {{comparisonTotalPages}}
+          </p>
+        </div>
+        <div class="fx-row-center-center fx-gap-10">
+          <button mat-raised-button color="accent" (click)="downloadComparisonTable()" [disabled]="isLoading || !importResults?.affectedRows?.length">
+            <mat-icon>download</mat-icon>
+            Als Excel herunterladen
+          </button>
+          <button mat-button color="primary" (click)="closeComparisonTable()">
+            <mat-icon>close</mat-icon>
+            Schließen
+          </button>
+        </div>
+      </div>
+      <hr>
+
+      <!-- Pagination controls for comparison table -->
+      <div class="fx-row-space-between-center fx-gap-10 pagination-controls" *ngIf="comparisonTotalPages > 1">
+        <div class="fx-row-center-center fx-gap-10">
+          <button mat-button [disabled]="!comparisonHasPreviousPage" (click)="previousComparisonPage()">
+            <mat-icon>chevron_left</mat-icon>
+            Vorherige
+          </button>
+          <span class="pagination-info">
+            Seite {{comparisonCurrentPage}} von {{comparisonTotalPages}}
+          </span>
+          <button mat-button [disabled]="!comparisonHasNextPage" (click)="nextComparisonPage()">
+            Nächste
+            <mat-icon>chevron_right</mat-icon>
+          </button>
+        </div>
+
+        <div class="fx-row-center-center fx-gap-10">
+          <label for="comparisonPageSize">Einträge pro Seite:</label>
+          <select id="comparisonPageSize" [value]="comparisonPageSize" (change)="changeComparisonPageSize(+$any($event.target).value)">
+            <option value="50">50</option>
+            <option value="100">100</option>
+            <option value="200">200</option>
+            <option value="500">500</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="comparison-content" *ngIf="importResults.affectedRows.length > 0">
+        <table class="results-table">
+          <thead>
+            <tr>
+              <th>Unit Alias</th>
+              <th>Variable ID</th>
+              <th>Person Code</th>
+              <th>Original Status</th>
+              <th>Original Code</th>
+              <th>Original Score</th>
+              <th>Updated Status</th>
+              <th>Updated Code</th>
+              <th>Updated Score</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let row of paginatedAffectedRows">
+              <td>{{row.unitAlias}}</td>
+              <td>{{row.variableId}}</td>
+              <td>{{row.personCode || '-'}}</td>
+              <td>{{row.originalCodedStatus}}</td>
+              <td>{{row.originalCode || '-'}}</td>
+              <td>{{row.originalScore || '-'}}</td>
+              <td [class.updated]="row.updatedCodedStatus !== row.originalCodedStatus">
+                {{row.updatedCodedStatus || '-'}}
+              </td>
+              <td [class.updated]="row.updatedCode !== row.originalCode">
+                {{row.updatedCode || '-'}}
+              </td>
+              <td [class.updated]="row.updatedScore !== row.originalScore">
+                {{row.updatedScore || '-'}}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Bottom pagination controls -->
+      <div class="fx-row-center-center fx-gap-10 pagination-controls" *ngIf="comparisonTotalPages > 1">
+        <button mat-button [disabled]="!comparisonHasPreviousPage" (click)="previousComparisonPage()">
+          <mat-icon>chevron_left</mat-icon>
+          Vorherige
+        </button>
+        <span class="pagination-info">
+          Seite {{comparisonCurrentPage}} von {{comparisonTotalPages}}
+        </span>
+        <button mat-button [disabled]="!comparisonHasNextPage" (click)="nextComparisonPage()">
+          Nächste
+          <mat-icon>chevron_right</mat-icon>
+        </button>
+      </div>
+
+      <div *ngIf="importResults.errors.length > 0" class="error-section">
+        <h3>Fehler und Warnungen</h3>
+        <ul>
+          <li *ngFor="let error of importResults.errors" class="error-item">{{error}}</li>
+        </ul>
       </div>
     </div>
   </div>
