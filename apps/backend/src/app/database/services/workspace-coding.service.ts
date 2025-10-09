@@ -25,6 +25,34 @@ import { ValidationResultDto } from '../../../../../../api-dto/coding/validation
 import { ValidateCodingCompletenessResponseDto } from '../../../../../../api-dto/coding/validate-coding-completeness-response.dto';
 import { JobQueueService } from '../../job-queue/job-queue.service';
 
+interface ExternalCodingRow {
+  unit_alias?: string;
+  variable_id?: string;
+  status?: string;
+  score?: string | number;
+  code?: string | number;
+  person_code?: string;
+  person_login?: string;
+  person_group?: string;
+  booklet_name?: string;
+  [key: string]: string | number | undefined;
+}
+
+interface ExternalCodingImportBody {
+  file: string; // base64 encoded file data
+  fileName?: string;
+}
+
+interface QueryParameters {
+  unitAlias: string;
+  variableId: string;
+  workspaceId: number;
+  personCode?: string;
+  personLogin?: string;
+  personGroup?: string;
+  bookletName?: string;
+}
+
 interface CodedResponse {
   id: number;
   code?: string;
@@ -1310,17 +1338,14 @@ export class WorkspaceCodingService {
     try {
       this.logger.log(`Getting missings profiles for workspace ${workspaceId}`);
 
-      // Get the setting with key 'missings-profile-iqb-standard'
       const setting = await this.settingRepository.findOne({
         where: { key: 'missings-profile-iqb-standard' }
       });
 
       if (!setting) {
-        // If no profiles exist yet, create a default one
         const defaultProfiles = this.createDefaultMissingsProfiles();
         await this.saveMissingsProfiles(defaultProfiles);
 
-        // Return just the labels
         return defaultProfiles.map(profile => ({ label: profile.label }));
       }
 
@@ -1340,7 +1365,6 @@ export class WorkspaceCodingService {
 
   private async getMissingsProfileByLabel(label: string): Promise<MissingsProfilesDto | null> {
     try {
-      // Get the setting with key 'missings-profile-iqb-standard'
       const setting = await this.settingRepository.findOne({
         where: { key: 'missings-profile-iqb-standard' }
       });
@@ -1349,7 +1373,6 @@ export class WorkspaceCodingService {
         return null;
       }
 
-      // Parse the profiles from the setting content
       try {
         const profiles: MissingsProfilesDto[] = JSON.parse(setting.content);
         const profile = profiles.find(p => p.label === label);
@@ -1432,7 +1455,6 @@ export class WorkspaceCodingService {
 
   private async saveMissingsProfiles(profiles: MissingsProfilesDto[]): Promise<void> {
     try {
-      // Create or update the setting
       let setting = await this.settingRepository.findOne({
         where: { key: 'missings-profile-iqb-standard' }
       });
@@ -1454,7 +1476,6 @@ export class WorkspaceCodingService {
     try {
       this.logger.log(`Creating missings profile for workspace ${workspaceId}`);
 
-      // Get all existing profiles
       const setting = await this.settingRepository.findOne({
         where: { key: 'missings-profile-iqb-standard' }
       });
@@ -1470,14 +1491,12 @@ export class WorkspaceCodingService {
         }
       }
 
-      // Check if a profile with the same label already exists
       const existingProfile = profiles.find(p => p.label === profile.label);
       if (existingProfile) {
         this.logger.error(`A missings profile with label '${profile.label}' already exists`);
         return null;
       }
 
-      // Add the new profile
       profiles.push(profile);
 
       // Save the updated profiles
@@ -2475,5 +2494,338 @@ export class WorkspaceCodingService {
       this.logger.error(`Error getting CODING_INCOMPLETE variables: ${error.message}`, error.stack);
       throw new Error('Could not get CODING_INCOMPLETE variables. Please check the database connection.');
     }
+  }
+
+  async importExternalCodingWithProgress(
+    workspaceId: number,
+    body: ExternalCodingImportBody,
+    progressCallback: (progress: number, message: string) => void
+  ): Promise<{
+      message: string;
+      processedRows: number;
+      updatedRows: number;
+      errors: string[];
+      affectedRows: Array<{
+        unitAlias: string;
+        variableId: string;
+        personCode?: string;
+        personLogin?: string;
+        personGroup?: string;
+        bookletName?: string;
+        originalCodedStatus: string;
+        originalCode: number | null;
+        originalScore: number | null;
+        updatedCodedStatus: string | null;
+        updatedCode: number | null;
+        updatedScore: number | null;
+      }>;
+    }> {
+    return this.importExternalCoding(workspaceId, body, progressCallback);
+  }
+
+  async importExternalCoding(
+    workspaceId: number,
+    body: ExternalCodingImportBody,
+    progressCallback?: (progress: number, message: string) => void
+  ): Promise<{
+      message: string;
+      processedRows: number;
+      updatedRows: number;
+      errors: string[];
+      affectedRows: Array<{
+        unitAlias: string;
+        variableId: string;
+        personCode?: string;
+        personLogin?: string;
+        personGroup?: string;
+        bookletName?: string;
+        originalCodedStatus: string;
+        originalCode: number | null;
+        originalScore: number | null;
+        updatedCodedStatus: string | null;
+        updatedCode: number | null;
+        updatedScore: number | null;
+      }>;
+    }> {
+    try {
+      this.logger.log(`Starting external coding import for workspace ${workspaceId}`);
+      progressCallback?.(5, 'Starting external coding import...');
+
+      const fileData = body.file; // Assuming base64 encoded file data
+      const fileName = body.fileName || 'external-coding.csv';
+
+      let parsedData: ExternalCodingRow[] = [];
+      const errors: string[] = [];
+
+      progressCallback?.(10, 'Parsing file...');
+
+      if (fileName.endsWith('.csv')) {
+        parsedData = await this.parseCSVFile(fileData);
+      } else if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
+        parsedData = await this.parseExcelFile(fileData);
+      } else {
+        this.logger.error(`Unsupported file format: ${fileName}. Please use CSV or Excel files.`);
+        return {
+          message: 'Unsupported file format. Please use CSV or Excel files.',
+          processedRows: 0,
+          updatedRows: 0,
+          errors: ['Unsupported file format. Please use CSV or Excel files.'],
+          affectedRows: []
+        };
+      }
+
+      this.logger.log(`Parsed ${parsedData.length} rows from external coding file`);
+      progressCallback?.(20, `Parsed ${parsedData.length} rows from file`);
+
+      let updatedRows = 0;
+      const processedRows = parsedData.length;
+      const affectedRows: Array<{
+        unitAlias: string;
+        variableId: string;
+        personCode?: string;
+        personLogin?: string;
+        personGroup?: string;
+        bookletName?: string;
+        originalCodedStatus: string;
+        originalCode: number | null;
+        originalScore: number | null;
+        updatedCodedStatus: string | null;
+        updatedCode: number | null;
+        updatedScore: number | null;
+      }> = [];
+
+      // Process data in batches for better performance
+      const batchSize = 1000;
+      const totalBatches = Math.ceil(parsedData.length / batchSize);
+
+      this.logger.log(`Processing ${parsedData.length} rows in ${totalBatches} batches of ${batchSize}`);
+      progressCallback?.(25, `Starting to process ${parsedData.length} rows in ${totalBatches} batches`);
+
+      for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
+        const batchStart = batchIndex * batchSize;
+        const batchEnd = Math.min(batchStart + batchSize, parsedData.length);
+        const batch = parsedData.slice(batchStart, batchEnd);
+
+        this.logger.log(`Processing batch ${batchIndex + 1}/${totalBatches} (rows ${batchStart + 1}-${batchEnd})`);
+
+        // Calculate progress: 25% start + 70% for batch processing
+        const batchProgress = 25 + Math.floor(((batchIndex) / totalBatches) * 70);
+        progressCallback?.(batchProgress, `Processing batch ${batchIndex + 1}/${totalBatches} (rows ${batchStart + 1}-${batchEnd})`);
+
+        for (const row of batch) {
+          try {
+            const {
+              unit_alias: unitAlias, variable_id: variableId, status, score, code,
+              person_code: personCode, person_login: personLogin, person_group: personGroup, booklet_name: bookletName
+            } = row;
+
+            if (!unitAlias || !variableId) {
+              errors.push(`Row missing required fields: unit_alias=${unitAlias}, variable_id=${variableId}`);
+              continue;
+            }
+
+            const queryBuilder = this.responseRepository
+              .createQueryBuilder('response')
+              .select(['response.id', 'response.codedstatus', 'response.code', 'response.score',
+                'response.coded_status_v2', 'response.coded_code_v2', 'response.coded_score_v2',
+                'unit.alias', 'person.code', 'person.login', 'person.group', 'bookletinfo.name'])
+              .innerJoin('response.unit', 'unit')
+              .innerJoin('unit.booklet', 'booklet')
+              .innerJoin('booklet.person', 'person')
+              .innerJoin('booklet.bookletinfo', 'bookletinfo')
+              .where('unit.alias = :unitAlias', { unitAlias })
+              .andWhere('response.variableid = :variableId', { variableId })
+              .andWhere('person.workspace_id = :workspaceId', { workspaceId });
+
+            if (personCode) {
+              queryBuilder.andWhere('person.code = :personCode', { personCode });
+            }
+            if (personLogin) {
+              queryBuilder.andWhere('person.login = :personLogin', { personLogin });
+            }
+            if (personGroup) {
+              queryBuilder.andWhere('person.group = :personGroup', { personGroup });
+            }
+            if (bookletName) {
+              queryBuilder.andWhere('bookletinfo.name = :bookletName', { bookletName });
+            }
+
+            const queryParameters: QueryParameters = {
+              unitAlias,
+              variableId,
+              workspaceId
+            };
+
+            if (personCode) {
+              queryParameters.personCode = personCode;
+            }
+            if (personLogin) {
+              queryParameters.personLogin = personLogin;
+            }
+            if (personGroup) {
+              queryParameters.personGroup = personGroup;
+            }
+            if (bookletName) {
+              queryParameters.bookletName = bookletName;
+            }
+
+            const responsesToUpdate = await queryBuilder.setParameters(queryParameters).getMany();
+
+            if (responsesToUpdate.length > 0) {
+              const responseIds = responsesToUpdate.map(r => r.id);
+              const updateResult = await this.responseRepository
+                .createQueryBuilder()
+                .update(ResponseEntity)
+                .set({
+                  coded_status_v2: status || null,
+                  coded_code_v2: code ? parseInt(code.toString(), 10) : null,
+                  coded_score_v2: score ? parseInt(score.toString(), 10) : null
+                })
+                .where('id IN (:...ids)', { ids: responseIds })
+                .execute();
+
+              if (updateResult.affected && updateResult.affected > 0) {
+                updatedRows += updateResult.affected;
+
+                // Add comparison data for each affected response
+                responsesToUpdate.forEach(response => {
+                  affectedRows.push({
+                    unitAlias: response.unit?.alias || unitAlias,
+                    variableId,
+                    personCode: response.unit?.booklet?.person?.code || undefined,
+                    personLogin: response.unit?.booklet?.person?.login || undefined,
+                    personGroup: response.unit?.booklet?.person?.group || undefined,
+                    bookletName: response.unit?.booklet?.bookletinfo?.name || undefined,
+                    originalCodedStatus: response.codedstatus,
+                    originalCode: response.code,
+                    originalScore: response.score,
+                    updatedCodedStatus: status || null,
+                    updatedCode: code ? parseInt(code.toString(), 10) : null,
+                    updatedScore: score ? parseInt(score.toString(), 10) : null
+                  });
+                });
+              }
+            } else {
+              const matchingCriteria = [`unit_alias=${unitAlias}`, `variable_id=${variableId}`];
+              if (personCode) matchingCriteria.push(`person_code=${personCode}`);
+              if (personLogin) matchingCriteria.push(`person_login=${personLogin}`);
+              if (personGroup) matchingCriteria.push(`person_group=${personGroup}`);
+              if (bookletName) matchingCriteria.push(`booklet_name=${bookletName}`);
+              errors.push(`No response found for ${matchingCriteria.join(', ')}`);
+            }
+          } catch (rowError) {
+            errors.push(`Error processing row: ${rowError.message}`);
+            this.logger.error(`Error processing row: ${rowError.message}`, rowError.stack);
+          }
+        }
+
+        // Small delay between batches to prevent overwhelming the database
+        if (batchIndex < totalBatches - 1) {
+          await new Promise(resolve => {
+            setTimeout(resolve, 10);
+          });
+        }
+      }
+
+      const message = `External coding import completed. Processed ${processedRows} rows, updated ${updatedRows} response records.`;
+      this.logger.log(message);
+      progressCallback?.(100, `Import completed: ${updatedRows} of ${processedRows} rows updated`);
+
+      return {
+        message,
+        processedRows,
+        updatedRows,
+        errors,
+        affectedRows
+      };
+    } catch (error) {
+      this.logger.error(`Error importing external coding: ${error.message}`, error.stack);
+      progressCallback?.(0, `Import failed: ${error.message}`);
+      throw new Error(`Could not import external coding data: ${error.message}`);
+    }
+  }
+
+  private async parseCSVFile(fileData: string): Promise<ExternalCodingRow[]> {
+    return new Promise((resolve, reject) => {
+      const results: ExternalCodingRow[] = [];
+      const buffer = Buffer.from(fileData, 'base64');
+      let rowCount = 0;
+
+      fastCsv.parseString(buffer.toString(), { headers: true })
+        .on('error', error => reject(error))
+        .on('data', row => {
+          if (Object.values(row).some(value => value && value.toString().trim() !== '')) {
+            results.push(row);
+            rowCount += 1;
+
+            // Log progress for large files
+            if (rowCount % 10000 === 0) {
+              this.logger.log(`Parsed ${rowCount} rows...`);
+            }
+
+            // Memory protection: limit to 200k rows to prevent memory overflow
+            if (rowCount > 200000) {
+              reject(new Error('File too large. Maximum 200,000 rows supported.'));
+            }
+          }
+        })
+        .on('end', () => {
+          this.logger.log(`CSV parsing completed. Total rows: ${results.length}`);
+          resolve(results);
+        });
+    });
+  }
+
+  private async parseExcelFile(fileData: string): Promise<ExternalCodingRow[]> {
+    const buffer = Buffer.from(fileData, 'base64');
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(buffer);
+
+    const worksheet = workbook.getWorksheet(1);
+    if (!worksheet) {
+      throw new Error('No worksheet found in Excel file');
+    }
+
+    const results: ExternalCodingRow[] = [];
+    const headers: string[] = [];
+
+    const headerRow = worksheet.getRow(1);
+    headerRow.eachCell((cell, colNumber) => {
+      headers[colNumber] = cell.text || cell.value?.toString() || '';
+    });
+
+    this.logger.log(`Starting Excel parsing. Total rows: ${worksheet.rowCount - 1}`);
+
+    // Memory protection: limit to 200k rows
+    const maxRows = Math.min(worksheet.rowCount, 200001); // +1 for header row
+    if (worksheet.rowCount > 200001) {
+      throw new Error('File too large. Maximum 200,000 rows supported.');
+    }
+
+    // Parse data rows
+    for (let rowNumber = 2; rowNumber <= maxRows; rowNumber++) {
+      const row = worksheet.getRow(rowNumber);
+      const rowData: ExternalCodingRow = {};
+
+      row.eachCell((cell, colNumber) => {
+        const header = headers[colNumber];
+        if (header) {
+          rowData[header] = cell.text || cell.value?.toString() || '';
+        }
+      });
+
+      // Only add non-empty rows
+      if (Object.values(rowData).some(value => value && value.toString().trim() !== '')) {
+        results.push(rowData);
+      }
+
+      // Log progress for large files
+      if ((rowNumber - 1) % 10000 === 0) {
+        this.logger.log(`Parsed ${rowNumber - 1} rows...`);
+      }
+    }
+
+    this.logger.log(`Excel parsing completed. Total rows: ${results.length}`);
+    return results;
   }
 }
