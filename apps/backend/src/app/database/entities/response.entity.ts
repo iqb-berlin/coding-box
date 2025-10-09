@@ -40,6 +40,30 @@ export class ResponseEntity {
   @Column({ type: 'text' })
     codedstatus: string;
 
+  @Column({ type: 'bigint', nullable: true })
+    coded_code_v1: number | null;
+
+  @Column({ type: 'bigint', nullable: true })
+    coded_score_v1: number | null;
+
+  @Column({ type: 'text', nullable: true })
+    coded_status_v2: string | null;
+
+  @Column({ type: 'bigint', nullable: true })
+    coded_code_v2: number | null;
+
+  @Column({ type: 'bigint', nullable: true })
+    coded_score_v2: number | null;
+
+  @Column({ type: 'text', nullable: true })
+    coded_status_v3: string | null;
+
+  @Column({ type: 'bigint', nullable: true })
+    coded_code_v3: number | null;
+
+  @Column({ type: 'bigint', nullable: true })
+    coded_score_v3: number | null;
+
   @ManyToOne(() => Unit, unit => unit.responses, {
     onDelete: 'CASCADE'
     // Not using eager loading here to avoid performance issues with large result sets
