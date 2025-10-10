@@ -40,12 +40,6 @@ export class ResponseEntity {
   @Column({ type: 'text' })
     codedstatus: string;
 
-  @Column({ type: 'bigint', nullable: true })
-    coded_code_v1: number | null;
-
-  @Column({ type: 'bigint', nullable: true })
-    coded_score_v1: number | null;
-
   @Column({ type: 'text', nullable: true })
     coded_status_v2: string | null;
 
