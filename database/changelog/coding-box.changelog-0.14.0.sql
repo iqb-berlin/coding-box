@@ -2,6 +2,7 @@
 
 -- changeset jurei733:1
 -- Add new columns to response table for coding functionality
+
 ALTER TABLE "public"."response" ADD COLUMN "coded_status_v2" TEXT;
 ALTER TABLE "public"."response" ADD COLUMN "coded_code_v2" INTEGER;
 ALTER TABLE "public"."response" ADD COLUMN "coded_score_v2" INTEGER;
