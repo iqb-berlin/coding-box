@@ -8,8 +8,6 @@ export interface ResponseEntity {
   code: number;
   score: number;
   codedstatus: string;
-  coded_code_v1?: number;
-  coded_score_v1?: number;
   coded_status_v2?: string;
   coded_code_v2?: number;
   coded_score_v2?: number;
