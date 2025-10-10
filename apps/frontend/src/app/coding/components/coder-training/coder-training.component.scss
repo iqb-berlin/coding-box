@@ -1,0 +1,278 @@
+.coder-training-container {
+  padding: 24px;
+  max-width: 1200px;
+  margin: 0 auto;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.training-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e0e0e0;
+
+  .section-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    font-size: 24px;
+    font-weight: 500;
+    color: #333;
+
+    mat-icon {
+      color: #1976d2;
+    }
+  }
+
+  .close-button {
+    color: #666;
+  }
+}
+
+.training-content {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.section {
+  .section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+
+    .section-subtitle {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 500;
+      color: #333;
+    }
+
+    .selection-controls {
+      display: flex;
+      gap: 8px;
+    }
+  }
+}
+
+// Coder Selection Styles
+.coder-selection {
+  .coder-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  .coder-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 16px;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+
+    &:hover {
+      border-color: #1976d2;
+      background-color: #f8f9fa;
+    }
+
+    &.selected {
+      border-color: #1976d2;
+      background-color: #e3f2fd;
+    }
+
+    .coder-info {
+      flex: 1;
+
+      .coder-name {
+        font-weight: 500;
+        font-size: 16px;
+        color: #333;
+        margin-bottom: 4px;
+      }
+
+      .coder-email {
+        font-size: 14px;
+        color: #666;
+        margin-bottom: 4px;
+      }
+
+      .coder-jobs {
+        font-size: 12px;
+        color: #888;
+        font-style: italic;
+      }
+    }
+  }
+
+  .no-coders-message {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 48px;
+    color: #666;
+    text-align: center;
+
+    mat-icon {
+      font-size: 48px;
+      width: 48px;
+      height: 48px;
+      margin-bottom: 16px;
+      color: #ccc;
+    }
+  }
+}
+
+.selection-summary {
+  padding: 12px 16px;
+  background-color: #e8f5e8;
+  border-radius: 6px;
+  border-left: 4px solid #4caf50;
+
+  p {
+    margin: 0;
+    color: #2e7d32;
+  }
+}
+
+// Variable Configuration Styles
+.variable-config {
+  .variable-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    margin-bottom: 16px;
+    padding: 16px;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    background-color: #fafafa;
+
+    .variable-name-field {
+      flex: 2;
+    }
+
+    .sample-count-field {
+      flex: 1;
+      min-width: 150px;
+    }
+
+    .remove-variable-button {
+      margin-top: 8px;
+    }
+  }
+}
+
+// Action Buttons
+.action-buttons {
+  display: flex;
+  gap: 16px;
+  justify-content: flex-end;
+  padding-top: 24px;
+  border-top: 1px solid #e0e0e0;
+
+  .start-training-button {
+    min-width: 180px;
+  }
+}
+
+// Training Summary
+.training-summary {
+  .summary-card {
+    padding: 20px;
+    background-color: #f5f5f5;
+    border-radius: 8px;
+    border-left: 4px solid #1976d2;
+
+    h4 {
+      margin: 0 0 16px 0;
+      color: #333;
+      font-weight: 500;
+    }
+
+    ul {
+      margin: 0;
+      padding-left: 20px;
+      list-style-type: disc;
+
+      li {
+        margin-bottom: 8px;
+        color: #555;
+
+        &:last-child {
+          margin-bottom: 0;
+        }
+
+        strong {
+          color: #1976d2;
+        }
+      }
+    }
+  }
+}
+
+// Loading State
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 64px;
+  color: #666;
+
+  p {
+    margin-top: 16px;
+    font-size: 16px;
+  }
+}
+
+// Responsive Design
+@media (max-width: 768px) {
+  .coder-training-container {
+    padding: 16px;
+  }
+
+  .training-header {
+    .section-title {
+      font-size: 20px;
+    }
+  }
+
+  .section-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .coder-selection .coder-list {
+    grid-template-columns: 1fr;
+  }
+
+  .variable-config .variable-item {
+    flex-direction: column;
+    align-items: stretch;
+
+    .remove-variable-button {
+      align-self: flex-end;
+      margin-top: 12px;
+    }
+  }
+
+  .action-buttons {
+    flex-direction: column-reverse;
+
+    .start-training-button,
+    .cancel-button {
+      width: 100%;
+    }
+  }
+}
