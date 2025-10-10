@@ -14,6 +14,8 @@ import * as ExcelJS from 'exceljs';
 import { Subject, takeUntil } from 'rxjs';
 import { CodingJobsComponent } from '../coding-jobs/coding-jobs.component';
 import { VariableBundleManagerComponent } from '../variable-bundle-manager/variable-bundle-manager.component';
+import { CoderTrainingComponent, VariableConfig } from '../coder-training/coder-training.component';
+import { Coder } from '../../models/coder.model';
 import { TestPersonCodingService } from '../../services/test-person-coding.service';
 import { ExpectedCombinationDto } from '../../../../../../../api-dto/coding/expected-combination.dto';
 import { ValidateCodingCompletenessResponseDto } from '../../../../../../../api-dto/coding/validate-coding-completeness-response.dto';
@@ -36,6 +38,7 @@ import {
     MatButton,
     MatProgressBarModule,
     VariableBundleManagerComponent,
+    CoderTrainingComponent,
     CommonModule
   ]
 })
@@ -72,6 +75,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   } | null = null;
 
   showComparisonTable = false;
+  showCoderTraining = false;
 
   currentPage = 1;
   pageSize = 50;
@@ -652,5 +656,35 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       duration: 5000,
       panelClass: ['success-snackbar']
     });
+  }
+
+  openCoderTraining(): void {
+    this.showCoderTraining = true;
+  }
+
+  closeCoderTraining(): void {
+    this.showCoderTraining = false;
+  }
+
+  onTrainingStart(data: { selectedCoders: Coder[], variableConfigs: VariableConfig[] }): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    this.testPersonCodingService.generateCoderTrainingPackages(
+      workspaceId,
+      data.selectedCoders,
+      data.variableConfigs
+    ).pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: packages => {
+          const totalResponses = packages.reduce((total, pkg) => total + pkg.responses.length, 0);
+
+          this.showSuccess(
+            `Schulung erfolgreich generiert: ${packages.length} Kodierer-Pakete mit insgesamt ${totalResponses} Antworten erstellt`
+          );
+          this.closeCoderTraining();
+        },
+        error: () => {
+          this.showError('Fehler beim Generieren der Kodierer-Schulungspakete');
+        }
+      });
   }
 }

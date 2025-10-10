@@ -1,0 +1,169 @@
+<div class="coder-training-container">
+  <div class="training-header">
+    <h2 class="section-title">
+      <mat-icon>school</mat-icon>
+      Kodierer-Schulung konfigurieren
+    </h2>
+    <button mat-icon-button (click)="onClose()" class="close-button">
+      <mat-icon>close</mat-icon>
+    </button>
+  </div>
+
+  <div class="training-content" *ngIf="!isLoading; else loadingTemplate">
+    <!-- Coder Selection Section -->
+    <div class="section">
+      <div class="section-header">
+        <h3 class="section-subtitle">Kodierer auswählen</h3>
+        <div class="selection-controls">
+          <button mat-button (click)="selectAllCoders()" type="button">
+            <mat-icon>check_box</mat-icon>
+            Alle auswählen
+          </button>
+          <button mat-button (click)="deselectAllCoders()" type="button">
+            <mat-icon>check_box_outline_blank</mat-icon>
+            Alle abwählen
+          </button>
+        </div>
+      </div>
+
+      <div class="coder-selection">
+        <div class="coder-list" *ngIf="coders.length > 0; else noCodersTemplate">
+          <div
+            class="coder-item"
+            *ngFor="let coder of coders; trackBy: trackByCoderId"
+            [class.selected]="isCoderSelected(coder)"
+            (click)="toggleCoderSelection(coder)">
+            <mat-checkbox
+              [checked]="isCoderSelected(coder)"
+              (change)="toggleCoderSelection(coder)"
+              (click)="$event.stopPropagation()">
+            </mat-checkbox>
+            <div class="coder-info">
+              <div class="coder-name">{{coder.displayName || coder.name}}</div>
+              <div class="coder-email" *ngIf="coder.email">{{coder.email}}</div>
+              <div class="coder-jobs" *ngIf="coder.assignedJobs && coder.assignedJobs.length > 0">
+                Zugewiesene Jobs: {{coder.assignedJobs.length}}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <ng-template #noCodersTemplate>
+          <div class="no-coders-message">
+            <mat-icon>person_off</mat-icon>
+            <p>Keine Kodierer gefunden</p>
+          </div>
+        </ng-template>
+      </div>
+
+      <div class="selection-summary" *ngIf="selectedCoders.size > 0">
+        <p><strong>{{selectedCoders.size}}</strong> Kodierer ausgewählt</p>
+      </div>
+    </div>
+
+    <!-- Variable Configuration Section -->
+    <div class="section">
+      <div class="section-header">
+        <h3 class="section-subtitle">
+          Variablen-Konfiguration
+          <span *ngIf="isLoadingVariables" class="loading-text">
+            <mat-progress-spinner mode="indeterminate" diameter="16" style="display: inline-block; margin-left: 8px;"></mat-progress-spinner>
+            Lade verfügbare Variablen...
+          </span>
+          <span *ngIf="!isLoadingVariables && availableVariables.length > 0" class="variable-count">
+            ({{availableVariables.length}} verfügbare Variablen)
+          </span>
+        </h3>
+        <button mat-button (click)="addVariable()" type="button" [disabled]="isLoadingVariables">
+          <mat-icon>add</mat-icon>
+          Variable hinzufügen
+        </button>
+      </div>
+
+      <form [formGroup]="trainingForm" class="variable-config">
+        <div formArrayName="variables">
+          <div
+            class="variable-item"
+            *ngFor="let variableGroup of variablesFormArray.controls; let i = index"
+            [formGroupName]="i">
+
+            <mat-form-field appearance="outline" class="variable-name-field">
+              <mat-label>Variable auswählen</mat-label>
+              <mat-select formControlName="variableName" placeholder="Variable auswählen">
+                <mat-option *ngFor="let variable of availableVariables" [value]="variable.variableId">
+                  {{variable.unitName}} - {{variable.variableId}}
+                </mat-option>
+                <mat-option value="" *ngIf="availableVariables.length === 0">
+                  Keine Variablen verfügbar
+                </mat-option>
+              </mat-select>
+            </mat-form-field>
+
+            <mat-form-field appearance="outline" class="sample-count-field">
+              <mat-label>Anzahl Stichproben</mat-label>
+              <input matInput
+                     type="number"
+                     formControlName="sampleCount"
+                     min="1"
+                     max="1000"
+                     placeholder="10">
+            </mat-form-field>
+
+            <button
+              mat-icon-button
+              type="button"
+              color="warn"
+              (click)="removeVariable(i)"
+              [disabled]="variablesFormArray.length === 1"
+              class="remove-variable-button">
+              <mat-icon>delete</mat-icon>
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="action-buttons">
+      <button
+        mat-raised-button
+        color="primary"
+        (click)="onStartTraining()"
+        [disabled]="!canStartTraining()"
+        class="start-training-button">
+        <mat-icon>play_arrow</mat-icon>
+        Schulung starten
+      </button>
+
+      <button
+        mat-button
+        (click)="onClose()"
+        class="cancel-button">
+        <mat-icon>cancel</mat-icon>
+        Abbrechen
+      </button>
+    </div>
+
+    <!-- Training Summary -->
+    <div class="training-summary" *ngIf="selectedCoders.size > 0 && variablesFormArray.length > 0">
+      <div class="summary-card">
+        <h4>Schulungs-Übersicht</h4>
+        <ul>
+          <li>Ausgewählte Kodierer: <strong>{{selectedCoders.size}}</strong></li>
+          <li>Konfigurierte Variablen: <strong>{{variablesFormArray.length}}</strong></li>
+          <li>
+            Gesamte Stichproben:
+            <strong>{{getTotalSamples()}}</strong>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <ng-template #loadingTemplate>
+    <div class="loading-container">
+      <mat-progress-spinner mode="indeterminate" diameter="50"></mat-progress-spinner>
+      <p>Lade Kodierer...</p>
+    </div>
+  </ng-template>
+</div>
