@@ -281,21 +281,12 @@ export class PersonService {
           if (logEntryKeyTrimmed === 'LOADCOMPLETE' && logEntryValue) {
             const parsedResult = this.parseLoadCompleteLog(logEntryValue);
             if (parsedResult) {
-              const {
-                browserVersion = 'Unknown',
-                browserName = 'Unknown',
-                osName = 'Unknown',
-                screenSizeWidth = '0',
-                screenSizeHeight = '0',
-                loadTime = '0'
-              } = parsedResult;
-
               booklet.sessions.push({
-                browser: `${browserName} ${browserVersion}`.trim(),
-                os: osName.toString(),
-                screen: `${screenSizeWidth} x ${screenSizeHeight}`,
+                browser: `${parsedResult.browserName} ${parsedResult.browserVersion}`.trim(),
+                os: parsedResult.osName,
+                screen: `${parsedResult.screenSizeWidth} x ${parsedResult.screenSizeHeight}`,
                 ts: timestamp,
-                loadCompleteMS: Number(loadTime) || 0
+                loadCompleteMS: parsedResult.loadTime
               });
             } else {
               this.logger.warn(
@@ -324,17 +315,32 @@ export class PersonService {
     return person;
   }
 
-  private parseLoadCompleteLog(logEntry: string): { [key: string]: string | number | undefined } | null {
+  private parseLoadCompleteLog(logEntry: string): {
+    browserVersion: string,
+    browserName: string,
+    osName: string,
+    device: string,
+    screenSizeWidth: number,
+    screenSizeHeight: number,
+    loadTime: number
+  } | null {
     try {
       const keyValues = logEntry.slice(1, -1).split(',');
       const parsedResult: { [key: string]: string | number | undefined } = {};
-
       keyValues.forEach(pair => {
-        const [key, value] = pair.split(':', 2).map(part => part.trim());
+        const [key, value] = pair.split(':', 2).map(part => part.trim().replace(/\\/g, ''));
         parsedResult[key] = !Number.isNaN(Number(value)) ? Number(value) : value || undefined;
       });
 
-      return parsedResult;
+      return {
+        browserVersion: parsedResult.browserVersion?.toString() || 'Unknown',
+        browserName: parsedResult.browserName?.toString() || 'Unknown',
+        osName: parsedResult.osName?.toString() || 'Unknown',
+        device: parsedResult.device?.toString() || 'Unknown',
+        screenSizeWidth: Number(parsedResult.screenSizeWidth) || 0,
+        screenSizeHeight: Number(parsedResult.screenSizeHeight) || 0,
+        loadTime: Number(parsedResult.loadTime) || 0
+      };
     } catch (error) {
       this.logger.error(`Failed to parse LOADCOMPLETE log entry: ${logEntry} - ${error.message}`);
       return null;
