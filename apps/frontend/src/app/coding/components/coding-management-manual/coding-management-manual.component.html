@@ -7,7 +7,7 @@
         Externe Kodierung einbinden
       </a>
       <input #externalCodingFileInput type="file" style="display: none;" accept=".csv, .xlsx, .xls" (change)="onExternalCodingFileSelected($event)">
-      <a mat-raised-button color="primary">
+      <a mat-raised-button color="primary" (click)="openCoderTraining()">
         <mat-icon>school</mat-icon>
         Schulung starten
       </a>
@@ -271,6 +271,16 @@
           <coding-box-variable-bundle-manager></coding-box-variable-bundle-manager>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- Coder Training Component -->
+  <div *ngIf="showCoderTraining" class="coder-training-overlay">
+    <div class="coder-training-modal">
+      <coding-box-coder-training
+        (close)="closeCoderTraining()"
+        (startTraining)="onTrainingStart($event)">
+      </coding-box-coder-training>
     </div>
   </div>
 </div>
