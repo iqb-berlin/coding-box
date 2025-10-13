@@ -1,4 +1,4 @@
-import { VariableInfo } from '@iqb/responses';
+import { VariableInfo } from '@iqbspecs/variable-info/variable-info.interface';
 
 /**
  * Item metadata for codebook

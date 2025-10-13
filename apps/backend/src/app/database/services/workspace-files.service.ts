@@ -8,7 +8,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as libxmljs from 'libxmljs2';
 import { parseStringPromise } from 'xml2js';
-import { VariableInfo } from '@iqb/responses';
+import { VariableInfo } from '@iqbspecs/variable-info/variable-info.interface';
 import FileUpload, { StructuredFileData } from '../entities/file_upload.entity';
 import { FilesDto } from '../../../../../../api-dto/files/files.dto';
 import { FileIo } from '../../admin/workspace/file-io.interface';
