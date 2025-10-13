@@ -31,7 +31,7 @@ export class ResponseEntity {
   @Column({ type: 'text', nullable: true })
     subform: string;
 
-  @Column({ type: 'text', nullable: true })
+  @Column({ type: 'integer', nullable: true })
     status_v1: string | null;
 
   @Column({ type: 'bigint', nullable: true })

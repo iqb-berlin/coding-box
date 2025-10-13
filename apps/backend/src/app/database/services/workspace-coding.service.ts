@@ -1,12 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Like, Repository } from 'typeorm';
+import { CodingScheme } from '@iqbspecs/coding-scheme/coding-scheme.interface';
 import * as Autocoder from '@iqb/responses';
 import * as cheerio from 'cheerio';
 import * as fastCsv from 'fast-csv';
 import * as ExcelJS from 'exceljs';
 import * as crypto from 'crypto';
-import { ResponseStatusType } from '@iqb/responses';
+import { ResponseStatusType } from '@iqbspecs/response/response.interface';
 import { CacheService } from '../../cache/cache.service';
 import FileUpload from '../entities/file_upload.entity';
 import Persons from '../entities/persons.entity';
@@ -94,7 +95,7 @@ export class WorkspaceCodingService {
     private cacheService: CacheService
   ) {}
 
-  private codingSchemeCache: Map<string, { scheme: Autocoder.CodingScheme; timestamp: number }> = new Map();
+  private codingSchemeCache: Map<string, { scheme: CodingScheme; timestamp: number }> = new Map();
   private readonly SCHEME_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes cache TTL
 
   private testFileCache: Map<number, { files: Map<string, FileUpload>; timestamp: number }> = new Map();
@@ -150,10 +151,10 @@ export class WorkspaceCodingService {
     return fileMap;
   }
 
-  private async getCodingSchemesWithCache(codingSchemeRefs: string[]): Promise<Map<string, Autocoder.CodingScheme>> {
+  private async getCodingSchemesWithCache(codingSchemeRefs: string[]): Promise<Map<string, CodingScheme>> {
     const now = Date.now();
-    const result = new Map<string, Autocoder.CodingScheme>();
-    const emptyScheme = new Autocoder.CodingScheme({});
+    const result = new Map<string, CodingScheme>();
+    const emptyScheme = new CodingScheme({});
 
     const missingSchemeRefs = codingSchemeRefs.filter(ref => {
       const cacheEntry = this.codingSchemeCache.get(ref);
@@ -178,7 +179,7 @@ export class WorkspaceCodingService {
     codingSchemeFiles.forEach(file => {
       try {
         const data = typeof file.data === 'string' ? JSON.parse(file.data) : file.data;
-        const scheme = new Autocoder.CodingScheme(data);
+        const scheme = new CodingScheme(data);
         result.set(file.file_id, scheme);
         this.codingSchemeCache.set(file.file_id, { scheme, timestamp: now });
       } catch (error) {
@@ -423,7 +424,7 @@ export class WorkspaceCodingService {
     units: Unit[],
     unitToResponsesMap: Map<number, ResponseEntity[]>,
     unitToCodingSchemeRefMap: Map<number, string>,
-    fileIdToCodingSchemeMap: Map<string, Autocoder.CodingScheme>,
+    fileIdToCodingSchemeMap: Map<string, CodingScheme>,
     allResponses: ResponseEntity[],
     statistics: CodingStatistics,
     jobId?: string,
@@ -434,7 +435,7 @@ export class WorkspaceCodingService {
     allCodedResponses.length = allResponses.length;
     let responseIndex = 0;
     const batchSize = 50;
-    const emptyScheme = new Autocoder.CodingScheme({});
+    const emptyScheme = new CodingScheme({});
 
     for (let i = 0; i < units.length; i += batchSize) {
       const unitBatch = units.slice(i, i + batchSize);
@@ -451,11 +452,11 @@ export class WorkspaceCodingService {
           emptyScheme;
 
         for (const response of responses) {
-          const codedResult = scheme.code([{
+          const codedResult = Autocoder.CodingFactory.code({
             id: response.variableid,
             value: response.value,
             status: response.status as ResponseStatusType
-          }]);
+          }, scheme.variableCodings[0]);
 
           const codedStatus = codedResult[0]?.status;
           if (!statistics.statusCounts[codedStatus]) {
@@ -465,9 +466,9 @@ export class WorkspaceCodingService {
 
           allCodedResponses[responseIndex] = {
             id: response.id,
-            code_v1: codedResult[0]?.code,
+            code_v1: codedResult?.code,
             status_v1: codedStatus,
-            score_v1: codedResult[0]?.score
+            score_v1: codedResult?.score
           };
           responseIndex += 1;
         }
@@ -495,7 +496,7 @@ export class WorkspaceCodingService {
     codingSchemeRefs: Set<string>,
     jobId?: string,
     queryRunner?: import('typeorm').QueryRunner
-  ): Promise<Map<string, Autocoder.CodingScheme>> {
+  ): Promise<Map<string, CodingScheme>> {
     const fileIdToCodingSchemeMap = await this.getCodingSchemesWithCache([...codingSchemeRefs]);
     if (jobId && await this.isJobCancelled(jobId)) {
       this.logger.log(`Job ${jobId} was cancelled or paused after getting coding scheme files`);
@@ -690,7 +691,7 @@ export class WorkspaceCodingService {
       // Step 5: Get responses - 50% progress
       const responseQueryStart = Date.now();
       const allResponses = await this.responseRepository.find({
-        where: { unitid: In(unitIdsArray), status: In(['VALUE_CHANGED']) },
+        where: { unitid: In(unitIdsArray), status: In(['VALUE_CHANGED', 'DISPLAYED', 'NOT_REACHED']) },
         select: ['id', 'unitid', 'variableid', 'value', 'status'] // Only select needed fields
       });
       metrics.responseQuery = Date.now() - responseQueryStart;
@@ -1070,7 +1071,7 @@ export class WorkspaceCodingService {
           .leftJoinAndSelect('unit.booklet', 'booklet')
           .leftJoinAndSelect('booklet.person', 'person')
           .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
-          .where('response.status_v1 = :status', { status: 'CODING_INCOMPLETE' })
+          .where('response.status_v1 = :status', { status: 8 }) // CODING_INCOMPLETE = 8
           .andWhere('person.workspace_id = :workspace_id', { workspace_id })
           .skip((validPage - 1) * validLimit)
           .take(MAX_LIMIT) // Set a very high limit to fetch all items
