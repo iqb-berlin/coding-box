@@ -41,22 +41,22 @@ export class ResponseEntity {
     codedstatus: string;
 
   @Column({ type: 'text', nullable: true })
-    coded_status_v2: string | null;
+    status_v2: string | null;
 
   @Column({ type: 'bigint', nullable: true })
-    coded_code_v2: number | null;
+    code_v2: number | null;
 
   @Column({ type: 'bigint', nullable: true })
-    coded_score_v2: number | null;
+    score_v2: number | null;
 
   @Column({ type: 'text', nullable: true })
-    coded_status_v3: string | null;
+    status_v3: string | null;
 
   @Column({ type: 'bigint', nullable: true })
-    coded_code_v3: number | null;
+    code_v3: number | null;
 
   @Column({ type: 'bigint', nullable: true })
-    coded_score_v3: number | null;
+    score_v3: number | null;
 
   @ManyToOne(() => Unit, unit => unit.responses, {
     onDelete: 'CASCADE'

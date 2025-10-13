@@ -2624,7 +2624,7 @@ export class WorkspaceCodingService {
             const queryBuilder = this.responseRepository
               .createQueryBuilder('response')
               .select(['response.id', 'response.codedstatus', 'response.code', 'response.score',
-                'response.coded_status_v2', 'response.coded_code_v2', 'response.coded_score_v2',
+                'response.status_v2', 'response.code_v2', 'response.score_v2',
                 'unit.alias', 'person.code', 'person.login', 'person.group', 'bookletinfo.name'])
               .innerJoin('response.unit', 'unit')
               .innerJoin('unit.booklet', 'booklet')
@@ -2674,9 +2674,9 @@ export class WorkspaceCodingService {
                 .createQueryBuilder()
                 .update(ResponseEntity)
                 .set({
-                  coded_status_v2: status || null,
-                  coded_code_v2: code ? parseInt(code.toString(), 10) : null,
-                  coded_score_v2: score ? parseInt(score.toString(), 10) : null
+                  status_v2: status || null,
+                  code_v2: code ? parseInt(code.toString(), 10) : null,
+                  score_v2: score ? parseInt(score.toString(), 10) : null
                 })
                 .where('id IN (:...ids)', { ids: responseIds })
                 .execute();
