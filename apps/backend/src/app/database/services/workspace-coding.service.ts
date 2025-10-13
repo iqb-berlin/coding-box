@@ -25,6 +25,19 @@ import { ValidationResultDto } from '../../../../../../api-dto/coding/validation
 import { ValidateCodingCompletenessResponseDto } from '../../../../../../api-dto/coding/validate-coding-completeness-response.dto';
 import { JobQueueService } from '../../job-queue/job-queue.service';
 
+interface CoderTrainingResponse {
+  responseId: number;
+  unitAlias: string;
+  variableId: string;
+  unitName: string;
+  value: string;
+  personLogin: string;
+  personCode: string;
+  personGroup: string;
+  bookletName: string;
+  variable: string; // combination of variableId + unitAlias
+}
+
 interface ExternalCodingRow {
   unit_alias?: string;
   variable_id?: string;
@@ -2833,18 +2846,7 @@ export class WorkspaceCodingService {
   ): Promise<{
       coderId: number;
       coderName: string;
-      responses: {
-        responseId: number;
-        unitAlias: string;
-        variableId: string;
-        unitName: string;
-        value: string;
-        personLogin: string;
-        personCode: string;
-        personGroup: string;
-        bookletName: string;
-        variable: string; // combination of variableId + unitAlias
-      }[];
+      responses: CoderTrainingResponse[];
     }[]> {
     try {
       this.logger.log(`Generating coder training packages for workspace ${workspaceId}`);
@@ -2888,9 +2890,8 @@ export class WorkspaceCodingService {
 
       this.logger.log(`Grouped responses into ${variableResponsesMap.size} unique variables`);
 
-      // Create training packages for each coder
       const trainingPackages = selectedCoders.map(coder => {
-        const coderResponses: any[] = [];
+        const coderResponses: CoderTrainingResponse[] = [];
         variableConfigs.forEach(config => {
           const matchingVariables = Array.from(variableResponsesMap.keys()).filter(variable => variable.toLowerCase().includes(config.variableName.toLowerCase()) ||
             config.variableName.toLowerCase().includes(variable.toLowerCase())
