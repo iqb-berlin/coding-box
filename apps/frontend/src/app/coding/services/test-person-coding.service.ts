@@ -444,4 +444,62 @@ export class TestPersonCodingService {
       onError(`Failed to start import: ${errorMessage}`);
     }
   }
+
+  /**
+   * Generate coder training packages based on CODING_INCOMPLETE responses
+   * @param workspaceId Workspace ID
+   * @param selectedCoders Array of selected coders with id and name
+   * @param variableConfigs Array of variable configurations with variableName and sampleCount
+   * @returns Observable of coder training packages
+   */
+  generateCoderTrainingPackages(
+    workspaceId: number,
+    selectedCoders: { id: number; name: string }[],
+    variableConfigs: { variableName: string; sampleCount: number }[]
+  ): Observable<{
+      coderId: number;
+      coderName: string;
+      responses: {
+        responseId: number;
+        unitAlias: string;
+        variableId: string;
+        unitName: string;
+        value: string;
+        personLogin: string;
+        personCode: string;
+        personGroup: string;
+        bookletName: string;
+        variable: string;
+      }[];
+    }[]> {
+    const request = {
+      selectedCoders,
+      variableConfigs
+    };
+
+    return this.http
+      .post<{
+      coderId: number;
+      coderName: string;
+      responses: {
+        responseId: number;
+        unitAlias: string;
+        variableId: string;
+        unitName: string;
+        value: string;
+        personLogin: string;
+        personCode: string;
+        personGroup: string;
+        bookletName: string;
+        variable: string;
+      }[];
+    }[]>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/coding/coder-training-packages`,
+      request,
+      { headers: this.authHeader }
+    )
+      .pipe(
+        catchError(() => of([]))
+      );
+  }
 }

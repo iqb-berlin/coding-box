@@ -390,3 +390,72 @@
     padding: 12px;
   }
 }
+
+// Coder Training Modal Overlay Styles
+.coder-training-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  box-sizing: border-box;
+  animation: fadeInOverlay 0.3s ease-in-out;
+
+  .coder-training-modal {
+    max-width: 90vw;
+    max-height: 90vh;
+    overflow: auto;
+    border-radius: 8px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    animation: slideInModal 0.3s ease-out;
+  }
+}
+
+@keyframes fadeInOverlay {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideInModal {
+  from {
+    transform: scale(0.8) translateY(-20px);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+  }
+}
+
+// Responsive modal styles
+@media (max-width: 768px) {
+  .coder-training-overlay {
+    padding: 10px;
+
+    .coder-training-modal {
+      max-width: 95vw;
+      max-height: 95vh;
+    }
+  }
+}
+
+@media (max-width: 576px) {
+  .coder-training-overlay {
+    padding: 5px;
+
+    .coder-training-modal {
+      max-width: 98vw;
+      max-height: 98vh;
+    }
+  }
+}
