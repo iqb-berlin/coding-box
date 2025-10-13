@@ -103,9 +103,9 @@ export class WorkspaceTestResultsService {
           'response.status',
           'response.value',
           'response.subform',
-          'response.code',
-          'response.score',
-          'response.codedstatus'
+          'response.code_v1',
+          'response.score_v1',
+          'response.status_v1'
         ])
         .getMany();
 
@@ -438,9 +438,9 @@ export class WorkspaceTestResultsService {
         .orderBy('response.id', 'ASC');
 
       if (status === 'null') {
-        queryBuilder.andWhere('response.codedStatus IS NULL');
+        queryBuilder.andWhere('response.status_v1 IS NULL');
       } else {
-        queryBuilder.andWhere('response.codedStatus = :statusParam', { statusParam: status });
+        queryBuilder.andWhere('response.status_v1 = :statusParam', { statusParam: status });
       }
 
       let result: [ResponseEntity[], number];
@@ -821,7 +821,7 @@ export class WorkspaceTestResultsService {
       }
 
       if (searchParams.codedStatus) {
-        query.andWhere('response.codedstatus = :codedStatus', { codedStatus: searchParams.codedStatus });
+        query.andWhere('response.status_v1 = :codedStatus', { codedStatus: searchParams.codedStatus });
       }
 
       if (searchParams.group) {
@@ -850,9 +850,9 @@ export class WorkspaceTestResultsService {
         variableId: response.variableid,
         value: response.value || '',
         status: response.status,
-        code: response.code,
-        score: response.score,
-        codedStatus: response.codedstatus,
+        code: response.code_v1,
+        score: response.score_v1,
+        codedStatus: response.status_v1,
         unitId: response.unit.id,
         unitName: response.unit.name,
         unitAlias: response.unit.alias,
@@ -955,9 +955,9 @@ export class WorkspaceTestResultsService {
           variableId: response.variableid,
           value: response.value || '',
           status: response.status,
-          code: response.code,
-          score: response.score,
-          codedStatus: response.codedstatus
+          code: response.code_v1,
+          score: response.score_v1,
+          codedStatus: response.status_v1
         })) : []
       }));
 

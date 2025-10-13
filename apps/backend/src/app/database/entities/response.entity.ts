@@ -8,7 +8,7 @@ import { Unit } from './unit.entity';
 @Entity('response')
 @Index(['unitid', 'variableid']) // Composite index for common query patterns
 @Index(['unitid', 'status']) // Composite index for filtering by status
-@Index(['codedstatus']) // Index for filtering by coded status
+@Index(['status_v1']) // Index for filtering by coded status
 @Index(['value']) // Index for searching by value
 export class ResponseEntity {
   @PrimaryGeneratedColumn()
@@ -31,14 +31,14 @@ export class ResponseEntity {
   @Column({ type: 'text', nullable: true })
     subform: string;
 
-  @Column({ type: 'bigint', nullable: true })
-    code: number | null;
+  @Column({ type: 'text', nullable: true })
+    status_v1: string | null;
 
   @Column({ type: 'bigint', nullable: true })
-    score: number | null;
+    code_v1: number | null;
 
-  @Column({ type: 'text' })
-    codedstatus: string;
+  @Column({ type: 'bigint', nullable: true })
+    score_v1: number | null;
 
   @Column({ type: 'text', nullable: true })
     status_v2: string | null;

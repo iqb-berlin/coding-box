@@ -68,9 +68,9 @@ interface QueryParameters {
 
 interface CodedResponse {
   id: number;
-  code?: string;
-  codedstatus?: string;
-  score?: number;
+  code_v1?: string;
+  status_v1?: string;
+  score_v1?: number;
 }
 
 @Injectable()
@@ -375,9 +375,9 @@ export class WorkspaceCodingService {
               ResponseEntity,
               response.id,
               {
-                code: response.code,
-                codedstatus: response.codedstatus,
-                score: response.score
+                code_v1: response.code_v1,
+                status_v1: response.status_v1,
+                score_v1: response.score_v1
               }
             ));
 
@@ -465,9 +465,9 @@ export class WorkspaceCodingService {
 
           allCodedResponses[responseIndex] = {
             id: response.id,
-            code: codedResult[0]?.code,
-            codedstatus: codedStatus,
-            score: codedResult[0]?.score
+            code_v1: codedResult[0]?.code,
+            status_v1: codedStatus,
+            score_v1: codedResult[0]?.score
           };
           responseIndex += 1;
         }
@@ -1012,7 +1012,7 @@ export class WorkspaceCodingService {
       const responses = await this.responseRepository.find({
         where: {
           unitid: In(unitIds),
-          codedstatus: In(['CODING_INCOMPLETE', 'INTENDED_INCOMPLETE', 'CODE_SELECTION_PENDING'])
+          status_v1: In(['CODING_INCOMPLETE', 'INTENDED_INCOMPLETE', 'CODE_SELECTION_PENDING'])
         }
       });
 
@@ -1070,7 +1070,7 @@ export class WorkspaceCodingService {
           .leftJoinAndSelect('unit.booklet', 'booklet')
           .leftJoinAndSelect('booklet.person', 'person')
           .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
-          .where('response.codedStatus = :status', { status: 'CODING_INCOMPLETE' })
+          .where('response.status_v1 = :status', { status: 'CODING_INCOMPLETE' })
           .andWhere('person.workspace_id = :workspace_id', { workspace_id })
           .skip((validPage - 1) * validLimit)
           .take(MAX_LIMIT) // Set a very high limit to fetch all items
@@ -1153,7 +1153,7 @@ export class WorkspaceCodingService {
         .leftJoinAndSelect('unit.booklet', 'booklet')
         .leftJoinAndSelect('booklet.person', 'person')
         .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
-        .where('response.codedStatus = :status', { status: 'CODING_INCOMPLETE' })
+        .where('response.status_v1 = :status', { status: 'CODING_INCOMPLETE' })
         .andWhere('person.workspace_id = :workspace_id', { workspace_id })
         .orderBy('response.id', 'ASC');
 
@@ -1254,7 +1254,7 @@ export class WorkspaceCodingService {
     try {
       const statusCountResults = await this.responseRepository.query(`
         SELECT
-          response.codedstatus as "statusValue",
+          response.status_v1 as "statusValue",
           COUNT(response.id) as count
         FROM response
         INNER JOIN unit ON response.unitid = unit.id
@@ -1263,7 +1263,7 @@ export class WorkspaceCodingService {
         WHERE response.status = $1
           AND person.workspace_id = $2
           AND person.consider = $3
-        GROUP BY response.codedstatus
+        GROUP BY response.status_v1
       `, ['VALUE_CHANGED', workspace_id, true]);
 
       let totalResponses = 0;
@@ -1939,7 +1939,7 @@ export class WorkspaceCodingService {
 
       // Step 2: Count total number of unique unit-variable-code combinations
       const countQuery = this.responseRepository.createQueryBuilder('response')
-        .select('COUNT(DISTINCT CONCAT(unit.name, response.variableid, response.code))', 'count')
+        .select('COUNT(DISTINCT CONCAT(unit.name, response.variableid, response.code_v1))', 'count')
         .leftJoin('response.unit', 'unit')
         .leftJoin('unit.booklet', 'booklet')
         .leftJoin('booklet.person', 'person')
@@ -1963,9 +1963,9 @@ export class WorkspaceCodingService {
       const aggregationQuery = this.responseRepository.createQueryBuilder('response')
         .select('unit.name', 'unitId')
         .addSelect('response.variableid', 'variableId')
-        .addSelect('response.code', 'code')
+        .addSelect('response.code_v1', 'code_v1')
         .addSelect('COUNT(response.id)', 'occurrenceCount')
-        .addSelect('MAX(response.score)', 'score') // Use MAX as a sample score
+        .addSelect('MAX(response.score_v1)', 'score_V1') // Use MAX as a sample score
         .leftJoin('response.unit', 'unit')
         .leftJoin('unit.booklet', 'booklet')
         .leftJoin('booklet.person', 'person')
@@ -1984,10 +1984,10 @@ export class WorkspaceCodingService {
       aggregationQuery
         .groupBy('unit.name')
         .addGroupBy('response.variableid')
-        .addGroupBy('response.code')
+        .addGroupBy('response.code_v1')
         .orderBy('unit.name', 'ASC')
         .addOrderBy('response.variableid', 'ASC')
-        .addOrderBy('response.code', 'ASC')
+        .addOrderBy('response.code_v1', 'ASC')
         .offset((page - 1) * limit)
         .limit(limit);
 
@@ -2472,7 +2472,7 @@ export class WorkspaceCodingService {
         .leftJoinAndSelect('response.unit', 'unit')
         .leftJoinAndSelect('unit.booklet', 'booklet')
         .leftJoinAndSelect('booklet.person', 'person')
-        .where('response.codedStatus = :status', { status: 'CODING_INCOMPLETE' })
+        .where('response.status_v1 = :status', { status: 'CODING_INCOMPLETE' })
         .andWhere('person.workspace_id = :workspace_id', { workspace_id: workspaceId });
 
       if (unitName) {
@@ -2636,7 +2636,7 @@ export class WorkspaceCodingService {
 
             const queryBuilder = this.responseRepository
               .createQueryBuilder('response')
-              .select(['response.id', 'response.codedstatus', 'response.code', 'response.score',
+              .select(['response.id', 'response.status_v1', 'response.code_v1', 'response.score_v1',
                 'response.status_v2', 'response.code_v2', 'response.score_v2',
                 'unit.alias', 'person.code', 'person.login', 'person.group', 'bookletinfo.name'])
               .innerJoin('response.unit', 'unit')
@@ -2706,9 +2706,9 @@ export class WorkspaceCodingService {
                     personLogin: response.unit?.booklet?.person?.login || undefined,
                     personGroup: response.unit?.booklet?.person?.group || undefined,
                     bookletName: response.unit?.booklet?.bookletinfo?.name || undefined,
-                    originalCodedStatus: response.codedstatus,
-                    originalCode: response.code,
-                    originalScore: response.score,
+                    originalCodedStatus: response.status_v1,
+                    originalCode: response.code_v1,
+                    originalScore: response.score_v1,
                     updatedCodedStatus: status || null,
                     updatedCode: code ? parseInt(code.toString(), 10) : null,
                     updatedScore: score ? parseInt(score.toString(), 10) : null
@@ -2871,7 +2871,7 @@ export class WorkspaceCodingService {
           'booklet.bookletinfo',
           'bookletinfo.name'
         ])
-        .where('response.codedstatus = :status', { status: 'CODING_INCOMPLETE' })
+        .where('response.status_v1 = :status', { status: 'CODING_INCOMPLETE' })
         .andWhere('person.workspace_id = :workspaceId', { workspaceId })
         .getMany();
 

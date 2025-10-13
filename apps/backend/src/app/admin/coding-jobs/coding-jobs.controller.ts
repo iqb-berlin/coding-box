@@ -162,9 +162,9 @@ export class CodingJobsController {
               status: { type: 'string' },
               value: { type: 'string' },
               subform: { type: 'string' },
-              code: { type: 'number' },
-              score: { type: 'number' },
-              codedstatus: { type: 'string' },
+              code_v1: { type: 'number' },
+              score_v1: { type: 'number' },
+              status_v1: { type: 'string' },
               unit: {
                 type: 'object',
                 properties: {
@@ -194,9 +194,9 @@ export class CodingJobsController {
         status: string;
         value: string;
         subform: string;
-        code: number;
-        score: number;
-        codedstatus: string;
+        code_v1: number;
+        score_v1: number;
+        status_v1: string;
         unit: {
           id: number;
           name: string;
