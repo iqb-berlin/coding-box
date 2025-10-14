@@ -792,4 +792,14 @@ export class BackendService {
     }
     return this.http.get<{ unitName: string; variableId: string }[]>(url, { params });
   }
+
+  downloadWorkspaceFilesAsZip(workspaceId: number): Observable<Blob> {
+    const url = `${this.serverUrl}/admin/workspace/${workspaceId}/files/download-zip`;
+    return this.http.get(url, {
+      responseType: 'blob',
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem('id_token')}`
+      }
+    });
+  }
 }

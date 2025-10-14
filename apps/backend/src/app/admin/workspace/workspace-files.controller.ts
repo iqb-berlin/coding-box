@@ -3,8 +3,9 @@ import {
   Body,
   Controller,
   Delete,
-  Get, InternalServerErrorException, NotFoundException, Param, Post, Query, UseGuards, UseInterceptors, UploadedFiles
+  Get, InternalServerErrorException, NotFoundException, Param, Post, Query, Res, UseGuards, UseInterceptors, UploadedFiles
 } from '@nestjs/common';
+import { Response } from 'express';
 import {
   ApiBadRequestResponse,
   ApiBearerAuth, ApiBody, ApiConsumes, ApiNotFoundResponse, ApiOkResponse, ApiOperation,
@@ -712,5 +713,42 @@ export class WorkspaceFilesController {
     @Param('workspace_id') workspace_id: number, @Param('scheme_file_id') scheme_file_id: string
   ): Promise<VariableInfo[]> {
     return this.workspaceFilesService.getVariableInfoForScheme(workspace_id, scheme_file_id);
+  }
+
+  @Get(':workspace_id/files/download-zip')
+  @ApiTags('admin workspace')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiOperation({ summary: 'Download all workspace files as ZIP', description: 'Creates and downloads a ZIP file containing all files in the workspace' })
+  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
+  @ApiOkResponse({
+    description: 'ZIP file created successfully',
+    schema: {
+      type: 'string',
+      format: 'binary'
+    }
+  })
+  @ApiBadRequestResponse({ description: 'Invalid workspace ID' })
+  async downloadWorkspaceFilesAsZip(
+    @Param('workspace_id') workspaceId: number,
+      @Res() res: Response
+  ): Promise<void> {
+    if (!workspaceId) {
+      throw new BadRequestException('Workspace ID is required.');
+    }
+
+    try {
+      const zipBuffer = await this.workspaceFilesService.downloadWorkspaceFilesAsZip(workspaceId);
+
+      res.set({
+        'Content-Type': 'application/zip',
+        'Content-Disposition': `attachment; filename="workspace-${workspaceId}-files.zip"`,
+        'Content-Length': zipBuffer.length
+      });
+
+      res.send(zipBuffer);
+    } catch (error) {
+      logger.error(`Error creating ZIP file for download: ${error.message}`);
+      throw new InternalServerErrorException('Unable to create ZIP file. Please try again later.');
+    }
   }
 }
