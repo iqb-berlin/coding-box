@@ -22,18 +22,24 @@ import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { MatCheckbox } from '@angular/material/checkbox';
 import { MatAnchor, MatButton, MatIconButton } from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { MatPaginator, MatPaginatorModule, PageEvent } from '@angular/material/paginator';
+import {
+  MatPaginator, MatPaginatorModule, MatPaginatorIntl, PageEvent
+} from '@angular/material/paginator';
 import { SearchFilterComponent } from '../../../shared/search-filter/search-filter.component';
 import { VariableBundle } from '../../models/coding-job.model';
 import { VariableBundleService, PaginatedBundles } from '../../services/variable-bundle.service';
 import { VariableBundleDialogComponent } from '../variable-bundle-dialog/variable-bundle-dialog.component';
 import { ConfirmDialogComponent, ConfirmDialogData } from '../../../shared/dialogs/confirm-dialog.component';
+import { GermanPaginatorIntl } from '../../../shared/services/german-paginator-intl.service';
 
 @Component({
   selector: 'coding-box-variable-bundle-manager',
   templateUrl: './variable-bundle-manager.component.html',
   styleUrls: ['./variable-bundle-manager.component.scss'],
   standalone: true,
+  providers: [
+    { provide: MatPaginatorIntl, useClass: GermanPaginatorIntl }
+  ],
   imports: [
     CommonModule,
     TranslateModule,
@@ -98,7 +104,6 @@ export class VariableBundleManagerComponent implements OnInit, AfterViewInit {
 
     this.variableBundleGroupService.getBundles(page, pageSize).subscribe({
       next: (paginatedResult: PaginatedBundles) => {
-        // Always set the data first
         this.dataSource.data = paginatedResult.bundles;
 
         if (this.currentFilter) {
@@ -125,7 +130,7 @@ export class VariableBundleManagerComponent implements OnInit, AfterViewInit {
   }
 
   onPageChange(event: PageEvent): void {
-    const page = event.pageIndex + 1; // MatPaginator is zero-based
+    const page = event.pageIndex + 1;
     const pageSize = event.pageSize;
     this.loadVariableBundleGroups(page, pageSize);
   }

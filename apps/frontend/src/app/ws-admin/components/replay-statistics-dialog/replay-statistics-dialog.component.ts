@@ -51,6 +51,9 @@ interface ReplayFrequencyData {
                 [yAxisLabel]="'workspace.replay-count' | translate"
                 [scheme]="colorScheme"
                 [showDataLabel]="true"
+                [rotateXAxisTicks]="true"
+                [xAxisTickFormatting]="formatXAxisLabel.bind(this)"
+                [view]="[800, 400]"
               ></ngx-charts-bar-vertical>
             </div>
           </mat-tab>
@@ -106,6 +109,8 @@ interface ReplayFrequencyData {
                     [yAxisLabel]="'workspace.avg-duration-milliseconds' | translate"
                     [scheme]="colorScheme"
                     [showDataLabel]="true"
+                    [rotateXAxisTicks]="true"
+                    [xAxisTickFormatting]="formatXAxisLabel.bind(this)"
                     [view]="[450, 300]"
                   ></ngx-charts-bar-vertical>
                 </div>
@@ -210,6 +215,9 @@ interface ReplayFrequencyData {
                 [yAxisLabel]="'workspace.failure-count' | translate"
                 [scheme]="colorScheme"
                 [showDataLabel]="true"
+                [rotateXAxisTicks]="true"
+                [xAxisTickFormatting]="formatXAxisLabel.bind(this)"
+                [view]="[800, 400]"
               ></ngx-charts-bar-vertical>
             </div>
           </mat-tab>
@@ -376,6 +384,18 @@ export class ReplayStatisticsDialogComponent implements OnInit {
     return `${(milliseconds / 1000).toFixed(2)} s`;
   }
 
+  /**
+   * Format X-axis labels to handle long unit names
+   * @param value The label value
+   * @returns Truncated label if too long
+   */
+  formatXAxisLabel(value: string): string {
+    if (true && value.length > 20) {
+      return `${value.substring(0, 17)}...`;
+    }
+    return value;
+  }
+
   constructor() {
     this.workspaceId = this.data.workspaceId;
   }
@@ -530,11 +550,9 @@ export class ReplayStatisticsDialogComponent implements OnInit {
           // Sort by unit ID
           this.failureByUnitData.sort((a, b) => a.name.localeCompare(b.name));
 
-          // Load failure distribution by day
           this.loadFailureDistributionByDay();
         },
         error: () => {
-          // Continue with day distribution even if unit distribution fails
           this.loadFailureDistributionByDay();
         }
       });
@@ -552,11 +570,9 @@ export class ReplayStatisticsDialogComponent implements OnInit {
           // Sort by date (oldest first)
           this.failureByDayData.sort((a, b) => a.name.localeCompare(b.name));
 
-          // Load failure distribution by hour
           this.loadFailureDistributionByHour();
         },
         error: () => {
-          // Continue with hour distribution even if day distribution fails
           this.loadFailureDistributionByHour();
         }
       });
@@ -578,7 +594,6 @@ export class ReplayStatisticsDialogComponent implements OnInit {
             return hourA - hourB;
           });
 
-          // Complete loading
           this.loading = false;
         },
         error: () => {

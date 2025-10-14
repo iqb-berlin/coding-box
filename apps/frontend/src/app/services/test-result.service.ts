@@ -2,14 +2,30 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import {
   catchError,
-  forkJoin,
-  map,
   Observable,
   of
 } from 'rxjs';
 import { logger } from 'nx/src/utils/logger';
 import { SERVER_URL } from '../injection-tokens';
 import { TestResultCacheService } from './test-result-cache.service';
+
+interface TestResultsResponse {
+  data: TestResultItem[];
+  total: number;
+}
+
+interface TestResultItem {
+  id: number;
+  code: string;
+  group: string;
+  login: string;
+  uploaded_at: Date;
+  [key: string]: unknown;
+}
+
+interface PersonTestResult {
+  [key: string]: unknown;
+}
 
 @Injectable({
   providedIn: 'root'
@@ -29,23 +45,14 @@ export class TestResultService {
       { headers: this.authHeader });
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  getTestResults(workspaceId: number, page: number, limit: number, searchText?: string): Observable<any> {
-    // Use the cache service to get test results
+  getTestResults(workspaceId: number, page: number, limit: number, searchText?: string): Observable<TestResultsResponse> {
     return this.cacheService.getTestResults(workspaceId, page, limit, searchText);
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  getPersonTestResults(workspaceId: number, personId: number): Observable<any[]> {
-    // Use the cache service to get person test results
+  getPersonTestResults(workspaceId: number, personId: number): Observable<PersonTestResult[]> {
     return this.cacheService.getPersonTestResults(workspaceId, personId);
   }
 
-  /**
-   * Invalidate the cache for a specific workspace
-   * This should be called whenever test results are modified
-   * @param workspaceId The workspace ID
-   */
   invalidateCache(workspaceId: number): void {
     this.cacheService.invalidateWorkspaceCache(workspaceId);
   }
@@ -164,12 +171,6 @@ export class TestResultService {
     );
   }
 
-  /**
-   * Delete a unit and all its associated responses
-   * @param workspaceId The ID of the workspace
-   * @param unitId The ID of the unit to delete
-   * @returns An Observable of the deletion result
-   */
   deleteUnit(workspaceId: number, unitId: number): Observable<{
     success: boolean;
     report: {
@@ -194,61 +195,6 @@ export class TestResultService {
     );
   }
 
-  /**
-   * Delete multiple units and all their associated responses
-   * @param workspaceId The ID of the workspace
-   * @param unitIds Array of unit IDs to delete
-   * @returns An Observable of the deletion result
-   */
-  deleteMultipleUnits(workspaceId: number, unitIds: number[]): Observable<{
-    success: boolean;
-    report: {
-      deletedUnits: number[];
-      warnings: string[];
-    };
-  }> {
-    // Create a series of delete requests for each unit
-    const deleteRequests = unitIds.map(unitId => this.deleteUnit(workspaceId, unitId));
-
-    // Combine all requests and aggregate the results
-    return forkJoin(deleteRequests).pipe(
-      map(results => {
-        const successfulDeletes = results.filter(result => result.success);
-        const deletedUnits = successfulDeletes
-          .map(result => result.report.deletedUnit)
-          .filter(id => id !== null) as number[];
-
-        const warnings = results
-          .filter(result => !result.success || result.report.warnings.length > 0)
-          .flatMap(result => result.report.warnings);
-
-        return {
-          success: deletedUnits.length > 0,
-          report: {
-            deletedUnits,
-            warnings
-          }
-        };
-      }),
-      catchError(() => {
-        logger.error('Error deleting multiple units');
-        return of({
-          success: false,
-          report: {
-            deletedUnits: [],
-            warnings: ['Failed to delete units']
-          }
-        });
-      })
-    );
-  }
-
-  /**
-   * Delete a booklet and all its associated units and responses
-   * @param workspaceId The ID of the workspace
-   * @param bookletId The ID of the booklet to delete
-   * @returns An Observable of the deletion result
-   */
   deleteBooklet(workspaceId: number, bookletId: number): Observable<{
     success: boolean;
     report: {

@@ -71,6 +71,29 @@
     </mat-card-content>
   </mat-card>
 
+  <mat-card class="coding-settings-card">
+    <mat-card-header>
+      <mat-card-title>Kodierung</mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      <div class="coding-settings-container">
+        <div class="setting-item">
+          <div class="setting-info">
+            <h4>Automatisches Laden der Kodierstatistiken</h4>
+            <p>Wenn aktiviert, werden die Kodierstatistiken automatisch beim Öffnen der Kodierungsverwaltung geladen. Wenn deaktiviert, müssen die Statistiken manuell über einen Button geladen werden.</p>
+          </div>
+          <div class="setting-control">
+            <mat-slide-toggle
+              [checked]="autoFetchCodingStatistics"
+              (change)="toggleAutoFetchCodingStatistics($event)">
+              {{autoFetchCodingStatistics ? 'Aktiviert' : 'Deaktiviert'}}
+            </mat-slide-toggle>
+          </div>
+        </div>
+      </div>
+    </mat-card-content>
+  </mat-card>
+
   <mat-card class="access-rights-card">
     <mat-card-header>
       <mat-card-title>Nutzerrechte</mat-card-title>
@@ -86,6 +109,34 @@
     </mat-card-header>
     <mat-card-content>
       <coding-box-journal></coding-box-journal>
+    </mat-card-content>
+  </mat-card>
+
+  <mat-card class="database-export-card">
+    <mat-card-header>
+      <mat-card-title>Testergebnisse exportieren</mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      <div class="database-export-container">
+        <p>Exportieren Sie die Testergebnisse dieses Arbeitsbereichs als SQLite-Datenbank. Die Exportdatei enthält alle relevanten Daten wie Personen, Testhefte, Aufgaben, Antworten und Protokolle.</p>
+        <div class="database-export-actions">
+          <button
+            mat-raised-button
+            color="primary"
+            [disabled]="isExporting"
+            (click)="exportWorkspaceDatabase()">
+            <mat-icon>download</mat-icon>
+            @if (isExporting) {
+              Exportiere...
+            } @else {
+              Datenbank exportieren
+            }
+          </button>
+        </div>
+        @if (isExporting) {
+          <mat-progress-bar mode="indeterminate" class="export-progress"></mat-progress-bar>
+        }
+      </div>
     </mat-card-content>
   </mat-card>
 </div>

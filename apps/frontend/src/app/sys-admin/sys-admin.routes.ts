@@ -1,10 +1,10 @@
 import { Routes } from '@angular/router';
-import { canActivateAuth } from '../core/guards/auth.guard';
+import { canActivateAdmin } from '../core/guards/admin.guard';
 
 export const sysAdminRoutes: Routes = [
   {
     path: 'admin',
-    canActivate: [canActivateAuth],
+    canActivate: [canActivateAdmin],
     loadComponent: () => import('./components/admin/admin.component').then(m => m.AdminComponent),
     children: [
       { path: '', redirectTo: 'users', pathMatch: 'full' },

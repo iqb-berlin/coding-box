@@ -25,7 +25,7 @@ import { MatFormField, MatLabel } from '@angular/material/form-field';
 import { MatOption, MatSelect } from '@angular/material/select';
 import { Subject, Subscription } from 'rxjs';
 import { debounceTime } from 'rxjs/operators';
-import { MatPaginator, PageEvent } from '@angular/material/paginator';
+import { MatPaginator, MatPaginatorIntl, PageEvent } from '@angular/material/paginator';
 import { FilesValidationDialogComponent } from '../files-validation-result/files-validation.component';
 import { TestCenterImportComponent } from '../test-center-import/test-center-import.component';
 import { ResourcePackagesDialogComponent } from '../resource-packages-dialog/resource-packages-dialog.component';
@@ -43,11 +43,15 @@ import { FileDownloadDto } from '../../../../../../../api-dto/files/file-downloa
 import { ContentDialogComponent } from '../../../shared/dialogs/content-dialog/content-dialog.component';
 import { ConfirmDialogComponent } from '../../../shared/dialogs/confirm-dialog.component';
 import { getFileIcon } from '../../utils/file-utils';
+import { GermanPaginatorIntl } from '../../../shared/services/german-paginator-intl.service';
 
 @Component({
   selector: 'coding-box-test-files',
   templateUrl: './test-files.component.html',
   styleUrls: ['./test-files.component.scss'],
+  providers: [
+    { provide: MatPaginatorIntl, useClass: GermanPaginatorIntl }
+  ],
   imports: [
     TranslateModule,
     DatePipe,
@@ -130,7 +134,6 @@ export class TestFilesComponent implements OnInit, OnDestroy {
     }
   }
 
-  /** Getter for setting table sorting */
   get matSort(): MatSort {
     if (this.dataSource) {
       this.dataSource.sort = this.sort;
@@ -361,8 +364,6 @@ export class TestFilesComponent implements OnInit, OnDestroy {
     dialogRef.afterClosed().subscribe(result => {
       if (result === true) {
         this.resourcePackagesModified = true;
-        // Optionally reload test files if they include resource packages
-        // this.loadTestFiles();
       }
     });
   }
@@ -380,8 +381,8 @@ export class TestFilesComponent implements OnInit, OnDestroy {
 
       if (file.file_type === 'Resource' && file.filename.toLowerCase().endsWith('.vocs')) {
         const dialogRef = this.dialog.open(SchemeEditorDialogComponent, {
-          width: '90%',
-          height: '90%',
+          width: '100vw',
+          height: '90vh',
           data: {
             workspaceId: this.appService.selectedWorkspaceId,
             fileId: file.id,

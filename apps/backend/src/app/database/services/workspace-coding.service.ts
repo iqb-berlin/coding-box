@@ -1,12 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Like, Repository } from 'typeorm';
+import { CodingScheme } from '@iqbspecs/coding-scheme/coding-scheme.interface';
 import * as Autocoder from '@iqb/responses';
 import * as cheerio from 'cheerio';
 import * as fastCsv from 'fast-csv';
 import * as ExcelJS from 'exceljs';
 import * as crypto from 'crypto';
-import { ResponseStatusType } from '@iqb/responses';
+import { ResponseStatusType } from '@iqbspecs/response/response.interface';
 import { CacheService } from '../../cache/cache.service';
 import FileUpload from '../entities/file_upload.entity';
 import Persons from '../entities/persons.entity';
@@ -25,11 +26,52 @@ import { ValidationResultDto } from '../../../../../../api-dto/coding/validation
 import { ValidateCodingCompletenessResponseDto } from '../../../../../../api-dto/coding/validate-coding-completeness-response.dto';
 import { JobQueueService } from '../../job-queue/job-queue.service';
 
+interface CoderTrainingResponse {
+  responseId: number;
+  unitAlias: string;
+  variableId: string;
+  unitName: string;
+  value: string;
+  personLogin: string;
+  personCode: string;
+  personGroup: string;
+  bookletName: string;
+  variable: string; // combination of variableId + unitAlias
+}
+
+interface ExternalCodingRow {
+  unit_alias?: string;
+  variable_id?: string;
+  status?: string;
+  score?: string | number;
+  code?: string | number;
+  person_code?: string;
+  person_login?: string;
+  person_group?: string;
+  booklet_name?: string;
+  [key: string]: string | number | undefined;
+}
+
+interface ExternalCodingImportBody {
+  file: string; // base64 encoded file data
+  fileName?: string;
+}
+
+interface QueryParameters {
+  unitAlias: string;
+  variableId: string;
+  workspaceId: number;
+  personCode?: string;
+  personLogin?: string;
+  personGroup?: string;
+  bookletName?: string;
+}
+
 interface CodedResponse {
   id: number;
-  code?: string;
-  codedstatus?: string;
-  score?: number;
+  code_v1?: string;
+  status_v1?: string;
+  score_v1?: number;
 }
 
 @Injectable()
@@ -53,17 +95,12 @@ export class WorkspaceCodingService {
     private cacheService: CacheService
   ) {}
 
-  private codingSchemeCache: Map<string, { scheme: Autocoder.CodingScheme; timestamp: number }> = new Map();
+  private codingSchemeCache: Map<string, { scheme: CodingScheme; timestamp: number }> = new Map();
   private readonly SCHEME_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes cache TTL
 
   private testFileCache: Map<number, { files: Map<string, FileUpload>; timestamp: number }> = new Map();
   private readonly TEST_FILE_CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes cache TTL
 
-  /**
-   * Generate a hash for expected combinations to create unique cache keys
-   * @param expectedCombinations Array of expected combinations
-   * @returns Hash string for cache key generation
-   */
   private generateExpectedCombinationsHash(expectedCombinations: ExpectedCombinationDto[]): string {
     const sortedData = expectedCombinations
       .map(combo => `${combo.unit_key}|${combo.login_name}|${combo.login_code}|${combo.booklet_id}|${combo.variable_id}`)
@@ -79,62 +116,49 @@ export class WorkspaceCodingService {
 
     if (cacheEntry && (now - cacheEntry.timestamp) < this.TEST_FILE_CACHE_TTL_MS) {
       this.logger.log(`Using cached test files for workspace ${workspace_id}`);
-
-      // Check if all requested unit aliases are in the cache
       const missingAliases = unitAliasesArray.filter(alias => !cacheEntry.files.has(alias));
-
       if (missingAliases.length === 0) {
-        // All files are in the cache, return the cached files
         return cacheEntry.files;
       }
 
-      // Some files are missing, fetch only the missing ones
       this.logger.log(`Fetching ${missingAliases.length} missing test files for workspace ${workspace_id}`);
       const missingFiles = await this.fileUploadRepository.find({
         where: { workspace_id, file_id: In(missingAliases) },
         select: ['file_id', 'data', 'filename']
       });
 
-      // Add the missing files to the cache
       missingFiles.forEach(file => {
         cacheEntry.files.set(file.file_id, file);
       });
 
-      // Update the timestamp
       cacheEntry.timestamp = now;
 
       return cacheEntry.files;
     }
 
-    // No valid cache entry, fetch all files
     this.logger.log(`Fetching all test files for workspace ${workspace_id}`);
     const testFiles = await this.fileUploadRepository.find({
       where: { workspace_id, file_id: In(unitAliasesArray) },
       select: ['file_id', 'data', 'filename']
     });
 
-    // Create a new cache entry
     const fileMap = new Map<string, FileUpload>();
     testFiles.forEach(file => {
       fileMap.set(file.file_id, file);
     });
 
-    // Store in cache
     this.testFileCache.set(workspace_id, { files: fileMap, timestamp: now });
-
     return fileMap;
   }
 
-  private async getCodingSchemesWithCache(codingSchemeRefs: string[]): Promise<Map<string, Autocoder.CodingScheme>> {
+  private async getCodingSchemesWithCache(codingSchemeRefs: string[]): Promise<Map<string, CodingScheme>> {
     const now = Date.now();
-    const result = new Map<string, Autocoder.CodingScheme>();
-    const emptyScheme = new Autocoder.CodingScheme({});
+    const result = new Map<string, CodingScheme>();
+    const emptyScheme = new CodingScheme({});
 
-    // Check which schemes are in the cache and still valid
     const missingSchemeRefs = codingSchemeRefs.filter(ref => {
       const cacheEntry = this.codingSchemeCache.get(ref);
       if (cacheEntry && (now - cacheEntry.timestamp) < this.SCHEME_CACHE_TTL_MS) {
-        // Scheme is in cache and still valid
         result.set(ref, cacheEntry.scheme);
         return false;
       }
@@ -142,32 +166,24 @@ export class WorkspaceCodingService {
     });
 
     if (missingSchemeRefs.length === 0) {
-      // All schemes are in the cache
       this.logger.log('Using all cached coding schemes');
       return result;
     }
 
-    // Fetch missing schemes
     this.logger.log(`Fetching ${missingSchemeRefs.length} missing coding schemes`);
     const codingSchemeFiles = await this.fileUploadRepository.find({
       where: { file_id: In(missingSchemeRefs) },
       select: ['file_id', 'data', 'filename']
     });
 
-    // Parse and cache the schemes
     codingSchemeFiles.forEach(file => {
       try {
         const data = typeof file.data === 'string' ? JSON.parse(file.data) : file.data;
-        const scheme = new Autocoder.CodingScheme(data);
-
-        // Store in result map
+        const scheme = new CodingScheme(data);
         result.set(file.file_id, scheme);
-
-        // Store in cache
         this.codingSchemeCache.set(file.file_id, { scheme, timestamp: now });
       } catch (error) {
         this.logger.error(`--- Fehler beim Verarbeiten des Kodierschemas ${file.filename}: ${error.message}`);
-        // Use empty scheme for invalid schemes
         result.set(file.file_id, emptyScheme);
       }
     });
@@ -177,15 +193,11 @@ export class WorkspaceCodingService {
 
   private cleanupCaches(): void {
     const now = Date.now();
-
-    // Clean up coding scheme cache
     for (const [key, entry] of this.codingSchemeCache.entries()) {
       if (now - entry.timestamp > this.SCHEME_CACHE_TTL_MS) {
         this.codingSchemeCache.delete(key);
       }
     }
-
-    // Clean up test file cache
     for (const [key, entry] of this.testFileCache.entries()) {
       if (now - entry.timestamp > this.TEST_FILE_CACHE_TTL_MS) {
         this.testFileCache.delete(key);
@@ -202,11 +214,9 @@ export class WorkspaceCodingService {
       }
 
       if (bullJob) {
-        // Get job state and progress
         const state = await bullJob.getState();
         const progress = await bullJob.progress() || 0;
 
-        // Map Bull job state to our job status
         let status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'paused';
         switch (state) {
           case 'active':
@@ -229,7 +239,6 @@ export class WorkspaceCodingService {
             status = 'pending';
         }
 
-        // Get result from job return value if completed
         let result: CodingStatistics | undefined;
         let error: string | undefined;
 
@@ -272,7 +281,6 @@ export class WorkspaceCodingService {
         return { success: false, message: `Job with ID ${jobId} not found` };
       }
 
-      // Check if job can be cancelled
       const state = await bullJob.getState();
       if (state === 'completed' || state === 'failed') {
         return {
@@ -281,7 +289,6 @@ export class WorkspaceCodingService {
         };
       }
 
-      // Cancel the job
       const result = await this.jobQueueService.cancelTestPersonCodingJob(jobId);
       if (result) {
         this.logger.log(`Job ${jobId} has been cancelled successfully`);
@@ -301,7 +308,6 @@ export class WorkspaceCodingService {
         return { success: false, message: `Job with ID ${jobId} not found` };
       }
 
-      // Delete the job
       const result = await this.jobQueueService.deleteTestPersonCodingJob(jobId);
       if (result) {
         this.logger.log(`Job ${jobId} has been deleted successfully`);
@@ -316,22 +322,18 @@ export class WorkspaceCodingService {
 
   private async isJobCancelled(jobId: string | number): Promise<boolean> {
     try {
-      // Check Redis queue
       const bullJob = await this.jobQueueService.getTestPersonCodingJob(jobId.toString());
       if (bullJob) {
-        // Check if job is paused via our custom isPaused property
         if (bullJob.data.isPaused) {
           return true;
         }
-
-        // Also check Bull's native state
         const state = await bullJob.getState();
         return state === 'paused';
       }
       return false;
     } catch (error) {
       this.logger.error(`Error checking job cancellation or pause: ${error.message}`, error.stack);
-      return false; // Assume not cancelled or paused on error
+      return false;
     }
   }
 
@@ -361,7 +363,6 @@ export class WorkspaceCodingService {
         const batch = batches[index];
         this.logger.log(`Starte Aktualisierung für Batch #${index + 1} (Größe: ${batch.length}).`);
 
-        // Check for cancellation or pause before updating batch
         if (jobId && await this.isJobCancelled(jobId)) {
           this.logger.log(`Job ${jobId} was cancelled or paused before updating batch #${index + 1}`);
           await queryRunner.rollbackTransaction();
@@ -375,9 +376,9 @@ export class WorkspaceCodingService {
               ResponseEntity,
               response.id,
               {
-                code: response.code,
-                codedstatus: response.codedstatus,
-                score: response.score
+                code_v1: response.code_v1,
+                status_v1: response.status_v1,
+                score_v1: response.score_v1
               }
             ));
 
@@ -386,21 +387,18 @@ export class WorkspaceCodingService {
 
           this.logger.log(`Batch #${index + 1} (Größe: ${batch.length}) erfolgreich aktualisiert.`);
 
-          // Update progress during batch updates
           if (progressCallback) {
             const batchProgress = 95 + (5 * ((index + 1) / batches.length));
             progressCallback(Math.round(Math.min(batchProgress, 99))); // Cap at 99% until fully complete and round to integer
           }
         } catch (error) {
           this.logger.error(`Fehler beim Aktualisieren von Batch #${index + 1} (Größe: ${batch.length}):`, error.message);
-          // Rollback transaction on error
           await queryRunner.rollbackTransaction();
           await queryRunner.release();
           return false;
         }
       }
 
-      // Commit transaction if all updates were successful
       await queryRunner.commitTransaction();
       this.logger.log(`${allCodedResponses.length} Responses wurden erfolgreich aktualisiert.`);
 
@@ -408,18 +406,15 @@ export class WorkspaceCodingService {
         metrics.update = Date.now() - updateStart;
       }
 
-      // Always release the query runner
       await queryRunner.release();
       return true;
     } catch (error) {
       this.logger.error('Fehler beim Aktualisieren der Responses:', error.message);
-      // Ensure transaction is rolled back on error
       try {
         await queryRunner.rollbackTransaction();
       } catch (rollbackError) {
         this.logger.error('Fehler beim Rollback der Transaktion:', rollbackError.message);
       }
-      // Always release the query runner
       await queryRunner.release();
       return false;
     }
@@ -429,7 +424,7 @@ export class WorkspaceCodingService {
     units: Unit[],
     unitToResponsesMap: Map<number, ResponseEntity[]>,
     unitToCodingSchemeRefMap: Map<number, string>,
-    fileIdToCodingSchemeMap: Map<string, Autocoder.CodingScheme>,
+    fileIdToCodingSchemeMap: Map<string, CodingScheme>,
     allResponses: ResponseEntity[],
     statistics: CodingStatistics,
     jobId?: string,
@@ -440,7 +435,7 @@ export class WorkspaceCodingService {
     allCodedResponses.length = allResponses.length;
     let responseIndex = 0;
     const batchSize = 50;
-    const emptyScheme = new Autocoder.CodingScheme({});
+    const emptyScheme = new CodingScheme({});
 
     for (let i = 0; i < units.length; i += batchSize) {
       const unitBatch = units.slice(i, i + batchSize);
@@ -457,11 +452,11 @@ export class WorkspaceCodingService {
           emptyScheme;
 
         for (const response of responses) {
-          const codedResult = scheme.code([{
+          const codedResult = Autocoder.CodingFactory.code({
             id: response.variableid,
             value: response.value,
             status: response.status as ResponseStatusType
-          }]);
+          }, scheme.variableCodings[0]);
 
           const codedStatus = codedResult[0]?.status;
           if (!statistics.statusCounts[codedStatus]) {
@@ -471,15 +466,14 @@ export class WorkspaceCodingService {
 
           allCodedResponses[responseIndex] = {
             id: response.id,
-            code: codedResult[0]?.code,
-            codedstatus: codedStatus,
-            score: codedResult[0]?.score
+            code_v1: codedResult?.code,
+            status_v1: codedStatus,
+            score_v1: codedResult?.score
           };
           responseIndex += 1;
         }
       }
 
-      // Check for cancellation or pause during response processing
       if (jobId && await this.isJobCancelled(jobId)) {
         this.logger.log(`Job ${jobId} was cancelled or paused during response processing`);
         if (queryRunner) {
@@ -491,7 +485,6 @@ export class WorkspaceCodingService {
 
     allCodedResponses.length = responseIndex;
 
-    // Report progress after processing
     if (progressCallback) {
       progressCallback(95);
     }
@@ -503,11 +496,8 @@ export class WorkspaceCodingService {
     codingSchemeRefs: Set<string>,
     jobId?: string,
     queryRunner?: import('typeorm').QueryRunner
-  ): Promise<Map<string, Autocoder.CodingScheme>> {
-    // Use cache for coding schemes
+  ): Promise<Map<string, CodingScheme>> {
     const fileIdToCodingSchemeMap = await this.getCodingSchemesWithCache([...codingSchemeRefs]);
-
-    // Check for cancellation or pause
     if (jobId && await this.isJobCancelled(jobId)) {
       this.logger.log(`Job ${jobId} was cancelled or paused after getting coding scheme files`);
       if (queryRunner) {
@@ -547,8 +537,6 @@ export class WorkspaceCodingService {
           this.logger.error(`--- Fehler beim Verarbeiten der Datei ${testFile.filename}: ${error.message}`);
         }
       }
-
-      // Check for cancellation or pause during scheme extraction
       if (jobId && await this.isJobCancelled(jobId)) {
         this.logger.log(`Job ${jobId} was cancelled or paused during scheme extraction`);
         if (queryRunner) {
@@ -567,7 +555,6 @@ export class WorkspaceCodingService {
     progressCallback?: (progress: number) => void,
     jobId?: string
   ): Promise<CodingStatistics> {
-    // Clean up expired cache entries
     this.cleanupCaches();
 
     const startTime = Date.now();
@@ -582,7 +569,6 @@ export class WorkspaceCodingService {
       progressCallback(0);
     }
 
-    // Check for cancellation or pause before starting work
     if (jobId && await this.isJobCancelled(jobId)) {
       this.logger.log(`Job ${jobId} was cancelled or paused before processing started`);
       return statistics;
@@ -705,7 +691,7 @@ export class WorkspaceCodingService {
       // Step 5: Get responses - 50% progress
       const responseQueryStart = Date.now();
       const allResponses = await this.responseRepository.find({
-        where: { unitid: In(unitIdsArray), status: In(['VALUE_CHANGED']) },
+        where: { unitid: In(unitIdsArray), status: In(['VALUE_CHANGED', 'DISPLAYED', 'NOT_REACHED']) },
         select: ['id', 'unitid', 'variableid', 'value', 'status'] // Only select needed fields
       });
       metrics.responseQuery = Date.now() - responseQueryStart;
@@ -905,9 +891,6 @@ export class WorkspaceCodingService {
       return { totalResponses: 0, statusCounts: {} };
     }
 
-    // Check if the input contains groups or person IDs
-    // If all items can be parsed as numbers, they are person IDs
-    // Otherwise, they are group names
     const areAllNumbers = groupsOrIds.every(item => !Number.isNaN(Number(item)));
 
     let personIds: string[] = [];
@@ -1030,7 +1013,7 @@ export class WorkspaceCodingService {
       const responses = await this.responseRepository.find({
         where: {
           unitid: In(unitIds),
-          codedstatus: In(['CODING_INCOMPLETE', 'INTENDED_INCOMPLETE', 'CODE_SELECTION_PENDING'])
+          status_v1: In(['CODING_INCOMPLETE', 'INTENDED_INCOMPLETE', 'CODE_SELECTION_PENDING'])
         }
       });
 
@@ -1088,7 +1071,7 @@ export class WorkspaceCodingService {
           .leftJoinAndSelect('unit.booklet', 'booklet')
           .leftJoinAndSelect('booklet.person', 'person')
           .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
-          .where('response.codedStatus = :status', { status: 'CODING_INCOMPLETE' })
+          .where('response.status_v1 = :status', { status: 8 }) // CODING_INCOMPLETE = 8
           .andWhere('person.workspace_id = :workspace_id', { workspace_id })
           .skip((validPage - 1) * validLimit)
           .take(MAX_LIMIT) // Set a very high limit to fetch all items
@@ -1171,7 +1154,7 @@ export class WorkspaceCodingService {
         .leftJoinAndSelect('unit.booklet', 'booklet')
         .leftJoinAndSelect('booklet.person', 'person')
         .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
-        .where('response.codedStatus = :status', { status: 'CODING_INCOMPLETE' })
+        .where('response.status_v1 = :status', { status: 'CODING_INCOMPLETE' })
         .andWhere('person.workspace_id = :workspace_id', { workspace_id })
         .orderBy('response.id', 'ASC');
 
@@ -1272,7 +1255,7 @@ export class WorkspaceCodingService {
     try {
       const statusCountResults = await this.responseRepository.query(`
         SELECT
-          response.codedstatus as "statusValue",
+          response.status_v1 as "statusValue",
           COUNT(response.id) as count
         FROM response
         INNER JOIN unit ON response.unitid = unit.id
@@ -1281,7 +1264,7 @@ export class WorkspaceCodingService {
         WHERE response.status = $1
           AND person.workspace_id = $2
           AND person.consider = $3
-        GROUP BY response.codedstatus
+        GROUP BY response.status_v1
       `, ['VALUE_CHANGED', workspace_id, true]);
 
       let totalResponses = 0;
@@ -1366,17 +1349,14 @@ export class WorkspaceCodingService {
     try {
       this.logger.log(`Getting missings profiles for workspace ${workspaceId}`);
 
-      // Get the setting with key 'missings-profile-iqb-standard'
       const setting = await this.settingRepository.findOne({
         where: { key: 'missings-profile-iqb-standard' }
       });
 
       if (!setting) {
-        // If no profiles exist yet, create a default one
         const defaultProfiles = this.createDefaultMissingsProfiles();
         await this.saveMissingsProfiles(defaultProfiles);
 
-        // Return just the labels
         return defaultProfiles.map(profile => ({ label: profile.label }));
       }
 
@@ -1396,7 +1376,6 @@ export class WorkspaceCodingService {
 
   private async getMissingsProfileByLabel(label: string): Promise<MissingsProfilesDto | null> {
     try {
-      // Get the setting with key 'missings-profile-iqb-standard'
       const setting = await this.settingRepository.findOne({
         where: { key: 'missings-profile-iqb-standard' }
       });
@@ -1405,7 +1384,6 @@ export class WorkspaceCodingService {
         return null;
       }
 
-      // Parse the profiles from the setting content
       try {
         const profiles: MissingsProfilesDto[] = JSON.parse(setting.content);
         const profile = profiles.find(p => p.label === label);
@@ -1488,7 +1466,6 @@ export class WorkspaceCodingService {
 
   private async saveMissingsProfiles(profiles: MissingsProfilesDto[]): Promise<void> {
     try {
-      // Create or update the setting
       let setting = await this.settingRepository.findOne({
         where: { key: 'missings-profile-iqb-standard' }
       });
@@ -1510,7 +1487,6 @@ export class WorkspaceCodingService {
     try {
       this.logger.log(`Creating missings profile for workspace ${workspaceId}`);
 
-      // Get all existing profiles
       const setting = await this.settingRepository.findOne({
         where: { key: 'missings-profile-iqb-standard' }
       });
@@ -1526,14 +1502,12 @@ export class WorkspaceCodingService {
         }
       }
 
-      // Check if a profile with the same label already exists
       const existingProfile = profiles.find(p => p.label === profile.label);
       if (existingProfile) {
         this.logger.error(`A missings profile with label '${profile.label}' already exists`);
         return null;
       }
 
-      // Add the new profile
       profiles.push(profile);
 
       // Save the updated profiles
@@ -1966,7 +1940,7 @@ export class WorkspaceCodingService {
 
       // Step 2: Count total number of unique unit-variable-code combinations
       const countQuery = this.responseRepository.createQueryBuilder('response')
-        .select('COUNT(DISTINCT CONCAT(unit.name, response.variableid, response.code))', 'count')
+        .select('COUNT(DISTINCT CONCAT(unit.name, response.variableid, response.code_v1))', 'count')
         .leftJoin('response.unit', 'unit')
         .leftJoin('unit.booklet', 'booklet')
         .leftJoin('booklet.person', 'person')
@@ -1990,9 +1964,9 @@ export class WorkspaceCodingService {
       const aggregationQuery = this.responseRepository.createQueryBuilder('response')
         .select('unit.name', 'unitId')
         .addSelect('response.variableid', 'variableId')
-        .addSelect('response.code', 'code')
+        .addSelect('response.code_v1', 'code_v1')
         .addSelect('COUNT(response.id)', 'occurrenceCount')
-        .addSelect('MAX(response.score)', 'score') // Use MAX as a sample score
+        .addSelect('MAX(response.score_v1)', 'score_V1') // Use MAX as a sample score
         .leftJoin('response.unit', 'unit')
         .leftJoin('unit.booklet', 'booklet')
         .leftJoin('booklet.person', 'person')
@@ -2011,10 +1985,10 @@ export class WorkspaceCodingService {
       aggregationQuery
         .groupBy('unit.name')
         .addGroupBy('response.variableid')
-        .addGroupBy('response.code')
+        .addGroupBy('response.code_v1')
         .orderBy('unit.name', 'ASC')
         .addOrderBy('response.variableid', 'ASC')
-        .addOrderBy('response.code', 'ASC')
+        .addOrderBy('response.code_v1', 'ASC')
         .offset((page - 1) * limit)
         .limit(limit);
 
@@ -2145,13 +2119,10 @@ export class WorkspaceCodingService {
         const occurrenceCount = parseInt(item.occurrenceCount, 10);
         const score = parseFloat(item.score) || 0;
 
-        // Get total count for this unit-variable combination
         const variableTotalCount = unitVariableCounts.get(unitId)?.get(variableId) || 0;
 
-        // Calculate relative occurrence
         const relativeOccurrence = variableTotalCount > 0 ? occurrenceCount / variableTotalCount : 0;
 
-        // Get coding scheme information
         let derivation = '';
         let description = '';
         const codingScheme = codingSchemeMap.get(unitId);
@@ -2163,22 +2134,18 @@ export class WorkspaceCodingService {
           }
         }
 
-        // Skip items where derivation is BASE_NO_VALUE or empty
         if (derivation === 'BASE_NO_VALUE' || derivation === '') {
           continue;
         }
 
-        // Get sample info for replay URL
         const sampleInfo = sampleInfoMap.get(`${unitId}|${variableId}`);
         const loginName = sampleInfo?.loginName || '';
         const loginCode = sampleInfo?.loginCode || '';
         const bookletId = sampleInfo?.bookletId || '';
 
-        // Generate replay URL
         const variablePage = '0';
         const replayUrl = `${serverUrl}/#/replay/${loginName}@${loginCode}@${bookletId}/${unitId}/${variablePage}/${variableId}?auth=${authToken}`;
 
-        // Add to result
         result.push({
           replayUrl,
           unitId,
@@ -2193,7 +2160,6 @@ export class WorkspaceCodingService {
         });
       }
 
-      // Apply derivation filter if provided
       if (derivationFilter && derivationFilter.trim() !== '') {
         const filteredResult = result.filter(item => item.derivation.toLowerCase().includes(derivationFilter.toLowerCase()));
 
@@ -2205,7 +2171,7 @@ export class WorkspaceCodingService {
 
         return {
           data: filteredResult,
-          total: filteredCount, // Update total count to reflect filtered results
+          total: filteredCount,
           page,
           limit
         };
@@ -2226,19 +2192,12 @@ export class WorkspaceCodingService {
     }
   }
 
-  /**
-   * Export validation results as Excel with complete database content from Redis cache
-   * @param workspaceId Workspace ID
-   * @param cacheKey Cache key to retrieve complete validation results
-   * @returns Excel buffer with complete data
-   */
   async exportValidationResultsAsExcel(
     workspaceId: number,
     cacheKey: string
   ): Promise<Buffer> {
     this.logger.log(`Exporting validation results as Excel for workspace ${workspaceId} using cache key ${cacheKey}`);
 
-    // Validate input parameters
     if (!cacheKey || typeof cacheKey !== 'string') {
       const errorMessage = 'Invalid cache key provided';
       this.logger.error(`${errorMessage}: ${cacheKey}`);
@@ -2246,26 +2205,20 @@ export class WorkspaceCodingService {
     }
 
     try {
-      // Retrieve complete validation results from cache
       this.logger.log(`Attempting to retrieve cached data with key: ${cacheKey}`);
       const cachedData = await this.cacheService.getCompleteValidationResults(cacheKey);
 
       if (!cachedData) {
-        const errorMessage = 'Validation results not found in cache. Please run validation again.';
         this.logger.error(`No cached validation results found for cache key ${cacheKey}`);
-        // Additional logging to help debug cache issues
         this.logger.error('Cache key format: validation:{workspaceId}:{hash}');
         this.logger.error(`Expected pattern: validation:${workspaceId}:*`);
-        throw new Error(errorMessage);
       }
 
       const validationResults = cachedData.results;
       this.logger.log(`Successfully retrieved ${validationResults.length} validation results from cache for export`);
 
       if (!validationResults || validationResults.length === 0) {
-        const errorMessage = 'No validation data available for export. Please run validation again.';
         this.logger.error('Cached data exists but contains no validation results');
-        throw new Error(errorMessage);
       }
 
       const workbook = new ExcelJS.Workbook();
@@ -2286,7 +2239,6 @@ export class WorkspaceCodingService {
         { header: 'Last Modified', key: 'last_modified', width: 20 }
       ];
 
-      // Add header style
       worksheet.getRow(1).font = { bold: true };
       worksheet.getRow(1).fill = {
         type: 'pattern',
@@ -2386,14 +2338,6 @@ export class WorkspaceCodingService {
     }
   }
 
-  /**
-   * Validate completeness of coding responses with Redis caching and complete backend processing
-   * @param workspaceId Workspace ID
-   * @param expectedCombinations Expected combinations from Excel
-   * @param page Page number (1-based)
-   * @param pageSize Number of items per page
-   * @returns Validation results with pagination metadata
-   */
   async validateCodingCompleteness(
     workspaceId: number,
     expectedCombinations: ExpectedCombinationDto[],
@@ -2404,7 +2348,6 @@ export class WorkspaceCodingService {
       this.logger.log(`Validating coding completeness for workspace ${workspaceId} with ${expectedCombinations.length} expected combinations`);
       const startTime = Date.now();
 
-      // Generate cache key based on workspace and combinations hash
       const combinationsHash = this.generateExpectedCombinationsHash(expectedCombinations);
       const cacheKey = this.cacheService.generateValidationCacheKey(workspaceId, combinationsHash);
 
@@ -2426,21 +2369,17 @@ export class WorkspaceCodingService {
         };
       }
 
-      // No cache found - process ALL combinations and cache the complete results
       this.logger.log(`No cached results found. Processing all ${expectedCombinations.length} combinations for workspace ${workspaceId}`);
 
       const allResults: ValidationResultDto[] = [];
       let totalMissingCount = 0;
 
-      // Process all combinations in batches to avoid overwhelming the database
       const batchSize = 100;
       for (let i = 0; i < expectedCombinations.length; i += batchSize) {
         const batch = expectedCombinations.slice(i, i + batchSize);
         this.logger.log(`Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(expectedCombinations.length / batchSize)}`);
 
-        // Process each combination in the batch
         for (const expected of batch) {
-          // Build a query to check if the response exists
           const responseExists = await this.responseRepository
             .createQueryBuilder('response')
             .innerJoin('response.unit', 'unit')
@@ -2456,7 +2395,6 @@ export class WorkspaceCodingService {
             .andWhere('response.value != :empty', { empty: '' })
             .getCount();
 
-          // Add the result
           const status = responseExists > 0 ? 'EXISTS' : 'MISSING';
           if (status === 'MISSING') {
             totalMissingCount += 1;
@@ -2469,7 +2407,6 @@ export class WorkspaceCodingService {
         }
       }
 
-      // Cache the complete results
       const metadata = {
         total: expectedCombinations.length,
         missing: totalMissingCount,
@@ -2484,7 +2421,6 @@ export class WorkspaceCodingService {
         this.logger.warn(`Failed to cache validation results for workspace ${workspaceId}`);
       }
 
-      // Now get the paginated results from the complete data
       cachedResults = await this.cacheService.getPaginatedValidationResults(cacheKey, page, pageSize);
 
       const endTime = Date.now();
@@ -2500,7 +2436,7 @@ export class WorkspaceCodingService {
           totalPages: cachedResults.metadata.totalPages,
           hasNextPage: cachedResults.metadata.hasNextPage,
           hasPreviousPage: cachedResults.metadata.hasPreviousPage,
-          cacheKey // Include cache key in response for subsequent requests
+          cacheKey
         };
       }
 
@@ -2537,7 +2473,7 @@ export class WorkspaceCodingService {
         .leftJoinAndSelect('response.unit', 'unit')
         .leftJoinAndSelect('unit.booklet', 'booklet')
         .leftJoinAndSelect('booklet.person', 'person')
-        .where('response.codedStatus = :status', { status: 'CODING_INCOMPLETE' })
+        .where('response.status_v1 = :status', { status: 'CODING_INCOMPLETE' })
         .andWhere('person.workspace_id = :workspace_id', { workspace_id: workspaceId });
 
       if (unitName) {
@@ -2569,5 +2505,444 @@ export class WorkspaceCodingService {
       this.logger.error(`Error getting CODING_INCOMPLETE variables: ${error.message}`, error.stack);
       throw new Error('Could not get CODING_INCOMPLETE variables. Please check the database connection.');
     }
+  }
+
+  async importExternalCodingWithProgress(
+    workspaceId: number,
+    body: ExternalCodingImportBody,
+    progressCallback: (progress: number, message: string) => void
+  ): Promise<{
+      message: string;
+      processedRows: number;
+      updatedRows: number;
+      errors: string[];
+      affectedRows: Array<{
+        unitAlias: string;
+        variableId: string;
+        personCode?: string;
+        personLogin?: string;
+        personGroup?: string;
+        bookletName?: string;
+        originalCodedStatus: string;
+        originalCode: number | null;
+        originalScore: number | null;
+        updatedCodedStatus: string | null;
+        updatedCode: number | null;
+        updatedScore: number | null;
+      }>;
+    }> {
+    return this.importExternalCoding(workspaceId, body, progressCallback);
+  }
+
+  async importExternalCoding(
+    workspaceId: number,
+    body: ExternalCodingImportBody,
+    progressCallback?: (progress: number, message: string) => void
+  ): Promise<{
+      message: string;
+      processedRows: number;
+      updatedRows: number;
+      errors: string[];
+      affectedRows: Array<{
+        unitAlias: string;
+        variableId: string;
+        personCode?: string;
+        personLogin?: string;
+        personGroup?: string;
+        bookletName?: string;
+        originalCodedStatus: string;
+        originalCode: number | null;
+        originalScore: number | null;
+        updatedCodedStatus: string | null;
+        updatedCode: number | null;
+        updatedScore: number | null;
+      }>;
+    }> {
+    try {
+      this.logger.log(`Starting external coding import for workspace ${workspaceId}`);
+      progressCallback?.(5, 'Starting external coding import...');
+
+      const fileData = body.file; // Assuming base64 encoded file data
+      const fileName = body.fileName || 'external-coding.csv';
+
+      let parsedData: ExternalCodingRow[] = [];
+      const errors: string[] = [];
+
+      progressCallback?.(10, 'Parsing file...');
+
+      if (fileName.endsWith('.csv')) {
+        parsedData = await this.parseCSVFile(fileData);
+      } else if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
+        parsedData = await this.parseExcelFile(fileData);
+      } else {
+        this.logger.error(`Unsupported file format: ${fileName}. Please use CSV or Excel files.`);
+        return {
+          message: 'Unsupported file format. Please use CSV or Excel files.',
+          processedRows: 0,
+          updatedRows: 0,
+          errors: ['Unsupported file format. Please use CSV or Excel files.'],
+          affectedRows: []
+        };
+      }
+
+      this.logger.log(`Parsed ${parsedData.length} rows from external coding file`);
+      progressCallback?.(20, `Parsed ${parsedData.length} rows from file`);
+
+      let updatedRows = 0;
+      const processedRows = parsedData.length;
+      const affectedRows: Array<{
+        unitAlias: string;
+        variableId: string;
+        personCode?: string;
+        personLogin?: string;
+        personGroup?: string;
+        bookletName?: string;
+        originalCodedStatus: string;
+        originalCode: number | null;
+        originalScore: number | null;
+        updatedCodedStatus: string | null;
+        updatedCode: number | null;
+        updatedScore: number | null;
+      }> = [];
+
+      // Process data in batches for better performance
+      const batchSize = 1000;
+      const totalBatches = Math.ceil(parsedData.length / batchSize);
+
+      this.logger.log(`Processing ${parsedData.length} rows in ${totalBatches} batches of ${batchSize}`);
+      progressCallback?.(25, `Starting to process ${parsedData.length} rows in ${totalBatches} batches`);
+
+      for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
+        const batchStart = batchIndex * batchSize;
+        const batchEnd = Math.min(batchStart + batchSize, parsedData.length);
+        const batch = parsedData.slice(batchStart, batchEnd);
+
+        this.logger.log(`Processing batch ${batchIndex + 1}/${totalBatches} (rows ${batchStart + 1}-${batchEnd})`);
+
+        // Calculate progress: 25% start + 70% for batch processing
+        const batchProgress = 25 + Math.floor(((batchIndex) / totalBatches) * 70);
+        progressCallback?.(batchProgress, `Processing batch ${batchIndex + 1}/${totalBatches} (rows ${batchStart + 1}-${batchEnd})`);
+
+        for (const row of batch) {
+          try {
+            const {
+              unit_alias: unitAlias, variable_id: variableId, status, score, code,
+              person_code: personCode, person_login: personLogin, person_group: personGroup, booklet_name: bookletName
+            } = row;
+
+            if (!unitAlias || !variableId) {
+              errors.push(`Row missing required fields: unit_alias=${unitAlias}, variable_id=${variableId}`);
+              continue;
+            }
+
+            const queryBuilder = this.responseRepository
+              .createQueryBuilder('response')
+              .select(['response.id', 'response.status_v1', 'response.code_v1', 'response.score_v1',
+                'response.status_v2', 'response.code_v2', 'response.score_v2',
+                'unit.alias', 'person.code', 'person.login', 'person.group', 'bookletinfo.name'])
+              .innerJoin('response.unit', 'unit')
+              .innerJoin('unit.booklet', 'booklet')
+              .innerJoin('booklet.person', 'person')
+              .innerJoin('booklet.bookletinfo', 'bookletinfo')
+              .where('unit.alias = :unitAlias', { unitAlias })
+              .andWhere('response.variableid = :variableId', { variableId })
+              .andWhere('person.workspace_id = :workspaceId', { workspaceId });
+
+            if (personCode) {
+              queryBuilder.andWhere('person.code = :personCode', { personCode });
+            }
+            if (personLogin) {
+              queryBuilder.andWhere('person.login = :personLogin', { personLogin });
+            }
+            if (personGroup) {
+              queryBuilder.andWhere('person.group = :personGroup', { personGroup });
+            }
+            if (bookletName) {
+              queryBuilder.andWhere('bookletinfo.name = :bookletName', { bookletName });
+            }
+
+            const queryParameters: QueryParameters = {
+              unitAlias,
+              variableId,
+              workspaceId
+            };
+
+            if (personCode) {
+              queryParameters.personCode = personCode;
+            }
+            if (personLogin) {
+              queryParameters.personLogin = personLogin;
+            }
+            if (personGroup) {
+              queryParameters.personGroup = personGroup;
+            }
+            if (bookletName) {
+              queryParameters.bookletName = bookletName;
+            }
+
+            const responsesToUpdate = await queryBuilder.setParameters(queryParameters).getMany();
+
+            if (responsesToUpdate.length > 0) {
+              const responseIds = responsesToUpdate.map(r => r.id);
+              const updateResult = await this.responseRepository
+                .createQueryBuilder()
+                .update(ResponseEntity)
+                .set({
+                  status_v2: status || null,
+                  code_v2: code ? parseInt(code.toString(), 10) : null,
+                  score_v2: score ? parseInt(score.toString(), 10) : null
+                })
+                .where('id IN (:...ids)', { ids: responseIds })
+                .execute();
+
+              if (updateResult.affected && updateResult.affected > 0) {
+                updatedRows += updateResult.affected;
+
+                // Add comparison data for each affected response
+                responsesToUpdate.forEach(response => {
+                  affectedRows.push({
+                    unitAlias: response.unit?.alias || unitAlias,
+                    variableId,
+                    personCode: response.unit?.booklet?.person?.code || undefined,
+                    personLogin: response.unit?.booklet?.person?.login || undefined,
+                    personGroup: response.unit?.booklet?.person?.group || undefined,
+                    bookletName: response.unit?.booklet?.bookletinfo?.name || undefined,
+                    originalCodedStatus: response.status_v1,
+                    originalCode: response.code_v1,
+                    originalScore: response.score_v1,
+                    updatedCodedStatus: status || null,
+                    updatedCode: code ? parseInt(code.toString(), 10) : null,
+                    updatedScore: score ? parseInt(score.toString(), 10) : null
+                  });
+                });
+              }
+            } else {
+              const matchingCriteria = [`unit_alias=${unitAlias}`, `variable_id=${variableId}`];
+              if (personCode) matchingCriteria.push(`person_code=${personCode}`);
+              if (personLogin) matchingCriteria.push(`person_login=${personLogin}`);
+              if (personGroup) matchingCriteria.push(`person_group=${personGroup}`);
+              if (bookletName) matchingCriteria.push(`booklet_name=${bookletName}`);
+              errors.push(`No response found for ${matchingCriteria.join(', ')}`);
+            }
+          } catch (rowError) {
+            errors.push(`Error processing row: ${rowError.message}`);
+            this.logger.error(`Error processing row: ${rowError.message}`, rowError.stack);
+          }
+        }
+
+        // Small delay between batches to prevent overwhelming the database
+        if (batchIndex < totalBatches - 1) {
+          await new Promise(resolve => {
+            setTimeout(resolve, 10);
+          });
+        }
+      }
+
+      const message = `External coding import completed. Processed ${processedRows} rows, updated ${updatedRows} response records.`;
+      this.logger.log(message);
+      progressCallback?.(100, `Import completed: ${updatedRows} of ${processedRows} rows updated`);
+
+      return {
+        message,
+        processedRows,
+        updatedRows,
+        errors,
+        affectedRows
+      };
+    } catch (error) {
+      this.logger.error(`Error importing external coding: ${error.message}`, error.stack);
+      progressCallback?.(0, `Import failed: ${error.message}`);
+      throw new Error(`Could not import external coding data: ${error.message}`);
+    }
+  }
+
+  private async parseCSVFile(fileData: string): Promise<ExternalCodingRow[]> {
+    return new Promise((resolve, reject) => {
+      const results: ExternalCodingRow[] = [];
+      const buffer = Buffer.from(fileData, 'base64');
+      let rowCount = 0;
+
+      fastCsv.parseString(buffer.toString(), { headers: true })
+        .on('error', error => reject(error))
+        .on('data', row => {
+          if (Object.values(row).some(value => value && value.toString().trim() !== '')) {
+            results.push(row);
+            rowCount += 1;
+
+            // Log progress for large files
+            if (rowCount % 10000 === 0) {
+              this.logger.log(`Parsed ${rowCount} rows...`);
+            }
+
+            // Memory protection: limit to 200k rows to prevent memory overflow
+            if (rowCount > 200000) {
+              reject(new Error('File too large. Maximum 200,000 rows supported.'));
+            }
+          }
+        })
+        .on('end', () => {
+          this.logger.log(`CSV parsing completed. Total rows: ${results.length}`);
+          resolve(results);
+        });
+    });
+  }
+
+  private async parseExcelFile(fileData: string): Promise<ExternalCodingRow[]> {
+    const buffer = Buffer.from(fileData, 'base64');
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(buffer);
+
+    const worksheet = workbook.getWorksheet(1);
+    if (!worksheet) {
+      throw new Error('No worksheet found in Excel file');
+    }
+
+    const results: ExternalCodingRow[] = [];
+    const headers: string[] = [];
+
+    const headerRow = worksheet.getRow(1);
+    headerRow.eachCell((cell, colNumber) => {
+      headers[colNumber] = cell.text || cell.value?.toString() || '';
+    });
+
+    this.logger.log(`Starting Excel parsing. Total rows: ${worksheet.rowCount - 1}`);
+
+    // Memory protection: limit to 200k rows
+    const maxRows = Math.min(worksheet.rowCount, 200001); // +1 for header row
+    if (worksheet.rowCount > 200001) {
+      throw new Error('File too large. Maximum 200,000 rows supported.');
+    }
+
+    // Parse data rows
+    for (let rowNumber = 2; rowNumber <= maxRows; rowNumber++) {
+      const row = worksheet.getRow(rowNumber);
+      const rowData: ExternalCodingRow = {};
+
+      row.eachCell((cell, colNumber) => {
+        const header = headers[colNumber];
+        if (header) {
+          rowData[header] = cell.text || cell.value?.toString() || '';
+        }
+      });
+
+      // Only add non-empty rows
+      if (Object.values(rowData).some(value => value && value.toString().trim() !== '')) {
+        results.push(rowData);
+      }
+
+      // Log progress for large files
+      if ((rowNumber - 1) % 10000 === 0) {
+        this.logger.log(`Parsed ${rowNumber - 1} rows...`);
+      }
+    }
+
+    this.logger.log(`Excel parsing completed. Total rows: ${results.length}`);
+    return results;
+  }
+
+  async generateCoderTrainingPackages(
+    workspaceId: number,
+    selectedCoders: { id: number; name: string }[],
+    variableConfigs: { variableName: string; sampleCount: number }[]
+  ): Promise<{
+      coderId: number;
+      coderName: string;
+      responses: CoderTrainingResponse[];
+    }[]> {
+    try {
+      this.logger.log(`Generating coder training packages for workspace ${workspaceId}`);
+
+      const incompleteResponses = await this.responseRepository
+        .createQueryBuilder('response')
+        .innerJoin('response.unit', 'unit')
+        .innerJoin('unit.booklet', 'booklet')
+        .innerJoin('booklet.person', 'person')
+        .innerJoin('booklet.bookletinfo', 'bookletinfo')
+        .select([
+          'response.id',
+          'response.variableid',
+          'response.value',
+          'unit.alias',
+          'unit.name',
+          'unit.booklet',
+          'booklet.person',
+          'person.login',
+          'person.code',
+          'person.group',
+          'booklet.bookletinfo',
+          'bookletinfo.name'
+        ])
+        .where('response.status_v1 = :status', { status: 'CODING_INCOMPLETE' })
+        .andWhere('person.workspace_id = :workspaceId', { workspaceId })
+        .getMany();
+
+      this.logger.log(`Found ${JSON.stringify(incompleteResponses)} responses with CODING_INCOMPLETE status`);
+
+      // Group responses by variable (combination of variableId + unitAlias)
+      const variableResponsesMap = new Map<string, typeof incompleteResponses>();
+
+      incompleteResponses.forEach(response => {
+        const variable = `${response.variableid}_${response.unit.alias}`;
+        if (!variableResponsesMap.has(variable)) {
+          variableResponsesMap.set(variable, []);
+        }
+        variableResponsesMap.get(variable)!.push(response);
+      });
+
+      this.logger.log(`Grouped responses into ${variableResponsesMap.size} unique variables`);
+
+      const trainingPackages = selectedCoders.map(coder => {
+        const coderResponses: CoderTrainingResponse[] = [];
+        variableConfigs.forEach(config => {
+          const matchingVariables = Array.from(variableResponsesMap.keys()).filter(variable => variable.toLowerCase().includes(config.variableName.toLowerCase()) ||
+            config.variableName.toLowerCase().includes(variable.toLowerCase())
+          );
+
+          matchingVariables.forEach(variable => {
+            const responses = variableResponsesMap.get(variable) || [];
+            const sampledResponses = this.sampleResponses(responses, config.sampleCount);
+
+            sampledResponses.forEach(response => {
+              const person = response.unit?.booklet?.person;
+              const bookletInfo = response.unit?.booklet?.bookletinfo;
+
+              coderResponses.push({
+                responseId: response.id,
+                unitAlias: response.unit?.alias || '',
+                variableId: response.variableid,
+                unitName: response.unit?.name || '',
+                value: response.value || '',
+                personLogin: person?.login || '',
+                personCode: person?.code || '',
+                personGroup: person?.group || '',
+                bookletName: bookletInfo?.name || '',
+                variable: variable
+              });
+            });
+          });
+        });
+        return {
+          coderId: coder.id,
+          coderName: coder.name,
+          responses: coderResponses
+        };
+      });
+
+      this.logger.log(`Generated training packages for ${selectedCoders.length} coders`);
+      return trainingPackages;
+    } catch (error) {
+      this.logger.error(`Error generating coder training packages: ${error.message}`, error.stack);
+      throw new Error(`Could not generate coder training packages: ${error.message}`);
+    }
+  }
+
+  private sampleResponses<T>(responses: T[], sampleCount: number): T[] {
+    if (responses.length <= sampleCount) {
+      return [...responses];
+    }
+
+    // Shuffle array and take first sampleCount items
+    const shuffled = [...responses].sort(() => Math.random() - 0.5);
+    return shuffled.slice(0, sampleCount);
   }
 }

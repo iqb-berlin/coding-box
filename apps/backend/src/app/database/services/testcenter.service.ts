@@ -3,13 +3,12 @@ import { HttpService } from '@nestjs/axios';
 import * as https from 'https';
 import { catchError, firstValueFrom } from 'rxjs';
 import { logger } from 'nx/src/utils/logger';
-import { Person, Response } from './shared-types';
-import {
-  ImportOptions
-} from '../../../../../frontend/src/app/ws-admin/components/test-center-import/test-center-import.component';
+import { Person, Response, Log } from './shared-types';
+
 import { TestGroupsInfoDto } from '../../../../../../api-dto/files/test-groups-info.dto';
 import { PersonService } from './person.service';
 import { WorkspaceFilesService } from './workspace-files.service';
+import { ImportOptions } from '../../../../../frontend/src/app/services/import.service';
 
 const agent = new https.Agent({
   rejectUnauthorized: false
@@ -36,16 +35,6 @@ type File = {
   data: string
 };
 
-export type Log = {
-  groupname:string,
-  loginname : string,
-  code : string,
-  bookletname : string,
-  unitname : string,
-  timestamp: number,
-  logentry : string,
-};
-
 export type Result = {
   success: boolean,
   testFiles: number,
@@ -54,7 +43,13 @@ export type Result = {
   booklets: number,
   units: number,
   persons: number,
-  importedGroups: string
+  importedGroups: string,
+  filesPlayer?: number,
+  filesUnits?: number,
+  filesDefinitions?: number,
+  filesCodings?: number,
+  filesBooklets?: number,
+  filesTestTakers?: number
 };
 
 @Injectable()
@@ -152,8 +147,9 @@ export class TestcenterService {
     logger.log('Import response data from TC');
     const headersRequest = this.createHeaders(authToken);
     const chunks = this.createChunks(testGroups.split(','), 2);
+    const allRawResponses: Response[] = [];
 
-    return chunks.map(async chunk => {
+    for (const chunk of chunks) {
       const endpoint = url ?
         `${url}/api/workspace/${tc_workspace}/report/response?dataIds=${chunk.join(',')}` :
         `https://www.iqb-testcenter${server}.de/api/workspace/${tc_workspace}/report/response?dataIds=${chunk.join(',')}`;
@@ -163,21 +159,29 @@ export class TestcenterService {
           httpsAgent: agent,
           headers: headersRequest
         });
+        allRawResponses.push(...rawResponses);
+      } catch (error) {
+        logger.error('Error fetching response chunk:');
+        throw error;
+      }
+    }
 
-        this.persons = await this.personService.createPersonList(rawResponses, Number(workspace_id));
+    return [Promise.resolve().then(async () => {
+      try {
+        this.persons = await this.personService.createPersonList(allRawResponses, Number(workspace_id));
 
         const personList = await Promise.all(
           this.persons.map(async person => {
-            const personWithBooklets = await this.personService.assignBookletsToPerson(person, rawResponses);
-            return this.personService.assignUnitsToBookletAndPerson(personWithBooklets, rawResponses);
+            const personWithBooklets = await this.personService.assignBookletsToPerson(person, allRawResponses);
+            return this.personService.assignUnitsToBookletAndPerson(personWithBooklets, allRawResponses);
           })
         );
         await this.personService.processPersonBooklets(personList, Number(workspace_id));
       } catch (error) {
-        logger.error('Error processing response chunk:');
+        logger.error('Error processing consolidated response data:');
         throw error;
       }
-    });
+    })];
   }
 
   private async importLogs(
@@ -192,20 +196,30 @@ export class TestcenterService {
     logger.log('Import logs data from TC');
     const headersRequest = this.createHeaders(authToken);
     const logsChunks = this.createChunks(testGroups.split(','), 2);
-    const logsPromises = logsChunks.map(async chunk => {
+    const allLogData: Log[] = [];
+    for (const chunk of logsChunks) {
       const logsUrl = url ?
         `${url}/api/workspace/${tc_workspace}/report/log?dataIds=${chunk.join(',')}` :
         `https://iqb-testcenter${server}.de/api/workspace/${tc_workspace}/report/log?dataIds=${chunk.join(',')}`;
+
       try {
         const { data: logData } = await this.httpService.axiosRef.get<Log[]>(logsUrl, {
           httpsAgent: agent,
           headers: headersRequest
         });
-        const { bookletLogs, unitLogs } = this.separateLogsByType(logData);
+        allLogData.push(...logData);
+      } catch (error) {
+        logger.error(`Error fetching log chunk: ${error.message}`);
+        throw error;
+      }
+    }
 
-        const persons = await this.personService.createPersonList(logData, Number(workspace_id));
+    return [Promise.resolve().then(async () => {
+      try {
+        const { bookletLogs, unitLogs } = this.separateLogsByType(allLogData);
 
-        // Process logs with overwrite flag
+        const persons = await this.personService.createPersonList(allLogData, Number(workspace_id));
+
         const result = await this.personService.processPersonLogs(
           persons,
           unitLogs,
@@ -215,12 +229,10 @@ export class TestcenterService {
 
         logger.log(`Logs import result: ${JSON.stringify(result)}`);
       } catch (error) {
-        logger.error(`Error processing logs: ${error.message}`);
+        logger.error(`Error processing consolidated log data: ${error.message}`);
         throw error;
       }
-    });
-
-    return logsPromises;
+    })];
   }
 
   private separateLogsByType(logData: Log[]): { bookletLogs: Log[], unitLogs: Log[] } {
@@ -240,7 +252,7 @@ export class TestcenterService {
     url: string,
     authToken: string,
     importOptions: ImportOptions
-  ): Promise<{ success: boolean, testFiles: number }> {
+  ): Promise<{ success: boolean, testFiles: number, filesPlayer: number, filesUnits: number, filesDefinitions: number, filesCodings: number, filesBooklets: number, filesTestTakers: number }> {
     const headersRequest = this.createHeaders(authToken);
     const filesEndpoint = url ?
       `${url}/api/workspace/${tc_workspace}/files` :
@@ -252,7 +264,30 @@ export class TestcenterService {
         headers: headersRequest
       });
 
-      const filePromises = this.createFilePromises(files, importOptions);
+      const {
+        units,
+        definitions,
+        player,
+        codings,
+        testTakers,
+        booklets
+      } = importOptions;
+
+      const playerArr: File[] = player === 'true' ? files.Resource.filter(f => f.name.includes('.html')) : [];
+      const unitsArr: File[] = units === 'true' ? files.Unit : [];
+      const definitionsArr: File[] = definitions === 'true' ? files.Resource.filter(f => f.name.includes('.voud')) : [];
+      const codingsArr: File[] = codings === 'true' ? files.Resource.filter(f => f.name.includes('.vocs')) : [];
+      const bookletsArr: File[] = booklets === 'true' ? files.Booklet as unknown as File[] : [];
+      const testTakersArr: File[] = testTakers === 'true' ? files.Testtakers as unknown as File[] : [];
+
+      const filePromises: Promise<File>[] = [
+        ...playerArr.map(file => Promise.resolve(file)),
+        ...unitsArr.map(file => Promise.resolve(file)),
+        ...definitionsArr.map(file => Promise.resolve(file)),
+        ...codingsArr.map(file => Promise.resolve(file)),
+        ...bookletsArr.map(file => Promise.resolve(file)),
+        ...testTakersArr.map(file => Promise.resolve(file))
+      ];
 
       const fetchedFiles = await Promise.all(filePromises.map(async filePromise => {
         const file = await filePromise;
@@ -264,45 +299,27 @@ export class TestcenterService {
       await this.workspaceFilesService.testCenterImport(dbEntries);
       return {
         success: fetchedFiles.length > 0,
-        testFiles: fetchedFiles.length
+        testFiles: fetchedFiles.length,
+        filesPlayer: playerArr.length,
+        filesUnits: unitsArr.length,
+        filesDefinitions: definitionsArr.length,
+        filesCodings: codingsArr.length,
+        filesBooklets: bookletsArr.length,
+        filesTestTakers: testTakersArr.length
       };
     } catch (error) {
       logger.error('Error fetching files:');
-      return { success: false, testFiles: 0 };
+      return {
+        success: false,
+        testFiles: 0,
+        filesPlayer: 0,
+        filesUnits: 0,
+        filesDefinitions: 0,
+        filesCodings: 0,
+        filesBooklets: 0,
+        filesTestTakers: 0
+      };
     }
-  }
-
-  private createFilePromises(files: ServerFilesResponse, importOptions: ImportOptions): Promise<File>[] {
-    const {
-      units,
-      definitions,
-      player,
-      codings,
-      testTakers,
-      booklets
-    } = importOptions;
-    const filePromises: Promise<File>[] = [];
-
-    if (player === 'true') {
-      filePromises.push(...files.Resource.filter(f => f.name.includes('.html')).map(file => Promise.resolve(file)));
-    }
-    if (units === 'true') {
-      filePromises.push(...files.Unit.map(file => Promise.resolve(file)));
-    }
-    if (definitions === 'true') {
-      filePromises.push(...files.Resource.filter(f => f.name.includes('.voud')).map(file => Promise.resolve(file)));
-    }
-    if (codings === 'true') {
-      filePromises.push(...files.Resource.filter(f => f.name.includes('.vocs')).map(file => Promise.resolve(file)));
-    }
-    if (booklets === 'true') {
-      filePromises.push(...files.Booklet.map(file => Promise.resolve(file)));
-    }
-    if (testTakers === 'true') {
-      filePromises.push(...files.Testtakers.map(file => Promise.resolve(file)));
-    }
-
-    return filePromises;
   }
 
   private createDatabaseEntries(
@@ -382,9 +399,14 @@ export class TestcenterService {
         );
         result.testFiles = filesResult.testFiles;
         result.success = filesResult.success;
+        result.filesPlayer = filesResult.filesPlayer;
+        result.filesUnits = filesResult.filesUnits;
+        result.filesDefinitions = filesResult.filesDefinitions;
+        result.filesCodings = filesResult.filesCodings;
+        result.filesBooklets = filesResult.filesBooklets;
+        result.filesTestTakers = filesResult.filesTestTakers;
       }
 
-      // Wait for all promises to complete
       await Promise.all(promises);
       result.success = true;
       return result;
@@ -426,7 +448,7 @@ export class TestcenterService {
 
     try {
       const response = await this.httpService.axiosRef.get<File>(requestUrl, {
-        httpsAgent: agent, // Disable SSL validation for HTTPS requests
+        httpsAgent: agent,
         headers: headersRequest
       });
 

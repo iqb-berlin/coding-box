@@ -1,13 +1,19 @@
 export interface ResponseEntity {
   id: number;
   unitId: number;
-  variableId: string;
+  variableid: string;
   status: string;
   value: string;
   subform: string;
   code: number;
   score: number;
-  codedStatus: string;
+  codedstatus: string;
+  status_v2?: string;
+  code_v2?: number;
+  score_v2?: number;
+  status_v3?: string;
+  code_v3?: number;
+  score_v3?: number;
   unit?: {
     name: string;
     alias: string;

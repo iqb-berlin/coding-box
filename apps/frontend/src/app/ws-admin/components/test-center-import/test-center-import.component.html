@@ -223,6 +223,44 @@
                         <mat-icon>description</mat-icon>
                         <span>{{ uploadData.testFiles }} Testdateien importiert</span>
                       </li>
+                      @if (data.importType === 'testFiles') {
+                        @if (uploadData.filesUnits && uploadData.filesUnits > 0) {
+                          <li>
+                            <mat-icon>assignment</mat-icon>
+                            <span>{{ uploadData.filesUnits }} Unit-Dateien</span>
+                          </li>
+                        }
+                        @if (uploadData.filesBooklets && uploadData.filesBooklets > 0) {
+                          <li>
+                            <mat-icon>book</mat-icon>
+                            <span>{{ uploadData.filesBooklets }} Booklet-Dateien</span>
+                          </li>
+                        }
+                        @if (uploadData.filesPlayer && uploadData.filesPlayer > 0) {
+                          <li>
+                            <mat-icon>smart_display</mat-icon>
+                            <span>{{ uploadData.filesPlayer }} Player-Dateien</span>
+                          </li>
+                        }
+                        @if (uploadData.filesDefinitions && uploadData.filesDefinitions > 0) {
+                          <li>
+                            <mat-icon>schema</mat-icon>
+                            <span>{{ uploadData.filesDefinitions }} Aufgabendefinitionen</span>
+                          </li>
+                        }
+                        @if (uploadData.filesCodings && uploadData.filesCodings > 0) {
+                          <li>
+                            <mat-icon>code</mat-icon>
+                            <span>{{ uploadData.filesCodings }} Codings</span>
+                          </li>
+                        }
+                        @if (uploadData.filesTestTakers && uploadData.filesTestTakers > 0) {
+                          <li>
+                            <mat-icon>group</mat-icon>
+                            <span>{{ uploadData.filesTestTakers }} Testtakers-Dateien</span>
+                          </li>
+                        }
+                      }
                     }
                     @if (uploadData.responses > 0) {
                       <li>

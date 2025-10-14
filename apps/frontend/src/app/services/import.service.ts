@@ -6,12 +6,35 @@ import {
   of
 } from 'rxjs';
 import { SERVER_URL } from '../injection-tokens';
-// eslint-disable-next-line import/no-cycle
-import {
-  ImportOptions,
-  Result
-} from '../ws-admin/components/test-center-import/test-center-import.component';
 import { TestGroupsInfoDto } from '../../../../../api-dto/files/test-groups-info.dto';
+
+export type ImportOptions = {
+  responses:string,
+  definitions:string,
+  units:string,
+  player:string,
+  codings:string,
+  logs:string,
+  testTakers:string,
+  booklets:string
+};
+
+export type Result = {
+  success: boolean,
+  testFiles: number,
+  responses: number,
+  logs: number,
+  booklets: number,
+  units: number,
+  persons: number,
+  importedGroups: string[],
+  filesPlayer?: number,
+  filesUnits?: number,
+  filesDefinitions?: number,
+  filesCodings?: number,
+  filesBooklets?: number,
+  filesTestTakers?: number
+};
 
 @Injectable({
   providedIn: 'root'
@@ -64,7 +87,13 @@ export class ImportService {
           booklets: 0,
           units: 0,
           persons: 0,
-          importedGroups: []
+          importedGroups: [],
+          filesPlayer: 0,
+          filesUnits: 0,
+          filesDefinitions: 0,
+          filesCodings: 0,
+          filesBooklets: 0,
+          filesTestTakers: 0
         }))
       );
   }

@@ -18,13 +18,14 @@ import { MatIcon } from '@angular/material/icon';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { MatAnchor, MatButton } from '@angular/material/button';
 import { DatePipe, NgClass } from '@angular/common';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { AppService } from '../../../services/app.service';
 import { BackendService } from '../../../services/backend.service';
 import { SearchFilterComponent } from '../../../shared/search-filter/search-filter.component';
 import { CodingJob } from '../../models/coding-job.model';
 import { WorkspaceUserDto } from '../../../../../../../api-dto/workspaces/workspace-user-dto';
 import { CoderService } from '../../services/coder.service';
+import { CodingJobService } from '../../services/coding-job.service';
 
 @Component({
   selector: 'coding-box-my-coding-jobs',
@@ -50,7 +51,8 @@ import { CoderService } from '../../services/coder.service';
     MatRowDef,
     MatColumnDef,
     MatSortModule,
-    MatButton
+    MatButton,
+    RouterLink
   ]
 })
 export class MyCodingJobsComponent implements OnInit, AfterViewInit {
@@ -59,8 +61,9 @@ export class MyCodingJobsComponent implements OnInit, AfterViewInit {
   private snackBar = inject(MatSnackBar);
   private router = inject(Router);
   private coderService = inject(CoderService);
+  private codingJobService = inject(CodingJobService);
 
-  displayedColumns: string[] = ['name', 'description', 'status', 'createdAt', 'updatedAt'];
+  displayedColumns: string[] = ['name', 'description', 'status', 'created_at', 'updated_at'];
   dataSource = new MatTableDataSource<CodingJob>([]);
   selection = new SelectionModel<CodingJob>(true, []);
   isLoading = false;
@@ -105,43 +108,10 @@ export class MyCodingJobsComponent implements OnInit, AfterViewInit {
   loadMyCodingJobs(): void {
     this.isLoading = true;
 
-    const sampleJobs = [
-      {
-        id: 1,
-        name: 'Kodierjob 1',
-        description: 'Beschreibung für Kodierjob 1',
-        status: 'active',
-        createdAt: new Date('2023-01-01'),
-        updatedAt: new Date('2023-01-15'),
-        assignedCoders: [1, 2]
-      },
-      {
-        id: 2,
-        name: 'Kodierjob 2',
-        description: 'Beschreibung für Kodierjob 2',
-        status: 'completed',
-        createdAt: new Date('2023-02-01'),
-        updatedAt: new Date('2023-02-15'),
-        assignedCoders: [3]
-      },
-      {
-        id: 3,
-        name: 'Kodierjob 3',
-        description: 'Beschreibung für Kodierjob 3',
-        status: 'pending',
-        createdAt: new Date('2023-03-01'),
-        updatedAt: new Date('2023-03-15'),
-        assignedCoders: [1]
-      }
-    ];
-
-    this.coderService.getCodersByJobId(this.currentUserId).subscribe({
-      next: coders => {
-        if (coders.length > 0) {
-          const currentCoder = coders[0];
-          const assignedJobIds = currentCoder.assignedJobs || [];
-
-          this.dataSource.data = sampleJobs.filter(job => assignedJobIds.includes(job.id));
+    this.coderService.getJobsByCoderId(this.currentUserId).subscribe({
+      next: jobs => {
+        if (jobs.length > 0) {
+          this.dataSource.data = jobs;
         } else {
           this.dataSource.data = [];
         }
@@ -164,7 +134,19 @@ export class MyCodingJobsComponent implements OnInit, AfterViewInit {
   }
 
   startCodingJob(job: CodingJob): void {
-    this.snackBar.open(`Starten von Kodierjob "${job.name}" noch nicht implementiert`, 'Schließen', { duration: 3000 });
+    this.snackBar.open(`Starten von Kodierjob "${job.name}"...`, 'Schließen', { duration: 2000 });
+    this.codingJobService.getResponsesForCodingJob(job.id).subscribe({
+      next: responses => {
+        if (responses && responses.length > 0) {
+          // fetch responses for this job
+        } else {
+          this.snackBar.open('Keine Antworten für diesen Kodierjob gefunden', 'Schließen', { duration: 3000 });
+        }
+      },
+      error: () => {
+        this.snackBar.open('Fehler beim Laden der Antworten', 'Schließen', { duration: 3000 });
+      }
+    });
   }
 
   getStatusClass(status: string): string {
