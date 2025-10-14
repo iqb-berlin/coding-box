@@ -325,7 +325,7 @@ export class WorkspaceFilesService {
       };
     } catch (error) {
       this.logger.error(`Error during test file validation for workspace ID ${workspaceId}: ${error.message}`, error.stack);
-      throw error;
+      throw new Error(`Error during test file validation for workspace ID ${workspaceId}: ${error.message}`);
     }
   }
 
@@ -643,8 +643,30 @@ ${bookletRefs}
       this.logger.warn(`File with ID ${fileId} not found in workspace ${workspace_id}`);
       throw new Error('File not found');
     }
+
     this.logger.log(`File ${file.filename} found. Preparing to convert to Base64.`);
-    const base64Data = Buffer.from(file.data, 'binary').toString('base64');
+
+    let base64Data: string;
+
+    // Check if the file was stored as base64 (binary files)
+    // We can detect this by checking if the data is a valid UTF-8 string containing base64 characters
+    try {
+      // If data is already base64-encoded (binary files), use it directly
+      // Base64 strings are valid UTF-8 and contain specific character patterns
+      if (/^[A-Za-z0-9+/]*={0,2}$/.test(file.data) && file.data.length % 4 === 0) {
+        base64Data = file.data;
+        this.logger.log(`File ${file.filename} already stored as base64.`);
+      } else {
+        // For UTF-8 text files, convert the string to base64
+        base64Data = Buffer.from(file.data, 'utf8').toString('base64');
+        this.logger.log(`File ${file.filename} converted from UTF-8 to base64.`);
+      }
+    } catch (error) {
+      this.logger.warn(`Failed to process file data for ${file.filename}, falling back to binary conversion: ${error.message}`);
+      // Fallback: treat as binary data
+      base64Data = Buffer.from(file.data, 'binary').toString('base64');
+    }
+
     this.logger.log(`File ${file.filename} successfully converted to Base64.`);
 
     return {
@@ -1064,11 +1086,17 @@ ${bookletRefs}
     try {
       const fileExtension = path.extname(file.originalname).toLowerCase();
       let fileType = 'Resource';
-      let fileContent: string | Buffer = file.buffer;
+      let fileContent: string | Buffer;
       let extractedInfo = {};
 
-      if (['.xml', '.html', '.htm', '.xhtml', '.txt', '.json', '.csv'].includes(fileExtension)) {
+      const textFileExtensions = ['.xml', '.html', '.htm', '.xhtml', '.txt', '.json', '.csv'];
+
+      if (textFileExtensions.includes(fileExtension)) {
+        // For text files, convert buffer to UTF8 string
         fileContent = file.buffer.toString('utf8');
+      } else {
+        // For binary files, convert to base64 to ensure valid UTF8 storage in database
+        fileContent = file.buffer.toString('base64');
       }
 
       if (fileExtension === '.xml') {
@@ -1108,7 +1136,6 @@ ${bookletRefs}
         extractedInfo
       };
 
-      // @ts-expect-error: not exact match
       const fileUpload = this.fileUploadRepository.create({
         workspace_id: workspaceId,
         filename: file.originalname,
@@ -1404,7 +1431,7 @@ ${bookletRefs}
       };
     } catch (error) {
       this.logger.error('Error validating units', error);
-      throw error;
+      throw new Error(`Error validating units: ${error.message}`);
     }
   }
 
@@ -1612,6 +1639,58 @@ ${bookletRefs}
     } catch (error) {
       this.logger.error(`Error retrieving variable info: ${error.message}`, error.stack);
       return [];
+    }
+  }
+
+  async downloadWorkspaceFilesAsZip(workspaceId: number): Promise<Buffer> {
+    try {
+      this.logger.log(`Creating ZIP file for workspace ${workspaceId}`);
+
+      const files = await this.fileUploadRepository.find({
+        where: { workspace_id: workspaceId },
+        order: { file_type: 'ASC', filename: 'ASC' },
+        take: 3000
+      });
+
+      if (!files || files.length === 0) {
+        throw new Error(`No files found in workspace ${workspaceId}`);
+      }
+
+      this.logger.log(`Found ${files.length} files to include in ZIP`);
+
+      const zip = new AdmZip();
+
+      const filesByType: Record<string, FileUpload[]> = {};
+      files.forEach(file => {
+        if (!filesByType[file.file_type]) {
+          filesByType[file.file_type] = [];
+        }
+        filesByType[file.file_type].push(file);
+      });
+
+      for (const [fileType, filesForType] of Object.entries(filesByType)) {
+        for (const file of filesForType) {
+          try {
+            const fileContent = Buffer.from(file.data.toString(), 'utf8');
+
+            const zipPath = `${fileType}/${file.filename}`;
+            zip.addFile(zipPath, fileContent);
+
+            this.logger.debug(`Added file ${zipPath} (${fileContent.length} bytes)`);
+          } catch (error) {
+            this.logger.error(`Error processing file ${file.filename}: ${error.message}`, error.stack);
+          }
+        }
+      }
+
+      // Generate ZIP buffer
+      const zipBuffer = zip.toBuffer();
+      this.logger.log(`ZIP file created successfully (${zipBuffer.length} bytes)`);
+
+      return zipBuffer;
+    } catch (error) {
+      this.logger.error(`Error creating ZIP file for workspace ${workspaceId}: ${error.message}`, error.stack);
+      throw new Error(`Failed to create ZIP file: ${error.message}`);
     }
   }
 
@@ -2166,7 +2245,7 @@ ${bookletRefs}
       };
     } catch (error) {
       this.logger.error(`Error validating TestTakers for workspace ${workspaceId}: ${error.message}`, error.stack);
-      throw error;
+      throw new Error(`Error validating TestTakers for workspace ${workspaceId}: ${error.message}`);
     }
   }
 
@@ -2664,7 +2743,7 @@ ${bookletRefs}
       };
     } catch (error) {
       this.logger.error(`Error validating group responses for workspace ${workspaceId}: ${error.message}`, error.stack);
-      throw error;
+      throw new Error(`Error validating group responses for workspace ${workspaceId}: ${error.message}`);
     }
   }
 
@@ -2745,7 +2824,7 @@ ${bookletRefs}
       return totalDeleted;
     } catch (error) {
       this.logger.error(`Error deleting invalid responses: ${error.message}`, error.stack);
-      throw error;
+      throw new Error(`Error deleting invalid responses: ${error.message}`);
     }
   }
 
