@@ -28,6 +28,9 @@ import FileUpload from '../database/entities/file_upload.entity';
 import { ReplayStatisticsController } from './replay-statistics/replay-statistics.controller';
 import { VariableBundleModule } from './variable-bundle/variable-bundle.module';
 import { VariableBundleController } from './variable-bundle/variable-bundle.controller';
+import { CodingJobsController } from './coding-jobs/coding-jobs.controller';
+import { DatabaseAdminController } from './database/database-admin.controller';
+import { DatabaseExportService } from './database/database-export.service';
 
 @Module({
   imports: [
@@ -58,11 +61,14 @@ import { VariableBundleController } from './variable-bundle/variable-bundle.cont
     UnitInfoController,
     MissingsProfilesController,
     ReplayStatisticsController,
-    VariableBundleController
+    VariableBundleController,
+    CodingJobsController,
+    DatabaseAdminController
   ],
   providers: [
     BookletInfoService,
-    UnitInfoService
+    UnitInfoService,
+    DatabaseExportService
   ]
 })
 export class AdminModule {}

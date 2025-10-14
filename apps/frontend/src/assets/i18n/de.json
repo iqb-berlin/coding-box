@@ -170,7 +170,8 @@
     "export-subtitle": "Export der Daten nach Kodierung und Bereinigung",
     "export-description": "Diese Komponente wird für den Export der Daten nach Kodierung und Bereinigung verwendet.",
     "export-placeholder": "Die Funktionalität zum Datenexport wird in einer zukünftigen Version implementiert.",
-    "export-action-button": "Datenexport starten"
+    "export-action-button": "Datenexport starten",
+    "no-access": "Sie haben keinen Zugriff auf diesen Arbeitsbereich. Bitte kontaktieren Sie den Studienadministrator für Zugriff."
   },
   "search-filter": {
     "filter-users": "Suche nach Nutzer:innen",
@@ -327,5 +328,14 @@
     "failure-distribution-by-hour": "Verteilung der Fehler nach Stunde",
     "failure-count": "Anzahl der Fehler",
     "no-failures": "Keine Fehler vorhanden"
+  },
+
+  "paginator": {
+    "itemsPerPageLabel": "Elemente pro Seite:",
+    "nextPageLabel": "Nächste Seite",
+    "previousPageLabel": "Vorherige Seite",
+    "firstPageLabel": "Erste Seite",
+    "lastPageLabel": "Letzte Seite",
+    "getRangeLabel": "{{startIndex}} - {{endIndex}} von {{length}}"
   }
 }

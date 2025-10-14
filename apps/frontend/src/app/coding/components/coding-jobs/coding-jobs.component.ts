@@ -27,6 +27,8 @@ import { SearchFilterComponent } from '../../../shared/search-filter/search-filt
 import { CodingJob, Variable, VariableBundle } from '../../models/coding-job.model';
 import { CodingJobDialogComponent } from '../coding-job-dialog/coding-job-dialog.component';
 import { ConfirmDialogComponent } from '../../../shared/confirm-dialog/confirm-dialog.component';
+import { Coder } from '../../models/coder.model';
+import { CoderService } from '../../services/coder.service';
 
 @Component({
   selector: 'coding-box-coding-jobs',
@@ -63,8 +65,10 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
   backendService = inject(BackendService);
   private snackBar = inject(MatSnackBar);
   private dialog = inject(MatDialog);
+  private coderService = inject(CoderService);
 
   private coderNamesByJobId = new Map<number, string>();
+  private allCoders: Coder[] = [];
 
   private jobDetailsCache = new Map<number, { variables?: Variable[], variableBundles?: VariableBundle[] }>();
 
@@ -76,6 +80,11 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
   @ViewChild(MatSort) sort!: MatSort;
 
   ngOnInit(): void {
+    this.coderService.getCoders().subscribe(coders => {
+      this.allCoders = coders;
+      this.updateCoderNamesMap(this.dataSource.data);
+    });
+
     this.loadCodingJobs();
   }
 
@@ -95,21 +104,16 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
     this.backendService.getCodingJobs(workspaceId).subscribe({
       next: response => {
         this.coderNamesByJobId.clear();
-        const processedData = response.data.map(job => {
-          if (job.assignedCoders && job.assignedCoders.length > 0) {
-            this.coderNamesByJobId.set(job.id, `${job.assignedCoders.length} Kodierer`);
-          } else {
-            this.coderNamesByJobId.set(job.id, 'Keine');
-          }
-
-          return {
-            ...job,
-            createdAt: job.createdAt ? new Date(job.createdAt) : new Date(),
-            updatedAt: job.updatedAt ? new Date(job.updatedAt) : new Date()
-          };
-        });
+        const processedData = response.data.map(job => ({
+          ...job,
+          createdAt: job.createdAt ? new Date(job.createdAt) : new Date(),
+          updatedAt: job.updatedAt ? new Date(job.updatedAt) : new Date()
+        }));
 
         this.dataSource.data = processedData;
+        // Namen der Codierer für die Liste aktualisieren
+        this.updateCoderNamesMap(processedData);
+
         this.jobDetailsCache.clear();
         this.isLoading = false;
       },
@@ -159,6 +163,15 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
     if (job.assignedVariables && job.assignedVariables.length > 0) {
       return this.formatAssignedVariables(job.assignedVariables);
     }
+    // Fallback: falls Variablen unter "variables" statt "assignedVariables" geliefert werden
+    if (job.variables && job.variables.length > 0) {
+      return this.formatAssignedVariables(job.variables);
+    }
+    // Letzter Fallback: ggf. aus Cache (z. B. nach Lazy-Load)
+    const cachedDetails = this.jobDetailsCache.get(job.id);
+    if (cachedDetails && cachedDetails.variables && cachedDetails.variables.length > 0) {
+      return this.formatAssignedVariables(cachedDetails.variables);
+    }
     return 'Keine Variablen';
   }
 
@@ -166,7 +179,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
     if (job.assignedVariableBundles && job.assignedVariableBundles.length > 0) {
       const count = job.assignedVariableBundles.length;
       const maxToShow = 2;
-      const bundleNames = job.assignedVariableBundles.map(b => b.name);
+      const bundleNames = job.assignedVariableBundles.map(b => b.name || 'unbekannt');
 
       if (bundleNames.length <= maxToShow) {
         return `${count} (${bundleNames.join(', ')})`;
@@ -185,7 +198,11 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
     }
 
     const maxToShow = 3;
-    const variableNames = assignedVariables.map(v => `${v.unitName}_${v.variableId}`);
+    const variableNames = assignedVariables.map(v => {
+      const unitName = v.unitName || 'unbekannt';
+      const variableId = v.variableId || 'unbekannt';
+      return `${unitName}_${variableId}`;
+    });
 
     if (variableNames.length <= maxToShow) {
       return variableNames.join(', ');
@@ -194,31 +211,29 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
     return `${variableNames.slice(0, maxToShow).join(', ')} +${variableNames.length - maxToShow} weitere`;
   }
 
-  private formatVariableBundles(bundles: VariableBundle[]): string {
-    if (!bundles || bundles.length === 0) {
-      return 'Keine Variablenbündel';
-    }
-    const maxToShow = 3;
-    const bundleNames = bundles.map(b => b.name);
-
-    if (bundleNames.length <= maxToShow) {
-      return bundleNames.join(', ');
-    }
-
-    return `${bundleNames.slice(0, maxToShow).join(', ')} +${bundleNames.length - maxToShow} weitere`;
-  }
-
   getFullVariables(job: CodingJob): string {
     if (job.assignedVariables && job.assignedVariables.length > 0) {
-      const variableNames = job.assignedVariables.map(v => `${v.unitName}_${v.variableId}`);
+      const variableNames = job.assignedVariables.map(v => {
+        const unitName = v.unitName || 'unbekannt';
+        const variableId = v.variableId || 'unbekannt';
+        return `${unitName}_${variableId}`;
+      });
       return `Variablen (${job.assignedVariables.length}): ${variableNames.join(', ')}`;
     }
     if (job.variables && job.variables.length > 0) {
-      return job.variables.map(v => `${v.unitName}_${v.variableId}`).join(', ');
+      return job.variables.map(v => {
+        const unitName = v.unitName || 'unbekannt';
+        const variableId = v.variableId || 'unbekannt';
+        return `${unitName}_${variableId}`;
+      }).join(', ');
     }
     const cachedDetails = this.jobDetailsCache.get(job.id);
     if (cachedDetails && cachedDetails.variables && cachedDetails.variables.length > 0) {
-      return cachedDetails.variables.map(v => `${v.unitName}_${v.variableId}`).join(', ');
+      return cachedDetails.variables.map(v => {
+        const unitName = v.unitName || 'unbekannt';
+        const variableId = v.variableId || 'unbekannt';
+        return `${unitName}_${variableId}`;
+      }).join(', ');
     }
 
     return 'Keine Variablen zugewiesen';
@@ -226,17 +241,17 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
 
   getFullVariableBundles(job: CodingJob): string {
     if (job.assignedVariableBundles && job.assignedVariableBundles.length > 0) {
-      const bundleNames = job.assignedVariableBundles.map(b => b.name);
+      const bundleNames = job.assignedVariableBundles.map(b => b.name || 'unbekannt');
       return `Variablen-Bündel (${job.assignedVariableBundles.length}): ${bundleNames.join(', ')}`;
     }
 
     if (job.variableBundles && job.variableBundles.length > 0) {
-      return job.variableBundles.map(b => b.name).join(', ');
+      return job.variableBundles.map(b => b.name || 'unbekannt').join(', ');
     }
 
     const cachedDetails = this.jobDetailsCache.get(job.id);
     if (cachedDetails && cachedDetails.variableBundles && cachedDetails.variableBundles.length > 0) {
-      return cachedDetails.variableBundles.map(b => b.name).join(', ');
+      return cachedDetails.variableBundles.map(b => b.name || 'unbekannt').join(', ');
     }
 
     return 'Keine Variablen-Bündel zugewiesen';
@@ -257,6 +272,8 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
         const now = new Date();
         const newCodingJob: CodingJob = {
           ...result,
+          // Normalisierung: damit die Liste sofort die Variablen anzeigt
+          assignedVariables: result.assignedVariables ?? result.variables ?? [],
           id: newId,
           createdAt: now,
           updatedAt: now
@@ -264,6 +281,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
         const currentData = this.dataSource.data;
         this.dataSource.data = [...currentData, newCodingJob];
         this.snackBar.open(`Kodierjob "${newCodingJob.name}" wurde erstellt`, 'Schließen', { duration: 3000 });
+        this.loadCodingJobs();
       }
     });
   }
@@ -282,32 +300,20 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
 
       dialogRef.afterClosed().subscribe(result => {
         if (result) {
-          const currentData = this.dataSource.data;
-          const index = currentData.findIndex(job => job.id === result.id);
-
-          if (index !== -1) {
-            // Preserve the original createdAt and ensure updatedAt is a Date object
-            const updatedData = [...currentData];
-            const now = new Date();
-
-            // Handle createdAt date properly
-            let createdAtDate = now;
-            if (selectedJob.createdAt instanceof Date) {
-              createdAtDate = selectedJob.createdAt;
-            } else if (selectedJob.createdAt) {
-              createdAtDate = new Date(selectedJob.createdAt);
-            }
-
-            updatedData[index] = {
-              ...result,
-              createdAt: createdAtDate,
-              updatedAt: now
-            };
-
-            this.dataSource.data = updatedData;
-
-            this.snackBar.open(`Kodierjob "${result.name}" wurde aktualisiert`, 'Schließen', { duration: 3000 });
+          const workspaceId = this.appService.selectedWorkspaceId;
+          if (!workspaceId) {
+            this.snackBar.open('Kein Workspace ausgewählt', 'Schließen', { duration: 3000 });
+            return;
           }
+          this.backendService.updateCodingJob(workspaceId, result.id, result).subscribe({
+            next: updatedJob => {
+              this.loadCodingJobs();
+              this.snackBar.open(`Kodierjob "${updatedJob.name}" wurde aktualisiert`, 'Schließen', { duration: 3000 });
+            },
+            error: () => {
+              this.snackBar.open(`Fehler beim Aktualisieren von Kodierjob "${result.name}"`, 'Schließen', { duration: 3000 });
+            }
+          });
         }
       });
     }
@@ -420,32 +426,61 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
 
   getAssignedCoderNames(job: CodingJob): string {
     if (this.coderNamesByJobId.has(job.id)) {
-      const coderNames = this.coderNamesByJobId.get(job.id)!;
-
-      if (coderNames !== 'Keine' && coderNames.includes(',') && job.assignedCoders && job.assignedCoders.length > 2) {
-        const namesList = coderNames.split(', ');
-        return `${namesList[0]}, ${namesList[1]} +${job.assignedCoders.length - 2} weitere`;
+      const full = this.coderNamesByJobId.get(job.id)!;
+      if (full === 'Keine') {
+        return full;
       }
-
-      return coderNames;
+      const names = full.split(', ').filter(n => n && n.trim().length > 0);
+      if (names.length > 2) {
+        return `${names[0]}, ${names[1]} +${names.length - 2} weitere`;
+      }
+      return names.join(', ');
     }
 
     if (!job.assignedCoders || job.assignedCoders.length === 0) {
       return 'Keine';
     }
 
+    // Fallback, falls Map noch nicht gefüllt ist
     return `${job.assignedCoders.length} Kodierer`;
   }
 
   getFullCoderNames(job: CodingJob): string {
     if (this.coderNamesByJobId.has(job.id)) {
-      return this.coderNamesByJobId.get(job.id) || `${job.assignedCoders?.length || 0} Kodierer`;
+      const full = this.coderNamesByJobId.get(job.id)!;
+      return full === 'Keine' ? 'Keine Kodierer zugewiesen' : full;
     }
 
     if (!job.assignedCoders || job.assignedCoders.length === 0) {
       return 'Keine Kodierer zugewiesen';
     }
 
+    // Fallback
     return `${job.assignedCoders.length} Kodierer`;
+  }
+
+  private updateCoderNamesMap(jobs: CodingJob[]): void {
+    if (!jobs || jobs.length === 0) {
+      return;
+    }
+
+    const byId = new Map<number, Coder>(this.allCoders.map(c => [c.id, c]));
+    jobs.forEach(job => {
+      const ids = job.assignedCoders || [];
+      if (ids.length === 0) {
+        this.coderNamesByJobId.set(job.id, 'Keine');
+        return;
+      }
+      const names = ids
+        .map(id => byId.get(id))
+        .filter((c): c is Coder => !!c)
+        .map(c => c.displayName || c.name || `Coder ${c.id}`);
+
+      if (names.length === 0) {
+        this.coderNamesByJobId.set(job.id, `${ids.length} Kodierer`);
+      } else {
+        this.coderNamesByJobId.set(job.id, names.join(', '));
+      }
+    });
   }
 }

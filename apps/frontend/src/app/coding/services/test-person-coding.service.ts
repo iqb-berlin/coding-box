@@ -13,6 +13,7 @@ import {
 import {
   ValidateCodingCompletenessRequestDto
 } from '../../../../../../api-dto/coding/validate-coding-completeness-request.dto';
+import { ExternalCodingImportResultDto } from '../../../../../../api-dto/coding/external-coding-import-result.dto';
 
 export interface CodingStatistics {
   totalResponses: number;
@@ -356,6 +357,149 @@ export class TestPersonCodingService {
         catchError(error => {
           throw error;
         })
+      );
+  }
+
+  /**
+   * Import external coding with real-time progress updates via streaming response
+   * @param workspaceId Workspace ID
+   * @param data File data containing file and fileName
+   * @param onProgress Callback for progress updates
+   * @param onComplete Callback for completion
+   * @param onError Callback for errors
+   */
+  async importExternalCodingWithProgress(
+    workspaceId: number,
+    data: { file: string; fileName: string },
+    onProgress: (progress: number, message: string) => void,
+    onComplete: (result: ExternalCodingImportResultDto) => void,
+    onError: (error: string) => void
+  ): Promise<void> {
+    try {
+      const response = await fetch(
+        `${this.serverUrl}admin/workspace/${workspaceId}/coding/external-coding-import/stream`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...this.authHeader
+          },
+          body: JSON.stringify(data)
+        }
+      );
+
+      if (!response.ok) {
+        onError(`HTTP ${response.status}: ${response.statusText}`);
+        return;
+      }
+
+      if (!response.body) {
+        onError('No response body available for streaming');
+        return;
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      try {
+        let done = false;
+        while (!done) {
+          const result = await reader.read();
+          done = result.done;
+          const value = result.value;
+
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+
+          // Process complete lines from the buffer
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || ''; // Keep incomplete line in buffer
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const progressData = JSON.parse(line.substring(6));
+
+                if (progressData.error) {
+                  onError(progressData.message);
+                  return;
+                } if (progressData.result) {
+                  onComplete(progressData.result);
+                  return;
+                }
+                onProgress(progressData.progress, progressData.message);
+              } catch (parseError) {
+                // Skip invalid SSE data lines silently
+              }
+            }
+          }
+        }
+      } finally {
+        reader.releaseLock();
+      }
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      onError(`Failed to start import: ${errorMessage}`);
+    }
+  }
+
+  /**
+   * Generate coder training packages based on CODING_INCOMPLETE responses
+   * @param workspaceId Workspace ID
+   * @param selectedCoders Array of selected coders with id and name
+   * @param variableConfigs Array of variable configurations with variableName and sampleCount
+   * @returns Observable of coder training packages
+   */
+  generateCoderTrainingPackages(
+    workspaceId: number,
+    selectedCoders: { id: number; name: string }[],
+    variableConfigs: { variableName: string; sampleCount: number }[]
+  ): Observable<{
+      coderId: number;
+      coderName: string;
+      responses: {
+        responseId: number;
+        unitAlias: string;
+        variableId: string;
+        unitName: string;
+        value: string;
+        personLogin: string;
+        personCode: string;
+        personGroup: string;
+        bookletName: string;
+        variable: string;
+      }[];
+    }[]> {
+    const request = {
+      selectedCoders,
+      variableConfigs
+    };
+
+    return this.http
+      .post<{
+      coderId: number;
+      coderName: string;
+      responses: {
+        responseId: number;
+        unitAlias: string;
+        variableId: string;
+        unitName: string;
+        value: string;
+        personLogin: string;
+        personCode: string;
+        personGroup: string;
+        bookletName: string;
+        variable: string;
+      }[];
+    }[]>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/coding/coder-training-packages`,
+      request,
+      { headers: this.authHeader }
+    )
+      .pipe(
+        catchError(() => of([]))
       );
   }
 }

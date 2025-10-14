@@ -33,7 +33,6 @@ export interface SchemeEditorDialogData {
   template: `
     <h2 mat-dialog-title>{{ data.fileName }}</h2>
     <mat-dialog-content>
-      <div class="editor-container">
         @if (schemerHtml && !isLoading) {
           <unit-schemer-standalone
             [schemerHtml]="schemerHtml"
@@ -42,30 +41,30 @@ export interface SchemeEditorDialogData {
             (error)="onError($event)">
           </unit-schemer-standalone>
         } @else {
-          <div class="loading">Loading schemer...</div>
+          <pre class="raw-json">{{ prettyScheme }}</pre>
         }
-      </div>
     </mat-dialog-content>
     <mat-divider></mat-divider>
     <mat-dialog-actions align="end">
-      <button mat-button (click)="close()">Cancel</button>
-      <button mat-button color="primary" [disabled]="!hasChanges" (click)="save()">Save</button>
+      <button mat-button (click)="close()">Abbrechen</button>
+      <button mat-button color="primary" [disabled]="!hasChanges" (click)="save()">Speichern</button>
     </mat-dialog-actions>
   `,
   styles: [`
-    .editor-container {
-      height: 80vh;
-      width: 100%;
-      overflow: hidden;
-    }
 
-    .loading {
-      display: flex;
-      justify-content: center;
-      align-items: center;
+    .raw-json {
       height: 100%;
-      font-size: 18px;
-      color: #666;
+      width: 100%;
+      box-sizing: border-box;
+      margin: 0;
+      padding: 12px;
+      border-radius: 4px;
+      overflow: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 12px;
+      line-height: 1.5;
     }
 
     unit-schemer-standalone {
@@ -85,6 +84,17 @@ export class SchemeEditorDialogComponent implements OnInit {
     schemeType: 'iqb-standard@3.2'
   };
 
+  get prettyScheme(): string {
+    const raw = this.unitScheme?.scheme ?? '';
+    if (!raw) return '';
+    try {
+      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      return JSON.stringify(parsed, null, 2);
+    } catch {
+      return raw.toString?.() ?? String(raw);
+    }
+  }
+
   constructor(
     public dialogRef: MatDialogRef<SchemeEditorDialogComponent>,
     @Inject(MAT_DIALOG_DATA) public data: SchemeEditorDialogData,
@@ -100,7 +110,6 @@ export class SchemeEditorDialogComponent implements OnInit {
       scheme: this.data.content,
       schemeType: 'iqb-standard@3.2'
     };
-    console.log(this.unitScheme);
     this.backendService.getVariableInfoForScheme(this.data.workspaceId, this.data.fileName)
       .subscribe({
         next: variables => {
@@ -175,9 +184,9 @@ export class SchemeEditorDialogComponent implements OnInit {
       const confirmRef = this.dialog.open(ConfirmDialogComponent, {
         width: '400px',
         data: {
-          title: 'Unsaved Changes',
-          content: 'You have unsaved changes. Are you sure you want to close?',
-          confirmButtonLabel: 'Yes',
+          title: 'Ungespeicherte Änderungen',
+          content: 'Sie haben ungespeicherte Änderungen. Möchten Sie wirklich schließen?',
+          confirmButtonLabel: 'Ja',
           showCancel: true
         }
       });
@@ -191,7 +200,6 @@ export class SchemeEditorDialogComponent implements OnInit {
       this.dialogRef.close(false);
     }
   }
-
 
   save(): void {
     if (!this.hasChanges) {

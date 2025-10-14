@@ -2,12 +2,13 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Like, Repository } from 'typeorm';
 import * as cheerio from 'cheerio';
+import { Element } from 'domhandler';
 import AdmZip = require('adm-zip');
 import * as fs from 'fs';
 import * as path from 'path';
 import * as libxmljs from 'libxmljs2';
 import { parseStringPromise } from 'xml2js';
-import { VariableInfo } from '@iqb/responses';
+import { VariableInfo } from '@iqbspecs/variable-info/variable-info.interface';
 import FileUpload, { StructuredFileData } from '../entities/file_upload.entity';
 import { FilesDto } from '../../../../../../api-dto/files/files.dto';
 import { FileIo } from '../../admin/workspace/file-io.interface';
@@ -134,7 +135,6 @@ export class WorkspaceFilesService {
     }
 
     if (fileSize) {
-      // fileSize-Filter: z.B. '0-10KB', '10KB-100KB', '100KB-1MB', '1MB-10MB', '10MB+'
       const KB = 1024;
       const MB = 1024 * KB;
       // eslint-disable-next-line default-case
@@ -146,10 +146,10 @@ export class WorkspaceFilesService {
           qb = qb.andWhere('file.file_size >= :min AND file.file_size < :max', { min: 10 * KB, max: 100 * KB });
           break;
         case '100KB-1MB':
-          qb = qb.andWhere('file.file_size >= :min AND file.file_size < :max', { min: 100 * KB, max: 1 * MB });
+          qb = qb.andWhere('file.file_size >= :min AND file.file_size < :max', { min: 100 * KB, max: MB });
           break;
         case '1MB-10MB':
-          qb = qb.andWhere('file.file_size >= :min AND file.file_size < :max', { min: 1 * MB, max: 10 * MB });
+          qb = qb.andWhere('file.file_size >= :min AND file.file_size < :max', { min: MB, max: 10 * MB });
           break;
         case '10MB+':
           qb = qb.andWhere('file.file_size >= :min', { min: 10 * MB });
@@ -180,7 +180,11 @@ export class WorkspaceFilesService {
 
   async deleteTestFiles(workspace_id: number, fileIds: string[]): Promise<boolean> {
     this.logger.log(`Delete test files for workspace ${workspace_id}`);
-    const res = await this.fileUploadRepository.delete(fileIds);
+    const numericIds = fileIds.map(id => parseInt(id, 10)).filter(id => !Number.isNaN(id));
+    const res = await this.fileUploadRepository.delete({
+      id: In(numericIds),
+      workspace_id: workspace_id
+    });
     return !!res;
   }
 
@@ -508,10 +512,7 @@ ${bookletRefs}
       unitsWithoutPlayer
     } = await this.checkMissingUnits(Array.from(uniqueBooklets));
 
-    // If booklets are incomplete, all other categories should also be marked as incomplete
     const bookletComplete = allBookletsExist;
-
-    // If units are incomplete, coding schemes, definitions, and player should also be marked as incomplete
     const unitComplete = bookletComplete && allUnitsExist;
 
     return {
@@ -549,10 +550,8 @@ ${bookletRefs}
   }
 
   private extractXmlData(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    bookletTags: cheerio.Cheerio<any>,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    unitTags: cheerio.Cheerio<any>
+    bookletTags: cheerio.Cheerio<Element>,
+    unitTags: cheerio.Cheerio<Element>
   ): {
       uniqueBooklets: Set<string>;
       uniqueUnits: Set<string>;
@@ -571,8 +570,9 @@ ${bookletRefs}
 
     unitTags.each((_, unit) => {
       const $ = cheerio.load(unit);
+      const unitElements = $('unit');
 
-      $('unit').each((__, codingScheme) => {
+      unitElements.each((__, codingScheme) => {
         const value = $(codingScheme).text().trim();
         if (value) codingSchemeRefs.push(value);
       });
@@ -582,7 +582,7 @@ ${bookletRefs}
         if (value) definitionRefs.push(value);
       });
 
-      const unitId = $('unit').attr('id');
+      const unitId = unitElements.attr('id');
       if (unitId) {
         uniqueUnits.add(unitId.trim());
       }
@@ -985,7 +985,6 @@ ${bookletRefs}
         this.logger.log(`Extracted information from ${fileType} file: ${JSON.stringify(extractedInfo)}`);
       } catch (extractError) {
         this.logger.error(`Error extracting information from ${fileType} file: ${extractError.message}`);
-        // Continue with upload even if extraction fails
       }
 
       const structuredData: StructuredFileData = {
@@ -999,7 +998,7 @@ ${bookletRefs}
         file_size: file.size,
         data: file.buffer.toString(),
         file_id: resolvedFileId,
-        structured_data: structuredData // Store extracted information in the structured_data column
+        structured_data: structuredData
       }, ['file_id', 'workspace_id']);
     } catch (error) {
       this.logger.error(`Error processing XML file: ${error.message}`);
@@ -1023,10 +1022,9 @@ ${bookletRefs}
         metadata
       };
 
-      // Check if this is a schemer HTML file
       if (metadata['@type'] === 'schemer') {
         const resourceFileId = WorkspaceFilesService.getSchemerId(file);
-        const result = await this.fileUploadRepository.upsert({
+        return await this.fileUploadRepository.upsert({
           filename: file.originalname,
           workspace_id: workspaceId,
           file_type: 'Schemer',
@@ -1035,12 +1033,10 @@ ${bookletRefs}
           data: file.buffer.toString(),
           structured_data: structuredData
         }, ['file_id', 'workspace_id']);
-        return result;
       }
 
-      // Handle as player HTML file
       const resourceFileId = WorkspaceFilesService.getPlayerId(file);
-      const result = await this.fileUploadRepository.upsert({
+      return await this.fileUploadRepository.upsert({
         filename: file.originalname,
         workspace_id: workspaceId,
         file_type: 'Resource',
@@ -1049,11 +1045,9 @@ ${bookletRefs}
         data: file.buffer.toString(),
         structured_data: structuredData
       }, ['file_id', 'workspace_id']);
-      return result;
     } catch (error) {
-      // If there's an error parsing the metadata, handle as a regular resource
       const resourceFileId = WorkspaceFilesService.getResourceId(file);
-      const result = await this.fileUploadRepository.upsert({
+      return this.fileUploadRepository.upsert({
         filename: file.originalname,
         workspace_id: workspaceId,
         file_type: 'Resource',
@@ -1062,7 +1056,6 @@ ${bookletRefs}
         data: file.buffer.toString(),
         structured_data: { metadata: {} }
       }, ['file_id', 'workspace_id']);
-      return result;
     }
   }
 

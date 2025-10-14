@@ -24,12 +24,13 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateModule } from '@ngx-translate/core';
 import { SelectionModel } from '@angular/cdk/collections';
 import { MatTooltip } from '@angular/material/tooltip';
+import { forkJoin } from 'rxjs';
 import { CodingJob, VariableBundle, Variable } from '../../models/coding-job.model';
 import { Coder } from '../../models/coder.model';
 import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
 import { CoderService } from '../../services/coder.service';
-import { VariableAnalysisItem } from '../../models/variable-analysis-item.model';
+import { CodingJobService } from '../../services/coding-job.service';
 
 export interface CodingJobDialogData {
   codingJob?: CodingJob;
@@ -70,6 +71,7 @@ export class CodingJobDialogComponent implements OnInit {
   private appService = inject(AppService);
   private coderService = inject(CoderService);
   private snackBar = inject(MatSnackBar);
+  private codingJobService = inject(CodingJobService);
 
   codingJobForm!: FormGroup;
   isLoading = false;
@@ -95,7 +97,6 @@ export class CodingJobDialogComponent implements OnInit {
   isLoadingBundles = false;
 
   // Variable analysis items
-  variableAnalysisItems: VariableAnalysisItem[] = [];
   isLoadingVariableAnalysis = false;
   totalVariableAnalysisRecords = 0;
   variableAnalysisPageIndex = 0;
@@ -117,16 +118,22 @@ export class CodingJobDialogComponent implements OnInit {
     this.loadCodingIncompleteVariables();
     this.loadVariableBundles();
     this.loadAvailableCoders();
-    console.log(this.data);
-    // Load coders if we're in edit mode and have a job ID
     if (this.data.isEdit && this.data.codingJob?.id) {
       this.loadCoders(this.data.codingJob.id);
     }
+
+    this.dataSource.filterPredicate = (row, filter: string): boolean => {
+      try {
+        const { unitName, variableId } = JSON.parse(filter || '{}');
+        const unitMatch = unitName ? row.unitName?.toLowerCase().includes(String(unitName).toLowerCase()) : true;
+        const varMatch = variableId ? row.variableId?.toLowerCase().includes(String(variableId).toLowerCase()) : true;
+        return unitMatch && varMatch;
+      } catch {
+        return true;
+      }
+    };
   }
 
-  /**
-   * Loads all available coders in the workspace for selection
-   */
   loadAvailableCoders(): void {
     this.isLoadingAvailableCoders = true;
 
@@ -134,6 +141,19 @@ export class CodingJobDialogComponent implements OnInit {
       next: coders => {
         this.availableCoders = coders;
         this.isLoadingAvailableCoders = false;
+        let assignedIds: number[] = [];
+        if (this.data.isEdit && this.data.codingJob?.assignedCoders) {
+          assignedIds = this.data.codingJob.assignedCoders;
+        } else if (this.coders && this.coders.length > 0) {
+          assignedIds = this.coders.map(c => c.id);
+        }
+
+        if (assignedIds.length > 0) {
+          const preSelectedCoders = this.availableCoders.filter(c => assignedIds.includes(c.id));
+          this.selectedCoders = new SelectionModel<Coder>(true, preSelectedCoders);
+        } else {
+          this.selectedCoders = new SelectionModel<Coder>(true, []);
+        }
       },
       error: () => {
         this.isLoadingAvailableCoders = false;
@@ -152,8 +172,9 @@ export class CodingJobDialogComponent implements OnInit {
       next: coders => {
         this.coders = coders;
         this.isLoadingCoders = false;
-        // Pre-select the assigned coders
-        this.selectedCoders = new SelectionModel<Coder>(true, coders);
+        const assignedIds = coders.map(c => c.id);
+        const preSelectedCoders = this.availableCoders.filter(c => assignedIds.includes(c.id));
+        this.selectedCoders = new SelectionModel<Coder>(true, preSelectedCoders);
       },
       error: () => {
         this.isLoadingCoders = false;
@@ -168,14 +189,10 @@ export class CodingJobDialogComponent implements OnInit {
       status: [this.data.codingJob?.status || 'pending', Validators.required]
     });
 
-    if (this.data.codingJob?.variables) {
-      this.variables = [...this.data.codingJob.variables];
-      this.dataSource.data = this.variables;
-      this.selectedVariables = new SelectionModel<Variable>(true, [...this.variables]);
-    }
+    const originallyAssigned = this.data.codingJob?.assignedVariables ?? this.data.codingJob?.variables;
 
-    if (this.data.codingJob?.variableBundles) {
-      this.selectedVariableBundles = new SelectionModel<VariableBundle>(true, [...this.data.codingJob.variableBundles]);
+    if (originallyAssigned && originallyAssigned.length > 0) {
+      this.selectedVariables = new SelectionModel<Variable>(true, [...originallyAssigned]);
     }
   }
 
@@ -195,13 +212,29 @@ export class CodingJobDialogComponent implements OnInit {
       next: variables => {
         this.variables = variables;
         this.dataSource.data = this.variables;
-        if (this.data.codingJob?.variables) {
-          this.data.codingJob.variables.forEach(variable => {
-            const foundVariable = this.variables.find(
-              b => b.unitName === variable.unitName && b.variableId === variable.variableId
-            );
-            if (foundVariable) {
-              this.selectedVariables.select(foundVariable);
+        const originallyAssigned = this.data.codingJob?.assignedVariables ?? this.data.codingJob?.variables;
+        if (originallyAssigned && originallyAssigned.length > 0) {
+          const makeKey = (u?: string | null, v?: string | null) => `${(u || '').trim().toLowerCase()}::${(v || '').trim().toLowerCase()}`;
+
+          const toKey = (obj: unknown): string => {
+            if (obj && typeof obj === 'object') {
+              const rec = obj as Record<string, unknown>;
+              const unitNameVal = rec.unitName;
+              const varIdCandidate = rec.variableId ?? rec.variableid ?? rec.variableID;
+              const unitName = typeof unitNameVal === 'string' ? unitNameVal : '';
+              const variableId = typeof varIdCandidate === 'string' ? varIdCandidate : '';
+              return makeKey(unitName, variableId);
+            }
+            return makeKey('', '');
+          };
+
+          const assignedKeySet = new Set(originallyAssigned.map(toKey));
+
+          this.selectedVariables.clear();
+          this.variables.forEach(rowVar => {
+            const rowKey = makeKey(rowVar.unitName ?? '', rowVar.variableId ?? '');
+            if (assignedKeySet.has(rowKey)) {
+              this.selectedVariables.select(rowVar);
             }
           });
         }
@@ -217,8 +250,6 @@ export class CodingJobDialogComponent implements OnInit {
 
   loadVariableBundles(): void {
     this.isLoadingBundles = true;
-
-    // Get the current workspace ID from the app service
     const workspaceId = this.appService.selectedWorkspaceId;
 
     if (workspaceId) {
@@ -237,13 +268,12 @@ export class CodingJobDialogComponent implements OnInit {
     }
   }
 
-  onPageChange(): void {
-    // Pagination not needed for CODING_INCOMPLETE variables
-    // This method can be removed or kept for future use
-  }
-
   applyFilter(): void {
     this.loadCodingIncompleteVariables(this.unitNameFilter);
+    this.dataSource.filter = JSON.stringify({
+      unitName: this.unitNameFilter || '',
+      variableId: this.variableIdFilter || ''
+    });
   }
 
   applyBundleFilter(): void {
@@ -257,6 +287,7 @@ export class CodingJobDialogComponent implements OnInit {
   clearFilters(): void {
     this.unitNameFilter = '';
     this.variableIdFilter = '';
+    this.dataSource.filter = '';
     this.loadCodingIncompleteVariables();
   }
 
@@ -265,24 +296,18 @@ export class CodingJobDialogComponent implements OnInit {
     this.bundlesDataSource.filter = '';
   }
 
-  /** Whether the number of selected bundle matches the total number of rows. */
-  isAllBundlesSelected(): boolean {
-    const numSelected = this.selectedVariableBundles.selected.length;
-    const numRows = this.bundlesDataSource.data.length;
-    return numSelected === numRows;
-  }
-
   /**
    * Check if a variable was originally assigned to this coding job
    * @param variable The variable to check
    * @returns true if the variable was originally assigned to this job
    */
   isVariableOriginallyAssigned(variable: Variable): boolean {
-    if (!this.data.codingJob?.variables) {
+    const originallyAssigned = this.data.codingJob?.assignedVariables ?? this.data.codingJob?.variables;
+    if (!originallyAssigned) {
       return false;
     }
 
-    return this.data.codingJob.variables.some(
+    return originallyAssigned.some(
       originalVar => originalVar.unitName === variable.unitName && originalVar.variableId === variable.variableId
     );
   }
@@ -300,6 +325,14 @@ export class CodingJobDialogComponent implements OnInit {
     return this.data.codingJob.variableBundles.some(
       originalBundle => originalBundle.id === bundle.id
     );
+  }
+
+  isCoderOriginallyAssigned(coder: Coder): boolean {
+    if (!this.data.codingJob?.assignedCoders) {
+      return false;
+    }
+
+    return this.data.codingJob.assignedCoders.includes(coder.id);
   }
 
   /** Gets the number of variables in a bundle */
@@ -353,37 +386,72 @@ export class CodingJobDialogComponent implements OnInit {
       return;
     }
 
+    const selectedCoderIds = this.selectedCoders.selected.map(c => c.id);
+
     const codingJob: CodingJob = {
       id: this.data.codingJob?.id || 0,
       ...this.codingJobForm.value,
       createdAt: this.data.codingJob?.createdAt || new Date(),
       updatedAt: new Date(),
-      assignedCoders: this.selectedCoders.selected.map(coder => coder.id),
+      assignedCoders: selectedCoderIds,
       variables: this.selectedVariables.selected,
       variableBundles: this.selectedVariableBundles.selected,
       assignedVariables: this.selectedVariables.selected,
       assignedVariableBundles: this.selectedVariableBundles.selected
     };
 
-    // If we're editing an existing coding job
     if (this.data.isEdit && this.data.codingJob?.id) {
       this.backendService.updateCodingJob(workspaceId, this.data.codingJob.id, codingJob).subscribe({
         next: updatedJob => {
-          this.isSaving = false;
-          this.snackBar.open('Coding job updated successfully', 'Close', { duration: 3000 });
-          this.dialogRef.close(updatedJob);
+          if (updatedJob?.id && selectedCoderIds.length > 0) {
+            const assignCalls = selectedCoderIds.map(id => this.codingJobService.assignCoder(updatedJob.id!, id));
+            forkJoin(assignCalls).subscribe({
+              next: results => {
+                const lastJob = results.filter(Boolean).pop() || { ...updatedJob, assignedCoders: selectedCoderIds };
+                this.isSaving = false;
+                this.snackBar.open('Coding job updated successfully', 'Close', { duration: 3000 });
+                this.dialogRef.close(lastJob);
+              },
+              error: () => {
+                this.isSaving = false;
+                this.snackBar.open('Coding job updated, but assigning coders failed', 'Close', { duration: 5000 });
+                this.dialogRef.close({ ...updatedJob, assignedCoders: selectedCoderIds });
+              }
+            });
+          } else {
+            this.isSaving = false;
+            this.snackBar.open('Coding job updated successfully', 'Close', { duration: 3000 });
+            this.dialogRef.close(updatedJob);
+          }
         },
         error: error => {
           this.isSaving = false;
           this.snackBar.open(`Error updating coding job: ${error.message}`, 'Close', { duration: 5000 });
         }
       });
-    } else { // If we're creating a new coding job
+    } else {
       this.backendService.createCodingJob(workspaceId, codingJob).subscribe({
         next: createdJob => {
-          this.isSaving = false;
-          this.snackBar.open('Coding job created successfully', 'Close', { duration: 3000 });
-          this.dialogRef.close(createdJob);
+          if (createdJob?.id && selectedCoderIds.length > 0) {
+            const assignCalls = selectedCoderIds.map(id => this.codingJobService.assignCoder(createdJob.id!, id));
+            forkJoin(assignCalls).subscribe({
+              next: results => {
+                const lastJob = results.filter(Boolean).pop() || { ...createdJob, assignedCoders: selectedCoderIds };
+                this.isSaving = false;
+                this.snackBar.open('Coding job created successfully', 'Close', { duration: 3000 });
+                this.dialogRef.close(lastJob);
+              },
+              error: () => {
+                this.isSaving = false;
+                this.snackBar.open('Job created, but assigning coders failed', 'Close', { duration: 5000 });
+                this.dialogRef.close({ ...createdJob, assignedCoders: selectedCoderIds });
+              }
+            });
+          } else {
+            this.isSaving = false;
+            this.snackBar.open('Coding job created successfully', 'Close', { duration: 3000 });
+            this.dialogRef.close(createdJob);
+          }
         },
         error: error => {
           this.isSaving = false;

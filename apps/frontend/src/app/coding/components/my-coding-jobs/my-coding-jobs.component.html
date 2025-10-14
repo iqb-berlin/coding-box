@@ -62,17 +62,17 @@
               </mat-cell>
             </ng-container>
 
-            <ng-container matColumnDef="createdAt">
+            <ng-container matColumnDef="created_at">
               <mat-header-cell *matHeaderCellDef mat-sort-header>Erstellt am</mat-header-cell>
               <mat-cell *matCellDef="let element">
-                <span class="cell-content date-cell">{{element.createdAt | date: 'dd.MM.yyyy HH:mm'}}</span>
+                <span class="cell-content date-cell">{{element.created_at | date: 'dd.MM.yyyy HH:mm'}}</span>
               </mat-cell>
             </ng-container>
 
-            <ng-container matColumnDef="updatedAt">
+            <ng-container matColumnDef="updated_at">
               <mat-header-cell *matHeaderCellDef mat-sort-header>Aktualisiert am</mat-header-cell>
               <mat-cell *matCellDef="let element">
-                <span class="cell-content date-cell">{{element.updatedAt | date: 'dd.MM.yyyy HH:mm'}}</span>
+                <span class="cell-content date-cell">{{element.updated_at | date: 'dd.MM.yyyy HH:mm'}}</span>
               </mat-cell>
             </ng-container>
           </mat-table>

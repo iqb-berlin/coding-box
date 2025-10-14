@@ -7,20 +7,11 @@ import {
   ApiOkResponse, ApiOperation,
   ApiParam, ApiQuery, ApiTags
 } from '@nestjs/swagger';
-import { TestcenterService } from '../../database/services/testcenter.service';
+import { TestcenterService, Result } from '../../database/services/testcenter.service';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { TestGroupsInfoDto } from '../../../../../../api-dto/files/test-groups-info.dto';
-import {
-  ImportOptions
-} from '../../../../../frontend/src/app/ws-admin/components/test-center-import/test-center-import.component';
-
-export type Result = {
-  success: boolean,
-  testFiles: number,
-  responses: number,
-  logs: number
-};
+import { ImportOptions } from '../../../../../frontend/src/app/services/import.service';
 
 @ApiTags('Admin Workspace Test Center')
 @Controller('admin/workspace')

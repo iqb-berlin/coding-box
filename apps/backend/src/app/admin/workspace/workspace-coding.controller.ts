@@ -17,6 +17,7 @@ import { VariableAnalysisItemDto } from '../../../../../../api-dto/coding/variab
 import { ValidateCodingCompletenessRequestDto } from '../../../../../../api-dto/coding/validate-coding-completeness-request.dto';
 import { ValidateCodingCompletenessResponseDto } from '../../../../../../api-dto/coding/validate-coding-completeness-response.dto';
 import { ExportValidationResultsRequestDto } from '../../../../../../api-dto/coding/export-validation-results-request.dto';
+import { ExternalCodingImportDto } from '../../../../../../api-dto/coding/external-coding-import.dto';
 
 @ApiTags('Admin Workspace Coding')
 @Controller('admin/workspace')
@@ -739,7 +740,6 @@ export class WorkspaceCodingController {
         page: number;
         limit: number;
       }> {
-    // Validate and sanitize pagination parameters
     const validPage = Math.max(1, page);
     const validLimit = Math.min(Math.max(1, limit), 500); // Set maximum limit to 500
 
@@ -807,7 +807,6 @@ export class WorkspaceCodingController {
       @Body() request: ExportValidationResultsRequestDto,
       @Res() res: Response
   ): Promise<void> {
-    // Export the complete validation results from cache using cache key
     const excelData = await this.workspaceCodingService.exportValidationResultsAsExcel(
       workspace_id,
       request.cacheKey
@@ -851,6 +850,187 @@ export class WorkspaceCodingController {
     return this.workspaceCodingService.getCodingIncompleteVariables(
       workspace_id,
       unitName
+    );
+  }
+
+  @Post(':workspace_id/coding/external-coding-import/stream')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiBody({
+    description: 'External coding file upload (CSV/Excel) with streaming progress',
+    type: ExternalCodingImportDto
+  })
+  @ApiOkResponse({
+    description: 'External coding import with progress streaming',
+    content: {
+      'text/event-stream': {
+        schema: {
+          type: 'string'
+        }
+      }
+    }
+  })
+  async importExternalCodingWithProgress(
+    @WorkspaceId() workspace_id: number,
+      @Body() body: ExternalCodingImportDto,
+      @Res() res: Response
+  ): Promise<void> {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Headers', 'Cache-Control');
+
+    try {
+      const result = await this.workspaceCodingService.importExternalCodingWithProgress(
+        workspace_id,
+        body,
+        (progress: number, message: string) => {
+          res.write(`data: ${JSON.stringify({ progress, message })}\n\n`);
+        }
+      );
+
+      // Send final result
+      res.write(`data: ${JSON.stringify({
+        progress: 100,
+        message: 'Import completed',
+        result
+      })}\n\n`);
+      res.end();
+    } catch (error) {
+      res.write(`data: ${JSON.stringify({
+        progress: 0,
+        message: `Import failed: ${error.message}`,
+        error: true
+      })}\n\n`);
+      res.end();
+    }
+  }
+
+  @Post(':workspace_id/coding/external-coding-import')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiBody({
+    description: 'External coding file upload (CSV/Excel)',
+    type: ExternalCodingImportDto
+  })
+  async importExternalCoding(
+    @WorkspaceId() workspace_id: number,
+      @Body() body: ExternalCodingImportDto
+  ): Promise<{
+        message: string;
+        processedRows: number;
+        updatedRows: number;
+        errors: string[];
+        affectedRows: Array<{
+          unitAlias: string;
+          variableId: string;
+          personCode?: string;
+          personLogin?: string;
+          personGroup?: string;
+          bookletName?: string;
+          originalCodedStatus: string;
+          originalCode: number | null;
+          originalScore: number | null;
+          updatedCodedStatus: string | null;
+          updatedCode: number | null;
+          updatedScore: number | null;
+        }>;
+      }> {
+    return this.workspaceCodingService.importExternalCoding(workspace_id, body);
+  }
+
+  @Post(':workspace_id/coding/coder-training-packages')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiBody({
+    description: 'Generate coder training packages based on CODING_INCOMPLETE responses',
+    schema: {
+      type: 'object',
+      properties: {
+        selectedCoders: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'number' },
+              name: { type: 'string' }
+            }
+          }
+        },
+        variableConfigs: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              variableName: { type: 'string' },
+              sampleCount: { type: 'number' }
+            }
+          }
+        }
+      }
+    }
+  })
+  @ApiOkResponse({
+    description: 'Coder training packages generated successfully',
+    schema: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          coderId: { type: 'number' },
+          coderName: { type: 'string' },
+          responses: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                responseId: { type: 'number' },
+                unitAlias: { type: 'string' },
+                variableId: { type: 'string' },
+                unitName: { type: 'string' },
+                value: { type: 'string' },
+                personLogin: { type: 'string' },
+                personCode: { type: 'string' },
+                personGroup: { type: 'string' },
+                bookletName: { type: 'string' },
+                variable: { type: 'string' }
+              }
+            }
+          }
+        }
+      }
+    }
+  })
+  async generateCoderTrainingPackages(
+    @WorkspaceId() workspace_id: number,
+      @Body() body: {
+        selectedCoders: { id: number; name: string }[];
+        variableConfigs: { variableName: string; sampleCount: number }[];
+      }
+  ): Promise<{
+        coderId: number;
+        coderName: string;
+        responses: {
+          responseId: number;
+          unitAlias: string;
+          variableId: string;
+          unitName: string;
+          value: string;
+          personLogin: string;
+          personCode: string;
+          personGroup: string;
+          bookletName: string;
+          variable: string;
+        }[];
+      }[]> {
+    return this.workspaceCodingService.generateCoderTrainingPackages(
+      workspace_id,
+      body.selectedCoders,
+      body.variableConfigs
     );
   }
 }

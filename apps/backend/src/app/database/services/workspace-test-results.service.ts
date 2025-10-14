@@ -103,9 +103,9 @@ export class WorkspaceTestResultsService {
           'response.status',
           'response.value',
           'response.subform',
-          'response.code',
-          'response.score',
-          'response.codedstatus'
+          'response.code_v1',
+          'response.score_v1',
+          'response.status_v1'
         ])
         .getMany();
 
@@ -140,7 +140,6 @@ export class WorkspaceTestResultsService {
         .select(['unitLog.id', 'unitLog.unitid', 'unitLog.ts', 'unitLog.key', 'unitLog.parameter'])
         .getMany();
 
-      // Group logs by unit ID for faster lookup
       const unitLogsMap = new Map<number, { id: number; unitid: number; ts: string; key: string; parameter: string }[]>();
       unitLogs.forEach(log => {
         if (!unitLogsMap.has(log.unitid)) {
@@ -207,7 +206,7 @@ export class WorkspaceTestResultsService {
         unitsMap.get(unit.bookletid)?.push(unit);
       });
 
-      const result = booklets.map(booklet => ({
+      return booklets.map(booklet => ({
         id: booklet.id,
         personid: booklet.personid,
         name: booklet.bookletinfo.name,
@@ -224,8 +223,6 @@ export class WorkspaceTestResultsService {
           tags: unitTagsMap.get(unit.id) || []
         }))
       }));
-
-      return result;
     } catch (error) {
       this.logger.error(
         `Failed to fetch booklets, bookletInfo, units, and results for personId: ${personId} and workspaceId: ${workspaceId}`,
@@ -267,16 +264,13 @@ export class WorkspaceTestResultsService {
         );
       }
 
-      // Add pagination
       queryBuilder
         .skip((validPage - 1) * validLimit)
         .take(validLimit)
         .orderBy('person.code', 'ASC');
 
       const [results, total] = await queryBuilder.getManyAndCount();
-      const result: [Persons[], number] = [results, total];
-
-      return result;
+      return [results, total];
     } catch (error) {
       this.logger.error(`Failed to fetch test results for workspace_id ${workspace_id}: ${error.message}`, error.stack);
       throw new Error('An error occurred while fetching test results');
@@ -325,7 +319,6 @@ export class WorkspaceTestResultsService {
 
     this.logger.log(`Cache miss for responses: workspace=${workspaceId}, testPerson=${connector}, unitId=${unitId}`);
 
-    // If not in cache, fetch from database
     const [login, code, bookletId] = connector.split('@');
     const queryBuilder = this.unitRepository.createQueryBuilder('unit')
       .innerJoinAndSelect('unit.responses', 'response')
@@ -342,7 +335,6 @@ export class WorkspaceTestResultsService {
     const unit = await queryBuilder.getOne();
 
     if (!unit) {
-      // If no unit found, we need to determine which part of the query failed
       const person = await this.personsRepository.findOne({
         where: {
           code, login, workspace_id: workspaceId, consider: true
@@ -384,7 +376,6 @@ export class WorkspaceTestResultsService {
           try {
             value = JSON.parse(value);
           } catch (e) {
-            // If parsing fails, keep the original value
             this.logger.warn(`Failed to parse JSON array: ${value}`);
           }
         } else if (value.startsWith('{') && value.endsWith('}')) {
@@ -412,7 +403,6 @@ export class WorkspaceTestResultsService {
       responsesBySubform[subformKey].push(mappedResponse);
     });
 
-    // Create responses array with unique responses for each subform
     const responsesArray = Object.keys(responsesBySubform).map(subform => {
       const uniqueResponses = responsesBySubform[subform].filter(
         (response, index, self) => index === self.findIndex(r => r.id === response.id)
@@ -428,7 +418,6 @@ export class WorkspaceTestResultsService {
       responses: responsesArray
     };
 
-    // Cache the result
     await this.cacheService.set(cacheKey, result);
     this.logger.log(`Cached responses for: workspace=${workspaceId}, testPerson=${connector}, unitId=${unitId}`);
 
@@ -449,9 +438,9 @@ export class WorkspaceTestResultsService {
         .orderBy('response.id', 'ASC');
 
       if (status === 'null') {
-        queryBuilder.andWhere('response.codedStatus IS NULL');
+        queryBuilder.andWhere('response.status_v1 IS NULL');
       } else {
-        queryBuilder.andWhere('response.codedStatus = :statusParam', { statusParam: status });
+        queryBuilder.andWhere('response.status_v1 = :statusParam', { statusParam: status });
       }
 
       let result: [ResponseEntity[], number];
@@ -459,8 +448,8 @@ export class WorkspaceTestResultsService {
       if (options) {
         const { page, limit } = options;
         const MAX_LIMIT = 500;
-        const validPage = Math.max(1, page); // minimum 1
-        const validLimit = Math.min(Math.max(1, limit), MAX_LIMIT); // Between 1 and MAX_LIMIT
+        const validPage = Math.max(1, page);
+        const validLimit = Math.min(Math.max(1, limit), MAX_LIMIT);
 
         queryBuilder
           .skip((validPage - 1) * validLimit)
@@ -469,7 +458,6 @@ export class WorkspaceTestResultsService {
         result = await queryBuilder.getManyAndCount();
         this.logger.log(`Found ${result[0].length} responses with status ${status} (page ${validPage}, limit ${validLimit}, total ${result[1]}) for workspace ${workspace_id}`);
       } else {
-        // For non-paginated queries, still use getManyAndCount to avoid multiple queries
         result = await queryBuilder.getManyAndCount();
         this.logger.log(`Found ${result[0].length} responses with status ${status} for workspace ${workspace_id}`);
       }
@@ -483,7 +471,8 @@ export class WorkspaceTestResultsService {
 
   async deleteTestPersons(
     workspaceId: number,
-    testPersonIds: string
+    testPersonIds: string,
+    userId: string
   ): Promise<{
       success: boolean;
       report: {
@@ -533,7 +522,7 @@ export class WorkspaceTestResultsService {
       for (const person of existingPersons) {
         try {
           await this.journalService.createEntry(
-            'system',
+            userId,
             workspaceId,
             'delete',
             'test-person',
@@ -559,7 +548,8 @@ export class WorkspaceTestResultsService {
 
   async deleteUnit(
     workspaceId: number,
-    unitId: number
+    unitId: number,
+    userId: string
   ): Promise<{
       success: boolean;
       report: {
@@ -599,7 +589,7 @@ export class WorkspaceTestResultsService {
 
       try {
         await this.journalService.createEntry(
-          'system', // userId
+          userId,
           workspaceId,
           'delete',
           'unit',
@@ -628,7 +618,8 @@ export class WorkspaceTestResultsService {
 
   async deleteResponse(
     workspaceId: number,
-    responseId: number
+    responseId: number,
+    userId: string
   ): Promise<{
       success: boolean;
       report: {
@@ -669,7 +660,7 @@ export class WorkspaceTestResultsService {
 
       try {
         await this.journalService.createEntry(
-          'system', // userId
+          userId,
           workspaceId,
           'delete',
           'response',
@@ -700,7 +691,8 @@ export class WorkspaceTestResultsService {
 
   async deleteBooklet(
     workspaceId: number,
-    bookletId: number
+    bookletId: number,
+    userId: string
   ): Promise<{
       success: boolean;
       report: {
@@ -717,6 +709,7 @@ export class WorkspaceTestResultsService {
       const booklet = await manager
         .createQueryBuilder(Booklet, 'booklet')
         .leftJoinAndSelect('booklet.person', 'person')
+        .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
         .where('booklet.id = :bookletId', { bookletId })
         .andWhere('person.workspace_id = :workspaceId', { workspaceId })
         .getOne();
@@ -728,7 +721,6 @@ export class WorkspaceTestResultsService {
         return { success: false, report };
       }
 
-      // Delete the booklet (cascade will delete associated units and responses)
       await manager
         .createQueryBuilder()
         .delete()
@@ -740,13 +732,14 @@ export class WorkspaceTestResultsService {
 
       try {
         await this.journalService.createEntry(
-          'system', // userId
+          userId,
           workspaceId,
           'delete',
           'booklet',
           bookletId,
           {
             bookletId,
+            bookletName: booklet.bookletinfo?.name || 'Unknown',
             personId: booklet.personid,
             personLogin: booklet.person?.login || 'Unknown',
             personCode: booklet.person?.code,
@@ -828,7 +821,7 @@ export class WorkspaceTestResultsService {
       }
 
       if (searchParams.codedStatus) {
-        query.andWhere('response.codedstatus = :codedStatus', { codedStatus: searchParams.codedStatus });
+        query.andWhere('response.status_v1 = :codedStatus', { codedStatus: searchParams.codedStatus });
       }
 
       if (searchParams.group) {
@@ -857,9 +850,9 @@ export class WorkspaceTestResultsService {
         variableId: response.variableid,
         value: response.value || '',
         status: response.status,
-        code: response.code,
-        score: response.score,
-        codedStatus: response.codedstatus,
+        code: response.code_v1,
+        score: response.score_v1,
+        codedStatus: response.status_v1,
         unitId: response.unit.id,
         unitName: response.unit.name,
         unitAlias: response.unit.alias,
@@ -871,9 +864,7 @@ export class WorkspaceTestResultsService {
         personGroup: response.unit.booklet.person.group
       }));
 
-      const result = { data, total };
-
-      return result;
+      return { data, total };
     } catch (error) {
       this.logger.error(
         `Failed to search for responses in workspace: ${workspaceId}`,
@@ -918,7 +909,6 @@ export class WorkspaceTestResultsService {
         `Searching for units with name: ${unitName} in workspace: ${workspaceId} (page: ${page}, limit: ${limit})`
       );
 
-      // Create a query to find all units with the given name
       const query = this.unitRepository.createQueryBuilder('unit')
         .innerJoinAndSelect('unit.booklet', 'booklet')
         .innerJoinAndSelect('booklet.person', 'person')
@@ -965,9 +955,9 @@ export class WorkspaceTestResultsService {
           variableId: response.variableid,
           value: response.value || '',
           status: response.status,
-          code: response.code,
-          score: response.score,
-          codedStatus: response.codedstatus
+          code: response.code_v1,
+          score: response.score_v1,
+          codedStatus: response.status_v1
         })) : []
       }));
 
@@ -980,9 +970,7 @@ export class WorkspaceTestResultsService {
       });
 
       data = Array.from(uniqueMap.values());
-      const result = { data, total: data.length };
-
-      return result;
+      return { data, total: data.length };
     } catch (error) {
       this.logger.error(
         `Failed to search for units with name: ${unitName} in workspace: ${workspaceId}`,
@@ -1027,7 +1015,6 @@ export class WorkspaceTestResultsService {
         `Searching for booklets with name: ${bookletName} in workspace: ${workspaceId} (page: ${page}, limit: ${limit})`
       );
 
-      // Create a query to find all booklets with the given name
       const query = this.bookletRepository.createQueryBuilder('booklet')
         .innerJoinAndSelect('booklet.person', 'person')
         .innerJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
