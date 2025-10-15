@@ -9,7 +9,7 @@ import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 import { ActivatedRoute, Params } from '@angular/router';
 import {
-  combineLatest, firstValueFrom, Observable, of, Subject, Subscription, switchMap
+  combineLatest, firstValueFrom, Observable, of, Subject, Subscription, switchMap, catchError
 } from 'rxjs';
 import * as xml2js from 'xml2js';
 import { jwtDecode, JwtPayload } from 'jwt-decode';
@@ -367,13 +367,13 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       authToken);
   }
 
-  private async getUnitData(workspace: number, authToken?:string) {
+  private async getUnitData(workspace: number, authToken?:string): Promise<{ unitDef: FilesDto[], response: ResponseDto[], player: FilesDto[] }> {
     const startTime = performance.now();
     this.isLoaded.next(false);
     const unitData = await firstValueFrom(
       combineLatest([
         this.getUnitDef(workspace, authToken),
-        this.getResponses(workspace, authToken),
+        this.getResponses(workspace, authToken).pipe(catchError(() => of([]))),
         this.getUnit(workspace, authToken)
           .pipe(switchMap(unitFile => {
             this.checkUnitId(unitFile);
