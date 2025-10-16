@@ -53,6 +53,7 @@ import { CodingJobCoder } from './entities/coding-job-coder.entity';
 import { CodingJobVariable } from './entities/coding-job-variable.entity';
 import { CodingJobVariableBundle } from './entities/coding-job-variable-bundle.entity';
 import { CodingJobService } from './services/coding-job.service';
+import { MissingsProfilesService } from './services/missings-profiles.service';
 // eslint-disable-next-line import/no-cycle
 import { JobQueueModule } from '../job-queue/job-queue.module';
 // eslint-disable-next-line import/no-cycle
@@ -149,7 +150,8 @@ import { CacheModule } from '../cache/cache.module';
     JobService,
     ValidationTaskService,
     ReplayStatisticsService,
-    CodingJobService
+    CodingJobService,
+    MissingsProfilesService
   ],
   exports: [
     User,
@@ -179,7 +181,8 @@ import { CacheModule } from '../cache/cache.module';
     JobService,
     ValidationTaskService,
     ReplayStatisticsService,
-    CodingJobService
+    CodingJobService,
+    MissingsProfilesService
   ]
 })
 export class DatabaseModule {}

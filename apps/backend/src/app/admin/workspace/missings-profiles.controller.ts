@@ -1,16 +1,16 @@
 import {
   Controller, Get, Post, Body, Param, Delete, Put
 } from '@nestjs/common';
-import { WorkspaceCodingService } from '../../database/services/workspace-coding.service';
+import { MissingsProfilesService } from '../../database/services/missings-profiles.service';
 import { MissingsProfilesDto } from '../../../../../../api-dto/coding/missings-profiles.dto';
 
 @Controller('admin/workspace/:workspaceId/missings-profiles')
 export class MissingsProfilesController {
-  constructor(private readonly workspaceCodingService: WorkspaceCodingService) {}
+  constructor(private readonly missingsProfilesService: MissingsProfilesService) {}
 
   @Get()
   async getMissingsProfiles(@Param('workspaceId') workspaceId: number) {
-    return this.workspaceCodingService.getMissingsProfiles(workspaceId);
+    return this.missingsProfilesService.getMissingsProfiles(workspaceId);
   }
 
   @Get(':label')
@@ -18,7 +18,7 @@ export class MissingsProfilesController {
   @Param('workspaceId') workspaceId: number,
     @Param('label') label: string
   ) {
-    return this.workspaceCodingService.getMissingsProfileDetails(workspaceId, label);
+    return this.missingsProfilesService.getMissingsProfileDetails(workspaceId, label);
   }
 
   @Post()
@@ -26,7 +26,7 @@ export class MissingsProfilesController {
   @Param('workspaceId') workspaceId: number,
     @Body() profile: MissingsProfilesDto
   ) {
-    return this.workspaceCodingService.createMissingsProfile(workspaceId, profile);
+    return this.missingsProfilesService.createMissingsProfile(workspaceId, profile);
   }
 
   @Put(':label')
@@ -35,7 +35,7 @@ export class MissingsProfilesController {
     @Param('label') label: string,
     @Body() profile: MissingsProfilesDto
   ) {
-    return this.workspaceCodingService.updateMissingsProfile(workspaceId, label, profile);
+    return this.missingsProfilesService.updateMissingsProfile(workspaceId, label, profile);
   }
 
   @Delete(':label')
@@ -43,6 +43,6 @@ export class MissingsProfilesController {
   @Param('workspaceId') workspaceId: number,
     @Param('label') label: string
   ) {
-    return this.workspaceCodingService.deleteMissingsProfile(workspaceId, label);
+    return this.missingsProfilesService.deleteMissingsProfile(workspaceId, label);
   }
 }
