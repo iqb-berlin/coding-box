@@ -114,7 +114,12 @@
     "workspaces-title": "Admin: Arbeitsbereiche",
     "edit-workspace-settings": "Arbeitsbereichs Einstellungen",
     "workspace-deleted": "Arbeitsbereich gelöscht",
-    "workspace-access-right-set": "Zugriffsrechte für Arbeitsbereich gesetzt"
+    "workspace-access-right-set": "Zugriffsrechte für Arbeitsbereich gesetzt",
+    "deleting-workspace-starting": "Löschen von Arbeitsbereich wird gestartet...",
+    "deleting-workspace-files": "Dateien werden gelöscht...",
+    "deleting-workspace-persons": "Personendaten werden gelöscht...",
+    "deleting-workspace-finish": "Löschen wird abgeschlossen...",
+    "deleting-workspace-success": "Arbeitsbereich erfolgreich gelöscht!"
   },
   "ws-admin": {
     "name": "Name",
