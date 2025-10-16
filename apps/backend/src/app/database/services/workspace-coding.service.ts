@@ -40,6 +40,7 @@ interface CoderTrainingResponse {
 }
 
 interface ExternalCodingRow {
+  unit_key?: string;
   unit_alias?: string;
   variable_id?: string;
   status?: string;
@@ -58,7 +59,8 @@ interface ExternalCodingImportBody {
 }
 
 interface QueryParameters {
-  unitAlias: string;
+  unitAlias?: string;
+  unitName?: string;
   variableId: string;
   workspaceId: number;
   personCode?: string;
@@ -348,7 +350,6 @@ export class WorkspaceCodingService {
       await queryRunner.release();
       return true;
     }
-
     const updateStart = Date.now();
     try {
       const updateBatchSize = 500;
@@ -376,9 +377,9 @@ export class WorkspaceCodingService {
               ResponseEntity,
               response.id,
               {
-                code_v1: response.code_v1,
-                status_v1: response.status_v1,
-                score_v1: response.score_v1
+                code_v1: response?.code_v1,
+                status_v1: response?.status_v1,
+                score_v1: response?.score_v1
               }
             ));
 
@@ -445,20 +446,17 @@ export class WorkspaceCodingService {
         if (responses.length === 0) continue;
 
         statistics.totalResponses += responses.length;
-
         const codingSchemeRef = unitToCodingSchemeRefMap.get(unit.id);
         const scheme = codingSchemeRef ?
           (fileIdToCodingSchemeMap.get(codingSchemeRef) || emptyScheme) :
           emptyScheme;
-
         for (const response of responses) {
           const codedResult = Autocoder.CodingFactory.code({
             id: response.variableid,
             value: response.value,
             status: response.status as ResponseStatusType
           }, scheme.variableCodings[0]);
-
-          const codedStatus = codedResult[0]?.status;
+          const codedStatus = codedResult?.status;
           if (!statistics.statusCounts[codedStatus]) {
             statistics.statusCounts[codedStatus] = 0;
           }
@@ -2626,12 +2624,16 @@ export class WorkspaceCodingService {
         for (const row of batch) {
           try {
             const {
+              unit_key: unitKey,
               unit_alias: unitAlias, variable_id: variableId, status, score, code,
               person_code: personCode, person_login: personLogin, person_group: personGroup, booklet_name: bookletName
             } = row;
 
-            if (!unitAlias || !variableId) {
-              errors.push(`Row missing required fields: unit_alias=${unitAlias}, variable_id=${variableId}`);
+            // Use unit_key if provided, otherwise fall back to unit_alias for backward compatibility
+            const unitIdentifier = unitKey || unitAlias;
+
+            if (!unitIdentifier || !variableId) {
+              errors.push(`Row missing required fields: unit_key=${unitKey}, unit_alias=${unitAlias}, variable_id=${variableId}`);
               continue;
             }
 
@@ -2639,12 +2641,20 @@ export class WorkspaceCodingService {
               .createQueryBuilder('response')
               .select(['response.id', 'response.status_v1', 'response.code_v1', 'response.score_v1',
                 'response.status_v2', 'response.code_v2', 'response.score_v2',
-                'unit.alias', 'person.code', 'person.login', 'person.group', 'bookletinfo.name'])
+                'unit.alias', 'unit.name', 'person.code', 'person.login', 'person.group', 'bookletinfo.name'])
               .innerJoin('response.unit', 'unit')
               .innerJoin('unit.booklet', 'booklet')
               .innerJoin('booklet.person', 'person')
-              .innerJoin('booklet.bookletinfo', 'bookletinfo')
-              .where('unit.alias = :unitAlias', { unitAlias })
+              .innerJoin('booklet.bookletinfo', 'bookletinfo');
+
+            // Use unit.name if unit_key was provided, otherwise unit.alias for unit_alias
+            if (unitKey) {
+              queryBuilder.andWhere('unit.name = :unitIdentifier', { unitIdentifier });
+            } else {
+              queryBuilder.andWhere('unit.alias = :unitIdentifier', { unitIdentifier });
+            }
+
+            queryBuilder
               .andWhere('response.variableid = :variableId', { variableId })
               .andWhere('person.workspace_id = :workspaceId', { workspaceId });
 
@@ -2662,7 +2672,8 @@ export class WorkspaceCodingService {
             }
 
             const queryParameters: QueryParameters = {
-              unitAlias,
+              unitAlias: unitAlias || unitKey,
+              unitName: unitKey || unitAlias,
               variableId,
               workspaceId
             };
