@@ -9,6 +9,7 @@ import * as ExcelJS from 'exceljs';
 import * as crypto from 'crypto';
 import { ResponseStatusType } from '@iqbspecs/response/response.interface';
 import { CacheService } from '../../cache/cache.service';
+import { MissingsProfilesService } from './missings-profiles.service';
 import FileUpload from '../entities/file_upload.entity';
 import Persons from '../entities/persons.entity';
 import { Unit } from '../entities/unit.entity';
@@ -94,7 +95,8 @@ export class WorkspaceCodingService {
     @InjectRepository(Setting)
     private settingRepository: Repository<Setting>,
     private jobQueueService: JobQueueService,
-    private cacheService: CacheService
+    private cacheService: CacheService,
+    private missingsProfilesService: MissingsProfilesService
   ) {}
 
   private codingSchemeCache: Map<string, { scheme: CodingScheme; timestamp: number }> = new Map();
@@ -1640,7 +1642,7 @@ export class WorkspaceCodingService {
       ];
 
       if (missingsProfile) {
-        const profile = await this.getMissingsProfileByLabel(missingsProfile);
+        const profile = await this.missingsProfilesService.getMissingsProfileDetails(workspaceId, missingsProfile);
         if (profile) {
           // Convert MissingDto[] to Missing[]
           const profileMissings = profile.parseMissings();
