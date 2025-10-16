@@ -53,6 +53,7 @@ import { CodingJobCoder } from './entities/coding-job-coder.entity';
 import { CodingJobVariable } from './entities/coding-job-variable.entity';
 import { CodingJobVariableBundle } from './entities/coding-job-variable-bundle.entity';
 import { CodingJobService } from './services/coding-job.service';
+import { CodingStatisticsService } from './services/coding-statistics.service';
 import { MissingsProfilesService } from './services/missings-profiles.service';
 // eslint-disable-next-line import/no-cycle
 import { JobQueueModule } from '../job-queue/job-queue.module';
@@ -151,6 +152,7 @@ import { CacheModule } from '../cache/cache.module';
     ValidationTaskService,
     ReplayStatisticsService,
     CodingJobService,
+    CodingStatisticsService,
     MissingsProfilesService
   ],
   exports: [
@@ -182,6 +184,7 @@ import { CacheModule } from '../cache/cache.module';
     ValidationTaskService,
     ReplayStatisticsService,
     CodingJobService,
+    CodingStatisticsService,
     MissingsProfilesService
   ]
 })

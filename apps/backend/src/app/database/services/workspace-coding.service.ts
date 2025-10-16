@@ -26,6 +26,7 @@ import { ExpectedCombinationDto } from '../../../../../../api-dto/coding/expecte
 import { ValidationResultDto } from '../../../../../../api-dto/coding/validation-result.dto';
 import { ValidateCodingCompletenessResponseDto } from '../../../../../../api-dto/coding/validate-coding-completeness-response.dto';
 import { JobQueueService } from '../../job-queue/job-queue.service';
+import { CodingStatisticsService } from './coding-statistics.service';
 
 interface CoderTrainingResponse {
   responseId: number;
@@ -96,7 +97,8 @@ export class WorkspaceCodingService {
     private settingRepository: Repository<Setting>,
     private jobQueueService: JobQueueService,
     private cacheService: CacheService,
-    private missingsProfilesService: MissingsProfilesService
+    private missingsProfilesService: MissingsProfilesService,
+    private codingStatisticsService: CodingStatisticsService
   ) {}
 
   private codingSchemeCache: Map<string, { scheme: CodingScheme; timestamp: number }> = new Map();
@@ -1235,59 +1237,8 @@ export class WorkspaceCodingService {
     }
   }
 
-  private statisticsCache: Map<number, { data: CodingStatistics; timestamp: number }> = new Map();
-  private readonly CACHE_TTL_MS = 60 * 1000; // 1 minute cache TTL
-
   async getCodingStatistics(workspace_id: number): Promise<CodingStatistics> {
-    this.logger.log(`Getting coding statistics for workspace ${workspace_id}`);
-
-    const cachedResult = this.statisticsCache.get(workspace_id);
-    if (cachedResult && (Date.now() - cachedResult.timestamp) < this.CACHE_TTL_MS) {
-      this.logger.log(`Returning cached statistics for workspace ${workspace_id}`);
-      return cachedResult.data;
-    }
-
-    const statistics: CodingStatistics = {
-      totalResponses: 0,
-      statusCounts: {}
-    };
-
-    try {
-      const statusCountResults = await this.responseRepository.query(`
-        SELECT
-          response.status_v1 as "statusValue",
-          COUNT(response.id) as count
-        FROM response
-        INNER JOIN unit ON response.unitid = unit.id
-        INNER JOIN booklet ON unit.bookletid = booklet.id
-        INNER JOIN persons person ON booklet.personid = person.id
-        WHERE response.status = $1
-          AND person.workspace_id = $2
-          AND person.consider = $3
-        GROUP BY response.status_v1
-      `, ['VALUE_CHANGED', workspace_id, true]);
-
-      let totalResponses = 0;
-
-      statusCountResults.forEach(result => {
-        const count = parseInt(result.count, 10);
-        const validCount = Number.isNaN(count) ? 0 : count;
-        statistics.statusCounts[result.statusValue] = validCount;
-        totalResponses += validCount;
-      });
-
-      statistics.totalResponses = totalResponses;
-
-      this.statisticsCache.set(workspace_id, {
-        data: statistics,
-        timestamp: Date.now()
-      });
-
-      return statistics;
-    } catch (error) {
-      this.logger.error(`Error getting coding statistics: ${error.message}`);
-      return statistics;
-    }
+    return this.codingStatisticsService.getCodingStatistics(workspace_id);
   }
 
   async getCodingListAsCsv(workspace_id: number): Promise<Buffer> {
