@@ -45,7 +45,6 @@ import { WorkspaceSettingsService } from '../../../ws-admin/services/workspace-s
 import { CodingStatistics } from '../../../../../../../api-dto/coding/coding-statistics';
 import { ExportDialogComponent, ExportFormat } from '../export-dialog/export-dialog.component';
 import { Success } from '../../models/success.model';
-import { CodingListItem } from '../../models/coding-list-item.model';
 import { ResponseEntity } from '../../../shared/models/response-entity.model';
 import { TestPersonCodingDialogComponent } from '../test-person-coding-dialog/test-person-coding-dialog.component';
 import { ExportCodingBookComponent } from '../export-coding-book/export-coding-book.component';
