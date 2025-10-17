@@ -1336,15 +1336,19 @@ export class WorkspaceCodingService {
 
       if (missingsProfile) {
         const profile = await this.missingsProfilesService.getMissingsProfileDetails(workspaceId, missingsProfile);
-        if (profile) {
-          // Convert MissingDto[] to Missing[]
-          const profileMissings = profile.parseMissings();
-          if (profileMissings.length > 0) {
-            missings = profileMissings.map(m => ({
-              code: m.code.toString(),
-              label: m.label,
-              description: m.description
-            }));
+        if (profile && profile.missings) {
+          try {
+            // Parse the missings configuration
+            const profileMissings = typeof profile.missings === 'string' ? JSON.parse(profile.missings) : profile.missings;
+            if (Array.isArray(profileMissings) && profileMissings.length > 0) {
+              missings = profileMissings.map(m => ({
+                code: m.code.toString(),
+                label: m.label,
+                description: m.description
+              }));
+            }
+          } catch (parseError) {
+            this.logger.error(`Error parsing missings from profile: ${parseError.message}`, parseError.stack);
           }
         }
       }
