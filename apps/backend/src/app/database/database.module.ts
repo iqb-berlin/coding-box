@@ -59,6 +59,7 @@ import { MissingsProfilesService } from './services/missings-profiles.service';
 import { JobQueueModule } from '../job-queue/job-queue.module';
 // eslint-disable-next-line import/no-cycle
 import { CacheModule } from '../cache/cache.module';
+import { CodingListService } from './services/coding-list.service';
 
 @Module({
   imports: [
@@ -153,7 +154,8 @@ import { CacheModule } from '../cache/cache.module';
     ReplayStatisticsService,
     CodingJobService,
     CodingStatisticsService,
-    MissingsProfilesService
+    MissingsProfilesService,
+    CodingListService
   ],
   exports: [
     User,
@@ -185,7 +187,8 @@ import { CacheModule } from '../cache/cache.module';
     ReplayStatisticsService,
     CodingJobService,
     CodingStatisticsService,
-    MissingsProfilesService
+    MissingsProfilesService,
+    CodingListService
   ]
 })
 export class DatabaseModule {}

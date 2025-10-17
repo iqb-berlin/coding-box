@@ -162,52 +162,34 @@ export class CodingService {
       );
   }
 
-  getCodingList(workspace_id: number, page: number = 1, limit: number = 100): Observable<PaginatedResponse<CodingListItem>> {
+  getCodingListAsCsv(workspace_id: number): Observable<Blob> {
     const identity = this.appService.loggedUser?.sub || '';
     return this.appService.createToken(workspace_id, identity, 60).pipe(
       catchError(() => of('')),
       switchMap(token => {
         const params = new HttpParams()
-          .set('page', page.toString())
-          .set('limit', limit.toString())
-          .set('identity', identity)
           .set('authToken', token)
           .set('serverUrl', window.location.origin);
-        return this.http
-          .get<PaginatedResponse<CodingListItem>>(
+        return this.http.get(
           `${this.serverUrl}admin/workspace/${workspace_id}/coding/coding-list`,
-          { headers: this.authHeader, params }
-        )
-          .pipe(
-            catchError(() => of({
-              data: [],
-              total: 0,
-              page,
-              limit
-            }))
-          );
+          {
+            headers: this.authHeader,
+            params,
+            responseType: 'blob' as 'json'
+          }
+        ) as unknown as Observable<Blob>;
       })
     );
   }
 
-  getCodingListAsCsv(workspace_id: number): Observable<ArrayBuffer> {
-    return this.http.get(
-      `${this.serverUrl}admin/workspace/${workspace_id}/coding/coding-list/csv`,
-      {
-        headers: this.authHeader,
-        responseType: 'arraybuffer'
-      }
-    );
-  }
-
-  getCodingListAsExcel(workspace_id: number): Observable<ArrayBuffer> {
+  getCodingListAsExcel(workspace_id: number): Observable<Blob> {
     return this.http.get(
       `${this.serverUrl}admin/workspace/${workspace_id}/coding/coding-list/excel`,
       {
         headers: this.authHeader,
-        responseType: 'arraybuffer'
+        responseType: 'blob' as 'json'
       }
-    );
+    ) as unknown as Observable<Blob>;
   }
 
   getCodingStatistics(workspace_id: number): Observable<CodingStatistics> {
