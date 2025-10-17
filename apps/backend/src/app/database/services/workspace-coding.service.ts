@@ -1059,97 +1059,26 @@ export class WorkspaceCodingService {
 
       this.logger.log(`Found ${voudFiles.length} VOUD files for workspace ${workspace_id}`);
 
-      const voudFileMap = new Map<string, FileUpload>();
-      voudFiles.forEach(file => {
-        voudFileMap.set(file.file_id, file);
-      });
-      if (options) {
-        const { page, limit } = options;
-        const MAX_LIMIT = 10000000;
-        const validPage = Math.max(1, page);
-        const validLimit = Math.min(Math.max(1, limit), MAX_LIMIT);
-        const queryBuilder = this.responseRepository.createQueryBuilder('response')
-          .leftJoinAndSelect('response.unit', 'unit')
-          .leftJoinAndSelect('unit.booklet', 'booklet')
-          .leftJoinAndSelect('booklet.person', 'person')
-          .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
-          .where('response.status_v1 = :status', { status: 8 }) // CODING_INCOMPLETE = 8
-          .andWhere('person.workspace_id = :workspace_id', { workspace_id })
-          .skip((validPage - 1) * validLimit)
-          .take(MAX_LIMIT) // Set a very high limit to fetch all items
-          .orderBy('response.id', 'ASC');
-
-        const [responses, total] = await queryBuilder.getManyAndCount();
-
-        const result = await Promise.all(responses.map(async response => {
-          const unit = response.unit;
-          const booklet = unit?.booklet;
-          const person = booklet?.person;
-          const bookletInfo = booklet?.bookletinfo;
-          const loginName = person?.login || '';
-          const loginCode = person?.code || '';
-          // const loginGroup = person.group || '';
-          const bookletId = bookletInfo?.name || '';
-          const unitKey = unit?.name || '';
-          const unitAlias = unit?.alias || '';
-          let variablePage = '0';
-          const variableAnchor = response.variableid || 0;
-          const voudFile = voudFileMap.get(`${unitKey}.VOUD`);
-          if (voudFile) {
-            try {
-              const respDefinition = {
-                definition: voudFile.data
-              };
-              // const transformResult = prepareDefinition(respDefinition);
-              const variableLocation = extractVariableLocation([respDefinition]);
-              const variablePageInfo = variableLocation[0].variable_pages.find(
-                pageInfo => pageInfo.variable_ref === response.variableid
-              );
-              const variablePageAlwaysVisible = variableLocation[0].variable_pages.find(
-                pageInfo => pageInfo.variable_page_always_visible === true
-              );
-
-              if (variablePageInfo) {
-                if (variablePageAlwaysVisible && variablePageInfo.variable_page_always_visible === true) {
-                  variablePage = (variablePageInfo.variable_path.pages - 1).toString();
-                }
-                variablePage = variablePageInfo?.variable_path?.pages.toString();
-              }
-
-              this.logger.log(`Processed VOUD file for unit ${unitKey}, variable ${response.variableid}, page ${variablePage}`);
-            } catch (error) {
-              this.logger.error(`Error processing VOUD file for unit ${unitKey}: ${error.message}`);
-            }
-          } else {
-            this.logger.warn(`VOUD file not found for unit ${unitKey}`);
+      // Pre-process VOUD files once per unit to extract variable page mappings
+      const variablePageMap = new Map<string, Map<string, string>>();
+      for (const voudFile of voudFiles) {
+        try {
+          const respDefinition = { definition: voudFile.data };
+          const variableLocation = extractVariableLocation([respDefinition]);
+          const unitVarPages = new Map<string, string>();
+          for (const pageInfo of variableLocation[0].variable_pages) {
+            unitVarPages.set(pageInfo.variable_ref, pageInfo.variable_path?.pages?.toString() || '0');
           }
-
-          const url = `${server}/#/replay/${loginName}@${loginCode}@${bookletId}/${unitKey}/${variablePage}/${variableAnchor}?auth=${authToken}`;
-
-          return {
-            unit_key: unitKey,
-            unit_alias: unitAlias,
-            login_name: loginName,
-            login_code: loginCode,
-            booklet_id: bookletId,
-            variable_id: response.variableid || '',
-            variable_page: variablePage,
-            variable_anchor: response.variableid || '',
-            url
-          };
-        }));
-
-        const sortedResult = result.sort((a, b) => {
-          const unitKeyComparison = a.unit_key.localeCompare(b.unit_key);
-          if (unitKeyComparison !== 0) {
-            return unitKeyComparison;
-          }
-          return a.variable_id.localeCompare(b.variable_id);
-        });
-
-        this.logger.log(`Found ${sortedResult.length} coding items (page ${validPage}, limit ${validLimit}, total ${total})`);
-        return [sortedResult, total];
+          variablePageMap.set(voudFile.file_id.replace('.VOUD', ''), unitVarPages);
+        } catch (error) {
+          this.logger.error(`Error parsing VOUD file ${voudFile.filename}: ${error.message}`);
+        }
       }
+
+      if (!options) {
+        this.logger.warn(`No pagination options provided for workspace ${workspace_id}`);
+      }
+
 
       const queryBuilder = this.responseRepository.createQueryBuilder('response')
         .leftJoinAndSelect('response.unit', 'unit')
@@ -1160,77 +1089,50 @@ export class WorkspaceCodingService {
         .andWhere('person.workspace_id = :workspace_id', { workspace_id })
         .orderBy('response.id', 'ASC');
 
-      const responses = await queryBuilder.getMany();
+      const [responses, total] = await queryBuilder.getManyAndCount();
 
-      const result = await Promise.all(responses.map(async response => {
+      // Synchronous processing using pre-computed page mappings
+      const result = responses.map(response => {
         const unit = response.unit;
         const booklet = unit?.booklet;
         const person = booklet?.person;
         const bookletInfo = booklet?.bookletinfo;
         const loginName = person?.login || '';
         const loginCode = person?.code || '';
-        // const loginGroup = person.group || '';
         const bookletId = bookletInfo?.name || '';
         const unitKey = unit?.name || '';
         const unitAlias = unit?.alias || '';
-        let variablePage = '0';
-        const variableAnchor = response.variableid || 0;
-        const voudFile = voudFileMap.get(`${unitKey}.VOUD`);
-
-        if (voudFile) {
-          try {
-            const respDefinition = {
-              definition: voudFile.data
-            };
-            // const transformResult = prepareDefinition(respDefinition);
-            const variableLocation = extractVariableLocation([respDefinition]);
-            const variablePageInfo = variableLocation[0].variable_pages.find(
-              pageInfo => pageInfo.variable_ref === response.variableid
-            );
-            const variablePageAlwaysVisible = variableLocation[0].variable_pages.find(
-              pageInfo => pageInfo.variable_page_always_visible === true
-            );
-
-            if (variablePageInfo) {
-              if (variablePageAlwaysVisible && variablePageInfo.variable_page_always_visible === true) {
-                variablePage = (variablePageInfo.variable_path.pages - 1).toString();
-              }
-              variablePage = variablePageInfo?.variable_path?.pages.toString();
-            }
-
-            this.logger.log(`Processed VOUD file for unit ${unitKey}, variable ${response.variableid}, page ${variablePage}`);
-          } catch (error) {
-            this.logger.error(`Error processing VOUD file for unit ${unitKey}: ${error.message}`);
-          }
-        } else {
-          this.logger.warn(`VOUD file not found for unit ${unitKey}`);
-        }
+        const variableId = response.variableid || '';
+        const unitVarPages = variablePageMap.get(unitKey);
+        const variablePage = unitVarPages?.get(variableId) || '0';
+        const variableAnchor = variableId;
 
         const url = `${server}/#/replay/${loginName}@${loginCode}@${bookletId}/${unitKey}/${variablePage}/${variableAnchor}?auth=${authToken}`;
+
         return {
           unit_key: unitKey,
           unit_alias: unitAlias,
           login_name: loginName,
           login_code: loginCode,
           booklet_id: bookletId,
-          variable_id: response.variableid || '',
+          variable_id: variableId,
           variable_page: variablePage,
-          variable_anchor: response.variableid || '',
+          variable_anchor: variableAnchor,
           url
         };
-      }));
+      });
 
+      // Sort the paginated results
       const sortedResult = result.sort((a, b) => {
         const unitKeyComparison = a.unit_key.localeCompare(b.unit_key);
         if (unitKeyComparison !== 0) {
           return unitKeyComparison;
         }
-        // If unit_key is the same, sort by variable_id
         return a.variable_id.localeCompare(b.variable_id);
       });
 
-      this.logger.log(`Found ${sortedResult.length} coding items`);
-      return [sortedResult, sortedResult.length];
+      this.logger.log(`Found ${sortedResult.length} coding items, total ${total})`);
+      return [sortedResult, total];
     } catch (error) {
       this.logger.error(`Error fetching coding list: ${error.message}`);
       return [[], 0];
