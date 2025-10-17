@@ -13,6 +13,9 @@ export interface BookletReplayUnit {
   name: string;
   alias: string | null;
   bookletId: number;
+  testPerson?: string;
+  variableId?: string;
+  variableAnchor?: string;
 }
 
 export interface BookletReplay {

@@ -21,6 +21,7 @@ import { MatCheckbox } from '@angular/material/checkbox';
 import { MatAnchor, MatButton } from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { DatePipe, NgClass } from '@angular/common';
+import { Router } from '@angular/router';
 import { AppService } from '../../../services/app.service';
 import { BackendService } from '../../../services/backend.service';
 import { SearchFilterComponent } from '../../../shared/search-filter/search-filter.component';
@@ -66,6 +67,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
   private snackBar = inject(MatSnackBar);
   private dialog = inject(MatDialog);
   private coderService = inject(CoderService);
+  private router = inject(Router);
 
   private coderNamesByJobId = new Map<number, string>();
   private allCoders: Coder[] = [];
@@ -394,7 +396,74 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
   startCodingJob(): void {
     if (this.selection.selected.length === 1) {
       const selectedJob = this.selection.selected[0];
-      this.snackBar.open(`Starten von Kodierjob "${selectedJob.name}" noch nicht implementiert`, 'Schließen', { duration: 3000 });
+      const workspaceId = this.appService.selectedWorkspaceId;
+      if (!workspaceId) {
+        this.snackBar.open('Kein Workspace ausgewählt', 'Schließen', { duration: 3000 });
+        return;
+      }
+
+      const loadingSnack = this.snackBar.open(`Starte Kodierjob "${selectedJob.name}"...`, '', { duration: 3000 });
+
+      this.backendService.startCodingJob(workspaceId, selectedJob.id).subscribe({
+        next: result => {
+          loadingSnack.dismiss();
+          if (!result || result.total === 0) {
+            this.snackBar.open('Keine passenden Antworten gefunden', 'Info', { duration: 3000 });
+            return;
+          }
+
+          // Map responses to a booklet-like structure so we can reuse the Replay booklet navigation
+          const units = result.items.map((item, idx) => ({
+            id: idx,
+            name: item.unitAlias || item.unitName,
+            alias: item.unitAlias || null,
+            bookletId: 0,
+            testPerson: `${item.personLogin}@${item.personCode}@${item.bookletName}`,
+            variableId: item.variableId,
+            variableAnchor: item.variableAnchor
+          }));
+
+          const bookletData = {
+            id: selectedJob.id,
+            name: `Coding-Job: ${selectedJob.name}`,
+            units,
+            currentUnitIndex: 0
+          };
+
+          const first = units[0];
+          const firstTestPerson = first.testPerson;
+          const firstUnitId = first.name;
+
+          this.appService
+            .createToken(this.appService.selectedWorkspaceId, this.appService.loggedUser?.sub || '', 1)
+            .subscribe(token => {
+              const bookletKey = `replay_booklet_${selectedJob.id}_${Date.now()}`;
+              try {
+                localStorage.setItem(bookletKey, JSON.stringify(bookletData));
+              } catch (e) {
+                // ignore
+              }
+
+              const queryParams = {
+                auth: token,
+                mode: 'booklet',
+                bookletKey
+              } as const;
+
+              const url = this.router.serializeUrl(
+                this.router.createUrlTree([
+                  `replay/${firstTestPerson}/${firstUnitId}/0/0`
+                ], { queryParams })
+              );
+              window.open(`#/${url}`, '_blank');
+              this.snackBar.open(`${result.total} Antworten für Replay vorbereitet`, 'Schließen', { duration: 3000 });
+            });
+        },
+        error: () => {
+          loadingSnack.dismiss();
+          this.snackBar.open('Fehler beim Starten des Kodierjobs', 'Fehler', { duration: 3000 });
+        }
+      });
     }
   }
 
@@ -441,7 +510,6 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
       return 'Keine';
     }
 
-    // Fallback, falls Map noch nicht gefüllt ist
     return `${job.assignedCoders.length} Kodierer`;
   }
 

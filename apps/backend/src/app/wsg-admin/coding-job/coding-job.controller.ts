@@ -226,6 +226,78 @@ export class WsgCodingJobController {
     }
   }
 
+  @Post(':id/start')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Start a coding job',
+    description: 'Finds all responses matching assigned variables and prepares replay data'
+  })
+  @ApiParam({
+    name: 'workspace_id',
+    type: Number,
+    required: true,
+    description: 'The ID of the workspace'
+  })
+  @ApiParam({
+    name: 'id',
+    type: Number,
+    required: true,
+    description: 'The ID of the coding job'
+  })
+  @ApiOkResponse({
+    description: 'Replay data prepared successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        total: { type: 'number' },
+        items: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              responseId: { type: 'number' },
+              unitName: { type: 'string' },
+              unitAlias: { type: 'string' },
+              variableId: { type: 'string' },
+              variableAnchor: { type: 'string' },
+              bookletName: { type: 'string' },
+              personLogin: { type: 'string' },
+              personCode: { type: 'string' }
+            }
+          }
+        }
+      }
+    }
+  })
+  async startCodingJob(
+    @WorkspaceId() workspaceId: number,
+      @Param('id', ParseIntPipe) id: number
+  ): Promise<{ total: number; items: Array<{ responseId: number; unitName: string; unitAlias: string | null; variableId: string; variableAnchor: string; bookletName: string; personLogin: string; personCode: string }> }> {
+    try {
+      await this.codingJobService.getCodingJob(id, workspaceId);
+      const responses = await this.codingJobService.getResponsesForCodingJob(id);
+
+      const items = responses.map(r => ({
+        responseId: r.id,
+        unitName: r.unit?.name || '',
+        unitAlias: r.unit?.alias || null,
+        variableId: r.variableid,
+        variableAnchor: r.variableid,
+        bookletName: r.unit?.booklet?.bookletinfo?.name || '',
+        personLogin: r.unit?.booklet?.person?.login || '',
+        personCode: r.unit?.booklet?.person?.code || ''
+      }));
+
+      return { total: items.length, items };
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new BadRequestException(`Failed to start coding job: ${error.message}`);
+    }
+  }
+
   @Delete(':id')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiBearerAuth()
