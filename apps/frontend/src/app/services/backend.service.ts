@@ -197,15 +197,11 @@ export class BackendService {
     return this.codingService.getCodingJobStatus(workspace_id, jobId);
   }
 
-  getCodingList(workspace_id: number, page: number = 1, limit: number = 100): Observable<PaginatedResponse<CodingListItem>> {
-    return this.codingService.getCodingList(workspace_id, page, limit);
-  }
-
-  getCodingListAsCsv(workspace_id: number): Observable<ArrayBuffer> {
+  getCodingListAsCsv(workspace_id: number): Observable<Blob> {
     return this.codingService.getCodingListAsCsv(workspace_id);
   }
 
-  getCodingListAsExcel(workspace_id: number): Observable<ArrayBuffer> {
+  getCodingListAsExcel(workspace_id: number): Observable<Blob> {
     return this.codingService.getCodingListAsExcel(workspace_id);
   }
 

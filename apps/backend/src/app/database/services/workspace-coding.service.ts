@@ -17,7 +17,6 @@ import { Booklet } from '../entities/booklet.entity';
 import { ResponseEntity } from '../entities/response.entity';
 import { Setting } from '../entities/setting.entity';
 import { CodingStatistics, CodingStatisticsWithJob } from './shared-types';
-import { extractVariableLocation } from '../../utils/voud/extractVariableLocation';
 import { CodebookGenerator } from '../../admin/code-book/codebook-generator.class';
 import { CodeBookContentSetting, UnitPropertiesForCodebook, Missing } from '../../admin/code-book/codebook.interfaces';
 import { MissingsProfilesDto } from '../../../../../../api-dto/coding/missings-profiles.dto';
@@ -1035,169 +1034,10 @@ export class WorkspaceCodingService {
     }
   }
 
-  async getCodingList(workspace_id: number, authToken: string, serverUrl?: string, options?: { page: number; limit: number }): Promise<[{
-    unit_key: string;
-    unit_alias: string;
-    login_name: string;
-    login_code: string;
-    booklet_id: string;
-    variable_id: string;
-    variable_page: string;
-    variable_anchor: string;
-    url: string;
-  }[], number]> {
-    try {
-      const server = serverUrl;
-
-      const voudFiles = await this.fileUploadRepository.find({
-        where: {
-          workspace_id: workspace_id,
-          file_type: 'Resource',
-          filename: Like('%.voud')
-        }
-      });
-
-      this.logger.log(`Found ${voudFiles.length} VOUD files for workspace ${workspace_id}`);
-
-      // Pre-process VOUD files once per unit to extract variable page mappings
-      const variablePageMap = new Map<string, Map<string, string>>();
-      for (const voudFile of voudFiles) {
-        try {
-          const respDefinition = { definition: voudFile.data };
-          const variableLocation = extractVariableLocation([respDefinition]);
-          const unitVarPages = new Map<string, string>();
-          for (const pageInfo of variableLocation[0].variable_pages) {
-            unitVarPages.set(pageInfo.variable_ref, pageInfo.variable_path?.pages?.toString() || '0');
-          }
-          variablePageMap.set(voudFile.file_id.replace('.VOUD', ''), unitVarPages);
-        } catch (error) {
-          this.logger.error(`Error parsing VOUD file ${voudFile.filename}: ${error.message}`);
-        }
-      }
-
-      if (!options) {
-        this.logger.warn(`No pagination options provided for workspace ${workspace_id}`);
-      }
-
-
-      const queryBuilder = this.responseRepository.createQueryBuilder('response')
-        .leftJoinAndSelect('response.unit', 'unit')
-        .leftJoinAndSelect('unit.booklet', 'booklet')
-        .leftJoinAndSelect('booklet.person', 'person')
-        .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
-        .where('response.status_v1 = :status', { status: 'CODING_INCOMPLETE' })
-        .andWhere('person.workspace_id = :workspace_id', { workspace_id })
-        .orderBy('response.id', 'ASC');
-
-      const [responses, total] = await queryBuilder.getManyAndCount();
-
-      // Synchronous processing using pre-computed page mappings
-      const result = responses.map(response => {
-        const unit = response.unit;
-        const booklet = unit?.booklet;
-        const person = booklet?.person;
-        const bookletInfo = booklet?.bookletinfo;
-        const loginName = person?.login || '';
-        const loginCode = person?.code || '';
-        const bookletId = bookletInfo?.name || '';
-        const unitKey = unit?.name || '';
-        const unitAlias = unit?.alias || '';
-        const variableId = response.variableid || '';
-        const unitVarPages = variablePageMap.get(unitKey);
-        const variablePage = unitVarPages?.get(variableId) || '0';
-        const variableAnchor = variableId;
-
-        const url = `${server}/#/replay/${loginName}@${loginCode}@${bookletId}/${unitKey}/${variablePage}/${variableAnchor}?auth=${authToken}`;
-
-        return {
-          unit_key: unitKey,
-          unit_alias: unitAlias,
-          login_name: loginName,
-          login_code: loginCode,
-          booklet_id: bookletId,
-          variable_id: variableId,
-          variable_page: variablePage,
-          variable_anchor: variableAnchor,
-          url
-        };
-      });
-
-      // Sort the paginated results
-      const sortedResult = result.sort((a, b) => {
-        const unitKeyComparison = a.unit_key.localeCompare(b.unit_key);
-        if (unitKeyComparison !== 0) {
-          return unitKeyComparison;
-        }
-        return a.variable_id.localeCompare(b.variable_id);
-      });
-
-      this.logger.log(`Found ${sortedResult.length} coding items, total ${total})`);
-      return [sortedResult, total];
-    } catch (error) {
-      this.logger.error(`Error fetching coding list: ${error.message}`);
-      return [[], 0];
-    }
-  }
-
   async getCodingStatistics(workspace_id: number): Promise<CodingStatistics> {
     return this.codingStatisticsService.getCodingStatistics(workspace_id);
   }
 
-  async getCodingListAsCsv(workspace_id: number): Promise<Buffer> {
-    this.logger.log(`Generating CSV export for workspace ${workspace_id}`);
-    const [items] = await this.getCodingList(workspace_id, '', '');
-
-    if (!items || items.length === 0) {
-      this.logger.warn('No coding list items found for CSV export');
-      return Buffer.from('No data available');
-    }
-
-    const csvStream = fastCsv.format({ headers: true });
-    const chunks: Buffer[] = [];
-
-    return new Promise<Buffer>((resolve, reject) => {
-      csvStream.on('data', chunk => {
-        chunks.push(Buffer.from(chunk));
-      });
-
-      csvStream.on('end', () => {
-        const csvBuffer = Buffer.concat(chunks);
-        this.logger.log(`CSV export generated successfully with ${items.length} items`);
-        resolve(csvBuffer);
-      });
-
-      csvStream.on('error', error => {
-        this.logger.error(`Error generating CSV export: ${error.message}`);
-        reject(error);
-      });
-
-      items.forEach(item => {
-        csvStream.write({
-          unit_key: item.unit_key,
-          unit_alias: item.unit_alias,
-          login_name: item.login_name,
-          login_code: item.login_code,
-          booklet_id: item.booklet_id,
-          variable_id: item.variable_id,
-          variable_page: item.variable_page,
-          variable_anchor: item.variable_anchor
-        });
-      });
-
-      csvStream.end();
-    });
-  }
-
-  async getCodingListAsExcel(workspace_id: number): Promise<Buffer> {
-    this.logger.log(`Generating Excel export for workspace ${workspace_id}`);
-    return this.getCodingListAsCsv(workspace_id);
-  }
-
-  /**
-   * Get all missings profiles
-   * @param workspaceId Workspace ID (not used, profiles are global)
-   * @returns Array of missings profiles with labels
-   */
   async getMissingsProfiles(workspaceId: number): Promise<{ label: string }[]> {
     try {
       this.logger.log(`Getting missings profiles for workspace ${workspaceId}`);
