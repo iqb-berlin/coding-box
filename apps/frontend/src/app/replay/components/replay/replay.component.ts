@@ -76,6 +76,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   protected bookletData: BookletReplay | null = null;
   @ViewChild(UnitPlayerComponent) unitPlayerComponent: UnitPlayerComponent | undefined;
   private replayStartTime: number = 0; // Track when replay viewing starts
+  protected reloadKey: number = 0;
 
   ngOnInit(): void {
     // Record the start time when the component is initialized
@@ -128,12 +129,33 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
         const queryParams = await firstValueFrom(this.route.queryParams);
         this.isBookletMode = queryParams.mode === 'booklet';
-        if (this.isBookletMode && queryParams.bookletData) {
-          const deserializedBooklet = this.deserializeBookletData(queryParams.bookletData);
+        if (this.isBookletMode) {
+          let deserializedBooklet = null as BookletReplay | null;
+
+          if (queryParams.bookletData) {
+            deserializedBooklet = this.deserializeBookletData(queryParams.bookletData);
+          } else if (queryParams.bookletKey) {
+            const key = queryParams.bookletKey as string;
+            try {
+              const stored = localStorage.getItem(key);
+              if (stored) {
+                deserializedBooklet = JSON.parse(stored) as BookletReplay;
+              }
+            } catch (e) {
+              // ignore parse errors
+            } finally {
+              try { localStorage.removeItem(key); } catch { /* empty */ }
+            }
+          }
+
           if (deserializedBooklet) {
             this.bookletData = deserializedBooklet;
             this.currentUnitIndex = deserializedBooklet.currentUnitIndex;
             this.totalUnits = deserializedBooklet.units.length;
+            const unitAny = (this.bookletData.units[this.currentUnitIndex] || {}) as unknown as { variableAnchor?: string };
+            if (unitAny.variableAnchor) {
+              this.anchor = unitAny.variableAnchor;
+            }
           }
         }
 
@@ -290,6 +312,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     this.cacheUnitDefData(unitData.unitDef[0]);
     this.player = unitData.player[0].data;
     this.unitDef = unitData.unitDef[0].data;
+    this.reloadKey += 1;
     this.responses = unitData.response;
   }
 
@@ -337,7 +360,6 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   private getResponses(workspace: number, authToken?:string): Observable<ResponseDto[]> {
-    // In print mode, we don't need responses, so return an empty array
     if (this.isPrintMode) {
       return of([]);
     }
@@ -522,28 +544,48 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   handleUnitChanged(unit: BookletReplayUnit): void {
-    if (unit && unit.name !== this.unitId) {
-      this.unitId = unit.name;
+    if (!unit) return;
+    const unitAny = unit as unknown as { name: string; testPerson?: string; variableId?: string };
+    const incomingTestPerson = unitAny.testPerson;
 
-      if (this.authToken) {
-        const decoded: JwtPayload & { workspace: string } = jwtDecode(this.authToken);
-        const workspace = decoded?.workspace;
-        if (workspace) {
-          this.getUnitData(Number(workspace), this.authToken).then(unitData => {
-            this.setUnitProperties(unitData);
-          });
-        }
+    if (typeof unitAny.variableId === 'string' && unitAny.variableId.length > 0) {
+      this.anchor = unitAny.variableId;
+    }
+
+    if (incomingTestPerson && incomingTestPerson !== this.testPerson) {
+      this.setTestPerson(incomingTestPerson);
+    }
+    this.unitId = unit.name;
+
+    if (this.authToken) {
+      const decoded: JwtPayload & { workspace: string } = jwtDecode(this.authToken);
+      const workspace = decoded?.workspace;
+      if (workspace) {
+        this.getUnitData(Number(workspace), this.authToken).then(unitData => {
+          this.setUnitProperties(unitData);
+          // After loading new unit data, try to highlight using current anchor
+          setTimeout(() => {
+            if (this.unitPlayerComponent?.hostingIframe?.nativeElement && this.anchor) {
+              highlightAspectSectionWithAnchor(this.unitPlayerComponent.hostingIframe.nativeElement, this.anchor);
+              scrollToElementByAlias(this.unitPlayerComponent.hostingIframe.nativeElement, this.anchor);
+            }
+          }, 500);
+        });
       }
+    }
 
-      if (this.bookletData) {
-        const newIndex = this.bookletData.units.findIndex(u => u.name === unit.name);
-        if (newIndex >= 0) {
-          this.bookletData = {
-            ...this.bookletData,
-            currentUnitIndex: newIndex
-          };
-          this.currentUnitIndex = newIndex;
-        }
+    if (this.bookletData) {
+      const newIndex = this.bookletData.units.findIndex(u => {
+        const uAny = u as unknown as { name: string; testPerson?: string; variableId?: string };
+        return uAny.name === unitAny.name && (uAny.testPerson ?? '') === (incomingTestPerson ?? '') && uAny.variableId === unitAny.variableId;
+      });
+      if (newIndex >= 0) {
+        this.bookletData = {
+          ...this.bookletData,
+          currentUnitIndex: newIndex
+        };
+
+        this.currentUnitIndex = newIndex + 1;
       }
     }
   }

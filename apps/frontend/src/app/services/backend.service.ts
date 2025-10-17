@@ -777,6 +777,14 @@ export class BackendService {
     return this.http.delete<{ success: boolean }>(url);
   }
 
+  startCodingJob(
+    workspaceId: number,
+    codingJobId: number
+  ): Observable<{ total: number; items: Array<{ responseId: number; unitName: string; unitAlias: string | null; variableId: string; variableAnchor: string; bookletName: string; personLogin: string; personCode: string }> }> {
+    const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job/${codingJobId}/start`;
+    return this.http.post<{ total: number; items: Array<{ responseId: number; unitName: string; unitAlias: string | null; variableId: string; variableAnchor: string; bookletName: string; personLogin: string; personCode: string }> }>(url, {});
+  }
+
   getCodingIncompleteVariables(
     workspaceId: number,
     unitName?: string

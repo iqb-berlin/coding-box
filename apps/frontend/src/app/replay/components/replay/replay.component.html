@@ -9,14 +9,16 @@
   }
 
   @if (!!player && unitDef) {
-    <coding-box-unit-player
-      [unitDef]="unitDef"
-      [unitPlayer]="player"
-      [unitResponses]="responses"
-      [pageId]="page"
-      [printMode]="isPrintMode"
-      (invalidPage)="checkPageError($event)">
-    </coding-box-unit-player>
+    @for (key of [reloadKey]; track key) {
+      <coding-box-unit-player
+        [unitDef]="unitDef"
+        [unitPlayer]="player"
+        [unitResponses]="responses"
+        [pageId]="page"
+        [printMode]="isPrintMode"
+        (invalidPage)="checkPageError($event)">
+      </coding-box-unit-player>
+    }
   }
 
   @if (testPerson && unitId) {
