@@ -1556,7 +1556,7 @@ ${bookletRefs}
       const codingSchemeFile = await this.fileUploadRepository.findOne({
         where: {
           workspace_id: workspaceId,
-          file_id: codingSchemeRef.toUpperCase()
+          file_id: `${codingSchemeRef.toUpperCase()}.VOCS`
         }
       });
 
@@ -2899,7 +2899,7 @@ ${bookletRefs}
       return await this.deleteInvalidResponses(workspaceId, responseIds);
     } catch (error) {
       this.logger.error(`Error deleting all invalid responses: ${error.message}`, error.stack);
-      throw error;
+      throw new Error(`Error deleting all invalid responses: ${error.message}`);
     }
   }
 }
