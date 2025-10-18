@@ -12,7 +12,47 @@
 }
 
 .booklet-mode {
-  // Add any specific styles for booklet mode here
+  .replay-content {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+  }
+
+  .unit-player-container {
+    flex: 1;
+    overflow: auto;
+  }
+
+  .code-selector-container {
+    width: 350px;
+    min-width: 350px;
+    background-color: #f9f9f9;
+    border-left: 1px solid #ddd;
+    padding: 16px;
+    overflow-y: auto;
+  }
+
+  // Hide the navigation when not enough space
+  @media (max-width: 1200px) {
+    .replay-content {
+      flex-direction: column;
+    }
+
+    .code-selector-container {
+      width: 100%;
+      min-width: unset;
+      border-left: none;
+      border-top: 1px solid #ddd;
+      max-height: 300px;
+    }
+  }
+
+  // Ensure the navigation bar stays at the top
+  coding-box-booklet-replay {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
 }
 
 // Booklet navigation styles

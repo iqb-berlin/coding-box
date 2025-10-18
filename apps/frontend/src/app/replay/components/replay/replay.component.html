@@ -1,23 +1,51 @@
 <div class="replay-container" [class.print-mode]="isPrintMode" [class.booklet-mode]="isBookletMode">
   <cb-spinner [isLoaded]="isLoaded"></cb-spinner>
 
-  @if (isBookletMode && !!player && unitDef) {
-    <coding-box-booklet-replay
-      [bookletData]="bookletData"
-      (unitChanged)="handleUnitChanged($event)">
-    </coding-box-booklet-replay>
-  }
+  @if (isBookletMode) {
+    @if (isBookletMode && !!player && unitDef) {
+      <coding-box-booklet-replay
+        [bookletData]="bookletData"
+        (unitChanged)="handleUnitChanged($event)">
+      </coding-box-booklet-replay>
+    }
 
-  @if (!!player && unitDef) {
-    @for (key of [reloadKey]; track key) {
-      <coding-box-unit-player
-        [unitDef]="unitDef"
-        [unitPlayer]="player"
-        [unitResponses]="responses"
-        [pageId]="page"
-        [printMode]="isPrintMode"
-        (invalidPage)="checkPageError($event)">
-      </coding-box-unit-player>
+    <div class="replay-content">
+      <div class="unit-player-container">
+        @if (!!player && unitDef) {
+          @for (key of [reloadKey]; track key) {
+            <coding-box-unit-player
+              [unitDef]="unitDef"
+              [unitPlayer]="player"
+              [unitResponses]="responses"
+              [pageId]="page"
+              [printMode]="isPrintMode"
+              (invalidPage)="checkPageError($event)">
+            </coding-box-unit-player>
+          }
+        }
+      </div>
+
+      @if (codingScheme && currentVariableId) {
+        <div class="code-selector-container">
+          <app-code-selector
+            [codingScheme]="codingScheme"
+            [variableId]="currentVariableId">
+          </app-code-selector>
+        </div>
+      }
+    </div>
+  } @else {
+    @if (!!player && unitDef) {
+      @for (key of [reloadKey]; track key) {
+        <coding-box-unit-player
+          [unitDef]="unitDef"
+          [unitPlayer]="player"
+          [unitResponses]="responses"
+          [pageId]="page"
+          [printMode]="isPrintMode"
+          (invalidPage)="checkPageError($event)">
+        </coding-box-unit-player>
+      }
     }
   }
 
