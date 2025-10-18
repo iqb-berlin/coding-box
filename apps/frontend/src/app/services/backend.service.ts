@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
-import { Observable } from 'rxjs';
+import { catchError, Observable, of } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { VariableInfo } from '@iqbspecs/variable-info/variable-info.interface';
 import { FilesInListDto } from 'api-dto/files/files-in-list.dto';
@@ -302,6 +302,21 @@ export class BackendService {
 
   getUnit(workspaceId: number, unitId: string, authToken?: string): Observable<FilesDto[]> {
     return this.fileService.getUnit(workspaceId, unitId, authToken);
+  }
+
+  getVocs(workspaceId: number, unitId: string, authToken?: string): Observable<FilesDto[]> {
+    const headers = authToken ? { Authorization: `Bearer ${authToken}` } : this.authHeader;
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/files/coding-scheme/${unitId}`;
+    return this.http.get<FileDownloadDto | null>(url, { headers }).pipe(
+      map(fileDownload => {
+        if (!fileDownload) {
+          return [];
+        }
+        const data = fileDownload?.base64Data;
+        return [{ file_id: fileDownload?.filename, data }];
+      }),
+      catchError(() => of([]))
+    );
   }
 
   getBookletUnits(workspaceId: number, bookletId: string, authToken?: string): Observable<BookletUnit[]> {

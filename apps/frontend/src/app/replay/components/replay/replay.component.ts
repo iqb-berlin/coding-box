@@ -70,6 +70,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   private lastPlayer: { id: string, data: string } = { id: '', data: '' };
   private lastUnitDef: { id: string, data: string } = { id: '', data: '' };
   private lastUnit: { id: string, data: string } = { id: '', data: '' };
+  private lastVocs: { id: string, data: string } = { id: '', data: '' };
   private routerSubscription: Subscription | null = null;
   readonly testPersonInput = input<string>();
   readonly unitIdInput = input<string>();
@@ -306,10 +307,18 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   private setUnitProperties(
-    unitData: { unitDef: FilesDto[], response: ResponseDto[], player: FilesDto[]
-    }) {
+    unitData: {
+      unitDef: FilesDto[],
+      response: ResponseDto[],
+      player: FilesDto[],
+      vocs: FilesDto[]
+    }
+  ) {
     this.cachePlayerData(unitData.player[0]);
     this.cacheUnitDefData(unitData.unitDef[0]);
+    if (unitData.vocs && unitData.vocs[0]) {
+      this.cacheVocsData(unitData.vocs[0]);
+    }
     this.player = unitData.player[0].data;
     this.unitDef = unitData.unitDef[0].data;
     this.reloadKey += 1;
@@ -329,6 +338,11 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   private cachePlayerData(playerData: FilesDto) {
     this.lastPlayer.data = playerData.data;
     this.lastPlayer.id = playerData.file_id;
+  }
+
+  private cacheVocsData(vocsData: FilesDto) {
+    this.lastVocs.data = vocsData.data;
+    this.lastVocs.id = vocsData.file_id.substring(0, vocsData.file_id.indexOf('.vocs'));
   }
 
   static getNormalizedPlayerId(name: string): string {
@@ -377,6 +391,16 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     return this.backendService.getUnit(workspace, this.unitId, authToken);
   }
 
+  private getVocs(workspace: number, authToken?:string): Observable<FilesDto[]> {
+    if (this.lastVocs.id && this.lastVocs.data && this.lastVocs.id === this.unitId.toUpperCase()) {
+      return of([{
+        data: this.lastVocs.data,
+        file_id: `${this.lastVocs.id}.vocs`
+      }]);
+    }
+    return this.backendService.getVocs(workspace, this.unitId, authToken);
+  }
+
   private getPlayer(
     workspace: number, player: string, authToken?:string
   ): Observable<FilesDto[]> {
@@ -389,13 +413,22 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       authToken);
   }
 
-  private async getUnitData(workspace: number, authToken?:string): Promise<{ unitDef: FilesDto[], response: ResponseDto[], player: FilesDto[] }> {
+  private async getUnitData(
+    workspace: number,
+    authToken?: string
+  ): Promise<{
+      unitDef: FilesDto[],
+      response: ResponseDto[],
+      player: FilesDto[],
+      vocs: FilesDto[]
+    }> {
     const startTime = performance.now();
     this.isLoaded.next(false);
     const unitData = await firstValueFrom(
       combineLatest([
         this.getUnitDef(workspace, authToken),
         this.getResponses(workspace, authToken).pipe(catchError(() => of([]))),
+        this.getVocs(workspace, authToken).pipe(catchError(() => of([]))),
         this.getUnit(workspace, authToken)
           .pipe(switchMap(unitFile => {
             this.checkUnitId(unitFile);
@@ -460,7 +493,12 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     }
 
     this.setIsLoaded();
-    return { unitDef: unitData[0], response: unitData[1], player: unitData[2] };
+    return {
+      unitDef: unitData[0],
+      response: unitData[1],
+      vocs: unitData[2],
+      player: unitData[3]
+    };
   }
 
   private getErrorMessages(): ErrorMessages {
