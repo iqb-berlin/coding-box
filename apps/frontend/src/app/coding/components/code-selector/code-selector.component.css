@@ -1,0 +1,42 @@
+.selector-card {
+  display: block;
+  margin: 8px 0;
+}
+
+.code-row {
+  display: flex;
+  flex-direction: column;
+  padding: 6px 0;
+  border-bottom: 1px solid #e0e0e0;
+  margin-bottom: 8px;
+}
+
+.code-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.code-id {
+  font-weight: 600;
+}
+
+.code-type {
+  color: rgba(0, 0, 0, 0.6);
+}
+
+.code-score {
+  color: rgba(0, 0, 0, 0.6);
+  font-style: italic;
+}
+
+.code-instruction {
+  margin-left: 24px;
+  margin-top: 4px;
+  color: rgba(0, 0, 0, 0.78);
+}
+
+.hint {
+  color: rgba(0, 0, 0, 0.54);
+  font-style: italic;
+}

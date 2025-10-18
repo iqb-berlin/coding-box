@@ -27,6 +27,7 @@ import { validateToken, isTestperson } from '../../utils/token-utils';
 import { scrollToElementByAlias, highlightAspectSectionWithAnchor } from '../../utils/dom-utils';
 import { BookletReplay, BookletReplayUnit } from '../../../services/booklet-replay.service';
 import { BookletReplayComponent } from '../booklet-replay/booklet-replay.component';
+import { CodeSelectorComponent } from '../../../coding/components/code-selector/code-selector.component';
 
 @Component({
   selector: 'coding-box-replay',
@@ -39,7 +40,8 @@ import { BookletReplayComponent } from '../booklet-replay/booklet-replay.compone
     UnitPlayerComponent,
     SpinnerComponent,
     FormsModule,
-    BookletReplayComponent
+    BookletReplayComponent,
+    CodeSelectorComponent
   ],
   templateUrl: './replay.component.html',
   styleUrl: './replay.component.scss'
@@ -78,6 +80,8 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   @ViewChild(UnitPlayerComponent) unitPlayerComponent: UnitPlayerComponent | undefined;
   private replayStartTime: number = 0; // Track when replay viewing starts
   protected reloadKey: number = 0;
+  protected codingScheme: any | null = null;
+  protected currentVariableId: string = '';
 
   ngOnInit(): void {
     // Record the start time when the component is initialized
@@ -153,9 +157,12 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
             this.bookletData = deserializedBooklet;
             this.currentUnitIndex = deserializedBooklet.currentUnitIndex;
             this.totalUnits = deserializedBooklet.units.length;
-            const unitAny = (this.bookletData.units[this.currentUnitIndex] || {}) as unknown as { variableAnchor?: string };
+            const unitAny = (this.bookletData.units[this.currentUnitIndex] || {}) as unknown as { variableAnchor?: string; variableId?: string };
             if (unitAny.variableAnchor) {
               this.anchor = unitAny.variableAnchor;
+            }
+            if (unitAny.variableId) {
+              this.currentVariableId = unitAny.variableId;
             }
           }
         }
@@ -323,6 +330,15 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     this.unitDef = unitData.unitDef[0].data;
     this.reloadKey += 1;
     this.responses = unitData.response;
+
+    // Set coding scheme for booklet mode from vocs data
+    if (this.isBookletMode && unitData.vocs && unitData.vocs[0] && unitData.vocs[0].data) {
+      try {
+        this.codingScheme = JSON.parse(unitData.vocs[0].data);
+      } catch (error) {
+        this.codingScheme = null;
+      }
+    }
   }
 
   private cacheUnitData(unit: FilesDto) {
@@ -588,6 +604,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
     if (typeof unitAny.variableId === 'string' && unitAny.variableId.length > 0) {
       this.anchor = unitAny.variableId;
+      this.currentVariableId = unitAny.variableId;
     }
 
     if (incomingTestPerson && incomingTestPerson !== this.testPerson) {
@@ -650,6 +667,8 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     this.unitDef = '';
     this.page = undefined;
     this.responses = undefined;
+    this.codingScheme = null;
+    this.currentVariableId = '';
   }
 
   ngOnDestroy(): void {
