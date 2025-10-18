@@ -18,14 +18,14 @@ import { MatIcon } from '@angular/material/icon';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { MatAnchor, MatButton } from '@angular/material/button';
 import { DatePipe, NgClass } from '@angular/common';
-import { Router, RouterLink } from '@angular/router';
+import { Router } from '@angular/router';
+import { forkJoin } from 'rxjs';
+import { map } from 'rxjs/operators';
 import { AppService } from '../../../services/app.service';
 import { BackendService } from '../../../services/backend.service';
 import { SearchFilterComponent } from '../../../shared/search-filter/search-filter.component';
-import { CodingJob } from '../../models/coding-job.model';
-import { WorkspaceUserDto } from '../../../../../../../api-dto/workspaces/workspace-user-dto';
-import { CoderService } from '../../services/coder.service';
-import { CodingJobService } from '../../services/coding-job.service';
+import { CodingJob, Variable } from '../../models/coding-job.model';
+import { WorkspaceFullDto } from '../../../../../../../api-dto/workspaces/workspace-full-dto';
 
 @Component({
   selector: 'coding-box-my-coding-jobs',
@@ -51,8 +51,7 @@ import { CodingJobService } from '../../services/coding-job.service';
     MatRowDef,
     MatColumnDef,
     MatSortModule,
-    MatButton,
-    RouterLink
+    MatButton
   ]
 })
 export class MyCodingJobsComponent implements OnInit, AfterViewInit {
@@ -60,10 +59,8 @@ export class MyCodingJobsComponent implements OnInit, AfterViewInit {
   backendService = inject(BackendService);
   private snackBar = inject(MatSnackBar);
   private router = inject(Router);
-  private coderService = inject(CoderService);
-  private codingJobService = inject(CodingJobService);
 
-  displayedColumns: string[] = ['name', 'description', 'status', 'created_at', 'updated_at'];
+  displayedColumns: string[] = ['name', 'description', 'status', 'variables', 'variableBundles', 'created_at', 'updated_at'];
   dataSource = new MatTableDataSource<CodingJob>([]);
   selection = new SelectionModel<CodingJob>(true, []);
   isLoading = false;
@@ -75,28 +72,9 @@ export class MyCodingJobsComponent implements OnInit, AfterViewInit {
   ngOnInit(): void {
     this.appService.authData$.subscribe(authData => {
       this.currentUserId = authData.userId;
+      this.isAuthorized = true;
       if (authData.workspaces && authData.workspaces.length > 0) {
-        this.checkUserAccessLevel();
-      } else {
-        this.router.navigate(['/']);
-        this.snackBar.open('Sie haben keinen Zugriff auf diese Seite', 'Schließen', { duration: 3000 });
-      }
-    });
-  }
-
-  private checkUserAccessLevel(): void {
-    this.backendService.getWorkspaceUsers(1).subscribe(users => {
-      const currentUser = users.data.find((user: WorkspaceUserDto) => user.userId === this.currentUserId);
-      if (currentUser && currentUser.accessLevel === 1) {
-        this.isAuthorized = true;
-        this.loadMyCodingJobs();
-      } else {
-        this.router.navigate(['/']);
-        this.snackBar.open(
-          'Sie haben keinen Zugriff auf diese Seite. Nur Kodierer können auf diese Seite zugreifen.',
-          'Schließen',
-          { duration: 3000 }
-        );
+        this.loadMyCodingJobs(authData.workspaces);
       }
     });
   }
@@ -105,24 +83,28 @@ export class MyCodingJobsComponent implements OnInit, AfterViewInit {
     this.dataSource.sort = this.sort;
   }
 
-  loadMyCodingJobs(): void {
+  loadMyCodingJobs(workspaces: [] | WorkspaceFullDto[]): void {
     this.isLoading = true;
+    if (workspaces) {
+      const workspaceJobsObservables = workspaces.map(workspace => this.backendService.getCodingJobs(workspace.id).pipe(
+        map(response => response.data)
+      )
+      );
 
-    this.coderService.getJobsByCoderId(this.currentUserId).subscribe({
-      next: jobs => {
-        if (jobs.length > 0) {
-          this.dataSource.data = jobs;
-        } else {
-          this.dataSource.data = [];
+      forkJoin(workspaceJobsObservables).subscribe({
+        next: allJobsArrays => {
+          this.dataSource.data = allJobsArrays.flat();
+          this.isLoading = false;
+        },
+        error: () => {
+          this.snackBar.open('Fehler beim Laden der Kodierjobs', 'Schließen', { duration: 3000 });
+          this.isLoading = false;
         }
-
-        this.isLoading = false;
-      },
-      error: () => {
-        this.snackBar.open('Fehler beim Laden der Kodierjobs', 'Schließen', { duration: 3000 });
-        this.isLoading = false;
-      }
-    });
+      });
+    } else {
+      this.dataSource.data = [];
+      this.isLoading = false;
+    }
   }
 
   applyFilter(filterValue: string): void {
@@ -134,17 +116,65 @@ export class MyCodingJobsComponent implements OnInit, AfterViewInit {
   }
 
   startCodingJob(job: CodingJob): void {
-    this.snackBar.open(`Starten von Kodierjob "${job.name}"...`, 'Schließen', { duration: 2000 });
-    this.codingJobService.getResponsesForCodingJob(job.id).subscribe({
-      next: responses => {
-        if (responses && responses.length > 0) {
-          // fetch responses for this job
-        } else {
-          this.snackBar.open('Keine Antworten für diesen Kodierjob gefunden', 'Schließen', { duration: 3000 });
+    const loadingSnack = this.snackBar.open(`Starte Kodierjob "${job.name}"...`, '', { duration: 3000 });
+
+    this.backendService.startCodingJob(job.workspace_id, job.id).subscribe({
+      next: result => {
+        loadingSnack.dismiss();
+        if (!result || result.total === 0) {
+          this.snackBar.open('Keine passenden Antworten gefunden', 'Info', { duration: 3000 });
+          return;
         }
+
+        const units = result.items.map((item, idx) => ({
+          id: idx,
+          name: item.unitAlias || item.unitName,
+          alias: item.unitAlias || null,
+          bookletId: 0,
+          testPerson: `${item.personLogin}@${item.personCode}@${item.bookletName}`,
+          variableId: item.variableId,
+          variableAnchor: item.variableAnchor
+        }));
+
+        const bookletData = {
+          id: job.id,
+          name: `Coding-Job: ${job.name}`,
+          units,
+          currentUnitIndex: 0
+        };
+
+        const first = units[0];
+        const firstTestPerson = first.testPerson;
+        const firstUnitId = first.name;
+
+        this.appService
+          .createToken(job.workspace_id, this.appService.loggedUser?.sub || '', 1)
+          .subscribe(token => {
+            const bookletKey = `replay_booklet_${job.id}_${Date.now()}`;
+            try {
+              localStorage.setItem(bookletKey, JSON.stringify(bookletData));
+            } catch (e) {
+              // ignore
+            }
+
+            const queryParams = {
+              auth: token,
+              mode: 'booklet',
+              bookletKey
+            } as const;
+
+            const url = this.router.serializeUrl(
+              this.router.createUrlTree([
+                `replay/${firstTestPerson}/${firstUnitId}/0/0`
+              ], { queryParams })
+            );
+            window.open(`#/${url}`, '_blank');
+            this.snackBar.open(`${result.total} Antworten für Replay vorbereitet`, 'Schließen', { duration: 3000 });
+          });
       },
       error: () => {
-        this.snackBar.open('Fehler beim Laden der Antworten', 'Schließen', { duration: 3000 });
+        loadingSnack.dismiss();
+        this.snackBar.open('Fehler beim Starten des Kodierjobs', 'Fehler', { duration: 3000 });
       }
     });
   }
@@ -173,5 +203,52 @@ export class MyCodingJobsComponent implements OnInit, AfterViewInit {
       default:
         return status;
     }
+  }
+
+  getVariables(job: CodingJob): string {
+    if (job.assignedVariables && job.assignedVariables.length > 0) {
+      return this.formatAssignedVariables(job.assignedVariables);
+    }
+    // Fallback: falls Variablen unter "variables" statt "assignedVariables" geliefert werden
+    if (job.variables && job.variables.length > 0) {
+      return this.formatAssignedVariables(job.variables);
+    }
+    return 'Keine Variablen';
+  }
+
+  getVariableBundles(job: CodingJob): string {
+    if (job.assignedVariableBundles && job.assignedVariableBundles.length > 0) {
+      const count = job.assignedVariableBundles.length;
+      const maxToShow = 2;
+      const bundleNames = job.assignedVariableBundles.map(b => b.name || 'unbekannt');
+
+      if (bundleNames.length <= maxToShow) {
+        return `${count} (${bundleNames.join(', ')})`;
+      }
+
+      const preview = bundleNames.slice(0, maxToShow).join(', ');
+      return `${count} (${preview}, +${count - maxToShow} weitere)`;
+    }
+
+    return 'Keine Variablen-Bundles';
+  }
+
+  private formatAssignedVariables(assignedVariables: Variable[]): string {
+    if (!assignedVariables || assignedVariables.length === 0) {
+      return 'Keine Variablen';
+    }
+
+    const maxToShow = 3;
+    const variableNames = assignedVariables.map(v => {
+      const unitName = v.unitName || 'unbekannt';
+      const variableId = v.variableId || 'unbekannt';
+      return `${unitName}_${variableId}`;
+    });
+
+    if (variableNames.length <= maxToShow) {
+      return variableNames.join(', ');
+    }
+
+    return `${variableNames.slice(0, maxToShow).join(', ')} +${variableNames.length - maxToShow} weitere`;
   }
 }

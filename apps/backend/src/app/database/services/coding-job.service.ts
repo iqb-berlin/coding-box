@@ -38,7 +38,6 @@ export class CodingJobService {
     })[]; total: number; page: number; limit: number }> {
     const validPage = page > 0 ? page : 1;
     const validLimit = limit > 0 ? limit : 10;
-
     const skip = (validPage - 1) * validLimit;
 
     const total = await this.codingJobRepository.count({
