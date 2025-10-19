@@ -20,7 +20,7 @@ import { CodingService } from './coding.service';
 import { UnitTagService } from './unit-tag.service';
 import { UnitNoteService } from './unit-note.service';
 import { ResponseService } from './response.service';
-import { TestResultService } from './test-result.service';
+import { TestResultService, TestResultsResponse, PersonTestResult } from './test-result.service';
 import { ResourcePackageService } from './resource-package.service';
 import { ValidationService } from './validation.service';
 import { UnitService } from './unit.service';
@@ -335,13 +335,11 @@ export class BackendService {
     return this.testResultService.getTestPersons(workspaceId);
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  getTestResults(workspaceId: number, page: number, limit: number, searchText?: string): Observable<any> {
+  getTestResults(workspaceId: number, page: number, limit: number, searchText?: string): Observable<TestResultsResponse> {
     return this.testResultService.getTestResults(workspaceId, page, limit, searchText);
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  getPersonTestResults(workspaceId: number, personId: number): Observable<any[]> {
+  getPersonTestResults(workspaceId: number, personId: number): Observable<PersonTestResult[]> {
     return this.testResultService.getPersonTestResults(workspaceId, personId);
   }
 
@@ -820,5 +818,29 @@ export class BackendService {
         Authorization: `Bearer ${localStorage.getItem('id_token')}`
       }
     });
+  }
+
+  saveCodingProgress(
+    workspaceId: number,
+    codingJobId: number,
+    progressData: {
+      testPerson: string;
+      unitId: string;
+      variableId: string;
+      selectedCode: {
+        id: number;
+        code: string;
+        label: string;
+        [key: string]: unknown;
+      };
+    }
+  ): Observable<CodingJob> {
+    const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job/${codingJobId}/progress`;
+    return this.http.post<CodingJob>(url, progressData);
+  }
+
+  getCodingProgress(workspaceId: number, codingJobId: number): Observable<Record<string, unknown>> {
+    const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job/${codingJobId}/progress`;
+    return this.http.get<Record<string, unknown>>(url);
   }
 }

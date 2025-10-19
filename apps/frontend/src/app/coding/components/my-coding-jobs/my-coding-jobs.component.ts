@@ -187,6 +187,8 @@ export class MyCodingJobsComponent implements OnInit, AfterViewInit {
         return 'status-completed';
       case 'pending':
         return 'status-pending';
+      case 'paused':
+        return 'status-paused';
       default:
         return '';
     }
@@ -200,6 +202,8 @@ export class MyCodingJobsComponent implements OnInit, AfterViewInit {
         return 'Abgeschlossen';
       case 'pending':
         return 'Ausstehend';
+      case 'paused':
+        return 'Pausiert';
       default:
         return status;
     }
