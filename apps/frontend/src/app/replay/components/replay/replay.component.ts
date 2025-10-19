@@ -82,6 +82,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   protected reloadKey: number = 0;
   protected codingScheme: any | null = null;
   protected currentVariableId: string = '';
+  workspaceId: number = 0;
   private selectedCodes: Map<string, any> = new Map(); // Track selected codes for each unique testperson-booklet-unit-variable combination
 
   ngOnInit(): void {
@@ -196,6 +197,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
             this.unitId = params.unitId;
             const decoded: JwtPayload & { workspace: string } = jwtDecode(this.authToken);
             const workspace = decoded?.workspace;
+            this.workspaceId = Number(workspace);
             const unitData = await this.getUnitData(Number(workspace), this.authToken);
             this.setUnitProperties(unitData);
           } else if (Object.keys(params).length >= 3 && Object.keys(params).length <= 4) {
@@ -203,6 +205,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
             if (this.authToken) {
               const decoded: JwtPayload & { workspace: string } = jwtDecode(this.authToken);
               const workspace = decoded?.workspace;
+              this.workspaceId = Number(workspace);
               if (workspace) {
                 const unitData = await this.getUnitData(Number(workspace), this.authToken);
                 this.setUnitProperties(unitData);
@@ -681,8 +684,21 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
   onCodeSelected(event: { variableId: string; code: any }): void {
     const compositeKey = this.generateCompositeKey(this.testPerson, this.unitId, event.variableId);
+    const wasEmpty = this.selectedCodes.size === 0;
     this.selectedCodes.set(compositeKey, event.code);
     this.checkCodingJobCompletion();
+    if (wasEmpty && this.bookletData?.id) {
+      if (this.workspaceId > 0) {
+        this.backendService.updateCodingJob(this.workspaceId, this.bookletData.id, { status: 'active' }).subscribe({
+          next: () => {
+            // Status updated successfully
+          },
+          error: () => {
+            // Status update failed
+          }
+        });
+      }
+    }
   }
 
   private generateCompositeKey(testPerson: string, unitId: string, variableId: string): string {
