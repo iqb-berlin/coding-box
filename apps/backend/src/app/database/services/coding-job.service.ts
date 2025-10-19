@@ -6,6 +6,7 @@ import { CodingJob } from '../entities/coding-job.entity';
 import { CodingJobCoder } from '../entities/coding-job-coder.entity';
 import { CodingJobVariable } from '../entities/coding-job-variable.entity';
 import { CodingJobVariableBundle } from '../entities/coding-job-variable-bundle.entity';
+import { CodingJobUnit } from '../entities/coding-job-unit.entity';
 import { CreateCodingJobDto } from '../../admin/coding-job/dto/create-coding-job.dto';
 import { UpdateCodingJobDto } from '../../admin/coding-job/dto/update-coding-job.dto';
 import { VariableBundle } from '../entities/variable-bundle.entity';
@@ -22,6 +23,8 @@ export class CodingJobService {
     private codingJobVariableRepository: Repository<CodingJobVariable>,
     @InjectRepository(CodingJobVariableBundle)
     private codingJobVariableBundleRepository: Repository<CodingJobVariableBundle>,
+    @InjectRepository(CodingJobUnit)
+    private codingJobUnitRepository: Repository<CodingJobUnit>,
     @InjectRepository(VariableBundle)
     private variableBundleRepository: Repository<VariableBundle>,
     @InjectRepository(ResponseEntity)
@@ -202,6 +205,7 @@ export class CodingJobService {
         }
       }
     }
+    await this.saveCodingJobUnits(savedCodingJob.id);
 
     return savedCodingJob;
   }
@@ -443,23 +447,37 @@ export class CodingJobService {
       throw new NotFoundException(`Coding job with ID ${codingJobId} not found`);
     }
 
-    const compositeKey = this.generateCodingProgressKey(
-      progress.testPerson,
-      progress.unitId,
-      progress.variableId
-    );
+    const testPersonParts = progress.testPerson.split('@');
+    const personLogin = testPersonParts[0] || '';
+    const personCode = testPersonParts[1] || '';
+    const bookletName = testPersonParts[2] || '';
 
-    const existingResults: Record<string, SaveCodingProgressDto['selectedCode']> = codingJob.partial_results ?
-      (JSON.parse(codingJob.partial_results) as Record<string, SaveCodingProgressDto['selectedCode']>) :
-      {};
+    const codingJobUnit = await this.codingJobUnitRepository.findOne({
+      where: {
+        coding_job_id: codingJobId,
+        unit_name: progress.unitId,
+        variable_id: progress.variableId,
+        person_login: personLogin,
+        person_code: personCode,
+        booklet_name: bookletName
+      }
+    });
 
-    // Update with new progress
-    existingResults[compositeKey] = progress.selectedCode;
+    if (!codingJobUnit) {
+      throw new NotFoundException('Coding job unit not found for progress entry');
+    }
 
-    // Save back to database
-    codingJob.partial_results = JSON.stringify(existingResults);
+    codingJobUnit.code_id = progress.selectedCode.id;
+    codingJobUnit.code = progress.selectedCode.code;
+    codingJobUnit.code_label = progress.selectedCode.label;
+    const score = progress.selectedCode.score;
+    if (score !== undefined) {
+      codingJobUnit.score = score;
+    }
 
-    return this.codingJobRepository.save(codingJob);
+    await this.codingJobUnitRepository.save(codingJobUnit);
+
+    return codingJob;
   }
 
   async getCodingProgress(codingJobId: number): Promise<Record<string, SaveCodingProgressDto['selectedCode']>> {
@@ -471,15 +489,34 @@ export class CodingJobService {
       throw new NotFoundException(`Coding job with ID ${codingJobId} not found`);
     }
 
-    if (!codingJob.partial_results) {
-      return {};
-    }
+    const codingJobUnits = await this.codingJobUnitRepository.find({
+      where: { coding_job_id: codingJobId }
+    });
 
-    try {
-      return JSON.parse(codingJob.partial_results) as Record<string, SaveCodingProgressDto['selectedCode']>;
-    } catch (error) {
-      return {};
-    }
+    const progressMap: Record<string, SaveCodingProgressDto['selectedCode']> = {};
+
+    codingJobUnits.forEach(unit => {
+      if (unit.code_id !== null && unit.code !== null && unit.code_label !== null) {
+        const compositeKey = this.generateCodingProgressKey(
+          `${unit.person_login}@${unit.person_code}@${unit.booklet_name}`,
+          unit.unit_name,
+          unit.variable_id
+        );
+
+        progressMap[compositeKey] = {
+          id: unit.code_id,
+          code: unit.code,
+          label: unit.code_label
+        };
+
+        // If score exists, add it to the object
+        if (unit.score !== null) {
+          progressMap[compositeKey].score = unit.score;
+        }
+      }
+    });
+
+    return progressMap;
   }
 
   /**
@@ -495,5 +532,45 @@ export class CodingJobService {
     }
 
     return `${testPerson}::${bookletId}::${unitId}::${variableId}`;
+  }
+
+  async getCodingJobUnits(codingJobId: number): Promise<{ responseId: number; unitName: string; unitAlias: string | null; variableId: string; variableAnchor: string; bookletName: string; personLogin: string; personCode: string }[]> {
+    const codingJobUnits = await this.codingJobUnitRepository.find({
+      where: { coding_job_id: codingJobId },
+      order: { id: 'ASC' }
+    });
+
+    return codingJobUnits.map(unit => ({
+      responseId: unit.response_id,
+      unitName: unit.unit_name,
+      unitAlias: unit.unit_alias,
+      variableId: unit.variable_id,
+      variableAnchor: unit.variable_anchor,
+      bookletName: unit.booklet_name,
+      personLogin: unit.person_login,
+      personCode: unit.person_code
+    }));
+  }
+
+  private async saveCodingJobUnits(codingJobId: number): Promise<void> {
+    const responses = await this.getResponsesForCodingJob(codingJobId);
+
+    if (responses.length === 0) {
+      return;
+    }
+
+    const codingJobUnits = responses.map(response => this.codingJobUnitRepository.create({
+      coding_job_id: codingJobId,
+      response_id: response.id,
+      unit_name: response.unit?.name || '',
+      unit_alias: response.unit?.alias || null,
+      variable_id: response.variableid,
+      variable_anchor: response.variableid,
+      booklet_name: response.unit?.booklet?.bookletinfo?.name || '',
+      person_login: response.unit?.booklet?.person?.login || '',
+      person_code: response.unit?.booklet?.person?.code || ''
+    }));
+
+    await this.codingJobUnitRepository.save(codingJobUnits);
   }
 }

@@ -30,9 +30,6 @@ export class CodingJob {
   @Column({ default: 'pending' })
     status: string;
 
-  @Column({ type: 'text', nullable: true })
-    partial_results?: string;
-
   @CreateDateColumn()
     created_at: Date;
 
