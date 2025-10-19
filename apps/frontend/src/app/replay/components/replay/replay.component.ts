@@ -82,6 +82,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   protected reloadKey: number = 0;
   protected codingScheme: any | null = null;
   protected currentVariableId: string = '';
+  private selectedCodes: Map<string, any> = new Map(); // Track selected codes for each unique testperson-booklet-unit-variable combination
 
   ngOnInit(): void {
     // Record the start time when the component is initialized
@@ -669,11 +670,131 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     this.responses = undefined;
     this.codingScheme = null;
     this.currentVariableId = '';
+    this.selectedCodes.clear(); // Clear selected codes when resetting unit data
   }
 
   ngOnDestroy(): void {
     this.routerSubscription?.unsubscribe();
     this.routerSubscription = null;
     this.resetSnackBars();
+  }
+
+  onCodeSelected(event: { variableId: string; code: any }): void {
+    const compositeKey = this.generateCompositeKey(this.testPerson, this.unitId, event.variableId);
+    this.selectedCodes.set(compositeKey, event.code);
+    this.checkCodingJobCompletion();
+  }
+
+  private generateCompositeKey(testPerson: string, unitId: string, variableId: string): string {
+    // Extract booklet ID from testPerson (format: login@code@bookletId)
+    let bookletId = 'default';
+    if (testPerson) {
+      const parts = testPerson.split('@');
+      if (parts.length >= 3) {
+        bookletId = parts[2];
+      }
+    }
+
+    return `${testPerson}::${bookletId}::${unitId}::${variableId}`;
+  }
+
+  private checkCodingJobCompletion(): void {
+    if (this.bookletData && this.bookletData.units.length > 0) {
+      const totalReplays = this.bookletData.units.length;
+      const completedReplays = this.bookletData.units.filter(unit => {
+        const unitAny = unit as unknown as { name: string; testPerson?: string; variableId?: string };
+        if (unitAny.variableId) {
+          const compositeKey = this.generateCompositeKey(
+            unitAny.testPerson || this.testPerson,
+            unitAny.name || this.unitId,
+            unitAny.variableId
+          );
+          return this.selectedCodes.has(compositeKey);
+        }
+        return false;
+      }).length;
+
+      const progressPercentage = Math.round((completedReplays / totalReplays) * 100);
+      if (completedReplays > 0 && completedReplays % Math.ceil(totalReplays / 4) === 0) {
+        this.showProgressNotification(progressPercentage, completedReplays, totalReplays);
+      }
+
+      // Check if job is complete
+      if (completedReplays === totalReplays) {
+        this.showCompletionNotification();
+      }
+    }
+  }
+
+  private showProgressNotification(percentage: number, completed: number, total: number): void {
+    this.errorSnackBar.open(
+      `Coding Progress: ${completed}/${total} completed (${percentage}%)`,
+      'Close',
+      { duration: 3000, panelClass: ['snackbar-info'] }
+    );
+  }
+
+  private showCompletionNotification(): void {
+    this.errorSnackBar.open(
+      '🎉 Coding job completed! All replays have been coded.',
+      'Close',
+      { duration: 5000, panelClass: ['snackbar-success'] }
+    );
+  }
+
+  getCompletedCount(): number {
+    if (!this.bookletData) return 0;
+    return this.bookletData.units.filter(unit => {
+      const unitAny = unit as unknown as { name: string; testPerson?: string; variableId?: string };
+      if (unitAny.variableId) {
+        const compositeKey = this.generateCompositeKey(
+          unitAny.testPerson || this.testPerson,
+          unitAny.name || this.unitId,
+          unitAny.variableId
+        );
+        return this.selectedCodes.has(compositeKey);
+      }
+      return false;
+    }).length;
+  }
+
+  getProgressPercentage(): number {
+    if (!this.bookletData || this.bookletData.units.length === 0) return 0;
+    return Math.round((this.getCompletedCount() / this.bookletData.units.length) * 100);
+  }
+
+  getPreSelectedCodeId(variableId: string): number | null {
+    const compositeKey = this.generateCompositeKey(this.testPerson, this.unitId, variableId);
+    const selectedCode = this.selectedCodes.get(compositeKey);
+    return selectedCode ? selectedCode.id : null;
+  }
+
+  private navigateToNextUnit(): void {
+    if (!this.bookletData || !this.isBookletMode) return;
+
+    const nextIndex = this.currentUnitIndex;
+    if (nextIndex < this.bookletData.units.length) {
+      const nextUnit = this.bookletData.units[nextIndex];
+      if (nextUnit) {
+        this.handleUnitChanged(nextUnit);
+      }
+    }
+  }
+
+  // Handle keydown events at the top level
+  onKeyDown(event: KeyboardEvent): void {
+    // Only handle Enter key in booklet mode
+    if (event.key === 'Enter' && this.isBookletMode && this.bookletData) {
+      // Check if we have a current variable with a selected code
+      if (this.currentVariableId) {
+        const compositeKey = this.generateCompositeKey(this.testPerson, this.unitId, this.currentVariableId);
+        const hasSelection = this.selectedCodes.has(compositeKey);
+
+        if (hasSelection) {
+          event.preventDefault(); // Prevent default Enter behavior
+          this.navigateToNextUnit();
+        }
+      }
+    }
   }
 }
