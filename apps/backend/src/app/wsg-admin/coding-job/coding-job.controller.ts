@@ -277,21 +277,8 @@ export class WsgCodingJobController {
   ): Promise<{ total: number; items: Array<{ responseId: number; unitName: string; unitAlias: string | null; variableId: string; variableAnchor: string; bookletName: string; personLogin: string; personCode: string }> }> {
     try {
       await this.codingJobService.getCodingJob(id, workspaceId); // Validate job exists and belongs to workspace
-      const responses = await this.codingJobService.getResponsesForCodingJob(id);
-
-      // Set coding job status to active
+      const items = await this.codingJobService.getCodingJobUnits(id);
       await this.codingJobService.updateCodingJob(id, workspaceId, { status: 'active' });
-
-      const items = responses.map(r => ({
-        responseId: r.id,
-        unitName: r.unit?.name || '',
-        unitAlias: r.unit?.alias || null,
-        variableId: r.variableid,
-        variableAnchor: r.variableid,
-        bookletName: r.unit?.booklet?.bookletinfo?.name || '',
-        personLogin: r.unit?.booklet?.person?.login || '',
-        personCode: r.unit?.booklet?.person?.code || ''
-      }));
 
       return { total: items.length, items };
     } catch (error) {

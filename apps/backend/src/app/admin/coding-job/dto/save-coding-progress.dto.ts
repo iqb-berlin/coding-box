@@ -31,13 +31,14 @@ export class SaveCodingProgressDto {
 
   @ApiProperty({
     description: 'Selected code object',
-    example: { id: 1, code: 'A1', label: 'Answer 1' }
+    example: { id: 1, code: 'A1', label: 'Answer 1', score: 1 }
   })
   @IsObject()
     selectedCode: {
     id: number;
     code: string;
     label: string;
+    score?: number;
     [key: string]: unknown;
   };
 }

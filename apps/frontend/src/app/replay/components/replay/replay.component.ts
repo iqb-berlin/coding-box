@@ -27,7 +27,14 @@ import { validateToken, isTestperson } from '../../utils/token-utils';
 import { scrollToElementByAlias, highlightAspectSectionWithAnchor } from '../../utils/dom-utils';
 import { BookletReplay, BookletReplayUnit } from '../../../services/booklet-replay.service';
 import { BookletReplayComponent } from '../booklet-replay/booklet-replay.component';
-import { CodeSelectorComponent } from '../../../coding/components/code-selector/code-selector.component';
+import { CodeSelectorComponent, Code, VariableCoding } from '../../../coding/components/code-selector/code-selector.component';
+
+interface SavedCode {
+  id: number;
+  code: string;
+  label: string;
+  [key: string]: unknown;
+}
 
 @Component({
   selector: 'coding-box-replay',
@@ -739,11 +746,14 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     try {
       const savedProgress = await firstValueFrom(
         this.backendService.getCodingProgress(this.workspaceId, this.codingJobId)
-      );
+      ) as { [key: string]: SavedCode };
 
-      // Restore saved codes into the selectedCodes Map
       Object.keys(savedProgress).forEach(compositeKey => {
-        this.selectedCodes.set(compositeKey, savedProgress[compositeKey]);
+        const partialCode = savedProgress[compositeKey];
+        if (partialCode?.id) {
+          const fullCode = this.findCodeById(partialCode.id);
+          this.selectedCodes.set(compositeKey, fullCode || partialCode);
+        }
       });
 
       if (this.bookletData && this.bookletData.units.length > 0) {
@@ -757,19 +767,40 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     }
   }
 
+  private findCodeById(codeId: number): any {
+    if (!this.codingScheme || typeof this.codingScheme === 'string') {
+      return null;
+    }
+
+    const variableCoding = this.codingScheme.variableCodings?.find((v: VariableCoding) => v.alias === this.currentVariableId
+    );
+
+    if (variableCoding) {
+      return variableCoding.codes?.find((c: Code) => c.id === codeId);
+    }
+
+    return null;
+  }
+
   private async saveCodingProgress(testPerson: string, unitId: string, variableId: string, selectedCode: any): Promise<void> {
     if (!this.codingJobId || !this.workspaceId) return;
 
     try {
+      const codeToSave = {
+        id: selectedCode.id,
+        code: selectedCode.code || '',
+        label: selectedCode.label || '',
+        ...(selectedCode.score !== undefined && { score: selectedCode.score })
+      };
+
       await firstValueFrom(
         this.backendService.saveCodingProgress(this.workspaceId, this.codingJobId, {
           testPerson,
           unitId,
           variableId,
-          selectedCode
+          selectedCode: codeToSave
         })
       );
-
     } catch (error) {
       // Ignore errors when saving coding progress
     }
@@ -790,7 +821,8 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         savePromises.push(this.saveCodingProgress(testPerson, unitId, variableId, selectedCode));
       }
     }
-    await Promise.allSettled(savePromises);}
+    await Promise.allSettled(savePromises);
+  }
 
   ngOnDestroy(): void {
     this.routerSubscription?.unsubscribe();
