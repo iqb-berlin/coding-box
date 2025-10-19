@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
+import { SaveCodingProgressDto } from '../../admin/coding-job/dto/save-coding-progress.dto';
 import { CodingJob } from '../entities/coding-job.entity';
 import { CodingJobCoder } from '../entities/coding-job-coder.entity';
 import { CodingJobVariable } from '../entities/coding-job-variable.entity';
@@ -428,5 +429,71 @@ export class CodingJobService {
     return queryBuilder
       .orderBy('response.id', 'ASC')
       .getMany();
+  }
+
+  async saveCodingProgress(
+    codingJobId: number,
+    progress: SaveCodingProgressDto
+  ): Promise<CodingJob> {
+    const codingJob = await this.codingJobRepository.findOne({
+      where: { id: codingJobId }
+    });
+
+    if (!codingJob) {
+      throw new NotFoundException(`Coding job with ID ${codingJobId} not found`);
+    }
+
+    const compositeKey = this.generateCodingProgressKey(
+      progress.testPerson,
+      progress.unitId,
+      progress.variableId
+    );
+
+    const existingResults: Record<string, SaveCodingProgressDto['selectedCode']> = codingJob.partial_results ?
+      (JSON.parse(codingJob.partial_results) as Record<string, SaveCodingProgressDto['selectedCode']>) :
+      {};
+
+    // Update with new progress
+    existingResults[compositeKey] = progress.selectedCode;
+
+    // Save back to database
+    codingJob.partial_results = JSON.stringify(existingResults);
+
+    return this.codingJobRepository.save(codingJob);
+  }
+
+  async getCodingProgress(codingJobId: number): Promise<Record<string, SaveCodingProgressDto['selectedCode']>> {
+    const codingJob = await this.codingJobRepository.findOne({
+      where: { id: codingJobId }
+    });
+
+    if (!codingJob) {
+      throw new NotFoundException(`Coding job with ID ${codingJobId} not found`);
+    }
+
+    if (!codingJob.partial_results) {
+      return {};
+    }
+
+    try {
+      return JSON.parse(codingJob.partial_results) as Record<string, SaveCodingProgressDto['selectedCode']>;
+    } catch (error) {
+      return {};
+    }
+  }
+
+  /**
+   * Generate composite key for coding progress using same logic as frontend
+   */
+  private generateCodingProgressKey(testPerson: string, unitId: string, variableId: string): string {
+    let bookletId = 'default';
+    if (testPerson) {
+      const parts = testPerson.split('@');
+      if (parts.length >= 3) {
+        bookletId = parts[2];
+      }
+    }
+
+    return `${testPerson}::${bookletId}::${unitId}::${variableId}`;
   }
 }

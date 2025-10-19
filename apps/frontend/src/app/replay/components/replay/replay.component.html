@@ -61,6 +61,15 @@
       <div class="progress-bar">
         <div class="progress-fill" [style.width.%]="getProgressPercentage()"></div>
       </div>
+      @if (codingJobId) {
+        <button
+          mat-raised-button
+          (click)="pauseCodingJob()"
+          [disabled]="isPausingJob"
+          class="pause-button">
+          {{ isPausingJob ? 'Pausing...' : 'Pause Coding' }}
+        </button>
+      }
     </div>
   }
 

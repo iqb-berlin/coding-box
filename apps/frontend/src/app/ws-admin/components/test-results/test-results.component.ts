@@ -344,7 +344,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       .subscribe({
         next: booklets => {
           this.selectedBooklet = row.group;
-          this.booklets = booklets;
+          this.booklets = booklets as any[];
           this.sortBooklets();
           this.sortBookletUnits();
           this.loadAllUnitTags();

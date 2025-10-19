@@ -25,10 +25,13 @@ export class CodingJob {
     description?: string;
 
   /**
-   * Status of the job: 'pending', 'active', 'completed'
+   * Status of the job: 'pending', 'active', 'paused', 'completed'
    */
   @Column({ default: 'pending' })
     status: string;
+
+  @Column({ type: 'text', nullable: true })
+    partial_results?: string;
 
   @CreateDateColumn()
     created_at: Date;
