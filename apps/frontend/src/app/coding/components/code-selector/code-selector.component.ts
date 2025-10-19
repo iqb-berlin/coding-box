@@ -60,6 +60,7 @@ export interface CodeSelectedEvent {
 export class CodeSelectorComponent implements OnChanges {
   @Input() codingScheme!: string | CodingScheme;
   @Input() variableId!: string;
+  @Input() preSelectedCodeId: number | null = null;
 
   @Output() codeSelected = new EventEmitter<CodeSelectedEvent>();
 
@@ -71,6 +72,9 @@ export class CodeSelectorComponent implements OnChanges {
   ngOnChanges(changes: SimpleChanges): void {
     if (changes.codingScheme || changes.variableId) {
       this.loadCodes();
+    }
+    if (changes.preSelectedCodeId) {
+      this.selectPreSelectedCode();
     }
   }
 
@@ -95,8 +99,27 @@ export class CodeSelectorComponent implements OnChanges {
     const variableCoding = scheme.variableCodings.find(v => v.alias === this.variableId);
     if (variableCoding) {
       this.codes = variableCoding.codes;
+      setTimeout(() => this.selectPreSelectedCode(), 0);
     } else {
       this.codes = [];
+    }
+  }
+
+  private selectPreSelectedCode(): void {
+    this.selectedCode = null;
+    if (this.preSelectedCodeId === null) {
+      return;
+    }
+    if (this.codes.length === 0) {
+      return;
+    }
+    const preSelectedCode = this.codes.find(c => c.id === this.preSelectedCodeId);
+    if (preSelectedCode) {
+      this.selectedCode = this.preSelectedCodeId;
+      this.codeSelected.emit({
+        variableId: this.variableId,
+        code: preSelectedCode
+      });
     }
   }
 
@@ -113,5 +136,10 @@ export class CodeSelectorComponent implements OnChanges {
         code: selectedCode
       });
     }
+  }
+
+  onSelectionChange(): void {
+    // This method is called whenever the selection changes
+    // Selection changes are handled by onSelect() method
   }
 }

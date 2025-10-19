@@ -1,4 +1,4 @@
-<div class="replay-container" [class.print-mode]="isPrintMode" [class.booklet-mode]="isBookletMode">
+<div class="replay-container" [class.print-mode]="isPrintMode" [class.booklet-mode]="isBookletMode" (window:keydown)="onKeyDown($event)">
   <cb-spinner [isLoaded]="isLoaded"></cb-spinner>
 
   @if (isBookletMode) {
@@ -29,7 +29,9 @@
         <div class="code-selector-container">
           <app-code-selector
             [codingScheme]="codingScheme"
-            [variableId]="currentVariableId">
+            [variableId]="currentVariableId"
+            [preSelectedCodeId]="getPreSelectedCodeId(currentVariableId)"
+            (codeSelected)="onCodeSelected($event)">
           </app-code-selector>
         </div>
       }
@@ -47,6 +49,19 @@
         </coding-box-unit-player>
       }
     }
+  }
+
+  @if (isBookletMode && bookletData) {
+    <div class="coding-progress">
+      <div class="progress-info">
+        <span class="progress-text">Coding Progress:</span>
+        <span class="progress-numbers">{{ getCompletedCount() }}/{{ bookletData.units.length }}</span>
+        <span class="progress-percentage">({{ getProgressPercentage() }}%)</span>
+      </div>
+      <div class="progress-bar">
+        <div class="progress-fill" [style.width.%]="getProgressPercentage()"></div>
+      </div>
+    </div>
   }
 
   @if (testPerson && unitId) {
