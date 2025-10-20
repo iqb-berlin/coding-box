@@ -25,8 +25,8 @@ import { FilesDto } from '../../../../../../../api-dto/files/files.dto';
 import { ErrorMessages } from '../../models/error-messages.model';
 import { validateToken, isTestperson } from '../../utils/token-utils';
 import { scrollToElementByAlias, highlightAspectSectionWithAnchor } from '../../utils/dom-utils';
-import { BookletReplay, BookletReplayUnit } from '../../../services/booklet-replay.service';
-import { BookletReplayComponent } from '../booklet-replay/booklet-replay.component';
+import { UnitsReplay, UnitsReplayUnit } from '../../../services/units-replay.service';
+import { UnitsReplayComponent } from '../units-replay/units-replay.component';
 import { CodeSelectorComponent, Code, VariableCoding } from '../../../coding/components/code-selector/code-selector.component';
 
 interface SavedCode {
@@ -47,7 +47,7 @@ interface SavedCode {
     UnitPlayerComponent,
     SpinnerComponent,
     FormsModule,
-    BookletReplayComponent,
+    UnitsReplayComponent,
     CodeSelectorComponent
   ],
   templateUrl: './replay.component.html',
@@ -83,7 +83,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   private routerSubscription: Subscription | null = null;
   readonly testPersonInput = input<string>();
   readonly unitIdInput = input<string>();
-  protected bookletData: BookletReplay | null = null;
+  protected unitsData: UnitsReplay | null = null;
   @ViewChild(UnitPlayerComponent) unitPlayerComponent: UnitPlayerComponent | undefined;
   private replayStartTime: number = 0; // Track when replay viewing starts
   protected reloadKey: number = 0;
@@ -122,14 +122,14 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     return auth;
   }
 
-  private deserializeBookletData(encodedData: string): BookletReplay | null {
+  private deserializeUnitsData(encodedData: string): UnitsReplay | null {
     if (!encodedData) {
       return null;
     }
 
     try {
       const jsonString = atob(encodedData);
-      return JSON.parse(jsonString) as BookletReplay;
+      return JSON.parse(jsonString) as UnitsReplay;
     } catch (error) {
       return null;
     }
@@ -148,16 +148,16 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         const queryParams = await firstValueFrom(this.route.queryParams);
         this.isBookletMode = queryParams.mode === 'booklet';
         if (this.isBookletMode) {
-          let deserializedBooklet = null as BookletReplay | null;
+          let deserializedUnits = null as UnitsReplay | null;
 
-          if (queryParams.bookletData) {
-            deserializedBooklet = this.deserializeBookletData(queryParams.bookletData);
+          if (queryParams.unitsData) {
+            deserializedUnits = this.deserializeUnitsData(queryParams.unitsData);
           } else if (queryParams.bookletKey) {
             const key = queryParams.bookletKey as string;
             try {
               const stored = localStorage.getItem(key);
               if (stored) {
-                deserializedBooklet = JSON.parse(stored) as BookletReplay;
+                deserializedUnits = JSON.parse(stored) as UnitsReplay;
               }
             } catch (e) {
               // ignore parse errors
@@ -166,12 +166,12 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
             }
           }
 
-          if (deserializedBooklet) {
-            this.bookletData = deserializedBooklet;
-            this.codingJobId = deserializedBooklet.id || null;
-            this.currentUnitIndex = deserializedBooklet.currentUnitIndex;
-            this.totalUnits = deserializedBooklet.units.length;
-            const unitAny = (this.bookletData.units[this.currentUnitIndex] || {}) as unknown as { variableAnchor?: string; variableId?: string };
+          if (deserializedUnits) {
+            this.unitsData = deserializedUnits;
+            this.codingJobId = deserializedUnits.id || null;
+            this.currentUnitIndex = deserializedUnits.currentUnitIndex;
+            this.totalUnits = deserializedUnits.units.length;
+            const unitAny = (this.unitsData.units[this.currentUnitIndex] || {}) as unknown as { variableAnchor?: string; variableId?: string };
             if (unitAny.variableAnchor) {
               this.anchor = unitAny.variableAnchor;
             }
@@ -617,7 +617,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     }
   }
 
-  handleUnitChanged(unit: BookletReplayUnit): void {
+  handleUnitChanged(unit: UnitsReplayUnit): void {
     if (!unit) return;
 
     // Save current partial results before navigating to next unit
@@ -652,14 +652,14 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         }
       }
 
-      if (this.bookletData) {
-        const newIndex = this.bookletData.units.findIndex(u => {
+      if (this.unitsData) {
+        const newIndex = this.unitsData.units.findIndex(u => {
           const uAny = u as unknown as { name: string; testPerson?: string; variableId?: string };
           return uAny.name === unitAny.name && (uAny.testPerson ?? '') === (incomingTestPerson ?? '') && uAny.variableId === unitAny.variableId;
         });
         if (newIndex >= 0) {
-          this.bookletData = {
-            ...this.bookletData,
+          this.unitsData = {
+            ...this.unitsData,
             currentUnitIndex: newIndex
           };
 
@@ -697,14 +697,14 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         }
       }
 
-      if (this.bookletData) {
-        const newIndex = this.bookletData.units.findIndex(u => {
+      if (this.unitsData) {
+        const newIndex = this.unitsData.units.findIndex(u => {
           const uAny = u as unknown as { name: string; testPerson?: string; variableId?: string };
           return uAny.name === unitAny.name && (uAny.testPerson ?? '') === (incomingTestPerson ?? '') && uAny.variableId === unitAny.variableId;
         });
         if (newIndex >= 0) {
-          this.bookletData = {
-            ...this.bookletData,
+          this.unitsData = {
+            ...this.unitsData,
             currentUnitIndex: newIndex
           };
 
@@ -756,7 +756,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         }
       });
 
-      if (this.bookletData && this.bookletData.units.length > 0) {
+      if (this.unitsData && this.unitsData.units.length > 0) {
         const firstUncodedIndex = this.findFirstUncodedUnitIndex();
         if (firstUncodedIndex >= 0 && firstUncodedIndex !== this.currentUnitIndex) {
           this.navigateToUnitIndex(firstUncodedIndex);
@@ -850,9 +850,9 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   private checkCodingJobCompletion(): void {
-    if (this.bookletData && this.bookletData.units.length > 0) {
-      const totalReplays = this.bookletData.units.length;
-      const completedReplays = this.bookletData.units.filter(unit => {
+    if (this.unitsData && this.unitsData.units.length > 0) {
+      const totalReplays = this.unitsData.units.length;
+      const completedReplays = this.unitsData.units.filter(unit => {
         const unitAny = unit as unknown as { name: string; testPerson?: string; variableId?: string };
         if (unitAny.variableId) {
           const compositeKey = this.generateCompositeKey(
@@ -894,8 +894,8 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   getCompletedCount(): number {
-    if (!this.bookletData) return 0;
-    return this.bookletData.units.filter(unit => {
+    if (!this.unitsData) return 0;
+    return this.unitsData.units.filter(unit => {
       const unitAny = unit as unknown as { name: string; testPerson?: string; variableId?: string };
       if (unitAny.variableId) {
         const compositeKey = this.generateCompositeKey(
@@ -910,8 +910,8 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   getProgressPercentage(): number {
-    if (!this.bookletData || this.bookletData.units.length === 0) return 0;
-    return Math.round((this.getCompletedCount() / this.bookletData.units.length) * 100);
+    if (!this.unitsData || this.unitsData.units.length === 0) return 0;
+    return Math.round((this.getCompletedCount() / this.unitsData.units.length) * 100);
   }
 
   getPreSelectedCodeId(variableId: string): number | null {
@@ -945,10 +945,10 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   private findFirstUncodedUnitIndex(): number {
-    if (!this.bookletData) return -1;
+    if (!this.unitsData) return -1;
 
-    for (let i = 0; i < this.bookletData.units.length; i++) {
-      const unit = this.bookletData.units[i];
+    for (let i = 0; i < this.unitsData.units.length; i++) {
+      const unit = this.unitsData.units[i];
       const unitAny = unit as unknown as { name: string; testPerson?: string; variableId?: string };
 
       if (unitAny.variableId) {
@@ -969,20 +969,20 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   private navigateToUnitIndex(index: number): void {
-    if (!this.bookletData || index < 0 || index >= this.bookletData.units.length) return;
+    if (!this.unitsData || index < 0 || index >= this.unitsData.units.length) return;
 
-    const targetUnit = this.bookletData.units[index];
+    const targetUnit = this.unitsData.units[index];
     if (targetUnit) {
       this.handleUnitChanged(targetUnit);
     }
   }
 
   private navigateToNextUnit(): void {
-    if (!this.bookletData || !this.isBookletMode) return;
+    if (!this.unitsData || !this.isBookletMode) return;
 
     const nextIndex = this.currentUnitIndex;
-    if (nextIndex < this.bookletData.units.length) {
-      const nextUnit = this.bookletData.units[nextIndex];
+    if (nextIndex < this.unitsData.units.length) {
+      const nextUnit = this.unitsData.units[nextIndex];
       if (nextUnit) {
         this.handleUnitChanged(nextUnit);
       }
@@ -990,7 +990,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   onKeyDown(event: KeyboardEvent): void {
-    if (event.key === 'Enter' && this.isBookletMode && this.bookletData) {
+    if (event.key === 'Enter' && this.isBookletMode && this.unitsData) {
       if (this.currentVariableId) {
         const compositeKey = this.generateCompositeKey(this.testPerson, this.unitId, this.currentVariableId);
         const hasSelection = this.selectedCodes.has(compositeKey);

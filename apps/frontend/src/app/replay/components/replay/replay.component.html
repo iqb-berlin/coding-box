@@ -3,10 +3,10 @@
 
   @if (isBookletMode) {
     @if (isBookletMode && !!player && unitDef) {
-      <coding-box-booklet-replay
-        [bookletData]="bookletData"
+      <coding-box-units-replay
+        [unitsData]="unitsData"
         (unitChanged)="handleUnitChanged($event)">
-      </coding-box-booklet-replay>
+      </coding-box-units-replay>
     }
 
     <div class="replay-content">
@@ -51,11 +51,11 @@
     }
   }
 
-  @if (isBookletMode && bookletData) {
+  @if (isBookletMode && unitsData) {
     <div class="coding-progress">
       <div class="progress-info">
         <span class="progress-text">Coding Progress:</span>
-        <span class="progress-numbers">{{ getCompletedCount() }}/{{ bookletData.units.length }}</span>
+        <span class="progress-numbers">{{ getCompletedCount() }}/{{ unitsData.units.length }}</span>
         <span class="progress-percentage">({{ getProgressPercentage() }}%)</span>
       </div>
       <div class="progress-bar">
