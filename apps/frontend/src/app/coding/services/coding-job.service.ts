@@ -28,8 +28,8 @@ export class CodingJobService {
     return this.http.post<CodingJob>(url, {}).pipe(
       map(updatedJob => ({
         ...updatedJob,
-        createdAt: new Date(updatedJob.createdAt),
-        updatedAt: new Date(updatedJob.updatedAt)
+        created_at: new Date((updatedJob).created_at),
+        updated_at: new Date((updatedJob).updated_at)
       })),
       tap(updatedJob => {
         if (updatedJob) {

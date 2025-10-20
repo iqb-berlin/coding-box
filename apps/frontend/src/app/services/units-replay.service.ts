@@ -8,26 +8,29 @@ import {
 } from 'rxjs';
 import { BackendService } from './backend.service';
 
-export interface BookletReplayUnit {
+export interface UnitsReplayUnit {
   id: number;
   name: string;
   alias: string | null;
   bookletId: number;
+  testPerson?: string;
+  variableId?: string;
+  variableAnchor?: string;
 }
 
-export interface BookletReplay {
+export interface UnitsReplay {
   id: number;
   name: string;
-  units: BookletReplayUnit[];
+  units: UnitsReplayUnit[];
   currentUnitIndex: number;
 }
 
 @Injectable({
   providedIn: 'root'
 })
-export class BookletReplayService {
+export class UnitsReplayService {
   private backendService = inject(BackendService);
-  getBookletFromFileUpload(workspaceId: number, bookletFileId: string): Observable<BookletReplay | null> {
+  getUnitsFromFileUpload(workspaceId: number, bookletFileId: string): Observable<UnitsReplay | null> {
     return this.backendService.getUnit(workspaceId, bookletFileId).pipe(
       switchMap(bookletFiles => {
         if (!bookletFiles || bookletFiles.length === 0) {
@@ -53,7 +56,7 @@ export class BookletReplayService {
               return null;
             }
 
-            const bookletReplay: BookletReplay = {
+            const unitsReplay: UnitsReplay = {
               id: bookletId,
               name: bookletName,
               units: units.map(unit => ({
@@ -65,7 +68,7 @@ export class BookletReplayService {
               currentUnitIndex: 0
             };
 
-            return bookletReplay;
+            return unitsReplay;
           })
         );
       }),

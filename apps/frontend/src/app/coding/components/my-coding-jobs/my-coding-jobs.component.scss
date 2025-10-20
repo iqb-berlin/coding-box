@@ -179,6 +179,12 @@
   border: 1px solid rgba(255, 152, 0, 0.2);
 }
 
+.status-paused {
+  background-color: rgba(156, 39, 176, 0.1);
+  color: #6a1b9a;
+  border: 1px solid rgba(156, 39, 176, 0.2);
+}
+
 /* Table styling */
 mat-header-row {
   background-color: #f8f9fa;
