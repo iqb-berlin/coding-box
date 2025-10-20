@@ -93,6 +93,8 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   private selectedCodes: Map<string, any> = new Map(); // Track selected codes for each unique testperson-booklet-unit-variable combination
   protected codingJobId: number | null = null;
   protected isPausingJob: boolean = false;
+  protected isCodingJobCompleted: boolean = false;
+  protected isSubmittingJob: boolean = false;
 
   ngOnInit(): void {
     this.replayStartTime = performance.now();
@@ -872,7 +874,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
       // Check if job is complete
       if (completedReplays === totalReplays) {
-        this.showCompletionNotification();
+        this.isCodingJobCompleted = true;
       }
     }
   }
@@ -937,6 +939,31 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       error: () => {
         this.isPausingJob = false;
         this.errorSnackBar.open('Failed to pause coding job', 'Close', {
+          duration: 3000,
+          panelClass: ['snackbar-error']
+        });
+      }
+    });
+  }
+
+  submitCodingJob(): void {
+    if (!this.codingJobId || !this.workspaceId) return;
+
+    this.isSubmittingJob = true;
+    this.errorSnackBar.open('Submitting coding job...', '', { duration: 2000 });
+
+    this.backendService.updateCodingJob(this.workspaceId, this.codingJobId, { status: 'finished' }).subscribe({
+      next: () => {
+        this.isSubmittingJob = false;
+        this.errorSnackBar.open('Coding job submitted successfully', 'Close', {
+          duration: 3000,
+          panelClass: ['snackbar-success']
+        });
+        window.close();
+      },
+      error: () => {
+        this.isSubmittingJob = false;
+        this.errorSnackBar.open('Failed to submit coding job', 'Close', {
           duration: 3000,
           panelClass: ['snackbar-error']
         });

@@ -61,7 +61,7 @@
       <div class="progress-bar">
         <div class="progress-fill" [style.width.%]="getProgressPercentage()"></div>
       </div>
-      @if (codingJobId) {
+      @if (codingJobId && !isCodingJobCompleted) {
         <button
           mat-raised-button
           (click)="pauseCodingJob()"
@@ -75,5 +75,22 @@
 
   @if (testPerson && unitId) {
     <div class="watermark">{{ testPerson }} - {{ unitId }}</div>
+  }
+
+  @if (isCodingJobCompleted) {
+    <div class="completion-overlay">
+      <div class="completion-dialog">
+        <h2>{{ 'CODING_JOB_COMPLETED' | translate }}</h2>
+        <p>{{ 'ALL_REPLAYS_CODED_MESSAGE' | translate }}</p>
+        <button
+          mat-raised-button
+          color="primary"
+          (click)="submitCodingJob()"
+          [disabled]="isSubmittingJob"
+          class="submit-button">
+          {{ isSubmittingJob ? ('SUBMITTING_JOB' | translate) : ('SUBMIT_JOB' | translate) }}
+        </button>
+      </div>
+    </div>
   }
 </div>
