@@ -97,6 +97,27 @@ export class CodingJobDto {
   })
     variable_bundles?: VariableBundleDto[];
 
+  @ApiProperty({
+    description: 'Progress percentage for the coding job',
+    example: 75,
+    required: false
+  })
+    progress?: number;
+
+  @ApiProperty({
+    description: 'Number of coded units for the coding job',
+    example: 15,
+    required: false
+  })
+    coded_units?: number;
+
+  @ApiProperty({
+    description: 'Total number of units assigned to the coding job',
+    example: 20,
+    required: false
+  })
+    total_units?: number;
+
   /**
    * Create a CodingJobDto from a CodingJob entity
    * @param entity The CodingJob entity

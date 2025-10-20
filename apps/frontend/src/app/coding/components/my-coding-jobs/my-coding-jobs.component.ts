@@ -60,7 +60,7 @@ export class MyCodingJobsComponent implements OnInit, AfterViewInit {
   private snackBar = inject(MatSnackBar);
   private router = inject(Router);
 
-  displayedColumns: string[] = ['name', 'description', 'status', 'variables', 'variableBundles', 'created_at', 'updated_at'];
+  displayedColumns: string[] = ['name', 'description', 'status', 'variables', 'variableBundles', 'progress', 'created_at', 'updated_at'];
   dataSource = new MatTableDataSource<CodingJob>([]);
   selection = new SelectionModel<CodingJob>(true, []);
   isLoading = false;
@@ -235,6 +235,17 @@ export class MyCodingJobsComponent implements OnInit, AfterViewInit {
     }
 
     return 'Keine Variablen-Bundles';
+  }
+
+  getProgress(job: CodingJob): string {
+    if (!job.totalUnits || job.totalUnits === 0) {
+      return 'Keine Aufgaben';
+    }
+    const progress = job.progress || 0;
+    const coded = job.codedUnits || 0;
+    const total = job.totalUnits;
+
+    return `${progress}% (${coded}/${total})`;
   }
 
   private formatAssignedVariables(assignedVariables: Variable[]): string {

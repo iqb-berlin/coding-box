@@ -108,8 +108,8 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
         this.coderNamesByJobId.clear();
         const processedData = response.data.map(job => ({
           ...job,
-          createdAt: job.createdAt ? new Date(job.createdAt) : new Date(),
-          updatedAt: job.updatedAt ? new Date(job.updatedAt) : new Date()
+          createdAt: job.created_at ? new Date(job.created_at) : new Date(),
+          updatedAt: job.updated_at ? new Date(job.updated_at) : new Date()
         }));
 
         this.dataSource.data = processedData;

@@ -391,8 +391,8 @@ export class CodingJobDialogComponent implements OnInit {
     const codingJob: CodingJob = {
       id: this.data.codingJob?.id || 0,
       ...this.codingJobForm.value,
-      createdAt: this.data.codingJob?.createdAt || new Date(),
-      updatedAt: new Date(),
+      created_at: this.data.codingJob?.created_at || new Date(),
+      updated_at: new Date(),
       assignedCoders: selectedCoderIds,
       variables: this.selectedVariables.selected,
       variableBundles: this.selectedVariableBundles.selected,

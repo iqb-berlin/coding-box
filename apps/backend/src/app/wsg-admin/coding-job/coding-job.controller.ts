@@ -213,12 +213,11 @@ export class WsgCodingJobController {
       @Body() updateCodingJobDto: UpdateCodingJobDto
   ): Promise<CodingJobDto> {
     try {
-      const codingJob = await this.codingJobService.updateCodingJob(
+      return await this.codingJobService.updateCodingJob(
         id,
         workspaceId,
         updateCodingJobDto
       );
-      return codingJob;
     } catch (error) {
       if (error instanceof NotFoundException) {
         throw error;
