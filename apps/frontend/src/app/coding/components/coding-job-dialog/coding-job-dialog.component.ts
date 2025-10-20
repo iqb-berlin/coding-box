@@ -35,6 +35,7 @@ import { CodingJobService } from '../../services/coding-job.service';
 export interface CodingJobDialogData {
   codingJob?: CodingJob;
   isEdit: boolean;
+  preloadedVariables?: Variable[];
 }
 
 @Component({
@@ -198,8 +199,18 @@ export class CodingJobDialogComponent implements OnInit {
 
   loadCodingIncompleteVariables(unitNameFilter?: string): void {
     this.isLoadingVariableAnalysis = true;
-    const workspaceId = this.appService.selectedWorkspaceId;
 
+    // Use preloaded variables if available
+    if (this.data.preloadedVariables && !unitNameFilter) {
+      this.variables = this.data.preloadedVariables;
+      this.dataSource.data = this.variables;
+      this.processVariableSelection();
+      this.totalVariableAnalysisRecords = this.variables.length;
+      this.isLoadingVariableAnalysis = false;
+      return;
+    }
+
+    const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
       this.isLoadingVariableAnalysis = false;
       return;
@@ -212,33 +223,7 @@ export class CodingJobDialogComponent implements OnInit {
       next: variables => {
         this.variables = variables;
         this.dataSource.data = this.variables;
-        const originallyAssigned = this.data.codingJob?.assignedVariables ?? this.data.codingJob?.variables;
-        if (originallyAssigned && originallyAssigned.length > 0) {
-          const makeKey = (u?: string | null, v?: string | null) => `${(u || '').trim().toLowerCase()}::${(v || '').trim().toLowerCase()}`;
-
-          const toKey = (obj: unknown): string => {
-            if (obj && typeof obj === 'object') {
-              const rec = obj as Record<string, unknown>;
-              const unitNameVal = rec.unitName;
-              const varIdCandidate = rec.variableId ?? rec.variableid ?? rec.variableID;
-              const unitName = typeof unitNameVal === 'string' ? unitNameVal : '';
-              const variableId = typeof varIdCandidate === 'string' ? varIdCandidate : '';
-              return makeKey(unitName, variableId);
-            }
-            return makeKey('', '');
-          };
-
-          const assignedKeySet = new Set(originallyAssigned.map(toKey));
-
-          this.selectedVariables.clear();
-          this.variables.forEach(rowVar => {
-            const rowKey = makeKey(rowVar.unitName ?? '', rowVar.variableId ?? '');
-            if (assignedKeySet.has(rowKey)) {
-              this.selectedVariables.select(rowVar);
-            }
-          });
-        }
-
+        this.processVariableSelection();
         this.totalVariableAnalysisRecords = variables.length;
         this.isLoadingVariableAnalysis = false;
       },
@@ -246,6 +231,35 @@ export class CodingJobDialogComponent implements OnInit {
         this.isLoadingVariableAnalysis = false;
       }
     });
+  }
+
+  private processVariableSelection(): void {
+    const originallyAssigned = this.data.codingJob?.assignedVariables ?? this.data.codingJob?.variables;
+    if (originallyAssigned && originallyAssigned.length > 0) {
+      const makeKey = (u?: string | null, v?: string | null) => `${(u || '').trim().toLowerCase()}::${(v || '').trim().toLowerCase()}`;
+
+      const toKey = (obj: unknown): string => {
+        if (obj && typeof obj === 'object') {
+          const rec = obj as Record<string, unknown>;
+          const unitNameVal = rec.unitName;
+          const varIdCandidate = rec.variableId ?? rec.variableid ?? rec.variableID;
+          const unitName = typeof unitNameVal === 'string' ? unitNameVal : '';
+          const variableId = typeof varIdCandidate === 'string' ? varIdCandidate : '';
+          return makeKey(unitName, variableId);
+        }
+        return makeKey('', '');
+      };
+
+      const assignedKeySet = new Set(originallyAssigned.map(toKey));
+
+      this.selectedVariables.clear();
+      this.variables.forEach(rowVar => {
+        const rowKey = makeKey(rowVar.unitName ?? '', rowVar.variableId ?? '');
+        if (assignedKeySet.has(rowKey)) {
+          this.selectedVariables.select(rowVar);
+        }
+      });
+    }
   }
 
   loadVariableBundles(): void {
