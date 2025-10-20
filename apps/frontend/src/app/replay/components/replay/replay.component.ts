@@ -1,5 +1,5 @@
 import {
-  Component, OnChanges, OnDestroy, OnInit, SimpleChanges, ViewChild, inject,
+  Component, OnChanges, OnDestroy, OnInit, SimpleChanges, ViewChild, HostListener, inject,
   input
 } from '@angular/core';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -945,7 +945,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     this.isSubmittingJob = true;
     this.errorSnackBar.open(this.translate.instant('replay.submitting-coding-job'), '', { duration: 2000 });
 
-    this.backendService.updateCodingJob(this.workspaceId, this.codingJobId, { status: 'finished' }).subscribe({
+    this.backendService.updateCodingJob(this.workspaceId, this.codingJobId, { status: 'completed' }).subscribe({
       next: () => {
         this.isSubmittingJob = false;
         this.errorSnackBar.open(this.translate.instant('replay.coding-job-submitted-successfully'), this.translate.instant('replay.close'), {
@@ -1020,6 +1020,13 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
           this.navigateToNextUnit();
         }
       }
+    }
+  }
+
+  @HostListener('window:beforeunload', ['$event'])
+  onBeforeUnload(): void {
+    if (this.codingJobId && this.workspaceId && !this.isCodingJobCompleted) {
+      this.backendService.updateCodingJob(this.workspaceId, this.codingJobId, { status: 'paused' }).subscribe();
     }
   }
 }
