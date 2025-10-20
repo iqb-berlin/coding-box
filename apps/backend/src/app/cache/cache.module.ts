@@ -6,6 +6,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { CacheService } from './cache.service';
 import { ResponseCacheSchedulerService } from './response-cache-scheduler.service';
 import { CodingIncompleteCacheSchedulerService } from './coding-incomplete-cache-scheduler.service';
+import { CodingStatisticsCacheSchedulerService } from './coding-statistics-cache-scheduler.service';
 import Persons from '../database/entities/persons.entity';
 import { Unit } from '../database/entities/unit.entity';
 // eslint-disable-next-line import/no-cycle
@@ -29,7 +30,7 @@ import { DatabaseModule } from '../database/database.module';
     TypeOrmModule.forFeature([Persons, Unit]),
     forwardRef(() => DatabaseModule)
   ],
-  providers: [CacheService, ResponseCacheSchedulerService, CodingIncompleteCacheSchedulerService],
+  providers: [CacheService, ResponseCacheSchedulerService, CodingIncompleteCacheSchedulerService, CodingStatisticsCacheSchedulerService],
   exports: [CacheService]
 })
 export class CacheModule {}
