@@ -74,7 +74,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
 
   private jobDetailsCache = new Map<number, { variables?: Variable[], variableBundles?: VariableBundle[] }>();
 
-  displayedColumns: string[] = ['selectCheckbox', 'name', 'description', 'status', 'assignedCoders', 'variables', 'variableBundles', 'createdAt', 'updatedAt'];
+  displayedColumns: string[] = ['selectCheckbox', 'name', 'description', 'status', 'assignedCoders', 'variables', 'variableBundles', 'progress', 'createdAt', 'updatedAt'];
   dataSource = new MatTableDataSource<CodingJob>([]);
   selection = new SelectionModel<CodingJob>(true, []);
   isLoading = false;
@@ -393,6 +393,17 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
     }
   }
 
+  getProgress(job: CodingJob): string {
+    if (!job.totalUnits || job.totalUnits === 0) {
+      return 'Keine Aufgaben';
+    }
+    const progress = job.progress || 0;
+    const coded = job.codedUnits || 0;
+    const total = job.totalUnits;
+
+    return `${progress}% (${coded}/${total})`;
+  }
+
   startCodingJob(): void {
     if (this.selection.selected.length === 1) {
       const selectedJob = this.selection.selected[0];
@@ -475,6 +486,8 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
         return 'status-completed';
       case 'pending':
         return 'status-pending';
+      case 'paused':
+        return 'status-paused';
       default:
         return '';
     }
@@ -488,6 +501,8 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
         return 'Abgeschlossen';
       case 'pending':
         return 'Ausstehend';
+      case 'paused':
+        return 'Pausiert';
       default:
         return status;
     }

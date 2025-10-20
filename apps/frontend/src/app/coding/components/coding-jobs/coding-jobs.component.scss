@@ -131,6 +131,10 @@ mat-cell {
   }
 }
 
+.mat-column-progress {
+  flex: 0 0 140px;
+}
+
 .mat-column-createdAt,
 .mat-column-updatedAt {
   flex: 0 0 160px;
@@ -163,6 +167,12 @@ mat-cell {
   padding: 4px 8px;
   border-radius: 4px;
   background-color: rgba(255, 152, 0, 0.1);
+}
+
+.status-paused {
+  background-color: rgba(156, 39, 176, 0.1);
+  color: #6a1b9a;
+  border: 1px solid rgba(156, 39, 176, 0.2);
 }
 
 .no-data-message {
