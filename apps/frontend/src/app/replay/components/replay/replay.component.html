@@ -54,7 +54,7 @@
   @if (isBookletMode && unitsData) {
     <div class="coding-progress">
       <div class="progress-info">
-        <span class="progress-text">Coding Progress:</span>
+        <span class="progress-text">{{ 'replay.coding-progress' | translate }}</span>
         <span class="progress-numbers">{{ getCompletedCount() }}/{{ unitsData.units.length }}</span>
         <span class="progress-percentage">({{ getProgressPercentage() }}%)</span>
       </div>
@@ -67,7 +67,7 @@
           (click)="pauseCodingJob()"
           [disabled]="isPausingJob"
           class="pause-button">
-          {{ isPausingJob ? 'Pausing...' : 'Pause Coding' }}
+          {{ isPausingJob ? ('replay.pausing' | translate) : ('replay.pause-coding' | translate) }}
         </button>
       }
     </div>
@@ -80,15 +80,15 @@
   @if (isCodingJobCompleted) {
     <div class="completion-overlay">
       <div class="completion-dialog">
-        <h2>{{ 'CODING_JOB_COMPLETED' | translate }}</h2>
-        <p>{{ 'ALL_REPLAYS_CODED_MESSAGE' | translate }}</p>
+        <h2>{{ 'replay.CODING_JOB_COMPLETED' | translate }}</h2>
+        <p>{{ 'replay.ALL_REPLAYS_CODED_MESSAGE' | translate }}</p>
         <button
           mat-raised-button
           color="primary"
           (click)="submitCodingJob()"
           [disabled]="isSubmittingJob"
           class="submit-button">
-          {{ isSubmittingJob ? ('SUBMITTING_JOB' | translate) : ('SUBMIT_JOB' | translate) }}
+          {{ isSubmittingJob ? ('replay.SUBMITTING_JOB' | translate) : ('replay.SUBMIT_JOB' | translate) }}
         </button>
       </div>
     </div>
