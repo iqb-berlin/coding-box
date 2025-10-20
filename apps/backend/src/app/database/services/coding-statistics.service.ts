@@ -3,26 +3,29 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ResponseEntity } from '../entities/response.entity';
 import { CodingStatistics } from './shared-types';
+import { CacheService } from '../../cache/cache.service';
 
 @Injectable()
 export class CodingStatisticsService {
   private readonly logger = new Logger(CodingStatisticsService.name);
-
-  private statisticsCache: Map<number, { data: CodingStatistics; timestamp: number }> = new Map();
-  private readonly CACHE_TTL_MS = 60 * 1000; // 1 minute cache TTL
+  private readonly CACHE_KEY_PREFIX = 'coding-statistics';
+  private readonly CACHE_TTL_SECONDS = 60 * 60 * 24; // 24 hours cache TTL
 
   constructor(
     @InjectRepository(ResponseEntity)
-    private responseRepository: Repository<ResponseEntity>
+    private responseRepository: Repository<ResponseEntity>,
+    private cacheService: CacheService
   ) {}
 
   async getCodingStatistics(workspace_id: number): Promise<CodingStatistics> {
     this.logger.log(`Getting coding statistics for workspace ${workspace_id}`);
 
-    const cachedResult = this.statisticsCache.get(workspace_id);
-    if (cachedResult && (Date.now() - cachedResult.timestamp) < this.CACHE_TTL_MS) {
+    // Try to get from Redis cache first
+    const cacheKey = `${this.CACHE_KEY_PREFIX}:${workspace_id}`;
+    const cachedResult = await this.cacheService.get<CodingStatistics>(cacheKey);
+    if (cachedResult) {
       this.logger.log(`Returning cached statistics for workspace ${workspace_id}`);
-      return cachedResult.data;
+      return cachedResult;
     }
 
     const statistics: CodingStatistics = {
@@ -56,16 +59,23 @@ export class CodingStatisticsService {
 
       statistics.totalResponses = totalResponses;
 
-      this.statisticsCache.set(workspace_id, {
-        data: statistics,
-        timestamp: Date.now()
-      });
+      await this.cacheService.set(cacheKey, statistics, this.CACHE_TTL_SECONDS);
+      this.logger.log(`Computed and cached statistics for workspace ${workspace_id}`);
 
       return statistics;
     } catch (error) {
       this.logger.error(`Error getting coding statistics: ${error.message}`);
       return statistics;
     }
+  }
+
+  /**
+   * Get the cache key for coding statistics
+   * @param workspaceId The workspace ID
+   * @returns The cache key
+   */
+  getCacheKey(workspaceId: number): string {
+    return `${this.CACHE_KEY_PREFIX}:${workspaceId}`;
   }
 
   async createCodingStatisticsJob(workspaceId: number): Promise<{ jobId: string; message: string }> {
