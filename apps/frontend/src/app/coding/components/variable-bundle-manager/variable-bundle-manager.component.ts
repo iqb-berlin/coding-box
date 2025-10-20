@@ -26,11 +26,13 @@ import {
   MatPaginator, MatPaginatorModule, MatPaginatorIntl, PageEvent
 } from '@angular/material/paginator';
 import { SearchFilterComponent } from '../../../shared/search-filter/search-filter.component';
-import { VariableBundle } from '../../models/coding-job.model';
+import { VariableBundle, Variable } from '../../models/coding-job.model';
 import { VariableBundleService, PaginatedBundles } from '../../services/variable-bundle.service';
 import { VariableBundleDialogComponent } from '../variable-bundle-dialog/variable-bundle-dialog.component';
 import { ConfirmDialogComponent, ConfirmDialogData } from '../../../shared/dialogs/confirm-dialog.component';
 import { GermanPaginatorIntl } from '../../../shared/services/german-paginator-intl.service';
+import { AppService } from '../../../services/app.service';
+import { BackendService } from '../../../services/backend.service';
 
 @Component({
   selector: 'coding-box-variable-bundle-manager',
@@ -72,6 +74,8 @@ export class VariableBundleManagerComponent implements OnInit, AfterViewInit {
   private variableBundleGroupService = inject(VariableBundleService);
   private snackBar = inject(MatSnackBar);
   private dialog = inject(MatDialog);
+  private appService = inject(AppService);
+  private backendService = inject(BackendService);
 
   displayedColumns: string[] = ['selectCheckbox', 'name', 'description', 'variableCount', 'createdAt', 'updatedAt', 'actions'];
   dataSource = new MatTableDataSource<VariableBundle>([]);
@@ -177,50 +181,78 @@ export class VariableBundleManagerComponent implements OnInit, AfterViewInit {
   }
 
   createVariableBundleGroup(): void {
-    const dialogRef = this.dialog.open(VariableBundleDialogComponent, {
-      width: '900px',
-      data: {
-        isEdit: false
-      }
-    });
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      this.snackBar.open('Kein Workspace ausgewählt', 'Schließen', { duration: 3000 });
+      return;
+    }
 
-    dialogRef.afterClosed().subscribe(result => {
-      if (result) {
-        this.variableBundleGroupService.createBundle(result).subscribe({
-          next: newBundleGroup => {
-            this.loadVariableBundleGroups();
-            this.snackBar.open(`Variablenbündel "${newBundleGroup.name}" wurde erstellt`, 'Schließen', { duration: 3000 });
-          },
-          error: () => {
-            this.snackBar.open('Fehler beim Erstellen des Variablenbündels', 'Schließen', { duration: 3000 });
+    this.backendService.getCodingIncompleteVariables(workspaceId).subscribe({
+      next: (incompleteVariables: Variable[]) => {
+        const dialogRef = this.dialog.open(VariableBundleDialogComponent, {
+          width: '900px',
+          data: {
+            isEdit: false,
+            preloadedIncompleteVariables: incompleteVariables
           }
         });
+
+        dialogRef.afterClosed().subscribe(result => {
+          if (result) {
+            this.variableBundleGroupService.createBundle(result).subscribe({
+              next: newBundleGroup => {
+                this.loadVariableBundleGroups();
+                this.snackBar.open(`Variablenbündel "${newBundleGroup.name}" wurde erstellt`, 'Schließen', { duration: 3000 });
+              },
+              error: () => {
+                this.snackBar.open('Fehler beim Erstellen des Variablenbündels', 'Schließen', { duration: 3000 });
+              }
+            });
+          }
+        });
+      },
+      error: () => {
+        this.snackBar.open('Fehler beim Laden der CODING_INCOMPLETE Variablen', 'Schließen', { duration: 3000 });
       }
     });
   }
 
   editVariableBundleGroup(bundleGroup: VariableBundle): void {
-    const dialogRef = this.dialog.open(VariableBundleDialogComponent, {
-      width: '900px',
-      data: {
-        bundleGroup,
-        isEdit: true
-      }
-    });
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      this.snackBar.open('Kein Workspace ausgewählt', 'Schließen', { duration: 3000 });
+      return;
+    }
 
-    dialogRef.afterClosed().subscribe(result => {
-      if (result) {
-        this.variableBundleGroupService.updateBundle(bundleGroup.id, result).subscribe({
-          next: updatedBundleGroup => {
-            if (updatedBundleGroup) {
-              this.loadVariableBundleGroups();
-              this.snackBar.open(`Variablenbündel "${updatedBundleGroup.name}" wurde aktualisiert`, 'Schließen', { duration: 3000 });
-            }
-          },
-          error: () => {
-            this.snackBar.open('Fehler beim Aktualisieren des Variablenbündels', 'Schließen', { duration: 3000 });
+    this.backendService.getCodingIncompleteVariables(workspaceId).subscribe({
+      next: (incompleteVariables: Variable[]) => {
+        const dialogRef = this.dialog.open(VariableBundleDialogComponent, {
+          width: '900px',
+          data: {
+            bundleGroup,
+            isEdit: true,
+            preloadedIncompleteVariables: incompleteVariables
           }
         });
+
+        dialogRef.afterClosed().subscribe(result => {
+          if (result) {
+            this.variableBundleGroupService.updateBundle(bundleGroup.id, result).subscribe({
+              next: updatedBundleGroup => {
+                if (updatedBundleGroup) {
+                  this.loadVariableBundleGroups();
+                  this.snackBar.open(`Variablenbündel "${updatedBundleGroup.name}" wurde aktualisiert`, 'Schließen', { duration: 3000 });
+                }
+              },
+              error: () => {
+                this.snackBar.open('Fehler beim Aktualisieren des Variablenbündels', 'Schließen', { duration: 3000 });
+              }
+            });
+          }
+        });
+      },
+      error: () => {
+        this.snackBar.open('Fehler beim Laden der CODING_INCOMPLETE Variablen', 'Schließen', { duration: 3000 });
       }
     });
   }
