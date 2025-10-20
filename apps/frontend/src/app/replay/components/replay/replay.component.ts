@@ -6,7 +6,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateService, TranslateModule } from '@ngx-translate/core';
 import { ActivatedRoute, Params } from '@angular/router';
 import {
   combineLatest, firstValueFrom, Observable, of, Subject, Subscription, switchMap, catchError
@@ -59,6 +59,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   private route = inject(ActivatedRoute);
   private errorSnackBar = inject(MatSnackBar);
   private pageErrorSnackBar = inject(MatSnackBar);
+  private translate = inject(TranslateService);
 
   player: string = '';
   unitDef: string = '';
@@ -881,17 +882,9 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
   private showProgressNotification(percentage: number, completed: number, total: number): void {
     this.errorSnackBar.open(
-      `Coding Progress: ${completed}/${total} completed (${percentage}%)`,
-      'Close',
+      this.translate.instant('replay.coding-progress-message', { completed, total, percentage }),
+      this.translate.instant('replay.close'),
       { duration: 3000, panelClass: ['snackbar-info'] }
-    );
-  }
-
-  private showCompletionNotification(): void {
-    this.errorSnackBar.open(
-      '🎉 Coding job completed! All replays have been coded.',
-      'Close',
-      { duration: 5000, panelClass: ['snackbar-success'] }
     );
   }
 
@@ -926,19 +919,19 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     if (!this.codingJobId || !this.workspaceId) return;
 
     this.isPausingJob = true;
-    this.errorSnackBar.open('Pausing coding job...', '', { duration: 2000 });
+    this.errorSnackBar.open(this.translate.instant('replay.pausing-coding-job'), '', { duration: 2000 });
 
     this.backendService.updateCodingJob(this.workspaceId, this.codingJobId, { status: 'paused' }).subscribe({
       next: () => {
         this.isPausingJob = false;
-        this.errorSnackBar.open('Coding job paused successfully', 'Close', {
+        this.errorSnackBar.open(this.translate.instant('replay.coding-job-paused-successfully'), this.translate.instant('replay.close'), {
           duration: 3000,
           panelClass: ['snackbar-success']
         });
       },
       error: () => {
         this.isPausingJob = false;
-        this.errorSnackBar.open('Failed to pause coding job', 'Close', {
+        this.errorSnackBar.open(this.translate.instant('replay.failed-to-pause-coding-job'), this.translate.instant('replay.close'), {
           duration: 3000,
           panelClass: ['snackbar-error']
         });
@@ -950,12 +943,12 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     if (!this.codingJobId || !this.workspaceId) return;
 
     this.isSubmittingJob = true;
-    this.errorSnackBar.open('Submitting coding job...', '', { duration: 2000 });
+    this.errorSnackBar.open(this.translate.instant('replay.submitting-coding-job'), '', { duration: 2000 });
 
     this.backendService.updateCodingJob(this.workspaceId, this.codingJobId, { status: 'finished' }).subscribe({
       next: () => {
         this.isSubmittingJob = false;
-        this.errorSnackBar.open('Coding job submitted successfully', 'Close', {
+        this.errorSnackBar.open(this.translate.instant('replay.coding-job-submitted-successfully'), this.translate.instant('replay.close'), {
           duration: 3000,
           panelClass: ['snackbar-success']
         });
@@ -963,7 +956,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       },
       error: () => {
         this.isSubmittingJob = false;
-        this.errorSnackBar.open('Failed to submit coding job', 'Close', {
+        this.errorSnackBar.open(this.translate.instant('replay.failed-to-submit-coding-job'), this.translate.instant('replay.close'), {
           duration: 3000,
           panelClass: ['snackbar-error']
         });
