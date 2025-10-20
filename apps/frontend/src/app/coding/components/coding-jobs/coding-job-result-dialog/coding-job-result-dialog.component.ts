@@ -10,7 +10,7 @@ import { MatPaginator, MatPaginatorModule } from '@angular/material/paginator';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
-import { NgClass } from '@angular/common';
+import { CommonModule, NgClass } from '@angular/common';
 
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { BackendService } from '../../../../services/backend.service';
@@ -36,6 +36,7 @@ interface CodingResult {
   styleUrls: ['./coding-job-result-dialog.component.scss'],
   standalone: true,
   imports: [
+    CommonModule,
     TranslateModule,
     MatDialogModule,
     MatTableModule,

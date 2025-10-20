@@ -141,6 +141,11 @@ mat-cell {
   justify-content: flex-start;
 }
 
+.mat-column-viewResults {
+  flex: 0 0 70px;
+  justify-content: center;
+}
+
 .mat-column-created_at, .mat-column-updated_at {
   flex: 0 0 150px;
 }

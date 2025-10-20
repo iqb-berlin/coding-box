@@ -156,7 +156,7 @@
           </p>
         </div>
         <div class="fx-row-center-center fx-gap-10">
-          <button mat-raised-button color="accent" (click)="downloadComparisonTable()" [disabled]="isLoading || !importResults?.affectedRows?.length">
+          <button mat-raised-button color="accent" (click)="downloadComparisonTable()" [disabled]="isLoading || !importResults.affectedRows.length">
             <mat-icon>download</mat-icon>
             Als Excel herunterladen
           </button>
