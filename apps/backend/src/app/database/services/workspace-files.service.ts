@@ -9,6 +9,7 @@ import * as path from 'path';
 import * as libxmljs from 'libxmljs2';
 import { parseStringPromise } from 'xml2js';
 import { VariableInfo } from '@iqbspecs/variable-info/variable-info.interface';
+import { statusNumberToString } from '../utils/response-status-converter';
 import FileUpload, { StructuredFileData } from '../entities/file_upload.entity';
 import { FilesDto } from '../../../../../../api-dto/files/files.dto';
 import { FileIo } from '../../admin/workspace/file-io.interface';
@@ -2388,7 +2389,7 @@ ${bookletRefs}
           duplicates: responses.map(response => ({
             responseId: response.id,
             value: response.value || '',
-            status: response.status
+            status: statusNumberToString(response.status) || 'UNSET'
             // We don't have timestamp in the response entity, but could add if needed
           }))
         });
@@ -2533,9 +2534,9 @@ ${bookletRefs}
         continue;
       }
 
-      const status = response.status;
+      const status = statusNumberToString(response.status);
 
-      if (!validStatusValues.includes(status)) {
+      if (!status || !validStatusValues.includes(status)) {
         invalidVariables.push({
           fileName: `${unitName}`,
           variableId: variableId,

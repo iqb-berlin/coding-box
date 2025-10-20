@@ -9,7 +9,7 @@ export class BookletLog {
   @PrimaryGeneratedColumn()
     id: number;
 
-  @Column({ type: 'bigint' })
+  @Column({ type: 'int' })
     bookletid: number;
 
   @Column({ type: 'text' })
