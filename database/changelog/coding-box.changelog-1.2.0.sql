@@ -1,11 +1,6 @@
 -- liquibase formatted sql
 
 -- changeset jurei733:1
-ALTER TABLE response ADD PRIMARY KEY (id);
--- rollback ALTER TABLE response DROP CONSTRAINT response_pkey;
-
-
--- changeset jurei733:2
 CREATE TABLE "public"."coding_job_unit" (
                                           "id" SERIAL PRIMARY KEY,
                                           "coding_job_id" INTEGER NOT NULL,
@@ -28,7 +23,7 @@ CREATE INDEX "idx_coding_job_unit_response_id" ON "public"."coding_job_unit" ("r
 -- rollback DROP TABLE IF EXISTS "public"."coding_job_unit";
 
 
--- changeset jurei733:3
+-- changeset jurei733:2
 -- comment: Add code-related columns to coding_job_unit table
 
 ALTER TABLE coding_job_unit
@@ -39,3 +34,133 @@ ALTER TABLE coding_job_unit
 
 -- rollback ALTER TABLE coding_job_unit DROP COLUMN score;
 -- rollback ALTER TABLE coding_job_unit DROP COLUMN code;
+
+-- liquibase formatted sql
+
+-- changeset jurei733:3
+-- comment: Optimize text columns with bounded lengths to varchar for better space efficiency
+
+-- Change response table columns from TEXT to VARCHAR with appropriate lengths
+ALTER TABLE "public"."response" ALTER COLUMN "variableid" TYPE VARCHAR(255);
+-- rollback ALTER TABLE "public"."response" ALTER COLUMN "variableid" TYPE TEXT;
+
+ALTER TABLE "public"."response" ALTER COLUMN "status" TYPE VARCHAR(255);
+-- rollback ALTER TABLE "public"."response" ALTER COLUMN "status" TYPE TEXT;
+
+ALTER TABLE "public"."response" ALTER COLUMN "status_v1" TYPE VARCHAR(255);
+-- rollback ALTER TABLE "public"."response" ALTER COLUMN "status_v1" TYPE TEXT;
+
+ALTER TABLE "public"."response" ALTER COLUMN "status_v2" TYPE VARCHAR(255);
+-- rollback ALTER TABLE "public"."response" ALTER COLUMN "status_v2" TYPE TEXT;
+
+ALTER TABLE "public"."response" ALTER COLUMN "status_v3" TYPE VARCHAR(255);
+-- rollback ALTER TABLE "public"."response" ALTER COLUMN "status_v3" TYPE TEXT;
+
+-- Change unit table columns from TEXT to VARCHAR(100)
+ALTER TABLE "public"."unit" ALTER COLUMN "name" TYPE VARCHAR(100);
+-- rollback ALTER TABLE "public"."unit" ALTER COLUMN "name" TYPE TEXT;
+
+ALTER TABLE "public"."unit" ALTER COLUMN "alias" TYPE VARCHAR(100);
+-- rollback ALTER TABLE "public"."unit" ALTER COLUMN "alias" TYPE TEXT;
+
+-- changeset jurei733:4
+-- comment: Downgrade bigint ID columns to integer where max ID < 2^31 (saves 4 bytes per row)
+
+-- Downgrade response.unitid from bigint to integer
+ALTER TABLE "public"."response" ALTER COLUMN "unitid" TYPE INTEGER;
+-- rollback ALTER TABLE "public"."response" ALTER COLUMN "unitid" TYPE BIGINT;
+
+-- Downgrade unit.bookletid from bigint to integer
+ALTER TABLE "public"."unit" ALTER COLUMN "bookletid" TYPE INTEGER;
+-- rollback ALTER TABLE "public"."unit" ALTER COLUMN "bookletid" TYPE BIGINT;
+
+-- Downgrade booklet.infoid from bigint to integer
+ALTER TABLE "public"."booklet" ALTER COLUMN "infoid" TYPE INTEGER;
+-- rollback ALTER TABLE "public"."booklet" ALTER COLUMN "infoid" TYPE BIGINT;
+
+-- Downgrade booklet.personid from bigint to integer
+ALTER TABLE "public"."booklet" ALTER COLUMN "personid" TYPE INTEGER;
+-- rollback ALTER TABLE "public"."booklet" ALTER COLUMN "personid" TYPE BIGINT;
+
+-- Downgrade bookletlog.bookletid from bigint to integer
+ALTER TABLE "public"."bookletlog" ALTER COLUMN "bookletid" TYPE INTEGER;
+-- rollback ALTER TABLE "public"."bookletlog" ALTER COLUMN "bookletid" TYPE BIGINT;
+
+-- Downgrade unitlog.unitid from bigint to integer
+ALTER TABLE "public"."unitlog" ALTER COLUMN "unitid" TYPE INTEGER;
+-- rollback ALTER TABLE "public"."unitlog" ALTER COLUMN "unitid" TYPE BIGINT;
+
+-- Downgrade unit_tag.unitId from bigint to integer
+ALTER TABLE "public"."unit_tag" ALTER COLUMN "unitId" TYPE INTEGER;
+-- rollback ALTER TABLE "public"."unit_tag" ALTER COLUMN "unitId" TYPE BIGINT;
+
+-- Downgrade unit_note.unitId from bigint to integer
+ALTER TABLE "public"."unit_note" ALTER COLUMN "unitId" TYPE INTEGER;
+-- rollback ALTER TABLE "public"."unit_note" ALTER COLUMN "unitId" TYPE BIGINT;
+
+-- changeset jurei733:5
+
+-- Migrate existing status string values to numeric values using the responseStatesNumericMap
+UPDATE "public"."response" SET "status" = 0 WHERE "status" = 'UNSET';
+UPDATE "public"."response" SET "status" = 1 WHERE "status" = 'NOT_REACHED';
+UPDATE "public"."response" SET "status" = 2 WHERE "status" = 'DISPLAYED';
+UPDATE "public"."response" SET "status" = 3 WHERE "status" = 'VALUE_CHANGED';
+UPDATE "public"."response" SET "status" = 4 WHERE "status" = 'DERIVE_ERROR';
+UPDATE "public"."response" SET "status" = 5 WHERE "status" = 'CODING_COMPLETE';
+UPDATE "public"."response" SET "status" = 6 WHERE "status" = 'NO_CODING';
+UPDATE "public"."response" SET "status" = 7 WHERE "status" = 'INVALID';
+UPDATE "public"."response" SET "status" = 8 WHERE "status" = 'CODING_INCOMPLETE';
+UPDATE "public"."response" SET "status" = 9 WHERE "status" = 'CODING_ERROR';
+UPDATE "public"."response" SET "status" = 10 WHERE "status" = 'PARTLY_DISPLAYED';
+UPDATE "public"."response" SET "status" = 11 WHERE "status" = 'DERIVE_PENDING';
+UPDATE "public"."response" SET "status" = 12 WHERE "status" = 'INTENDED_INCOMPLETE';
+UPDATE "public"."response" SET "status" = 13 WHERE "status" = 'CODE_SELECTION_PENDING';
+-- rollback for status not needed as rollback will change to VARCHAR
+
+-- Same for status_v1
+UPDATE "public"."response" SET "status_v1" = 0 WHERE "status_v1" = 'UNSET';
+UPDATE "public"."response" SET "status_v1" = 1 WHERE "status_v1" = 'NOT_REACHED';
+UPDATE "public"."response" SET "status_v1" = 2 WHERE "status_v1" = 'DISPLAYED';
+UPDATE "public"."response" SET "status_v1" = 3 WHERE "status_v1" = 'VALUE_CHANGED';
+UPDATE "public"."response" SET "status_v1" = 4 WHERE "status_v1" = 'DERIVE_ERROR';
+UPDATE "public"."response" SET "status_v1" = 5 WHERE "status_v1" = 'CODING_COMPLETE';
+UPDATE "public"."response" SET "status_v1" = 6 WHERE "status_v1" = 'NO_CODING';
+UPDATE "public"."response" SET "status_v1" = 7 WHERE "status_v1" = 'INVALID';
+UPDATE "public"."response" SET "status_v1" = 8 WHERE "status_v1" = 'CODING_INCOMPLETE';
+UPDATE "public"."response" SET "status_v1" = 9 WHERE "status_v1" = 'CODING_ERROR';
+UPDATE "public"."response" SET "status_v1" = 10 WHERE "status_v1" = 'PARTLY_DISPLAYED';
+UPDATE "public"."response" SET "status_v1" = 11 WHERE "status_v1" = 'DERIVE_PENDING';
+UPDATE "public"."response" SET "status_v1" = 12 WHERE "status_v1" = 'INTENDED_INCOMPLETE';
+UPDATE "public"."response" SET "status_v1" = 13 WHERE "status_v1" = 'CODE_SELECTION_PENDING';
+
+-- Same for status_v2
+UPDATE "public"."response" SET "status_v2" = 0 WHERE "status_v2" = 'UNSET';
+UPDATE "public"."response" SET "status_v2" = 1 WHERE "status_v2" = 'NOT_REACHED';
+UPDATE "public"."response" SET "status_v2" = 2 WHERE "status_v2" = 'DISPLAYED';
+UPDATE "public"."response" SET "status_v2" = 3 WHERE "status_v2" = 'VALUE_CHANGED';
+UPDATE "public"."response" SET "status_v2" = 4 WHERE "status_v2" = 'DERIVE_ERROR';
+UPDATE "public"."response" SET "status_v2" = 5 WHERE "status_v2" = 'CODING_COMPLETE';
+UPDATE "public"."response" SET "status_v2" = 6 WHERE "status_v2" = 'NO_CODING';
+UPDATE "public"."response" SET "status_v2" = 7 WHERE "status_v2" = 'INVALID';
+UPDATE "public"."response" SET "status_v2" = 8 WHERE "status_v2" = 'CODING_INCOMPLETE';
+UPDATE "public"."response" SET "status_v2" = 9 WHERE "status_v2" = 'CODING_ERROR';
+UPDATE "public"."response" SET "status_v2" = 10 WHERE "status_v2" = 'PARTLY_DISPLAYED';
+UPDATE "public"."response" SET "status_v2" = 11 WHERE "status_v2" = 'DERIVE_PENDING';
+UPDATE "public"."response" SET "status_v2" = 12 WHERE "status_v2" = 'INTENDED_INCOMPLETE';
+UPDATE "public"."response" SET "status_v2" = 13 WHERE "status_v2" = 'CODE_SELECTION_PENDING';
+
+-- Same for status_v3
+UPDATE "public"."response" SET "status_v3" = 0 WHERE "status_v3" = 'UNSET';
+UPDATE "public"."response" SET "status_v3" = 1 WHERE "status_v3" = 'NOT_REACHED';
+UPDATE "public"."response" SET "status_v3" = 2 WHERE "status_v3" = 'DISPLAYED';
+UPDATE "public"."response" SET "status_v3" = 3 WHERE "status_v3" = 'VALUE_CHANGED';
+UPDATE "public"."response" SET "status_v3" = 4 WHERE "status_v3" = 'DERIVE_ERROR';
+UPDATE "public"."response" SET "status_v3" = 5 WHERE "status_v3" = 'CODING_COMPLETE';
+UPDATE "public"."response" SET "status_v3" = 6 WHERE "status_v3" = 'NO_CODING';
+UPDATE "public"."response" SET "status_v3" = 7 WHERE "status_v3" = 'INVALID';
+UPDATE "public"."response" SET "status_v3" = 8 WHERE "status_v3" = 'CODING_INCOMPLETE';
+UPDATE "public"."response" SET "status_v3" = 9 WHERE "status_v3" = 'CODING_ERROR';
+UPDATE "public"."response" SET "status_v3" = 10 WHERE "status_v3" = 'PARTLY_DISPLAYED';
+UPDATE "public"."response" SET "status_v3" = 11 WHERE "status_v3" = 'DERIVE_PENDING';
+UPDATE "public"."response" SET "status_v3" = 12 WHERE "status_v3" = 'INTENDED_INCOMPLETE';
+UPDATE "public"."response" SET "status_v3" = 13 WHERE "status_v3" = 'CODE_SELECTION_PENDING';

@@ -29,15 +29,15 @@ export class Unit {
     id: number;
 
   @Index()
-  @Column({ type: 'bigint' })
+  @Column({ type: 'int' })
     bookletid: number;
 
   @Index()
-  @Column({ type: 'text' })
+  @Column({ type: 'varchar', length: 100 })
     name: string;
 
   @Index()
-  @Column({ type: 'text', nullable: true })
+  @Column({ type: 'varchar', length: 100, nullable: true })
     alias: string;
 
   @ManyToOne(() => Booklet, booklet => booklet.units, {

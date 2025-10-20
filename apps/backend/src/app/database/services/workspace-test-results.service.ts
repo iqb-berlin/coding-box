@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Connection, Repository } from 'typeorm';
 import Persons from '../entities/persons.entity';
+import { statusNumberToString } from '../utils/response-status-converter';
 import { Unit } from '../entities/unit.entity';
 import { Booklet } from '../entities/booklet.entity';
 import { ResponseEntity } from '../entities/response.entity';
@@ -849,10 +850,10 @@ export class WorkspaceTestResultsService {
         responseId: response.id,
         variableId: response.variableid,
         value: response.value || '',
-        status: response.status,
+        status: statusNumberToString(response.status) || 'UNSET',
         code: response.code_v1,
         score: response.score_v1,
-        codedStatus: response.status_v1,
+        codedStatus: statusNumberToString(response.status_v1) || 'UNSET',
         unitId: response.unit.id,
         unitName: response.unit.name,
         unitAlias: response.unit.alias,
@@ -954,10 +955,10 @@ export class WorkspaceTestResultsService {
         responses: unit.responses ? unit.responses.map(response => ({
           variableId: response.variableid,
           value: response.value || '',
-          status: response.status,
+          status: statusNumberToString(response.status) || 'UNSET',
           code: response.code_v1,
           score: response.score_v1,
-          codedStatus: response.status_v1
+          codedStatus: statusNumberToString(response.status_v1) || 'UNSET'
         })) : []
       }));
 
