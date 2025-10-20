@@ -12,6 +12,7 @@ import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
 import { WorkspaceCodingService } from '../../database/services/workspace-coding.service';
+import { CoderTrainingService } from '../../database/services/coder-training.service';
 import { CodingListService } from '../../database/services/coding-list.service';
 import { PersonService } from '../../database/services/person.service';
 import { VariableAnalysisItemDto } from '../../../../../../api-dto/coding/variable-analysis-item.dto';
@@ -26,7 +27,8 @@ export class WorkspaceCodingController {
   constructor(
     private workspaceCodingService: WorkspaceCodingService,
     private personService: PersonService,
-    private codingListService: CodingListService
+    private codingListService: CodingListService,
+    private coderTrainingService: CoderTrainingService
   ) {}
 
   @Get(':workspace_id/coding')
@@ -866,7 +868,7 @@ export class WorkspaceCodingController {
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiBody({
-    description: 'Generate coder training packages based on CODING_INCOMPLETE responses',
+    description: 'Generate coder training packages based on CODING_INCOMPLETE responses for specific variable and unit combinations',
     schema: {
       type: 'object',
       properties: {
@@ -885,7 +887,8 @@ export class WorkspaceCodingController {
           items: {
             type: 'object',
             properties: {
-              variableName: { type: 'string' },
+              variableId: { type: 'string' },
+              unitId: { type: 'string' },
               sampleCount: { type: 'number' }
             }
           }
@@ -928,7 +931,7 @@ export class WorkspaceCodingController {
     @WorkspaceId() workspace_id: number,
       @Body() body: {
         selectedCoders: { id: number; name: string }[];
-        variableConfigs: { variableName: string; sampleCount: number }[];
+        variableConfigs: { variableId: string; unitId: string; sampleCount: number }[];
       }
   ): Promise<{
         coderId: number;
@@ -946,7 +949,77 @@ export class WorkspaceCodingController {
           variable: string;
         }[];
       }[]> {
-    return this.workspaceCodingService.generateCoderTrainingPackages(
+    return this.coderTrainingService.generateCoderTrainingPackages(
+      workspace_id,
+      body.selectedCoders,
+      body.variableConfigs
+    );
+  }
+
+  @Post(':workspace_id/coding/coder-training-jobs')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiBody({
+    description: 'Create persistent coding jobs for coder training',
+    schema: {
+      type: 'object',
+      properties: {
+        selectedCoders: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'number' },
+              name: { type: 'string' }
+            }
+          }
+        },
+        variableConfigs: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              variableId: { type: 'string' },
+              unitId: { type: 'string' },
+              sampleCount: { type: 'number' }
+            }
+          }
+        }
+      }
+    }
+  })
+  @ApiOkResponse({
+    description: 'Coding jobs created successfully for coder training',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        jobsCreated: { type: 'number' },
+        message: { type: 'string' },
+        jobs: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              coderId: { type: 'number' },
+              coderName: { type: 'string' },
+              jobId: { type: 'number' },
+              jobName: { type: 'string' }
+            }
+          }
+        }
+      }
+    }
+  })
+  async createCoderTrainingJobs(
+    @WorkspaceId() workspace_id: number,
+      @Body() body: {
+        selectedCoders: { id: number; name: string }[];
+        variableConfigs: { variableId: string; unitId: string; sampleCount: number }[];
+      }
+  ): Promise<{ success: boolean; jobsCreated: number; message: string; jobs: { coderId: number; coderName: string; jobId: number; jobName: string }[] }> {
+    return this.coderTrainingService.createCoderTrainingJobs(
       workspace_id,
       body.selectedCoders,
       body.variableConfigs

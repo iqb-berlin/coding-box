@@ -810,6 +810,18 @@ export class BackendService {
     return this.http.get<{ unitName: string; variableId: string }[]>(url, { params });
   }
 
+  createCoderTrainingJobs(
+    workspaceId: number,
+    selectedCoders: { id: number; name: string }[],
+    variableConfigs: { variableId: string; unitId: string; sampleCount: number }[]
+  ): Observable<{ success: boolean; jobsCreated: number; message: string; jobs: { coderId: number; coderName: string; jobId: number; jobName: string }[] }> {
+    const url = `${this.serverUrl}/admin/workspace/${workspaceId}/coding/coder-training-jobs`;
+    return this.http.post<{ success: boolean; jobsCreated: number; message: string; jobs: { coderId: number; coderName: string; jobId: number; jobName: string }[] }>(url, {
+      selectedCoders,
+      variableConfigs
+    });
+  }
+
   downloadWorkspaceFilesAsZip(workspaceId: number): Observable<Blob> {
     const url = `${this.serverUrl}/admin/workspace/${workspaceId}/files/download-zip`;
     return this.http.get(url, {
