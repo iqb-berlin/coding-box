@@ -608,7 +608,13 @@ export class CodingJobService {
   async getCodingJobUnits(codingJobId: number): Promise<{ responseId: number; unitName: string; unitAlias: string | null; variableId: string; variableAnchor: string; bookletName: string; personLogin: string; personCode: string }[]> {
     const codingJobUnits = await this.codingJobUnitRepository.find({
       where: { coding_job_id: codingJobId },
-      order: { id: 'ASC' }
+      order: {
+        unit_name: 'ASC',
+        booklet_name: 'ASC',
+        person_login: 'ASC',
+        person_code: 'ASC',
+        variable_id: 'ASC'
+      }
     });
 
     return codingJobUnits.map(unit => ({

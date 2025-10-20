@@ -1,4 +1,4 @@
-import { Module, forwardRef } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { HttpModule } from '@nestjs/axios';
@@ -32,7 +32,6 @@ import { Session } from './entities/session.entity';
 import { UnitTag } from './entities/unitTag.entity';
 import { UnitNote } from './entities/unitNote.entity';
 import { PersonService } from './services/person.service';
-import { AuthService } from '../auth/service/auth.service';
 import { UnitTagService } from './services/unit-tag.service';
 import { UnitNoteService } from './services/unit-note.service';
 import { ResourcePackageService } from './services/resource-package.service';
@@ -61,6 +60,7 @@ import { JobQueueModule } from '../job-queue/job-queue.module';
 // eslint-disable-next-line import/no-cycle
 import { CacheModule } from '../cache/cache.module';
 import { CodingListService } from './services/coding-list.service';
+import { CoderTrainingService } from './services/coder-training.service';
 
 @Module({
   imports: [
@@ -80,8 +80,8 @@ import { CodingListService } from './services/coding-list.service';
     ResourcePackage,
     WorkspaceUser,
     HttpModule,
-    forwardRef(() => JobQueueModule),
-    forwardRef(() => CacheModule),
+    JobQueueModule,
+
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => ({
@@ -131,7 +131,8 @@ import { CodingListService } from './services/coding-list.service';
       CodingJobVariable,
       CodingJobVariableBundle,
       CodingJobUnit
-    ])
+    ]),
+    CacheModule
   ],
   providers: [
     UsersService,
@@ -144,7 +145,6 @@ import { CodingListService } from './services/coding-list.service';
     TestcenterService,
     UploadResultsService,
     PersonService,
-    AuthService,
     JwtService,
     UnitTagService,
     UnitNoteService,
@@ -157,7 +157,8 @@ import { CodingListService } from './services/coding-list.service';
     CodingJobService,
     CodingStatisticsService,
     MissingsProfilesService,
-    CodingListService
+    CodingListService,
+    CoderTrainingService
   ],
   exports: [
     User,
@@ -179,7 +180,6 @@ import { CodingListService } from './services/coding-list.service';
     ResourcePackageService,
     ResourcePackage,
     PersonService,
-    AuthService,
     UnitTagService,
     UnitNoteService,
     JournalService,
@@ -190,7 +190,8 @@ import { CodingListService } from './services/coding-list.service';
     CodingJobService,
     CodingStatisticsService,
     MissingsProfilesService,
-    CodingListService
+    CodingListService,
+    CoderTrainingService
   ]
 })
 export class DatabaseModule {}

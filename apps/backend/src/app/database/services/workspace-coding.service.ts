@@ -27,19 +27,6 @@ import { ValidateCodingCompletenessResponseDto } from '../../../../../../api-dto
 import { JobQueueService } from '../../job-queue/job-queue.service';
 import { CodingStatisticsService } from './coding-statistics.service';
 
-interface CoderTrainingResponse {
-  responseId: number;
-  unitAlias: string;
-  variableId: string;
-  unitName: string;
-  value: string;
-  personLogin: string;
-  personCode: string;
-  personGroup: string;
-  bookletName: string;
-  variable: string; // combination of variableId + unitAlias
-}
-
 interface ExternalCodingRow {
   unit_key?: string;
   unit_alias?: string;
@@ -2561,7 +2548,6 @@ export class WorkspaceCodingService {
     headerRow.eachCell((cell, colNumber) => {
       headers[colNumber] = cell.text || cell.value?.toString() || '';
     });
-
     this.logger.log(`Starting Excel parsing. Total rows: ${worksheet.rowCount - 1}`);
 
     // Memory protection: limit to 200k rows
@@ -2595,111 +2581,5 @@ export class WorkspaceCodingService {
 
     this.logger.log(`Excel parsing completed. Total rows: ${results.length}`);
     return results;
-  }
-
-  async generateCoderTrainingPackages(
-    workspaceId: number,
-    selectedCoders: { id: number; name: string }[],
-    variableConfigs: { variableName: string; sampleCount: number }[]
-  ): Promise<{
-      coderId: number;
-      coderName: string;
-      responses: CoderTrainingResponse[];
-    }[]> {
-    try {
-      this.logger.log(`Generating coder training packages for workspace ${workspaceId}`);
-
-      const incompleteResponses = await this.responseRepository
-        .createQueryBuilder('response')
-        .innerJoin('response.unit', 'unit')
-        .innerJoin('unit.booklet', 'booklet')
-        .innerJoin('booklet.person', 'person')
-        .innerJoin('booklet.bookletinfo', 'bookletinfo')
-        .select([
-          'response.id',
-          'response.variableid',
-          'response.value',
-          'unit.alias',
-          'unit.name',
-          'unit.booklet',
-          'booklet.person',
-          'person.login',
-          'person.code',
-          'person.group',
-          'booklet.bookletinfo',
-          'bookletinfo.name'
-        ])
-        .where('response.status_v1 = :status', { status: 'CODING_INCOMPLETE' })
-        .andWhere('person.workspace_id = :workspaceId', { workspaceId })
-        .getMany();
-
-      this.logger.log(`Found ${JSON.stringify(incompleteResponses)} responses with CODING_INCOMPLETE status`);
-
-      // Group responses by variable (combination of variableId + unitAlias)
-      const variableResponsesMap = new Map<string, typeof incompleteResponses>();
-
-      incompleteResponses.forEach(response => {
-        const variable = `${response.variableid}_${response.unit.alias}`;
-        if (!variableResponsesMap.has(variable)) {
-          variableResponsesMap.set(variable, []);
-        }
-        variableResponsesMap.get(variable)!.push(response);
-      });
-
-      this.logger.log(`Grouped responses into ${variableResponsesMap.size} unique variables`);
-
-      const trainingPackages = selectedCoders.map(coder => {
-        const coderResponses: CoderTrainingResponse[] = [];
-        variableConfigs.forEach(config => {
-          const matchingVariables = Array.from(variableResponsesMap.keys()).filter(variable => variable.toLowerCase().includes(config.variableName.toLowerCase()) ||
-            config.variableName.toLowerCase().includes(variable.toLowerCase())
-          );
-
-          matchingVariables.forEach(variable => {
-            const responses = variableResponsesMap.get(variable) || [];
-            const sampledResponses = this.sampleResponses(responses, config.sampleCount);
-
-            sampledResponses.forEach(response => {
-              const person = response.unit?.booklet?.person;
-              const bookletInfo = response.unit?.booklet?.bookletinfo;
-
-              coderResponses.push({
-                responseId: response.id,
-                unitAlias: response.unit?.alias || '',
-                variableId: response.variableid,
-                unitName: response.unit?.name || '',
-                value: response.value || '',
-                personLogin: person?.login || '',
-                personCode: person?.code || '',
-                personGroup: person?.group || '',
-                bookletName: bookletInfo?.name || '',
-                variable: variable
-              });
-            });
-          });
-        });
-        return {
-          coderId: coder.id,
-          coderName: coder.name,
-          responses: coderResponses
-        };
-      });
-
-      this.logger.log(`Generated training packages for ${selectedCoders.length} coders`);
-      return trainingPackages;
-    } catch (error) {
-      this.logger.error(`Error generating coder training packages: ${error.message}`, error.stack);
-      throw new Error(`Could not generate coder training packages: ${error.message}`);
-    }
-  }
-
-  private sampleResponses<T>(responses: T[], sampleCount: number): T[] {
-    if (responses.length <= sampleCount) {
-      return [...responses];
-    }
-
-    // Shuffle array and take first sampleCount items
-    const shuffled = [...responses].sort(() => Math.random() - 0.5);
-    return shuffled.slice(0, sampleCount);
   }
 }
