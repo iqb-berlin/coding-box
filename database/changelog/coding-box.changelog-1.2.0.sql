@@ -32,18 +32,10 @@ CREATE INDEX "idx_coding_job_unit_response_id" ON "public"."coding_job_unit" ("r
 -- comment: Add code-related columns to coding_job_unit table
 
 ALTER TABLE coding_job_unit
-  ADD COLUMN code_id INTEGER NULL;
-
-ALTER TABLE coding_job_unit
-  ADD COLUMN code VARCHAR(255) NULL;
-
-ALTER TABLE coding_job_unit
-  ADD COLUMN code_label VARCHAR(255) NULL;
+  ADD COLUMN code INTEGER NULL;
 
 ALTER TABLE coding_job_unit
   ADD COLUMN score INTEGER NULL;
 
 -- rollback ALTER TABLE coding_job_unit DROP COLUMN score;
--- rollback ALTER TABLE coding_job_unit DROP COLUMN code_label;
 -- rollback ALTER TABLE coding_job_unit DROP COLUMN code;
--- rollback ALTER TABLE coding_job_unit DROP COLUMN code_id;

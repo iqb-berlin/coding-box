@@ -112,6 +112,15 @@
           {{element.updatedAt | date: 'dd.MM.yyyy HH:mm'}}
         </mat-cell>
       </ng-container>
+
+      <ng-container matColumnDef="viewResults">
+        <mat-header-cell *matHeaderCellDef></mat-header-cell>
+        <mat-cell *matCellDef="let element">
+          <button mat-icon-button (click)="viewCodingResults(element)" aria-label="Ergebnisse anzeigen">
+            <mat-icon>visibility</mat-icon>
+          </button>
+        </mat-cell>
+      </ng-container>
     </mat-table>
 
     @if (dataSource.data.length === 0) {

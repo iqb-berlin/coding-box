@@ -38,8 +38,8 @@ export class SaveCodingProgressDto {
   @IsObject()
     selectedCode: {
     id: number;
-    code: string;
-    label: string;
+    code?: string;
+    label?: string;
     score?: number;
     [key: string]: unknown;
   };

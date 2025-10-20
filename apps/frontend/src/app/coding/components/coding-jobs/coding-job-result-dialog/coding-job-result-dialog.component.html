@@ -1,0 +1,79 @@
+<div class="dialog-container">
+  <div class="dialog-header">
+    <h1 mat-dialog-title>Kodierergebnisse: {{data.codingJob.name}}</h1>
+    <button mat-icon-button mat-dialog-close aria-label="Dialog schließen">
+      <mat-icon>close</mat-icon>
+    </button>
+  </div>
+
+  <div class="filter-section">
+    <coding-box-search-filter
+      [title]="'Kodierergebnisse filtern'"
+      (valueChange)="applyFilter($event)">
+    </coding-box-search-filter>
+  </div>
+
+  @if (isLoading) {
+    <div class="loading-container">
+      <mat-spinner></mat-spinner>
+      <p>Lade Kodierergebnisse...</p>
+    </div>
+  } @else {
+    <div class="table-container">
+      @if (dataSource.data.length > 0) {
+        <mat-table [dataSource]="dataSource" matSort class="coding-results-table">
+          <ng-container matColumnDef="unitName">
+            <mat-header-cell *matHeaderCellDef mat-sort-header>Einheit</mat-header-cell>
+            <mat-cell *matCellDef="let result">{{result.unitName}}
+              <span *ngIf="result.unitAlias && result.unitAlias !== result.unitName" class="unit-alias">
+                ({{result.unitAlias}})
+              </span>
+            </mat-cell>
+          </ng-container>
+
+          <ng-container matColumnDef="testPerson">
+            <mat-header-cell *matHeaderCellDef mat-sort-header>Testperson</mat-header-cell>
+            <mat-cell *matCellDef="let result">{{result.testPerson}}</mat-cell>
+          </ng-container>
+
+          <ng-container matColumnDef="variableId">
+            <mat-header-cell *matHeaderCellDef mat-sort-header>Variable</mat-header-cell>
+            <mat-cell *matCellDef="let result">{{result.variableId}}</mat-cell>
+          </ng-container>
+
+          <ng-container matColumnDef="code">
+            <mat-header-cell *matHeaderCellDef mat-sort-header>Code</mat-header-cell>
+            <mat-cell *matCellDef="let result" [ngClass]="{'coded': hasCode(result), 'not-coded': !hasCode(result)}">
+              {{getCodeDisplay(result)}}
+            </mat-cell>
+          </ng-container>
+
+          <ng-container matColumnDef="score">
+            <mat-header-cell *matHeaderCellDef mat-sort-header>Score</mat-header-cell>
+            <mat-cell *matCellDef="let result" [ngClass]="{'coded': hasCode(result), 'not-coded': !hasCode(result)}">
+              {{getScoreDisplay(result)}}
+            </mat-cell>
+          </ng-container>
+
+          <mat-header-row *matHeaderRowDef="displayedColumns"></mat-header-row>
+          <mat-row *matRowDef="let row; columns: displayedColumns;"></mat-row>
+        </mat-table>
+
+        <mat-paginator
+          [pageSizeOptions]="[10, 25, 50, 100]"
+          showFirstLastButtons
+          aria-label="Wähle eine Seite der Kodierergebnisse">
+        </mat-paginator>
+      } @else {
+        <div class="no-data-message">
+          <p>Keine Kodierergebnisse verfügbar.</p>
+          <p>Entweder wurden noch keine Variablen für diesen Job kodiert oder es gibt keine zu kodierenden Einheiten.</p>
+        </div>
+      }
+    </div>
+  }
+
+  <div class="dialog-actions">
+    <button mat-raised-button mat-dialog-close color="primary">Schließen</button>
+  </div>
+</div>

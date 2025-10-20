@@ -44,13 +44,7 @@ export class CodingJobUnit {
     person_code: string;
 
   @Column({ nullable: true })
-    code_id: number | null;
-
-  @Column({ nullable: true })
-    code: string | null;
-
-  @Column({ nullable: true })
-    code_label: string | null;
+    code: number | null;
 
   @Column({ nullable: true })
     score: number | null;
