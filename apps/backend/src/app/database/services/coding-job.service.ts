@@ -13,6 +13,23 @@ import { CreateCodingJobDto } from '../../admin/coding-job/dto/create-coding-job
 import { UpdateCodingJobDto } from '../../admin/coding-job/dto/update-coding-job.dto';
 import { VariableBundle } from '../entities/variable-bundle.entity';
 import { ResponseEntity } from '../entities/response.entity';
+import FileUpload from '../entities/file_upload.entity';
+
+interface CodingSchemeCode {
+  id: number | string;
+  code?: string;
+  label?: string;
+  score?: number;
+}
+
+interface CodingSchemeVariableCoding {
+  id: string;
+  codes?: CodingSchemeCode[];
+}
+
+interface CodingScheme {
+  variableCodings?: CodingSchemeVariableCoding[];
+}
 
 @Injectable()
 export class CodingJobService {
@@ -30,7 +47,9 @@ export class CodingJobService {
     @InjectRepository(VariableBundle)
     private variableBundleRepository: Repository<VariableBundle>,
     @InjectRepository(ResponseEntity)
-    private responseRepository: Repository<ResponseEntity>
+    private responseRepository: Repository<ResponseEntity>,
+    @InjectRepository(FileUpload)
+    private fileUploadRepository: Repository<FileUpload>
   ) {}
 
   async getCodingJobProgress(jobId: number): Promise<{ progress: number; coded: number; total: number }> {
@@ -45,7 +64,7 @@ export class CodingJobService {
     const codedUnits = await this.codingJobUnitRepository.count({
       where: {
         coding_job_id: jobId,
-        code_id: Not(IsNull()),
+        code: Not(IsNull()),
         score: Not(IsNull())
       }
     });
@@ -497,15 +516,15 @@ export class CodingJobService {
       throw new NotFoundException('Coding job unit not found for progress entry');
     }
 
-    codingJobUnit.code_id = progress.selectedCode.id;
-    codingJobUnit.code = progress.selectedCode.code;
-    codingJobUnit.code_label = progress.selectedCode.label;
+    codingJobUnit.code = progress.selectedCode.id;
     const score = progress.selectedCode.score;
     if (score !== undefined) {
       codingJobUnit.score = score;
     }
 
     await this.codingJobUnitRepository.save(codingJobUnit);
+
+    await this.checkAndUpdateCodingJobCompletion(codingJobId);
 
     return codingJob;
   }
@@ -523,20 +542,42 @@ export class CodingJobService {
       where: { coding_job_id: codingJobId }
     });
 
+    if (codingJobUnits.length === 0) {
+      return {};
+    }
+
+    const unitAliases = [...new Set(codingJobUnits.map(unit => unit.unit_alias).filter(alias => alias !== null))];
+    const codingSchemes = await this.getCodingSchemes(unitAliases, codingJob.workspace_id);
+
     const progressMap: Record<string, SaveCodingProgressDto['selectedCode']> = {};
 
     codingJobUnits.forEach(unit => {
-      if (unit.code_id !== null && unit.code !== null && unit.code_label !== null) {
+      if (unit.code !== null) {
         const compositeKey = this.generateCodingProgressKey(
           `${unit.person_login}@${unit.person_code}@${unit.booklet_name}`,
           unit.unit_name,
           unit.variable_id
         );
 
+        const codingScheme = unit.unit_alias ? codingSchemes.get(unit.unit_alias) : undefined;
+        let code: string | undefined;
+        let label: string | undefined;
+
+        if (codingScheme) {
+          const variableCoding = codingScheme.variableCodings?.find(vc => vc.id === unit.variable_id);
+          if (variableCoding?.codes) {
+            const codeEntry = variableCoding.codes.find(c => c.id === unit.code);
+            if (codeEntry) {
+              code = codeEntry.code;
+              label = codeEntry.label;
+            }
+          }
+        }
+
         progressMap[compositeKey] = {
-          id: unit.code_id,
-          code: unit.code,
-          label: unit.code_label
+          id: unit.code,
+          code,
+          label
         };
 
         // If score exists, add it to the object
@@ -602,5 +643,42 @@ export class CodingJobService {
     }));
 
     await this.codingJobUnitRepository.save(codingJobUnits);
+  }
+
+  private async getCodingSchemes(unitAliases: string[], workspaceId: number): Promise<Map<string, CodingScheme>> {
+    const codingSchemeRefs = unitAliases.filter(alias => alias !== null);
+    const codingSchemes = new Map<string, CodingScheme>();
+
+    if (codingSchemeRefs.length === 0) {
+      return codingSchemes;
+    }
+
+    const codingSchemeFiles = await this.fileUploadRepository.find({
+      where: {
+        workspace_id: workspaceId,
+        file_id: In(codingSchemeRefs)
+      },
+      select: ['file_id', 'data']
+    });
+
+    for (const file of codingSchemeFiles) {
+      try {
+        const data = typeof file.data === 'string' ? JSON.parse(file.data) : file.data;
+        codingSchemes.set(file.file_id, data);
+      } catch (error) {
+        // Use empty scheme for invalid schemes
+        codingSchemes.set(file.file_id, {});
+      }
+    }
+
+    return codingSchemes;
+  }
+
+  private async checkAndUpdateCodingJobCompletion(codingJobId: number): Promise<void> {
+    const progress = await this.getCodingJobProgress(codingJobId);
+
+    if (progress.total > 0 && progress.progress === 100) {
+      await this.codingJobRepository.update(codingJobId, { status: 'completed' });
+    }
   }
 }

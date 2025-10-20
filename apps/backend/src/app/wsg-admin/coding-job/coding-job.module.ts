@@ -10,6 +10,7 @@ import { CodingJobUnit } from '../../database/entities/coding-job-unit.entity';
 import { VariableBundle } from '../../database/entities/variable-bundle.entity';
 import { ResponseEntity } from '../../database/entities/response.entity';
 import { Unit } from '../../database/entities/unit.entity';
+import FileUpload from '../../database/entities/file_upload.entity';
 import { AuthModule } from '../../auth/auth.module';
 
 @Module({
@@ -22,7 +23,8 @@ import { AuthModule } from '../../auth/auth.module';
       CodingJobUnit,
       VariableBundle,
       ResponseEntity,
-      Unit
+      Unit,
+      FileUpload
     ]),
     AuthModule
   ],

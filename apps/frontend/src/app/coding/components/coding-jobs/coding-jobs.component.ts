@@ -18,7 +18,7 @@ import { SelectionModel } from '@angular/cdk/collections';
 import { MatIcon } from '@angular/material/icon';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { MatCheckbox } from '@angular/material/checkbox';
-import { MatAnchor, MatButton } from '@angular/material/button';
+import { MatAnchor, MatButton, MatIconButton } from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { DatePipe, NgClass } from '@angular/common';
 import { Router } from '@angular/router';
@@ -30,6 +30,7 @@ import { CodingJobDialogComponent } from '../coding-job-dialog/coding-job-dialog
 import { ConfirmDialogComponent } from '../../../shared/confirm-dialog/confirm-dialog.component';
 import { Coder } from '../../models/coder.model';
 import { CoderService } from '../../services/coder.service';
+import { CodingJobResultDialogComponent } from './coding-job-result-dialog/coding-job-result-dialog.component';
 
 @Component({
   selector: 'coding-box-coding-jobs',
@@ -58,7 +59,8 @@ import { CoderService } from '../../services/coder.service';
     MatSortModule,
     MatButton,
     MatDialogModule,
-    MatTooltipModule
+    MatTooltipModule,
+    MatIconButton
   ]
 })
 export class CodingJobsComponent implements OnInit, AfterViewInit {
@@ -75,7 +77,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
   private jobDetailsCache = new Map<number, { variables?: Variable[], variableBundles?: VariableBundle[] }>();
   private preloadedVariables: Variable[] | null = null;
 
-  displayedColumns: string[] = ['selectCheckbox', 'name', 'description', 'status', 'assignedCoders', 'variables', 'variableBundles', 'progress', 'createdAt', 'updatedAt'];
+  displayedColumns: string[] = ['selectCheckbox', 'name', 'description', 'status', 'assignedCoders', 'variables', 'variableBundles', 'progress', 'createdAt', 'updatedAt', 'viewResults'];
   dataSource = new MatTableDataSource<CodingJob>([]);
   selection = new SelectionModel<CodingJob>(true, []);
   isLoading = false;
@@ -305,11 +307,9 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
     dialogRef.afterClosed().subscribe(result => {
       if (result) {
         const newId = this.getNextId();
-        // Ensure dates are Date objects
         const now = new Date();
         const newCodingJob: CodingJob = {
           ...result,
-          // Normalisierung: damit die Liste sofort die Variablen anzeigt
           assignedVariables: result.assignedVariables ?? result.variables ?? [],
           assignedVariableBundles: result.assignedVariableBundles ?? result.variableBundles ?? [],
           id: newId,
@@ -401,7 +401,6 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
                 if (response.success) {
                   successCount += 1;
 
-                  // If all jobs have been processed, show success message and refresh the list
                   if (successCount + errorCount === this.selection.selected.length) {
                     const message = count === 1 ?
                       `Kodierjob "${jobNames}" wurde erfolgreich gelöscht` :
@@ -600,6 +599,22 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
         this.coderNamesByJobId.set(job.id, `${ids.length} Kodierer`);
       } else {
         this.coderNamesByJobId.set(job.id, names.join(', '));
+      }
+    });
+  }
+
+  viewCodingResults(job: CodingJob): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      this.snackBar.open('Kein Workspace ausgewählt', 'Schließen', { duration: 3000 });
+      return;
+    }
+    this.dialog.open(CodingJobResultDialogComponent, {
+      width: '1200px',
+      height: '80vh',
+      data: {
+        codingJob: job,
+        workspaceId: workspaceId
       }
     });
   }
