@@ -1,5 +1,11 @@
 -- liquibase formatted sql
 
+-- changeset jurei733:0
+-- comment: Add PRIMARY KEY constraint to response.id to enable foreign key references
+
+ALTER TABLE "public"."response" ADD PRIMARY KEY ("id");
+-- rollback ALTER TABLE "public"."response" DROP CONSTRAINT IF EXISTS response_pkey;
+
 -- changeset jurei733:1
 CREATE TABLE "public"."coding_job_unit" (
                                           "id" SERIAL PRIMARY KEY,
