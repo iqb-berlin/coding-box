@@ -861,6 +861,9 @@ export class WorkspaceCodingService {
         - Response processing: ${metrics.processing}ms
         - Database updates: ${metrics.update || 0}ms`);
 
+      // Invalidate cache since coding statuses have been updated
+      await this.invalidateIncompleteVariablesCache(workspace_id);
+
       return statistics;
     } catch (error) {
       this.logger.error('Fehler beim Verarbeiten der Personen:', error);
@@ -2164,44 +2167,83 @@ export class WorkspaceCodingService {
     unitName?: string
   ): Promise<{ unitName: string; variableId: string }[]> {
     try {
-      this.logger.log(`Getting CODING_INCOMPLETE variables for workspace ${workspaceId}${unitName ? ` and unit ${unitName}` : ''}`);
-
-      const queryBuilder = this.responseRepository.createQueryBuilder('response')
-        .leftJoinAndSelect('response.unit', 'unit')
-        .leftJoinAndSelect('unit.booklet', 'booklet')
-        .leftJoinAndSelect('booklet.person', 'person')
-        .where('response.status_v1 = :status', { status: 'CODING_INCOMPLETE' })
-        .andWhere('person.workspace_id = :workspace_id', { workspace_id: workspaceId });
-
       if (unitName) {
-        queryBuilder.andWhere('unit.name = :unitName', { unitName });
+        // If filtering by unit name, we can't use cache (would require complex cache indexing)
+        this.logger.log(`Querying CODING_INCOMPLETE variables for workspace ${workspaceId} and unit ${unitName} (not cached)`);
+        return await this.fetchCodingIncompleteVariablesFromDb(workspaceId, unitName);
       }
 
-      const responses = await queryBuilder.getMany();
+      // Try to get from cache first
+      const cacheKey = this.generateIncompleteVariablesCacheKey(workspaceId);
+      const cachedResult = await this.cacheService.get<{ unitName: string; variableId: string }[]>(cacheKey);
 
-      const uniqueVariables = new Map<string, { unitName: string; variableId: string }>();
+      if (cachedResult) {
+        this.logger.log(`Retrieved ${cachedResult.length} CODING_INCOMPLETE variables from cache for workspace ${workspaceId}`);
+        return cachedResult;
+      }
 
-      responses.forEach(response => {
-        const unit = response.unit;
-        if (unit && response.variableid) {
-          const key = `${unit.name}|${response.variableid}`;
-          if (!uniqueVariables.has(key)) {
-            uniqueVariables.set(key, {
-              unitName: unit.name,
-              variableId: response.variableid
-            });
-          }
-        }
-      });
+      // Not in cache, fetch from database
+      this.logger.log(`Cache miss: Querying CODING_INCOMPLETE variables for workspace ${workspaceId}`);
+      const result = await this.fetchCodingIncompleteVariablesFromDb(workspaceId);
 
-      const result = Array.from(uniqueVariables.values());
-      this.logger.log(`Found ${result.length} unique CODING_INCOMPLETE variables`);
+      // Cache the result for 1 hour (3600 seconds)
+      const cacheSet = await this.cacheService.set(cacheKey, result, 3600);
+      if (cacheSet) {
+        this.logger.log(`Cached ${result.length} CODING_INCOMPLETE variables for workspace ${workspaceId}`);
+      } else {
+        this.logger.warn(`Failed to cache CODING_INCOMPLETE variables for workspace ${workspaceId}`);
+      }
 
       return result;
     } catch (error) {
       this.logger.error(`Error getting CODING_INCOMPLETE variables: ${error.message}`, error.stack);
       throw new Error('Could not get CODING_INCOMPLETE variables. Please check the database connection.');
     }
+  }
+
+  private async fetchCodingIncompleteVariablesFromDb(
+    workspaceId: number,
+    unitName?: string
+  ): Promise<{ unitName: string; variableId: string }[]> {
+    const queryBuilder = this.responseRepository.createQueryBuilder('response')
+      .distinct()
+      .select('unit.name', 'unitName')
+      .addSelect('response.variableid', 'variableId')
+      .leftJoin('response.unit', 'unit')
+      .leftJoin('unit.booklet', 'booklet')
+      .leftJoin('booklet.person', 'person')
+      .where('response.status_v1 = :status', { status: 'CODING_INCOMPLETE' })
+      .andWhere('person.workspace_id = :workspace_id', { workspace_id: workspaceId });
+
+    if (unitName) {
+      queryBuilder.andWhere('unit.name = :unitName', { unitName });
+    }
+
+    const rawResults = await queryBuilder.getRawMany();
+
+    const result = rawResults.map(row => ({
+      unitName: row.unitName,
+      variableId: row.variableId
+    }));
+
+    this.logger.log(`Found ${result.length} unique CODING_INCOMPLETE variables${unitName ? ` for unit ${unitName}` : ''}`);
+
+    return result;
+  }
+
+  private generateIncompleteVariablesCacheKey(workspaceId: number): string {
+    return `coding_incomplete_variables:${workspaceId}`;
+  }
+
+  /**
+   * Clear the CODING_INCOMPLETE variables cache for a specific workspace
+   * Should be called whenever coding status changes for the workspace
+   * @param workspaceId The workspace ID to clear cache for
+   */
+  async invalidateIncompleteVariablesCache(workspaceId: number): Promise<void> {
+    const cacheKey = this.generateIncompleteVariablesCacheKey(workspaceId);
+    await this.cacheService.delete(cacheKey);
+    this.logger.log(`Invalidated CODING_INCOMPLETE variables cache for workspace ${workspaceId}`);
   }
 
   async importExternalCodingWithProgress(
@@ -2451,6 +2493,11 @@ export class WorkspaceCodingService {
       const message = `External coding import completed. Processed ${processedRows} rows, updated ${updatedRows} response records.`;
       this.logger.log(message);
       progressCallback?.(100, `Import completed: ${updatedRows} of ${processedRows} rows updated`);
+
+      // Invalidate cache if rows were updated since coding statuses may have changed
+      if (updatedRows > 0) {
+        await this.invalidateIncompleteVariablesCache(workspaceId);
+      }
 
       return {
         message,

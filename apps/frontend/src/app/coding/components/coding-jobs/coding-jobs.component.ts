@@ -73,6 +73,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
   private allCoders: Coder[] = [];
 
   private jobDetailsCache = new Map<number, { variables?: Variable[], variableBundles?: VariableBundle[] }>();
+  private preloadedVariables: Variable[] | null = null;
 
   displayedColumns: string[] = ['selectCheckbox', 'name', 'description', 'status', 'assignedCoders', 'variables', 'variableBundles', 'progress', 'createdAt', 'updatedAt'];
   dataSource = new MatTableDataSource<CodingJob>([]);
@@ -103,25 +104,56 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
       return;
     }
 
-    this.backendService.getCodingJobs(workspaceId).subscribe({
-      next: response => {
-        this.coderNamesByJobId.clear();
-        const processedData = response.data.map(job => ({
-          ...job,
-          createdAt: job.created_at ? new Date(job.created_at) : new Date(),
-          updatedAt: job.updated_at ? new Date(job.updated_at) : new Date()
-        }));
+    // Preload variables alongside coding jobs
+    this.backendService.getCodingIncompleteVariables(workspaceId).subscribe({
+      next: variables => {
+        this.preloadedVariables = variables;
 
-        this.dataSource.data = processedData;
-        // Namen der Codierer für die Liste aktualisieren
-        this.updateCoderNamesMap(processedData);
+        this.backendService.getCodingJobs(workspaceId).subscribe({
+          next: response => {
+            this.coderNamesByJobId.clear();
+            const processedData = response.data.map(job => ({
+              ...job,
+              createdAt: job.created_at ? new Date(job.created_at) : new Date(),
+              updatedAt: job.updated_at ? new Date(job.updated_at) : new Date()
+            }));
 
-        this.jobDetailsCache.clear();
-        this.isLoading = false;
+            this.dataSource.data = processedData;
+            // Namen der Codierer für die Liste aktualisieren
+            this.updateCoderNamesMap(processedData);
+
+            this.jobDetailsCache.clear();
+            this.isLoading = false;
+          },
+          error: () => {
+            this.snackBar.open('Fehler beim Laden der Kodierjobs', 'Schließen', { duration: 3000 });
+            this.isLoading = false;
+          }
+        });
       },
       error: () => {
-        this.snackBar.open('Fehler beim Laden der Kodierjobs', 'Schließen', { duration: 3000 });
-        this.isLoading = false;
+        // Still load coding jobs even if variables fail to load
+        this.backendService.getCodingJobs(workspaceId).subscribe({
+          next: response => {
+            this.coderNamesByJobId.clear();
+            const processedData = response.data.map(job => ({
+              ...job,
+              createdAt: job.created_at ? new Date(job.created_at) : new Date(),
+              updatedAt: job.updated_at ? new Date(job.updated_at) : new Date()
+            }));
+
+            this.dataSource.data = processedData;
+            // Namen der Codierer für die Liste aktualisieren
+            this.updateCoderNamesMap(processedData);
+
+            this.jobDetailsCache.clear();
+            this.isLoading = false;
+          },
+          error: () => {
+            this.snackBar.open('Fehler beim Laden der Kodierjobs', 'Schließen', { duration: 3000 });
+            this.isLoading = false;
+          }
+        });
       }
     });
   }
@@ -263,7 +295,8 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
     const dialogRef = this.dialog.open(CodingJobDialogComponent, {
       width: '900px',
       data: {
-        isEdit: false
+        isEdit: false,
+        preloadedVariables: this.preloadedVariables || []
       }
     });
 
@@ -296,7 +329,8 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
         width: '900px',
         data: {
           codingJob: selectedJob,
-          isEdit: true
+          isEdit: true,
+          preloadedVariables: this.preloadedVariables || []
         }
       });
 
