@@ -272,6 +272,14 @@ export class CodingJobDialogComponent implements OnInit {
           this.variableBundles = bundles;
           this.bundlesDataSource.data = bundles;
           this.isLoadingBundles = false;
+          if (this.data.isEdit && this.data.codingJob) {
+            const assignedBundles = this.data.codingJob.variableBundles || this.data.codingJob.assignedVariableBundles;
+            if (assignedBundles && assignedBundles.length > 0) {
+              const ids = assignedBundles.map(b => b.name);
+              const preSelected = this.variableBundles.filter(b => ids.includes(b.name));
+              this.selectedVariableBundles.select(...preSelected);
+            }
+          }
         },
         error: () => {
           this.isLoadingBundles = false;

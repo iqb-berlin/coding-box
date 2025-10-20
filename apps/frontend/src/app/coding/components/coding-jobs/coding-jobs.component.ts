@@ -115,7 +115,9 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
             const processedData = response.data.map(job => ({
               ...job,
               createdAt: job.created_at ? new Date(job.created_at) : new Date(),
-              updatedAt: job.updated_at ? new Date(job.updated_at) : new Date()
+              updatedAt: job.updated_at ? new Date(job.updated_at) : new Date(),
+              // Normalize variable bundles - backend might return as variableBundles instead of assignedVariableBundles
+              assignedVariableBundles: job.assignedVariableBundles ?? job.variableBundles ?? []
             }));
 
             this.dataSource.data = processedData;
@@ -139,11 +141,11 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
             const processedData = response.data.map(job => ({
               ...job,
               createdAt: job.created_at ? new Date(job.created_at) : new Date(),
-              updatedAt: job.updated_at ? new Date(job.updated_at) : new Date()
+              updatedAt: job.updated_at ? new Date(job.updated_at) : new Date(),
+              assignedVariableBundles: job.assignedVariableBundles ?? job.variableBundles ?? []
             }));
 
             this.dataSource.data = processedData;
-            // Namen der Codierer für die Liste aktualisieren
             this.updateCoderNamesMap(processedData);
 
             this.jobDetailsCache.clear();
@@ -309,6 +311,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
           ...result,
           // Normalisierung: damit die Liste sofort die Variablen anzeigt
           assignedVariables: result.assignedVariables ?? result.variables ?? [],
+          assignedVariableBundles: result.assignedVariableBundles ?? result.variableBundles ?? [],
           id: newId,
           createdAt: now,
           updatedAt: now
