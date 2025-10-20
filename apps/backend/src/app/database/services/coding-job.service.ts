@@ -1,6 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In } from 'typeorm';
+import {
+  Repository, In, Not, IsNull
+} from 'typeorm';
 import { SaveCodingProgressDto } from '../../admin/coding-job/dto/save-coding-progress.dto';
 import { CodingJob } from '../entities/coding-job.entity';
 import { CodingJobCoder } from '../entities/coding-job-coder.entity';
@@ -31,6 +33,27 @@ export class CodingJobService {
     private responseRepository: Repository<ResponseEntity>
   ) {}
 
+  async getCodingJobProgress(jobId: number): Promise<{ progress: number; coded: number; total: number }> {
+    const totalUnits = await this.codingJobUnitRepository.count({
+      where: { coding_job_id: jobId }
+    });
+
+    if (totalUnits === 0) {
+      return { progress: 0, coded: 0, total: 0 };
+    }
+
+    const codedUnits = await this.codingJobUnitRepository.count({
+      where: {
+        coding_job_id: jobId,
+        code_id: Not(IsNull()),
+        score: Not(IsNull())
+      }
+    });
+    const progress = Math.round((codedUnits / totalUnits) * 100);
+
+    return { progress, coded: codedUnits, total: totalUnits };
+  }
+
   async getCodingJobs(
     workspaceId: number,
     page: number = 1,
@@ -38,7 +61,10 @@ export class CodingJobService {
   ): Promise<{ data: (CodingJob & {
       assignedCoders?: number[];
       assignedVariables?: { unitName: string; variableId: string }[];
-      assignedVariableBundles?: { name: string; variables: { unitName: string; variableId: string }[] }[]
+      assignedVariableBundles?: { name: string; variables: { unitName: string; variableId: string }[] }[];
+      progress?: number;
+      codedUnits?: number;
+      totalUnits?: number;
     })[]; total: number; page: number; limit: number }> {
     const validPage = page > 0 ? page : 1;
     const validLimit = limit > 0 ? limit : 10;
@@ -57,7 +83,7 @@ export class CodingJobService {
 
     const jobIds = jobs.map(job => job.id);
 
-    const [allCoders, allVariables, variableBundleEntities] = await Promise.all([
+    const [allCoders, allVariables, variableBundleEntities, progressData] = await Promise.all([
       this.codingJobCoderRepository.find({
         where: { coding_job_id: In(jobIds) }
       }),
@@ -67,7 +93,8 @@ export class CodingJobService {
       this.codingJobVariableBundleRepository.find({
         where: { coding_job_id: In(jobIds) },
         relations: ['variable_bundle']
-      })
+      }),
+      Promise.all(jobIds.map(jobId => this.getCodingJobProgress(jobId)))
     ]);
 
     const codersByJobId = new Map<number, number[]>();
@@ -102,11 +129,14 @@ export class CodingJobService {
       }
     });
 
-    const data = jobs.map(job => ({
+    const data = jobs.map((job, index) => ({
       ...job,
       assignedCoders: codersByJobId.get(job.id) || [],
       assignedVariables: variablesByJobId.get(job.id) || [],
-      assignedVariableBundles: variableBundlesByJobId.get(job.id) || []
+      assignedVariableBundles: variableBundlesByJobId.get(job.id) || [],
+      progress: progressData[index]?.progress || 0,
+      codedUnits: progressData[index]?.coded || 0,
+      totalUnits: progressData[index]?.total || 0
     }));
     return {
       data,

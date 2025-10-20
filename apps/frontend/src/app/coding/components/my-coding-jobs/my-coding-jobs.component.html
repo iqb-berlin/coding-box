@@ -67,6 +67,13 @@
               </mat-cell>
             </ng-container>
 
+            <ng-container matColumnDef="progress">
+              <mat-header-cell *matHeaderCellDef mat-sort-header>Fortschritt</mat-header-cell>
+              <mat-cell *matCellDef="let element">
+                <span class="cell-content">{{getProgress(element)}}</span>
+              </mat-cell>
+            </ng-container>
+
             <ng-container matColumnDef="created_at">
               <mat-header-cell *matHeaderCellDef mat-sort-header>Erstellt am</mat-header-cell>
               <mat-cell *matCellDef="let element">
