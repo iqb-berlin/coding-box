@@ -9,10 +9,17 @@
       (workspaceDeleted)="deleteWorkspace($event)"
       (setWorkspaceUsersAccessRight) ="setWorkspaceUsersAccessRight($event)">
     </coding-box-workspaces-menu>
+    @if (isDeleting) {
+      <div class="deleting-overlay">
+        <mat-spinner diameter="50"></mat-spinner>
+        <div class="delete-status">{{ deleteStatus }}</div>
+      </div>
+    }
     <coding-box-workspaces-selection
       (workspaceSelectionChanged)="workspaceSelectionChanged($event)"
       (workspacesUpdated)="workspacesUpdated()"
       [workspacesChanged]="workspacesChanged"
-      [selectedWorkspacesIds]=[selectedWorkspaceId]></coding-box-workspaces-selection>
+      [selectedWorkspacesIds]=[selectedWorkspaceId]>
+    </coding-box-workspaces-selection>
   </div>
 </div>

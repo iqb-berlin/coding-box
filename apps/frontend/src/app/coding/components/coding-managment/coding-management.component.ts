@@ -45,7 +45,6 @@ import { WorkspaceSettingsService } from '../../../ws-admin/services/workspace-s
 import { CodingStatistics } from '../../../../../../../api-dto/coding/coding-statistics';
 import { ExportDialogComponent, ExportFormat } from '../export-dialog/export-dialog.component';
 import { Success } from '../../models/success.model';
-import { CodingListItem } from '../../models/coding-list-item.model';
 import { ResponseEntity } from '../../../shared/models/response-entity.model';
 import { TestPersonCodingDialogComponent } from '../test-person-coding-dialog/test-person-coding-dialog.component';
 import { ExportCodingBookComponent } from '../export-coding-book/export-coding-book.component';
@@ -112,6 +111,7 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
   isLoadingStatistics = false;
   isAutoCoding = false;
   showManualCoding = false;
+
   statisticsLoaded = false;
   currentStatusFilter: string | null = null;
   pageSizeOptions = [100, 200, 500];
@@ -303,7 +303,7 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
     if (this.currentStatusFilter) {
       this.fetchResponsesByStatus(this.currentStatusFilter, this.pageIndex + 1, this.pageSize);
     } else {
-      this.fetchCodingList(this.pageIndex + 1, this.pageSize);
+      this.fetchCodingList();
     }
   }
 
@@ -350,7 +350,7 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
     });
   }
 
-  fetchCodingList(page: number = 1, limit: number = this.pageSize): void {
+  fetchCodingList(): void {
     const dialogRef = this.dialog.open(ExportDialogComponent, {
       width: '500px'
     });
@@ -362,110 +362,104 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
         }
 
         const workspaceId = this.appService.selectedWorkspaceId;
-        this.isLoading = true;
 
-        this.backendService.getCodingList(workspaceId, page, limit)
-          .pipe(
-            catchError(() => {
-              this.isLoading = false;
-              this.snackBar.open('Fehler beim Abrufen der Kodierliste', 'Schließen', {
-                duration: 5000,
-                panelClass: ['error-snackbar']
-              });
-              return of({
-                data: [],
-                total: 0,
-                page,
-                limit
-              });
-            }),
-            finalize(() => {
-              this.isLoading = false;
-            })
-          )
-          .subscribe(result => {
-            if (result && result.data.length > 0) {
-              switch (format) {
-                case 'json':
-                  this.downloadCodingListAsJson(result.data);
-                  break;
-                case 'csv':
-                  this.downloadCodingListAsCsv(workspaceId);
-                  break;
-                case 'excel':
-                  this.downloadCodingListAsExcel(workspaceId);
-                  break;
-                default:
-                  this.snackBar.open(`Unbekanntes Format: ${format}`, 'Schließen', {
-                    duration: 5000,
-                    panelClass: ['error-snackbar']
-                  });
-                  break;
-              }
-
-              this.snackBar.open(`Kodierliste mit ${result.total} Einträgen wurde erfolgreich abgerufen.`, 'Schließen', {
-                duration: 5000,
-                panelClass: ['success-snackbar']
-              });
-            } else {
-              this.snackBar.open('Keine Einträge in der Kodierliste gefunden.', 'Schlie��en', {
-                duration: 5000
-              });
-            }
-          });
+        switch (format) {
+          case 'csv':
+            this.downloadCodingListAsCsvBackground(workspaceId);
+            break;
+          case 'excel':
+            this.downloadCodingListAsExcelBackground(workspaceId);
+            break;
+          case 'json':
+            this.downloadCodingListAsJsonBackground(workspaceId);
+            break;
+          default:
+            this.snackBar.open(`Unbekanntes Format: ${format}`, 'Schließen', {
+              duration: 5000,
+              panelClass: ['error-snackbar']
+            });
+            break;
+        }
       });
   }
 
-  downloadCodingListAsJson(data: never[] | CodingListItem[]): void {
-    if (data.length === 0) {
-      this.snackBar.open('Keine Daten zum Herunterladen verfügbar. Bitte zuerst die Kodierliste abrufen.', 'Schließen', {
-        duration: 5000,
-        panelClass: ['error-snackbar']
-      });
-      return;
-    }
-
-    const jsonData = JSON.stringify(data, null, 2);
-    const blob = new Blob([jsonData], { type: 'application/json' });
-    const url = window.URL.createObjectURL(blob);
-
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `coding-list-${new Date().toISOString()
-      .slice(0, 10)}.json`;
-    document.body.appendChild(a);
-    a.click();
-
-    window.URL.revokeObjectURL(url);
-    document.body.removeChild(a);
-
-    this.snackBar.open('Kodierliste wurde als JSON heruntergeladen.', 'Schließen', {
-      duration: 5000,
-      panelClass: ['success-snackbar']
+  downloadCodingListAsJsonBackground(workspaceId: number): void {
+    this.snackBar.open('Kodierliste wird im Hintergrund erstellt...', 'Schließen', {
+      duration: 3000
     });
-  }
-
-  downloadCodingListAsCsv(workspaceId: number): void {
-    this.isLoading = true;
     this.backendService.getCodingListAsCsv(workspaceId)
       .pipe(
         catchError(() => {
-          this.isLoading = false;
+          this.snackBar.open('Fehler beim Abrufen der Kodierliste (JSON)', 'Schließen', {
+            duration: 5000,
+            panelClass: ['error-snackbar']
+          });
+          return of(null);
+        })
+      )
+      .subscribe(async (blob: Blob | null) => {
+        if (!blob) return;
+        try {
+          const text = await blob.text();
+          const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
+          if (lines.length === 0) {
+            this.snackBar.open('Keine Einträge in der Kodierliste gefunden.', 'Schließen', { duration: 5000 });
+            return;
+          }
+          const headers = lines[0].split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map(h => h.replace(/^"|"$/g, ''));
+          const data = lines.slice(1).map(line => {
+            const values = line.split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map(v => v.replace(/^"|"$/g, ''));
+            const obj: Record<string, unknown> = {};
+            headers.forEach((h, i) => { obj[h] = values[i] ?? ''; });
+            return obj;
+          });
+
+          const jsonData = JSON.stringify(data, null, 2);
+          const jsonBlob = new Blob([jsonData], { type: 'application/json' });
+          const url = window.URL.createObjectURL(jsonBlob);
+
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `coding-list-${new Date().toISOString()
+            .slice(0, 10)}.json`;
+          document.body.appendChild(a);
+          a.click();
+
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+
+          this.snackBar.open('Kodierliste wurde als JSON erfolgreich heruntergeladen.', 'Schließen', {
+            duration: 5000,
+            panelClass: ['success-snackbar']
+          });
+        } catch (e) {
+          this.snackBar.open('Fehler beim Umwandeln der CSV-Daten in JSON', 'Schließen', {
+            duration: 5000,
+            panelClass: ['error-snackbar']
+          });
+        }
+      });
+  }
+
+  downloadCodingListAsCsvBackground(workspaceId: number): void {
+    this.snackBar.open('Kodierliste wird im Hintergrund erstellt...', 'Schließen', {
+      duration: 3000
+    });
+    this.backendService.getCodingListAsCsv(workspaceId)
+      .pipe(
+        catchError(() => {
           this.snackBar.open('Fehler beim Herunterladen der Kodierliste als CSV', 'Schließen', {
             duration: 5000,
             panelClass: ['error-snackbar']
           });
           return of(null);
-        }),
-        finalize(() => {
-          this.isLoading = false;
         })
       )
       .subscribe(response => {
         if (!response) {
           return;
         }
-        const blob = new Blob([response], { type: 'text/csv' });
+        const blob = response as Blob;
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -476,27 +470,25 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
         window.URL.revokeObjectURL(url);
         document.body.removeChild(a);
 
-        this.snackBar.open('Kodierliste wurde als CSV heruntergeladen.', 'Schließen', {
+        this.snackBar.open('Kodierliste wurde als CSV erfolgreich heruntergeladen.', 'Schließen', {
           duration: 5000,
           panelClass: ['success-snackbar']
         });
       });
   }
 
-  downloadCodingListAsExcel(workspaceId: number): void {
-    this.isLoading = true;
+  downloadCodingListAsExcelBackground(workspaceId: number): void {
+    this.snackBar.open('Kodierliste wird im Hintergrund erstellt...', 'Schließen', {
+      duration: 3000
+    });
     this.backendService.getCodingListAsExcel(workspaceId)
       .pipe(
         catchError(() => {
-          this.isLoading = false;
           this.snackBar.open('Fehler beim Herunterladen der Kodierliste als Excel', 'Schließen', {
             duration: 5000,
             panelClass: ['error-snackbar']
           });
           return of(null);
-        }),
-        finalize(() => {
-          this.isLoading = false;
         })
       )
       .subscribe(response => {
@@ -504,7 +496,7 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
           return;
         }
 
-        const blob = new Blob([response], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        const blob = response as Blob;
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -515,7 +507,7 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
         window.URL.revokeObjectURL(url);
         document.body.removeChild(a);
 
-        this.snackBar.open('Kodierliste wurde als Excel heruntergeladen.', 'Schließen', {
+        this.snackBar.open('Kodierliste wurde als Excel erfolgreich heruntergeladen.', 'Schließen', {
           duration: 5000,
           panelClass: ['success-snackbar']
         });

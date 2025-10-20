@@ -10,15 +10,6 @@
       </div>
     }
 
-    @if (!isAuthorized && !isLoading) {
-      <div class="unauthorized-message">
-        <mat-icon>lock</mat-icon>
-        <h3>Zugriff verweigert</h3>
-        <p>Sie haben keinen Zugriff auf diese Seite. Nur Kodierer (Benutzer mit Zugriffsebene 1) können auf diese Seite zugreifen.</p>
-        <a mat-raised-button color="primary" routerLink="/">Zurück zur Startseite</a>
-      </div>
-    }
-
     @if (!isLoading && isAuthorized) {
       <div class="flex-container">
         <div class="filter-section">
@@ -62,6 +53,27 @@
               </mat-cell>
             </ng-container>
 
+            <ng-container matColumnDef="variables">
+              <mat-header-cell *matHeaderCellDef mat-sort-header>Variablen</mat-header-cell>
+              <mat-cell *matCellDef="let element">
+                <span class="cell-content">{{getVariables(element)}}</span>
+              </mat-cell>
+            </ng-container>
+
+            <ng-container matColumnDef="variableBundles">
+              <mat-header-cell *matHeaderCellDef mat-sort-header>Variablen-Bundles</mat-header-cell>
+              <mat-cell *matCellDef="let element">
+                <span class="cell-content">{{getVariableBundles(element)}}</span>
+              </mat-cell>
+            </ng-container>
+
+            <ng-container matColumnDef="progress">
+              <mat-header-cell *matHeaderCellDef mat-sort-header>Fortschritt</mat-header-cell>
+              <mat-cell *matCellDef="let element">
+                <span class="cell-content">{{getProgress(element)}}</span>
+              </mat-cell>
+            </ng-container>
+
             <ng-container matColumnDef="created_at">
               <mat-header-cell *matHeaderCellDef mat-sort-header>Erstellt am</mat-header-cell>
               <mat-cell *matCellDef="let element">
@@ -76,13 +88,6 @@
               </mat-cell>
             </ng-container>
           </mat-table>
-
-          @if (dataSource.data.length === 0) {
-            <div class="no-data-message">
-              <mat-icon>assignment</mat-icon>
-              <p>Keine Kodierjobs für Sie vorhanden.</p>
-            </div>
-          }
         </div>
 
       </div>

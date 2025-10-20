@@ -9,6 +9,7 @@ import * as ExcelJS from 'exceljs';
 import * as crypto from 'crypto';
 import { ResponseStatusType } from '@iqbspecs/response/response.interface';
 import { CacheService } from '../../cache/cache.service';
+import { MissingsProfilesService } from './missings-profiles.service';
 import FileUpload from '../entities/file_upload.entity';
 import Persons from '../entities/persons.entity';
 import { Unit } from '../entities/unit.entity';
@@ -16,7 +17,6 @@ import { Booklet } from '../entities/booklet.entity';
 import { ResponseEntity } from '../entities/response.entity';
 import { Setting } from '../entities/setting.entity';
 import { CodingStatistics, CodingStatisticsWithJob } from './shared-types';
-import { extractVariableLocation } from '../../utils/voud/extractVariableLocation';
 import { CodebookGenerator } from '../../admin/code-book/codebook-generator.class';
 import { CodeBookContentSetting, UnitPropertiesForCodebook, Missing } from '../../admin/code-book/codebook.interfaces';
 import { MissingsProfilesDto } from '../../../../../../api-dto/coding/missings-profiles.dto';
@@ -25,21 +25,10 @@ import { ExpectedCombinationDto } from '../../../../../../api-dto/coding/expecte
 import { ValidationResultDto } from '../../../../../../api-dto/coding/validation-result.dto';
 import { ValidateCodingCompletenessResponseDto } from '../../../../../../api-dto/coding/validate-coding-completeness-response.dto';
 import { JobQueueService } from '../../job-queue/job-queue.service';
-
-interface CoderTrainingResponse {
-  responseId: number;
-  unitAlias: string;
-  variableId: string;
-  unitName: string;
-  value: string;
-  personLogin: string;
-  personCode: string;
-  personGroup: string;
-  bookletName: string;
-  variable: string; // combination of variableId + unitAlias
-}
+import { CodingStatisticsService } from './coding-statistics.service';
 
 interface ExternalCodingRow {
+  unit_key?: string;
   unit_alias?: string;
   variable_id?: string;
   status?: string;
@@ -58,7 +47,8 @@ interface ExternalCodingImportBody {
 }
 
 interface QueryParameters {
-  unitAlias: string;
+  unitAlias?: string;
+  unitName?: string;
   variableId: string;
   workspaceId: number;
   personCode?: string;
@@ -92,7 +82,9 @@ export class WorkspaceCodingService {
     @InjectRepository(Setting)
     private settingRepository: Repository<Setting>,
     private jobQueueService: JobQueueService,
-    private cacheService: CacheService
+    private cacheService: CacheService,
+    private missingsProfilesService: MissingsProfilesService,
+    private codingStatisticsService: CodingStatisticsService
   ) {}
 
   private codingSchemeCache: Map<string, { scheme: CodingScheme; timestamp: number }> = new Map();
@@ -348,7 +340,6 @@ export class WorkspaceCodingService {
       await queryRunner.release();
       return true;
     }
-
     const updateStart = Date.now();
     try {
       const updateBatchSize = 500;
@@ -376,9 +367,9 @@ export class WorkspaceCodingService {
               ResponseEntity,
               response.id,
               {
-                code_v1: response.code_v1,
-                status_v1: response.status_v1,
-                score_v1: response.score_v1
+                code_v1: response?.code_v1,
+                status_v1: response?.status_v1,
+                score_v1: response?.score_v1
               }
             ));
 
@@ -445,20 +436,17 @@ export class WorkspaceCodingService {
         if (responses.length === 0) continue;
 
         statistics.totalResponses += responses.length;
-
         const codingSchemeRef = unitToCodingSchemeRefMap.get(unit.id);
         const scheme = codingSchemeRef ?
           (fileIdToCodingSchemeMap.get(codingSchemeRef) || emptyScheme) :
           emptyScheme;
-
         for (const response of responses) {
           const codedResult = Autocoder.CodingFactory.code({
             id: response.variableid,
             value: response.value,
             status: response.status as ResponseStatusType
           }, scheme.variableCodings[0]);
-
-          const codedStatus = codedResult[0]?.status;
+          const codedStatus = codedResult?.status;
           if (!statistics.statusCounts[codedStatus]) {
             statistics.statusCounts[codedStatus] = 0;
           }
@@ -860,6 +848,9 @@ export class WorkspaceCodingService {
         - Response processing: ${metrics.processing}ms
         - Database updates: ${metrics.update || 0}ms`);
 
+      // Invalidate cache since coding statuses have been updated
+      await this.invalidateIncompleteVariablesCache(workspace_id);
+
       return statistics;
     } catch (error) {
       this.logger.error('Fehler beim Verarbeiten der Personen:', error);
@@ -1033,318 +1024,10 @@ export class WorkspaceCodingService {
     }
   }
 
-  async getCodingList(workspace_id: number, authToken: string, serverUrl?: string, options?: { page: number; limit: number }): Promise<[{
-    unit_key: string;
-    unit_alias: string;
-    login_name: string;
-    login_code: string;
-    booklet_id: string;
-    variable_id: string;
-    variable_page: string;
-    variable_anchor: string;
-    url: string;
-  }[], number]> {
-    try {
-      const server = serverUrl;
-
-      const voudFiles = await this.fileUploadRepository.find({
-        where: {
-          workspace_id: workspace_id,
-          file_type: 'Resource',
-          filename: Like('%.voud')
-        }
-      });
-
-      this.logger.log(`Found ${voudFiles.length} VOUD files for workspace ${workspace_id}`);
-
-      const voudFileMap = new Map<string, FileUpload>();
-      voudFiles.forEach(file => {
-        voudFileMap.set(file.file_id, file);
-      });
-      if (options) {
-        const { page, limit } = options;
-        const MAX_LIMIT = 10000000;
-        const validPage = Math.max(1, page);
-        const validLimit = Math.min(Math.max(1, limit), MAX_LIMIT);
-        const queryBuilder = this.responseRepository.createQueryBuilder('response')
-          .leftJoinAndSelect('response.unit', 'unit')
-          .leftJoinAndSelect('unit.booklet', 'booklet')
-          .leftJoinAndSelect('booklet.person', 'person')
-          .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
-          .where('response.status_v1 = :status', { status: 8 }) // CODING_INCOMPLETE = 8
-          .andWhere('person.workspace_id = :workspace_id', { workspace_id })
-          .skip((validPage - 1) * validLimit)
-          .take(MAX_LIMIT) // Set a very high limit to fetch all items
-          .orderBy('response.id', 'ASC');
-
-        const [responses, total] = await queryBuilder.getManyAndCount();
-
-        const result = await Promise.all(responses.map(async response => {
-          const unit = response.unit;
-          const booklet = unit?.booklet;
-          const person = booklet?.person;
-          const bookletInfo = booklet?.bookletinfo;
-          const loginName = person?.login || '';
-          const loginCode = person?.code || '';
-          // const loginGroup = person.group || '';
-          const bookletId = bookletInfo?.name || '';
-          const unitKey = unit?.name || '';
-          const unitAlias = unit?.alias || '';
-          let variablePage = '0';
-          const variableAnchor = response.variableid || 0;
-          const voudFile = voudFileMap.get(`${unitKey}.VOUD`);
-          if (voudFile) {
-            try {
-              const respDefinition = {
-                definition: voudFile.data
-              };
-              // const transformResult = prepareDefinition(respDefinition);
-              const variableLocation = extractVariableLocation([respDefinition]);
-              const variablePageInfo = variableLocation[0].variable_pages.find(
-                pageInfo => pageInfo.variable_ref === response.variableid
-              );
-              const variablePageAlwaysVisible = variableLocation[0].variable_pages.find(
-                pageInfo => pageInfo.variable_page_always_visible === true
-              );
-
-              if (variablePageInfo) {
-                if (variablePageAlwaysVisible && variablePageInfo.variable_page_always_visible === true) {
-                  variablePage = (variablePageInfo.variable_path.pages - 1).toString();
-                }
-                variablePage = variablePageInfo?.variable_path?.pages.toString();
-              }
-
-              this.logger.log(`Processed VOUD file for unit ${unitKey}, variable ${response.variableid}, page ${variablePage}`);
-            } catch (error) {
-              this.logger.error(`Error processing VOUD file for unit ${unitKey}: ${error.message}`);
-            }
-          } else {
-            this.logger.warn(`VOUD file not found for unit ${unitKey}`);
-          }
-
-          const url = `${server}/#/replay/${loginName}@${loginCode}@${bookletId}/${unitKey}/${variablePage}/${variableAnchor}?auth=${authToken}`;
-
-          return {
-            unit_key: unitKey,
-            unit_alias: unitAlias,
-            login_name: loginName,
-            login_code: loginCode,
-            booklet_id: bookletId,
-            variable_id: response.variableid || '',
-            variable_page: variablePage,
-            variable_anchor: response.variableid || '',
-            url
-          };
-        }));
-
-        const sortedResult = result.sort((a, b) => {
-          const unitKeyComparison = a.unit_key.localeCompare(b.unit_key);
-          if (unitKeyComparison !== 0) {
-            return unitKeyComparison;
-          }
-          return a.variable_id.localeCompare(b.variable_id);
-        });
-
-        this.logger.log(`Found ${sortedResult.length} coding items (page ${validPage}, limit ${validLimit}, total ${total})`);
-        return [sortedResult, total];
-      }
-
-      const queryBuilder = this.responseRepository.createQueryBuilder('response')
-        .leftJoinAndSelect('response.unit', 'unit')
-        .leftJoinAndSelect('unit.booklet', 'booklet')
-        .leftJoinAndSelect('booklet.person', 'person')
-        .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
-        .where('response.status_v1 = :status', { status: 'CODING_INCOMPLETE' })
-        .andWhere('person.workspace_id = :workspace_id', { workspace_id })
-        .orderBy('response.id', 'ASC');
-
-      const responses = await queryBuilder.getMany();
-
-      const result = await Promise.all(responses.map(async response => {
-        const unit = response.unit;
-        const booklet = unit?.booklet;
-        const person = booklet?.person;
-        const bookletInfo = booklet?.bookletinfo;
-        const loginName = person?.login || '';
-        const loginCode = person?.code || '';
-        // const loginGroup = person.group || '';
-        const bookletId = bookletInfo?.name || '';
-        const unitKey = unit?.name || '';
-        const unitAlias = unit?.alias || '';
-        let variablePage = '0';
-        const variableAnchor = response.variableid || 0;
-        const voudFile = voudFileMap.get(`${unitKey}.VOUD`);
-
-        if (voudFile) {
-          try {
-            const respDefinition = {
-              definition: voudFile.data
-            };
-            // const transformResult = prepareDefinition(respDefinition);
-            const variableLocation = extractVariableLocation([respDefinition]);
-            const variablePageInfo = variableLocation[0].variable_pages.find(
-              pageInfo => pageInfo.variable_ref === response.variableid
-            );
-            const variablePageAlwaysVisible = variableLocation[0].variable_pages.find(
-              pageInfo => pageInfo.variable_page_always_visible === true
-            );
-
-            if (variablePageInfo) {
-              if (variablePageAlwaysVisible && variablePageInfo.variable_page_always_visible === true) {
-                variablePage = (variablePageInfo.variable_path.pages - 1).toString();
-              }
-              variablePage = variablePageInfo?.variable_path?.pages.toString();
-            }
-
-            this.logger.log(`Processed VOUD file for unit ${unitKey}, variable ${response.variableid}, page ${variablePage}`);
-          } catch (error) {
-            this.logger.error(`Error processing VOUD file for unit ${unitKey}: ${error.message}`);
-          }
-        } else {
-          this.logger.warn(`VOUD file not found for unit ${unitKey}`);
-        }
-
-        const url = `${server}/#/replay/${loginName}@${loginCode}@${bookletId}/${unitKey}/${variablePage}/${variableAnchor}?auth=${authToken}`;
-        return {
-          unit_key: unitKey,
-          unit_alias: unitAlias,
-          login_name: loginName,
-          login_code: loginCode,
-          booklet_id: bookletId,
-          variable_id: response.variableid || '',
-          variable_page: variablePage,
-          variable_anchor: response.variableid || '',
-          url
-        };
-      }));
-
-      const sortedResult = result.sort((a, b) => {
-        const unitKeyComparison = a.unit_key.localeCompare(b.unit_key);
-        if (unitKeyComparison !== 0) {
-          return unitKeyComparison;
-        }
-        // If unit_key is the same, sort by variable_id
-        return a.variable_id.localeCompare(b.variable_id);
-      });
-
-      this.logger.log(`Found ${sortedResult.length} coding items`);
-      return [sortedResult, sortedResult.length];
-    } catch (error) {
-      this.logger.error(`Error fetching coding list: ${error.message}`);
-      return [[], 0];
-    }
-  }
-
-  private statisticsCache: Map<number, { data: CodingStatistics; timestamp: number }> = new Map();
-  private readonly CACHE_TTL_MS = 60 * 1000; // 1 minute cache TTL
-
   async getCodingStatistics(workspace_id: number): Promise<CodingStatistics> {
-    this.logger.log(`Getting coding statistics for workspace ${workspace_id}`);
-
-    const cachedResult = this.statisticsCache.get(workspace_id);
-    if (cachedResult && (Date.now() - cachedResult.timestamp) < this.CACHE_TTL_MS) {
-      this.logger.log(`Returning cached statistics for workspace ${workspace_id}`);
-      return cachedResult.data;
-    }
-
-    const statistics: CodingStatistics = {
-      totalResponses: 0,
-      statusCounts: {}
-    };
-
-    try {
-      const statusCountResults = await this.responseRepository.query(`
-        SELECT
-          response.status_v1 as "statusValue",
-          COUNT(response.id) as count
-        FROM response
-        INNER JOIN unit ON response.unitid = unit.id
-        INNER JOIN booklet ON unit.bookletid = booklet.id
-        INNER JOIN persons person ON booklet.personid = person.id
-        WHERE response.status = $1
-          AND person.workspace_id = $2
-          AND person.consider = $3
-        GROUP BY response.status_v1
-      `, ['VALUE_CHANGED', workspace_id, true]);
-
-      let totalResponses = 0;
-
-      statusCountResults.forEach(result => {
-        const count = parseInt(result.count, 10);
-        const validCount = Number.isNaN(count) ? 0 : count;
-        statistics.statusCounts[result.statusValue] = validCount;
-        totalResponses += validCount;
-      });
-
-      statistics.totalResponses = totalResponses;
-
-      this.statisticsCache.set(workspace_id, {
-        data: statistics,
-        timestamp: Date.now()
-      });
-
-      return statistics;
-    } catch (error) {
-      this.logger.error(`Error getting coding statistics: ${error.message}`);
-      return statistics;
-    }
+    return this.codingStatisticsService.getCodingStatistics(workspace_id);
   }
 
-  async getCodingListAsCsv(workspace_id: number): Promise<Buffer> {
-    this.logger.log(`Generating CSV export for workspace ${workspace_id}`);
-    const [items] = await this.getCodingList(workspace_id, '', '');
-
-    if (!items || items.length === 0) {
-      this.logger.warn('No coding list items found for CSV export');
-      return Buffer.from('No data available');
-    }
-
-    const csvStream = fastCsv.format({ headers: true });
-    const chunks: Buffer[] = [];
-
-    return new Promise<Buffer>((resolve, reject) => {
-      csvStream.on('data', chunk => {
-        chunks.push(Buffer.from(chunk));
-      });
-
-      csvStream.on('end', () => {
-        const csvBuffer = Buffer.concat(chunks);
-        this.logger.log(`CSV export generated successfully with ${items.length} items`);
-        resolve(csvBuffer);
-      });
-
-      csvStream.on('error', error => {
-        this.logger.error(`Error generating CSV export: ${error.message}`);
-        reject(error);
-      });
-
-      items.forEach(item => {
-        csvStream.write({
-          unit_key: item.unit_key,
-          unit_alias: item.unit_alias,
-          login_name: item.login_name,
-          login_code: item.login_code,
-          booklet_id: item.booklet_id,
-          variable_id: item.variable_id,
-          variable_page: item.variable_page,
-          variable_anchor: item.variable_anchor
-        });
-      });
-
-      csvStream.end();
-    });
-  }
-
-  async getCodingListAsExcel(workspace_id: number): Promise<Buffer> {
-    this.logger.log(`Generating Excel export for workspace ${workspace_id}`);
-    return this.getCodingListAsCsv(workspace_id);
-  }
-
-  /**
-   * Get all missings profiles
-   * @param workspaceId Workspace ID (not used, profiles are global)
-   * @returns Array of missings profiles with labels
-   */
   async getMissingsProfiles(workspaceId: number): Promise<{ label: string }[]> {
     try {
       this.logger.log(`Getting missings profiles for workspace ${workspaceId}`);
@@ -1642,16 +1325,20 @@ export class WorkspaceCodingService {
       ];
 
       if (missingsProfile) {
-        const profile = await this.getMissingsProfileByLabel(missingsProfile);
-        if (profile) {
-          // Convert MissingDto[] to Missing[]
-          const profileMissings = profile.parseMissings();
-          if (profileMissings.length > 0) {
-            missings = profileMissings.map(m => ({
-              code: m.code.toString(),
-              label: m.label,
-              description: m.description
-            }));
+        const profile = await this.missingsProfilesService.getMissingsProfileDetails(workspaceId, missingsProfile);
+        if (profile && profile.missings) {
+          try {
+            // Parse the missings configuration
+            const profileMissings = typeof profile.missings === 'string' ? JSON.parse(profile.missings) : profile.missings;
+            if (Array.isArray(profileMissings) && profileMissings.length > 0) {
+              missings = profileMissings.map(m => ({
+                code: m.code.toString(),
+                label: m.label,
+                description: m.description
+              }));
+            }
+          } catch (parseError) {
+            this.logger.error(`Error parsing missings from profile: ${parseError.message}`, parseError.stack);
           }
         }
       }
@@ -2467,44 +2154,83 @@ export class WorkspaceCodingService {
     unitName?: string
   ): Promise<{ unitName: string; variableId: string }[]> {
     try {
-      this.logger.log(`Getting CODING_INCOMPLETE variables for workspace ${workspaceId}${unitName ? ` and unit ${unitName}` : ''}`);
-
-      const queryBuilder = this.responseRepository.createQueryBuilder('response')
-        .leftJoinAndSelect('response.unit', 'unit')
-        .leftJoinAndSelect('unit.booklet', 'booklet')
-        .leftJoinAndSelect('booklet.person', 'person')
-        .where('response.status_v1 = :status', { status: 'CODING_INCOMPLETE' })
-        .andWhere('person.workspace_id = :workspace_id', { workspace_id: workspaceId });
-
       if (unitName) {
-        queryBuilder.andWhere('unit.name = :unitName', { unitName });
+        // If filtering by unit name, we can't use cache (would require complex cache indexing)
+        this.logger.log(`Querying CODING_INCOMPLETE variables for workspace ${workspaceId} and unit ${unitName} (not cached)`);
+        return await this.fetchCodingIncompleteVariablesFromDb(workspaceId, unitName);
       }
 
-      const responses = await queryBuilder.getMany();
+      // Try to get from cache first
+      const cacheKey = this.generateIncompleteVariablesCacheKey(workspaceId);
+      const cachedResult = await this.cacheService.get<{ unitName: string; variableId: string }[]>(cacheKey);
 
-      const uniqueVariables = new Map<string, { unitName: string; variableId: string }>();
+      if (cachedResult) {
+        this.logger.log(`Retrieved ${cachedResult.length} CODING_INCOMPLETE variables from cache for workspace ${workspaceId}`);
+        return cachedResult;
+      }
 
-      responses.forEach(response => {
-        const unit = response.unit;
-        if (unit && response.variableid) {
-          const key = `${unit.name}|${response.variableid}`;
-          if (!uniqueVariables.has(key)) {
-            uniqueVariables.set(key, {
-              unitName: unit.name,
-              variableId: response.variableid
-            });
-          }
-        }
-      });
+      // Not in cache, fetch from database
+      this.logger.log(`Cache miss: Querying CODING_INCOMPLETE variables for workspace ${workspaceId}`);
+      const result = await this.fetchCodingIncompleteVariablesFromDb(workspaceId);
 
-      const result = Array.from(uniqueVariables.values());
-      this.logger.log(`Found ${result.length} unique CODING_INCOMPLETE variables`);
+      // Cache the result for 1 hour (3600 seconds)
+      const cacheSet = await this.cacheService.set(cacheKey, result, 3600);
+      if (cacheSet) {
+        this.logger.log(`Cached ${result.length} CODING_INCOMPLETE variables for workspace ${workspaceId}`);
+      } else {
+        this.logger.warn(`Failed to cache CODING_INCOMPLETE variables for workspace ${workspaceId}`);
+      }
 
       return result;
     } catch (error) {
       this.logger.error(`Error getting CODING_INCOMPLETE variables: ${error.message}`, error.stack);
       throw new Error('Could not get CODING_INCOMPLETE variables. Please check the database connection.');
     }
+  }
+
+  private async fetchCodingIncompleteVariablesFromDb(
+    workspaceId: number,
+    unitName?: string
+  ): Promise<{ unitName: string; variableId: string }[]> {
+    const queryBuilder = this.responseRepository.createQueryBuilder('response')
+      .distinct()
+      .select('unit.name', 'unitName')
+      .addSelect('response.variableid', 'variableId')
+      .leftJoin('response.unit', 'unit')
+      .leftJoin('unit.booklet', 'booklet')
+      .leftJoin('booklet.person', 'person')
+      .where('response.status_v1 = :status', { status: 'CODING_INCOMPLETE' })
+      .andWhere('person.workspace_id = :workspace_id', { workspace_id: workspaceId });
+
+    if (unitName) {
+      queryBuilder.andWhere('unit.name = :unitName', { unitName });
+    }
+
+    const rawResults = await queryBuilder.getRawMany();
+
+    const result = rawResults.map(row => ({
+      unitName: row.unitName,
+      variableId: row.variableId
+    }));
+
+    this.logger.log(`Found ${result.length} unique CODING_INCOMPLETE variables${unitName ? ` for unit ${unitName}` : ''}`);
+
+    return result;
+  }
+
+  private generateIncompleteVariablesCacheKey(workspaceId: number): string {
+    return `coding_incomplete_variables:${workspaceId}`;
+  }
+
+  /**
+   * Clear the CODING_INCOMPLETE variables cache for a specific workspace
+   * Should be called whenever coding status changes for the workspace
+   * @param workspaceId The workspace ID to clear cache for
+   */
+  async invalidateIncompleteVariablesCache(workspaceId: number): Promise<void> {
+    const cacheKey = this.generateIncompleteVariablesCacheKey(workspaceId);
+    await this.cacheService.delete(cacheKey);
+    this.logger.log(`Invalidated CODING_INCOMPLETE variables cache for workspace ${workspaceId}`);
   }
 
   async importExternalCodingWithProgress(
@@ -2626,12 +2352,16 @@ export class WorkspaceCodingService {
         for (const row of batch) {
           try {
             const {
+              unit_key: unitKey,
               unit_alias: unitAlias, variable_id: variableId, status, score, code,
               person_code: personCode, person_login: personLogin, person_group: personGroup, booklet_name: bookletName
             } = row;
 
-            if (!unitAlias || !variableId) {
-              errors.push(`Row missing required fields: unit_alias=${unitAlias}, variable_id=${variableId}`);
+            // Use unit_key if provided, otherwise fall back to unit_alias for backward compatibility
+            const unitIdentifier = unitKey || unitAlias;
+
+            if (!unitIdentifier || !variableId) {
+              errors.push(`Row missing required fields: unit_key=${unitKey}, unit_alias=${unitAlias}, variable_id=${variableId}`);
               continue;
             }
 
@@ -2639,12 +2369,20 @@ export class WorkspaceCodingService {
               .createQueryBuilder('response')
               .select(['response.id', 'response.status_v1', 'response.code_v1', 'response.score_v1',
                 'response.status_v2', 'response.code_v2', 'response.score_v2',
-                'unit.alias', 'person.code', 'person.login', 'person.group', 'bookletinfo.name'])
+                'unit.alias', 'unit.name', 'person.code', 'person.login', 'person.group', 'bookletinfo.name'])
               .innerJoin('response.unit', 'unit')
               .innerJoin('unit.booklet', 'booklet')
               .innerJoin('booklet.person', 'person')
-              .innerJoin('booklet.bookletinfo', 'bookletinfo')
-              .where('unit.alias = :unitAlias', { unitAlias })
+              .innerJoin('booklet.bookletinfo', 'bookletinfo');
+
+            // Use unit.name if unit_key was provided, otherwise unit.alias for unit_alias
+            if (unitKey) {
+              queryBuilder.andWhere('unit.name = :unitIdentifier', { unitIdentifier });
+            } else {
+              queryBuilder.andWhere('unit.alias = :unitIdentifier', { unitIdentifier });
+            }
+
+            queryBuilder
               .andWhere('response.variableid = :variableId', { variableId })
               .andWhere('person.workspace_id = :workspaceId', { workspaceId });
 
@@ -2662,7 +2400,8 @@ export class WorkspaceCodingService {
             }
 
             const queryParameters: QueryParameters = {
-              unitAlias,
+              unitAlias: unitAlias || unitKey,
+              unitName: unitKey || unitAlias,
               variableId,
               workspaceId
             };
@@ -2742,6 +2481,11 @@ export class WorkspaceCodingService {
       this.logger.log(message);
       progressCallback?.(100, `Import completed: ${updatedRows} of ${processedRows} rows updated`);
 
+      // Invalidate cache if rows were updated since coding statuses may have changed
+      if (updatedRows > 0) {
+        await this.invalidateIncompleteVariablesCache(workspaceId);
+      }
+
       return {
         message,
         processedRows,
@@ -2804,7 +2548,6 @@ export class WorkspaceCodingService {
     headerRow.eachCell((cell, colNumber) => {
       headers[colNumber] = cell.text || cell.value?.toString() || '';
     });
-
     this.logger.log(`Starting Excel parsing. Total rows: ${worksheet.rowCount - 1}`);
 
     // Memory protection: limit to 200k rows
@@ -2838,111 +2581,5 @@ export class WorkspaceCodingService {
 
     this.logger.log(`Excel parsing completed. Total rows: ${results.length}`);
     return results;
-  }
-
-  async generateCoderTrainingPackages(
-    workspaceId: number,
-    selectedCoders: { id: number; name: string }[],
-    variableConfigs: { variableName: string; sampleCount: number }[]
-  ): Promise<{
-      coderId: number;
-      coderName: string;
-      responses: CoderTrainingResponse[];
-    }[]> {
-    try {
-      this.logger.log(`Generating coder training packages for workspace ${workspaceId}`);
-
-      const incompleteResponses = await this.responseRepository
-        .createQueryBuilder('response')
-        .innerJoin('response.unit', 'unit')
-        .innerJoin('unit.booklet', 'booklet')
-        .innerJoin('booklet.person', 'person')
-        .innerJoin('booklet.bookletinfo', 'bookletinfo')
-        .select([
-          'response.id',
-          'response.variableid',
-          'response.value',
-          'unit.alias',
-          'unit.name',
-          'unit.booklet',
-          'booklet.person',
-          'person.login',
-          'person.code',
-          'person.group',
-          'booklet.bookletinfo',
-          'bookletinfo.name'
-        ])
-        .where('response.status_v1 = :status', { status: 'CODING_INCOMPLETE' })
-        .andWhere('person.workspace_id = :workspaceId', { workspaceId })
-        .getMany();
-
-      this.logger.log(`Found ${JSON.stringify(incompleteResponses)} responses with CODING_INCOMPLETE status`);
-
-      // Group responses by variable (combination of variableId + unitAlias)
-      const variableResponsesMap = new Map<string, typeof incompleteResponses>();
-
-      incompleteResponses.forEach(response => {
-        const variable = `${response.variableid}_${response.unit.alias}`;
-        if (!variableResponsesMap.has(variable)) {
-          variableResponsesMap.set(variable, []);
-        }
-        variableResponsesMap.get(variable)!.push(response);
-      });
-
-      this.logger.log(`Grouped responses into ${variableResponsesMap.size} unique variables`);
-
-      const trainingPackages = selectedCoders.map(coder => {
-        const coderResponses: CoderTrainingResponse[] = [];
-        variableConfigs.forEach(config => {
-          const matchingVariables = Array.from(variableResponsesMap.keys()).filter(variable => variable.toLowerCase().includes(config.variableName.toLowerCase()) ||
-            config.variableName.toLowerCase().includes(variable.toLowerCase())
-          );
-
-          matchingVariables.forEach(variable => {
-            const responses = variableResponsesMap.get(variable) || [];
-            const sampledResponses = this.sampleResponses(responses, config.sampleCount);
-
-            sampledResponses.forEach(response => {
-              const person = response.unit?.booklet?.person;
-              const bookletInfo = response.unit?.booklet?.bookletinfo;
-
-              coderResponses.push({
-                responseId: response.id,
-                unitAlias: response.unit?.alias || '',
-                variableId: response.variableid,
-                unitName: response.unit?.name || '',
-                value: response.value || '',
-                personLogin: person?.login || '',
-                personCode: person?.code || '',
-                personGroup: person?.group || '',
-                bookletName: bookletInfo?.name || '',
-                variable: variable
-              });
-            });
-          });
-        });
-        return {
-          coderId: coder.id,
-          coderName: coder.name,
-          responses: coderResponses
-        };
-      });
-
-      this.logger.log(`Generated training packages for ${selectedCoders.length} coders`);
-      return trainingPackages;
-    } catch (error) {
-      this.logger.error(`Error generating coder training packages: ${error.message}`, error.stack);
-      throw new Error(`Could not generate coder training packages: ${error.message}`);
-    }
-  }
-
-  private sampleResponses<T>(responses: T[], sampleCount: number): T[] {
-    if (responses.length <= sampleCount) {
-      return [...responses];
-    }
-
-    // Shuffle array and take first sampleCount items
-    const shuffled = [...responses].sort(() => Math.random() - 0.5);
-    return shuffled.slice(0, sampleCount);
   }
 }

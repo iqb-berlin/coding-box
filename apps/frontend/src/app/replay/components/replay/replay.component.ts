@@ -1,15 +1,15 @@
 import {
-  Component, OnChanges, OnDestroy, OnInit, SimpleChanges, ViewChild, inject,
+  Component, OnChanges, OnDestroy, OnInit, SimpleChanges, ViewChild, HostListener, inject,
   input
 } from '@angular/core';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateService, TranslateModule } from '@ngx-translate/core';
 import { ActivatedRoute, Params } from '@angular/router';
 import {
-  combineLatest, firstValueFrom, Observable, of, Subject, Subscription, switchMap
+  combineLatest, firstValueFrom, Observable, of, Subject, Subscription, switchMap, catchError
 } from 'rxjs';
 import * as xml2js from 'xml2js';
 import { jwtDecode, JwtPayload } from 'jwt-decode';
@@ -25,8 +25,16 @@ import { FilesDto } from '../../../../../../../api-dto/files/files.dto';
 import { ErrorMessages } from '../../models/error-messages.model';
 import { validateToken, isTestperson } from '../../utils/token-utils';
 import { scrollToElementByAlias, highlightAspectSectionWithAnchor } from '../../utils/dom-utils';
-import { BookletReplay, BookletReplayUnit } from '../../../services/booklet-replay.service';
-import { BookletReplayComponent } from '../booklet-replay/booklet-replay.component';
+import { UnitsReplay, UnitsReplayUnit } from '../../../services/units-replay.service';
+import { UnitsReplayComponent } from '../units-replay/units-replay.component';
+import { CodeSelectorComponent, Code, VariableCoding } from '../../../coding/components/code-selector/code-selector.component';
+
+interface SavedCode {
+  id: number;
+  code: string;
+  label: string;
+  [key: string]: unknown;
+}
 
 @Component({
   selector: 'coding-box-replay',
@@ -39,7 +47,8 @@ import { BookletReplayComponent } from '../booklet-replay/booklet-replay.compone
     UnitPlayerComponent,
     SpinnerComponent,
     FormsModule,
-    BookletReplayComponent
+    UnitsReplayComponent,
+    CodeSelectorComponent
   ],
   templateUrl: './replay.component.html',
   styleUrl: './replay.component.scss'
@@ -50,6 +59,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   private route = inject(ActivatedRoute);
   private errorSnackBar = inject(MatSnackBar);
   private pageErrorSnackBar = inject(MatSnackBar);
+  private translate = inject(TranslateService);
 
   player: string = '';
   unitDef: string = '';
@@ -70,15 +80,24 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   private lastPlayer: { id: string, data: string } = { id: '', data: '' };
   private lastUnitDef: { id: string, data: string } = { id: '', data: '' };
   private lastUnit: { id: string, data: string } = { id: '', data: '' };
+  private lastVocs: { id: string, data: string } = { id: '', data: '' };
   private routerSubscription: Subscription | null = null;
   readonly testPersonInput = input<string>();
   readonly unitIdInput = input<string>();
-  protected bookletData: BookletReplay | null = null;
+  protected unitsData: UnitsReplay | null = null;
   @ViewChild(UnitPlayerComponent) unitPlayerComponent: UnitPlayerComponent | undefined;
   private replayStartTime: number = 0; // Track when replay viewing starts
+  protected reloadKey: number = 0;
+  protected codingScheme: any | null = null;
+  protected currentVariableId: string = '';
+  workspaceId: number = 0;
+  private selectedCodes: Map<string, any> = new Map(); // Track selected codes for each unique testperson-booklet-unit-variable combination
+  protected codingJobId: number | null = null;
+  protected isPausingJob: boolean = false;
+  protected isCodingJobCompleted: boolean = false;
+  protected isSubmittingJob: boolean = false;
 
   ngOnInit(): void {
-    // Record the start time when the component is initialized
     this.replayStartTime = performance.now();
     this.subscribeRouter();
   }
@@ -106,14 +125,14 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     return auth;
   }
 
-  private deserializeBookletData(encodedData: string): BookletReplay | null {
+  private deserializeUnitsData(encodedData: string): UnitsReplay | null {
     if (!encodedData) {
       return null;
     }
 
     try {
       const jsonString = atob(encodedData);
-      return JSON.parse(jsonString) as BookletReplay;
+      return JSON.parse(jsonString) as UnitsReplay;
     } catch (error) {
       return null;
     }
@@ -125,15 +144,54 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         this.resetSnackBars();
         this.resetUnitData();
         this.authToken = await this.getAuthToken();
+        const decoded: JwtPayload & { workspace: string } = jwtDecode(this.authToken);
+        const workspace = decoded?.workspace;
+        this.workspaceId = Number(workspace);
 
         const queryParams = await firstValueFrom(this.route.queryParams);
         this.isBookletMode = queryParams.mode === 'booklet';
-        if (this.isBookletMode && queryParams.bookletData) {
-          const deserializedBooklet = this.deserializeBookletData(queryParams.bookletData);
-          if (deserializedBooklet) {
-            this.bookletData = deserializedBooklet;
-            this.currentUnitIndex = deserializedBooklet.currentUnitIndex;
-            this.totalUnits = deserializedBooklet.units.length;
+        if (this.isBookletMode) {
+          let deserializedUnits = null as UnitsReplay | null;
+
+          if (queryParams.unitsData) {
+            deserializedUnits = this.deserializeUnitsData(queryParams.unitsData);
+          } else if (queryParams.bookletKey) {
+            const key = queryParams.bookletKey as string;
+            try {
+              const stored = localStorage.getItem(key);
+              if (stored) {
+                deserializedUnits = JSON.parse(stored) as UnitsReplay;
+              }
+            } catch (e) {
+              // ignore parse errors
+            } finally {
+              try { localStorage.removeItem(key); } catch { /* empty */ }
+            }
+          }
+
+          if (deserializedUnits) {
+            this.unitsData = deserializedUnits;
+            this.codingJobId = deserializedUnits.id || null;
+            this.currentUnitIndex = deserializedUnits.currentUnitIndex;
+            this.totalUnits = deserializedUnits.units.length;
+            const unitAny = (this.unitsData.units[this.currentUnitIndex] || {}) as unknown as { variableAnchor?: string; variableId?: string };
+            if (unitAny.variableAnchor) {
+              this.anchor = unitAny.variableAnchor;
+            }
+            if (unitAny.variableId) {
+              this.currentVariableId = unitAny.variableId;
+            }
+            if (this.codingJobId && this.workspaceId) {
+              this.backendService.updateCodingJob(this.workspaceId, this.codingJobId, { status: 'active' }).subscribe({
+                next: () => {
+                  // Status updated successfully
+                },
+                error: () => {
+                  // Status update failed
+                }
+              });
+              this.loadSavedCodingProgress();
+            }
           }
         }
 
@@ -163,19 +221,14 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
           if (this.isPrintMode && params.unitId) {
             this.unitId = params.unitId;
-            const decoded: JwtPayload & { workspace: string } = jwtDecode(this.authToken);
-            const workspace = decoded?.workspace;
             const unitData = await this.getUnitData(Number(workspace), this.authToken);
             this.setUnitProperties(unitData);
           } else if (Object.keys(params).length >= 3 && Object.keys(params).length <= 4) {
             this.setUnitParams(params);
             if (this.authToken) {
-              const decoded: JwtPayload & { workspace: string } = jwtDecode(this.authToken);
-              const workspace = decoded?.workspace;
               if (workspace) {
                 const unitData = await this.getUnitData(Number(workspace), this.authToken);
                 this.setUnitProperties(unitData);
-
                 setTimeout(() => {
                   if (this.unitPlayerComponent?.hostingIframe?.nativeElement) {
                     if (this.anchor) {
@@ -284,13 +337,31 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   private setUnitProperties(
-    unitData: { unitDef: FilesDto[], response: ResponseDto[], player: FilesDto[]
-    }) {
+    unitData: {
+      unitDef: FilesDto[],
+      response: ResponseDto[],
+      player: FilesDto[],
+      vocs: FilesDto[]
+    }
+  ) {
     this.cachePlayerData(unitData.player[0]);
     this.cacheUnitDefData(unitData.unitDef[0]);
+    if (unitData.vocs && unitData.vocs[0]) {
+      this.cacheVocsData(unitData.vocs[0]);
+    }
     this.player = unitData.player[0].data;
     this.unitDef = unitData.unitDef[0].data;
+    this.reloadKey += 1;
     this.responses = unitData.response;
+
+    // Set coding scheme for booklet mode from vocs data
+    if (this.isBookletMode && unitData.vocs && unitData.vocs[0] && unitData.vocs[0].data) {
+      try {
+        this.codingScheme = JSON.parse(unitData.vocs[0].data);
+      } catch (error) {
+        this.codingScheme = null;
+      }
+    }
   }
 
   private cacheUnitData(unit: FilesDto) {
@@ -306,6 +377,11 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   private cachePlayerData(playerData: FilesDto) {
     this.lastPlayer.data = playerData.data;
     this.lastPlayer.id = playerData.file_id;
+  }
+
+  private cacheVocsData(vocsData: FilesDto) {
+    this.lastVocs.data = vocsData.data;
+    this.lastVocs.id = vocsData.file_id.substring(0, vocsData.file_id.indexOf('.vocs'));
   }
 
   static getNormalizedPlayerId(name: string): string {
@@ -337,7 +413,6 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   private getResponses(workspace: number, authToken?:string): Observable<ResponseDto[]> {
-    // In print mode, we don't need responses, so return an empty array
     if (this.isPrintMode) {
       return of([]);
     }
@@ -355,6 +430,16 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     return this.backendService.getUnit(workspace, this.unitId, authToken);
   }
 
+  private getVocs(workspace: number, authToken?:string): Observable<FilesDto[]> {
+    if (this.lastVocs.id && this.lastVocs.data && this.lastVocs.id === this.unitId.toUpperCase()) {
+      return of([{
+        data: this.lastVocs.data,
+        file_id: `${this.lastVocs.id}.vocs`
+      }]);
+    }
+    return this.backendService.getVocs(workspace, this.unitId, authToken);
+  }
+
   private getPlayer(
     workspace: number, player: string, authToken?:string
   ): Observable<FilesDto[]> {
@@ -367,13 +452,22 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       authToken);
   }
 
-  private async getUnitData(workspace: number, authToken?:string) {
+  private async getUnitData(
+    workspace: number,
+    authToken?: string
+  ): Promise<{
+      unitDef: FilesDto[],
+      response: ResponseDto[],
+      player: FilesDto[],
+      vocs: FilesDto[]
+    }> {
     const startTime = performance.now();
     this.isLoaded.next(false);
     const unitData = await firstValueFrom(
       combineLatest([
         this.getUnitDef(workspace, authToken),
-        this.getResponses(workspace, authToken),
+        this.getResponses(workspace, authToken).pipe(catchError(() => of([]))),
+        this.getVocs(workspace, authToken).pipe(catchError(() => of([]))),
         this.getUnit(workspace, authToken)
           .pipe(switchMap(unitFile => {
             this.checkUnitId(unitFile);
@@ -438,7 +532,12 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     }
 
     this.setIsLoaded();
-    return { unitDef: unitData[0], response: unitData[1], player: unitData[2] };
+    return {
+      unitDef: unitData[0],
+      response: unitData[1],
+      vocs: unitData[2],
+      player: unitData[3]
+    };
   }
 
   private getErrorMessages(): ErrorMessages {
@@ -521,8 +620,22 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     }
   }
 
-  handleUnitChanged(unit: BookletReplayUnit): void {
-    if (unit && unit.name !== this.unitId) {
+  handleUnitChanged(unit: UnitsReplayUnit): void {
+    if (!unit) return;
+
+    // Save current partial results before navigating to next unit
+    this.saveAllCodingProgress().then(() => {
+      const unitAny = unit as unknown as { name: string; testPerson?: string; variableId?: string };
+      const incomingTestPerson = unitAny.testPerson;
+
+      if (typeof unitAny.variableId === 'string' && unitAny.variableId.length > 0) {
+        this.anchor = unitAny.variableId;
+        this.currentVariableId = unitAny.variableId;
+      }
+
+      if (incomingTestPerson && incomingTestPerson !== this.testPerson) {
+        this.setTestPerson(incomingTestPerson);
+      }
       this.unitId = unit.name;
 
       if (this.authToken) {
@@ -531,21 +644,77 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         if (workspace) {
           this.getUnitData(Number(workspace), this.authToken).then(unitData => {
             this.setUnitProperties(unitData);
+            // After loading new unit data, try to highlight using current anchor
+            setTimeout(() => {
+              if (this.unitPlayerComponent?.hostingIframe?.nativeElement && this.anchor) {
+                highlightAspectSectionWithAnchor(this.unitPlayerComponent.hostingIframe.nativeElement, this.anchor);
+                scrollToElementByAlias(this.unitPlayerComponent.hostingIframe.nativeElement, this.anchor);
+              }
+            }, 500);
           });
         }
       }
 
-      if (this.bookletData) {
-        const newIndex = this.bookletData.units.findIndex(u => u.name === unit.name);
+      if (this.unitsData) {
+        const newIndex = this.unitsData.units.findIndex(u => {
+          const uAny = u as unknown as { name: string; testPerson?: string; variableId?: string };
+          return uAny.name === unitAny.name && (uAny.testPerson ?? '') === (incomingTestPerson ?? '') && uAny.variableId === unitAny.variableId;
+        });
         if (newIndex >= 0) {
-          this.bookletData = {
-            ...this.bookletData,
+          this.unitsData = {
+            ...this.unitsData,
             currentUnitIndex: newIndex
           };
-          this.currentUnitIndex = newIndex;
+
+          this.currentUnitIndex = newIndex + 1;
         }
       }
-    }
+    }).catch(() => {
+      const unitAny = unit as unknown as { name: string; testPerson?: string; variableId?: string };
+      const incomingTestPerson = unitAny.testPerson;
+
+      if (typeof unitAny.variableId === 'string' && unitAny.variableId.length > 0) {
+        this.anchor = unitAny.variableId;
+        this.currentVariableId = unitAny.variableId;
+      }
+
+      if (incomingTestPerson && incomingTestPerson !== this.testPerson) {
+        this.setTestPerson(incomingTestPerson);
+      }
+      this.unitId = unit.name;
+
+      if (this.authToken) {
+        const decoded: JwtPayload & { workspace: string } = jwtDecode(this.authToken);
+        const workspace = decoded?.workspace;
+        if (workspace) {
+          this.getUnitData(Number(workspace), this.authToken).then(unitData => {
+            this.setUnitProperties(unitData);
+            // After loading new unit data, try to highlight using current anchor
+            setTimeout(() => {
+              if (this.unitPlayerComponent?.hostingIframe?.nativeElement && this.anchor) {
+                highlightAspectSectionWithAnchor(this.unitPlayerComponent.hostingIframe.nativeElement, this.anchor);
+                scrollToElementByAlias(this.unitPlayerComponent.hostingIframe.nativeElement, this.anchor);
+              }
+            }, 500);
+          });
+        }
+      }
+
+      if (this.unitsData) {
+        const newIndex = this.unitsData.units.findIndex(u => {
+          const uAny = u as unknown as { name: string; testPerson?: string; variableId?: string };
+          return uAny.name === unitAny.name && (uAny.testPerson ?? '') === (incomingTestPerson ?? '') && uAny.variableId === unitAny.variableId;
+        });
+        if (newIndex >= 0) {
+          this.unitsData = {
+            ...this.unitsData,
+            currentUnitIndex: newIndex
+          };
+
+          this.currentUnitIndex = newIndex + 1;
+        }
+      }
+    });
   }
 
   checkPageError(pageError: 'notInList' | 'notCurrent' | null): void {
@@ -570,11 +739,294 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     this.unitDef = '';
     this.page = undefined;
     this.responses = undefined;
+    this.codingScheme = null;
+    this.currentVariableId = '';
+  }
+
+  private async loadSavedCodingProgress(): Promise<void> {
+    if (!this.codingJobId || !this.workspaceId) return;
+
+    try {
+      const savedProgress = await firstValueFrom(
+        this.backendService.getCodingProgress(this.workspaceId, this.codingJobId)
+      ) as { [key: string]: SavedCode };
+
+      Object.keys(savedProgress).forEach(compositeKey => {
+        const partialCode = savedProgress[compositeKey];
+        if (partialCode?.id) {
+          const fullCode = this.findCodeById(partialCode.id);
+          this.selectedCodes.set(compositeKey, fullCode || partialCode);
+        }
+      });
+
+      if (this.unitsData && this.unitsData.units.length > 0) {
+        const firstUncodedIndex = this.findFirstUncodedUnitIndex();
+        if (firstUncodedIndex >= 0 && firstUncodedIndex !== this.currentUnitIndex) {
+          this.navigateToUnitIndex(firstUncodedIndex);
+        }
+      }
+    } catch (error) {
+      // Ignore errors when loading saved coding progress
+    }
+  }
+
+  private findCodeById(codeId: number): any {
+    if (!this.codingScheme || typeof this.codingScheme === 'string') {
+      return null;
+    }
+
+    const variableCoding = this.codingScheme.variableCodings?.find((v: VariableCoding) => v.alias === this.currentVariableId
+    );
+
+    if (variableCoding) {
+      return variableCoding.codes?.find((c: Code) => c.id === codeId);
+    }
+
+    return null;
+  }
+
+  private async saveCodingProgress(testPerson: string, unitId: string, variableId: string, selectedCode: any): Promise<void> {
+    if (!this.codingJobId || !this.workspaceId) return;
+
+    try {
+      const codeToSave = {
+        id: selectedCode.id,
+        code: selectedCode.code || '',
+        label: selectedCode.label || '',
+        ...(selectedCode.score !== undefined && { score: selectedCode.score })
+      };
+
+      await firstValueFrom(
+        this.backendService.saveCodingProgress(this.workspaceId, this.codingJobId, {
+          testPerson,
+          unitId,
+          variableId,
+          selectedCode: codeToSave
+        })
+      );
+    } catch (error) {
+      // Ignore errors when saving coding progress
+    }
+  }
+
+  private async saveAllCodingProgress(): Promise<void> {
+    if (!this.codingJobId || !this.workspaceId) return;
+
+    const savePromises: Promise<void>[] = [];
+
+    for (const [compositeKey, selectedCode] of this.selectedCodes) {
+      const parts = compositeKey.split('::');
+      if (parts.length >= 4) {
+        const testPerson = parts[0];
+        const unitId = parts[2];
+        const variableId = parts[3];
+
+        savePromises.push(this.saveCodingProgress(testPerson, unitId, variableId, selectedCode));
+      }
+    }
+    await Promise.allSettled(savePromises);
   }
 
   ngOnDestroy(): void {
     this.routerSubscription?.unsubscribe();
     this.routerSubscription = null;
     this.resetSnackBars();
+  }
+
+  onCodeSelected(event: { variableId: string; code: any }): void {
+    const compositeKey = this.generateCompositeKey(this.testPerson, this.unitId, event.variableId);
+    this.selectedCodes.set(compositeKey, event.code);
+    this.checkCodingJobCompletion();
+    this.saveCodingProgress(this.testPerson, this.unitId, event.variableId, event.code);
+  }
+
+  private generateCompositeKey(testPerson: string, unitId: string, variableId: string): string {
+    let bookletId = 'default';
+    if (testPerson) {
+      const parts = testPerson.split('@');
+      if (parts.length >= 3) {
+        bookletId = parts[2];
+      }
+    }
+
+    return `${testPerson}::${bookletId}::${unitId}::${variableId}`;
+  }
+
+  private checkCodingJobCompletion(): void {
+    if (this.unitsData && this.unitsData.units.length > 0) {
+      const totalReplays = this.unitsData.units.length;
+      const completedReplays = this.unitsData.units.filter(unit => {
+        const unitAny = unit as unknown as { name: string; testPerson?: string; variableId?: string };
+        if (unitAny.variableId) {
+          const compositeKey = this.generateCompositeKey(
+            unitAny.testPerson || this.testPerson,
+            unitAny.name || this.unitId,
+            unitAny.variableId
+          );
+          return this.selectedCodes.has(compositeKey);
+        }
+        return false;
+      }).length;
+
+      const progressPercentage = Math.round((completedReplays / totalReplays) * 100);
+      if (completedReplays > 0 && completedReplays % Math.ceil(totalReplays / 4) === 0) {
+        this.showProgressNotification(progressPercentage, completedReplays, totalReplays);
+      }
+
+      // Check if job is complete
+      if (completedReplays === totalReplays) {
+        this.isCodingJobCompleted = true;
+      }
+    }
+  }
+
+  private showProgressNotification(percentage: number, completed: number, total: number): void {
+    this.errorSnackBar.open(
+      this.translate.instant('replay.coding-progress-message', { completed, total, percentage }),
+      this.translate.instant('replay.close'),
+      { duration: 3000, panelClass: ['snackbar-info'] }
+    );
+  }
+
+  getCompletedCount(): number {
+    if (!this.unitsData) return 0;
+    return this.unitsData.units.filter(unit => {
+      const unitAny = unit as unknown as { name: string; testPerson?: string; variableId?: string };
+      if (unitAny.variableId) {
+        const compositeKey = this.generateCompositeKey(
+          unitAny.testPerson || this.testPerson,
+          unitAny.name || this.unitId,
+          unitAny.variableId
+        );
+        return this.selectedCodes.has(compositeKey);
+      }
+      return false;
+    }).length;
+  }
+
+  getProgressPercentage(): number {
+    if (!this.unitsData || this.unitsData.units.length === 0) return 0;
+    return Math.round((this.getCompletedCount() / this.unitsData.units.length) * 100);
+  }
+
+  getPreSelectedCodeId(variableId: string): number | null {
+    const compositeKey = this.generateCompositeKey(this.testPerson, this.unitId, variableId);
+    const selectedCode = this.selectedCodes.get(compositeKey);
+    return selectedCode ? selectedCode.id : null;
+  }
+
+  pauseCodingJob(): void {
+    if (!this.codingJobId || !this.workspaceId) return;
+
+    this.isPausingJob = true;
+    this.errorSnackBar.open(this.translate.instant('replay.pausing-coding-job'), '', { duration: 2000 });
+
+    this.backendService.updateCodingJob(this.workspaceId, this.codingJobId, { status: 'paused' }).subscribe({
+      next: () => {
+        this.isPausingJob = false;
+        this.errorSnackBar.open(this.translate.instant('replay.coding-job-paused-successfully'), this.translate.instant('replay.close'), {
+          duration: 3000,
+          panelClass: ['snackbar-success']
+        });
+      },
+      error: () => {
+        this.isPausingJob = false;
+        this.errorSnackBar.open(this.translate.instant('replay.failed-to-pause-coding-job'), this.translate.instant('replay.close'), {
+          duration: 3000,
+          panelClass: ['snackbar-error']
+        });
+      }
+    });
+  }
+
+  submitCodingJob(): void {
+    if (!this.codingJobId || !this.workspaceId) return;
+
+    this.isSubmittingJob = true;
+    this.errorSnackBar.open(this.translate.instant('replay.submitting-coding-job'), '', { duration: 2000 });
+
+    this.backendService.updateCodingJob(this.workspaceId, this.codingJobId, { status: 'completed' }).subscribe({
+      next: () => {
+        this.isSubmittingJob = false;
+        this.errorSnackBar.open(this.translate.instant('replay.coding-job-submitted-successfully'), this.translate.instant('replay.close'), {
+          duration: 3000,
+          panelClass: ['snackbar-success']
+        });
+        window.close();
+      },
+      error: () => {
+        this.isSubmittingJob = false;
+        this.errorSnackBar.open(this.translate.instant('replay.failed-to-submit-coding-job'), this.translate.instant('replay.close'), {
+          duration: 3000,
+          panelClass: ['snackbar-error']
+        });
+      }
+    });
+  }
+
+  private findFirstUncodedUnitIndex(): number {
+    if (!this.unitsData) return -1;
+
+    for (let i = 0; i < this.unitsData.units.length; i++) {
+      const unit = this.unitsData.units[i];
+      const unitAny = unit as unknown as { name: string; testPerson?: string; variableId?: string };
+
+      if (unitAny.variableId) {
+        const compositeKey = this.generateCompositeKey(
+          unitAny.testPerson || this.testPerson,
+          unitAny.name,
+          unitAny.variableId
+        );
+
+        if (!this.selectedCodes.has(compositeKey)) {
+          return i;
+        }
+      }
+    }
+
+    // If all units are coded, return -1
+    return -1;
+  }
+
+  private navigateToUnitIndex(index: number): void {
+    if (!this.unitsData || index < 0 || index >= this.unitsData.units.length) return;
+
+    const targetUnit = this.unitsData.units[index];
+    if (targetUnit) {
+      this.handleUnitChanged(targetUnit);
+    }
+  }
+
+  private navigateToNextUnit(): void {
+    if (!this.unitsData || !this.isBookletMode) return;
+
+    const nextIndex = this.currentUnitIndex;
+    if (nextIndex < this.unitsData.units.length) {
+      const nextUnit = this.unitsData.units[nextIndex];
+      if (nextUnit) {
+        this.handleUnitChanged(nextUnit);
+      }
+    }
+  }
+
+  onKeyDown(event: KeyboardEvent): void {
+    if (event.key === 'Enter' && this.isBookletMode && this.unitsData) {
+      if (this.currentVariableId) {
+        const compositeKey = this.generateCompositeKey(this.testPerson, this.unitId, this.currentVariableId);
+        const hasSelection = this.selectedCodes.has(compositeKey);
+
+        if (hasSelection) {
+          event.preventDefault();
+          this.navigateToNextUnit();
+        }
+      }
+    }
+  }
+
+  @HostListener('window:beforeunload', ['$event'])
+  onBeforeUnload(): void {
+    if (this.codingJobId && this.workspaceId && !this.isCodingJobCompleted) {
+      this.backendService.updateCodingJob(this.workspaceId, this.codingJobId, { status: 'paused' }).subscribe();
+    }
   }
 }

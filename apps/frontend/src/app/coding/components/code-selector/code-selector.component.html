@@ -1,0 +1,25 @@
+<mat-card class="selector-card">
+  <mat-card-header>
+    <mat-card-title>Codes for Variable {{ variableId }}</mat-card-title>
+  </mat-card-header>
+
+  <mat-card-content>
+    <div *ngIf="codes.length; else noCodes">
+      <mat-radio-group [(ngModel)]="selectedCode" (ngModelChange)="onSelectionChange()">
+        <div class="code-row" *ngFor="let code of codes">
+          <mat-radio-button [value]="code.id" (change)="onSelect(code.id)">
+            <span class="code-info">
+              <span class="code-id">{{ code.id }}</span>
+              <span class="code-type">({{ code.type }})</span>
+              <span class="code-score" *ngIf="code.score !== undefined">Score: {{ code.score }}</span>
+            </span>
+          </mat-radio-button>
+          <div class="code-instruction" *ngIf="code.manualInstruction" [innerHTML]="getSafeHtml(code.manualInstruction)"></div>
+        </div>
+      </mat-radio-group>
+    </div>
+    <ng-template #noCodes>
+      <div class="hint">No codes found for variable {{ variableId }}.</div>
+    </ng-template>
+  </mat-card-content>
+</mat-card>

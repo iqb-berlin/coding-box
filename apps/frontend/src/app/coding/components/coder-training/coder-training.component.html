@@ -84,12 +84,12 @@
         <div formArrayName="variables">
           <div
             class="variable-item"
-            *ngFor="let variableGroup of variablesFormArray.controls; let i = index"
+            *ngFor="let _ of variablesFormArray.controls; let i = index"
             [formGroupName]="i">
 
             <mat-form-field appearance="outline" class="variable-name-field">
               <mat-label>Variable auswählen</mat-label>
-              <mat-select formControlName="variableName" placeholder="Variable auswählen">
+              <mat-select formControlName="variableId" placeholder="Variable auswählen" (selectionChange)="onVariableChange($event.value, i)">
                 <mat-option *ngFor="let variable of availableVariables" [value]="variable.variableId">
                   {{variable.unitName}} - {{variable.variableId}}
                 </mat-option>
@@ -97,6 +97,7 @@
                   Keine Variablen verfügbar
                 </mat-option>
               </mat-select>
+              <input type="hidden" formControlName="unitId">
             </mat-form-field>
 
             <mat-form-field appearance="outline" class="sample-count-field">
@@ -129,15 +130,17 @@
         mat-raised-button
         color="primary"
         (click)="onStartTraining()"
-        [disabled]="!canStartTraining()"
+        [disabled]="!canStartTraining() || isLoading"
         class="start-training-button">
-        <mat-icon>play_arrow</mat-icon>
-        Schulung starten
+        <mat-icon *ngIf="!isLoading">play_arrow</mat-icon>
+        <mat-progress-spinner mode="indeterminate" diameter="20" *ngIf="isLoading"></mat-progress-spinner>
+        {{ isLoading ? 'Kodierungsaufträge werden erstellt...' : 'Kodierungsaufträge erstellen' }}
       </button>
 
       <button
         mat-button
         (click)="onClose()"
+        [disabled]="isLoading"
         class="cancel-button">
         <mat-icon>cancel</mat-icon>
         Abbrechen

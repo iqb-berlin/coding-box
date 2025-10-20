@@ -27,11 +27,11 @@ import { Subject, takeUntil } from 'rxjs';
 import { CoderService } from '../../services/coder.service';
 import { Coder } from '../../models/coder.model';
 import { BackendService } from '../../../services/backend.service';
-import { WorkspaceService } from '../../../services/workspace.service';
 import { AppService } from '../../../services/app.service';
 
 export interface VariableConfig {
-  variableName: string;
+  variableId: string;
+  unitId: string;
   sampleCount: number;
 }
 
@@ -111,29 +111,34 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
         next: variables => {
           this.availableVariables = variables;
           this.isLoadingVariables = false;
-
-          // Add a default variable entry if no variables are available
           if (variables.length === 0) {
             this.addVariable();
           }
         },
-        error: error => {
-          console.error('Error loading available variables:', error);
+        error: () => {
           this.showError('Fehler beim Laden der verfügbaren Variablen');
           this.isLoadingVariables = false;
-          // Add a default variable entry on error
           this.addVariable();
         }
       });
   }
 
-  addVariable(variableName: string = ''): void {
+  addVariable(variableId: string = '', unitId: string = ''): void {
     const variableGroup = this.fb.group({
-      variableName: [variableName, [Validators.required]],
+      variableId: [variableId, [Validators.required]],
+      unitId: [unitId, [Validators.required]],
       sampleCount: [10, [Validators.required, Validators.min(1), Validators.max(1000)]]
     });
 
     this.variablesFormArray.push(variableGroup);
+  }
+
+  onVariableChange(variableId: string, index: number): void {
+    const control = this.variablesFormArray.at(index);
+    const selectedVariable = this.availableVariables.find(v => v.variableId === variableId);
+    if (selectedVariable) {
+      control.get('unitId')?.setValue(selectedVariable.unitName);
+    }
   }
 
   removeVariable(index: number): void {
@@ -185,9 +190,14 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   }
 
   canStartTraining(): boolean {
-    return this.selectedCoders.size > 0 &&
-           this.trainingForm.valid &&
-           this.variablesFormArray.length > 0;
+    return this.selectedCoders.size > 0 && this.hasAtLeastOneVariableSelected();
+  }
+
+  hasAtLeastOneVariableSelected(): boolean {
+    return this.variablesFormArray.controls.some(control => {
+      const variableId = control.get('variableId')?.value;
+      return variableId && variableId.trim() !== '';
+    });
   }
 
   getTotalSamples(): number {
@@ -204,14 +214,42 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       return;
     }
 
+    this.isLoading = true;
     const selectedCoders = this.getSelectedCoders();
-    const variableConfigs: VariableConfig[] = this.variablesFormArray.controls.map(control => ({
-      variableName: control.get('variableName')?.value || '',
-      sampleCount: control.get('sampleCount')?.value || 10
-    }));
+    const variableConfigs: VariableConfig[] = this.variablesFormArray.controls.map(control => {
+      const variableId = control.get('variableId')?.value || '';
+      const selectedVariable = this.availableVariables.find(v => v.variableId === variableId);
+      return {
+        variableId,
+        unitId: selectedVariable?.unitName || '',
+        sampleCount: control.get('sampleCount')?.value || 10
+      };
+    });
 
-    this.startTraining.emit({ selectedCoders, variableConfigs });
-    this.showSuccess(`Schulung für ${selectedCoders.length} Kodierer gestartet`);
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      this.showError('Kein Arbeitsbereich ausgewählt');
+      this.isLoading = false;
+      return;
+    }
+
+    this.backendService.createCoderTrainingJobs(workspaceId, selectedCoders, variableConfigs)
+      .subscribe({
+        next: result => {
+          this.isLoading = false;
+          if (result.success) {
+            this.showSuccess(`Erfolgreich ${result.jobsCreated} Kodierungsaufträge für ${selectedCoders.length} Kodierer erstellt`);
+            this.startTraining.emit({ selectedCoders, variableConfigs });
+            this.onClose();
+          } else {
+            this.showError(`Fehler beim Erstellen der Kodierungsaufträge: ${result.message}`);
+          }
+        },
+        error: () => {
+          this.isLoading = false;
+          this.showError('Fehler beim Erstellen der Kodierungsaufträge');
+        }
+      });
   }
 
   onClose(): void {

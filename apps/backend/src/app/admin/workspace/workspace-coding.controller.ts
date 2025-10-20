@@ -12,6 +12,8 @@ import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
 import { WorkspaceCodingService } from '../../database/services/workspace-coding.service';
+import { CoderTrainingService } from '../../database/services/coder-training.service';
+import { CodingListService } from '../../database/services/coding-list.service';
 import { PersonService } from '../../database/services/person.service';
 import { VariableAnalysisItemDto } from '../../../../../../api-dto/coding/variable-analysis-item.dto';
 import { ValidateCodingCompletenessRequestDto } from '../../../../../../api-dto/coding/validate-coding-completeness-request.dto';
@@ -24,7 +26,9 @@ import { ExternalCodingImportDto } from '../../../../../../api-dto/coding/extern
 export class WorkspaceCodingController {
   constructor(
     private workspaceCodingService: WorkspaceCodingService,
-    private personService: PersonService
+    private personService: PersonService,
+    private codingListService: CodingListService,
+    private coderTrainingService: CoderTrainingService
   ) {}
 
   @Get(':workspace_id/coding')
@@ -47,86 +51,6 @@ export class WorkspaceCodingController {
   @Get(':workspace_id/coding/coding-list')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiTags('coding')
-  @ApiQuery({
-    name: 'identity',
-    required: false,
-    description: 'User identity for token generation',
-    type: String
-  })
-  @ApiQuery({
-    name: 'serverUrl',
-    required: false,
-    description: 'Server URL to use for generating links',
-    type: String
-  })
-  @ApiQuery({
-    name: 'page',
-    required: false,
-    description: 'Page number for pagination',
-    type: Number
-  })
-  @ApiQuery({
-    name: 'limit',
-    required: false,
-    description: 'Number of items per page',
-    type: Number
-  })
-  @ApiOkResponse({
-    description: 'List of incomplete coding items retrieved successfully.',
-    schema: {
-      type: 'object',
-      properties: {
-        data: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              unit_key: { type: 'string' },
-              unit_alias: { type: 'string' },
-              login_name: { type: 'string' },
-              login_code: { type: 'string' },
-              booklet_id: { type: 'string' },
-              variable_id: { type: 'string' },
-              variable_page: { type: 'string' },
-              variable_anchor: { type: 'string' },
-              url: { type: 'string' }
-            }
-          }
-        },
-        total: { type: 'number' },
-        page: { type: 'number' },
-        limit: { type: 'number' }
-      }
-    }
-  })
-  async getCodingList(@WorkspaceId() workspace_id: number, @Query('authToken') authToken: string, @Query('serverUrl') serverUrl: string, @Query('page') page: number = 1, @Query('limit') limit: number = 20): Promise<{
-    data: {
-      unit_key: string;
-      unit_alias: string;
-      login_name: string;
-      login_code: string;
-      booklet_id: string;
-      variable_id: string;
-      variable_page: string;
-      variable_anchor: string;
-      url: string;
-    }[];
-    total: number;
-    page: number;
-    limit: number;
-  }> {
-    const [items, total] = await this.workspaceCodingService.getCodingList(workspace_id, authToken, serverUrl, { page, limit });
-    return {
-      data: items,
-      total,
-      page,
-      limit
-    };
-  }
-
-  @Get(':workspace_id/coding/coding-list/csv')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
-  @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiOkResponse({
     description: 'Coding list exported as CSV',
@@ -139,12 +63,9 @@ export class WorkspaceCodingController {
       }
     }
   })
-  async getCodingListAsCsv(@WorkspaceId() workspace_id: number, @Res() res: Response): Promise<void> {
-    const csvData = await this.workspaceCodingService.getCodingListAsCsv(workspace_id);
-
-    res.setHeader('Content-Type', 'text/csv');
-    res.setHeader('Content-Disposition', `attachment; filename="coding-list-${new Date().toISOString().slice(0, 10)}.csv"`);
-    res.send(csvData);
+  async getCodingListAsCsv(@WorkspaceId() workspace_id: number, @Query('authToken') authToken: string, @Query('serverUrl') serverUrl: string, @Res() res: Response): Promise<void> {
+    const csvStream = await this.codingListService.getCodingListCsvStream(workspace_id, authToken || '', serverUrl || '');
+    csvStream.pipe(res);
   }
 
   @Get(':workspace_id/coding/coding-list/excel')
@@ -163,7 +84,7 @@ export class WorkspaceCodingController {
     }
   })
   async getCodingListAsExcel(@WorkspaceId() workspace_id: number, @Res() res: Response): Promise<void> {
-    const excelData = await this.workspaceCodingService.getCodingListAsExcel(workspace_id);
+    const excelData = await this.codingListService.getCodingListAsExcel(workspace_id);
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="coding-list-${new Date().toISOString().slice(0, 10)}.xlsx"`);
@@ -947,7 +868,7 @@ export class WorkspaceCodingController {
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiBody({
-    description: 'Generate coder training packages based on CODING_INCOMPLETE responses',
+    description: 'Generate coder training packages based on CODING_INCOMPLETE responses for specific variable and unit combinations',
     schema: {
       type: 'object',
       properties: {
@@ -966,7 +887,8 @@ export class WorkspaceCodingController {
           items: {
             type: 'object',
             properties: {
-              variableName: { type: 'string' },
+              variableId: { type: 'string' },
+              unitId: { type: 'string' },
               sampleCount: { type: 'number' }
             }
           }
@@ -1009,7 +931,7 @@ export class WorkspaceCodingController {
     @WorkspaceId() workspace_id: number,
       @Body() body: {
         selectedCoders: { id: number; name: string }[];
-        variableConfigs: { variableName: string; sampleCount: number }[];
+        variableConfigs: { variableId: string; unitId: string; sampleCount: number }[];
       }
   ): Promise<{
         coderId: number;
@@ -1027,7 +949,77 @@ export class WorkspaceCodingController {
           variable: string;
         }[];
       }[]> {
-    return this.workspaceCodingService.generateCoderTrainingPackages(
+    return this.coderTrainingService.generateCoderTrainingPackages(
+      workspace_id,
+      body.selectedCoders,
+      body.variableConfigs
+    );
+  }
+
+  @Post(':workspace_id/coding/coder-training-jobs')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiBody({
+    description: 'Create persistent coding jobs for coder training',
+    schema: {
+      type: 'object',
+      properties: {
+        selectedCoders: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'number' },
+              name: { type: 'string' }
+            }
+          }
+        },
+        variableConfigs: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              variableId: { type: 'string' },
+              unitId: { type: 'string' },
+              sampleCount: { type: 'number' }
+            }
+          }
+        }
+      }
+    }
+  })
+  @ApiOkResponse({
+    description: 'Coding jobs created successfully for coder training',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        jobsCreated: { type: 'number' },
+        message: { type: 'string' },
+        jobs: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              coderId: { type: 'number' },
+              coderName: { type: 'string' },
+              jobId: { type: 'number' },
+              jobName: { type: 'string' }
+            }
+          }
+        }
+      }
+    }
+  })
+  async createCoderTrainingJobs(
+    @WorkspaceId() workspace_id: number,
+      @Body() body: {
+        selectedCoders: { id: number; name: string }[];
+        variableConfigs: { variableId: string; unitId: string; sampleCount: number }[];
+      }
+  ): Promise<{ success: boolean; jobsCreated: number; message: string; jobs: { coderId: number; coderName: string; jobId: number; jobName: string }[] }> {
+    return this.coderTrainingService.createCoderTrainingJobs(
       workspace_id,
       body.selectedCoders,
       body.variableConfigs

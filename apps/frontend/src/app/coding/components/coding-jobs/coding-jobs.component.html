@@ -92,6 +92,13 @@
         </mat-cell>
       </ng-container>
 
+      <ng-container matColumnDef="progress">
+        <mat-header-cell *matHeaderCellDef mat-sort-header>Fortschritt</mat-header-cell>
+        <mat-cell *matCellDef="let element">
+          {{getProgress(element)}}
+        </mat-cell>
+      </ng-container>
+
       <ng-container matColumnDef="createdAt">
         <mat-header-cell *matHeaderCellDef mat-sort-header>Erstellt am</mat-header-cell>
         <mat-cell *matCellDef="let element">
@@ -103,6 +110,15 @@
         <mat-header-cell *matHeaderCellDef mat-sort-header>Aktualisiert am</mat-header-cell>
         <mat-cell *matCellDef="let element">
           {{element.updatedAt | date: 'dd.MM.yyyy HH:mm'}}
+        </mat-cell>
+      </ng-container>
+
+      <ng-container matColumnDef="viewResults">
+        <mat-header-cell *matHeaderCellDef></mat-header-cell>
+        <mat-cell *matCellDef="let element">
+          <button mat-icon-button (click)="viewCodingResults(element)" aria-label="Ergebnisse anzeigen">
+            <mat-icon>visibility</mat-icon>
+          </button>
         </mat-cell>
       </ng-container>
     </mat-table>

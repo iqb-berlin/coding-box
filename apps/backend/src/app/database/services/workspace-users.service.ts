@@ -52,7 +52,7 @@ export class WorkspaceUsersService {
 
   async setWorkspaceUsers(workspaceId: number, userIds: number[]): Promise<boolean> {
     this.logger.log(`Setting users for workspace with id: ${workspaceId}`);
-    const entries = userIds.map(user => ({ userId: user, workspaceId: workspaceId }));
+    const entries = userIds.map(user => ({ userId: user, workspaceId: workspaceId, accessLevel: 3 }));
     const hasRights = this.workspaceUsersRepository.find({ where: { workspaceId: workspaceId } });
     if (hasRights) {
       await this.workspaceUsersRepository.delete({ workspaceId: workspaceId });
