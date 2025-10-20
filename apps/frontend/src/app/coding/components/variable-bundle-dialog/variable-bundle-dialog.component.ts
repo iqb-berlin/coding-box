@@ -35,6 +35,7 @@ import { VariableAnalysisItem } from '../../models/variable-analysis-item.model'
 export interface VariableBundleGroupDialogData {
   bundleGroup?: VariableBundle;
   isEdit: boolean;
+  preloadedIncompleteVariables?: Variable[];
 }
 
 @Component({
@@ -96,7 +97,7 @@ export class VariableBundleDialogComponent implements OnInit, OnDestroy {
 
   // Selected variables table
   selectedVariablesDataSource = new MatTableDataSource<Variable>([]);
-  selectedVariablesDisplayedColumns: string[] = ['unitName', 'variableId', 'actions'];
+  selectedVariablesDisplayedColumns: string[] = ['unitName', 'variableId'];
 
   constructor(
     public dialogRef: MatDialogRef<VariableBundleDialogComponent>,
@@ -162,6 +163,16 @@ export class VariableBundleDialogComponent implements OnInit, OnDestroy {
     this.isLoadingVariableAnalysis = true;
     const workspaceId = this.appService.selectedWorkspaceId;
 
+    if (this.data.preloadedIncompleteVariables && page === 1) {
+      this.availableVariables = this.data.preloadedIncompleteVariables;
+      this.dataSource.data = this.availableVariables;
+      this.processVariableSelection();
+      this.totalVariableAnalysisRecords = this.availableVariables.length;
+      this.variableAnalysisPageIndex = 0;
+      this.isLoadingVariableAnalysis = false;
+      return;
+    }
+
     if (!workspaceId) {
       this.isLoadingVariableAnalysis = false;
       return;
@@ -216,6 +227,20 @@ export class VariableBundleDialogComponent implements OnInit, OnDestroy {
     });
   }
 
+  private processVariableSelection(): void {
+    // Pre-select variables that are already in the bundle group
+    if (this.data.bundleGroup?.variables) {
+      this.data.bundleGroup.variables.forEach((variable: Variable) => {
+        const foundVariable = this.availableVariables.find(
+          v => v.unitName === variable.unitName && v.variableId === variable.variableId
+        );
+        if (foundVariable) {
+          this.selectedVariables.select(foundVariable);
+        }
+      });
+    }
+  }
+
   onPageChange(event: PageEvent): void {
     this.loadVariableAnalysisItems(event.pageIndex + 1, event.pageSize);
   }
@@ -253,14 +278,6 @@ export class VariableBundleDialogComponent implements OnInit, OnDestroy {
     } else {
       this.dataSource.data.forEach(row => this.selectedVariables.select(row));
     }
-  }
-
-  /** The label for the checkbox on the passed row */
-  checkboxLabel(row?: Variable): string {
-    if (!row) {
-      return `${this.isAllSelected() ? 'deselect' : 'select'} all`;
-    }
-    return `${this.selectedVariables.isSelected(row) ? 'deselect' : 'select'} row ${row.unitName}`;
   }
 
   /** Add selected variables to the bundle group */
