@@ -17,7 +17,7 @@ export class UnitTag {
     id: number;
 
   @Index()
-  @Column({ type: 'bigint' })
+  @Column({ type: 'int' })
     unitId: number;
 
   @Index()

@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
+import { ResponseStatusType } from '@iqbspecs/response/response.interface';
 import Persons from '../entities/persons.entity';
 import { Booklet } from '../entities/booklet.entity';
 import { Unit } from '../entities/unit.entity';
@@ -11,6 +12,7 @@ import { ChunkEntity } from '../entities/chunk.entity';
 import { BookletLog } from '../entities/bookletLog.entity';
 import { Session } from '../entities/session.entity';
 import { UnitLog } from '../entities/unitLog.entity';
+import { statusStringToNumber } from '../utils/response-status-converter';
 import {
   Chunk,
   Log,
@@ -700,7 +702,7 @@ export class PersonService {
             return {
               unitid: Number(savedUnit.id),
               variableid: response.id,
-              status: response.status as string,
+              status: statusStringToNumber(response.status as ResponseStatusType) || 0,
               value: value,
               subform: subform.id
             };

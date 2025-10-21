@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { ResponseEntity } from '../entities/response.entity';
 import { CodingStatistics } from './shared-types';
 import { CacheService } from '../../cache/cache.service';
+import { statusStringToNumber } from '../utils/response-status-converter';
 
 @Injectable()
 export class CodingStatisticsService {
@@ -20,7 +21,6 @@ export class CodingStatisticsService {
   async getCodingStatistics(workspace_id: number): Promise<CodingStatistics> {
     this.logger.log(`Getting coding statistics for workspace ${workspace_id}`);
 
-    // Try to get from Redis cache first
     const cacheKey = `${this.CACHE_KEY_PREFIX}:${workspace_id}`;
     const cachedResult = await this.cacheService.get<CodingStatistics>(cacheKey);
     if (cachedResult) {
@@ -34,6 +34,7 @@ export class CodingStatisticsService {
     };
 
     try {
+      const valuedChangedStatus = statusStringToNumber('VALUE_CHANGED') || 3;
       const statusCountResults = await this.responseRepository.query(`
         SELECT
           response.status_v1 as "statusValue",
@@ -43,10 +44,11 @@ export class CodingStatisticsService {
         INNER JOIN booklet ON unit.bookletid = booklet.id
         INNER JOIN persons person ON booklet.personid = person.id
         WHERE response.status = $1
+          AND response.status_v1 IS NOT NULL
           AND person.workspace_id = $2
           AND person.consider = $3
         GROUP BY response.status_v1
-      `, ['VALUE_CHANGED', workspace_id, true]);
+      `, [valuedChangedStatus, workspace_id, true]);
 
       let totalResponses = 0;
 
@@ -55,9 +57,12 @@ export class CodingStatisticsService {
         const validCount = Number.isNaN(count) ? 0 : count;
         statistics.statusCounts[result.statusValue] = validCount;
         totalResponses += validCount;
+        this.logger.debug(`Coded status ${result.statusValue}: ${validCount} responses`);
       });
 
       statistics.totalResponses = totalResponses;
+
+      this.logger.log(`Computed coding statistics for workspace ${workspace_id}: ${totalResponses} total coded responses, ${Object.keys(statistics.statusCounts).length} different status types`);
 
       await this.cacheService.set(cacheKey, statistics, this.CACHE_TTL_SECONDS);
       this.logger.log(`Computed and cached statistics for workspace ${workspace_id}`);
@@ -67,20 +72,5 @@ export class CodingStatisticsService {
       this.logger.error(`Error getting coding statistics: ${error.message}`);
       return statistics;
     }
-  }
-
-  /**
-   * Get the cache key for coding statistics
-   * @param workspaceId The workspace ID
-   * @returns The cache key
-   */
-  getCacheKey(workspaceId: number): string {
-    return `${this.CACHE_KEY_PREFIX}:${workspaceId}`;
-  }
-
-  async createCodingStatisticsJob(workspaceId: number): Promise<{ jobId: string; message: string }> {
-    this.logger.log(`Creating coding statistics job for workspace ${workspaceId}`);
-    // This will be implemented in the JobQueueService
-    throw new Error('Method not implemented yet - needs JobQueueService integration');
   }
 }

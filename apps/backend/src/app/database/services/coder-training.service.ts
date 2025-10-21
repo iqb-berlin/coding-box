@@ -7,6 +7,7 @@ import { CodingJobVariable } from '../entities/coding-job-variable.entity';
 import { CodingJobUnit } from '../entities/coding-job-unit.entity';
 import { ResponseEntity } from '../entities/response.entity';
 import { Unit } from '../entities/unit.entity';
+import { statusStringToNumber } from '../utils/response-status-converter';
 
 interface CoderTrainingResponse {
   responseId: number;
@@ -91,7 +92,7 @@ export class CoderTrainingService {
         // Query responses with CODING_INCOMPLETE status for this variable/unit combination
         const responses = await this.responseRepository.find({
           where: {
-            status_v1: 'CODING_INCOMPLETE',
+            status_v1: statusStringToNumber('CODING_INCOMPLETE'),
             variableid: variableId
           },
           relations: ['unit', 'unit.booklet', 'unit.booklet.person', 'unit.booklet.bookletinfo'],

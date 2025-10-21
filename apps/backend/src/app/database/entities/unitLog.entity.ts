@@ -9,7 +9,7 @@ export class UnitLog {
   @PrimaryGeneratedColumn()
     id: number;
 
-  @Column({ type: 'bigint' })
+  @Column({ type: 'int' })
     unitid: number;
 
   @Column({ type: 'text' })
