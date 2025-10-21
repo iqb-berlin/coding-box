@@ -368,7 +368,7 @@ export class WorkspaceCodingService {
               response.id,
               {
                 code_v1: response?.code_v1,
-                status_v1: response?.status_v1,
+                status_v1: statusStringToNumber(response?.status_v1),
                 score_v1: response?.score_v1
               }
             ));

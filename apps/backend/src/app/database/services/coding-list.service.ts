@@ -6,6 +6,7 @@ import * as ExcelJS from 'exceljs';
 import FileUpload from '../entities/file_upload.entity';
 import { ResponseEntity } from '../entities/response.entity';
 import { extractVariableLocation } from '../../utils/voud/extractVariableLocation';
+import { statusStringToNumber } from '../utils/response-status-converter';
 
 @Injectable()
 export class CodingListService {
@@ -173,7 +174,7 @@ export class CodingListService {
 
   // Stream-based CSV generator to avoid loading everything into memory
   async getCodingListCsvStream(workspace_id: number, authToken: string, serverUrl?: string) {
-    this.logger.log(`Streaming CSV export for workspace ddddd ${workspace_id}`);
+    this.logger.log(`Streaming CSV export for workspacee${workspace_id}`);
 
     // Prepare CSV transform stream with headers
     const csvStream = fastCsv.format({ headers: true });
@@ -245,7 +246,7 @@ export class CodingListService {
             .leftJoinAndSelect('unit.booklet', 'booklet')
             .leftJoinAndSelect('booklet.person', 'person')
             .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
-            .where('response.status_v1 = :status', { status: 'CODING_INCOMPLETE' })
+            .where('response.status_v1 = :status', { status: statusStringToNumber('CODING_INCOMPLETE') })
             .andWhere('person.workspace_id = :workspace_id', { workspace_id })
             .andWhere('response.id > :lastId', { lastId })
             .orderBy('response.id', 'ASC')
