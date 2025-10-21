@@ -19,6 +19,8 @@ export type Testcenter = {
 })
 export class WorkspaceAdminService {
   private lastAuthToken: string = '';
+  private lastServer: string = '';
+  private lastUrl: string = '';
   private lastTestcenterInstance!: Testcenter[];
   private claims!: WorkspaceAdmin[];
   private testGroups!: TestGroupsInfoDto[];
@@ -27,12 +29,28 @@ export class WorkspaceAdminService {
     return this.lastAuthToken;
   }
 
+  getLastServer() : string {
+    return this.lastServer;
+  }
+
+  getLastUrl() : string {
+    return this.lastUrl;
+  }
+
   getClaims() : WorkspaceAdmin[] {
     return this.claims;
   }
 
   setLastAuthToken(token:string) {
     this.lastAuthToken = token;
+  }
+
+  setLastServer(server:string) {
+    this.lastServer = server;
+  }
+
+  setLastUrl(url:string) {
+    this.lastUrl = url;
   }
 
   setClaims(claims:WorkspaceAdmin[]) {
