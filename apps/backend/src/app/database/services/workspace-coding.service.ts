@@ -59,8 +59,8 @@ interface QueryParameters {
 
 interface CodedResponse {
   id: number;
-  code_v1?: string;
-  status_v1?: string;
+  code_v1?: number;
+  status_v1?: number;
   score_v1?: number;
 }
 
