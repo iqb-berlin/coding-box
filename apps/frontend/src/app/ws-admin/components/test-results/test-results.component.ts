@@ -41,6 +41,7 @@ import { MatDivider } from '@angular/material/divider';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
+import { TestResultService } from '../../../services/test-result.service';
 import { TestCenterImportComponent } from '../test-center-import/test-center-import.component';
 import { LogDialogComponent } from '../booklet-log-dialog/log-dialog.component';
 import { UnitLogsDialogComponent } from '../unit-logs-dialog/unit-logs-dialog.component';
@@ -187,6 +188,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   private dialog = inject(MatDialog);
   private backendService = inject(BackendService);
   private appService = inject(AppService);
+  private testResultService = inject(TestResultService);
   private router = inject(Router);
   private snackBar = inject(MatSnackBar);
   private translateService = inject(TranslateService);
@@ -789,7 +791,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   createTestResultsList(page: number = 0, limit: number = 50, searchText: string = ''): void {
     const validPage = Math.max(0, page);
     this.isLoading = !this.isSearching;
-    this.backendService.getTestResults(this.appService.selectedWorkspaceId, validPage, limit, searchText)
+    this.testResultService.getTestResults(this.appService.selectedWorkspaceId, validPage, limit, searchText)
       .subscribe(response => {
         this.isLoading = false;
         this.isSearching = false;
@@ -841,6 +843,9 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
     dialogRef.afterClosed().subscribe((result: boolean | UntypedFormGroup) => {
       if (result instanceof UntypedFormGroup || result) {
+        if (this.appService.selectedWorkspaceId) {
+          this.testResultService.invalidateCache(this.appService.selectedWorkspaceId);
+        }
         this.createTestResultsList(this.pageIndex, this.pageSize, this.getCurrentSearchText());
       }
     });
@@ -872,6 +877,9 @@ export class TestResultsComponent implements OnInit, OnDestroy {
               resultType,
               overwriteExisting
             ).subscribe(() => {
+              if (this.appService.selectedWorkspaceId) {
+                this.testResultService.invalidateCache(this.appService.selectedWorkspaceId);
+              }
               setTimeout(() => {
                 this.createTestResultsList(this.pageIndex, this.pageSize, this.getCurrentSearchText());
               }, 1000);
