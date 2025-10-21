@@ -25,11 +25,11 @@ export class Booklet {
     id: number;
 
   @Index()
-  @Column({ type: 'bigint' })
+  @Column({ type: 'int' })
     infoid: number;
 
   @Index()
-  @Column({ type: 'bigint' })
+  @Column({ type: 'int' })
     personid: number;
 
   @Column({ type: 'bigint', default: 0 })

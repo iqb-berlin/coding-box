@@ -18,7 +18,7 @@ export class UnitNote {
     id: number;
 
   @Index()
-  @Column({ type: 'bigint' })
+  @Column({ type: 'int' })
     unitId: number;
 
   @Index()

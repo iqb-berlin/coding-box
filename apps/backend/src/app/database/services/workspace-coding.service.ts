@@ -7,7 +7,7 @@ import * as cheerio from 'cheerio';
 import * as fastCsv from 'fast-csv';
 import * as ExcelJS from 'exceljs';
 import * as crypto from 'crypto';
-import { ResponseStatusType } from '@iqbspecs/response/response.interface';
+import { statusNumberToString, statusStringToNumber } from '../utils/response-status-converter';
 import { CacheService } from '../../cache/cache.service';
 import { MissingsProfilesService } from './missings-profiles.service';
 import FileUpload from '../entities/file_upload.entity';
@@ -444,7 +444,7 @@ export class WorkspaceCodingService {
           const codedResult = Autocoder.CodingFactory.code({
             id: response.variableid,
             value: response.value,
-            status: response.status as ResponseStatusType
+            status: statusNumberToString(response.status) || 'UNSET'
           }, scheme.variableCodings[0]);
           const codedStatus = codedResult?.status;
           if (!statistics.statusCounts[codedStatus]) {
@@ -679,7 +679,7 @@ export class WorkspaceCodingService {
       // Step 5: Get responses - 50% progress
       const responseQueryStart = Date.now();
       const allResponses = await this.responseRepository.find({
-        where: { unitid: In(unitIdsArray), status: In(['VALUE_CHANGED', 'DISPLAYED', 'NOT_REACHED']) },
+        where: { unitid: In(unitIdsArray), status: In([3, 2, 1]) },
         select: ['id', 'unitid', 'variableid', 'value', 'status'] // Only select needed fields
       });
       metrics.responseQuery = Date.now() - responseQueryStart;
@@ -1004,7 +1004,7 @@ export class WorkspaceCodingService {
       const responses = await this.responseRepository.find({
         where: {
           unitid: In(unitIds),
-          status_v1: In(['CODING_INCOMPLETE', 'INTENDED_INCOMPLETE', 'CODE_SELECTION_PENDING'])
+          status_v1: In([statusStringToNumber('CODING_INCOMPLETE'), statusStringToNumber('INTENDED_INCOMPLETE'), statusStringToNumber('CODE_SELECTION_PENDING')])
         }
       });
 
@@ -2199,7 +2199,7 @@ export class WorkspaceCodingService {
       .leftJoin('response.unit', 'unit')
       .leftJoin('unit.booklet', 'booklet')
       .leftJoin('booklet.person', 'person')
-      .where('response.status_v1 = :status', { status: 'CODING_INCOMPLETE' })
+      .where('response.status_v1 = :status', { status: statusStringToNumber('CODING_INCOMPLETE') })
       .andWhere('person.workspace_id = :workspace_id', { workspace_id: workspaceId });
 
     if (unitName) {
@@ -2427,7 +2427,7 @@ export class WorkspaceCodingService {
                 .createQueryBuilder()
                 .update(ResponseEntity)
                 .set({
-                  status_v2: status || null,
+                  status_v2: statusStringToNumber(status) || null,
                   code_v2: code ? parseInt(code.toString(), 10) : null,
                   score_v2: score ? parseInt(score.toString(), 10) : null
                 })
@@ -2446,7 +2446,7 @@ export class WorkspaceCodingService {
                     personLogin: response.unit?.booklet?.person?.login || undefined,
                     personGroup: response.unit?.booklet?.person?.group || undefined,
                     bookletName: response.unit?.booklet?.bookletinfo?.name || undefined,
-                    originalCodedStatus: response.status_v1,
+                    originalCodedStatus: statusNumberToString(response.status_v1) || '',
                     originalCode: response.code_v1,
                     originalScore: response.score_v1,
                     updatedCodedStatus: status || null,
