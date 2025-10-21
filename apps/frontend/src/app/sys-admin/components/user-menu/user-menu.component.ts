@@ -7,6 +7,8 @@ import { MatDivider } from '@angular/material/divider';
 import { WrappedIconComponent } from '../../../shared/wrapped-icon/wrapped-icon.component';
 import { AccountActionComponent } from '../account-action/account-action.component';
 import { AuthService } from '../../../core/services/auth.service';
+import { AppService } from '../../../services/app.service';
+import { AuthDataDto } from '../../../../../../../api-dto/auth-data-dto';
 
 @Component({
   selector: 'coding-box-user-menu',
@@ -25,8 +27,10 @@ import { AuthService } from '../../../core/services/auth.service';
 })
 export class UserMenuComponent implements OnInit {
   private authService = inject(AuthService);
+  private appService = inject(AppService);
 
   userName: string = '';
+  userStatus: string = '';
 
   async ngOnInit() {
     try {
@@ -36,6 +40,10 @@ export class UserMenuComponent implements OnInit {
       } else if (userProfile.username) {
         this.userName = userProfile.username;
       }
+
+      this.appService.authData$.subscribe((authData: AuthDataDto) => {
+        this.userStatus = authData.isAdmin ? 'Administrator' : 'Nutzer';
+      });
     } catch (error) {
       console.error('Failed to load user profile:', error);
     }
