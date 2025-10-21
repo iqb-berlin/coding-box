@@ -242,3 +242,10 @@ ALTER TABLE "public"."response" ALTER COLUMN "status_v1" TYPE SMALLINT USING sta
 ALTER TABLE "public"."response" ALTER COLUMN "status_v2" TYPE SMALLINT USING status_v2::SMALLINT;
 -- rollback ALTER TABLE "public"."response" ALTER COLUMN "status_v2" TYPE VARCHAR(255);
 
+-- changeset jurei733:7
+-- comment: Allow code_v1 and score_v1 to be nullable, matching the TypeORM entity definition
+ALTER TABLE "public"."response" ALTER COLUMN "code_v1" DROP NOT NULL;
+ALTER TABLE "public"."response" ALTER COLUMN "score_v1" DROP NOT NULL;
+
+-- rollback ALTER TABLE "public"."response" ALTER COLUMN "code_v1" SET NOT NULL;
+-- rollback ALTER TABLE "public"."response" ALTER COLUMN "score_v1" SET NOT NULL;
