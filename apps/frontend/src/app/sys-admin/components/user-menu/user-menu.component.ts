@@ -1,8 +1,9 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, OnInit } from '@angular/core';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MatMenu, MatMenuTrigger } from '@angular/material/menu';
 import { MatButton } from '@angular/material/button';
+import { MatDivider } from '@angular/material/divider';
 import { WrappedIconComponent } from '../../../shared/wrapped-icon/wrapped-icon.component';
 import { AccountActionComponent } from '../account-action/account-action.component';
 import { AuthService } from '../../../core/services/auth.service';
@@ -18,11 +19,27 @@ import { AuthService } from '../../../core/services/auth.service';
     WrappedIconComponent,
     MatMenu,
     TranslateModule,
-    AccountActionComponent
+    AccountActionComponent,
+    MatDivider
   ]
 })
-export class UserMenuComponent {
+export class UserMenuComponent implements OnInit {
   private authService = inject(AuthService);
+
+  userName: string = '';
+
+  async ngOnInit() {
+    try {
+      const userProfile = await this.authService.loadUserProfile();
+      if (userProfile.firstName && userProfile.lastName) {
+        this.userName = `${userProfile.firstName} ${userProfile.lastName}`;
+      } else if (userProfile.username) {
+        this.userName = userProfile.username;
+      }
+    } catch (error) {
+      console.error('Failed to load user profile:', error);
+    }
+  }
 
   async logout() {
     await this.authService.logout();
