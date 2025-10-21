@@ -225,3 +225,20 @@ UPDATE "public"."response" SET "status_v3" = 13 WHERE "status_v3" = 'CODE_SELECT
 -- rollback UPDATE "public"."response" SET "status_v3" = 'DERIVE_PENDING'     WHERE "status_v3" = '11';
 -- rollback UPDATE "public"."response" SET "status_v3" = 'INTENDED_INCOMPLETE' WHERE "status_v3" = '12';
 -- rollback UPDATE "public"."response" SET "status_v3" = 'CODE_SELECTION_PENDING' WHERE "status_v3" = '13';
+
+
+-- changeset jurei733:6
+-- comment: Change response table status, status_v1, and status_v2 columns from VARCHAR to SMALLINT after migrating existing string values to integers
+
+-- Change status column from VARCHAR to SMALLINT
+ALTER TABLE "public"."response" ALTER COLUMN "status" TYPE SMALLINT USING status::SMALLINT;
+-- rollback ALTER TABLE "public"."response" ALTER COLUMN "status" TYPE VARCHAR(255);
+
+-- Change status_v1 column from VARCHAR to SMALLINT
+ALTER TABLE "public"."response" ALTER COLUMN "status_v1" TYPE SMALLINT USING status_v1::SMALLINT;
+-- rollback ALTER TABLE "public"."response" ALTER COLUMN "status_v1" TYPE VARCHAR(255);
+
+-- Change status_v2 column from VARCHAR to SMALLINT
+ALTER TABLE "public"."response" ALTER COLUMN "status_v2" TYPE SMALLINT USING status_v2::SMALLINT;
+-- rollback ALTER TABLE "public"."response" ALTER COLUMN "status_v2" TYPE VARCHAR(255);
+
