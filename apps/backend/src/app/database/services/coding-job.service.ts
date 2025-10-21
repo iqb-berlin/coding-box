@@ -1,14 +1,35 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In } from 'typeorm';
+import {
+  Repository, In, Not, IsNull
+} from 'typeorm';
+import { SaveCodingProgressDto } from '../../admin/coding-job/dto/save-coding-progress.dto';
 import { CodingJob } from '../entities/coding-job.entity';
 import { CodingJobCoder } from '../entities/coding-job-coder.entity';
 import { CodingJobVariable } from '../entities/coding-job-variable.entity';
 import { CodingJobVariableBundle } from '../entities/coding-job-variable-bundle.entity';
+import { CodingJobUnit } from '../entities/coding-job-unit.entity';
 import { CreateCodingJobDto } from '../../admin/coding-job/dto/create-coding-job.dto';
 import { UpdateCodingJobDto } from '../../admin/coding-job/dto/update-coding-job.dto';
 import { VariableBundle } from '../entities/variable-bundle.entity';
 import { ResponseEntity } from '../entities/response.entity';
+import FileUpload from '../entities/file_upload.entity';
+
+interface CodingSchemeCode {
+  id: number | string;
+  code?: string;
+  label?: string;
+  score?: number;
+}
+
+interface CodingSchemeVariableCoding {
+  id: string;
+  codes?: CodingSchemeCode[];
+}
+
+interface CodingScheme {
+  variableCodings?: CodingSchemeVariableCoding[];
+}
 
 @Injectable()
 export class CodingJobService {
@@ -21,11 +42,36 @@ export class CodingJobService {
     private codingJobVariableRepository: Repository<CodingJobVariable>,
     @InjectRepository(CodingJobVariableBundle)
     private codingJobVariableBundleRepository: Repository<CodingJobVariableBundle>,
+    @InjectRepository(CodingJobUnit)
+    private codingJobUnitRepository: Repository<CodingJobUnit>,
     @InjectRepository(VariableBundle)
     private variableBundleRepository: Repository<VariableBundle>,
     @InjectRepository(ResponseEntity)
-    private responseRepository: Repository<ResponseEntity>
+    private responseRepository: Repository<ResponseEntity>,
+    @InjectRepository(FileUpload)
+    private fileUploadRepository: Repository<FileUpload>
   ) {}
+
+  async getCodingJobProgress(jobId: number): Promise<{ progress: number; coded: number; total: number }> {
+    const totalUnits = await this.codingJobUnitRepository.count({
+      where: { coding_job_id: jobId }
+    });
+
+    if (totalUnits === 0) {
+      return { progress: 0, coded: 0, total: 0 };
+    }
+
+    const codedUnits = await this.codingJobUnitRepository.count({
+      where: {
+        coding_job_id: jobId,
+        code: Not(IsNull()),
+        score: Not(IsNull())
+      }
+    });
+    const progress = Math.round((codedUnits / totalUnits) * 100);
+
+    return { progress, coded: codedUnits, total: totalUnits };
+  }
 
   async getCodingJobs(
     workspaceId: number,
@@ -34,11 +80,13 @@ export class CodingJobService {
   ): Promise<{ data: (CodingJob & {
       assignedCoders?: number[];
       assignedVariables?: { unitName: string; variableId: string }[];
-      assignedVariableBundles?: { name: string; variables: { unitName: string; variableId: string }[] }[]
+      assignedVariableBundles?: { name: string; variables: { unitName: string; variableId: string }[] }[];
+      progress?: number;
+      codedUnits?: number;
+      totalUnits?: number;
     })[]; total: number; page: number; limit: number }> {
     const validPage = page > 0 ? page : 1;
     const validLimit = limit > 0 ? limit : 10;
-
     const skip = (validPage - 1) * validLimit;
 
     const total = await this.codingJobRepository.count({
@@ -54,7 +102,7 @@ export class CodingJobService {
 
     const jobIds = jobs.map(job => job.id);
 
-    const [allCoders, allVariables, variableBundleEntities] = await Promise.all([
+    const [allCoders, allVariables, variableBundleEntities, progressData] = await Promise.all([
       this.codingJobCoderRepository.find({
         where: { coding_job_id: In(jobIds) }
       }),
@@ -64,7 +112,8 @@ export class CodingJobService {
       this.codingJobVariableBundleRepository.find({
         where: { coding_job_id: In(jobIds) },
         relations: ['variable_bundle']
-      })
+      }),
+      Promise.all(jobIds.map(jobId => this.getCodingJobProgress(jobId)))
     ]);
 
     const codersByJobId = new Map<number, number[]>();
@@ -99,11 +148,14 @@ export class CodingJobService {
       }
     });
 
-    const data = jobs.map(job => ({
+    const data = jobs.map((job, index) => ({
       ...job,
       assignedCoders: codersByJobId.get(job.id) || [],
       assignedVariables: variablesByJobId.get(job.id) || [],
-      assignedVariableBundles: variableBundlesByJobId.get(job.id) || []
+      assignedVariableBundles: variableBundlesByJobId.get(job.id) || [],
+      progress: progressData[index]?.progress || 0,
+      codedUnits: progressData[index]?.coded || 0,
+      totalUnits: progressData[index]?.total || 0
     }));
     return {
       data,
@@ -202,6 +254,7 @@ export class CodingJobService {
         }
       }
     }
+    await this.saveCodingJobUnits(savedCodingJob.id);
 
     return savedCodingJob;
   }
@@ -429,5 +482,209 @@ export class CodingJobService {
     return queryBuilder
       .orderBy('response.id', 'ASC')
       .getMany();
+  }
+
+  async saveCodingProgress(
+    codingJobId: number,
+    progress: SaveCodingProgressDto
+  ): Promise<CodingJob> {
+    const codingJob = await this.codingJobRepository.findOne({
+      where: { id: codingJobId }
+    });
+
+    if (!codingJob) {
+      throw new NotFoundException(`Coding job with ID ${codingJobId} not found`);
+    }
+
+    const testPersonParts = progress.testPerson.split('@');
+    const personLogin = testPersonParts[0] || '';
+    const personCode = testPersonParts[1] || '';
+    const bookletName = testPersonParts[2] || '';
+
+    const codingJobUnit = await this.codingJobUnitRepository.findOne({
+      where: {
+        coding_job_id: codingJobId,
+        unit_name: progress.unitId,
+        variable_id: progress.variableId,
+        person_login: personLogin,
+        person_code: personCode,
+        booklet_name: bookletName
+      }
+    });
+
+    if (!codingJobUnit) {
+      throw new NotFoundException('Coding job unit not found for progress entry');
+    }
+
+    codingJobUnit.code = progress.selectedCode.id;
+    const score = progress.selectedCode.score;
+    if (score !== undefined) {
+      codingJobUnit.score = score;
+    }
+
+    await this.codingJobUnitRepository.save(codingJobUnit);
+
+    await this.checkAndUpdateCodingJobCompletion(codingJobId);
+
+    return codingJob;
+  }
+
+  async getCodingProgress(codingJobId: number): Promise<Record<string, SaveCodingProgressDto['selectedCode']>> {
+    const codingJob = await this.codingJobRepository.findOne({
+      where: { id: codingJobId }
+    });
+
+    if (!codingJob) {
+      throw new NotFoundException(`Coding job with ID ${codingJobId} not found`);
+    }
+
+    const codingJobUnits = await this.codingJobUnitRepository.find({
+      where: { coding_job_id: codingJobId }
+    });
+
+    if (codingJobUnits.length === 0) {
+      return {};
+    }
+
+    const unitAliases = [...new Set(codingJobUnits.map(unit => unit.unit_alias).filter(alias => alias !== null))];
+    const codingSchemes = await this.getCodingSchemes(unitAliases, codingJob.workspace_id);
+
+    const progressMap: Record<string, SaveCodingProgressDto['selectedCode']> = {};
+
+    codingJobUnits.forEach(unit => {
+      if (unit.code !== null) {
+        const compositeKey = this.generateCodingProgressKey(
+          `${unit.person_login}@${unit.person_code}@${unit.booklet_name}`,
+          unit.unit_name,
+          unit.variable_id
+        );
+
+        const codingScheme = unit.unit_alias ? codingSchemes.get(unit.unit_alias) : undefined;
+        let code: string | undefined;
+        let label: string | undefined;
+
+        if (codingScheme) {
+          const variableCoding = codingScheme.variableCodings?.find(vc => vc.id === unit.variable_id);
+          if (variableCoding?.codes) {
+            const codeEntry = variableCoding.codes.find(c => c.id === unit.code);
+            if (codeEntry) {
+              code = codeEntry.code;
+              label = codeEntry.label;
+            }
+          }
+        }
+
+        progressMap[compositeKey] = {
+          id: unit.code,
+          code,
+          label
+        };
+
+        // If score exists, add it to the object
+        if (unit.score !== null) {
+          progressMap[compositeKey].score = unit.score;
+        }
+      }
+    });
+
+    return progressMap;
+  }
+
+  /**
+   * Generate composite key for coding progress using same logic as frontend
+   */
+  private generateCodingProgressKey(testPerson: string, unitId: string, variableId: string): string {
+    let bookletId = 'default';
+    if (testPerson) {
+      const parts = testPerson.split('@');
+      if (parts.length >= 3) {
+        bookletId = parts[2];
+      }
+    }
+
+    return `${testPerson}::${bookletId}::${unitId}::${variableId}`;
+  }
+
+  async getCodingJobUnits(codingJobId: number): Promise<{ responseId: number; unitName: string; unitAlias: string | null; variableId: string; variableAnchor: string; bookletName: string; personLogin: string; personCode: string }[]> {
+    const codingJobUnits = await this.codingJobUnitRepository.find({
+      where: { coding_job_id: codingJobId },
+      order: {
+        unit_name: 'ASC',
+        booklet_name: 'ASC',
+        person_login: 'ASC',
+        person_code: 'ASC',
+        variable_id: 'ASC'
+      }
+    });
+
+    return codingJobUnits.map(unit => ({
+      responseId: unit.response_id,
+      unitName: unit.unit_name,
+      unitAlias: unit.unit_alias,
+      variableId: unit.variable_id,
+      variableAnchor: unit.variable_anchor,
+      bookletName: unit.booklet_name,
+      personLogin: unit.person_login,
+      personCode: unit.person_code
+    }));
+  }
+
+  private async saveCodingJobUnits(codingJobId: number): Promise<void> {
+    const responses = await this.getResponsesForCodingJob(codingJobId);
+
+    if (responses.length === 0) {
+      return;
+    }
+
+    const codingJobUnits = responses.map(response => this.codingJobUnitRepository.create({
+      coding_job_id: codingJobId,
+      response_id: response.id,
+      unit_name: response.unit?.name || '',
+      unit_alias: response.unit?.alias || null,
+      variable_id: response.variableid,
+      variable_anchor: response.variableid,
+      booklet_name: response.unit?.booklet?.bookletinfo?.name || '',
+      person_login: response.unit?.booklet?.person?.login || '',
+      person_code: response.unit?.booklet?.person?.code || ''
+    }));
+
+    await this.codingJobUnitRepository.save(codingJobUnits);
+  }
+
+  private async getCodingSchemes(unitAliases: string[], workspaceId: number): Promise<Map<string, CodingScheme>> {
+    const codingSchemeRefs = unitAliases.filter(alias => alias !== null);
+    const codingSchemes = new Map<string, CodingScheme>();
+
+    if (codingSchemeRefs.length === 0) {
+      return codingSchemes;
+    }
+
+    const codingSchemeFiles = await this.fileUploadRepository.find({
+      where: {
+        workspace_id: workspaceId,
+        file_id: In(codingSchemeRefs)
+      },
+      select: ['file_id', 'data']
+    });
+
+    for (const file of codingSchemeFiles) {
+      try {
+        const data = typeof file.data === 'string' ? JSON.parse(file.data) : file.data;
+        codingSchemes.set(file.file_id, data);
+      } catch (error) {
+        // Use empty scheme for invalid schemes
+        codingSchemes.set(file.file_id, {});
+      }
+    }
+
+    return codingSchemes;
+  }
+
+  private async checkAndUpdateCodingJobCompletion(codingJobId: number): Promise<void> {
+    const progress = await this.getCodingJobProgress(codingJobId);
+
+    if (progress.total > 0 && progress.progress === 100) {
+      await this.codingJobRepository.update(codingJobId, { status: 'completed' });
+    }
   }
 }

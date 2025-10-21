@@ -142,6 +142,15 @@ export class TestCenterImportComponent {
       this.workspaces = this.workspaceAdminService.getClaims();
       this.testCenterInstance = this.workspaceAdminService.getlastTestcenterInstance();
       this.testGroups = this.workspaceAdminService.getTestGroups();
+      const storedServer = this.workspaceAdminService.getLastServer();
+      const storedUrl = this.workspaceAdminService.getLastUrl();
+      if (storedServer) {
+        this.loginForm.get('testCenter')?.setValue(parseInt(storedServer, 10));
+        if (storedUrl) {
+          this.loginForm.get('testCenterIndividual')?.setValue(storedUrl);
+          this.loginForm.get('testCenterIndividual')?.enable();
+        }
+      }
     }
   }
 
@@ -184,6 +193,8 @@ export class TestCenterImportComponent {
       this.authToken = response.token;
       this.authenticationError = false;
       this.workspaceAdminService.setLastAuthToken(response.token);
+      this.workspaceAdminService.setLastServer(this.testCenterInstance[0]?.id.toString());
+      this.workspaceAdminService.setLastUrl(url);
       this.workspaceAdminService.setClaims(response.claims.workspaceAdmin);
       this.workspaceAdminService.setlastTestcenterInstance(this.testCenterInstance);
       this.workspaces = response.claims.workspaceAdmin;
@@ -195,6 +206,8 @@ export class TestCenterImportComponent {
     this.authenticated = false;
     this.authToken = '';
     this.workspaceAdminService.setLastAuthToken('');
+    this.workspaceAdminService.setLastServer('');
+    this.workspaceAdminService.setLastUrl('');
     this.workspaceAdminService.setClaims([]);
     this.workspaceAdminService.setlastTestcenterInstance([]);
     this.workspaces = [];
@@ -214,15 +227,19 @@ export class TestCenterImportComponent {
       testCenter: this.loginForm.get('testCenter')?.value,
       workspace: this.importFilesForm.get('workspace')?.value,
       testCenterIndividual: this.loginForm.get('testCenterIndividual')?.value || ''
-
     };
+
+    // Use stored server and url if available, otherwise fall back to form values
+    const server = this.workspaceAdminService.getLastServer() || formValues.testCenter?.toString();
+    const url = this.workspaceAdminService.getLastUrl() || formValues.testCenterIndividual;
+
     this.isUploadingTestResults = true;
     this.backendService
       .importTestcenterGroups(
         this.appService.selectedWorkspaceId,
         formValues.workspace,
-        formValues.testCenter,
-        formValues.testCenterIndividual,
+        server,
+        url,
         this.authToken
       )
       .subscribe(response => {
@@ -261,6 +278,9 @@ export class TestCenterImportComponent {
       testCenterIndividual: this.loginForm.get('testCenterIndividual')?.value || ''
     };
 
+    const server = this.workspaceAdminService.getLastServer() || formValues.testCenter?.toString();
+    const url = this.workspaceAdminService.getLastUrl() || formValues.testCenterIndividual;
+
     const tempIsUploadingTestResults = this.isUploadingTestResults;
     this.isUploadingTestResults = true;
 
@@ -268,8 +288,8 @@ export class TestCenterImportComponent {
       .importTestcenterGroups(
         this.appService.selectedWorkspaceId,
         formValues.workspace,
-        formValues.testCenter,
-        formValues.testCenterIndividual,
+        server,
+        url,
         this.authToken
       )
       .subscribe({

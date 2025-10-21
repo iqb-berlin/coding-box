@@ -32,31 +32,26 @@
             </div>
           }
           @if (selectedVariablesDataSource.data.length > 0) {
-            <table mat-table [dataSource]="selectedVariablesDataSource" class="selected-variables-table">
-              <!-- Unit Name Column -->
-              <ng-container matColumnDef="unitName">
-                <th mat-header-cell *matHeaderCellDef>Aufgaben-ID</th>
-                <td mat-cell *matCellDef="let element">{{ element.unitName }}</td>
-              </ng-container>
-
-              <!-- Variable ID Column -->
-              <ng-container matColumnDef="variableId">
-                <th mat-header-cell *matHeaderCellDef>Variablen-ID</th>
-                <td mat-cell *matCellDef="let element">{{ element.variableId }}</td>
-              </ng-container>
-
-              <!-- Actions Column -->
-              <ng-container matColumnDef="actions">
-                <th mat-header-cell *matHeaderCellDef>Aktionen</th>
-                <td mat-cell *matCellDef="let element">
-                  <button mat-icon-button color="warn" (click)="removeVariable(element)" matTooltip="Variable entfernen">
-                    <mat-icon>delete</mat-icon>
-                  </button>
-                </td>
-              </ng-container>
-
-              <tr mat-header-row *matHeaderRowDef="selectedVariablesDisplayedColumns; sticky: true"></tr>
-              <tr mat-row *matRowDef="let row; columns: selectedVariablesDisplayedColumns;"></tr>
+            <table class="preview-table">
+              <thead>
+                <tr>
+                  <th>Aufgaben-ID</th>
+                  <th>Variablen-ID</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (variable of selectedVariablesDataSource.data; track variable.unitName + variable.variableId) {
+                  <tr>
+                    <td>{{ variable.unitName }}</td>
+                    <td>
+                      {{ variable.variableId }}
+                      <button mat-icon-button class="delete-button" color="warn" (click)="removeVariable(variable)" matTooltip="Variable entfernen">
+                        <mat-icon>delete</mat-icon>
+                      </button>
+                    </td>
+                  </tr>
+                }
+              </tbody>
             </table>
           }
         </div>
@@ -106,54 +101,38 @@
         }
 
         @if (!isLoadingVariableAnalysis && availableVariables.length > 0) {
-          <div class="table-container">
-            <table mat-table [dataSource]="dataSource" class="variable-bundles-table">
-              <!-- Checkbox Column -->
-              <ng-container matColumnDef="select">
-                <th mat-header-cell *matHeaderCellDef>
-                  <mat-checkbox (change)="$event ? masterToggle() : null"
-                                [checked]="selectedVariables.hasValue() && isAllSelected()"
-                                [indeterminate]="selectedVariables.hasValue() && !isAllSelected()"
-                                [aria-label]="checkboxLabel()">
-                  </mat-checkbox>
-                </th>
-                <td mat-cell *matCellDef="let row">
-                  <mat-checkbox (click)="$event.stopPropagation()"
-                                (change)="$event ? selectedVariables.toggle(row) : null"
-                                [checked]="selectedVariables.isSelected(row)"
-                                [aria-label]="checkboxLabel(row)">
-                  </mat-checkbox>
-                </td>
-              </ng-container>
+          <!-- Quick selection tools -->
+          <div class="quick-selection-tools">
+            <button mat-stroked-button color="primary" (click)="masterToggle()" class="select-all-button">
+              <mat-icon>{{ isAllSelected() ? 'deselect' : 'select_all' }}</mat-icon>
+              {{ isAllSelected() ? 'Alle abwählen' : 'Alle auswählen' }}
+            </button>
+            <div class="selection-count">
+              {{ selectedVariables.selected.length }} von {{ dataSource.filteredData.length }} Variablen ausgewählt
+            </div>
+          </div>
 
-              <!-- Unit Name Column -->
-              <ng-container matColumnDef="unitName">
-                <th mat-header-cell *matHeaderCellDef>Aufgaben-ID</th>
-                <td mat-cell *matCellDef="let element">{{ element.unitName }}</td>
-              </ng-container>
-
-              <!-- Variable ID Column -->
-              <ng-container matColumnDef="variableId">
-                <th mat-header-cell *matHeaderCellDef>Variablen-ID</th>
-                <td mat-cell *matCellDef="let element">{{ element.variableId }}</td>
-              </ng-container>
-
-              <tr mat-header-row *matHeaderRowDef="displayedColumns; sticky: true"></tr>
-              <tr mat-row *matRowDef="let row; columns: displayedColumns;"
-                  (click)="selectedVariables.toggle(row)"
-                  [class.selected-row]="selectedVariables.isSelected(row)">
-              </tr>
-            </table>
-
-            <mat-paginator
-              [length]="totalVariableAnalysisRecords"
-              [pageSize]="variableAnalysisPageSize"
-              [pageIndex]="variableAnalysisPageIndex"
-              [pageSizeOptions]="variableAnalysisPageSizeOptions"
-              showFirstLastButtons
-              (page)="onPageChange($event)"
-              aria-label="Seiten auswählen">
-            </mat-paginator>
+          <!-- Variables grid view -->
+          <div class="variables-grid-container">
+            <div class="variables-grid">
+              @for (variable of dataSource.filteredData; track variable.unitName + variable.variableId) {
+                <div class="variable-card"
+                     [class.selected]="selectedVariables.isSelected(variable)"
+                     (click)="selectedVariables.toggle(variable)">
+                  <div class="variable-card-header">
+                    <mat-checkbox [checked]="selectedVariables.isSelected(variable)"
+                                  (click)="$event.stopPropagation()"
+                                  (change)="$event ? selectedVariables.toggle(variable) : null">
+                    </mat-checkbox>
+                    <div class="variable-identifiers">
+                      <div class="variable-id">
+                        {{ variable.unitName }}_{{ variable.variableId }}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              }
+            </div>
           </div>
 
           <div class="action-buttons">
@@ -162,6 +141,16 @@
               Ausgewählte Variablen hinzufügen
             </button>
           </div>
+
+          <mat-paginator
+            [length]="totalVariableAnalysisRecords"
+            [pageSize]="variableAnalysisPageSize"
+            [pageIndex]="variableAnalysisPageIndex"
+            [pageSizeOptions]="variableAnalysisPageSizeOptions"
+            showFirstLastButtons
+            (page)="onPageChange($event)"
+            aria-label="Seiten auswählen">
+          </mat-paginator>
         }
 
         @if (!isLoadingVariableAnalysis && availableVariables.length === 0) {

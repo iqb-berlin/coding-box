@@ -6,7 +6,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
 import { ReactiveFormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
-import { Subscription } from 'rxjs';
+import { Subscription, forkJoin } from 'rxjs';
 import { ActivatedRoute, Router } from '@angular/router';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { AppService } from '../../services/app.service';
@@ -49,8 +49,6 @@ export class HomeComponent implements OnInit, OnDestroy {
       if (authData) {
         this.authData = authData;
         this.workspaces = authData.workspaces;
-
-        // Check if user is a coder and redirect if needed
         if (!this.isCoderChecked && authData.userId > 0) {
           this.checkIfUserIsCoder(authData.userId);
         }
@@ -71,13 +69,16 @@ export class HomeComponent implements OnInit, OnDestroy {
       return;
     }
 
-    const firstWorkspaceId = this.workspaces[0].id;
+    const workspaceIds = this.workspaces.map(workspace => workspace.id);
+    const observables = workspaceIds.map(workspaceId => this.backendService.getWorkspaceUsers(workspaceId));
 
-    this.backendService.getWorkspaceUsers(firstWorkspaceId).subscribe(response => {
-      const currentUser = response.data.find(user => user.userId === userId);
-
-      if (currentUser && currentUser.accessLevel === 1) {
-        this.router.navigate(['/coding']);
+    forkJoin(observables).subscribe(responses => {
+      for (const response of responses) {
+        const currentUser = response.data.find(user => user.userId === userId);
+        if (currentUser && currentUser.accessLevel === 1) {
+          this.router.navigate(['/coding']);
+          return;
+        }
       }
     });
   }

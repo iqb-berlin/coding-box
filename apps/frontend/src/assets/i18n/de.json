@@ -114,7 +114,12 @@
     "workspaces-title": "Admin: Arbeitsbereiche",
     "edit-workspace-settings": "Arbeitsbereichs Einstellungen",
     "workspace-deleted": "Arbeitsbereich gelöscht",
-    "workspace-access-right-set": "Zugriffsrechte für Arbeitsbereich gesetzt"
+    "workspace-access-right-set": "Zugriffsrechte für Arbeitsbereich gesetzt",
+    "deleting-workspace-starting": "Löschen von Arbeitsbereich wird gestartet...",
+    "deleting-workspace-files": "Dateien werden gelöscht...",
+    "deleting-workspace-persons": "Personendaten werden gelöscht...",
+    "deleting-workspace-finish": "Löschen wird abgeschlossen...",
+    "deleting-workspace-success": "Arbeitsbereich erfolgreich gelöscht!"
   },
   "ws-admin": {
     "name": "Name",
@@ -337,5 +342,23 @@
     "firstPageLabel": "Erste Seite",
     "lastPageLabel": "Letzte Seite",
     "getRangeLabel": "{{startIndex}} - {{endIndex}} von {{length}}"
+  },
+
+  "replay": {
+    "coding-progress": "Kodierfortschritt:",
+    "pausing": "Wird angehalten...",
+    "pause-coding": "Kodierung anhalten",
+    "CODING_JOB_COMPLETED": "Kodierungsauftrag abgeschlossen",
+    "ALL_REPLAYS_CODED_MESSAGE": "Alle Replays wurden kodiert",
+    "SUBMITTING_JOB": "Auftrag wird eingereicht...",
+    "SUBMIT_JOB": "Auftrag einreichen",
+    "pausing-coding-job": "Kodierungsauftrag wird angehalten...",
+    "coding-job-paused-successfully": "Kodierungsauftrag erfolgreich angehalten",
+    "failed-to-pause-coding-job": "Fehler beim Anhalten des Kodierungsauftrags",
+    "submitting-coding-job": "Kodierungsauftrag wird eingereicht...",
+    "coding-job-submitted-successfully": "Kodierungsauftrag erfolgreich eingereicht",
+    "failed-to-submit-coding-job": "Fehler beim Einreichen des Kodierungsauftrags",
+    "coding-progress-message": "Kodierfortschritt: {{completed}}/{{total}} abgeschlossen ({{percentage}}%)",
+    "close": "Schließen"
   }
 }

@@ -1,25 +1,96 @@
-<div class="replay-container" [class.print-mode]="isPrintMode" [class.booklet-mode]="isBookletMode">
+<div class="replay-container" [class.print-mode]="isPrintMode" [class.booklet-mode]="isBookletMode" (window:keydown)="onKeyDown($event)">
   <cb-spinner [isLoaded]="isLoaded"></cb-spinner>
 
-  @if (isBookletMode && !!player && unitDef) {
-    <coding-box-booklet-replay
-      [bookletData]="bookletData"
-      (unitChanged)="handleUnitChanged($event)">
-    </coding-box-booklet-replay>
+  @if (isBookletMode) {
+    @if (isBookletMode && !!player && unitDef) {
+      <coding-box-units-replay
+        [unitsData]="unitsData"
+        (unitChanged)="handleUnitChanged($event)">
+      </coding-box-units-replay>
+    }
+
+    <div class="replay-content">
+      <div class="unit-player-container">
+        @if (!!player && unitDef) {
+          @for (key of [reloadKey]; track key) {
+            <coding-box-unit-player
+              [unitDef]="unitDef"
+              [unitPlayer]="player"
+              [unitResponses]="responses"
+              [pageId]="page"
+              [printMode]="isPrintMode"
+              (invalidPage)="checkPageError($event)">
+            </coding-box-unit-player>
+          }
+        }
+      </div>
+
+      @if (codingScheme && currentVariableId) {
+        <div class="code-selector-container">
+          <app-code-selector
+            [codingScheme]="codingScheme"
+            [variableId]="currentVariableId"
+            [preSelectedCodeId]="getPreSelectedCodeId(currentVariableId)"
+            (codeSelected)="onCodeSelected($event)">
+          </app-code-selector>
+        </div>
+      }
+    </div>
+  } @else {
+    @if (!!player && unitDef) {
+      @for (key of [reloadKey]; track key) {
+        <coding-box-unit-player
+          [unitDef]="unitDef"
+          [unitPlayer]="player"
+          [unitResponses]="responses"
+          [pageId]="page"
+          [printMode]="isPrintMode"
+          (invalidPage)="checkPageError($event)">
+        </coding-box-unit-player>
+      }
+    }
   }
 
-  @if (!!player && unitDef) {
-    <coding-box-unit-player
-      [unitDef]="unitDef"
-      [unitPlayer]="player"
-      [unitResponses]="responses"
-      [pageId]="page"
-      [printMode]="isPrintMode"
-      (invalidPage)="checkPageError($event)">
-    </coding-box-unit-player>
+  @if (isBookletMode && unitsData) {
+    <div class="coding-progress">
+      <div class="progress-info">
+        <span class="progress-text">{{ 'replay.coding-progress' | translate }}</span>
+        <span class="progress-numbers">{{ getCompletedCount() }}/{{ unitsData.units.length }}</span>
+        <span class="progress-percentage">({{ getProgressPercentage() }}%)</span>
+      </div>
+      <div class="progress-bar">
+        <div class="progress-fill" [style.width.%]="getProgressPercentage()"></div>
+      </div>
+      @if (codingJobId && !isCodingJobCompleted) {
+        <button
+          mat-raised-button
+          (click)="pauseCodingJob()"
+          [disabled]="isPausingJob"
+          class="pause-button">
+          {{ isPausingJob ? ('replay.pausing' | translate) : ('replay.pause-coding' | translate) }}
+        </button>
+      }
+    </div>
   }
 
   @if (testPerson && unitId) {
     <div class="watermark">{{ testPerson }} - {{ unitId }}</div>
+  }
+
+  @if (isCodingJobCompleted) {
+    <div class="completion-overlay">
+      <div class="completion-dialog">
+        <h2>{{ 'replay.CODING_JOB_COMPLETED' | translate }}</h2>
+        <p>{{ 'replay.ALL_REPLAYS_CODED_MESSAGE' | translate }}</p>
+        <button
+          mat-raised-button
+          color="primary"
+          (click)="submitCodingJob()"
+          [disabled]="isSubmittingJob"
+          class="submit-button">
+          {{ isSubmittingJob ? ('replay.SUBMITTING_JOB' | translate) : ('replay.SUBMIT_JOB' | translate) }}
+        </button>
+      </div>
+    </div>
   }
 </div>

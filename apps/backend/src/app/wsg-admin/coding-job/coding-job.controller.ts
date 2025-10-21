@@ -31,6 +31,7 @@ import { CodingJobService } from '../../database/services/coding-job.service';
 import { CodingJobDto } from '../../admin/coding-job/dto/coding-job.dto';
 import { CreateCodingJobDto } from '../../admin/coding-job/dto/create-coding-job.dto';
 import { UpdateCodingJobDto } from '../../admin/coding-job/dto/update-coding-job.dto';
+import { SaveCodingProgressDto } from '../../admin/coding-job/dto/save-coding-progress.dto';
 
 @ApiTags('WSG Admin Coding Jobs')
 @Controller('wsg-admin/workspace/:workspace_id/coding-job')
@@ -212,17 +213,78 @@ export class WsgCodingJobController {
       @Body() updateCodingJobDto: UpdateCodingJobDto
   ): Promise<CodingJobDto> {
     try {
-      const codingJob = await this.codingJobService.updateCodingJob(
+      return await this.codingJobService.updateCodingJob(
         id,
         workspaceId,
         updateCodingJobDto
       );
-      return codingJob;
     } catch (error) {
       if (error instanceof NotFoundException) {
         throw error;
       }
       throw new BadRequestException(`Failed to update coding job: ${error.message}`);
+    }
+  }
+
+  @Post(':id/start')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Start a coding job',
+    description: 'Finds all responses matching assigned variables and prepares replay data'
+  })
+  @ApiParam({
+    name: 'workspace_id',
+    type: Number,
+    required: true,
+    description: 'The ID of the workspace'
+  })
+  @ApiParam({
+    name: 'id',
+    type: Number,
+    required: true,
+    description: 'The ID of the coding job'
+  })
+  @ApiOkResponse({
+    description: 'Replay data prepared successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        total: { type: 'number' },
+        items: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              responseId: { type: 'number' },
+              unitName: { type: 'string' },
+              unitAlias: { type: 'string' },
+              variableId: { type: 'string' },
+              variableAnchor: { type: 'string' },
+              bookletName: { type: 'string' },
+              personLogin: { type: 'string' },
+              personCode: { type: 'string' }
+            }
+          }
+        }
+      }
+    }
+  })
+  async startCodingJob(
+    @WorkspaceId() workspaceId: number,
+      @Param('id', ParseIntPipe) id: number
+  ): Promise<{ total: number; items: Array<{ responseId: number; unitName: string; unitAlias: string | null; variableId: string; variableAnchor: string; bookletName: string; personLogin: string; personCode: string }> }> {
+    try {
+      await this.codingJobService.getCodingJob(id, workspaceId); // Validate job exists and belongs to workspace
+      const items = await this.codingJobService.getCodingJobUnits(id);
+      await this.codingJobService.updateCodingJob(id, workspaceId, { status: 'active' });
+
+      return { total: items.length, items };
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new BadRequestException(`Failed to start coding job: ${error.message}`);
     }
   }
 
@@ -268,6 +330,96 @@ export class WsgCodingJobController {
         throw error;
       }
       throw new BadRequestException(`Failed to delete coding job: ${error.message}`);
+    }
+  }
+
+  @Post(':id/progress')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Save coding progress',
+    description: 'Saves partial coding progress for a specific unit-variable combination'
+  })
+  @ApiParam({
+    name: 'workspace_id',
+    type: Number,
+    required: true,
+    description: 'The ID of the workspace'
+  })
+  @ApiParam({
+    name: 'id',
+    type: Number,
+    required: true,
+    description: 'The ID of the coding job'
+  })
+  @ApiOkResponse({
+    description: 'Coding progress saved successfully',
+    type: CodingJobDto
+  })
+  @ApiNotFoundResponse({
+    description: 'Coding job not found.'
+  })
+  @ApiBadRequestResponse({
+    description: 'Invalid input data.'
+  })
+  async saveCodingProgress(
+    @WorkspaceId() workspaceId: number,
+      @Param('id', ParseIntPipe) id: number,
+      @Body() saveCodingProgressDto: SaveCodingProgressDto
+  ): Promise<CodingJobDto> {
+    try {
+      await this.codingJobService.getCodingJob(id, workspaceId); // Validate job exists and belongs to workspace
+      const codingJob = await this.codingJobService.saveCodingProgress(id, saveCodingProgressDto);
+      return CodingJobDto.fromEntity(codingJob);
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new BadRequestException(`Failed to save coding progress: ${error.message}`);
+    }
+  }
+
+  @Get(':id/progress')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get coding progress',
+    description: 'Retrieves saved partial coding progress for a coding job'
+  })
+  @ApiParam({
+    name: 'workspace_id',
+    type: Number,
+    required: true,
+    description: 'The ID of the workspace'
+  })
+  @ApiParam({
+    name: 'id',
+    type: Number,
+    required: true,
+    description: 'The ID of the coding job'
+  })
+  @ApiOkResponse({
+    description: 'Coding progress retrieved successfully',
+    schema: {
+      type: 'object',
+      additionalProperties: { type: 'object' }
+    }
+  })
+  @ApiNotFoundResponse({
+    description: 'Coding job not found.'
+  })
+  async getCodingProgress(
+    @WorkspaceId() workspaceId: number,
+      @Param('id', ParseIntPipe) id: number
+  ): Promise<Record<string, unknown>> {
+    try {
+      await this.codingJobService.getCodingJob(id, workspaceId); // Validate job exists and belongs to workspace
+      return await this.codingJobService.getCodingProgress(id);
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new BadRequestException(`Failed to retrieve coding progress: ${error.message}`);
     }
   }
 }

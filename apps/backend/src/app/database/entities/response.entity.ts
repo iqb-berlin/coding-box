@@ -15,15 +15,15 @@ export class ResponseEntity {
     id: number;
 
   @Index()
-  @Column({ type: 'bigint' })
+  @Column({ type: 'int' })
     unitid: number;
 
   @Index()
-  @Column({ type: 'text' })
+  @Column({ type: 'varchar', length: 255 })
     variableid: string;
 
-  @Column({ type: 'text' })
-    status: string;
+  @Column({ type: 'smallint' })
+    status: number;
 
   @Column({ type: 'text', nullable: true })
     value: string;
@@ -31,17 +31,17 @@ export class ResponseEntity {
   @Column({ type: 'text', nullable: true })
     subform: string;
 
-  @Column({ type: 'integer', nullable: true })
-    status_v1: string | null;
+  @Column({ type: 'smallint', nullable: true })
+    status_v1: number | null;
 
   @Column({ type: 'bigint', nullable: true })
     code_v1: number | null;
 
-  @Column({ type: 'bigint', nullable: true })
+  @Column({ type: 'smallint', nullable: true })
     score_v1: number | null;
 
-  @Column({ type: 'text', nullable: true })
-    status_v2: string | null;
+  @Column({ type: 'smallint', nullable: true })
+    status_v2: number | null;
 
   @Column({ type: 'bigint', nullable: true })
     code_v2: number | null;
@@ -49,8 +49,8 @@ export class ResponseEntity {
   @Column({ type: 'bigint', nullable: true })
     score_v2: number | null;
 
-  @Column({ type: 'text', nullable: true })
-    status_v3: string | null;
+  @Column({ type: 'smallint', nullable: true })
+    status_v3: number | null;
 
   @Column({ type: 'bigint', nullable: true })
     code_v3: number | null;

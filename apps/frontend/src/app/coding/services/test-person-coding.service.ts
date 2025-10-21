@@ -360,14 +360,6 @@ export class TestPersonCodingService {
       );
   }
 
-  /**
-   * Import external coding with real-time progress updates via streaming response
-   * @param workspaceId Workspace ID
-   * @param data File data containing file and fileName
-   * @param onProgress Callback for progress updates
-   * @param onComplete Callback for completion
-   * @param onError Callback for errors
-   */
   async importExternalCodingWithProgress(
     workspaceId: number,
     data: { file: string; fileName: string },
@@ -445,17 +437,10 @@ export class TestPersonCodingService {
     }
   }
 
-  /**
-   * Generate coder training packages based on CODING_INCOMPLETE responses
-   * @param workspaceId Workspace ID
-   * @param selectedCoders Array of selected coders with id and name
-   * @param variableConfigs Array of variable configurations with variableName and sampleCount
-   * @returns Observable of coder training packages
-   */
   generateCoderTrainingPackages(
     workspaceId: number,
     selectedCoders: { id: number; name: string }[],
-    variableConfigs: { variableName: string; sampleCount: number }[]
+    variableConfigs: { variableId: string; unitId: string; sampleCount: number }[]
   ): Observable<{
       coderId: number;
       coderName: string;
