@@ -5,6 +5,8 @@
   <coding-box-wrapped-icon icon="account_box"></coding-box-wrapped-icon>
 </button>
 <mat-menu #menuUser="matMenu">
+  <div class="user-info">{{ userName }}</div>
+  <mat-divider></mat-divider>
   <coding-box-account-action [type]="'editMyData'"
     [iconName]="'edit'"
     (click)="editAccount()"
