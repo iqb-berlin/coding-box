@@ -3,24 +3,24 @@ import {
   input,
   output
 } from '@angular/core';
-import { BookletReplay, BookletReplayUnit } from '../../../services/booklet-replay.service';
+import { UnitsReplay, UnitsReplayUnit } from '../../../services/units-replay.service';
 
 @Component({
-  selector: 'coding-box-booklet-replay',
-  templateUrl: './booklet-replay.component.html',
-  styleUrls: ['./booklet-replay.component.scss'],
+  selector: 'coding-box-units-replay',
+  templateUrl: './units-replay.component.html',
+  styleUrls: ['./units-replay.component.scss'],
   standalone: true
 })
-export class BookletReplayComponent {
-  bookletData = input<BookletReplay | null>(null);
-  unitChanged = output<BookletReplayUnit>();
+export class UnitsReplayComponent {
+  unitsData = input<UnitsReplay | null>(null);
+  unitChanged = output<UnitsReplayUnit>();
 
   currentUnitIndex = 0;
   totalUnits = 0;
 
   // Getters for the current state
-  get currentUnit(): BookletReplayUnit | null {
-    const data = this.bookletData();
+  get currentUnit(): UnitsReplayUnit | null {
+    const data = this.unitsData();
     if (!data || !data.units || data.units.length === 0) {
       return null;
     }
@@ -29,7 +29,7 @@ export class BookletReplayComponent {
 
   // Navigation methods
   nextUnit(): void {
-    const data = this.bookletData();
+    const data = this.unitsData();
     if (!data || !this.hasNextUnit()) {
       return;
     }
@@ -42,7 +42,7 @@ export class BookletReplayComponent {
   }
 
   previousUnit(): void {
-    const data = this.bookletData();
+    const data = this.unitsData();
     if (!data || !this.hasPreviousUnit()) {
       return;
     }
@@ -55,14 +55,14 @@ export class BookletReplayComponent {
   }
 
   hasNextUnit(): boolean {
-    const data = this.bookletData();
+    const data = this.unitsData();
     if (!data) return false;
 
     return data.currentUnitIndex < data.units.length - 1;
   }
 
   hasPreviousUnit(): boolean {
-    const data = this.bookletData();
+    const data = this.unitsData();
     if (!data) return false;
 
     return data.currentUnitIndex > 0;
@@ -70,7 +70,7 @@ export class BookletReplayComponent {
 
   // Update the current state based on the input
   ngOnChanges(): void {
-    const data = this.bookletData();
+    const data = this.unitsData();
     if (data) {
       this.currentUnitIndex = data.currentUnitIndex;
       this.totalUnits = data.units.length;

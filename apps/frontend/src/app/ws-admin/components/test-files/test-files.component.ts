@@ -19,7 +19,7 @@ import { SelectionModel } from '@angular/cdk/collections';
 import { MatIcon } from '@angular/material/icon';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { MatCheckbox } from '@angular/material/checkbox';
-import { MatAnchor, MatButton } from '@angular/material/button';
+import { MatAnchor, MatButton, MatIconButton } from '@angular/material/button';
 import { DatePipe } from '@angular/common';
 import { MatFormField, MatLabel } from '@angular/material/form-field';
 import { MatOption, MatSelect } from '@angular/material/select';
@@ -80,7 +80,8 @@ import { GermanPaginatorIntl } from '../../../shared/services/german-paginator-i
     MatLabel,
     MatSelect,
     MatOption,
-    MatPaginator
+    MatPaginator,
+    MatIconButton
   ]
 })
 export class TestFilesComponent implements OnInit, OnDestroy {
@@ -252,6 +253,37 @@ export class TestFilesComponent implements OnInit, OnDestroy {
         anchor.click();
         document.body.removeChild(anchor);
         window.URL.revokeObjectURL(url);
+      }
+    });
+  }
+
+  downloadAllFilesAsZip(): void {
+    this.isLoading = true;
+    this.backendService.downloadWorkspaceFilesAsZip(this.appService.selectedWorkspaceId).subscribe({
+      next: (blob: Blob) => {
+        const url = window.URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = `workspace-${this.appService.selectedWorkspaceId}-files.zip`;
+        document.body.appendChild(anchor);
+        anchor.click();
+        document.body.removeChild(anchor);
+        window.URL.revokeObjectURL(url);
+        this.isLoading = false;
+
+        this.snackBar.open(
+          'ZIP-Datei wurde erfolgreich heruntergeladen.',
+          'OK',
+          { duration: 3000 }
+        );
+      },
+      error: () => {
+        this.isLoading = false;
+        this.snackBar.open(
+          'Fehler beim Herunterladen der ZIP-Datei.',
+          this.translate.instant('error'),
+          { duration: 3000 }
+        );
       }
     });
   }

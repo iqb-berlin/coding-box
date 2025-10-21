@@ -41,6 +41,7 @@ import { MatDivider } from '@angular/material/divider';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
+import { TestResultService } from '../../../services/test-result.service';
 import { TestCenterImportComponent } from '../test-center-import/test-center-import.component';
 import { LogDialogComponent } from '../booklet-log-dialog/log-dialog.component';
 import { UnitLogsDialogComponent } from '../unit-logs-dialog/unit-logs-dialog.component';
@@ -54,7 +55,7 @@ import { ValidationDialogComponent } from '../validation-dialog/validation-dialo
 import { VariableValidationDto } from '../../../../../../../api-dto/files/variable-validation.dto';
 import { VariableAnalysisDialogComponent } from '../variable-analysis-dialog/variable-analysis-dialog.component';
 import { ValidationTaskStateService } from '../../../services/validation-task-state.service';
-import { BookletReplay, BookletReplayService } from '../../../services/booklet-replay.service';
+import { UnitsReplay, UnitsReplayService } from '../../../services/units-replay.service';
 import { BookletInfoDto } from '../../../../../../../api-dto/booklet-info/booklet-info.dto';
 import { BookletInfoDialogComponent } from '../booklet-info-dialog/booklet-info-dialog.component';
 import { UnitInfoDialogComponent } from '../unit-info-dialog/unit-info-dialog.component';
@@ -187,11 +188,12 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   private dialog = inject(MatDialog);
   private backendService = inject(BackendService);
   private appService = inject(AppService);
+  private testResultService = inject(TestResultService);
   private router = inject(Router);
   private snackBar = inject(MatSnackBar);
   private translateService = inject(TranslateService);
   private validationTaskStateService = inject(ValidationTaskStateService);
-  private bookletReplayService = inject(BookletReplayService);
+  private unitsReplayService = inject(UnitsReplayService);
   private searchSubject = new Subject<string>();
   private searchSubscription: Subscription | null = null;
   private readonly SEARCH_DEBOUNCE_TIME = 800;
@@ -344,7 +346,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       .subscribe({
         next: booklets => {
           this.selectedBooklet = row.group;
-          this.booklets = booklets;
+          this.booklets = booklets as any[];
           this.sortBooklets();
           this.sortBookletUnits();
           this.loadAllUnitTags();
@@ -459,7 +461,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       { duration: 3000 }
     );
 
-    this.bookletReplayService.getBookletFromFileUpload(
+    this.unitsReplayService.getUnitsFromFileUpload(
       this.appService.selectedWorkspaceId,
       booklet.name
     ).subscribe({
@@ -474,7 +476,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           );
           return;
         }
-        const serializedBooklet = this.serializeBookletData(bookletReplay);
+        const serializedBooklet = this.serializeUnitsData(bookletReplay);
         const firstUnit = bookletReplay.units[0];
 
         this.appService
@@ -483,7 +485,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
             const queryParams = {
               auth: token,
               mode: 'booklet',
-              bookletData: serializedBooklet
+              unitsData: serializedBooklet
             };
 
             const url = this.router
@@ -789,7 +791,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   createTestResultsList(page: number = 0, limit: number = 50, searchText: string = ''): void {
     const validPage = Math.max(0, page);
     this.isLoading = !this.isSearching;
-    this.backendService.getTestResults(this.appService.selectedWorkspaceId, validPage, limit, searchText)
+    this.testResultService.getTestResults(this.appService.selectedWorkspaceId, validPage, limit, searchText)
       .subscribe(response => {
         this.isLoading = false;
         this.isSearching = false;
@@ -841,6 +843,9 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
     dialogRef.afterClosed().subscribe((result: boolean | UntypedFormGroup) => {
       if (result instanceof UntypedFormGroup || result) {
+        if (this.appService.selectedWorkspaceId) {
+          this.testResultService.invalidateCache(this.appService.selectedWorkspaceId);
+        }
         this.createTestResultsList(this.pageIndex, this.pageSize, this.getCurrentSearchText());
       }
     });
@@ -872,6 +877,9 @@ export class TestResultsComponent implements OnInit, OnDestroy {
               resultType,
               overwriteExisting
             ).subscribe(() => {
+              if (this.appService.selectedWorkspaceId) {
+                this.testResultService.invalidateCache(this.appService.selectedWorkspaceId);
+              }
               setTimeout(() => {
                 this.createTestResultsList(this.pageIndex, this.pageSize, this.getCurrentSearchText());
               }, 1000);
@@ -1180,7 +1188,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     });
   }
 
-  private serializeBookletData(booklet: BookletReplay): string {
+  private serializeUnitsData(booklet: UnitsReplay): string {
     try {
       const jsonString = JSON.stringify(booklet);
 

@@ -9,12 +9,12 @@ import { logger } from 'nx/src/utils/logger';
 import { SERVER_URL } from '../injection-tokens';
 import { TestResultCacheService } from './test-result-cache.service';
 
-interface TestResultsResponse {
+export interface TestResultsResponse {
   data: TestResultItem[];
   total: number;
 }
 
-interface TestResultItem {
+export interface TestResultItem {
   id: number;
   code: string;
   group: string;
@@ -23,7 +23,7 @@ interface TestResultItem {
   [key: string]: unknown;
 }
 
-interface PersonTestResult {
+export interface PersonTestResult {
   [key: string]: unknown;
 }
 

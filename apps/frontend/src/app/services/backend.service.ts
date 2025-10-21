@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
-import { Observable } from 'rxjs';
+import { catchError, Observable, of } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { VariableInfo } from '@iqbspecs/variable-info/variable-info.interface';
 import { FilesInListDto } from 'api-dto/files/files-in-list.dto';
@@ -20,7 +20,7 @@ import { CodingService } from './coding.service';
 import { UnitTagService } from './unit-tag.service';
 import { UnitNoteService } from './unit-note.service';
 import { ResponseService } from './response.service';
-import { TestResultService } from './test-result.service';
+import { TestResultService, TestResultsResponse, PersonTestResult } from './test-result.service';
 import { ResourcePackageService } from './resource-package.service';
 import { ValidationService } from './validation.service';
 import { UnitService } from './unit.service';
@@ -197,15 +197,11 @@ export class BackendService {
     return this.codingService.getCodingJobStatus(workspace_id, jobId);
   }
 
-  getCodingList(workspace_id: number, page: number = 1, limit: number = 100): Observable<PaginatedResponse<CodingListItem>> {
-    return this.codingService.getCodingList(workspace_id, page, limit);
-  }
-
-  getCodingListAsCsv(workspace_id: number): Observable<ArrayBuffer> {
+  getCodingListAsCsv(workspace_id: number): Observable<Blob> {
     return this.codingService.getCodingListAsCsv(workspace_id);
   }
 
-  getCodingListAsExcel(workspace_id: number): Observable<ArrayBuffer> {
+  getCodingListAsExcel(workspace_id: number): Observable<Blob> {
     return this.codingService.getCodingListAsExcel(workspace_id);
   }
 
@@ -308,6 +304,21 @@ export class BackendService {
     return this.fileService.getUnit(workspaceId, unitId, authToken);
   }
 
+  getVocs(workspaceId: number, unitId: string, authToken?: string): Observable<FilesDto[]> {
+    const headers = authToken ? { Authorization: `Bearer ${authToken}` } : this.authHeader;
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/files/coding-scheme/${unitId}`;
+    return this.http.get<FileDownloadDto | null>(url, { headers }).pipe(
+      map(fileDownload => {
+        if (!fileDownload) {
+          return [];
+        }
+        const data = fileDownload?.base64Data;
+        return [{ file_id: fileDownload?.filename, data }];
+      }),
+      catchError(() => of([]))
+    );
+  }
+
   getBookletUnits(workspaceId: number, bookletId: string, authToken?: string): Observable<BookletUnit[]> {
     return this.fileService.getBookletUnits(workspaceId, bookletId, authToken);
   }
@@ -324,13 +335,11 @@ export class BackendService {
     return this.testResultService.getTestPersons(workspaceId);
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  getTestResults(workspaceId: number, page: number, limit: number, searchText?: string): Observable<any> {
+  getTestResults(workspaceId: number, page: number, limit: number, searchText?: string): Observable<TestResultsResponse> {
     return this.testResultService.getTestResults(workspaceId, page, limit, searchText);
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  getPersonTestResults(workspaceId: number, personId: number): Observable<any[]> {
+  getPersonTestResults(workspaceId: number, personId: number): Observable<PersonTestResult[]> {
     return this.testResultService.getPersonTestResults(workspaceId, personId);
   }
 
@@ -781,6 +790,14 @@ export class BackendService {
     return this.http.delete<{ success: boolean }>(url);
   }
 
+  startCodingJob(
+    workspaceId: number,
+    codingJobId: number
+  ): Observable<{ total: number; items: Array<{ responseId: number; unitName: string; unitAlias: string | null; variableId: string; variableAnchor: string; bookletName: string; personLogin: string; personCode: string }> }> {
+    const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job/${codingJobId}/start`;
+    return this.http.post<{ total: number; items: Array<{ responseId: number; unitName: string; unitAlias: string | null; variableId: string; variableAnchor: string; bookletName: string; personLogin: string; personCode: string }> }>(url, {});
+  }
+
   getCodingIncompleteVariables(
     workspaceId: number,
     unitName?: string
@@ -791,5 +808,51 @@ export class BackendService {
       params = params.set('unitName', unitName);
     }
     return this.http.get<{ unitName: string; variableId: string }[]>(url, { params });
+  }
+
+  createCoderTrainingJobs(
+    workspaceId: number,
+    selectedCoders: { id: number; name: string }[],
+    variableConfigs: { variableId: string; unitId: string; sampleCount: number }[]
+  ): Observable<{ success: boolean; jobsCreated: number; message: string; jobs: { coderId: number; coderName: string; jobId: number; jobName: string }[] }> {
+    const url = `${this.serverUrl}/admin/workspace/${workspaceId}/coding/coder-training-jobs`;
+    return this.http.post<{ success: boolean; jobsCreated: number; message: string; jobs: { coderId: number; coderName: string; jobId: number; jobName: string }[] }>(url, {
+      selectedCoders,
+      variableConfigs
+    });
+  }
+
+  downloadWorkspaceFilesAsZip(workspaceId: number): Observable<Blob> {
+    const url = `${this.serverUrl}/admin/workspace/${workspaceId}/files/download-zip`;
+    return this.http.get(url, {
+      responseType: 'blob',
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem('id_token')}`
+      }
+    });
+  }
+
+  saveCodingProgress(
+    workspaceId: number,
+    codingJobId: number,
+    progressData: {
+      testPerson: string;
+      unitId: string;
+      variableId: string;
+      selectedCode: {
+        id: number;
+        code: string;
+        label: string;
+        [key: string]: unknown;
+      };
+    }
+  ): Observable<CodingJob> {
+    const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job/${codingJobId}/progress`;
+    return this.http.post<CodingJob>(url, progressData);
+  }
+
+  getCodingProgress(workspaceId: number, codingJobId: number): Observable<Record<string, unknown>> {
+    const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job/${codingJobId}/progress`;
+    return this.http.get<Record<string, unknown>>(url);
   }
 }

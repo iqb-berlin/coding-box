@@ -1,4 +1,4 @@
-import { Module, forwardRef } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { HttpModule } from '@nestjs/axios';
@@ -32,7 +32,6 @@ import { Session } from './entities/session.entity';
 import { UnitTag } from './entities/unitTag.entity';
 import { UnitNote } from './entities/unitNote.entity';
 import { PersonService } from './services/person.service';
-import { AuthService } from '../auth/service/auth.service';
 import { UnitTagService } from './services/unit-tag.service';
 import { UnitNoteService } from './services/unit-note.service';
 import { ResourcePackageService } from './services/resource-package.service';
@@ -52,11 +51,16 @@ import { CodingJob } from './entities/coding-job.entity';
 import { CodingJobCoder } from './entities/coding-job-coder.entity';
 import { CodingJobVariable } from './entities/coding-job-variable.entity';
 import { CodingJobVariableBundle } from './entities/coding-job-variable-bundle.entity';
+import { CodingJobUnit } from './entities/coding-job-unit.entity';
 import { CodingJobService } from './services/coding-job.service';
+import { CodingStatisticsService } from './services/coding-statistics.service';
+import { MissingsProfilesService } from './services/missings-profiles.service';
 // eslint-disable-next-line import/no-cycle
 import { JobQueueModule } from '../job-queue/job-queue.module';
 // eslint-disable-next-line import/no-cycle
 import { CacheModule } from '../cache/cache.module';
+import { CodingListService } from './services/coding-list.service';
+import { CoderTrainingService } from './services/coder-training.service';
 
 @Module({
   imports: [
@@ -76,8 +80,8 @@ import { CacheModule } from '../cache/cache.module';
     ResourcePackage,
     WorkspaceUser,
     HttpModule,
-    forwardRef(() => JobQueueModule),
-    forwardRef(() => CacheModule),
+    JobQueueModule,
+
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => ({
@@ -89,7 +93,7 @@ import { CacheModule } from '../cache/cache.module';
         database: configService.get('POSTGRES_DB'),
         entities: [BookletInfo, Booklet, Session, BookletLog, Unit, UnitLog, UnitLastState, ResponseEntity,
           User, Workspace, WorkspaceAdmin, FileUpload, WorkspaceUser, ResourcePackage, Logs, Persons, ChunkEntity, BookletLog, Session, UnitLog, UnitTag, UnitNote, JournalEntry, Job, VariableAnalysisJob, ValidationTask, Setting, ReplayStatistics, VariableBundle,
-          CodingJob, CodingJobCoder, CodingJobVariable, CodingJobVariableBundle
+          CodingJob, CodingJobCoder, CodingJobVariable, CodingJobVariableBundle, CodingJobUnit
         ],
         synchronize: false
       }),
@@ -125,8 +129,10 @@ import { CacheModule } from '../cache/cache.module';
       CodingJob,
       CodingJobCoder,
       CodingJobVariable,
-      CodingJobVariableBundle
-    ])
+      CodingJobVariableBundle,
+      CodingJobUnit
+    ]),
+    CacheModule
   ],
   providers: [
     UsersService,
@@ -139,7 +145,6 @@ import { CacheModule } from '../cache/cache.module';
     TestcenterService,
     UploadResultsService,
     PersonService,
-    AuthService,
     JwtService,
     UnitTagService,
     UnitNoteService,
@@ -149,7 +154,11 @@ import { CacheModule } from '../cache/cache.module';
     JobService,
     ValidationTaskService,
     ReplayStatisticsService,
-    CodingJobService
+    CodingJobService,
+    CodingStatisticsService,
+    MissingsProfilesService,
+    CodingListService,
+    CoderTrainingService
   ],
   exports: [
     User,
@@ -171,7 +180,6 @@ import { CacheModule } from '../cache/cache.module';
     ResourcePackageService,
     ResourcePackage,
     PersonService,
-    AuthService,
     UnitTagService,
     UnitNoteService,
     JournalService,
@@ -179,7 +187,11 @@ import { CacheModule } from '../cache/cache.module';
     JobService,
     ValidationTaskService,
     ReplayStatisticsService,
-    CodingJobService
+    CodingJobService,
+    CodingStatisticsService,
+    MissingsProfilesService,
+    CodingListService,
+    CoderTrainingService
   ]
 })
 export class DatabaseModule {}

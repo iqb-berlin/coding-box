@@ -19,6 +19,7 @@ import {
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { CodingJobService } from '../../database/services/coding-job.service';
 import { CodingJobDto } from '../coding-job/dto/coding-job.dto';
+import { statusNumberToString } from '../../database/utils/response-status-converter';
 
 @ApiTags('Admin Coding Jobs (Direct)')
 @Controller('admin/coding-jobs')
@@ -206,7 +207,22 @@ export class CodingJobsController {
     try {
       const responses = await this.codingJobService.getResponsesForCodingJob(id);
       return {
-        data: responses
+        data: responses.map(response => ({
+          id: response.id,
+          unitid: response.unitid,
+          variableid: response.variableid,
+          status: statusNumberToString(response.status) || 'UNSET',
+          value: response.value,
+          subform: response.subform,
+          code_v1: response.code_v1,
+          score_v1: response.score_v1,
+          status_v1: statusNumberToString(response.status_v1) || null,
+          unit: response.unit ? {
+            id: response.unit.id,
+            name: response.unit.name,
+            alias: response.unit.alias
+          } : { id: 0, name: '', alias: '' }
+        }))
       };
     } catch (error) {
       throw new BadRequestException(`Failed to get responses for coding job: ${error.message}`);

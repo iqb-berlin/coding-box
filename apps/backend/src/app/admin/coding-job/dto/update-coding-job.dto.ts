@@ -8,8 +8,6 @@ import {
   ValidateNested
 } from 'class-validator';
 import { Type } from 'class-transformer';
-
-// Import the DTOs from the variable-bundle module
 import { VariableDto } from '../../variable-bundle/dto/variable.dto';
 import { SimpleVariableBundleDto } from '../../variable-bundle/dto/simple-variable-bundle.dto';
 
@@ -38,10 +36,10 @@ export class UpdateCodingJobDto {
   @ApiProperty({
     description: 'Status of the coding job',
     example: 'pending',
-    enum: ['pending', 'active', 'completed'],
+    enum: ['pending', 'active', 'paused', 'completed'],
     required: false
   })
-  @IsEnum(['pending', 'active', 'completed'])
+  @IsEnum(['pending', 'active', 'paused', 'completed'])
   @IsOptional()
     status?: string;
 

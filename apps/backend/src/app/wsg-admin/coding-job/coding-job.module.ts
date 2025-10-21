@@ -6,9 +6,11 @@ import { CodingJob } from '../../database/entities/coding-job.entity';
 import { CodingJobCoder } from '../../database/entities/coding-job-coder.entity';
 import { CodingJobVariable } from '../../database/entities/coding-job-variable.entity';
 import { CodingJobVariableBundle } from '../../database/entities/coding-job-variable-bundle.entity';
+import { CodingJobUnit } from '../../database/entities/coding-job-unit.entity';
 import { VariableBundle } from '../../database/entities/variable-bundle.entity';
 import { ResponseEntity } from '../../database/entities/response.entity';
 import { Unit } from '../../database/entities/unit.entity';
+import FileUpload from '../../database/entities/file_upload.entity';
 import { AuthModule } from '../../auth/auth.module';
 
 @Module({
@@ -18,9 +20,11 @@ import { AuthModule } from '../../auth/auth.module';
       CodingJobCoder,
       CodingJobVariable,
       CodingJobVariableBundle,
+      CodingJobUnit,
       VariableBundle,
       ResponseEntity,
-      Unit
+      Unit,
+      FileUpload
     ]),
     AuthModule
   ],
