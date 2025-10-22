@@ -39,6 +39,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDivider } from '@angular/material/divider';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { responseStatesNumericMap } from '@iqbspecs/response/response.interface';
 import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
 import { TestResultService } from '../../../services/test-result.service';
@@ -198,6 +199,15 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   private searchSubscription: Subscription | null = null;
   private readonly SEARCH_DEBOUNCE_TIME = 800;
 
+  private responseStatusMap = new Map(responseStatesNumericMap.map(entry => [entry.key, entry.value]));
+
+  /**
+   * Maps numeric response status to string
+   */
+  private mapStatusToString(status: number): string {
+    return this.responseStatusMap.get(status) || 'UNKNOWN';
+  }
+
   selection = new SelectionModel<P>(true, []);
   dataSource !: MatTableDataSource<P>;
   displayedColumns: string[] = ['select', 'code', 'group', 'login', 'uploaded_at'];
@@ -346,7 +356,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       .subscribe({
         next: booklets => {
           this.selectedBooklet = row.group;
-          this.booklets = booklets as any[];
+          this.booklets = booklets as unknown as Booklet[];
           this.sortBooklets();
           this.sortBookletUnits();
           this.loadAllUnitTags();
@@ -628,6 +638,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   onUnitClick(unit: Unit, booklet: Booklet): void {
     const mappedResponses = unit.results.map((response: UnitResult) => ({
       ...response,
+      status: this.mapStatusToString(Number(response.status)),
       expanded: false
     }));
     this.responses = Array.from(mappedResponses);

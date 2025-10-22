@@ -623,7 +623,7 @@ export class BackendService {
     return this.fileService.createDummyTestTakerFile(workspaceId);
   }
 
-  getMissingsProfiles(workspaceId: number): Observable<{ label: string }[]> {
+  getMissingsProfiles(workspaceId: number): Observable<{ label: string; id: number }[]> {
     return this.codingService.getMissingsProfiles(workspaceId);
   }
 
@@ -769,6 +769,11 @@ export class BackendService {
       .set('page', page.toString())
       .set('limit', limit.toString());
     return this.http.get<PaginatedResponse<CodingJob>>(url, { params });
+  }
+
+  getCodingJob(workspaceId: number, codingJobId: number): Observable<CodingJob> {
+    const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job/${codingJobId}`;
+    return this.http.get<CodingJob>(url);
   }
 
   createCodingJob(workspaceId: number, codingJob: Omit<CodingJob, 'id' | 'createdAt' | 'updatedAt'>): Observable<CodingJob> {

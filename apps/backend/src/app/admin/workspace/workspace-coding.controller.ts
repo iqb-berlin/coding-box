@@ -20,12 +20,14 @@ import { ValidateCodingCompletenessRequestDto } from '../../../../../../api-dto/
 import { ValidateCodingCompletenessResponseDto } from '../../../../../../api-dto/coding/validate-coding-completeness-response.dto';
 import { ExportValidationResultsRequestDto } from '../../../../../../api-dto/coding/export-validation-results-request.dto';
 import { ExternalCodingImportDto } from '../../../../../../api-dto/coding/external-coding-import.dto';
+import { MissingsProfilesService } from '../../database/services/missings-profiles.service';
 
 @ApiTags('Admin Workspace Coding')
 @Controller('admin/workspace')
 export class WorkspaceCodingController {
   constructor(
     private workspaceCodingService: WorkspaceCodingService,
+    private missingsProfilesService: MissingsProfilesService,
     private personService: PersonService,
     private codingListService: CodingListService,
     private coderTrainingService: CoderTrainingService
@@ -479,7 +481,7 @@ export class WorkspaceCodingController {
     }
   })
   async getMissingsProfiles(@WorkspaceId() workspace_id: number): Promise<{ label: string }[]> {
-    return this.workspaceCodingService.getMissingsProfiles(workspace_id);
+    return this.missingsProfilesService.getMissingsProfiles(workspace_id);
   }
 
   @Post(':workspace_id/coding/codebook')
@@ -493,7 +495,8 @@ export class WorkspaceCodingController {
       properties: {
         missingsProfile: {
           type: 'string',
-          description: 'Name of the missings profile to use'
+          description: 'Name of the missings profile to use',
+          example: 'IQB-Standard'
         },
         contentOptions: {
           type: 'object',
@@ -531,7 +534,7 @@ export class WorkspaceCodingController {
   async generateCodebook(
     @WorkspaceId() workspace_id: number,
       @Body() body: {
-        missingsProfile: string;
+        missingsProfile: number;
         contentOptions: {
           exportFormat: string;
           missingsProfile: string;

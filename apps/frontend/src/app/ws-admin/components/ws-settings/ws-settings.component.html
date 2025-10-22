@@ -1,36 +1,36 @@
 <div class="wrapper">
   <mat-card class="token-settings-card">
     <mat-card-header>
-      <mat-card-title>Zugangstoken</mat-card-title>
+      <mat-card-title>{{ 'ws-settings.access-token' | translate }}</mat-card-title>
     </mat-card-header>
     <mat-card-content>
       <div class="token-container">
-        <h3>Token generieren</h3>
-        <p class="token-description">Generieren Sie ein Zugangstoken für den Zugriff auf diesen Arbeitsbereich.</p>
+        <h3>{{ 'ws-settings.generate-token' | translate }}</h3>
+        <p class="token-description">{{ 'ws-settings.generate-token-description' | translate }}</p>
 
         <mat-form-field class="full-width">
-          <mat-label>Laufzeit in Tagen</mat-label>
+          <mat-label>{{ 'ws-settings.validity-days' | translate }}</mat-label>
           <input matInput [(ngModel)]="duration" type="number" min="1" placeholder="Laufzeit in Tagen"/>
-          <mat-hint>Geben Sie die Anzahl der Tage ein, für die das Token gültig sein soll</mat-hint>
+          <mat-hint>{{ 'ws-settings.enter-validity-days' | translate }}</mat-hint>
         </mat-form-field>
 
         <div class="token-actions">
           <button mat-raised-button color="primary" [disabled]="!duration || duration < 0" (click)="createToken()">
-            <mat-icon>vpn_key</mat-icon> Zugangstoken generieren
+            <mat-icon>vpn_key</mat-icon> {{ 'ws-settings.generate-access-token' | translate }}
           </button>
         </div>
 
         @if (authToken) {
           <div class="token-result">
-            <h4>Generiertes Token</h4>
+            <h4>{{ 'ws-settings.generated-token' | translate }}</h4>
             <mat-form-field class="full-width token-field">
-              <mat-label>Autorisierungs Token</mat-label>
+              <mat-label>{{ 'ws-settings.authorization-token' | translate }}</mat-label>
               <textarea matInput cdkTextareaAutosize [value]="authToken" readonly placeholder="Autorisierungs Token">{{authToken}}</textarea>
-              <mat-hint>Dieses Token kann für den API-Zugriff verwendet werden</mat-hint>
+              <mat-hint>{{ 'ws-settings.token-api-hint' | translate }}</mat-hint>
             </mat-form-field>
             <div class="token-copy-action">
               <button mat-button color="primary" (click)="copyToken()">
-                <mat-icon>content_copy</mat-icon> In Zwischenablage kopieren
+                <mat-icon>content_copy</mat-icon> {{ 'ws-settings.copy-to-clipboard' | translate }}
               </button>
             </div>
           </div>
@@ -57,14 +57,14 @@
 
   <mat-card class="replay-statistics-card">
     <mat-card-header>
-      <mat-card-title>Replay-Statistiken</mat-card-title>
+      <mat-card-title>{{ 'ws-settings.replay-statistics' | translate }}</mat-card-title>
     </mat-card-header>
     <mat-card-content>
       <div class="replay-statistics-container">
-        <p>Visualisieren Sie Statistiken über die Nutzung der Replay-Funktion, einschließlich Häufigkeit und Dauer.</p>
+        <p>{{ 'ws-settings.replay-statistics-description' | translate }}</p>
         <div class="replay-statistics-actions">
           <button mat-raised-button color="primary" (click)="openReplayStatistics()">
-            <mat-icon>bar_chart</mat-icon> Replay-Statistiken anzeigen
+            <mat-icon>bar_chart</mat-icon> {{ 'ws-settings.show-replay-statistics' | translate }}
           </button>
         </div>
       </div>
@@ -73,20 +73,20 @@
 
   <mat-card class="coding-settings-card">
     <mat-card-header>
-      <mat-card-title>Kodierung</mat-card-title>
+      <mat-card-title>{{ 'ws-settings.coding' | translate }}</mat-card-title>
     </mat-card-header>
     <mat-card-content>
       <div class="coding-settings-container">
         <div class="setting-item">
           <div class="setting-info">
-            <h4>Automatisches Laden der Kodierstatistiken</h4>
-            <p>Wenn aktiviert, werden die Kodierstatistiken automatisch beim Öffnen der Kodierungsverwaltung geladen. Wenn deaktiviert, müssen die Statistiken manuell über einen Button geladen werden.</p>
+            <h4>{{ 'ws-settings.auto-fetch-coding-statistics' | translate }}</h4>
+            <p>{{ 'ws-settings.auto-fetch-coding-statistics-description' | translate }}</p>
           </div>
           <div class="setting-control">
             <mat-slide-toggle
               [checked]="autoFetchCodingStatistics"
               (change)="toggleAutoFetchCodingStatistics($event)">
-              {{autoFetchCodingStatistics ? 'Aktiviert' : 'Deaktiviert'}}
+              {{autoFetchCodingStatistics ? ('ws-settings.enabled' | translate) : ('ws-settings.disabled' | translate)}}
             </mat-slide-toggle>
           </div>
         </div>
@@ -96,7 +96,7 @@
 
   <mat-card class="access-rights-card">
     <mat-card-header>
-      <mat-card-title>Nutzerrechte</mat-card-title>
+      <mat-card-title>{{ 'ws-settings.user-rights' | translate }}</mat-card-title>
     </mat-card-header>
     <mat-card-content>
       <coding-box-ws-access-rights></coding-box-ws-access-rights>
@@ -105,7 +105,7 @@
 
   <mat-card class="journal-card">
     <mat-card-header>
-      <mat-card-title>System Journal</mat-card-title>
+      <mat-card-title>{{ 'ws-settings.system-journal' | translate }}</mat-card-title>
     </mat-card-header>
     <mat-card-content>
       <coding-box-journal></coding-box-journal>
@@ -114,11 +114,11 @@
 
   <mat-card class="database-export-card">
     <mat-card-header>
-      <mat-card-title>Testergebnisse exportieren</mat-card-title>
+      <mat-card-title>{{ 'ws-settings.export-test-results' | translate }}</mat-card-title>
     </mat-card-header>
     <mat-card-content>
       <div class="database-export-container">
-        <p>Exportieren Sie die Testergebnisse dieses Arbeitsbereichs als SQLite-Datenbank. Die Exportdatei enthält alle relevanten Daten wie Personen, Testhefte, Aufgaben, Antworten und Protokolle.</p>
+        <p>{{ 'ws-settings.export-database-description' | translate }}</p>
         <div class="database-export-actions">
           <button
             mat-raised-button
@@ -127,9 +127,9 @@
             (click)="exportWorkspaceDatabase()">
             <mat-icon>download</mat-icon>
             @if (isExporting) {
-              Exportiere...
+              {{ 'ws-settings.exporting' | translate }}
             } @else {
-              Datenbank exportieren
+              {{ 'ws-settings.export-database' | translate }}
             }
           </button>
         </div>

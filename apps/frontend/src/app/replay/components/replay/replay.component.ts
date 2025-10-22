@@ -28,6 +28,7 @@ import { scrollToElementByAlias, highlightAspectSectionWithAnchor } from '../../
 import { UnitsReplay, UnitsReplayUnit } from '../../../services/units-replay.service';
 import { UnitsReplayComponent } from '../units-replay/units-replay.component';
 import { CodeSelectorComponent, Code, VariableCoding } from '../../../coding/components/code-selector/code-selector.component';
+import { MissingDto } from '../../../../../../../api-dto/coding/missings-profiles.dto';
 
 interface SavedCode {
   id: number;
@@ -90,6 +91,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   protected reloadKey: number = 0;
   protected codingScheme: any | null = null;
   protected currentVariableId: string = '';
+  protected missings: MissingDto[] = [];
   workspaceId: number = 0;
   private selectedCodes: Map<string, any> = new Map(); // Track selected codes for each unique testperson-booklet-unit-variable combination
   protected codingJobId: number | null = null;
@@ -144,8 +146,13 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         this.resetSnackBars();
         this.resetUnitData();
         this.authToken = await this.getAuthToken();
-        const decoded: JwtPayload & { workspace: string } = jwtDecode(this.authToken);
-        const workspace = decoded?.workspace;
+        let workspace: string | undefined;
+        try {
+          const decoded: JwtPayload & { workspace: string } = jwtDecode(this.authToken);
+          workspace = decoded?.workspace;
+        } catch (error) {
+          workspace = undefined;
+        }
         this.workspaceId = Number(workspace);
 
         const queryParams = await firstValueFrom(this.route.queryParams);
@@ -190,7 +197,8 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
                   // Status update failed
                 }
               });
-              this.loadSavedCodingProgress();
+              await this.loadSavedCodingProgress();
+              await this.loadCodingJobMissings();
             }
           }
         }
@@ -639,8 +647,13 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       this.unitId = unit.name;
 
       if (this.authToken) {
-        const decoded: JwtPayload & { workspace: string } = jwtDecode(this.authToken);
-        const workspace = decoded?.workspace;
+        let workspace: string | undefined;
+        try {
+          const decoded: JwtPayload & { workspace: string } = jwtDecode(this.authToken);
+          workspace = decoded?.workspace;
+        } catch (error) {
+          workspace = undefined;
+        }
         if (workspace) {
           this.getUnitData(Number(workspace), this.authToken).then(unitData => {
             this.setUnitProperties(unitData);
@@ -684,8 +697,13 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       this.unitId = unit.name;
 
       if (this.authToken) {
-        const decoded: JwtPayload & { workspace: string } = jwtDecode(this.authToken);
-        const workspace = decoded?.workspace;
+        let workspace: string | undefined;
+        try {
+          const decoded: JwtPayload & { workspace: string } = jwtDecode(this.authToken);
+          workspace = decoded?.workspace;
+        } catch (error) {
+          workspace = undefined;
+        }
         if (workspace) {
           this.getUnitData(Number(workspace), this.authToken).then(unitData => {
             this.setUnitProperties(unitData);
@@ -770,6 +788,46 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     }
   }
 
+  private async loadCodingJobMissings(): Promise<void> {
+    if (!this.codingJobId || !this.workspaceId) return;
+
+    try {
+      const codingJob = await firstValueFrom(
+        this.backendService.getCodingJob(this.workspaceId, this.codingJobId)
+      );
+      if (codingJob.missings_profile_id) {
+        try {
+          const profile = await firstValueFrom(
+            this.backendService.getMissingsProfileDetails(this.workspaceId, codingJob.missings_profile_id.toString())
+          );
+          if (profile) {
+            const parsed = JSON.parse(profile.missings);
+            this.missings = Array.isArray(parsed) ? parsed : [];
+          }
+        } catch (idError) {
+          try {
+            const profiles = await firstValueFrom(
+              this.backendService.getMissingsProfiles(this.workspaceId)
+            );
+            const matchingProfile = profiles.find(p => p.id === codingJob.missings_profile_id);
+            if (matchingProfile) {
+              const profileDetails = await firstValueFrom(
+                this.backendService.getMissingsProfileDetails(this.workspaceId, matchingProfile.label)
+              );
+              if (profileDetails) {
+                this.missings = profileDetails.parseMissings();
+              }
+            }
+          } catch (fallbackError) {
+            // Ignore errors when loading missings
+          }
+        }
+      }
+    } catch (error) {
+      // Ignore errors when loading coding job missings
+    }
+  }
+
   private findCodeById(codeId: number): any {
     if (!this.codingScheme || typeof this.codingScheme === 'string') {
       return null;
@@ -785,13 +843,20 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     return null;
   }
 
-  private async saveCodingProgress(testPerson: string, unitId: string, variableId: string, selectedCode: any): Promise<void> {
+  private async saveCodingProgress(testPerson: string, unitId: string, variableId: string, selectedCode: {
+    id: number;
+    code: any;
+    label: string;
+    [key: string]: unknown;
+  }): Promise<void> {
     if (!this.codingJobId || !this.workspaceId) return;
 
     try {
+      // Determine if this is a missing code (missing codes have a 'code' property as number)
+      const isMissingCode = typeof selectedCode.code === 'number';
       const codeToSave = {
-        id: selectedCode.id,
-        code: selectedCode.code || '',
+        id: isMissingCode ? Number(selectedCode.code) : selectedCode.id,
+        code: String(selectedCode.code),
         label: selectedCode.label || '',
         ...(selectedCode.score !== undefined && { score: selectedCode.score })
       };
@@ -835,9 +900,17 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
   onCodeSelected(event: { variableId: string; code: any }): void {
     const compositeKey = this.generateCompositeKey(this.testPerson, this.unitId, event.variableId);
-    this.selectedCodes.set(compositeKey, event.code);
+    const isMissing = !Number.isInteger(event.code);
+    const normalizedCode = {
+      id: isMissing ? event.code.code : event.code.id,
+      code: event.code.code,
+      label: event.code.label,
+      ...(event.code.score !== undefined && { score: event.code.score }),
+      ...(event.code.description && { description: event.code.description })
+    };
+    this.selectedCodes.set(compositeKey, normalizedCode);
     this.checkCodingJobCompletion();
-    this.saveCodingProgress(this.testPerson, this.unitId, event.variableId, event.code);
+    this.saveCodingProgress(this.testPerson, this.unitId, event.variableId, normalizedCode);
   }
 
   private generateCompositeKey(testPerson: string, unitId: string, variableId: string): string {

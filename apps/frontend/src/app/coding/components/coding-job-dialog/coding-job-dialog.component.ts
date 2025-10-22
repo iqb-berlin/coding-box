@@ -104,6 +104,11 @@ export class CodingJobDialogComponent implements OnInit {
   variableAnalysisPageSize = 10;
   variableAnalysisPageSizeOptions = [5, 10, 25, 50];
 
+  // Missings profiles
+  missingsProfiles: { label: string; id: number }[] = [];
+  selectedMissingsProfileId: number | null = null;
+  isLoadingMissingsProfiles = false;
+
   // Filters
   unitNameFilter = '';
   variableIdFilter = '';
@@ -119,8 +124,10 @@ export class CodingJobDialogComponent implements OnInit {
     this.loadCodingIncompleteVariables();
     this.loadVariableBundles();
     this.loadAvailableCoders();
+    this.loadMissingsProfiles();
     if (this.data.isEdit && this.data.codingJob?.id) {
       this.loadCoders(this.data.codingJob.id);
+      this.selectedMissingsProfileId = this.data.codingJob.missings_profile_id || null;
     }
 
     this.dataSource.filterPredicate = (row, filter: string): boolean => {
@@ -290,6 +297,25 @@ export class CodingJobDialogComponent implements OnInit {
     }
   }
 
+  loadMissingsProfiles(): void {
+    this.isLoadingMissingsProfiles = true;
+    const workspaceId = this.appService.selectedWorkspaceId;
+
+    if (workspaceId) {
+      this.backendService.getMissingsProfiles(workspaceId).subscribe({
+        next: profiles => {
+          this.missingsProfiles = profiles;
+          this.isLoadingMissingsProfiles = false;
+        },
+        error: () => {
+          this.isLoadingMissingsProfiles = false;
+        }
+      });
+    } else {
+      this.isLoadingMissingsProfiles = false;
+    }
+  }
+
   applyFilter(): void {
     this.loadCodingIncompleteVariables(this.unitNameFilter);
     this.dataSource.filter = JSON.stringify({
@@ -318,11 +344,6 @@ export class CodingJobDialogComponent implements OnInit {
     this.bundlesDataSource.filter = '';
   }
 
-  /**
-   * Check if a variable was originally assigned to this coding job
-   * @param variable The variable to check
-   * @returns true if the variable was originally assigned to this job
-   */
   isVariableOriginallyAssigned(variable: Variable): boolean {
     const originallyAssigned = this.data.codingJob?.assignedVariables ?? this.data.codingJob?.variables;
     if (!originallyAssigned) {
@@ -334,11 +355,6 @@ export class CodingJobDialogComponent implements OnInit {
     );
   }
 
-  /**
-   * Check if a variable bundle was originally assigned to this coding job
-   * @param bundle The variable bundle to check
-   * @returns true if the bundle was originally assigned to this job
-   */
   isBundleOriginallyAssigned(bundle: VariableBundle): boolean {
     if (!this.data.codingJob?.variableBundles) {
       return false;
@@ -357,19 +373,16 @@ export class CodingJobDialogComponent implements OnInit {
     return this.data.codingJob.assignedCoders.includes(coder.id);
   }
 
-  /** Gets the number of variables in a bundle */
   getVariableCount(bundle: VariableBundle): number {
     return bundle.variables.length;
   }
 
-  /** Whether the number of selected elements matches the total number of rows. */
   isAllSelected(): boolean {
     const numSelected = this.selectedVariables.selected.length;
     const numRows = this.dataSource.data.length;
     return numSelected === numRows && numRows > 0;
   }
 
-  /** Selects all rows if they are not all selected; otherwise clear selection. */
   masterToggle(): void {
     if (this.isAllSelected()) {
       this.selectedVariables.clear();
@@ -378,14 +391,12 @@ export class CodingJobDialogComponent implements OnInit {
     }
   }
 
-  /** Whether all coders are selected. */
   isAllCodersSelected(): boolean {
     const numSelected = this.selectedCoders.selected.length;
     const numRows = this.availableCoders.length;
     return numSelected === numRows && numRows > 0;
   }
 
-  /** Selects all coders if they are not all selected; otherwise clear selection. */
   masterCoderToggle(): void {
     if (this.isAllCodersSelected()) {
       this.selectedCoders.clear();
@@ -419,7 +430,8 @@ export class CodingJobDialogComponent implements OnInit {
       variables: this.selectedVariables.selected,
       variableBundles: this.selectedVariableBundles.selected,
       assignedVariables: this.selectedVariables.selected,
-      assignedVariableBundles: this.selectedVariableBundles.selected
+      assignedVariableBundles: this.selectedVariableBundles.selected,
+      missings_profile_id: this.selectedMissingsProfileId || undefined
     };
 
     if (this.data.isEdit && this.data.codingJob?.id) {
