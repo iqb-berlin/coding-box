@@ -8,6 +8,7 @@ import { MatRadioModule } from '@angular/material/radio';
 import { MatButtonModule } from '@angular/material/button';
 import { FormsModule } from '@angular/forms';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
+import { MissingDto } from '../../../../../../../api-dto/coding/missings-profiles.dto';
 
 export interface CodingScheme {
   variableCodings: VariableCoding[];
@@ -47,7 +48,19 @@ export interface Rule {
 
 export interface CodeSelectedEvent {
   variableId: string;
-  code: Code;
+  code: Code | MissingDto;
+}
+
+export interface SelectableItem {
+  id: number;
+  label: string;
+  type: string;
+  score?: number;
+  manualInstruction?: string;
+  description?: string;
+  isMissing: boolean;
+  originalCode?: Code;
+  originalMissing?: MissingDto;
 }
 
 @Component({
@@ -61,16 +74,17 @@ export class CodeSelectorComponent implements OnChanges {
   @Input() codingScheme!: string | CodingScheme;
   @Input() variableId!: string;
   @Input() preSelectedCodeId: number | null = null;
+  @Input() missings: MissingDto[] = [];
 
   @Output() codeSelected = new EventEmitter<CodeSelectedEvent>();
 
-  codes: Code[] = [];
+  selectableItems: SelectableItem[] = [];
   selectedCode: number | null = null;
 
   constructor(private sanitizer: DomSanitizer) {}
 
   ngOnChanges(changes: SimpleChanges): void {
-    if (changes.codingScheme || changes.variableId) {
+    if (changes.codingScheme || changes.variableId || changes.missings) {
       this.loadCodes();
     }
     if (changes.preSelectedCodeId) {
@@ -80,7 +94,7 @@ export class CodeSelectorComponent implements OnChanges {
 
   private loadCodes(): void {
     if (!this.codingScheme || !this.variableId) {
-      this.codes = [];
+      this.selectableItems = [];
       return;
     }
 
@@ -89,7 +103,7 @@ export class CodeSelectorComponent implements OnChanges {
       try {
         scheme = JSON.parse(this.codingScheme);
       } catch (e) {
-        this.codes = [];
+        this.selectableItems = [];
         return;
       }
     } else {
@@ -98,10 +112,29 @@ export class CodeSelectorComponent implements OnChanges {
 
     const variableCoding = scheme.variableCodings.find(v => v.alias === this.variableId);
     if (variableCoding) {
-      this.codes = variableCoding.codes;
+      const codeItems: SelectableItem[] = variableCoding.codes.map(code => ({
+        id: code.id,
+        label: code.label,
+        type: code.type,
+        score: code.score,
+        manualInstruction: code.manualInstruction,
+        isMissing: false,
+        originalCode: code
+      }));
+
+      const missingItems: SelectableItem[] = this.missings.map(missing => ({
+        id: missing.code,
+        label: missing.label,
+        type: 'MISSING',
+        description: missing.description,
+        isMissing: true,
+        originalMissing: missing
+      }));
+
+      this.selectableItems = [...codeItems, ...missingItems];
       setTimeout(() => this.selectPreSelectedCode(), 0);
     } else {
-      this.codes = [];
+      this.selectableItems = [];
     }
   }
 
@@ -110,15 +143,15 @@ export class CodeSelectorComponent implements OnChanges {
     if (this.preSelectedCodeId === null) {
       return;
     }
-    if (this.codes.length === 0) {
+    if (this.selectableItems.length === 0) {
       return;
     }
-    const preSelectedCode = this.codes.find(c => c.id === this.preSelectedCodeId);
-    if (preSelectedCode) {
+    const preSelectedItem = this.selectableItems.find(item => item.id === this.preSelectedCodeId);
+    if (preSelectedItem) {
       this.selectedCode = this.preSelectedCodeId;
       this.codeSelected.emit({
         variableId: this.variableId,
-        code: preSelectedCode
+        code: preSelectedItem.isMissing ? preSelectedItem.originalMissing! : preSelectedItem.originalCode!
       });
     }
   }
@@ -129,17 +162,12 @@ export class CodeSelectorComponent implements OnChanges {
 
   onSelect(codeId: number): void {
     this.selectedCode = codeId;
-    const selectedCode = this.codes.find(c => c.id === codeId);
-    if (selectedCode) {
+    const selectedItem = this.selectableItems.find(item => item.id === codeId);
+    if (selectedItem) {
       this.codeSelected.emit({
         variableId: this.variableId,
-        code: selectedCode
+        code: selectedItem.isMissing ? selectedItem.originalMissing! : selectedItem.originalCode!
       });
     }
-  }
-
-  onSelectionChange(): void {
-    // This method is called whenever the selection changes
-    // Selection changes are handled by onSelect() method
   }
 }

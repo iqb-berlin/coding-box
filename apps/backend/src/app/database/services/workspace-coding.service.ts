@@ -1033,7 +1033,7 @@ export class WorkspaceCodingService {
 
   async generateCodebook(
     workspaceId: number,
-    missingsProfile: string,
+    missingsProfile: number,
     contentOptions: CodeBookContentSetting,
     unitIds: number[]
   ): Promise<Buffer | null> {

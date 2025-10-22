@@ -245,10 +245,10 @@ export class CodingService {
       );
   }
 
-  getMissingsProfileDetails(workspaceId: number, label: string): Observable<MissingsProfilesDto | null> {
+  getMissingsProfileDetails(workspaceId: number, id: string): Observable<MissingsProfilesDto | null> {
     return this.http
       .get<MissingsProfilesDto>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/missings-profiles/${encodeURIComponent(label)}`,
+      `${this.serverUrl}admin/workspace/${workspaceId}/missings-profiles/${id}`,
       { headers: this.authHeader }
     )
       .pipe(
