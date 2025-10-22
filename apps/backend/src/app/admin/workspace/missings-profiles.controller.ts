@@ -13,12 +13,12 @@ export class MissingsProfilesController {
     return this.missingsProfilesService.getMissingsProfiles(workspaceId);
   }
 
-  @Get(':label')
+  @Get(':id')
   async getMissingsProfileDetails(
   @Param('workspaceId') workspaceId: number,
-    @Param('label') label: string
+    @Param('id') id: number
   ) {
-    return this.missingsProfilesService.getMissingsProfileDetails(workspaceId, label);
+    return this.missingsProfilesService.getMissingsProfileDetails(workspaceId, id);
   }
 
   @Post()

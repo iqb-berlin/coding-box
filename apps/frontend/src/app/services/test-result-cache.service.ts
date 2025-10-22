@@ -74,10 +74,7 @@ export class TestResultCacheService {
         params: params
       }
     ).pipe(
-      catchError(() => {
-        console.error('Error fetching test data');
-        return of({ data: [], total: 0 });
-      }),
+      catchError(() => of({ data: [], total: 0 })),
       map(result => result || { data: [], total: 0 }),
       tap(result => this.addToCache(cacheKey, result))
     );

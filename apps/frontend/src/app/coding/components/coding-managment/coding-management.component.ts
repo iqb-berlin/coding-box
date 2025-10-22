@@ -38,6 +38,7 @@ import { ScrollingModule } from '@angular/cdk/scrolling';
 import { MatDivider } from '@angular/material/divider';
 import { MatSelectModule } from '@angular/material/select';
 import { MatDialog } from '@angular/material/dialog';
+import { responseStatesNumericMap } from '@iqbspecs/response/response.interface';
 import { ContentDialogComponent } from '../../../shared/dialogs/content-dialog/content-dialog.component';
 import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
@@ -100,6 +101,15 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
   private snackBar = inject(MatSnackBar);
   private dialog = inject(MatDialog);
 
+  private responseStatusMap = new Map(responseStatesNumericMap.map(entry => [entry.key, entry.value]));
+
+  /**
+   * Maps numeric response status to string
+   */
+  mapStatusToString(status: number): string {
+    return this.responseStatusMap.get(status) || 'UNKNOWN';
+  }
+
   @ViewChild(MatSort) sort!: MatSort;
   @ViewChild(MatPaginator) paginator!: MatPaginator;
 
@@ -114,8 +124,8 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
 
   statisticsLoaded = false;
   currentStatusFilter: string | null = null;
-  pageSizeOptions = [100, 200, 500];
-  pageSize = 100;
+  pageSizeOptions = [100, 200, 500, 1000];
+  pageSize = 1000;
   totalRecords = 0;
   pageIndex = 0;
   filterTextChanged = new Subject<Event>();
@@ -662,4 +672,6 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
       }
     });
   }
+
+  protected readonly Number = Number;
 }

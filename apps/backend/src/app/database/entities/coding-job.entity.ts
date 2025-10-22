@@ -3,8 +3,11 @@ import {
   Column,
   PrimaryGeneratedColumn,
   CreateDateColumn,
-  UpdateDateColumn
+  UpdateDateColumn,
+  ManyToOne,
+  JoinColumn
 } from 'typeorm';
+import { MissingsProfile } from './missings-profile.entity';
 
 /**
  * Entity for coding jobs
@@ -29,6 +32,13 @@ export class CodingJob {
    */
   @Column({ default: 'pending' })
     status: string;
+
+  @Column({ name: 'missings_profile_id', nullable: true })
+    missings_profile_id?: number;
+
+  @ManyToOne(() => MissingsProfile)
+  @JoinColumn({ name: 'missings_profile_id' })
+    missingsProfile?: MissingsProfile;
 
   @CreateDateColumn()
     created_at: Date;
