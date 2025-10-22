@@ -64,8 +64,7 @@ export class CodingJobService {
     const codedUnits = await this.codingJobUnitRepository.count({
       where: {
         coding_job_id: jobId,
-        code: Not(IsNull()),
-        score: Not(IsNull())
+        code: Not(IsNull())
       }
     });
     const progress = Math.round((codedUnits / totalUnits) * 100);

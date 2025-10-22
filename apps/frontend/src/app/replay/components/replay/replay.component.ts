@@ -828,13 +828,20 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     return null;
   }
 
-  private async saveCodingProgress(testPerson: string, unitId: string, variableId: string, selectedCode: any): Promise<void> {
+  private async saveCodingProgress(testPerson: string, unitId: string, variableId: string, selectedCode: {
+    id: number;
+    code: any;
+    label: string;
+    [key: string]: unknown;
+  }): Promise<void> {
     if (!this.codingJobId || !this.workspaceId) return;
 
     try {
+      // Determine if this is a missing code (missing codes have a 'code' property as number)
+      const isMissingCode = typeof selectedCode.code === 'number';
       const codeToSave = {
-        id: selectedCode.id,
-        code: selectedCode.code || '',
+        id: isMissingCode ? Number(selectedCode.code) : selectedCode.id,
+        code: String(selectedCode.code),
         label: selectedCode.label || '',
         ...(selectedCode.score !== undefined && { score: selectedCode.score })
       };
@@ -878,9 +885,17 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
   onCodeSelected(event: { variableId: string; code: any }): void {
     const compositeKey = this.generateCompositeKey(this.testPerson, this.unitId, event.variableId);
-    this.selectedCodes.set(compositeKey, event.code);
+    const isMissing = !Number.isInteger(event.code);
+    const normalizedCode = {
+      id: isMissing ? event.code.code : event.code.id,
+      code: event.code.code,
+      label: event.code.label,
+      ...(event.code.score !== undefined && { score: event.code.score }),
+      ...(event.code.description && { description: event.code.description })
+    };
+    this.selectedCodes.set(compositeKey, normalizedCode);
     this.checkCodingJobCompletion();
-    this.saveCodingProgress(this.testPerson, this.unitId, event.variableId, event.code);
+    this.saveCodingProgress(this.testPerson, this.unitId, event.variableId, normalizedCode);
   }
 
   private generateCompositeKey(testPerson: string, unitId: string, variableId: string): string {
