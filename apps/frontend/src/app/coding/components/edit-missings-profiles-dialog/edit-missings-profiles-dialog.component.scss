@@ -1,7 +1,8 @@
 .dialog-content {
-  min-width: 800px;
-  max-width: 1200px;
-  max-height: 80vh;
+  min-width: 1100px;
+  max-width: 1600px;
+  min-height: 70vh;
+  max-height: 90vh;
   overflow: auto;
 }
 
@@ -29,7 +30,7 @@
   }
 
   mat-list {
-    max-height: 300px;
+    max-height: 400px;
     overflow-y: auto;
     border: 1px solid rgba(0, 0, 0, 0.12);
     border-radius: 4px;
