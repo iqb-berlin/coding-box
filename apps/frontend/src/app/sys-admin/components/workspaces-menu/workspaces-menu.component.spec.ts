@@ -1,57 +1,42 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { ActivatedRoute } from '@angular/router';
-import { MatSnackBar } from '@angular/material/snack-bar';
-import { of } from 'rxjs';
 import { TranslateModule } from '@ngx-translate/core';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
-import { AppService } from '../../../services/app.service';
-import { HomeComponent } from '../../../components/home/home.component';
-import { AuthService } from '../../../core/services/auth.service';
+import { WorkspacesMenuComponent } from './workspaces-menu.component';
+import { environment } from '../../../../environments/environment';
+import { SERVER_URL } from '../../../injection-tokens';
+import { WorkspaceInListDto } from '../../../../../../../api-dto/workspaces/workspace-in-list-dto';
 
-describe('HomeComponent', () => {
-  let component: HomeComponent;
-  let fixture: ComponentFixture<HomeComponent>;
-
-  const mockAppService = {
-    authData$: of(AppService.defaultAuthData),
-    refreshAuthData: jest.fn(),
-    userProfile: {
-      firstName: '',
-      lastName: ''
-    }
-  };
-
-  const mockSnackBar = {
-    open: jest.fn()
-  };
-
-  const mockActivatedRoute = {
-    queryParams: of({})
-  };
-  const mockAuthService = {
-    getAuthData: jest.fn(),
-    isLoggedIn: jest.fn(() => true),
-    login: jest.fn()
-  };
+describe('WorkspacesMenuComponent', () => {
+  let component: WorkspacesMenuComponent;
+  let fixture: ComponentFixture<WorkspacesMenuComponent>;
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [
-        HomeComponent,
+        WorkspacesMenuComponent,
         TranslateModule.forRoot(),
         NoopAnimationsModule
       ],
       providers: [
-        { provide: AppService, useValue: mockAppService },
-        { provide: MatSnackBar, useValue: mockSnackBar },
-        { provide: ActivatedRoute, useValue: mockActivatedRoute },
-        { provide: AuthService, useValue: mockAuthService }
-
+        { provide: SERVER_URL, useValue: environment.backendUrl }
       ]
     }).compileComponents();
 
-    fixture = TestBed.createComponent(HomeComponent);
+    fixture = TestBed.createComponent(WorkspacesMenuComponent);
     component = fixture.componentInstance;
+
+    fixture.componentRef.setInput('selectedWorkspaces', [1, 2, 3]);
+    fixture.componentRef.setInput('selectedRows', [{
+      id: 1,
+      name: 'Test Workspace 1',
+      description: 'Test Description 1'
+    } as WorkspaceInListDto]);
+    fixture.componentRef.setInput('checkedRows', [{
+      id: 1,
+      name: 'Test Workspace 1',
+      description: 'Test Description 1'
+    } as WorkspaceInListDto]);
+
     fixture.detectChanges();
   });
 
