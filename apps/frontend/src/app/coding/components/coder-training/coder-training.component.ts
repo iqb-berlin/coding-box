@@ -77,6 +77,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
 
   constructor() {
     this.trainingForm = this.fb.group({
+      trainingLabel: ['', [Validators.required]],
       variables: this.fb.array([])
     });
   }
@@ -138,6 +139,8 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     const selectedVariable = this.availableVariables.find(v => v.variableId === variableId);
     if (selectedVariable) {
       control.get('unitId')?.setValue(selectedVariable.unitName);
+      // Force validation update for the changed control
+      control.get('unitId')?.updateValueAndValidity();
     }
   }
 
@@ -190,7 +193,12 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   }
 
   canStartTraining(): boolean {
-    return this.selectedCoders.size > 0 && this.hasAtLeastOneVariableSelected();
+    const trainingLabel = this.trainingForm.get('trainingLabel')?.value;
+    console.log('Training Label:', trainingLabel);
+    return this.selectedCoders.size > 0 &&
+           this.hasAtLeastOneVariableSelected() &&
+           trainingLabel?.trim() &&
+           this.trainingForm.valid;
   }
 
   hasAtLeastOneVariableSelected(): boolean {
@@ -233,7 +241,9 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.backendService.createCoderTrainingJobs(workspaceId, selectedCoders, variableConfigs)
+    const trainingLabel = this.trainingForm.get('trainingLabel')?.value || '';
+
+    this.backendService.createCoderTrainingJobs(workspaceId, selectedCoders, variableConfigs, trainingLabel)
       .subscribe({
         next: result => {
           this.isLoading = false;

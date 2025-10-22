@@ -5,6 +5,7 @@ import { CodingJob } from '../entities/coding-job.entity';
 import { CodingJobCoder } from '../entities/coding-job-coder.entity';
 import { CodingJobVariable } from '../entities/coding-job-variable.entity';
 import { CodingJobUnit } from '../entities/coding-job-unit.entity';
+import { CoderTraining } from '../entities/coder-training.entity';
 import { ResponseEntity } from '../entities/response.entity';
 import { Unit } from '../entities/unit.entity';
 import { statusStringToNumber } from '../utils/response-status-converter';
@@ -35,6 +36,15 @@ interface TrainingJob {
   jobName: string;
 }
 
+interface CoderTrainingWithJobs {
+  id: number;
+  workspace_id: number;
+  label: string;
+  created_at: Date;
+  updated_at: Date;
+  jobsCount: number;
+}
+
 @Injectable()
 export class CoderTrainingService {
   private readonly logger = new Logger(CoderTrainingService.name);
@@ -48,6 +58,8 @@ export class CoderTrainingService {
     private codingJobVariableRepository: Repository<CodingJobVariable>,
     @InjectRepository(CodingJobUnit)
     private codingJobUnitRepository: Repository<CodingJobUnit>,
+    @InjectRepository(CoderTraining)
+    private coderTrainingRepository: Repository<CoderTraining>,
     @InjectRepository(ResponseEntity)
     private responseRepository: Repository<ResponseEntity>,
     @InjectRepository(Unit)
@@ -166,10 +178,23 @@ export class CoderTrainingService {
   async createCoderTrainingJobs(
     workspaceId: number,
     selectedCoders: { id: number; name: string }[],
-    variableConfigs: { variableId: string; unitId: string; sampleCount: number }[]
-  ): Promise<{ success: boolean; jobsCreated: number; message: string; jobs: TrainingJob[] }> {
+    variableConfigs: { variableId: string; unitId: string; sampleCount: number }[],
+    trainingLabel: string
+  ): Promise<{ success: boolean; jobsCreated: number; message: string; jobs: TrainingJob[]; trainingId?: number }> {
     try {
-      this.logger.log(`Creating coder training jobs for workspace ${workspaceId} with ${selectedCoders.length} coders`);
+      this.logger.log(`Creating coder training jobs for workspace ${workspaceId} with ${selectedCoders.length} coders and label '${trainingLabel}'`);
+
+      // Create the coder training record
+      const coderTraining = new CoderTraining();
+      coderTraining.workspace_id = workspaceId;
+      coderTraining.label = trainingLabel;
+      coderTraining.created_at = new Date();
+      coderTraining.updated_at = new Date();
+
+      const savedTraining = await this.coderTrainingRepository.save(coderTraining);
+      const trainingId = savedTraining.id;
+
+      this.logger.log(`Created coder training ${trainingId} with label '${trainingLabel}'`);
 
       // First generate training packages to get the response data
       const trainingPackages = await this.generateCoderTrainingPackages(workspaceId, selectedCoders, variableConfigs);
@@ -188,6 +213,7 @@ export class CoderTrainingService {
         codingJob.name = `Coder Training - ${coderName}`;
         codingJob.workspace_id = workspaceId;
         codingJob.description = `Training job for coder ${coderName} generated on ${new Date().toISOString()}`;
+        codingJob.training_id = trainingId;
         codingJob.created_at = new Date();
         codingJob.updated_at = new Date();
 
@@ -250,7 +276,8 @@ export class CoderTrainingService {
         success: true,
         jobsCreated,
         message,
-        jobs
+        jobs,
+        trainingId
       };
     } catch (error) {
       const errorMessage = `Error creating coder training jobs: ${error.message}`;
@@ -262,5 +289,24 @@ export class CoderTrainingService {
         jobs: []
       };
     }
+  }
+
+  async getCoderTrainings(workspaceId: number): Promise<CoderTrainingWithJobs[]> {
+    this.logger.log(`Getting all coder trainings for workspace ${workspaceId}`);
+
+    const trainings = await this.coderTrainingRepository.find({
+      where: { workspace_id: workspaceId },
+      relations: ['codingJobs'],
+      order: { created_at: 'DESC' }
+    });
+
+    return trainings.map(training => ({
+      id: training.id,
+      workspace_id: training.workspace_id,
+      label: training.label,
+      created_at: training.created_at,
+      updated_at: training.updated_at,
+      jobsCount: training.codingJobs?.length || 0
+    }));
   }
 }

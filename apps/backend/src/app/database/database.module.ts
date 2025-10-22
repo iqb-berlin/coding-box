@@ -53,6 +53,7 @@ import { CodingJobVariable } from './entities/coding-job-variable.entity';
 import { CodingJobVariableBundle } from './entities/coding-job-variable-bundle.entity';
 import { CodingJobUnit } from './entities/coding-job-unit.entity';
 import { MissingsProfile } from './entities/missings-profile.entity';
+import { CoderTraining } from './entities/coder-training.entity';
 import { CodingJobService } from './services/coding-job.service';
 import { CodingStatisticsService } from './services/coding-statistics.service';
 import { MissingsProfilesService } from './services/missings-profiles.service';
@@ -94,7 +95,7 @@ import { CoderTrainingService } from './services/coder-training.service';
         database: configService.get('POSTGRES_DB'),
         entities: [BookletInfo, Booklet, Session, BookletLog, Unit, UnitLog, UnitLastState, ResponseEntity,
           User, Workspace, WorkspaceAdmin, FileUpload, WorkspaceUser, ResourcePackage, Logs, Persons, ChunkEntity, BookletLog, Session, UnitLog, UnitTag, UnitNote, JournalEntry, Job, VariableAnalysisJob, ValidationTask, Setting, ReplayStatistics, VariableBundle,
-          CodingJob, CodingJobCoder, CodingJobVariable, CodingJobVariableBundle, CodingJobUnit, MissingsProfile
+          CodingJob, CodingJobCoder, CodingJobVariable, CodingJobVariableBundle, CodingJobUnit, CoderTraining, MissingsProfile
         ],
         synchronize: false
       }),
@@ -131,6 +132,8 @@ import { CoderTrainingService } from './services/coder-training.service';
       CodingJobCoder,
       CodingJobVariable,
       CodingJobVariableBundle,
+      CodingJobUnit,
+      CoderTraining,
       CodingJobUnit,
       MissingsProfile
     ]),

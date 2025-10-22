@@ -1,0 +1,98 @@
+.coder-trainings-container {
+  padding: 20px 0;
+
+  .header-section {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+
+    h3 {
+      margin: 0;
+      font-weight: 500;
+    }
+  }
+
+  .loading-container {
+    text-align: center;
+    padding: 40px 20px;
+
+    p {
+      margin: 16px 0 0 0;
+      color: #666;
+    }
+  }
+
+  .no-trainings-message {
+    text-align: center;
+    padding: 40px 20px;
+    background: #f9f9f9;
+    border-radius: 8px;
+    border: 2px dashed #ddd;
+
+    mat-icon {
+      font-size: 64px;
+      height: 64px;
+      width: 64px;
+      color: #ccc;
+      margin-bottom: 16px;
+    }
+
+    h4 {
+      margin: 0 0 8px 0;
+      font-weight: 500;
+      color: #555;
+    }
+
+    p {
+      margin: 0 0 24px 0;
+      color: #777;
+      max-width: 400px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+  }
+
+  .trainings-list {
+    .trainings-table {
+      width: 100%;
+      margin-bottom: 20px;
+
+      .training-label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+
+        mat-icon {
+          color: #1976d2;
+          font-size: 20px;
+          height: 20px;
+          width: 20px;
+        }
+
+        span {
+          font-weight: 500;
+        }
+      }
+
+      .action-buttons {
+        display: flex;
+        gap: 4px;
+      }
+    }
+  }
+}
+
+@media (max-width: 768px) {
+  .coder-trainings-container {
+    .header-section {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 16px;
+    }
+
+    .trainings-list {
+      overflow-x: auto;
+    }
+  }
+}
