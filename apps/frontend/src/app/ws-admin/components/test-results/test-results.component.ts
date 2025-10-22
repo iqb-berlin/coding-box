@@ -39,6 +39,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDivider } from '@angular/material/divider';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { responseStatesNumericMap } from '@iqbspecs/response/response.interface';
 import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
 import { TestResultService } from '../../../services/test-result.service';
@@ -197,6 +198,15 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   private searchSubject = new Subject<string>();
   private searchSubscription: Subscription | null = null;
   private readonly SEARCH_DEBOUNCE_TIME = 800;
+
+  private responseStatusMap = new Map(responseStatesNumericMap.map(entry => [entry.key, entry.value]));
+
+  /**
+   * Maps numeric response status to string
+   */
+  private mapStatusToString(status: number): string {
+    return this.responseStatusMap.get(status) || 'UNKNOWN';
+  }
 
   selection = new SelectionModel<P>(true, []);
   dataSource !: MatTableDataSource<P>;
@@ -628,6 +638,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   onUnitClick(unit: Unit, booklet: Booklet): void {
     const mappedResponses = unit.results.map((response: UnitResult) => ({
       ...response,
+      status: this.mapStatusToString(Number(response.status)),
       expanded: false
     }));
     this.responses = Array.from(mappedResponses);

@@ -13,7 +13,7 @@
         {{ showManualCoding ? 'Zurück zur Übersicht' : 'Manuell Kodieren' }}
       </a>
       @if (!showManualCoding) {
-        <a mat-raised-button color="primary" (click)="fetchResponsesByStatus('CODING_INCOMPLETE')">
+        <a mat-raised-button color="primary" (click)="fetchResponsesByStatus('6')">
           <mat-icon>refresh</mat-icon>
           Manuelle zu kodierende Fälle
         </a>
@@ -74,7 +74,7 @@
                         unkodierte Antworten:
                         <mat-icon class="warning-icon" color="warn" [matTooltip]="'Kodierschemata fehlen'">warning</mat-icon>
                       } @else {
-                        Anzahl der Antworten mit Status {{ status }}:
+                        Anzahl der Antworten mit Status {{ mapStatusToString(Number(status)) }}:
                       }
                     </span>
                     <span class="statistic-value">
@@ -130,7 +130,7 @@
                       @if (currentStatusFilter === 'null') {
                         Unkodierte Antworten
                       } @else {
-                        Antworten mit Status: <span class="status-badge">{{ currentStatusFilter }}</span>
+                        Antworten mit Status: <span class="status-badge">{{ mapStatusToString(Number(currentStatusFilter)) }}</span>
                       }
                     </h3>
                   </div>
