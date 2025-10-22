@@ -15,7 +15,7 @@ import { MatListModule } from '@angular/material/list';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTableModule } from '@angular/material/table';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
 import { MissingDto, MissingsProfilesDto } from '../../../../../../../api-dto/coding/missings-profiles.dto';
@@ -48,6 +48,7 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
   editMode = false;
   loading = false;
   saving = false;
+  editMissings: MissingDto[] = [];
   displayedColumns: string[] = ['id', 'label', 'description', 'code', 'actions'];
 
   constructor(
@@ -55,7 +56,8 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
     @Inject(MAT_DIALOG_DATA) public data: { workspaceId: number },
     private backendService: BackendService,
     private appService: AppService,
-    private snackBar: MatSnackBar
+    private snackBar: MatSnackBar,
+    private translateService: TranslateService
   ) {}
 
   ngOnInit(): void {
@@ -70,10 +72,15 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
         next: profiles => {
           this.missingsProfiles = profiles;
           this.loading = false;
+          // Auto-select IQB-Standard profile if it exists
+          const iqbStandardProfile = profiles.find(p => p.label === 'IQB-Standard');
+          if (iqbStandardProfile) {
+            this.selectProfile('IQB-Standard');
+          }
         },
         error: () => {
           this.loading = false;
-          this.snackBar.open('Error loading missings profiles', 'Close', { duration: 3000 });
+          this.snackBar.open(this.translateService.instant('workspace.error-loading-missings-profiles'), this.translateService.instant('close'), { duration: 3000 });
         }
       });
     }
@@ -96,7 +103,7 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
         },
         error: () => {
           this.loading = false;
-          this.snackBar.open('Error loading missings profile details', 'Close', { duration: 3000 });
+          this.snackBar.open(this.translateService.instant('workspace.error-loading-missings-profile-details'), this.translateService.instant('close'), { duration: 3000 });
         }
       });
     }
@@ -105,24 +112,31 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
   createProfile(): void {
     this.selectedProfile = new MissingsProfilesDto();
     this.selectedProfile.label = '';
-    // this.selectedProfile.setMissings([
-    //   {
-    //     id: 'missing',
-    //     label: 'Missing',
-    //     description: 'Value is missing',
-    //     code: 999
-    //   }
-    // ]);
+    this.selectedProfile.setMissings([]);
     this.editMode = true;
   }
 
   editProfile(): void {
+    if (this.selectedProfile) {
+      const missings = this.selectedProfile.parseMissings();
+      this.editMissings = Array.isArray(missings) ? [...missings] : [];
+    }
     this.editMode = true;
   }
 
   saveProfile(): void {
     const workspaceId = this.data.workspaceId;
     if (workspaceId && this.selectedProfile) {
+      const missings = this.editMode ? this.editMissings : this.selectedProfile.parseMissings();
+      if (!this.isProfileValid(missings)) {
+        this.snackBar.open(this.translateService.instant('workspace.missing-validation-error'), this.translateService.instant('close'), { duration: 3000 });
+        return;
+      }
+
+      if (this.editMode) {
+        this.selectedProfile.setMissings(missings);
+      }
+
       this.saving = true;
 
       const existingProfile = this.missingsProfiles.find(p => p.label === this.selectedProfile?.label);
@@ -140,7 +154,7 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
             this.saving = false;
             this.editMode = false;
             this.loadMissingsProfiles();
-            this.snackBar.open('Profile updated successfully', 'Close', { duration: 3000 });
+            this.snackBar.open(this.translateService.instant('workspace.profile-updated-successfully'), this.translateService.instant('close'), { duration: 3000 });
           },
           error: () => {
             this.saving = false;
@@ -207,24 +221,30 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
   }
 
   addMissing(): void {
-    if (this.selectedProfile) {
-      const missings = this.selectedProfile.parseMissings();
+    const missings = this.editMode ? this.editMissings : (this.selectedProfile?.parseMissings() || []);
 
-      const highestCode = missings.reduce((max, missing) => Math.max(max, missing.code), 0);
+    const highestCode = missings.reduce((max, missing) => Math.max(max, missing.code), 0);
 
-      missings.push({
-        id: `missing-${Date.now()}`,
-        label: 'New Missing',
-        description: 'Description',
-        code: highestCode > 900 ? highestCode - 1 : 998
-      });
+    missings.push({
+      id: `missing-${Date.now()}`,
+      label: 'New Missing',
+      description: 'Description',
+      code: highestCode > 900 ? highestCode - 1 : 998
+    });
 
-      // this.selectedProfile.setMissings(missings);
+    if (this.editMode) {
+      this.editMissings = [...missings];
+    } else if (this.selectedProfile) {
+      this.selectedProfile.setMissings(missings);
     }
   }
 
   removeMissing(index: number): void {
-    if (this.selectedProfile) {
+    if (this.editMode) {
+      const missings = [...this.editMissings];
+      missings.splice(index, 1);
+      this.editMissings = missings;
+    } else if (this.selectedProfile) {
       const missings = this.selectedProfile.parseMissings();
       missings.splice(index, 1);
       this.selectedProfile.setMissings(missings);
@@ -238,28 +258,27 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
 
     try {
       const missings = this.selectedProfile.parseMissings();
-      return Array.isArray(missings) ? missings : [];
+      if (!Array.isArray(missings)) {
+        return [];
+      }
+      return missings.filter(missing => missing.id !== undefined && missing.id !== null &&
+        missing.id.trim() !== '' && missing.label !== undefined && missing.label !== null &&
+        missing.label.trim() !== '' && missing.description !== undefined && missing.description !== null &&
+        missing.code !== undefined && missing.code !== null && !Number.isNaN(missing.code));
     } catch (error) {
       // Error occurred while parsing missings
       return [];
     }
   }
 
-  updateMissing(index: number, field: keyof MissingDto, value: string | number): void {
-    if (this.selectedProfile) {
-      const missings = this.selectedProfile.parseMissings();
-
-      if (field === 'code') {
-        missings[index][field] = typeof value === 'string' ? parseInt(value, 10) : value;
-      } else if (field === 'id' || field === 'label' || field === 'description') {
-        missings[index][field] = String(value);
-      }
-
-      this.selectedProfile.setMissings(missings);
-    }
-  }
-
   close(): void {
     this.dialogRef.close();
+  }
+
+  isProfileValid(missings: MissingDto[]): boolean {
+    return missings.every(missing => missing.id !== undefined && missing.id !== null &&
+      missing.id.trim() !== '' && missing.label !== undefined && missing.label !== null &&
+      missing.label.trim() !== '' && missing.description !== undefined && missing.description !== null &&
+      missing.code !== undefined && missing.code !== null && !Number.isNaN(missing.code));
   }
 }

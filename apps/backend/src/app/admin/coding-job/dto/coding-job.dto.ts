@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { CodingJob } from '../../../database/entities/coding-job.entity';
+import { MissingsProfile } from '../../../database/entities/missings-profile.entity';
 import { VariableBundleDto } from '../../variable-bundle/dto/variable-bundle.dto';
 import { VariableDto } from '../../variable-bundle/dto/variable.dto';
 
@@ -118,6 +119,20 @@ export class CodingJobDto {
   })
     total_units?: number;
 
+  @ApiProperty({
+    description: 'ID of the missings profile assigned to the coding job',
+    example: 1,
+    required: false
+  })
+    missings_profile_id?: number;
+
+  @ApiProperty({
+    description: 'Missings profile assigned to the coding job',
+    example: { id: 1, label: 'Default Profile', missings: '...' },
+    required: false
+  })
+    missings_profile?: MissingsProfile;
+
   /**
    * Create a CodingJobDto from a CodingJob entity
    * @param entity The CodingJob entity
@@ -140,6 +155,11 @@ export class CodingJobDto {
     dto.status = entity.status;
     dto.created_at = entity.created_at;
     dto.updated_at = entity.updated_at;
+    dto.missings_profile_id = entity.missings_profile_id;
+
+    if (entity.missingsProfile) {
+      dto.missings_profile = entity.missingsProfile;
+    }
 
     if (assignedCoders) {
       dto.assigned_coders = assignedCoders;
