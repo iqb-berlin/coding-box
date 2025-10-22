@@ -171,12 +171,15 @@ export class CoderTrainingService {
     try {
       this.logger.log(`Creating coder training jobs for workspace ${workspaceId} with ${selectedCoders.length} coders`);
 
+      // First generate training packages to get the response data
+      const trainingPackages = await this.generateCoderTrainingPackages(workspaceId, selectedCoders, variableConfigs);
+
       const jobs: TrainingJob[] = [];
       let jobsCreated = 0;
 
-      for (const coder of selectedCoders) {
-        const coderId = coder.id;
-        const coderName = coder.name;
+      for (const trainingPackage of trainingPackages) {
+        const coderId = trainingPackage.coderId;
+        const coderName = trainingPackage.coderName;
 
         this.logger.log(`Creating training job for coder ${coderName} (ID: ${coderId})`);
 
@@ -205,38 +208,39 @@ export class CoderTrainingService {
         codingJobCoder.user_id = coderId;
         await this.codingJobCoderRepository.save(codingJobCoder);
 
-        // Add variables to the job for each configuration
-        for (const config of variableConfigs) {
-          const variableId = config.variableId;
-          const unitId = config.unitId;
-
-          // Get unit ID from alias
-          const unit = await this.unitRepository.findOne({
-            where: { alias: unitId, booklet: { person: { workspace_id: workspaceId } } },
-            relations: ['booklet']
-          });
-
-          if (!unit) {
-            this.logger.warn(`Unit with alias ${unitId} not found in workspace ${workspaceId}`);
-            continue;
+        // Add variables to the job (deduplicated)
+        const processedVariables = new Set<string>();
+        for (const response of trainingPackage.responses) {
+          const variableKey = `${response.variableId}:${response.unitName}`;
+          if (!processedVariables.has(variableKey)) {
+            const codingJobVariable = new CodingJobVariable();
+            codingJobVariable.coding_job_id = jobId;
+            codingJobVariable.variable_id = response.variableId;
+            codingJobVariable.unit_name = response.unitName;
+            await this.codingJobVariableRepository.save(codingJobVariable);
+            processedVariables.add(variableKey);
+            this.logger.log(`Added variable ${response.variableId} for unit ${response.unitName} to training job ${jobId} for coder ${coderName}`);
           }
-
-          // Add variable to the job
-          const codingJobVariable = new CodingJobVariable();
-          codingJobVariable.coding_job_id = jobId;
-          codingJobVariable.variable_id = variableId;
-          codingJobVariable.unit_name = unit.name;
-          await this.codingJobVariableRepository.save(codingJobVariable);
-
-          // Add unit to the job
-          const codingJobUnit = new CodingJobUnit();
-          codingJobUnit.coding_job_id = jobId;
-          await this.codingJobUnitRepository.save(codingJobUnit);
-
-          this.logger.log(`Added variable ${variableId} and unit ${unitId} to training job ${jobId} for coder ${coderName}`);
         }
 
-        this.logger.log(`Successfully created training job ${jobId} for coder ${coderName}`);
+        // Add coding job units for each response in the training package
+        for (const response of trainingPackage.responses) {
+          const codingJobUnit = new CodingJobUnit();
+          codingJobUnit.coding_job_id = jobId;
+          codingJobUnit.response_id = response.responseId;
+          codingJobUnit.unit_name = response.unitName;
+          codingJobUnit.unit_alias = response.unitAlias || null;
+          codingJobUnit.variable_id = response.variableId;
+          codingJobUnit.variable_anchor = response.variableId; // Same as variable_id
+          codingJobUnit.booklet_name = response.bookletName;
+          codingJobUnit.person_login = response.personLogin;
+          codingJobUnit.person_code = response.personCode;
+          await this.codingJobUnitRepository.save(codingJobUnit);
+
+          this.logger.log(`Added coding job unit for response ${response.responseId} to training job ${jobId} for coder ${coderName}`);
+        }
+
+        this.logger.log(`Successfully created training job ${jobId} with ${trainingPackage.responses.length} coding units for coder ${coderName}`);
       }
 
       const message = `Successfully created ${jobsCreated} coder training jobs`;
