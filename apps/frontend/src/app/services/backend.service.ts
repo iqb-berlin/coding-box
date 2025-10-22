@@ -818,13 +818,34 @@ export class BackendService {
   createCoderTrainingJobs(
     workspaceId: number,
     selectedCoders: { id: number; name: string }[],
-    variableConfigs: { variableId: string; unitId: string; sampleCount: number }[]
-  ): Observable<{ success: boolean; jobsCreated: number; message: string; jobs: { coderId: number; coderName: string; jobId: number; jobName: string }[] }> {
+    variableConfigs: { variableId: string; unitId: string; sampleCount: number }[],
+    trainingLabel: string
+  ): Observable<{ success: boolean; jobsCreated: number; message: string; jobs: { coderId: number; coderName: string; jobId: number; jobName: string }[]; trainingId?: number }> {
     const url = `${this.serverUrl}/admin/workspace/${workspaceId}/coding/coder-training-jobs`;
-    return this.http.post<{ success: boolean; jobsCreated: number; message: string; jobs: { coderId: number; coderName: string; jobId: number; jobName: string }[] }>(url, {
+    return this.http.post<{ success: boolean; jobsCreated: number; message: string; jobs: { coderId: number; coderName: string; jobId: number; jobName: string }[]; trainingId?: number }>(url, {
+      trainingLabel,
       selectedCoders,
       variableConfigs
     });
+  }
+
+  getCoderTrainings(workspaceId: number): Observable<{
+    id: number;
+    workspace_id: number;
+    label: string;
+    created_at: Date;
+    updated_at: Date;
+    jobsCount: number;
+  }[]> {
+    const url = `${this.serverUrl}/admin/workspace/${workspaceId}/coding/coder-trainings`;
+    return this.http.get<{
+      id: number;
+      workspace_id: number;
+      label: string;
+      created_at: Date;
+      updated_at: Date;
+      jobsCount: number;
+    }[]>(url);
   }
 
   downloadWorkspaceFilesAsZip(workspaceId: number): Observable<Blob> {

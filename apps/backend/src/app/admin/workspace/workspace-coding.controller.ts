@@ -959,6 +959,38 @@ export class WorkspaceCodingController {
     );
   }
 
+  @Get(':workspace_id/coding/coder-trainings')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiOkResponse({
+    description: 'List of coder trainings retrieved successfully.',
+    schema: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'number', description: 'Training ID' },
+          workspace_id: { type: 'number', description: 'Workspace ID' },
+          label: { type: 'string', description: 'Training label' },
+          created_at: { type: 'string', format: 'date-time', description: 'Creation date' },
+          updated_at: { type: 'string', format: 'date-time', description: 'Last update date' },
+          jobsCount: { type: 'number', description: 'Number of coding jobs in this training' }
+        }
+      }
+    }
+  })
+  async getCoderTrainings(@WorkspaceId() workspace_id: number): Promise<{
+    id: number;
+    workspace_id: number;
+    label: string;
+    created_at: Date;
+    updated_at: Date;
+    jobsCount: number;
+  }[]> {
+    return this.coderTrainingService.getCoderTrainings(workspace_id);
+  }
+
   @Post(':workspace_id/coding/coder-training-jobs')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiTags('coding')
@@ -968,6 +1000,7 @@ export class WorkspaceCodingController {
     schema: {
       type: 'object',
       properties: {
+        trainingLabel: { type: 'string', description: 'Label for the coder training session' },
         selectedCoders: {
           type: 'array',
           items: {
@@ -989,7 +1022,8 @@ export class WorkspaceCodingController {
             }
           }
         }
-      }
+      },
+      required: ['trainingLabel', 'selectedCoders', 'variableConfigs']
     }
   })
   @ApiOkResponse({
@@ -1011,6 +1045,10 @@ export class WorkspaceCodingController {
               jobName: { type: 'string' }
             }
           }
+        },
+        trainingId: {
+          type: 'number',
+          description: 'ID of the created coder training session'
         }
       }
     }
@@ -1018,14 +1056,16 @@ export class WorkspaceCodingController {
   async createCoderTrainingJobs(
     @WorkspaceId() workspace_id: number,
       @Body() body: {
+        trainingLabel: string;
         selectedCoders: { id: number; name: string }[];
         variableConfigs: { variableId: string; unitId: string; sampleCount: number }[];
       }
-  ): Promise<{ success: boolean; jobsCreated: number; message: string; jobs: { coderId: number; coderName: string; jobId: number; jobName: string }[] }> {
+  ): Promise<{ success: boolean; jobsCreated: number; message: string; jobs: { coderId: number; coderName: string; jobId: number; jobName: string }[]; trainingId?: number }> {
     return this.coderTrainingService.createCoderTrainingJobs(
       workspace_id,
       body.selectedCoders,
-      body.variableConfigs
+      body.variableConfigs,
+      body.trainingLabel
     );
   }
 }

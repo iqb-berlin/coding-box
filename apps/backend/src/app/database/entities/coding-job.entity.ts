@@ -7,6 +7,7 @@ import {
   ManyToOne,
   JoinColumn
 } from 'typeorm';
+import { CoderTraining } from './coder-training.entity';
 import { MissingsProfile } from './missings-profile.entity';
 
 /**
@@ -32,6 +33,13 @@ export class CodingJob {
    */
   @Column({ default: 'pending' })
     status: string;
+
+  @Column({ nullable: true })
+    training_id?: number;
+
+  @ManyToOne(() => CoderTraining, coderTraining => coderTraining.codingJobs)
+  @JoinColumn({ name: 'training_id' })
+    training?: CoderTraining;
 
   @Column({ name: 'missings_profile_id', nullable: true })
     missings_profile_id?: number;

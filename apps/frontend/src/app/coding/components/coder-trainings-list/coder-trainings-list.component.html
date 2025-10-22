@@ -1,0 +1,76 @@
+<div class="coder-trainings-container">
+  <div class="header-section" *ngIf="showCreateButton">
+    <h3>Kodierer-Schulungen</h3>
+    <button mat-raised-button color="primary" (click)="createTraining()">
+      <mat-icon>add</mat-icon>
+      Neue Schulung erstellen
+    </button>
+  </div>
+
+  <div class="loading-container" *ngIf="isLoading">
+    <mat-progress-spinner mode="indeterminate" diameter="50"></mat-progress-spinner>
+    <p>Lade Kodierer-Schulungen...</p>
+  </div>
+
+  <div class="no-trainings-message" *ngIf="!isLoading && coderTrainings.length === 0">
+    <mat-icon>school</mat-icon>
+    <h4>Keine Kodierer-Schulungen vorhanden</h4>
+    <p>Erstellen Sie Ihre erste Schulung, um mit dem Training zu beginnen.</p>
+    <button mat-button color="primary" (click)="createTraining()" *ngIf="showCreateButton">
+      <mat-icon>add</mat-icon>
+      Erste Schulung erstellen
+    </button>
+  </div>
+
+  <div class="trainings-list" *ngIf="!isLoading && coderTrainings.length > 0">
+    <table mat-table [dataSource]="coderTrainings" class="trainings-table">
+
+      <!-- Label Column -->
+      <ng-container matColumnDef="label">
+        <th mat-header-cell *matHeaderCellDef>Bezeichnung</th>
+        <td mat-cell *matCellDef="let training">
+          <div class="training-label">
+            <mat-icon>school</mat-icon>
+            <span>{{ training.label }}</span>
+          </div>
+        </td>
+      </ng-container>
+
+      <!-- Jobs Count Column -->
+      <ng-container matColumnDef="jobsCount">
+        <th mat-header-cell *matHeaderCellDef>Kodierjobs</th>
+        <td mat-cell *matCellDef="let training">
+          <mat-chip-listbox>
+            <mat-chip>{{ training.jobsCount }} {{ training.jobsCount === 1 ? 'Job' : 'Jobs' }}</mat-chip>
+          </mat-chip-listbox>
+        </td>
+      </ng-container>
+
+      <!-- Created Date Column -->
+      <ng-container matColumnDef="created_at">
+        <th mat-header-cell *matHeaderCellDef>Erstellt am</th>
+        <td mat-cell *matCellDef="let training">
+          {{ formatDate(training.created_at) }}
+        </td>
+      </ng-container>
+
+      <!-- Actions Column -->
+      <ng-container matColumnDef="actions">
+        <th mat-header-cell *matHeaderCellDef>Aktionen</th>
+        <td mat-cell *matCellDef="let training">
+          <div class="action-buttons">
+            <button mat-icon-button title="Details anzeigen" color="primary">
+              <mat-icon>visibility</mat-icon>
+            </button>
+            <button mat-icon-button title="Bearbeiten" color="accent">
+              <mat-icon>edit</mat-icon>
+            </button>
+          </div>
+        </td>
+      </ng-container>
+
+      <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+      <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+    </table>
+  </div>
+</div>
