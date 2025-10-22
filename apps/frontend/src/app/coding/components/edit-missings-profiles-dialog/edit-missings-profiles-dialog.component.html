@@ -40,14 +40,13 @@
           </mat-form-field>
 
           <h4>{{ 'workspace.missing-values' | translate }}</h4>
-          <table mat-table [dataSource]="getMissings()" class="missings-table">
+          <table mat-table [dataSource]="editMode ? editMissings : getMissings()" class="missings-table">
             <!-- ID Column -->
             <ng-container matColumnDef="id">
               <th mat-header-cell *matHeaderCellDef>{{ 'workspace.missing-id' | translate }}</th>
               <td mat-cell *matCellDef="let missing; let i = index">
                 <mat-form-field appearance="fill">
-                  <input matInput [(ngModel)]="missing.id"
-                         (change)="updateMissing(i, 'id', missing.id)">
+                  <input matInput [(ngModel)]="missing.id">
                 </mat-form-field>
               </td>
             </ng-container>
@@ -57,8 +56,7 @@
               <th mat-header-cell *matHeaderCellDef>{{ 'workspace.missing-label' | translate }}</th>
               <td mat-cell *matCellDef="let missing; let i = index">
                 <mat-form-field appearance="fill">
-                  <input matInput [(ngModel)]="missing.label"
-                         (change)="updateMissing(i, 'label', missing.label)">
+                  <input matInput [(ngModel)]="missing.label">
                 </mat-form-field>
               </td>
             </ng-container>
@@ -68,8 +66,7 @@
               <th mat-header-cell *matHeaderCellDef>{{ 'workspace.missing-description' | translate }}</th>
               <td mat-cell *matCellDef="let missing; let i = index">
                 <mat-form-field appearance="fill">
-                  <input matInput [(ngModel)]="missing.description"
-                         (change)="updateMissing(i, 'description', missing.description)">
+                  <input matInput [(ngModel)]="missing.description">
                 </mat-form-field>
               </td>
             </ng-container>
@@ -79,8 +76,7 @@
               <th mat-header-cell *matHeaderCellDef>{{ 'workspace.missing-code' | translate }}</th>
               <td mat-cell *matCellDef="let missing; let i = index">
                 <mat-form-field appearance="fill">
-                  <input matInput type="number" [(ngModel)]="missing.code"
-                         (change)="updateMissing(i, 'code', missing.code)">
+                  <input matInput type="number" [(ngModel)]="missing.code">
                 </mat-form-field>
               </td>
             </ng-container>

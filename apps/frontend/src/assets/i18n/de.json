@@ -332,7 +332,16 @@
     "failure-distribution-by-day": "Verteilung der Fehler nach Tag",
     "failure-distribution-by-hour": "Verteilung der Fehler nach Stunde",
     "failure-count": "Anzahl der Fehler",
-    "no-failures": "Keine Fehler vorhanden"
+    "no-failures": "Keine Fehler vorhanden",
+    "error-loading-missings-profiles": "Fehler beim Laden der Missings-Profile",
+    "error-loading-missings-profile-details": "Fehler beim Laden der Details zum Missings-Profil",
+    "missing-validation-error": "Alle Missing-Einträge müssen ein gültiges Label und einen gültigen Code haben",
+    "profile-updated-successfully": "Profil erfolgreich aktualisiert",
+    "error-updating-missings-profile": "Fehler beim Aktualisieren des Missings-Profils",
+    "profile-created-successfully": "Profil erfolgreich erstellt",
+    "error-creating-missings-profile": "Fehler beim Erstellen des Missings-Profils",
+    "profile-deleted-successfully": "Profil erfolgreich gelöscht",
+    "error-deleting-missings-profile": "Fehler beim Löschen des Missings-Profils"
   },
 
   "paginator": {
@@ -360,5 +369,41 @@
     "failed-to-submit-coding-job": "Fehler beim Einreichen des Kodierungsauftrags",
     "coding-progress-message": "Kodierfortschritt: {{completed}}/{{total}} abgeschlossen ({{percentage}}%)",
     "close": "Schließen"
+  },
+
+  "ws-settings": {
+    "access-token": "Zugangstoken",
+    "generate-token": "Token generieren",
+    "generate-token-description": "Generieren Sie ein Zugangstoken für den Zugriff auf diesen Arbeitsbereich.",
+    "validity-days": "Laufzeit in Tagen",
+    "enter-validity-days": "Geben Sie die Anzahl der Tage ein, für die das Token gültig sein soll",
+    "generate-access-token": "Zugangstoken generieren",
+    "generated-token": "Generiertes Token",
+    "authorization-token": "Autorisierungs Token",
+    "token-api-hint": "Dieses Token kann für den API-Zugriff verwendet werden",
+    "copy-to-clipboard": "In Zwischenablage kopieren",
+    "replay-statistics": "Replay-Statistiken",
+    "replay-statistics-description": "Visualisieren Sie Statistiken über die Nutzung der Replay-Funktion, einschließlich Häufigkeit und Dauer.",
+    "show-replay-statistics": "Replay-Statistiken anzeigen",
+    "coding": "Kodierung",
+    "auto-fetch-coding-statistics": "Automatisches Laden der Kodierstatistiken",
+    "auto-fetch-coding-statistics-description": "Wenn aktiviert, werden die Kodierstatistiken automatisch beim Öffnen der Kodierungsverwaltung geladen. Wenn deaktiviert, müssen die Statistiken manuell über einen Button geladen werden.",
+    "enabled": "Aktiviert",
+    "disabled": "Deaktiviert",
+    "user-rights": "Nutzerrechte",
+    "system-journal": "System Journal",
+    "export-test-results": "Testergebnisse exportieren",
+    "export-database-description": "Exportieren Sie die Testergebnisse dieses Arbeitsbereichs als SQLite-Datenbank. Die Exportdatei enthält alle relevanten Daten wie Personen, Testhefte, Aufgaben, Antworten und Protokolle.",
+    "exporting": "Exportiere...",
+    "export-database": "Datenbank exportieren",
+    "token-generated-successfully": "Token erfolgreich generiert",
+    "token-copied-to-clipboard": "Token in die Zwischenablage kopiert",
+    "auto-fetch-coding-statistics-enabled": "Automatisches Laden der Kodierstatistiken aktiviert",
+    "auto-fetch-coding-statistics-disabled": "Automatisches Laden der Kodierstatistiken deaktiviert",
+    "error-saving-setting": "Fehler beim Speichern der Einstellung",
+    "no-workspace-selected": "Kein Arbeitsbereich ausgewählt",
+    "workspace-database-exported-successfully": "Arbeitsbereich-Datenbank erfolgreich exportiert",
+    "error-exporting-workspace-database-retry": "Fehler beim Exportieren der Arbeitsbereich-Datenbank. Bitte versuchen Sie es erneut.",
+    "authentication-required": "Nicht authentifiziert. Bitte melden Sie sich erneut an."
   }
 }
