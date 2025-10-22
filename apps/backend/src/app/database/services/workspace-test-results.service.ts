@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Connection, Repository } from 'typeorm';
 import Persons from '../entities/persons.entity';
-import { statusNumberToString } from '../utils/response-status-converter';
+import { statusNumberToString, statusStringToNumber } from '../utils/response-status-converter';
 import { Unit } from '../entities/unit.entity';
 import { Booklet } from '../entities/booklet.entity';
 import { ResponseEntity } from '../entities/response.entity';
@@ -434,7 +434,7 @@ export class WorkspaceTestResultsService {
         .leftJoinAndSelect('unit.booklet', 'booklet')
         .leftJoinAndSelect('booklet.person', 'person')
         .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
-        .where('response.status = :constStatus', { constStatus: 'VALUE_CHANGED' })
+        .where('response.status = :constStatus', { constStatus: statusStringToNumber('VALUE_CHANGED') })
         .andWhere('person.workspace_id = :workspace_id_param', { workspace_id_param: workspace_id })
         .orderBy('response.id', 'ASC');
 

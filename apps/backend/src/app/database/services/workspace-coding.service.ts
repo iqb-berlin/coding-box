@@ -257,6 +257,10 @@ export class WorkspaceCodingService {
 
   async createCodingStatisticsJob(workspaceId: number): Promise<{ jobId: string; message: string }> {
     try {
+      const cacheKey = `coding-statistics:${workspaceId}`;
+      await this.cacheService.delete(cacheKey);
+      this.logger.log(`Cleared coding statistics cache for workspace ${workspaceId} before refresh`);
+
       const job = await this.jobQueueService.addCodingStatisticsJob(workspaceId);
       this.logger.log(`Created coding statistics job ${job.id} for workspace ${workspaceId}`);
       return { jobId: job.id.toString(), message: 'Coding statistics job created' };
