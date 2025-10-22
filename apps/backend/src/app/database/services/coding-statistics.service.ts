@@ -51,7 +51,6 @@ export class CodingStatisticsService {
       `, [valuedChangedStatus, workspace_id, true]);
 
       let totalResponses = 0;
-
       statusCountResults.forEach(result => {
         const count = parseInt(result.count, 10);
         const validCount = Number.isNaN(count) ? 0 : count;
