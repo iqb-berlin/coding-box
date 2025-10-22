@@ -86,9 +86,9 @@ export class JobQueueService {
    * @returns Array of jobs
    */
   async getTestPersonCodingJobs(workspaceId: number): Promise<Job<TestPersonCodingJobData>[]> {
-    console.log(`Fetching all test person coding jobs for workspace ${workspaceId}`);
+    this.logger.log(`Fetching all test person coding jobs for workspace ${workspaceId}`);
     const jobs = await this.testPersonCodingQueue.getJobs(['completed', 'failed', 'active', 'waiting', 'delayed']);
-    console.log(`Found ${jobs.length} jobs in total`);
+    this.logger.log(`Found ${jobs.length} jobs in total`);
     return jobs.filter(job => job.data.workspaceId === workspaceId);
   }
 

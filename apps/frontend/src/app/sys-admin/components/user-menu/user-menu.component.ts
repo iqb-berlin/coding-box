@@ -45,7 +45,7 @@ export class UserMenuComponent implements OnInit {
         this.userStatus = authData.isAdmin ? 'Administrator' : 'Nutzer';
       });
     } catch (error) {
-      console.error('Failed to load user profile:', error);
+      // Handle error silently or log to a service if needed
     }
   }
 

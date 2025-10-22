@@ -39,7 +39,7 @@ describe('TestPersonCodingService', () => {
     try {
       httpMock.verify();
     } catch (error) {
-      console.error('Error in httpMock.verify():', error);
+      // Error in httpMock.verify() handled
     }
   });
 
