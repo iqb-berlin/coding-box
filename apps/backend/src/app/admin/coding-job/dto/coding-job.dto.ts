@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { CodingJob } from '../../../database/entities/coding-job.entity';
+import { MissingsProfile } from '../../../database/entities/missings-profile.entity';
 import { VariableBundleDto } from '../../variable-bundle/dto/variable-bundle.dto';
 import { VariableDto } from '../../variable-bundle/dto/variable.dto';
 
@@ -130,7 +131,7 @@ export class CodingJobDto {
     example: { id: 1, label: 'Default Profile', missings: '...' },
     required: false
   })
-    missings_profile?: any;
+    missings_profile?: MissingsProfile;
 
   /**
    * Create a CodingJobDto from a CodingJob entity
