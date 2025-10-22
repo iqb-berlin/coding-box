@@ -4,17 +4,18 @@
   </mat-card-header>
 
   <mat-card-content>
-    <div *ngIf="codes.length; else noCodes">
-      <mat-radio-group [(ngModel)]="selectedCode" (ngModelChange)="onSelectionChange()">
-        <div class="code-row" *ngFor="let code of codes">
-          <mat-radio-button [value]="code.id" (change)="onSelect(code.id)">
+    <div *ngIf="selectableItems.length; else noCodes">
+      <mat-radio-group [(ngModel)]="selectedCode">
+        <div class="code-row" *ngFor="let item of selectableItems">
+          <mat-radio-button [value]="item.id" (change)="onSelect(item.id)">
             <span class="code-info">
-              <span class="code-id">{{ code.id }}</span>
-              <span class="code-type">({{ code.type }})</span>
-              <span class="code-score" *ngIf="code.score !== undefined">Score: {{ code.score }}</span>
+              <span class="code-id">{{ item.id }}</span>
+              <span class="code-type">({{ item.type }})</span>
+              <span class="code-score" *ngIf="item.score !== undefined">Score: {{ item.score }}</span>
             </span>
           </mat-radio-button>
-          <div class="code-instruction" *ngIf="code.manualInstruction" [innerHTML]="getSafeHtml(code.manualInstruction)"></div>
+          <div class="code-instruction" *ngIf="item.manualInstruction" [innerHTML]="getSafeHtml(item.manualInstruction)"></div>
+          <div class="missing-description" *ngIf="item.isMissing && item.description" [innerHTML]="getSafeHtml(item.description)"></div>
         </div>
       </mat-radio-group>
     </div>

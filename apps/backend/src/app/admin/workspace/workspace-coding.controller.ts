@@ -534,7 +534,7 @@ export class WorkspaceCodingController {
   async generateCodebook(
     @WorkspaceId() workspace_id: number,
       @Body() body: {
-        missingsProfile: string;
+        missingsProfile: number;
         contentOptions: {
           exportFormat: string;
           missingsProfile: string;

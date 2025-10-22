@@ -44,10 +44,10 @@ export class MissingsProfilesService {
     }
   }
 
-  private async getMissingsProfileByLabel(label: string): Promise<MissingsProfilesDto | null> {
+  private async getMissingsProfileById(id:number): Promise<MissingsProfilesDto | null> {
     try {
       const profileEntity = await this.missingsProfileRepository.findOne({
-        where: { label }
+        where: { id }
       });
 
       if (!profileEntity) {
@@ -74,7 +74,6 @@ export class MissingsProfilesService {
    * @returns Array of default missings profiles
    */
   private createDefaultMissingsProfiles(): MissingsProfilesDto[] {
-    // Create default IQB-Standard profile (matching the one from WorkspaceCodingService)
     const iqbStandardProfile = new MissingsProfilesDto();
     iqbStandardProfile.label = 'IQB-Standard';
     iqbStandardProfile.setMissings([
@@ -197,10 +196,10 @@ export class MissingsProfilesService {
     }
   }
 
-  async getMissingsProfileDetails(workspaceId: number, label: string): Promise<MissingsProfilesDto | null> {
+  async getMissingsProfileDetails(workspaceId: number, id: number): Promise<MissingsProfilesDto | null> {
     try {
-      this.logger.log(`Getting missings profile details for '${label}' in workspace ${workspaceId}`);
-      return await this.getMissingsProfileByLabel(label);
+      this.logger.log(`Getting missings profile details for '${id}' in workspace ${workspaceId}`);
+      return await this.getMissingsProfileById(id);
     } catch (error) {
       this.logger.error(`Error getting missings profile details: ${error.message}`, error.stack);
       return null;
