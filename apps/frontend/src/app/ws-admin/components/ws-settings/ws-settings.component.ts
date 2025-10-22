@@ -1,6 +1,6 @@
 import { Component, inject, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
@@ -47,6 +47,7 @@ export class WsSettingsComponent implements OnInit {
   private clipboard = inject(Clipboard);
   private snackBar = inject(MatSnackBar);
   private dialog = inject(MatDialog);
+  private translateService = inject(TranslateService);
 
   authToken: string | null = null;
   duration = 60;
@@ -78,14 +79,14 @@ export class WsSettingsComponent implements OnInit {
       .createToken(this.appService.selectedWorkspaceId, this.appService.loggedUser?.sub || '', this.duration)
       .subscribe(authToken => {
         this.authToken = authToken;
-        this.snackBar.open('Token erfolgreich generiert', 'Schließen', { duration: 3000 });
+        this.snackBar.open(this.translateService.instant('ws-settings.token-generated-successfully'), this.translateService.instant('close'), { duration: 3000 });
       });
   }
 
   copyToken(): void {
     if (this.authToken) {
       this.clipboard.copy(this.authToken);
-      this.snackBar.open('Token in die Zwischenablage kopiert', 'Schließen', { duration: 3000 });
+      this.snackBar.open(this.translateService.instant('ws-settings.token-copied-to-clipboard'), this.translateService.instant('close'), { duration: 3000 });
     }
   }
 
@@ -93,7 +94,7 @@ export class WsSettingsComponent implements OnInit {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (workspaceId) {
       this.dialog.open(EditMissingsProfilesDialogComponent, {
-        width: '900px',
+        width: '1600px',
         data: { workspaceId }
       });
     }
@@ -110,14 +111,14 @@ export class WsSettingsComponent implements OnInit {
           next: () => {
             this.snackBar.open(
               this.autoFetchCodingStatistics ?
-                'Automatisches Laden der Kodierstatistiken aktiviert' :
-                'Automatisches Laden der Kodierstatistiken deaktiviert',
-              'Schließen',
+                this.translateService.instant('ws-settings.auto-fetch-coding-statistics-enabled') :
+                this.translateService.instant('ws-settings.auto-fetch-coding-statistics-disabled'),
+              this.translateService.instant('close'),
               { duration: 3000 }
             );
           },
           error: () => {
-            this.snackBar.open('Fehler beim Speichern der Einstellung', 'Schließen', {
+            this.snackBar.open(this.translateService.instant('ws-settings.error-saving-setting'), this.translateService.instant('close'), {
               duration: 3000,
               panelClass: ['error-snackbar']
             });
@@ -134,7 +135,7 @@ export class WsSettingsComponent implements OnInit {
 
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
-      this.snackBar.open('Kein Arbeitsbereich ausgewählt', 'Schließen', { duration: 3000 });
+      this.snackBar.open(this.translateService.instant('ws-settings.no-workspace-selected'), this.translateService.instant('close'), { duration: 3000 });
       return;
     }
 
@@ -147,7 +148,7 @@ export class WsSettingsComponent implements OnInit {
     const token = localStorage.getItem('id_token');
 
     if (!token) {
-      this.snackBar.open('Nicht authentifiziert. Bitte melden Sie sich erneut an.', 'Schließen', { duration: 5000 });
+      this.snackBar.open(this.translateService.instant('ws-settings.authentication-required'), this.translateService.instant('close'), { duration: 5000 });
       this.isExporting = false;
       return;
     }
@@ -173,10 +174,10 @@ export class WsSettingsComponent implements OnInit {
         window.URL.revokeObjectURL(url);
         document.body.removeChild(anchor);
 
-        this.snackBar.open('Arbeitsbereich-Datenbank erfolgreich exportiert', 'Schließen', { duration: 3000 });
+        this.snackBar.open(this.translateService.instant('ws-settings.workspace-database-exported-successfully'), this.translateService.instant('close'), { duration: 3000 });
       })
       .catch(() => {
-        this.snackBar.open('Fehler beim Exportieren der Arbeitsbereich-Datenbank. Bitte versuchen Sie es erneut.', 'Schließen', { duration: 5000 });
+        this.snackBar.open(this.translateService.instant('ws-settings.error-exporting-workspace-database-retry'), this.translateService.instant('close'), { duration: 5000 });
         if (document.body.contains(anchor)) {
           document.body.removeChild(anchor);
         }

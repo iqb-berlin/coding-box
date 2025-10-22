@@ -1,5 +1,13 @@
-import { Processor, Process } from '@nestjs/bull';
-import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
+import {
+  Processor,
+  Process
+} from '@nestjs/bull';
+import {
+  Injectable,
+  Logger,
+  Inject,
+  forwardRef
+} from '@nestjs/common';
 import { Job } from 'bull';
 import { CodingStatistics } from '../../database/services/shared-types';
 import { WorkspaceCodingService } from '../../database/services/workspace-coding.service';

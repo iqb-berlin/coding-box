@@ -76,7 +76,6 @@ export class VariableBundleService {
         };
       }),
       catchError(error => {
-        console.error('Error fetching variable bundles:', error);
         throw error;
       })
     );

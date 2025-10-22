@@ -86,4 +86,13 @@ export class UpdateCodingJobDto {
   @Type(() => SimpleVariableBundleDto)
   @IsOptional()
     variableBundles?: SimpleVariableBundleDto[];
+
+  @ApiProperty({
+    description: 'ID of the missings profile to assign to the coding job',
+    example: 1,
+    required: false
+  })
+  @IsNumber()
+  @IsOptional()
+    missingsProfileId?: number;
 }

@@ -39,7 +39,7 @@ export class PostMessageService {
               source: event.source
             });
           } catch (error) {
-            console.error('Error processing postMessage:', error);
+            // Error processing postMessage: ${JSON.stringify(error)}
           }
         });
       });
@@ -55,7 +55,7 @@ export class PostMessageService {
       target.postMessage(message, targetOrigin);
       return true;
     } catch (error) {
-      console.error('Error sending postMessage:', error);
+      // Error sending postMessage: ${JSON.stringify(error)}
       return false;
     }
   }
@@ -66,7 +66,7 @@ export class PostMessageService {
     targetOrigin = '*'
   ): boolean {
     if (!iframe || !iframe.contentWindow) {
-      console.error('Invalid iframe or contentWindow is null');
+      // Invalid iframe or contentWindow is null
       return false;
     }
 
