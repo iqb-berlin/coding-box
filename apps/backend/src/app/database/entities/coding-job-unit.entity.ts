@@ -6,7 +6,10 @@ import {
   ManyToOne,
   JoinColumn
 } from 'typeorm';
+// eslint-disable-next-line import/no-cycle
 import { CodingJob } from './coding-job.entity';
+// eslint-disable-next-line import/no-cycle
+import { ResponseEntity } from './response.entity';
 
 /**
  * Entity for coding job units (responses that need to be coded for a job)
@@ -55,4 +58,8 @@ export class CodingJobUnit {
   @ManyToOne(() => CodingJob)
   @JoinColumn({ name: 'coding_job_id' })
     coding_job: CodingJob;
+
+  @ManyToOne(() => ResponseEntity)
+  @JoinColumn({ name: 'response_id' })
+    response: ResponseEntity;
 }

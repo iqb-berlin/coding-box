@@ -848,6 +848,104 @@ export class BackendService {
     }[]>(url);
   }
 
+  updateCoderTrainingLabel(workspaceId: number, trainingId: number, newLabel: string): Observable<{ success: boolean; message: string }> {
+    const url = `${this.serverUrl}/admin/workspace/${workspaceId}/coding/coder-trainings/${trainingId}`;
+    return this.http.put<{ success: boolean; message: string }>(url, { label: newLabel });
+  }
+
+  deleteCoderTraining(workspaceId: number, trainingId: number): Observable<{ success: boolean; message: string }> {
+    const url = `${this.serverUrl}/admin/workspace/${workspaceId}/coding/coder-trainings/${trainingId}`;
+    return this.http.delete<{ success: boolean; message: string }>(url);
+  }
+
+  compareTrainingCodingResults(
+    workspaceId: number,
+    trainingIds: string
+  ): Observable<Array<{
+      unitName: string;
+      variableId: string;
+      trainings: Array<{
+        trainingId: number;
+        trainingLabel: string;
+        code: string | null;
+        score: number | null;
+      }>;
+    }>> {
+    const url = `${this.serverUrl}/admin/workspace/${workspaceId}/coding/compare-training-results?trainingIds=${encodeURIComponent(trainingIds)}`;
+    return this.http.get<Array<{
+      unitName: string;
+      variableId: string;
+      trainings: Array<{
+        trainingId: number;
+        trainingLabel: string;
+        code: string | null;
+        score: number | null;
+      }>;
+    }>>(url);
+  }
+
+  compareWithinTrainingCodingResults(
+    workspaceId: number,
+    trainingId: number
+  ): Observable<Array<{
+      unitName: string;
+      variableId: string;
+      personCode: string;
+      testPerson: string;
+      givenAnswer: string;
+      coders: Array<{
+        jobId: number;
+        coderName: string;
+        code: string | null;
+        score: number | null;
+      }>;
+    }>> {
+    const url = `${this.serverUrl}/admin/workspace/${workspaceId}/coding/compare-within-training?trainingId=${trainingId}`;
+    return this.http.get<Array<{
+      unitName: string;
+      variableId: string;
+      personCode: string;
+      testPerson: string;
+      givenAnswer: string;
+      coders: Array<{
+        jobId: number;
+        coderName: string;
+        code: string | null;
+        score: number | null;
+      }>;
+    }>>(url);
+  }
+
+  getCodingJobsForTraining(
+    workspaceId: number,
+    trainingId: number
+  ): Observable<Array<{
+      id: number;
+      name: string;
+      description?: string;
+      status: string;
+      created_at: Date;
+      coder: {
+        userId: number;
+        username: string;
+      };
+      unitsCount: number;
+    }>> {
+    const url = `${this.serverUrl}/admin/workspace/${workspaceId}/coding/coder-trainings/${trainingId}/jobs`;
+    return this.http.get<Array<{
+      id: number;
+      name: string;
+      description?: string;
+      status: string;
+      created_at: Date;
+      coder: {
+        userId: number;
+        username: string;
+      };
+      unitsCount: number;
+    }>>(url);
+  }
+
   downloadWorkspaceFilesAsZip(workspaceId: number): Observable<Blob> {
     const url = `${this.serverUrl}/admin/workspace/${workspaceId}/files/download-zip`;
     return this.http.get(url, {

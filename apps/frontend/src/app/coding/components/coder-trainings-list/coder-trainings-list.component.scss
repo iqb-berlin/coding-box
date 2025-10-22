@@ -11,6 +11,11 @@
       margin: 0;
       font-weight: 500;
     }
+
+    .header-actions {
+      display: flex;
+      gap: 12px;
+    }
   }
 
   .loading-container {

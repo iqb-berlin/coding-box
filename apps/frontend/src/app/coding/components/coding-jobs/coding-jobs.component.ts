@@ -1,8 +1,12 @@
 import {
   Component, OnInit, ViewChild, AfterViewInit, inject
 } from '@angular/core';
+import { CommonModule } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatSort, MatSortModule } from '@angular/material/sort';
+import {
+  MatFormField, MatLabel, MatOption, MatSelect
+} from '@angular/material/select';
 import {
   MatCell, MatCellDef, MatColumnDef,
   MatHeaderCell,
@@ -20,7 +24,6 @@ import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { MatCheckbox } from '@angular/material/checkbox';
 import { MatAnchor, MatButton, MatIconButton } from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { DatePipe, NgClass } from '@angular/common';
 import { Router } from '@angular/router';
 import { AppService } from '../../../services/app.service';
 import { BackendService } from '../../../services/backend.service';
@@ -31,6 +34,7 @@ import { ConfirmDialogComponent } from '../../../shared/confirm-dialog/confirm-d
 import { Coder } from '../../models/coder.model';
 import { CoderService } from '../../services/coder.service';
 import { CodingJobResultDialogComponent } from './coding-job-result-dialog/coding-job-result-dialog.component';
+import { CoderTraining } from '../../models/coder-training.model';
 
 @Component({
   selector: 'coding-box-coding-jobs',
@@ -38,9 +42,8 @@ import { CodingJobResultDialogComponent } from './coding-job-result-dialog/codin
   styleUrls: ['./coding-jobs.component.scss'],
   standalone: true,
   imports: [
+    CommonModule,
     TranslateModule,
-    DatePipe,
-    NgClass,
     SearchFilterComponent,
     MatIcon,
     MatHeaderCell,
@@ -60,7 +63,11 @@ import { CodingJobResultDialogComponent } from './coding-job-result-dialog/codin
     MatButton,
     MatDialogModule,
     MatTooltipModule,
-    MatIconButton
+    MatIconButton,
+    MatFormField,
+    MatLabel,
+    MatSelect,
+    MatOption
   ]
 })
 export class CodingJobsComponent implements OnInit, AfterViewInit {
@@ -82,6 +89,10 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
   selection = new SelectionModel<CodingJob>(true, []);
   isLoading = false;
 
+  coderTrainings: CoderTraining[] = [];
+  selectedTrainingId: number | null = null;
+  private originalData: CodingJob[] = [];
+
   @ViewChild(MatSort) sort!: MatSort;
 
   private handleWindowFocus = () => {
@@ -94,6 +105,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
       this.updateCoderNamesMap(this.dataSource.data);
     });
 
+    this.loadCoderTrainings();
     this.loadCodingJobs();
     window.addEventListener('focus', this.handleWindowFocus);
   }
@@ -127,12 +139,15 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
               assignedVariableBundles: job.assignedVariableBundles ?? job.variableBundles ?? []
             }));
 
+            this.originalData = [...processedData];
             this.dataSource.data = processedData;
             // Namen der Codierer für die Liste aktualisieren
             this.updateCoderNamesMap(processedData);
 
             this.jobDetailsCache.clear();
             this.isLoading = false;
+            // Apply current filter after loading
+            this.onTrainingFilterChange();
           },
           error: () => {
             this.snackBar.open('Fehler beim Laden der Kodierjobs', 'Schließen', { duration: 3000 });
@@ -152,11 +167,14 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
               assignedVariableBundles: job.assignedVariableBundles ?? job.variableBundles ?? []
             }));
 
+            this.originalData = [...processedData];
             this.dataSource.data = processedData;
             this.updateCoderNamesMap(processedData);
 
             this.jobDetailsCache.clear();
             this.isLoading = false;
+            // Apply current filter after loading
+            this.onTrainingFilterChange();
           },
           error: () => {
             this.snackBar.open('Fehler beim Laden der Kodierjobs', 'Schließen', { duration: 3000 });
@@ -168,6 +186,8 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
   }
 
   applyFilter(filterValue: string): void {
+    // Apply training filter first, then text filter
+    this.applyTrainingFilter();
     this.dataSource.filter = filterValue.trim().toLowerCase();
   }
 
@@ -606,6 +626,36 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
         this.coderNamesByJobId.set(job.id, names.join(', '));
       }
     });
+  }
+
+  loadCoderTrainings(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      return;
+    }
+
+    this.backendService.getCoderTrainings(workspaceId).subscribe({
+      next: trainings => {
+        this.coderTrainings = trainings;
+      },
+      error: () => {
+        this.coderTrainings = [];
+      }
+    });
+  }
+
+  onTrainingFilterChange(): void {
+    this.applyTrainingFilter();
+    this.applyFilter('');
+  }
+
+  private applyTrainingFilter(): void {
+    if (this.selectedTrainingId === null || this.selectedTrainingId === undefined) {
+      this.dataSource.data = this.originalData || [];
+      return;
+    }
+
+    this.dataSource.data = (this.originalData || []).filter(job => job.training_id === this.selectedTrainingId);
   }
 
   viewCodingResults(job: CodingJob): void {

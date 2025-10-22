@@ -30,6 +30,18 @@
       (valueChange)="applyFilter($event)">
     </coding-box-search-filter>
 
+    <div class="training-filter">
+      <mat-form-field appearance="outline" class="filter-field">
+        <mat-label>Nach Training filtern</mat-label>
+        <mat-select [(value)]="selectedTrainingId" (selectionChange)="onTrainingFilterChange()">
+          <mat-option [value]="null">Alle Trainings</mat-option>
+          <mat-option *ngFor="let training of coderTrainings" [value]="training.id">
+            {{training.label}}
+          </mat-option>
+        </mat-select>
+      </mat-form-field>
+    </div>
+
     <mat-table [dataSource]="dataSource" matSort class="coding-jobs-table">
       <mat-header-row *matHeaderRowDef="displayedColumns; sticky: true"></mat-header-row>
       <mat-row *matRowDef="let row; columns: displayedColumns;" (click)="selectRow(row, $event)">
