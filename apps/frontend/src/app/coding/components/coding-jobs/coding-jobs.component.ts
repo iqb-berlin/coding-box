@@ -84,6 +84,10 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
 
   @ViewChild(MatSort) sort!: MatSort;
 
+  private handleWindowFocus = () => {
+    this.loadCodingJobs();
+  };
+
   ngOnInit(): void {
     this.coderService.getCoders().subscribe(coders => {
       this.allCoders = coders;
@@ -91,6 +95,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
     });
 
     this.loadCodingJobs();
+    window.addEventListener('focus', this.handleWindowFocus);
   }
 
   ngAfterViewInit(): void {
