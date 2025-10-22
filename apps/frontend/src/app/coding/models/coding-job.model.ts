@@ -1,3 +1,5 @@
+import { MissingsProfilesDto } from '../../../../../../api-dto/coding/missings-profiles.dto';
+
 export interface CodingJob {
   id: number;
   workspace_id: number;
@@ -15,6 +17,8 @@ export interface CodingJob {
   progress?: number;
   codedUnits?: number;
   totalUnits?: number;
+  missings_profile_id?: number;
+  missings_profile?: MissingsProfilesDto;
 }
 
 export interface Variable {

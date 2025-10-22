@@ -16,24 +16,28 @@ export class MissingsProfilesService {
   /**
    * Get all missings profiles
    * @param workspaceId Workspace ID (not used, profiles are global)
-   * @returns Array of missings profiles with labels
+   * @returns Array of missings profiles with labels and ids
    */
-  async getMissingsProfiles(workspaceId: number): Promise<{ label: string }[]> {
+  async getMissingsProfiles(workspaceId: number): Promise<{ label: string; id: number }[]> {
     try {
       this.logger.log(`Getting missings profiles for workspace ${workspaceId}`);
 
       const profiles = await this.missingsProfileRepository.find({
-        select: ['label']
+        select: ['id', 'label']
       });
 
       if (profiles.length === 0) {
         const defaultProfiles = this.createDefaultMissingsProfiles();
         await this.saveDefaultMissingsProfiles(defaultProfiles);
 
-        return defaultProfiles.map(profile => ({ label: profile.label }));
+        // After saving defaults, fetch them again to get IDs
+        const savedProfiles = await this.missingsProfileRepository.find({
+          select: ['id', 'label']
+        });
+        return savedProfiles.map(profile => ({ label: profile.label, id: profile.id }));
       }
 
-      return profiles.map(profile => ({ label: profile.label }));
+      return profiles.map(profile => ({ label: profile.label, id: profile.id }));
     } catch (error) {
       this.logger.error(`Error getting missings profiles for workspace ${workspaceId}: ${error.message}`, error.stack);
       return [];
