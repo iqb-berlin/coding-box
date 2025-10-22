@@ -223,7 +223,8 @@ export class CodingJobService {
       workspace_id: workspaceId,
       name: createCodingJobDto.name,
       description: createCodingJobDto.description,
-      status: createCodingJobDto.status || 'pending'
+      status: createCodingJobDto.status || 'pending',
+      missings_profile_id: createCodingJobDto.missings_profile_id
     });
 
     const savedCodingJob = await this.codingJobRepository.save(codingJob);
@@ -274,6 +275,9 @@ export class CodingJobService {
     }
     if (updateCodingJobDto.status !== undefined) {
       codingJob.codingJob.status = updateCodingJobDto.status;
+    }
+    if (updateCodingJobDto.missingsProfileId !== undefined) {
+      codingJob.codingJob.missings_profile_id = updateCodingJobDto.missingsProfileId;
     }
 
     const savedCodingJob = await this.codingJobRepository.save(codingJob.codingJob);

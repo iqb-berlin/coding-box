@@ -104,6 +104,11 @@ export class CodingJobDialogComponent implements OnInit {
   variableAnalysisPageSize = 10;
   variableAnalysisPageSizeOptions = [5, 10, 25, 50];
 
+  // Missings profiles
+  missingsProfiles: { label: string; id: number }[] = [];
+  selectedMissingsProfileId: number | null = null;
+  isLoadingMissingsProfiles = false;
+
   // Filters
   unitNameFilter = '';
   variableIdFilter = '';
@@ -119,8 +124,10 @@ export class CodingJobDialogComponent implements OnInit {
     this.loadCodingIncompleteVariables();
     this.loadVariableBundles();
     this.loadAvailableCoders();
+    this.loadMissingsProfiles();
     if (this.data.isEdit && this.data.codingJob?.id) {
       this.loadCoders(this.data.codingJob.id);
+      this.selectedMissingsProfileId = this.data.codingJob.missings_profile_id || null;
     }
 
     this.dataSource.filterPredicate = (row, filter: string): boolean => {
@@ -290,6 +297,25 @@ export class CodingJobDialogComponent implements OnInit {
     }
   }
 
+  loadMissingsProfiles(): void {
+    this.isLoadingMissingsProfiles = true;
+    const workspaceId = this.appService.selectedWorkspaceId;
+
+    if (workspaceId) {
+      this.backendService.getMissingsProfiles(workspaceId).subscribe({
+        next: profiles => {
+          this.missingsProfiles = profiles;
+          this.isLoadingMissingsProfiles = false;
+        },
+        error: () => {
+          this.isLoadingMissingsProfiles = false;
+        }
+      });
+    } else {
+      this.isLoadingMissingsProfiles = false;
+    }
+  }
+
   applyFilter(): void {
     this.loadCodingIncompleteVariables(this.unitNameFilter);
     this.dataSource.filter = JSON.stringify({
@@ -419,7 +445,8 @@ export class CodingJobDialogComponent implements OnInit {
       variables: this.selectedVariables.selected,
       variableBundles: this.selectedVariableBundles.selected,
       assignedVariables: this.selectedVariables.selected,
-      assignedVariableBundles: this.selectedVariableBundles.selected
+      assignedVariableBundles: this.selectedVariableBundles.selected,
+      missings_profile_id: this.selectedMissingsProfileId || undefined
     };
 
     if (this.data.isEdit && this.data.codingJob?.id) {

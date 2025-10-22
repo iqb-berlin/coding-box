@@ -234,9 +234,9 @@ export class CodingService {
       );
   }
 
-  getMissingsProfiles(workspaceId: number): Observable<{ label: string }[]> {
+  getMissingsProfiles(workspaceId: number): Observable<{ label: string; id: number }[]> {
     return this.http
-      .get<{ label: string }[]>(
+      .get<{ label: string; id: number }[]>(
       `${this.serverUrl}admin/workspace/${workspaceId}/coding/missings-profiles`,
       { headers: this.authHeader }
     )

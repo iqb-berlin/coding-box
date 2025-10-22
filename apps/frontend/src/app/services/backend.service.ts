@@ -623,7 +623,7 @@ export class BackendService {
     return this.fileService.createDummyTestTakerFile(workspaceId);
   }
 
-  getMissingsProfiles(workspaceId: number): Observable<{ label: string }[]> {
+  getMissingsProfiles(workspaceId: number): Observable<{ label: string; id: number }[]> {
     return this.codingService.getMissingsProfiles(workspaceId);
   }
 
