@@ -8,7 +8,7 @@ describe('CodingJobResultDialogComponent', () => {
   let fixture: ComponentFixture<CodingJobResultDialogComponent>;
 
   const mockDialogRef = {
-    close: jasmine.createSpy('close')
+    close: jest.fn()
   };
 
   const mockDialogData = {
