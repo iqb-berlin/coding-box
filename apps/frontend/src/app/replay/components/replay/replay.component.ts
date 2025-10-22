@@ -146,8 +146,13 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         this.resetSnackBars();
         this.resetUnitData();
         this.authToken = await this.getAuthToken();
-        const decoded: JwtPayload & { workspace: string } = jwtDecode(this.authToken);
-        const workspace = decoded?.workspace;
+        let workspace: string | undefined;
+        try {
+          const decoded: JwtPayload & { workspace: string } = jwtDecode(this.authToken);
+          workspace = decoded?.workspace;
+        } catch (error) {
+          workspace = undefined;
+        }
         this.workspaceId = Number(workspace);
 
         const queryParams = await firstValueFrom(this.route.queryParams);
@@ -642,8 +647,13 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       this.unitId = unit.name;
 
       if (this.authToken) {
-        const decoded: JwtPayload & { workspace: string } = jwtDecode(this.authToken);
-        const workspace = decoded?.workspace;
+        let workspace: string | undefined;
+        try {
+          const decoded: JwtPayload & { workspace: string } = jwtDecode(this.authToken);
+          workspace = decoded?.workspace;
+        } catch (error) {
+          workspace = undefined;
+        }
         if (workspace) {
           this.getUnitData(Number(workspace), this.authToken).then(unitData => {
             this.setUnitProperties(unitData);
@@ -687,8 +697,13 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       this.unitId = unit.name;
 
       if (this.authToken) {
-        const decoded: JwtPayload & { workspace: string } = jwtDecode(this.authToken);
-        const workspace = decoded?.workspace;
+        let workspace: string | undefined;
+        try {
+          const decoded: JwtPayload & { workspace: string } = jwtDecode(this.authToken);
+          workspace = decoded?.workspace;
+        } catch (error) {
+          workspace = undefined;
+        }
         if (workspace) {
           this.getUnitData(Number(workspace), this.authToken).then(unitData => {
             this.setUnitProperties(unitData);
