@@ -579,6 +579,10 @@ export class BackendService {
     return this.variableAnalysisService.cancelJob(workspaceId, jobId);
   }
 
+  deleteVariableAnalysisJob(workspaceId: number, jobId: number): Observable<{ success: boolean; message: string }> {
+    return this.variableAnalysisService.deleteJob(workspaceId, jobId);
+  }
+
   createValidationTask(
     workspaceId: number,
     type: 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'groupResponses' | 'deleteResponses' | 'deleteAllResponses' | 'duplicateResponses',
