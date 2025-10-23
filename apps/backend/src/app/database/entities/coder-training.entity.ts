@@ -6,6 +6,7 @@ import {
   UpdateDateColumn,
   OneToMany
 } from 'typeorm';
+// eslint-disable-next-line import/no-cycle
 import { CodingJob } from './coding-job.entity';
 
 /**
