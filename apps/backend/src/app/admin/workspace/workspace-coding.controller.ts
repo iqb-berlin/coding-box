@@ -74,6 +74,18 @@ export class WorkspaceCodingController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiQuery({
+    name: 'authToken',
+    required: true,
+    description: 'Authentication token for generating replay URLs',
+    type: String
+  })
+  @ApiQuery({
+    name: 'serverUrl',
+    required: false,
+    description: 'Server URL to use for generating links',
+    type: String
+  })
   @ApiOkResponse({
     description: 'Coding list exported as Excel',
     content: {
@@ -85,8 +97,8 @@ export class WorkspaceCodingController {
       }
     }
   })
-  async getCodingListAsExcel(@WorkspaceId() workspace_id: number, @Res() res: Response): Promise<void> {
-    const excelData = await this.codingListService.getCodingListAsExcel(workspace_id);
+  async getCodingListAsExcel(@WorkspaceId() workspace_id: number, @Query('authToken') authToken: string, @Query('serverUrl') serverUrl: string, @Res() res: Response): Promise<void> {
+    const excelData = await this.codingListService.getCodingListAsExcel(workspace_id, authToken || '', serverUrl || '');
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="coding-list-${new Date().toISOString().slice(0, 10)}.xlsx"`);
