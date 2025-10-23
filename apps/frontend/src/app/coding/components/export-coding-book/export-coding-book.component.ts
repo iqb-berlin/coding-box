@@ -68,8 +68,8 @@ export class ExportCodingBookComponent implements OnInit {
   filterTextChanged = new Subject<Event>();
   isLoading = false;
 
-  selectedMissingsProfile: string = '';
-  missingsProfiles: string[] = [''];
+  selectedMissingsProfile: number = 0;
+  missingsProfiles: { id: number, label: string }[] = [{ id: 0, label: '' }];
   workspaceChanges = false;
 
   displayedColumns: string[] = ['select', 'unitName'];
@@ -190,11 +190,9 @@ export class ExportCodingBookComponent implements OnInit {
     if (workspaceId) {
       this.backendService.getMissingsProfiles(workspaceId).subscribe({
         next: profiles => {
-          this.missingsProfiles = [''];
-          const profileLabels = profiles.map(profile => profile.label);
-          this.missingsProfiles = [...this.missingsProfiles, ...profileLabels];
-          this.selectedMissingsProfile = '';
-          this.contentOptions.missingsProfile = this.selectedMissingsProfile;
+          this.missingsProfiles = [{ id: 0, label: '' }, ...profiles.map(profile => ({ id: profile.id ?? 0, label: profile.label }))];
+          this.selectedMissingsProfile = 0;
+          this.contentOptions.missingsProfile = this.selectedMissingsProfile.toString();
         },
         error: () => {
           // Error occurred while loading missings profiles
@@ -212,11 +210,11 @@ export class ExportCodingBookComponent implements OnInit {
       return;
     }
 
-    this.contentOptions.missingsProfile = this.selectedMissingsProfile;
+    this.contentOptions.missingsProfile = this.selectedMissingsProfile.toString();
     this.appService.dataLoading = true;
     this.backendService.getCodingBook(
       workspaceId,
-      this.selectedMissingsProfile,
+      this.contentOptions.missingsProfile,
       this.contentOptions,
       this.unitList
     ).subscribe({
