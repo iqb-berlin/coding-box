@@ -819,13 +819,15 @@ export class BackendService {
     workspaceId: number,
     selectedCoders: { id: number; name: string }[],
     variableConfigs: { variableId: string; unitId: string; sampleCount: number }[],
-    trainingLabel: string
+    trainingLabel: string,
+    missingsProfileId?: number
   ): Observable<{ success: boolean; jobsCreated: number; message: string; jobs: { coderId: number; coderName: string; jobId: number; jobName: string }[]; trainingId?: number }> {
     const url = `${this.serverUrl}/admin/workspace/${workspaceId}/coding/coder-training-jobs`;
     return this.http.post<{ success: boolean; jobsCreated: number; message: string; jobs: { coderId: number; coderName: string; jobId: number; jobName: string }[]; trainingId?: number }>(url, {
       trainingLabel,
       selectedCoders,
-      variableConfigs
+      variableConfigs,
+      missingsProfileId
     });
   }
 

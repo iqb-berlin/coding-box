@@ -70,14 +70,17 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   coders: Coder[] = [];
   selectedCoders: Set<number> = new Set();
   availableVariables: { unitName: string; variableId: string }[] = [];
+  availableMissingsProfiles: { label: string; id: number }[] = [];
   isLoading = false;
   isLoadingVariables = false;
+  isLoadingMissingsProfiles = false;
 
   trainingForm: FormGroup;
 
   constructor() {
     this.trainingForm = this.fb.group({
       trainingLabel: ['', [Validators.required]],
+      missingsProfileId: [null],
       variables: this.fb.array([])
     });
   }
@@ -85,6 +88,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.loadCoders();
     this.loadAvailableVariables();
+    this.loadMissingsProfiles();
   }
 
   ngOnDestroy(): void {
@@ -168,6 +172,30 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       });
   }
 
+  private loadMissingsProfiles(): void {
+    this.isLoadingMissingsProfiles = true;
+    const workspaceId = this.appService.selectedWorkspaceId;
+
+    if (!workspaceId) {
+      this.showError('Kein Arbeitsbereich ausgewählt');
+      this.isLoadingMissingsProfiles = false;
+      return;
+    }
+
+    this.backendService.getMissingsProfiles(workspaceId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: profiles => {
+          this.availableMissingsProfiles = profiles;
+          this.isLoadingMissingsProfiles = false;
+        },
+        error: () => {
+          this.showError('Fehler beim Laden der Missings-Profile');
+          this.isLoadingMissingsProfiles = false;
+        }
+      });
+  }
+
   toggleCoderSelection(coder: Coder): void {
     if (this.selectedCoders.has(coder.id)) {
       this.selectedCoders.delete(coder.id);
@@ -194,7 +222,6 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
 
   canStartTraining(): boolean {
     const trainingLabel = this.trainingForm.get('trainingLabel')?.value;
-    console.log('Training Label:', trainingLabel);
     return this.selectedCoders.size > 0 &&
            this.hasAtLeastOneVariableSelected() &&
            trainingLabel?.trim() &&
@@ -242,8 +269,9 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     }
 
     const trainingLabel = this.trainingForm.get('trainingLabel')?.value || '';
+    const missingsProfileId = this.trainingForm.get('missingsProfileId')?.value;
 
-    this.backendService.createCoderTrainingJobs(workspaceId, selectedCoders, variableConfigs, trainingLabel)
+    this.backendService.createCoderTrainingJobs(workspaceId, selectedCoders, variableConfigs, trainingLabel, missingsProfileId)
       .subscribe({
         next: result => {
           this.isLoading = false;
