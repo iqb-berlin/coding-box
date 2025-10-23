@@ -1001,6 +1001,7 @@ export class WorkspaceCodingController {
       type: 'object',
       properties: {
         trainingLabel: { type: 'string', description: 'Label for the coder training session' },
+        missingsProfileId: { type: 'number', description: 'ID of the missings profile to assign to all created coding jobs' },
         selectedCoders: {
           type: 'array',
           items: {
@@ -1057,6 +1058,7 @@ export class WorkspaceCodingController {
     @WorkspaceId() workspace_id: number,
       @Body() body: {
         trainingLabel: string;
+        missingsProfileId?: number;
         selectedCoders: { id: number; name: string }[];
         variableConfigs: { variableId: string; unitId: string; sampleCount: number }[];
       }
@@ -1065,7 +1067,8 @@ export class WorkspaceCodingController {
       workspace_id,
       body.selectedCoders,
       body.variableConfigs,
-      body.trainingLabel
+      body.trainingLabel,
+      body.missingsProfileId
     );
   }
 

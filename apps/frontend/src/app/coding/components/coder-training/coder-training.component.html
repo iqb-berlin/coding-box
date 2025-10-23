@@ -23,6 +23,28 @@
         </mat-form-field>
       </div>
 
+      <div class="section">
+        <div class="section-header">
+          <h3 class="section-subtitle">Missings-Profil</h3>
+          <span *ngIf="isLoadingMissingsProfiles" class="loading-text">
+            <mat-progress-spinner mode="indeterminate" diameter="16" style="display: inline-block; margin-left: 8px;"></mat-progress-spinner>
+            Lade Missings-Profile...
+          </span>
+          <span *ngIf="!isLoadingMissingsProfiles && availableMissingsProfiles.length > 0" class="profile-count">
+            ({{availableMissingsProfiles.length}} verfügbare Profile)
+          </span>
+        </div>
+        <mat-form-field appearance="outline" class="missings-profile-field">
+          <mat-label>Missings-Profil auswählen (optional)</mat-label>
+          <mat-select formControlName="missingsProfileId" placeholder="Profil auswählen">
+            <mat-option [value]="null">Kein Profil verwenden</mat-option>
+            <mat-option *ngFor="let profile of availableMissingsProfiles" [value]="profile.id">
+              {{profile.label}}
+            </mat-option>
+          </mat-select>
+        </mat-form-field>
+      </div>
+
       <!-- Coder Selection Section -->
       <div class="section">
         <div class="section-header">

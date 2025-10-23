@@ -170,7 +170,8 @@ export class CoderTrainingService {
     workspaceId: number,
     selectedCoders: { id: number; name: string }[],
     variableConfigs: { variableId: string; unitId: string; sampleCount: number }[],
-    trainingLabel: string
+    trainingLabel: string,
+    missingsProfileId?: number
   ): Promise<{ success: boolean; jobsCreated: number; message: string; jobs: TrainingJob[]; trainingId?: number }> {
     try {
       this.logger.log(`Creating coder training jobs for workspace ${workspaceId} with ${selectedCoders.length} coders and label '${trainingLabel}'`);
@@ -202,6 +203,7 @@ export class CoderTrainingService {
         codingJob.workspace_id = workspaceId;
         codingJob.description = `Training job for coder ${coderName} generated on ${new Date().toISOString()}`;
         codingJob.training_id = trainingId;
+        codingJob.missings_profile_id = missingsProfileId;
         codingJob.created_at = new Date();
         codingJob.updated_at = new Date();
 
