@@ -20,9 +20,10 @@ import {
   MatPaginator, MatPaginatorModule, MatPaginatorIntl, PageEvent
 } from '@angular/material/paginator';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { Router } from '@angular/router';
 import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
+import { responseStatesNumericMap } from '@iqbspecs/response/response.interface';
 import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
 import { ConfirmDialogComponent, ConfirmDialogData } from '../../../shared/dialogs/confirm-dialog.component';
@@ -122,15 +123,17 @@ export class TestResultsSearchComponent implements OnInit {
   responseDisplayedColumns: string[] = ['variableId', 'value', 'status', 'codedStatus', 'unitName', 'unitAlias', 'bookletName', 'personLogin', 'personCode', 'personGroup', 'actions'];
   bookletDisplayedColumns: string[] = ['bookletName', 'personCode', 'personLogin', 'personGroup', 'unitCount', 'actions'];
 
+  private stringToNumberMap = new Map(responseStatesNumericMap.map(entry => [entry.value, entry.key]));
+
   private unitSearchSubject = new Subject<string>();
   private responseSearchSubject = new Subject<{ value?: string; variableId?: string; unitName?: string; status?: string; codedStatus?: string; group?: string; code?: string }>();
   private bookletSearchSubject = new Subject<string>();
   private readonly SEARCH_DEBOUNCE_TIME = 500;
 
   totalItems: number = 0;
-  pageSize: number = 10;
+  pageSize: number = 200;
   pageIndex: number = 0;
-  pageSizeOptions: number[] = [50, 100, 200, 500];
+  pageSizeOptions: number[] = [100, 200, 500, 1000];
 
   @ViewChild(MatPaginator) paginator!: MatPaginator;
 
@@ -141,7 +144,8 @@ export class TestResultsSearchComponent implements OnInit {
     private appService: AppService,
     private router: Router,
     private dialog: MatDialog,
-    private snackBar: MatSnackBar
+    private snackBar: MatSnackBar,
+    private translateService: TranslateService
   ) {}
 
   ngOnInit(): void {
@@ -177,12 +181,15 @@ export class TestResultsSearchComponent implements OnInit {
   }
 
   onResponseSearchChange(): void {
+    const status = this.searchStatus.trim() !== '' ? this.stringToNumberMap.get(this.searchStatus.trim())?.toString() : undefined;
+    const codedStatus = this.searchCodedStatus.trim() !== '' ? this.stringToNumberMap.get(this.searchCodedStatus.trim())?.toString() : undefined;
+
     this.responseSearchSubject.next({
       value: this.searchValue.trim() !== '' ? this.searchValue : undefined,
       variableId: this.searchVariableId.trim() !== '' ? this.searchVariableId : undefined,
       unitName: this.searchUnitName.trim() !== '' ? this.searchUnitName : undefined,
-      status: this.searchStatus.trim() !== '' ? this.searchStatus : undefined,
-      codedStatus: this.searchCodedStatus.trim() !== '' ? this.searchCodedStatus : undefined,
+      status: status,
+      codedStatus: codedStatus,
       group: this.searchGroup.trim() !== '' ? this.searchGroup : undefined,
       code: this.searchCode.trim() !== '' ? this.searchCode : undefined
     });
@@ -201,12 +208,15 @@ export class TestResultsSearchComponent implements OnInit {
     if (this.searchMode === 'unit') {
       this.searchUnits(this.searchText);
     } else if (this.searchMode === 'response') {
+      const status = this.searchStatus.trim() !== '' ? this.stringToNumberMap.get(this.searchStatus.trim())?.toString() : undefined;
+      const codedStatus = this.searchCodedStatus.trim() !== '' ? this.stringToNumberMap.get(this.searchCodedStatus.trim())?.toString() : undefined;
+
       this.searchResponses({
         value: this.searchValue.trim() !== '' ? this.searchValue : undefined,
         variableId: this.searchVariableId.trim() !== '' ? this.searchVariableId : undefined,
         unitName: this.searchUnitName.trim() !== '' ? this.searchUnitName : undefined,
-        status: this.searchStatus.trim() !== '' ? this.searchStatus : undefined,
-        codedStatus: this.searchCodedStatus.trim() !== '' ? this.searchCodedStatus : undefined,
+        status: status,
+        codedStatus: codedStatus,
         group: this.searchGroup.trim() !== '' ? this.searchGroup : undefined,
         code: this.searchCode.trim() !== '' ? this.searchCode : undefined
       });
@@ -327,12 +337,18 @@ export class TestResultsSearchComponent implements OnInit {
   }
 
   deleteUnit(unit: UnitSearchResult): void {
+    const dialogTitle = this.translateService.instant('test-results-search.confirm-dialogs.delete-unit.title');
+    const dialogContent = unit.unitAlias ?
+      this.translateService.instant('test-results-search.confirm-dialogs.delete-unit.content', { unitName: unit.unitName, unitAlias: unit.unitAlias }) :
+      this.translateService.instant('test-results-search.confirm-dialogs.delete-unit.content-no-alias', { unitName: unit.unitName });
+    const confirmButtonLabel = this.translateService.instant('test-results-search.confirm-dialogs.delete-unit.confirm');
+
     const dialogRef = this.dialog.open(ConfirmDialogComponent, {
       width: '400px',
       data: {
-        title: 'Unit löschen',
-        content: `Sind Sie sicher, dass Sie die Unit "${unit.unitName}" (${unit.unitAlias || 'ohne Alias'}) löschen möchten? Alle zugehörigen Antworten werden ebenfalls gelöscht.`,
-        confirmButtonLabel: 'Löschen',
+        title: dialogTitle,
+        content: dialogContent,
+        confirmButtonLabel: confirmButtonLabel,
         showCancel: true
       } as ConfirmDialogData
     });
@@ -520,12 +536,15 @@ export class TestResultsSearchComponent implements OnInit {
               'OK',
               { duration: 5000 }
             );
+            const status = this.searchStatus.trim() !== '' ? this.stringToNumberMap.get(this.searchStatus.trim())?.toString() : undefined;
+            const codedStatus = this.searchCodedStatus.trim() !== '' ? this.stringToNumberMap.get(this.searchCodedStatus.trim())?.toString() : undefined;
+
             this.searchResponses({
               value: this.searchValue.trim() !== '' ? this.searchValue : undefined,
               variableId: this.searchVariableId.trim() !== '' ? this.searchVariableId : undefined,
               unitName: this.searchUnitName.trim() !== '' ? this.searchUnitName : undefined,
-              status: this.searchStatus.trim() !== '' ? this.searchStatus : undefined,
-              codedStatus: this.searchCodedStatus.trim() !== '' ? this.searchCodedStatus : undefined,
+              status: status,
+              codedStatus: codedStatus,
               group: this.searchGroup.trim() !== '' ? this.searchGroup : undefined,
               code: this.searchCode.trim() !== '' ? this.searchCode : undefined
             });

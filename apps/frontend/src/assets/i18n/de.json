@@ -516,5 +516,132 @@
     "status-paused": "Pausiert",
     "loading-results": "Lade Analyse-Ergebnisse...",
     "error-loading-results": "Fehler beim Laden der Analyse-Ergebnisse"
+  },
+
+  "test-results-search": {
+    "search-units": "Aufgaben suchen",
+    "search-responses": "Antworten suchen",
+    "search-booklets": "Booklets suchen",
+    "search-field": {
+      "unit-name": "Aufgabe suchen",
+      "unit-name-placeholder": "Geben Sie den Namen der Aufgabe ein...",
+      "response-value": "Antwort-Wert",
+      "response-value-placeholder": "Suche nach Antwort-Wert...",
+      "variable-id": "Variablen-ID",
+      "variable-id-placeholder": "Suche nach Variablen-ID...",
+      "task": "Aufgabe",
+      "task-placeholder": "Suche nach Aufgabe...",
+      "status": "Status",
+      "status-placeholder": "Suche nach Status...",
+      "coding-status": "Kodier Status",
+      "coding-status-placeholder": "Suche nach Kodier Status...",
+      "group": "Gruppe",
+      "group-placeholder": "Suche nach Gruppe...",
+      "code": "Code",
+      "code-placeholder": "Suche nach Code...",
+      "booklet-name": "Booklet suchen",
+      "booklet-name-placeholder": "Geben Sie den Namen des Booklets ein..."
+    },
+    "loading": "Suche läuft...",
+    "no-results": {
+      "units": "Keine Ergebnisse gefunden für \"{{searchText}}\"",
+      "responses": "Keine Ergebnisse gefunden für die angegebenen Suchkriterien",
+      "booklets": "Keine Ergebnisse gefunden für \"{{bookletSearchText}}\""
+    },
+    "search-hint": {
+      "units": "Geben Sie mindestens 3 Zeichen ein, um die Suche zu starten",
+      "responses": "Geben Sie Zeichen in eines der Suchfelder ein, um die Suche zu starten",
+      "booklets": "Geben Sie mindestens 3 Zeichen ein, um die Suche zu starten"
+    },
+    "table-headers": {
+      "task": "Aufgabe",
+      "alias": "Alias",
+      "booklet": "Booklet",
+      "login": "Login",
+      "code": "Code",
+      "group": "Gruppe",
+      "tags": "Tags",
+      "answer": "Antwort",
+      "actions": "Aktionen",
+      "variable-id": "Variable ID",
+      "value": "Wert",
+      "status": "Status",
+      "coding-status": "Kodier Status",
+      "booklet-name": "Booklet Name",
+      "units": "Units"
+    },
+    "no-data": {
+      "no-tags": "Keine Tags",
+      "no-answer": "Keine Antwort verfügbar",
+      "no-answers": "Keine Antworten zum Löschen gefunden.",
+      "no-units": "Keine Aufgaben zum Löschen gefunden.",
+      "no-booklets": "Keine Booklets zum Löschen gefunden."
+    },
+    "more-responses": "+{{count}} weitere",
+    "buttons": {
+      "replay-unit": "Replay Unit",
+      "delete-unit": "Unit löschen",
+      "delete-answer": "Antwort löschen",
+      "delete-all-units": "Alle {{count}} gefilterten Aufgaben löschen",
+      "delete-all-answers": "Alle {{count}} gefilterten Antworten löschen",
+      "delete-all-booklets": "Alle {{count}} gefilterten Booklets löschen",
+      "close": "Schließen"
+    },
+    "confirm-dialogs": {
+      "delete-unit": {
+        "title": "Unit löschen",
+        "content": "Sind Sie sicher, dass Sie die Unit \"{{unitName}}\" ({{unitAlias}}) löschen möchten? Alle zugehörigen Antworten werden ebenfalls gelöscht.",
+        "content-no-alias": "Sind Sie sicher, dass Sie die Unit \"{{unitName}}\" (ohne Alias) löschen möchten? Alle zugehörigen Antworten werden ebenfalls gelöscht.",
+        "confirm": "Löschen"
+      },
+      "delete-answer": {
+        "title": "Antwort löschen",
+        "content": "Sind Sie sicher, dass Sie die Antwort für Variable \"{{variableId}}\" löschen möchten?",
+        "confirm": "Löschen"
+      },
+      "delete-all-units": {
+        "title": "Alle gefilterten Aufgaben löschen",
+        "content": "Sind Sie sicher, dass Sie alle {{count}} gefilterten Aufgaben löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.",
+        "confirm": "Alle löschen"
+      },
+      "delete-all-answers": {
+        "title": "Alle gefilterten Antworten löschen",
+        "content": "Sind Sie sicher, dass Sie alle {{count}} gefilterten Antworten löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.",
+        "confirm": "Alle löschen"
+      },
+      "delete-booklet": {
+        "title": "Booklet löschen",
+        "content": "Sind Sie sicher, dass Sie das Booklet \"{{bookletName}}\" löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.",
+        "confirm": "Löschen"
+      },
+      "delete-all-booklets": {
+        "title": "Alle gefilterten Booklets löschen",
+        "content": "Sind Sie sicher, dass Sie alle {{count}} gefilterten Booklets löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.",
+        "confirm": "Alle löschen"
+      }
+    },
+    "snackbars": {
+      "unit-deleted": "Unit erfolgreich gelöscht. Unit ID: {{unitId}}",
+      "unit-delete-error": "Fehler beim Löschen der Unit: {{warnings}}",
+      "unit-delete-general-error": "Fehler beim Löschen der Unit. Bitte versuchen Sie es später erneut.",
+      "answer-deleted": "Antwort erfolgreich gelöscht. Antwort ID: {{answerId}}",
+      "answer-delete-error": "Fehler beim Löschen der Antwort: {{warnings}}",
+      "answer-delete-general-error": "Fehler beim Löschen der Antwort. Bitte versuchen Sie es später erneut.",
+      "units-deleted": "{{successCount}} Aufgaben erfolgreich gelöscht.",
+      "units-delete-error": "Fehler beim Löschen der Aufgaben: {{warnings}}",
+      "units-delete-general-error": "Fehler beim Löschen der Aufgaben. Bitte versuchen Sie es später erneut.",
+      "answers-deleted": "{{successCount}} Antworten gelöscht, {{failCount}} fehlgeschlagen.",
+      "answers-delete-general-error": "Fehler beim Löschen der Antworten. Bitte versuchen Sie es später erneut.",
+      "booklet-deleted": "Booklet \"{{bookletName}}\" wurde erfolgreich gelöscht.",
+      "booklet-delete-error": "Fehler beim Löschen des Booklets: {{warnings}}",
+      "booklet-delete-general-error": "Fehler beim Löschen des Booklets. Bitte versuchen Sie es erneut.",
+      "booklets-deleted": "{{successCount}} Booklets gelöscht, {{failCount}} fehlgeschlagen.",
+      "booklets-delete-general-error": "Fehler beim Löschen der Booklets. Bitte versuchen Sie es erneut.",
+      "loading-booklet-info": "Lade Booklet-Informationen...",
+      "booklet-info-error": "Fehler beim Laden der Booklet-Informationen"
+    },
+    "booklet-info": "Booklet Info anzeigen",
+    "booklet-delete": "Booklet löschen",
+    "paginator": "Seite wählen"
   }
 }
