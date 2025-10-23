@@ -99,11 +99,12 @@ describe('ReplayComponent', () => {
   });
 
   it('should handle page errors correctly', () => {
+    snackBar.open.mockClear();
     component.checkPageError('notInList');
     expect(snackBar.open).toHaveBeenCalledWith(
-      expect.stringContaining('Keine valide Seite mit ID'),
+      'Keine valide Seite mit der ID "" gefunden',
       'Schließen',
-      expect.any(Object)
+      { panelClass: ['snackbar-error'] }
     );
   });
 

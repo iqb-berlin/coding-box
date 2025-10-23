@@ -3,6 +3,7 @@ import { MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/materia
 
 import { HttpClientTestingModule } from '@angular/common/http/testing';
 import { CodingResultsComparisonComponent } from './coding-results-comparison.component';
+import { SERVER_URL } from '../../../injection-tokens';
 
 describe('CodingResultsComparisonComponent', () => {
   let component: CodingResultsComparisonComponent;
@@ -18,11 +19,15 @@ describe('CodingResultsComparisonComponent', () => {
       providers: [
         {
           provide: MatDialogRef,
-          useValue: jasmine.createSpyObj('MatDialogRef', ['close'])
+          useValue: { close: jest.fn() }
         },
         {
           provide: MAT_DIALOG_DATA,
           useValue: { workspaceId: 1 }
+        },
+        {
+          provide: SERVER_URL,
+          useValue: 'http://localhost:3000'
         }
       ]
     }).compileComponents();
