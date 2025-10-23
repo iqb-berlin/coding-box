@@ -13,11 +13,6 @@ export class MissingsProfilesService {
     private missingsProfileRepository: Repository<MissingsProfile>
   ) {}
 
-  /**
-   * Get all missings profiles
-   * @param workspaceId Workspace ID (not used, profiles are global)
-   * @returns Array of missings profiles with labels and ids
-   */
   async getMissingsProfiles(workspaceId: number): Promise<{ label: string; id: number }[]> {
     try {
       this.logger.log(`Getting missings profiles for workspace ${workspaceId}`);
@@ -41,6 +36,31 @@ export class MissingsProfilesService {
     } catch (error) {
       this.logger.error(`Error getting missings profiles for workspace ${workspaceId}: ${error.message}`, error.stack);
       return [];
+    }
+  }
+
+  async getMissingsProfileByLabel(label: string): Promise<MissingsProfilesDto | null> {
+    try {
+      const profileEntity = await this.missingsProfileRepository.findOne({
+        where: { label }
+      });
+
+      if (!profileEntity) {
+        return null;
+      }
+
+      try {
+        const profile = new MissingsProfilesDto();
+        profile.label = profileEntity.label;
+        profile.missings = profileEntity.missings;
+        return profile;
+      } catch (parseError) {
+        this.logger.error(`Error parsing missings profile: ${parseError.message}`, parseError.stack);
+        return null;
+      }
+    } catch (error) {
+      this.logger.error(`Error getting missings profile by label: ${error.message}`, error.stack);
+      return null;
     }
   }
 
@@ -69,10 +89,6 @@ export class MissingsProfilesService {
     }
   }
 
-  /**
-   * Create default missings profiles
-   * @returns Array of default missings profiles
-   */
   private createDefaultMissingsProfiles(): MissingsProfilesDto[] {
     const iqbStandardProfile = new MissingsProfilesDto();
     iqbStandardProfile.label = 'IQB-Standard';

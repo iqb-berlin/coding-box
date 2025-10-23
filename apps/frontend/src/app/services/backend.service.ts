@@ -627,8 +627,8 @@ export class BackendService {
     return this.codingService.getMissingsProfiles(workspaceId);
   }
 
-  getMissingsProfileDetails(workspaceId: number, label: string): Observable<MissingsProfilesDto | null> {
-    return this.codingService.getMissingsProfileDetails(workspaceId, label);
+  getMissingsProfileDetails(workspaceId: number, id: number | string): Observable<MissingsProfilesDto | null> {
+    return this.codingService.getMissingsProfileDetails(workspaceId, id);
   }
 
   createMissingsProfile(workspaceId: number, profile: MissingsProfilesDto): Observable<MissingsProfilesDto | null> {
