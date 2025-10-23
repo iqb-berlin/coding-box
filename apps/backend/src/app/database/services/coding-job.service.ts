@@ -94,6 +94,7 @@ export class CodingJobService {
 
     const jobs = await this.codingJobRepository.find({
       where: { workspace_id: workspaceId },
+      relations: ['training'],
       order: { created_at: 'DESC' },
       skip,
       take: validLimit

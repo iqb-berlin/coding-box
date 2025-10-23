@@ -25,6 +25,7 @@ import {
   ValidationProgress,
   ValidationStateService
 } from '../../services/validation-state.service';
+import { CoderTrainingsListComponent } from '../coder-trainings-list/coder-trainings-list.component';
 
 @Component({
   selector: 'coding-box-coding-management-manual',
@@ -39,6 +40,7 @@ import {
     MatProgressBarModule,
     VariableBundleManagerComponent,
     CoderTrainingComponent,
+    CoderTrainingsListComponent,
     CommonModule
   ]
 })
