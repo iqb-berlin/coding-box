@@ -1,0 +1,164 @@
+<div class="comparison-container">
+  <div class="dialog-header">
+    <h2>Kodierergebnisse vergleichen</h2>
+    <span>Ergebnisse verschiedener Kodierer-Schulungen oder innerhalb einer Schulung gegenüberstellen</span>
+  </div>
+
+  <div class="mode-selection">
+    <h3>Vergleichsmodus</h3>
+    <mat-radio-group [(ngModel)]="comparisonMode" (change)="onModeChange()">
+      <mat-radio-button value="between-trainings">Zwischen Schulungen vergleichen</mat-radio-button>
+      <mat-radio-button value="within-training">Innerhalb einer Schulung vergleichen</mat-radio-button>
+    </mat-radio-group>
+  </div>
+
+  <div class="training-selection" *ngIf="comparisonMode === 'between-trainings'">
+    <h3>Schulungen auswählen</h3>
+    <div class="training-options">
+      <mat-form-field>
+        <mat-label>Suche</mat-label>
+        <mat-icon matPrefix>search</mat-icon>
+        <input matInput (keyup)="applyFilter($event)" placeholder="Schulungen filtern...">
+      </mat-form-field>
+    </div>
+    <mat-checkbox *ngFor="let training of availableTrainings"
+                  [checked]="selectedTrainings.isSelected(training.id)"
+                  (change)="selectedTrainings.toggle(training.id); onTrainingSelectionChange();">
+      {{ training.label }} ({{ training.jobsCount }} {{ training.jobsCount === 1 ? 'Job' : 'Jobs' }}, erstellt: {{ training.created_at | date:'dd.MM.yyyy HH:mm' }})
+    </mat-checkbox>
+  </div>
+
+  <div class="training-selection" *ngIf="comparisonMode === 'within-training'">
+    <h3>Schulung auswählen</h3>
+    <mat-form-field>
+      <mat-label>Schulung</mat-label>
+      <mat-select [(ngModel)]="selectedTrainingForWithin" (selectionChange)="onTrainingForWithinChange()">
+        <mat-option *ngFor="let training of availableTrainings" [value]="training.id">
+          {{ training.label }} ({{ training.jobsCount }} {{ training.jobsCount === 1 ? 'Kodierer' : 'Kodierer' }}, erstellt: {{ training.created_at | date:'dd.MM.yyyy HH:mm' }})
+        </mat-option>
+      </mat-select>
+    </mat-form-field>
+  </div>
+
+  <div class="controls">
+    <button mat-raised-button color="primary" (click)="loadComparison()" [disabled]="(comparisonMode === 'between-trainings' && selectedTrainings.selected.length < 2) || (comparisonMode === 'within-training' && !selectedTrainingForWithin) || isLoading">
+      <mat-icon>compare</mat-icon>
+      Vergleich laden
+    </button>
+    <button mat-button (click)="dialogRef.close()">
+      Schließen
+    </button>
+  </div>
+
+  <div class="loading-container" *ngIf="isLoading">
+    <mat-progress-spinner mode="indeterminate" diameter="50"></mat-progress-spinner>
+    <p>Lade Vergleichsdaten...</p>
+  </div>
+
+  <div class="comparison-table" *ngIf="!isLoading && ((comparisonMode === 'between-trainings' && comparisonData.length > 0) || (comparisonMode === 'within-training' && withinTrainingData.length > 0))">
+    <h3>Vergleichsergebnisse</h3>
+    <div class="statistics-section" *ngIf="totalComparisons > 0">
+      <h4>Kodierungsübereinstimmung</h4>
+      <div class="statistics-row">
+        <span>Gesamtvergleiche: <strong>{{ totalComparisons }}</strong></span>
+        <span>Übereinstimmungen: <strong>{{ matchingComparisons }}</strong></span>
+        <span>Übereinstimmungsrate: <strong>{{ matchingPercentage }}%</strong></span>
+      </div>
+    </div>
+
+    <div class="table-container">
+      <table mat-table [dataSource]="dataSource" matSort class="mat-elevation-z2">
+        <!-- Unit Name Column -->
+        <ng-container matColumnDef="unitName">
+          <th mat-header-cell *matHeaderCellDef mat-sort-header=unitName>Aufgabe</th>
+          <td mat-cell *matCellDef="let comparison">
+            <strong>{{ comparison.unitName }}</strong>
+          </td>
+        </ng-container>
+
+        <!-- Variable ID Column -->
+        <ng-container matColumnDef="variableId">
+          <th mat-header-cell *matHeaderCellDef mat-sort-header=variableId>Variable</th>
+          <td mat-cell *matCellDef="let comparison">
+            <code>{{ comparison.variableId }}</code>
+          </td>
+        </ng-container>
+
+        <!-- Testperson Column -->
+        <ng-container matColumnDef="testperson">
+          <th mat-header-cell *matHeaderCellDef mat-sort-header=testperson>Testperson</th>
+          <td mat-cell *matCellDef="let comparison">
+            {{ comparison.testperson }}
+          </td>
+        </ng-container>
+
+        <!-- Match Column -->
+        <ng-container matColumnDef="match">
+          <th mat-header-cell *matHeaderCellDef>Übereinstimmung</th>
+          <td mat-cell *matCellDef="let comparison" [class]="areCodesTheSame(comparison) ? 'match-status-match' : 'match-status-differ'">
+            <mat-icon>{{ areCodesTheSame(comparison) ? 'check_circle' : 'cancel' }}</mat-icon>
+          </td>
+        </ng-container>
+
+        <!-- Dynamic Training Columns (between trainings mode) -->
+        <ng-container *ngFor="let trainingId of selectedTrainings.selected" [matColumnDef]="'training_' + trainingId">
+          <th mat-header-cell *matHeaderCellDef>
+            {{ getTrainingColumnName(trainingId) }}
+          </th>
+          <td mat-cell *matCellDef="let comparison" [class]="hasCodeOrScore(comparison, trainingId) ? 'has-data' : 'no-data'">
+            <div class="code-display" *ngIf="getTrainingCode(comparison, trainingId) as code">
+              <span class="code">Code: {{ code }}</span>
+              <span class="score" *ngIf="getTrainingScore(comparison, trainingId)">Score: {{ getTrainingScore(comparison, trainingId) }}</span>
+            </div>
+            <span class="no-code" *ngIf="!getTrainingCode(comparison, trainingId)">Nicht kodier</span>
+          </td>
+        </ng-container>
+
+        <!-- Dynamic Coder Columns (within training mode) -->
+        <ng-container *ngIf="comparisonMode === 'within-training' && selectedTrainingForWithin && withinTrainingData.length > 0">
+          <ng-container *ngFor="let coder of withinTrainingData[0].coders; trackBy: trackByCoder" [matColumnDef]="'coder_' + coder.jobId">
+            <th mat-header-cell *matHeaderCellDef>
+              {{ coder.coderName }}
+            </th>
+            <td mat-cell *matCellDef="let comparison" [class]="hasCoderCodeOrScore(comparison, coder.jobId) ? 'has-data' : 'no-data'">
+              <div class="code-display" *ngIf="getCoderCode(comparison, coder.jobId) as code">
+                <span class="code">Code: {{ code }}</span>
+                <span class="score" *ngIf="getCoderScore(comparison, coder.jobId)">Score: {{ getCoderScore(comparison, coder.jobId) }}</span>
+              </div>
+              <span class="no-code" *ngIf="!getCoderCode(comparison, coder.jobId)">Nicht kodiert</span>
+            </td>
+          </ng-container>
+        </ng-container>
+
+        <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+        <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+      </table>
+
+      <mat-paginator [pageSizeOptions]="[50, 100, 200, 500]" showFirstLastButtons></mat-paginator>
+    </div>
+  </div>
+
+  <div class="no-data" *ngIf="!isLoading && comparisonMode === 'between-trainings' && comparisonData.length === 0 && selectedTrainings.selected.length < 2">
+    <mat-icon>compare</mat-icon>
+    <h4>Wählen Sie mindestens 2 Schulungen aus</h4>
+    <p>Um Kodierergebnisse zu vergleichen, müssen mindestens 2 Schulungen ausgewählt werden.</p>
+  </div>
+
+  <div class="no-data" *ngIf="!isLoading && comparisonMode === 'within-training' && withinTrainingData.length === 0 && !selectedTrainingForWithin">
+    <mat-icon>compare</mat-icon>
+    <h4>Wählen Sie eine Schulung aus</h4>
+    <p>Um Kodierergebnisse innerhalb einer Schulung zu vergleichen, müssen Sie eine Schulung auswählen.</p>
+  </div>
+
+  <div class="no-results" *ngIf="!isLoading && comparisonMode === 'between-trainings' && comparisonData.length === 0 && selectedTrainings.selected.length >= 2">
+    <mat-icon>info</mat-icon>
+    <h4>Keine gemeinsamen Daten gefunden</h4>
+    <p>Die ausgewählten Schulungen haben keine gemeinsamen Einheiten/Variablen oder keine Kodierergebnisse.</p>
+  </div>
+
+  <div class="no-results" *ngIf="!isLoading && comparisonMode === 'within-training' && withinTrainingData.length === 0 && selectedTrainingForWithin">
+    <mat-icon>info</mat-icon>
+    <h4>Keine Daten gefunden</h4>
+    <p>Die ausgewählte Schulung hat keine Kodierergebnisse oder alle Kodierer haben die gleichen Ergebnisse.</p>
+  </div>
+</div>

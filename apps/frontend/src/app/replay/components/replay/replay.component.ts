@@ -900,10 +900,10 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
   onCodeSelected(event: { variableId: string; code: any }): void {
     const compositeKey = this.generateCompositeKey(this.testPerson, this.unitId, event.variableId);
-    const isMissing = !Number.isInteger(event.code);
+    const isMissing = 'code' in event.code && event.code.code !== undefined;
     const normalizedCode = {
-      id: isMissing ? event.code.code : event.code.id,
-      code: event.code.code,
+      id: isMissing ? (event.code as any).code : event.code.id,
+      code: isMissing ? (event.code as any).code : event.code.id,
       label: event.code.label,
       ...(event.code.score !== undefined && { score: event.code.score }),
       ...(event.code.description && { description: event.code.description })
@@ -1012,11 +1012,23 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     });
   }
 
-  submitCodingJob(): void {
+  async submitCodingJob(): Promise<void> {
     if (!this.codingJobId || !this.workspaceId) return;
 
     this.isSubmittingJob = true;
     this.errorSnackBar.open(this.translate.instant('replay.submitting-coding-job'), '', { duration: 2000 });
+
+    try {
+      await this.saveAllCodingProgress();
+    } catch (error) {
+      this.errorSnackBar.dismiss();
+      this.isSubmittingJob = false;
+      this.errorSnackBar.open(this.translate.instant('replay.failed-to-save-coding-progress'), this.translate.instant('replay.close'), {
+        duration: 3000,
+        panelClass: ['snackbar-error']
+      });
+      return;
+    }
 
     this.backendService.updateCodingJob(this.workspaceId, this.codingJobId, { status: 'completed' }).subscribe({
       next: () => {

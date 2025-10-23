@@ -15,7 +15,6 @@
   "cancel": "Abbrechen",
   "close": "Schließen",
   "warning": "Warnung",
-  "error": "Fehler",
   "confirm": "Bestätigen",
   "filter-by": "Filtern nach...",
   "hour": "Uhr",
@@ -213,7 +212,55 @@
     "created_at": "Hochgeladen am"
   },
 
+  "error": {
+    "general": "Fehler: {{error}}",
+    "noWorkspaceSelected": "Kein Workspace ausgewählt"
+  },
+
   "coding": {
+    "trainings": {
+      "title": "Kodierer-Schulungen",
+      "compare": {
+        "button": "Ergebnisse vergleichen",
+        "notEnough": "Um Ergebnisse zu vergleichen, werden mindestens zwei Kodierer-Schulungen benötigt."
+      },
+      "create": {
+        "button": "Neue Schulung erstellen",
+        "first": "Erste Schulung erstellen"
+      },
+      "loading": "Lade Kodierer-Schulungen...",
+      "empty": {
+        "title": "Keine Kodierer-Schulungen vorhanden",
+        "subtitle": "Erstellen Sie Ihre erste Schulung, um mit dem Training zu beginnen."
+      },
+      "table": {
+        "label": "Bezeichnung",
+        "jobs": "Kodierjobs",
+        "created": "Erstellt am"
+      },
+      "action": {
+        "details": "Details anzeigen"
+      },
+      "jobs": {
+        "title": "Kodierjobs in Schulung: {{trainingLabel}}",
+        "empty": "Keine Kodierjobs in dieser Schulung gefunden"
+      },
+      "edit": {
+        "error": {
+          "generic": "Fehler beim Bearbeiten der Schulung: {{error}}"
+        }
+      },
+      "delete": {
+        "confirm": {
+          "title": "Löschen bestätigen",
+          "message": "Sind Sie sicher, dass Sie die Schulung \"{{label}}\" mit {{count}} {{jobText}} löschen möchten?",
+          "warning": "Diese Aktion kann nicht rückgängig gemacht werden."
+        },
+        "error": {
+          "generic": "Fehler beim Löschen der Schulung: {{error}}"
+        }
+      }
+    },
     "id": "Variablen Id",
     "result": "Kodierergebnis",
     "variable": "Variable",
@@ -241,7 +288,24 @@
     "export-format": "Exportformat",
     "code-label-to-upper": "Code-Label in Großbuchstaben",
     "hide-item-var-relation": "Item-Variable-Relation ausblenden",
-    "error-save-changes": "Änderungen im Arbeitsbereich müssen erst noch gespeichert werden!"
+    "error-save-changes": "Änderungen im Arbeitsbereich müssen erst noch gespeichert werden!",
+    "jobs": {
+      "table": {
+        "name": "Job-Name",
+        "coder": "Kodierer:in",
+        "status": "Status",
+        "units": "Aufgaben"
+      }
+    }
+  },
+
+  "common": {
+    "close": "Schließen",
+    "cancel": "Abbrechen",
+    "edit": "Bearbeiten",
+    "delete": "Löschen",
+    "actions": "Aktionen",
+    "created": "Erstellt am"
   },
 
   "workspace": {

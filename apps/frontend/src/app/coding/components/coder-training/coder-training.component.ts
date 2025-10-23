@@ -70,13 +70,17 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   coders: Coder[] = [];
   selectedCoders: Set<number> = new Set();
   availableVariables: { unitName: string; variableId: string }[] = [];
+  availableMissingsProfiles: { label: string; id: number }[] = [];
   isLoading = false;
   isLoadingVariables = false;
+  isLoadingMissingsProfiles = false;
 
   trainingForm: FormGroup;
 
   constructor() {
     this.trainingForm = this.fb.group({
+      trainingLabel: ['', [Validators.required]],
+      missingsProfileId: [null],
       variables: this.fb.array([])
     });
   }
@@ -84,6 +88,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.loadCoders();
     this.loadAvailableVariables();
+    this.loadMissingsProfiles();
   }
 
   ngOnDestroy(): void {
@@ -138,6 +143,8 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     const selectedVariable = this.availableVariables.find(v => v.variableId === variableId);
     if (selectedVariable) {
       control.get('unitId')?.setValue(selectedVariable.unitName);
+      // Force validation update for the changed control
+      control.get('unitId')?.updateValueAndValidity();
     }
   }
 
@@ -161,6 +168,30 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
         error: () => {
           this.showError('Fehler beim Laden der Kodierer');
           this.isLoading = false;
+        }
+      });
+  }
+
+  private loadMissingsProfiles(): void {
+    this.isLoadingMissingsProfiles = true;
+    const workspaceId = this.appService.selectedWorkspaceId;
+
+    if (!workspaceId) {
+      this.showError('Kein Arbeitsbereich ausgewählt');
+      this.isLoadingMissingsProfiles = false;
+      return;
+    }
+
+    this.backendService.getMissingsProfiles(workspaceId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: profiles => {
+          this.availableMissingsProfiles = profiles;
+          this.isLoadingMissingsProfiles = false;
+        },
+        error: () => {
+          this.showError('Fehler beim Laden der Missings-Profile');
+          this.isLoadingMissingsProfiles = false;
         }
       });
   }
@@ -190,7 +221,11 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   }
 
   canStartTraining(): boolean {
-    return this.selectedCoders.size > 0 && this.hasAtLeastOneVariableSelected();
+    const trainingLabel = this.trainingForm.get('trainingLabel')?.value;
+    return this.selectedCoders.size > 0 &&
+           this.hasAtLeastOneVariableSelected() &&
+           trainingLabel?.trim() &&
+           this.trainingForm.valid;
   }
 
   hasAtLeastOneVariableSelected(): boolean {
@@ -233,7 +268,10 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.backendService.createCoderTrainingJobs(workspaceId, selectedCoders, variableConfigs)
+    const trainingLabel = this.trainingForm.get('trainingLabel')?.value || '';
+    const missingsProfileId = this.trainingForm.get('missingsProfileId')?.value;
+
+    this.backendService.createCoderTrainingJobs(workspaceId, selectedCoders, variableConfigs, trainingLabel, missingsProfileId)
       .subscribe({
         next: result => {
           this.isLoading = false;

@@ -6,7 +6,9 @@ import {
   ManyToOne,
   JoinColumn
 } from 'typeorm';
+// eslint-disable-next-line import/no-cycle
 import { CodingJob } from './coding-job.entity';
+import User from './user.entity';
 
 /**
  * Entity for coding job coders (relation between coding jobs and users)
@@ -28,4 +30,8 @@ export class CodingJobCoder {
   @ManyToOne(() => CodingJob)
   @JoinColumn({ name: 'coding_job_id' })
     coding_job: CodingJob;
+
+  @ManyToOne(() => User)
+  @JoinColumn({ name: 'user_id' })
+    user: User;
 }
