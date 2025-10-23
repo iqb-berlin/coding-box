@@ -63,6 +63,7 @@ import { JobQueueModule } from '../job-queue/job-queue.module';
 import { CacheModule } from '../cache/cache.module';
 import { CodingListService } from './services/coding-list.service';
 import { CoderTrainingService } from './services/coder-training.service';
+import { VariableAnalysisReplayService } from './services/variable-analysis-replay.service';
 
 @Module({
   imports: [
@@ -163,7 +164,8 @@ import { CoderTrainingService } from './services/coder-training.service';
     CodingStatisticsService,
     MissingsProfilesService,
     CodingListService,
-    CoderTrainingService
+    CoderTrainingService,
+    VariableAnalysisReplayService
   ],
   exports: [
     User,
@@ -196,7 +198,8 @@ import { CoderTrainingService } from './services/coder-training.service';
     CodingStatisticsService,
     MissingsProfilesService,
     CodingListService,
-    CoderTrainingService
+    CoderTrainingService,
+    VariableAnalysisReplayService
   ]
 })
 export class DatabaseModule {}
