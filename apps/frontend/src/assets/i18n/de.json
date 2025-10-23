@@ -214,7 +214,8 @@
 
   "error": {
     "general": "Fehler: {{error}}",
-    "noWorkspaceSelected": "Kein Workspace ausgewählt"
+    "noWorkspaceSelected": "Kein Workspace ausgewählt",
+    "unknown": "Unbekannter Fehler"
   },
 
   "coding": {
@@ -469,5 +470,51 @@
     "workspace-database-exported-successfully": "Arbeitsbereich-Datenbank erfolgreich exportiert",
     "error-exporting-workspace-database-retry": "Fehler beim Exportieren der Arbeitsbereich-Datenbank. Bitte versuchen Sie es erneut.",
     "authentication-required": "Nicht authentifiziert. Bitte melden Sie sich erneut an."
+  },
+
+  "variable-analysis": {
+    "analysis-results": "Analyse Ergebnisse",
+    "analyzing-variables": "Analysiere Variablen...",
+    "search-variables": "Variablen suchen",
+    "search-placeholder": "Variablenname eingeben...",
+    "no-variables-found": "Keine Variablen gefunden.",
+    "max-values-info": "Es werden maximal die {{max}} häufigsten Werte pro Variable angezeigt.",
+    "value-column": "Wert",
+    "count-column": "Anzahl",
+    "percentage-column": "Prozent",
+    "empty-value": "[Leer]",
+    "unit-id-column": "Unit ID",
+    "variable-id-column": "Variable ID",
+    "analysis-jobs": "Analyse-Aufträge",
+    "start-new-analysis": "Neue Analyse starten",
+    "refresh": "Aktualisieren",
+    "loading-jobs": "Lade Aufträge...",
+    "no-analysis-jobs-found": "Keine Variablen-Analyse Aufträge gefunden.",
+    "id-column": "ID",
+    "status-column": "Status",
+    "created-at-column": "Erstellt am",
+    "actions-column": "Aktionen",
+    "all": "Alle",
+    "view-results": "Ergebnisse anzeigen",
+    "cancel-job": "Auftrag abbrechen",
+    "close": "Schließen",
+    "error-loading-jobs": "Fehler beim Laden der Analyse-Aufträge",
+    "starting-analysis": "Starte Analyse...",
+    "analysis-started": "Analyse gestartet (Job ID: {{jobId}}). Sie werden benachrichtigt, wenn die Analyse abgeschlossen ist.",
+    "error-starting-analysis": "Fehler beim Starten der Analyse",
+    "job-cancelled": "Analyse-Auftrag erfolgreich abgebrochen",
+    "error-cancelling-job": "Fehler beim Abbrechen des Analyse-Auftrags",
+    "job-deleted": "Analyse-Auftrag erfolgreich gelöscht",
+    "error-deleting-job": "Fehler beim Löschen des Analyse-Auftrags",
+    "confirm-delete-job": "Sind Sie sicher, dass Sie diesen Analyse-Auftrag löschen wollen?",
+    "delete-job": "Auftrag löschen",
+    "status-pending": "Ausstehend",
+    "status-processing": "Wird bearbeitet",
+    "status-completed": "Abgeschlossen",
+    "status-failed": "Fehlgeschlagen",
+    "status-cancelled": "Abgebrochen",
+    "status-paused": "Pausiert",
+    "loading-results": "Lade Analyse-Ergebnisse...",
+    "error-loading-results": "Fehler beim Laden der Analyse-Ergebnisse"
   }
 }

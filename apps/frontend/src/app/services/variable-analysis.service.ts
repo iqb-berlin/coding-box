@@ -124,4 +124,16 @@ export class VariableAnalysisService {
       })
     );
   }
+
+  deleteJob(workspaceId: number, jobId: number): Observable<JobCancelResult> {
+    return this.http.delete<JobCancelResult>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/jobs/${jobId}`,
+      { headers: this.authHeader }
+    ).pipe(
+      catchError(error => {
+        logger.error(`Error deleting variable analysis job: ${error.message}`);
+        throw error;
+      })
+    );
+  }
 }
