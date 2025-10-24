@@ -2939,6 +2939,37 @@ ${bookletRefs}
       const unitFiles = await this.fileUploadRepository.find({
         where: { workspace_id: workspaceId, file_type: 'Unit' }
       });
+
+      const codingSchemes = await this.fileUploadRepository.find({
+        where: {
+          workspace_id: workspaceId,
+          file_type: 'Resource',
+          file_id: Like('%.VOCS')
+        }
+      });
+
+      // Create a map of unitId to parsed coding scheme for quick lookup
+      const codingSchemeMap = new Map<string, Map<string, string>>();
+      for (const scheme of codingSchemes) {
+        try {
+          const unitId = scheme.file_id.replace('.VOCS', '');
+          const parsedScheme = JSON.parse(scheme.data) as {
+            variableCodings?: { id: string; sourceType?: string }[]
+          };
+          if (parsedScheme.variableCodings && Array.isArray(parsedScheme.variableCodings)) {
+            const variableSourceTypes = new Map<string, string>();
+            for (const vc of parsedScheme.variableCodings) {
+              if (vc.id && vc.sourceType) {
+                variableSourceTypes.set(vc.id, vc.sourceType);
+              }
+            }
+            codingSchemeMap.set(unitId, variableSourceTypes);
+          }
+        } catch (error) {
+          this.logger.error(`Error parsing coding scheme ${scheme.file_id}: ${error.message}`, error.stack);
+        }
+      }
+
       const unitVariables: Map<string, Set<string>> = new Map();
       for (const unitFile of unitFiles) {
         try {
@@ -2956,7 +2987,11 @@ ${bookletRefs}
 
               for (const variable of baseVariables) {
                 if (variable.$.alias && variable.$.type !== 'no-value') {
-                  variables.add(variable.$.alias);
+                  const unitSourceTypes = codingSchemeMap.get(unitName);
+                  const sourceType = unitSourceTypes?.get(variable.$.alias);
+                  if (sourceType !== 'BASE_NO_VALUE') {
+                    variables.add(variable.$.alias);
+                  }
                 }
               }
             }

@@ -4,6 +4,7 @@ import { Like, Repository } from 'typeorm';
 import FileUpload from '../entities/file_upload.entity';
 import { ResponseEntity } from '../entities/response.entity';
 import { VariableAnalysisItemDto } from '../../../../../../api-dto/coding/variable-analysis-item.dto';
+import { WorkspaceFilesService } from './workspace-files.service';
 
 @Injectable()
 export class VariableAnalysisReplayService {
@@ -13,7 +14,8 @@ export class VariableAnalysisReplayService {
     @InjectRepository(FileUpload)
     private fileUploadRepository: Repository<FileUpload>,
     @InjectRepository(ResponseEntity)
-    private responseRepository: Repository<ResponseEntity>
+    private responseRepository: Repository<ResponseEntity>,
+    private workspaceFilesService: WorkspaceFilesService
   ) {}
 
   async getVariableAnalysis(
@@ -35,8 +37,12 @@ export class VariableAnalysisReplayService {
       this.logger.log(`Getting variable analysis for workspace ${workspace_id} (page ${page}, limit ${limit})`);
       const startTime = Date.now();
 
-      // Step 1: Pre-fetch all coding schemes for the workspace to avoid individual queries
-      this.logger.log('Pre-fetching coding schemes...');
+      this.logger.log('Getting unit variables mapping...');
+      const unitVariablesMap = await this.workspaceFilesService.getUnitVariableMap(workspace_id);
+      this.logger.log(`Retrieved unit variables map with ${unitVariablesMap.size} units`);
+
+      // Step 2: Pre-fetch all coding schemes for the workspace to get derivations and descriptions for the response
+      this.logger.log('Pre-fetching coding schemes for derivation info...');
       const codingSchemes = await this.fileUploadRepository.find({
         where: {
           workspace_id,
@@ -45,7 +51,6 @@ export class VariableAnalysisReplayService {
         }
       });
 
-      // Create a map of unitId to parsed coding scheme for quick lookup
       interface CodingScheme {
         variableCodings?: {
           id: string;
@@ -67,7 +72,6 @@ export class VariableAnalysisReplayService {
       }
       this.logger.log(`Pre-fetched ${codingSchemeMap.size} coding schemes in ${Date.now() - startTime}ms`);
 
-      // Step 2: Count total number of unique unit-variable-code combinations
       const countQuery = this.responseRepository.createQueryBuilder('response')
         .select('COUNT(DISTINCT CONCAT(unit.name, response.variableid, response.code_v1))', 'count')
         .leftJoin('response.unit', 'unit')
@@ -75,7 +79,6 @@ export class VariableAnalysisReplayService {
         .leftJoin('booklet.person', 'person')
         .where('person.workspace_id = :workspace_id', { workspace_id });
 
-      // Add filters if provided
       if (unitIdFilter) {
         countQuery.andWhere('unit.name LIKE :unitId', { unitId: `%${unitIdFilter}%` });
       }
@@ -88,8 +91,6 @@ export class VariableAnalysisReplayService {
       const totalCount = parseInt(totalCountResult?.count || '0', 10);
       this.logger.log(`Total unique combinations: ${totalCount}`);
 
-      // Step 3: Use direct SQL aggregation to get counts and other data
-      // This avoids loading complete response objects and processing them in memory
       const aggregationQuery = this.responseRepository.createQueryBuilder('response')
         .select('unit.name', 'unitId')
         .addSelect('response.variableid', 'variableId')
@@ -102,7 +103,6 @@ export class VariableAnalysisReplayService {
         .leftJoin('booklet.bookletinfo', 'bookletinfo')
         .where('person.workspace_id = :workspace_id', { workspace_id });
 
-      // Add filters if provided
       if (unitIdFilter) {
         aggregationQuery.andWhere('unit.name LIKE :unitId', { unitId: `%${unitIdFilter}%` });
       }
@@ -124,7 +124,6 @@ export class VariableAnalysisReplayService {
       const aggregatedResults = await aggregationQuery.getRawMany();
       this.logger.log(`Retrieved ${aggregatedResults.length} aggregated combinations for page ${page}`);
 
-      // If no combinations found, return empty result
       if (aggregatedResults.length === 0) {
         return {
           data: [],
@@ -133,12 +132,7 @@ export class VariableAnalysisReplayService {
           limit
         };
       }
-
-      // Step 4: Get total counts for each unit-variable combination
-      // We need this to calculate relative occurrences
       const unitVariableCounts = new Map<string, Map<string, number>>();
-
-      // Extract unique unit-variable combinations from the aggregated results
       const unitVariableCombinations = Array.from(
         new Set(aggregatedResults.map(item => `${item.unitId}|${item.variableId}`))
       ).map(combined => {
@@ -146,7 +140,6 @@ export class VariableAnalysisReplayService {
         return { unitId, variableId };
       });
 
-      // Query to get total counts for each unit-variable combination
       const totalCountsQuery = this.responseRepository.createQueryBuilder('response')
         .select('unit.name', 'unitId')
         .addSelect('response.variableid', 'variableId')
@@ -156,7 +149,6 @@ export class VariableAnalysisReplayService {
         .leftJoin('booklet.person', 'person')
         .where('person.workspace_id = :workspace_id', { workspace_id });
 
-      // Add filters if provided
       if (unitIdFilter) {
         totalCountsQuery.andWhere('unit.name LIKE :unitId', { unitId: `%${unitIdFilter}%` });
       }
@@ -165,7 +157,6 @@ export class VariableAnalysisReplayService {
         totalCountsQuery.andWhere('response.variableid LIKE :variableId', { variableId: `%${variableIdFilter}%` });
       }
 
-      // Add conditions for the specific unit-variable combinations we need
       if (unitVariableCombinations.length > 0) {
         unitVariableCombinations.forEach((combo, index) => {
           totalCountsQuery.orWhere(
@@ -183,7 +174,6 @@ export class VariableAnalysisReplayService {
 
       const totalCountsResults = await totalCountsQuery.getRawMany();
 
-      // Build a map for quick lookup of total counts
       for (const result of totalCountsResults) {
         if (!unitVariableCounts.has(result.unitId)) {
           unitVariableCounts.set(result.unitId, new Map<string, number>());
@@ -191,8 +181,6 @@ export class VariableAnalysisReplayService {
         unitVariableCounts.get(result.unitId)?.set(result.variableId, parseInt(result.totalCount, 10));
       }
 
-      // Step 5: Get sample login information for replay URLs
-      // We need one sample per unit-variable combination
       const sampleInfoQuery = this.responseRepository.createQueryBuilder('response')
         .select('unit.name', 'unitId')
         .addSelect('response.variableid', 'variableId')
@@ -205,7 +193,6 @@ export class VariableAnalysisReplayService {
         .leftJoin('booklet.bookletinfo', 'bookletinfo')
         .where('person.workspace_id = :workspace_id', { workspace_id });
 
-      // Add conditions for the specific unit-variable combinations we need
       if (unitVariableCombinations.length > 0) {
         unitVariableCombinations.forEach((combo, index) => {
           sampleInfoQuery.orWhere(
@@ -218,7 +205,6 @@ export class VariableAnalysisReplayService {
         });
       }
 
-      // Limit to one sample per combination
       sampleInfoQuery.groupBy('unit.name')
         .addGroupBy('response.variableid')
         .addGroupBy('person.login')
@@ -227,7 +213,6 @@ export class VariableAnalysisReplayService {
 
       const sampleInfoResults = await sampleInfoQuery.getRawMany();
 
-      // Build a map for quick lookup of sample info
       const sampleInfoMap = new Map<string, { loginName: string; loginCode: string; bookletId: string }>();
       for (const result of sampleInfoResults) {
         const key = `${result.unitId}|${result.variableId}`;
@@ -238,19 +223,23 @@ export class VariableAnalysisReplayService {
         });
       }
 
-      // Step 6: Convert aggregated data to the required format
       const result: VariableAnalysisItemDto[] = [];
 
       for (const item of aggregatedResults) {
         const unitId = item.unitId;
         const variableId = item.variableId;
-        const code = item.code;
+        const code = item.code_v1;
         const occurrenceCount = parseInt(item.occurrenceCount, 10);
-        const score = parseFloat(item.score) || 0;
+        const score = parseFloat(item.score_V1) || 0;
 
         const variableTotalCount = unitVariableCounts.get(unitId)?.get(variableId) || 0;
 
         const relativeOccurrence = variableTotalCount > 0 ? occurrenceCount / variableTotalCount : 0;
+
+        const unitVariables = unitVariablesMap.get(unitId);
+        if (!unitVariables || !unitVariables.has(variableId)) {
+          continue;
+        }
 
         let derivation = '';
         let description = '';
@@ -261,10 +250,6 @@ export class VariableAnalysisReplayService {
             derivation = variableCoding.sourceType || '';
             description = variableCoding.label || '';
           }
-        }
-
-        if (derivation === 'BASE_NO_VALUE' || derivation === '') {
-          continue;
         }
 
         const sampleInfo = sampleInfoMap.get(`${unitId}|${variableId}`);
