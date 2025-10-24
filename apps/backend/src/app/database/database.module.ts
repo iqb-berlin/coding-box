@@ -66,6 +66,7 @@ import { CoderTrainingService } from './services/coder-training.service';
 import { VariableAnalysisReplayService } from './services/variable-analysis-replay.service';
 import { ExportValidationResultsService } from './services/export-validation-results.service';
 import { ExternalCodingImportService } from './services/external-coding-import.service';
+import { BullJobManagementService } from './services/bull-job-management.service';
 
 @Module({
   imports: [
@@ -169,7 +170,8 @@ import { ExternalCodingImportService } from './services/external-coding-import.s
     CoderTrainingService,
     VariableAnalysisReplayService,
     ExportValidationResultsService,
-    ExternalCodingImportService
+    ExternalCodingImportService,
+    BullJobManagementService
   ],
   exports: [
     User,
@@ -205,7 +207,8 @@ import { ExternalCodingImportService } from './services/external-coding-import.s
     CoderTrainingService,
     VariableAnalysisReplayService,
     ExportValidationResultsService,
-    ExternalCodingImportService
+    ExternalCodingImportService,
+    BullJobManagementService
   ]
 })
 export class DatabaseModule {}
