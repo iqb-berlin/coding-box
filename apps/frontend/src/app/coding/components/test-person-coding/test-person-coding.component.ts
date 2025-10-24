@@ -9,7 +9,7 @@ import { MatDialogModule } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
-import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
+import { MatPaginatorModule } from '@angular/material/paginator';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSelectModule } from '@angular/material/select';
@@ -17,7 +17,7 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTableModule } from '@angular/material/table';
 import { MatTabsModule } from '@angular/material/tabs';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
   BehaviorSubject,
   Observable,
@@ -67,6 +67,7 @@ export class TestPersonCodingComponent implements OnInit {
   private snackBar = inject(MatSnackBar);
   private appService = inject(AppService);
   private backendService = inject(BackendService);
+  private translateService = inject(TranslateService);
   Math = Math;
   get workspaceId(): number {
     return this.appService.selectedWorkspaceId;
@@ -101,8 +102,6 @@ export class TestPersonCodingComponent implements OnInit {
   groupsLoading = false;
 
   ngOnInit(): void {
-    // this.loadStatistics();
-    // this.loadCodingList();
     this.loadAllJobs();
     this.startJobsRefreshInterval();
     this.loadWorkspaceGroups();
@@ -133,14 +132,10 @@ export class TestPersonCodingComponent implements OnInit {
       .pipe(
         tap(jobs => {
           this.allJobs = jobs;
-
-          // If we have an active job, update its status from the list
           if (this.activeJobId) {
             const activeJob = jobs.find(job => job.jobId === this.activeJobId);
             if (activeJob) {
               this.jobStatus = activeJob;
-
-              // If job is completed, failed, cancelled, or paused, stop polling
               if (['completed', 'failed', 'cancelled', 'paused'].includes(activeJob.status)) {
                 this.stopJobStatusPolling();
 
@@ -160,10 +155,7 @@ export class TestPersonCodingComponent implements OnInit {
   }
 
   startJobsRefreshInterval(): void {
-    // Clear any existing interval
     this.stopJobsRefreshInterval();
-
-    // Refresh jobs list every 5 seconds
     this.jobsRefreshInterval = window.setInterval(() => {
       this.loadAllJobs();
     }, 5000);
@@ -184,10 +176,7 @@ export class TestPersonCodingComponent implements OnInit {
     this.isLoading = true;
     this.currentPage = page;
     this.pageSize = limit;
-
-    // Get current auth token
     const authToken = localStorage.getItem('id_token') || '';
-    // Get server URL for generating links
     const serverUrl = window.location.origin;
 
     this.testPersonCodingService.getCodingList(this.workspaceId, authToken, serverUrl, page, limit)
@@ -200,13 +189,9 @@ export class TestPersonCodingComponent implements OnInit {
       .subscribe();
   }
 
-  handlePageEvent(event: PageEvent): void {
-    this.loadCodingList(event.pageIndex + 1, event.pageSize);
-  }
-
   codeTestPersons(testPersonIds: string): void {
     if (!testPersonIds) {
-      this.snackBar.open('Bitte geben Sie Testpersonen-IDs ein', 'Schließen', { duration: 3000 });
+      this.snackBar.open(this.translateService.instant('test-person-coding.enter-test-person-ids'), this.translateService.instant('close'), { duration: 3000 });
       return;
     }
 
@@ -215,19 +200,17 @@ export class TestPersonCodingComponent implements OnInit {
       .pipe(
         tap(result => {
           if (result.jobId) {
-            // Background job started
             this.activeJobId = result.jobId;
             this.startJobStatusPolling(result.jobId);
-            this.snackBar.open(result.message || 'Hintergrundauftrag gestartet', 'Schließen', { duration: 5000 });
+            this.snackBar.open(result.message || this.translateService.instant('test-person-coding.background-job-started'), this.translateService.instant('close'), { duration: 5000 });
           } else {
-            // Immediate result
-            this.snackBar.open(`${result.totalResponses} Antworten kodiert`, 'Schließen', { duration: 3000 });
+            this.snackBar.open(this.translateService.instant('test-person-coding.responses-coded', { count: result.totalResponses }), this.translateService.instant('close'), { duration: 3000 });
             this.loadStatistics();
             this.loadCodingList(this.currentPage, this.pageSize);
           }
         }),
         catchError(error => {
-          this.snackBar.open(`Fehler: ${error.message || 'Kodierung der Testpersonen fehlgeschlagen'}`, 'Schließen', { duration: 5000 });
+          this.snackBar.open(this.translateService.instant('test-person-coding.job-error', { error: error.message || this.translateService.instant('test-person-coding.coding-failed') }), this.translateService.instant('close'), { duration: 5000 });
           return of(null);
         }),
         finalize(() => {
@@ -246,7 +229,7 @@ export class TestPersonCodingComponent implements OnInit {
       this.testPersonCodingService.getJobStatus(this.workspaceId, jobId)
         .subscribe(status => {
           if ('error' in status) {
-            this.snackBar.open(`Fehler: ${status.error}`, 'Schließen', { duration: 5000 });
+            this.snackBar.open(this.translateService.instant('test-person-coding.job-error', { error: status.error }), this.translateService.instant('close'), { duration: 5000 });
             this.stopJobStatusPolling();
             return;
           }
@@ -257,15 +240,15 @@ export class TestPersonCodingComponent implements OnInit {
             this.stopJobStatusPolling();
 
             if (status.status === 'completed') {
-              this.snackBar.open('Kodierungsauftrag erfolgreich abgeschlossen', 'Schließen', { duration: 3000 });
+              this.snackBar.open(this.translateService.instant('test-person-coding.job-completed'), this.translateService.instant('close'), { duration: 3000 });
               this.loadStatistics();
               this.loadCodingList(this.currentPage, this.pageSize);
             } else if (status.status === 'failed') {
-              this.snackBar.open(`Kodierungsauftrag fehlgeschlagen: ${status.error || 'Unbekannter Fehler'}`, 'Schließen', { duration: 5000 });
+              this.snackBar.open(this.translateService.instant('test-person-coding.job-completed-with-error', { error: status.error || this.translateService.instant('error.unknown') }), this.translateService.instant('close'), { duration: 5000 });
             } else if (status.status === 'cancelled') {
-              this.snackBar.open('Kodierungsauftrag wurde abgebrochen', 'Schließen', { duration: 3000 });
+              this.snackBar.open(this.translateService.instant('test-person-coding.job-cancelled'), this.translateService.instant('close'), { duration: 3000 });
             } else if (status.status === 'paused') {
-              this.snackBar.open('Kodierungsauftrag wurde pausiert', 'Schließen', { duration: 3000 });
+              this.snackBar.open(this.translateService.instant('test-person-coding.job-paused'), this.translateService.instant('close'), { duration: 3000 });
             }
           }
         });
@@ -288,11 +271,10 @@ export class TestPersonCodingComponent implements OnInit {
     this.testPersonCodingService.cancelJob(this.workspaceId, idToCancel)
       .subscribe(result => {
         if (result.success) {
-          this.snackBar.open(result.message, 'Schließen', { duration: 3000 });
-          // Refresh the jobs list
+          this.snackBar.open(result.message, this.translateService.instant('close'), { duration: 3000 });
           this.loadAllJobs();
         } else {
-          this.snackBar.open(`Fehler beim Abbrechen des Auftrags: ${result.message}`, 'Schließen', { duration: 5000 });
+          this.snackBar.open(this.translateService.instant('test-person-coding.job-cancel-error', { message: result.message }), this.translateService.instant('close'), { duration: 5000 });
         }
       });
   }
@@ -303,10 +285,10 @@ export class TestPersonCodingComponent implements OnInit {
     this.testPersonCodingService.deleteJob(this.workspaceId, jobId)
       .subscribe(result => {
         if (result.success) {
-          this.snackBar.open(result.message, 'Schließen', { duration: 3000 });
+          this.snackBar.open(result.message, this.translateService.instant('close'), { duration: 3000 });
           this.loadAllJobs();
         } else {
-          this.snackBar.open(`Fehler beim Löschen des Auftrags: ${result.message}`, 'Schließen', { duration: 5000 });
+          this.snackBar.open(this.translateService.instant('test-person-coding.job-delete-error', { message: result.message }), this.translateService.instant('close'), { duration: 5000 });
         }
       });
   }
@@ -317,7 +299,7 @@ export class TestPersonCodingComponent implements OnInit {
     this.testPersonCodingService.restartJob(this.workspaceId, jobId)
       .subscribe(result => {
         if (result.success) {
-          this.snackBar.open(result.message || 'Auftrag wurde neu gestartet', 'Schließen', { duration: 3000 });
+          this.snackBar.open(result.message || this.translateService.instant('test-person-coding.job-restarted'), this.translateService.instant('close'), { duration: 3000 });
           if (result.jobId) {
             // If a new job was created, start polling its status
             this.activeJobId = result.jobId;
@@ -325,42 +307,42 @@ export class TestPersonCodingComponent implements OnInit {
           }
           this.loadAllJobs();
         } else {
-          this.snackBar.open(`Fehler beim Neustarten des Auftrags: ${result.message}`, 'Schließen', { duration: 5000 });
+          this.snackBar.open(this.translateService.instant('test-person-coding.job-restart-error', { message: result.message }), this.translateService.instant('close'), { duration: 5000 });
         }
       });
   }
 
   showJobResult(job: JobInfo): void {
     if (!job.result) {
-      this.snackBar.open('Keine Ergebnisse für diesen Auftrag verfügbar', 'Schließen', { duration: 3000 });
+      this.snackBar.open(this.translateService.instant('test-person-coding.job-result-unavailable'), this.translateService.instant('close'), { duration: 3000 });
       return;
     }
 
-    let message = `Auftrags-ID: ${job.jobId}\n\n`;
+    let message = `${this.translateService.instant('test-person-coding.jobs.table.job-id')}: ${job.jobId}\n\n`;
 
     if (job.groupNames) {
-      message += `Kodierte Gruppen: ${job.groupNames}\n\n`;
+      message += `${this.translateService.instant('test-person-coding.jobs.table.groups')}: ${job.groupNames}\n\n`;
     }
 
     if (job.durationMs) {
-      message += `Dauer: ${this.formatDuration(job.durationMs)}\n\n`;
+      message += `${this.translateService.instant('test-person-coding.jobs.table.duration')}: ${this.formatDuration(job.durationMs)}\n\n`;
     }
 
-    message += `Gesamtantworten: ${job.result.totalResponses}\n\n`;
-    message += 'Statuszähler:\n';
+    message += `${this.translateService.instant('test-person-coding.responses-coded', { count: job.result.totalResponses })}\n\n`;
+    message += `${this.translateService.instant('coding.status')}:\n`;
 
     for (const [status, count] of Object.entries(job.result.statusCounts)) {
-      message += `${status || 'Unbekannt'}: ${count}\n`;
+      message += `${status || this.translateService.instant('test-person-coding.jobs.table.unknown')}: ${count}\n`;
     }
 
-    this.snackBar.open(message, 'Schließen', { duration: 10000 });
+    this.snackBar.open(message, this.translateService.instant('close'), { duration: 10000 });
   }
 
   codeAllTestPersons(): void {
     if (this.availableGroups.length > 0) {
       this.selectedGroups = [...this.availableGroups];
       this.codeTestPersons(this.selectedGroups.join(','));
-      this.snackBar.open(`Kodiere Testpersonen aus allen ${this.selectedGroups.length} Gruppen`, 'Schließen', { duration: 3000 });
+      this.snackBar.open(this.translateService.instant('test-person-coding.coding-all-groups', { count: this.selectedGroups.length }), this.translateService.instant('close'), { duration: 3000 });
       return;
     }
 
@@ -368,7 +350,7 @@ export class TestPersonCodingComponent implements OnInit {
     this.backendService.getTestPersons(this.workspaceId)
       .pipe(
         catchError(error => {
-          this.snackBar.open(`Fehler beim Abrufen der Testpersonen: ${error.message || 'Unbekannter Fehler'}`, 'Schließen', { duration: 5000 });
+          this.snackBar.open(this.translateService.instant('test-person-coding.fetch-test-persons-error', { error: error.message || this.translateService.instant('error.unknown') }), this.translateService.instant('close'), { duration: 5000 });
           return of([]);
         }),
         finalize(() => {
@@ -377,15 +359,12 @@ export class TestPersonCodingComponent implements OnInit {
       )
       .subscribe(testPersonIds => {
         if (testPersonIds.length === 0) {
-          this.snackBar.open('Keine Testpersonen für diesen Arbeitsbereich gefunden', 'Schließen', { duration: 3000 });
+          this.snackBar.open(this.translateService.instant('test-person-coding.no-test-persons'), this.translateService.instant('close'), { duration: 3000 });
           return;
         }
-
         const testPersonIdsString = testPersonIds.join(',');
         this.codeTestPersons(testPersonIdsString);
-
-        // Show message about how many test persons are being coded
-        this.snackBar.open(`Kodiere ${testPersonIds.length} Testpersonen`, 'Schließen', { duration: 5000 });
+        this.snackBar.open(this.translateService.instant('test-person-coding.coding-test-persons-count', { count: testPersonIds.length }), this.translateService.instant('close'), { duration: 5000 });
       });
   }
 

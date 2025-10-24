@@ -3,9 +3,6 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Job } from '../entities/job.entity';
 
-/**
- * Service for managing jobs
- */
 @Injectable()
 export class JobService {
   private readonly logger = new Logger(JobService.name);
@@ -15,13 +12,6 @@ export class JobService {
     private jobRepository: Repository<Job>
   ) {}
 
-  /**
-   * Get a job by ID
-   * @param jobId The ID of the job
-   * @param workspaceId Optional workspace ID to filter by
-   * @returns The job
-   * @throws NotFoundException if the job is not found
-   */
   async getJob(jobId: number, workspaceId?: number): Promise<Job> {
     const whereClause: { id: number; workspace_id?: number } = { id: jobId };
 
@@ -40,12 +30,6 @@ export class JobService {
     return job;
   }
 
-  /**
-   * Get all jobs for a workspace
-   * @param workspaceId The ID of the workspace
-   * @param type Optional job type to filter by
-   * @returns Array of jobs
-   */
   async getJobs(workspaceId: number, type?: string): Promise<Job[]> {
     const whereClause: { workspace_id: number; type?: string } = { workspace_id: workspaceId };
 
@@ -59,33 +43,16 @@ export class JobService {
     });
   }
 
-  /**
-   * Update a job
-   * @param jobId The ID of the job
-   * @param updates The updates to apply
-   * @returns The updated job
-   * @throws NotFoundException if the job is not found
-   */
   async updateJob(jobId: number, updates: Partial<Job>): Promise<Job> {
     const job = await this.getJob(jobId);
-
-    // Apply updates
     Object.assign(job, updates);
-
-    // Save the job
     return this.jobRepository.save(job);
   }
 
-  /**
-   * Cancel a job
-   * @param jobId The ID of the job
-   * @returns Object with success flag and message
-   */
   async cancelJob(jobId: number): Promise<{ success: boolean; message: string }> {
     try {
       const job = await this.getJob(jobId);
 
-      // Only pending or processing jobs can be cancelled
       if (job.status !== 'pending' && job.status !== 'processing') {
         return {
           success: false,
@@ -93,7 +60,6 @@ export class JobService {
         };
       }
 
-      // Update job status to cancelled
       job.status = 'cancelled';
       await this.jobRepository.save(job);
       this.logger.log(`Job ${jobId} has been cancelled`);
@@ -105,11 +71,25 @@ export class JobService {
     }
   }
 
-  /**
-   * Check if a job has been cancelled
-   * @param jobId The ID of the job
-   * @returns True if the job has been cancelled, false otherwise
-   */
+  async deleteJob(jobId: number): Promise<{ success: boolean; message: string }> {
+    try {
+      const job = await this.getJob(jobId);
+      if (job.status === 'pending' || job.status === 'processing') {
+        return {
+          success: false,
+          message: `Job with ID ${jobId} cannot be deleted because it is currently ${job.status}`
+        };
+      }
+      await this.jobRepository.remove(job);
+      this.logger.log(`Job ${jobId} has been deleted`);
+
+      return { success: true, message: `Job ${jobId} has been deleted successfully` };
+    } catch (error) {
+      this.logger.error(`Error deleting job: ${error.message}`, error.stack);
+      return { success: false, message: `Error deleting job: ${error.message}` };
+    }
+  }
+
   async isJobCancelled(jobId: number): Promise<boolean> {
     try {
       const job = await this.getJob(jobId);

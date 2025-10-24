@@ -183,13 +183,23 @@ export class CodingService {
   }
 
   getCodingListAsExcel(workspace_id: number): Observable<Blob> {
-    return this.http.get(
-      `${this.serverUrl}admin/workspace/${workspace_id}/coding/coding-list/excel`,
-      {
-        headers: this.authHeader,
-        responseType: 'blob' as 'json'
-      }
-    ) as unknown as Observable<Blob>;
+    const identity = this.appService.loggedUser?.sub || '';
+    return this.appService.createToken(workspace_id, identity, 60).pipe(
+      catchError(() => of('')),
+      switchMap(token => {
+        const params = new HttpParams()
+          .set('authToken', token)
+          .set('serverUrl', window.location.origin);
+        return this.http.get(
+          `${this.serverUrl}admin/workspace/${workspace_id}/coding/coding-list/excel`,
+          {
+            headers: this.authHeader,
+            params,
+            responseType: 'blob' as 'json'
+          }
+        ) as unknown as Observable<Blob>;
+      })
+    );
   }
 
   getCodingStatistics(workspace_id: number): Observable<CodingStatistics> {
@@ -245,7 +255,7 @@ export class CodingService {
       );
   }
 
-  getMissingsProfileDetails(workspaceId: number, id: string): Observable<MissingsProfilesDto | null> {
+  getMissingsProfileDetails(workspaceId: number, id: string | number): Observable<MissingsProfilesDto | null> {
     return this.http
       .get<MissingsProfilesDto>(
       `${this.serverUrl}admin/workspace/${workspaceId}/missings-profiles/${id}`,

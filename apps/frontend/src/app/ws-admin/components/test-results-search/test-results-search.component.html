@@ -3,17 +3,17 @@
   <div mat-dialog-content>
     <!-- Search Mode Toggle -->
     <div class="search-mode-toggle">
-      <button mat-button [class.active]="searchMode === 'unit'" (click)="setSearchMode('unit')">Aufgaben suchen</button>
-      <button mat-button [class.active]="searchMode === 'response'" (click)="setSearchMode('response')">Antworten suchen</button>
-      <button mat-button [class.active]="searchMode === 'booklet'" (click)="setSearchMode('booklet')">Booklets suchen</button>
+      <button mat-button [class.active]="searchMode === 'unit'" (click)="setSearchMode('unit')">{{ 'test-results-search.search-units' | translate }}</button>
+      <button mat-button [class.active]="searchMode === 'response'" (click)="setSearchMode('response')">{{ 'test-results-search.search-responses' | translate }}</button>
+      <button mat-button [class.active]="searchMode === 'booklet'" (click)="setSearchMode('booklet')">{{ 'test-results-search.search-booklets' | translate }}</button>
     </div>
 
     <!-- Unit Search -->
     @if (searchMode === 'unit') {
       <div class="search-container">
         <mat-form-field appearance="outline" class="search-field">
-          <mat-label>Aufgabe suchen</mat-label>
-          <input matInput [(ngModel)]="searchText" (ngModelChange)="onUnitSearchChange()" placeholder="Geben Sie den Namen der Aufgabe ein...">
+          <mat-label>{{ 'test-results-search.search-field.unit-name' | translate }}</mat-label>
+          <input matInput [(ngModel)]="searchText" (ngModelChange)="onUnitSearchChange()" [placeholder]="'test-results-search.search-field.unit-name-placeholder' | translate">
           <mat-icon matSuffix>search</mat-icon>
         </mat-form-field>
       </div>
@@ -23,44 +23,44 @@
     @if (searchMode === 'response') {
       <div class="search-container response-search">
         <mat-form-field appearance="outline" class="search-field">
-          <mat-label>Antwort-Wert</mat-label>
-          <input matInput [(ngModel)]="searchValue" (ngModelChange)="onResponseSearchChange()" placeholder="Suche nach Antwort-Wert...">
+          <mat-label>{{ 'test-results-search.search-field.response-value' | translate }}</mat-label>
+          <input matInput [(ngModel)]="searchValue" (ngModelChange)="onResponseSearchChange()" [placeholder]="'test-results-search.search-field.response-value-placeholder' | translate">
           <mat-icon matSuffix>search</mat-icon>
         </mat-form-field>
 
         <mat-form-field appearance="outline" class="search-field">
-          <mat-label>Variablen-ID</mat-label>
-          <input matInput [(ngModel)]="searchVariableId" (ngModelChange)="onResponseSearchChange()" placeholder="Suche nach Variablen-ID...">
+          <mat-label>{{ 'test-results-search.search-field.variable-id' | translate }}</mat-label>
+          <input matInput [(ngModel)]="searchVariableId" (ngModelChange)="onResponseSearchChange()" [placeholder]="'test-results-search.search-field.variable-id-placeholder' | translate">
           <mat-icon matSuffix>search</mat-icon>
         </mat-form-field>
 
         <mat-form-field appearance="outline" class="search-field">
-          <mat-label>Aufgabe</mat-label>
-          <input matInput [(ngModel)]="searchUnitName" (ngModelChange)="onResponseSearchChange()" placeholder="Suche nach Aufgabe...">
+          <mat-label>{{ 'test-results-search.search-field.task' | translate }}</mat-label>
+          <input matInput [(ngModel)]="searchUnitName" (ngModelChange)="onResponseSearchChange()" [placeholder]="'test-results-search.search-field.task-placeholder' | translate">
           <mat-icon matSuffix>search</mat-icon>
         </mat-form-field>
 
         <mat-form-field appearance="outline" class="search-field">
-          <mat-label>Status</mat-label>
-          <input matInput [(ngModel)]="searchStatus" (ngModelChange)="onResponseSearchChange()" placeholder="Suche nach Status...">
+          <mat-label>{{ 'test-results-search.search-field.status' | translate }}</mat-label>
+          <input matInput [(ngModel)]="searchStatus" (ngModelChange)="onResponseSearchChange()" [placeholder]="'test-results-search.search-field.status-placeholder' | translate">
           <mat-icon matSuffix>search</mat-icon>
         </mat-form-field>
 
         <mat-form-field appearance="outline" class="search-field">
-          <mat-label>Kodier Status</mat-label>
-          <input matInput [(ngModel)]="searchCodedStatus" (ngModelChange)="onResponseSearchChange()" placeholder="Suche nach Kodier Status...">
+          <mat-label>{{ 'test-results-search.search-field.coding-status' | translate }}</mat-label>
+          <input matInput [(ngModel)]="searchCodedStatus" (ngModelChange)="onResponseSearchChange()" [placeholder]="'test-results-search.search-field.coding-status-placeholder' | translate">
           <mat-icon matSuffix>search</mat-icon>
         </mat-form-field>
 
         <mat-form-field appearance="outline" class="search-field">
-          <mat-label>Gruppe</mat-label>
-          <input matInput [(ngModel)]="searchGroup" (ngModelChange)="onResponseSearchChange()" placeholder="Suche nach Gruppe...">
+          <mat-label>{{ 'test-results-search.search-field.group' | translate }}</mat-label>
+          <input matInput [(ngModel)]="searchGroup" (ngModelChange)="onResponseSearchChange()" [placeholder]="'test-results-search.search-field.group-placeholder' | translate">
           <mat-icon matSuffix>search</mat-icon>
         </mat-form-field>
 
         <mat-form-field appearance="outline" class="search-field">
-          <mat-label>Code</mat-label>
-          <input matInput [(ngModel)]="searchCode" (ngModelChange)="onResponseSearchChange()" placeholder="Suche nach Code...">
+          <mat-label>{{ 'test-results-search.search-field.code' | translate }}</mat-label>
+          <input matInput [(ngModel)]="searchCode" (ngModelChange)="onResponseSearchChange()" [placeholder]="'test-results-search.search-field.code-placeholder' | translate">
           <mat-icon matSuffix>search</mat-icon>
         </mat-form-field>
       </div>
@@ -70,8 +70,8 @@
     @if (searchMode === 'booklet') {
       <div class="search-container">
         <mat-form-field appearance="outline" class="search-field">
-          <mat-label>Booklet suchen</mat-label>
-          <input matInput [(ngModel)]="bookletSearchText" (ngModelChange)="onBookletSearchChange()" placeholder="Geben Sie den Namen des Booklets ein...">
+          <mat-label>{{ 'test-results-search.search-field.booklet-name' | translate }}</mat-label>
+          <input matInput [(ngModel)]="bookletSearchText" (ngModelChange)="onBookletSearchChange()" [placeholder]="'test-results-search.search-field.booklet-name-placeholder' | translate">
           <mat-icon matSuffix>search</mat-icon>
         </mat-form-field>
       </div>
@@ -81,7 +81,7 @@
       @if (isLoading) {
         <div class="loading-container">
           <mat-spinner diameter="40"></mat-spinner>
-          <p>Suche läuft...</p>
+          <p>{{ 'test-results-search.loading' | translate }}</p>
         </div>
       } @else if (searchMode === 'unit' && unitSearchResults.length === 0 && searchText.trim().length > 2) {
         <div class="no-results">
