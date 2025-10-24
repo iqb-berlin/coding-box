@@ -1,11 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Like, Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { CodingScheme } from '@iqbspecs/coding-scheme/coding-scheme.interface';
 import * as Autocoder from '@iqb/responses';
 import * as cheerio from 'cheerio';
-import * as fastCsv from 'fast-csv';
-import * as ExcelJS from 'exceljs';
 import * as crypto from 'crypto';
 import { statusNumberToString, statusStringToNumber } from '../utils/response-status-converter';
 import { CacheService } from '../../cache/cache.service';
@@ -25,36 +23,11 @@ import { ValidationResultDto } from '../../../../../../api-dto/coding/validation
 import { ValidateCodingCompletenessResponseDto } from '../../../../../../api-dto/coding/validate-coding-completeness-response.dto';
 import { JobQueueService } from '../../job-queue/job-queue.service';
 import { CodingStatisticsService } from './coding-statistics.service';
-
-interface ExternalCodingRow {
-  unit_key?: string;
-  unit_alias?: string;
-  variable_id?: string;
-  status?: string;
-  score?: string | number;
-  code?: string | number;
-  person_code?: string;
-  person_login?: string;
-  person_group?: string;
-  booklet_name?: string;
-  [key: string]: string | number | undefined;
-}
-
-interface ExternalCodingImportBody {
-  file: string; // base64 encoded file data
-  fileName?: string;
-}
-
-interface QueryParameters {
-  unitAlias?: string;
-  unitName?: string;
-  variableId: string;
-  workspaceId: number;
-  personCode?: string;
-  personLogin?: string;
-  personGroup?: string;
-  bookletName?: string;
-}
+import { VariableAnalysisReplayService } from './variable-analysis-replay.service';
+import { ExportValidationResultsService } from './export-validation-results.service';
+import { ExternalCodingImportService, ExternalCodingImportBody } from './external-coding-import.service';
+import { BullJobManagementService } from './bull-job-management.service';
+import { WorkspaceFilesService } from './workspace-files.service';
 
 interface CodedResponse {
   id: number;
@@ -83,7 +56,12 @@ export class WorkspaceCodingService {
     private jobQueueService: JobQueueService,
     private cacheService: CacheService,
     private missingsProfilesService: MissingsProfilesService,
-    private codingStatisticsService: CodingStatisticsService
+    private codingStatisticsService: CodingStatisticsService,
+    private variableAnalysisReplayService: VariableAnalysisReplayService,
+    private exportValidationResultsService: ExportValidationResultsService,
+    private externalCodingImportService: ExternalCodingImportService,
+    private bullJobManagementService: BullJobManagementService,
+    private workspaceFilesService: WorkspaceFilesService
   ) {}
 
   private codingSchemeCache: Map<string, { scheme: CodingScheme; timestamp: number }> = new Map();
@@ -257,12 +235,17 @@ export class WorkspaceCodingService {
   async createCodingStatisticsJob(workspaceId: number): Promise<{ jobId: string; message: string }> {
     try {
       const cacheKey = `coding-statistics:${workspaceId}`;
-      await this.cacheService.delete(cacheKey);
-      this.logger.log(`Cleared coding statistics cache for workspace ${workspaceId} before refresh`);
+      const cachedResult = await this.cacheService.get<CodingStatistics>(cacheKey);
+      if (cachedResult) {
+        this.logger.log(`Cached coding statistics exist for workspace ${workspaceId}, returning empty jobId to use cache`);
+        return { jobId: '', message: 'Using cached coding statistics' };
+      }
+      await this.cacheService.delete(cacheKey); // Clear any stale cache
+      this.logger.log(`No cached coding statistics for workspace ${workspaceId}, creating job to recalculate`);
 
       const job = await this.jobQueueService.addCodingStatisticsJob(workspaceId);
       this.logger.log(`Created coding statistics job ${job.id} for workspace ${workspaceId}`);
-      return { jobId: job.id.toString(), message: 'Coding statistics job created' };
+      return { jobId: job.id.toString(), message: 'Created coding statistics job - no cache available' };
     } catch (error) {
       this.logger.error(`Error creating coding statistics job: ${error.message}`, error.stack);
       throw error;
@@ -705,46 +688,72 @@ export class WorkspaceCodingService {
         return statistics;
       }
 
-      // Step 6: Process responses and build maps - 60% progress
-      const unitToResponsesMap = new Map();
-      for (const response of allResponses) {
+      // Step 6: Get unit variables for filtering - 55% progress
+      const unitVariables = await this.workspaceFilesService.getUnitVariableMap(workspace_id);
+      const validVariableSets = new Map<string, Set<string>>();
+      unitVariables.forEach((vars: Set<string>, unitName: string) => {
+        validVariableSets.set(unitName.toUpperCase(), vars);
+      });
+
+      const unitIdToNameMap = new Map<number, string>();
+      units.forEach(unit => {
+        unitIdToNameMap.set(unit.id, unit.name);
+      });
+
+      const filteredResponses = allResponses.filter(response => {
+        const unitName = unitIdToNameMap.get(response.unitid)?.toUpperCase();
+        const validVars = validVariableSets.get(unitName || '');
+        return validVars?.has(response.variableid);
+      });
+
+      this.logger.log(`Filtered responses: ${allResponses.length} -> ${filteredResponses.length} (removed ${allResponses.length - filteredResponses.length} invalid variable responses)`);
+
+      if (jobId && await this.isJobCancelled(jobId)) {
+        this.logger.log(`Job ${jobId} was cancelled or paused after filtering responses`);
+        await queryRunner.release();
+        return statistics;
+      }
+
+      // Step 7: Process responses and build maps - 60% progress
+      const unitToResponsesMap = new Map<number, ResponseEntity[]>();
+      for (const response of filteredResponses) {
         if (!unitToResponsesMap.has(response.unitid)) {
           unitToResponsesMap.set(response.unitid, []);
         }
-        unitToResponsesMap.get(response.unitid).push(response);
+        unitToResponsesMap.get(response.unitid)!.push(response);
       }
 
-      // Report progress after step 6
+      // Report progress after step 7
       if (progressCallback) {
         progressCallback(60);
       }
 
-      // Check for cancellation or pause after step 6
+      // Check for cancellation or pause after step 7
       if (jobId && await this.isJobCancelled(jobId)) {
         this.logger.log(`Job ${jobId} was cancelled or paused after processing responses`);
         await queryRunner.release();
         return statistics;
       }
 
-      // Step 7: Get test files - 70% progress
+      // Step 8: Get test files - 70% progress
       const fileQueryStart = Date.now();
       // Use cache for test files
       const fileIdToTestFileMap = await this.getTestFilesWithCache(workspace_id, unitAliasesArray);
       metrics.fileQuery = Date.now() - fileQueryStart;
 
-      // Report progress after step 7
+      // Report progress after step 8
       if (progressCallback) {
         progressCallback(70);
       }
 
-      // Check for cancellation or pause after step 7
+      // Check for cancellation or pause after step 8
       if (jobId && await this.isJobCancelled(jobId)) {
         this.logger.log(`Job ${jobId} was cancelled or paused after getting test files`);
         await queryRunner.release();
         return statistics;
       }
 
-      // Step 8: Extract coding scheme references - 80% progress
+      // Step 9: Extract coding scheme references - 80% progress
       const schemeExtractStart = Date.now();
       const { codingSchemeRefs, unitToCodingSchemeRefMap } = await this.extractCodingSchemeReferences(
         units,
@@ -754,19 +763,19 @@ export class WorkspaceCodingService {
       );
       metrics.schemeExtract = Date.now() - schemeExtractStart;
 
-      // Report progress after step 8
+      // Report progress after step 9
       if (progressCallback) {
         progressCallback(80);
       }
 
-      // Check for cancellation or pause after step 8
+      // Check for cancellation or pause after step 9
       if (jobId && await this.isJobCancelled(jobId)) {
         this.logger.log(`Job ${jobId} was cancelled or paused after extracting scheme references`);
         await queryRunner.release();
         return statistics;
       }
 
-      // Step 9: Get coding scheme files - 85% progress
+      // Step 10: Get coding scheme files - 85% progress
       const schemeQueryStart = Date.now();
       const fileIdToCodingSchemeMap = await this.getCodingSchemeFiles(
         codingSchemeRefs,
@@ -777,7 +786,7 @@ export class WorkspaceCodingService {
       // No separate parsing step needed as it's handled by the cache helper
       metrics.schemeParsing = 0;
 
-      // Report progress after step 9
+      // Report progress after step 10
       if (progressCallback) {
         progressCallback(85);
       }
@@ -802,7 +811,7 @@ export class WorkspaceCodingService {
         unitToResponsesMap,
         unitToCodingSchemeRefMap,
         fileIdToCodingSchemeMap,
-        allResponses,
+        filteredResponses,
         statistics,
         jobId,
         queryRunner,
@@ -828,11 +837,9 @@ export class WorkspaceCodingService {
       );
 
       if (!updateSuccess) {
-        // If update failed, return early
         return statistics;
       }
 
-      // Report completion
       if (progressCallback) {
         progressCallback(100);
       }
@@ -851,8 +858,8 @@ export class WorkspaceCodingService {
         - Response processing: ${metrics.processing}ms
         - Database updates: ${metrics.update || 0}ms`);
 
-      // Invalidate cache since coding statuses have been updated
       await this.invalidateIncompleteVariablesCache(workspace_id);
+      await this.codingStatisticsService.refreshStatistics(workspace_id);
 
       return statistics;
     } catch (error) {
@@ -1055,7 +1062,6 @@ export class WorkspaceCodingService {
         scheme: unit.data || ''
       }));
 
-      // Get the missings from the selected profile
       let missings: Missing[] = [
         {
           code: '999',
@@ -1068,7 +1074,6 @@ export class WorkspaceCodingService {
         const profile = await this.missingsProfilesService.getMissingsProfileDetails(workspaceId, missingsProfile);
         if (profile && profile.missings) {
           try {
-            // Parse the missings configuration
             const profileMissings = typeof profile.missings === 'string' ? JSON.parse(profile.missings) : profile.missings;
             if (Array.isArray(profileMissings) && profileMissings.length > 0) {
               missings = profileMissings.map(m => ({
@@ -1091,115 +1096,17 @@ export class WorkspaceCodingService {
   }
 
   async pauseJob(jobId: string): Promise<{ success: boolean; message: string }> {
-    try {
-      // Get job from Bull queue
-      const bullJob = await this.jobQueueService.getTestPersonCodingJob(jobId);
-      if (!bullJob) {
-        return { success: false, message: `Job with ID ${jobId} not found` };
-      }
-
-      // Check if job can be paused
-      const state = await bullJob.getState();
-      if (state !== 'active' && state !== 'waiting' && state !== 'delayed') {
-        return {
-          success: false,
-          message: `Job with ID ${jobId} cannot be paused because it is ${state}`
-        };
-      }
-
-      // Update job data to mark it as paused
-      const updatedData = {
-        ...bullJob.data,
-        isPaused: true
-      };
-
-      await bullJob.update(updatedData);
-      this.logger.log(`Job ${jobId} has been paused successfully`);
-
-      return { success: true, message: `Job ${jobId} has been paused successfully` };
-    } catch (error) {
-      this.logger.error(`Error pausing job: ${error.message}`, error.stack);
-      return { success: false, message: `Error pausing job: ${error.message}` };
-    }
+    return this.bullJobManagementService.pauseJob(jobId);
   }
 
   async resumeJob(jobId: string): Promise<{ success: boolean; message: string }> {
-    try {
-      // Get job from Bull queue
-      const bullJob = await this.jobQueueService.getTestPersonCodingJob(jobId);
-      if (!bullJob) {
-        return { success: false, message: `Job with ID ${jobId} not found` };
-      }
-
-      // Check if job is paused
-      if (!bullJob.data.isPaused) {
-        return {
-          success: false,
-          message: `Job with ID ${jobId} is not paused and cannot be resumed`
-        };
-      }
-
-      // Update job data to remove the isPaused flag
-      const { isPaused, ...restData } = bullJob.data;
-      await bullJob.update(restData);
-
-      this.logger.log(`Job ${jobId} has been resumed successfully`);
-      return { success: true, message: `Job ${jobId} has been resumed successfully` };
-    } catch (error) {
-      this.logger.error(`Error resuming job: ${error.message}`, error.stack);
-      return { success: false, message: `Error resuming job: ${error.message}` };
-    }
+    return this.bullJobManagementService.resumeJob(jobId);
   }
 
-  /**
-   * Restart a failed job
-   * @param jobId The job ID to restart
-   * @returns Success status and message, with new job ID if successful
-   */
   async restartJob(jobId: string): Promise<{ success: boolean; message: string; jobId?: string }> {
-    try {
-      // Get job from Bull queue
-      const bullJob = await this.jobQueueService.getTestPersonCodingJob(jobId);
-      if (!bullJob) {
-        return { success: false, message: `Job with ID ${jobId} not found` };
-      }
-
-      // Check if job is failed
-      const state = await bullJob.getState();
-      if (state !== 'failed') {
-        return {
-          success: false,
-          message: `Job with ID ${jobId} is not failed and cannot be restarted`
-        };
-      }
-
-      // Create a new job with the same data
-      const newJob = await this.jobQueueService.addTestPersonCodingJob({
-        workspaceId: bullJob.data.workspaceId,
-        personIds: bullJob.data.personIds,
-        groupNames: bullJob.data.groupNames
-      });
-
-      // Delete the old job
-      await this.jobQueueService.deleteTestPersonCodingJob(jobId);
-
-      this.logger.log(`Job ${jobId} has been restarted as job ${newJob.id}`);
-      return {
-        success: true,
-        message: `Job ${jobId} has been restarted as job ${newJob.id}`,
-        jobId: newJob.id.toString()
-      };
-    } catch (error) {
-      this.logger.error(`Error restarting job: ${error.message}`, error.stack);
-      return { success: false, message: `Error restarting job: ${error.message}` };
-    }
+    return this.bullJobManagementService.restartJob(jobId);
   }
 
-  /**
-   * Get jobs only from Redis Bull queue for a workspace
-   * @param workspaceId The workspace ID
-   * @returns Array of jobs from Redis Bull
-   */
   async getBullJobs(workspaceId: number): Promise<{
     jobId: string;
     status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'paused';
@@ -1212,108 +1119,9 @@ export class WorkspaceCodingService {
     durationMs?: number;
     completedAt?: Date;
   }[]> {
-    const jobs: {
-      jobId: string;
-      status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'paused';
-      progress: number;
-      result?: CodingStatistics;
-      error?: string;
-      workspaceId?: number;
-      createdAt?: Date;
-      groupNames?: string;
-      durationMs?: number;
-      completedAt?: Date;
-    }[] = [];
-
-    try {
-      const bullJobs = await this.jobQueueService.getTestPersonCodingJobs(workspaceId);
-      for (const bullJob of bullJobs) {
-        // Get job state and progress
-        const state = await bullJob.getState();
-        const progress = await bullJob.progress() || 0;
-
-        // Map Bull job state to our job status
-        let status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'paused';
-        switch (state) {
-          case 'active':
-            status = 'processing';
-            break;
-          case 'completed':
-            status = 'completed';
-            break;
-          case 'failed':
-            status = 'failed';
-            break;
-          case 'delayed':
-          case 'waiting':
-            status = 'pending';
-            break;
-          case 'paused':
-            status = 'paused';
-            break;
-          default:
-            status = 'pending';
-        }
-
-        // Get result from job return value if completed
-        let result: CodingStatistics | undefined;
-        let error: string | undefined;
-
-        if (state === 'completed' && bullJob.returnvalue) {
-          result = bullJob.returnvalue as CodingStatistics;
-        } else if (state === 'failed' && bullJob.failedReason) {
-          error = bullJob.failedReason;
-        }
-
-        // Add job to the list
-        jobs.push({
-          jobId: bullJob.id.toString(),
-          status,
-          progress: typeof progress === 'number' ? progress : 0,
-          result,
-          error,
-          workspaceId: bullJob.data.workspaceId,
-          createdAt: new Date(bullJob.timestamp),
-          groupNames: bullJob.data.groupNames,
-          completedAt: state === 'completed' ? new Date(bullJob.finishedOn || Date.now()) : undefined,
-          durationMs: state === 'completed' && bullJob.finishedOn && bullJob.timestamp ?
-            bullJob.finishedOn - bullJob.timestamp :
-            undefined
-        });
-      }
-    } catch (bullError) {
-      this.logger.error(`Error getting jobs from Redis queue: ${bullError.message}`, bullError.stack);
-    }
-
-    // Sort jobs by creation date (newest first)
-    return jobs.sort((a, b) => {
-      if (!a.createdAt) return 1;
-      if (!b.createdAt) return -1;
-      return b.createdAt.getTime() - a.createdAt.getTime();
-    });
+    return this.bullJobManagementService.getBullJobs(workspaceId);
   }
 
-  /**
-   * Get variable analysis data for a workspace
-   * This method retrieves and analyzes responses grouped by unit, variable, and code
-   * It also fetches coding scheme information to populate derivation and description fields
-   *
-   * The analysis includes:
-   * - Grouping responses by unit, variable, and code
-   * - Calculating occurrence counts and relative occurrences
-   * - Generating replay URLs for each combination
-   * - Fetching coding scheme information from file_upload table (file_id = unitId+.VOCS)
-   *
-   * @param workspace_id The workspace ID
-   * @param authToken Authentication token for generating replay URLs
-   * @param serverUrl Base server URL for replay links
-   * @param page Page number for pagination (default: 1)
-   * @param limit Number of items per page (default: 100)
-   * @param unitIdFilter Optional filter to search for specific unit IDs
-   * @param variableIdFilter Optional filter to search for specific variable IDs
-   * @param derivationFilter Optional filter to search for specific derivation values
-   * @returns Paginated array of variable analysis items with all required information
-   */
   async getVariableAnalysis(
     workspace_id: number,
     authToken: string,
@@ -1329,440 +1137,23 @@ export class WorkspaceCodingService {
       page: number;
       limit: number;
     }> {
-    try {
-      this.logger.log(`Getting variable analysis for workspace ${workspace_id} (page ${page}, limit ${limit})`);
-      const startTime = Date.now();
-
-      // Step 1: Pre-fetch all coding schemes for the workspace to avoid individual queries
-      this.logger.log('Pre-fetching coding schemes...');
-      const codingSchemes = await this.fileUploadRepository.find({
-        where: {
-          workspace_id,
-          file_type: 'Resource',
-          file_id: Like('%.VOCS')
-        }
-      });
-
-      // Create a map of unitId to parsed coding scheme for quick lookup
-      interface CodingScheme {
-        variableCodings?: {
-          id: string;
-          sourceType?: string;
-          label?: string;
-        }[];
-        [key: string]: unknown;
-      }
-
-      const codingSchemeMap = new Map<string, CodingScheme>();
-      for (const scheme of codingSchemes) {
-        try {
-          const unitId = scheme.file_id.replace('.VOCS', '');
-          const parsedScheme = JSON.parse(scheme.data) as CodingScheme;
-          codingSchemeMap.set(unitId, parsedScheme);
-        } catch (error) {
-          this.logger.error(`Error parsing coding scheme ${scheme.file_id}: ${error.message}`, error.stack);
-        }
-      }
-      this.logger.log(`Pre-fetched ${codingSchemeMap.size} coding schemes in ${Date.now() - startTime}ms`);
-
-      // Step 2: Count total number of unique unit-variable-code combinations
-      const countQuery = this.responseRepository.createQueryBuilder('response')
-        .select('COUNT(DISTINCT CONCAT(unit.name, response.variableid, response.code_v1))', 'count')
-        .leftJoin('response.unit', 'unit')
-        .leftJoin('unit.booklet', 'booklet')
-        .leftJoin('booklet.person', 'person')
-        .where('person.workspace_id = :workspace_id', { workspace_id });
-
-      // Add filters if provided
-      if (unitIdFilter) {
-        countQuery.andWhere('unit.name LIKE :unitId', { unitId: `%${unitIdFilter}%` });
-      }
-
-      if (variableIdFilter) {
-        countQuery.andWhere('response.variableid LIKE :variableId', { variableId: `%${variableIdFilter}%` });
-      }
-
-      const totalCountResult = await countQuery.getRawOne();
-      const totalCount = parseInt(totalCountResult?.count || '0', 10);
-      this.logger.log(`Total unique combinations: ${totalCount}`);
-
-      // Step 3: Use direct SQL aggregation to get counts and other data
-      // This avoids loading complete response objects and processing them in memory
-      const aggregationQuery = this.responseRepository.createQueryBuilder('response')
-        .select('unit.name', 'unitId')
-        .addSelect('response.variableid', 'variableId')
-        .addSelect('response.code_v1', 'code_v1')
-        .addSelect('COUNT(response.id)', 'occurrenceCount')
-        .addSelect('MAX(response.score_v1)', 'score_V1') // Use MAX as a sample score
-        .leftJoin('response.unit', 'unit')
-        .leftJoin('unit.booklet', 'booklet')
-        .leftJoin('booklet.person', 'person')
-        .leftJoin('booklet.bookletinfo', 'bookletinfo')
-        .where('person.workspace_id = :workspace_id', { workspace_id });
-
-      // Add filters if provided
-      if (unitIdFilter) {
-        aggregationQuery.andWhere('unit.name LIKE :unitId', { unitId: `%${unitIdFilter}%` });
-      }
-
-      if (variableIdFilter) {
-        aggregationQuery.andWhere('response.variableid LIKE :variableId', { variableId: `%${variableIdFilter}%` });
-      }
-
-      aggregationQuery
-        .groupBy('unit.name')
-        .addGroupBy('response.variableid')
-        .addGroupBy('response.code_v1')
-        .orderBy('unit.name', 'ASC')
-        .addOrderBy('response.variableid', 'ASC')
-        .addOrderBy('response.code_v1', 'ASC')
-        .offset((page - 1) * limit)
-        .limit(limit);
-
-      const aggregatedResults = await aggregationQuery.getRawMany();
-      this.logger.log(`Retrieved ${aggregatedResults.length} aggregated combinations for page ${page}`);
-
-      // If no combinations found, return empty result
-      if (aggregatedResults.length === 0) {
-        return {
-          data: [],
-          total: totalCount,
-          page,
-          limit
-        };
-      }
-
-      // Step 4: Get total counts for each unit-variable combination
-      // We need this to calculate relative occurrences
-      const unitVariableCounts = new Map<string, Map<string, number>>();
-
-      // Extract unique unit-variable combinations from the aggregated results
-      const unitVariableCombinations = Array.from(
-        new Set(aggregatedResults.map(item => `${item.unitId}|${item.variableId}`))
-      ).map(combined => {
-        const [unitId, variableId] = combined.split('|');
-        return { unitId, variableId };
-      });
-
-      // Query to get total counts for each unit-variable combination
-      const totalCountsQuery = this.responseRepository.createQueryBuilder('response')
-        .select('unit.name', 'unitId')
-        .addSelect('response.variableid', 'variableId')
-        .addSelect('COUNT(response.id)', 'totalCount')
-        .leftJoin('response.unit', 'unit')
-        .leftJoin('unit.booklet', 'booklet')
-        .leftJoin('booklet.person', 'person')
-        .where('person.workspace_id = :workspace_id', { workspace_id });
-
-      // Add filters if provided
-      if (unitIdFilter) {
-        totalCountsQuery.andWhere('unit.name LIKE :unitId', { unitId: `%${unitIdFilter}%` });
-      }
-
-      if (variableIdFilter) {
-        totalCountsQuery.andWhere('response.variableid LIKE :variableId', { variableId: `%${variableIdFilter}%` });
-      }
-
-      // Add conditions for the specific unit-variable combinations we need
-      if (unitVariableCombinations.length > 0) {
-        unitVariableCombinations.forEach((combo, index) => {
-          totalCountsQuery.orWhere(
-            `(unit.name = :unitId${index} AND response.variableid = :variableId${index})`,
-            {
-              [`unitId${index}`]: combo.unitId,
-              [`variableId${index}`]: combo.variableId
-            }
-          );
-        });
-      }
-
-      totalCountsQuery.groupBy('unit.name')
-        .addGroupBy('response.variableid');
-
-      const totalCountsResults = await totalCountsQuery.getRawMany();
-
-      // Build a map for quick lookup of total counts
-      for (const result of totalCountsResults) {
-        if (!unitVariableCounts.has(result.unitId)) {
-          unitVariableCounts.set(result.unitId, new Map<string, number>());
-        }
-        unitVariableCounts.get(result.unitId)?.set(result.variableId, parseInt(result.totalCount, 10));
-      }
-
-      // Step 5: Get sample login information for replay URLs
-      // We need one sample per unit-variable combination
-      const sampleInfoQuery = this.responseRepository.createQueryBuilder('response')
-        .select('unit.name', 'unitId')
-        .addSelect('response.variableid', 'variableId')
-        .addSelect('person.login', 'loginName')
-        .addSelect('person.code', 'loginCode')
-        .addSelect('bookletinfo.name', 'bookletId')
-        .leftJoin('response.unit', 'unit')
-        .leftJoin('unit.booklet', 'booklet')
-        .leftJoin('booklet.person', 'person')
-        .leftJoin('booklet.bookletinfo', 'bookletinfo')
-        .where('person.workspace_id = :workspace_id', { workspace_id });
-
-      // Add conditions for the specific unit-variable combinations we need
-      if (unitVariableCombinations.length > 0) {
-        unitVariableCombinations.forEach((combo, index) => {
-          sampleInfoQuery.orWhere(
-            `(unit.name = :unitId${index} AND response.variableid = :variableId${index})`,
-            {
-              [`unitId${index}`]: combo.unitId,
-              [`variableId${index}`]: combo.variableId
-            }
-          );
-        });
-      }
-
-      // Limit to one sample per combination
-      sampleInfoQuery.groupBy('unit.name')
-        .addGroupBy('response.variableid')
-        .addGroupBy('person.login')
-        .addGroupBy('person.code')
-        .addGroupBy('bookletinfo.name');
-
-      const sampleInfoResults = await sampleInfoQuery.getRawMany();
-
-      // Build a map for quick lookup of sample info
-      const sampleInfoMap = new Map<string, { loginName: string; loginCode: string; bookletId: string }>();
-      for (const result of sampleInfoResults) {
-        const key = `${result.unitId}|${result.variableId}`;
-        sampleInfoMap.set(key, {
-          loginName: result.loginName || '',
-          loginCode: result.loginCode || '',
-          bookletId: result.bookletId || ''
-        });
-      }
-
-      // Step 6: Convert aggregated data to the required format
-      const result: VariableAnalysisItemDto[] = [];
-
-      for (const item of aggregatedResults) {
-        const unitId = item.unitId;
-        const variableId = item.variableId;
-        const code = item.code;
-        const occurrenceCount = parseInt(item.occurrenceCount, 10);
-        const score = parseFloat(item.score) || 0;
-
-        const variableTotalCount = unitVariableCounts.get(unitId)?.get(variableId) || 0;
-
-        const relativeOccurrence = variableTotalCount > 0 ? occurrenceCount / variableTotalCount : 0;
-
-        let derivation = '';
-        let description = '';
-        const codingScheme = codingSchemeMap.get(unitId);
-        if (codingScheme && codingScheme.variableCodings && Array.isArray(codingScheme.variableCodings)) {
-          const variableCoding = codingScheme.variableCodings.find(vc => vc.id === variableId);
-          if (variableCoding) {
-            derivation = variableCoding.sourceType || '';
-            description = variableCoding.label || '';
-          }
-        }
-
-        if (derivation === 'BASE_NO_VALUE' || derivation === '') {
-          continue;
-        }
-
-        const sampleInfo = sampleInfoMap.get(`${unitId}|${variableId}`);
-        const loginName = sampleInfo?.loginName || '';
-        const loginCode = sampleInfo?.loginCode || '';
-        const bookletId = sampleInfo?.bookletId || '';
-
-        const variablePage = '0';
-        const replayUrl = `${serverUrl}/#/replay/${loginName}@${loginCode}@${bookletId}/${unitId}/${variablePage}/${variableId}?auth=${authToken}`;
-
-        result.push({
-          replayUrl,
-          unitId,
-          variableId,
-          derivation,
-          code,
-          description,
-          score,
-          occurrenceCount,
-          totalCount: variableTotalCount,
-          relativeOccurrence
-        });
-      }
-
-      if (derivationFilter && derivationFilter.trim() !== '') {
-        const filteredResult = result.filter(item => item.derivation.toLowerCase().includes(derivationFilter.toLowerCase()));
-
-        const filteredCount = filteredResult.length;
-        this.logger.log(`Applied derivation filter: ${derivationFilter}, filtered from ${result.length} to ${filteredCount} items`);
-
-        const endTime = Date.now();
-        this.logger.log(`Variable analysis completed in ${endTime - startTime}ms`);
-
-        return {
-          data: filteredResult,
-          total: filteredCount,
-          page,
-          limit
-        };
-      }
-
-      const endTime = Date.now();
-      this.logger.log(`Variable analysis completed in ${endTime - startTime}ms`);
-
-      return {
-        data: result,
-        total: totalCount,
-        page,
-        limit
-      };
-    } catch (error) {
-      this.logger.error(`Error getting variable analysis: ${error.message}`, error.stack);
-      throw new Error('Could not retrieve variable analysis data. Please check the database connection or query.');
-    }
+    return this.variableAnalysisReplayService.getVariableAnalysis(
+      workspace_id,
+      authToken,
+      serverUrl,
+      page,
+      limit,
+      unitIdFilter,
+      variableIdFilter,
+      derivationFilter
+    );
   }
 
   async exportValidationResultsAsExcel(
     workspaceId: number,
     cacheKey: string
   ): Promise<Buffer> {
-    this.logger.log(`Exporting validation results as Excel for workspace ${workspaceId} using cache key ${cacheKey}`);
-
-    if (!cacheKey || typeof cacheKey !== 'string') {
-      const errorMessage = 'Invalid cache key provided';
-      this.logger.error(`${errorMessage}: ${cacheKey}`);
-      throw new Error(errorMessage);
-    }
-
-    try {
-      this.logger.log(`Attempting to retrieve cached data with key: ${cacheKey}`);
-      const cachedData = await this.cacheService.getCompleteValidationResults(cacheKey);
-
-      if (!cachedData) {
-        this.logger.error(`No cached validation results found for cache key ${cacheKey}`);
-        this.logger.error('Cache key format: validation:{workspaceId}:{hash}');
-        this.logger.error(`Expected pattern: validation:${workspaceId}:*`);
-      }
-
-      const validationResults = cachedData.results;
-      this.logger.log(`Successfully retrieved ${validationResults.length} validation results from cache for export`);
-
-      if (!validationResults || validationResults.length === 0) {
-        this.logger.error('Cached data exists but contains no validation results');
-      }
-
-      const workbook = new ExcelJS.Workbook();
-      const worksheet = workbook.addWorksheet('Validation Results');
-
-      worksheet.columns = [
-        { header: 'Status', key: 'status', width: 10 },
-        { header: 'Unit Key', key: 'unit_key', width: 15 },
-        { header: 'Login Name', key: 'login_name', width: 15 },
-        { header: 'Login Code', key: 'login_code', width: 15 },
-        { header: 'Booklet ID', key: 'booklet_id', width: 15 },
-        { header: 'Variable ID', key: 'variable_id', width: 15 },
-        { header: 'Response Value', key: 'response_value', width: 20 },
-        { header: 'Response Status', key: 'response_status', width: 15 },
-        { header: 'Person ID', key: 'person_id', width: 12 },
-        { header: 'Unit Name', key: 'unit_name', width: 20 },
-        { header: 'Booklet Name', key: 'booklet_name', width: 20 },
-        { header: 'Last Modified', key: 'last_modified', width: 20 }
-      ];
-
-      worksheet.getRow(1).font = { bold: true };
-      worksheet.getRow(1).fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: 'FFE0E0E0' }
-      };
-
-      for (const result of validationResults) {
-        const combination = result.combination;
-        let responseData = null;
-        let personData = null;
-        let unitData = null;
-        let bookletData = null;
-
-        if (result.status === 'EXISTS') {
-          const query = this.responseRepository
-            .createQueryBuilder('response')
-            .leftJoin('response.unit', 'unit')
-            .leftJoin('unit.booklet', 'booklet')
-            .leftJoin('booklet.person', 'person')
-            .leftJoin('booklet.bookletinfo', 'bookletinfo')
-            .select([
-              'response.value',
-              'response.status',
-              'person.id',
-              'person.login',
-              'person.code',
-              'unit.name',
-              'unit.alias',
-              'bookletinfo.name'
-            ])
-            .where('unit.alias = :unitKey', { unitKey: combination.unit_key })
-            .andWhere('person.login = :loginName', { loginName: combination.login_name })
-            .andWhere('person.code = :loginCode', { loginCode: combination.login_code })
-            .andWhere('bookletinfo.name = :bookletId', { bookletId: combination.booklet_id })
-            .andWhere('response.variableid = :variableId', { variableId: combination.variable_id })
-            .andWhere('response.value IS NOT NULL')
-            .andWhere('response.value != :empty', { empty: '' });
-
-          const responseEntity = await query.getOne();
-          if (responseEntity) {
-            responseData = responseEntity;
-            personData = responseEntity.unit?.booklet?.person;
-            unitData = responseEntity.unit;
-            bookletData = responseEntity.unit?.booklet?.bookletinfo;
-          }
-        }
-
-        worksheet.addRow({
-          status: result.status,
-          unit_key: combination.unit_key,
-          login_name: combination.login_name,
-          login_code: combination.login_code,
-          booklet_id: combination.booklet_id,
-          variable_id: combination.variable_id,
-          response_value: responseData?.value || '',
-          response_status: responseData?.status || '',
-          person_id: personData?.id || '',
-          unit_name: unitData?.name || '',
-          booklet_name: bookletData?.name || '',
-          last_modified: '' // No timestamp field available in ResponseEntity
-        });
-      }
-
-      worksheet.eachRow((row, rowNumber) => {
-        if (rowNumber > 1) { // Skip header row
-          const statusCell = row.getCell(1);
-          if (statusCell.value === 'EXISTS') {
-            statusCell.fill = {
-              type: 'pattern',
-              pattern: 'solid',
-              fgColor: { argb: 'FF90EE90' } // Light green
-            };
-          } else if (statusCell.value === 'MISSING') {
-            statusCell.fill = {
-              type: 'pattern',
-              pattern: 'solid',
-              fgColor: { argb: 'FFFFA0A0' } // Light red
-            };
-          }
-        }
-      });
-
-      // Auto-fit columns
-      worksheet.columns.forEach(column => {
-        if (column.header) {
-          column.width = Math.max(column.width || 10, column.header.length + 2);
-        }
-      });
-
-      // Generate Excel buffer
-      const buffer = await workbook.xlsx.writeBuffer();
-      return Buffer.from(buffer);
-    } catch (error) {
-      this.logger.error(`Error exporting validation results as Excel: ${error.message}`, error.stack);
-      throw new Error('Could not export validation results as Excel. Please check the database connection or query.');
-    }
+    return this.exportValidationResultsService.exportValidationResultsAsExcel(workspaceId, cacheKey);
   }
 
   async validateCodingCompleteness(
@@ -1913,8 +1304,8 @@ export class WorkspaceCodingService {
       this.logger.log(`Cache miss: Querying CODING_INCOMPLETE variables for workspace ${workspaceId}`);
       const result = await this.fetchCodingIncompleteVariablesFromDb(workspaceId);
 
-      // Cache the result for 1 hour (3600 seconds)
-      const cacheSet = await this.cacheService.set(cacheKey, result, 3600);
+      // Cache the result (no TTL - permanent cache)
+      const cacheSet = await this.cacheService.set(cacheKey, result, 0);
       if (cacheSet) {
         this.logger.log(`Cached ${result.length} CODING_INCOMPLETE variables for workspace ${workspaceId}`);
       } else {
@@ -1948,12 +1339,24 @@ export class WorkspaceCodingService {
 
     const rawResults = await queryBuilder.getRawMany();
 
-    const result = rawResults.map(row => ({
+    const unitVariableMap = await this.workspaceFilesService.getUnitVariableMap(workspaceId);
+
+    const validVariableSets = new Map<string, Set<string>>();
+    unitVariableMap.forEach((variables: Set<string>, unitNameKey: string) => {
+      validVariableSets.set(unitNameKey.toUpperCase(), variables);
+    });
+
+    const filteredResult = rawResults.filter(row => {
+      const unitNamesValidVars = validVariableSets.get(row.unitName?.toUpperCase());
+      return unitNamesValidVars?.has(row.variableId);
+    });
+
+    const result = filteredResult.map(row => ({
       unitName: row.unitName,
       variableId: row.variableId
     }));
 
-    this.logger.log(`Found ${result.length} unique CODING_INCOMPLETE variables${unitName ? ` for unit ${unitName}` : ''}`);
+    this.logger.log(`Found ${rawResults.length} CODING_INCOMPLETE variables, filtered to ${filteredResult.length} valid variables${unitName ? ` for unit ${unitName}` : ''}`);
 
     return result;
   }
@@ -1962,11 +1365,6 @@ export class WorkspaceCodingService {
     return `coding_incomplete_variables:${workspaceId}`;
   }
 
-  /**
-   * Clear the CODING_INCOMPLETE variables cache for a specific workspace
-   * Should be called whenever coding status changes for the workspace
-   * @param workspaceId The workspace ID to clear cache for
-   */
   async invalidateIncompleteVariablesCache(workspaceId: number): Promise<void> {
     const cacheKey = this.generateIncompleteVariablesCacheKey(workspaceId);
     await this.cacheService.delete(cacheKey);
@@ -1997,13 +1395,12 @@ export class WorkspaceCodingService {
         updatedScore: number | null;
       }>;
     }> {
-    return this.importExternalCoding(workspaceId, body, progressCallback);
+    return this.externalCodingImportService.importExternalCodingWithProgress(workspaceId, body, progressCallback);
   }
 
   async importExternalCoding(
     workspaceId: number,
-    body: ExternalCodingImportBody,
-    progressCallback?: (progress: number, message: string) => void
+    body: ExternalCodingImportBody
   ): Promise<{
       message: string;
       processedRows: number;
@@ -2024,302 +1421,6 @@ export class WorkspaceCodingService {
         updatedScore: number | null;
       }>;
     }> {
-    try {
-      this.logger.log(`Starting external coding import for workspace ${workspaceId}`);
-      progressCallback?.(5, 'Starting external coding import...');
-
-      const fileData = body.file; // Assuming base64 encoded file data
-      const fileName = body.fileName || 'external-coding.csv';
-
-      let parsedData: ExternalCodingRow[] = [];
-      const errors: string[] = [];
-
-      progressCallback?.(10, 'Parsing file...');
-
-      if (fileName.endsWith('.csv')) {
-        parsedData = await this.parseCSVFile(fileData);
-      } else if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
-        parsedData = await this.parseExcelFile(fileData);
-      } else {
-        this.logger.error(`Unsupported file format: ${fileName}. Please use CSV or Excel files.`);
-        return {
-          message: 'Unsupported file format. Please use CSV or Excel files.',
-          processedRows: 0,
-          updatedRows: 0,
-          errors: ['Unsupported file format. Please use CSV or Excel files.'],
-          affectedRows: []
-        };
-      }
-
-      this.logger.log(`Parsed ${parsedData.length} rows from external coding file`);
-      progressCallback?.(20, `Parsed ${parsedData.length} rows from file`);
-
-      let updatedRows = 0;
-      const processedRows = parsedData.length;
-      const affectedRows: Array<{
-        unitAlias: string;
-        variableId: string;
-        personCode?: string;
-        personLogin?: string;
-        personGroup?: string;
-        bookletName?: string;
-        originalCodedStatus: string;
-        originalCode: number | null;
-        originalScore: number | null;
-        updatedCodedStatus: string | null;
-        updatedCode: number | null;
-        updatedScore: number | null;
-      }> = [];
-
-      // Process data in batches for better performance
-      const batchSize = 1000;
-      const totalBatches = Math.ceil(parsedData.length / batchSize);
-
-      this.logger.log(`Processing ${parsedData.length} rows in ${totalBatches} batches of ${batchSize}`);
-      progressCallback?.(25, `Starting to process ${parsedData.length} rows in ${totalBatches} batches`);
-
-      for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
-        const batchStart = batchIndex * batchSize;
-        const batchEnd = Math.min(batchStart + batchSize, parsedData.length);
-        const batch = parsedData.slice(batchStart, batchEnd);
-
-        this.logger.log(`Processing batch ${batchIndex + 1}/${totalBatches} (rows ${batchStart + 1}-${batchEnd})`);
-
-        // Calculate progress: 25% start + 70% for batch processing
-        const batchProgress = 25 + Math.floor(((batchIndex) / totalBatches) * 70);
-        progressCallback?.(batchProgress, `Processing batch ${batchIndex + 1}/${totalBatches} (rows ${batchStart + 1}-${batchEnd})`);
-
-        for (const row of batch) {
-          try {
-            const {
-              unit_key: unitKey,
-              unit_alias: unitAlias, variable_id: variableId, status, score, code,
-              person_code: personCode, person_login: personLogin, person_group: personGroup, booklet_name: bookletName
-            } = row;
-
-            // Use unit_key if provided, otherwise fall back to unit_alias for backward compatibility
-            const unitIdentifier = unitKey || unitAlias;
-
-            if (!unitIdentifier || !variableId) {
-              errors.push(`Row missing required fields: unit_key=${unitKey}, unit_alias=${unitAlias}, variable_id=${variableId}`);
-              continue;
-            }
-
-            const queryBuilder = this.responseRepository
-              .createQueryBuilder('response')
-              .select(['response.id', 'response.status_v1', 'response.code_v1', 'response.score_v1',
-                'response.status_v2', 'response.code_v2', 'response.score_v2',
-                'unit.alias', 'unit.name', 'person.code', 'person.login', 'person.group', 'bookletinfo.name'])
-              .innerJoin('response.unit', 'unit')
-              .innerJoin('unit.booklet', 'booklet')
-              .innerJoin('booklet.person', 'person')
-              .innerJoin('booklet.bookletinfo', 'bookletinfo');
-
-            // Use unit.name if unit_key was provided, otherwise unit.alias for unit_alias
-            if (unitKey) {
-              queryBuilder.andWhere('unit.name = :unitIdentifier', { unitIdentifier });
-            } else {
-              queryBuilder.andWhere('unit.alias = :unitIdentifier', { unitIdentifier });
-            }
-
-            queryBuilder
-              .andWhere('response.variableid = :variableId', { variableId })
-              .andWhere('person.workspace_id = :workspaceId', { workspaceId });
-
-            if (personCode) {
-              queryBuilder.andWhere('person.code = :personCode', { personCode });
-            }
-            if (personLogin) {
-              queryBuilder.andWhere('person.login = :personLogin', { personLogin });
-            }
-            if (personGroup) {
-              queryBuilder.andWhere('person.group = :personGroup', { personGroup });
-            }
-            if (bookletName) {
-              queryBuilder.andWhere('bookletinfo.name = :bookletName', { bookletName });
-            }
-
-            const queryParameters: QueryParameters = {
-              unitAlias: unitAlias || unitKey,
-              unitName: unitKey || unitAlias,
-              variableId,
-              workspaceId
-            };
-
-            if (personCode) {
-              queryParameters.personCode = personCode;
-            }
-            if (personLogin) {
-              queryParameters.personLogin = personLogin;
-            }
-            if (personGroup) {
-              queryParameters.personGroup = personGroup;
-            }
-            if (bookletName) {
-              queryParameters.bookletName = bookletName;
-            }
-
-            const responsesToUpdate = await queryBuilder.setParameters(queryParameters).getMany();
-
-            if (responsesToUpdate.length > 0) {
-              const responseIds = responsesToUpdate.map(r => r.id);
-              const updateResult = await this.responseRepository
-                .createQueryBuilder()
-                .update(ResponseEntity)
-                .set({
-                  status_v2: statusStringToNumber(status) || null,
-                  code_v2: code ? parseInt(code.toString(), 10) : null,
-                  score_v2: score ? parseInt(score.toString(), 10) : null
-                })
-                .where('id IN (:...ids)', { ids: responseIds })
-                .execute();
-
-              if (updateResult.affected && updateResult.affected > 0) {
-                updatedRows += updateResult.affected;
-
-                // Add comparison data for each affected response
-                responsesToUpdate.forEach(response => {
-                  affectedRows.push({
-                    unitAlias: response.unit?.alias || unitAlias,
-                    variableId,
-                    personCode: response.unit?.booklet?.person?.code || undefined,
-                    personLogin: response.unit?.booklet?.person?.login || undefined,
-                    personGroup: response.unit?.booklet?.person?.group || undefined,
-                    bookletName: response.unit?.booklet?.bookletinfo?.name || undefined,
-                    originalCodedStatus: statusNumberToString(response.status_v1) || '',
-                    originalCode: response.code_v1,
-                    originalScore: response.score_v1,
-                    updatedCodedStatus: status || null,
-                    updatedCode: code ? parseInt(code.toString(), 10) : null,
-                    updatedScore: score ? parseInt(score.toString(), 10) : null
-                  });
-                });
-              }
-            } else {
-              const matchingCriteria = [`unit_alias=${unitAlias}`, `variable_id=${variableId}`];
-              if (personCode) matchingCriteria.push(`person_code=${personCode}`);
-              if (personLogin) matchingCriteria.push(`person_login=${personLogin}`);
-              if (personGroup) matchingCriteria.push(`person_group=${personGroup}`);
-              if (bookletName) matchingCriteria.push(`booklet_name=${bookletName}`);
-              errors.push(`No response found for ${matchingCriteria.join(', ')}`);
-            }
-          } catch (rowError) {
-            errors.push(`Error processing row: ${rowError.message}`);
-            this.logger.error(`Error processing row: ${rowError.message}`, rowError.stack);
-          }
-        }
-
-        // Small delay between batches to prevent overwhelming the database
-        if (batchIndex < totalBatches - 1) {
-          await new Promise(resolve => {
-            setTimeout(resolve, 10);
-          });
-        }
-      }
-
-      const message = `External coding import completed. Processed ${processedRows} rows, updated ${updatedRows} response records.`;
-      this.logger.log(message);
-      progressCallback?.(100, `Import completed: ${updatedRows} of ${processedRows} rows updated`);
-
-      // Invalidate cache if rows were updated since coding statuses may have changed
-      if (updatedRows > 0) {
-        await this.invalidateIncompleteVariablesCache(workspaceId);
-      }
-
-      return {
-        message,
-        processedRows,
-        updatedRows,
-        errors,
-        affectedRows
-      };
-    } catch (error) {
-      this.logger.error(`Error importing external coding: ${error.message}`, error.stack);
-      progressCallback?.(0, `Import failed: ${error.message}`);
-      throw new Error(`Could not import external coding data: ${error.message}`);
-    }
-  }
-
-  private async parseCSVFile(fileData: string): Promise<ExternalCodingRow[]> {
-    return new Promise((resolve, reject) => {
-      const results: ExternalCodingRow[] = [];
-      const buffer = Buffer.from(fileData, 'base64');
-      let rowCount = 0;
-
-      fastCsv.parseString(buffer.toString(), { headers: true })
-        .on('error', error => reject(error))
-        .on('data', row => {
-          if (Object.values(row).some(value => value && value.toString().trim() !== '')) {
-            results.push(row);
-            rowCount += 1;
-
-            // Log progress for large files
-            if (rowCount % 10000 === 0) {
-              this.logger.log(`Parsed ${rowCount} rows...`);
-            }
-
-            // Memory protection: limit to 200k rows to prevent memory overflow
-            if (rowCount > 200000) {
-              reject(new Error('File too large. Maximum 200,000 rows supported.'));
-            }
-          }
-        })
-        .on('end', () => {
-          this.logger.log(`CSV parsing completed. Total rows: ${results.length}`);
-          resolve(results);
-        });
-    });
-  }
-
-  private async parseExcelFile(fileData: string): Promise<ExternalCodingRow[]> {
-    const buffer = Buffer.from(fileData, 'base64');
-    const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(buffer);
-
-    const worksheet = workbook.getWorksheet(1);
-    if (!worksheet) {
-      throw new Error('No worksheet found in Excel file');
-    }
-
-    const results: ExternalCodingRow[] = [];
-    const headers: string[] = [];
-
-    const headerRow = worksheet.getRow(1);
-    headerRow.eachCell((cell, colNumber) => {
-      headers[colNumber] = cell.text || cell.value?.toString() || '';
-    });
-    this.logger.log(`Starting Excel parsing. Total rows: ${worksheet.rowCount - 1}`);
-
-    // Memory protection: limit to 200k rows
-    const maxRows = Math.min(worksheet.rowCount, 200001); // +1 for header row
-    if (worksheet.rowCount > 200001) {
-      throw new Error('File too large. Maximum 200,000 rows supported.');
-    }
-
-    // Parse data rows
-    for (let rowNumber = 2; rowNumber <= maxRows; rowNumber++) {
-      const row = worksheet.getRow(rowNumber);
-      const rowData: ExternalCodingRow = {};
-
-      row.eachCell((cell, colNumber) => {
-        const header = headers[colNumber];
-        if (header) {
-          rowData[header] = cell.text || cell.value?.toString() || '';
-        }
-      });
-
-      // Only add non-empty rows
-      if (Object.values(rowData).some(value => value && value.toString().trim() !== '')) {
-        results.push(rowData);
-      }
-
-      // Log progress for large files
-      if ((rowNumber - 1) % 10000 === 0) {
-        this.logger.log(`Parsed ${rowNumber - 1} rows...`);
-      }
-    }
-
-    this.logger.log(`Excel parsing completed. Total rows: ${results.length}`);
-    return results;
+    return this.externalCodingImportService.importExternalCoding(workspaceId, body);
   }
 }

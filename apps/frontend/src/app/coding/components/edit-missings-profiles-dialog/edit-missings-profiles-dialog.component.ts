@@ -43,7 +43,7 @@ import { MissingDto, MissingsProfilesDto } from '../../../../../../../api-dto/co
   ]
 })
 export class EditMissingsProfilesDialogComponent implements OnInit {
-  missingsProfiles: { label: string }[] = [];
+  missingsProfiles: { label: string; id: number }[] = [];
   selectedProfile: MissingsProfilesDto | null = null;
   editMode = false;
   loading = false;
@@ -89,23 +89,26 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
   selectProfile(label: string): void {
     const workspaceId = this.data.workspaceId;
     if (workspaceId) {
-      this.loading = true;
-      this.backendService.getMissingsProfileDetails(workspaceId, label).subscribe({
-        next: profile => {
-          const missingsProfile = new MissingsProfilesDto();
-          if (profile) {
-            missingsProfile.id = profile.id;
-            missingsProfile.label = profile.label;
-            missingsProfile.missings = profile.missings;
+      const profile = this.missingsProfiles.find(p => p.label === label);
+      if (profile) {
+        this.loading = true;
+        this.backendService.getMissingsProfileDetails(workspaceId, profile.id).subscribe({
+          next: profileDetails => {
+            const missingsProfile = new MissingsProfilesDto();
+            if (profileDetails) {
+              missingsProfile.id = profileDetails.id;
+              missingsProfile.label = profileDetails.label;
+              missingsProfile.missings = profileDetails.missings;
+            }
+            this.selectedProfile = missingsProfile;
+            this.loading = false;
+          },
+          error: () => {
+            this.loading = false;
+            this.snackBar.open(this.translateService.instant('workspace.error-loading-missings-profile-details'), this.translateService.instant('close'), { duration: 3000 });
           }
-          this.selectedProfile = missingsProfile;
-          this.loading = false;
-        },
-        error: () => {
-          this.loading = false;
-          this.snackBar.open(this.translateService.instant('workspace.error-loading-missings-profile-details'), this.translateService.instant('close'), { duration: 3000 });
-        }
-      });
+        });
+      }
     }
   }
 

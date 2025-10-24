@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Like, Repository } from 'typeorm';
 import * as cheerio from 'cheerio';
@@ -27,6 +27,7 @@ import {
   TestTakersValidationDto
 } from '../../../../../../api-dto/files/testtakers-validation.dto';
 import Persons from '../entities/persons.entity';
+import { CodingStatisticsService } from './coding-statistics.service';
 
 function sanitizePath(filePath: string): string {
   const normalizedPath = path.normalize(filePath);
@@ -80,8 +81,9 @@ export type ValidationResult = {
 };
 
 @Injectable()
-export class WorkspaceFilesService {
+export class WorkspaceFilesService implements OnModuleInit {
   private readonly logger = new Logger(WorkspaceFilesService.name);
+  private unitVariableCache: Map<number, Map<string, Set<string>>> = new Map();
 
   constructor(
     @InjectRepository(FileUpload)
@@ -95,7 +97,8 @@ export class WorkspaceFilesService {
     @InjectRepository(Persons)
     private personsRepository: Repository<Persons>,
     @InjectRepository(Booklet)
-    private bookletRepository: Repository<Booklet>
+    private bookletRepository: Repository<Booklet>,
+    private codingStatisticsService: CodingStatisticsService
   ) {}
 
   async findAllFileTypes(workspaceId: number): Promise<string[]> {
@@ -186,6 +189,10 @@ export class WorkspaceFilesService {
       id: In(numericIds),
       workspace_id: workspace_id
     });
+
+    // Invalidate coding statistics cache since test files changed
+    await this.codingStatisticsService.invalidateCache(workspace_id);
+
     return !!res;
   }
 
@@ -626,6 +633,9 @@ ${bookletRefs}
         failedFiles.forEach(({ file, reason }) => this.logger.warn(`File: ${JSON.stringify(file)}, Reason: ${reason}`)
         );
       }
+      await this.codingStatisticsService.invalidateCache(workspace_id);
+      await this.codingStatisticsService.invalidateIncompleteVariablesCache(workspace_id);
+
       return failedFiles.length === 0;
     } catch (error) {
       this.logger.error(`Unexpected error while uploading files for workspace ${workspace_id}:`, error);
@@ -648,9 +658,6 @@ ${bookletRefs}
     this.logger.log(`File ${file.filename} found. Preparing to convert to Base64.`);
 
     let base64Data: string;
-
-    // Check if the file was stored as base64 (binary files)
-    // We can detect this by checking if the data is a valid UTF-8 string containing base64 characters
     try {
       // If data is already base64-encoded (binary files), use it directly
       // Base64 strings are valid UTF-8 and contain specific character patterns
@@ -664,7 +671,6 @@ ${bookletRefs}
       }
     } catch (error) {
       this.logger.warn(`Failed to process file data for ${file.filename}, falling back to binary conversion: ${error.message}`);
-      // Fallback: treat as binary data
       base64Data = Buffer.from(file.data, 'binary').toString('base64');
     }
 
@@ -1722,7 +1728,7 @@ ${bookletRefs}
               parsedXml.Unit.BaseVariables.Variable :
               [parsedXml.Unit.BaseVariables.Variable];
             for (const variable of baseVariables) {
-              if (variable.$.alias) {
+              if (variable.$.alias && variable.$.type !== 'no-value') {
                 variables.add(variable.$.alias);
               }
             }
@@ -1903,7 +1909,7 @@ ${bookletRefs}
               [parsedXml.Unit.BaseVariables.Variable];
 
             for (const variable of baseVariables) {
-              if (variable.$.alias && variable.$.type) {
+              if (variable.$.alias && variable.$.type && variable.$.type !== 'no-value') {
                 const multiple = variable.$.multiple === 'true' || variable.$.multiple === true;
                 const nullable = variable.$.nullable === 'true' || variable.$.nullable === true;
                 variableTypes.set(variable.$.alias, {
@@ -2838,7 +2844,6 @@ ${bookletRefs}
 
       this.logger.log(`Deleting all invalid responses for workspace ${workspaceId} of type ${validationType}`);
 
-      // Handle duplicate responses
       if (validationType === 'duplicateResponses') {
         const result = await this.validateDuplicateResponses(workspaceId, 1, Number.MAX_SAFE_INTEGER);
 
@@ -2847,7 +2852,6 @@ ${bookletRefs}
           return 0;
         }
 
-        // Extract all response IDs from all duplicates
         const responseIds: number[] = [];
         for (const duplicateResponse of result.data) {
           // For each duplicate response, we take all but the first response ID
@@ -2869,7 +2873,6 @@ ${bookletRefs}
         return await this.deleteInvalidResponses(workspaceId, responseIds);
       }
 
-      // Handle other validation types (variables, variableTypes, responseStatus)
       let invalidResponses: InvalidVariableDto[] = [];
 
       if (validationType === 'variables') {
@@ -2902,5 +2905,108 @@ ${bookletRefs}
       this.logger.error(`Error deleting all invalid responses: ${error.message}`, error.stack);
       throw new Error(`Error deleting all invalid responses: ${error.message}`);
     }
+  }
+
+  async onModuleInit(): Promise<void> {
+    this.logger.log('Initializing WorkspaceFilesService - refreshing unit variable cache for all workspaces');
+
+    try {
+      const workspacesWithUnits = await this.fileUploadRepository
+        .createQueryBuilder('file')
+        .select('DISTINCT file.workspace_id', 'workspace_id')
+        .where('file.file_type = :fileType', { fileType: 'Unit' })
+        .getRawMany();
+
+      for (const { workspaceId } of workspacesWithUnits) {
+        await this.refreshUnitVariableCache(workspaceId);
+      }
+      this.logger.log(`Successfully initialized unit variable cache for ${workspacesWithUnits.length} workspaces`);
+    } catch (error) {
+      this.logger.error(`Error initializing unit variable cache: ${error.message}`, error.stack);
+    }
+  }
+
+  async refreshUnitVariableCache(workspaceId: number): Promise<void> {
+    this.logger.log(`Refreshing unit variable cache for workspace ${workspaceId}`);
+
+    try {
+      const unitFiles = await this.fileUploadRepository.find({
+        where: { workspace_id: workspaceId, file_type: 'Unit' }
+      });
+
+      const codingSchemes = await this.fileUploadRepository.find({
+        where: {
+          workspace_id: workspaceId,
+          file_type: 'Resource',
+          file_id: Like('%.VOCS')
+        }
+      });
+
+      // Create a map of unitId to parsed coding scheme for quick lookup
+      const codingSchemeMap = new Map<string, Map<string, string>>();
+      for (const scheme of codingSchemes) {
+        try {
+          const unitId = scheme.file_id.replace('.VOCS', '');
+          const parsedScheme = JSON.parse(scheme.data) as {
+            variableCodings?: { id: string; sourceType?: string }[]
+          };
+          if (parsedScheme.variableCodings && Array.isArray(parsedScheme.variableCodings)) {
+            const variableSourceTypes = new Map<string, string>();
+            for (const vc of parsedScheme.variableCodings) {
+              if (vc.id && vc.sourceType) {
+                variableSourceTypes.set(vc.id, vc.sourceType);
+              }
+            }
+            codingSchemeMap.set(unitId, variableSourceTypes);
+          }
+        } catch (error) {
+          this.logger.error(`Error parsing coding scheme ${scheme.file_id}: ${error.message}`, error.stack);
+        }
+      }
+
+      const unitVariables: Map<string, Set<string>> = new Map();
+      for (const unitFile of unitFiles) {
+        try {
+          const xmlContent = unitFile.data.toString();
+          const parsedXml = await parseStringPromise(xmlContent, { explicitArray: false });
+
+          if (parsedXml.Unit && parsedXml.Unit.Metadata && parsedXml.Unit.Metadata.Id) {
+            const unitName = parsedXml.Unit.Metadata.Id;
+            const variables = new Set<string>();
+
+            if (parsedXml.Unit.BaseVariables && parsedXml.Unit.BaseVariables.Variable) {
+              const baseVariables = Array.isArray(parsedXml.Unit.BaseVariables.Variable) ?
+                parsedXml.Unit.BaseVariables.Variable :
+                [parsedXml.Unit.BaseVariables.Variable];
+
+              for (const variable of baseVariables) {
+                if (variable.$.alias && variable.$.type !== 'no-value') {
+                  const unitSourceTypes = codingSchemeMap.get(unitName);
+                  const sourceType = unitSourceTypes?.get(variable.$.alias);
+                  if (sourceType !== 'BASE_NO_VALUE') {
+                    variables.add(variable.$.alias);
+                  }
+                }
+              }
+            }
+            unitVariables.set(unitName, variables);
+          }
+        } catch (e) {
+          this.logger.warn(`Error parsing unit file ${unitFile.file_id}: ${(e as Error).message}`);
+        }
+      }
+
+      this.unitVariableCache.set(workspaceId, unitVariables);
+      this.logger.log(`Cached ${unitVariables.size} units with their variables for workspace ${workspaceId}`);
+    } catch (error) {
+      this.logger.error(`Error refreshing unit variable cache for workspace ${workspaceId}: ${error.message}`, error.stack);
+    }
+  }
+
+  async getUnitVariableMap(workspaceId: number): Promise<Map<string, Set<string>>> {
+    if (!this.unitVariableCache.has(workspaceId)) {
+      await this.refreshUnitVariableCache(workspaceId);
+    }
+    return this.unitVariableCache.get(workspaceId) || new Map();
   }
 }

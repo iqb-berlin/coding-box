@@ -33,13 +33,17 @@ export class CacheService {
    * Set a value in the cache
    * @param key The cache key
    * @param value The value to cache
-   * @param ttl Time to live in seconds (optional, defaults to 1 hour)
+   * @param ttl Time to live in seconds (optional, defaults to 1 hour, use 0 for no expiration)
    * @returns True if the value was set, false otherwise
    */
   async set<T>(key: string, value: T, ttl: number = this.DEFAULT_TTL): Promise<boolean> {
     try {
       const serializedValue = JSON.stringify(value);
-      await this.redis.set(key, serializedValue, 'EX', ttl);
+      if (ttl > 0) {
+        await this.redis.set(key, serializedValue, 'EX', ttl);
+      } else {
+        await this.redis.set(key, serializedValue);
+      }
       return true;
     } catch (error) {
       this.logger.error(`Error setting value in cache: ${error.message}`, error.stack);
@@ -123,7 +127,12 @@ export class CacheService {
         cachedAt: Date.now()
       };
 
-      await this.redis.set(cacheKey, JSON.stringify(cacheData), 'EX', ttl);
+      const serializedValue = JSON.stringify(cacheData);
+      if (ttl > 0) {
+        await this.redis.set(cacheKey, serializedValue, 'EX', ttl);
+      } else {
+        await this.redis.set(cacheKey, serializedValue);
+      }
       this.logger.log(`Stored validation results in cache: ${cacheKey} (${results.length} results)`);
       return true;
     } catch (error) {

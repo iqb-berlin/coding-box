@@ -579,6 +579,10 @@ export class BackendService {
     return this.variableAnalysisService.cancelJob(workspaceId, jobId);
   }
 
+  deleteVariableAnalysisJob(workspaceId: number, jobId: number): Observable<{ success: boolean; message: string }> {
+    return this.variableAnalysisService.deleteJob(workspaceId, jobId);
+  }
+
   createValidationTask(
     workspaceId: number,
     type: 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'groupResponses' | 'deleteResponses' | 'deleteAllResponses' | 'duplicateResponses',
@@ -627,8 +631,8 @@ export class BackendService {
     return this.codingService.getMissingsProfiles(workspaceId);
   }
 
-  getMissingsProfileDetails(workspaceId: number, label: string): Observable<MissingsProfilesDto | null> {
-    return this.codingService.getMissingsProfileDetails(workspaceId, label);
+  getMissingsProfileDetails(workspaceId: number, id: number | string): Observable<MissingsProfilesDto | null> {
+    return this.codingService.getMissingsProfileDetails(workspaceId, id);
   }
 
   createMissingsProfile(workspaceId: number, profile: MissingsProfilesDto): Observable<MissingsProfilesDto | null> {
@@ -980,5 +984,10 @@ export class BackendService {
   getCodingProgress(workspaceId: number, codingJobId: number): Observable<Record<string, unknown>> {
     const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job/${codingJobId}/progress`;
     return this.http.get<Record<string, unknown>>(url);
+  }
+
+  getUnitVariables(workspaceId: number): Observable<{ unitName: string; variables: string[] }[]> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/files/unit-variables`;
+    return this.http.get<{ unitName: string; variables: string[] }[]>(url);
   }
 }
