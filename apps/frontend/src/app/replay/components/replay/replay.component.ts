@@ -73,6 +73,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   testPerson: string = '';
   unitId: string = '';
   isBookletMode: boolean = false;
+  isBookletReplayMode: boolean = false; // for replays without coding features
   currentUnitIndex: number = 0;
   totalUnits: number = 0;
   private authToken: string = '';
@@ -157,6 +158,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
         const queryParams = await firstValueFrom(this.route.queryParams);
         this.isBookletMode = queryParams.mode === 'booklet';
+        this.isBookletReplayMode = queryParams.mode === 'booklet' && !queryParams.bookletKey; // replays from test results don't have bookletKey
         if (this.isBookletMode) {
           let deserializedUnits = null as UnitsReplay | null;
 
