@@ -64,6 +64,7 @@ import { CacheModule } from '../cache/cache.module';
 import { CodingListService } from './services/coding-list.service';
 import { CoderTrainingService } from './services/coder-training.service';
 import { VariableAnalysisReplayService } from './services/variable-analysis-replay.service';
+import { ExportValidationResultsService } from './services/export-validation-results.service';
 
 @Module({
   imports: [
@@ -165,7 +166,8 @@ import { VariableAnalysisReplayService } from './services/variable-analysis-repl
     MissingsProfilesService,
     CodingListService,
     CoderTrainingService,
-    VariableAnalysisReplayService
+    VariableAnalysisReplayService,
+    ExportValidationResultsService
   ],
   exports: [
     User,
@@ -199,7 +201,8 @@ import { VariableAnalysisReplayService } from './services/variable-analysis-repl
     MissingsProfilesService,
     CodingListService,
     CoderTrainingService,
-    VariableAnalysisReplayService
+    VariableAnalysisReplayService,
+    ExportValidationResultsService
   ]
 })
 export class DatabaseModule {}
