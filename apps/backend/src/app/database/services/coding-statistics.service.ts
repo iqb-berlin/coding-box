@@ -167,6 +167,12 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
     this.logger.log(`Invalidated coding statistics cache for workspace ${workspace_id}`);
   }
 
+  async invalidateIncompleteVariablesCache(workspace_id: number): Promise<void> {
+    const cacheKey = `coding_incomplete_variables:${workspace_id}`;
+    await this.cacheService.delete(cacheKey);
+    this.logger.log(`Invalidated incomplete variables cache for workspace ${workspace_id}`);
+  }
+
   async refreshStatistics(workspace_id: number): Promise<CodingStatistics> {
     this.logger.log(`Refreshing coding statistics for workspace ${workspace_id}`);
     return this.getCodingStatistics(workspace_id, true); // skipCache = true

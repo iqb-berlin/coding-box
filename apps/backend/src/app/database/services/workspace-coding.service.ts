@@ -1304,8 +1304,8 @@ export class WorkspaceCodingService {
       this.logger.log(`Cache miss: Querying CODING_INCOMPLETE variables for workspace ${workspaceId}`);
       const result = await this.fetchCodingIncompleteVariablesFromDb(workspaceId);
 
-      // Cache the result for 1 hour (3600 seconds)
-      const cacheSet = await this.cacheService.set(cacheKey, result, 3600);
+      // Cache the result (no TTL - permanent cache)
+      const cacheSet = await this.cacheService.set(cacheKey, result, 0);
       if (cacheSet) {
         this.logger.log(`Cached ${result.length} CODING_INCOMPLETE variables for workspace ${workspaceId}`);
       } else {
@@ -1339,12 +1339,24 @@ export class WorkspaceCodingService {
 
     const rawResults = await queryBuilder.getRawMany();
 
-    const result = rawResults.map(row => ({
+    const unitVariableMap = await this.workspaceFilesService.getUnitVariableMap(workspaceId);
+
+    const validVariableSets = new Map<string, Set<string>>();
+    unitVariableMap.forEach((variables: Set<string>, unitNameKey: string) => {
+      validVariableSets.set(unitNameKey.toUpperCase(), variables);
+    });
+
+    const filteredResult = rawResults.filter(row => {
+      const unitNamesValidVars = validVariableSets.get(row.unitName?.toUpperCase());
+      return unitNamesValidVars?.has(row.variableId);
+    });
+
+    const result = filteredResult.map(row => ({
       unitName: row.unitName,
       variableId: row.variableId
     }));
 
-    this.logger.log(`Found ${result.length} unique CODING_INCOMPLETE variables${unitName ? ` for unit ${unitName}` : ''}`);
+    this.logger.log(`Found ${rawResults.length} CODING_INCOMPLETE variables, filtered to ${filteredResult.length} valid variables${unitName ? ` for unit ${unitName}` : ''}`);
 
     return result;
   }

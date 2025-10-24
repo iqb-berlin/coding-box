@@ -634,6 +634,7 @@ ${bookletRefs}
         );
       }
       await this.codingStatisticsService.invalidateCache(workspace_id);
+      await this.codingStatisticsService.invalidateIncompleteVariablesCache(workspace_id);
 
       return failedFiles.length === 0;
     } catch (error) {
@@ -657,9 +658,6 @@ ${bookletRefs}
     this.logger.log(`File ${file.filename} found. Preparing to convert to Base64.`);
 
     let base64Data: string;
-
-    // Check if the file was stored as base64 (binary files)
-    // We can detect this by checking if the data is a valid UTF-8 string containing base64 characters
     try {
       // If data is already base64-encoded (binary files), use it directly
       // Base64 strings are valid UTF-8 and contain specific character patterns
@@ -673,7 +671,6 @@ ${bookletRefs}
       }
     } catch (error) {
       this.logger.warn(`Failed to process file data for ${file.filename}, falling back to binary conversion: ${error.message}`);
-      // Fallback: treat as binary data
       base64Data = Buffer.from(file.data, 'binary').toString('base64');
     }
 
@@ -2847,7 +2844,6 @@ ${bookletRefs}
 
       this.logger.log(`Deleting all invalid responses for workspace ${workspaceId} of type ${validationType}`);
 
-      // Handle duplicate responses
       if (validationType === 'duplicateResponses') {
         const result = await this.validateDuplicateResponses(workspaceId, 1, Number.MAX_SAFE_INTEGER);
 
@@ -2856,7 +2852,6 @@ ${bookletRefs}
           return 0;
         }
 
-        // Extract all response IDs from all duplicates
         const responseIds: number[] = [];
         for (const duplicateResponse of result.data) {
           // For each duplicate response, we take all but the first response ID
@@ -2878,7 +2873,6 @@ ${bookletRefs}
         return await this.deleteInvalidResponses(workspaceId, responseIds);
       }
 
-      // Handle other validation types (variables, variableTypes, responseStatus)
       let invalidResponses: InvalidVariableDto[] = [];
 
       if (validationType === 'variables') {
