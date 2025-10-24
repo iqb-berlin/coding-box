@@ -27,6 +27,7 @@ import {
   TestTakersValidationDto
 } from '../../../../../../api-dto/files/testtakers-validation.dto';
 import Persons from '../entities/persons.entity';
+import { CodingStatisticsService } from './coding-statistics.service';
 
 function sanitizePath(filePath: string): string {
   const normalizedPath = path.normalize(filePath);
@@ -96,7 +97,8 @@ export class WorkspaceFilesService implements OnModuleInit {
     @InjectRepository(Persons)
     private personsRepository: Repository<Persons>,
     @InjectRepository(Booklet)
-    private bookletRepository: Repository<Booklet>
+    private bookletRepository: Repository<Booklet>,
+    private codingStatisticsService: CodingStatisticsService
   ) {}
 
   async findAllFileTypes(workspaceId: number): Promise<string[]> {
@@ -187,6 +189,10 @@ export class WorkspaceFilesService implements OnModuleInit {
       id: In(numericIds),
       workspace_id: workspace_id
     });
+
+    // Invalidate coding statistics cache since test files changed
+    await this.codingStatisticsService.invalidateCache(workspace_id);
+
     return !!res;
   }
 
@@ -627,6 +633,8 @@ ${bookletRefs}
         failedFiles.forEach(({ file, reason }) => this.logger.warn(`File: ${JSON.stringify(file)}, Reason: ${reason}`)
         );
       }
+      await this.codingStatisticsService.invalidateCache(workspace_id);
+
       return failedFiles.length === 0;
     } catch (error) {
       this.logger.error(`Unexpected error while uploading files for workspace ${workspace_id}:`, error);

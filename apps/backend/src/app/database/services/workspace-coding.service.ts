@@ -233,12 +233,17 @@ export class WorkspaceCodingService {
   async createCodingStatisticsJob(workspaceId: number): Promise<{ jobId: string; message: string }> {
     try {
       const cacheKey = `coding-statistics:${workspaceId}`;
-      await this.cacheService.delete(cacheKey);
-      this.logger.log(`Cleared coding statistics cache for workspace ${workspaceId} before refresh`);
+      const cachedResult = await this.cacheService.get<CodingStatistics>(cacheKey);
+      if (cachedResult) {
+        this.logger.log(`Cached coding statistics exist for workspace ${workspaceId}, returning empty jobId to use cache`);
+        return { jobId: '', message: 'Using cached coding statistics' };
+      }
+      await this.cacheService.delete(cacheKey); // Clear any stale cache
+      this.logger.log(`No cached coding statistics for workspace ${workspaceId}, creating job to recalculate`);
 
       const job = await this.jobQueueService.addCodingStatisticsJob(workspaceId);
       this.logger.log(`Created coding statistics job ${job.id} for workspace ${workspaceId}`);
-      return { jobId: job.id.toString(), message: 'Coding statistics job created' };
+      return { jobId: job.id.toString(), message: 'Created coding statistics job - no cache available' };
     } catch (error) {
       this.logger.error(`Error creating coding statistics job: ${error.message}`, error.stack);
       throw error;
@@ -804,11 +809,9 @@ export class WorkspaceCodingService {
       );
 
       if (!updateSuccess) {
-        // If update failed, return early
         return statistics;
       }
 
-      // Report completion
       if (progressCallback) {
         progressCallback(100);
       }
@@ -827,8 +830,8 @@ export class WorkspaceCodingService {
         - Response processing: ${metrics.processing}ms
         - Database updates: ${metrics.update || 0}ms`);
 
-      // Invalidate cache since coding statuses have been updated
       await this.invalidateIncompleteVariablesCache(workspace_id);
+      await this.codingStatisticsService.refreshStatistics(workspace_id);
 
       return statistics;
     } catch (error) {
