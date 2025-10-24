@@ -560,7 +560,6 @@
       "no-coding-schema-data": "Kodierschema '{{schemaRef}}' in Kodierdaten nicht gefunden.",
       "error-coding-schema-xml": "Fehler beim Verarbeiten des Kodierschemas '{{schemaRef}}'",
       "error-unit-xml": "Fehler beim Abrufen der Unit-XML-Daten für Unit {{unitId}}",
-      "error-unit-content-xml": "Fehler beim Abrufen der Unit-XML-Daten für Unit {{unitId}}",
       "unit-xml-title": "Unit-XML für Unit {{unitId}}",
       "coding-schema-title": "Kodierschema: {{schemaRef}}",
       "error-coding-variables": "Fehler beim Abrufen der Kodiervariablen",
