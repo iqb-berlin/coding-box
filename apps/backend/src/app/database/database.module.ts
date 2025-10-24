@@ -138,7 +138,6 @@ import { BullJobManagementService } from './services/bull-job-management.service
       CodingJobVariableBundle,
       CodingJobUnit,
       CoderTraining,
-      CodingJobUnit,
       MissingsProfile
     ]),
     CacheModule
