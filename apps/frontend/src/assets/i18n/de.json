@@ -718,5 +718,66 @@
     "booklet-info": "Booklet Info anzeigen",
     "booklet-delete": "Booklet löschen",
     "paginator": "Seite wählen"
+  },
+  "test-person-coding": {
+    "title": "Testpersonen Kodieren",
+    "select-groups-label": "Testpersonengruppen auswählen",
+    "select-groups-hint": "Wählen Sie eine oder mehrere Gruppen zum Kodieren aus",
+    "loading-groups": "Gruppen werden geladen...",
+    "no-groups": "Keine Gruppen verfügbar",
+    "code-selected-groups": "Ausgewählte Gruppen kodieren",
+    "code-all-test-persons": "Alle Testpersonen kodieren",
+    "coding-all-groups": "Kodiere Testpersonen aus allen {{count}} Gruppen",
+    "coding-test-persons-count": "Kodiere {{count}} Testpersonen",
+    "responses-coded": "{{count}} Antworten kodiert",
+    "background-job-started": "Hintergrundauftrag gestartet",
+    "enter-test-person-ids": "Bitte geben Sie Testpersonen-IDs ein",
+    "job-error": "Fehler: {{error}}",
+    "coding-failed": "Kodierung der Testpersonen fehlgeschlagen",
+    "job-completed": "Kodierungsauftrag erfolgreich abgeschlossen",
+    "job-completed-with-error": "Kodierungsauftrag fehlgeschlagen: {{error}}",
+    "job-cancelled": "Kodierungsauftrag wurde abgebrochen",
+    "job-paused": "Kodierungsauftrag wurde pausiert",
+    "job-result-unavailable": "Keine Ergebnisse für diesen Auftrag verfügbar",
+    "job-cancel-error": "Fehler beim Abbrechen des Auftrags: {{message}}",
+    "job-delete-error": "Fehler beim Löschen des Auftrags: {{message}}",
+    "job-restart-error": "Fehler beim Neustarten des Auftrags: {{message}}",
+    "job-restarted": "Auftrag wurde neu gestartet",
+    "fetch-test-persons-error": "Fehler beim Abrufen der Testpersonen: {{error}}",
+    "no-test-persons": "Keine Testpersonen für diesen Arbeitsbereich gefunden",
+    "jobs": {
+      "title": "Laufende Aufträge",
+      "refresh": "Aufträge aktualisieren",
+      "loading": "Aufträge werden geladen...",
+      "no-jobs": "Keine Aufträge gefunden.",
+      "table": {
+        "job-id": "Auftrags-ID",
+        "status": "Status",
+        "progress": "Fortschritt",
+        "created": "Erstellt",
+        "groups": "Gruppen",
+        "duration": "Dauer",
+        "unknown": "Unbekannt",
+        "actions": "Aktionen"
+      },
+      "actions": {
+        "cancel-job": "Auftrag abbrechen",
+        "show-result": "Ergebnis anzeigen",
+        "delete-job": "Auftrag löschen",
+        "restart-job": "Auftrag neu starten",
+        "error-tooltip": "Fehler: {{error}}",
+        "test-person-id": "Testpersonen-ID: {{id}}"
+      }
+    },
+    "current-job": {
+      "title": "Aktueller Auftragsstatus",
+      "subtitle": "Auftrags-ID: {{id}}",
+      "status": "Status:",
+      "progress": "Fortschritt:",
+      "groups": "Gruppen:",
+      "duration": "Dauer:",
+      "error": "Fehler:",
+      "cancel": "Auftrag abbrechen"
+    }
   }
 }
