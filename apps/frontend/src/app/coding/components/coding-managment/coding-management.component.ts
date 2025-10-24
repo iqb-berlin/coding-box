@@ -694,7 +694,6 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
         })
       )
       .subscribe((data: { unitName: string; variables: string[] }[]) => {
-        console.log(data);
         if (data.length === 0) {
           this.snackBar.open('Keine Kodiervariablen gefunden.', 'Schließen', {
             duration: 5000
