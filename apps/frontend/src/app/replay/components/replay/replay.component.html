@@ -25,13 +25,13 @@
         }
       </div>
 
-      @if (codingScheme && currentVariableId && !isBookletReplayMode) {
+      @if (codingService.codingScheme && codingService.currentVariableId && !isBookletReplayMode) {
         <div class="code-selector-container">
           <app-code-selector
-            [codingScheme]="codingScheme"
-            [variableId]="currentVariableId"
-            [preSelectedCodeId]="getPreSelectedCodeId(currentVariableId)"
-            [missings]="missings"
+            [codingScheme]="codingService.codingScheme"
+            [variableId]="codingService.currentVariableId"
+            [preSelectedCodeId]="getPreSelectedCodeId(codingService.currentVariableId)"
+            [missings]="codingService.missings"
             (codeSelected)="onCodeSelected($event)">
           </app-code-selector>
         </div>
@@ -62,13 +62,13 @@
       <div class="progress-bar">
         <div class="progress-fill" [style.width.%]="getProgressPercentage()"></div>
       </div>
-      @if (codingJobId && !isCodingJobCompleted) {
+      @if (codingService.codingJobId && !codingService.isCodingJobCompleted) {
         <button
           mat-raised-button
           (click)="pauseCodingJob()"
-          [disabled]="isPausingJob"
+          [disabled]="codingService.isPausingJob"
           class="pause-button">
-          {{ isPausingJob ? ('replay.pausing' | translate) : ('replay.pause-coding' | translate) }}
+          {{ codingService.isPausingJob ? ('replay.pausing' | translate) : ('replay.pause-coding' | translate) }}
         </button>
       }
     </div>
@@ -78,7 +78,7 @@
     <div class="watermark">{{ testPerson }} - {{ unitId }}</div>
   }
 
-  @if (isCodingJobCompleted && !isBookletReplayMode) {
+  @if (codingService.isCodingJobCompleted && !isBookletReplayMode) {
     <div class="completion-overlay">
       <div class="completion-dialog">
         <h2>{{ 'replay.CODING_JOB_COMPLETED' | translate }}</h2>
@@ -87,9 +87,9 @@
           mat-raised-button
           color="primary"
           (click)="submitCodingJob()"
-          [disabled]="isSubmittingJob"
+          [disabled]="codingService.isSubmittingJob"
           class="submit-button">
-          {{ isSubmittingJob ? ('replay.SUBMITTING_JOB' | translate) : ('replay.SUBMIT_JOB' | translate) }}
+          {{ codingService.isSubmittingJob ? ('replay.SUBMITTING_JOB' | translate) : ('replay.SUBMIT_JOB' | translate) }}
         </button>
       </div>
     </div>
