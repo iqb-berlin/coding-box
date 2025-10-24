@@ -179,7 +179,7 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
           this.backendService.getCodingStatistics(workspaceId)
             .pipe(
               catchError(() => {
-                this.snackBar.open('Fehler beim Abrufen der Kodierstatistiken', 'Schließen', {
+                this.snackBar.open(this.translateService.instant('coding-management.descriptions.error-statistics'), this.translateService.instant('close'), {
                   duration: 5000,
                   panelClass: ['error-snackbar']
                 });
