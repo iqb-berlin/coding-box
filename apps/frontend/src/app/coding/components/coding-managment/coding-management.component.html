@@ -5,35 +5,41 @@
       @if (!showManualCoding) {
         <a mat-raised-button color="primary" (click)="onAutoCode()">
           <mat-icon>auto_fix_high</mat-icon>
-          Automatisch Kodieren
+          {{ 'coding-management.buttons.auto-code' | translate }}
         </a>
       }
       <a mat-raised-button [color]="showManualCoding ? 'accent' : 'primary'" (click)="toggleManualCoding()" >
         <mat-icon>edit</mat-icon>
-        {{ showManualCoding ? 'Zurück zur Übersicht' : 'Manuell Kodieren' }}
+        {{ showManualCoding ? ('coding-management.buttons.back-to-overview' | translate) : ('coding-management.buttons.manual-code' | translate) }}
       </a>
       @if (!showManualCoding) {
         <a mat-raised-button color="primary" (click)="fetchResponsesByStatus('6')">
           <mat-icon>refresh</mat-icon>
-          Manuelle zu kodierende Fälle
+          {{ 'coding-management.buttons.manual-cases' | translate }}
         </a>
       }
       @if (!showManualCoding) {
         <a mat-raised-button color="primary" (click)="fetchCodingList()">
           <mat-icon>list</mat-icon>
-          Kodierliste
+          {{ 'coding-management.buttons.coding-list' | translate }}
         </a>
       }
       @if (!showManualCoding) {
         <a mat-raised-button color="primary" (click)="openExportCodingBook()">
           <mat-icon>book</mat-icon>
-          Codebook
+          {{ 'coding-management.buttons.codebook' | translate }}
         </a>
       }
       @if (!showManualCoding) {
         <a mat-raised-button color="primary" (click)="fetchVariableAnalysis()">
           <mat-icon>analytics</mat-icon>
-          Item/Variablenanalyse
+          {{ 'coding-management.buttons.item-variable-analysis' | translate }}
+        </a>
+      }
+      @if (!showManualCoding) {
+        <a mat-raised-button color="primary" (click)="fetchUnitVariables()">
+          <mat-icon>list_alt</mat-icon>
+          {{ 'coding-management.buttons.coding-variables' | translate }}
         </a>
       }
     </div>
@@ -50,31 +56,31 @@
           @if (!statisticsLoaded && !isLoadingStatistics) {
             <div class="statistics-placeholder">
               <div class="statistics-icon-container">
-                <button mat-fab color="primary" (click)="fetchCodingStatistics()" matTooltip="Kodierstatistiken laden" class="statistics-load-button">
+                <button mat-fab color="primary" (click)="fetchCodingStatistics()" [matTooltip]="'coding-management.tooltips.load-statistics' | translate" class="statistics-load-button">
                   <mat-icon>analytics</mat-icon>
                 </button>
-                <p class="statistics-placeholder-text">Klicken Sie hier, um die Kodierstatistiken zu laden</p>
+                <p class="statistics-placeholder-text">{{ 'coding-management.descriptions.load-statistics' | translate }}</p>
               </div>
             </div>
           }
           @if (statisticsLoaded && !isLoadingStatistics) {
             <div class="statistics-card">
-              <h2 class="section-title">Kodierstatistiken</h2>
-              <p class="section-description">Übersicht über den Status der Kodierung und Antworten</p>
+              <h2 class="section-title">{{ 'coding-management.titles.coding-statistics' | translate }}</h2>
+              <p class="section-description">{{ 'coding-management.descriptions.statistics-overview' | translate }}</p>
               <mat-divider></mat-divider>
               <div class="statistics-content">
                 <div class="statistic-item">
-                  <span class="statistic-label">Gesamtanzahl der gegebenen Antworten:</span>
+                  <span class="statistic-label">{{ 'coding-management.statistics.total-responses' | translate }}</span>
                   <span class="statistic-value">{{ codingStatistics.totalResponses }}</span>
                 </div>
                 @for (status of getStatuses(); track status) {
                   <div class="statistic-item">
                     <span class="statistic-label">
                       @if (status === 'null') {
-                        unkodierte Antworten:
-                        <mat-icon class="warning-icon" color="warn" [matTooltip]="'Kodierschemata fehlen'">warning</mat-icon>
+                        {{ 'coding-management.statistics.uncoded-responses' | translate }}
+                        <mat-icon class="warning-icon" color="warn" [matTooltip]="'coding-management.statistics.missing-schemas' | translate">warning</mat-icon>
                       } @else {
-                        Anzahl der Antworten mit Status {{ mapStatusToString(Number(status)) }}:
+                        {{ 'coding-management.statistics.responses-with-status' | translate:{status: mapStatusToString(Number(status))} }}
                       }
                     </span>
                     <span class="statistic-value">
@@ -83,7 +89,7 @@
                     </span>
                     <a mat-button color="primary" (click)="fetchResponsesByStatus(status)" class="view-button">
                       <mat-icon>visibility</mat-icon>
-                      Anzeigen
+                      {{ 'display' | translate }}
                     </a>
                   </div>
                 }
@@ -91,7 +97,7 @@
               <div class="statistics-actions">
                 <a mat-raised-button color="primary" (click)="fetchCodingStatistics()">
                   <mat-icon>refresh</mat-icon>
-                  Statistiken aktualisieren
+                  {{ 'coding-management.buttons.update-statistics' | translate }}
                 </a>
               </div>
             </div>

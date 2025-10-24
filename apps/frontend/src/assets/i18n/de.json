@@ -518,6 +518,81 @@
     "error-loading-results": "Fehler beim Laden der Analyse-Ergebnisse"
   },
 
+  "coding-management": {
+    "buttons": {
+      "auto-code": "Automatisch Kodieren",
+      "manual-code": "Manuell Kodieren",
+      "back-to-overview": "Zurück zur Übersicht",
+      "manual-cases": "Manuelle zu kodierende Fälle",
+      "coding-list": "Kodierliste",
+      "codebook": "Codebook",
+      "item-variable-analysis": "Item/Variablenanalyse",
+      "coding-variables": "Kodiervariablen",
+      "load-statistics": "Anzeigen",
+      "update-statistics": "Statistiken aktualisieren"
+    },
+    "titles": {
+      "coding-statistics": "Kodierstatistiken",
+      "coding-data": "Kodierdaten"
+    },
+    "descriptions": {
+      "statistics-overview": "Übersicht über den Status der Kodierung und Antworten",
+      "load-statistics": "Klicken Sie hier, um die Kodierstatistiken zu laden",
+      "no-data": "Noch keine Kodierdaten angezeigt",
+      "click-display": "Klicken Sie auf \"Anzeigen\" um Daten zu laden.",
+      "no-results": "Keine Antworten mit Status {{status}} gefunden.",
+      "missing-replay-info": "Fehlende Informationen für Replay",
+      "missing-token": "Fehler beim Abrufen des Tokens für Replay",
+      "error-statistics": "Fehler beim Abrufen der Kodierstatistiken",
+      "statistics-job-failed": "Statistik-Job {{status}}",
+      "error-responses-status": "Fehler beim Abrufen der Antworten mit Status {{status}}",
+      "downloading-coding-list": "Kodierliste wird im Hintergrund erstellt...",
+      "coding-list-json-success": "Kodierliste wurde als JSON erfolgreich heruntergeladen.",
+      "error-coding-list-json": "Fehler beim Abrufen der Kodierliste (JSON)",
+      "json-convert-error": "Fehler beim Umwandeln der CSV-Daten in JSON",
+      "coding-list-csv-success": "Kodierliste wurde als CSV erfolgreich heruntergeladen.",
+      "error-coding-list-csv": "Fehler beim Herunterladen der Kodierliste als CSV",
+      "coding-list-excel-success": "Kodierliste wurde als Excel erfolgreich heruntergeladen.",
+      "error-coding-list-excel": "Fehler beim Herunterladen der Kodierliste als Excel",
+      "error-unit-coding-xml": "Fehler beim Abrufen der Unit-XML-Daten für Unit {{unitId}}",
+      "no-coding-schema-unit": "Kein Kodierschema in Kodierdaten für die Unit {{unitId}} gefunden.",
+      "error-coding-schema": "Fehler beim Abrufen des Kodierschemas '{{schemaRef}}'",
+      "no-coding-schema-data": "Kodierschema '{{schemaRef}}' in Kodierdaten nicht gefunden.",
+      "error-coding-schema-xml": "Fehler beim Verarbeiten des Kodierschemas '{{schemaRef}}'",
+      "error-unit-xml": "Fehler beim Abrufen der Unit-XML-Daten für Unit {{unitId}}",
+      "error-unit-content-xml": "Fehler beim Abrufen der Unit-XML-Daten für Unit {{unitId}}",
+      "unit-xml-title": "Unit-XML für Unit {{unitId}}",
+      "coding-schema-title": "Kodierschema: {{schemaRef}}",
+      "error-coding-variables": "Fehler beim Abrufen der Kodiervariablen",
+      "no-coding-variables": "Keine Kodiervariablen gefunden.",
+      "coding-variables-title": "Kodiervariablen",
+      "error-unit-xml-processing": "Fehler beim Verarbeiten der Unit-XML-Daten"
+    },
+    "loading": {
+      "loading-statistics": "Lade Kodierstatistiken...",
+      "coding-responses": "Antworten werden kodiert...",
+      "processing-data": "Daten werden verarbeitet...",
+      "creating-coding-statistics": "Fehler beim Erstellen des Statistik-Jobs"
+    },
+    "tooltips": {
+      "load-statistics": "Kodierstatistiken laden",
+      "view-in-replay": "Im Replay anzeigen",
+      "show-coding-schema": "Kodierschema anzeigen",
+      "show-unit-xml": "Unit-XML anzeigen"
+    },
+    "statistics": {
+      "total-responses": "Gesamtanzahl der gegebenen Antworten:",
+      "uncoded-responses": "unkodierte Antworten:",
+      "responses-with-status": "Anzahl der Antworten mit Status {{status}}:",
+      "missing-schemas": "Kodierschemata fehlen",
+      "uncoded-responses-title": "Unkodierte Antworten",
+      "responses-with-status-title": "Antworten mit Status: {{status}}"
+    },
+    "aria": {
+      "select-page": "Seiten auswählen"
+    }
+  },
+
   "test-results-search": {
     "search-units": "Aufgaben suchen",
     "search-responses": "Antworten suchen",

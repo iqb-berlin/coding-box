@@ -38,6 +38,7 @@ import { ScrollingModule } from '@angular/cdk/scrolling';
 import { MatDivider } from '@angular/material/divider';
 import { MatSelectModule } from '@angular/material/select';
 import { MatDialog } from '@angular/material/dialog';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { responseStatesNumericMap } from '@iqbspecs/response/response.interface';
 import { ContentDialogComponent } from '../../../shared/dialogs/content-dialog/content-dialog.component';
 import { BackendService } from '../../../services/backend.service';
@@ -90,7 +91,8 @@ import { GermanPaginatorIntl } from '../../../shared/services/german-paginator-i
     MatButton,
     MatSelectModule,
     CodingManagementManualComponent,
-    FormsModule
+    FormsModule,
+    TranslateModule
   ],
   styleUrls: ['./coding-management.component.scss']
 })
@@ -135,7 +137,7 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
     statusCounts: {}
   };
 
-  constructor() {
+  constructor(private translateService: TranslateService) {
     this.isAutoCoding = false;
   }
 
@@ -170,7 +172,7 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
 
     this.backendService.createCodingStatisticsJob(workspaceId)
       .pipe(
-        catchError(() => of({ jobId: '' as string, message: 'Fehler beim Erstellen des Statistik-Jobs' }))
+        catchError(() => of({ jobId: '' as string, message: this.translateService.instant('coding-management.loading.creating-coding-statistics') }))
       )
       .subscribe(({ jobId }) => {
         if (!jobId) {
@@ -671,6 +673,43 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
         workspaceId
       }
     });
+  }
+
+  fetchUnitVariables(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    this.isLoading = true;
+
+    this.backendService.getUnitVariables(workspaceId)
+      .pipe(
+        catchError(() => {
+          this.isLoading = false;
+          this.snackBar.open('Fehler beim Abrufen der Kodiervariablen', 'Schließen', {
+            duration: 5000,
+            panelClass: ['error-snackbar']
+          });
+          return of([]);
+        }),
+        finalize(() => {
+          this.isLoading = false;
+        })
+      )
+      .subscribe((data: { unitName: string; variables: string[] }[]) => {
+        console.log(data);
+        if (data.length === 0) {
+          this.snackBar.open('Keine Kodiervariablen gefunden.', 'Schließen', {
+            duration: 5000
+          });
+          return;
+        }
+        this.dialog.open(ContentDialogComponent, {
+          width: '80%',
+          data: {
+            title: 'Kodiervariablen',
+            content: JSON.stringify(data, null, 2),
+            isJson: true
+          }
+        });
+      });
   }
 
   protected readonly Number = Number;
