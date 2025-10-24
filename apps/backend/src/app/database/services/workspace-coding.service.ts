@@ -27,6 +27,7 @@ import { VariableAnalysisReplayService } from './variable-analysis-replay.servic
 import { ExportValidationResultsService } from './export-validation-results.service';
 import { ExternalCodingImportService, ExternalCodingImportBody } from './external-coding-import.service';
 import { BullJobManagementService } from './bull-job-management.service';
+import { WorkspaceFilesService } from './workspace-files.service';
 
 interface CodedResponse {
   id: number;
@@ -59,7 +60,8 @@ export class WorkspaceCodingService {
     private variableAnalysisReplayService: VariableAnalysisReplayService,
     private exportValidationResultsService: ExportValidationResultsService,
     private externalCodingImportService: ExternalCodingImportService,
-    private bullJobManagementService: BullJobManagementService
+    private bullJobManagementService: BullJobManagementService,
+    private workspaceFilesService: WorkspaceFilesService
   ) {}
 
   private codingSchemeCache: Map<string, { scheme: CodingScheme; timestamp: number }> = new Map();
@@ -686,46 +688,72 @@ export class WorkspaceCodingService {
         return statistics;
       }
 
-      // Step 6: Process responses and build maps - 60% progress
-      const unitToResponsesMap = new Map();
-      for (const response of allResponses) {
+      // Step 6: Get unit variables for filtering - 55% progress
+      const unitVariables = await this.workspaceFilesService.getUnitVariableMap(workspace_id);
+      const validVariableSets = new Map<string, Set<string>>();
+      unitVariables.forEach((vars: Set<string>, unitName: string) => {
+        validVariableSets.set(unitName.toUpperCase(), vars);
+      });
+
+      const unitIdToNameMap = new Map<number, string>();
+      units.forEach(unit => {
+        unitIdToNameMap.set(unit.id, unit.name);
+      });
+
+      const filteredResponses = allResponses.filter(response => {
+        const unitName = unitIdToNameMap.get(response.unitid)?.toUpperCase();
+        const validVars = validVariableSets.get(unitName || '');
+        return validVars?.has(response.variableid);
+      });
+
+      this.logger.log(`Filtered responses: ${allResponses.length} -> ${filteredResponses.length} (removed ${allResponses.length - filteredResponses.length} invalid variable responses)`);
+
+      if (jobId && await this.isJobCancelled(jobId)) {
+        this.logger.log(`Job ${jobId} was cancelled or paused after filtering responses`);
+        await queryRunner.release();
+        return statistics;
+      }
+
+      // Step 7: Process responses and build maps - 60% progress
+      const unitToResponsesMap = new Map<number, ResponseEntity[]>();
+      for (const response of filteredResponses) {
         if (!unitToResponsesMap.has(response.unitid)) {
           unitToResponsesMap.set(response.unitid, []);
         }
-        unitToResponsesMap.get(response.unitid).push(response);
+        unitToResponsesMap.get(response.unitid)!.push(response);
       }
 
-      // Report progress after step 6
+      // Report progress after step 7
       if (progressCallback) {
         progressCallback(60);
       }
 
-      // Check for cancellation or pause after step 6
+      // Check for cancellation or pause after step 7
       if (jobId && await this.isJobCancelled(jobId)) {
         this.logger.log(`Job ${jobId} was cancelled or paused after processing responses`);
         await queryRunner.release();
         return statistics;
       }
 
-      // Step 7: Get test files - 70% progress
+      // Step 8: Get test files - 70% progress
       const fileQueryStart = Date.now();
       // Use cache for test files
       const fileIdToTestFileMap = await this.getTestFilesWithCache(workspace_id, unitAliasesArray);
       metrics.fileQuery = Date.now() - fileQueryStart;
 
-      // Report progress after step 7
+      // Report progress after step 8
       if (progressCallback) {
         progressCallback(70);
       }
 
-      // Check for cancellation or pause after step 7
+      // Check for cancellation or pause after step 8
       if (jobId && await this.isJobCancelled(jobId)) {
         this.logger.log(`Job ${jobId} was cancelled or paused after getting test files`);
         await queryRunner.release();
         return statistics;
       }
 
-      // Step 8: Extract coding scheme references - 80% progress
+      // Step 9: Extract coding scheme references - 80% progress
       const schemeExtractStart = Date.now();
       const { codingSchemeRefs, unitToCodingSchemeRefMap } = await this.extractCodingSchemeReferences(
         units,
@@ -735,19 +763,19 @@ export class WorkspaceCodingService {
       );
       metrics.schemeExtract = Date.now() - schemeExtractStart;
 
-      // Report progress after step 8
+      // Report progress after step 9
       if (progressCallback) {
         progressCallback(80);
       }
 
-      // Check for cancellation or pause after step 8
+      // Check for cancellation or pause after step 9
       if (jobId && await this.isJobCancelled(jobId)) {
         this.logger.log(`Job ${jobId} was cancelled or paused after extracting scheme references`);
         await queryRunner.release();
         return statistics;
       }
 
-      // Step 9: Get coding scheme files - 85% progress
+      // Step 10: Get coding scheme files - 85% progress
       const schemeQueryStart = Date.now();
       const fileIdToCodingSchemeMap = await this.getCodingSchemeFiles(
         codingSchemeRefs,
@@ -758,7 +786,7 @@ export class WorkspaceCodingService {
       // No separate parsing step needed as it's handled by the cache helper
       metrics.schemeParsing = 0;
 
-      // Report progress after step 9
+      // Report progress after step 10
       if (progressCallback) {
         progressCallback(85);
       }
@@ -783,7 +811,7 @@ export class WorkspaceCodingService {
         unitToResponsesMap,
         unitToCodingSchemeRefMap,
         fileIdToCodingSchemeMap,
-        allResponses,
+        filteredResponses,
         statistics,
         jobId,
         queryRunner,
