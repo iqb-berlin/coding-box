@@ -65,6 +65,7 @@ import { CodingListService } from './services/coding-list.service';
 import { CoderTrainingService } from './services/coder-training.service';
 import { VariableAnalysisReplayService } from './services/variable-analysis-replay.service';
 import { ExportValidationResultsService } from './services/export-validation-results.service';
+import { ExternalCodingImportService } from './services/external-coding-import.service';
 
 @Module({
   imports: [
@@ -167,7 +168,8 @@ import { ExportValidationResultsService } from './services/export-validation-res
     CodingListService,
     CoderTrainingService,
     VariableAnalysisReplayService,
-    ExportValidationResultsService
+    ExportValidationResultsService,
+    ExternalCodingImportService
   ],
   exports: [
     User,
@@ -202,7 +204,8 @@ import { ExportValidationResultsService } from './services/export-validation-res
     CodingListService,
     CoderTrainingService,
     VariableAnalysisReplayService,
-    ExportValidationResultsService
+    ExportValidationResultsService,
+    ExternalCodingImportService
   ]
 })
 export class DatabaseModule {}
