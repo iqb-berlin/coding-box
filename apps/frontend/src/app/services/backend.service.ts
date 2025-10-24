@@ -985,4 +985,9 @@ export class BackendService {
     const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job/${codingJobId}/progress`;
     return this.http.get<Record<string, unknown>>(url);
   }
+
+  getUnitVariables(workspaceId: number): Observable<{ unitName: string; variables: string[] }[]> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/files/unit-variables`;
+    return this.http.get<{ unitName: string; variables: string[] }[]>(url);
+  }
 }

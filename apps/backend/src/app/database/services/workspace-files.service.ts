@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Like, Repository } from 'typeorm';
 import * as cheerio from 'cheerio';
@@ -80,8 +80,9 @@ export type ValidationResult = {
 };
 
 @Injectable()
-export class WorkspaceFilesService {
+export class WorkspaceFilesService implements OnModuleInit {
   private readonly logger = new Logger(WorkspaceFilesService.name);
+  private unitVariableCache: Map<number, Map<string, Set<string>>> = new Map();
 
   constructor(
     @InjectRepository(FileUpload)
@@ -1722,7 +1723,7 @@ ${bookletRefs}
               parsedXml.Unit.BaseVariables.Variable :
               [parsedXml.Unit.BaseVariables.Variable];
             for (const variable of baseVariables) {
-              if (variable.$.alias) {
+              if (variable.$.alias && variable.$.type !== 'no-value') {
                 variables.add(variable.$.alias);
               }
             }
@@ -1903,7 +1904,7 @@ ${bookletRefs}
               [parsedXml.Unit.BaseVariables.Variable];
 
             for (const variable of baseVariables) {
-              if (variable.$.alias && variable.$.type) {
+              if (variable.$.alias && variable.$.type && variable.$.type !== 'no-value') {
                 const multiple = variable.$.multiple === 'true' || variable.$.multiple === true;
                 const nullable = variable.$.nullable === 'true' || variable.$.nullable === true;
                 variableTypes.set(variable.$.alias, {
@@ -2902,5 +2903,73 @@ ${bookletRefs}
       this.logger.error(`Error deleting all invalid responses: ${error.message}`, error.stack);
       throw new Error(`Error deleting all invalid responses: ${error.message}`);
     }
+  }
+
+  async onModuleInit(): Promise<void> {
+    this.logger.log('Initializing WorkspaceFilesService - refreshing unit variable cache for all workspaces');
+
+    try {
+      const workspacesWithUnits = await this.fileUploadRepository
+        .createQueryBuilder('file')
+        .select('DISTINCT file.workspace_id', 'workspace_id')
+        .where('file.file_type = :fileType', { fileType: 'Unit' })
+        .getRawMany();
+
+      for (const { workspaceId } of workspacesWithUnits) {
+        await this.refreshUnitVariableCache(workspaceId);
+      }
+      this.logger.log(`Successfully initialized unit variable cache for ${workspacesWithUnits.length} workspaces`);
+    } catch (error) {
+      this.logger.error(`Error initializing unit variable cache: ${error.message}`, error.stack);
+    }
+  }
+
+  async refreshUnitVariableCache(workspaceId: number): Promise<void> {
+    this.logger.log(`Refreshing unit variable cache for workspace ${workspaceId}`);
+
+    try {
+      const unitFiles = await this.fileUploadRepository.find({
+        where: { workspace_id: workspaceId, file_type: 'Unit' }
+      });
+      const unitVariables: Map<string, Set<string>> = new Map();
+      for (const unitFile of unitFiles) {
+        try {
+          const xmlContent = unitFile.data.toString();
+          const parsedXml = await parseStringPromise(xmlContent, { explicitArray: false });
+
+          if (parsedXml.Unit && parsedXml.Unit.Metadata && parsedXml.Unit.Metadata.Id) {
+            const unitName = parsedXml.Unit.Metadata.Id;
+            const variables = new Set<string>();
+
+            if (parsedXml.Unit.BaseVariables && parsedXml.Unit.BaseVariables.Variable) {
+              const baseVariables = Array.isArray(parsedXml.Unit.BaseVariables.Variable) ?
+                parsedXml.Unit.BaseVariables.Variable :
+                [parsedXml.Unit.BaseVariables.Variable];
+
+              for (const variable of baseVariables) {
+                if (variable.$.alias && variable.$.type !== 'no-value') {
+                  variables.add(variable.$.alias);
+                }
+              }
+            }
+            unitVariables.set(unitName, variables);
+          }
+        } catch (e) {
+          this.logger.warn(`Error parsing unit file ${unitFile.file_id}: ${(e as Error).message}`);
+        }
+      }
+
+      this.unitVariableCache.set(workspaceId, unitVariables);
+      this.logger.log(`Cached ${unitVariables.size} units with their variables for workspace ${workspaceId}`);
+    } catch (error) {
+      this.logger.error(`Error refreshing unit variable cache for workspace ${workspaceId}: ${error.message}`, error.stack);
+    }
+  }
+
+  async getUnitVariableMap(workspaceId: number): Promise<Map<string, Set<string>>> {
+    if (!this.unitVariableCache.has(workspaceId)) {
+      await this.refreshUnitVariableCache(workspaceId);
+    }
+    return this.unitVariableCache.get(workspaceId) || new Map();
   }
 }
