@@ -25,7 +25,7 @@
         }
       </div>
 
-      @if (codingScheme && currentVariableId) {
+      @if (codingScheme && currentVariableId && !isBookletReplayMode) {
         <div class="code-selector-container">
           <app-code-selector
             [codingScheme]="codingScheme"
@@ -52,7 +52,7 @@
     }
   }
 
-  @if (isBookletMode && unitsData) {
+  @if (isBookletMode && unitsData && !isBookletReplayMode) {
     <div class="coding-progress">
       <div class="progress-info">
         <span class="progress-text">{{ 'replay.coding-progress' | translate }}</span>
@@ -78,7 +78,7 @@
     <div class="watermark">{{ testPerson }} - {{ unitId }}</div>
   }
 
-  @if (isCodingJobCompleted) {
+  @if (isCodingJobCompleted && !isBookletReplayMode) {
     <div class="completion-overlay">
       <div class="completion-dialog">
         <h2>{{ 'replay.CODING_JOB_COMPLETED' | translate }}</h2>
