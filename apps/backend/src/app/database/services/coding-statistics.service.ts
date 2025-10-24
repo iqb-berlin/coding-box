@@ -11,7 +11,7 @@ import { statusStringToNumber } from '../utils/response-status-converter';
 export class CodingStatisticsService implements OnApplicationBootstrap {
   private readonly logger = new Logger(CodingStatisticsService.name);
   private readonly CACHE_KEY_PREFIX = 'coding-statistics';
-  private readonly CACHE_TTL_SECONDS = 0; // No expiration - persist until explicitly invalidated
+  private readonly CACHE_TTL_SECONDS = 0; // No expiration (TTL=0 means no EX flag in Redis) - persist until explicitly invalidated
 
   constructor(
     @InjectRepository(ResponseEntity)
