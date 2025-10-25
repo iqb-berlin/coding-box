@@ -24,3 +24,10 @@ CREATE INDEX "idx_coding_job_training_id" ON "public"."coding_job" ("training_id
 -- rollback ALTER TABLE "public"."coding_job" DROP CONSTRAINT IF EXISTS "fk_coding_job_training_id";
 -- rollback DROP INDEX IF EXISTS "idx_coding_job_training_id";
 -- rollback ALTER TABLE "public"."coding_job" DROP COLUMN "training_id";
+
+-- changeset jurei733:2
+-- comment: Add is_open column to coding_job_unit table to track units marked as open
+
+ALTER TABLE "public"."coding_job_unit" ADD COLUMN "is_open" BOOLEAN DEFAULT FALSE;
+
+-- rollback ALTER TABLE "public"."coding_job_unit" DROP COLUMN "is_open";

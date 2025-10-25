@@ -199,9 +199,9 @@ export class CoderTrainingService {
         this.logger.log(`Creating training job for coder ${coderName} (ID: ${coderId})`);
 
         const codingJob = new CodingJob();
-        codingJob.name = `Coder Training - ${coderName}`;
+        codingJob.name = `${trainingLabel}-${coderName}`;
         codingJob.workspace_id = workspaceId;
-        codingJob.description = `Training job for coder ${coderName} generated on ${new Date().toISOString()}`;
+        codingJob.description = '';
         codingJob.training_id = trainingId;
         codingJob.missings_profile_id = missingsProfileId;
         codingJob.created_at = new Date();

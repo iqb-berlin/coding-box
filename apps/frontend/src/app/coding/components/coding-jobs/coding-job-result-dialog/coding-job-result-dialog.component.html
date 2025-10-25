@@ -43,14 +43,14 @@
 
           <ng-container matColumnDef="code">
             <mat-header-cell *matHeaderCellDef mat-sort-header>Code</mat-header-cell>
-            <mat-cell *matCellDef="let result" [ngClass]="{'coded': hasCode(result), 'not-coded': !hasCode(result)}">
+            <mat-cell *matCellDef="let result" [ngClass]="getCellClasses(result)">
               {{getCodeDisplay(result)}}
             </mat-cell>
           </ng-container>
 
           <ng-container matColumnDef="score">
             <mat-header-cell *matHeaderCellDef mat-sort-header>Score</mat-header-cell>
-            <mat-cell *matCellDef="let result" [ngClass]="{'coded': hasCode(result), 'not-coded': !hasCode(result)}">
+            <mat-cell *matCellDef="let result" [ngClass]="getCellClasses(result)">
               {{getScoreDisplay(result)}}
             </mat-cell>
           </ng-container>

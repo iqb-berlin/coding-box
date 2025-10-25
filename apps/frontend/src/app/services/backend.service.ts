@@ -975,15 +975,29 @@ export class BackendService {
         label: string;
         [key: string]: unknown;
       };
+      isOpen?: boolean;
     }
   ): Observable<CodingJob> {
     const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job/${codingJobId}/progress`;
     return this.http.post<CodingJob>(url, progressData);
   }
 
+  restartCodingJobWithOpenUnits(workspaceId: number, codingJobId: number): Observable<CodingJob> {
+    const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job/${codingJobId}/restart-open-units`;
+    return this.http.post<CodingJob>(url, {});
+  }
+
   getCodingProgress(workspaceId: number, codingJobId: number): Observable<Record<string, unknown>> {
     const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job/${codingJobId}/progress`;
     return this.http.get<Record<string, unknown>>(url);
+  }
+
+  getCodingJobUnits(
+    workspaceId: number,
+    codingJobId: number
+  ): Observable<Array<{ responseId: number; unitName: string; unitAlias: string | null; variableId: string; variableAnchor: string; bookletName: string; personLogin: string; personCode: string }>> {
+    const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job/${codingJobId}/units`;
+    return this.http.get<Array<{ responseId: number; unitName: string; unitAlias: string | null; variableId: string; variableAnchor: string; bookletName: string; personLogin: string; personCode: string }>>(url);
   }
 
   getUnitVariables(workspaceId: number): Observable<{ unitName: string; variables: string[] }[]> {

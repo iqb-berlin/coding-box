@@ -5,7 +5,7 @@ import {
   inject
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateService, TranslateModule } from '@ngx-translate/core';
 import { MatAnchor, MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { MatSnackBar } from '@angular/material/snack-bar';
@@ -49,6 +49,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   private appService = inject(AppService);
   private snackBar = inject(MatSnackBar);
   private validationStateService = inject(ValidationStateService);
+  private translateService = inject(TranslateService);
   private destroy$ = new Subject<void>();
 
   validationResults: ValidateCodingCompletenessResponseDto | null = null;
@@ -142,7 +143,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         this.isLoading = progress.status === 'loading' || progress.status === 'processing';
 
         if (progress.status === 'error') {
-          this.showError(progress.error || 'Fehler bei der Validierung');
+          this.showError(progress.error || this.translateService.instant('coding-management-manual.errors.validation-failed'));
         }
       });
 
@@ -153,7 +154,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
         if (results) {
           this.validationCacheKey = results.cacheKey || null;
-          this.showSuccess(`Validierung abgeschlossen. ${results.missing} von ${results.total} Kombinationen fehlen.`);
+          this.showSuccess(this.translateService.instant('coding-management-manual.success.validation-completed', { missing: results.missing, total: results.total }));
         }
       });
 
@@ -179,13 +180,13 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     const input = event.target as HTMLInputElement;
 
     if (!input.files || input.files.length === 0) {
-      this.showError('Keine Datei ausgewählt');
+      this.showError(this.translateService.instant('coding-management-manual.errors.no-file-selected'));
       return;
     }
 
     const file = input.files[0];
     if (!this.isExcelOrCsvFile(file)) {
-      this.showError('Bitte wählen Sie eine CSV- oder Excel-Datei aus (.csv, .xlsx, .xls)');
+      this.showError(this.translateService.instant('coding-management-manual.errors.invalid-file-type'));
       return;
     }
 
@@ -210,12 +211,13 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       const workspaceId = this.appService.selectedWorkspaceId;
 
       if (!workspaceId) {
-        this.showError('Kein Arbeitsbereich ausgewählt');
-        this.validationStateService.setValidationError('Kein Arbeitsbereich ausgewählt');
+        const errorMsg = this.translateService.instant('coding-management-manual.errors.no-workspace-selected');
+        this.showError(errorMsg);
+        this.validationStateService.setValidationError(errorMsg);
         return;
       }
 
-      this.validationStateService.updateProgress(10, 'Datei wird verarbeitet...');
+      this.validationStateService.updateProgress(10, this.translateService.instant('coding-management-manual.progress.file-processing'));
       const fileData = await this.fileToBase64(file);
 
       // Start import with progress tracking via Server-Sent Events
@@ -239,10 +241,11 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
           this.showComparisonTable = true;
           this.comparisonCurrentPage = 1;
 
-          this.showSuccess(`Externe Kodierung erfolgreich importiert: ${result.updatedRows} von ${result.processedRows} Zeilen aktualisiert.`);
+          this.showSuccess(this.translateService.instant('coding-management-manual.success.import-completed', { updatedRows: result.updatedRows, processedRows: result.processedRows }));
 
           if (result.errors && result.errors.length > 0) {
-            this.showError(`${result.errors.length} Warnungen aufgetreten. Details in der Konsole.`);
+            // For warnings, we could show a different message, but keeping simple
+            this.showError(this.translateService.instant('error.general', { error: `${result.errors.length} Warnungen aufgetreten. Details in der Konsole.` }));
           }
 
           this.isLoading = false;
@@ -250,13 +253,13 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         // onError callback
         (error: string) => {
           this.validationStateService.setValidationError(`Import fehlgeschlagen: ${error}`);
-          this.showError('Fehler beim Importieren der externen Kodierung');
+          this.showError(this.translateService.instant('coding-management-manual.errors.import-failed'));
           this.isLoading = false;
         }
       );
     } catch (error) {
-      this.validationStateService.setValidationError('Fehler beim Importieren der externen Kodierung');
-      this.showError('Fehler beim Importieren der externen Kodierung');
+      this.validationStateService.setValidationError(this.translateService.instant('coding-management-manual.errors.import-failed'));
+      this.showError(this.translateService.instant('coding-management-manual.errors.import-failed'));
       this.isLoading = false;
     }
   }
