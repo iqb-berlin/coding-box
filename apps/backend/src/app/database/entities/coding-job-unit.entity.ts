@@ -52,6 +52,9 @@ export class CodingJobUnit {
   @Column({ nullable: true })
     score: number | null;
 
+  @Column({ default: false })
+    is_open: boolean;
+
   @CreateDateColumn()
     created_at: Date;
 

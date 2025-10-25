@@ -6,7 +6,7 @@ import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/materia
 import { TranslateModule } from '@ngx-translate/core';
 import { MatTableModule, MatTableDataSource } from '@angular/material/table';
 import { MatSort, MatSortModule } from '@angular/material/sort';
-import { MatPaginator, MatPaginatorModule } from '@angular/material/paginator';
+import { MatPaginator, MatPaginatorIntl, MatPaginatorModule } from '@angular/material/paginator';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
@@ -16,6 +16,7 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { BackendService } from '../../../../services/backend.service';
 import { SearchFilterComponent } from '../../../../shared/search-filter/search-filter.component';
 import { CodingJob } from '../../../models/coding-job.model';
+import { GermanPaginatorIntl } from '../../../../shared/services/german-paginator-intl.service';
 
 interface CodingResult {
   unitName: string;
@@ -47,6 +48,9 @@ interface CodingResult {
     MatIcon,
     NgClass,
     SearchFilterComponent
+  ],
+  providers: [
+    { provide: MatPaginatorIntl, useClass: GermanPaginatorIntl }
   ]
 })
 export class CodingJobResultDialogComponent implements OnInit {
@@ -83,9 +87,9 @@ export class CodingJobResultDialogComponent implements OnInit {
   loadCodingResults(): void {
     this.isLoading = true;
 
-    this.backendService.startCodingJob(this.data.workspaceId, this.data.codingJob.id).subscribe({
+    this.backendService.getCodingJobUnits(this.data.workspaceId, this.data.codingJob.id).subscribe({
       next: unitsResult => {
-        if (!unitsResult || unitsResult.total === 0) {
+        if (!unitsResult || unitsResult.length === 0) {
           this.isLoading = false;
           this.dataSource.data = [];
           return;
@@ -93,10 +97,10 @@ export class CodingJobResultDialogComponent implements OnInit {
 
         this.backendService.getCodingProgress(this.data.workspaceId, this.data.codingJob.id).subscribe({
           next: progressResult => {
-            const codingResults: CodingResult[] = unitsResult.items.map(unit => {
+            const codingResults: CodingResult[] = unitsResult.map(unit => {
               const testPerson = `${unit.personLogin}@${unit.personCode}@${unit.bookletName}`;
               const progressKey = `${testPerson}::${unit.bookletName}::${unit.unitName}::${unit.variableId}`;
-              const progress = progressResult[progressKey] as { id?: string; score?: number } | undefined;
+              const progress = progressResult[progressKey] as { id?: string; label?: string; score?: number } | undefined;
 
               return {
                 unitName: unit.unitName,
@@ -107,6 +111,7 @@ export class CodingJobResultDialogComponent implements OnInit {
                 personCode: unit.personCode,
                 testPerson: `${unit.personLogin}@${unit.personCode}`,
                 code: progress?.id,
+                codeLabel: progress?.label,
                 score: progress?.score
               };
             });
@@ -132,6 +137,9 @@ export class CodingJobResultDialogComponent implements OnInit {
   }
 
   getCodeDisplay(result: CodingResult): string {
+    if (this.isOpen(result)) {
+      return 'offen';
+    }
     if (result.code !== undefined && result.code !== null) {
       return result.code;
     }
@@ -139,13 +147,30 @@ export class CodingJobResultDialogComponent implements OnInit {
   }
 
   getScoreDisplay(result: CodingResult): string {
+    if (this.isOpen(result)) {
+      return 'offen';
+    }
     if (result.score !== undefined && result.score !== null) {
       return result.score.toString();
+    }
+    if (this.hasCode(result)) {
+      return 'offen';
     }
     return 'Nicht kodiert';
   }
 
   hasCode(result: CodingResult): boolean {
-    return result.code !== undefined && result.code !== null;
+    return result.code !== undefined && result.code !== null && !this.isOpen(result);
+  }
+
+  isOpen(result: CodingResult): boolean {
+    return result.codeLabel === 'OPEN';
+  }
+
+  getCellClasses(result: CodingResult): string {
+    if (this.isOpen(result)) {
+      return 'open';
+    }
+    return this.hasCode(result) ? 'coded' : 'not-coded';
   }
 }

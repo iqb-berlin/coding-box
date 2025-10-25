@@ -32,7 +32,9 @@
             [variableId]="codingService.currentVariableId"
             [preSelectedCodeId]="getPreSelectedCodeId(codingService.currentVariableId)"
             [missings]="codingService.missings"
-            (codeSelected)="onCodeSelected($event)">
+            [isOpen]="isUnitOpen()"
+            (codeSelected)="onCodeSelected($event)"
+            (openChanged)="onOpenChanged($event)">
           </app-code-selector>
         </div>
       }
@@ -58,6 +60,9 @@
         <span class="progress-text">{{ 'replay.coding-progress' | translate }}</span>
         <span class="progress-numbers">{{ getCompletedCount() }}/{{ unitsData.units.length }}</span>
         <span class="progress-percentage">({{ getProgressPercentage() }}%)</span>
+        @if (getOpenCount() > 0) {
+          <span class="progress-open">{{ 'replay.open-count' | translate }}: {{ getOpenCount() }}</span>
+        }
       </div>
       <div class="progress-bar">
         <div class="progress-fill" [style.width.%]="getProgressPercentage()"></div>

@@ -608,12 +608,6 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
   async handleUnitChanged(unit: UnitsReplayUnit): Promise<void> {
     if (!unit) return;
-
-    // Save current partial results before navigating to next unit
-    if (this.codingService.codingJobId) {
-      await this.codingService.saveAllCodingProgress(this.workspaceId, this.codingService.codingJobId);
-    }
-
     const unitAny = unit as unknown as { name: string; testPerson?: string; variableId?: string };
     const incomingTestPerson = unitAny.testPerson;
 
@@ -696,13 +690,20 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     this.resetSnackBars();
   }
 
-  onCodeSelected(event: { variableId: string; code: any }): void {
-    this.codingService.handleCodeSelected(event, this.testPerson, this.unitId, this.workspaceId, this.unitsData);
-    // The service handles completion checking and saving internally
+  async onCodeSelected(event: { variableId: string; code: any }): Promise<void> {
+    await this.codingService.handleCodeSelected(event, this.testPerson, this.unitId, this.workspaceId, this.unitsData);
+  }
+
+  onOpenChanged(isOpen: boolean): void {
+    this.codingService.handleOpenChanged(isOpen, this.testPerson, this.unitId, this.workspaceId, this.unitsData);
   }
 
   getCompletedCount(): number {
     return this.codingService.getCompletedCount(this.unitsData);
+  }
+
+  getOpenCount(): number {
+    return this.codingService.getOpenCount(this.unitsData);
   }
 
   getProgressPercentage(): number {
@@ -711,6 +712,11 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
   getPreSelectedCodeId(variableId: string): number | null {
     return this.codingService.getPreSelectedCodeId(this.testPerson, this.unitId, variableId);
+  }
+
+  isUnitOpen(): boolean {
+    const compositeKey = this.codingService.generateCompositeKey(this.testPerson, this.unitId, this.codingService.currentVariableId);
+    return this.codingService.openSelections.has(compositeKey);
   }
 
   pauseCodingJob(): void {
