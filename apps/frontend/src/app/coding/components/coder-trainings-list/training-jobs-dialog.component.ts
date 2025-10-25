@@ -196,7 +196,8 @@ export class TrainingJobsDialogComponent {
   }
 
   formatDate(date: Date): string {
-    return new Date(date).toLocaleDateString();
+    const d = new Date(date);
+    return `${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
   }
 
   getStatusClass(status: string): string {
