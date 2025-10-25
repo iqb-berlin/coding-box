@@ -1,11 +1,7 @@
 <div class="coder-trainings-container">
   <div class="header-row">
     <div class="header-actions">
-      <button mat-raised-button (click)="openResultsComparison()" [disabled]="coderTrainings.length < 2">
-        <mat-icon>compare</mat-icon>
-        {{ 'coding.trainings.compare.button' | translate }}
-      </button>
-      <button mat-raised-button color="primary" (click)="createTraining()" *ngIf="showCreateButton">
+      <button mat-stroked-button color="primary" (click)="createTraining()" *ngIf="showCreateButton">
         <mat-icon>add</mat-icon>
         {{ 'coding.trainings.create.button' | translate }}
       </button>
@@ -21,7 +17,7 @@
     <mat-icon>school</mat-icon>
     <h4>{{ 'coding.trainings.empty.title' | translate }}</h4>
     <p>{{ 'coding.trainings.empty.subtitle' | translate }}</p>
-    <button mat-button color="primary" (click)="createTraining()" *ngIf="showCreateButton">
+    <button mat-stroked-button color="primary" (click)="createTraining()" *ngIf="showCreateButton">
       <mat-icon>add</mat-icon>
       {{ 'coding.trainings.create.first' | translate }}
     </button>
@@ -43,10 +39,10 @@
             <mat-form-field appearance="outline" class="edit-input">
               <input matInput [(ngModel)]="editingLabel" (keyup.enter)="saveEditTraining()" (keyup.escape)="cancelEditTraining()" #editInput>
             </mat-form-field>
-            <button mat-icon-button color="primary" (click)="saveEditTraining()" [disabled]="!editingLabel.trim()">
+            <button mat-icon-button (click)="saveEditTraining()" [disabled]="!editingLabel.trim()">
               <mat-icon>check</mat-icon>
             </button>
-            <button mat-icon-button color="warn" (click)="cancelEditTraining()">
+            <button mat-icon-button (click)="cancelEditTraining()">
               <mat-icon>close</mat-icon>
             </button>
           </div>
@@ -67,7 +63,7 @@
       <ng-container matColumnDef="created_at">
         <th mat-header-cell *matHeaderCellDef>{{ 'coding.trainings.table.created' | translate }}</th>
         <td mat-cell *matCellDef="let training">
-          {{ formatDate(training.created_at) }}
+          {{ training.created_at | date: 'dd.MM.yyyy HH:mm' }}
         </td>
       </ng-container>
 
@@ -76,13 +72,16 @@
         <th mat-header-cell *matHeaderCellDef>{{ 'common.actions' | translate }}</th>
         <td mat-cell *matCellDef="let training">
           <div class="action-buttons">
-            <button mat-icon-button title="{{ 'coding.trainings.action.details' | translate }}" color="primary" (click)="showTrainingJobs(training)">
+            <button mat-icon-button title="{{ 'coding.trainings.compare.button' | translate }}" (click)="openResultsComparison(training)">
+              <mat-icon>compare</mat-icon>
+            </button>
+            <button mat-icon-button title="{{ 'coding.trainings.action.details' | translate }}" (click)="showTrainingJobs(training)">
               <mat-icon>visibility</mat-icon>
             </button>
-            <button mat-icon-button title="{{ 'common.edit' | translate }}" color="accent" (click)="startEditTraining(training)" *ngIf="editingTrainingId !== training.id">
+            <button mat-icon-button title="{{ 'common.edit' | translate }}" (click)="startEditTraining(training)" *ngIf="editingTrainingId !== training.id">
               <mat-icon>edit</mat-icon>
             </button>
-            <button mat-icon-button title="{{ 'common.delete' | translate }}" color="warn" (click)="deleteTraining(training)" *ngIf="editingTrainingId !== training.id">
+            <button mat-icon-button title="{{ 'common.delete' | translate }}" (click)="deleteTraining(training)" *ngIf="editingTrainingId !== training.id">
               <mat-icon>delete</mat-icon>
             </button>
           </div>
