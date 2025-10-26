@@ -14,7 +14,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatTableModule, MatTableDataSource } from '@angular/material/table';
 import { MatCheckboxModule } from '@angular/material/checkbox';
-import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
+
 import { MatSortModule } from '@angular/material/sort';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatDividerModule } from '@angular/material/divider';
@@ -30,7 +30,6 @@ import {
 import { VariableBundle, Variable } from '../../models/coding-job.model';
 import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
-import { VariableAnalysisItem } from '../../models/variable-analysis-item.model';
 
 export interface VariableBundleGroupDialogData {
   bundleGroup?: VariableBundle;
@@ -56,7 +55,6 @@ export interface VariableBundleGroupDialogData {
     MatChipsModule,
     MatTableModule,
     MatCheckboxModule,
-    MatPaginatorModule,
     MatSortModule,
     MatProgressSpinnerModule,
     MatDividerModule,
@@ -82,22 +80,12 @@ export class VariableBundleDialogComponent implements OnInit, OnDestroy {
   displayedColumns: string[] = ['select', 'unitName', 'variableId'];
   dataSource = new MatTableDataSource<Variable>([]);
 
-  // Variable analysis items
-  variableAnalysisItems: VariableAnalysisItem[] = [];
   isLoadingVariableAnalysis = false;
-  totalVariableAnalysisRecords = 0;
-  variableAnalysisPageIndex = 0;
-  variableAnalysisPageSize = 10;
-  variableAnalysisPageSizeOptions = [5, 10, 25, 50];
 
   // Filters
   unitNameFilter = '';
   variableIdFilter = '';
   private readonly debounceTimeMs = 300;
-
-  // Selected variables table
-  selectedVariablesDataSource = new MatTableDataSource<Variable>([]);
-  selectedVariablesDisplayedColumns: string[] = ['unitName', 'variableId'];
 
   constructor(
     public dialogRef: MatDialogRef<VariableBundleDialogComponent>,
@@ -106,13 +94,19 @@ export class VariableBundleDialogComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.initForm();
-    this.loadVariableAnalysisItems();
+    this.loadCodingIncompleteVariables();
 
-    if (this.data.bundleGroup?.variables) {
-      this.selectedVariablesDataSource.data = [...this.data.bundleGroup.variables];
-    }
+    this.dataSource.filterPredicate = (row, filter: string): boolean => {
+      try {
+        const { unitName, variableId } = JSON.parse(filter || '{}');
+        const unitMatch = unitName ? row.unitName?.toLowerCase().includes(String(unitName).toLowerCase()) : true;
+        const varMatch = variableId ? row.variableId?.toLowerCase().includes(String(variableId).toLowerCase()) : true;
+        return unitMatch && varMatch;
+      } catch {
+        return true;
+      }
+    };
 
-    // Set up debounce for filter inputs after view is initialized
     setTimeout(() => this.setupFilterDebounce(), 0);
   }
 
@@ -122,12 +116,9 @@ export class VariableBundleDialogComponent implements OnInit, OnDestroy {
   }
 
   private setupFilterDebounce(): void {
-    // Skip if the ViewChild elements aren't available yet
     if (!this.unitNameFilterInput || !this.variableIdFilterInput) {
       return;
     }
-
-    // Set up debounce for unit name filter
     fromEvent(this.unitNameFilterInput.nativeElement, 'input')
       .pipe(
         debounceTime(this.debounceTimeMs),
@@ -139,7 +130,6 @@ export class VariableBundleDialogComponent implements OnInit, OnDestroy {
         this.applyFilter();
       });
 
-    // Set up debounce for variable ID filter
     fromEvent(this.variableIdFilterInput.nativeElement, 'input')
       .pipe(
         debounceTime(this.debounceTimeMs),
@@ -159,66 +149,30 @@ export class VariableBundleDialogComponent implements OnInit, OnDestroy {
     });
   }
 
-  loadVariableAnalysisItems(page: number = 1, limit: number = 10): void {
+  loadCodingIncompleteVariables(unitNameFilter?: string): void {
     this.isLoadingVariableAnalysis = true;
-    const workspaceId = this.appService.selectedWorkspaceId;
-
-    if (this.data.preloadedIncompleteVariables && page === 1) {
+    if (this.data.preloadedIncompleteVariables && !unitNameFilter) {
       this.availableVariables = this.data.preloadedIncompleteVariables;
       this.dataSource.data = this.availableVariables;
       this.processVariableSelection();
-      this.totalVariableAnalysisRecords = this.availableVariables.length;
-      this.variableAnalysisPageIndex = 0;
       this.isLoadingVariableAnalysis = false;
       return;
     }
 
+    const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
       this.isLoadingVariableAnalysis = false;
       return;
     }
 
-    this.backendService.getVariableAnalysis(
+    this.backendService.getCodingIncompleteVariables(
       workspaceId,
-      page,
-      limit,
-      this.unitNameFilter || undefined,
-      this.variableIdFilter || undefined
+      unitNameFilter || undefined
     ).subscribe({
-      next: response => {
-        // Convert variable analysis items to variable bundles
-        this.variableAnalysisItems = response.data;
-
-        // Create unique variables from the items
-        const uniqueVariables = new Map<string, Variable>();
-
-        this.variableAnalysisItems.forEach(item => {
-          const key = `${item.unitId}|${item.variableId}`;
-          if (!uniqueVariables.has(key)) {
-            uniqueVariables.set(key, {
-              unitName: item.unitId,
-              variableId: item.variableId
-            });
-          }
-        });
-
-        this.availableVariables = Array.from(uniqueVariables.values());
+      next: variables => {
+        this.availableVariables = variables;
         this.dataSource.data = this.availableVariables;
-
-        // Pre-select variables that are already in the bundle group
-        if (this.data.bundleGroup?.variables) {
-          this.data.bundleGroup.variables.forEach((variable: Variable) => {
-            const foundVariable = this.availableVariables.find(
-              v => v.unitName === variable.unitName && v.variableId === variable.variableId
-            );
-            if (foundVariable) {
-              this.selectedVariables.select(foundVariable);
-            }
-          });
-        }
-
-        this.totalVariableAnalysisRecords = response.total;
-        this.variableAnalysisPageIndex = page - 1;
+        this.processVariableSelection();
         this.isLoadingVariableAnalysis = false;
       },
       error: () => {
@@ -228,7 +182,6 @@ export class VariableBundleDialogComponent implements OnInit, OnDestroy {
   }
 
   private processVariableSelection(): void {
-    // Pre-select variables that are already in the bundle group
     if (this.data.bundleGroup?.variables) {
       this.data.bundleGroup.variables.forEach((variable: Variable) => {
         const foundVariable = this.availableVariables.find(
@@ -241,19 +194,17 @@ export class VariableBundleDialogComponent implements OnInit, OnDestroy {
     }
   }
 
-  onPageChange(event: PageEvent): void {
-    this.loadVariableAnalysisItems(event.pageIndex + 1, event.pageSize);
-  }
-
   applyFilter(): void {
-    this.loadVariableAnalysisItems(1, this.variableAnalysisPageSize);
+    this.dataSource.filter = JSON.stringify({
+      unitName: this.unitNameFilter || '',
+      variableId: this.variableIdFilter || ''
+    });
   }
 
   clearFilters(): void {
     this.unitNameFilter = '';
     this.variableIdFilter = '';
 
-    // Reset the input field values
     if (this.unitNameFilterInput) {
       this.unitNameFilterInput.nativeElement.value = '';
     }
@@ -261,45 +212,7 @@ export class VariableBundleDialogComponent implements OnInit, OnDestroy {
       this.variableIdFilterInput.nativeElement.value = '';
     }
 
-    this.loadVariableAnalysisItems(1, this.variableAnalysisPageSize);
-  }
-
-  /** Whether the number of selected elements matches the total number of rows. */
-  isAllSelected(): boolean {
-    const numSelected = this.selectedVariables.selected.length;
-    const numRows = this.dataSource.data.length;
-    return numSelected === numRows;
-  }
-
-  /** Selects all rows if they are not all selected; otherwise clear selection. */
-  masterToggle(): void {
-    if (this.isAllSelected()) {
-      this.selectedVariables.clear();
-    } else {
-      this.dataSource.data.forEach(row => this.selectedVariables.select(row));
-    }
-  }
-
-  /** Add selected variables to the bundle group */
-  addSelectedVariables(): void {
-    const currentVariables = this.selectedVariablesDataSource.data;
-    const newVariables = this.selectedVariables.selected.filter(variable => !currentVariables.some(v => v.unitName === variable.unitName && v.variableId === variable.variableId
-    )
-    );
-
-    if (newVariables.length > 0) {
-      this.selectedVariablesDataSource.data = [...currentVariables, ...newVariables];
-      this.selectedVariables.clear();
-    }
-  }
-
-  /** Remove a variable from the bundle group */
-  removeVariable(variable: Variable): void {
-    const currentVariables = this.selectedVariablesDataSource.data;
-    const updatedVariables = currentVariables.filter(v => !(v.unitName === variable.unitName && v.variableId === variable.variableId)
-    );
-
-    this.selectedVariablesDataSource.data = updatedVariables;
+    this.applyFilter();
   }
 
   onSubmit(): void {
@@ -307,12 +220,14 @@ export class VariableBundleDialogComponent implements OnInit, OnDestroy {
       return;
     }
 
+    const selectedVars = this.selectedVariables.selected;
+
     const bundleGroup: VariableBundle = {
       id: this.data.bundleGroup?.id || 0,
       ...this.bundleGroupForm.value,
       createdAt: this.data.bundleGroup?.createdAt || new Date(),
       updatedAt: new Date(),
-      variables: this.selectedVariablesDataSource.data
+      variables: selectedVars
     };
 
     this.dialogRef.close(bundleGroup);
