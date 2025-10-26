@@ -1,36 +1,46 @@
 <div class="fx-column-start-start fx-gap-10 container">
-  <div class="fx-row-center-center-stretch fx-gap-20 action-buttons">
-    <a mat-raised-button color="primary" (click)="createCodingJob()">
-      <mat-icon>add</mat-icon>
-      Kodierjob erstellen
-    </a>
-    <a mat-raised-button color="primary" [disabled]="selection.selected.length !== 1"
-       (click)="selection.selected.length === 1 && editCodingJob()">
-      <mat-icon>edit</mat-icon>
-      Kodierjob bearbeiten
-    </a>
-    <a mat-raised-button color="primary" [disabled]="selection.selected.length === 0"
-       (click)="selection.selected.length > 0 && deleteCodingJobs()">
-      <mat-icon>delete</mat-icon>
-      Kodierjob(s) löschen
-    </a>
-    <a mat-raised-button color="primary" [disabled]="selection.selected.length !== 1"
-       (click)="selection.selected.length === 1 && startCodingJob()">
-      <mat-icon>play_arrow</mat-icon>
-      Kodierjob starten
-    </a>
-  </div>
-
   @if (isLoading) {
     <mat-spinner></mat-spinner>
   }
   @if (!isLoading) {
-    <coding-box-search-filter
-      [title]="'Kodierjobs filtern'"
-      (valueChange)="applyFilter($event)">
-    </coding-box-search-filter>
+    <div class="fx-row-center-center-stretch fx-gap-16 header-row">
+      <button mat-stroked-button color="primary" (click)="createCodingJob()">
+        <mat-icon>add</mat-icon>
+        Kodierjob erstellen
+      </button>
 
-    <div class="training-filter">
+      <mat-form-field appearance="outline" class="filter-field">
+        <mat-label>Name filtern</mat-label>
+        <mat-select [(value)]="selectedJobName" (selectionChange)="onJobNameFilterChange()">
+          <mat-option [value]="null">Alle Namen</mat-option>
+          <mat-option *ngFor="let job of originalData" [value]="job.name">
+            {{job.name}}
+          </mat-option>
+        </mat-select>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="filter-field">
+        <mat-label>Kodierer filtern</mat-label>
+        <mat-select [(value)]="selectedCoderId" (selectionChange)="onCoderFilterChange()">
+          <mat-option [value]="null">Alle Kodierer</mat-option>
+          <mat-option *ngFor="let coder of allCoders" [value]="coder.id">
+            {{coder.displayName || coder.name}}
+          </mat-option>
+        </mat-select>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="filter-field">
+        <mat-label>Status filtern</mat-label>
+        <mat-select [(value)]="selectedStatus" (selectionChange)="onStatusFilterChange()">
+          <mat-option [value]="null">Alle Status</mat-option>
+          <mat-option value="active">Aktiv</mat-option>
+          <mat-option value="completed">Abgeschlossen</mat-option>
+          <mat-option value="pending">Ausstehend</mat-option>
+          <mat-option value="paused">Pausiert</mat-option>
+          <mat-option value="open">Offen</mat-option>
+        </mat-select>
+      </mat-form-field>
+
       <mat-form-field appearance="outline" class="filter-field">
         <mat-label>Nach Training filtern</mat-label>
         <mat-select [(value)]="selectedTrainingId" (selectionChange)="onTrainingFilterChange()">
@@ -44,28 +54,48 @@
 
     <mat-table [dataSource]="dataSource" matSort class="coding-jobs-table">
       <mat-header-row *matHeaderRowDef="displayedColumns; sticky: true"></mat-header-row>
-      <mat-row *matRowDef="let row; columns: displayedColumns;" (click)="selectRow(row, $event)">
+      <mat-row *matRowDef="let row; columns: displayedColumns;">
       </mat-row>
 
-      <ng-container matColumnDef="selectCheckbox">
-        <mat-header-cell *matHeaderCellDef class="fx-flex-row-fix-70">
-          <mat-checkbox [checked]="isAllSelected()"
-                      [indeterminate]="isIndeterminate()"
-                      (change)="$event ? masterToggle() : null">
-          </mat-checkbox>
-        </mat-header-cell>
-        <mat-cell *matCellDef="let row" class="fx-flex-row-fix-70">
-          <mat-checkbox [checked]="selection.isSelected(row)"
-                      (click)="$event.stopPropagation()"
-                      (change)="$event ? selection.toggle(row) : null">
-          </mat-checkbox>
+
+
+      <ng-container matColumnDef="actions">
+        <mat-header-cell *matHeaderCellDef>Aktionen</mat-header-cell>
+        <mat-cell *matCellDef="let element">
+          <button mat-icon-button (click)="startCodingJob(element)"
+                  matTooltip="Kodierjob starten"
+                  aria-label="Kodierjob starten">
+            <mat-icon>play_arrow</mat-icon>
+          </button>
+          <button mat-icon-button (click)="editCodingJob(element)"
+                  matTooltip="Kodierjob bearbeiten"
+                  aria-label="Kodierjob bearbeiten">
+            <mat-icon>edit</mat-icon>
+          </button>
+          <button mat-icon-button (click)="deleteCodingJob(element)"
+                  matTooltip="Kodierjob löschen"
+                  aria-label="Kodierjob löschen">
+            <mat-icon>delete</mat-icon>
+          </button>
+          <button mat-icon-button (click)="viewCodingResults(element)"
+                  matTooltip="Ergebnisse anzeigen"
+                  aria-label="Ergebnisse anzeigen">
+            <mat-icon>assessment</mat-icon>
+          </button>
+          @if ((element.totalUnits || 0) > 0 && (element.openUnits || 0) > 0) {
+            <button mat-icon-button (click)="restartCodingJob(element)"
+                    [matTooltip]="'Neustart mit offenen Einheiten'"
+                    aria-label="Neustart mit offenen Einheiten">
+              <mat-icon>restart_alt</mat-icon>
+            </button>
+          }
         </mat-cell>
       </ng-container>
 
       <ng-container matColumnDef="name">
         <mat-header-cell *matHeaderCellDef mat-sort-header>Name</mat-header-cell>
         <mat-cell *matCellDef="let element">
-          {{element.name}}
+          {{getDisplayName(element)}}
         </mat-cell>
       </ng-container>
 
@@ -125,14 +155,7 @@
         </mat-cell>
       </ng-container>
 
-      <ng-container matColumnDef="viewResults">
-        <mat-header-cell *matHeaderCellDef></mat-header-cell>
-        <mat-cell *matCellDef="let element">
-          <button mat-icon-button (click)="viewCodingResults(element)" aria-label="Ergebnisse anzeigen">
-            <mat-icon>visibility</mat-icon>
-          </button>
-        </mat-cell>
-      </ng-container>
+
     </mat-table>
 
     @if (dataSource.data.length === 0) {

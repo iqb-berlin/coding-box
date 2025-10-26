@@ -10,11 +10,19 @@
   gap: 16px;
 }
 
-.action-buttons {
+.header-row {
   display: flex;
-  flex-wrap: wrap;
+  align-items: center;
   gap: 16px;
   margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.button-create-coding-job {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s ease;
 }
 
 a {
@@ -68,9 +76,7 @@ mat-cell {
   color: #555;
 }
 
-.mat-column-selectCheckbox {
-  flex: 0 0 70px;
-}
+
 
 .mat-column-name, .mat-column-description {
   flex: 1 1 25%;
@@ -146,6 +152,11 @@ mat-cell {
   justify-content: center;
 }
 
+.mat-column-actions {
+  flex: 0 0 290px;
+  justify-content: flex-start;
+}
+
 .mat-column-created_at, .mat-column-updated_at {
   flex: 0 0 150px;
 }
@@ -195,18 +206,33 @@ mat-cell {
 }
 
 /* Responsive styles */
+@media (max-width: 1200px) {
+  .header-row {
+    gap: 12px;
+  }
+
+  .filter-field {
+    min-width: 160px;
+  }
+}
+
+@media (max-width: 1024px) {
+  .header-row {
+    flex-wrap: wrap;
+  }
+}
+
 @media (max-width: 768px) {
   .container {
     padding: 16px;
   }
 
-  .action-buttons {
+  .header-row {
     gap: 12px;
   }
 
-  a {
-    padding: 10px 16px;
-    font-size: 14px;
+  .filter-field {
+    min-width: 140px;
   }
 
   .mat-column-description {
@@ -219,13 +245,14 @@ mat-cell {
     padding: 12px;
   }
 
-  .action-buttons {
+  .header-row {
     flex-direction: column;
     align-items: stretch;
   }
 
-  a {
+  .filter-field {
     width: 100%;
+    min-width: auto;
   }
 
   .coding-jobs-table {

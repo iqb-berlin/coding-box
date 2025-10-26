@@ -221,6 +221,7 @@
   "coding": {
     "trainings": {
       "title": "Kodierer-Schulungen",
+      "job-name-prefix": "Schulung-",
       "compare": {
         "button": "Ergebnisse vergleichen",
         "notEnough": "Um Ergebnisse zu vergleichen, werden mindestens zwei Kodierer-Schulungen benötigt."
@@ -243,7 +244,7 @@
         "details": "Details anzeigen"
       },
       "jobs": {
-        "title": "Kodierjobs in Schulung: {{trainingLabel}}",
+        "title": "Kodierjobs in Schulung: ",
         "empty": "Keine Kodierjobs in dieser Schulung gefunden"
       },
       "edit": {
@@ -420,6 +421,7 @@
 
   "replay": {
     "coding-progress": "Kodierfortschritt:",
+    "open-count": "Offen:",
     "pausing": "Wird angehalten...",
     "pause-coding": "Kodierung anhalten",
     "CODING_JOB_COMPLETED": "Kodierungsauftrag abgeschlossen",
@@ -434,6 +436,14 @@
     "failed-to-submit-coding-job": "Fehler beim Einreichen des Kodierungsauftrags",
     "coding-progress-message": "Kodierfortschritt: {{completed}}/{{total}} abgeschlossen ({{percentage}}%)",
     "close": "Schließen"
+  },
+
+  "code-selector": {
+    "codes-for-variable": "Codes für Variable",
+    "mark-as-open": "Als offen markieren",
+    "open-explanation": "Diese Frage ist offen kodiert - keine spezifische Kodierung erforderlich",
+    "score-label": "Bewertung:",
+    "no-codes-found": "Keine Codes gefunden für Variable"
   },
 
   "ws-settings": {
@@ -777,6 +787,92 @@
       "duration": "Dauer:",
       "error": "Fehler:",
       "cancel": "Auftrag abbrechen"
+    }
+  },
+  "coding-management-manual": {
+    "errors": {
+      "no-file-selected": "Keine Datei ausgewählt",
+      "invalid-file-type": "Bitte wählen Sie eine CSV- oder Excel-Datei aus (.csv, .xlsx, .xls)",
+      "no-workspace-selected": "Kein Arbeitsbereich ausgewählt",
+      "import-failed": "Fehler beim Importieren der externen Kodierung",
+      "excel-parse-error": "Fehler beim Parsen der Excel-Datei",
+      "file-read-error": "Fehler beim Lesen der Datei",
+      "no-valid-data": "Die Datei enthält keine gültigen Daten",
+      "validation-failed": "Fehler bei der Validierung",
+      "no-download-data": "Keine Daten zum Herunterladen verfügbar. Bitte führen Sie zuerst eine Validierung durch.",
+      "download-failed": "Fehler beim Herunterladen der Excel-Datei",
+      "cache-not-found": "Validierungsdaten nicht gefunden. Bitte führen Sie zuerst eine neue Validierung durch.",
+      "invalid-cache": "Ungültiger Cache-Schlüssel. Bitte führen Sie eine neue Validierung durch.",
+      "server-error": "Server-Fehler beim Generieren der Excel-Datei. Bitte versuchen Sie es später erneut.",
+      "network-error": "Netzwerk-Fehler. Bitte überprüfen Sie Ihre Internetverbindung.",
+      "no-comparison-data": "Keine Vergleichsdaten zum Herunterladen verfügbar.",
+      "excel-create-error": "Fehler beim Erstellen der Excel-Datei"
+    },
+    "success": {
+      "validation-completed": "Validierung abgeschlossen. {{missing}} von {{total}} Kombinationen fehlen.",
+      "excel-downloaded": "Excel-Datei wurde erfolgreich heruntergeladen",
+      "import-completed": "Externe Kodierung erfolgreich importiert: {{updatedRows}} von {{processedRows}} Zeilen aktualisiert.",
+      "comparison-excel-downloaded": "Vergleichstabelle wurde erfolgreich als Excel-Datei heruntergeladen",
+      "training-generated": "Schulung erfolgreich generiert: {{packages}} Kodierer-Pakete mit insgesamt {{totalResponses}} Antworten erstellt"
+    },
+    "progress": {
+      "file-processing": "Datei wird verarbeitet...",
+      "excel-loading": "Excel-Datei wird geladen...",
+      "excel-processing": "Excel-Datei wird verarbeitet...",
+      "data-extraction": "Daten werden extrahiert ({{current}}/{{total}})...",
+      "data-preparation": "Daten werden für Validierung vorbereitet...",
+      "validation-progress": "Validierung wird durchgeführt (Seite {{page}})..."
+    },
+    "titles": {
+      "validation-running": "Validierung läuft",
+      "validation-results": "Validierungsergebnisse",
+      "comparison-table": "Import-Vergleichstabelle",
+      "manual-coding-planning": "Manuelle Kodierung planen",
+      "coding-jobs": "Kodierjobs",
+      "coder-trainings": "Kodierer-Schulungen",
+      "variable-bundles": "Variablenbündel"
+    },
+    "descriptions": {
+      "validation-message": "{{message}}",
+      "validation-note": "Sie können andere Aufgaben erledigen, während die Validierung im Hintergrund läuft.",
+      "validation-summary": "Insgesamt: {{total}} | Fehlend: {{missing}} | Seite {{currentPage}} von {{totalPages}}",
+      "comparison-summary": "{{message}} | Betroffene Zeilen: {{affectedRows}} | Seite {{currentPage}} von {{totalPages}}"
+    },
+    "buttons": {
+      "try-again": "Erneut versuchen",
+      "close": "Schließen",
+      "download-excel": "Als Excel herunterladen"
+    },
+    "table": {
+      "headers": {
+        "unit-key": "Unit-Schlüssel",
+        "login-name": "Login-Name",
+        "login-code": "Login-Code",
+        "booklet-id": "Booklet-ID",
+        "variable-id": "Variablen-ID",
+        "status": "Status",
+        "unit-alias": "Unit-Alias",
+        "person-code": "Person-Code",
+        "original-status": "Original Status",
+        "original-code": "Original Code",
+        "original-score": "Original Score",
+        "updated-status": "Aktualisierter Status",
+        "updated-code": "Aktualisierter Code",
+        "updated-score": "Aktualisierter Score"
+      },
+      "status": {
+        "missing": "Fehlend",
+        "present": "Vorhanden"
+      }
+    },
+    "pagination": {
+      "prev": "Vorherige",
+      "next": "Nächste",
+      "page-of": "Seite {{current}} von {{total}}",
+      "items-per-page": "Einträge pro Seite:"
+    },
+    "import": {
+      "errors-and-warnings": "Fehler und Warnungen"
     }
   }
 }
