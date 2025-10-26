@@ -77,7 +77,9 @@ export class CodingJobService {
         }
       })
     ]);
-    const progress = Math.round(((codedUnits + openUnits) / totalUnits) * 100);
+
+    const accessibleUnits = totalUnits;
+    const progress = accessibleUnits > 0 ? Math.round((codedUnits / accessibleUnits) * 100) : 0;
 
     return {
       progress, coded: codedUnits, total: totalUnits, open: openUnits
@@ -729,13 +731,6 @@ export class CodingJobService {
 
   async restartCodingJobWithOpenUnits(codingJobId: number, workspaceId: number): Promise<CodingJob> {
     const codingJob = await this.getCodingJob(codingJobId, workspaceId);
-
-    await this.codingJobUnitRepository.createQueryBuilder()
-      .delete()
-      .from(CodingJobUnit)
-      .where('coding_job_id = :codingJobId AND is_open = false', { codingJobId })
-      .execute();
-
     codingJob.codingJob.status = 'pending';
     await this.codingJobRepository.save(codingJob.codingJob);
 
