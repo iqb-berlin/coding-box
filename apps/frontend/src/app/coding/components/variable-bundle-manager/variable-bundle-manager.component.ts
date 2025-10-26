@@ -16,21 +16,16 @@ import {
 } from '@angular/material/table';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
-import { SelectionModel } from '@angular/cdk/collections';
 import { MatIcon } from '@angular/material/icon';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
-import { MatCheckbox } from '@angular/material/checkbox';
-import { MatAnchor, MatButton, MatIconButton } from '@angular/material/button';
+import { MatButton, MatIconButton } from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import {
-  MatPaginator, MatPaginatorModule, MatPaginatorIntl, PageEvent
-} from '@angular/material/paginator';
-import { SearchFilterComponent } from '../../../shared/search-filter/search-filter.component';
+import { MatSelectModule } from '@angular/material/select';
+import { MatFormFieldModule } from '@angular/material/form-field';
 import { VariableBundle, Variable } from '../../models/coding-job.model';
 import { VariableBundleService, PaginatedBundles } from '../../services/variable-bundle.service';
 import { VariableBundleDialogComponent } from '../variable-bundle-dialog/variable-bundle-dialog.component';
 import { ConfirmDialogComponent, ConfirmDialogData } from '../../../shared/dialogs/confirm-dialog.component';
-import { GermanPaginatorIntl } from '../../../shared/services/german-paginator-intl.service';
 import { AppService } from '../../../services/app.service';
 import { BackendService } from '../../../services/backend.service';
 
@@ -39,24 +34,18 @@ import { BackendService } from '../../../services/backend.service';
   templateUrl: './variable-bundle-manager.component.html',
   styleUrls: ['./variable-bundle-manager.component.scss'],
   standalone: true,
-  providers: [
-    { provide: MatPaginatorIntl, useClass: GermanPaginatorIntl }
-  ],
   imports: [
     CommonModule,
     TranslateModule,
     DatePipe,
-    SearchFilterComponent,
     MatIcon,
     MatHeaderCell,
     MatCell,
     MatHeaderRow,
     MatRow,
     MatProgressSpinner,
-    MatCheckbox,
     MatTable,
     MatTableModule,
-    MatAnchor,
     MatHeaderCellDef,
     MatCellDef,
     MatHeaderRowDef,
@@ -67,7 +56,8 @@ import { BackendService } from '../../../services/backend.service';
     MatDialogModule,
     MatTooltipModule,
     MatIconButton,
-    MatPaginatorModule
+    MatSelectModule,
+    MatFormFieldModule
   ]
 })
 export class VariableBundleManagerComponent implements OnInit, AfterViewInit {
@@ -77,17 +67,14 @@ export class VariableBundleManagerComponent implements OnInit, AfterViewInit {
   private appService = inject(AppService);
   private backendService = inject(BackendService);
 
-  displayedColumns: string[] = ['selectCheckbox', 'name', 'description', 'variableCount', 'createdAt', 'updatedAt', 'actions'];
+  displayedColumns: string[] = ['actions', 'name', 'description', 'variableCount', 'createdAt', 'updatedAt'];
   dataSource = new MatTableDataSource<VariableBundle>([]);
-  selection = new SelectionModel<VariableBundle>(true, []);
   isLoading = false;
 
-  currentPage = 1;
-  pageSize = 10;
-  totalItems = 0;
+  selectedName: string | null = null;
+  originalData: VariableBundle[] = [];
 
   @ViewChild(MatSort) sort!: MatSort;
-  @ViewChild(MatPaginator) paginator!: MatPaginator;
 
   ngOnInit(): void {
     this.loadVariableBundleGroups();
@@ -95,35 +82,16 @@ export class VariableBundleManagerComponent implements OnInit, AfterViewInit {
 
   ngAfterViewInit(): void {
     this.dataSource.sort = this.sort;
-
-    if (this.paginator) {
-      this.paginator.pageIndex = this.currentPage - 1;
-      this.paginator.pageSize = this.pageSize;
-      this.paginator.length = this.totalItems;
-    }
   }
 
-  loadVariableBundleGroups(page: number = this.currentPage, pageSize: number = this.pageSize): void {
+  loadVariableBundleGroups(): void {
     this.isLoading = true;
 
-    this.variableBundleGroupService.getBundles(page, pageSize).subscribe({
+    this.variableBundleGroupService.getBundles(1, 10000).subscribe({
       next: (paginatedResult: PaginatedBundles) => {
+        this.originalData = paginatedResult.bundles;
         this.dataSource.data = paginatedResult.bundles;
-
-        if (this.currentFilter) {
-          this.dataSource.filter = this.currentFilter;
-        }
-
-        this.totalItems = paginatedResult.total;
-        this.currentPage = paginatedResult.page;
-        this.pageSize = paginatedResult.limit;
-
-        if (this.paginator) {
-          this.paginator.pageIndex = this.currentPage - 1;
-          this.paginator.pageSize = this.pageSize;
-          this.paginator.length = this.totalItems;
-        }
-
+        this.applyFilters();
         this.isLoading = false;
       },
       error: () => {
@@ -133,51 +101,18 @@ export class VariableBundleManagerComponent implements OnInit, AfterViewInit {
     });
   }
 
-  onPageChange(event: PageEvent): void {
-    const page = event.pageIndex + 1;
-    const pageSize = event.pageSize;
-    this.loadVariableBundleGroups(page, pageSize);
+  onNameFilterChange(): void {
+    this.applyFilters();
   }
 
-  currentFilter: string = '';
+  private applyFilters(): void {
+    let filteredData = this.originalData;
 
-  applyFilter(filterValue: string): void {
-    this.currentFilter = filterValue.trim().toLowerCase();
-    this.dataSource.filter = this.currentFilter;
-    if (this.paginator) {
-      this.paginator.firstPage();
+    if (this.selectedName) {
+      filteredData = filteredData.filter(bundle => bundle.name === this.selectedName);
     }
-    this.loadVariableBundleGroups(1, this.pageSize);
-  }
 
-  isAllSelected(): boolean {
-    const numSelected = this.selection.selected.length;
-    const numRows = this.dataSource.data.length;
-    return numSelected === numRows;
-  }
-
-  isIndeterminate(): boolean {
-    return this.selection.selected.length > 0 && !this.isAllSelected();
-  }
-
-  masterToggle(): void {
-    if (this.isAllSelected()) {
-      this.selection.clear();
-    } else {
-      this.dataSource.data.forEach(row => this.selection.select(row));
-    }
-  }
-
-  selectRow(row: VariableBundle, event?: MouseEvent): void {
-    if (event && event.target instanceof Element) {
-      const target = event.target as Element;
-      if (target.tagName === 'MAT-CHECKBOX' ||
-          target.classList.contains('mat-checkbox') ||
-          target.closest('.mat-checkbox')) {
-        return;
-      }
-    }
-    this.selection.toggle(row);
+    this.dataSource.data = filteredData;
   }
 
   createVariableBundleGroup(): void {
@@ -279,43 +214,6 @@ export class VariableBundleManagerComponent implements OnInit, AfterViewInit {
           error: () => {
             this.snackBar.open('Fehler beim Löschen des Variablenbündels', 'Schließen', { duration: 3000 });
           }
-        });
-      }
-    });
-  }
-
-  deleteSelectedVariableBundleGroups(): void {
-    if (this.selection.selected.length === 0) {
-      return;
-    }
-
-    const selectedBundles = [...this.selection.selected];
-    const selectedCount = selectedBundles.length;
-    const dialogRef = this.dialog.open(ConfirmDialogComponent, {
-      data: {
-        title: 'Variablenbündel löschen',
-        content: `Sind Sie sicher, dass Sie ${selectedCount} ausgewählte Variablenbündel löschen möchten?`,
-        confirmButtonLabel: 'Löschen',
-        showCancel: true
-      } as ConfirmDialogData
-    });
-
-    dialogRef.afterClosed().subscribe(result => {
-      if (result) {
-        import('rxjs').then(({ forkJoin }) => {
-          const deleteObservables = selectedBundles.map(bundleGroup => this.variableBundleGroupService.deleteBundle(bundleGroup.id));
-
-          forkJoin(deleteObservables).subscribe({
-            next: results => {
-              this.loadVariableBundleGroups();
-              this.selection.clear();
-              const successCount = results.filter(success => success).length;
-              this.snackBar.open(`${successCount} Variablenbündel wurden gelöscht`, 'Schließen', { duration: 3000 });
-            },
-            error: () => {
-              this.snackBar.open('Fehler beim Löschen der Variablenbündel', 'Schließen', { duration: 3000 });
-            }
-          });
         });
       }
     });
