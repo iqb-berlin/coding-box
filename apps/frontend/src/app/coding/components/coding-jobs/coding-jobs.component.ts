@@ -652,7 +652,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
       return;
     }
 
-    const confirmMessage = `Möchten Sie den Kodierjob "${job.name}" wirklich neu starten? Der Job wird mit nur den offenen Einheiten neu gestartet und die Kodierungsvorschau wird geöffnet.`;
+    const confirmMessage = `Möchten Sie den Kodierjob "${job.name}" wirklich neu starten? Alle Einheiten werden für eine Aktualisierung geöffnet und die Kodierungsvorschau wird geöffnet.`;
 
     const dialogRef = this.dialog.open(ConfirmDialogComponent, {
       width: '500px',
