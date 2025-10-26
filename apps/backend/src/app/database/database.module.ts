@@ -53,6 +53,7 @@ import { CodingJobVariable } from './entities/coding-job-variable.entity';
 import { CodingJobVariableBundle } from './entities/coding-job-variable-bundle.entity';
 import { CodingJobUnit } from './entities/coding-job-unit.entity';
 import { MissingsProfile } from './entities/missings-profile.entity';
+import { CoderTraining } from './entities/coder-training.entity';
 import { CodingJobService } from './services/coding-job.service';
 import { CodingStatisticsService } from './services/coding-statistics.service';
 import { MissingsProfilesService } from './services/missings-profiles.service';
@@ -62,6 +63,10 @@ import { JobQueueModule } from '../job-queue/job-queue.module';
 import { CacheModule } from '../cache/cache.module';
 import { CodingListService } from './services/coding-list.service';
 import { CoderTrainingService } from './services/coder-training.service';
+import { VariableAnalysisReplayService } from './services/variable-analysis-replay.service';
+import { ExportValidationResultsService } from './services/export-validation-results.service';
+import { ExternalCodingImportService } from './services/external-coding-import.service';
+import { BullJobManagementService } from './services/bull-job-management.service';
 
 @Module({
   imports: [
@@ -94,7 +99,7 @@ import { CoderTrainingService } from './services/coder-training.service';
         database: configService.get('POSTGRES_DB'),
         entities: [BookletInfo, Booklet, Session, BookletLog, Unit, UnitLog, UnitLastState, ResponseEntity,
           User, Workspace, WorkspaceAdmin, FileUpload, WorkspaceUser, ResourcePackage, Logs, Persons, ChunkEntity, BookletLog, Session, UnitLog, UnitTag, UnitNote, JournalEntry, Job, VariableAnalysisJob, ValidationTask, Setting, ReplayStatistics, VariableBundle,
-          CodingJob, CodingJobCoder, CodingJobVariable, CodingJobVariableBundle, CodingJobUnit, MissingsProfile
+          CodingJob, CodingJobCoder, CodingJobVariable, CodingJobVariableBundle, CodingJobUnit, CoderTraining, MissingsProfile
         ],
         synchronize: false
       }),
@@ -132,6 +137,7 @@ import { CoderTrainingService } from './services/coder-training.service';
       CodingJobVariable,
       CodingJobVariableBundle,
       CodingJobUnit,
+      CoderTraining,
       MissingsProfile
     ]),
     CacheModule
@@ -160,7 +166,11 @@ import { CoderTrainingService } from './services/coder-training.service';
     CodingStatisticsService,
     MissingsProfilesService,
     CodingListService,
-    CoderTrainingService
+    CoderTrainingService,
+    VariableAnalysisReplayService,
+    ExportValidationResultsService,
+    ExternalCodingImportService,
+    BullJobManagementService
   ],
   exports: [
     User,
@@ -193,7 +203,11 @@ import { CoderTrainingService } from './services/coder-training.service';
     CodingStatisticsService,
     MissingsProfilesService,
     CodingListService,
-    CoderTrainingService
+    CoderTrainingService,
+    VariableAnalysisReplayService,
+    ExportValidationResultsService,
+    ExternalCodingImportService,
+    BullJobManagementService
   ]
 })
 export class DatabaseModule {}

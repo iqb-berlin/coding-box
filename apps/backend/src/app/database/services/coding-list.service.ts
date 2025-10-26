@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Like, Repository } from 'typeorm';
+import { Like, Repository } from 'typeorm';
 import * as fastCsv from 'fast-csv';
 import * as ExcelJS from 'exceljs';
 import FileUpload from '../entities/file_upload.entity';
@@ -71,33 +71,23 @@ export class CodingListService {
         .leftJoinAndSelect('unit.booklet', 'booklet')
         .leftJoinAndSelect('booklet.person', 'person')
         .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
-        .where('response.status_v1 = :status', { status: 'CODING_INCOMPLETE' })
+        .where('response.status_v1 = :status', { status: statusStringToNumber('CODING_INCOMPLETE') })
         .andWhere('person.workspace_id = :workspace_id', { workspace_id })
         .orderBy('response.id', 'ASC');
 
       const [responses, total] = await queryBuilder.getManyAndCount();
 
       // 3) Build exclusion Set from VOCS files where sourceType == BASE_NO_VALUE
-      const unitNames = Array.from(
-        new Set(
-          responses
-            .map(r => r.unit?.name)
-            .filter((u): u is string => typeof u === 'string' && !!u)
-        )
-      );
-
       interface VocsScheme { variableCodings?: { id: string; sourceType?: string }[] }
 
-      const vocsFiles = unitNames.length ?
-        await this.fileUploadRepository.find({
-          where: {
-            workspace_id,
-            file_type: 'Resource',
-            file_id: In(unitNames.map(u => `${u}.VOCS`))
-          },
-          select: ['file_id', 'data']
-        }) :
-        [];
+      const vocsFiles = await this.fileUploadRepository.find({
+        where: {
+          workspace_id,
+          file_type: 'Resource',
+          file_id: Like('%.VOCS')
+        },
+        select: ['file_id', 'data']
+      });
 
       const excludedPairs = new Set<string>(); // key: `${unitKey}||${variableId}`
       for (const file of vocsFiles) {
@@ -311,7 +301,7 @@ export class CodingListService {
     return csvStream;
   }
 
-  async getCodingListAsExcel(workspace_id: number): Promise<Buffer> {
+  async getCodingListAsExcel(workspace_id: number, authToken?: string, serverUrl?: string): Promise<Buffer> {
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('Coding List');
 
@@ -327,7 +317,7 @@ export class CodingListService {
       { header: 'url', key: 'url', width: 60 }
     ];
 
-    const { items } = await this.getCodingList(workspace_id, '', '');
+    const { items } = await this.getCodingList(workspace_id, authToken || '', serverUrl || '');
     items.forEach(item => worksheet.addRow(item));
 
     const buffer = await workbook.xlsx.writeBuffer();

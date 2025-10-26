@@ -6,7 +6,9 @@ import { MatCardModule } from '@angular/material/card';
 import { MatListModule } from '@angular/material/list';
 import { MatRadioModule } from '@angular/material/radio';
 import { MatButtonModule } from '@angular/material/button';
+import { MatCheckboxModule } from '@angular/material/checkbox';
 import { FormsModule } from '@angular/forms';
+import { TranslateModule } from '@ngx-translate/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { MissingDto } from '../../../../../../../api-dto/coding/missings-profiles.dto';
 
@@ -66,7 +68,7 @@ export interface SelectableItem {
 @Component({
   selector: 'app-code-selector',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatCardModule, MatListModule, MatRadioModule, MatButtonModule],
+  imports: [CommonModule, FormsModule, MatCardModule, MatListModule, MatRadioModule, MatButtonModule, MatCheckboxModule, TranslateModule],
   templateUrl: './code-selector.component.html',
   styleUrls: ['./code-selector.component.css']
 })
@@ -75,8 +77,10 @@ export class CodeSelectorComponent implements OnChanges {
   @Input() variableId!: string;
   @Input() preSelectedCodeId: number | null = null;
   @Input() missings: MissingDto[] = [];
+  @Input() isOpen: boolean = false;
 
   @Output() codeSelected = new EventEmitter<CodeSelectedEvent>();
+  @Output() openChanged = new EventEmitter<boolean>();
 
   selectableItems: SelectableItem[] = [];
   selectedCode: number | null = null;
@@ -169,5 +173,12 @@ export class CodeSelectorComponent implements OnChanges {
         code: selectedItem.isMissing ? selectedItem.originalMissing! : selectedItem.originalCode!
       });
     }
+  }
+
+  onOpenChanged(): void {
+    if (this.isOpen) {
+      this.selectedCode = null;
+    }
+    this.openChanged.emit(this.isOpen);
   }
 }

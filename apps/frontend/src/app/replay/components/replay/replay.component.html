@@ -25,14 +25,16 @@
         }
       </div>
 
-      @if (codingScheme && currentVariableId) {
+      @if (codingService.codingScheme && codingService.currentVariableId && !isBookletReplayMode) {
         <div class="code-selector-container">
           <app-code-selector
-            [codingScheme]="codingScheme"
-            [variableId]="currentVariableId"
-            [preSelectedCodeId]="getPreSelectedCodeId(currentVariableId)"
-            [missings]="missings"
-            (codeSelected)="onCodeSelected($event)">
+            [codingScheme]="codingService.codingScheme"
+            [variableId]="codingService.currentVariableId"
+            [preSelectedCodeId]="getPreSelectedCodeId(codingService.currentVariableId)"
+            [missings]="codingService.missings"
+            [isOpen]="isUnitOpen()"
+            (codeSelected)="onCodeSelected($event)"
+            (openChanged)="onOpenChanged($event)">
           </app-code-selector>
         </div>
       }
@@ -52,23 +54,26 @@
     }
   }
 
-  @if (isBookletMode && unitsData) {
+  @if (isBookletMode && unitsData && !isBookletReplayMode) {
     <div class="coding-progress">
       <div class="progress-info">
         <span class="progress-text">{{ 'replay.coding-progress' | translate }}</span>
         <span class="progress-numbers">{{ getCompletedCount() }}/{{ unitsData.units.length }}</span>
         <span class="progress-percentage">({{ getProgressPercentage() }}%)</span>
+        @if (getOpenCount() > 0) {
+          <span class="progress-open">{{ 'replay.open-count' | translate }}: {{ getOpenCount() }}</span>
+        }
       </div>
       <div class="progress-bar">
         <div class="progress-fill" [style.width.%]="getProgressPercentage()"></div>
       </div>
-      @if (codingJobId && !isCodingJobCompleted) {
+      @if (codingService.codingJobId && !codingService.isCodingJobCompleted) {
         <button
           mat-raised-button
           (click)="pauseCodingJob()"
-          [disabled]="isPausingJob"
+          [disabled]="codingService.isPausingJob"
           class="pause-button">
-          {{ isPausingJob ? ('replay.pausing' | translate) : ('replay.pause-coding' | translate) }}
+          {{ codingService.isPausingJob ? ('replay.pausing' | translate) : ('replay.pause-coding' | translate) }}
         </button>
       }
     </div>
@@ -78,7 +83,7 @@
     <div class="watermark">{{ testPerson }} - {{ unitId }}</div>
   }
 
-  @if (isCodingJobCompleted) {
+  @if (codingService.isCodingJobCompleted && !isBookletReplayMode) {
     <div class="completion-overlay">
       <div class="completion-dialog">
         <h2>{{ 'replay.CODING_JOB_COMPLETED' | translate }}</h2>
@@ -87,9 +92,9 @@
           mat-raised-button
           color="primary"
           (click)="submitCodingJob()"
-          [disabled]="isSubmittingJob"
+          [disabled]="codingService.isSubmittingJob"
           class="submit-button">
-          {{ isSubmittingJob ? ('replay.SUBMITTING_JOB' | translate) : ('replay.SUBMIT_JOB' | translate) }}
+          {{ codingService.isSubmittingJob ? ('replay.SUBMITTING_JOB' | translate) : ('replay.SUBMIT_JOB' | translate) }}
         </button>
       </div>
     </div>

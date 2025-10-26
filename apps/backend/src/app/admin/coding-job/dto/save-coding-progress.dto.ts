@@ -43,4 +43,11 @@ export class SaveCodingProgressDto {
     score?: number;
     [key: string]: unknown;
   };
+
+  @ApiProperty({
+    description: 'Whether the unit is marked as open',
+    example: false,
+    required: false
+  })
+    isOpen?: boolean;
 }

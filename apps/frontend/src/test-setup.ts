@@ -2,6 +2,11 @@ import { setupZoneTestEnv } from 'jest-preset-angular/setup-env/zone';
 
 setupZoneTestEnv();
 
+// Mock @swimlane/ngx-charts to prevent d3 issues in tests
+jest.mock('@swimlane/ngx-charts', () => ({
+  NgxChartsModule: {}
+}));
+
 // Mock d3-selection to prevent ES module issues in tests
 jest.mock('d3-selection', () => ({
   select: jest.fn(() => ({
@@ -15,6 +20,15 @@ jest.mock('d3-selection', () => ({
     enter: jest.fn().mockReturnThis(),
     exit: jest.fn().mockReturnThis(),
     merge: jest.fn().mockReturnThis()
+  }))
+}));
+
+// Mock d3-transition to prevent ES module issues in tests
+jest.mock('d3-transition', () => ({
+  transition: jest.fn(() => ({
+    duration: jest.fn().mockReturnThis(),
+    ease: jest.fn().mockReturnThis(),
+    attr: jest.fn().mockReturnThis()
   }))
 }));
 

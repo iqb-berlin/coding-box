@@ -681,6 +681,45 @@ export class WorkspaceFilesController {
     return this.workspaceFilesService.getUnitsWithFileIds(workspace_id);
   }
 
+  @Get(':workspace_id/files/unit-variables')
+  @ApiTags('admin workspace')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiOperation({ summary: 'Get unit variables mapping', description: 'Retrieves a mapping of all units and their defined variables from Unit XML files' })
+  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
+  @ApiOkResponse({
+    description: 'Unit variables mapping retrieved successfully',
+    schema: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          unitName: { type: 'string' },
+          variables: {
+            type: 'array',
+            items: { type: 'string' }
+          }
+        }
+      }
+    }
+  })
+  @ApiBadRequestResponse({
+    description: 'Failed to retrieve unit variables mapping'
+  })
+  async getUnitVariables(
+    @Param('workspace_id') workspace_id: number): Promise<{ unitName: string; variables: string[] }[]> {
+    if (!workspace_id) {
+      throw new BadRequestException('Workspace ID is required.');
+    }
+
+    const unitVariableMap: Map<string, Set<string>> = await this.workspaceFilesService.getUnitVariableMap(workspace_id);
+
+    const res = Array.from(unitVariableMap.entries()).map(([unitName, variables]: [string, Set<string>]) => ({
+      unitName,
+      variables: Array.from(variables)
+    }));
+    return res;
+  }
+
   @Get(':workspace_id/files/variable-info/:scheme_file_id')
   @ApiTags('admin workspace')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)

@@ -106,12 +106,12 @@
         <table class="results-table">
           <thead>
             <tr>
-              <th>Unit Key</th>
-              <th>Login Name</th>
-              <th>Login Code</th>
-              <th>Booklet ID</th>
-              <th>Variable ID</th>
-              <th>Status</th>
+              <th>{{ 'coding-management-manual.table.headers.unit-key' | translate }}</th>
+              <th>{{ 'coding-management-manual.table.headers.login-name' | translate }}</th>
+              <th>{{ 'coding-management-manual.table.headers.login-code' | translate }}</th>
+              <th>{{ 'coding-management-manual.table.headers.booklet-id' | translate }}</th>
+              <th>{{ 'coding-management-manual.table.headers.variable-id' | translate }}</th>
+              <th>{{ 'coding-management-manual.table.headers.status' | translate }}</th>
             </tr>
           </thead>
           <tbody>
@@ -121,7 +121,7 @@
               <td>{{result.combination.login_code}}</td>
               <td>{{result.combination.booklet_id}}</td>
               <td>{{result.combination.variable_id}}</td>
-              <td>{{result.status === 'MISSING' ? 'Fehlend' : 'Vorhanden'}}</td>
+              <td>{{ 'coding-management-manual.table.status.' + (result.status === 'MISSING' ? 'missing' : 'present') | translate }}</td>
             </tr>
           </tbody>
         </table>
@@ -199,15 +199,15 @@
         <table class="results-table">
           <thead>
             <tr>
-              <th>Unit Alias</th>
-              <th>Variable ID</th>
-              <th>Person Code</th>
-              <th>Original Status</th>
-              <th>Original Code</th>
-              <th>Original Score</th>
-              <th>Updated Status</th>
-              <th>Updated Code</th>
-              <th>Updated Score</th>
+              <th>{{ 'coding-management-manual.table.headers.unit-alias' | translate }}</th>
+              <th>{{ 'coding-management-manual.table.headers.variable-id' | translate }}</th>
+              <th>{{ 'coding-management-manual.table.headers.person-code' | translate }}</th>
+              <th>{{ 'coding-management-manual.table.headers.original-status' | translate }}</th>
+              <th>{{ 'coding-management-manual.table.headers.original-code' | translate }}</th>
+              <th>{{ 'coding-management-manual.table.headers.original-score' | translate }}</th>
+              <th>{{ 'coding-management-manual.table.headers.updated-status' | translate }}</th>
+              <th>{{ 'coding-management-manual.table.headers.updated-code' | translate }}</th>
+              <th>{{ 'coding-management-manual.table.headers.updated-score' | translate }}</th>
             </tr>
           </thead>
           <tbody>
@@ -265,6 +265,12 @@
         <div class="coding-jobs-container">
           <h3>Kodierjobs</h3>
           <coding-box-coding-jobs></coding-box-coding-jobs>
+        </div>
+        <div class="coder-training-list-container">
+          <h3>Kodierer-Schulungen</h3>
+          <coding-box-coder-trainings-list
+            (onCreateTraining)="openCoderTraining()">
+          </coding-box-coder-trainings-list>
         </div>
         <div class="variable-bundle-container">
           <h3>Variablenbündel</h3>
