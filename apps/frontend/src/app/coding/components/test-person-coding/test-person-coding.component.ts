@@ -12,6 +12,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatPaginatorModule } from '@angular/material/paginator';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatRadioModule } from '@angular/material/radio';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTableModule } from '@angular/material/table';
@@ -55,6 +56,7 @@ import { BackendService } from '../../../services/backend.service';
     MatPaginatorModule,
     MatProgressBarModule,
     MatProgressSpinnerModule,
+    MatRadioModule,
     MatSelectModule,
     MatTableModule,
     MatTabsModule,
@@ -100,6 +102,8 @@ export class TestPersonCodingComponent implements OnInit {
   availableGroups: string[] = [];
   selectedGroups: string[] = [];
   groupsLoading = false;
+
+  autoCoderRun: number = 1;
 
   ngOnInit(): void {
     this.loadAllJobs();
@@ -196,7 +200,7 @@ export class TestPersonCodingComponent implements OnInit {
     }
 
     this.isLoading = true;
-    this.testPersonCodingService.codeTestPersons(this.workspaceId, testPersonIds)
+    this.testPersonCodingService.codeTestPersons(this.workspaceId, testPersonIds, this.autoCoderRun)
       .pipe(
         tap(result => {
           if (result.jobId) {

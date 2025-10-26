@@ -74,22 +74,21 @@ export class TestPersonCodingService {
     return { Authorization: `Bearer ${localStorage.getItem('id_token')}` };
   }
 
-  codeTestPersons(workspaceId: number, testPersonIds: string): Observable<CodingStatisticsWithJob> {
+  codeTestPersons(workspaceId: number, testPersonIds: string, autoCoderRun: number = 1): Observable<CodingStatisticsWithJob> {
+    const params = new HttpParams()
+      .set('testPersons', testPersonIds)
+      .set('autoCoderRun', autoCoderRun.toString());
+
     return this.http
       .get<CodingStatisticsWithJob>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/coding?testPersons=${testPersonIds}`,
-      { headers: this.authHeader }
+      `${this.serverUrl}admin/workspace/${workspaceId}/coding`,
+      { headers: this.authHeader, params }
     )
       .pipe(
         catchError(() => of({ totalResponses: 0, statusCounts: {} }))
       );
   }
 
-  /**
-   * Get manual test persons
-   * @param workspaceId Workspace ID
-   * @param testPersonIds Optional comma-separated list of test person IDs
-   */
   getManualTestPersons(workspaceId: number, testPersonIds?: string): Observable<unknown> {
     let url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/manual`;
     if (testPersonIds) {
@@ -103,14 +102,6 @@ export class TestPersonCodingService {
       );
   }
 
-  /**
-   * Get coding list
-   * @param workspaceId Workspace ID
-   * @param authToken Authentication token
-   * @param serverUrl Server URL
-   * @param page Page number
-   * @param limit Items per page
-   */
   getCodingList(
     workspaceId: number,
     authToken: string,
@@ -142,10 +133,6 @@ export class TestPersonCodingService {
       );
   }
 
-  /**
-   * Get coding statistics
-   * @param workspaceId Workspace ID
-   */
   getCodingStatistics(workspaceId: number): Observable<CodingStatistics> {
     return this.http
       .get<CodingStatistics>(
@@ -157,11 +144,6 @@ export class TestPersonCodingService {
       );
   }
 
-  /**
-   * Get job status
-   * @param workspaceId Workspace ID
-   * @param jobId Job ID
-   */
   getJobStatus(workspaceId: number, jobId: string): Observable<JobStatus | { error: string }> {
     return this.http
       .get<JobStatus | { error: string }>(
@@ -173,11 +155,6 @@ export class TestPersonCodingService {
       );
   }
 
-  /**
-   * Cancel job
-   * @param workspaceId Workspace ID
-   * @param jobId Job ID
-   */
   cancelJob(workspaceId: number, jobId: string): Observable<{ success: boolean; message: string }> {
     return this.http
       .get<{ success: boolean; message: string }>(
@@ -189,11 +166,6 @@ export class TestPersonCodingService {
       );
   }
 
-  /**
-   * Delete job
-   * @param workspaceId Workspace ID
-   * @param jobId Job ID
-   */
   deleteJob(workspaceId: number, jobId: string): Observable<{ success: boolean; message: string }> {
     return this.http
       .get<{ success: boolean; message: string }>(
@@ -205,10 +177,6 @@ export class TestPersonCodingService {
       );
   }
 
-  /**
-   * Export coding list as CSV
-   * @param workspaceId Workspace ID
-   */
   exportCodingListAsCsv(workspaceId: number): Observable<Blob> {
     return this.http
       .get(
@@ -223,10 +191,6 @@ export class TestPersonCodingService {
       );
   }
 
-  /**
-   * Export coding list as Excel
-   * @param workspaceId Workspace ID
-   */
   exportCodingListAsExcel(workspaceId: number): Observable<Blob> {
     return this.http
       .get(
@@ -241,11 +205,6 @@ export class TestPersonCodingService {
       );
   }
 
-  /**
-   * Get all jobs for a workspace
-   * @param workspaceId Workspace ID
-   * @returns Observable of an array of job information
-   */
   getAllJobs(workspaceId: number): Observable<JobInfo[]> {
     return this.http
       .get<JobInfo[]>(
@@ -257,11 +216,6 @@ export class TestPersonCodingService {
       );
   }
 
-  /**
-   * Get all test person groups for a workspace
-   * @param workspaceId Workspace ID
-   * @returns Observable of an array of group names
-   */
   getWorkspaceGroups(workspaceId: number): Observable<string[]> {
     return this.http
       .get<string[]>(
@@ -273,12 +227,6 @@ export class TestPersonCodingService {
       );
   }
 
-  /**
-   * Restart a failed job
-   * @param workspaceId Workspace ID
-   * @param jobId Job ID to restart
-   * @returns Observable with restart result
-   */
   restartJob(workspaceId: number, jobId: string): Observable<{ success: boolean; message: string; jobId?: string }> {
     return this.http
       .get<{ success: boolean; message: string; jobId?: string }>(
@@ -290,14 +238,6 @@ export class TestPersonCodingService {
       );
   }
 
-  /**
-   * Validate completeness of coding responses with pagination support
-   * @param workspaceId Workspace ID
-   * @param expectedCombinations Expected combinations from Excel
-   * @param page Page number (1-based, optional - defaults to 1)
-   * @param pageSize Number of items per page (optional - defaults to 50)
-   * @returns Observable of validation results with pagination metadata
-   */
   validateCodingCompleteness(
     workspaceId: number,
     expectedCombinations: ExpectedCombinationDto[],
@@ -330,12 +270,6 @@ export class TestPersonCodingService {
       );
   }
 
-  /**
-   * Download validation results as Excel file using cache key
-   * @param workspaceId Workspace ID
-   * @param cacheKey Cache key from validation results
-   * @returns Observable of Excel file as Blob
-   */
   downloadValidationResultsAsExcel(
     workspaceId: number,
     cacheKey: string

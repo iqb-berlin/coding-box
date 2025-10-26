@@ -111,6 +111,7 @@ export class BullJobManagementService {
     groupNames?: string;
     durationMs?: number;
     completedAt?: Date;
+    autoCoderRun?: number;
   }[]> {
     const jobs: {
       jobId: string;
@@ -123,6 +124,7 @@ export class BullJobManagementService {
       groupNames?: string;
       durationMs?: number;
       completedAt?: Date;
+      autoCoderRun?: number;
     }[] = [];
 
     try {
@@ -174,7 +176,8 @@ export class BullJobManagementService {
           completedAt: state === 'completed' ? new Date(bullJob.finishedOn || Date.now()) : undefined,
           durationMs: state === 'completed' && bullJob.finishedOn && bullJob.timestamp ?
             bullJob.finishedOn - bullJob.timestamp :
-            undefined
+            undefined,
+          autoCoderRun: bullJob.data.autoCoderRun || 1
         });
       }
     } catch (bullError) {

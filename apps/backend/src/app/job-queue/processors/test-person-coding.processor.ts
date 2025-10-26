@@ -25,24 +25,19 @@ export class TestPersonCodingProcessor {
     this.logger.log(`Processing test person coding job ${job.id} for workspace ${job.data.workspaceId}`);
 
     try {
-      // Process test persons in batches
       const BATCH_SIZE = 500;
       const totalPersons = job.data.personIds.length;
       const combinedResult: CodingStatistics = { totalResponses: 0, statusCounts: {} };
 
-      // Update job progress to 0%
       await job.progress(0);
 
-      // Process each batch sequentially
       for (let i = 0; i < job.data.personIds.length; i += BATCH_SIZE) {
-        // Check if job has been cancelled or paused
         const currentJob = await job.getState();
         if (currentJob === 'failed' || currentJob === 'paused') {
           this.logger.log(`Job ${job.id} was ${currentJob} before processing batch ${(i / BATCH_SIZE) + 1}`);
           return combinedResult;
         }
 
-        // Check if job is marked as paused in the job data
         if (job.data.isPaused) {
           this.logger.log(`Job ${job.id} was paused before processing batch ${(i / BATCH_SIZE) + 1}`);
           return combinedResult;
@@ -53,7 +48,6 @@ export class TestPersonCodingProcessor {
         const totalBatches = Math.ceil(totalPersons / BATCH_SIZE);
         this.logger.log(`Processing batch ${batchNumber} of ${totalBatches} (${batchPersonIds.length} persons)`);
 
-        // Process the batch using the actual processing logic
         const progressCallback = async (progress: number) => {
           // Calculate overall progress based on completed batches and current batch progress
           const batchProgress = (i / job.data.personIds.length) * 100; // Progress from completed batches
@@ -66,18 +60,15 @@ export class TestPersonCodingProcessor {
           await job.progress(overallProgress);
         };
 
-        // Call the actual processing logic
         const batchResult = await this.workspaceCodingService.processTestPersonsBatch(
           job.data.workspaceId,
           batchPersonIds,
+          job.data.autoCoderRun || 1,
           progressCallback,
           job.id.toString()
         );
 
-        // Merge batch results into combined results
         combinedResult.totalResponses += batchResult.totalResponses;
-
-        // Merge status counts
         Object.entries(batchResult.statusCounts).forEach(([status, count]) => {
           if (!combinedResult.statusCounts[status]) {
             combinedResult.statusCounts[status] = 0;
@@ -86,15 +77,12 @@ export class TestPersonCodingProcessor {
         });
       }
 
-      // Set job progress to 100%
       await job.progress(100);
 
       this.logger.log(`Job ${job.id} completed successfully`);
       return combinedResult;
     } catch (error) {
       this.logger.error(`Error processing job ${job.id}: ${error.message}`, error.stack);
-
-      // Re-throw the error to mark the job as failed in Bull
       throw error;
     }
   }

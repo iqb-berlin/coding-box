@@ -244,6 +244,11 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
   }
 
   onStatisticsVersionChange(): void {
+    this.data = [];
+    this.dataSource.data = [];
+    this.currentStatusFilter = null;
+    this.totalRecords = 0;
+
     if (this.statisticsLoaded) {
       this.fetchCodingStatistics();
     }
@@ -265,7 +270,7 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
     this.isLoading = true;
     this.currentStatusFilter = status;
 
-    this.backendService.getResponsesByStatus(workspaceId, status, page, limit)
+    this.backendService.getResponsesByStatus(workspaceId, status, this.selectedStatisticsVersion, page, limit)
       .pipe(
         catchError(() => {
           this.isLoading = false;
@@ -285,23 +290,28 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
         })
       )
       .subscribe(response => {
-        this.data = response.data.map((item: ResponseEntity) => ({
-          id: item.id,
-          unitid: item.unitId,
-          variableid: item.variableid || '',
-          status: item.status || '',
-          value: item.value || '',
-          subform: item.subform || '',
-          code: item.code?.toString() || null,
-          score: item.score?.toString() || null,
-          unit: item.unit,
-          codedstatus: item.codedstatus || '',
-          unitname: item.unit?.name || '',
-          login_name: item.unit?.booklet?.person?.login || '',
-          login_group: (item.unit?.booklet?.person as { login: string; code: string; group?: string })?.group || '',
-          login_code: item.unit?.booklet?.person?.code || '',
-          booklet_id: item.unit?.booklet?.bookletinfo?.name || ''
-        }));
+        this.data = response.data.map((item: ResponseEntity) => {
+          const codeKey = `code_${this.selectedStatisticsVersion}` as keyof ResponseEntity;
+          const scoreKey = `score_${this.selectedStatisticsVersion}` as keyof ResponseEntity;
+
+          return {
+            id: item.id,
+            unitid: item.unitId,
+            variableid: item.variableid || '',
+            status: item.status || '',
+            value: item.value || '',
+            subform: item.subform || '',
+            code: (item[codeKey] as number)?.toString() || null,
+            score: (item[scoreKey] as number)?.toString() || null,
+            unit: item.unit,
+            codedstatus: item.codedstatus || '',
+            unitname: item.unit?.name || '',
+            login_name: item.unit?.booklet?.person?.login || '',
+            login_group: (item.unit?.booklet?.person as { login: string; code: string; group?: string })?.group || '',
+            login_code: item.unit?.booklet?.person?.code || '',
+            booklet_id: item.unit?.booklet?.bookletinfo?.name || ''
+          };
+        });
         this.dataSource.data = this.data;
         this.totalRecords = response.total;
 

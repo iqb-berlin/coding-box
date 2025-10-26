@@ -224,8 +224,8 @@ export class BackendService {
     return this.codingService.getVariableAnalysis(workspace_id, page, limit, unitId, variableId, derivation);
   }
 
-  getResponsesByStatus(workspace_id: number, status: string, page: number = 1, limit: number = 100): Observable<PaginatedResponse<ResponseEntity>> {
-    return this.codingService.getResponsesByStatus(workspace_id, status, page, limit);
+  getResponsesByStatus(workspace_id: number, status: string, version: 'v1' | 'v2' | 'v3' = 'v1', page: number = 1, limit: number = 100): Observable<PaginatedResponse<ResponseEntity>> {
+    return this.codingService.getResponsesByStatus(workspace_id, status, version, page, limit);
   }
 
   changeWorkspace(workspaceData: WorkspaceFullDto): Observable<boolean> {

@@ -741,6 +741,11 @@
   },
   "test-person-coding": {
     "title": "Testpersonen Kodieren",
+    "autocoder-run-selection": {
+      "select-run": "Autocoder Lauf auswählen",
+      "run-1": "1 Autocoder Lauf",
+      "run-2": "2 Autocoder Lauf"
+    },
     "select-groups-label": "Testpersonengruppen auswählen",
     "select-groups-hint": "Wählen Sie eine oder mehrere Gruppen zum Kodieren aus",
     "loading-groups": "Gruppen werden geladen...",
@@ -776,6 +781,7 @@
         "progress": "Fortschritt",
         "created": "Erstellt",
         "groups": "Gruppen",
+        "coding-run": "Kodier-Lauf",
         "duration": "Dauer",
         "unknown": "Unbekannt",
         "actions": "Aktionen"
