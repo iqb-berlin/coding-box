@@ -32,8 +32,11 @@ import { WorkspaceFilesService } from './workspace-files.service';
 interface CodedResponse {
   id: number;
   code_v1?: number;
-  status_v1?: number;
+  status_v1?: string;
   score_v1?: number;
+  code_v3?: number;
+  status_v3?: string;
+  score_v3?: number;
 }
 
 @Injectable()
@@ -349,15 +352,33 @@ export class WorkspaceCodingService {
 
         try {
           if (batch.length > 0) {
-            const updatePromises = batch.map(response => queryRunner.manager.update(
-              ResponseEntity,
-              response.id,
-              {
-                code_v1: response?.code_v1,
-                status_v1: statusStringToNumber(response?.status_v1),
-                score_v1: response?.score_v1
+            const updatePromises = batch.map(response => {
+              const updateData: Partial<Pick<ResponseEntity, 'code_v1' | 'status_v1' | 'score_v1' | 'code_v3' | 'status_v3' | 'score_v3'>> = {};
+
+              if (response.code_v1 !== undefined) {
+                updateData.code_v1 = response.code_v1;
               }
-            ));
+              if (response.status_v1 !== undefined) {
+                updateData.status_v1 = statusStringToNumber(response.status_v1);
+              }
+              if (response.score_v1 !== undefined) {
+                updateData.score_v1 = response.score_v1;
+              }
+
+              if (response.code_v3 !== undefined) {
+                updateData.code_v3 = response.code_v3;
+              }
+              if (response.status_v3 !== undefined) {
+                updateData.status_v3 = statusStringToNumber(response.status_v3);
+              }
+              if (response.score_v3 !== undefined) {
+                updateData.score_v3 = response.score_v3;
+              }
+              if (Object.keys(updateData).length > 0) {
+                return queryRunner.manager.update(ResponseEntity, response.id, updateData);
+              }
+              return Promise.resolve();
+            });
 
             await Promise.all(updatePromises);
           }
@@ -404,6 +425,7 @@ export class WorkspaceCodingService {
     fileIdToCodingSchemeMap: Map<string, CodingScheme>,
     allResponses: ResponseEntity[],
     statistics: CodingStatistics,
+    autoCoderRun: number = 1,
     jobId?: string,
     queryRunner?: import('typeorm').QueryRunner,
     progressCallback?: (progress: number) => void
@@ -427,10 +449,17 @@ export class WorkspaceCodingService {
           (fileIdToCodingSchemeMap.get(codingSchemeRef) || emptyScheme) :
           emptyScheme;
         for (const response of responses) {
+          // Determine which status field to use as input for autocoder
+          let inputStatus = response.status; // default for run 1
+          if (autoCoderRun === 2) {
+            // For run 2, use status_v2 if available, otherwise status_v1
+            inputStatus = response.status_v2 || response.status_v1 || response.status;
+          }
+
           const codedResult = Autocoder.CodingFactory.code({
             id: response.variableid,
             value: response.value,
-            status: statusNumberToString(response.status) || 'UNSET'
+            status: statusNumberToString(inputStatus) || 'UNSET'
           }, scheme.variableCodings[0]);
           const codedStatus = codedResult?.status;
           if (!statistics.statusCounts[codedStatus]) {
@@ -438,12 +467,21 @@ export class WorkspaceCodingService {
           }
           statistics.statusCounts[codedStatus] += 1;
 
-          allCodedResponses[responseIndex] = {
-            id: response.id,
-            code_v1: codedResult?.code,
-            status_v1: codedStatus,
-            score_v1: codedResult?.score
+          const codedResponse: CodedResponse = {
+            id: response.id
           };
+
+          if (autoCoderRun === 1) {
+            codedResponse.code_v1 = codedResult?.code;
+            codedResponse.status_v1 = codedStatus;
+            codedResponse.score_v1 = codedResult?.score;
+          } else if (autoCoderRun === 2) {
+            codedResponse.code_v3 = codedResult?.code;
+            codedResponse.status_v3 = codedStatus;
+            codedResponse.score_v3 = codedResult?.score;
+          }
+
+          allCodedResponses[responseIndex] = codedResponse;
           responseIndex += 1;
         }
       }
@@ -526,6 +564,7 @@ export class WorkspaceCodingService {
   async processTestPersonsBatch(
     workspace_id: number,
     personIds: string[],
+    autoCoderRun: number = 1,
     progressCallback?: (progress: number) => void,
     jobId?: string
   ): Promise<CodingStatistics> {
@@ -813,6 +852,7 @@ export class WorkspaceCodingService {
         fileIdToCodingSchemeMap,
         filteredResponses,
         statistics,
+        autoCoderRun,
         jobId,
         queryRunner,
         progressCallback
@@ -844,7 +884,6 @@ export class WorkspaceCodingService {
         progressCallback(100);
       }
 
-      // Log performance metrics
       const totalTime = Date.now() - startTime;
       this.logger.log(`Performance metrics for processTestPersonsBatch (total: ${totalTime}ms):
         - Persons query: ${metrics.personsQuery}ms
@@ -865,7 +904,6 @@ export class WorkspaceCodingService {
     } catch (error) {
       this.logger.error('Fehler beim Verarbeiten der Personen:', error);
 
-      // Ensure transaction is rolled back on error
       try {
         await queryRunner.rollbackTransaction();
       } catch (rollbackError) {
@@ -878,7 +916,7 @@ export class WorkspaceCodingService {
     }
   }
 
-  async codeTestPersons(workspace_id: number, testPersonIdsOrGroups: string): Promise<CodingStatisticsWithJob> {
+  async codeTestPersons(workspace_id: number, testPersonIdsOrGroups: string, autoCoderRun: number = 1): Promise<CodingStatisticsWithJob> {
     this.cleanupCaches();
 
     if (!workspace_id || !testPersonIdsOrGroups || testPersonIdsOrGroups.trim() === '') {
@@ -900,7 +938,6 @@ export class WorkspaceCodingService {
       personIds = groupsOrIds;
       this.logger.log(`Using provided person IDs: ${personIds.length} persons`);
     } else {
-      // Input contains group names, fetch all persons in these groups
       this.logger.log(`Fetching persons for groups: ${groupsOrIds.join(', ')}`);
 
       try {
@@ -934,14 +971,13 @@ export class WorkspaceCodingService {
       }
     }
 
-    // Always process as a job, regardless of the number of test persons
     this.logger.log(`Starting job for ${personIds.length} test persons in workspace ${workspace_id}`);
 
-    // Add the job to the Redis queue
     const bullJob = await this.jobQueueService.addTestPersonCodingJob({
       workspaceId: workspace_id,
       personIds,
-      groupNames: !areAllNumbers ? groupsOrIds.join(',') : undefined
+      groupNames: !areAllNumbers ? groupsOrIds.join(',') : undefined,
+      autoCoderRun
     });
 
     this.logger.log(`Added job to Redis queue with ID ${bullJob.id}`);
@@ -1286,25 +1322,18 @@ export class WorkspaceCodingService {
   ): Promise<{ unitName: string; variableId: string }[]> {
     try {
       if (unitName) {
-        // If filtering by unit name, we can't use cache (would require complex cache indexing)
         this.logger.log(`Querying CODING_INCOMPLETE variables for workspace ${workspaceId} and unit ${unitName} (not cached)`);
         return await this.fetchCodingIncompleteVariablesFromDb(workspaceId, unitName);
       }
-
-      // Try to get from cache first
       const cacheKey = this.generateIncompleteVariablesCacheKey(workspaceId);
       const cachedResult = await this.cacheService.get<{ unitName: string; variableId: string }[]>(cacheKey);
-
       if (cachedResult) {
         this.logger.log(`Retrieved ${cachedResult.length} CODING_INCOMPLETE variables from cache for workspace ${workspaceId}`);
         return cachedResult;
       }
-
-      // Not in cache, fetch from database
       this.logger.log(`Cache miss: Querying CODING_INCOMPLETE variables for workspace ${workspaceId}`);
       const result = await this.fetchCodingIncompleteVariablesFromDb(workspaceId);
 
-      // Cache the result (no TTL - permanent cache)
       const cacheSet = await this.cacheService.set(cacheKey, result, 0);
       if (cacheSet) {
         this.logger.log(`Cached ${result.length} CODING_INCOMPLETE variables for workspace ${workspaceId}`);
@@ -1422,5 +1451,93 @@ export class WorkspaceCodingService {
       }>;
     }> {
     return this.externalCodingImportService.importExternalCoding(workspaceId, body);
+  }
+
+  async getResponsesByStatus(
+    workspaceId: number,
+    status: string,
+    version: 'v1' | 'v2' | 'v3' = 'v1',
+    page: number = 1,
+    limit: number = 100
+  ): Promise<{
+      data: ResponseEntity[];
+      total: number;
+      page: number;
+      limit: number;
+    }> {
+    try {
+      const statusNumber = statusStringToNumber(status);
+      if (statusNumber === null) {
+        this.logger.warn(`Invalid status string: ${status}`);
+        return {
+          data: [], total: 0, page, limit
+        };
+      }
+
+      const offset = (page - 1) * limit;
+
+      // Build the select fields dynamically based on version
+      const selectFields = [
+        'response.id',
+        'response.unitId',
+        'response.variableid',
+        'response.value',
+        'response.status',
+        'response.codedstatus'
+      ];
+
+      // Always include all code and score fields
+      selectFields.push('response.code_v1', 'response.score_v1');
+      selectFields.push('response.code_v2', 'response.score_v2');
+      selectFields.push('response.code_v3', 'response.score_v3');
+      selectFields.push('response.status_v1', 'response.status_v2', 'response.status_v3');
+
+      // Add joins and relation selections
+      const queryBuilder = this.responseRepository.createQueryBuilder('response')
+        .leftJoinAndSelect('response.unit', 'unit')
+        .leftJoinAndSelect('unit.booklet', 'booklet')
+        .leftJoinAndSelect('booklet.person', 'person')
+        .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
+        .select(selectFields)
+        .where('person.workspace_id = :workspaceId', { workspaceId });
+
+      // Filter by status - look for the status in the appropriate column based on version
+      switch (version) {
+        case 'v1':
+          queryBuilder.andWhere('response.status_v1 = :status', { status: statusNumber });
+          break;
+        case 'v2':
+          queryBuilder.andWhere('response.status_v2 = :status', { status: statusNumber });
+          break;
+        case 'v3':
+          queryBuilder.andWhere('response.status_v3 = :status', { status: statusNumber });
+          break;
+        default:
+          queryBuilder.andWhere('response.status_v1 = :status', { status: statusNumber });
+          break;
+      }
+
+      // Get total count
+      const total = await queryBuilder.getCount();
+
+      // Apply pagination and ordering
+      const data = await queryBuilder
+        .orderBy('response.id', 'ASC')
+        .skip(offset)
+        .take(limit)
+        .getMany();
+
+      this.logger.log(`Retrieved ${data.length} responses with status ${status} for version ${version} in workspace ${workspaceId}`);
+
+      return {
+        data,
+        total,
+        page,
+        limit
+      };
+    } catch (error) {
+      this.logger.error(`Error getting responses by status: ${error.message}`, error.stack);
+      throw new Error('Could not retrieve responses. Please check the database connection or query.');
+    }
   }
 }

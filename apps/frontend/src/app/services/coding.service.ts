@@ -225,8 +225,9 @@ export class CodingService {
       );
   }
 
-  getResponsesByStatus(workspace_id: number, status: string, page: number = 1, limit: number = 100): Observable<PaginatedResponse<ResponseEntity>> {
+  getResponsesByStatus(workspace_id: number, status: string, version: 'v1' | 'v2' | 'v3' = 'v1', page: number = 1, limit: number = 100): Observable<PaginatedResponse<ResponseEntity>> {
     const params = new HttpParams()
+      .set('version', version)
       .set('page', page.toString())
       .set('limit', limit.toString());
 
@@ -308,7 +309,6 @@ export class CodingService {
     contentOptions: CodeBookContentSetting,
     unitList: number[]
   ): Observable<Blob | null> {
-    // Ensure unitList is an array of numbers
     const payload = {
       missingsProfile,
       contentOptions,

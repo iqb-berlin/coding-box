@@ -15,6 +15,7 @@ import { WorkspaceCodingService } from '../../database/services/workspace-coding
 import { CoderTrainingService } from '../../database/services/coder-training.service';
 import { CodingListService } from '../../database/services/coding-list.service';
 import { PersonService } from '../../database/services/person.service';
+import { ResponseEntity } from '../../database/entities/response.entity';
 import { VariableAnalysisItemDto } from '../../../../../../api-dto/coding/variable-analysis-item.dto';
 import { ValidateCodingCompletenessRequestDto } from '../../../../../../api-dto/coding/validate-coding-completeness-request.dto';
 import { ValidateCodingCompletenessResponseDto } from '../../../../../../api-dto/coding/validate-coding-completeness-response.dto';
@@ -36,11 +37,18 @@ export class WorkspaceCodingController {
   @Get(':workspace_id/coding')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiQuery({
+    name: 'autoCoderRun',
+    required: false,
+    description: 'Autocoder run type: 1 (standard) or 2 (uses v2 as input, saves to v3)',
+    enum: [1, 2],
+    example: 1
+  })
   @ApiOkResponse({
     description: 'Coding statistics retrieved successfully.'
   })
-  async codeTestPersons(@Query('testPersons') testPersons: string, @WorkspaceId() workspace_id: number): Promise<CodingStatistics> {
-    return this.workspaceCodingService.codeTestPersons(workspace_id, testPersons);
+  async codeTestPersons(@Query('testPersons') testPersons: string, @WorkspaceId() workspace_id: number, @Query('autoCoderRun') autoCoderRun: number = 1): Promise<CodingStatistics> {
+    return this.workspaceCodingService.codeTestPersons(workspace_id, testPersons, autoCoderRun);
   }
 
   @Get(':workspace_id/coding/manual')
@@ -299,6 +307,7 @@ export class WorkspaceCodingController {
     groupNames?: string;
     durationMs?: number;
     completedAt?: Date;
+    autoCoderRun?: number;
   }[]> {
     return this.workspaceCodingService.getBullJobs(workspace_id);
   }
@@ -1330,5 +1339,84 @@ export class WorkspaceCodingController {
     }
 
     return this.coderTrainingService.deleteCoderTraining(workspace_id, trainingId);
+  }
+
+  @Get(':workspace_id/coding/responses/:status')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiParam({ name: 'status', type: String, description: 'Response status to filter by' })
+  @ApiQuery({
+    name: 'version',
+    required: false,
+    description: 'Coding version to get responses for: v1, v2, or v3',
+    enum: ['v1', 'v2', 'v3'],
+    example: 'v1'
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    description: 'Page number for pagination (default: 1)',
+    type: Number
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    description: 'Number of items per page (default: 100, max: 500)',
+    type: Number
+  })
+  @ApiOkResponse({
+    description: 'Responses retrieved successfully.',
+    schema: {
+      type: 'object',
+      properties: {
+        data: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'number', description: 'Response ID' },
+              unitId: { type: 'string', description: 'Unit ID' },
+              variableid: { type: 'string', description: 'Variable ID' },
+              value: { type: 'string', description: 'Response value' },
+              status: { type: 'string', description: 'Response status' },
+              codedstatus: { type: 'string', description: 'Coded status' },
+              code_v1: { type: 'number', description: 'Code for version 1' },
+              score_v1: { type: 'number', description: 'Score for version 1' },
+              code_v2: { type: 'number', description: 'Code for version 2' },
+              score_v2: { type: 'number', description: 'Score for version 2' },
+              code_v3: { type: 'number', description: 'Code for version 3' },
+              score_v3: { type: 'number', description: 'Score for version 3' }
+            }
+          }
+        },
+        total: { type: 'number', description: 'Total number of items' },
+        page: { type: 'number', description: 'Current page number' },
+        limit: { type: 'number', description: 'Number of items per page' }
+      }
+    }
+  })
+  async getResponsesByStatus(
+    @WorkspaceId() workspace_id: number,
+      @Param('status') status: string,
+                   @Query('version') version: 'v1' | 'v2' | 'v3' = 'v1',
+                   @Query('page') page: number = 1,
+                   @Query('limit') limit: number = 100
+  ): Promise<{
+        data: ResponseEntity[];
+        total: number;
+        page: number;
+        limit: number;
+      }> {
+    const validPage = Math.max(1, page);
+    const validLimit = Math.min(Math.max(1, limit), 500); // Set maximum limit to 500
+
+    return this.workspaceCodingService.getResponsesByStatus(
+      workspace_id,
+      status,
+      version,
+      validPage,
+      validLimit
+    );
   }
 }

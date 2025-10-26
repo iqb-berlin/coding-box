@@ -16,6 +16,14 @@
             <mat-hint>{{ 'test-person-coding.select-groups-hint' | translate }}</mat-hint>
           </mat-form-field>
         </div>
+
+        <div class="autocoder-run-selection">
+          <mat-radio-group [(ngModel)]="autoCoderRun" class="autocoder-radio-group">
+            <mat-radio-button [value]="1">{{ 'test-person-coding.autocoder-run-selection.run-1' | translate }}</mat-radio-button>
+            <mat-radio-button [value]="2">{{ 'test-person-coding.autocoder-run-selection.run-2' | translate }}</mat-radio-button>
+          </mat-radio-group>
+        </div>
+
         <div class="button-container">
           <button mat-raised-button color="primary" [disabled]="isLoading || selectedGroups.length === 0" (click)="codeTestPersons(selectedGroups.join(','))">
             <mat-icon>code</mat-icon>
@@ -86,6 +94,11 @@
             </td>
           </ng-container>
 
+          <ng-container matColumnDef="autoCoderRun">
+            <th mat-header-cell *matHeaderCellDef>{{ 'test-person-coding.jobs.table.coding-run' | translate }}</th>
+            <td mat-cell *matCellDef="let job">{{ job.autoCoderRun || 1 }}</td>
+          </ng-container>
+
           <ng-container matColumnDef="duration">
             <th mat-header-cell *matHeaderCellDef>{{ 'test-person-coding.jobs.table.duration' | translate }}</th>
             <td mat-cell *matCellDef="let job">
@@ -135,8 +148,8 @@
             </td>
           </ng-container>
 
-          <tr mat-header-row *matHeaderRowDef="['jobId', 'status', 'progress', 'createdAt', 'groups', 'duration', 'actions']"></tr>
-          <tr mat-row *matRowDef="let row; columns: ['jobId', 'status', 'progress', 'createdAt', 'groups', 'duration', 'actions'];"></tr>
+          <tr mat-header-row *matHeaderRowDef="['jobId', 'status', 'progress', 'createdAt', 'groups', 'autoCoderRun', 'duration', 'actions']"></tr>
+          <tr mat-row *matRowDef="let row; columns: ['jobId', 'status', 'progress', 'createdAt', 'groups', 'autoCoderRun', 'duration', 'actions'];"></tr>
         </table>
       </div>
 
