@@ -25,7 +25,7 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
       const workspaceIds = await this.getWorkspaceIdsWithResponses();
       this.logger.log(`Found ${workspaceIds.length} workspaces with responses, preloading statistics...`);
 
-      const preloadPromises = workspaceIds.map(workspaceId => this.getCodingStatistics(workspaceId, true).catch(error => {
+      const preloadPromises = workspaceIds.map(workspaceId => this.getCodingStatistics(workspaceId).catch(error => {
         this.logger.error(`Failed to preload statistics for workspace ${workspaceId}: ${error.message}`);
       })
       );
@@ -51,10 +51,10 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
     return result.map(row => parseInt(row.workspace_id, 10)).filter(id => !Number.isNaN(id));
   }
 
-  async getCodingStatistics(workspace_id: number, skipCache: boolean = false): Promise<CodingStatistics> {
-    this.logger.log(`Getting coding statistics for workspace ${workspace_id}${skipCache ? ' (skipping cache)' : ''}`);
+  async getCodingStatistics(workspace_id: number, version: 'v1' | 'v2' | 'v3' = 'v1', skipCache: boolean = false): Promise<CodingStatistics> {
+    this.logger.log(`Getting coding statistics for workspace ${workspace_id} (version: ${version})${skipCache ? ' (skipping cache)' : ''}`);
 
-    const cacheKey = `${this.CACHE_KEY_PREFIX}:${workspace_id}`;
+    const cacheKey = `${this.CACHE_KEY_PREFIX}:${workspace_id}:${version}`;
     if (!skipCache) {
       const cachedResult = await this.cacheService.get<CodingStatistics>(cacheKey);
       if (cachedResult) {
@@ -81,20 +81,32 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
       this.logger.log(`Filtering coding statistics to ${unitsWithVariables.length} units that have defined variables`);
 
       const valuedChangedStatus = statusStringToNumber('VALUE_CHANGED') || 3;
+
+      let statusColumn = 'response.status_v1';
+      let whereCondition = 'response.status_v1 IS NOT NULL';
+
+      if (version === 'v2') {
+        statusColumn = 'COALESCE(response.status_v2, response.status_v1)';
+        whereCondition = '(COALESCE(response.status_v2, response.status_v1)) IS NOT NULL';
+      } else if (version === 'v3') {
+        statusColumn = 'COALESCE(response.status_v3, response.status_v2, response.status_v1)';
+        whereCondition = '(COALESCE(response.status_v3, response.status_v2, response.status_v1)) IS NOT NULL';
+      }
+
       const statusCountResults = await this.responseRepository.query(`
         SELECT
-          response.status_v1 as "statusValue",
+          ${statusColumn} as "statusValue",
           COUNT(response.id) as count
         FROM response
         INNER JOIN unit ON response.unitid = unit.id
         INNER JOIN booklet ON unit.bookletid = booklet.id
         INNER JOIN persons person ON booklet.personid = person.id
         WHERE response.status = $1
-          AND response.status_v1 IS NOT NULL
+          AND ${whereCondition}
           AND person.workspace_id = $2
           AND person.consider = $3
           AND unit.name = ANY($4)
-        GROUP BY response.status_v1
+        GROUP BY ${statusColumn}
       `, [valuedChangedStatus, workspace_id, true, unitsWithVariables]);
 
       let totalResponses = 0;
@@ -161,10 +173,21 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
     return unitVariables;
   }
 
-  async invalidateCache(workspace_id: number): Promise<void> {
-    const cacheKey = `${this.CACHE_KEY_PREFIX}:${workspace_id}`;
-    await this.cacheService.delete(cacheKey);
-    this.logger.log(`Invalidated coding statistics cache for workspace ${workspace_id}`);
+  async invalidateCache(workspace_id: number, version?: 'v1' | 'v2' | 'v3'): Promise<void> {
+    if (version) {
+      const cacheKey = `${this.CACHE_KEY_PREFIX}:${workspace_id}:${version}`;
+      await this.cacheService.delete(cacheKey);
+      this.logger.log(`Invalidated coding statistics cache for workspace ${workspace_id} (version: ${version})`);
+    } else {
+      // Invalidate all versions
+      const versions: ('v1' | 'v2' | 'v3')[] = ['v1', 'v2', 'v3'];
+      const deletePromises = versions.map(v => {
+        const cacheKey = `${this.CACHE_KEY_PREFIX}:${workspace_id}:${v}`;
+        return this.cacheService.delete(cacheKey);
+      });
+      await Promise.all(deletePromises);
+      this.logger.log(`Invalidated all coding statistics caches for workspace ${workspace_id}`);
+    }
   }
 
   async invalidateIncompleteVariablesCache(workspace_id: number): Promise<void> {
@@ -173,8 +196,8 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
     this.logger.log(`Invalidated incomplete variables cache for workspace ${workspace_id}`);
   }
 
-  async refreshStatistics(workspace_id: number): Promise<CodingStatistics> {
+  async refreshStatistics(workspace_id: number, version: 'v1' | 'v2' | 'v3' = 'v1'): Promise<CodingStatistics> {
     this.logger.log(`Refreshing coding statistics for workspace ${workspace_id}`);
-    return this.getCodingStatistics(workspace_id, true); // skipCache = true
+    return this.getCodingStatistics(workspace_id, version, true); // skipCache = true
   }
 }
