@@ -1,51 +1,31 @@
 <div class="fx-column-start-start fx-gap-10 container">
-  <div class="fx-row-center-center-stretch fx-gap-20 action-buttons">
-    <a mat-raised-button color="primary" (click)="createVariableBundleGroup()">
-      <mat-icon>add</mat-icon>
-      Variablenbündel erstellen
-    </a>
-    <a mat-raised-button color="primary" [disabled]="selection.selected.length !== 1"
-       (click)="selection.selected.length === 1 && editVariableBundleGroup(selection.selected[0])">
-      <mat-icon>edit</mat-icon>
-      Variablenbündel bearbeiten
-    </a>
-    <a mat-raised-button color="warn" [disabled]="selection.selected.length === 0" (click)="deleteSelectedVariableBundleGroups()">
-      <mat-icon>delete</mat-icon>
-      Variablenbündel löschen
-    </a>
-  </div>
-
   @if (isLoading) {
     <div class="loading-container">
       <mat-spinner></mat-spinner>
     </div>
   }
   @if (!isLoading) {
-    <coding-box-search-filter
-      [title]="'Variablenbündel filtern'"
-      [initialValue]="currentFilter"
-      (valueChange)="applyFilter($event)">
-    </coding-box-search-filter>
+    <div class="fx-row-center-center-stretch fx-gap-16 header-row">
+      <button mat-stroked-button color="primary" (click)="createVariableBundleGroup()">
+        <mat-icon>add</mat-icon>
+        Variablenbündel erstellen
+      </button>
+
+      <mat-form-field appearance="outline" class="filter-field">
+        <mat-label>Name filtern</mat-label>
+        <mat-select [(value)]="selectedName" (selectionChange)="onNameFilterChange()">
+          <mat-option [value]="null">Alle Namen</mat-option>
+          <mat-option *ngFor="let bundle of originalData" [value]="bundle.name">
+            {{bundle.name}}
+          </mat-option>
+        </mat-select>
+      </mat-form-field>
+    </div>
 
     <mat-table [dataSource]="dataSource" matSort class="variable-bundle-table">
       <mat-header-row *matHeaderRowDef="displayedColumns; sticky: true"></mat-header-row>
-      <mat-row *matRowDef="let row; columns: displayedColumns;" (click)="selectRow(row, $event)">
+      <mat-row *matRowDef="let row; columns: displayedColumns;">
       </mat-row>
-
-      <ng-container matColumnDef="selectCheckbox">
-        <mat-header-cell *matHeaderCellDef class="fx-flex-row-fix-70">
-          <mat-checkbox [checked]="isAllSelected()"
-                      [indeterminate]="isIndeterminate()"
-                      (change)="$event ? masterToggle() : null">
-          </mat-checkbox>
-        </mat-header-cell>
-        <mat-cell *matCellDef="let row" class="fx-flex-row-fix-70">
-          <mat-checkbox [checked]="selection.isSelected(row)"
-                      (click)="$event.stopPropagation()"
-                      (change)="$event ? selection.toggle(row) : null">
-          </mat-checkbox>
-        </mat-cell>
-      </ng-container>
 
       <ng-container matColumnDef="name">
         <mat-header-cell *matHeaderCellDef mat-sort-header>Name</mat-header-cell>
@@ -85,24 +65,15 @@
       <ng-container matColumnDef="actions">
         <mat-header-cell *matHeaderCellDef>Aktionen</mat-header-cell>
         <mat-cell *matCellDef="let element">
-          <button mat-icon-button color="primary" (click)="$event.stopPropagation(); editVariableBundleGroup(element)" matTooltip="Bearbeiten">
+          <button mat-icon-button (click)="$event.stopPropagation(); editVariableBundleGroup(element)" matTooltip="Bearbeiten">
             <mat-icon>edit</mat-icon>
           </button>
-          <button mat-icon-button color="warn" (click)="$event.stopPropagation(); deleteVariableBundleGroup(element)" matTooltip="Löschen">
+          <button mat-icon-button (click)="$event.stopPropagation(); deleteVariableBundleGroup(element)" matTooltip="Löschen">
             <mat-icon>delete</mat-icon>
           </button>
         </mat-cell>
       </ng-container>
     </mat-table>
-
-    <mat-paginator
-      [pageIndex]="currentPage - 1"
-      [pageSize]="pageSize"
-      [pageSizeOptions]="[5, 10, 25, 50]"
-      [length]="totalItems"
-      (page)="onPageChange($event)"
-      aria-label="Seite auswählen">
-    </mat-paginator>
 
     @if (dataSource.data.length === 0) {
       <div class="no-data-message">
