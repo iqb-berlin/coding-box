@@ -298,6 +298,16 @@
         "status": "Status",
         "units": "Aufgaben"
       }
+    },
+    "tooltip": {
+      "has-only-vars-with-codes": "Nur Variablen mit Kodierschemas einbeziehen",
+      "has-general-instructions": "Allgemeine Hinweise für jede Variable einbeziehen",
+      "hide-item-var-relation": "Die Beziehung zwischen Items und Variablen ausblenden",
+      "has-derived-vars": "Abgeleitete Variablen in das Codebook einbeziehen",
+      "has-only-manual-coding": "Nur Variablen, die manuelle Kodierung erfordern, einbeziehen",
+      "has-closed-vars": "Geschlossene Variablen in das Codebook einbeziehen",
+      "show-score": "Bewertungswerte im Codebook anzeigen",
+      "code-label-to-upper": "Code-Labels in Großbuchstaben konvertieren"
     }
   },
 
@@ -891,5 +901,40 @@
     "import": {
       "errors-and-warnings": "Fehler und Warnungen"
     }
+  },
+
+  "export-dialog": {
+    "title": "Export Format wählen",
+    "description": "Bitte wählen Sie das gewünschte Format für den Export der Kodierliste:",
+    "formats": {
+      "json": "JSON",
+      "json-description": "Standard-Format mit allen Details",
+      "csv": "CSV",
+      "csv-description": "Komma-getrennte Werte, für Excel und andere Tabellenkalkulationen",
+      "excel": "Excel",
+      "excel-description": "Direktes Excel-Format (.xlsx)"
+    },
+    "cancel": "Abbrechen",
+    "export": "Exportieren",
+    "validation": {
+      "section-title": "Validierung externer Kodierliste für Replay-Funktionalität",
+      "upload-button": "Validierungs-Kodierliste",
+      "tooltip": "Validierung externer Kodierliste für Replay-Funktionalität",
+      "running-title": "Validierung läuft",
+      "running-description": "Validierung läuft im Hintergrund",
+      "error-title": "Fehler bei der Validierung",
+      "retry-button": "Erneut versuchen",
+      "download-button": "Validierungsliste herunterladen",
+      "file-loading": "Excel-Datei wird geladen...",
+      "file-processing": "Excel-Datei wird verarbeitet...",
+      "data-extraction-general": "Daten werden extrahiert...",
+      "data-extraction-progress": "Daten werden extrahiert ({{current}}/{{total}})...",
+      "data-preparation": "Daten werden für Validierung vorbereitet...",
+      "validation-running": "Validierung wird durchgeführt...",
+      "validation-page-progress": "Validierung wird durchgeführt (Seite {{page}})..."
+    }
+  },
+  "export-coding-book": {
+    "validation-file": "Validierungs-Kodierliste"
   }
 }

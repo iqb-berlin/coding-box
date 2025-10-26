@@ -7,15 +7,8 @@
         Externe Kodierung einbinden
       </a>
       <input #externalCodingFileInput type="file" style="display: none;" accept=".csv, .xlsx, .xls" (change)="onExternalCodingFileSelected($event)">
-      <a mat-raised-button color="primary" (click)="openCoderTraining()">
-        <mat-icon>school</mat-icon>
-        Schulung starten
-      </a>
-      <a mat-raised-button color="primary" (click)="fileInput.click()" [disabled]="isLoading">
-        <mat-icon>upload_file</mat-icon>
-        Validierungs-Kodierliste
-      </a>
-      <input #fileInput type="file" style="display: none;" accept=".xlsx, .xls" (change)="onFileSelected($event)">
+
+
     </div>
   </div>
 
@@ -47,10 +40,7 @@
       </p>
       <hr>
       <div class="error-actions">
-        <button mat-button color="primary" (click)="fileInput.click()">
-          <mat-icon>refresh</mat-icon>
-          Erneut versuchen
-        </button>
+
       </div>
     </div>
   </div>
