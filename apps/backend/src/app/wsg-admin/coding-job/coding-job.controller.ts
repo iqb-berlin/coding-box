@@ -70,6 +70,7 @@ export class WsgCodingJobController {
       properties: {
         data: { type: 'array', items: { $ref: '#/components/schemas/CodingJobDto' } },
         total: { type: 'number' },
+        totalOpenUnits: { type: 'number' },
         page: { type: 'number' },
         limit: { type: 'number' }
       }
@@ -85,12 +86,13 @@ export class WsgCodingJobController {
     @WorkspaceId() workspaceId: number,
       @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
       @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number
-  ): Promise<{ data: CodingJobDto[]; total: number; page: number; limit: number }> {
+  ): Promise<{ data: CodingJobDto[]; total: number; totalOpenUnits: number; page: number; limit: number }> {
     try {
       const result = await this.codingJobService.getCodingJobs(workspaceId, page, limit);
       return {
         data: result.data,
         total: result.total,
+        totalOpenUnits: result.totalOpenUnits,
         page: result.page,
         limit: result.limit
       };
@@ -275,8 +277,8 @@ export class WsgCodingJobController {
       @Param('id', ParseIntPipe) id: number
   ): Promise<{ total: number; items: Array<{ responseId: number; unitName: string; unitAlias: string | null; variableId: string; variableAnchor: string; bookletName: string; personLogin: string; personCode: string }> }> {
     try {
-      await this.codingJobService.getCodingJob(id, workspaceId); // Validate job exists and belongs to workspace
-      const items = await this.codingJobService.getCodingJobUnits(id);
+      await this.codingJobService.getCodingJob(id, workspaceId);
+      const items = await this.codingJobService.getCodingJobUnits(id, false);
       await this.codingJobService.updateCodingJob(id, workspaceId, { status: 'active' });
 
       return { total: items.length, items };
@@ -368,7 +370,7 @@ export class WsgCodingJobController {
       @Body() saveCodingProgressDto: SaveCodingProgressDto
   ): Promise<CodingJobDto> {
     try {
-      await this.codingJobService.getCodingJob(id, workspaceId); // Validate job exists and belongs to workspace
+      await this.codingJobService.getCodingJob(id, workspaceId);
       const codingJob = await this.codingJobService.saveCodingProgress(id, saveCodingProgressDto);
       return CodingJobDto.fromEntity(codingJob);
     } catch (error) {
@@ -376,6 +378,50 @@ export class WsgCodingJobController {
         throw error;
       }
       throw new BadRequestException(`Failed to save coding progress: ${error.message}`);
+    }
+  }
+
+  @Post(':id/restart-open-units')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Restart coding job with only open units',
+    description: 'Removes coded units and keeps only open units for recoding'
+  })
+  @ApiParam({
+    name: 'workspace_id',
+    type: Number,
+    required: true,
+    description: 'The ID of the workspace'
+  })
+  @ApiParam({
+    name: 'id',
+    type: Number,
+    required: true,
+    description: 'The ID of the coding job'
+  })
+  @ApiOkResponse({
+    description: 'Coding job restarted with open units only',
+    type: CodingJobDto
+  })
+  @ApiNotFoundResponse({
+    description: 'Coding job not found.'
+  })
+  @ApiBadRequestResponse({
+    description: 'Invalid input data.'
+  })
+  async restartCodingJobWithOpenUnits(
+    @WorkspaceId() workspaceId: number,
+      @Param('id', ParseIntPipe) id: number
+  ): Promise<CodingJobDto> {
+    try {
+      const codingJob = await this.codingJobService.restartCodingJobWithOpenUnits(id, workspaceId);
+      return CodingJobDto.fromEntity(codingJob);
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new BadRequestException(`Failed to restart coding job: ${error.message}`);
     }
   }
 
@@ -413,13 +459,69 @@ export class WsgCodingJobController {
       @Param('id', ParseIntPipe) id: number
   ): Promise<Record<string, unknown>> {
     try {
-      await this.codingJobService.getCodingJob(id, workspaceId); // Validate job exists and belongs to workspace
+      await this.codingJobService.getCodingJob(id, workspaceId);
       return await this.codingJobService.getCodingProgress(id);
     } catch (error) {
       if (error instanceof NotFoundException) {
         throw error;
       }
       throw new BadRequestException(`Failed to retrieve coding progress: ${error.message}`);
+    }
+  }
+
+  @Get(':id/units')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get coding job units',
+    description: 'Retrieves all units assigned to a coding job without starting it'
+  })
+  @ApiParam({
+    name: 'workspace_id',
+    type: Number,
+    required: true,
+    description: 'The ID of the workspace'
+  })
+  @ApiParam({
+    name: 'id',
+    type: Number,
+    required: true,
+    description: 'The ID of the coding job'
+  })
+  @ApiOkResponse({
+    description: 'Units retrieved successfully',
+    schema: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          responseId: { type: 'number' },
+          unitName: { type: 'string' },
+          unitAlias: { type: 'string' },
+          variableId: { type: 'string' },
+          variableAnchor: { type: 'string' },
+          bookletName: { type: 'string' },
+          personLogin: { type: 'string' },
+          personCode: { type: 'string' }
+        }
+      }
+    }
+  })
+  @ApiNotFoundResponse({
+    description: 'Coding job not found.'
+  })
+  async getCodingJobUnits(
+    @WorkspaceId() workspaceId: number,
+      @Param('id', ParseIntPipe) id: number
+  ): Promise<Array<{ responseId: number; unitName: string; unitAlias: string | null; variableId: string; variableAnchor: string; bookletName: string; personLogin: string; personCode: string }>> {
+    try {
+      await this.codingJobService.getCodingJob(id, workspaceId);
+      return await this.codingJobService.getCodingJobUnits(id, false);
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new BadRequestException(`Failed to retrieve coding job units: ${error.message}`);
     }
   }
 }

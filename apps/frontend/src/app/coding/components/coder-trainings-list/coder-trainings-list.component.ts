@@ -76,25 +76,29 @@ export class CoderTrainingsListComponent implements OnInit, OnDestroy {
     this.destroy$.complete();
   }
 
-  loadCoderTrainings(): void {
-    const workspaceId = this.appService.selectedWorkspaceId;
-    if (!workspaceId) {
-      return;
-    }
+  loadCoderTrainings(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const workspaceId = this.appService.selectedWorkspaceId;
+      if (!workspaceId) {
+        reject();
+        return;
+      }
 
-    this.isLoading = true;
-    this.backendService.getCoderTrainings(workspaceId)
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: (trainings: CoderTraining[]) => {
-          this.coderTrainings = trainings;
-          this.isLoading = false;
-        },
-        error: () => {
-          this.coderTrainings = [];
-          this.isLoading = false;
-        }
-      });
+      this.backendService.getCoderTrainings(workspaceId)
+        .pipe(takeUntil(this.destroy$))
+        .subscribe({
+          next: (trainings: CoderTraining[]) => {
+            this.coderTrainings = trainings;
+            this.isLoading = false;
+            resolve();
+          },
+          error: () => {
+            this.coderTrainings = [];
+            this.isLoading = false;
+            reject();
+          }
+        });
+    });
   }
 
   startEditTraining(training: CoderTraining): void {
@@ -153,27 +157,19 @@ export class CoderTrainingsListComponent implements OnInit, OnDestroy {
     this.onCreateTraining.emit();
   }
 
-  openResultsComparison(): void {
+  openResultsComparison(training?: CoderTraining): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
-      return;
-    }
-
-    if (this.coderTrainings.length < 2) {
-      this.snackBar.open(
-        this.translate.instant('coding.trainings.compare.notEnough'),
-        this.translate.instant('common.close'),
-        {
-          duration: 5000
-        }
-      );
       return;
     }
 
     this.dialog.open(CodingResultsComparisonComponent, {
       width: '90vw',
       height: '80vh',
-      data: { workspaceId }
+      data: {
+        workspaceId,
+        selectedTraining: training
+      }
     });
   }
 
@@ -209,10 +205,6 @@ export class CoderTrainingsListComponent implements OnInit, OnDestroy {
           );
         }
       });
-  }
-
-  formatDate(date: Date): string {
-    return new Date(date).toLocaleDateString();
   }
 
   deleteTraining(training: CoderTraining): void {

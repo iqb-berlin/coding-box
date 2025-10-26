@@ -93,7 +93,7 @@ export class CodingResultsComparisonComponent implements OnInit {
 
   constructor(
     public dialogRef: MatDialogRef<CodingResultsComparisonComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: { workspaceId: number },
+    @Inject(MAT_DIALOG_DATA) public data: { workspaceId: number; selectedTraining?: CoderTraining },
     private paginatorIntl: MatPaginatorIntl
   ) {
     this.paginatorIntl.itemsPerPageLabel = 'Einträge pro Seite:';
@@ -113,7 +113,13 @@ export class CodingResultsComparisonComponent implements OnInit {
   }
 
   ngOnInit(): void {
-    this.loadCoderTrainings();
+    this.loadCoderTrainings().then(() => {
+      if (this.data.selectedTraining) {
+        this.comparisonMode = 'within-training';
+        this.selectedTrainingForWithin = this.data.selectedTraining.id;
+        this.loadComparison();
+      }
+    });
   }
 
   ngAfterViewInit(): void {
@@ -121,19 +127,24 @@ export class CodingResultsComparisonComponent implements OnInit {
     this.dataSource.paginator = this.paginator;
   }
 
-  loadCoderTrainings(): void {
-    const workspaceId = this.data.workspaceId;
-    if (!workspaceId) {
-      return;
-    }
-
-    this.backendService.getCoderTrainings(workspaceId).subscribe({
-      next: trainings => {
-        this.availableTrainings = trainings;
-      },
-      error: () => {
-        this.snackBar.open('Fehler beim Laden der Kodierer-Schulungen', 'Schließen', { duration: 3000 });
+  loadCoderTrainings(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const workspaceId = this.data.workspaceId;
+      if (!workspaceId) {
+        reject();
+        return;
       }
+
+      this.backendService.getCoderTrainings(workspaceId).subscribe({
+        next: trainings => {
+          this.availableTrainings = trainings;
+          resolve();
+        },
+        error: () => {
+          this.snackBar.open('Fehler beim Laden der Kodierer-Schulungen', 'Schließen', { duration: 3000 });
+          reject();
+        }
+      });
     });
   }
 

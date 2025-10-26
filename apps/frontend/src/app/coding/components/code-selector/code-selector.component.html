@@ -1,17 +1,29 @@
 <mat-card class="selector-card">
   <mat-card-header>
-    <mat-card-title>Codes for Variable {{ variableId }}</mat-card-title>
+    <mat-card-title>{{ 'code-selector.codes-for-variable' | translate }} {{ variableId }}</mat-card-title>
   </mat-card-header>
 
   <mat-card-content>
-    <div *ngIf="selectableItems.length; else noCodes">
+    <div class="open-checkbox-container">
+      <mat-checkbox
+        [(ngModel)]="isOpen"
+        (change)="onOpenChanged()"
+        [disabled]="selectedCode !== null">
+        {{ 'code-selector.mark-as-open' | translate }}
+      </mat-checkbox>
+      <div class="open-explanation" *ngIf="isOpen">
+        {{ 'code-selector.open-explanation' | translate }}
+      </div>
+    </div>
+
+    <div *ngIf="selectableItems.length && !isOpen; else noCodes">
       <mat-radio-group [(ngModel)]="selectedCode">
         <div class="code-row" *ngFor="let item of selectableItems">
           <mat-radio-button [value]="item.id" (change)="onSelect(item.id)">
             <span class="code-info">
               <span class="code-id">{{ item.id }}</span>
               <span class="code-type">({{ item.type }})</span>
-              <span class="code-score" *ngIf="item.score !== undefined">Score: {{ item.score }}</span>
+              <span class="code-score" *ngIf="item.score !== undefined">{{ 'code-selector.score-label' | translate }} {{ item.score }}</span>
             </span>
           </mat-radio-button>
           <div class="code-instruction" *ngIf="item.manualInstruction" [innerHTML]="getSafeHtml(item.manualInstruction)"></div>
@@ -20,7 +32,7 @@
       </mat-radio-group>
     </div>
     <ng-template #noCodes>
-      <div class="hint">No codes found for variable {{ variableId }}.</div>
+      <div class="hint">{{ 'code-selector.no-codes-found' | translate }} {{ variableId }}.</div>
     </ng-template>
   </mat-card-content>
 </mat-card>

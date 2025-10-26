@@ -1,5 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { FormsModule } from '@angular/forms';
+import { TranslateModule } from '@ngx-translate/core';
 import { CodeSelectorComponent } from './code-selector.component';
 
 describe('CodeSelectorComponent', () => {
@@ -8,7 +9,7 @@ describe('CodeSelectorComponent', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [FormsModule, CodeSelectorComponent]
+      imports: [FormsModule, TranslateModule.forRoot(), CodeSelectorComponent]
     })
       .compileComponents();
 
