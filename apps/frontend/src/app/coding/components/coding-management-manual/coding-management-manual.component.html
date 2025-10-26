@@ -1,16 +1,6 @@
 <div class="fx-column-start-start fx-gap-10 coding-container">
 
-  <div>
-    <div class="fx-row-center-center-stretch fx-gap-20 action-buttons">
-      <a mat-raised-button color="primary" (click)="externalCodingFileInput.click()" [disabled]="isLoading">
-        <mat-icon>link</mat-icon>
-        Externe Kodierung einbinden
-      </a>
-      <input #externalCodingFileInput type="file" style="display: none;" accept=".csv, .xlsx, .xls" (change)="onExternalCodingFileSelected($event)">
 
-
-    </div>
-  </div>
 
   <div *ngIf="validationProgress && (validationProgress.status === 'loading' || validationProgress.status === 'processing')"
        class="fx-column-start-start fx-gap-10 validation-progress">
@@ -248,8 +238,18 @@
 
   <div class="fx-row-space-between-stretch">
     <div class="statistics-card">
-      <h2 class="section-title">Manuelle Kodierung planen</h2>
-      <p class="section-description">Verwalten Sie Kodierjobs für die manuelle Kodierung von Antworten.</p>
+      <div class="header-row">
+        <div>
+          <h2 class="section-title">Manuelle Kodierung planen</h2>
+          <p class="section-description">Verwalten Sie Kodierjobs für die manuelle Kodierung von Antworten.</p>
+        </div>
+        <div class="header-actions">
+          <button mat-stroked-button color="primary" (click)="externalCodingFileInput.click()" [disabled]="isLoading">
+            <mat-icon>link</mat-icon>
+            Externe Kodierung einbinden
+          </button>
+        </div>
+      </div>
       <hr>
       <div class="statistics-content">
         <div class="coding-jobs-container">
@@ -269,6 +269,8 @@
       </div>
     </div>
   </div>
+
+  <input #externalCodingFileInput type="file" style="display: none;" accept=".csv, .xlsx, .xls" (change)="onExternalCodingFileSelected($event)">
 
   <!-- Coder Training Component -->
   <div *ngIf="showCoderTraining" class="coder-training-overlay">
