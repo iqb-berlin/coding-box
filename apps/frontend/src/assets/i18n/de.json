@@ -15,7 +15,6 @@
   "cancel": "Abbrechen",
   "close": "Schließen",
   "warning": "Warnung",
-  "error": "Fehler",
   "confirm": "Bestätigen",
   "filter-by": "Filtern nach...",
   "hour": "Uhr",
@@ -213,7 +212,57 @@
     "created_at": "Hochgeladen am"
   },
 
+  "error": {
+    "general": "Fehler: {{error}}",
+    "noWorkspaceSelected": "Kein Workspace ausgewählt",
+    "unknown": "Unbekannter Fehler"
+  },
+
   "coding": {
+    "trainings": {
+      "title": "Kodierer-Schulungen",
+      "job-name-prefix": "Schulung-",
+      "compare": {
+        "button": "Ergebnisse vergleichen",
+        "notEnough": "Um Ergebnisse zu vergleichen, werden mindestens zwei Kodierer-Schulungen benötigt."
+      },
+      "create": {
+        "button": "Neue Schulung erstellen",
+        "first": "Erste Schulung erstellen"
+      },
+      "loading": "Lade Kodierer-Schulungen...",
+      "empty": {
+        "title": "Keine Kodierer-Schulungen vorhanden",
+        "subtitle": "Erstellen Sie Ihre erste Schulung, um mit dem Training zu beginnen."
+      },
+      "table": {
+        "label": "Bezeichnung",
+        "jobs": "Kodierjobs",
+        "created": "Erstellt am"
+      },
+      "action": {
+        "details": "Details anzeigen"
+      },
+      "jobs": {
+        "title": "Kodierjobs in Schulung: ",
+        "empty": "Keine Kodierjobs in dieser Schulung gefunden"
+      },
+      "edit": {
+        "error": {
+          "generic": "Fehler beim Bearbeiten der Schulung: {{error}}"
+        }
+      },
+      "delete": {
+        "confirm": {
+          "title": "Löschen bestätigen",
+          "message": "Sind Sie sicher, dass Sie die Schulung \"{{label}}\" mit {{count}} {{jobText}} löschen möchten?",
+          "warning": "Diese Aktion kann nicht rückgängig gemacht werden."
+        },
+        "error": {
+          "generic": "Fehler beim Löschen der Schulung: {{error}}"
+        }
+      }
+    },
     "id": "Variablen Id",
     "result": "Kodierergebnis",
     "variable": "Variable",
@@ -241,7 +290,24 @@
     "export-format": "Exportformat",
     "code-label-to-upper": "Code-Label in Großbuchstaben",
     "hide-item-var-relation": "Item-Variable-Relation ausblenden",
-    "error-save-changes": "Änderungen im Arbeitsbereich müssen erst noch gespeichert werden!"
+    "error-save-changes": "Änderungen im Arbeitsbereich müssen erst noch gespeichert werden!",
+    "jobs": {
+      "table": {
+        "name": "Job-Name",
+        "coder": "Kodierer:in",
+        "status": "Status",
+        "units": "Aufgaben"
+      }
+    }
+  },
+
+  "common": {
+    "close": "Schließen",
+    "cancel": "Abbrechen",
+    "edit": "Bearbeiten",
+    "delete": "Löschen",
+    "actions": "Aktionen",
+    "created": "Erstellt am"
   },
 
   "workspace": {
@@ -355,6 +421,7 @@
 
   "replay": {
     "coding-progress": "Kodierfortschritt:",
+    "open-count": "Offen:",
     "pausing": "Wird angehalten...",
     "pause-coding": "Kodierung anhalten",
     "CODING_JOB_COMPLETED": "Kodierungsauftrag abgeschlossen",
@@ -369,6 +436,14 @@
     "failed-to-submit-coding-job": "Fehler beim Einreichen des Kodierungsauftrags",
     "coding-progress-message": "Kodierfortschritt: {{completed}}/{{total}} abgeschlossen ({{percentage}}%)",
     "close": "Schließen"
+  },
+
+  "code-selector": {
+    "codes-for-variable": "Codes für Variable",
+    "mark-as-open": "Als offen markieren",
+    "open-explanation": "Diese Frage ist offen kodiert - keine spezifische Kodierung erforderlich",
+    "score-label": "Bewertung:",
+    "no-codes-found": "Keine Codes gefunden für Variable"
   },
 
   "ws-settings": {
@@ -405,5 +480,399 @@
     "workspace-database-exported-successfully": "Arbeitsbereich-Datenbank erfolgreich exportiert",
     "error-exporting-workspace-database-retry": "Fehler beim Exportieren der Arbeitsbereich-Datenbank. Bitte versuchen Sie es erneut.",
     "authentication-required": "Nicht authentifiziert. Bitte melden Sie sich erneut an."
+  },
+
+  "variable-analysis": {
+    "analysis-results": "Analyse Ergebnisse",
+    "analyzing-variables": "Analysiere Variablen...",
+    "search-variables": "Variablen suchen",
+    "search-placeholder": "Variablenname eingeben...",
+    "no-variables-found": "Keine Variablen gefunden.",
+    "max-values-info": "Es werden maximal die {{max}} häufigsten Werte pro Variable angezeigt.",
+    "value-column": "Wert",
+    "count-column": "Anzahl",
+    "percentage-column": "Prozent",
+    "empty-value": "[Leer]",
+    "unit-id-column": "Unit ID",
+    "variable-id-column": "Variable ID",
+    "analysis-jobs": "Analyse-Aufträge",
+    "start-new-analysis": "Neue Analyse starten",
+    "refresh": "Aktualisieren",
+    "loading-jobs": "Lade Aufträge...",
+    "no-analysis-jobs-found": "Keine Variablen-Analyse Aufträge gefunden.",
+    "id-column": "ID",
+    "status-column": "Status",
+    "created-at-column": "Erstellt am",
+    "actions-column": "Aktionen",
+    "all": "Alle",
+    "view-results": "Ergebnisse anzeigen",
+    "cancel-job": "Auftrag abbrechen",
+    "close": "Schließen",
+    "error-loading-jobs": "Fehler beim Laden der Analyse-Aufträge",
+    "starting-analysis": "Starte Analyse...",
+    "analysis-started": "Analyse gestartet (Job ID: {{jobId}}). Sie werden benachrichtigt, wenn die Analyse abgeschlossen ist.",
+    "error-starting-analysis": "Fehler beim Starten der Analyse",
+    "job-cancelled": "Analyse-Auftrag erfolgreich abgebrochen",
+    "error-cancelling-job": "Fehler beim Abbrechen des Analyse-Auftrags",
+    "job-deleted": "Analyse-Auftrag erfolgreich gelöscht",
+    "error-deleting-job": "Fehler beim Löschen des Analyse-Auftrags",
+    "confirm-delete-job": "Sind Sie sicher, dass Sie diesen Analyse-Auftrag löschen wollen?",
+    "delete-job": "Auftrag löschen",
+    "status-pending": "Ausstehend",
+    "status-processing": "Wird bearbeitet",
+    "status-completed": "Abgeschlossen",
+    "status-failed": "Fehlgeschlagen",
+    "status-cancelled": "Abgebrochen",
+    "status-paused": "Pausiert",
+    "loading-results": "Lade Analyse-Ergebnisse...",
+    "error-loading-results": "Fehler beim Laden der Analyse-Ergebnisse"
+  },
+
+  "coding-management": {
+    "buttons": {
+      "auto-code": "Automatisch Kodieren",
+      "manual-code": "Manuell Kodieren",
+      "back-to-overview": "Zurück zur Übersicht",
+      "manual-cases": "Manuelle zu kodierende Fälle",
+      "coding-list": "Kodierliste",
+      "codebook": "Codebook",
+      "item-variable-analysis": "Item/Variablenanalyse",
+      "coding-variables": "Kodiervariablen",
+      "load-statistics": "Anzeigen",
+      "update-statistics": "Statistiken aktualisieren"
+    },
+    "titles": {
+      "coding-statistics": "Kodierstatistiken",
+      "coding-data": "Kodierdaten"
+    },
+    "descriptions": {
+      "statistics-overview": "Übersicht über den Status der Kodierung und Antworten",
+      "load-statistics": "Klicken Sie hier, um die Kodierstatistiken zu laden",
+      "no-data": "Noch keine Kodierdaten angezeigt",
+      "click-display": "Klicken Sie auf \"Anzeigen\" um Daten zu laden.",
+      "no-results": "Keine Antworten mit Status {{status}} gefunden.",
+      "missing-replay-info": "Fehlende Informationen für Replay",
+      "missing-token": "Fehler beim Abrufen des Tokens für Replay",
+      "error-statistics": "Fehler beim Abrufen der Kodierstatistiken",
+      "statistics-job-failed": "Statistik-Job {{status}}",
+      "error-responses-status": "Fehler beim Abrufen der Antworten mit Status {{status}}",
+      "downloading-coding-list": "Kodierliste wird im Hintergrund erstellt...",
+      "coding-list-json-success": "Kodierliste wurde als JSON erfolgreich heruntergeladen.",
+      "error-coding-list-json": "Fehler beim Abrufen der Kodierliste (JSON)",
+      "json-convert-error": "Fehler beim Umwandeln der CSV-Daten in JSON",
+      "coding-list-csv-success": "Kodierliste wurde als CSV erfolgreich heruntergeladen.",
+      "error-coding-list-csv": "Fehler beim Herunterladen der Kodierliste als CSV",
+      "coding-list-excel-success": "Kodierliste wurde als Excel erfolgreich heruntergeladen.",
+      "error-coding-list-excel": "Fehler beim Herunterladen der Kodierliste als Excel",
+      "error-unit-coding-xml": "Fehler beim Abrufen der Unit-XML-Daten für Unit {{unitId}}",
+      "no-coding-schema-unit": "Kein Kodierschema in Kodierdaten für die Unit {{unitId}} gefunden.",
+      "error-coding-schema": "Fehler beim Abrufen des Kodierschemas '{{schemaRef}}'",
+      "no-coding-schema-data": "Kodierschema '{{schemaRef}}' in Kodierdaten nicht gefunden.",
+      "error-coding-schema-xml": "Fehler beim Verarbeiten des Kodierschemas '{{schemaRef}}'",
+      "error-unit-xml": "Fehler beim Abrufen der Unit-XML-Daten für Unit {{unitId}}",
+      "unit-xml-title": "Unit-XML für Unit {{unitId}}",
+      "coding-schema-title": "Kodierschema: {{schemaRef}}",
+      "error-coding-variables": "Fehler beim Abrufen der Kodiervariablen",
+      "no-coding-variables": "Keine Kodiervariablen gefunden.",
+      "coding-variables-title": "Kodiervariablen",
+      "error-unit-xml-processing": "Fehler beim Verarbeiten der Unit-XML-Daten"
+    },
+    "loading": {
+      "loading-statistics": "Lade Kodierstatistiken...",
+      "coding-responses": "Antworten werden kodiert...",
+      "processing-data": "Daten werden verarbeitet...",
+      "creating-coding-statistics": "Fehler beim Erstellen des Statistik-Jobs"
+    },
+    "tooltips": {
+      "load-statistics": "Kodierstatistiken laden",
+      "view-in-replay": "Im Replay anzeigen",
+      "show-coding-schema": "Kodierschema anzeigen",
+      "show-unit-xml": "Unit-XML anzeigen"
+    },
+    "statistics": {
+      "total-responses": "Gesamtanzahl der gegebenen Antworten:",
+      "uncoded-responses": "unkodierte Antworten:",
+      "responses-with-status": "Anzahl der Antworten mit Status {{status}}:",
+      "missing-schemas": "Kodierschemata fehlen",
+      "uncoded-responses-title": "Unkodierte Antworten",
+      "responses-with-status-title": "Antworten mit Status: {{status}}"
+    },
+    "aria": {
+      "select-page": "Seiten auswählen"
+    }
+  },
+
+  "test-results-search": {
+    "search-units": "Aufgaben suchen",
+    "search-responses": "Antworten suchen",
+    "search-booklets": "Booklets suchen",
+    "search-field": {
+      "unit-name": "Aufgabe suchen",
+      "unit-name-placeholder": "Geben Sie den Namen der Aufgabe ein...",
+      "response-value": "Antwort-Wert",
+      "response-value-placeholder": "Suche nach Antwort-Wert...",
+      "variable-id": "Variablen-ID",
+      "variable-id-placeholder": "Suche nach Variablen-ID...",
+      "task": "Aufgabe",
+      "task-placeholder": "Suche nach Aufgabe...",
+      "status": "Status",
+      "status-placeholder": "Suche nach Status...",
+      "coding-status": "Kodier Status",
+      "coding-status-placeholder": "Suche nach Kodier Status...",
+      "group": "Gruppe",
+      "group-placeholder": "Suche nach Gruppe...",
+      "code": "Code",
+      "code-placeholder": "Suche nach Code...",
+      "booklet-name": "Booklet suchen",
+      "booklet-name-placeholder": "Geben Sie den Namen des Booklets ein..."
+    },
+    "loading": "Suche läuft...",
+    "no-results": {
+      "units": "Keine Ergebnisse gefunden für \"{{searchText}}\"",
+      "responses": "Keine Ergebnisse gefunden für die angegebenen Suchkriterien",
+      "booklets": "Keine Ergebnisse gefunden für \"{{bookletSearchText}}\""
+    },
+    "search-hint": {
+      "units": "Geben Sie mindestens 3 Zeichen ein, um die Suche zu starten",
+      "responses": "Geben Sie Zeichen in eines der Suchfelder ein, um die Suche zu starten",
+      "booklets": "Geben Sie mindestens 3 Zeichen ein, um die Suche zu starten"
+    },
+    "table-headers": {
+      "task": "Aufgabe",
+      "alias": "Alias",
+      "booklet": "Booklet",
+      "login": "Login",
+      "code": "Code",
+      "group": "Gruppe",
+      "tags": "Tags",
+      "answer": "Antwort",
+      "actions": "Aktionen",
+      "variable-id": "Variable ID",
+      "value": "Wert",
+      "status": "Status",
+      "coding-status": "Kodier Status",
+      "booklet-name": "Booklet Name",
+      "units": "Units"
+    },
+    "no-data": {
+      "no-tags": "Keine Tags",
+      "no-answer": "Keine Antwort verfügbar",
+      "no-answers": "Keine Antworten zum Löschen gefunden.",
+      "no-units": "Keine Aufgaben zum Löschen gefunden.",
+      "no-booklets": "Keine Booklets zum Löschen gefunden."
+    },
+    "more-responses": "+{{count}} weitere",
+    "buttons": {
+      "replay-unit": "Replay Unit",
+      "delete-unit": "Unit löschen",
+      "delete-answer": "Antwort löschen",
+      "delete-all-units": "Alle {{count}} gefilterten Aufgaben löschen",
+      "delete-all-answers": "Alle {{count}} gefilterten Antworten löschen",
+      "delete-all-booklets": "Alle {{count}} gefilterten Booklets löschen",
+      "close": "Schließen"
+    },
+    "confirm-dialogs": {
+      "delete-unit": {
+        "title": "Unit löschen",
+        "content": "Sind Sie sicher, dass Sie die Unit \"{{unitName}}\" ({{unitAlias}}) löschen möchten? Alle zugehörigen Antworten werden ebenfalls gelöscht.",
+        "content-no-alias": "Sind Sie sicher, dass Sie die Unit \"{{unitName}}\" (ohne Alias) löschen möchten? Alle zugehörigen Antworten werden ebenfalls gelöscht.",
+        "confirm": "Löschen"
+      },
+      "delete-answer": {
+        "title": "Antwort löschen",
+        "content": "Sind Sie sicher, dass Sie die Antwort für Variable \"{{variableId}}\" löschen möchten?",
+        "confirm": "Löschen"
+      },
+      "delete-all-units": {
+        "title": "Alle gefilterten Aufgaben löschen",
+        "content": "Sind Sie sicher, dass Sie alle {{count}} gefilterten Aufgaben löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.",
+        "confirm": "Alle löschen"
+      },
+      "delete-all-answers": {
+        "title": "Alle gefilterten Antworten löschen",
+        "content": "Sind Sie sicher, dass Sie alle {{count}} gefilterten Antworten löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.",
+        "confirm": "Alle löschen"
+      },
+      "delete-booklet": {
+        "title": "Booklet löschen",
+        "content": "Sind Sie sicher, dass Sie das Booklet \"{{bookletName}}\" löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.",
+        "confirm": "Löschen"
+      },
+      "delete-all-booklets": {
+        "title": "Alle gefilterten Booklets löschen",
+        "content": "Sind Sie sicher, dass Sie alle {{count}} gefilterten Booklets löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.",
+        "confirm": "Alle löschen"
+      }
+    },
+    "snackbars": {
+      "unit-deleted": "Unit erfolgreich gelöscht. Unit ID: {{unitId}}",
+      "unit-delete-error": "Fehler beim Löschen der Unit: {{warnings}}",
+      "unit-delete-general-error": "Fehler beim Löschen der Unit. Bitte versuchen Sie es später erneut.",
+      "answer-deleted": "Antwort erfolgreich gelöscht. Antwort ID: {{answerId}}",
+      "answer-delete-error": "Fehler beim Löschen der Antwort: {{warnings}}",
+      "answer-delete-general-error": "Fehler beim Löschen der Antwort. Bitte versuchen Sie es später erneut.",
+      "units-deleted": "{{successCount}} Aufgaben erfolgreich gelöscht.",
+      "units-delete-error": "Fehler beim Löschen der Aufgaben: {{warnings}}",
+      "units-delete-general-error": "Fehler beim Löschen der Aufgaben. Bitte versuchen Sie es später erneut.",
+      "answers-deleted": "{{successCount}} Antworten gelöscht, {{failCount}} fehlgeschlagen.",
+      "answers-delete-general-error": "Fehler beim Löschen der Antworten. Bitte versuchen Sie es später erneut.",
+      "booklet-deleted": "Booklet \"{{bookletName}}\" wurde erfolgreich gelöscht.",
+      "booklet-delete-error": "Fehler beim Löschen des Booklets: {{warnings}}",
+      "booklet-delete-general-error": "Fehler beim Löschen des Booklets. Bitte versuchen Sie es erneut.",
+      "booklets-deleted": "{{successCount}} Booklets gelöscht, {{failCount}} fehlgeschlagen.",
+      "booklets-delete-general-error": "Fehler beim Löschen der Booklets. Bitte versuchen Sie es erneut.",
+      "loading-booklet-info": "Lade Booklet-Informationen...",
+      "booklet-info-error": "Fehler beim Laden der Booklet-Informationen"
+    },
+    "booklet-info": "Booklet Info anzeigen",
+    "booklet-delete": "Booklet löschen",
+    "paginator": "Seite wählen"
+  },
+  "test-person-coding": {
+    "title": "Testpersonen Kodieren",
+    "select-groups-label": "Testpersonengruppen auswählen",
+    "select-groups-hint": "Wählen Sie eine oder mehrere Gruppen zum Kodieren aus",
+    "loading-groups": "Gruppen werden geladen...",
+    "no-groups": "Keine Gruppen verfügbar",
+    "code-selected-groups": "Ausgewählte Gruppen kodieren",
+    "code-all-test-persons": "Alle Testpersonen kodieren",
+    "coding-all-groups": "Kodiere Testpersonen aus allen {{count}} Gruppen",
+    "coding-test-persons-count": "Kodiere {{count}} Testpersonen",
+    "responses-coded": "{{count}} Antworten kodiert",
+    "background-job-started": "Hintergrundauftrag gestartet",
+    "enter-test-person-ids": "Bitte geben Sie Testpersonen-IDs ein",
+    "job-error": "Fehler: {{error}}",
+    "coding-failed": "Kodierung der Testpersonen fehlgeschlagen",
+    "job-completed": "Kodierungsauftrag erfolgreich abgeschlossen",
+    "job-completed-with-error": "Kodierungsauftrag fehlgeschlagen: {{error}}",
+    "job-cancelled": "Kodierungsauftrag wurde abgebrochen",
+    "job-paused": "Kodierungsauftrag wurde pausiert",
+    "job-result-unavailable": "Keine Ergebnisse für diesen Auftrag verfügbar",
+    "job-cancel-error": "Fehler beim Abbrechen des Auftrags: {{message}}",
+    "job-delete-error": "Fehler beim Löschen des Auftrags: {{message}}",
+    "job-restart-error": "Fehler beim Neustarten des Auftrags: {{message}}",
+    "job-restarted": "Auftrag wurde neu gestartet",
+    "fetch-test-persons-error": "Fehler beim Abrufen der Testpersonen: {{error}}",
+    "no-test-persons": "Keine Testpersonen für diesen Arbeitsbereich gefunden",
+    "jobs": {
+      "title": "Laufende Aufträge",
+      "refresh": "Aufträge aktualisieren",
+      "loading": "Aufträge werden geladen...",
+      "no-jobs": "Keine Aufträge gefunden.",
+      "table": {
+        "job-id": "Auftrags-ID",
+        "status": "Status",
+        "progress": "Fortschritt",
+        "created": "Erstellt",
+        "groups": "Gruppen",
+        "duration": "Dauer",
+        "unknown": "Unbekannt",
+        "actions": "Aktionen"
+      },
+      "actions": {
+        "cancel-job": "Auftrag abbrechen",
+        "show-result": "Ergebnis anzeigen",
+        "delete-job": "Auftrag löschen",
+        "restart-job": "Auftrag neu starten",
+        "error-tooltip": "Fehler: {{error}}",
+        "test-person-id": "Testpersonen-ID: {{id}}"
+      }
+    },
+    "current-job": {
+      "title": "Aktueller Auftragsstatus",
+      "subtitle": "Auftrags-ID: {{id}}",
+      "status": "Status:",
+      "progress": "Fortschritt:",
+      "groups": "Gruppen:",
+      "duration": "Dauer:",
+      "error": "Fehler:",
+      "cancel": "Auftrag abbrechen"
+    }
+  },
+  "coding-management-manual": {
+    "errors": {
+      "no-file-selected": "Keine Datei ausgewählt",
+      "invalid-file-type": "Bitte wählen Sie eine CSV- oder Excel-Datei aus (.csv, .xlsx, .xls)",
+      "no-workspace-selected": "Kein Arbeitsbereich ausgewählt",
+      "import-failed": "Fehler beim Importieren der externen Kodierung",
+      "excel-parse-error": "Fehler beim Parsen der Excel-Datei",
+      "file-read-error": "Fehler beim Lesen der Datei",
+      "no-valid-data": "Die Datei enthält keine gültigen Daten",
+      "validation-failed": "Fehler bei der Validierung",
+      "no-download-data": "Keine Daten zum Herunterladen verfügbar. Bitte führen Sie zuerst eine Validierung durch.",
+      "download-failed": "Fehler beim Herunterladen der Excel-Datei",
+      "cache-not-found": "Validierungsdaten nicht gefunden. Bitte führen Sie zuerst eine neue Validierung durch.",
+      "invalid-cache": "Ungültiger Cache-Schlüssel. Bitte führen Sie eine neue Validierung durch.",
+      "server-error": "Server-Fehler beim Generieren der Excel-Datei. Bitte versuchen Sie es später erneut.",
+      "network-error": "Netzwerk-Fehler. Bitte überprüfen Sie Ihre Internetverbindung.",
+      "no-comparison-data": "Keine Vergleichsdaten zum Herunterladen verfügbar.",
+      "excel-create-error": "Fehler beim Erstellen der Excel-Datei"
+    },
+    "success": {
+      "validation-completed": "Validierung abgeschlossen. {{missing}} von {{total}} Kombinationen fehlen.",
+      "excel-downloaded": "Excel-Datei wurde erfolgreich heruntergeladen",
+      "import-completed": "Externe Kodierung erfolgreich importiert: {{updatedRows}} von {{processedRows}} Zeilen aktualisiert.",
+      "comparison-excel-downloaded": "Vergleichstabelle wurde erfolgreich als Excel-Datei heruntergeladen",
+      "training-generated": "Schulung erfolgreich generiert: {{packages}} Kodierer-Pakete mit insgesamt {{totalResponses}} Antworten erstellt"
+    },
+    "progress": {
+      "file-processing": "Datei wird verarbeitet...",
+      "excel-loading": "Excel-Datei wird geladen...",
+      "excel-processing": "Excel-Datei wird verarbeitet...",
+      "data-extraction": "Daten werden extrahiert ({{current}}/{{total}})...",
+      "data-preparation": "Daten werden für Validierung vorbereitet...",
+      "validation-progress": "Validierung wird durchgeführt (Seite {{page}})..."
+    },
+    "titles": {
+      "validation-running": "Validierung läuft",
+      "validation-results": "Validierungsergebnisse",
+      "comparison-table": "Import-Vergleichstabelle",
+      "manual-coding-planning": "Manuelle Kodierung planen",
+      "coding-jobs": "Kodierjobs",
+      "coder-trainings": "Kodierer-Schulungen",
+      "variable-bundles": "Variablenbündel"
+    },
+    "descriptions": {
+      "validation-message": "{{message}}",
+      "validation-note": "Sie können andere Aufgaben erledigen, während die Validierung im Hintergrund läuft.",
+      "validation-summary": "Insgesamt: {{total}} | Fehlend: {{missing}} | Seite {{currentPage}} von {{totalPages}}",
+      "comparison-summary": "{{message}} | Betroffene Zeilen: {{affectedRows}} | Seite {{currentPage}} von {{totalPages}}"
+    },
+    "buttons": {
+      "try-again": "Erneut versuchen",
+      "close": "Schließen",
+      "download-excel": "Als Excel herunterladen"
+    },
+    "table": {
+      "headers": {
+        "unit-key": "Unit-Schlüssel",
+        "login-name": "Login-Name",
+        "login-code": "Login-Code",
+        "booklet-id": "Booklet-ID",
+        "variable-id": "Variablen-ID",
+        "status": "Status",
+        "unit-alias": "Unit-Alias",
+        "person-code": "Person-Code",
+        "original-status": "Original Status",
+        "original-code": "Original Code",
+        "original-score": "Original Score",
+        "updated-status": "Aktualisierter Status",
+        "updated-code": "Aktualisierter Code",
+        "updated-score": "Aktualisierter Score"
+      },
+      "status": {
+        "missing": "Fehlend",
+        "present": "Vorhanden"
+      }
+    },
+    "pagination": {
+      "prev": "Vorherige",
+      "next": "Nächste",
+      "page-of": "Seite {{current}} von {{total}}",
+      "items-per-page": "Einträge pro Seite:"
+    },
+    "import": {
+      "errors-and-warnings": "Fehler und Warnungen"
+    }
   }
 }

@@ -68,14 +68,14 @@ export class VariableAnalysisDialogComponent implements OnInit {
   variableAnalysisDataSource = new MatTableDataSource<VariableAnalysisItemDto>([]);
   variableAnalysisColumns: string[] = [
     'replayUrl', 'unitId', 'variableId',
-    'code', 'description', 'score', 'occurrenceCount',
+    'code', 'score', 'occurrenceCount',
     'totalCount', 'relativeOccurrence'
   ];
 
   totalVariableAnalysisRecords = 0;
   variableAnalysisPageIndex = 0;
-  variableAnalysisPageSize = 100;
-  variableAnalysisPageSizeOptions = [10, 25, 50, 100, 200];
+  variableAnalysisPageSize = 200;
+  variableAnalysisPageSizeOptions = [100, 200, 500, 1000];
   unitIdFilter = '';
   variableIdFilter = '';
   isLoadingVariableAnalysis = false;

@@ -234,7 +234,7 @@ export class MyCodingJobsComponent implements OnInit, AfterViewInit {
       return `${count} (${preview}, +${count - maxToShow} weitere)`;
     }
 
-    return 'Keine Variablen-Bundles';
+    return 'Keine Variablen-Bündel';
   }
 
   getProgress(job: CodingJob): string {

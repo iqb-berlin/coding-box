@@ -16,9 +16,13 @@ export class MissingsProfilesController {
   @Get(':id')
   async getMissingsProfileDetails(
   @Param('workspaceId') workspaceId: number,
-    @Param('id') id: number
+    @Param('id') id: string
   ) {
-    return this.missingsProfilesService.getMissingsProfileDetails(workspaceId, id);
+    const parsedId = parseInt(id, 10);
+    if (!Number.isNaN(parsedId)) {
+      return this.missingsProfilesService.getMissingsProfileDetails(workspaceId, parsedId);
+    }
+    return this.missingsProfilesService.getMissingsProfileByLabel(id);
   }
 
   @Post()

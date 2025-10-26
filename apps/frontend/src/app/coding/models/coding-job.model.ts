@@ -1,4 +1,5 @@
 import { MissingsProfilesDto } from '../../../../../../api-dto/coding/missings-profiles.dto';
+import { CoderTraining } from './coder-training.model';
 
 export interface CodingJob {
   id: number;
@@ -17,8 +18,11 @@ export interface CodingJob {
   progress?: number;
   codedUnits?: number;
   totalUnits?: number;
+  openUnits?: number;
   missings_profile_id?: number;
   missings_profile?: MissingsProfilesDto;
+  training_id?: number;
+  training?: CoderTraining;
 }
 
 export interface Variable {

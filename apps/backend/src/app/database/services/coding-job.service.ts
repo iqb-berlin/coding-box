@@ -52,24 +52,36 @@ export class CodingJobService {
     private fileUploadRepository: Repository<FileUpload>
   ) {}
 
-  async getCodingJobProgress(jobId: number): Promise<{ progress: number; coded: number; total: number }> {
+  async getCodingJobProgress(jobId: number): Promise<{ progress: number; coded: number; total: number; open: number }> {
     const totalUnits = await this.codingJobUnitRepository.count({
       where: { coding_job_id: jobId }
     });
 
     if (totalUnits === 0) {
-      return { progress: 0, coded: 0, total: 0 };
+      return {
+        progress: 0, coded: 0, total: 0, open: 0
+      };
     }
 
-    const codedUnits = await this.codingJobUnitRepository.count({
-      where: {
-        coding_job_id: jobId,
-        code: Not(IsNull())
-      }
-    });
-    const progress = Math.round((codedUnits / totalUnits) * 100);
+    const [codedUnits, openUnits] = await Promise.all([
+      this.codingJobUnitRepository.count({
+        where: {
+          coding_job_id: jobId,
+          code: Not(IsNull())
+        }
+      }),
+      this.codingJobUnitRepository.count({
+        where: {
+          coding_job_id: jobId,
+          is_open: true
+        }
+      })
+    ]);
+    const progress = Math.round(((codedUnits + openUnits) / totalUnits) * 100);
 
-    return { progress, coded: codedUnits, total: totalUnits };
+    return {
+      progress, coded: codedUnits, total: totalUnits, open: openUnits
+    };
   }
 
   async getCodingJobs(
@@ -83,7 +95,8 @@ export class CodingJobService {
       progress?: number;
       codedUnits?: number;
       totalUnits?: number;
-    })[]; total: number; page: number; limit: number }> {
+      openUnits?: number;
+    })[]; total: number; totalOpenUnits?: number; page: number; limit: number }> {
     const validPage = page > 0 ? page : 1;
     const validLimit = limit > 0 ? limit : 10;
     const skip = (validPage - 1) * validLimit;
@@ -94,6 +107,7 @@ export class CodingJobService {
 
     const jobs = await this.codingJobRepository.find({
       where: { workspace_id: workspaceId },
+      relations: ['training'],
       order: { created_at: 'DESC' },
       skip,
       take: validLimit
@@ -154,11 +168,22 @@ export class CodingJobService {
       assignedVariableBundles: variableBundlesByJobId.get(job.id) || [],
       progress: progressData[index]?.progress || 0,
       codedUnits: progressData[index]?.coded || 0,
-      totalUnits: progressData[index]?.total || 0
+      totalUnits: progressData[index]?.total || 0,
+      openUnits: progressData[index]?.open || 0
     }));
+
+    const totalOpenUnits = await this.codingJobUnitRepository.count({
+      relations: ['coding_job'],
+      where: {
+        coding_job: { workspace_id: workspaceId },
+        is_open: true
+      }
+    });
+
     return {
       data,
       total,
+      totalOpenUnits,
       page: validPage,
       limit: validLimit
     };
@@ -519,10 +544,19 @@ export class CodingJobService {
       throw new NotFoundException('Coding job unit not found for progress entry');
     }
 
-    codingJobUnit.code = progress.selectedCode.id;
-    const score = progress.selectedCode.score;
-    if (score !== undefined) {
-      codingJobUnit.score = score;
+    if (progress.isOpen !== undefined) {
+      codingJobUnit.is_open = progress.isOpen;
+      if (progress.isOpen) {
+        codingJobUnit.code = null;
+        codingJobUnit.score = null;
+      }
+    } else {
+      codingJobUnit.code = progress.selectedCode.id;
+      codingJobUnit.is_open = false;
+      const score = progress.selectedCode.score;
+      if (score !== undefined) {
+        codingJobUnit.score = score;
+      }
     }
 
     await this.codingJobUnitRepository.save(codingJobUnit);
@@ -555,13 +589,19 @@ export class CodingJobService {
     const progressMap: Record<string, SaveCodingProgressDto['selectedCode']> = {};
 
     codingJobUnits.forEach(unit => {
-      if (unit.code !== null) {
-        const compositeKey = this.generateCodingProgressKey(
-          `${unit.person_login}@${unit.person_code}@${unit.booklet_name}`,
-          unit.unit_name,
-          unit.variable_id
-        );
+      const compositeKey = this.generateCodingProgressKey(
+        `${unit.person_login}@${unit.person_code}@${unit.booklet_name}`,
+        unit.unit_name,
+        unit.variable_id
+      );
 
+      if (unit.is_open) {
+        progressMap[`${compositeKey}:open`] = {
+          id: -1,
+          code: '',
+          label: 'OPEN'
+        };
+      } else if (unit.code !== null) {
         const codingScheme = unit.unit_alias ? codingSchemes.get(unit.unit_alias) : undefined;
         let code: string | undefined;
         let label: string | undefined;
@@ -583,7 +623,6 @@ export class CodingJobService {
           label
         };
 
-        // If score exists, add it to the object
         if (unit.score !== null) {
           progressMap[compositeKey].score = unit.score;
         }
@@ -608,9 +647,15 @@ export class CodingJobService {
     return `${testPerson}::${bookletId}::${unitId}::${variableId}`;
   }
 
-  async getCodingJobUnits(codingJobId: number): Promise<{ responseId: number; unitName: string; unitAlias: string | null; variableId: string; variableAnchor: string; bookletName: string; personLogin: string; personCode: string }[]> {
+  async getCodingJobUnits(codingJobId: number, onlyOpen: boolean = false): Promise<{ responseId: number; unitName: string; unitAlias: string | null; variableId: string; variableAnchor: string; bookletName: string; personLogin: string; personCode: string }[]> {
+    const whereClause: { coding_job_id: number; is_open?: boolean } = { coding_job_id: codingJobId };
+
+    if (onlyOpen) {
+      whereClause.is_open = true;
+    }
+
     const codingJobUnits = await this.codingJobUnitRepository.find({
-      where: { coding_job_id: codingJobId },
+      where: whereClause,
       order: {
         unit_name: 'ASC',
         booklet_name: 'ASC',
@@ -675,7 +720,6 @@ export class CodingJobService {
         const data = typeof file.data === 'string' ? JSON.parse(file.data) : file.data;
         codingSchemes.set(file.file_id, data);
       } catch (error) {
-        // Use empty scheme for invalid schemes
         codingSchemes.set(file.file_id, {});
       }
     }
@@ -683,11 +727,27 @@ export class CodingJobService {
     return codingSchemes;
   }
 
+  async restartCodingJobWithOpenUnits(codingJobId: number, workspaceId: number): Promise<CodingJob> {
+    const codingJob = await this.getCodingJob(codingJobId, workspaceId);
+
+    await this.codingJobUnitRepository.createQueryBuilder()
+      .delete()
+      .from(CodingJobUnit)
+      .where('coding_job_id = :codingJobId AND is_open = false', { codingJobId })
+      .execute();
+
+    codingJob.codingJob.status = 'pending';
+    await this.codingJobRepository.save(codingJob.codingJob);
+
+    return codingJob.codingJob;
+  }
+
   private async checkAndUpdateCodingJobCompletion(codingJobId: number): Promise<void> {
     const progress = await this.getCodingJobProgress(codingJobId);
 
     if (progress.total > 0 && progress.progress === 100) {
-      await this.codingJobRepository.update(codingJobId, { status: 'completed' });
+      const newStatus = progress.open > 0 ? 'open' : 'completed';
+      await this.codingJobRepository.update(codingJobId, { status: newStatus });
     }
   }
 }

@@ -140,3 +140,45 @@
   justify-content: flex-end;
   margin-top: 16px;
 }
+
+.status-badge {
+  font-weight: 500;
+  padding: 4px 8px;
+  border-radius: 4px;
+
+  &.status-active {
+    color: #4caf50;
+    background-color: rgba(76, 175, 80, 0.1);
+  }
+
+  &.status-completed {
+    color: #2196f3;
+    background-color: rgba(33, 150, 243, 0.1);
+  }
+
+  &.status-pending {
+    color: #ff9800;
+    background-color: rgba(255, 152, 0, 0.1);
+  }
+
+  &.status-paused {
+    background-color: rgba(156, 39, 176, 0.1);
+    color: #6a1b9a;
+    border: 1px solid rgba(156, 39, 176, 0.2);
+  }
+
+  &.status-processing {
+    color: #4caf50;
+    background-color: rgba(76, 175, 80, 0.1);
+  }
+
+  &.status-failed {
+    color: #f44336;
+    background-color: rgba(244, 67, 54, 0.1);
+  }
+
+  &.status-cancelled {
+    color: #9e9e9e;
+    background-color: rgba(158, 158, 158, 0.1);
+  }
+}

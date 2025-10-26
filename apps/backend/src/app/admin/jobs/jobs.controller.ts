@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Controller,
+  Delete,
   Get,
   NotFoundException,
   Param,
@@ -147,6 +148,53 @@ export class JobsController {
         throw error;
       }
       throw new BadRequestException(`Failed to cancel job: ${error.message}`);
+    }
+  }
+
+  @Delete(':job_id')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Delete a job',
+    description: 'Deletes a job by ID'
+  })
+  @ApiParam({
+    name: 'workspace_id',
+    type: Number,
+    required: true,
+    description: 'The ID of the workspace'
+  })
+  @ApiParam({
+    name: 'job_id',
+    type: Number,
+    required: true,
+    description: 'The ID of the job'
+  })
+  @ApiOkResponse({
+    description: 'The job has been successfully deleted.',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        message: { type: 'string' }
+      }
+    }
+  })
+  @ApiNotFoundResponse({
+    description: 'Job not found.'
+  })
+  async deleteJob(
+    @WorkspaceId() workspaceId: number,
+      @Param('job_id') jobId: number
+  ): Promise<{ success: boolean; message: string }> {
+    try {
+      await this.jobService.getJob(jobId, workspaceId);
+      return await this.jobService.deleteJob(jobId);
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new BadRequestException(`Failed to delete job: ${error.message}`);
     }
   }
 }

@@ -157,11 +157,11 @@
               [(value)]="selectedMissingsProfile"
               (click)="$event.stopPropagation()">
               @for (missingsProfile of missingsProfiles; track missingsProfile) {
-                <mat-option [value]="missingsProfile">
-                  @if (missingsProfile === '') {
+                <mat-option [value]="missingsProfile.id">
+                  @if (missingsProfile.id === 0) {
                     {{ 'Keines' }}
                   } @else {
-                    {{missingsProfile}}
+                    {{missingsProfile.label}}
                   }
                 </mat-option>
               }
