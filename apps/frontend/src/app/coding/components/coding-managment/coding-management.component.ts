@@ -1,7 +1,7 @@
 import {
   Component, ViewChild, AfterViewInit, OnInit, OnDestroy, inject
 } from '@angular/core';
-import { NgClass, TitleCasePipe } from '@angular/common';
+import { NgClass } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import {
   catchError,
@@ -66,7 +66,6 @@ import { GermanPaginatorIntl } from '../../../shared/services/german-paginator-i
     MatTable,
     MatColumnDef,
     MatHeaderCell,
-    TitleCasePipe,
     MatCell,
     MatHeaderRow,
     MatRow,
@@ -117,7 +116,7 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
 
   data: Success[] = [];
   dataSource = new MatTableDataSource<Success>(this.data);
-  displayedColumns: string[] = ['unitname', 'variableid', 'value', 'codedstatus', 'actions'];
+  displayedColumns: string[] = ['unitname', 'variableid', 'value', 'status', 'actions'];
   isLoading = false;
   isFilterLoading = false;
   isLoadingStatistics = false;
@@ -137,8 +136,33 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
     statusCounts: {}
   };
 
+  selectedStatisticsVersion: 'v1' | 'v2' | 'v3' = 'v1';
+
+  codingRunOptions = [
+    { value: 'v1', label: 'coding-management.statistics.first-autocode-run' },
+    { value: 'v2', label: 'coding-management.statistics.manual-coding-run' },
+    { value: 'v3', label: 'coding-management.statistics.second-autocode-run' }
+  ] as const;
+
   constructor(private translateService: TranslateService) {
     this.isAutoCoding = false;
+  }
+
+  getColumnHeader(column: string): string {
+    const headers: Record<string, string> = {
+      unitname: 'coding-management.columns.unitname',
+      variableid: 'coding-management.columns.variableid',
+      value: 'coding-management.columns.value',
+      status: 'coding-management.columns.codedstatus',
+      actions: 'coding-management.columns.actions'
+    };
+    return this.translateService.instant(headers[column] || column);
+  }
+
+  getStatusString(status: string): string {
+    if (!status) return '';
+    const num = parseInt(status, 10);
+    return Number.isNaN(num) ? status : this.mapStatusToString(num);
   }
 
   ngOnInit(): void {
@@ -176,7 +200,7 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
       )
       .subscribe(({ jobId }) => {
         if (!jobId) {
-          this.backendService.getCodingStatistics(workspaceId)
+          this.backendService.getCodingStatistics(workspaceId, this.selectedStatisticsVersion)
             .pipe(
               catchError(() => {
                 this.snackBar.open(this.translateService.instant('coding-management.descriptions.error-statistics'), this.translateService.instant('close'), {
@@ -217,6 +241,12 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
             }
           });
       });
+  }
+
+  onStatisticsVersionChange(): void {
+    if (this.statisticsLoaded) {
+      this.fetchCodingStatistics();
+    }
   }
 
   getStatuses(): string[] {

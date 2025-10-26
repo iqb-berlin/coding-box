@@ -51,7 +51,7 @@
 
 
     <div class="fx-column-start-start">
-      <div class="content-row fx-row-start-start fx-gap-20">
+      <div class="content-row fx-column-start-start fx-gap-20">
         <div class="statistics-section">
           @if (!statisticsLoaded && !isLoadingStatistics) {
             <div class="statistics-placeholder">
@@ -65,8 +65,24 @@
           }
           @if (statisticsLoaded && !isLoadingStatistics) {
             <div class="statistics-card">
-              <h2 class="section-title">{{ 'coding-management.titles.coding-statistics' | translate }}</h2>
-              <p class="section-description">{{ 'coding-management.descriptions.statistics-overview' | translate }}</p>
+              <div class="statistics-header">
+                <div class="statistics-title-section">
+                  <h2 class="section-title">{{ 'coding-management.titles.coding-statistics' | translate }}</h2>
+                  <p class="section-description">{{ 'coding-management.descriptions.statistics-overview' | translate }}</p>
+                </div>
+                <div class="statistics-version-selector">
+                  <mat-form-field appearance="outline" class="statistics-version-field">
+                    <mat-label>{{ 'coding-management.statistics.coding-run-selector' | translate }}</mat-label>
+                    <mat-select [(value)]="selectedStatisticsVersion" (selectionChange)="onStatisticsVersionChange()">
+                      @for (option of codingRunOptions; track option.value) {
+                        <mat-option [value]="option.value">
+                          {{ option.label | translate }}
+                        </mat-option>
+                      }
+                    </mat-select>
+                  </mat-form-field>
+                </div>
+              </div>
               <mat-divider></mat-divider>
               <div class="statistics-content">
                 <div class="statistic-item">
@@ -147,7 +163,7 @@
                 <table mat-table [dataSource]="dataSource" matSort class="coding-table">
                   @for (column of displayedColumns; track column) {
                     <ng-container matColumnDef="{{ column }}">
-                      <th mat-header-cell *matHeaderCellDef mat-sort-header> {{ column | titlecase }} </th>
+                      <th mat-header-cell *matHeaderCellDef mat-sort-header> {{ getColumnHeader(column) }} </th>
                       <td mat-cell *matCellDef="let element" [attr.colspan]="element.id === 0 ? displayedColumns.length : null">
                         @if (element.id === 0) {
                           <ng-container class="group-header">
@@ -170,11 +186,25 @@
                             </span>
                           } @else {
                             <span [ngClass]="{'status-value': column === 'status' || column === 'codedstatus',
-                                              'status-complete': (column === 'status' && element[column] === 'CODING_COMPLETE') || (column === 'codedstatus' && element[column] === 'CODING_COMPLETE'),
-                                              'status-incomplete': (column === 'status' && element[column] === 'CODING_INCOMPLETE') || (column === 'codedstatus' && element[column] === 'CODING_INCOMPLETE'),
-                                              'status-changed': column === 'status' && element[column] === 'VALUE_CHANGED',
-                                              'status-not-reached': column === 'status' && element[column] === 'NOT_REACHED'}">
-                              {{ element[column] }}
+                                              'status-complete': (column === 'status' && getStatusString(element[column]) === 'CODING_COMPLETE') || (column === 'codedstatus' && element[column] === 'CODING_COMPLETE'),
+                                              'status-incomplete': (column === 'status' && getStatusString(element[column]) === 'CODING_INCOMPLETE') || (column === 'codedstatus' && element[column] === 'CODING_INCOMPLETE'),
+                                              'status-changed': column === 'status' && getStatusString(element[column]) === 'VALUE_CHANGED',
+                                              'status-not-reached': column === 'status' && getStatusString(element[column]) === 'NOT_REACHED',
+                                              'status-unset': column === 'status' && getStatusString(element[column]) === 'UNSET',
+                                              'status-displayed': column === 'status' && getStatusString(element[column]) === 'DISPLAYED',
+                                              'status-derive-error': column === 'status' && getStatusString(element[column]) === 'DERIVE_ERROR',
+                                              'status-no-coding': column === 'status' && getStatusString(element[column]) === 'NO_CODING',
+                                              'status-invalid': column === 'status' && getStatusString(element[column]) === 'INVALID',
+                                              'status-coding-error': column === 'status' && getStatusString(element[column]) === 'CODING_ERROR',
+                                              'status-partly-displayed': column === 'status' && getStatusString(element[column]) === 'PARTLY_DISPLAYED',
+                                              'status-derive-pending': column === 'status' && getStatusString(element[column]) === 'DERIVE_PENDING',
+                                              'status-intended-incomplete': column === 'status' && getStatusString(element[column]) === 'INTENDED_INCOMPLETE',
+                                              'status-code-selection-pending': column === 'status' && getStatusString(element[column]) === 'CODE_SELECTION_PENDING'}">
+                              @if (column === 'status') {
+                                {{ getStatusString(element[column]) }}
+                              } @else {
+                                {{ element[column] }}
+                              }
                             </span>
                           }
                         }

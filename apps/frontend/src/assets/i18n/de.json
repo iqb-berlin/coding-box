@@ -595,7 +595,18 @@
       "responses-with-status": "Anzahl der Antworten mit Status {{status}}:",
       "missing-schemas": "Kodierschemata fehlen",
       "uncoded-responses-title": "Unkodierte Antworten",
-      "responses-with-status-title": "Antworten mit Status: {{status}}"
+      "responses-with-status-title": "Antworten mit Status: {{status}}",
+      "coding-run-selector": "Kodier-Lauf auswählen:",
+      "first-autocode-run": "1 Autocoder Lauf",
+      "manual-coding-run": "manuelle Kodierung",
+      "second-autocode-run": "2 Autocoder Lauf"
+    },
+    "columns": {
+      "unitname": "Einheit",
+      "variableid": "Variable",
+      "value": "Wert",
+      "codedstatus": "Kodierstatus",
+      "actions": "Aktionen"
     },
     "aria": {
       "select-page": "Seiten auswählen"

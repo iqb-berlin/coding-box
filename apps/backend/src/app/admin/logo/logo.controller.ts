@@ -57,8 +57,6 @@ export class LogoController {
           return cb(new BadRequestException('Only image files are allowed'), false);
         }
 
-
-
         return cb(null, true);
       }
     })

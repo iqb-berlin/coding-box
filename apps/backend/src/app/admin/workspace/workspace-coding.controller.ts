@@ -109,11 +109,18 @@ export class WorkspaceCodingController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiQuery({
+    name: 'version',
+    required: false,
+    description: 'Coding version to get statistics for: v1, v2, or v3',
+    enum: ['v1', 'v2', 'v3'],
+    example: 'v1'
+  })
   @ApiOkResponse({
     description: 'Coding statistics retrieved successfully.'
   })
-  async getCodingStatistics(@WorkspaceId() workspace_id: number): Promise<CodingStatistics> {
-    return this.workspaceCodingService.getCodingStatistics(workspace_id);
+  async getCodingStatistics(@WorkspaceId() workspace_id: number, @Query('version') version: 'v1' | 'v2' | 'v3' = 'v1'): Promise<CodingStatistics> {
+    return this.workspaceCodingService.getCodingStatistics(workspace_id, version);
   }
 
   @Post(':workspace_id/coding/statistics/job')

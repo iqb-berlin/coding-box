@@ -202,11 +202,12 @@ export class CodingService {
     );
   }
 
-  getCodingStatistics(workspace_id: number): Observable<CodingStatistics> {
+  getCodingStatistics(workspace_id: number, version: 'v1' | 'v2' | 'v3' = 'v1'): Observable<CodingStatistics> {
+    const params = new HttpParams().set('version', version);
     return this.http
       .get<CodingStatistics>(
       `${this.serverUrl}admin/workspace/${workspace_id}/coding/statistics`,
-      { headers: this.authHeader })
+      { headers: this.authHeader, params })
       .pipe(
         catchError(() => of({ totalResponses: 0, statusCounts: {} }))
       );

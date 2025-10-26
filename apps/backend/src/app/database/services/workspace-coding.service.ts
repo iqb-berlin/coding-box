@@ -1034,8 +1034,8 @@ export class WorkspaceCodingService {
     }
   }
 
-  async getCodingStatistics(workspace_id: number): Promise<CodingStatistics> {
-    return this.codingStatisticsService.getCodingStatistics(workspace_id);
+  async getCodingStatistics(workspace_id: number, version: 'v1' | 'v2' | 'v3' = 'v1'): Promise<CodingStatistics> {
+    return this.codingStatisticsService.getCodingStatistics(workspace_id, version);
   }
 
   async generateCodebook(

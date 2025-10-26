@@ -205,8 +205,8 @@ export class BackendService {
     return this.codingService.getCodingListAsExcel(workspace_id);
   }
 
-  getCodingStatistics(workspace_id: number): Observable<CodingStatistics> {
-    return this.codingService.getCodingStatistics(workspace_id);
+  getCodingStatistics(workspace_id: number, version: 'v1' | 'v2' | 'v3' = 'v1'): Observable<CodingStatistics> {
+    return this.codingService.getCodingStatistics(workspace_id, version);
   }
 
   createCodingStatisticsJob(workspace_id: number): Observable<{ jobId: string; message: string }> {
