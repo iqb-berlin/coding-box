@@ -405,7 +405,9 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
           this.isLoading = false;
         })
       )
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .subscribe((response: { data: any[]; total: number }) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         this.data = response.data.map((item: any) => ({
           id: item.responseId,
           unitid: item.unitId,
