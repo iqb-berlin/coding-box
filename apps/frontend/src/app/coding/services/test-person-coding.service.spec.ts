@@ -59,7 +59,7 @@ describe('TestPersonCodingService', () => {
         expect(response).toEqual(mockResponse);
       });
 
-      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding?testPersons=${mockTestPersonIds}`);
+      const req = httpMock.expectOne(request => request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding` && request.params.get('testPersons') === mockTestPersonIds && request.params.get('autoCoderRun') === '1');
       expect(req.request.method).toBe('GET');
       expect(req.request.headers.get('Authorization')).toBe(`Bearer ${mockAuthToken}`);
       req.flush(mockResponse);
@@ -72,7 +72,7 @@ describe('TestPersonCodingService', () => {
         expect(response).toEqual({ totalResponses: 0, statusCounts: {} });
       });
 
-      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding?testPersons=${mockTestPersonIds}`);
+      const req = httpMock.expectOne(request => request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding` && request.params.get('testPersons') === mockTestPersonIds && request.params.get('autoCoderRun') === '1');
       req.error(new ProgressEvent('error'));
     });
   });
