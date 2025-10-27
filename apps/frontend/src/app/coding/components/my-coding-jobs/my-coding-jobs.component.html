@@ -11,6 +11,30 @@
     }
 
     @if (!isLoading && isAuthorized) {
+      <div class="fx-row-center-center-stretch fx-gap-16 filter-row">
+        <mat-form-field appearance="outline" class="filter-field">
+          <mat-label>Name filtern</mat-label>
+          <mat-select [(value)]="selectedJobName" (selectionChange)="onJobNameFilterChange()">
+            <mat-option [value]="null">Alle Namen</mat-option>
+            <mat-option *ngFor="let job of originalData" [value]="job.name">
+              {{job.name}}
+            </mat-option>
+          </mat-select>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" class="filter-field">
+          <mat-label>Status filtern</mat-label>
+          <mat-select [(value)]="selectedStatus" (selectionChange)="onStatusFilterChange()">
+            <mat-option [value]="null">Alle Status</mat-option>
+            <mat-option value="active">Aktiv</mat-option>
+            <mat-option value="completed">Abgeschlossen</mat-option>
+            <mat-option value="pending">Ausstehend</mat-option>
+            <mat-option value="paused">Pausiert</mat-option>
+            <mat-option value="open">Offen</mat-option>
+          </mat-select>
+        </mat-form-field>
+      </div>
+
       @if (dataSource.data.length > 0) {
         <div class="total-progress-section">
           <mat-icon>bar_chart</mat-icon>
@@ -19,28 +43,24 @@
             <strong>{{totalProgress}}% ({{totalCodedUnits}}/{{totalUnits}} Aufgaben)</strong>
           </span>
         </div>
-      }
 
-      <div class="flex-container">
-        <div class="filter-section">
-          <div class="filter-action-container">
-            <coding-box-search-filter
-              [title]="'Kodierjobs filtern'"
-              (valueChange)="applyFilter($event)">
-            </coding-box-search-filter>
-
-            <a mat-raised-button color="primary" [disabled]="selection.selected.length !== 1" (click)="startCodingJob(selection.selected[0])" class="action-button">
-              <mat-icon>play_arrow</mat-icon>
-              Kodierjob starten
-            </a>
-          </div>
-        </div>
-
-        <div class="table-container">
+        <div class="flex-container">
+          <div class="table-container">
           <mat-table [dataSource]="dataSource" matSort class="coding-jobs-table">
             <mat-header-row *matHeaderRowDef="displayedColumns; sticky: true"></mat-header-row>
             <mat-row *matRowDef="let row; columns: displayedColumns;" (click)="selectRow(row)" [class.selected]="selection.isSelected(row)">
             </mat-row>
+
+            <ng-container matColumnDef="actions">
+              <mat-header-cell *matHeaderCellDef>Aktionen</mat-header-cell>
+              <mat-cell *matCellDef="let element">
+                <button mat-icon-button (click)="$event.stopPropagation(); startCodingJob(element)"
+                        matTooltip="Kodierjob starten"
+                        aria-label="Kodierjob starten">
+                  <mat-icon>play_arrow</mat-icon>
+                </button>
+              </mat-cell>
+            </ng-container>
 
             <ng-container matColumnDef="name">
               <mat-header-cell *matHeaderCellDef mat-sort-header>Name</mat-header-cell>
@@ -98,9 +118,16 @@
               </mat-cell>
             </ng-container>
           </mat-table>
+          </div>
         </div>
+      }
 
-      </div>
+      @if (dataSource.data.length === 0) {
+        <div class="no-data-message">
+          <mat-icon>assignment</mat-icon>
+          <p>Keine Kodierjobs zugewiesen. Ihnen sind derzeit keine Kodierjobs zugewiesen.</p>
+        </div>
+      }
     }
   </div>
 </div>

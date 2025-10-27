@@ -1,5 +1,5 @@
 import {
-  Component, OnInit, OnDestroy, ViewChild, AfterViewInit, inject
+  Component, OnInit, OnDestroy, ViewChild, AfterViewInit, inject, ChangeDetectorRef
 } from '@angular/core';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatSort, MatSortModule } from '@angular/material/sort';
@@ -12,18 +12,21 @@ import {
   MatTable,
   MatTableDataSource
 } from '@angular/material/table';
+import {
+  MatFormField, MatLabel, MatOption, MatSelect
+} from '@angular/material/select';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { SelectionModel } from '@angular/cdk/collections';
 import { MatIcon } from '@angular/material/icon';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
-import { MatAnchor, MatButton } from '@angular/material/button';
-import { DatePipe, NgClass } from '@angular/common';
+import { MatAnchor, MatIconButton } from '@angular/material/button';
+import { DatePipe, NgClass, NgFor } from '@angular/common';
 import { Router } from '@angular/router';
 import { forkJoin } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { AppService } from '../../../services/app.service';
 import { BackendService } from '../../../services/backend.service';
-import { SearchFilterComponent } from '../../../shared/search-filter/search-filter.component';
 import { CodingJob, Variable } from '../../models/coding-job.model';
 import { WorkspaceFullDto } from '../../../../../../../api-dto/workspaces/workspace-full-dto';
 
@@ -36,7 +39,7 @@ import { WorkspaceFullDto } from '../../../../../../../api-dto/workspaces/worksp
     TranslateModule,
     DatePipe,
     NgClass,
-    SearchFilterComponent,
+    NgFor,
     MatIcon,
     MatHeaderCell,
     MatCell,
@@ -51,7 +54,12 @@ import { WorkspaceFullDto } from '../../../../../../../api-dto/workspaces/worksp
     MatRowDef,
     MatColumnDef,
     MatSortModule,
-    MatButton
+    MatIconButton,
+    MatTooltipModule,
+    MatFormField,
+    MatLabel,
+    MatSelect,
+    MatOption
   ]
 })
 export class MyCodingJobsComponent implements OnInit, AfterViewInit, OnDestroy {
@@ -59,8 +67,9 @@ export class MyCodingJobsComponent implements OnInit, AfterViewInit, OnDestroy {
   backendService = inject(BackendService);
   private snackBar = inject(MatSnackBar);
   private router = inject(Router);
+  private cdr = inject(ChangeDetectorRef);
 
-  displayedColumns: string[] = ['name', 'description', 'status', 'variables', 'variableBundles', 'progress', 'created_at', 'updated_at'];
+  displayedColumns: string[] = ['actions', 'name', 'description', 'status', 'variables', 'variableBundles', 'progress', 'created_at', 'updated_at'];
   dataSource = new MatTableDataSource<CodingJob>([]);
   selection = new SelectionModel<CodingJob>(true, []);
   isLoading = false;
@@ -70,6 +79,10 @@ export class MyCodingJobsComponent implements OnInit, AfterViewInit, OnDestroy {
   totalProgress = 0;
   totalCodedUnits = 0;
   totalUnits = 0;
+
+  selectedStatus: string | null = null;
+  selectedJobName: string | null = null;
+  originalData: CodingJob[] = [];
 
   @ViewChild(MatSort) sort!: MatSort;
 
@@ -115,8 +128,10 @@ export class MyCodingJobsComponent implements OnInit, AfterViewInit, OnDestroy {
           const allJobs = allJobsArrays.flat();
           const assignedJobs = allJobs.filter(job => job.assignedCoders && job.assignedCoders.includes(this.currentUserId)
           );
+          this.originalData = [...assignedJobs];
           this.dataSource.data = assignedJobs;
           this.calculateTotalProgress(assignedJobs);
+          this.cdr.detectChanges(); // Trigger change detection for filters
           this.isLoading = false;
         },
         error: () => {
@@ -130,8 +145,26 @@ export class MyCodingJobsComponent implements OnInit, AfterViewInit, OnDestroy {
     }
   }
 
-  applyFilter(filterValue: string): void {
-    this.dataSource.filter = filterValue.trim().toLowerCase();
+  onStatusFilterChange(): void {
+    this.applyAllFilters();
+  }
+
+  onJobNameFilterChange(): void {
+    this.applyAllFilters();
+  }
+
+  private applyAllFilters(): void {
+    let filteredData = this.originalData || [];
+
+    if (this.selectedStatus !== null && this.selectedStatus !== 'all') {
+      filteredData = filteredData.filter(job => job.status === this.selectedStatus);
+    }
+
+    if (this.selectedJobName !== null && this.selectedJobName !== 'all') {
+      filteredData = filteredData.filter(job => job.name === this.selectedJobName);
+    }
+
+    this.dataSource.data = filteredData;
   }
 
   selectRow(row: CodingJob): void {
