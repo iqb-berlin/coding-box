@@ -29,7 +29,7 @@
             <mat-icon>code</mat-icon>
             {{ 'test-person-coding.code-selected-groups' | translate }}
           </button>
-          <button mat-raised-button color="accent" [disabled]="isLoading" (click)="codeAllTestPersons()">
+          <button mat-button [disabled]="isLoading" (click)="codeAllTestPersons()">
             <mat-icon>group</mat-icon>
             {{ 'test-person-coding.code-all-test-persons' | translate }}
           </button>
@@ -65,7 +65,7 @@
           <ng-container matColumnDef="status">
             <th mat-header-cell *matHeaderCellDef>{{ 'test-person-coding.jobs.table.status' | translate }}</th>
             <td mat-cell *matCellDef="let job">
-              <span class="status-value" [ngClass]="'status-' + job.status">{{ job.status | titlecase }}</span>
+              <span class="status-value" [ngClass]="'status-' + job.status">{{ 'status-' + job.status | translate }}</span>
             </td>
           </ng-container>
 
@@ -81,7 +81,7 @@
 
           <ng-container matColumnDef="createdAt">
             <th mat-header-cell *matHeaderCellDef>{{ 'test-person-coding.jobs.table.created' | translate }}</th>
-            <td mat-cell *matCellDef="let job">{{ job.createdAt | date:'medium' }}</td>
+            <td mat-cell *matCellDef="let job">{{ job.createdAt | date:'dd.MM.yyyy, HH:mm' }}</td>
           </ng-container>
 
           <ng-container matColumnDef="groups">
@@ -172,7 +172,7 @@
       <div class="job-status-content">
         <div class="status-row">
           <span class="status-label">{{ 'test-person-coding.current-job.status' | translate }}</span>
-          <span class="status-value" [ngClass]="'status-' + jobStatus.status">{{ jobStatus.status | titlecase }}</span>
+          <span class="status-value" [ngClass]="'status-' + jobStatus.status">{{ 'status-' + jobStatus.status | translate }}</span>
         </div>
         <div class="status-row">
           <span class="status-label">{{ 'test-person-coding.current-job.progress' | translate }}</span>

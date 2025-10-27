@@ -35,6 +35,7 @@ import {
 } from '../../services/test-person-coding.service';
 import { AppService } from '../../../services/app.service';
 import { BackendService } from '../../../services/backend.service';
+import { BackendMessageTranslatorService } from '../../services/backend-message-translator.service';
 
 @Component({
   selector: 'coding-box-test-person-coding',
@@ -70,6 +71,7 @@ export class TestPersonCodingComponent implements OnInit {
   private appService = inject(AppService);
   private backendService = inject(BackendService);
   private translateService = inject(TranslateService);
+  private backendMessageTranslator = inject(BackendMessageTranslatorService);
   Math = Math;
   get workspaceId(): number {
     return this.appService.selectedWorkspaceId;
@@ -206,7 +208,8 @@ export class TestPersonCodingComponent implements OnInit {
           if (result.jobId) {
             this.activeJobId = result.jobId;
             this.startJobStatusPolling(result.jobId);
-            this.snackBar.open(result.message || this.translateService.instant('test-person-coding.background-job-started'), this.translateService.instant('close'), { duration: 5000 });
+            const translatedMessage = result.message ? this.backendMessageTranslator.translateMessage(result.message) : this.translateService.instant('test-person-coding.background-job-started');
+            this.snackBar.open(translatedMessage, this.translateService.instant('close'), { duration: 5000 });
           } else {
             this.snackBar.open(this.translateService.instant('test-person-coding.responses-coded', { count: result.totalResponses }), this.translateService.instant('close'), { duration: 3000 });
             this.loadStatistics();
@@ -275,10 +278,12 @@ export class TestPersonCodingComponent implements OnInit {
     this.testPersonCodingService.cancelJob(this.workspaceId, idToCancel)
       .subscribe(result => {
         if (result.success) {
-          this.snackBar.open(result.message, this.translateService.instant('close'), { duration: 3000 });
+          const translatedMessage = this.backendMessageTranslator.translateMessage(result.message);
+          this.snackBar.open(translatedMessage, this.translateService.instant('close'), { duration: 3000 });
           this.loadAllJobs();
         } else {
-          this.snackBar.open(this.translateService.instant('test-person-coding.job-cancel-error', { message: result.message }), this.translateService.instant('close'), { duration: 5000 });
+          const translatedErrorMessage = result.message ? this.backendMessageTranslator.translateMessage(result.message) : '';
+          this.snackBar.open(this.translateService.instant('test-person-coding.job-cancel-error', { message: translatedErrorMessage }), this.translateService.instant('close'), { duration: 5000 });
         }
       });
   }
@@ -289,10 +294,12 @@ export class TestPersonCodingComponent implements OnInit {
     this.testPersonCodingService.deleteJob(this.workspaceId, jobId)
       .subscribe(result => {
         if (result.success) {
-          this.snackBar.open(result.message, this.translateService.instant('close'), { duration: 3000 });
+          const translatedMessage = this.backendMessageTranslator.translateMessage(result.message);
+          this.snackBar.open(translatedMessage, this.translateService.instant('close'), { duration: 3000 });
           this.loadAllJobs();
         } else {
-          this.snackBar.open(this.translateService.instant('test-person-coding.job-delete-error', { message: result.message }), this.translateService.instant('close'), { duration: 5000 });
+          const translatedErrorMessage = result.message ? this.backendMessageTranslator.translateMessage(result.message) : '';
+          this.snackBar.open(this.translateService.instant('test-person-coding.job-delete-error', { message: translatedErrorMessage }), this.translateService.instant('close'), { duration: 5000 });
         }
       });
   }
@@ -303,15 +310,18 @@ export class TestPersonCodingComponent implements OnInit {
     this.testPersonCodingService.restartJob(this.workspaceId, jobId)
       .subscribe(result => {
         if (result.success) {
-          this.snackBar.open(result.message || this.translateService.instant('test-person-coding.job-restarted'), this.translateService.instant('close'), { duration: 3000 });
+          const translatedMessage = result.message ? this.backendMessageTranslator.translateMessage(result.message) : this.translateService.instant('test-person-coding.job-restarted');
+          this.snackBar.open(translatedMessage, this.translateService.instant('close'), { duration: 3000 });
           if (result.jobId) {
-            // If a new job was created, start polling its status
             this.activeJobId = result.jobId;
             this.startJobStatusPolling(result.jobId);
+            const translatedBackgroundMessage = result.message ? this.backendMessageTranslator.translateMessage(result.message) : this.translateService.instant('test-person-coding.background-job-started');
+            this.snackBar.open(translatedBackgroundMessage, this.translateService.instant('close'), { duration: 5000 });
           }
           this.loadAllJobs();
         } else {
-          this.snackBar.open(this.translateService.instant('test-person-coding.job-restart-error', { message: result.message }), this.translateService.instant('close'), { duration: 5000 });
+          const translatedErrorMessage = result.message ? this.backendMessageTranslator.translateMessage(result.message) : '';
+          this.snackBar.open(this.translateService.instant('test-person-coding.job-restart-error', { message: translatedErrorMessage }), this.translateService.instant('close'), { duration: 5000 });
         }
       });
   }
