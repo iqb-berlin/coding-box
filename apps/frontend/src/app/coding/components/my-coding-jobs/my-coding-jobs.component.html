@@ -44,6 +44,14 @@
           </span>
         </div>
 
+        <div class="total-progress-section">
+          <mat-icon>work_outline</mat-icon>
+          <span class="total-progress-text">
+            Nicht abgeschlossene Kodierjobs:
+            <strong>{{incompleteJobs}}</strong>
+          </span>
+        </div>
+
         <div class="flex-container">
           <div class="table-container">
           <mat-table [dataSource]="dataSource" matSort class="coding-jobs-table">

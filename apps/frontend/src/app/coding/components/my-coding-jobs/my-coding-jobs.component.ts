@@ -79,6 +79,7 @@ export class MyCodingJobsComponent implements OnInit, AfterViewInit, OnDestroy {
   totalProgress = 0;
   totalCodedUnits = 0;
   totalUnits = 0;
+  incompleteJobs = 0;
 
   selectedStatus: string | null = null;
   selectedJobName: string | null = null;
@@ -307,6 +308,7 @@ export class MyCodingJobsComponent implements OnInit, AfterViewInit, OnDestroy {
     this.totalCodedUnits = assignedJobs.reduce((sum, job) => sum + (job.codedUnits || 0), 0);
     this.totalUnits = assignedJobs.reduce((sum, job) => sum + (job.totalUnits || 0), 0);
     this.totalProgress = this.totalUnits > 0 ? Math.round((this.totalCodedUnits / this.totalUnits) * 100) : 0;
+    this.incompleteJobs = assignedJobs.filter(job => job.status !== 'completed').length;
   }
 
   private formatAssignedVariables(assignedVariables: Variable[]): string {
