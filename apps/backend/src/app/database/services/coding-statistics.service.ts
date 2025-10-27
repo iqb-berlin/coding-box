@@ -38,15 +38,16 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
   }
 
   private async getWorkspaceIdsWithResponses(): Promise<number[]> {
+    const codedStatuses = [statusStringToNumber('NOT_REACHED') || 1, statusStringToNumber('DISPLAYED') || 2, statusStringToNumber('VALUE_CHANGED') || 3];
     const result = await this.responseRepository.query(`
       SELECT DISTINCT person.workspace_id
       FROM response
       INNER JOIN unit ON response.unitid = unit.id
       INNER JOIN booklet ON unit.bookletid = booklet.id
       INNER JOIN persons person ON booklet.personid = person.id
-      WHERE response.status = $1
+      WHERE response.status = ANY($1)
         AND person.consider = $2
-    `, [statusStringToNumber('VALUE_CHANGED') || 3, true]);
+    `, [codedStatuses, true]);
 
     return result.map(row => parseInt(row.workspace_id, 10)).filter(id => !Number.isNaN(id));
   }
@@ -80,7 +81,7 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
 
       this.logger.log(`Filtering coding statistics to ${unitsWithVariables.length} units that have defined variables`);
 
-      const valuedChangedStatus = statusStringToNumber('VALUE_CHANGED') || 3;
+      const codedStatuses = [statusStringToNumber('NOT_REACHED') || 1, statusStringToNumber('DISPLAYED') || 2, statusStringToNumber('VALUE_CHANGED') || 3];
 
       let statusColumn = 'response.status_v1';
       let whereCondition = 'response.status_v1 IS NOT NULL';
@@ -101,13 +102,13 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
         INNER JOIN unit ON response.unitid = unit.id
         INNER JOIN booklet ON unit.bookletid = booklet.id
         INNER JOIN persons person ON booklet.personid = person.id
-        WHERE response.status = $1
+        WHERE response.status = ANY($1)
           AND ${whereCondition}
           AND person.workspace_id = $2
           AND person.consider = $3
           AND unit.name = ANY($4)
         GROUP BY ${statusColumn}
-      `, [valuedChangedStatus, workspace_id, true, unitsWithVariables]);
+      `, [codedStatuses, workspace_id, true, unitsWithVariables]);
 
       let totalResponses = 0;
       statusCountResults.forEach(result => {
