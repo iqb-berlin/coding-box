@@ -725,6 +725,12 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     }
   }
 
+  resumeCodingJob(): void {
+    if (this.codingService.codingJobId) {
+      this.codingService.resumeCodingJob(this.workspaceId, this.codingService.codingJobId);
+    }
+  }
+
   async submitCodingJob(): Promise<void> {
     if (this.codingService.codingJobId) {
       await this.codingService.saveAllCodingProgress(this.workspaceId, this.codingService.codingJobId);
@@ -732,14 +738,15 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     }
   }
 
-  onKeyDown(event: KeyboardEvent): void {
-    if (event.key === 'Enter' && this.isBookletMode && this.unitsData) {
+  onKeyDown(event: Event): void {
+    const keyboardEvent = event as KeyboardEvent;
+    if (keyboardEvent.key === 'Enter' && this.isBookletMode && this.unitsData) {
       if (this.codingService.currentVariableId) {
         const compositeKey = this.codingService.generateCompositeKey(this.testPerson, this.unitId, this.codingService.currentVariableId);
         const hasSelection = this.codingService.selectedCodes.has(compositeKey);
 
         if (hasSelection) {
-          event.preventDefault();
+          keyboardEvent.preventDefault();
           // Navigate to next unit - find the next unit index
           const nextIndex = this.codingService.findFirstUncodedUnitIndex(this.unitsData);
           if (nextIndex >= 0 && nextIndex < this.unitsData.units.length) {

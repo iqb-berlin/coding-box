@@ -147,6 +147,12 @@
 
 // Variable Configuration Styles
 .variable-config {
+  .variable-section-title {
+    margin-bottom: 16px;
+    color: #555;
+    font-weight: 500;
+  }
+
   .variable-item {
     display: flex;
     align-items: flex-start;
@@ -168,6 +174,97 @@
 
     .remove-variable-button {
       margin-top: 8px;
+    }
+  }
+
+  // Bundle-specific styles
+  .bundle-variable-group {
+    margin-bottom: 32px;
+    border: 2px solid #e8f4fd;
+    border-radius: 12px;
+    background-color: #f8fbff;
+
+    .bundle-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 20px;
+      background-color: #e8f4fd;
+      border-bottom: 1px solid #bbdefb;
+      border-radius: 12px 12px 0 0;
+
+      .bundle-title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 0;
+        font-size: 16px;
+        font-weight: 500;
+        color: #1565c0;
+
+        mat-icon {
+          color: #1976d2;
+        }
+
+        .bundle-variable-count-badge {
+          background-color: #1976d2;
+          color: white;
+          padding: 2px 6px;
+          border-radius: 10px;
+          font-size: 12px;
+          font-weight: 500;
+          margin-left: 8px;
+        }
+      }
+
+      .bundle-controls {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+
+        .bundle-sample-field {
+          min-width: 180px;
+
+          mat-form-field {
+            width: 100%;
+          }
+        }
+      }
+    }
+
+    .bundle-variables-list {
+      padding: 16px 20px 20px 20px;
+
+      .bundle-variable-item {
+        background-color: #fff;
+        border: 1px solid #ddd;
+        border-left: 3px solid #1976d2;
+        opacity: 0.9;
+
+        .variable-info {
+          flex: 1;
+          display: flex;
+          gap: 16px;
+
+          .variable-name-field {
+            margin-right: 12px;
+          }
+
+          .bundle-sample-display {
+            margin-right: 12px;
+
+            input[readonly] {
+              background-color: #f5f5f5;
+              color: #666;
+            }
+
+            .mat-mdc-form-field-hint {
+              color: #666;
+              font-style: italic;
+            }
+          }
+        }
+      }
     }
   }
 }

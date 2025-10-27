@@ -180,7 +180,7 @@ describe('WorkspaceCodingService - Unit Variable Filtering', () => {
       mockWorkspaceFilesService.getUnitVariableMap.mockResolvedValue(mockUnitVariables);
 
       try {
-        await service.processTestPersonsBatch(1, ['1'], jest.fn());
+        await service.processTestPersonsBatch(1, ['1'], 1, jest.fn(), 'test-job-id');
       } catch (error) {
         expect(mockWorkspaceFilesService.getUnitVariableMap).toHaveBeenCalledWith(1);
       }

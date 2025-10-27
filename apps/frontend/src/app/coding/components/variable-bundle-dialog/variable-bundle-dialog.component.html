@@ -23,43 +23,7 @@
 
       <div class="form-section">
         <h3>Variablen im Bündel</h3>
-        <p class="section-description">Aktuell ausgewählte Variablen in diesem Bündel:</p>
-
-        <div class="selected-variables-container">
-          @if (selectedVariablesDataSource.data.length === 0) {
-            <div class="empty-state">
-              <p>Keine Variablen ausgewählt. Wählen Sie unten Variablen aus, um sie diesem Bündel hinzuzufügen.</p>
-            </div>
-          }
-          @if (selectedVariablesDataSource.data.length > 0) {
-            <table class="preview-table">
-              <thead>
-                <tr>
-                  <th>Aufgaben-ID</th>
-                  <th>Variablen-ID</th>
-                </tr>
-              </thead>
-              <tbody>
-                @for (variable of selectedVariablesDataSource.data; track variable.unitName + variable.variableId) {
-                  <tr>
-                    <td>{{ variable.unitName }}</td>
-                    <td>
-                      {{ variable.variableId }}
-                      <button mat-icon-button class="delete-button" color="warn" (click)="removeVariable(variable)" matTooltip="Variable entfernen">
-                        <mat-icon>delete</mat-icon>
-                      </button>
-                    </td>
-                  </tr>
-                }
-              </tbody>
-            </table>
-          }
-        </div>
-      </div>
-
-      <div class="form-section">
-        <h3>Verfügbare Variablen</h3>
-        <p class="section-description">Wählen Sie Variablen aus, um sie dem Bündel hinzuzufügen:</p>
+        <p class="section-description">Wählen Sie die Variablen aus, die diesem Bündel zugewiesen werden sollen:</p>
 
         <!-- Filter controls -->
         <div class="filter-container">
@@ -101,15 +65,8 @@
         }
 
         @if (!isLoadingVariableAnalysis && availableVariables.length > 0) {
-          <!-- Quick selection tools -->
-          <div class="quick-selection-tools">
-            <button mat-stroked-button color="primary" (click)="masterToggle()" class="select-all-button">
-              <mat-icon>{{ isAllSelected() ? 'deselect' : 'select_all' }}</mat-icon>
-              {{ isAllSelected() ? 'Alle abwählen' : 'Alle auswählen' }}
-            </button>
-            <div class="selection-count">
-              {{ selectedVariables.selected.length }} von {{ dataSource.filteredData.length }} Variablen ausgewählt
-            </div>
+          <div class="selection-count">
+            {{ selectedVariables.selected.length }} von {{ dataSource.filteredData.length }} Variablen ausgewählt
           </div>
 
           <!-- Variables grid view -->
@@ -134,23 +91,6 @@
               }
             </div>
           </div>
-
-          <div class="action-buttons">
-            <button mat-raised-button color="primary" type="button" [disabled]="selectedVariables.selected.length === 0" (click)="addSelectedVariables()">
-              <mat-icon>add</mat-icon>
-              Ausgewählte Variablen hinzufügen
-            </button>
-          </div>
-
-          <mat-paginator
-            [length]="totalVariableAnalysisRecords"
-            [pageSize]="variableAnalysisPageSize"
-            [pageIndex]="variableAnalysisPageIndex"
-            [pageSizeOptions]="variableAnalysisPageSizeOptions"
-            showFirstLastButtons
-            (page)="onPageChange($event)"
-            aria-label="Seiten auswählen">
-          </mat-paginator>
         }
 
         @if (!isLoadingVariableAnalysis && availableVariables.length === 0) {
@@ -166,7 +106,7 @@
 
   <div class="dialog-actions">
     <button mat-button (click)="onCancel()">Abbrechen</button>
-    <button mat-raised-button color="primary" (click)="onSubmit()" [disabled]="bundleGroupForm.invalid || selectedVariablesDataSource.data.length === 0">
+    <button mat-raised-button color="primary" (click)="onSubmit()" [disabled]="bundleGroupForm.invalid || selectedVariables.selected.length === 0">
       {{ data.isEdit ? 'Speichern' : 'Erstellen' }}
     </button>
   </div>

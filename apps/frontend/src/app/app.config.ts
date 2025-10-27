@@ -1,5 +1,5 @@
 import {
-  ApplicationConfig, importProvidersFrom,
+  ApplicationConfig, importProvidersFrom, LOCALE_ID,
   provideAppInitializer
 } from '@angular/core';
 import { provideRouter } from '@angular/router';
@@ -9,6 +9,8 @@ import {
   provideHttpClient,
   withInterceptors
 } from '@angular/common/http';
+import { registerLocaleData, HashLocationStrategy, LocationStrategy } from '@angular/common';
+import localeDeAt from '@angular/common/locales/de-AT';
 import { TranslateHttpLoader } from '@ngx-translate/http-loader';
 import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
 import {
@@ -18,7 +20,6 @@ import {
   UserActivityService,
   withAutoRefreshToken
 } from 'keycloak-angular';
-import { HashLocationStrategy, LocationStrategy } from '@angular/common';
 import { routes } from './app.routes';
 import { environment } from '../environments/environment';
 import { authInterceptor } from './core/interceptors/auth.interceptor';
@@ -58,6 +59,8 @@ export const provideKeycloakAngular = () => provideKeycloak({
     AutoRefreshTokenService, UserActivityService]
 });
 
+registerLocaleData(localeDeAt);
+
 export const appConfig: ApplicationConfig = {
   providers: [
     provideHttpClient(
@@ -81,6 +84,10 @@ export const appConfig: ApplicationConfig = {
     {
       provide: LocationStrategy,
       useClass: HashLocationStrategy
+    },
+    {
+      provide: LOCALE_ID,
+      useValue: 'de-AT'
     },
     provideAppInitializer(() => {
     })

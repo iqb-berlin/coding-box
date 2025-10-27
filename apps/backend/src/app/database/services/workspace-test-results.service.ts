@@ -760,7 +760,17 @@ export class WorkspaceTestResultsService {
 
   async searchResponses(
     workspaceId: number,
-    searchParams: { value?: string; variableId?: string; unitName?: string; status?: string; codedStatus?: string; group?: string; code?: string },
+    searchParams: {
+      value?: string;
+      variableId?: string;
+      unitName?: string;
+      bookletName?: string;
+      status?: string;
+      codedStatus?: string;
+      group?: string;
+      code?: string;
+      version?: 'v1' | 'v2' | 'v3'
+    },
     options: { page?: number; limit?: number } = {}
   ): Promise<{
       data: {
@@ -817,12 +827,17 @@ export class WorkspaceTestResultsService {
         query.andWhere('unit.name ILIKE :unitName', { unitName: `%${searchParams.unitName}%` });
       }
 
+      if (searchParams.bookletName) {
+        query.andWhere('bookletinfo.name ILIKE :bookletName', { bookletName: `%${searchParams.bookletName}%` });
+      }
+
       if (searchParams.status) {
         query.andWhere('response.status = :status', { status: searchParams.status });
       }
 
       if (searchParams.codedStatus) {
-        query.andWhere('response.status_v1 = :codedStatus', { codedStatus: searchParams.codedStatus });
+        const statusColumn = searchParams.version ? `status_${searchParams.version}` : 'status_v1';
+        query.andWhere(`response.${statusColumn} = :codedStatus`, { codedStatus: searchParams.codedStatus });
       }
 
       if (searchParams.group) {
@@ -846,24 +861,31 @@ export class WorkspaceTestResultsService {
 
       this.logger.log(`Found ${total} responses matching the criteria in workspace: ${workspaceId}, returning ${responses.length} for page ${page}`);
 
-      const data = responses.map(response => ({
-        responseId: response.id,
-        variableId: response.variableid,
-        value: response.value || '',
-        status: statusNumberToString(response.status) || 'UNSET',
-        code: response.code_v1,
-        score: response.score_v1,
-        codedStatus: statusNumberToString(response.status_v1) || 'UNSET',
-        unitId: response.unit.id,
-        unitName: response.unit.name,
-        unitAlias: response.unit.alias,
-        bookletId: response.unit.booklet.id,
-        bookletName: response.unit.booklet.bookletinfo.name,
-        personId: response.unit.booklet.person.id,
-        personLogin: response.unit.booklet.person.login,
-        personCode: response.unit.booklet.person.code,
-        personGroup: response.unit.booklet.person.group
-      }));
+      const version = searchParams.version || 'v1';
+      const data = responses.map(response => {
+        const code = response[`code_${version}` as keyof ResponseEntity] as number;
+        const score = response[`score_${version}` as keyof ResponseEntity] as number;
+        const codedStatus = response[`status_${version}` as keyof ResponseEntity] as number;
+
+        return {
+          responseId: response.id,
+          variableId: response.variableid,
+          value: response.value || '',
+          status: statusNumberToString(response.status) || 'UNSET',
+          code,
+          score,
+          codedStatus: statusNumberToString(codedStatus) || 'UNSET',
+          unitId: response.unit.id,
+          unitName: response.unit.name,
+          unitAlias: response.unit.alias,
+          bookletId: response.unit.booklet.id,
+          bookletName: response.unit.booklet.bookletinfo.name,
+          personId: response.unit.booklet.person.id,
+          personLogin: response.unit.booklet.person.login,
+          personCode: response.unit.booklet.person.code,
+          personGroup: response.unit.booklet.person.group
+        };
+      });
 
       return { data, total };
     } catch (error) {

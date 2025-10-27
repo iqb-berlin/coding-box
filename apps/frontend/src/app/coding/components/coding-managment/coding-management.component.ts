@@ -1,7 +1,6 @@
 import {
   Component, ViewChild, AfterViewInit, OnInit, OnDestroy, inject
 } from '@angular/core';
-import { NgClass, TitleCasePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import {
   catchError,
@@ -62,11 +61,9 @@ import { GermanPaginatorIntl } from '../../../shared/services/german-paginator-i
     { provide: MatPaginatorIntl, useClass: GermanPaginatorIntl }
   ],
   imports: [
-    NgClass,
     MatTable,
     MatColumnDef,
     MatHeaderCell,
-    TitleCasePipe,
     MatCell,
     MatHeaderRow,
     MatRow,
@@ -105,9 +102,6 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
 
   private responseStatusMap = new Map(responseStatesNumericMap.map(entry => [entry.key, entry.value]));
 
-  /**
-   * Maps numeric response status to string
-   */
   mapStatusToString(status: number): string {
     return this.responseStatusMap.get(status) || 'UNKNOWN';
   }
@@ -117,7 +111,7 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
 
   data: Success[] = [];
   dataSource = new MatTableDataSource<Success>(this.data);
-  displayedColumns: string[] = ['unitname', 'variableid', 'value', 'codedstatus', 'actions'];
+  displayedColumns: string[] = ['unitname', 'variableid', 'value', 'codedstatus', 'person_code', 'person_group', 'booklet_id', 'actions'];
   isLoading = false;
   isFilterLoading = false;
   isLoadingStatistics = false;
@@ -137,8 +131,47 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
     statusCounts: {}
   };
 
+  selectedStatisticsVersion: 'v1' | 'v2' | 'v3' = 'v1';
+
+  codingRunOptions = [
+    { value: 'v1', label: 'coding-management.statistics.first-autocode-run' },
+    { value: 'v2', label: 'coding-management.statistics.manual-coding-run' },
+    { value: 'v3', label: 'coding-management.statistics.second-autocode-run' }
+  ] as const;
+
+  filterParams = {
+    unitName: '',
+    codedStatus: '',
+    version: 'v1' as 'v1' | 'v2' | 'v3',
+    code: '',
+    group: '',
+    bookletName: ''
+  };
+
+  private filterTimer?: NodeJS.Timeout;
+
   constructor(private translateService: TranslateService) {
     this.isAutoCoding = false;
+  }
+
+  getColumnHeader(column: string): string {
+    const headers: Record<string, string> = {
+      unitname: 'coding-management.columns.unitname',
+      variableid: 'coding-management.columns.variableid',
+      value: 'coding-management.columns.value',
+      codedstatus: 'coding-management.columns.codedstatus',
+      person_code: 'coding-management.columns.person-code',
+      person_group: 'coding-management.columns.person-group',
+      booklet_id: 'coding-management.columns.booklet-id',
+      actions: 'coding-management.columns.actions'
+    };
+    return this.translateService.instant(headers[column] || column);
+  }
+
+  getStatusString(status: string): string {
+    if (!status) return '';
+    const num = parseInt(status, 10);
+    return Number.isNaN(num) ? status : this.mapStatusToString(num);
   }
 
   ngOnInit(): void {
@@ -176,7 +209,7 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
       )
       .subscribe(({ jobId }) => {
         if (!jobId) {
-          this.backendService.getCodingStatistics(workspaceId)
+          this.backendService.getCodingStatistics(workspaceId, this.selectedStatisticsVersion)
             .pipe(
               catchError(() => {
                 this.snackBar.open(this.translateService.instant('coding-management.descriptions.error-statistics'), this.translateService.instant('close'), {
@@ -219,6 +252,17 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
       });
   }
 
+  onStatisticsVersionChange(): void {
+    this.data = [];
+    this.dataSource.data = [];
+    this.currentStatusFilter = null;
+    this.totalRecords = 0;
+
+    if (this.statisticsLoaded) {
+      this.fetchCodingStatistics();
+    }
+  }
+
   getStatuses(): string[] {
     return Object.keys(this.codingStatistics.statusCounts);
   }
@@ -235,7 +279,7 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
     this.isLoading = true;
     this.currentStatusFilter = status;
 
-    this.backendService.getResponsesByStatus(workspaceId, status, page, limit)
+    this.backendService.getResponsesByStatus(workspaceId, status, this.selectedStatisticsVersion, page, limit)
       .pipe(
         catchError(() => {
           this.isLoading = false;
@@ -255,23 +299,28 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
         })
       )
       .subscribe(response => {
-        this.data = response.data.map((item: ResponseEntity) => ({
-          id: item.id,
-          unitid: item.unitId,
-          variableid: item.variableid || '',
-          status: item.status || '',
-          value: item.value || '',
-          subform: item.subform || '',
-          code: item.code?.toString() || null,
-          score: item.score?.toString() || null,
-          unit: item.unit,
-          codedstatus: item.codedstatus || '',
-          unitname: item.unit?.name || '',
-          login_name: item.unit?.booklet?.person?.login || '',
-          login_group: (item.unit?.booklet?.person as { login: string; code: string; group?: string })?.group || '',
-          login_code: item.unit?.booklet?.person?.code || '',
-          booklet_id: item.unit?.booklet?.bookletinfo?.name || ''
-        }));
+        this.data = response.data.map((item: ResponseEntity) => {
+          const codeKey = `code_${this.selectedStatisticsVersion}` as keyof ResponseEntity;
+          const scoreKey = `score_${this.selectedStatisticsVersion}` as keyof ResponseEntity;
+
+          return {
+            id: item.id,
+            unitid: item.unitId,
+            variableid: item.variableid || '',
+            status: item.status || '',
+            value: item.value || '',
+            subform: item.subform || '',
+            code: (item[codeKey] as number)?.toString() || null,
+            score: (item[scoreKey] as number)?.toString() || null,
+            unit: item.unit,
+            codedstatus: item.status_v1 || '',
+            unitname: item.unit?.name || '',
+            login_name: item.unit?.booklet?.person?.login || '',
+            login_group: (item.unit?.booklet?.person as { login: string; code: string; group?: string })?.group || '',
+            login_code: item.unit?.booklet?.person?.code || '',
+            booklet_id: item.unit?.booklet?.bookletinfo?.name || ''
+          };
+        });
         this.dataSource.data = this.data;
         this.totalRecords = response.total;
 
@@ -283,7 +332,112 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
       });
   }
 
+  onFilterChange(): void {
+    this.clearFilterTimer();
+    if (!this.filterParams.codedStatus) {
+      this.data = [];
+      this.dataSource.data = [];
+      this.totalRecords = 0;
+      this.currentStatusFilter = null;
+      this.pageIndex = 0;
+      return;
+    }
+
+    this.filterTimer = setTimeout(() => {
+      this.performSearch();
+    }, 500);
+  }
+
+  clearFilterTimer(): void {
+    if (this.filterTimer) {
+      clearTimeout(this.filterTimer);
+      this.filterTimer = undefined;
+    }
+  }
+
+  clearFilters(): void {
+    this.filterParams = {
+      unitName: '',
+      codedStatus: '',
+      version: 'v1',
+      code: '',
+      group: '',
+      bookletName: ''
+    };
+    this.data = [];
+    this.dataSource.data = [];
+    this.totalRecords = 0;
+    this.currentStatusFilter = null;
+    this.pageIndex = 0;
+  }
+
+  performSearch(): void {
+    this.currentStatusFilter = null;
+    this.pageIndex = 0;
+    this.fetchResponsesWithFilters();
+  }
+
+  fetchResponsesWithFilters(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    this.isLoading = true;
+
+    const hasActiveFilters = Object.values(this.filterParams).some(value => value.trim() !== '');
+
+    if (!hasActiveFilters) {
+      this.data = [];
+      this.dataSource.data = [];
+      this.totalRecords = 0;
+      this.isLoading = false;
+      return;
+    }
+
+    this.backendService.searchResponses(workspaceId, this.filterParams, this.pageIndex + 1, this.pageSize)
+      .pipe(
+        catchError(() => {
+          this.isLoading = false;
+          this.snackBar.open('Fehler beim Filtern der Kodierdaten', 'Schließen', {
+            duration: 5000,
+            panelClass: ['error-snackbar']
+          });
+          return of<{ data: unknown[]; total: number }>({ data: [], total: 0 });
+        }),
+        finalize(() => {
+          this.isLoading = false;
+        })
+      )
+      .subscribe((response: { data: any[]; total: number }) => {
+        this.data = response.data.map((item: any) => ({
+          id: item.responseId,
+          unitid: item.unitId,
+          variableid: item.variableId || '',
+          status: item.status || '',
+          value: item.value || '',
+          subform: '',
+          code: item.code?.toString() || null,
+          score: item.score?.toString() || null,
+          unit: { name: item.unitName },
+          codedstatus: item.codedStatus || '',
+          unitname: item.unitName || '',
+          login_name: item.personLogin || '',
+          login_group: item.personGroup || '',
+          login_code: item.personCode || '',
+          booklet_id: item.bookletName || '',
+          person_code: item.personCode || '',
+          person_group: item.personGroup || ''
+        })) as Success[];
+        this.dataSource.data = this.data;
+        this.totalRecords = response.total;
+
+        if (this.data.length === 0) {
+          this.snackBar.open('Keine Daten mit den angegebenen Filtern gefunden.', 'Schließen', {
+            duration: 5000
+          });
+        }
+      });
+  }
+
   ngOnDestroy(): void {
+    this.clearFilterTimer();
     this.destroy$.next();
     this.destroy$.complete();
     this.filterTextChanged.complete();
@@ -315,7 +469,14 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
     if (this.currentStatusFilter) {
       this.fetchResponsesByStatus(this.currentStatusFilter, this.pageIndex + 1, this.pageSize);
     } else {
-      this.fetchCodingList();
+      // Check if we have active filters
+      const hasActiveFilters = Object.values(this.filterParams).some(value => value.trim() !== '');
+
+      if (hasActiveFilters) {
+        this.fetchResponsesWithFilters();
+      } else {
+        this.fetchCodingList();
+      }
     }
   }
 
@@ -528,20 +689,15 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
 
   getCodingSchemeRefFromUnit(unitId: number): void {
     const workspaceId = this.appService.selectedWorkspaceId;
-    this.isLoading = true;
 
     this.backendService.getUnitContentXml(workspaceId, unitId.toString())
       .pipe(
         catchError(() => {
-          this.isLoading = false;
           this.snackBar.open(`Fehler beim Abrufen der Unit-XML-Daten für Unit ${unitId}`, 'Schließen', {
             duration: 5000,
             panelClass: ['error-snackbar']
           });
           return of(null);
-        }),
-        finalize(() => {
-          this.isLoading = false;
         })
       )
       .subscribe(xmlContent => {
@@ -621,20 +777,15 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
 
   showUnitXml(unitId: number): void {
     const workspaceId = this.appService.selectedWorkspaceId;
-    this.isLoading = true;
 
     this.backendService.getUnitContentXml(workspaceId, unitId.toString())
       .pipe(
         catchError(() => {
-          this.isLoading = false;
           this.snackBar.open(`Fehler beim Abrufen der Unit-XML-Daten für Unit ${unitId}`, 'Schließen', {
             duration: 5000,
             panelClass: ['error-snackbar']
           });
           return of(null);
-        }),
-        finalize(() => {
-          this.isLoading = false;
         })
       )
       .subscribe(xmlContent => {

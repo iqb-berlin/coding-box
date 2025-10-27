@@ -24,6 +24,12 @@
   "loading-units": "Aufgaben werden geladen...",
   "no-units-matching": "Keine Aufgaben gefunden, die übereinstimmen mit",
   "no-units-available": "Keine Aufgaben verfügbar",
+  "status-pending": "Ausstehend",
+  "status-processing": "Wird bearbeitet",
+  "status-completed": "Abgeschlossen",
+  "status-failed": "Fehlgeschlagen",
+  "status-cancelled": "Abgebrochen",
+  "status-paused": "Pausiert",
 
   "home": {
     "welcome": "Willkommen!",
@@ -278,7 +284,7 @@
     "select": "Auswählen",
     "unit-id": "Aufgaben-ID",
     "unit-name": "Aufgabe",
-    "unit-alias": "Einheiten-Alias",
+    "unit-alias": "Aufgaben-Alias",
     "has-only-vars-with-codes": "Nur Variablen mit Codes",
     "vars-with-codes-only": "Nur Variablen mit Codes",
     "has-general-instructions": "Allgemeine Hinweise für jede Variable",
@@ -298,6 +304,16 @@
         "status": "Status",
         "units": "Aufgaben"
       }
+    },
+    "tooltip": {
+      "has-only-vars-with-codes": "Nur Variablen mit Kodierschemas einbeziehen",
+      "has-general-instructions": "Allgemeine Hinweise für jede Variable einbeziehen",
+      "hide-item-var-relation": "Die Beziehung zwischen Items und Variablen ausblenden",
+      "has-derived-vars": "Abgeleitete Variablen in das Codebook einbeziehen",
+      "has-only-manual-coding": "Nur Variablen, die manuelle Kodierung erfordern, einbeziehen",
+      "has-closed-vars": "Geschlossene Variablen in das Codebook einbeziehen",
+      "show-score": "Bewertungswerte im Codebook anzeigen",
+      "code-label-to-upper": "Code-Labels in Großbuchstaben konvertieren"
     }
   },
 
@@ -367,6 +383,19 @@
     "save-profile": "Profil speichern",
     "delete-profile": "Profil löschen",
     "close": "Schließen",
+    "backend-messages": {
+      "operation-completed": "Vorgang erfolgreich abgeschlossen",
+      "process-completed": "Prozess erfolgreich abgeschlossen",
+      "success": "Erfolg",
+      "operation-failed": "Vorgang fehlgeschlagen",
+      "process-failed": "Prozess fehlgeschlagen",
+      "error": "Fehler",
+      "unexpected-error": "Unerwarteter Fehler aufgetreten",
+      "invalid-request": "Ungültige Anfrage",
+      "access-denied": "Zugriff verweigert",
+      "not-found": "Nicht gefunden",
+      "internal-server-error": "Interner Serverfehler"
+    },
     "select-missings-profile": "Missings-Profil auswählen",
     "replay-statistics": "Replay-Statistiken",
     "loading-statistics": "Statistiken werden geladen...",
@@ -428,9 +457,14 @@
     "ALL_REPLAYS_CODED_MESSAGE": "Alle Replays wurden kodiert",
     "SUBMITTING_JOB": "Auftrag wird eingereicht...",
     "SUBMIT_JOB": "Auftrag einreichen",
+    "coding-job-paused": "Kodierungsauftrag pausiert",
     "pausing-coding-job": "Kodierungsauftrag wird angehalten...",
     "coding-job-paused-successfully": "Kodierungsauftrag erfolgreich angehalten",
     "failed-to-pause-coding-job": "Fehler beim Anhalten des Kodierungsauftrags",
+    "resuming-coding-job": "Kodierungsauftrag wird fortgesetzt...",
+    "coding-job-resumed-successfully": "Kodierungsauftrag erfolgreich fortgesetzt",
+    "failed-to-resume-coding-job": "Fehler beim Fortsetzen des Kodierungsauftrags",
+    "resume-coding": "Kodierung fortsetzen",
     "submitting-coding-job": "Kodierungsauftrag wird eingereicht...",
     "coding-job-submitted-successfully": "Kodierungsauftrag erfolgreich eingereicht",
     "failed-to-submit-coding-job": "Fehler beim Einreichen des Kodierungsauftrags",
@@ -595,7 +629,34 @@
       "responses-with-status": "Anzahl der Antworten mit Status {{status}}:",
       "missing-schemas": "Kodierschemata fehlen",
       "uncoded-responses-title": "Unkodierte Antworten",
-      "responses-with-status-title": "Antworten mit Status: {{status}}"
+      "responses-with-status-title": "Antworten mit Status: {{status}}",
+      "coding-run-selector": "Kodier-Lauf auswählen:",
+      "first-autocode-run": "1 Autocoder Lauf",
+      "manual-coding-run": "manuelle Kodierung",
+      "second-autocode-run": "2 Autocoder Lauf"
+    },
+    "columns": {
+      "unitname": "Aufgabe",
+      "variableid": "Variable",
+      "value": "Wert",
+      "codedstatus": "Kodierstatus",
+      "person-code": "Person-Code",
+      "person-group": "Person-Gruppe",
+      "booklet-id": "Booklet-ID",
+      "actions": "Aktionen"
+    },
+    "filters": {
+      "unit-name": "Aufgaben-Name",
+      "unit-name-placeholder": "Aufgaben-Name eingeben...",
+      "coded-status": "Kodier-Status",
+      "run": "Lauf",
+      "person-code": "Person-Code",
+      "person-code-placeholder": "Person-Code eingeben...",
+      "person-group": "Person-Gruppe",
+      "person-group-placeholder": "Person-Gruppe eingeben...",
+      "booklet-name": "Testheft-Name",
+      "booklet-name-placeholder": "Testheft-Name eingeben...",
+      "clear": "Filter löschen"
     },
     "aria": {
       "select-page": "Seiten auswählen"
@@ -605,7 +666,7 @@
   "test-results-search": {
     "search-units": "Aufgaben suchen",
     "search-responses": "Antworten suchen",
-    "search-booklets": "Booklets suchen",
+    "search-booklets": "Testhefte suchen",
     "search-field": {
       "unit-name": "Aufgabe suchen",
       "unit-name-placeholder": "Geben Sie den Namen der Aufgabe ein...",
@@ -623,8 +684,8 @@
       "group-placeholder": "Suche nach Gruppe...",
       "code": "Code",
       "code-placeholder": "Suche nach Code...",
-      "booklet-name": "Booklet suchen",
-      "booklet-name-placeholder": "Geben Sie den Namen des Booklets ein..."
+      "booklet-name": "Testheft suchen",
+      "booklet-name-placeholder": "Geben Sie den Namen des Testhefts ein..."
     },
     "loading": "Suche läuft...",
     "no-results": {
@@ -640,7 +701,7 @@
     "table-headers": {
       "task": "Aufgabe",
       "alias": "Alias",
-      "booklet": "Booklet",
+      "booklet": "Testheft",
       "login": "Login",
       "code": "Code",
       "group": "Gruppe",
@@ -651,8 +712,8 @@
       "value": "Wert",
       "status": "Status",
       "coding-status": "Kodier Status",
-      "booklet-name": "Booklet Name",
-      "units": "Units"
+      "booklet-name": "Testheft Name",
+      "units": "Aufgaben"
     },
     "no-data": {
       "no-tags": "Keine Tags",
@@ -730,6 +791,11 @@
   },
   "test-person-coding": {
     "title": "Testpersonen Kodieren",
+    "autocoder-run-selection": {
+      "select-run": "Autocoder Lauf auswählen",
+      "run-1": "1 Autocoder Lauf",
+      "run-2": "2 Autocoder Lauf"
+    },
     "select-groups-label": "Testpersonengruppen auswählen",
     "select-groups-hint": "Wählen Sie eine oder mehrere Gruppen zum Kodieren aus",
     "loading-groups": "Gruppen werden geladen...",
@@ -765,6 +831,7 @@
         "progress": "Fortschritt",
         "created": "Erstellt",
         "groups": "Gruppen",
+        "coding-run": "Kodier-Lauf",
         "duration": "Dauer",
         "unknown": "Unbekannt",
         "actions": "Aktionen"
@@ -874,5 +941,40 @@
     "import": {
       "errors-and-warnings": "Fehler und Warnungen"
     }
+  },
+
+  "export-dialog": {
+    "title": "Export Format wählen",
+    "description": "Bitte wählen Sie das gewünschte Format für den Export der Kodierliste:",
+    "formats": {
+      "json": "JSON",
+      "json-description": "Standard-Format mit allen Details",
+      "csv": "CSV",
+      "csv-description": "Komma-getrennte Werte, für Excel und andere Tabellenkalkulationen",
+      "excel": "Excel",
+      "excel-description": "Direktes Excel-Format (.xlsx)"
+    },
+    "cancel": "Abbrechen",
+    "export": "Exportieren",
+    "validation": {
+      "section-title": "Validierung externer Kodierliste für Replay-Funktionalität",
+      "upload-button": "Validierungs-Kodierliste",
+      "tooltip": "Validierung externer Kodierliste für Replay-Funktionalität",
+      "running-title": "Validierung läuft",
+      "running-description": "Validierung läuft im Hintergrund",
+      "error-title": "Fehler bei der Validierung",
+      "retry-button": "Erneut versuchen",
+      "download-button": "Validierungsliste herunterladen",
+      "file-loading": "Excel-Datei wird geladen...",
+      "file-processing": "Excel-Datei wird verarbeitet...",
+      "data-extraction-general": "Daten werden extrahiert...",
+      "data-extraction-progress": "Daten werden extrahiert ({{current}}/{{total}})...",
+      "data-preparation": "Daten werden für Validierung vorbereitet...",
+      "validation-running": "Validierung wird durchgeführt...",
+      "validation-page-progress": "Validierung wird durchgeführt (Seite {{page}})..."
+    }
+  },
+  "export-coding-book": {
+    "validation-file": "Validierungs-Kodierliste"
   }
 }

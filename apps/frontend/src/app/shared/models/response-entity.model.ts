@@ -7,7 +7,9 @@ export interface ResponseEntity {
   subform: string;
   code: number;
   score: number;
-  codedstatus: string;
+  status_v1?: string;
+  code_v1?: number;
+  score_v1?: number;
   status_v2?: string;
   code_v2?: number;
   score_v2?: number;

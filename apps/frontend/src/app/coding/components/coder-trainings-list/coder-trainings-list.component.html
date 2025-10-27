@@ -5,6 +5,16 @@
         <mat-icon>add</mat-icon>
         {{ 'coding.trainings.create.button' | translate }}
       </button>
+
+      <mat-form-field appearance="outline" class="filter-field">
+        <mat-label>Name filtern</mat-label>
+        <mat-select [(value)]="selectedTrainingName" (selectionChange)="onTrainingNameFilterChange()">
+          <mat-option [value]="null">Alle Namen</mat-option>
+          <mat-option *ngFor="let training of originalData" [value]="training.label">
+            {{training.label}}
+          </mat-option>
+        </mat-select>
+      </mat-form-field>
     </div>
   </div>
 
