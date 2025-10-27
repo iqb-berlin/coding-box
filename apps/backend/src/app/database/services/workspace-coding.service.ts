@@ -655,7 +655,7 @@ export class WorkspaceCodingService {
       metrics.unitQuery = Date.now() - unitQueryStart;
 
       if (!units || units.length === 0) {
-        this.logger.log('Keine Einheiten für die angegebenen Booklets gefunden.');
+        this.logger.log('Keine Aufgaben für die angegebenen Testhefte gefunden.');
         await queryRunner.release();
         return statistics;
       }
@@ -1476,7 +1476,6 @@ export class WorkspaceCodingService {
 
       const offset = (page - 1) * limit;
 
-      // Build the select fields dynamically based on version
       const selectFields = [
         'response.id',
         'response.unitId',
@@ -1486,13 +1485,11 @@ export class WorkspaceCodingService {
         'response.codedstatus'
       ];
 
-      // Always include all code and score fields
       selectFields.push('response.code_v1', 'response.score_v1');
       selectFields.push('response.code_v2', 'response.score_v2');
       selectFields.push('response.code_v3', 'response.score_v3');
       selectFields.push('response.status_v1', 'response.status_v2', 'response.status_v3');
 
-      // Add joins and relation selections
       const queryBuilder = this.responseRepository.createQueryBuilder('response')
         .leftJoinAndSelect('response.unit', 'unit')
         .leftJoinAndSelect('unit.booklet', 'booklet')
@@ -1501,7 +1498,6 @@ export class WorkspaceCodingService {
         .select(selectFields)
         .where('person.workspace_id = :workspaceId', { workspaceId });
 
-      // Filter by status - look for the status in the appropriate column based on version
       switch (version) {
         case 'v1':
           queryBuilder.andWhere('response.status_v1 = :status', { status: statusNumber });
@@ -1517,10 +1513,7 @@ export class WorkspaceCodingService {
           break;
       }
 
-      // Get total count
       const total = await queryBuilder.getCount();
-
-      // Apply pagination and ordering
       const data = await queryBuilder
         .orderBy('response.id', 'ASC')
         .skip(offset)
