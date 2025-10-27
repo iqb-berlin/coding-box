@@ -35,7 +35,9 @@ export class ReplayCodingService {
   openSelections: Set<string> = new Set(); // Track open selections
   isPausingJob: boolean = false;
   isCodingJobCompleted: boolean = false;
+  isCodingJobPaused: boolean = false;
   isSubmittingJob: boolean = false;
+  isResumingJob: boolean = false;
 
   resetCodingData() {
     this.codingScheme = null;
@@ -371,6 +373,20 @@ export class ReplayCodingService {
     return selectedCode ? selectedCode.id : null;
   }
 
+  async loadCurrentJobStatus(workspaceId: number, jobId: number): Promise<void> {
+    if (!jobId || !workspaceId) return;
+
+    try {
+      const codingJob = await firstValueFrom(
+        this.backendService.getCodingJob(workspaceId, jobId)
+      );
+      this.isCodingJobPaused = codingJob.status === 'paused';
+      this.isCodingJobCompleted = codingJob.status === 'completed';
+    } catch (error) {
+      // Ignore errors when loading job status
+    }
+  }
+
   async pauseCodingJob(workspaceId: number, jobId: number): Promise<void> {
     if (!jobId || !workspaceId) return;
 
@@ -379,6 +395,7 @@ export class ReplayCodingService {
 
     try {
       await this.updateCodingJobStatus(workspaceId, jobId, 'paused');
+      this.isCodingJobPaused = true;
       this.isPausingJob = false;
       this.snackBar.open(this.translate.instant('replay.coding-job-paused-successfully'), this.translate.instant('replay.close'), {
         duration: 3000,
@@ -387,6 +404,29 @@ export class ReplayCodingService {
     } catch (error) {
       this.isPausingJob = false;
       this.snackBar.open(this.translate.instant('replay.failed-to-pause-coding-job'), this.translate.instant('replay.close'), {
+        duration: 3000,
+        panelClass: ['snackbar-error']
+      });
+    }
+  }
+
+  async resumeCodingJob(workspaceId: number, jobId: number): Promise<void> {
+    if (!jobId || !workspaceId) return;
+
+    this.isResumingJob = true;
+    this.snackBar.open(this.translate.instant('replay.resuming-coding-job'), '', { duration: 2000 });
+
+    try {
+      await this.updateCodingJobStatus(workspaceId, jobId, 'active');
+      this.isCodingJobPaused = false;
+      this.isResumingJob = false;
+      this.snackBar.open(this.translate.instant('replay.coding-job-resumed-successfully'), this.translate.instant('replay.close'), {
+        duration: 3000,
+        panelClass: ['snackbar-success']
+      });
+    } catch (error) {
+      this.isResumingJob = false;
+      this.snackBar.open(this.translate.instant('replay.failed-to-resume-coding-job'), this.translate.instant('replay.close'), {
         duration: 3000,
         panelClass: ['snackbar-error']
       });
