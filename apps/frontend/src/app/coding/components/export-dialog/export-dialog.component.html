@@ -1,27 +1,73 @@
 <div class="export-dialog-container">
-  <h2 mat-dialog-title>Export Format wählen</h2>
+  <h2 mat-dialog-title>{{ 'export-dialog.title' | translate }}</h2>
   <mat-dialog-content>
-    <p>Bitte wählen Sie das gewünschte Format für den Export der Kodierliste:</p>
+    <p>{{ 'export-dialog.description' | translate }}</p>
     <div class="format-options">
       <mat-radio-group [(ngModel)]="selectedFormat">
         <div class="format-option">
-          <mat-radio-button value="json">JSON</mat-radio-button>
-          <span class="format-description">Standard-Format mit allen Details</span>
+        <mat-radio-button value="json">{{ 'export-dialog.formats.json' | translate }}</mat-radio-button>
+        <span class="format-description">{{ 'export-dialog.formats.json-description' | translate }}</span>
         </div>
         <div class="format-option">
-          <mat-radio-button value="csv">CSV</mat-radio-button>
-          <span class="format-description">Komma-getrennte Werte, für Excel und andere Tabellenkalkulationen</span>
+          <mat-radio-button value="csv">{{ 'export-dialog.formats.csv' | translate }}</mat-radio-button>
+        <span class="format-description">{{ 'export-dialog.formats.csv-description' | translate }}</span>
         </div>
         <div class="format-option">
-          <mat-radio-button value="excel">Excel</mat-radio-button>
-          <span class="format-description">Direktes Excel-Format (.xlsx)</span>
+          <mat-radio-button value="excel">{{ 'export-dialog.formats.excel' | translate }}</mat-radio-button>
+        <span class="format-description">{{ 'export-dialog.formats.excel-description' | translate }}</span>
         </div>
       </mat-radio-group>
     </div>
+
+    <mat-divider></mat-divider>
+
+    <!-- New section: Validierung externer Kodierliste für Replay-Funktionalität -->
+    <div class="validation-section">
+      <h3>{{ 'export-dialog.validation.section-title' | translate }}</h3>
+      <div class="validation-controls">
+        <button mat-button color="" (click)="validationFileInput.click()" [disabled]="isValidating">
+          <mat-icon>fact_check</mat-icon>
+          {{ 'export-dialog.validation.upload-button' | translate }}
+        </button>
+        <input #validationFileInput type="file" style="display: none;" accept=".xlsx, .xls" (change)="onValidationFileSelected($event)">
+      </div>
+
+      <!-- Validation Progress -->
+      @if (validationProgress && (validationProgress.status === 'loading' || validationProgress.status === 'processing')) {
+        <div class="validation-progress-section">
+          <h4>{{ 'export-dialog.validation.running-title' | translate }}</h4>
+          <p>{{validationProgress.message}}</p>
+          <mat-progress-bar mode="determinate" [value]="validationProgress.progress"></mat-progress-bar>
+          <p>{{ 'export-dialog.validation.running-description' | translate }}</p>
+        </div>
+      }
+
+      <!-- Validation Error -->
+      @if (validationProgress && validationProgress.status === 'error') {
+        <div class="validation-error-section">
+          <h4>{{ 'export-dialog.validation.error-title' | translate }}</h4>
+          <p>{{validationProgress.message}}</p>
+          <p *ngIf="validationProgress.error">{{validationProgress.error}}</p>
+          <button mat-button color="primary" (click)="validationFileInput.click()">
+            <mat-icon>refresh</mat-icon>
+            {{ 'export-dialog.validation.retry-button' | translate }}
+          </button>
+        </div>
+      }
+
+      <!-- Validation Results -->
+      @if (validationResults && validationProgress && validationProgress.status === 'completed') {
+        <div class="validation-results-section">
+          <button mat-button (click)="downloadValidationExcel()" [disabled]="isValidating || !validationCacheKey">
+            <mat-icon>download</mat-icon>
+            {{ 'export-dialog.validation.download-button' | translate }}
+          </button>
+        </div>
+      }
+    </div>
   </mat-dialog-content>
   <mat-dialog-actions align="end">
-    <button mat-button (click)="onCancel()">Abbrechen</button>
-    <button mat-raised-button color="primary" (click)="onExport()">Exportieren</button>
+    <button mat-button (click)="onCancel()">{{ 'export-dialog.cancel' | translate }}</button>
+    <button mat-raised-button color="primary" (click)="onExport()">{{ 'export-dialog.export' | translate }}</button>
   </mat-dialog-actions>
 </div>
-

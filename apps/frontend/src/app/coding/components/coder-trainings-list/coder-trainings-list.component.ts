@@ -17,6 +17,8 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTableModule } from '@angular/material/table';
 import { MatCardModule } from '@angular/material/card';
 import { MatChipsModule } from '@angular/material/chips';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatSelectModule } from '@angular/material/select';
 import {
   MatDialog, MatDialogModule
 } from '@angular/material/dialog';
@@ -44,7 +46,9 @@ import { TrainingJobsDialogComponent } from './training-jobs-dialog.component';
     MatCardModule,
     MatChipsModule,
     MatDialogModule,
-    MatSnackBarModule
+    MatSnackBarModule,
+    MatFormFieldModule,
+    MatSelectModule
   ],
   templateUrl: './coder-trainings-list.component.html',
   styleUrls: ['./coder-trainings-list.component.scss']
@@ -61,8 +65,10 @@ export class CoderTrainingsListComponent implements OnInit, OnDestroy {
   @Output() onCreateTraining = new EventEmitter<void>();
 
   coderTrainings: CoderTraining[] = [];
+  originalData: CoderTraining[] = [];
+  selectedTrainingName: string | null = null;
   isLoading = false;
-  displayedColumns: string[] = ['label', 'jobsCount', 'created_at', 'actions'];
+  displayedColumns: string[] = ['actions', 'label', 'jobsCount', 'created_at'];
 
   editingTrainingId: number | null = null;
   editingLabel = '';
@@ -88,12 +94,14 @@ export class CoderTrainingsListComponent implements OnInit, OnDestroy {
         .pipe(takeUntil(this.destroy$))
         .subscribe({
           next: (trainings: CoderTraining[]) => {
-            this.coderTrainings = trainings;
+            this.originalData = trainings;
+            this.applyAllFilters();
             this.isLoading = false;
             resolve();
           },
           error: () => {
             this.coderTrainings = [];
+            this.originalData = [];
             this.isLoading = false;
             reject();
           }
@@ -155,6 +163,24 @@ export class CoderTrainingsListComponent implements OnInit, OnDestroy {
 
   createTraining(): void {
     this.onCreateTraining.emit();
+  }
+
+  onTrainingNameFilterChange(): void {
+    this.applyAllFilters();
+  }
+
+  private applyAllFilters(): void {
+    if (!this.originalData) {
+      this.coderTrainings = [];
+      return;
+    }
+
+    if (this.selectedTrainingName === null || this.selectedTrainingName === '') {
+      this.coderTrainings = [...this.originalData];
+      return;
+    }
+
+    this.coderTrainings = this.originalData.filter(training => training.label === this.selectedTrainingName);
   }
 
   openResultsComparison(training?: CoderTraining): void {

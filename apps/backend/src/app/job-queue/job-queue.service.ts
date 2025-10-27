@@ -7,10 +7,7 @@ export interface TestPersonCodingJobData {
   personIds: string[];
   groupNames?: string;
   isPaused?: boolean;
-}
-
-export interface CodingStatisticsJobData {
-  workspaceId: number;
+  autoCoderRun?: number;
 }
 
 export interface RedisConnectionStatus {
@@ -42,12 +39,6 @@ export class JobQueueService {
     @InjectQueue('coding-statistics') private codingStatisticsQueue: Queue
   ) {}
 
-  /**
-   * Add a test person coding job to the queue
-   * @param data Job data
-   * @param options Job options
-   * @returns The created job
-   */
   async addTestPersonCodingJob(
     data: TestPersonCodingJobData,
     options?: JobOptions
@@ -56,35 +47,19 @@ export class JobQueueService {
     return this.testPersonCodingQueue.add(data, options);
   }
 
-  /**
-   * Get a test person coding job by ID
-   * @param jobId The job ID
-   * @returns The job
-   */
   async getTestPersonCodingJob(jobId: string): Promise<Job<TestPersonCodingJobData>> {
     return this.testPersonCodingQueue.getJob(jobId);
   }
 
-  /**
-   * Add a coding statistics job to the queue
-   */
   async addCodingStatisticsJob(workspaceId: number, options?: JobOptions): Promise<Job<{ workspaceId: number }>> {
     this.logger.log(`Adding coding statistics job for workspace ${workspaceId}`);
     return this.codingStatisticsQueue.add({ workspaceId }, options);
   }
 
-  /**
-   * Get a coding statistics job by ID
-   */
   async getCodingStatisticsJob(jobId: string): Promise<Job<{ workspaceId: number }>> {
     return this.codingStatisticsQueue.getJob(jobId);
   }
 
-  /**
-   * Get all test person coding jobs for a workspace
-   * @param workspaceId The workspace ID
-   * @returns Array of jobs
-   */
   async getTestPersonCodingJobs(workspaceId: number): Promise<Job<TestPersonCodingJobData>[]> {
     this.logger.log(`Fetching all test person coding jobs for workspace ${workspaceId}`);
     const jobs = await this.testPersonCodingQueue.getJobs(['completed', 'failed', 'active', 'waiting', 'delayed']);
@@ -92,11 +67,6 @@ export class JobQueueService {
     return jobs.filter(job => job.data.workspaceId === workspaceId);
   }
 
-  /**
-   * Cancel a test person coding job
-   * @param jobId The job ID
-   * @returns True if the job was cancelled, false otherwise
-   */
   async cancelTestPersonCodingJob(jobId: string): Promise<boolean> {
     const job = await this.testPersonCodingQueue.getJob(jobId);
     if (!job) {
@@ -114,25 +84,6 @@ export class JobQueueService {
     }
   }
 
-  /**
-   * Clean completed and failed jobs
-   * @returns The number of jobs cleaned
-   */
-  async cleanJobs(): Promise<number> {
-    // Keep jobs for 24 hours
-    const grace = 24 * 60 * 60 * 1000;
-    const completedCount = await this.testPersonCodingQueue.clean(grace, 'completed');
-    const failedCount = await this.testPersonCodingQueue.clean(grace, 'failed');
-
-    this.logger.log(`Cleaned ${completedCount} completed jobs and ${failedCount} failed jobs`);
-    return completedCount.length + failedCount.length;
-  }
-
-  /**
-   * Delete a test person coding job
-   * @param jobId The job ID
-   * @returns True if the job was deleted, false otherwise
-   */
   async deleteTestPersonCodingJob(jobId: string): Promise<boolean> {
     const job = await this.testPersonCodingQueue.getJob(jobId);
     if (!job) {
@@ -150,10 +101,6 @@ export class JobQueueService {
     }
   }
 
-  /**
-   * Check if Redis is connected and jobs can be managed
-   * @returns Redis connection status
-   */
   async checkRedisConnection(): Promise<RedisConnectionStatus> {
     try {
       this.logger.log('Checking Redis connection status...');
@@ -168,21 +115,14 @@ export class JobQueueService {
         };
       }
 
-      // Measure ping latency
       const startTime = Date.now();
       await client.ping();
       const pingLatency = Date.now() - startTime;
-
-      // Get queue job counts to verify job management
       const originalJobCounts = await this.testPersonCodingQueue.getJobCounts();
-
-      // Add the missing 'paused' property to match our RedisConnectionStatus interface
       const jobCounts = {
         ...originalJobCounts,
         paused: 0 // Default value since JobCounts doesn't include this property
       };
-
-      // Check if queue is ready
       let isReady = false;
       try {
         await this.testPersonCodingQueue.isReady();

@@ -205,8 +205,8 @@ export class BackendService {
     return this.codingService.getCodingListAsExcel(workspace_id);
   }
 
-  getCodingStatistics(workspace_id: number): Observable<CodingStatistics> {
-    return this.codingService.getCodingStatistics(workspace_id);
+  getCodingStatistics(workspace_id: number, version: 'v1' | 'v2' | 'v3' = 'v1'): Observable<CodingStatistics> {
+    return this.codingService.getCodingStatistics(workspace_id, version);
   }
 
   createCodingStatisticsJob(workspace_id: number): Observable<{ jobId: string; message: string }> {
@@ -224,8 +224,8 @@ export class BackendService {
     return this.codingService.getVariableAnalysis(workspace_id, page, limit, unitId, variableId, derivation);
   }
 
-  getResponsesByStatus(workspace_id: number, status: string, page: number = 1, limit: number = 100): Observable<PaginatedResponse<ResponseEntity>> {
-    return this.codingService.getResponsesByStatus(workspace_id, status, page, limit);
+  getResponsesByStatus(workspace_id: number, status: string, version: 'v1' | 'v2' | 'v3' = 'v1', page: number = 1, limit: number = 100): Observable<PaginatedResponse<ResponseEntity>> {
+    return this.codingService.getResponsesByStatus(workspace_id, status, version, page, limit);
   }
 
   changeWorkspace(workspaceData: WorkspaceFullDto): Observable<boolean> {
@@ -410,7 +410,7 @@ export class BackendService {
 
   searchResponses(
     workspaceId: number,
-    searchParams: { value?: string; variableId?: string; unitName?: string; status?: string; codedStatus?: string; group?: string; code?: string },
+    searchParams: { value?: string; variableId?: string; unitName?: string; bookletName?: string; status?: string; codedStatus?: string; group?: string; code?: string; version?: 'v1' | 'v2' | 'v3' },
     page?: number,
     limit?: number
   ): Observable<{
@@ -681,12 +681,12 @@ export class BackendService {
       errorMessage?: string;
     }
   ): Observable<ReplayStatisticsResponse> {
-    const url = `${this.serverUrl}/admin/workspace/${workspaceId}/replay-statistics`;
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/replay-statistics`;
     return this.http.post<ReplayStatisticsResponse>(url, data);
   }
 
   getReplayFrequencyByUnit(workspaceId: number): Observable<Record<string, number>> {
-    const url = `${this.serverUrl}/admin/workspace/${workspaceId}/replay-statistics/frequency`;
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/replay-statistics/frequency`;
     return this.http.get<Record<string, number>>(url);
   }
 
@@ -700,7 +700,7 @@ export class BackendService {
       distribution: Record<string, number>;
       unitAverages?: Record<string, number>;
     }> {
-    let url = `${this.serverUrl}/admin/workspace/${workspaceId}/replay-statistics/duration`;
+    let url = `${this.serverUrl}admin/workspace/${workspaceId}/replay-statistics/duration`;
     if (unitId) {
       url += `?unitId=${encodeURIComponent(unitId)}`;
     }
@@ -714,12 +714,12 @@ export class BackendService {
   }
 
   getReplayDistributionByDay(workspaceId: number): Observable<Record<string, number>> {
-    const url = `${this.serverUrl}/admin/workspace/${workspaceId}/replay-statistics/distribution/day`;
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/replay-statistics/distribution/day`;
     return this.http.get<Record<string, number>>(url);
   }
 
   getReplayDistributionByHour(workspaceId: number): Observable<Record<string, number>> {
-    const url = `${this.serverUrl}/admin/workspace/${workspaceId}/replay-statistics/distribution/hour`;
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/replay-statistics/distribution/hour`;
     return this.http.get<Record<string, number>>(url);
   }
 
@@ -730,7 +730,7 @@ export class BackendService {
     failedReplays: number;
     commonErrors: Array<{ message: string; count: number }>;
   }> {
-    const url = `${this.serverUrl}/admin/workspace/${workspaceId}/replay-statistics/errors`;
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/replay-statistics/errors`;
     return this.http.get<{
       successRate: number;
       totalReplays: number;
@@ -741,17 +741,17 @@ export class BackendService {
   }
 
   getFailureDistributionByUnit(workspaceId: number): Observable<Record<string, number>> {
-    const url = `${this.serverUrl}/admin/workspace/${workspaceId}/replay-statistics/failures/unit`;
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/replay-statistics/failures/unit`;
     return this.http.get<Record<string, number>>(url);
   }
 
   getFailureDistributionByDay(workspaceId: number): Observable<Record<string, number>> {
-    const url = `${this.serverUrl}/admin/workspace/${workspaceId}/replay-statistics/failures/day`;
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/replay-statistics/failures/day`;
     return this.http.get<Record<string, number>>(url);
   }
 
   getFailureDistributionByHour(workspaceId: number): Observable<Record<string, number>> {
-    const url = `${this.serverUrl}/admin/workspace/${workspaceId}/replay-statistics/failures/hour`;
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/replay-statistics/failures/hour`;
     return this.http.get<Record<string, number>>(url);
   }
 
@@ -795,7 +795,7 @@ export class BackendService {
   }
 
   deleteCodingJob(workspaceId: number, codingJobId: number): Observable<{ success: boolean }> {
-    const url = `${this.serverUrl}/wsg-admin/workspace/${workspaceId}/coding-job/${codingJobId}`;
+    const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job/${codingJobId}`;
     return this.http.delete<{ success: boolean }>(url);
   }
 
@@ -811,7 +811,7 @@ export class BackendService {
     workspaceId: number,
     unitName?: string
   ): Observable<{ unitName: string; variableId: string }[]> {
-    const url = `${this.serverUrl}/admin/workspace/${workspaceId}/coding/incomplete-variables`;
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/incomplete-variables`;
     let params = new HttpParams();
     if (unitName) {
       params = params.set('unitName', unitName);
@@ -826,7 +826,7 @@ export class BackendService {
     trainingLabel: string,
     missingsProfileId?: number
   ): Observable<{ success: boolean; jobsCreated: number; message: string; jobs: { coderId: number; coderName: string; jobId: number; jobName: string }[]; trainingId?: number }> {
-    const url = `${this.serverUrl}/admin/workspace/${workspaceId}/coding/coder-training-jobs`;
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/coder-training-jobs`;
     return this.http.post<{ success: boolean; jobsCreated: number; message: string; jobs: { coderId: number; coderName: string; jobId: number; jobName: string }[]; trainingId?: number }>(url, {
       trainingLabel,
       selectedCoders,
@@ -843,7 +843,7 @@ export class BackendService {
     updated_at: Date;
     jobsCount: number;
   }[]> {
-    const url = `${this.serverUrl}/admin/workspace/${workspaceId}/coding/coder-trainings`;
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/coder-trainings`;
     return this.http.get<{
       id: number;
       workspace_id: number;
@@ -855,12 +855,12 @@ export class BackendService {
   }
 
   updateCoderTrainingLabel(workspaceId: number, trainingId: number, newLabel: string): Observable<{ success: boolean; message: string }> {
-    const url = `${this.serverUrl}/admin/workspace/${workspaceId}/coding/coder-trainings/${trainingId}`;
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/coder-trainings/${trainingId}`;
     return this.http.put<{ success: boolean; message: string }>(url, { label: newLabel });
   }
 
   deleteCoderTraining(workspaceId: number, trainingId: number): Observable<{ success: boolean; message: string }> {
-    const url = `${this.serverUrl}/admin/workspace/${workspaceId}/coding/coder-trainings/${trainingId}`;
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/coder-trainings/${trainingId}`;
     return this.http.delete<{ success: boolean; message: string }>(url);
   }
 
@@ -877,7 +877,7 @@ export class BackendService {
         score: number | null;
       }>;
     }>> {
-    const url = `${this.serverUrl}/admin/workspace/${workspaceId}/coding/compare-training-results?trainingIds=${encodeURIComponent(trainingIds)}`;
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/compare-training-results?trainingIds=${encodeURIComponent(trainingIds)}`;
     return this.http.get<Array<{
       unitName: string;
       variableId: string;
@@ -906,7 +906,7 @@ export class BackendService {
         score: number | null;
       }>;
     }>> {
-    const url = `${this.serverUrl}/admin/workspace/${workspaceId}/coding/compare-within-training?trainingId=${trainingId}`;
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/compare-within-training?trainingId=${trainingId}`;
     return this.http.get<Array<{
       unitName: string;
       variableId: string;
@@ -937,7 +937,7 @@ export class BackendService {
       };
       unitsCount: number;
     }>> {
-    const url = `${this.serverUrl}/admin/workspace/${workspaceId}/coding/coder-trainings/${trainingId}/jobs`;
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/coder-trainings/${trainingId}/jobs`;
     return this.http.get<Array<{
       id: number;
       name: string;
@@ -953,7 +953,7 @@ export class BackendService {
   }
 
   downloadWorkspaceFilesAsZip(workspaceId: number): Observable<Blob> {
-    const url = `${this.serverUrl}/admin/workspace/${workspaceId}/files/download-zip`;
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/files/download-zip`;
     return this.http.get(url, {
       responseType: 'blob',
       headers: {

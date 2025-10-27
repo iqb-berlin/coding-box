@@ -277,8 +277,10 @@ export class WsgCodingJobController {
       @Param('id', ParseIntPipe) id: number
   ): Promise<{ total: number; items: Array<{ responseId: number; unitName: string; unitAlias: string | null; variableId: string; variableAnchor: string; bookletName: string; personLogin: string; personCode: string }> }> {
     try {
-      await this.codingJobService.getCodingJob(id, workspaceId);
-      const items = await this.codingJobService.getCodingJobUnits(id, false);
+      const job = await this.codingJobService.getCodingJob(id, workspaceId);
+      const onlyOpen = job.codingJob.status === 'pending';
+      const items = await this.codingJobService.getCodingJobUnits(id, onlyOpen);
+
       await this.codingJobService.updateCodingJob(id, workspaceId, { status: 'active' });
 
       return { total: items.length, items };

@@ -392,7 +392,7 @@ export class WorkspaceTestResultsController {
   @Get(':workspace_id/responses/search')
   @ApiOperation({
     summary: 'Search for responses',
-    description: 'Searches for responses across all test persons in a workspace by value, variable ID, and unit name'
+    description: 'Searches for responses across all test persons in a workspace by value, variable ID, unit name, booklet name, and other filters'
   })
   @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
   @ApiQuery({
@@ -411,6 +411,12 @@ export class WorkspaceTestResultsController {
     name: 'unitName',
     required: false,
     description: 'Name of the unit to search for',
+    type: String
+  })
+  @ApiQuery({
+    name: 'bookletName',
+    required: false,
+    description: 'Name of the booklet to search for',
     type: String
   })
   @ApiQuery({
@@ -436,6 +442,13 @@ export class WorkspaceTestResultsController {
     required: false,
     description: 'Code of the person',
     type: String
+  })
+  @ApiQuery({
+    name: 'version',
+    required: false,
+    description: 'Coding version to filter by: v1, v2, or v3',
+    enum: ['v1', 'v2', 'v3'],
+    example: 'v1'
   })
   @ApiQuery({
     name: 'page',
@@ -489,10 +502,12 @@ export class WorkspaceTestResultsController {
       @Query('value') value?: string,
       @Query('variableId') variableId?: string,
       @Query('unitName') unitName?: string,
+      @Query('bookletName') bookletName?: string,
       @Query('status') status?: string,
       @Query('codedStatus') codedStatus?: string,
       @Query('group') group?: string,
       @Query('code') code?: string,
+      @Query('version') version?: 'v1' | 'v2' | 'v3',
       @Query('page') page?: number,
       @Query('limit') limit?: number
   ): Promise<{
@@ -527,10 +542,12 @@ export class WorkspaceTestResultsController {
           value,
           variableId,
           unitName,
+          bookletName,
           status,
           codedStatus,
           group,
-          code
+          code,
+          version
         },
         { page, limit }
       );

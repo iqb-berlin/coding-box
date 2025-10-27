@@ -1,5 +1,5 @@
 import {
-  Component, OnInit
+  Component, OnInit, OnDestroy
 } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -16,12 +16,15 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatTableDataSource, MatTableModule } from '@angular/material/table';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { TranslateModule } from '@ngx-translate/core';
 import { Subject } from 'rxjs';
-import { debounceTime, distinctUntilChanged } from 'rxjs/operators';
+import { debounceTime, distinctUntilChanged, takeUntil } from 'rxjs/operators';
 import { CodeBookContentSetting } from '../../../../../../../api-dto/coding/codebook-content-setting';
 import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
+import { ValidationStateService, ValidationProgress } from '../../services/validation-state.service';
+import { ValidateCodingCompletenessResponseDto } from '../../../../../../../api-dto/coding/validate-coding-completeness-response.dto';
 
 @Component({
   selector: 'shared-export-coding-book',
@@ -44,13 +47,14 @@ import { AppService } from '../../../services/app.service';
     MatDividerModule,
     MatTableModule,
     MatProgressSpinnerModule,
+    MatProgressBarModule,
     TranslateModule
   ],
   providers: [
     DatePipe
   ]
 })
-export class ExportCodingBookComponent implements OnInit {
+export class ExportCodingBookComponent implements OnInit, OnDestroy {
   unitList: number[] = [];
   availableUnits: {
     unitId: number;
@@ -87,10 +91,17 @@ export class ExportCodingBookComponent implements OnInit {
     hideItemVarRelation: true
   };
 
+  private destroy$ = new Subject<void>();
+  validationResults: ValidateCodingCompletenessResponseDto | null = null;
+  validationProgress: ValidationProgress | null = null;
+  isValidating = false;
+  validationCacheKey: string | null = null;
+
   constructor(
     private backendService: BackendService,
     private appService: AppService,
-    private datePipe: DatePipe
+    private datePipe: DatePipe,
+    private validationStateService: ValidationStateService
   ) {}
 
   ngOnInit(): void {
@@ -106,18 +117,46 @@ export class ExportCodingBookComponent implements OnInit {
       .subscribe(event => {
         this.applyFilter(event);
       });
+
+    this.validationStateService.validationProgress$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(progress => {
+        this.validationProgress = progress;
+        this.isValidating = progress.status === 'loading' || progress.status === 'processing';
+      });
+
+    this.validationStateService.validationResults$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(results => {
+        this.validationResults = results;
+        if (results) {
+          this.validationCacheKey = results.cacheKey || null;
+        }
+      });
+
+    const currentResults = this.validationStateService.getValidationResults();
+    if (currentResults) {
+      this.validationResults = currentResults;
+    }
+
+    const currentProgress = this.validationStateService.getValidationProgress();
+    this.validationProgress = currentProgress;
+    this.isValidating = currentProgress.status === 'loading' || currentProgress.status === 'processing';
+  }
+
+  ngOnDestroy(): void {
+    this.destroy$.next();
+    this.destroy$.complete();
   }
 
   applyFilter(event: Event): void {
     const filterValue = (event.target as HTMLInputElement).value;
-    // Apply the filter to the data source (will use the filterPredicate defined in loadUnitsWithFileIds)
     this.dataSource.filter = filterValue.trim().toLowerCase();
   }
 
   private loadUnitsWithFileIds(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (workspaceId) {
-      // Show loading indicator while fetching data
       this.isLoading = true;
 
       this.backendService.getUnitsWithFileIds(workspaceId).subscribe({
@@ -128,13 +167,7 @@ export class ExportCodingBookComponent implements OnInit {
               unitName: unit.fileName,
               unitAlias: null
             }));
-
-            // Initialize the data source with all units
-            // MatTableDataSource will handle filtering internally
             this.dataSource.data = this.availableUnits;
-
-            // Set up custom filter predicate to filter by formatted unit name
-            // This allows users to search for units without the .vocs extension
             this.dataSource.filterPredicate = (data, filter: string) => {
               const formattedName = this.formatUnitName(data.unitName).toLowerCase();
               return formattedName.includes(filter);
@@ -145,7 +178,6 @@ export class ExportCodingBookComponent implements OnInit {
           this.isLoading = false;
         },
         error: () => {
-          // Error occurred while loading units with file IDs
           this.isLoading = false;
         }
       });
