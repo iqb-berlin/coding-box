@@ -1,4 +1,4 @@
-<div class="replay-container" [class.print-mode]="isPrintMode" [class.booklet-mode]="isBookletMode" (window:keydown)="onKeyDown($event)">
+<div class="replay-container" [class.print-mode]="isPrintMode" [class.booklet-mode]="isBookletMode" (window:keydown)="onKeyDown($any($event))">
   <cb-spinner [isLoaded]="isLoaded"></cb-spinner>
 
   @if (isBookletMode) {
@@ -95,6 +95,22 @@
           [disabled]="codingService.isSubmittingJob"
           class="submit-button">
           {{ codingService.isSubmittingJob ? ('replay.SUBMITTING_JOB' | translate) : ('replay.SUBMIT_JOB' | translate) }}
+        </button>
+      </div>
+    </div>
+  }
+
+  @if (codingService.isCodingJobPaused && !isBookletReplayMode) {
+    <div class="pause-overlay">
+      <div class="pause-dialog">
+        <h2>{{ 'replay.coding-job-paused' | translate }}</h2>
+        <button
+          mat-raised-button
+          color="primary"
+          (click)="resumeCodingJob()"
+          [disabled]="codingService.isResumingJob"
+          class="resume-button">
+          {{ codingService.isResumingJob ? ('replay.resuming-coding-job' | translate) : ('replay.resume-coding' | translate) }}
         </button>
       </div>
     </div>
