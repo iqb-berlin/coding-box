@@ -143,7 +143,7 @@ export class ResponseService {
 
   searchResponses(
     workspaceId: number,
-    searchParams: { value?: string; variableId?: string; unitName?: string; status?: string; codedStatus?: string; group?: string; code?: string },
+    searchParams: { value?: string; variableId?: string; unitName?: string; bookletName?: string; status?: string; codedStatus?: string; group?: string; code?: string; version?: 'v1' | 'v2' | 'v3' },
     page?: number,
     limit?: number
   ): Observable<{
@@ -181,6 +181,10 @@ export class ResponseService {
       params = params.set('unitName', searchParams.unitName);
     }
 
+    if (searchParams.bookletName) {
+      params = params.set('bookletName', searchParams.bookletName);
+    }
+
     if (searchParams.status) {
       params = params.set('status', searchParams.status);
     }
@@ -195,6 +199,10 @@ export class ResponseService {
 
     if (searchParams.code) {
       params = params.set('code', searchParams.code);
+    }
+
+    if (searchParams.version) {
+      params = params.set('version', searchParams.version);
     }
 
     if (page !== undefined) {

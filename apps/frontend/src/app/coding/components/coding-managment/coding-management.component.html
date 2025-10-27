@@ -12,12 +12,7 @@
         <mat-icon>keyboard</mat-icon>
         {{ showManualCoding ? ('coding-management.buttons.back-to-overview' | translate) : ('coding-management.buttons.manual-code' | translate) }}
       </a>
-      @if (!showManualCoding) {
-        <a mat-raised-button color="primary" (click)="fetchResponsesByStatus('6')">
-          <mat-icon>assignment</mat-icon>
-          {{ 'coding-management.buttons.manual-cases' | translate }}
-        </a>
-      }
+
       @if (!showManualCoding) {
         <a mat-raised-button color="primary" (click)="fetchCodingList()">
           <mat-icon>list</mat-icon>
@@ -103,18 +98,8 @@
                       {{ codingStatistics.statusCounts[status] }}
                       <span class="percentage">({{ getStatusPercentage(status) }}%)</span>
                     </span>
-                    <a mat-button color="primary" (click)="fetchResponsesByStatus(status)" class="view-button">
-                      <mat-icon>visibility</mat-icon>
-                      {{ 'display' | translate }}
-                    </a>
                   </div>
                 }
-              </div>
-              <div class="statistics-actions">
-                <a mat-raised-button color="primary" (click)="fetchCodingStatistics()">
-                  <mat-icon>refresh</mat-icon>
-                  {{ 'coding-management.buttons.update-statistics' | translate }}
-                </a>
               </div>
             </div>
           }
@@ -126,6 +111,65 @@
             </div>
           }
         </div>
+
+        <!-- Filter Section -->
+        @if (!showManualCoding) {
+          <div class="filters-section">
+            <div class="filter-controls" style="display: flex; gap: 20px; flex-wrap: wrap;">
+              <mat-form-field appearance="outline" class="filter-field">
+                <mat-label>{{ 'coding-management.filters.coded-status' | translate }}</mat-label>
+                <mat-select [(ngModel)]="filterParams.codedStatus" (selectionChange)="onFilterChange()">
+                  <mat-option></mat-option>
+                  @for (status of getStatuses(); track status) {
+                    <mat-option [value]="status">
+                      @if (status === 'null') {
+                        {{ 'coding-management.statistics.uncoded-responses' | translate }}
+                      } @else {
+                        {{ mapStatusToString(Number(status)) }}
+                      }
+                    </mat-option>
+                  }
+                </mat-select>
+              </mat-form-field>
+
+              <mat-form-field appearance="outline" class="filter-field">
+                <mat-label>{{ 'coding-management.filters.unit-name' | translate }}</mat-label>
+                <input matInput [(ngModel)]="filterParams.unitName" (input)="onFilterChange()" placeholder="{{ 'coding-management.filters.unit-name-placeholder' | translate }}">
+              </mat-form-field>
+
+              <mat-form-field appearance="outline" class="filter-field">
+                <mat-label>{{ 'coding-management.filters.run' | translate }}</mat-label>
+                <mat-select [(ngModel)]="filterParams.version" (selectionChange)="onFilterChange()">
+                  @for (option of codingRunOptions; track option.value) {
+                    <mat-option [value]="option.value">
+                      {{ option.label | translate }}
+                    </mat-option>
+                  }
+                </mat-select>
+              </mat-form-field>
+
+              <mat-form-field appearance="outline" class="filter-field">
+                <mat-label>{{ 'coding-management.filters.person-code' | translate }}</mat-label>
+                <input matInput [(ngModel)]="filterParams.code" (input)="onFilterChange()" placeholder="{{ 'coding-management.filters.person-code-placeholder' | translate }}">
+              </mat-form-field>
+
+              <mat-form-field appearance="outline" class="filter-field">
+                <mat-label>{{ 'coding-management.filters.person-group' | translate }}</mat-label>
+                <input matInput [(ngModel)]="filterParams.group" (input)="onFilterChange()" placeholder="{{ 'coding-management.filters.person-group-placeholder' | translate }}">
+              </mat-form-field>
+
+              <mat-form-field appearance="outline" class="filter-field">
+                <mat-label>{{ 'coding-management.filters.booklet-name' | translate }}</mat-label>
+                <input matInput [(ngModel)]="filterParams.bookletName" (input)="onFilterChange()" placeholder="{{ 'coding-management.filters.booklet-name-placeholder' | translate }}">
+              </mat-form-field>
+
+              <button mat-button (click)="clearFilters()" [disabled]="isFilterLoading">
+                <mat-icon>clear</mat-icon>
+                {{ 'coding-management.filters.clear' | translate }}
+              </button>
+            </div>
+          </div>
+        }
 
         <div class="data-section">
           @if (isAutoCoding) {
@@ -176,7 +220,7 @@
                               <button mat-icon-button color="primary" (click)="openReplay(element)" [matTooltip]="'coding-management.tooltips.view-in-replay' | translate" class="action-button">
                                 <mat-icon>play_circle_filled</mat-icon>
                               </button>
-                              <button mat-icon-button color="accent" (click)="getCodingSchemeRefFromUnit(element.unit.name)" [matTooltip]="'coding-management.tooltips.show-coding-schema' | translate" class="action-button">
+                              <button mat-icon-button color="primary" (click)="getCodingSchemeRefFromUnit(element.unit.name)" [matTooltip]="'coding-management.tooltips.show-coding-schema' | translate" class="action-button">
                                 <mat-icon>code</mat-icon>
                               </button>
                             </div>
@@ -185,27 +229,17 @@
                               {{ element[column] }}
                             </span>
                           } @else {
-                            <span [ngClass]="{'status-value': column === 'status' || column === 'codedstatus',
-                                              'status-complete': (column === 'status' && getStatusString(element[column]) === 'CODING_COMPLETE') || (column === 'codedstatus' && element[column] === 'CODING_COMPLETE'),
-                                              'status-incomplete': (column === 'status' && getStatusString(element[column]) === 'CODING_INCOMPLETE') || (column === 'codedstatus' && element[column] === 'CODING_INCOMPLETE'),
-                                              'status-changed': column === 'status' && getStatusString(element[column]) === 'VALUE_CHANGED',
-                                              'status-not-reached': column === 'status' && getStatusString(element[column]) === 'NOT_REACHED',
-                                              'status-unset': column === 'status' && getStatusString(element[column]) === 'UNSET',
-                                              'status-displayed': column === 'status' && getStatusString(element[column]) === 'DISPLAYED',
-                                              'status-derive-error': column === 'status' && getStatusString(element[column]) === 'DERIVE_ERROR',
-                                              'status-no-coding': column === 'status' && getStatusString(element[column]) === 'NO_CODING',
-                                              'status-invalid': column === 'status' && getStatusString(element[column]) === 'INVALID',
-                                              'status-coding-error': column === 'status' && getStatusString(element[column]) === 'CODING_ERROR',
-                                              'status-partly-displayed': column === 'status' && getStatusString(element[column]) === 'PARTLY_DISPLAYED',
-                                              'status-derive-pending': column === 'status' && getStatusString(element[column]) === 'DERIVE_PENDING',
-                                              'status-intended-incomplete': column === 'status' && getStatusString(element[column]) === 'INTENDED_INCOMPLETE',
-                                              'status-code-selection-pending': column === 'status' && getStatusString(element[column]) === 'CODE_SELECTION_PENDING'}">
-                              @if (column === 'status') {
+                              @if (column === 'codedstatus') {
                                 {{ getStatusString(element[column]) }}
+                              } @else if (column === 'person_code') {
+                                {{ element.person_code || element.login_code }}
+                              } @else if (column === 'person_group') {
+                                {{ element.person_group || element.login_group }}
+                              } @else if (column === 'booklet_id') {
+                                {{ element.booklet_id }}
                               } @else {
                                 {{ element[column] }}
                               }
-                            </span>
                           }
                         }
                       </td>
