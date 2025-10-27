@@ -616,7 +616,23 @@
       "variableid": "Variable",
       "value": "Wert",
       "codedstatus": "Kodierstatus",
+      "person-code": "Person-Code",
+      "person-group": "Person-Gruppe",
+      "booklet-id": "Booklet-ID",
       "actions": "Aktionen"
+    },
+    "filters": {
+      "unit-name": "Aufgaben-Name",
+      "unit-name-placeholder": "Aufgaben-Name eingeben...",
+      "coded-status": "Kodier-Status",
+      "run": "Lauf",
+      "person-code": "Person-Code",
+      "person-code-placeholder": "Person-Code eingeben...",
+      "person-group": "Person-Gruppe",
+      "person-group-placeholder": "Person-Gruppe eingeben...",
+      "booklet-name": "Testheft-Name",
+      "booklet-name-placeholder": "Testheft-Name eingeben...",
+      "clear": "Filter löschen"
     },
     "aria": {
       "select-page": "Seiten auswählen"
@@ -626,7 +642,7 @@
   "test-results-search": {
     "search-units": "Aufgaben suchen",
     "search-responses": "Antworten suchen",
-    "search-booklets": "Booklets suchen",
+    "search-booklets": "Testhefte suchen",
     "search-field": {
       "unit-name": "Aufgabe suchen",
       "unit-name-placeholder": "Geben Sie den Namen der Aufgabe ein...",
@@ -644,8 +660,8 @@
       "group-placeholder": "Suche nach Gruppe...",
       "code": "Code",
       "code-placeholder": "Suche nach Code...",
-      "booklet-name": "Booklet suchen",
-      "booklet-name-placeholder": "Geben Sie den Namen des Booklets ein..."
+      "booklet-name": "Testheft suchen",
+      "booklet-name-placeholder": "Geben Sie den Namen des Testhefts ein..."
     },
     "loading": "Suche läuft...",
     "no-results": {
@@ -661,7 +677,7 @@
     "table-headers": {
       "task": "Aufgabe",
       "alias": "Alias",
-      "booklet": "Booklet",
+      "booklet": "Testheft",
       "login": "Login",
       "code": "Code",
       "group": "Gruppe",
@@ -672,8 +688,8 @@
       "value": "Wert",
       "status": "Status",
       "coding-status": "Kodier Status",
-      "booklet-name": "Booklet Name",
-      "units": "Units"
+      "booklet-name": "Testheft Name",
+      "units": "Aufgaben"
     },
     "no-data": {
       "no-tags": "Keine Tags",

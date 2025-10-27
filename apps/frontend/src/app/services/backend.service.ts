@@ -410,7 +410,7 @@ export class BackendService {
 
   searchResponses(
     workspaceId: number,
-    searchParams: { value?: string; variableId?: string; unitName?: string; status?: string; codedStatus?: string; group?: string; code?: string },
+    searchParams: { value?: string; variableId?: string; unitName?: string; bookletName?: string; status?: string; codedStatus?: string; group?: string; code?: string; version?: 'v1' | 'v2' | 'v3' },
     page?: number,
     limit?: number
   ): Observable<{

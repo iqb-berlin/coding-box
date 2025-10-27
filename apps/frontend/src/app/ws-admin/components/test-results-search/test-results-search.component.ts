@@ -126,7 +126,7 @@ export class TestResultsSearchComponent implements OnInit {
   private stringToNumberMap = new Map(responseStatesNumericMap.map(entry => [entry.value, entry.key]));
 
   private unitSearchSubject = new Subject<string>();
-  private responseSearchSubject = new Subject<{ value?: string; variableId?: string; unitName?: string; status?: string; codedStatus?: string; group?: string; code?: string }>();
+  private responseSearchSubject = new Subject<{ value?: string; variableId?: string; unitName?: string; bookletName?: string; status?: string; codedStatus?: string; group?: string; code?: string; version?: 'v1' | 'v2' | 'v3' }>();
   private bookletSearchSubject = new Subject<string>();
   private readonly SEARCH_DEBOUNCE_TIME = 500;
 
@@ -266,7 +266,7 @@ export class TestResultsSearchComponent implements OnInit {
     });
   }
 
-  searchResponses(searchParams: { value?: string; variableId?: string; unitName?: string; status?: string; codedStatus?: string; group?: string; code?: string }): void {
+  searchResponses(searchParams: { value?: string; variableId?: string; unitName?: string; bookletName?: string; status?: string; codedStatus?: string; group?: string; code?: string; version?: 'v1' | 'v2' | 'v3' }): void {
     this.isLoading = true;
     this.backendService.searchResponses(
       this.appService.selectedWorkspaceId,
