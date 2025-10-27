@@ -23,6 +23,34 @@
   margin: 0 0 20px 0;
 }
 
+.total-progress-section {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid #e0e0e0;
+  margin-bottom: 16px;
+
+  mat-icon {
+    color: #2196f3;
+    font-size: 24px;
+    height: 24px;
+    width: 24px;
+  }
+
+  .total-progress-text {
+    font-size: 16px;
+    color: #333;
+
+    strong {
+      color: #2196f3;
+      font-weight: 600;
+    }
+  }
+}
+
 .flex-container {
   display: flex;
   flex-direction: column;

@@ -11,6 +11,16 @@
     }
 
     @if (!isLoading && isAuthorized) {
+      @if (dataSource.data.length > 0) {
+        <div class="total-progress-section">
+          <mat-icon>bar_chart</mat-icon>
+          <span class="total-progress-text">
+            Gesamter Kodierfortschritt:
+            <strong>{{totalProgress}}% ({{totalCodedUnits}}/{{totalUnits}} Aufgaben)</strong>
+          </span>
+        </div>
+      }
+
       <div class="flex-container">
         <div class="filter-section">
           <div class="filter-action-container">

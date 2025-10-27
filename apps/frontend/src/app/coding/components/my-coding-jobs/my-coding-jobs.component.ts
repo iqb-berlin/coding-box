@@ -1,5 +1,5 @@
 import {
-  Component, OnInit, ViewChild, AfterViewInit, inject
+  Component, OnInit, OnDestroy, ViewChild, AfterViewInit, inject
 } from '@angular/core';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatSort, MatSortModule } from '@angular/material/sort';
@@ -54,7 +54,7 @@ import { WorkspaceFullDto } from '../../../../../../../api-dto/workspaces/worksp
     MatButton
   ]
 })
-export class MyCodingJobsComponent implements OnInit, AfterViewInit {
+export class MyCodingJobsComponent implements OnInit, AfterViewInit, OnDestroy {
   appService = inject(AppService);
   backendService = inject(BackendService);
   private snackBar = inject(MatSnackBar);
@@ -67,7 +67,21 @@ export class MyCodingJobsComponent implements OnInit, AfterViewInit {
   currentUserId = 0;
   isAuthorized = false;
 
+  totalProgress = 0;
+  totalCodedUnits = 0;
+  totalUnits = 0;
+
   @ViewChild(MatSort) sort!: MatSort;
+
+  private handleWindowFocus = () => {
+    if (this.isAuthorized) {
+      this.appService.authData$.subscribe(authData => {
+        if (authData.workspaces && authData.workspaces.length > 0) {
+          this.loadMyCodingJobs(authData.workspaces);
+        }
+      }).unsubscribe();
+    }
+  };
 
   ngOnInit(): void {
     this.appService.authData$.subscribe(authData => {
@@ -77,10 +91,15 @@ export class MyCodingJobsComponent implements OnInit, AfterViewInit {
         this.loadMyCodingJobs(authData.workspaces);
       }
     });
+    window.addEventListener('focus', this.handleWindowFocus);
   }
 
   ngAfterViewInit(): void {
     this.dataSource.sort = this.sort;
+  }
+
+  ngOnDestroy(): void {
+    window.removeEventListener('focus', this.handleWindowFocus);
   }
 
   loadMyCodingJobs(workspaces: [] | WorkspaceFullDto[]): void {
@@ -93,7 +112,11 @@ export class MyCodingJobsComponent implements OnInit, AfterViewInit {
 
       forkJoin(workspaceJobsObservables).subscribe({
         next: allJobsArrays => {
-          this.dataSource.data = allJobsArrays.flat();
+          const allJobs = allJobsArrays.flat();
+          const assignedJobs = allJobs.filter(job => job.assignedCoders && job.assignedCoders.includes(this.currentUserId)
+          );
+          this.dataSource.data = assignedJobs;
+          this.calculateTotalProgress(assignedJobs);
           this.isLoading = false;
         },
         error: () => {
@@ -213,7 +236,6 @@ export class MyCodingJobsComponent implements OnInit, AfterViewInit {
     if (job.assignedVariables && job.assignedVariables.length > 0) {
       return this.formatAssignedVariables(job.assignedVariables);
     }
-    // Fallback: falls Variablen unter "variables" statt "assignedVariables" geliefert werden
     if (job.variables && job.variables.length > 0) {
       return this.formatAssignedVariables(job.variables);
     }
@@ -246,6 +268,12 @@ export class MyCodingJobsComponent implements OnInit, AfterViewInit {
     const total = job.totalUnits;
 
     return `${progress}% (${coded}/${total})`;
+  }
+
+  private calculateTotalProgress(assignedJobs: CodingJob[]): void {
+    this.totalCodedUnits = assignedJobs.reduce((sum, job) => sum + (job.codedUnits || 0), 0);
+    this.totalUnits = assignedJobs.reduce((sum, job) => sum + (job.totalUnits || 0), 0);
+    this.totalProgress = this.totalUnits > 0 ? Math.round((this.totalCodedUnits / this.totalUnits) * 100) : 0;
   }
 
   private formatAssignedVariables(assignedVariables: Variable[]): string {
