@@ -180,9 +180,6 @@ export class CodeSelectorComponent implements OnChanges {
   }
 
   onOpenChanged(): void {
-    if (this.isOpen) {
-      this.selectedCode = null;
-    }
     this.openChanged.emit(this.isOpen);
   }
 

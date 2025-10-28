@@ -475,7 +475,7 @@
   "code-selector": {
     "codes-for-variable": "Codes für Variable",
     "mark-as-open": "Als offen markieren",
-    "open-explanation": "Diese Frage ist offen kodiert - keine spezifische Kodierung erforderlich",
+    "open-explanation": "Diese Frage ist offen kodiert",
     "score-label": "Bewertung:",
     "no-codes-found": "Keine Codes gefunden für Variable"
   },
