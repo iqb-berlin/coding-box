@@ -367,7 +367,7 @@
     "validate": "Validieren",
     "send-navigation-denied": "Sende die Nachricht \"Verweigerte Navigation\"",
     "edit-missings-profiles": "Missings-Profile verwalten",
-    "edit-missings-profiles-description": "Hier können Sie Missings-Profile erstellen, bearbeiten und löschen. Diese Profile werden beim Export des Codebooks verwendet.",
+    "edit-missings-profiles-description": "Hier können Sie Missings-Profile erstellen, bearbeiten und löschen.",
     "missings-profiles": "Missings-Profile",
     "create-profile": "Profil erstellen",
     "edit-profile": "Profil bearbeiten",
