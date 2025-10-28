@@ -31,9 +31,9 @@ export class ReplayCodingService {
   currentVariableId: string = '';
   missings: MissingDto[] = [];
   codingJobId: number | null = null;
-  selectedCodes: Map<string, SavedCode> = new Map(); // Track selected codes
-  openSelections: Set<string> = new Set(); // Track open selections
-  notes: Map<string, string> = new Map(); // Track coder notes
+  selectedCodes: Map<string, SavedCode> = new Map();
+  openSelections: Set<string> = new Set();
+  notes: Map<string, string> = new Map();
   isPausingJob: boolean = false;
   isCodingJobCompleted: boolean = false;
   isCodingJobPaused: boolean = false;
@@ -143,7 +143,7 @@ export class ReplayCodingService {
   }
 
   findCodeById(codeId: number): Code | null {
-    if (!this.codingScheme || typeof this.codingScheme === 'string') {
+    if (!this.codingScheme || false) {
       return null;
     }
 
@@ -242,7 +242,7 @@ export class ReplayCodingService {
           testPerson,
           unitId,
           variableId,
-          selectedCode: { id: -1, code: '', label: '' }, // Special marker for open state
+          selectedCode: { id: -1, code: '', label: '' },
           isOpen
         })
       );
@@ -278,9 +278,13 @@ export class ReplayCodingService {
       };
     }
     this.selectedCodes.set(compositeKey, normalizedCode);
-    this.openSelections.delete(compositeKey); // Remove from open if coded
+    if (this.openSelections.has(compositeKey)) {
+      await this.saveOpenSelection(workspaceId, testPerson, unitId, event.variableId, true);
+    } else {
+      this.openSelections.delete(compositeKey); // Remove from open if coded
+    }
 
-    if (this.codingJobId) {
+    if (this.codingJobId && !this.openSelections.has(compositeKey)) {
       await this.saveCodingProgress(workspaceId, this.codingJobId, testPerson, unitId, event.variableId, normalizedCode);
     }
 
@@ -297,10 +301,16 @@ export class ReplayCodingService {
     const compositeKey = this.generateCompositeKey(testPerson, unitId, this.currentVariableId);
     if (isOpen) {
       this.openSelections.add(compositeKey);
-      this.selectedCodes.delete(compositeKey); // Clear any selected code
+      // Don't clear selectedCodes - allow both open and selected code states
       this.saveOpenSelection(workspaceId, testPerson, unitId, this.currentVariableId, true);
     } else {
       this.openSelections.delete(compositeKey);
+      if (this.selectedCodes.has(compositeKey) && this.codingJobId) {
+        const selectedCode = this.selectedCodes.get(compositeKey);
+        if (selectedCode) {
+          this.saveCodingProgress(workspaceId, this.codingJobId, testPerson, unitId, this.currentVariableId, selectedCode);
+        }
+      }
       this.saveOpenSelection(workspaceId, testPerson, unitId, this.currentVariableId, false);
     }
     this.checkCodingJobCompletion(unitsData);
@@ -328,8 +338,6 @@ export class ReplayCodingService {
     if (completedReplays > 0 && completedReplays % Math.ceil(totalReplays / 4) === 0) {
       this.showProgressNotification(progressPercentage, completedReplays, totalReplays);
     }
-
-    // Check if job is complete
     if (completedReplays === totalReplays) {
       this.isCodingJobCompleted = true;
     }
@@ -417,20 +425,6 @@ export class ReplayCodingService {
       );
     } catch (error) {
       // Ignore errors when saving notes
-    }
-  }
-
-  async loadCurrentJobStatus(workspaceId: number, jobId: number): Promise<void> {
-    if (!jobId || !workspaceId) return;
-
-    try {
-      const codingJob = await firstValueFrom(
-        this.backendService.getCodingJob(workspaceId, jobId)
-      );
-      this.isCodingJobPaused = codingJob.status === 'paused';
-      this.isCodingJobCompleted = codingJob.status === 'completed';
-    } catch (error) {
-      // Ignore errors when loading job status
     }
   }
 

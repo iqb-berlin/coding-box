@@ -7,8 +7,7 @@
     <div class="open-checkbox-container">
       <mat-checkbox
         [(ngModel)]="isOpen"
-        (change)="onOpenChanged()"
-        [disabled]="selectedCode !== null">
+        (change)="onOpenChanged()">
         {{ 'code-selector.mark-as-open' | translate }}
       </mat-checkbox>
       <div class="open-explanation" *ngIf="isOpen">
@@ -25,7 +24,7 @@
       </mat-form-field>
     </div>
 
-    <div *ngIf="selectableItems.length && !isOpen; else noCodes">
+    <div *ngIf="selectableItems.length; else noCodes">
       <mat-radio-group [(ngModel)]="selectedCode">
         <div class="code-row" *ngFor="let item of selectableItems">
           <mat-radio-button [value]="item.id" (change)="onSelect(item.id)">
