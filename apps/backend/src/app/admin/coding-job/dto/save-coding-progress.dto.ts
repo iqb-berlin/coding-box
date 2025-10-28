@@ -50,4 +50,11 @@ export class SaveCodingProgressDto {
     required: false
   })
     isOpen?: boolean;
+
+  @ApiProperty({
+    description: 'Coder notes for the unit',
+    example: 'This unit needs manual coding due to ambiguity.',
+    required: false
+  })
+    notes?: string;
 }

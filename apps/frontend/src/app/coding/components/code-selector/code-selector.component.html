@@ -14,6 +14,15 @@
       <div class="open-explanation" *ngIf="isOpen">
         {{ 'code-selector.open-explanation' | translate }}
       </div>
+
+      <mat-form-field *ngIf="isOpen" appearance="outline" class="notes-field">
+        <mat-label>{{ 'code-selector.coder-notes' | translate }}</mat-label>
+        <textarea matInput
+          [(ngModel)]="coderNotes"
+          (input)="onNotesChanged()"
+          placeholder="{{ 'code-selector.coder-notes-placeholder' | translate }}"
+          rows="3"></textarea>
+      </mat-form-field>
     </div>
 
     <div *ngIf="selectableItems.length && !isOpen; else noCodes">

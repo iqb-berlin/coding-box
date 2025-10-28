@@ -7,6 +7,8 @@ import { MatListModule } from '@angular/material/list';
 import { MatRadioModule } from '@angular/material/radio';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCheckboxModule } from '@angular/material/checkbox';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
@@ -68,7 +70,7 @@ export interface SelectableItem {
 @Component({
   selector: 'app-code-selector',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatCardModule, MatListModule, MatRadioModule, MatButtonModule, MatCheckboxModule, TranslateModule],
+  imports: [CommonModule, FormsModule, MatCardModule, MatListModule, MatRadioModule, MatButtonModule, MatCheckboxModule, MatFormFieldModule, MatInputModule, TranslateModule],
   templateUrl: './code-selector.component.html',
   styleUrls: ['./code-selector.component.css']
 })
@@ -78,9 +80,11 @@ export class CodeSelectorComponent implements OnChanges {
   @Input() preSelectedCodeId: number | null = null;
   @Input() missings: MissingDto[] = [];
   @Input() isOpen: boolean = false;
+  @Input() coderNotes: string = '';
 
   @Output() codeSelected = new EventEmitter<CodeSelectedEvent>();
   @Output() openChanged = new EventEmitter<boolean>();
+  @Output() notesChanged = new EventEmitter<string>();
 
   selectableItems: SelectableItem[] = [];
   selectedCode: number | null = null;
@@ -180,5 +184,9 @@ export class CodeSelectorComponent implements OnChanges {
       this.selectedCode = null;
     }
     this.openChanged.emit(this.isOpen);
+  }
+
+  onNotesChanged(): void {
+    this.notesChanged.emit(this.coderNotes);
   }
 }

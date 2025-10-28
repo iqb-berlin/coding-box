@@ -561,6 +561,10 @@ export class CodingJobService {
       }
     }
 
+    if (progress.notes !== undefined) {
+      codingJobUnit.notes = progress.notes || null;
+    }
+
     await this.codingJobUnitRepository.save(codingJobUnit);
 
     await this.checkAndUpdateCodingJobCompletion(codingJobId);
@@ -634,6 +638,40 @@ export class CodingJobService {
     return progressMap;
   }
 
+  async getCodingNotes(codingJobId: number): Promise<Record<string, string>> {
+    const codingJob = await this.codingJobRepository.findOne({
+      where: { id: codingJobId }
+    });
+
+    if (!codingJob) {
+      throw new NotFoundException(`Coding job with ID ${codingJobId} not found`);
+    }
+
+    const codingJobUnits = await this.codingJobUnitRepository.find({
+      where: { coding_job_id: codingJobId },
+      select: ['person_login', 'person_code', 'booklet_name', 'unit_name', 'variable_id', 'notes']
+    });
+
+    if (codingJobUnits.length === 0) {
+      return {};
+    }
+
+    const notesMap: Record<string, string> = {};
+
+    codingJobUnits.forEach(unit => {
+      if (unit.notes) {
+        const compositeKey = this.generateCodingProgressKey(
+          `${unit.person_login}@${unit.person_code}@${unit.booklet_name}`,
+          unit.unit_name,
+          unit.variable_id
+        );
+        notesMap[compositeKey] = unit.notes;
+      }
+    });
+
+    return notesMap;
+  }
+
   /**
    * Generate composite key for coding progress using same logic as frontend
    */
@@ -649,7 +687,7 @@ export class CodingJobService {
     return `${testPerson}::${bookletId}::${unitId}::${variableId}`;
   }
 
-  async getCodingJobUnits(codingJobId: number, onlyOpen: boolean = false): Promise<{ responseId: number; unitName: string; unitAlias: string | null; variableId: string; variableAnchor: string; bookletName: string; personLogin: string; personCode: string }[]> {
+  async getCodingJobUnits(codingJobId: number, onlyOpen: boolean = false): Promise<{ responseId: number; unitName: string; unitAlias: string | null; variableId: string; variableAnchor: string; bookletName: string; personLogin: string; personCode: string; notes: string | null }[]> {
     const whereClause: { coding_job_id: number; is_open?: boolean } = { coding_job_id: codingJobId };
 
     if (onlyOpen) {
@@ -658,6 +696,17 @@ export class CodingJobService {
 
     const codingJobUnits = await this.codingJobUnitRepository.find({
       where: whereClause,
+      select: [
+        'response_id',
+        'unit_name',
+        'unit_alias',
+        'variable_id',
+        'variable_anchor',
+        'booklet_name',
+        'person_login',
+        'person_code',
+        'notes'
+      ],
       order: {
         unit_name: 'ASC',
         booklet_name: 'ASC',
@@ -675,7 +724,8 @@ export class CodingJobService {
       variableAnchor: unit.variable_anchor,
       bookletName: unit.booklet_name,
       personLogin: unit.person_login,
-      personCode: unit.person_code
+      personCode: unit.person_code,
+      notes: unit.notes
     }));
   }
 
