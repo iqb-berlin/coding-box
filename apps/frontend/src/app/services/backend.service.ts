@@ -976,6 +976,7 @@ export class BackendService {
         [key: string]: unknown;
       };
       isOpen?: boolean;
+      notes?: string;
     }
   ): Observable<CodingJob> {
     const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job/${codingJobId}/progress`;
@@ -990,6 +991,11 @@ export class BackendService {
   getCodingProgress(workspaceId: number, codingJobId: number): Observable<Record<string, unknown>> {
     const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job/${codingJobId}/progress`;
     return this.http.get<Record<string, unknown>>(url);
+  }
+
+  getCodingNotes(workspaceId: number, codingJobId: number): Observable<Record<string, string> | null> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding-job/${codingJobId}/notes`;
+    return this.http.get<Record<string, string> | null>(url, { headers: this.authHeader });
   }
 
   getCodingJobUnits(

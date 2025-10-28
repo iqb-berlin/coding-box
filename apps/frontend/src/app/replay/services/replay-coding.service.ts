@@ -33,6 +33,7 @@ export class ReplayCodingService {
   codingJobId: number | null = null;
   selectedCodes: Map<string, SavedCode> = new Map(); // Track selected codes
   openSelections: Set<string> = new Set(); // Track open selections
+  notes: Map<string, string> = new Map(); // Track coder notes
   isPausingJob: boolean = false;
   isCodingJobCompleted: boolean = false;
   isCodingJobPaused: boolean = false;
@@ -86,6 +87,16 @@ export class ReplayCodingService {
           this.selectedCodes.set(compositeKey, toStore);
         }
       });
+
+      const savedNotes = await firstValueFrom(
+        this.backendService.getCodingNotes(workspaceId, jobId)
+      );
+      if (savedNotes) {
+        this.notes.clear();
+        Object.keys(savedNotes).forEach(key => {
+          this.notes.set(key, savedNotes[key]);
+        });
+      }
     } catch (error) {
       // Ignore errors when loading saved coding progress
     }
@@ -371,6 +382,42 @@ export class ReplayCodingService {
     const compositeKey = this.generateCompositeKey(testPerson, unitId, variableId);
     const selectedCode = this.selectedCodes.get(compositeKey);
     return selectedCode ? selectedCode.id : null;
+  }
+
+  getNotes(testPerson: string, unitId: string, variableId: string): string {
+    const compositeKey = this.generateCompositeKey(testPerson, unitId, variableId);
+    return this.notes.get(compositeKey) || '';
+  }
+
+  async saveNotes(
+    workspaceId: number,
+    testPerson: string,
+    unitId: string,
+    variableId: string,
+    notes: string
+  ): Promise<void> {
+    if (!this.codingJobId || !workspaceId) return;
+
+    try {
+      const compositeKey = this.generateCompositeKey(testPerson, unitId, variableId);
+      if (notes.trim()) {
+        this.notes.set(compositeKey, notes);
+      } else {
+        this.notes.delete(compositeKey);
+      }
+
+      await firstValueFrom(
+        this.backendService.saveCodingProgress(workspaceId, this.codingJobId, {
+          testPerson,
+          unitId,
+          variableId,
+          selectedCode: { id: -1, code: '', label: '' },
+          notes: notes.trim() || undefined
+        })
+      );
+    } catch (error) {
+      // Ignore errors when saving notes
+    }
   }
 
   async loadCurrentJobStatus(workspaceId: number, jobId: number): Promise<void> {

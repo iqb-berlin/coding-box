@@ -55,6 +55,9 @@ export class CodingJobUnit {
   @Column({ default: false })
     is_open: boolean;
 
+  @Column({ nullable: true, type: 'text' })
+    notes: string | null;
+
   @CreateDateColumn()
     created_at: Date;
 

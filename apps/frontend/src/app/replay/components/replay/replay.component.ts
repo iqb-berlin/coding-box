@@ -698,6 +698,20 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     this.codingService.handleOpenChanged(isOpen, this.testPerson, this.unitId, this.workspaceId, this.unitsData);
   }
 
+  getCoderNotes(): string {
+    return this.codingService.getNotes(this.testPerson, this.unitId, this.codingService.currentVariableId);
+  }
+
+  onNotesChanged(notes: string): void {
+    this.codingService.saveNotes(
+      this.workspaceId,
+      this.testPerson,
+      this.unitId,
+      this.codingService.currentVariableId,
+      notes
+    );
+  }
+
   getCompletedCount(): number {
     return this.codingService.getCompletedCount(this.unitsData);
   }

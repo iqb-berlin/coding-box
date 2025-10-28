@@ -33,8 +33,10 @@
             [preSelectedCodeId]="getPreSelectedCodeId(codingService.currentVariableId)"
             [missings]="codingService.missings"
             [isOpen]="isUnitOpen()"
+            [coderNotes]="getCoderNotes()"
             (codeSelected)="onCodeSelected($event)"
-            (openChanged)="onOpenChanged($event)">
+            (openChanged)="onOpenChanged($event)"
+            (notesChanged)="onNotesChanged($event)">
           </app-code-selector>
         </div>
       }
