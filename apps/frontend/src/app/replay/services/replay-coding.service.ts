@@ -26,7 +26,6 @@ export class ReplayCodingService {
   private translate = inject(TranslateService);
   private snackBar = inject(MatSnackBar);
 
-  // Coding state properties
   codingScheme: CodingScheme | null = null;
   currentVariableId: string = '';
   missings: MissingDto[] = [];
@@ -497,10 +496,10 @@ export class ReplayCodingService {
     }
   }
 
-  findFirstUncodedUnitIndex(unitsData: UnitsReplay | null): number {
+  findNextUncodedUnitIndex(unitsData: UnitsReplay | null, fromIndex: number = 0): number {
     if (!unitsData) return -1;
 
-    for (let i = 0; i < unitsData.units.length; i++) {
+    for (let i = fromIndex; i < unitsData.units.length; i++) {
       const unit: UnitsReplayUnit = unitsData.units[i];
 
       if (unit.variableId) {
@@ -516,7 +515,19 @@ export class ReplayCodingService {
       }
     }
 
-    // If all units are coded, return -1
+    // If no uncoded units found from fromIndex, return -1
     return -1;
+  }
+
+  isUnitCoded(unit: UnitsReplayUnit): boolean {
+    if (!unit.variableId) return false;
+
+    const compositeKey = this.generateCompositeKey(
+      unit.testPerson || '',
+      unit.name,
+      unit.variableId
+    );
+
+    return this.selectedCodes.has(compositeKey) || this.openSelections.has(compositeKey);
   }
 }

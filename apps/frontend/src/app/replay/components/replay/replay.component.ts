@@ -632,7 +632,6 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       if (workspace) {
         this.getUnitData(Number(workspace), this.authToken).then(unitData => {
           this.setUnitProperties(unitData);
-          // After loading new unit data, try to highlight using current anchor
           setTimeout(() => {
             if (this.unitPlayerComponent?.hostingIframe?.nativeElement && this.anchor) {
               highlightAspectSectionWithAnchor(this.unitPlayerComponent.hostingIframe.nativeElement, this.anchor);
@@ -761,8 +760,9 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
         if (hasSelection) {
           keyboardEvent.preventDefault();
-          // Navigate to next unit - find the next unit index
-          const nextIndex = this.codingService.findFirstUncodedUnitIndex(this.unitsData);
+          // Navigate to next uncoded unit from current position
+          const currentIndex = this.unitsData.currentUnitIndex;
+          const nextIndex = this.codingService.findNextUncodedUnitIndex(this.unitsData, currentIndex + 1);
           if (nextIndex >= 0 && nextIndex < this.unitsData.units.length) {
             this.handleUnitChanged(this.unitsData.units[nextIndex]);
           }
