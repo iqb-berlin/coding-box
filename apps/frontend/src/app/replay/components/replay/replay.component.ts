@@ -710,6 +710,11 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     return this.codingService.getNotes(this.testPerson, this.unitId, this.codingService.currentVariableId);
   }
 
+  isUnitOpen(): boolean {
+    const compositeKey = this.codingService.generateCompositeKey(this.testPerson, this.unitId, this.codingService.currentVariableId);
+    return this.codingService.openSelections.has(compositeKey);
+  }
+
   onNotesChanged(notes: string): void {
     this.codingService.saveNotes(
       this.workspaceId,
@@ -734,11 +739,6 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
   getPreSelectedCodeId(variableId: string): number | null {
     return this.codingService.getPreSelectedCodeId(this.testPerson, this.unitId, variableId);
-  }
-
-  isUnitOpen(): boolean {
-    const compositeKey = this.codingService.generateCompositeKey(this.testPerson, this.unitId, this.codingService.currentVariableId);
-    return this.codingService.openSelections.has(compositeKey);
   }
 
   pauseCodingJob(): void {

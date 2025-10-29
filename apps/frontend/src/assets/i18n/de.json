@@ -539,7 +539,9 @@
     "mark-as-open": "Als offen markieren",
     "open-explanation": "Diese Frage ist offen kodiert",
     "score-label": "Bewertung:",
-    "no-codes-found": "Keine Codes gefunden für Variable"
+    "no-codes-found": "Keine Codes gefunden für Variable",
+    "coder-notes": "Notiz zu diesem Kodierfall",
+    "coder-notes-placeholder": "Notiz zu diesem Kodierfall"
   },
 
   "ws-settings": {

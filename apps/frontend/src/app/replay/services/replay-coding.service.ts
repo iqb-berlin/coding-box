@@ -181,7 +181,6 @@ export class ReplayCodingService {
     if (!jobId || !workspaceId) return;
 
     try {
-      // Determine if this is a missing code (missing codes have a 'code' property as number)
       const isMissingCode = typeof selectedCode.code === 'number';
       const codeToSave = {
         id: isMissingCode ? Number(selectedCode.code) : selectedCode.id,
@@ -265,8 +264,15 @@ export class ReplayCodingService {
     unitsData: UnitsReplay | null
   ): Promise<void> {
     const compositeKey = this.generateCompositeKey(testPerson, unitId, event.variableId);
+
+    if (event.code === null) {
+      this.selectedCodes.delete(compositeKey);
+      this.openSelections.delete(compositeKey);
+      return;
+    }
+
     let normalizedCode: SavedCode;
-    if ('code' in event.code) {
+    if ('code' in event.code!) {
       const missing = event.code;
       normalizedCode = {
         id: missing.code,
