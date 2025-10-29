@@ -72,6 +72,12 @@
       <div class="progress-actions">
         <button
           mat-icon-button
+          (click)="openNavigateDialog()"
+          class="navigate-button"
+          matTooltip="{{ 'replay.navigate-dialog.title' | translate }}">
+          <mat-icon>directions</mat-icon>
+        </button>
+        <button
           (click)="openCommentDialog()"
           class="comment-button"
           matTooltip="{{ 'coding.comment-dialog.title' | translate }}">
