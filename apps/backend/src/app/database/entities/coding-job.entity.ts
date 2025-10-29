@@ -34,9 +34,9 @@ export class CodingJob {
   @Column({ type: 'text', nullable: true })
     description?: string;
 
-  /**
-   * Status of the job: 'pending', 'active', 'paused', 'completed'
-   */
+  @Column({ type: 'text', nullable: true })
+    comment?: string;
+
   @Column({ default: 'pending' })
     status: string;
 

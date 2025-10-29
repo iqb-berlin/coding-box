@@ -6,6 +6,7 @@ export interface CodingJob {
   workspace_id: number;
   name: string;
   description?: string;
+  comment?: string;
   status: string;
   created_at: Date;
   updated_at: Date;
