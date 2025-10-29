@@ -95,4 +95,13 @@ export class UpdateCodingJobDto {
   @IsNumber()
   @IsOptional()
     missingsProfileId?: number;
+
+  @ApiProperty({
+    description: 'Comment for the coding job',
+    example: 'This coding job requires special attention',
+    required: false
+  })
+  @IsString()
+  @IsOptional()
+    comment?: string;
 }

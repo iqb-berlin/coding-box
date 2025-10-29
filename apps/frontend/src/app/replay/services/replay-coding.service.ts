@@ -33,6 +33,7 @@ export class ReplayCodingService {
   selectedCodes: Map<string, SavedCode> = new Map();
   openSelections: Set<string> = new Set();
   notes: Map<string, string> = new Map();
+  codingJobComment: string = '';
   isPausingJob: boolean = false;
   isCodingJobCompleted: boolean = false;
   isCodingJobPaused: boolean = false;
@@ -46,6 +47,7 @@ export class ReplayCodingService {
     this.codingJobId = null;
     this.selectedCodes.clear();
     this.openSelections.clear();
+    this.codingJobComment = '';
     this.isPausingJob = false;
     this.isCodingJobCompleted = false;
     this.isSubmittingJob = false;
@@ -96,6 +98,11 @@ export class ReplayCodingService {
           this.notes.set(key, savedNotes[key]);
         });
       }
+
+      const codingJob = await firstValueFrom(
+        this.backendService.getCodingJob(workspaceId, jobId)
+      );
+      this.codingJobComment = codingJob.comment || '';
     } catch (error) {
       // Ignore errors when loading saved coding progress
     }
@@ -424,6 +431,19 @@ export class ReplayCodingService {
       );
     } catch (error) {
       // Ignore errors when saving notes
+    }
+  }
+
+  async saveCodingJobComment(workspaceId: number, comment: string): Promise<void> {
+    if (!this.codingJobId || !workspaceId) return;
+
+    try {
+      this.codingJobComment = comment;
+      await firstValueFrom(
+        this.backendService.updateCodingJob(workspaceId, this.codingJobId, { comment })
+      );
+    } catch (error) {
+      // Ignore errors when saving comment
     }
   }
 

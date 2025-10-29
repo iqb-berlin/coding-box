@@ -302,6 +302,9 @@ export class CodingJobService {
     if (updateCodingJobDto.status !== undefined) {
       codingJob.codingJob.status = updateCodingJobDto.status;
     }
+    if (updateCodingJobDto.comment !== undefined) {
+      codingJob.codingJob.comment = updateCodingJobDto.comment;
+    }
     if (updateCodingJobDto.missingsProfileId !== undefined) {
       codingJob.codingJob.missings_profile_id = updateCodingJobDto.missingsProfileId;
     }

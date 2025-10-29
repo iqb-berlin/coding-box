@@ -69,15 +69,24 @@
       <div class="progress-bar">
         <div class="progress-fill" [style.width.%]="getProgressPercentage()"></div>
       </div>
-      @if (codingService.codingJobId && !codingService.isCodingJobCompleted) {
+      <div class="progress-actions">
         <button
-          mat-raised-button
-          (click)="pauseCodingJob()"
-          [disabled]="codingService.isPausingJob"
-          class="pause-button">
-          {{ codingService.isPausingJob ? ('replay.pausing' | translate) : ('replay.pause-coding' | translate) }}
+          mat-icon-button
+          (click)="openCommentDialog()"
+          class="comment-button"
+          matTooltip="{{ 'coding.comment-dialog.title' | translate }}">
+          <mat-icon>comment</mat-icon>
         </button>
-      }
+        @if (codingService.codingJobId && !codingService.isCodingJobCompleted) {
+          <button
+            mat-raised-button
+            (click)="pauseCodingJob()"
+            [disabled]="codingService.isPausingJob"
+            class="pause-button">
+            {{ codingService.isPausingJob ? ('replay.pausing' | translate) : ('replay.pause-coding' | translate) }}
+          </button>
+        }
+      </div>
     </div>
   }
 

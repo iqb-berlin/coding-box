@@ -225,6 +225,13 @@
   },
 
   "coding": {
+    "comment-dialog": {
+      "title": "Kommentar zum Kodierjob",
+      "label": "Kommentar",
+      "placeholder": "Geben Sie einen Kommentar zu diesem Kodierjob ein...",
+      "save": "Speichern",
+      "cancel": "Abbrechen"
+    },
     "my-coding-jobs": {
       "title": "Meine Kodierjobs",
       "subtitle": "Hier finden Sie alle Kodierjobs, die Ihnen zugewiesen wurden",

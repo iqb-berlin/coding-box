@@ -5,6 +5,9 @@ import {
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { MatIconModule } from '@angular/material/icon';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 import { ActivatedRoute, Params } from '@angular/router';
@@ -28,6 +31,7 @@ import { scrollToElementByAlias, highlightAspectSectionWithAnchor } from '../../
 import { UnitsReplay, UnitsReplayUnit } from '../../../services/units-replay.service';
 import { UnitsReplayComponent } from '../units-replay/units-replay.component';
 import { CodeSelectorComponent } from '../../../coding/components/code-selector/code-selector.component';
+import { CodingJobCommentDialogComponent } from '../../../coding/components/coding-job-comment-dialog/coding-job-comment-dialog.component';
 import { ReplayCodingService } from '../../services/replay-coding.service';
 
 @Component({
@@ -37,6 +41,9 @@ import { ReplayCodingService } from '../../services/replay-coding.service';
     MatFormFieldModule,
     MatInputModule,
     MatButtonModule,
+    MatDialogModule,
+    MatIconModule,
+    MatTooltipModule,
     ReactiveFormsModule,
     TranslateModule,
     UnitPlayerComponent,
@@ -54,6 +61,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   private route = inject(ActivatedRoute);
   private errorSnackBar = inject(MatSnackBar);
   private pageErrorSnackBar = inject(MatSnackBar);
+  private dialog = inject(MatDialog);
   codingService = inject(ReplayCodingService);
 
   player: string = '';
@@ -749,6 +757,19 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       await this.codingService.saveAllCodingProgress(this.workspaceId, this.codingService.codingJobId);
       this.codingService.submitCodingJob(this.workspaceId, this.codingService.codingJobId);
     }
+  }
+
+  openCommentDialog(): void {
+    const dialogRef = this.dialog.open(CodingJobCommentDialogComponent, {
+      width: '500px',
+      data: { comment: this.codingService.codingJobComment }
+    });
+
+    dialogRef.afterClosed().subscribe(async (result: string) => {
+      if (result !== undefined && result !== this.codingService.codingJobComment) {
+        await this.codingService.saveCodingJobComment(this.workspaceId, result);
+      }
+    });
   }
 
   onKeyDown(event: Event): void {
