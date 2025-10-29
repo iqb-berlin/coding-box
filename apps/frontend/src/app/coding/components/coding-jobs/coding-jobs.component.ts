@@ -526,6 +526,8 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
         return 'status-paused';
       case 'open':
         return 'status-open';
+      case 'review':
+        return 'status-review';
       default:
         return '';
     }
@@ -543,6 +545,8 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
         return 'Pausiert';
       case 'open':
         return 'Offen';
+      case 'review':
+        return 'Zur Überprüfung';
       default:
         return status;
     }

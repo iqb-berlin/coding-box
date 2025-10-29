@@ -1,21 +1,21 @@
 <div class="page-body">
   <div class="admin-background">
-    <h1 class="page-title">Meine Kodierjobs</h1>
-    <p class="subtitle">Hier finden Sie alle Kodierjobs, die Ihnen zugewiesen wurden</p>
+    <h1 class="page-title">{{ 'coding.my-coding-jobs.title' | translate }}</h1>
+    <p class="subtitle">{{ 'coding.my-coding-jobs.subtitle' | translate }}</p>
 
     @if (isLoading) {
       <div class="loading-container">
         <mat-spinner></mat-spinner>
-        <p>Kodierjobs werden geladen...</p>
+        <p>{{ 'coding.my-coding-jobs.loading-jobs' | translate }}</p>
       </div>
     }
 
     @if (!isLoading && isAuthorized) {
       <div class="fx-row-center-center-stretch fx-gap-16 filter-row">
         <mat-form-field appearance="outline" class="filter-field">
-          <mat-label>Name filtern</mat-label>
+          <mat-label>{{ 'coding.my-coding-jobs.filter-job-name' | translate }}</mat-label>
           <mat-select [(value)]="selectedJobName" (selectionChange)="onJobNameFilterChange()">
-            <mat-option [value]="null">Alle Namen</mat-option>
+            <mat-option [value]="null">{{ 'coding.my-coding-jobs.filter-all-job-names' | translate }}</mat-option>
             <mat-option *ngFor="let job of originalData" [value]="job.name">
               {{job.name}}
             </mat-option>
@@ -23,14 +23,15 @@
         </mat-form-field>
 
         <mat-form-field appearance="outline" class="filter-field">
-          <mat-label>Status filtern</mat-label>
+          <mat-label>{{ 'coding.my-coding-jobs.filter-status' | translate }}</mat-label>
           <mat-select [(value)]="selectedStatus" (selectionChange)="onStatusFilterChange()">
-            <mat-option [value]="null">Alle Status</mat-option>
-            <mat-option value="active">Aktiv</mat-option>
-            <mat-option value="completed">Abgeschlossen</mat-option>
-            <mat-option value="pending">Ausstehend</mat-option>
-            <mat-option value="paused">Pausiert</mat-option>
-            <mat-option value="open">Offen</mat-option>
+            <mat-option [value]="null">{{ 'coding.my-coding-jobs.filter-all-statuses' | translate }}</mat-option>
+            <mat-option value="active">{{ 'coding.my-coding-jobs.filter-active' | translate }}</mat-option>
+            <mat-option value="completed">{{ 'coding.my-coding-jobs.filter-completed' | translate }}</mat-option>
+            <mat-option value="pending">{{ 'coding.my-coding-jobs.filter-pending' | translate }}</mat-option>
+            <mat-option value="paused">{{ 'coding.my-coding-jobs.filter-paused' | translate }}</mat-option>
+            <mat-option value="open">{{ 'coding.my-coding-jobs.filter-open' | translate }}</mat-option>
+            <mat-option value="review">{{ 'coding.my-coding-jobs.filter-review' | translate }}</mat-option>
           </mat-select>
         </mat-form-field>
       </div>
@@ -39,16 +40,24 @@
         <div class="total-progress-section">
           <mat-icon>bar_chart</mat-icon>
           <span class="total-progress-text">
-            Gesamter Kodierfortschritt:
-            <strong>{{totalProgress}}% ({{totalCodedUnits}}/{{totalUnits}} Aufgaben)</strong>
+            {{ 'coding.my-coding-jobs.total-coding-progress' | translate }}:
+            <strong>{{totalProgress}}% ({{totalCodedUnits}}/{{totalUnits}} {{ 'coding.my-coding-jobs.no-tasks' | translate }})</strong>
           </span>
         </div>
 
         <div class="total-progress-section">
           <mat-icon>work_outline</mat-icon>
           <span class="total-progress-text">
-            Nicht abgeschlossene Kodierjobs:
+            {{ 'coding.my-coding-jobs.total-progress-incomplete' | translate }}:
             <strong>{{incompleteJobs}}</strong>
+          </span>
+        </div>
+
+        <div class="total-progress-section">
+          <mat-icon>check_circle</mat-icon>
+          <span class="total-progress-text">
+            {{ 'coding.my-coding-jobs.total-progress-completed' | translate }}:
+            <strong>{{completedJobs}}</strong>
           </span>
         </div>
 
@@ -60,67 +69,74 @@
             </mat-row>
 
             <ng-container matColumnDef="actions">
-              <mat-header-cell *matHeaderCellDef>Aktionen</mat-header-cell>
-              <mat-cell *matCellDef="let element">
+              <mat-header-cell *matHeaderCellDef>{{ 'coding.my-coding-jobs.actions' | translate }}</mat-header-cell>
+              <mat-cell *matCellDef="let element" class="actions-cell">
                 <button mat-icon-button (click)="$event.stopPropagation(); startCodingJob(element)"
-                        matTooltip="Kodierjob starten"
-                        aria-label="Kodierjob starten">
+                        [matTooltip]="'coding.my-coding-jobs.start-coding' | translate"
+                        [attr.aria-label]="'coding.my-coding-jobs.start-coding' | translate">
                   <mat-icon>play_arrow</mat-icon>
                 </button>
+                @if (element.status === 'completed') {
+                  <button mat-icon-button (click)="$event.stopPropagation(); sendToReview(element)"
+                          [matTooltip]="'coding.my-coding-jobs.send-to-review' | translate"
+                          [attr.aria-label]="'coding.my-coding-jobs.send-to-review' | translate">
+                    <mat-icon>check_circle</mat-icon>
+                  </button>
+                }
               </mat-cell>
             </ng-container>
 
             <ng-container matColumnDef="name">
-              <mat-header-cell *matHeaderCellDef mat-sort-header>Name</mat-header-cell>
+              <mat-header-cell *matHeaderCellDef mat-sort-header>{{ 'coding.my-coding-jobs.job-name' | translate }}</mat-header-cell>
               <mat-cell *matCellDef="let element">
                 <span class="cell-content">{{element.name}}</span>
               </mat-cell>
             </ng-container>
 
             <ng-container matColumnDef="description">
-              <mat-header-cell *matHeaderCellDef mat-sort-header>Beschreibung</mat-header-cell>
+              <mat-header-cell *matHeaderCellDef mat-sort-header>{{ 'coding.my-coding-jobs.job-description' | translate }}</mat-header-cell>
               <mat-cell *matCellDef="let element">
                 <span class="cell-content">{{element.description}}</span>
               </mat-cell>
             </ng-container>
 
             <ng-container matColumnDef="status">
-              <mat-header-cell *matHeaderCellDef mat-sort-header>Status</mat-header-cell>
+              <mat-header-cell *matHeaderCellDef mat-sort-header>{{ 'coding.my-coding-jobs.job-status' | translate }}</mat-header-cell>
               <mat-cell *matCellDef="let element">
                 <span class="status-badge" [ngClass]="getStatusClass(element.status)">{{getStatusText(element.status)}}</span>
               </mat-cell>
             </ng-container>
 
             <ng-container matColumnDef="variables">
-              <mat-header-cell *matHeaderCellDef mat-sort-header>Variablen</mat-header-cell>
+              <mat-header-cell *matHeaderCellDef mat-sort-header>{{ 'coding.my-coding-jobs.job-variables' | translate }}</mat-header-cell>
               <mat-cell *matCellDef="let element">
                 <span class="cell-content">{{getVariables(element)}}</span>
               </mat-cell>
             </ng-container>
 
             <ng-container matColumnDef="variableBundles">
-              <mat-header-cell *matHeaderCellDef mat-sort-header>Variablen-Bundles</mat-header-cell>
+              <mat-header-cell *matHeaderCellDef mat-sort-header>{{ 'coding.my-coding-jobs.job-variable-bundles' | translate }}</mat-header-cell>
               <mat-cell *matCellDef="let element">
                 <span class="cell-content">{{getVariableBundles(element)}}</span>
               </mat-cell>
             </ng-container>
 
             <ng-container matColumnDef="progress">
-              <mat-header-cell *matHeaderCellDef mat-sort-header>Fortschritt</mat-header-cell>
+              <mat-header-cell *matHeaderCellDef mat-sort-header>{{ 'coding.my-coding-jobs.job-progress' | translate }}</mat-header-cell>
               <mat-cell *matCellDef="let element">
                 <span class="cell-content">{{getProgress(element)}}</span>
               </mat-cell>
             </ng-container>
 
             <ng-container matColumnDef="created_at">
-              <mat-header-cell *matHeaderCellDef mat-sort-header>Erstellt am</mat-header-cell>
+              <mat-header-cell *matHeaderCellDef mat-sort-header>{{ 'coding.my-coding-jobs.job-created-at' | translate }}</mat-header-cell>
               <mat-cell *matCellDef="let element">
                 <span class="cell-content date-cell">{{element.created_at | date: 'dd.MM.yyyy HH:mm'}}</span>
               </mat-cell>
             </ng-container>
 
             <ng-container matColumnDef="updated_at">
-              <mat-header-cell *matHeaderCellDef mat-sort-header>Aktualisiert am</mat-header-cell>
+              <mat-header-cell *matHeaderCellDef mat-sort-header>{{ 'coding.my-coding-jobs.job-updated-at' | translate }}</mat-header-cell>
               <mat-cell *matCellDef="let element">
                 <span class="cell-content date-cell">{{element.updated_at | date: 'dd.MM.yyyy HH:mm'}}</span>
               </mat-cell>
@@ -133,7 +149,7 @@
       @if (dataSource.data.length === 0) {
         <div class="no-data-message">
           <mat-icon>assignment</mat-icon>
-          <p>Keine Kodierjobs zugewiesen. Ihnen sind derzeit keine Kodierjobs zugewiesen.</p>
+          <p>{{ 'coding.my-coding-jobs.no-jobs-assigned' | translate }}</p>
         </div>
       }
     }
