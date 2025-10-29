@@ -35,7 +35,6 @@
             [codingScheme]="codingService.codingScheme"
             [variableId]="codingService.currentVariableId"
             [preSelectedCodeId]="getPreSelectedCodeId(codingService.currentVariableId)"
-            [missings]="codingService.missings"
             [isOpen]="isUnitOpen()"
             [coderNotes]="getCoderNotes()"
             (codeSelected)="onCodeSelected($event)"

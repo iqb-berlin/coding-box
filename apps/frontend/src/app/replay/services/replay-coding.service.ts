@@ -6,7 +6,6 @@ import { BackendService } from '../../services/backend.service';
 import {
   Code, VariableCoding, CodingScheme, CodeSelectedEvent
 } from '../../coding/components/code-selector/code-selector.component';
-import { MissingDto } from '../../../../../../api-dto/coding/missings-profiles.dto';
 import { UnitsReplay, UnitsReplayUnit } from '../../services/units-replay.service';
 
 interface SavedCode {
@@ -28,7 +27,6 @@ export class ReplayCodingService {
 
   codingScheme: CodingScheme | null = null;
   currentVariableId: string = '';
-  missings: MissingDto[] = [];
   codingJobId: number | null = null;
   selectedCodes: Map<string, SavedCode> = new Map();
   openSelections: Set<string> = new Set();
@@ -43,7 +41,6 @@ export class ReplayCodingService {
   resetCodingData() {
     this.codingScheme = null;
     this.currentVariableId = '';
-    this.missings = [];
     this.codingJobId = null;
     this.selectedCodes.clear();
     this.openSelections.clear();
@@ -108,46 +105,6 @@ export class ReplayCodingService {
     }
   }
 
-  async loadCodingJobMissings(workspaceId: number, jobId: number): Promise<void> {
-    if (!jobId || !workspaceId) return;
-
-    try {
-      const codingJob = await firstValueFrom(
-        this.backendService.getCodingJob(workspaceId, jobId)
-      );
-      if (codingJob.missings_profile_id) {
-        try {
-          const profile = await firstValueFrom(
-            this.backendService.getMissingsProfileDetails(workspaceId, codingJob.missings_profile_id.toString())
-          );
-          if (profile) {
-            const parsed = JSON.parse(profile.missings);
-            this.missings = Array.isArray(parsed) ? parsed : [];
-          }
-        } catch (idError) {
-          try {
-            const profiles = await firstValueFrom(
-              this.backendService.getMissingsProfiles(workspaceId)
-            );
-            const matchingProfile = profiles.find(p => p.id === codingJob.missings_profile_id);
-            if (matchingProfile) {
-              const profileDetails = await firstValueFrom(
-                this.backendService.getMissingsProfileDetails(workspaceId, matchingProfile.label)
-              );
-              if (profileDetails) {
-                this.missings = profileDetails.parseMissings();
-              }
-            }
-          } catch (fallbackError) {
-            // Ignore errors when loading missings
-          }
-        }
-      }
-    } catch (error) {
-      // Ignore errors when loading coding job missings
-    }
-  }
-
   findCodeById(codeId: number): Code | null {
     if (!this.codingScheme) {
       return null;
@@ -181,10 +138,9 @@ export class ReplayCodingService {
     if (!jobId || !workspaceId) return;
 
     try {
-      const isMissingCode = typeof selectedCode.code === 'number';
       const codeToSave = {
-        id: isMissingCode ? Number(selectedCode.code) : selectedCode.id,
-        code: String(selectedCode.code),
+        id: selectedCode.id,
+        code: selectedCode.code,
         label: selectedCode.label || '',
         ...(selectedCode.score !== undefined && { score: selectedCode.score })
       };
@@ -272,16 +228,16 @@ export class ReplayCodingService {
     }
 
     let normalizedCode: SavedCode;
-    if ('code' in event.code!) {
-      const missing = event.code;
+    if ('code' in event.code! && event.code!.code < 0) {
+      const uncertainCode = event.code as { code: number; label: string; description?: string };
       normalizedCode = {
-        id: missing.code,
-        code: String(missing.code),
-        label: missing.label,
-        description: missing.description
+        id: uncertainCode.code,
+        code: String(uncertainCode.code),
+        label: uncertainCode.label,
+        description: uncertainCode.description
       };
     } else {
-      const code = event.code;
+      const code = event.code as { id: number; label: string; score?: number };
       normalizedCode = {
         id: code.id,
         code: String(code.id),
