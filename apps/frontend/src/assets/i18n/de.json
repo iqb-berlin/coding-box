@@ -522,7 +522,16 @@
     "coding-job-submitted-successfully": "Kodierungsauftrag erfolgreich eingereicht",
     "failed-to-submit-coding-job": "Fehler beim Einreichen des Kodierungsauftrags",
     "coding-progress-message": "Kodierfortschritt: {{completed}}/{{total}} abgeschlossen ({{percentage}}%)",
-    "close": "Schließen"
+    "close": "Schließen",
+    "navigate-dialog": {
+      "title": "Kodierte Fälle navigieren",
+      "position": "Position",
+      "case-number-variable": "Fall Nr. Variable",
+      "given-code": "Gegebener Code",
+      "comments": "Kommentare",
+      "close": "Schließen",
+      "no-coded-units": "Keine kodierten Einheiten gefunden."
+    }
   },
 
   "code-selector": {

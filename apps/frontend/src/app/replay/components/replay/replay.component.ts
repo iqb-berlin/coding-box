@@ -32,6 +32,7 @@ import { UnitsReplay, UnitsReplayUnit } from '../../../services/units-replay.ser
 import { UnitsReplayComponent } from '../units-replay/units-replay.component';
 import { CodeSelectorComponent } from '../../../coding/components/code-selector/code-selector.component';
 import { CodingJobCommentDialogComponent } from '../../../coding/components/coding-job-comment-dialog/coding-job-comment-dialog.component';
+import { NavigateCodingCasesDialogComponent, NavigateCodingCasesDialogData } from '../navigate-coding-cases-dialog/navigate-coding-cases-dialog.component';
 import { ReplayCodingService } from '../../services/replay-coding.service';
 
 @Component({
@@ -768,6 +769,27 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     dialogRef.afterClosed().subscribe(async (result: string) => {
       if (result !== undefined && result !== this.codingService.codingJobComment) {
         await this.codingService.saveCodingJobComment(this.workspaceId, result);
+      }
+    });
+  }
+
+  openNavigateDialog(): void {
+    if (!this.unitsData) return;
+
+    const dialogData: NavigateCodingCasesDialogData = {
+      unitsData: this.unitsData,
+      codingService: this.codingService,
+      testPerson: this.testPerson
+    };
+
+    const dialogRef = this.dialog.open(NavigateCodingCasesDialogComponent, {
+      width: '800px',
+      data: dialogData
+    });
+
+    dialogRef.afterClosed().subscribe((selectedUnit: UnitsReplayUnit | undefined) => {
+      if (selectedUnit) {
+        this.handleUnitChanged(selectedUnit);
       }
     });
   }
