@@ -5,7 +5,11 @@
     @if (isBookletMode && !!player && unitDef) {
       <coding-box-units-replay
         [unitsData]="unitsData"
-        (unitChanged)="handleUnitChanged($event)">
+        [isCodingActive]="!!codingService.codingJobId && !isBookletReplayMode"
+        (unitChanged)="handleUnitChanged($event)"
+        (openNavigateDialog)="openNavigateDialog()"
+        (openCommentDialog)="openCommentDialog()"
+        (pauseCodingJob)="pauseCodingJob()">
       </coding-box-units-replay>
     }
 
@@ -56,45 +60,7 @@
     }
   }
 
-  @if (isBookletMode && unitsData && !isBookletReplayMode) {
-    <div class="coding-progress">
-      <div class="progress-info">
-        <span class="progress-text">{{ 'replay.coding-progress' | translate }}</span>
-        <span class="progress-numbers">{{ getCompletedCount() }}/{{ unitsData.units.length }}</span>
-        <span class="progress-percentage">({{ getProgressPercentage() }}%)</span>
-        @if (getOpenCount() > 0) {
-          <span class="progress-open">{{ 'replay.open-count' | translate }}: {{ getOpenCount() }}</span>
-        }
-      </div>
-      <div class="progress-bar">
-        <div class="progress-fill" [style.width.%]="getProgressPercentage()"></div>
-      </div>
-      <div class="progress-actions">
-        <button
-          mat-icon-button
-          (click)="openNavigateDialog()"
-          class="navigate-button"
-          matTooltip="{{ 'replay.navigate-dialog.title' | translate }}">
-          <mat-icon>directions</mat-icon>
-        </button>
-        <button
-          (click)="openCommentDialog()"
-          class="comment-button"
-          matTooltip="{{ 'coding.comment-dialog.title' | translate }}">
-          <mat-icon>comment</mat-icon>
-        </button>
-        @if (codingService.codingJobId && !codingService.isCodingJobCompleted) {
-          <button
-            mat-raised-button
-            (click)="pauseCodingJob()"
-            [disabled]="codingService.isPausingJob"
-            class="pause-button">
-            {{ codingService.isPausingJob ? ('replay.pausing' | translate) : ('replay.pause-coding' | translate) }}
-          </button>
-        }
-      </div>
-    </div>
-  }
+
 
   @if (testPerson && unitId) {
     <div class="watermark">{{ testPerson }} - {{ unitId }}</div>

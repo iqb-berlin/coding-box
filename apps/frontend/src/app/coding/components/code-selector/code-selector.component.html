@@ -5,7 +5,7 @@
         <div class="code-list scrollable-codes">
           <div class="code-row"
                [class.selected]="item.id === selectedCode"
-               *ngFor="let item of regularCodes; let i = index; let isLast = last"
+               *ngFor="let item of regularCodes;"
                (click)="onSelect(item.id)">
             <div class="code-content">
               <span class="code-info">
@@ -20,7 +20,7 @@
         <div class="uncertain-codes-section">
           <div class="code-row"
                [class.selected]="item.id === selectedCode"
-               *ngFor="let item of uncertainCodes; let i = index; let isLast = last"
+               *ngFor="let item of uncertainCodes;"
                (click)="onSelect(item.id)">
             <div class="code-content">
               <span class="uncertain-text">{{ item.label }}</span>

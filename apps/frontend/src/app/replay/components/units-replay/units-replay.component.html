@@ -4,11 +4,52 @@
       <span class="nav-icon">←</span> Vorherige Aufgabe
     </button>
 
-    <div class="unit-position">
-      <span class="current-position">{{ currentUnitIndex + 1 }}</span>
-      <span class="position-separator">/</span>
-      <span class="total-units">{{ totalUnits }}</span>
-    </div>
+    @if (!isCodingActive()) {
+      <div class="unit-position">
+        <span class="current-position">{{ (unitsData()?.currentUnitIndex || 0) + 1 }}</span>
+        <span class="position-separator">/</span>
+        <span class="total-units">{{ totalUnits }}</span>
+      </div>
+    } @else {
+      <div class="coding-progress">
+        <div class="progress-info">
+          <span class="progress-text">{{ 'replay.coding-progress' | translate }}</span>
+          <span class="progress-numbers">{{ getCompletedCount() }}/{{ totalUnits }}</span>
+          <span class="progress-percentage">({{ getProgressPercentage() }}%)</span>
+          @if (getOpenCount() > 0) {
+            <span class="progress-open">{{ 'replay.open-count' | translate }}: {{ getOpenCount() }}</span>
+          }
+        </div>
+        <div class="progress-bar">
+          <div class="progress-fill" [style.width.%]="getProgressPercentage()"></div>
+        </div>
+        <div class="progress-actions">
+          <button
+            mat-icon-button
+            (click)="onNavigateClick()"
+            class="navigate-button"
+            matTooltip="{{ 'replay.navigate-dialog.title' | translate }}">
+            <mat-icon>directions</mat-icon>
+          </button>
+          <button
+            (click)="onCommentClick()"
+            class="comment-button"
+            matTooltip="{{ 'coding.comment-dialog.title' | translate }}">
+            <mat-icon>comment</mat-icon>
+          </button>
+          @if (hasCodingJob() && !isCodingJobCompleted) {
+            <button
+              mat-icon-button
+              (click)="onPauseClick()"
+              [disabled]="isPausingJob"
+              class="pause-button"
+              matTooltip="{{ isPausingJob ? ('replay.pausing' | translate) : ('replay.pause-coding' | translate) }}">
+              <mat-icon>pause</mat-icon>
+            </button>
+          }
+        </div>
+      </div>
+    }
 
     <button class="nav-button next-button" [disabled]="!hasNextUnit()" (click)="nextUnit()">
       Nächste Aufgabe <span class="nav-icon">→</span>

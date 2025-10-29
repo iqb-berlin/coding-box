@@ -149,7 +149,7 @@ export class ReplayCodingService {
   }
 
   findCodeById(codeId: number): Code | null {
-    if (!this.codingScheme || false) {
+    if (!this.codingScheme) {
       return null;
     }
 
