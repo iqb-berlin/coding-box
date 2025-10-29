@@ -1,46 +1,49 @@
 <mat-card class="selector-card">
-  <mat-card-header>
-    <mat-card-title>{{ 'code-selector.codes-for-variable' | translate }} {{ variableId }}</mat-card-title>
-  </mat-card-header>
+  <mat-card-content class="selector-content">
+    <div class="codes-section">
+      <div *ngIf="regularCodes.length; else noCodes">
+        <div class="code-list scrollable-codes">
+          <div class="code-row"
+               [class.selected]="item.id === selectedCode"
+               *ngFor="let item of regularCodes; let i = index; let isLast = last"
+               (click)="onSelect(item.id)">
+            <div class="code-content">
+              <span class="code-info">
+                <span class="code-id">{{ item.id }}</span>
+                <span class="code-score" *ngIf="item.score !== undefined">{{ 'code-selector.score-label' | translate }} {{ item.score }}</span>
+              </span>
+            </div>
+            <div class="code-instruction" *ngIf="item.manualInstruction" [innerHTML]="getSafeHtml(item.manualInstruction)"></div>
+          </div>
+        </div>
 
-  <mat-card-content>
-    <div class="open-checkbox-container">
-      <mat-checkbox
-        [(ngModel)]="isOpen"
-        (change)="onOpenChanged()">
-        {{ 'code-selector.mark-as-open' | translate }}
-      </mat-checkbox>
-      <div class="open-explanation" *ngIf="isOpen">
-        {{ 'code-selector.open-explanation' | translate }}
+        <div class="uncertain-codes-section">
+          <div class="code-row"
+               [class.selected]="item.id === selectedCode"
+               *ngFor="let item of uncertainCodes; let i = index; let isLast = last"
+               (click)="onSelect(item.id)">
+            <div class="code-content">
+              <span class="uncertain-text">{{ item.label }}</span>
+            </div>
+          </div>
+        </div>
       </div>
 
-      <mat-form-field *ngIf="isOpen" appearance="outline" class="notes-field">
-        <mat-label>{{ 'code-selector.coder-notes' | translate }}</mat-label>
-        <textarea matInput
-          [(ngModel)]="coderNotes"
-          (input)="onNotesChanged()"
-          placeholder="{{ 'code-selector.coder-notes-placeholder' | translate }}"
-          rows="3"></textarea>
-      </mat-form-field>
+      <ng-template #noCodes>
+        <div class="hint">{{ 'code-selector.no-codes-found' | translate }} {{ variableId }}.</div>
+      </ng-template>
     </div>
 
-    <div *ngIf="selectableItems.length; else noCodes">
-      <mat-radio-group [(ngModel)]="selectedCode">
-        <div class="code-row" *ngFor="let item of selectableItems">
-          <mat-radio-button [value]="item.id" (change)="onSelect(item.id)">
-            <span class="code-info">
-              <span class="code-id">{{ item.id }}</span>
-              <span class="code-type">({{ item.type }})</span>
-              <span class="code-score" *ngIf="item.score !== undefined">{{ 'code-selector.score-label' | translate }} {{ item.score }}</span>
-            </span>
-          </mat-radio-button>
-          <div class="code-instruction" *ngIf="item.manualInstruction" [innerHTML]="getSafeHtml(item.manualInstruction)"></div>
-          <div class="missing-description" *ngIf="item.isMissing && item.description" [innerHTML]="getSafeHtml(item.description)"></div>
-        </div>
-      </mat-radio-group>
+    <div class="deselect-container fixed-section">
+      <button mat-button class="deselect-button" (click)="deselectAll()">Code-Auswahl entfernen</button>
     </div>
-    <ng-template #noCodes>
-      <div class="hint">{{ 'code-selector.no-codes-found' | translate }} {{ variableId }}.</div>
-    </ng-template>
+
+    <mat-form-field appearance="outline" class="notes-field fixed-section">
+      <textarea matInput
+        [(ngModel)]="coderNotes"
+        (input)="onNotesChanged()"
+        placeholder="{{ 'code-selector.coder-notes-placeholder' | translate }}"
+        rows="3"></textarea>
+    </mat-form-field>
   </mat-card-content>
 </mat-card>

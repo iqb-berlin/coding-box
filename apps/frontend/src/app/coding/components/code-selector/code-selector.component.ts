@@ -4,15 +4,13 @@ import {
 import { CommonModule } from '@angular/common';
 import { MatCardModule } from '@angular/material/card';
 import { MatListModule } from '@angular/material/list';
-import { MatRadioModule } from '@angular/material/radio';
 import { MatButtonModule } from '@angular/material/button';
-import { MatCheckboxModule } from '@angular/material/checkbox';
+import { MatDividerModule } from '@angular/material/divider';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
-import { MissingDto } from '../../../../../../../api-dto/coding/missings-profiles.dto';
 
 export interface CodingScheme {
   variableCodings: VariableCoding[];
@@ -50,9 +48,16 @@ export interface Rule {
   parameters: string[];
 }
 
+export interface UncertainDto {
+  id: string;
+  label: string;
+  description: string;
+  code: number;
+}
+
 export interface CodeSelectedEvent {
   variableId: string;
-  code: Code | MissingDto;
+  code: Code | UncertainDto | null;
 }
 
 export interface SelectableItem {
@@ -62,15 +67,13 @@ export interface SelectableItem {
   score?: number;
   manualInstruction?: string;
   description?: string;
-  isMissing: boolean;
   originalCode?: Code;
-  originalMissing?: MissingDto;
 }
 
 @Component({
   selector: 'app-code-selector',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatCardModule, MatListModule, MatRadioModule, MatButtonModule, MatCheckboxModule, MatFormFieldModule, MatInputModule, TranslateModule],
+  imports: [CommonModule, FormsModule, MatCardModule, MatListModule, MatButtonModule, MatDividerModule, MatFormFieldModule, MatInputModule, TranslateModule],
   templateUrl: './code-selector.component.html',
   styleUrls: ['./code-selector.component.css']
 })
@@ -78,7 +81,7 @@ export class CodeSelectorComponent implements OnChanges {
   @Input() codingScheme!: string | CodingScheme;
   @Input() variableId!: string;
   @Input() preSelectedCodeId: number | null = null;
-  @Input() missings: MissingDto[] = [];
+  @Input() missings: readonly unknown[] = [];
   @Input() isOpen: boolean = false;
   @Input() coderNotes: string = '';
 
@@ -126,20 +129,33 @@ export class CodeSelectorComponent implements OnChanges {
         type: code.type,
         score: code.score,
         manualInstruction: code.manualInstruction,
-        isMissing: false,
         originalCode: code
       }));
 
-      const missingItems: SelectableItem[] = this.missings.map(missing => ({
-        id: missing.code,
-        label: missing.label,
-        type: 'MISSING',
-        description: missing.description,
-        isMissing: true,
-        originalMissing: missing
-      }));
+      const uncertainOptions: SelectableItem[] = [
+        {
+          id: -1,
+          label: 'Code-Vergabe unsicher',
+          type: 'UNCERTAIN'
+        },
+        {
+          id: -2,
+          label: 'Neuer Code nötig',
+          type: 'UNCERTAIN'
+        },
+        {
+          id: -3,
+          label: 'Ungültig (Spaßantwort)',
+          type: 'UNCERTAIN'
+        },
+        {
+          id: -4,
+          label: 'Technische Probleme',
+          type: 'UNCERTAIN'
+        }
+      ];
 
-      this.selectableItems = [...codeItems, ...missingItems];
+      this.selectableItems = [...codeItems, ...uncertainOptions];
       setTimeout(() => this.selectPreSelectedCode(), 0);
     } else {
       this.selectableItems = [];
@@ -159,7 +175,7 @@ export class CodeSelectorComponent implements OnChanges {
       this.selectedCode = this.preSelectedCodeId;
       this.codeSelected.emit({
         variableId: this.variableId,
-        code: preSelectedItem.isMissing ? preSelectedItem.originalMissing! : preSelectedItem.originalCode!
+        code: this.createCodeOrUncertainDto(preSelectedItem)
       });
     }
   }
@@ -168,19 +184,50 @@ export class CodeSelectorComponent implements OnChanges {
     return this.sanitizer.bypassSecurityTrustHtml(instructions);
   }
 
+  private createCodeOrUncertainDto(item: SelectableItem): Code | UncertainDto {
+    if (item.originalCode) {
+      return item.originalCode;
+    }
+    if (item.type === 'UNCERTAIN') {
+      return {
+        id: `uncertain-${item.id}`,
+        label: item.label,
+        description: '',
+        code: item.id
+      };
+    }
+    throw new Error(`Invalid item type for conversion: ${item.type}`);
+  }
+
   onSelect(codeId: number): void {
     this.selectedCode = codeId;
     const selectedItem = this.selectableItems.find(item => item.id === codeId);
     if (selectedItem) {
       this.codeSelected.emit({
         variableId: this.variableId,
-        code: selectedItem.isMissing ? selectedItem.originalMissing! : selectedItem.originalCode!
+        code: this.createCodeOrUncertainDto(selectedItem)
       });
+
+      if (selectedItem.type === 'UNCERTAIN') {
+        this.openChanged.emit(true);
+      }
     }
   }
 
-  onOpenChanged(): void {
-    this.openChanged.emit(this.isOpen);
+  get regularCodes(): SelectableItem[] {
+    return this.selectableItems.filter(item => item.type !== 'UNCERTAIN');
+  }
+
+  get uncertainCodes(): SelectableItem[] {
+    return this.selectableItems.filter(item => item.type === 'UNCERTAIN');
+  }
+
+  deselectAll(): void {
+    this.selectedCode = null;
+    this.codeSelected.emit({
+      variableId: this.variableId,
+      code: null
+    });
   }
 
   onNotesChanged(): void {
