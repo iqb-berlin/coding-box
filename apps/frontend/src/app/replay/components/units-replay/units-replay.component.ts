@@ -38,7 +38,7 @@ export class UnitsReplayComponent {
       }
     } else {
       const currentIndex = data.currentUnitIndex;
-      const nextIndex = this.codingService.findNextUncodedUnitIndex(data, currentIndex + 1);
+      const nextIndex = this.codingService.getNextJumpableUnitIndex(data, currentIndex);
       if (nextIndex >= 0 && nextIndex < data.units.length) {
         this.unitChanged.emit(data.units[nextIndex]);
       }
@@ -77,8 +77,8 @@ export class UnitsReplayComponent {
 
     const hasSelection = this.codingService.selectedCodes.has(compositeKey) ||
                         this.codingService.openSelections.has(compositeKey);
-    const nextUncodedIndex = this.codingService.findNextUncodedUnitIndex(data, data.currentUnitIndex + 1);
-    return hasSelection && nextUncodedIndex >= 0;
+    const nextJumpableIndex = this.codingService.getNextJumpableUnitIndex(data, data.currentUnitIndex);
+    return hasSelection && nextJumpableIndex >= 0;
   }
 
   hasPreviousUnit(): boolean {

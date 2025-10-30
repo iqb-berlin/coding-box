@@ -478,4 +478,29 @@ export class ReplayCodingService {
 
     return this.selectedCodes.has(compositeKey) || this.openSelections.has(compositeKey);
   }
+
+  getNextJumpableUnitIndex(unitsData: UnitsReplay | null, fromIndex: number): number {
+    if (!unitsData) return -1;
+
+    const jumpableIndexes: number[] = [];
+
+    for (let i = 0; i < unitsData.units.length; i++) {
+      if (this.isUnitCoded(unitsData.units[i])) {
+        jumpableIndexes.push(i);
+      }
+    }
+    if (jumpableIndexes.length > 0) {
+      const lastCodedIndex = jumpableIndexes[jumpableIndexes.length - 1];
+      if (lastCodedIndex + 1 < unitsData.units.length) {
+        jumpableIndexes.push(lastCodedIndex + 1);
+      }
+    }
+    for (const idx of jumpableIndexes) {
+      if (idx > fromIndex) {
+        return idx;
+      }
+    }
+
+    return -1;
+  }
 }
