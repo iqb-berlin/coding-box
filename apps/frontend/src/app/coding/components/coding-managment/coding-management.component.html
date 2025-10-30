@@ -228,19 +228,27 @@
                             <span class="clickable-cell" (click)="showUnitXml(element.unit.name)" [matTooltip]="'coding-management.tooltips.show-unit-xml' | translate">
                               {{ element[column] }}
                             </span>
-                          } @else {
-                              @if (column === 'codedstatus') {
-                                {{ getStatusString(element[column]) }}
-                              } @else if (column === 'person_code') {
-                                {{ element.person_code || element.login_code }}
-                              } @else if (column === 'person_group') {
-                                {{ element.person_group || element.login_group }}
-                              } @else if (column === 'booklet_id') {
-                                {{ element.booklet_id }}
-                              } @else {
-                                {{ element[column] }}
-                              }
-                          }
+        } @else {
+            @if (column === 'codedstatus') {
+              {{ getStatusString(element[column]) }}
+            } @else if (column === 'code') {
+
+                {{ element[column] }}
+            } @else if (column === 'score') {
+                {{ element[column] }}
+
+            } @else if (column === 'person_code') {
+              {{ element.person_code || element.login_code }}
+            } @else if (column === 'person_login') {
+              {{ element.login_name }}
+            } @else if (column === 'person_group') {
+              {{ element.person_group || element.login_group }}
+            } @else if (column === 'booklet_id') {
+              {{ element.booklet_id }}
+            } @else {
+              {{ element[column] }}
+            }
+          }
                         }
                       </td>
                     </ng-container>
