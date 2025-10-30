@@ -1,0 +1,57 @@
+<div class="bulk-dialog-container">
+  <h2 class="dialog-title">Massen-Erstellung von Kodieraufträgen</h2>
+  <mat-divider></mat-divider>
+
+  <div class="dialog-content">
+    <p class="info-text">
+      Die folgenden {{ jobPreviews.length }} Kodieraufträge werden erstellt:
+    </p>
+
+    <div class="jobs-preview">
+      @for (job of jobPreviews; track job.variable.unitName + job.variable.variableId) {
+        <div class="job-preview-item">
+          <div class="job-header">
+            <span class="job-name">{{ job.name }}</span>
+          </div>
+          <div class="variable-info">
+            Variable: {{ job.variable.unitName }} → {{ job.variable.variableId }}
+          </div>
+        </div>
+      }
+    </div>
+
+    <div class="coders-section">
+      <h3>Kodierer-Zuweisung</h3>
+      <p>Auf alle Aufträge werden zugewiesen:</p>
+      <div class="coders-list">
+        @for (coder of data.selectedCoders; track coder.id) {
+          <mat-chip class="coder-chip">
+            <mat-icon>person</mat-icon>
+            {{ coder.displayName || coder.name }}
+          </mat-chip>
+        }
+      </div>
+    </div>
+
+    @if (data.selectedVariableBundles.length > 0) {
+      <div class="bundles-section">
+        <h3>Variablenbündel</h3>
+        <p>Folgende Variablenbündel werden allen Aufträgen zugewiesen:</p>
+        <div class="bundles-list">
+          @for (bundle of data.selectedVariableBundles; track bundle.id) {
+            <div class="bundle-item">
+              {{ bundle.name }} ({{ bundle.variables?.length || 0 }} Variablen)
+            </div>
+          }
+        </div>
+      </div>
+    }
+  </div>
+
+  <div class="dialog-actions">
+    <button mat-button (click)="onCancel()">Abbrechen</button>
+    <button mat-raised-button color="primary" (click)="onConfirm()">
+      {{ jobPreviews.length }} Kodieraufträge erstellen
+    </button>
+  </div>
+</div>

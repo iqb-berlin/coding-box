@@ -3,9 +3,11 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import {
-  FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators
+  FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators, ValidatorFn
 } from '@angular/forms';
-import { MatDialogRef, MAT_DIALOG_DATA, MatDialogModule } from '@angular/material/dialog';
+import {
+  MatDialogRef, MAT_DIALOG_DATA, MatDialogModule, MatDialog
+} from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
@@ -31,6 +33,7 @@ import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
 import { CoderService } from '../../services/coder.service';
 import { CodingJobService } from '../../services/coding-job.service';
+import { CodingJobBulkCreationDialogComponent, BulkCreationData } from '../coding-job-bulk-creation-dialog/coding-job-bulk-creation-dialog.component';
 
 export interface CodingJobDefinitionDialogData {
   codingJob?: CodingJob;
@@ -73,6 +76,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
   private coderService = inject(CoderService);
   private snackBar = inject(MatSnackBar);
   private codingJobService = inject(CodingJobService);
+  private matDialog = inject(MatDialog);
 
   codingJobForm!: FormGroup;
   isLoading = false;
@@ -101,11 +105,6 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
   isLoadingVariableAnalysis = false;
   totalVariableAnalysisRecords = 0;
 
-  // Missings profiles
-  missingsProfiles: { label: string; id: number }[] = [];
-  selectedMissingsProfileId: number | null = null;
-  isLoadingMissingsProfiles = false;
-
   // Filters
   unitNameFilter = '';
   variableIdFilter = '';
@@ -121,10 +120,8 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
     this.loadCodingIncompleteVariables();
     this.loadVariableBundles();
     this.loadAvailableCoders();
-    this.loadMissingsProfiles();
     if (this.data.isEdit && this.data.codingJob?.id) {
       this.loadCoders(this.data.codingJob.id);
-      this.selectedMissingsProfileId = this.data.codingJob.missings_profile_id || null;
     }
 
     this.dataSource.filterPredicate = (row, filter: string): boolean => {
@@ -184,11 +181,16 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
   }
 
   initForm(): void {
-    this.codingJobForm = this.fb.group({
-      name: [this.data.codingJob?.name || '', Validators.required],
-      description: [this.data.codingJob?.description || ''],
-      status: [this.data.codingJob?.status || 'pending', Validators.required]
-    });
+    const formFields: Record<string, [string, ValidatorFn[]]> = {
+      name: [this.data.codingJob?.name || '', [Validators.required]],
+      description: [this.data.codingJob?.description || '', []]
+    };
+
+    if (this.data.isEdit) {
+      formFields.status = [this.data.codingJob?.status || 'pending', [Validators.required]];
+    }
+
+    this.codingJobForm = this.fb.group(formFields);
 
     const originallyAssigned = this.data.codingJob?.assignedVariables ?? this.data.codingJob?.variables;
 
@@ -285,25 +287,6 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
     }
   }
 
-  loadMissingsProfiles(): void {
-    this.isLoadingMissingsProfiles = true;
-    const workspaceId = this.appService.selectedWorkspaceId;
-
-    if (workspaceId) {
-      this.backendService.getMissingsProfiles(workspaceId).subscribe({
-        next: profiles => {
-          this.missingsProfiles = profiles;
-          this.isLoadingMissingsProfiles = false;
-        },
-        error: () => {
-          this.isLoadingMissingsProfiles = false;
-        }
-      });
-    } else {
-      this.isLoadingMissingsProfiles = false;
-    }
-  }
-
   applyFilter(): void {
     this.loadCodingIncompleteVariables(this.unitNameFilter);
     this.dataSource.filter = JSON.stringify({
@@ -365,6 +348,10 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
     return bundle.variables.length;
   }
 
+  getCodingJobCount(): number {
+    return this.selectedVariables.selected.length;
+  }
+
   isAllSelected(): boolean {
     const numSelected = this.selectedVariables.selected.length;
     const numRows = this.dataSource.data.length;
@@ -393,11 +380,25 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
     }
   }
 
-  onSubmit(): void {
+  async onSubmit(): Promise<void> {
     if (this.codingJobForm.invalid) {
       return;
     }
 
+    if (this.data.isEdit && this.data.codingJob?.id) {
+      this.submitEdit();
+      return;
+    }
+
+    if (this.selectedVariables.selected.length > 1) {
+      this.openBulkCreationDialog();
+      return;
+    }
+
+    this.submitCreate();
+  }
+
+  private submitEdit(): void {
     this.isSaving = true;
 
     const workspaceId = this.appService.selectedWorkspaceId;
@@ -418,69 +419,169 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
       variables: this.selectedVariables.selected,
       variableBundles: this.selectedVariableBundles.selected,
       assignedVariables: this.selectedVariables.selected,
-      assignedVariableBundles: this.selectedVariableBundles.selected,
-      missings_profile_id: this.selectedMissingsProfileId || undefined
+      assignedVariableBundles: this.selectedVariableBundles.selected
     };
 
-    if (this.data.isEdit && this.data.codingJob?.id) {
-      this.backendService.updateCodingJob(workspaceId, this.data.codingJob.id, codingJob).subscribe({
-        next: updatedJob => {
-          if (updatedJob?.id && selectedCoderIds.length > 0) {
-            const assignCalls = selectedCoderIds.map(id => this.codingJobService.assignCoder(updatedJob.id!, id));
-            forkJoin(assignCalls).subscribe({
-              next: results => {
-                const lastJob = results.filter(Boolean).pop() || { ...updatedJob, assignedCoders: selectedCoderIds };
-                this.isSaving = false;
-                this.snackBar.open('Coding job updated successfully', 'Close', { duration: 3000 });
-                this.dialogRef.close(lastJob);
-              },
-              error: () => {
-                this.isSaving = false;
-                this.snackBar.open('Coding job updated, but assigning coders failed', 'Close', { duration: 5000 });
-                this.dialogRef.close({ ...updatedJob, assignedCoders: selectedCoderIds });
-              }
-            });
-          } else {
-            this.isSaving = false;
-            this.snackBar.open('Coding job updated successfully', 'Close', { duration: 3000 });
-            this.dialogRef.close(updatedJob);
-          }
-        },
-        error: error => {
+    this.backendService.updateCodingJob(workspaceId, this.data.codingJob!.id!, codingJob).subscribe({
+      next: updatedJob => {
+        if (updatedJob?.id && selectedCoderIds.length > 0) {
+          const assignCalls = selectedCoderIds.map(id => this.codingJobService.assignCoder(updatedJob.id!, id));
+          forkJoin(assignCalls).subscribe({
+            next: results => {
+              const lastJob = results.filter(Boolean).pop() || { ...updatedJob, assignedCoders: selectedCoderIds };
+              this.isSaving = false;
+              this.snackBar.open('Coding job updated successfully', 'Close', { duration: 3000 });
+              this.dialogRef.close(lastJob);
+            },
+            error: () => {
+              this.isSaving = false;
+              this.snackBar.open('Coding job updated, but assigning coders failed', 'Close', { duration: 5000 });
+              this.dialogRef.close({ ...updatedJob, assignedCoders: selectedCoderIds });
+            }
+          });
+        } else {
           this.isSaving = false;
-          this.snackBar.open(`Error updating coding job: ${error.message}`, 'Close', { duration: 5000 });
+          this.snackBar.open('Coding job updated successfully', 'Close', { duration: 3000 });
+          this.dialogRef.close(updatedJob);
         }
-      });
-    } else {
-      this.backendService.createCodingJob(workspaceId, codingJob).subscribe({
-        next: createdJob => {
-          if (createdJob?.id && selectedCoderIds.length > 0) {
-            const assignCalls = selectedCoderIds.map(id => this.codingJobService.assignCoder(createdJob.id!, id));
-            forkJoin(assignCalls).subscribe({
-              next: results => {
-                const lastJob = results.filter(Boolean).pop() || { ...createdJob, assignedCoders: selectedCoderIds };
-                this.isSaving = false;
-                this.snackBar.open('Coding job created successfully', 'Close', { duration: 3000 });
-                this.dialogRef.close(lastJob);
-              },
-              error: () => {
-                this.isSaving = false;
-                this.snackBar.open('Job created, but assigning coders failed', 'Close', { duration: 5000 });
-                this.dialogRef.close({ ...createdJob, assignedCoders: selectedCoderIds });
-              }
-            });
-          } else {
-            this.isSaving = false;
-            this.snackBar.open('Coding job created successfully', 'Close', { duration: 3000 });
-            this.dialogRef.close(createdJob);
-          }
-        },
-        error: error => {
-          this.isSaving = false;
-          this.snackBar.open(`Error creating coding job: ${error.message}`, 'Close', { duration: 5000 });
-        }
-      });
+      },
+      error: error => {
+        this.isSaving = false;
+        this.snackBar.open(`Error updating coding job: ${error.message}`, 'Close', { duration: 5000 });
+      }
+    });
+  }
+
+  private submitCreate(): void {
+    this.isSaving = true;
+
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      this.snackBar.open('No workspace selected', 'Close', { duration: 3000 });
+      this.isSaving = false;
+      return;
     }
+
+    const selectedCoderIds = this.selectedCoders.selected.map(c => c.id);
+
+    const codingJob: CodingJob = {
+      id: 0,
+      ...this.codingJobForm.value,
+      created_at: new Date(),
+      updated_at: new Date(),
+      assignedCoders: selectedCoderIds,
+      variables: this.selectedVariables.selected,
+      variableBundles: this.selectedVariableBundles.selected,
+      assignedVariables: this.selectedVariables.selected,
+      assignedVariableBundles: this.selectedVariableBundles.selected
+    };
+
+    this.backendService.createCodingJob(workspaceId, codingJob).subscribe({
+      next: createdJob => {
+        if (createdJob?.id && selectedCoderIds.length > 0) {
+          const assignCalls = selectedCoderIds.map(id => this.codingJobService.assignCoder(createdJob.id!, id));
+          forkJoin(assignCalls).subscribe({
+            next: results => {
+              const lastJob = results.filter(Boolean).pop() || { ...createdJob, assignedCoders: selectedCoderIds };
+              this.isSaving = false;
+              this.snackBar.open('Coding job created successfully', 'Close', { duration: 3000 });
+              this.dialogRef.close(lastJob);
+            },
+            error: () => {
+              this.isSaving = false;
+              this.snackBar.open('Job created, but assigning coders failed', 'Close', { duration: 5000 });
+              this.dialogRef.close({ ...createdJob, assignedCoders: selectedCoderIds });
+            }
+          });
+        } else {
+          this.isSaving = false;
+          this.snackBar.open('Coding job created successfully', 'Close', { duration: 3000 });
+          this.dialogRef.close(createdJob);
+        }
+      },
+      error: error => {
+        this.isSaving = false;
+        this.snackBar.open(`Error creating coding job: ${error.message}`, 'Close', { duration: 5000 });
+      }
+    });
+  }
+
+  private async openBulkCreationDialog(): Promise<void> {
+    const dialogData: BulkCreationData = {
+      baseName: this.codingJobForm.value.name,
+      description: this.codingJobForm.value.description,
+      selectedVariables: this.selectedVariables.selected,
+      selectedVariableBundles: this.selectedVariableBundles.selected,
+      selectedCoders: this.selectedCoders.selected
+    };
+
+    const dialogRef = this.matDialog.open(CodingJobBulkCreationDialogComponent, {
+      width: '700px',
+      data: dialogData
+    });
+
+    const result = await dialogRef.afterClosed().toPromise();
+    if (result === true) {
+      this.createBulkJobs(dialogData);
+    }
+  }
+
+  private async createBulkJobs(data: BulkCreationData): Promise<void> {
+    this.isSaving = true;
+
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      this.snackBar.open('No workspace selected', 'Close', { duration: 3000 });
+      this.isSaving = false;
+      return;
+    }
+
+    const selectedCoderIds = data.selectedCoders.map(c => c.id);
+    let successCount = 0;
+    let errorCount = 0;
+
+    for (const variable of data.selectedVariables) {
+      const jobName = `${data.baseName}_${variable.unitName}_${variable.variableId}`;
+
+      const codingJob: CodingJob = {
+        id: 0,
+        workspace_id: workspaceId,
+        name: jobName,
+        description: data.description,
+        status: 'pending',
+        created_at: new Date(),
+        updated_at: new Date(),
+        assignedCoders: selectedCoderIds,
+        variables: [variable],
+        variableBundles: data.selectedVariableBundles,
+        assignedVariables: [variable],
+        assignedVariableBundles: data.selectedVariableBundles
+      };
+
+      try {
+        const createdJob = await this.backendService.createCodingJob(workspaceId, codingJob).toPromise();
+
+        if (createdJob?.id && selectedCoderIds.length > 0) {
+          await forkJoin(
+            selectedCoderIds.map(id => this.codingJobService.assignCoder(createdJob.id!, id))
+          ).toPromise();
+        }
+
+        successCount += 1;
+      } catch (error) {
+        errorCount += 1;
+      }
+    }
+
+    this.isSaving = false;
+
+    if (errorCount === 0) {
+      this.snackBar.open(`${successCount} coding jobs created successfully`, 'Close', { duration: 3000 });
+    } else {
+      this.snackBar.open(`${successCount} jobs created, ${errorCount} failed`, 'Close', { duration: 5000 });
+    }
+
+    this.dialogRef.close();
   }
 
   onCancel(): void {
