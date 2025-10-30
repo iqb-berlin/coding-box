@@ -34,12 +34,10 @@ export class UnitsReplayComponent {
       return;
     }
 
-    const nextIndex = data.currentUnitIndex + 1;
-    if (nextIndex < data.units.length) {
-      const nextUnit = data.units[nextIndex];
-      if (!this.codingService.isUnitCoded(nextUnit)) {
-        this.unitChanged.emit(nextUnit);
-      }
+    const currentIndex = data.currentUnitIndex;
+    const nextIndex = this.codingService.findNextUncodedUnitIndex(data, currentIndex + 1);
+    if (nextIndex >= 0 && nextIndex < data.units.length) {
+      this.unitChanged.emit(data.units[nextIndex]);
     }
   }
 
@@ -58,13 +56,21 @@ export class UnitsReplayComponent {
 
   hasNextUnit(): boolean {
     const data = this.unitsData();
-    if (!data) return false;
+    if (!data || !data.units.length) return false;
 
-    const nextIndex = data.currentUnitIndex + 1;
-    if (nextIndex >= data.units.length) return false;
+    const currentUnit = data.units[data.currentUnitIndex];
+    if (!currentUnit) return false;
 
-    const nextUnit = data.units[nextIndex];
-    return !this.codingService.isUnitCoded(nextUnit);
+    const compositeKey = this.codingService.generateCompositeKey(
+      currentUnit.testPerson || '',
+      currentUnit.name,
+      currentUnit.variableId || ''
+    );
+
+    const hasSelection = this.codingService.selectedCodes.has(compositeKey) ||
+                        this.codingService.openSelections.has(compositeKey);
+    const nextUncodedIndex = this.codingService.findNextUncodedUnitIndex(data, data.currentUnitIndex + 1);
+    return hasSelection && nextUncodedIndex >= 0;
   }
 
   hasPreviousUnit(): boolean {
