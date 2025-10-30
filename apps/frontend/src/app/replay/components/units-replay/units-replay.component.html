@@ -4,13 +4,13 @@
       <span class="nav-icon">←</span> Vorherige Aufgabe
     </button>
 
-    @if (!isCodingActive()) {
-      <div class="unit-position">
-        <span class="current-position">{{ (unitsData()?.currentUnitIndex || 0) + 1 }}</span>
-        <span class="position-separator">/</span>
-        <span class="total-units">{{ totalUnits }}</span>
-      </div>
-    } @else {
+    <div class="unit-position">
+      <span class="current-position">{{ (unitsData()?.currentUnitIndex || 0) + 1 }}</span>
+      <span class="position-separator">/</span>
+      <span class="total-units">{{ totalUnits }}</span>
+    </div>
+
+    @if (isCodingActive()) {
       <div class="coding-progress">
         <div class="progress-info">
           <span class="progress-text">{{ 'replay.coding-progress' | translate }}</span>
