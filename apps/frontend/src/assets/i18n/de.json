@@ -704,7 +704,10 @@
       "variableid": "Variable",
       "value": "Wert",
       "codedstatus": "Kodierstatus",
+      "code": "Code",
+      "score": "Bewertung",
       "person-code": "Person-Code",
+      "person-login": "Person-Login",
       "person-group": "Person-Gruppe",
       "booklet-id": "Booklet-ID",
       "actions": "Aktionen"

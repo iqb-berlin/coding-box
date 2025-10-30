@@ -111,7 +111,7 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
 
   data: Success[] = [];
   dataSource = new MatTableDataSource<Success>(this.data);
-  displayedColumns: string[] = ['unitname', 'variableid', 'value', 'codedstatus', 'person_code', 'person_group', 'booklet_id', 'actions'];
+  displayedColumns: string[] = ['unitname', 'variableid', 'value', 'codedstatus', 'code', 'score', 'person_code', 'person_login', 'person_group', 'booklet_id', 'actions'];
   isLoading = false;
   isFilterLoading = false;
   isLoadingStatistics = false;
@@ -160,7 +160,10 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
       variableid: 'coding-management.columns.variableid',
       value: 'coding-management.columns.value',
       codedstatus: 'coding-management.columns.codedstatus',
+      code: 'coding-management.columns.code',
+      score: 'coding-management.columns.score',
       person_code: 'coding-management.columns.person-code',
+      person_login: 'coding-management.columns.person-login',
       person_group: 'coding-management.columns.person-group',
       booklet_id: 'coding-management.columns.booklet-id',
       actions: 'coding-management.columns.actions'
@@ -415,8 +418,8 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
           status: item.status || '',
           value: item.value || '',
           subform: '',
-          code: item.code?.toString() || null,
-          score: item.score?.toString() || null,
+          code: item.code,
+          score: item.score,
           unit: { name: item.unitName },
           codedstatus: item.codedStatus || '',
           unitname: item.unitName || '',
