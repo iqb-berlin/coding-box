@@ -1,7 +1,7 @@
-<div class="replay-container" [class.print-mode]="isPrintMode" [class.booklet-mode]="isBookletMode" (window:keydown)="onKeyDown($any($event))">
+<div class="replay-container" [class.print-mode]="isPrintMode" [class.booklet-mode]="isCodingMode" (window:keydown)="onKeyDown($any($event))">
   <cb-spinner [isLoaded]="isLoaded"></cb-spinner>
 
-  @if (isBookletMode || isBookletReplayMode) {
+  @if (isCodingMode || isBookletReplayMode) {
     @if (isBookletReplayMode && !!player && unitDef) {
       <coding-box-units-replay
         [unitsData]="unitsData"
@@ -26,7 +26,7 @@
         }
       </div>
 
-      @if (isBookletMode && codingService.codingScheme && codingService.currentVariableId) {
+      @if (isCodingMode && codingService.codingScheme && codingService.currentVariableId) {
         <div class="code-selector-container">
           <app-code-selector
             [codingScheme]="codingService.codingScheme"
