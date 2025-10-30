@@ -27,7 +27,7 @@ import { AppService } from '../../../services/app.service';
 import { BackendService } from '../../../services/backend.service';
 
 import { CodingJob, Variable, VariableBundle } from '../../models/coding-job.model';
-import { CodingJobDialogComponent } from '../coding-job-dialog/coding-job-dialog.component';
+import { CodingJobDefinitionDialogComponent, CodingJobDefinitionDialogData } from '../coding-job-definition-dialog/coding-job-definition-dialog.component';
 import { ConfirmDialogComponent } from '../../../shared/confirm-dialog/confirm-dialog.component';
 import { Coder } from '../../models/coder.model';
 import { CoderService } from '../../services/coder.service';
@@ -320,12 +320,12 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
   }
 
   createCodingJob(): void {
-    const dialogRef = this.dialog.open(CodingJobDialogComponent, {
+    const dialogRef = this.dialog.open(CodingJobDefinitionDialogComponent, {
       width: '900px',
       data: {
         isEdit: false,
         preloadedVariables: this.preloadedVariables || []
-      }
+      } as CodingJobDefinitionDialogData
     });
 
     dialogRef.afterClosed().subscribe(result => {
@@ -351,13 +351,13 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
   editCodingJob(job: CodingJob): void {
     const selectedJob = job;
 
-    const dialogRef = this.dialog.open(CodingJobDialogComponent, {
+    const dialogRef = this.dialog.open(CodingJobDefinitionDialogComponent, {
       width: '900px',
       data: {
         codingJob: selectedJob,
         isEdit: true,
         preloadedVariables: this.preloadedVariables || []
-      }
+      } as CodingJobDefinitionDialogData
     });
 
     dialogRef.afterClosed().subscribe(editResult => {

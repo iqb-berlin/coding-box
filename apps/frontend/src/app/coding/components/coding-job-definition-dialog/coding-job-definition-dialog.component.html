@@ -145,12 +145,6 @@
                       <div class="coder-card"
                            [class.selected]="selectedCoders.isSelected(coder)"
                            (click)="selectedCoders.toggle(coder)">
-                        <div class="coder-card-header">
-                          <mat-checkbox [checked]="selectedCoders.isSelected(coder)"
-                                        (click)="$event.stopPropagation()"
-                                        (change)="$event ? selectedCoders.toggle(coder) : null">
-                          </mat-checkbox>
-                        </div>
                         <div class="coder-avatar">
                           <mat-icon class="avatar-icon">person</mat-icon>
                         </div>
@@ -165,7 +159,6 @@
                           @if (coder.email) {
                             <p class="coder-email">{{ coder.email }}</p>
                           }
-                          <div class="coder-id">ID: {{ coder.id }}</div>
                         </div>
                       </div>
                     }
@@ -244,15 +237,11 @@
                          [class.selected]="selectedVariables.isSelected(variable)"
                          (click)="selectedVariables.toggle(variable)">
                       <div class="variable-card-header">
-                        <mat-checkbox [checked]="selectedVariables.isSelected(variable)"
-                                      (click)="$event.stopPropagation()"
-                                      (change)="$event ? selectedVariables.toggle(variable) : null">
-                        </mat-checkbox>
                         <div class="variable-identifiers">
                           <div class="variable-id">
                             {{ variable.unitName }}_{{ variable.variableId }}
                             @if (variable.responseCount != null) {
-                              <span class="response-count">({{ variable.responseCount }} Antworten)</span>
+                              <span class="response-count">({{ variable.responseCount }})</span>
                             }
                             @if (data.isEdit && isVariableOriginallyAssigned(variable)) {
                               <mat-icon class="assigned-indicator" matTooltip="Bereits diesem Kodierjob zugewiesen" matTooltipPosition="above">check_circle</mat-icon>
@@ -314,10 +303,6 @@
                          [class.selected]="selectedVariableBundles.isSelected(bundle)"
                          (click)="selectedVariableBundles.toggle(bundle)">
                       <div class="bundle-card-header">
-                        <mat-checkbox [checked]="selectedVariableBundles.isSelected(bundle)"
-                                      (click)="$event.stopPropagation()"
-                                      (change)="$event ? selectedVariableBundles.toggle(bundle) : null">
-                        </mat-checkbox>
                         <h3 class="bundle-name">
                           {{ bundle.name }}
                           @if (data.isEdit && isBundleOriginallyAssigned(bundle)) {
@@ -325,7 +310,7 @@
                           }
                         </h3>
                       </div>
-                      <div class="bundle-card-content">
+                        <div class="bundle-card-content">
                         <p class="bundle-description">{{ bundle.description || 'Keine Beschreibung' }}</p>
                         <div class="bundle-stats">
                           <span class="variable-count">{{ getVariableCount(bundle) }} Variablen</span>
@@ -365,15 +350,15 @@
                   <h4>Vorschau der ausgewählten Variablenbündel</h4>
                   <mat-accordion>
                     @for (bundle of selectedVariableBundles.selected; track bundle.id) {
-                      <mat-expansion-panel>
-                        <mat-expansion-panel-header>
-                          <mat-panel-title>
-                            {{ bundle.name }}
-                          </mat-panel-title>
-                          <mat-panel-description>
-                            {{ getVariableCount(bundle) }} Variablen
-                          </mat-panel-description>
-                        </mat-expansion-panel-header>
+                        <mat-expansion-panel>
+                          <mat-expansion-panel-header>
+                            <mat-panel-title>
+                              {{ bundle.name }}
+                            </mat-panel-title>
+                            <mat-panel-description>
+                              {{ getVariableCount(bundle) }} Variablen
+                            </mat-panel-description>
+                          </mat-expansion-panel-header>
 
                         <table class="preview-table">
                           <thead>

@@ -1319,14 +1319,14 @@ export class WorkspaceCodingService {
   async getCodingIncompleteVariables(
     workspaceId: number,
     unitName?: string
-  ): Promise<{ unitName: string; variableId: string }[]> {
+  ): Promise<{ unitName: string; variableId: string; responseCount: number }[]> {
     try {
       if (unitName) {
         this.logger.log(`Querying CODING_INCOMPLETE variables for workspace ${workspaceId} and unit ${unitName} (not cached)`);
         return await this.fetchCodingIncompleteVariablesFromDb(workspaceId, unitName);
       }
       const cacheKey = this.generateIncompleteVariablesCacheKey(workspaceId);
-      const cachedResult = await this.cacheService.get<{ unitName: string; variableId: string }[]>(cacheKey);
+      const cachedResult = await this.cacheService.get<{ unitName: string; variableId: string; responseCount: number }[]>(cacheKey);
       if (cachedResult) {
         this.logger.log(`Retrieved ${cachedResult.length} CODING_INCOMPLETE variables from cache for workspace ${workspaceId}`);
         return cachedResult;
@@ -1340,7 +1340,6 @@ export class WorkspaceCodingService {
       } else {
         this.logger.warn(`Failed to cache CODING_INCOMPLETE variables for workspace ${workspaceId}`);
       }
-
       return result;
     } catch (error) {
       this.logger.error(`Error getting CODING_INCOMPLETE variables: ${error.message}`, error.stack);
@@ -1351,11 +1350,11 @@ export class WorkspaceCodingService {
   private async fetchCodingIncompleteVariablesFromDb(
     workspaceId: number,
     unitName?: string
-  ): Promise<{ unitName: string; variableId: string }[]> {
+  ): Promise<{ unitName: string; variableId: string; responseCount: number }[]> {
     const queryBuilder = this.responseRepository.createQueryBuilder('response')
-      .distinct()
       .select('unit.name', 'unitName')
       .addSelect('response.variableid', 'variableId')
+      .addSelect('COUNT(response.id)', 'responseCount')
       .leftJoin('response.unit', 'unit')
       .leftJoin('unit.booklet', 'booklet')
       .leftJoin('booklet.person', 'person')
@@ -1365,6 +1364,10 @@ export class WorkspaceCodingService {
     if (unitName) {
       queryBuilder.andWhere('unit.name = :unitName', { unitName });
     }
+
+    queryBuilder
+      .groupBy('unit.name')
+      .addGroupBy('response.variableid');
 
     const rawResults = await queryBuilder.getRawMany();
 
@@ -1382,10 +1385,11 @@ export class WorkspaceCodingService {
 
     const result = filteredResult.map(row => ({
       unitName: row.unitName,
-      variableId: row.variableId
+      variableId: row.variableId,
+      responseCount: parseInt(row.responseCount, 10)
     }));
 
-    this.logger.log(`Found ${rawResults.length} CODING_INCOMPLETE variables, filtered to ${filteredResult.length} valid variables${unitName ? ` for unit ${unitName}` : ''}`);
+    this.logger.log(`Found ${rawResults.length} CODING_INCOMPLETE variable groups, filtered to ${filteredResult.length} valid variables${unitName ? ` for unit ${unitName}` : ''}`);
 
     return result;
   }
