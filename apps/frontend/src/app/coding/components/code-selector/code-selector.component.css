@@ -118,6 +118,60 @@
   resize: none;
 }
 
+/* Enhanced Progress Section */
+.progress-info {
+  text-align: center;
+  padding: 12px 8px;
+  margin-bottom: 12px;
+  background: rgba(0, 0, 0, 0.04);
+  border-radius: 8px;
+  font-size: 14px;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.progress-text {
+  font-weight: 500;
+  color: rgba(0, 0, 0, 0.87);
+}
+
+.progress-numbers {
+  font-weight: 600;
+  color: #1976d2;
+  margin: 0 8px;
+}
+
+.progress-percentage {
+  color: rgba(0, 0, 0, 0.6);
+}
+
+.progress-open {
+  display: block;
+  margin-top: 4px;
+  color: #f57c00;
+  font-size: 13px;
+}
+
+.custom-progress-bar {
+  margin-bottom: 16px;
+  height: 10px;
+  border-radius: 5px;
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.custom-progress-bar ::ng-deep .mat-mdc-progress-bar-primary-bar {
+  border-radius: 5px;
+}
+
+/* Progress colors are dynamically set via Material theme colors */
+
+.progress-actions {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 8px 0;
+}
+
 .selector-content {
   display: flex;
   flex-direction: column;

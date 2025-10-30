@@ -8,6 +8,9 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
+import { MatIconModule } from '@angular/material/icon';
+import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
@@ -73,7 +76,7 @@ export interface SelectableItem {
 @Component({
   selector: 'app-code-selector',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatCardModule, MatListModule, MatButtonModule, MatDividerModule, MatFormFieldModule, MatInputModule, TranslateModule],
+  imports: [CommonModule, FormsModule, MatCardModule, MatListModule, MatButtonModule, MatDividerModule, MatFormFieldModule, MatInputModule, MatIconModule, MatTooltipModule, MatProgressBarModule, TranslateModule],
   templateUrl: './code-selector.component.html',
   styleUrls: ['./code-selector.component.css']
 })
@@ -84,14 +87,25 @@ export class CodeSelectorComponent implements OnChanges {
   @Input() missings: readonly unknown[] = [];
   @Input() isOpen: boolean = false;
   @Input() coderNotes: string = '';
+  @Input() showProgress: boolean = false;
+  @Input() completedCount: number = 0;
+  @Input() totalUnits: number = 0;
+  @Input() progressPercentage: number = 0;
+  @Input() openCount: number = 0;
+  @Input() isCodingActive: boolean = false;
+  @Input() hasCodingJob: boolean = false;
+  @Input() isCodingJobCompleted: boolean = false;
+  @Input() isPausingJob: boolean = false;
 
   @Output() codeSelected = new EventEmitter<CodeSelectedEvent>();
   @Output() openChanged = new EventEmitter<boolean>();
   @Output() notesChanged = new EventEmitter<string>();
+  @Output() openNavigateDialog = new EventEmitter<void>();
+  @Output() openCommentDialog = new EventEmitter<void>();
+  @Output() pauseCodingJob = new EventEmitter<void>();
 
   selectableItems: SelectableItem[] = [];
   selectedCode: number | null = null;
-
   constructor(private sanitizer: DomSanitizer) {}
 
   ngOnChanges(changes: SimpleChanges): void {
@@ -228,6 +242,18 @@ export class CodeSelectorComponent implements OnChanges {
       variableId: this.variableId,
       code: null
     });
+  }
+
+  onNavigateClick(): void {
+    this.openNavigateDialog.emit();
+  }
+
+  onCommentClick(): void {
+    this.openCommentDialog.emit();
+  }
+
+  onPauseClick(): void {
+    this.pauseCodingJob.emit();
   }
 
   onNotesChanged(): void {

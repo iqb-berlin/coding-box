@@ -22,11 +22,7 @@ export class UnitsReplayComponent {
   private codingService = inject(ReplayCodingService);
 
   unitsData = input<UnitsReplay | null>(null);
-  isCodingActive = input<boolean>(false);
   unitChanged = output<UnitsReplayUnit>();
-  openNavigateDialog = output<void>();
-  openCommentDialog = output<void>();
-  pauseCodingJob = output<void>();
 
   nextUnit(): void {
     const data = this.unitsData();
@@ -78,42 +74,6 @@ export class UnitsReplayComponent {
     if (!data) return false;
 
     return data.currentUnitIndex > 0;
-  }
-
-  getCompletedCount(): number {
-    return this.codingService.getCompletedCount(this.unitsData());
-  }
-
-  getOpenCount(): number {
-    return this.codingService.getOpenCount(this.unitsData());
-  }
-
-  getProgressPercentage(): number {
-    return this.codingService.getProgressPercentage(this.unitsData());
-  }
-
-  onNavigateClick(): void {
-    this.openNavigateDialog.emit();
-  }
-
-  onCommentClick(): void {
-    this.openCommentDialog.emit();
-  }
-
-  onPauseClick(): void {
-    this.pauseCodingJob.emit();
-  }
-
-  get isPausingJob(): boolean {
-    return this.codingService.isPausingJob;
-  }
-
-  get isCodingJobCompleted(): boolean {
-    return this.codingService.isCodingJobCompleted;
-  }
-
-  hasCodingJob(): boolean {
-    return !!this.codingService.codingJobId;
   }
 
   get totalUnits(): number {

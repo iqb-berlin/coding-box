@@ -3,6 +3,7 @@ import { TranslateService } from '@ngx-translate/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { firstValueFrom } from 'rxjs';
 import { BackendService } from '../../services/backend.service';
+// eslint-disable-next-line import/no-cycle
 import {
   Code, VariableCoding, CodingScheme, CodeSelectedEvent
 } from '../../coding/components/code-selector/code-selector.component';
@@ -269,7 +270,6 @@ export class ReplayCodingService {
     const compositeKey = this.generateCompositeKey(testPerson, unitId, this.currentVariableId);
     if (isOpen) {
       this.openSelections.add(compositeKey);
-      // Don't clear selectedCodes - allow both open and selected code states
       this.saveOpenSelection(workspaceId, testPerson, unitId, this.currentVariableId, true);
     } else {
       this.openSelections.delete(compositeKey);
@@ -298,25 +298,11 @@ export class ReplayCodingService {
 
   checkCodingJobCompletion(unitsData: UnitsReplay | null): void {
     if (!unitsData || !unitsData.units || unitsData.units.length === 0) return;
-
     const totalReplays = unitsData.units.length;
     const completedReplays = this.getCompletedCount(unitsData);
-
-    const progressPercentage = Math.round((completedReplays / totalReplays) * 100);
-    if (completedReplays > 0 && completedReplays % Math.ceil(totalReplays / 4) === 0) {
-      this.showProgressNotification(progressPercentage, completedReplays, totalReplays);
-    }
     if (completedReplays === totalReplays) {
       this.isCodingJobCompleted = true;
     }
-  }
-
-  showProgressNotification(percentage: number, completed: number, total: number): void {
-    this.snackBar.open(
-      this.translate.instant('replay.coding-progress-message', { completed, total, percentage }),
-      this.translate.instant('replay.close'),
-      { duration: 3000, panelClass: ['snackbar-info'] }
-    );
   }
 
   getCompletedCount(unitsData: UnitsReplay | null): number {
@@ -413,45 +399,26 @@ export class ReplayCodingService {
     if (!jobId || !workspaceId) return;
 
     this.isPausingJob = true;
-    this.snackBar.open(this.translate.instant('replay.pausing-coding-job'), '', { duration: 2000 });
 
     try {
       await this.updateCodingJobStatus(workspaceId, jobId, 'paused');
       this.isCodingJobPaused = true;
       this.isPausingJob = false;
-      this.snackBar.open(this.translate.instant('replay.coding-job-paused-successfully'), this.translate.instant('replay.close'), {
-        duration: 3000,
-        panelClass: ['snackbar-success']
-      });
     } catch (error) {
       this.isPausingJob = false;
-      this.snackBar.open(this.translate.instant('replay.failed-to-pause-coding-job'), this.translate.instant('replay.close'), {
-        duration: 3000,
-        panelClass: ['snackbar-error']
-      });
     }
   }
 
   async resumeCodingJob(workspaceId: number, jobId: number): Promise<void> {
     if (!jobId || !workspaceId) return;
-
     this.isResumingJob = true;
-    this.snackBar.open(this.translate.instant('replay.resuming-coding-job'), '', { duration: 2000 });
 
     try {
       await this.updateCodingJobStatus(workspaceId, jobId, 'active');
       this.isCodingJobPaused = false;
       this.isResumingJob = false;
-      this.snackBar.open(this.translate.instant('replay.coding-job-resumed-successfully'), this.translate.instant('replay.close'), {
-        duration: 3000,
-        panelClass: ['snackbar-success']
-      });
     } catch (error) {
       this.isResumingJob = false;
-      this.snackBar.open(this.translate.instant('replay.failed-to-resume-coding-job'), this.translate.instant('replay.close'), {
-        duration: 3000,
-        panelClass: ['snackbar-error']
-      });
     }
   }
 
