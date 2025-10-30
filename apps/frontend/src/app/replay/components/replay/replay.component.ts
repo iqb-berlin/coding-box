@@ -805,7 +805,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         if (hasSelection) {
           keyboardEvent.preventDefault();
           const currentIndex = this.unitsData.currentUnitIndex;
-          const nextIndex = this.codingService.findNextUncodedUnitIndex(this.unitsData, currentIndex + 1);
+          const nextIndex = this.codingService.getNextJumpableUnitIndex(this.unitsData, currentIndex);
           if (nextIndex >= 0 && nextIndex < this.unitsData.units.length) {
             this.handleUnitChanged(this.unitsData.units[nextIndex]);
           }
@@ -813,7 +813,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       } else if (keyboardEvent.key === 'ArrowRight') {
         keyboardEvent.preventDefault();
         const currentIndex = this.unitsData.currentUnitIndex;
-        const nextIndex = this.codingService.findNextUncodedUnitIndex(this.unitsData, currentIndex + 1);
+        const nextIndex = this.codingService.getNextJumpableUnitIndex(this.unitsData, currentIndex);
         if (nextIndex >= 0 && nextIndex < this.unitsData.units.length) {
           this.handleUnitChanged(this.unitsData.units[nextIndex]);
         }
