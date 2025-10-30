@@ -29,6 +29,7 @@ export interface CodingJob {
 export interface Variable {
   unitName: string;
   variableId: string;
+  responseCount?: number;
 }
 
 export interface VariableBundle {
