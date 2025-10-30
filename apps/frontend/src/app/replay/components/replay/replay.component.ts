@@ -75,7 +75,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   isPrintMode: boolean = false;
   testPerson: string = '';
   unitId: string = '';
-  isBookletMode: boolean = false;
+  isCodingMode: boolean = false;
   isBookletReplayMode: boolean = false; // for replays without coding features
   currentUnitIndex: number = 0;
   totalUnits: number = 0;
@@ -152,9 +152,9 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         this.workspaceId = Number(workspace);
 
         const queryParams = await firstValueFrom(this.route.queryParams);
-        this.isBookletMode = queryParams.mode === 'coding';
+        this.isCodingMode = queryParams.mode === 'coding';
         this.isBookletReplayMode = queryParams.mode === 'booklet-view';
-        if (this.isBookletMode) {
+        if (this.isCodingMode) {
           let deserializedUnits = null as UnitsReplay | null;
 
           if (queryParams.unitsData) {
@@ -352,11 +352,9 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     this.reloadKey += 1;
     this.responses = unitData.response;
 
-    // Set coding scheme for booklet mode from vocs data
-    if (this.isBookletMode && unitData.vocs && unitData.vocs[0] && unitData.vocs[0].data) {
+    if (this.isCodingMode && unitData.vocs && unitData.vocs[0] && unitData.vocs[0].data) {
       this.codingService.setCodingSchemeFromVocsData(unitData.vocs[0].data);
-    } else if (this.isBookletMode && !this.codingService.codingScheme) {
-      // For coding mode, try to load coding scheme from unit XML if not available in vocs
+    } else if (this.isCodingMode && !this.codingService.codingScheme) {
       this.loadCodingSchemeForCodingJob();
     }
   }
@@ -798,18 +796,46 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
   onKeyDown(event: Event): void {
     const keyboardEvent = event as KeyboardEvent;
-    if (keyboardEvent.key === 'Enter' && this.isBookletMode && this.unitsData) {
-      if (this.codingService.currentVariableId) {
+    if (this.isCodingMode && this.unitsData) {
+      // Check for Enter key - navigate to next unit (existing functionality)
+      if (keyboardEvent.key === 'Enter' && this.codingService.currentVariableId) {
         const compositeKey = this.codingService.generateCompositeKey(this.testPerson, this.unitId, this.codingService.currentVariableId);
         const hasSelection = this.codingService.selectedCodes.has(compositeKey);
 
         if (hasSelection) {
           keyboardEvent.preventDefault();
-          // Navigate to next uncoded unit from current position
           const currentIndex = this.unitsData.currentUnitIndex;
           const nextIndex = this.codingService.findNextUncodedUnitIndex(this.unitsData, currentIndex + 1);
           if (nextIndex >= 0 && nextIndex < this.unitsData.units.length) {
             this.handleUnitChanged(this.unitsData.units[nextIndex]);
+          }
+        }
+      } else if (keyboardEvent.key === 'ArrowRight') {
+        keyboardEvent.preventDefault();
+        const currentIndex = this.unitsData.currentUnitIndex;
+        const nextIndex = this.codingService.findNextUncodedUnitIndex(this.unitsData, currentIndex + 1);
+        if (nextIndex >= 0 && nextIndex < this.unitsData.units.length) {
+          this.handleUnitChanged(this.unitsData.units[nextIndex]);
+        }
+      } else if (keyboardEvent.key === 'ArrowLeft' && this.unitsData.currentUnitIndex > 0) {
+        keyboardEvent.preventDefault();
+        const prevIndex = this.unitsData.currentUnitIndex - 1;
+        if (prevIndex >= 0) {
+          this.handleUnitChanged(this.unitsData.units[prevIndex]);
+        }
+      } else if (['0', '1', '2', '3'].includes(keyboardEvent.key) && this.codingService.currentVariableId) {
+        keyboardEvent.preventDefault();
+        const codeId = parseInt(keyboardEvent.key, 10);
+        if (this.codingService.codingScheme) {
+          const variableCoding = this.codingService.codingScheme.variableCodings.find((v: any) => v.alias === this.codingService.currentVariableId);
+          if (variableCoding) {
+            const code = variableCoding.codes.find((c: any) => c.id === codeId);
+            if (code) {
+              this.onCodeSelected({
+                variableId: this.codingService.currentVariableId,
+                code: code
+              });
+            }
           }
         }
       }
