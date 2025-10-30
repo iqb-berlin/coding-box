@@ -9,7 +9,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { TranslateModule } from '@ngx-translate/core';
 import { UnitsReplay, UnitsReplayUnit } from '../../../services/units-replay.service';
-import { ReplayCodingService } from '../../services/replay-coding.service';
+import { ReplayCodingService } from '../../../services/replay-coding.service';
 
 @Component({
   selector: 'coding-box-units-replay',
@@ -22,6 +22,7 @@ export class UnitsReplayComponent {
   private codingService = inject(ReplayCodingService);
 
   unitsData = input<UnitsReplay | null>(null);
+  freeNavigation = input<boolean>(false);
   unitChanged = output<UnitsReplayUnit>();
 
   nextUnit(): void {
@@ -30,10 +31,17 @@ export class UnitsReplayComponent {
       return;
     }
 
-    const currentIndex = data.currentUnitIndex;
-    const nextIndex = this.codingService.findNextUncodedUnitIndex(data, currentIndex + 1);
-    if (nextIndex >= 0 && nextIndex < data.units.length) {
-      this.unitChanged.emit(data.units[nextIndex]);
+    if (this.freeNavigation()) {
+      const nextIndex = data.currentUnitIndex + 1;
+      if (nextIndex < data.units.length) {
+        this.unitChanged.emit(data.units[nextIndex]);
+      }
+    } else {
+      const currentIndex = data.currentUnitIndex;
+      const nextIndex = this.codingService.findNextUncodedUnitIndex(data, currentIndex + 1);
+      if (nextIndex >= 0 && nextIndex < data.units.length) {
+        this.unitChanged.emit(data.units[nextIndex]);
+      }
     }
   }
 
@@ -53,6 +61,10 @@ export class UnitsReplayComponent {
   hasNextUnit(): boolean {
     const data = this.unitsData();
     if (!data || !data.units.length) return false;
+
+    if (this.freeNavigation()) {
+      return data.currentUnitIndex + 1 < data.units.length;
+    }
 
     const currentUnit = data.units[data.currentUnitIndex];
     if (!currentUnit) return false;

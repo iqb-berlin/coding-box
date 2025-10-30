@@ -1,10 +1,11 @@
 <div class="replay-container" [class.print-mode]="isPrintMode" [class.booklet-mode]="isBookletMode" (window:keydown)="onKeyDown($any($event))">
   <cb-spinner [isLoaded]="isLoaded"></cb-spinner>
 
-  @if (isBookletMode) {
-    @if (isBookletMode && !!player && unitDef) {
+  @if (isBookletMode || isBookletReplayMode) {
+    @if (isBookletReplayMode && !!player && unitDef) {
       <coding-box-units-replay
         [unitsData]="unitsData"
+        [freeNavigation]="isBookletReplayMode"
         (unitChanged)="handleUnitChanged($event)">
       </coding-box-units-replay>
     }
@@ -25,7 +26,7 @@
         }
       </div>
 
-      @if (codingService.codingScheme && codingService.currentVariableId && !isBookletReplayMode) {
+      @if (isBookletMode && codingService.codingScheme && codingService.currentVariableId) {
         <div class="code-selector-container">
           <app-code-selector
             [codingScheme]="codingService.codingScheme"
@@ -42,12 +43,15 @@
             [hasCodingJob]="!!codingService.codingJobId"
             [isCodingJobCompleted]="codingService.isCodingJobCompleted"
             [isPausingJob]="codingService.isPausingJob"
+            [unitsData]="unitsData"
+            [codingService]="codingService"
             (codeSelected)="onCodeSelected($event)"
             (openChanged)="onOpenChanged($event)"
             (notesChanged)="onNotesChanged($event)"
             (openNavigateDialog)="openNavigateDialog()"
             (openCommentDialog)="openCommentDialog()"
-            (pauseCodingJob)="pauseCodingJob()">
+            (pauseCodingJob)="pauseCodingJob()"
+            (unitChanged)="handleUnitChanged($event)">
           </app-code-selector>
         </div>
       }

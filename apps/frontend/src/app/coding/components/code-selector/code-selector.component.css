@@ -200,3 +200,29 @@
   padding-top: 8px;
   border-top: 1px solid rgba(0, 0, 0, 0.1);
 }
+
+.nav-button {
+  margin: 0 8px;
+}
+
+.unit-position {
+  display: flex;
+  align-items: center;
+  font-weight: 500;
+  color: rgba(0, 0, 0, 0.87);
+  min-width: 60px;
+  justify-content: center;
+}
+
+.unit-position .current-position {
+  font-weight: 600;
+  color: #1976d2;
+}
+
+.unit-position .total-units {
+  color: rgba(0, 0, 0, 0.6);
+}
+
+.position-separator {
+  margin: 0 4px;
+}

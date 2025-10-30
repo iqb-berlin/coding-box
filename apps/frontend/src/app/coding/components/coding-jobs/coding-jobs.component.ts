@@ -494,7 +494,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
 
             const queryParams = {
               auth: token,
-              mode: 'booklet',
+              mode: 'coding',
               bookletKey
             } as const;
 
@@ -715,7 +715,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
 
                     const queryParams = {
                       auth: token,
-                      mode: 'booklet',
+                      mode: 'coding',
                       bookletKey
                     } as const;
 

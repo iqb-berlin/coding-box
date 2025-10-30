@@ -245,7 +245,7 @@ export class MyCodingJobsComponent implements OnInit, AfterViewInit, OnDestroy {
 
             const queryParams = {
               auth: token,
-              mode: 'booklet',
+              mode: 'coding',
               bookletKey
             } as const;
 

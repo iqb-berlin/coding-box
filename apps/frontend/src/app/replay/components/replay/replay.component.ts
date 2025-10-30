@@ -33,7 +33,7 @@ import { UnitsReplayComponent } from '../units-replay/units-replay.component';
 import { CodeSelectorComponent } from '../../../coding/components/code-selector/code-selector.component';
 import { CodingJobCommentDialogComponent } from '../../../coding/components/coding-job-comment-dialog/coding-job-comment-dialog.component';
 import { NavigateCodingCasesDialogComponent, NavigateCodingCasesDialogData } from '../navigate-coding-cases-dialog/navigate-coding-cases-dialog.component';
-import { ReplayCodingService } from '../../services/replay-coding.service';
+import { ReplayCodingService } from '../../../services/replay-coding.service';
 
 @Component({
   providers: [ReplayCodingService],
@@ -152,8 +152,8 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         this.workspaceId = Number(workspace);
 
         const queryParams = await firstValueFrom(this.route.queryParams);
-        this.isBookletMode = queryParams.mode === 'booklet';
-        this.isBookletReplayMode = queryParams.mode === 'booklet' && !queryParams.bookletKey; // replays from test results don't have bookletKey
+        this.isBookletMode = queryParams.mode === 'coding';
+        this.isBookletReplayMode = queryParams.mode === 'booklet-view';
         if (this.isBookletMode) {
           let deserializedUnits = null as UnitsReplay | null;
 
@@ -355,6 +355,9 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     // Set coding scheme for booklet mode from vocs data
     if (this.isBookletMode && unitData.vocs && unitData.vocs[0] && unitData.vocs[0].data) {
       this.codingService.setCodingSchemeFromVocsData(unitData.vocs[0].data);
+    } else if (this.isBookletMode && !this.codingService.codingScheme) {
+      // For coding mode, try to load coding scheme from unit XML if not available in vocs
+      this.loadCodingSchemeForCodingJob();
     }
   }
 
@@ -818,5 +821,36 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     if (this.codingService.codingJobId && this.workspaceId && !this.codingService.isCodingJobCompleted) {
       this.codingService.updateCodingJobStatus(this.workspaceId, this.codingService.codingJobId, 'paused');
     }
+  }
+
+  private loadCodingSchemeForCodingJob(): void {
+    if (!this.unitDef) return;
+
+    const codingSchemeRef = this.extractCodingSchemeRefFromXml(this.unitDef);
+    if (codingSchemeRef) {
+      this.backendService.getCodingSchemeFile(this.workspaceId, codingSchemeRef)
+        .pipe(catchError(() => of(null)))
+        .subscribe(fileData => {
+          if (fileData && fileData.base64Data) {
+            this.codingService.setCodingSchemeFromVocsData(fileData.base64Data);
+          }
+        });
+    }
+  }
+
+  private extractCodingSchemeRefFromXml(xmlContent: string): string | null {
+    try {
+      const parser = new DOMParser();
+      const xmlDoc = parser.parseFromString(xmlContent, 'text/xml');
+      const codingSchemeRefElement = xmlDoc.querySelector('CodingSchemeRef');
+
+      if (codingSchemeRefElement && codingSchemeRefElement.textContent) {
+        return codingSchemeRefElement.textContent.trim();
+      }
+    } catch (error) {
+      // Ignore parsing errors
+    }
+
+    return null;
   }
 }

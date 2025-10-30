@@ -11,6 +11,22 @@
     </div>
     <mat-progress-bar mode="determinate" [value]="progressPercentage" class="custom-progress-bar"></mat-progress-bar>
     <div class="progress-actions">
+      @if (unitsData) {
+        <button mat-icon-button [disabled]="!hasPreviousUnit()" (click)="previousUnit()" matTooltip="Vorherige Aufgabe" class="nav-button prev-button">
+          <mat-icon>chevron_left</mat-icon>
+        </button>
+
+        <div class="unit-position">
+          <span class="current-position">{{ currentNavigationIndex }}</span>
+          <span class="position-separator">/</span>
+          <span class="total-units">{{ totalNavigationUnits }}</span>
+        </div>
+
+        <button mat-icon-button [disabled]="!hasNextUnit()" (click)="nextUnit()" matTooltip="Nächste Aufgabe" class="nav-button next-button">
+          <mat-icon>chevron_right</mat-icon>
+        </button>
+      }
+
       <button
         mat-icon-button
         (click)="onNavigateClick()"
