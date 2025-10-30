@@ -5,11 +5,7 @@
     @if (isBookletMode && !!player && unitDef) {
       <coding-box-units-replay
         [unitsData]="unitsData"
-        [isCodingActive]="!!codingService.codingJobId && !isBookletReplayMode"
-        (unitChanged)="handleUnitChanged($event)"
-        (openNavigateDialog)="openNavigateDialog()"
-        (openCommentDialog)="openCommentDialog()"
-        (pauseCodingJob)="pauseCodingJob()">
+        (unitChanged)="handleUnitChanged($event)">
       </coding-box-units-replay>
     }
 
@@ -37,9 +33,21 @@
             [preSelectedCodeId]="getPreSelectedCodeId(codingService.currentVariableId)"
             [isOpen]="isUnitOpen()"
             [coderNotes]="getCoderNotes()"
+            [showProgress]="!!codingService.codingJobId"
+            [completedCount]="getCompletedCount()"
+            [totalUnits]="totalUnits"
+            [progressPercentage]="getProgressPercentage()"
+            [openCount]="getOpenCount()"
+            [isCodingActive]="!!codingService.codingJobId && !isBookletReplayMode"
+            [hasCodingJob]="!!codingService.codingJobId"
+            [isCodingJobCompleted]="codingService.isCodingJobCompleted"
+            [isPausingJob]="codingService.isPausingJob"
             (codeSelected)="onCodeSelected($event)"
             (openChanged)="onOpenChanged($event)"
-            (notesChanged)="onNotesChanged($event)">
+            (notesChanged)="onNotesChanged($event)"
+            (openNavigateDialog)="openNavigateDialog()"
+            (openCommentDialog)="openCommentDialog()"
+            (pauseCodingJob)="pauseCodingJob()">
           </app-code-selector>
         </div>
       }

@@ -1,5 +1,42 @@
 <mat-card class="selector-card">
   <mat-card-content class="selector-content">
+  @if (showProgress) {
+    <div class="progress-info">
+      <span class="progress-text">{{ 'replay.coding-progress' | translate }}</span>
+      <span class="progress-numbers">{{ completedCount }}/{{ totalUnits }}</span>
+      <span class="progress-percentage">({{ progressPercentage }}%)</span>
+      @if (openCount > 0) {
+        <span class="progress-open">{{ 'replay.open-count' | translate }}: {{ openCount }}</span>
+      }
+    </div>
+    <mat-progress-bar mode="determinate" [value]="progressPercentage" class="custom-progress-bar"></mat-progress-bar>
+    <div class="progress-actions">
+      <button
+        mat-icon-button
+        (click)="onNavigateClick()"
+        class="navigate-button"
+        matTooltip="{{ 'replay.navigate-dialog.title' | translate }}">
+        <mat-icon>directions</mat-icon>
+      </button>
+      <button
+        (click)="onCommentClick()"
+        class="comment-button"
+        matTooltip="{{ 'coding.comment-dialog.title' | translate }}">
+        <mat-icon>comment</mat-icon>
+      </button>
+      @if (hasCodingJob && !isCodingJobCompleted) {
+        <button
+          mat-icon-button
+          (click)="onPauseClick()"
+          [disabled]="isPausingJob"
+          class="pause-button"
+          matTooltip="{{ isPausingJob ? ('replay.pausing' | translate) : ('replay.pause-coding' | translate) }}">
+          <mat-icon>pause</mat-icon>
+        </button>
+      }
+    </div>
+  }
+
     <div class="codes-section">
       <div *ngIf="regularCodes.length; else noCodes">
         <div class="code-list scrollable-codes">
