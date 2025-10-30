@@ -1,5 +1,5 @@
 <div class="dialog-container">
-  <h2 class="dialog-title">{{ data.isEdit ? 'Kodierjob bearbeiten' : 'Neuen Kodierjob erstellen' }}</h2>
+  <h2 class="dialog-title">{{ data.isEdit ? 'Kodierjob bearbeiten' : 'Neue Kodierjob-Definition erstellen' }}</h2>
   <mat-divider></mat-divider>
 
   <div class="dialog-content">
@@ -251,6 +251,9 @@
                         <div class="variable-identifiers">
                           <div class="variable-id">
                             {{ variable.unitName }}_{{ variable.variableId }}
+                            @if (variable.responseCount != null) {
+                              <span class="response-count">({{ variable.responseCount }} Antworten)</span>
+                            }
                             @if (data.isEdit && isVariableOriginallyAssigned(variable)) {
                               <mat-icon class="assigned-indicator" matTooltip="Bereits diesem Kodierjob zugewiesen" matTooltipPosition="above">check_circle</mat-icon>
                             }

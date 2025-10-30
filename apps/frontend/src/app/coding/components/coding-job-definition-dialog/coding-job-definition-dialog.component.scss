@@ -393,6 +393,13 @@
             align-items: center;
             gap: 8px;
 
+            .response-count {
+              font-size: 0.85rem;
+              color: rgba(0, 0, 0, 0.6);
+              font-weight: 400;
+              margin-left: 4px;
+            }
+
             .assigned-indicator {
               color: #4caf50;
               font-size: 18px;

@@ -32,16 +32,16 @@ import { AppService } from '../../../services/app.service';
 import { CoderService } from '../../services/coder.service';
 import { CodingJobService } from '../../services/coding-job.service';
 
-export interface CodingJobDialogData {
+export interface CodingJobDefinitionDialogData {
   codingJob?: CodingJob;
   isEdit: boolean;
   preloadedVariables?: Variable[];
 }
 
 @Component({
-  selector: 'coding-box-coding-job-dialog',
-  templateUrl: './coding-job-dialog.component.html',
-  styleUrls: ['./coding-job-dialog.component.scss'],
+  selector: 'coding-box-coding-job-definition-dialog',
+  templateUrl: './coding-job-definition-dialog.component.html',
+  styleUrls: ['./coding-job-definition-dialog.component.scss'],
   standalone: true,
   imports: [
     CommonModule,
@@ -66,7 +66,7 @@ export interface CodingJobDialogData {
     MatTooltip
   ]
 })
-export class CodingJobDialogComponent implements OnInit {
+export class CodingJobDefinitionDialogComponent implements OnInit {
   private fb = inject(FormBuilder);
   private backendService = inject(BackendService);
   private appService = inject(AppService);
@@ -100,9 +100,6 @@ export class CodingJobDialogComponent implements OnInit {
   // Variable analysis items
   isLoadingVariableAnalysis = false;
   totalVariableAnalysisRecords = 0;
-  variableAnalysisPageIndex = 0;
-  variableAnalysisPageSize = 10;
-  variableAnalysisPageSizeOptions = [5, 10, 25, 50];
 
   // Missings profiles
   missingsProfiles: { label: string; id: number }[] = [];
@@ -115,8 +112,8 @@ export class CodingJobDialogComponent implements OnInit {
   bundleNameFilter = '';
 
   constructor(
-    public dialogRef: MatDialogRef<CodingJobDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: CodingJobDialogData
+    public dialogRef: MatDialogRef<CodingJobDefinitionDialogComponent>,
+    @Inject(MAT_DIALOG_DATA) public data: CodingJobDefinitionDialogData
   ) {}
 
   ngOnInit(): void {
@@ -169,10 +166,6 @@ export class CodingJobDialogComponent implements OnInit {
     });
   }
 
-  /**
-   * Loads coders assigned to the current job
-   * @param jobId The ID of the job
-   */
   loadCoders(jobId: number): void {
     this.isLoadingCoders = true;
 
@@ -206,8 +199,6 @@ export class CodingJobDialogComponent implements OnInit {
 
   loadCodingIncompleteVariables(unitNameFilter?: string): void {
     this.isLoadingVariableAnalysis = true;
-
-    // Use preloaded variables if available
     if (this.data.preloadedVariables && !unitNameFilter) {
       this.variables = this.data.preloadedVariables;
       this.dataSource.data = this.variables;
@@ -223,10 +214,7 @@ export class CodingJobDialogComponent implements OnInit {
       return;
     }
 
-    this.backendService.getCodingIncompleteVariables(
-      workspaceId,
-      unitNameFilter || undefined
-    ).subscribe({
+    this.backendService.getCodingIncompleteVariables(workspaceId, unitNameFilter || undefined).subscribe({
       next: variables => {
         this.variables = variables;
         this.dataSource.data = this.variables;
