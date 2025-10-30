@@ -321,7 +321,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
 
   createCodingJob(): void {
     const dialogRef = this.dialog.open(CodingJobDefinitionDialogComponent, {
-      width: '900px',
+      width: '1200px',
       data: {
         isEdit: false,
         preloadedVariables: this.preloadedVariables || []
@@ -352,7 +352,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
     const selectedJob = job;
 
     const dialogRef = this.dialog.open(CodingJobDefinitionDialogComponent, {
-      width: '900px',
+      width: '1200px',
       data: {
         codingJob: selectedJob,
         isEdit: true,

@@ -20,7 +20,7 @@
           <textarea matInput formControlName="description" placeholder="Beschreibung des Kodierjobs" rows="3"></textarea>
         </mat-form-field>
 
-        <mat-form-field appearance="fill" class="full-width">
+        <mat-form-field appearance="fill" class="full-width" *ngIf="data.isEdit">
           <mat-label>Status</mat-label>
           <mat-select formControlName="status">
             <mat-option value="pending">Ausstehend</mat-option>
@@ -29,20 +29,13 @@
           </mat-select>
         </mat-form-field>
 
-        <mat-form-field appearance="fill" class="full-width" *ngIf="!isLoadingMissingsProfiles">
-          <mat-label>Missings-Profil</mat-label>
-          <mat-select [(ngModel)]="selectedMissingsProfileId" [ngModelOptions]="{standalone: true}">
-            <mat-option [value]="null">Keine</mat-option>
-            <mat-option *ngFor="let profile of missingsProfiles" [value]="profile.id">
-              {{ profile.label }}
-            </mat-option>
-          </mat-select>
-          <mat-hint>Missings-Profil für die Kodierung auswählen (optional)</mat-hint>
-        </mat-form-field>
-
-        <div *ngIf="isLoadingMissingsProfiles" class="loading-container">
-          <mat-spinner diameter="20"></mat-spinner>
-          <span class="loading-text small">Missings-Profile laden...</span>
+        <div class="coding-job-count-info" *ngIf="!data.isEdit">
+          <mat-icon class="info-icon">info</mat-icon>
+          <span class="count-label">Erstellte Kodieraufträge:</span>
+          <span class="count-value">{{ getCodingJobCount() }}</span>
+          <span class="count-description" *ngIf="getCodingJobCount() === 0">Mindestens eine Variable muss ausgewählt werden</span>
+          <span class="count-description" *ngIf="getCodingJobCount() === 1">Ein Kodierauftrag wird erstellt</span>
+          <span class="count-description" *ngIf="getCodingJobCount() > 1">Multiple Kodieraufträge werden erstellt ({{ getCodingJobCount() }} insgesamt)</span>
         </div>
       </div>
 
