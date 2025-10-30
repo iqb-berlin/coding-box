@@ -8,7 +8,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { TranslateModule } from '@ngx-translate/core';
 import { CommonModule, NgIf } from '@angular/common';
 import { UnitsReplay, UnitsReplayUnit } from '../../../services/units-replay.service';
-import { ReplayCodingService } from '../../services/replay-coding.service';
+import { ReplayCodingService } from '../../../services/replay-coding.service';
 
 interface NavigationUnit {
   position: number;

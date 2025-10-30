@@ -2,12 +2,11 @@ import { Injectable, inject } from '@angular/core';
 import { TranslateService } from '@ngx-translate/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { firstValueFrom } from 'rxjs';
-import { BackendService } from '../../services/backend.service';
-// eslint-disable-next-line import/no-cycle
+import { BackendService } from './backend.service';
 import {
   Code, VariableCoding, CodingScheme, CodeSelectedEvent
-} from '../../coding/components/code-selector/code-selector.component';
-import { UnitsReplay, UnitsReplayUnit } from '../../services/units-replay.service';
+} from '../models/coding-interfaces';
+import { UnitsReplay, UnitsReplayUnit } from './units-replay.service';
 
 interface SavedCode {
   id: number;

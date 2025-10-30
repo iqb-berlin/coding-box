@@ -14,64 +14,16 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
-
-export interface CodingScheme {
-  variableCodings: VariableCoding[];
-  version: string;
-}
-
-export interface VariableCoding {
-  id: string;
-  alias: string;
-  label: string;
-  sourceType: string;
-  processing: string[];
-  codeModel: string;
-  codes: Code[];
-  manualInstruction: string;
-}
-
-export interface Code {
-  id: number;
-  type: 'FULL_CREDIT' | 'RESIDUAL';
-  label: string;
-  score: number;
-  ruleSetOperatorAnd: boolean;
-  ruleSets: RuleSet[];
-  manualInstruction: string;
-}
-
-export interface RuleSet {
-  ruleOperatorAnd: boolean;
-  rules: Rule[];
-}
-
-export interface Rule {
-  method: string;
-  parameters: string[];
-}
-
-export interface UncertainDto {
-  id: string;
-  label: string;
-  description: string;
-  code: number;
-}
-
-export interface CodeSelectedEvent {
-  variableId: string;
-  code: Code | UncertainDto | null;
-}
-
-export interface SelectableItem {
-  id: number;
-  label: string;
-  type: string;
-  score?: number;
-  manualInstruction?: string;
-  description?: string;
-  originalCode?: Code;
-}
+import { UnitsReplay, UnitsReplayUnit } from '../../../services/units-replay.service';
+import { ReplayCodingService } from '../../../services/replay-coding.service';
+import {
+  Code,
+  CodeSelectedEvent,
+  CodingScheme,
+  SelectableItem,
+  UncertainDto,
+  VariableCoding
+} from '../../../models/coding-interfaces';
 
 @Component({
   selector: 'app-code-selector',
@@ -84,7 +36,6 @@ export class CodeSelectorComponent implements OnChanges {
   @Input() codingScheme!: string | CodingScheme;
   @Input() variableId!: string;
   @Input() preSelectedCodeId: number | null = null;
-  @Input() missings: readonly unknown[] = [];
   @Input() isOpen: boolean = false;
   @Input() coderNotes: string = '';
   @Input() showProgress: boolean = false;
@@ -96,6 +47,8 @@ export class CodeSelectorComponent implements OnChanges {
   @Input() hasCodingJob: boolean = false;
   @Input() isCodingJobCompleted: boolean = false;
   @Input() isPausingJob: boolean = false;
+  @Input() unitsData: UnitsReplay | null = null;
+  @Input() codingService!: ReplayCodingService;
 
   @Output() codeSelected = new EventEmitter<CodeSelectedEvent>();
   @Output() openChanged = new EventEmitter<boolean>();
@@ -103,6 +56,7 @@ export class CodeSelectorComponent implements OnChanges {
   @Output() openNavigateDialog = new EventEmitter<void>();
   @Output() openCommentDialog = new EventEmitter<void>();
   @Output() pauseCodingJob = new EventEmitter<void>();
+  @Output() unitChanged = new EventEmitter<UnitsReplayUnit>();
 
   selectableItems: SelectableItem[] = [];
   selectedCode: number | null = null;
@@ -135,9 +89,9 @@ export class CodeSelectorComponent implements OnChanges {
       scheme = this.codingScheme;
     }
 
-    const variableCoding = scheme.variableCodings.find(v => v.alias === this.variableId);
+    const variableCoding = scheme.variableCodings.find((v: VariableCoding) => v.alias === this.variableId);
     if (variableCoding) {
-      const codeItems: SelectableItem[] = variableCoding.codes.map(code => ({
+      const codeItems: SelectableItem[] = variableCoding.codes.map((code: Code) => ({
         id: code.id,
         label: code.label,
         type: code.type,
@@ -258,5 +212,65 @@ export class CodeSelectorComponent implements OnChanges {
 
   onNotesChanged(): void {
     this.notesChanged.emit(this.coderNotes);
+  }
+
+  nextUnit(): void {
+    const data = this.unitsData;
+    if (!data) {
+      return;
+    }
+
+    const currentIndex = data.currentUnitIndex;
+    const nextIndex = this.codingService.findNextUncodedUnitIndex(data, currentIndex + 1);
+    if (nextIndex >= 0 && nextIndex < data.units.length) {
+      this.unitChanged.emit(data.units[nextIndex]);
+    }
+  }
+
+  previousUnit(): void {
+    const data = this.unitsData;
+    if (!data || !this.hasPreviousUnit()) {
+      return;
+    }
+
+    const prevIndex = data.currentUnitIndex - 1;
+    if (prevIndex >= 0) {
+      const prevUnit = data.units[prevIndex];
+      this.unitChanged.emit(prevUnit);
+    }
+  }
+
+  hasNextUnit(): boolean {
+    const data = this.unitsData;
+    if (!data || !data.units.length) return false;
+
+    const currentUnit = data.units[data.currentUnitIndex];
+    if (!currentUnit) return false;
+
+    const compositeKey = this.codingService.generateCompositeKey(
+      currentUnit.testPerson || '',
+      currentUnit.name,
+      currentUnit.variableId || ''
+    );
+
+    const hasSelection = this.codingService.selectedCodes.has(compositeKey) ||
+                        this.codingService.openSelections.has(compositeKey);
+    const nextUncodedIndex = this.codingService.findNextUncodedUnitIndex(data, data.currentUnitIndex + 1);
+    return hasSelection && nextUncodedIndex >= 0;
+  }
+
+  hasPreviousUnit(): boolean {
+    const data = this.unitsData;
+    if (!data) return false;
+
+    return data.currentUnitIndex > 0;
+  }
+
+  get totalNavigationUnits(): number {
+    return this.unitsData?.units.length || 0;
+  }
+
+  get currentNavigationIndex(): number {
+    return (this.unitsData?.currentUnitIndex || 0) + 1;
   }
 }
