@@ -16,18 +16,24 @@ import { CoderTrainingService } from '../../database/services/coder-training.ser
 import { CodingListService } from '../../database/services/coding-list.service';
 import { PersonService } from '../../database/services/person.service';
 import { ResponseEntity } from '../../database/entities/response.entity';
+import { JobDefinition } from '../../database/entities/job-definition.entity';
 import { VariableAnalysisItemDto } from '../../../../../../api-dto/coding/variable-analysis-item.dto';
 import { ValidateCodingCompletenessRequestDto } from '../../../../../../api-dto/coding/validate-coding-completeness-request.dto';
 import { ValidateCodingCompletenessResponseDto } from '../../../../../../api-dto/coding/validate-coding-completeness-response.dto';
 import { ExportValidationResultsRequestDto } from '../../../../../../api-dto/coding/export-validation-results-request.dto';
 import { ExternalCodingImportDto } from '../../../../../../api-dto/coding/external-coding-import.dto';
 import { MissingsProfilesService } from '../../database/services/missings-profiles.service';
+import { JobDefinitionService } from '../../database/services/job-definition.service';
+import { CreateJobDefinitionDto } from '../coding-job/dto/create-job-definition.dto';
+import { UpdateJobDefinitionDto } from '../coding-job/dto/update-job-definition.dto';
+import { ApproveJobDefinitionDto } from '../coding-job/dto/approve-job-definition.dto';
 
 @ApiTags('Admin Workspace Coding')
 @Controller('admin/workspace')
 export class WorkspaceCodingController {
   constructor(
     private workspaceCodingService: WorkspaceCodingService,
+    private jobDefinitionService: JobDefinitionService,
     private missingsProfilesService: MissingsProfilesService,
     private personService: PersonService,
     private codingListService: CodingListService,
@@ -51,10 +57,11 @@ export class WorkspaceCodingController {
     return this.workspaceCodingService.codeTestPersons(workspace_id, testPersons, autoCoderRun);
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   @Get(':workspace_id/coding/manual')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiParam({ name: 'workspace_id', type: Number })
-  async getManualTestPersons(@Query('testPersons') testPersons: string, @WorkspaceId() workspace_id: number): Promise<unknown> {
+  async getManualTestPersons(@Query('testPersons') testPersons: string, @WorkspaceId() /* eslint-disable-next-line @typescript-eslint/no-unused-vars */ workspace_id: number): Promise<Array<ResponseEntity & { unitname: string }>> {
     return this.workspaceCodingService.getManualTestPersons(workspace_id, testPersons);
   }
 
@@ -1418,5 +1425,160 @@ export class WorkspaceCodingController {
       validPage,
       validLimit
     );
+  }
+
+  @Post(':workspace_id/coding/job-definitions')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiBody({
+    description: 'Create a new job definition',
+    type: CreateJobDefinitionDto
+  })
+  @ApiOkResponse({
+    description: 'Job definition created successfully.'
+  })
+  async createJobDefinition(
+    @WorkspaceId() workspace_id: number,
+      @Body() createDto: CreateJobDefinitionDto
+  ): Promise<JobDefinition> {
+    return this.jobDefinitionService.createJobDefinition(createDto);
+  }
+
+  @Get(':workspace_id/coding/job-definitions')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiOkResponse({
+    description: 'List of job definitions retrieved successfully.',
+    schema: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'number' },
+          status: { type: 'string' },
+          assigned_variables: { type: 'array' },
+          assigned_variable_bundles: { type: 'array' },
+          assigned_coders: { type: 'array' },
+          duration_seconds: { type: 'number' },
+          max_coding_cases: { type: 'number' },
+          double_coding_absolute: { type: 'number' },
+          double_coding_percentage: { type: 'number' },
+          created_at: { type: 'string', format: 'date-time' },
+          updated_at: { type: 'string', format: 'date-time' }
+        }
+      }
+    }
+  })
+  async getJobDefinitions(@WorkspaceId() workspace_id: number): Promise<JobDefinition[]> {
+    return this.jobDefinitionService.getJobDefinitions(workspace_id);
+  }
+
+  @Get(':workspace_id/coding/job-definitions/approved')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiOkResponse({
+    description: 'List of approved job definitions retrieved successfully.',
+    schema: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'number' },
+          assigned_variables: { type: 'array' },
+          assigned_variable_bundles: { type: 'array' },
+          assigned_coders: { type: 'array' },
+          duration_seconds: { type: 'number' },
+          max_coding_cases: { type: 'number' },
+          double_coding_absolute: { type: 'number' },
+          double_coding_percentage: { type: 'number' },
+          created_at: { type: 'string', format: 'date-time' },
+          updated_at: { type: 'string', format: 'date-time' }
+        }
+      }
+    }
+  })
+  async getApprovedJobDefinitions(): Promise<JobDefinition[]> {
+    return this.jobDefinitionService.getApprovedJobDefinitions();
+  }
+
+  @Get(':workspace_id/coding/job-definitions/:id')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiParam({ name: 'id', type: Number, description: 'Job definition ID' })
+  @ApiOkResponse({
+    description: 'Job definition retrieved successfully.'
+  })
+  async getJobDefinition(
+    @WorkspaceId() workspace_id: number,
+      @Param('id') id: number
+  ): Promise<JobDefinition> {
+    return this.jobDefinitionService.getJobDefinition(id);
+  }
+
+  @Put(':workspace_id/coding/job-definitions/:id')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiParam({ name: 'id', type: Number, description: 'Job definition ID' })
+  @ApiBody({
+    description: 'Update job definition',
+    type: UpdateJobDefinitionDto
+  })
+  @ApiOkResponse({
+    description: 'Job definition updated successfully.'
+  })
+  async updateJobDefinition(
+    @WorkspaceId() workspace_id: number,
+      @Param('id') id: number,
+      @Body() updateDto: UpdateJobDefinitionDto
+  ): Promise<JobDefinition> {
+    return this.jobDefinitionService.updateJobDefinition(id, updateDto);
+  }
+
+  @Put(':workspace_id/coding/job-definitions/:id/approve')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiParam({ name: 'id', type: Number, description: 'Job definition ID' })
+  @ApiBody({
+    description: 'Approve job definition',
+    type: ApproveJobDefinitionDto
+  })
+  @ApiOkResponse({
+    description: 'Job definition approved successfully.'
+  })
+  async approveJobDefinition(
+    @WorkspaceId() workspace_id: number,
+      @Param('id') id: number,
+      @Body() approveDto: ApproveJobDefinitionDto
+  ): Promise<JobDefinition> {
+    return this.jobDefinitionService.approveJobDefinition(id, approveDto);
+  }
+
+  @Delete(':workspace_id/coding/job-definitions/:id')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiParam({ name: 'id', type: Number, description: 'Job definition ID' })
+  @ApiOkResponse({
+    description: 'Job definition deleted successfully.',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        message: { type: 'string' }
+      }
+    }
+  })
+  async deleteJobDefinition(
+    @WorkspaceId() workspace_id: number,
+      @Param('id') id: number
+  ): Promise<{ success: boolean; message: string }> {
+    await this.jobDefinitionService.deleteJobDefinition(id);
+    return { success: true, message: 'Job definition deleted successfully' };
   }
 }

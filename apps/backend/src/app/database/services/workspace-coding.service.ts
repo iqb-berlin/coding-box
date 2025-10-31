@@ -990,7 +990,7 @@ export class WorkspaceCodingService {
     };
   }
 
-  async getManualTestPersons(workspace_id: number, personIds?: string): Promise<unknown> {
+  async getManualTestPersons(workspace_id: number, personIds?: string): Promise<Array<ResponseEntity & { unitname: string }>> {
     this.logger.log(
       `Fetching responses for workspace_id = ${workspace_id} ${
         personIds ? `and personIds = ${personIds}` : ''
@@ -1219,11 +1219,9 @@ export class WorkspaceCodingService {
           totalPages: cachedResults.metadata.totalPages,
           hasNextPage: cachedResults.metadata.hasNextPage,
           hasPreviousPage: cachedResults.metadata.hasPreviousPage,
-          cacheKey // Include cache key in response for subsequent requests
+          cacheKey
         };
       }
-
-      this.logger.log(`No cached results found. Processing all ${expectedCombinations.length} combinations for workspace ${workspaceId}`);
 
       const allResults: ValidationResultDto[] = [];
       let totalMissingCount = 0;

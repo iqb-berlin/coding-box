@@ -552,6 +552,29 @@
   }
 }
 
+.double-coding-section {
+  h4 {
+    color: rgba(0, 0, 0, 0.87);
+    margin-top: 24px;
+    margin-bottom: 8px;
+  }
+
+  .section-description {
+    color: rgba(0, 0, 0, 0.6);
+    margin-bottom: 16px;
+  }
+
+  .double-coding-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+
+    .double-coding-input {
+      flex: 1;
+    }
+  }
+}
+
 .bundle-preview-container {
   margin-top: 24px;
   border: 1px solid rgba(0, 0, 0, 0.12);

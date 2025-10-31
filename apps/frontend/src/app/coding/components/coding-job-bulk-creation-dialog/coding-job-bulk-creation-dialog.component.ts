@@ -9,8 +9,6 @@ import { VariableBundle, Variable } from '../../models/coding-job.model';
 import { Coder } from '../../models/coder.model';
 
 export interface BulkCreationData {
-  baseName: string;
-  description: string;
   selectedVariables: Variable[];
   selectedVariableBundles: VariableBundle[];
   selectedCoders: Coder[];
@@ -47,7 +45,7 @@ export class CodingJobBulkCreationDialogComponent {
 
   private createJobPreviews(): JobPreview[] {
     return this.data.selectedVariables.map(variable => ({
-      name: `${this.data.baseName}_${variable.unitName}_${variable.variableId}`,
+      name: `${variable.unitName}_${variable.variableId}`,
       variable
     }));
   }

@@ -93,4 +93,31 @@ export class CreateCodingJobDto {
   @IsNumber()
   @IsOptional()
     missings_profile_id?: number;
+
+  @ApiProperty({
+    description: 'Duration in seconds for one coding task',
+    example: 300,
+    required: false
+  })
+  @IsNumber()
+  @IsOptional()
+    durationSeconds?: number;
+
+  @ApiProperty({
+    description: 'Absolute number of cases that should be double coded',
+    example: 10,
+    required: false
+  })
+  @IsNumber()
+  @IsOptional()
+    doubleCodingAbsolute?: number;
+
+  @ApiProperty({
+    description: 'Percentage (0-100) of cases that should be double coded',
+    example: 25.5,
+    required: false
+  })
+  @IsNumber()
+  @IsOptional()
+    doubleCodingPercentage?: number;
 }
