@@ -13,7 +13,13 @@ import Persons from '../entities/persons.entity';
 import { Unit } from '../entities/unit.entity';
 import { Booklet } from '../entities/booklet.entity';
 import { ResponseEntity } from '../entities/response.entity';
-import { Setting } from '../entities/setting.entity';
+import { CodingJob } from '../entities/coding-job.entity';
+import { CodingJobCoder } from '../entities/coding-job-coder.entity';
+import { CodingJobVariable } from '../entities/coding-job-variable.entity';
+import { CodingJobVariableBundle } from '../entities/coding-job-variable-bundle.entity';
+import { CodingJobUnit } from '../entities/coding-job-unit.entity';
+import { JobDefinition } from '../entities/job-definition.entity';
+import { VariableBundle } from '../entities/variable-bundle.entity';
 import { CodingStatistics, CodingStatisticsWithJob } from './shared-types';
 import { CodebookGenerator } from '../../admin/code-book/codebook-generator.class';
 import { CodeBookContentSetting, UnitPropertiesForCodebook, Missing } from '../../admin/code-book/codebook.interfaces';
@@ -28,6 +34,7 @@ import { ExportValidationResultsService } from './export-validation-results.serv
 import { ExternalCodingImportService, ExternalCodingImportBody } from './external-coding-import.service';
 import { BullJobManagementService } from './bull-job-management.service';
 import { WorkspaceFilesService } from './workspace-files.service';
+import { CodingResultsService } from './coding-results.service';
 
 interface CodedResponse {
   id: number;
@@ -54,8 +61,20 @@ export class WorkspaceCodingService {
     private bookletRepository: Repository<Booklet>,
     @InjectRepository(ResponseEntity)
     private responseRepository: Repository<ResponseEntity>,
-    @InjectRepository(Setting)
-    private settingRepository: Repository<Setting>,
+    @InjectRepository(CodingJob)
+    private codingJobRepository: Repository<CodingJob>,
+    @InjectRepository(CodingJobCoder)
+    private codingJobCoderRepository: Repository<CodingJobCoder>,
+    @InjectRepository(CodingJobVariable)
+    private codingJobVariableRepository: Repository<CodingJobVariable>,
+    @InjectRepository(CodingJobVariableBundle)
+    private codingJobVariableBundleRepository: Repository<CodingJobVariableBundle>,
+    @InjectRepository(CodingJobUnit)
+    private codingJobUnitRepository: Repository<CodingJobUnit>,
+    @InjectRepository(JobDefinition)
+    private jobDefinitionRepository: Repository<JobDefinition>,
+    @InjectRepository(VariableBundle)
+    private variableBundleRepository: Repository<VariableBundle>,
     private jobQueueService: JobQueueService,
     private cacheService: CacheService,
     private missingsProfilesService: MissingsProfilesService,
@@ -64,7 +83,8 @@ export class WorkspaceCodingService {
     private exportValidationResultsService: ExportValidationResultsService,
     private externalCodingImportService: ExternalCodingImportService,
     private bullJobManagementService: BullJobManagementService,
-    private workspaceFilesService: WorkspaceFilesService
+    private workspaceFilesService: WorkspaceFilesService,
+    private codingResultsService: CodingResultsService
   ) {}
 
   private codingSchemeCache: Map<string, { scheme: CodingScheme; timestamp: number }> = new Map();
@@ -1534,5 +1554,14 @@ export class WorkspaceCodingService {
       this.logger.error(`Error getting responses by status: ${error.message}`, error.stack);
       throw new Error('Could not retrieve responses. Please check the database connection or query.');
     }
+  }
+
+  async applyCodingResults(workspaceId: number, codingJobId: number): Promise<{
+    success: boolean;
+    updatedResponsesCount: number;
+    skippedReviewCount: number;
+    message: string;
+  }> {
+    return this.codingResultsService.applyCodingResults(workspaceId, codingJobId);
   }
 }

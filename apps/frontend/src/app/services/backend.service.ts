@@ -1034,6 +1034,24 @@ export class BackendService {
     return this.http.get<Array<{ responseId: number; unitName: string; unitAlias: string | null; variableId: string; variableAnchor: string; bookletName: string; personLogin: string; personCode: string }>>(url);
   }
 
+  applyCodingResults(
+    workspaceId: number,
+    codingJobId: number
+  ): Observable<{
+      success: boolean;
+      updatedResponsesCount: number;
+      skippedReviewCount: number;
+      message: string;
+    }> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/jobs/${codingJobId}/apply-results`;
+    return this.http.post<{
+      success: boolean;
+      updatedResponsesCount: number;
+      skippedReviewCount: number;
+      message: string;
+    }>(url, {});
+  }
+
   getUnitVariables(workspaceId: number): Observable<{ unitName: string; variables: string[] }[]> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/files/unit-variables`;
     return this.http.get<{ unitName: string; variables: string[] }[]>(url);

@@ -1595,4 +1595,45 @@ export class WorkspaceCodingController {
   ): Promise<CodingJob> {
     return this.jobDefinitionService.createCodingJobFromDefinition(id, workspace_id);
   }
+
+  @Post(':workspace_id/coding/jobs/:jobId/apply-results')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiParam({ name: 'jobId', type: Number, description: 'Coding job ID to apply results for' })
+  @ApiOkResponse({
+    description: 'Coding results applied successfully to response database.',
+    schema: {
+      type: 'object',
+      properties: {
+        success: {
+          type: 'boolean',
+          description: 'Whether the application was successful'
+        },
+        updatedResponsesCount: {
+          type: 'number',
+          description: 'Number of responses updated'
+        },
+        skippedReviewCount: {
+          type: 'number',
+          description: 'Number of responses skipped for manual review'
+        },
+        message: {
+          type: 'string',
+          description: 'Detailed message about the operation'
+        }
+      }
+    }
+  })
+  async applyCodingResults(
+    @WorkspaceId() workspace_id: number,
+      @Param('jobId') jobId: number
+  ): Promise<{
+        success: boolean;
+        updatedResponsesCount: number;
+        skippedReviewCount: number;
+        message: string;
+      }> {
+    return this.workspaceCodingService.applyCodingResults(workspace_id, jobId);
+  }
 }
