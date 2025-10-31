@@ -13,6 +13,7 @@ import { MatIcon } from '@angular/material/icon';
 import { CommonModule, NgClass } from '@angular/common';
 
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { MatTooltip } from '@angular/material/tooltip';
 import { BackendService } from '../../../../services/backend.service';
 import { SearchFilterComponent } from '../../../../shared/search-filter/search-filter.component';
 import { CodingJob } from '../../../models/coding-job.model';
@@ -47,7 +48,8 @@ interface CodingResult {
     MatButtonModule,
     MatIcon,
     NgClass,
-    SearchFilterComponent
+    SearchFilterComponent,
+    MatTooltip
   ],
   providers: [
     { provide: MatPaginatorIntl, useClass: GermanPaginatorIntl }
@@ -134,6 +136,37 @@ export class CodingJobResultDialogComponent implements OnInit {
 
   applyFilter(filterValue: string): void {
     this.dataSource.filter = filterValue.trim().toLowerCase();
+  }
+
+  applyCodingResults(): void {
+    this.isLoading = true;
+    this.backendService.applyCodingResults(this.data.workspaceId, this.data.codingJob.id).subscribe({
+      next: result => {
+        this.isLoading = false;
+        let message = result.message;
+        if (result.success) {
+          if (result.updatedResponsesCount > 0) {
+            message += `\n\nAktualisiert: ${result.updatedResponsesCount} Antworten`;
+          }
+          if (result.skippedReviewCount > 0) {
+            message += `\nÜbersprungen (manuelle Prüfung benötigt): ${result.skippedReviewCount} Antworten`;
+          }
+          this.snackBar.open(`Ergebnisse erfolgreich angewendet!\n${message}`, 'Schließen', {
+            duration: 5000,
+            panelClass: ['success-snackbar']
+          });
+        } else {
+          this.snackBar.open(`Fehler beim Anwenden der Ergebnisse: ${message}`, 'Schließen', {
+            duration: 5000,
+            panelClass: ['error-snackbar']
+          });
+        }
+      },
+      error: error => {
+        this.isLoading = false;
+        this.snackBar.open(`Fehler beim Anwenden der Kodierergebnisse: ${error.message || error}`, 'Schließen', { duration: 5000 });
+      }
+    });
   }
 
   getCodeDisplay(result: CodingResult): string {
