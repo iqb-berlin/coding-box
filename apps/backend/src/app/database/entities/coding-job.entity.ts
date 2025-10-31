@@ -6,6 +6,7 @@ import {
   UpdateDateColumn,
   ManyToOne,
   OneToMany,
+  OneToOne,
   JoinColumn
 } from 'typeorm';
 // eslint-disable-next-line import/no-cycle
@@ -15,6 +16,8 @@ import { MissingsProfile } from './missings-profile.entity';
 import { CodingJobUnit } from './coding-job-unit.entity';
 // eslint-disable-next-line import/no-cycle
 import { CodingJobCoder } from './coding-job-coder.entity';
+// eslint-disable-next-line import/no-cycle
+import { JobDefinition } from './job-definition.entity';
 
 /**
  * Entity for coding jobs
@@ -65,4 +68,7 @@ export class CodingJob {
 
   @OneToMany(() => CodingJobCoder, codingJobCoder => codingJobCoder.coding_job, { cascade: true })
     codingJobCoders: CodingJobCoder[];
+
+  @OneToOne(() => JobDefinition, jobDefinition => jobDefinition.codingJob, { cascade: true })
+    jobDefinition?: JobDefinition;
 }

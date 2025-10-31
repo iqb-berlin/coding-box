@@ -104,4 +104,40 @@ export class UpdateCodingJobDto {
   @IsString()
   @IsOptional()
     comment?: string;
+
+  @ApiProperty({
+    description: 'Duration in seconds for one coding task',
+    example: 300,
+    required: false
+  })
+  @IsNumber()
+  @IsOptional()
+    durationSeconds?: number;
+
+  @ApiProperty({
+    description: 'Maximum number of coding cases for this job',
+    example: 100,
+    required: false
+  })
+  @IsNumber()
+  @IsOptional()
+    maxCodingCases?: number;
+
+  @ApiProperty({
+    description: 'Absolute number of cases that should be double coded',
+    example: 10,
+    required: false
+  })
+  @IsNumber()
+  @IsOptional()
+    doubleCodingAbsolute?: number;
+
+  @ApiProperty({
+    description: 'Percentage (0-100) of cases that should be double coded',
+    example: 25.5,
+    required: false
+  })
+  @IsNumber()
+  @IsOptional()
+    doubleCodingPercentage?: number;
 }

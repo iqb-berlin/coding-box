@@ -9,6 +9,7 @@ import { CodingJobCoder } from '../entities/coding-job-coder.entity';
 import { CodingJobVariable } from '../entities/coding-job-variable.entity';
 import { CodingJobVariableBundle } from '../entities/coding-job-variable-bundle.entity';
 import { CodingJobUnit } from '../entities/coding-job-unit.entity';
+import { JobDefinition } from '../entities/job-definition.entity';
 import { CreateCodingJobDto } from '../../admin/coding-job/dto/create-coding-job.dto';
 import { UpdateCodingJobDto } from '../../admin/coding-job/dto/update-coding-job.dto';
 import { VariableBundle } from '../entities/variable-bundle.entity';
@@ -44,6 +45,8 @@ export class CodingJobService {
     private codingJobVariableBundleRepository: Repository<CodingJobVariableBundle>,
     @InjectRepository(CodingJobUnit)
     private codingJobUnitRepository: Repository<CodingJobUnit>,
+    @InjectRepository(JobDefinition)
+    private jobDefinitionRepository: Repository<JobDefinition>,
     @InjectRepository(VariableBundle)
     private variableBundleRepository: Repository<VariableBundle>,
     @InjectRepository(ResponseEntity)
@@ -192,7 +195,7 @@ export class CodingJobService {
   }
 
   async getCodingJob(id: number, workspaceId?: number): Promise<{
-    codingJob: CodingJob;
+    codingJob: CodingJob & { durationSeconds?: number };
     assignedCoders: number[];
     variables: { unitName: string; variableId: string }[];
     variableBundles: VariableBundle[];
@@ -282,6 +285,14 @@ export class CodingJobService {
       }
     }
     await this.saveCodingJobUnits(savedCodingJob.id);
+
+    if (createCodingJobDto.durationSeconds !== undefined) {
+      const jobDefinition = this.jobDefinitionRepository.create({
+        coding_job_id: savedCodingJob.id,
+        duration_seconds: createCodingJobDto.durationSeconds
+      });
+      await this.jobDefinitionRepository.save(jobDefinition);
+    }
 
     return savedCodingJob;
   }

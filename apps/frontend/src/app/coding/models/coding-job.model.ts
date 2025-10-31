@@ -24,6 +24,10 @@ export interface CodingJob {
   missings_profile?: MissingsProfilesDto;
   training_id?: number;
   training?: CoderTraining;
+  durationSeconds?: number;
+  maxCodingCases?: number;
+  doubleCodingAbsolute?: number;
+  doubleCodingPercentage?: number;
 }
 
 export interface Variable {

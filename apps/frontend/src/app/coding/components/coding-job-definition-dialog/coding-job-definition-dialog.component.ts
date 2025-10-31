@@ -3,7 +3,7 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import {
-  FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators, ValidatorFn
+  FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, FormControl, Validators, ValidatorFn
 } from '@angular/forms';
 import {
   MatDialogRef, MAT_DIALOG_DATA, MatDialogModule, MatDialog
@@ -22,6 +22,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatTabsModule } from '@angular/material/tabs';
 import { MatExpansionModule } from '@angular/material/expansion';
+import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateModule } from '@ngx-translate/core';
 import { SelectionModel } from '@angular/cdk/collections';
@@ -38,7 +39,23 @@ import { CodingJobBulkCreationDialogComponent, BulkCreationData } from '../codin
 export interface CodingJobDefinitionDialogData {
   codingJob?: CodingJob;
   isEdit: boolean;
+  mode: 'definition' | 'job';
+  jobDefinitionId?: number;
   preloadedVariables?: Variable[];
+}
+
+export interface JobDefinition {
+  id?: number;
+  status?: 'draft' | 'pending_review' | 'approved';
+  assignedVariables?: Variable[];
+  assignedVariableBundles?: VariableBundle[];
+  assignedCoders?: number[];
+  durationSeconds?: number;
+  maxCodingCases?: number;
+  doubleCodingAbsolute?: number;
+  doubleCodingPercentage?: number;
+  created_at?: Date;
+  updated_at?: Date;
 }
 
 @Component({
@@ -54,6 +71,7 @@ export interface CodingJobDefinitionDialogData {
     MatFormFieldModule,
     MatInputModule,
     MatButtonModule,
+    MatButtonToggleModule,
     MatSelectModule,
     MatIconModule,
     MatChipsModule,
@@ -81,6 +99,9 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
   codingJobForm!: FormGroup;
   isLoading = false;
   isSaving = false;
+
+  // Double coding configuration
+  doubleCodingMode: 'absolute' | 'percentage' = 'absolute';
 
   // Variables
   variables: Variable[] = [];
@@ -116,6 +137,14 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
   ) {}
 
   ngOnInit(): void {
+    if (this.data.codingJob?.doubleCodingAbsolute !== null && this.data.codingJob?.doubleCodingAbsolute !== undefined) {
+      this.doubleCodingMode = 'absolute';
+    } else if (this.data.codingJob?.doubleCodingPercentage !== null && this.data.codingJob?.doubleCodingPercentage !== undefined) {
+      this.doubleCodingMode = 'percentage';
+    } else {
+      this.doubleCodingMode = 'absolute'; // default
+    }
+
     this.initForm();
     this.loadCodingIncompleteVariables();
     this.loadVariableBundles();
@@ -181,9 +210,11 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
   }
 
   initForm(): void {
-    const formFields: Record<string, [string, ValidatorFn[]]> = {
-      name: [this.data.codingJob?.name || '', [Validators.required]],
-      description: [this.data.codingJob?.description || '', []]
+    const formFields: Record<string, [string | number | null | undefined, ValidatorFn[]]> = {
+      durationSeconds: [this.data.codingJob?.durationSeconds || null, [Validators.min(1)]],
+      maxCodingCases: [null, [Validators.min(1)]],
+      doubleCodingAbsolute: [this.data.codingJob?.doubleCodingAbsolute ?? 0, []],
+      doubleCodingPercentage: [this.data.codingJob?.doubleCodingPercentage ?? 0, []]
     };
 
     if (this.data.isEdit) {
@@ -352,6 +383,26 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
     return this.selectedVariables.selected.length;
   }
 
+  getTotalCodingCases(): number {
+    let total = this.selectedVariables.selected.reduce((sum, v) => sum + (v.responseCount || 0), 0);
+    this.selectedVariableBundles.selected.forEach(bundle => {
+      bundle.variables.forEach(v => { total += (v.responseCount || 0); });
+    });
+    return total;
+  }
+
+  getTotalTimeInSeconds(): number {
+    const durationPerCase = this.codingJobForm.value.durationSeconds || 1;
+    return this.getTotalCodingCases() * durationPerCase;
+  }
+
+  getFormattedTotalTime(): string {
+    const seconds = this.getTotalTimeInSeconds();
+    const min = Math.floor(seconds / 60);
+    const sec = seconds % 60;
+    return `${min}:${sec.toString().padStart(2, '0')}`;
+  }
+
   isAllSelected(): boolean {
     const numSelected = this.selectedVariables.selected.length;
     const numRows = this.dataSource.data.length;
@@ -385,17 +436,26 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
       return;
     }
 
-    if (this.data.isEdit && this.data.codingJob?.id) {
-      this.submitEdit();
-      return;
-    }
+    if (this.data.mode === 'definition') {
+      if (this.data.isEdit && this.data.jobDefinitionId) {
+        this.submitDefinitionUpdate();
+      } else {
+        this.submitDefinitionCreate();
+      }
+    } else {
+      // mode === 'job'
+      if (this.data.isEdit && this.data.codingJob?.id) {
+        this.submitEdit();
+        return;
+      }
 
-    if (this.selectedVariables.selected.length > 1) {
-      this.openBulkCreationDialog();
-      return;
-    }
+      if (this.selectedVariables.selected.length > 1) {
+        this.openBulkCreationDialog();
+        return;
+      }
 
-    this.submitCreate();
+      this.submitCreate();
+    }
   }
 
   private submitEdit(): void {
@@ -508,8 +568,6 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
 
   private async openBulkCreationDialog(): Promise<void> {
     const dialogData: BulkCreationData = {
-      baseName: this.codingJobForm.value.name,
-      description: this.codingJobForm.value.description,
       selectedVariables: this.selectedVariables.selected,
       selectedVariableBundles: this.selectedVariableBundles.selected,
       selectedCoders: this.selectedCoders.selected
@@ -541,13 +599,12 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
     let errorCount = 0;
 
     for (const variable of data.selectedVariables) {
-      const jobName = `${data.baseName}_${variable.unitName}_${variable.variableId}`;
+      const jobName = `${variable.unitName}_${variable.variableId}`;
 
       const codingJob: CodingJob = {
         id: 0,
         workspace_id: workspaceId,
         name: jobName,
-        description: data.description,
         status: 'pending',
         created_at: new Date(),
         updated_at: new Date(),
@@ -582,6 +639,140 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
     }
 
     this.dialogRef.close();
+  }
+
+  toggleDoubleCodingMode(): void {
+    this.doubleCodingMode = this.doubleCodingMode === 'absolute' ? 'percentage' : 'absolute';
+  }
+
+  get currentDoubleCodingControl(): FormControl {
+    const controlName = this.doubleCodingMode === 'absolute' ? 'doubleCodingAbsolute' : 'doubleCodingPercentage';
+    return this.codingJobForm.get(controlName) as FormControl;
+  }
+
+  getDoubleCodingLabel(): string {
+    if (this.doubleCodingMode === 'absolute') {
+      return 'Absolute Anzahl';
+    }
+    return 'Prozent';
+  }
+
+  getDoubleCodingPlaceholder(): string {
+    if (this.doubleCodingMode === 'absolute') {
+      return 'z.B. 10 Fälle';
+    }
+    return 'z.B. 25.5 für 25.5%';
+  }
+
+  private submitDefinitionCreate(): void {
+    this.isSaving = true;
+
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      this.snackBar.open('No workspace selected', 'Close', { duration: 3000 });
+      this.isSaving = false;
+      return;
+    }
+
+    const selectedCoderIds = this.selectedCoders.selected.map(c => c.id);
+
+    const jobDefinition: JobDefinition = {
+      status: 'draft',
+      assignedVariables: this.selectedVariables.selected,
+      assignedVariableBundles: this.selectedVariableBundles.selected,
+      assignedCoders: selectedCoderIds,
+      durationSeconds: this.codingJobForm.value.durationSeconds,
+      maxCodingCases: this.codingJobForm.value.maxCodingCases,
+      doubleCodingAbsolute: this.codingJobForm.value.doubleCodingAbsolute,
+      doubleCodingPercentage: this.codingJobForm.value.doubleCodingPercentage
+    };
+
+    this.backendService.createJobDefinition(workspaceId, jobDefinition).subscribe({
+      next: createdDefinition => {
+        this.isSaving = false;
+        this.snackBar.open('Job definition created successfully', 'Close', { duration: 3000 });
+        this.dialogRef.close(createdDefinition);
+      },
+      error: error => {
+        this.isSaving = false;
+        this.snackBar.open(`Error creating job definition: ${error.message}`, 'Close', { duration: 5000 });
+      }
+    });
+  }
+
+  private submitDefinitionUpdate(): void {
+    this.isSaving = true;
+
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      this.snackBar.open('No workspace selected', 'Close', { duration: 3000 });
+      this.isSaving = false;
+      return;
+    }
+
+    const selectedCoderIds = this.selectedCoders.selected.map(c => c.id);
+
+    const jobDefinition: Partial<JobDefinition> = {
+      assignedVariables: this.selectedVariables.selected,
+      assignedVariableBundles: this.selectedVariableBundles.selected,
+      assignedCoders: selectedCoderIds,
+      durationSeconds: this.codingJobForm.value.durationSeconds,
+      maxCodingCases: this.codingJobForm.value.maxCodingCases,
+      doubleCodingAbsolute: this.codingJobForm.value.doubleCodingAbsolute,
+      doubleCodingPercentage: this.codingJobForm.value.doubleCodingPercentage
+    };
+
+    this.backendService.updateJobDefinition(workspaceId, this.data.jobDefinitionId!, jobDefinition).subscribe({
+      next: updatedDefinition => {
+        this.isSaving = false;
+        this.snackBar.open('Job definition updated successfully', 'Close', { duration: 3000 });
+        this.dialogRef.close(updatedDefinition);
+      },
+      error: error => {
+        this.isSaving = false;
+        this.snackBar.open(`Error updating job definition: ${error.message}`, 'Close', { duration: 5000 });
+      }
+    });
+  }
+
+  onSubmitForReview(): void {
+    if (this.codingJobForm.invalid) {
+      return;
+    }
+
+    this.isSaving = true;
+
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      this.snackBar.open('No workspace selected', 'Close', { duration: 3000 });
+      this.isSaving = false;
+      return;
+    }
+
+    const selectedCoderIds = this.selectedCoders.selected.map(c => c.id);
+
+    const jobDefinition: JobDefinition = {
+      status: 'pending_review', // Submit for review
+      assignedVariables: this.selectedVariables.selected,
+      assignedVariableBundles: this.selectedVariableBundles.selected,
+      assignedCoders: selectedCoderIds,
+      durationSeconds: this.codingJobForm.value.durationSeconds,
+      maxCodingCases: this.codingJobForm.value.maxCodingCases,
+      doubleCodingAbsolute: this.codingJobForm.value.doubleCodingAbsolute,
+      doubleCodingPercentage: this.codingJobForm.value.doubleCodingPercentage
+    };
+
+    this.backendService.createJobDefinition(workspaceId, jobDefinition).subscribe({
+      next: createdDefinition => {
+        this.isSaving = false;
+        this.snackBar.open('Job definition submitted for review', 'Close', { duration: 3000 });
+        this.dialogRef.close(createdDefinition);
+      },
+      error: error => {
+        this.isSaving = false;
+        this.snackBar.open(`Error submitting for review: ${error.message}`, 'Close', { duration: 5000 });
+      }
+    });
   }
 
   onCancel(): void {

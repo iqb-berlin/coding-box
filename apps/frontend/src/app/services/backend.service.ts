@@ -65,6 +65,20 @@ type ReplayStatisticsResponse = {
   errorMessage?: string;
 };
 
+interface JobDefinition {
+  id?: number;
+  status?: 'draft' | 'pending_review' | 'approved';
+  assignedVariables?: import('../coding/models/coding-job.model').Variable[];
+  assignedVariableBundles?: import('../coding/models/coding-job.model').VariableBundle[];
+  assignedCoders?: number[];
+  durationSeconds?: number;
+  maxCodingCases?: number;
+  doubleCodingAbsolute?: number;
+  doubleCodingPercentage?: number;
+  created_at?: Date;
+  updated_at?: Date;
+}
+
 interface PaginatedResponse<T> {
   data: T[];
   total: number;
@@ -1009,5 +1023,40 @@ export class BackendService {
   getUnitVariables(workspaceId: number): Observable<{ unitName: string; variables: string[] }[]> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/files/unit-variables`;
     return this.http.get<{ unitName: string; variables: string[] }[]>(url);
+  }
+
+  createJobDefinition(workspaceId: number, jobDefinition: Omit<import('../coding/components/coding-job-definition-dialog/coding-job-definition-dialog.component').JobDefinition, 'id'>): Observable<JobDefinition> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/job-definitions`;
+    return this.http.post<JobDefinition>(url, jobDefinition);
+  }
+
+  updateJobDefinition(workspaceId: number, jobDefinitionId: number, jobDefinition: Partial<import('../coding/components/coding-job-definition-dialog/coding-job-definition-dialog.component').JobDefinition>): Observable<JobDefinition> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/job-definitions/${jobDefinitionId}`;
+    return this.http.put<JobDefinition>(url, jobDefinition);
+  }
+
+  approveJobDefinition(workspaceId: number, jobDefinitionId: number, status: 'pending_review' | 'approved'): Observable<JobDefinition> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/job-definitions/${jobDefinitionId}/approve`;
+    return this.http.put<JobDefinition>(url, { status });
+  }
+
+  getJobDefinitions(workspaceId: number): Observable<JobDefinition[]> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/job-definitions`;
+    return this.http.get<JobDefinition[]>(url);
+  }
+
+  getApprovedJobDefinitions(workspaceId: number): Observable<JobDefinition[]> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/job-definitions/approved`;
+    return this.http.get<JobDefinition[]>(url);
+  }
+
+  getJobDefinition(workspaceId: number, jobDefinitionId: number): Observable<JobDefinition> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/job-definitions/${jobDefinitionId}`;
+    return this.http.get<JobDefinition>(url);
+  }
+
+  deleteJobDefinition(workspaceId: number, jobDefinitionId: number): Observable<{ success: boolean; message: string }> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/job-definitions/${jobDefinitionId}`;
+    return this.http.delete<{ success: boolean; message: string }>(url);
   }
 }

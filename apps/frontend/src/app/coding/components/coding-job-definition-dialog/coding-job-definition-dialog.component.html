@@ -1,5 +1,14 @@
 <div class="dialog-container">
-  <h2 class="dialog-title">{{ data.isEdit ? 'Kodierjob bearbeiten' : 'Neue Kodierjob-Definition erstellen' }}</h2>
+  <h2 class="dialog-title">
+    <!-- Job Definition Mode -->
+    <ng-container *ngIf="data.mode === 'definition'">
+      {{ data.isEdit ? 'Job-Definition bearbeiten' : 'Neue Job-Definition erstellen' }}
+    </ng-container>
+    <!-- Job Mode -->
+    <ng-container *ngIf="data.mode === 'job'">
+      {{ data.isEdit ? 'Kodierjob bearbeiten' : 'Neuer Kodierjob erstellen' }}
+    </ng-container>
+  </h2>
   <mat-divider></mat-divider>
 
   <div class="dialog-content">
@@ -8,17 +17,45 @@
         <h3>Allgemeine Informationen</h3>
 
         <mat-form-field appearance="fill" class="full-width">
-          <mat-label>Name</mat-label>
-          <input matInput formControlName="name" placeholder="Name des Kodierjobs" required>
-          @if (codingJobForm.get('name')?.invalid && codingJobForm.get('name')?.touched) {
-            <mat-error>Name ist erforderlich</mat-error>
+          <mat-label>Dauer für eine Kodieraufgabe (Sekunden)</mat-label>
+          <input matInput type="number" formControlName="durationSeconds" placeholder="z.B. 300 (5 Minuten)" min="1">
+          <mat-hint>Optionale Angabe der erwarteten Bearbeitungszeit für eine einzelne Kodieraufgabe in Sekunden</mat-hint>
+          @if (codingJobForm.get('durationSeconds')?.invalid && codingJobForm.get('durationSeconds')?.touched) {
+            <mat-error>Die Dauer muss mindestens 1 Sekunde betragen</mat-error>
           }
         </mat-form-field>
 
         <mat-form-field appearance="fill" class="full-width">
-          <mat-label>Beschreibung</mat-label>
-          <textarea matInput formControlName="description" placeholder="Beschreibung des Kodierjobs" rows="3"></textarea>
+          <mat-label>Maximale Anzahl Kodierfälle</mat-label>
+          <input matInput type="number" formControlName="maxCodingCases" placeholder="z.B. 100" min="1">
+          <mat-hint>Optionale Angabe der maximalen Anzahl von Kodierfällen. Bei mehr verfügbaren Fällen wird zufällig ausgewählt.</mat-hint>
+          @if (codingJobForm.get('maxCodingCases')?.invalid && codingJobForm.get('maxCodingCases')?.touched) {
+            <mat-error>Die maximale Anzahl muss mindestens 1 betragen</mat-error>
+          }
         </mat-form-field>
+
+        <div class="double-coding-section">
+          <h4>Doppelkodierung</h4>
+          <p class="section-description">Konfiguriere, welche Fälle doppelt kodiert werden sollen.</p>
+
+          <div class="double-coding-controls">
+            <mat-button-toggle-group [(value)]="doubleCodingMode" (change)="toggleDoubleCodingMode()">
+              <mat-button-toggle value="absolute">Absolute Anzahl</mat-button-toggle>
+              <mat-button-toggle value="percentage">Prozent</mat-button-toggle>
+            </mat-button-toggle-group>
+
+            <mat-form-field appearance="fill" class="double-coding-input">
+              <mat-label>{{ getDoubleCodingLabel() }}</mat-label>
+              <input matInput type="number"
+                     [formControl]="currentDoubleCodingControl"
+                     [placeholder]="getDoubleCodingPlaceholder()"
+                     min="0"
+                     [max]="doubleCodingMode === 'percentage' ? 100 : null"
+                     [step]="doubleCodingMode === 'percentage' ? 0.1 : 1">
+              <mat-hint *ngIf="doubleCodingMode === 'percentage'">Der Prozentsatz muss zwischen 0 und 100 liegen</mat-hint>
+            </mat-form-field>
+          </div>
+        </div>
 
         <mat-form-field appearance="fill" class="full-width" *ngIf="data.isEdit">
           <mat-label>Status</mat-label>
@@ -59,6 +96,14 @@
               <div class="count-item">
                 <span class="count-label">Kodierer:</span>
                 <span class="count-value">{{ selectedCoders.selected.length }}</span>
+              </div>
+              <div class="count-item">
+                <span class="count-label">Gesamt Kodierfälle:</span>
+                <span class="count-value">{{ getTotalCodingCases() }}</span>
+              </div>
+              <div class="count-item">
+                <span class="count-label">Geschätzte Zeit:</span>
+                <span class="count-value">{{ getFormattedTotalTime() }}</span>
               </div>
             </div>
 
@@ -391,8 +436,23 @@
 
   <div class="dialog-actions">
     <button mat-button (click)="onCancel()">Abbrechen</button>
-    <button mat-raised-button color="primary" (click)="onSubmit()" [disabled]="codingJobForm.invalid">
-      {{ data.isEdit ? 'Speichern' : 'Erstellen' }}
-    </button>
+
+    <!-- Job Definition Mode Buttons -->
+    <ng-container *ngIf="data.mode === 'definition'">
+      <button mat-raised-button color="primary" (click)="onSubmit()" [disabled]="codingJobForm.invalid">
+        {{ data.isEdit ? 'Definition speichern' : 'Definition erstellen' }}
+      </button>
+      <button mat-stroked-button color="accent" (click)="onSubmitForReview()" [disabled]="codingJobForm.invalid" *ngIf="!data.isEdit">
+        <mat-icon>send</mat-icon>
+        Zur Prüfung einreichen
+      </button>
+    </ng-container>
+
+    <!-- Job Mode Buttons -->
+    <ng-container *ngIf="data.mode === 'job'">
+      <button mat-raised-button color="primary" (click)="onSubmit()" [disabled]="codingJobForm.invalid">
+        {{ data.isEdit ? 'Job speichern' : 'Job erstellen' }}
+      </button>
+    </ng-container>
   </div>
 </div>
