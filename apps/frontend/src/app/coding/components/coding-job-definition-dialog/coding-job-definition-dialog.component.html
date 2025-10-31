@@ -58,6 +58,25 @@
           </div>
         </div>
 
+        <div class="coding-display-options-section" *ngIf="data.mode === 'job'">
+          <h4>{{ 'coding-job-definition-dialog.coding-display-options.title' | translate }}</h4>
+          <p class="section-description">Steuern Sie, welche Elemente während der Kodierung angezeigt werden sollen.</p>
+
+          <div class="display-options-controls">
+            <mat-checkbox formControlName="showScore" class="display-option-checkbox">
+              {{ 'coding-job-definition-dialog.coding-display-options.show-score' | translate }}
+            </mat-checkbox>
+
+            <mat-checkbox formControlName="allowComments" class="display-option-checkbox">
+              {{ 'coding-job-definition-dialog.coding-display-options.allow-comments' | translate }}
+            </mat-checkbox>
+
+            <mat-checkbox formControlName="suppressGeneralInstructions" class="display-option-checkbox">
+              {{ 'coding-job-definition-dialog.coding-display-options.suppress-general-instructions' | translate }}
+            </mat-checkbox>
+          </div>
+        </div>
+
         <mat-form-field appearance="fill" class="full-width" *ngIf="data.isEdit && data.mode === 'definition'">
           <mat-label>{{ 'coding-job-definition-dialog.form-fields.status-label' | translate }}</mat-label>
           <mat-select formControlName="status">

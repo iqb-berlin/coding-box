@@ -129,4 +129,31 @@ export class CreateCodingJobDto {
   @IsNumber()
   @IsOptional()
     jobDefinitionId?: number;
+
+  @ApiProperty({
+    description: 'Whether to show scores in the coding interface',
+    example: false,
+    default: false,
+    required: false
+  })
+  @IsOptional()
+    showScore?: boolean;
+
+  @ApiProperty({
+    description: 'Whether to allow comments in the coding interface',
+    example: true,
+    default: true,
+    required: false
+  })
+  @IsOptional()
+    allowComments?: boolean;
+
+  @ApiProperty({
+    description: 'Whether to suppress general instructions in the coding interface',
+    example: false,
+    default: false,
+    required: false
+  })
+  @IsOptional()
+    suppressGeneralInstructions?: boolean;
 }

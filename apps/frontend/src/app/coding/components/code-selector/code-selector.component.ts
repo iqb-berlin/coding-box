@@ -48,6 +48,9 @@ export class CodeSelectorComponent implements OnChanges {
   @Input() isPausingJob: boolean = false;
   @Input() unitsData: UnitsReplay | null = null;
   @Input() codingService!: ReplayCodingService;
+  @Input() showScore: boolean = true;
+  @Input() allowComments: boolean = true;
+  @Input() suppressGeneralInstructions: boolean = false;
 
   @Output() codeSelected = new EventEmitter<CodeSelectedEvent>();
   @Output() openChanged = new EventEmitter<boolean>();

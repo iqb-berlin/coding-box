@@ -307,15 +307,15 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
 
       const result = await dialogRef.afterClosed().toPromise();
 
-      if (result === true) {
-        this.createBulkJobsFromDefinition(dialogData, definition, workspaceId);
+      if (result && result.confirmed) {
+        this.createBulkJobsFromDefinition(dialogData, definition, workspaceId, result);
       }
     } catch (error) {
       this.showError(`Fehler beim Laden der Kodierer: ${(error as Error).message}`);
     }
   }
 
-  private async createBulkJobsFromDefinition(data: BulkCreationData, definition: JobDefinition, workspaceId: number): Promise<void> { // eslint-disable-line @typescript-eslint/no-unused-vars
+  private async createBulkJobsFromDefinition(data: BulkCreationData, definition: JobDefinition, workspaceId: number, displayOptions: { showScore: boolean; allowComments: boolean; suppressGeneralInstructions: boolean }): Promise<void> {
     const selectedCoderIds = data.selectedCoders.map(c => c.id);
     let successCount = 0;
     let errorCount = 0;
@@ -338,7 +338,10 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
         maxCodingCases: definition.maxCodingCases,
         doubleCodingAbsolute: definition.doubleCodingAbsolute,
         doubleCodingPercentage: definition.doubleCodingPercentage,
-        jobDefinitionId: definition.id
+        jobDefinitionId: definition.id,
+        showScore: displayOptions.showScore,
+        allowComments: displayOptions.allowComments,
+        suppressGeneralInstructions: displayOptions.suppressGeneralInstructions
       };
 
       try {
@@ -370,7 +373,10 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
         maxCodingCases: definition.maxCodingCases,
         doubleCodingAbsolute: definition.doubleCodingAbsolute,
         doubleCodingPercentage: definition.doubleCodingPercentage,
-        jobDefinitionId: definition.id
+        jobDefinitionId: definition.id,
+        showScore: displayOptions.showScore,
+        allowComments: displayOptions.allowComments,
+        suppressGeneralInstructions: displayOptions.suppressGeneralInstructions
       };
 
       try {
