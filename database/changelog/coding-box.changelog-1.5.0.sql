@@ -61,12 +61,12 @@ ALTER TABLE "public"."job_definitions" ADD COLUMN "assigned_variables" JSONB NUL
 ALTER TABLE "public"."job_definitions" ADD COLUMN "assigned_variable_bundles" JSONB NULL;
 ALTER TABLE "public"."job_definitions" ADD COLUMN "assigned_coders" JSONB NULL;
 
--- rollback DROP TYPE IF EXISTS job_definition_status;
 -- rollback ALTER TABLE "public"."job_definitions" DROP COLUMN IF EXISTS "status";
 -- rollback ALTER TABLE "public"."job_definitions" DROP COLUMN IF EXISTS "assigned_variables";
 -- rollback ALTER TABLE "public"."job_definitions" DROP COLUMN IF EXISTS "assigned_variable_bundles";
 -- rollback ALTER TABLE "public"."job_definitions" DROP COLUMN IF EXISTS "assigned_coders";
 -- rollback ALTER TABLE "public"."job_definitions" ALTER COLUMN "coding_job_id" SET NOT NULL;
+-- rollback DROP TYPE IF EXISTS job_definition_status;
 
 -- changeset jurei733:6
 -- comment: Change job_definitions and coding_job relationship from one-to-one to many-to-one
