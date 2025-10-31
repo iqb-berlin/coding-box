@@ -28,6 +28,7 @@ export interface CodingJob {
   maxCodingCases?: number;
   doubleCodingAbsolute?: number;
   doubleCodingPercentage?: number;
+  jobDefinitionId?: number;
 }
 
 export interface Variable {

@@ -120,4 +120,13 @@ export class CreateCodingJobDto {
   @IsNumber()
   @IsOptional()
     doubleCodingPercentage?: number;
+
+  @ApiProperty({
+    description: 'ID of the job definition this job is created from',
+    example: 1,
+    required: false
+  })
+  @IsNumber()
+  @IsOptional()
+    jobDefinitionId?: number;
 }

@@ -283,7 +283,9 @@
                   @for (variable of dataSource.filteredData; track variable.unitName + variable.variableId) {
                     <div class="variable-card"
                          [class.selected]="selectedVariables.isSelected(variable)"
-                         (click)="selectedVariables.toggle(variable)">
+                         [class.disabled]="isVariableDisabled(variable)"
+                         [class.clickable]="!isVariableDisabled(variable)"
+                         (click)="!isVariableDisabled(variable) && selectedVariables.toggle(variable)">
                       <div class="variable-card-header">
                         <div class="variable-identifiers">
                           <div class="variable-id">
@@ -293,6 +295,9 @@
                             }
                             @if (data.isEdit && isVariableOriginallyAssigned(variable)) {
                               <mat-icon class="assigned-indicator" matTooltip="Bereits diesem Kodierjob zugewiesen" matTooltipPosition="above">check_circle</mat-icon>
+                            }
+                            @if (isVariableDisabled(variable)) {
+                              <mat-icon class="disabled-indicator" matTooltip="Bereits in anderen Definitionen verwendet" matTooltipPosition="above">block</mat-icon>
                             }
                           </div>
                         </div>

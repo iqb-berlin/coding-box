@@ -8,13 +8,17 @@
     </p>
 
     <div class="jobs-preview">
-      @for (job of jobPreviews; track job.variable.unitName + job.variable.variableId) {
+      @for (job of jobPreviews; track job.name) {
         <div class="job-preview-item">
           <div class="job-header">
             <span class="job-name">{{ job.name }}</span>
           </div>
           <div class="variable-info">
-            Variable: {{ job.variable.unitName }} → {{ job.variable.variableId }}
+            @if (job.variable) {
+              Variable: {{ job.variable.unitName }} → {{ job.variable.variableId }}
+            } @else if (job.bundle) {
+              Variablenbündel: {{ job.bundle.variables?.length || 0 }} Variablen
+            }
           </div>
         </div>
       }
@@ -33,19 +37,7 @@
       </div>
     </div>
 
-    @if (data.selectedVariableBundles.length > 0) {
-      <div class="bundles-section">
-        <h3>Variablenbündel</h3>
-        <p>Folgende Variablenbündel werden allen Aufträgen zugewiesen:</p>
-        <div class="bundles-list">
-          @for (bundle of data.selectedVariableBundles; track bundle.id) {
-            <div class="bundle-item">
-              {{ bundle.name }} ({{ bundle.variables?.length || 0 }} Variablen)
-            </div>
-          }
-        </div>
-      </div>
-    }
+
   </div>
 
   <div class="dialog-actions">

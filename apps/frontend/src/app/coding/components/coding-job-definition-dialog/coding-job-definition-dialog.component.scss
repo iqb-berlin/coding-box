@@ -408,6 +408,21 @@
         background-color: #e3f2fd;
       }
 
+      &.disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        filter: grayscale(50%);
+
+        &:hover {
+          box-shadow: none;
+          transform: none;
+        }
+      }
+
+      &.clickable {
+        cursor: pointer;
+      }
+
       .variable-card-header {
         display: flex;
         align-items: center;
@@ -429,6 +444,13 @@
 
             .assigned-indicator {
               color: #4caf50;
+              font-size: 18px;
+              width: 18px;
+              height: 18px;
+            }
+
+            .disabled-indicator {
+              color: #f44336;
               font-size: 18px;
               width: 18px;
               height: 18px;
