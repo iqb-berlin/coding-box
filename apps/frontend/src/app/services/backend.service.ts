@@ -65,6 +65,20 @@ type ReplayStatisticsResponse = {
   errorMessage?: string;
 };
 
+interface JobDefinitionApiResponse {
+  id?: number;
+  status?: 'draft' | 'pending_review' | 'approved';
+  assigned_variables?: import('../coding/models/coding-job.model').Variable[];
+  assigned_variable_bundles?: import('../coding/models/coding-job.model').VariableBundle[];
+  assigned_coders?: number[];
+  duration_seconds?: number;
+  max_coding_cases?: number;
+  double_coding_absolute?: number;
+  double_coding_percentage?: number;
+  created_at?: Date;
+  updated_at?: Date;
+}
+
 interface JobDefinition {
   id?: number;
   status?: 'draft' | 'pending_review' | 'approved';
@@ -75,8 +89,8 @@ interface JobDefinition {
   maxCodingCases?: number;
   doubleCodingAbsolute?: number;
   doubleCodingPercentage?: number;
-  created_at?: Date;
-  updated_at?: Date;
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
 interface PaginatedResponse<T> {
@@ -1042,17 +1056,40 @@ export class BackendService {
 
   getJobDefinitions(workspaceId: number): Observable<JobDefinition[]> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/job-definitions`;
-    return this.http.get<JobDefinition[]>(url);
+    return this.http.get<JobDefinitionApiResponse[]>(url).pipe(
+      map((definitions: JobDefinitionApiResponse[]) => definitions.map(def => ({
+        id: def.id,
+        status: def.status,
+        assignedVariables: def.assigned_variables,
+        assignedVariableBundles: def.assigned_variable_bundles,
+        assignedCoders: def.assigned_coders,
+        durationSeconds: def.duration_seconds,
+        maxCodingCases: def.max_coding_cases,
+        doubleCodingAbsolute: def.double_coding_absolute,
+        doubleCodingPercentage: def.double_coding_percentage,
+        createdAt: def.created_at,
+        updatedAt: def.updated_at
+      })))
+    );
   }
 
   getApprovedJobDefinitions(workspaceId: number): Observable<JobDefinition[]> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/job-definitions/approved`;
-    return this.http.get<JobDefinition[]>(url);
-  }
-
-  getJobDefinition(workspaceId: number, jobDefinitionId: number): Observable<JobDefinition> {
-    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/job-definitions/${jobDefinitionId}`;
-    return this.http.get<JobDefinition>(url);
+    return this.http.get<JobDefinitionApiResponse[]>(url).pipe(
+      map((definitions: JobDefinitionApiResponse[]) => definitions.map(def => ({
+        id: def.id,
+        status: def.status,
+        assignedVariables: def.assigned_variables,
+        assignedVariableBundles: def.assigned_variable_bundles,
+        assignedCoders: def.assigned_coders,
+        durationSeconds: def.duration_seconds,
+        maxCodingCases: def.max_coding_cases,
+        doubleCodingAbsolute: def.double_coding_absolute,
+        doubleCodingPercentage: def.double_coding_percentage,
+        createdAt: def.created_at,
+        updatedAt: def.updated_at
+      })))
+    );
   }
 
   deleteJobDefinition(workspaceId: number, jobDefinitionId: number): Observable<{ success: boolean; message: string }> {

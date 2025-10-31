@@ -24,7 +24,7 @@ import { MatTabsModule } from '@angular/material/tabs';
 import { MatExpansionModule } from '@angular/material/expansion';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateService, TranslateModule } from '@ngx-translate/core';
 import { SelectionModel } from '@angular/cdk/collections';
 import { MatTooltip } from '@angular/material/tooltip';
 import { forkJoin } from 'rxjs';
@@ -95,6 +95,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
   private snackBar = inject(MatSnackBar);
   private codingJobService = inject(CodingJobService);
   private matDialog = inject(MatDialog);
+  private translateService = inject(TranslateService);
 
   codingJobForm!: FormGroup;
   isLoading = false;
@@ -218,7 +219,8 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
     };
 
     if (this.data.isEdit) {
-      formFields.status = [this.data.codingJob?.status || 'pending', [Validators.required]];
+      const defaultStatus = this.data.mode === 'definition' ? 'draft' : 'pending';
+      formFields.status = [this.data.codingJob?.status || defaultStatus, [Validators.required]];
     }
 
     this.codingJobForm = this.fb.group(formFields);
@@ -463,7 +465,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
 
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
-      this.snackBar.open('No workspace selected', 'Close', { duration: 3000 });
+      this.snackBar.open(this.translateService.instant('coding-job-definition-dialog.snackbars.no-workspace-selected'), this.translateService.instant('common.close'), { duration: 3000 });
       this.isSaving = false;
       return;
     }
@@ -490,12 +492,12 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
             next: results => {
               const lastJob = results.filter(Boolean).pop() || { ...updatedJob, assignedCoders: selectedCoderIds };
               this.isSaving = false;
-              this.snackBar.open('Coding job updated successfully', 'Close', { duration: 3000 });
+              this.snackBar.open(this.translateService.instant('coding-job-definition-dialog.snackbars.job-updated-success'), this.translateService.instant('close'), { duration: 3000 });
               this.dialogRef.close(lastJob);
             },
             error: () => {
               this.isSaving = false;
-              this.snackBar.open('Coding job updated, but assigning coders failed', 'Close', { duration: 5000 });
+              this.snackBar.open(this.translateService.instant('coding-job-definition-dialog.snackbars.job-updated-coder-failed'), this.translateService.instant('close'), { duration: 5000 });
               this.dialogRef.close({ ...updatedJob, assignedCoders: selectedCoderIds });
             }
           });
@@ -517,7 +519,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
 
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
-      this.snackBar.open('No workspace selected', 'Close', { duration: 3000 });
+      this.snackBar.open(this.translateService.instant('coding-job-definition-dialog.snackbars.no-workspace-selected'), this.translateService.instant('common.close'), { duration: 3000 });
       this.isSaving = false;
       return;
     }
@@ -589,7 +591,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
 
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
-      this.snackBar.open('No workspace selected', 'Close', { duration: 3000 });
+      this.snackBar.open(this.translateService.instant('coding-job-definition-dialog.snackbars.no-workspace-selected'), this.translateService.instant('common.close'), { duration: 3000 });
       this.isSaving = false;
       return;
     }
@@ -652,16 +654,16 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
 
   getDoubleCodingLabel(): string {
     if (this.doubleCodingMode === 'absolute') {
-      return 'Absolute Anzahl';
+      return this.translateService.instant('coding-job-definition-dialog.double-coding.labels.absolute');
     }
-    return 'Prozent';
+    return this.translateService.instant('coding-job-definition-dialog.double-coding.labels.percentage');
   }
 
   getDoubleCodingPlaceholder(): string {
     if (this.doubleCodingMode === 'absolute') {
-      return 'z.B. 10 Fälle';
+      return this.translateService.instant('coding-job-definition-dialog.double-coding.placeholders.absolute');
     }
-    return 'z.B. 25.5 für 25.5%';
+    return this.translateService.instant('coding-job-definition-dialog.double-coding.placeholders.percentage');
   }
 
   private submitDefinitionCreate(): void {
@@ -669,7 +671,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
 
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
-      this.snackBar.open('No workspace selected', 'Close', { duration: 3000 });
+      this.snackBar.open(this.translateService.instant('coding-job-definition-dialog.snackbars.no-workspace-selected'), this.translateService.instant('common.close'), { duration: 3000 });
       this.isSaving = false;
       return;
     }
@@ -705,7 +707,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
 
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
-      this.snackBar.open('No workspace selected', 'Close', { duration: 3000 });
+      this.snackBar.open(this.translateService.instant('coding-job-definition-dialog.snackbars.no-workspace-selected'), this.translateService.instant('common.close'), { duration: 3000 });
       this.isSaving = false;
       return;
     }
@@ -721,6 +723,10 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
       doubleCodingAbsolute: this.codingJobForm.value.doubleCodingAbsolute,
       doubleCodingPercentage: this.codingJobForm.value.doubleCodingPercentage
     };
+
+    if (this.codingJobForm.get('status')) {
+      jobDefinition.status = this.codingJobForm.value.status;
+    }
 
     this.backendService.updateJobDefinition(workspaceId, this.data.jobDefinitionId!, jobDefinition).subscribe({
       next: updatedDefinition => {
@@ -744,7 +750,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
 
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
-      this.snackBar.open('No workspace selected', 'Close', { duration: 3000 });
+      this.snackBar.open(this.translateService.instant('coding-job-definition-dialog.snackbars.no-workspace-selected'), this.translateService.instant('common.close'), { duration: 3000 });
       this.isSaving = false;
       return;
     }
