@@ -6,7 +6,6 @@ import {
   UpdateDateColumn,
   ManyToOne,
   OneToMany,
-  OneToOne,
   JoinColumn
 } from 'typeorm';
 // eslint-disable-next-line import/no-cycle
@@ -57,6 +56,13 @@ export class CodingJob {
   @JoinColumn({ name: 'missings_profile_id' })
     missingsProfile?: MissingsProfile;
 
+  @Column({ name: 'job_definition_id', nullable: true })
+    job_definition_id?: number;
+
+  @ManyToOne(() => JobDefinition, jobDefinition => jobDefinition.codingJobs, { nullable: true })
+  @JoinColumn({ name: 'job_definition_id' })
+    jobDefinition?: JobDefinition;
+
   @CreateDateColumn()
     created_at: Date;
 
@@ -68,7 +74,4 @@ export class CodingJob {
 
   @OneToMany(() => CodingJobCoder, codingJobCoder => codingJobCoder.coding_job, { cascade: true })
     codingJobCoders: CodingJobCoder[];
-
-  @OneToOne(() => JobDefinition, jobDefinition => jobDefinition.codingJob, { cascade: true })
-    jobDefinition?: JobDefinition;
 }

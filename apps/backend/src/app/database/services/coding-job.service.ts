@@ -253,7 +253,8 @@ export class CodingJobService {
       name: createCodingJobDto.name,
       description: createCodingJobDto.description,
       status: createCodingJobDto.status || 'pending',
-      missings_profile_id: createCodingJobDto.missings_profile_id
+      missings_profile_id: createCodingJobDto.missings_profile_id,
+      job_definition_id: createCodingJobDto.jobDefinitionId
     });
 
     const savedCodingJob = await this.codingJobRepository.save(codingJob);
@@ -285,14 +286,6 @@ export class CodingJobService {
       }
     }
     await this.saveCodingJobUnits(savedCodingJob.id);
-
-    if (createCodingJobDto.durationSeconds !== undefined) {
-      const jobDefinition = this.jobDefinitionRepository.create({
-        coding_job_id: savedCodingJob.id,
-        duration_seconds: createCodingJobDto.durationSeconds
-      });
-      await this.jobDefinitionRepository.save(jobDefinition);
-    }
 
     return savedCodingJob;
   }

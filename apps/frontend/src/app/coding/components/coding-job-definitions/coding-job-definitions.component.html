@@ -1,7 +1,7 @@
 <div class="job-definitions-container">
   <div class="header-actions">
     <h3>Job-Definitionen</h3>
-    <button mat-raised-button color="primary" (click)="createDefinition()">
+    <button mat-stroked-button color="primary" (click)="createDefinition()">
       <mat-icon>add</mat-icon>
       Neue Definition erstellen
     </button>
@@ -70,7 +70,7 @@
             <mat-icon>more_vert</mat-icon>
           </button>
           <mat-menu #menu="matMenu">
-            <button mat-menu-item *ngIf="definition.status === 'draft'" (click)="editDefinition(definition)">
+            <button mat-menu-item (click)="editDefinition(definition)">
               <mat-icon>edit</mat-icon>
               Bearbeiten
             </button>
@@ -86,7 +86,11 @@
               <mat-icon>cancel</mat-icon>
               Ablehnen
             </button>
-            <button mat-menu-item *ngIf="definition.status === 'draft' || definition.status === 'pending_review'" (click)="deleteDefinition(definition)">
+            <button mat-menu-item *ngIf="definition.status === 'approved'" (click)="createCodingJobFromDefinition(definition)">
+              <mat-icon>play_arrow</mat-icon>
+              Coding-Job erstellen
+            </button>
+            <button mat-menu-item (click)="deleteDefinition(definition)">
               <mat-icon>delete</mat-icon>
               Löschen
             </button>

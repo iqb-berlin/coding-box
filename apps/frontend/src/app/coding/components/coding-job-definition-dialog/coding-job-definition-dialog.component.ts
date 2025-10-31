@@ -132,6 +132,9 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
   variableIdFilter = '';
   bundleNameFilter = '';
 
+  private disabledVariableKeys = new Set<string>();
+  existingJobDefinitions: JobDefinition[] = [];
+
   constructor(
     public dialogRef: MatDialogRef<CodingJobDefinitionDialogComponent>,
     @Inject(MAT_DIALOG_DATA) public data: CodingJobDefinitionDialogData
@@ -152,6 +155,10 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
     this.loadAvailableCoders();
     if (this.data.isEdit && this.data.codingJob?.id) {
       this.loadCoders(this.data.codingJob.id);
+    }
+
+    if (!this.data.isEdit && this.data.mode === 'definition') {
+      this.loadExistingJobDefinitions();
     }
 
     this.dataSource.filterPredicate = (row, filter: string): boolean => {
@@ -189,6 +196,49 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
       },
       error: () => {
         this.isLoadingAvailableCoders = false;
+      }
+    });
+  }
+
+  loadExistingJobDefinitions(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      return;
+    }
+
+    this.backendService.getJobDefinitions(workspaceId).subscribe({
+      next: definitions => {
+        this.existingJobDefinitions = definitions;
+        this.buildDisabledVariablesSet();
+      },
+      error: () => {
+        // Silently fail - disabled variables will just not be disabled
+      }
+    });
+  }
+
+  private buildDisabledVariablesSet(): void {
+    this.disabledVariableKeys.clear();
+
+    const makeKey = (unitName: string, variableId: string) => `${unitName?.trim().toLowerCase() || ''}::${variableId?.trim().toLowerCase() || ''}`;
+
+    this.existingJobDefinitions.forEach(definition => {
+      if (definition.assignedVariables) {
+        definition.assignedVariables.forEach(variable => {
+          const key = makeKey(variable.unitName || '', variable.variableId || '');
+          this.disabledVariableKeys.add(key);
+        });
+      }
+
+      if (definition.assignedVariableBundles) {
+        definition.assignedVariableBundles.forEach(bundle => {
+          if (bundle.variables) {
+            bundle.variables.forEach(variable => {
+              const key = makeKey(variable.unitName || '', variable.variableId || '');
+              this.disabledVariableKeys.add(key);
+            });
+          }
+        });
       }
     });
   }
@@ -375,6 +425,21 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
     }
 
     return this.data.codingJob.assignedCoders.includes(coder.id);
+  }
+
+  isVariableDisabled(variable: Variable): boolean {
+    if (this.data.isEdit && this.data.mode === 'definition') {
+      return false;
+    }
+
+    if (this.data.mode !== 'definition') {
+      return false;
+    }
+
+    const makeKey = (unitName: string, variableId: string) => `${unitName?.trim().toLowerCase() || ''}::${variableId?.trim().toLowerCase() || ''}`;
+
+    const key = makeKey(variable.unitName || '', variable.variableId || '');
+    return this.disabledVariableKeys.has(key);
   }
 
   getVariableCount(bundle: VariableBundle): number {
@@ -600,10 +665,10 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
     let successCount = 0;
     let errorCount = 0;
 
+    // Create jobs for individual variables
     for (const variable of data.selectedVariables) {
       const jobName = `${variable.unitName}_${variable.variableId}`;
-
-      const codingJob: CodingJob = {
+      const codingJob = {
         id: 0,
         workspace_id: workspaceId,
         name: jobName,
@@ -612,20 +677,41 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
         updated_at: new Date(),
         assignedCoders: selectedCoderIds,
         variables: [variable],
-        variableBundles: data.selectedVariableBundles,
+        variableBundles: [],
         assignedVariables: [variable],
-        assignedVariableBundles: data.selectedVariableBundles
+        assignedVariableBundles: []
       };
-
       try {
         const createdJob = await this.backendService.createCodingJob(workspaceId, codingJob).toPromise();
-
         if (createdJob?.id && selectedCoderIds.length > 0) {
-          await forkJoin(
-            selectedCoderIds.map(id => this.codingJobService.assignCoder(createdJob.id!, id))
-          ).toPromise();
+          await forkJoin(selectedCoderIds.map(id => this.codingJobService.assignCoder(createdJob.id, id))).toPromise();
         }
+        successCount += 1;
+      } catch (error) {
+        errorCount += 1;
+      }
+    }
 
+    for (const bundle of data.selectedVariableBundles) {
+      const jobName = bundle.name;
+      const codingJob = {
+        id: 0,
+        workspace_id: workspaceId,
+        name: jobName,
+        status: 'pending',
+        created_at: new Date(),
+        updated_at: new Date(),
+        assignedCoders: selectedCoderIds,
+        variables: bundle.variables,
+        variableBundles: [bundle],
+        assignedVariables: bundle.variables,
+        assignedVariableBundles: [bundle]
+      };
+      try {
+        const createdJob = await this.backendService.createCodingJob(workspaceId, codingJob).toPromise();
+        if (createdJob?.id && selectedCoderIds.length > 0) {
+          await forkJoin(selectedCoderIds.map(id => this.codingJobService.assignCoder(createdJob.id, id))).toPromise();
+        }
         successCount += 1;
       } catch (error) {
         errorCount += 1;

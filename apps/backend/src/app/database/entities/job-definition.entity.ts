@@ -4,8 +4,7 @@ import {
   PrimaryGeneratedColumn,
   CreateDateColumn,
   UpdateDateColumn,
-  OneToOne,
-  JoinColumn
+  OneToMany
 } from 'typeorm';
 // eslint-disable-next-line import/no-cycle
 import { CodingJob } from './coding-job.entity';
@@ -27,12 +26,8 @@ export class JobDefinition {
   @PrimaryGeneratedColumn()
     id: number;
 
-  @Column({ nullable: true })
-    coding_job_id?: number;
-
-  @OneToOne(() => CodingJob, { onDelete: 'CASCADE', nullable: true })
-  @JoinColumn({ name: 'coding_job_id' })
-    codingJob?: CodingJob;
+  @OneToMany(() => CodingJob, codingJob => codingJob.jobDefinition, { cascade: false })
+    codingJobs: CodingJob[];
 
   @Column({
     type: 'enum',

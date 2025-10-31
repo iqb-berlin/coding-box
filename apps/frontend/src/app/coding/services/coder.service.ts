@@ -31,8 +31,8 @@ export class CoderService {
       username: string;
     }
 
-    this.http.get<{ data: WorkspaceUser[], total: number }>(url).subscribe({
-      next: response => {
+    return this.http.get<{ data: WorkspaceUser[], total: number }>(url).pipe(
+      map(response => {
         const coders: Coder[] = response.data.map(user => ({
           id: user.userId,
           name: user.username || `User ${user.userId}`,
@@ -40,10 +40,10 @@ export class CoderService {
           assignedJobs: []
         }));
         this.codersSubject.next(coders);
-      }
-    });
-
-    return this.codersSubject.asObservable();
+        return coders;
+      }),
+      catchError(() => of([]))
+    );
   }
 
   createCoder(coder: Omit<Coder, 'id'>): Observable<Coder> {

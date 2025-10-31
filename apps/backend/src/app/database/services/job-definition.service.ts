@@ -1,7 +1,9 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, In } from 'typeorm';
 import { JobDefinition } from '../entities/job-definition.entity';
+import { VariableBundle } from '../entities/variable-bundle.entity';
+import { CodingJobService } from './coding-job.service';
 import { CreateJobDefinitionDto } from '../../admin/coding-job/dto/create-job-definition.dto';
 import { UpdateJobDefinitionDto } from '../../admin/coding-job/dto/update-job-definition.dto';
 import { ApproveJobDefinitionDto } from '../../admin/coding-job/dto/approve-job-definition.dto';
@@ -10,7 +12,10 @@ import { ApproveJobDefinitionDto } from '../../admin/coding-job/dto/approve-job-
 export class JobDefinitionService {
   constructor(
     @InjectRepository(JobDefinition)
-    private jobDefinitionRepository: Repository<JobDefinition>
+    private jobDefinitionRepository: Repository<JobDefinition>,
+    @InjectRepository(VariableBundle)
+    private variableBundleRepository: Repository<VariableBundle>,
+    private codingJobService: CodingJobService
   ) {}
 
   async createJobDefinition(createDto: CreateJobDefinitionDto): Promise<JobDefinition> {
@@ -98,29 +103,49 @@ export class JobDefinitionService {
 
   async deleteJobDefinition(id: number): Promise<void> {
     const jobDefinition = await this.getJobDefinition(id);
-
-    if (jobDefinition.coding_job_id) {
-      throw new Error('Cannot delete job definition that is linked to a coding job');
-    }
-
     await this.jobDefinitionRepository.remove(jobDefinition);
-  }
-
-  async linkToCodingJob(jobDefinitionId: number, codingJobId: number): Promise<JobDefinition> {
-    const jobDefinition = await this.getJobDefinition(jobDefinitionId);
-
-    if (jobDefinition.status !== 'approved') {
-      throw new Error('Only approved job definitions can be linked to coding jobs');
-    }
-
-    jobDefinition.coding_job_id = codingJobId;
-    return this.jobDefinitionRepository.save(jobDefinition);
   }
 
   async getApprovedJobDefinitions(): Promise<JobDefinition[]> {
     return this.jobDefinitionRepository.find({
       where: { status: 'approved' },
       order: { created_at: 'DESC' }
+    });
+  }
+
+  async createCodingJobFromDefinition(jobDefinitionId: number, workspaceId: number) {
+    const jobDefinition = await this.getJobDefinition(jobDefinitionId);
+
+    if (jobDefinition.status !== 'approved') {
+      throw new Error('Only approved job definitions can be used to create coding jobs');
+    }
+
+    const allVariables = jobDefinition.assigned_variables || [];
+    if (jobDefinition.assigned_variable_bundles) {
+      const bundleIds = jobDefinition.assigned_variable_bundles.map(bundle => bundle.id);
+      const variableBundles = await this.variableBundleRepository.find({
+        where: { id: In(bundleIds) }
+      });
+      variableBundles.forEach(bundle => {
+        if (bundle.variables) {
+          allVariables.push(...bundle.variables);
+        }
+      });
+    }
+
+    const codingJobData = {
+      name: `Coding Job from Definition ${jobDefinitionId}`,
+      status: 'pending',
+      variables: allVariables,
+      assignedCoders: jobDefinition.assigned_coders || [],
+      durationSeconds: jobDefinition.duration_seconds,
+      doubleCodingAbsolute: jobDefinition.double_coding_absolute,
+      doubleCodingPercentage: jobDefinition.double_coding_percentage
+    };
+
+    return this.codingJobService.createCodingJob(workspaceId, {
+      ...codingJobData,
+      jobDefinitionId: jobDefinitionId
     });
   }
 }

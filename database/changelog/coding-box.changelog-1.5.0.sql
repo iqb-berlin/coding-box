@@ -67,3 +67,27 @@ ALTER TABLE "public"."job_definitions" ADD COLUMN "assigned_coders" JSONB NULL;
 -- rollback ALTER TABLE "public"."job_definitions" DROP COLUMN IF EXISTS "assigned_variable_bundles";
 -- rollback ALTER TABLE "public"."job_definitions" DROP COLUMN IF EXISTS "assigned_coders";
 -- rollback ALTER TABLE "public"."job_definitions" ALTER COLUMN "coding_job_id" SET NOT NULL;
+
+-- changeset jurei733:6
+-- comment: Change job_definitions and coding_job relationship from one-to-one to many-to-one
+
+-- Add job_definition_id column to coding_job table
+ALTER TABLE "public"."coding_job" ADD COLUMN "job_definition_id" INTEGER NULL;
+
+-- Add foreign key constraint
+ALTER TABLE "public"."coding_job" ADD CONSTRAINT "FK_coding_job_job_definition_id" FOREIGN KEY ("job_definition_id") REFERENCES "public"."job_definitions"("id") ON DELETE SET NULL ON UPDATE NO ACTION;
+
+-- Drop old foreign key from job_definitions
+ALTER TABLE "public"."job_definitions" DROP CONSTRAINT IF EXISTS "FK_job_definitions_coding_job_id";
+
+-- Drop old unique constraint
+ALTER TABLE "public"."job_definitions" DROP CONSTRAINT IF EXISTS "UQ_job_definitions_coding_job_id";
+
+-- Remove old coding_job_id column from job_definitions
+ALTER TABLE "public"."job_definitions" DROP COLUMN IF EXISTS "coding_job_id";
+
+-- rollback ALTER TABLE "public"."coding_job" DROP COLUMN IF EXISTS "job_definition_id";
+-- rollback ALTER TABLE "public"."job_definitions" DROP CONSTRAINT IF EXISTS "FK_coding_job_job_definition_id";
+-- rollback ALTER TABLE "public"."job_definitions" ADD COLUMN "coding_job_id" INTEGER NULL;
+-- rollback ALTER TABLE "public"."job_definitions" ADD CONSTRAINT "UQ_job_definitions_coding_job_id" UNIQUE ("coding_job_id");
+-- rollback ALTER TABLE "public"."job_definitions" ADD CONSTRAINT "FK_job_definitions_coding_job_id" FOREIGN KEY ("coding_job_id") REFERENCES "public"."coding_job"("id") ON DELETE CASCADE ON UPDATE NO ACTION;

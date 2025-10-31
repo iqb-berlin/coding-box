@@ -1073,25 +1073,6 @@ export class BackendService {
     );
   }
 
-  getApprovedJobDefinitions(workspaceId: number): Observable<JobDefinition[]> {
-    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/job-definitions/approved`;
-    return this.http.get<JobDefinitionApiResponse[]>(url).pipe(
-      map((definitions: JobDefinitionApiResponse[]) => definitions.map(def => ({
-        id: def.id,
-        status: def.status,
-        assignedVariables: def.assigned_variables,
-        assignedVariableBundles: def.assigned_variable_bundles,
-        assignedCoders: def.assigned_coders,
-        durationSeconds: def.duration_seconds,
-        maxCodingCases: def.max_coding_cases,
-        doubleCodingAbsolute: def.double_coding_absolute,
-        doubleCodingPercentage: def.double_coding_percentage,
-        createdAt: def.created_at,
-        updatedAt: def.updated_at
-      })))
-    );
-  }
-
   deleteJobDefinition(workspaceId: number, jobDefinitionId: number): Observable<{ success: boolean; message: string }> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/job-definitions/${jobDefinitionId}`;
     return this.http.delete<{ success: boolean; message: string }>(url);

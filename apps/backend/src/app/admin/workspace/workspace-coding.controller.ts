@@ -24,6 +24,7 @@ import { ExportValidationResultsRequestDto } from '../../../../../../api-dto/cod
 import { ExternalCodingImportDto } from '../../../../../../api-dto/coding/external-coding-import.dto';
 import { MissingsProfilesService } from '../../database/services/missings-profiles.service';
 import { JobDefinitionService } from '../../database/services/job-definition.service';
+import { CodingJob } from '../../database/entities/coding-job.entity';
 import { CreateJobDefinitionDto } from '../coding-job/dto/create-job-definition.dto';
 import { UpdateJobDefinitionDto } from '../coding-job/dto/update-job-definition.dto';
 import { ApproveJobDefinitionDto } from '../coding-job/dto/approve-job-definition.dto';
@@ -57,7 +58,6 @@ export class WorkspaceCodingController {
     return this.workspaceCodingService.codeTestPersons(workspace_id, testPersons, autoCoderRun);
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   @Get(':workspace_id/coding/manual')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiParam({ name: 'workspace_id', type: Number })
@@ -1161,7 +1161,6 @@ export class WorkspaceCodingController {
       throw new Error('At least one valid training ID must be provided');
     }
 
-    // Get coding results for all training jobs combined
     return this.coderTrainingService.getTrainingCodingComparison(workspace_id, trainingIds);
   }
 
@@ -1580,5 +1579,20 @@ export class WorkspaceCodingController {
   ): Promise<{ success: boolean; message: string }> {
     await this.jobDefinitionService.deleteJobDefinition(id);
     return { success: true, message: 'Job definition deleted successfully' };
+  }
+
+  @Post(':workspace_id/coding/job-definitions/:id/create-job')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiParam({ name: 'id', type: Number, description: 'Job definition ID' })
+  @ApiOkResponse({
+    description: 'Coding job created successfully from job definition.'
+  })
+  async createCodingJobFromDefinition(
+    @WorkspaceId() workspace_id: number,
+      @Param('id') id: number
+  ): Promise<CodingJob> {
+    return this.jobDefinitionService.createCodingJobFromDefinition(id, workspace_id);
   }
 }

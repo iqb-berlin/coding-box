@@ -14,11 +14,14 @@ import { MatMenuModule } from '@angular/material/menu';
 import { MatDialog } from '@angular/material/dialog';
 import { MatCardModule } from '@angular/material/card';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { Subject, takeUntil } from 'rxjs';
+import { Subject, takeUntil, forkJoin } from 'rxjs';
 import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
 import { Variable, VariableBundle } from '../../models/coding-job.model';
+import { CoderService } from '../../services/coder.service';
+import { CodingJobService } from '../../services/coding-job.service';
 import { CodingJobDefinitionDialogComponent, CodingJobDefinitionDialogData } from '../coding-job-definition-dialog/coding-job-definition-dialog.component';
+import { CodingJobBulkCreationDialogComponent, BulkCreationData } from '../coding-job-bulk-creation-dialog/coding-job-bulk-creation-dialog.component';
 
 interface JobDefinition {
   id?: number;
@@ -54,6 +57,8 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
   private appService = inject(AppService);
   private snackBar = inject(MatSnackBar);
   private dialog = inject(MatDialog);
+  private coderService = inject(CoderService);
+  private codingJobService = inject(CodingJobService);
   private destroy$ = new Subject<void>();
 
   jobDefinitions: JobDefinition[] = [];
@@ -132,8 +137,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
   createDefinition(): void {
     const dialogData: CodingJobDefinitionDialogData = {
       isEdit: false,
-      mode: 'definition',
-      preloadedVariables: []
+      mode: 'definition'
     };
 
     const dialogRef = this.dialog.open(CodingJobDefinitionDialogComponent, {
@@ -274,6 +278,119 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
           this.showError(`Fehler beim Löschen: ${error.message}`);
         }
       });
+  }
+
+  async createCodingJobFromDefinition(definition: JobDefinition): Promise<void> {
+    if (!definition.id || !definition.assignedCoders) {
+      return;
+    }
+
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      this.showError('No workspace selected');
+      return;
+    }
+
+    try {
+      const allCoders = await this.coderService.getCoders().toPromise();
+      const selectedCoders = allCoders?.filter(coder => definition.assignedCoders!.includes(coder.id)) || [];
+
+      const dialogData: BulkCreationData = {
+        selectedVariables: definition.assignedVariables || [],
+        selectedVariableBundles: definition.assignedVariableBundles || [],
+        selectedCoders: selectedCoders
+      };
+      const dialogRef = this.dialog.open(CodingJobBulkCreationDialogComponent, {
+        width: '700px',
+        data: dialogData
+      });
+
+      const result = await dialogRef.afterClosed().toPromise();
+
+      if (result === true) {
+        this.createBulkJobsFromDefinition(dialogData, definition, workspaceId);
+      }
+    } catch (error) {
+      this.showError(`Fehler beim Laden der Kodierer: ${(error as Error).message}`);
+    }
+  }
+
+  private async createBulkJobsFromDefinition(data: BulkCreationData, definition: JobDefinition, workspaceId: number): Promise<void> { // eslint-disable-line @typescript-eslint/no-unused-vars
+    const selectedCoderIds = data.selectedCoders.map(c => c.id);
+    let successCount = 0;
+    let errorCount = 0;
+
+    for (const variable of data.selectedVariables) {
+      const jobName = `${variable.unitName}_${variable.variableId}`;
+      const codingJob = {
+        id: 0,
+        workspace_id: workspaceId,
+        name: jobName,
+        status: 'pending',
+        created_at: new Date(),
+        updated_at: new Date(),
+        assignedCoders: selectedCoderIds,
+        variables: [variable],
+        variableBundles: [],
+        assignedVariables: [variable],
+        assignedVariableBundles: [],
+        durationSeconds: definition.durationSeconds,
+        maxCodingCases: definition.maxCodingCases,
+        doubleCodingAbsolute: definition.doubleCodingAbsolute,
+        doubleCodingPercentage: definition.doubleCodingPercentage,
+        jobDefinitionId: definition.id
+      };
+
+      try {
+        const createdJob = await this.backendService.createCodingJob(workspaceId, codingJob).toPromise();
+        if (createdJob?.id && selectedCoderIds.length > 0) {
+          await forkJoin(selectedCoderIds.map(id => this.codingJobService.assignCoder(createdJob.id, id))).toPromise();
+        }
+        successCount += 1;
+      } catch (error) {
+        errorCount += 1;
+      }
+    }
+
+    for (const bundle of data.selectedVariableBundles) {
+      const jobName = bundle.name;
+      const codingJob = {
+        id: 0,
+        workspace_id: workspaceId,
+        name: jobName,
+        status: 'pending',
+        created_at: new Date(),
+        updated_at: new Date(),
+        assignedCoders: selectedCoderIds,
+        variables: bundle.variables,
+        variableBundles: [bundle],
+        assignedVariables: bundle.variables,
+        assignedVariableBundles: [bundle],
+        durationSeconds: definition.durationSeconds,
+        maxCodingCases: definition.maxCodingCases,
+        doubleCodingAbsolute: definition.doubleCodingAbsolute,
+        doubleCodingPercentage: definition.doubleCodingPercentage,
+        jobDefinitionId: definition.id
+      };
+
+      try {
+        const createdJob = await this.backendService.createCodingJob(workspaceId, codingJob).toPromise();
+        if (createdJob?.id && selectedCoderIds.length > 0) {
+          await forkJoin(selectedCoderIds.map(id => this.codingJobService.assignCoder(createdJob.id, id))).toPromise();
+        }
+        successCount += 1;
+      } catch (error) {
+        errorCount += 1;
+      }
+    }
+
+    if (errorCount === 0) {
+      this.snackBar.open(`${successCount} Coding-Jobs wurden erfolgreich erstellt`, 'Schließen', { duration: 3000 });
+    } else {
+      this.snackBar.open(`${successCount} Jobs erstellt, ${errorCount} fehlgeschlagen`, 'Schließen', { duration: 5000 });
+    }
+
+    this.loadJobDefinitions();
   }
 
   private showError(message: string): void {

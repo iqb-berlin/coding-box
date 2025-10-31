@@ -16,7 +16,8 @@ export interface BulkCreationData {
 
 export interface JobPreview {
   name: string;
-  variable: Variable;
+  variable?: Variable;
+  bundle?: VariableBundle;
 }
 
 @Component({
@@ -44,10 +45,21 @@ export class CodingJobBulkCreationDialogComponent {
   }
 
   private createJobPreviews(): JobPreview[] {
-    return this.data.selectedVariables.map(variable => ({
-      name: `${variable.unitName}_${variable.variableId}`,
-      variable
-    }));
+    const previews: JobPreview[] = [];
+    this.data.selectedVariables.forEach(variable => {
+      previews.push({
+        name: `${variable.unitName}_${variable.variableId}`,
+        variable
+      });
+    });
+    this.data.selectedVariableBundles.forEach(bundle => {
+      previews.push({
+        name: bundle.name,
+        bundle
+      });
+    });
+
+    return previews;
   }
 
   onCancel(): void {
