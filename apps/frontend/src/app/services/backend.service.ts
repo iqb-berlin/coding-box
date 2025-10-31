@@ -611,6 +611,27 @@ export class BackendService {
     return this.variableAnalysisService.deleteJob(workspaceId, jobId);
   }
 
+  createDistributedCodingJobs(
+    workspaceId: number,
+    selectedVariables: { unitName: string; variableId: string }[],
+    selectedCoders: { id: number; name: string; username: string }[]
+  ): Observable<{
+      success: boolean;
+      jobsCreated: number;
+      message: string;
+      distribution: Record<string, Record<string, number>>;
+      jobs: {
+        coderId: number;
+        coderName: string;
+        variable: { unitName: string; variableId: string };
+        jobId: number;
+        jobName: string;
+        caseCount: number;
+      }[];
+    }> {
+    return this.codingService.createDistributedCodingJobs(workspaceId, selectedVariables, selectedCoders);
+  }
+
   createValidationTask(
     workspaceId: number,
     type: 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'groupResponses' | 'deleteResponses' | 'deleteAllResponses' | 'duplicateResponses',

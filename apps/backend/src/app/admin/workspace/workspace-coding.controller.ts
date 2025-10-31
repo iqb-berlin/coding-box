@@ -1636,4 +1636,121 @@ export class WorkspaceCodingController {
       }> {
     return this.workspaceCodingService.applyCodingResults(workspace_id, jobId);
   }
+
+  @Post(':workspace_id/coding/create-distributed-jobs')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiBody({
+    description: 'Create distributed coding jobs with equal case distribution',
+    schema: {
+      type: 'object',
+      properties: {
+        selectedVariables: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              unitName: { type: 'string' },
+              variableId: { type: 'string' }
+            }
+          }
+        },
+        selectedVariableBundles: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'number' },
+              name: { type: 'string' },
+              variables: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    unitName: { type: 'string' },
+                    variableId: { type: 'string' }
+                  }
+                }
+              }
+            }
+          }
+        },
+        selectedCoders: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'number' },
+              name: { type: 'string' },
+              username: { type: 'string' }
+            }
+          }
+        }
+      },
+      required: ['selectedVariables', 'selectedCoders']
+    }
+  })
+  @ApiOkResponse({
+    description: 'Distributed coding jobs created successfully.',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        jobsCreated: { type: 'number' },
+        message: { type: 'string' },
+        distribution: {
+          type: 'object',
+          description: 'Case distribution matrix',
+          additionalProperties: {
+            type: 'object',
+            additionalProperties: { type: 'number' }
+          }
+        },
+        jobs: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              coderId: { type: 'number' },
+              coderName: { type: 'string' },
+              variable: {
+                type: 'object',
+                properties: {
+                  unitName: { type: 'string' },
+                  variableId: { type: 'string' }
+                }
+              },
+              jobId: { type: 'number' },
+              jobName: { type: 'string' },
+              caseCount: { type: 'number' }
+            }
+          }
+        }
+      }
+    }
+  })
+  async createDistributedCodingJobs(
+    @WorkspaceId() workspace_id: number,
+      @Body() body: {
+        selectedVariables: { unitName: string; variableId: string }[];
+        selectedVariableBundles?: { id: number; name: string; variables: { unitName: string; variableId: string }[] }[];
+        selectedCoders: { id: number; name: string; username: string }[];
+      }
+  ): Promise<{
+        success: boolean;
+        jobsCreated: number;
+        message: string;
+        distribution: Record<string, Record<string, number>>;
+        jobs: {
+          coderId: number;
+          coderName: string;
+          variable: { unitName: string; variableId: string };
+          jobId: number;
+          jobName: string;
+          caseCount: number;
+        }[];
+      }> {
+    return this.workspaceCodingService.createDistributedCodingJobs(workspace_id, body);
+  }
 }

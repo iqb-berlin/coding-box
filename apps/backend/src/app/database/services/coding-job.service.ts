@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
   Repository, In, Not, IsNull
@@ -34,6 +34,8 @@ interface CodingScheme {
 
 @Injectable()
 export class CodingJobService {
+  private readonly logger = new Logger(CodingJobService.name);
+
   constructor(
     @InjectRepository(CodingJob)
     private codingJobRepository: Repository<CodingJob>,
@@ -802,4 +804,286 @@ export class CodingJobService {
       await this.codingJobRepository.update(codingJobId, { status: newStatus });
     }
   }
+
+  async createCodingJobWithUnitSubset(
+    workspaceId: number,
+    createCodingJobDto: CreateCodingJobDto,
+    unitSubset: number[]
+  ): Promise<CodingJob> {
+    const codingJob = this.codingJobRepository.create({
+      workspace_id: workspaceId,
+      name: createCodingJobDto.name,
+      description: createCodingJobDto.description,
+      status: createCodingJobDto.status || 'pending',
+      missings_profile_id: createCodingJobDto.missings_profile_id,
+      job_definition_id: createCodingJobDto.jobDefinitionId
+    });
+
+    const savedCodingJob = await this.codingJobRepository.save(codingJob);
+
+    if (createCodingJobDto.assignedCoders && createCodingJobDto.assignedCoders.length > 0) {
+      await this.assignCoders(savedCodingJob.id, createCodingJobDto.assignedCoders);
+    }
+
+    if (createCodingJobDto.variables && createCodingJobDto.variables.length > 0) {
+      await this.assignVariables(savedCodingJob.id, createCodingJobDto.variables);
+    }
+
+    if (createCodingJobDto.variableBundleIds && createCodingJobDto.variableBundleIds.length > 0) {
+      await this.assignVariableBundles(savedCodingJob.id, createCodingJobDto.variableBundleIds);
+    } else if (createCodingJobDto.variableBundles && createCodingJobDto.variableBundles.length > 0) {
+      if (createCodingJobDto.variableBundles[0].id) {
+        const bundleIds = createCodingJobDto.variableBundles
+          .filter(bundle => bundle.id)
+          .map(bundle => bundle.id);
+
+        if (bundleIds.length > 0) {
+          await this.assignVariableBundles(savedCodingJob.id, bundleIds);
+        }
+      } else {
+        const variables = createCodingJobDto.variableBundles.flatMap(bundle => bundle.variables || []);
+        if (variables.length > 0) {
+          await this.assignVariables(savedCodingJob.id, variables);
+        }
+      }
+    }
+
+    await this.saveCodingJobUnitsSubset(savedCodingJob.id, unitSubset);
+
+    return savedCodingJob;
+  }
+
+  private async saveCodingJobUnitsSubset(codingJobId: number, responseIds: number[]): Promise<void> {
+    const responses = await this.responseRepository.find({
+      where: { id: In(responseIds) },
+      relations: ['unit', 'unit.booklet', 'unit.booklet.bookletinfo', 'unit.booklet.person']
+    });
+
+    if (responses.length === 0) {
+      return;
+    }
+
+    const codingJobUnits = responses.map(response => this.codingJobUnitRepository.create({
+      coding_job_id: codingJobId,
+      response_id: response.id,
+      unit_name: response.unit?.name || '',
+      unit_alias: response.unit?.alias || null,
+      variable_id: response.variableid,
+      variable_anchor: response.variableid,
+      booklet_name: response.unit?.booklet?.bookletinfo?.name || '',
+      person_login: response.unit?.booklet?.person?.login || '',
+      person_code: response.unit?.booklet?.person?.code || ''
+    }));
+
+    await this.codingJobUnitRepository.save(codingJobUnits);
+  }
+
+  async getResponsesForVariables(workspaceId: number, variables: { unitName: string; variableId: string }[]): Promise<ResponseEntity[]> {
+    if (variables.length === 0) {
+      return [];
+    }
+
+    const queryBuilder = this.responseRepository.createQueryBuilder('response')
+      .leftJoinAndSelect('response.unit', 'unit')
+      .leftJoinAndSelect('unit.booklet', 'booklet')
+      .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
+      .leftJoinAndSelect('booklet.person', 'person')
+      .leftJoin('unit.booklet', 'unit_booklet_filter')
+      .leftJoin('unit_booklet_filter.workspace_user', 'workspace_user')
+      .where('workspace_user.workspace_id = :workspaceId', { workspaceId });
+
+    const conditions: string[] = [];
+    const parameters: Record<string, string> = {};
+
+    variables.forEach((variable, index) => {
+      const unitParam = `unitName${index}`;
+      const variableParam = `variableId${index}`;
+      conditions.push(`(unit.name = :${unitParam} AND response.variableid = :${variableParam})`);
+      parameters[unitParam] = variable.unitName;
+      parameters[variableParam] = variable.variableId;
+    });
+
+    if (conditions.length > 0) {
+      queryBuilder.andWhere(`(${conditions.join(' OR ')})`, parameters);
+    }
+
+    return queryBuilder
+      .orderBy('response.id', 'ASC')
+      .getMany();
+  }
+
+  async createDistributedCodingJobs(
+    workspaceId: number,
+    request: {
+      selectedVariables: { unitName: string; variableId: string }[];
+      selectedVariableBundles?: { id: number; name: string; variables: { unitName: string; variableId: string }[] }[];
+      selectedCoders: { id: number; name: string; username: string }[];
+    }
+  ): Promise<{
+      success: boolean;
+      jobsCreated: number;
+      message: string;
+      distribution: Record<string, Record<string, number>>;
+      jobs: {
+        coderId: number;
+        coderName: string;
+        variable: { unitName: string; variableId: string };
+        jobId: number;
+        jobName: string;
+        caseCount: number;
+      }[];
+    }> {
+    this.logger.log(`Creating distributed coding jobs for workspace ${workspaceId}`);
+
+    const { selectedVariables, selectedCoders } = request;
+    const distribution: Record<string, Record<string, number>> = {};
+    const createdJobs: {
+      coderId: number;
+      coderName: string;
+      variable: { unitName: string; variableId: string };
+      jobId: number;
+      jobName: string;
+      caseCount: number;
+    }[] = [];
+
+    try {
+      // Get all response units for the selected variables
+      const allResponses = await this.getResponsesForVariables(workspaceId, selectedVariables);
+
+      // Group responses by variable
+      const variableResponseMap = new Map<string, ResponseEntity[]>();
+      const variableKeyFunc = (unitName: string, variableId: string) => `${unitName}::${variableId}`;
+
+      allResponses.forEach(response => {
+        if (response.unit?.name && response.variableid) {
+          const key = variableKeyFunc(response.unit.name, response.variableid);
+          if (!variableResponseMap.has(key)) {
+            variableResponseMap.set(key, []);
+          }
+          variableResponseMap.get(key)!.push(response);
+        }
+      });
+
+      // Sort coders alphabetically for deterministic distribution
+      const sortedCoders = [...selectedCoders].sort((a, b) => a.name.localeCompare(b.name));
+
+      // Create distribution matrix and jobs
+      for (const variable of selectedVariables) {
+        const variableKey = variableKeyFunc(variable.unitName, variable.variableId);
+        const responses = variableResponseMap.get(variableKey) || [];
+        const totalCases = responses.length;
+
+        distribution[variableKey] = {};
+
+        if (totalCases === 0) {
+        // No cases for this variable, create empty jobs
+          for (const coder of sortedCoders) {
+            distribution[variableKey][coder.name] = 0;
+            const jobName = generateJobName(coder.name, variable.unitName, variable.variableId, 0);
+
+            const codingJob = await this.createCodingJob(workspaceId, {
+              name: jobName,
+              assignedCoders: [coder.id],
+              variables: [variable]
+            });
+
+            createdJobs.push({
+              coderId: coder.id,
+              coderName: coder.name,
+              variable: { unitName: variable.unitName, variableId: variable.variableId },
+              jobId: codingJob.id,
+              jobName: jobName,
+              caseCount: 0
+            });
+          }
+          continue;
+        }
+
+        // Distribute cases equally among coders
+        const baseCasesPerCoder = Math.floor(totalCases / sortedCoders.length);
+        const remainder = totalCases % sortedCoders.length;
+
+        // Assign base cases plus remainder (first coders get extra case)
+        let responseIndex = 0;
+        for (let i = 0; i < sortedCoders.length; i++) {
+          const coder = sortedCoders[i];
+          const casesForCoder = baseCasesPerCoder + (i < remainder ? 1 : 0);
+          const endIndex = responseIndex + casesForCoder;
+          const coderResponses = responses.slice(responseIndex, endIndex);
+
+          distribution[variableKey][coder.name] = casesForCoder;
+
+          if (casesForCoder > 0) {
+            const jobName = generateJobName(coder.name, variable.unitName, variable.variableId, casesForCoder);
+
+            const codingJob = await this.createCodingJobWithUnitSubset(
+              workspaceId,
+              {
+                name: jobName,
+                assignedCoders: [coder.id],
+                variables: [variable]
+              },
+              coderResponses.map(r => r.id)
+            );
+
+            createdJobs.push({
+              coderId: coder.id,
+              coderName: coder.name,
+              variable: { unitName: variable.unitName, variableId: variable.variableId },
+              jobId: codingJob.id,
+              jobName: jobName,
+              caseCount: casesForCoder
+            });
+          } else {
+            const jobName = generateJobName(coder.name, variable.unitName, variable.variableId, 0);
+
+            const codingJob = await this.createCodingJob(workspaceId, {
+              name: jobName,
+              assignedCoders: [coder.id],
+              variables: [variable]
+            });
+
+            createdJobs.push({
+              coderId: coder.id,
+              coderName: coder.name,
+              variable: { unitName: variable.unitName, variableId: variable.variableId },
+              jobId: codingJob.id,
+              jobName: jobName,
+              caseCount: 0
+            });
+          }
+
+          responseIndex = endIndex;
+        }
+      }
+
+      this.logger.log(`Successfully created ${createdJobs.length} distributed coding jobs`);
+
+      return {
+        success: true,
+        jobsCreated: createdJobs.length,
+        message: `Created ${createdJobs.length} distributed coding jobs`,
+        distribution,
+        jobs: createdJobs
+      };
+    } catch (error) {
+      this.logger.error(`Error creating distributed coding jobs: ${error.message}`, error.stack);
+      return {
+        success: false,
+        jobsCreated: 0,
+        message: `Failed to create distributed jobs: ${error.message}`,
+        distribution: {},
+        jobs: []
+      };
+    }
+  }
+}
+
+function generateJobName(coderName: string, unitName: string, variableId: string, caseCount: number): string {
+  // Clean names to avoid issues with special characters
+  const cleanCoderName = coderName.replace(/[^a-zA-Z0-9-_]/g, '_');
+  const cleanUnitName = unitName.replace(/[^a-zA-Z0-9-_]/g, '_');
+  const cleanVariableId = variableId.replace(/[^a-zA-Z0-9-_]/g, '_');
+
+  return `${cleanCoderName}_${cleanUnitName}_${cleanVariableId}_${caseCount}`;
 }

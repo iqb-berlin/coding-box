@@ -641,7 +641,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
     };
 
     const dialogRef = this.matDialog.open(CodingJobBulkCreationDialogComponent, {
-      width: '700px',
+      width: '1200px',
       data: dialogData
     });
 
@@ -651,7 +651,8 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
     }
   }
 
-  private async createBulkJobs(data: BulkCreationData, displayOptions: BulkCreationResult): Promise<void> {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  private async createBulkJobs(data: BulkCreationData, _displayOptions: BulkCreationResult): Promise<void> {
     this.isSaving = true;
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
@@ -660,78 +661,32 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
       return;
     }
 
-    const selectedCoderIds = data.selectedCoders.map(c => c.id);
-    let successCount = 0;
-    let errorCount = 0;
+    try {
+      // Use the new distributed job creation endpoint
+      const mappedCoders = data.selectedCoders.map(coder => ({
+        id: coder.id,
+        name: coder.name,
+        username: coder.name
+      }));
+      const result = await this.backendService.createDistributedCodingJobs(
+        workspaceId,
+        data.selectedVariables,
+        mappedCoders
+      ).toPromise();
 
-    // Create jobs for individual variables
-    for (const variable of data.selectedVariables) {
-      const jobName = `${variable.unitName}_${variable.variableId}`;
-      const codingJob = {
-        id: 0,
-        workspace_id: workspaceId,
-        name: jobName,
-        status: 'pending',
-        created_at: new Date(),
-        updated_at: new Date(),
-        assignedCoders: selectedCoderIds,
-        variables: [variable],
-        variableBundles: [],
-        assignedVariables: [variable],
-        assignedVariableBundles: [],
-        showScore: displayOptions.showScore,
-        allowComments: displayOptions.allowComments,
-        suppressGeneralInstructions: displayOptions.suppressGeneralInstructions
-      };
-      try {
-        const createdJob = await this.backendService.createCodingJob(workspaceId, codingJob).toPromise();
-        if (createdJob?.id && selectedCoderIds.length > 0) {
-          await forkJoin(selectedCoderIds.map(id => this.codingJobService.assignCoder(createdJob.id, id))).toPromise();
-        }
-        successCount += 1;
-      } catch (error) {
-        errorCount += 1;
+      if (result && result.success) {
+        this.snackBar.open(result.message, 'Close', { duration: 3000 });
+        this.dialogRef.close({ bulkJobCreation: true, distributedJobs: result.jobs });
+      } else if (result) {
+        this.snackBar.open(`Failed to create distributed jobs: ${result.message}`, 'Close', { duration: 5000 });
+      } else {
+        this.snackBar.open('Failed to create distributed jobs: No response from server', 'Close', { duration: 5000 });
       }
-    }
-
-    for (const bundle of data.selectedVariableBundles) {
-      const jobName = bundle.name;
-      const codingJob = {
-        id: 0,
-        workspace_id: workspaceId,
-        name: jobName,
-        status: 'pending',
-        created_at: new Date(),
-        updated_at: new Date(),
-        assignedCoders: selectedCoderIds,
-        variables: bundle.variables,
-        variableBundles: [bundle],
-        assignedVariables: bundle.variables,
-        assignedVariableBundles: [bundle],
-        showScore: displayOptions.showScore,
-        allowComments: displayOptions.allowComments,
-        suppressGeneralInstructions: displayOptions.suppressGeneralInstructions
-      };
-      try {
-        const createdJob = await this.backendService.createCodingJob(workspaceId, codingJob).toPromise();
-        if (createdJob?.id && selectedCoderIds.length > 0) {
-          await forkJoin(selectedCoderIds.map(id => this.codingJobService.assignCoder(createdJob.id, id))).toPromise();
-        }
-        successCount += 1;
-      } catch (error) {
-        errorCount += 1;
-      }
+    } catch (error) {
+      this.snackBar.open(`Error creating distributed jobs: ${error instanceof Error ? error.message : error}`, 'Close', { duration: 5000 });
     }
 
     this.isSaving = false;
-
-    if (errorCount === 0) {
-      this.snackBar.open(`${successCount} coding jobs created successfully`, 'Close', { duration: 3000 });
-    } else {
-      this.snackBar.open(`${successCount} jobs created, ${errorCount} failed`, 'Close', { duration: 5000 });
-    }
-
-    this.dialogRef.close();
   }
 
   toggleDoubleCodingMode(): void {

@@ -1192,5 +1192,74 @@
       "single": "Ein Kodierauftrag wird erstellt",
       "multiple": "Multiple Kodieraufträge werden erstellt"
     }
+  },
+  "coding-job-definitions": {
+    "title": "Job-Definitionen",
+    "create-new": "Neue Definition erstellen",
+    "loading": "Lade Job-Definitionen...",
+    "table-headers": {
+      "id": "ID",
+      "status": "Status",
+      "variables": "Variablen",
+      "coders": "Kodierer",
+      "bundles": "Bündel",
+      "created-at": "Erstellt am",
+      "actions": "Aktionen"
+    },
+    "actions": {
+      "edit": "Bearbeiten",
+      "submit-for-review": "Zur Prüfung einreichen",
+      "approve": "Genehmigen",
+      "reject": "Ablehnen",
+      "create-coding-jobs": "Kodier-Jobs erstellen",
+      "delete": "Löschen"
+    },
+    "messages": {
+      "empty-state": "Keine Job-Definitionen gefunden",
+      "snackbar": {
+        "submitted-for-review": "Job-Definition wurde zur Prüfung eingereicht",
+        "submit-failed": "Fehler beim Einreichen zur Prüfung: {{error}}",
+        "approved": "Job-Definition wurde genehmigt",
+        "approve-failed": "Fehler bei der Genehmigung: {{error}}",
+        "rejected": "Job-Definition wurde abgelehnt und wieder als Entwurf markiert",
+        "reject-failed": "Fehler bei der Ablehnung: {{error}}",
+        "deleted": "Job-Definition wurde gelöscht",
+        "delete-failed": "Fehler beim Löschen: {{error}}",
+        "jobs-created": "{{count}} Kodier-Jobs wurden erfolgreich erstellt",
+        "jobs-created-partial": "{{successCount}} Jobs erstellt, {{errorCount}} fehlgeschlagen",
+        "coders-loading-failed": "Fehler beim Laden der Kodierer: {{error}}",
+        "no-workspace": "No workspace selected"
+      }
+    }
+  },
+
+  "coding-job-bulk-creation-dialog": {
+    "title": "Verteilte Erstellung von Kodieraufträgen",
+    "description": "Die ausgewählten Variablen werden gleichmäßig auf die ausgewählten Kodierer verteilt:",
+    "distribution-summary": {
+      "title": "Verteilungsübersicht",
+      "variable": "Variable",
+      "total": "Gesamt",
+      "cases": "Fälle",
+      "grand-total": "GESAMT:",
+      "notice": "Hinweis:",
+      "notice-text": "Fälle werden gleichmäßig auf die Kodierer verteilt. Bei ungeraden Zahlen bekommen die ersten Kodierer (alphabetisch) einen zusätzlichen Fall."
+    },
+    "jobs-summary": {
+      "title": "Zu erstellende Aufträge",
+      "description": "{{count}} Kodieraufträge werden erstellt:",
+      "details": "{{unitName}} → {{variableId}}"
+    },
+    "display-options": {
+      "title": "Anzeigeoptionen für Kodieraufträge",
+      "description": "Steuern Sie, welche Elemente während der Kodierung angezeigt werden sollen.",
+      "show-score": "Scores anzeigen",
+      "allow-comments": "Kommentare erlauben",
+      "suppress-instructions": "Allgemeine Anweisungen ausblenden"
+    },
+    "buttons": {
+      "cancel": "Abbrechen",
+      "confirm": "{{count}} kodierer-spezifische Aufträge erstellen"
+    }
   }
 }

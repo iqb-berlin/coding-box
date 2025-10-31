@@ -35,6 +35,7 @@ import { ExternalCodingImportService, ExternalCodingImportBody } from './externa
 import { BullJobManagementService } from './bull-job-management.service';
 import { WorkspaceFilesService } from './workspace-files.service';
 import { CodingResultsService } from './coding-results.service';
+import { CodingJobService } from './coding-job.service';
 
 interface CodedResponse {
   id: number;
@@ -84,7 +85,8 @@ export class WorkspaceCodingService {
     private externalCodingImportService: ExternalCodingImportService,
     private bullJobManagementService: BullJobManagementService,
     private workspaceFilesService: WorkspaceFilesService,
-    private codingResultsService: CodingResultsService
+    private codingResultsService: CodingResultsService,
+    private codingJobService: CodingJobService
   ) {}
 
   private codingSchemeCache: Map<string, { scheme: CodingScheme; timestamp: number }> = new Map();
@@ -1563,5 +1565,29 @@ export class WorkspaceCodingService {
     message: string;
   }> {
     return this.codingResultsService.applyCodingResults(workspaceId, codingJobId);
+  }
+
+  async createDistributedCodingJobs(
+    workspaceId: number,
+    request: {
+      selectedVariables: { unitName: string; variableId: string }[];
+      selectedVariableBundles?: { id: number; name: string; variables: { unitName: string; variableId: string }[] }[];
+      selectedCoders: { id: number; name: string; username: string }[];
+    }
+  ): Promise<{
+      success: boolean;
+      jobsCreated: number;
+      message: string;
+      distribution: Record<string, Record<string, number>>;
+      jobs: {
+        coderId: number;
+        coderName: string;
+        variable: { unitName: string; variableId: string };
+        jobId: number;
+        jobName: string;
+        caseCount: number;
+      }[];
+    }> {
+    return this.codingJobService.createDistributedCodingJobs(workspaceId, request);
   }
 }

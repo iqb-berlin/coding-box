@@ -5,7 +5,7 @@ import {
   inject
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { MatTableModule } from '@angular/material/table';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatIconModule } from '@angular/material/icon';
@@ -59,6 +59,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
   private dialog = inject(MatDialog);
   private coderService = inject(CoderService);
   private codingJobService = inject(CodingJobService);
+  private translateService = inject(TranslateService);
   private destroy$ = new Subject<void>();
 
   jobDefinitions: JobDefinition[] = [];
@@ -88,7 +89,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
     const workspaceId = this.appService.selectedWorkspaceId;
 
     if (!workspaceId) {
-      this.showError('No workspace selected');
+      this.showError(this.translateService.instant('coding-job-definitions.messages.snackbar.no-workspace'));
       this.isLoading = false;
       return;
     }
@@ -101,7 +102,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
           this.isLoading = false;
         },
         error: error => {
-          this.showError(`Error loading job definitions: ${error.message}`);
+          this.showError(this.translateService.instant('error.general', { error: error.message }));
           this.isLoading = false;
         }
       });
@@ -126,12 +127,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
   }
 
   getStatusLabel(status: string): string {
-    switch (status) {
-      case 'draft': return 'Entwurf';
-      case 'pending_review': return 'Warten auf Genehmigung';
-      case 'approved': return 'Genehmigt';
-      default: return status || '-';
-    }
+    return this.translateService.instant(`coding-job-definition-dialog.status.definition.${status}`) || status || '-';
   }
 
   createDefinition(): void {
@@ -154,6 +150,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
     });
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   canPerformActions(definition: JobDefinition): boolean {
     // TODO: Add permission checks here based on user role
     return true;
@@ -201,18 +198,18 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
 
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
-      this.showError('No workspace selected');
+      this.showError(this.translateService.instant('coding-job-definitions.messages.snackbar.no-workspace'));
       return;
     }
 
     this.backendService.updateJobDefinition(workspaceId, definition.id, { status: 'pending_review' })
       .subscribe({
         next: () => {
-          this.snackBar.open('Job-Definition wurde zur Prüfung eingereicht', 'Schließen', { duration: 3000 });
+          this.snackBar.open(this.translateService.instant('coding-job-definitions.messages.snackbar.submitted-for-review'), this.translateService.instant('common.close'), { duration: 3000 });
           this.loadJobDefinitions();
         },
         error: error => {
-          this.showError(`Fehler beim Einreichen zur Prüfung: ${error.message}`);
+          this.showError(this.translateService.instant('coding-job-definitions.messages.snackbar.submit-failed', { error: error.message }));
         }
       });
   }
@@ -222,18 +219,18 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
 
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
-      this.showError('No workspace selected');
+      this.showError(this.translateService.instant('coding-job-definitions.messages.snackbar.no-workspace'));
       return;
     }
 
     this.backendService.approveJobDefinition(workspaceId, definition.id, 'approved')
       .subscribe({
         next: () => {
-          this.snackBar.open('Job-Definition wurde genehmigt', 'Schließen', { duration: 3000 });
+          this.snackBar.open(this.translateService.instant('coding-job-definitions.messages.snackbar.approved'), this.translateService.instant('common.close'), { duration: 3000 });
           this.loadJobDefinitions();
         },
         error: error => {
-          this.showError(`Fehler bei der Genehmigung: ${error.message}`);
+          this.showError(this.translateService.instant('coding-job-definitions.messages.snackbar.approve-failed', { error: error.message }));
         }
       });
   }
@@ -243,18 +240,18 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
 
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
-      this.showError('No workspace selected');
+      this.showError(this.translateService.instant('coding-job-definitions.messages.snackbar.no-workspace'));
       return;
     }
 
     this.backendService.updateJobDefinition(workspaceId, definition.id, { status: 'draft' })
       .subscribe({
         next: () => {
-          this.snackBar.open('Job-Definition wurde abgelehnt und wieder als Entwurf markiert', 'Schließen', { duration: 3000 });
+          this.snackBar.open(this.translateService.instant('coding-job-definitions.messages.snackbar.rejected'), this.translateService.instant('common.close'), { duration: 3000 });
           this.loadJobDefinitions();
         },
         error: error => {
-          this.showError(`Fehler bei der Ablehnung: ${error.message}`);
+          this.showError(this.translateService.instant('coding-job-definitions.messages.snackbar.reject-failed', { error: error.message }));
         }
       });
   }
@@ -264,18 +261,18 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
 
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
-      this.showError('No workspace selected');
+      this.showError(this.translateService.instant('coding-job-definitions.messages.snackbar.no-workspace'));
       return;
     }
 
     this.backendService.deleteJobDefinition(workspaceId, definition.id)
       .subscribe({
         next: () => {
-          this.snackBar.open('Job-Definition wurde gelöscht', 'Schließen', { duration: 3000 });
+          this.snackBar.open(this.translateService.instant('coding-job-definitions.messages.snackbar.deleted'), this.translateService.instant('common.close'), { duration: 3000 });
           this.loadJobDefinitions();
         },
         error: error => {
-          this.showError(`Fehler beim Löschen: ${error.message}`);
+          this.showError(this.translateService.instant('coding-job-definitions.messages.snackbar.delete-failed', { error: error.message }));
         }
       });
   }
@@ -287,7 +284,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
 
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
-      this.showError('No workspace selected');
+      this.showError(this.translateService.instant('coding-job-definitions.messages.snackbar.no-workspace'));
       return;
     }
 
@@ -301,7 +298,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
         selectedCoders: selectedCoders
       };
       const dialogRef = this.dialog.open(CodingJobBulkCreationDialogComponent, {
-        width: '700px',
+        width: '1200px',
         data: dialogData
       });
 
@@ -311,7 +308,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
         this.createBulkJobsFromDefinition(dialogData, definition, workspaceId, result);
       }
     } catch (error) {
-      this.showError(`Fehler beim Laden der Kodierer: ${(error as Error).message}`);
+      this.showError(this.translateService.instant('coding-job-definitions.messages.snackbar.coders-loading-failed', { error: (error as Error).message }));
     }
   }
 
@@ -391,9 +388,9 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
     }
 
     if (errorCount === 0) {
-      this.snackBar.open(`${successCount} Coding-Jobs wurden erfolgreich erstellt`, 'Schließen', { duration: 3000 });
+      this.snackBar.open(this.translateService.instant('coding-job-definitions.messages.snackbar.jobs-created', { count: successCount }), this.translateService.instant('common.close'), { duration: 3000 });
     } else {
-      this.snackBar.open(`${successCount} Jobs erstellt, ${errorCount} fehlgeschlagen`, 'Schließen', { duration: 5000 });
+      this.snackBar.open(this.translateService.instant('coding-job-definitions.messages.snackbar.jobs-created-partial', { successCount, errorCount }), this.translateService.instant('common.close'), { duration: 5000 });
     }
 
     this.loadJobDefinitions();
