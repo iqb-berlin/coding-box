@@ -1,6 +1,10 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { TranslateModule } from '@ngx-translate/core';
+import { provideHttpClient } from '@angular/common/http';
 
 import { CodingJobDefinitionsComponent } from './coding-job-definitions.component';
+import { SERVER_URL } from '../../../injection-tokens';
+import { environment } from '../../../../environments/environment';
 
 describe('CodingJobDefinitionsComponent', () => {
   let component: CodingJobDefinitionsComponent;
@@ -8,7 +12,14 @@ describe('CodingJobDefinitionsComponent', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [CodingJobDefinitionsComponent]
+      providers: [
+        { provide: SERVER_URL, useValue: environment.backendUrl },
+        provideHttpClient()
+      ],
+      imports: [
+        CodingJobDefinitionsComponent,
+        TranslateModule.forRoot()
+      ]
     })
       .compileComponents();
 
