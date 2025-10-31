@@ -34,7 +34,7 @@ import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
 import { CoderService } from '../../services/coder.service';
 import { CodingJobService } from '../../services/coding-job.service';
-import { CodingJobBulkCreationDialogComponent, BulkCreationData } from '../coding-job-bulk-creation-dialog/coding-job-bulk-creation-dialog.component';
+import { CodingJobBulkCreationDialogComponent, BulkCreationData, BulkCreationResult } from '../coding-job-bulk-creation-dialog/coding-job-bulk-creation-dialog.component';
 
 export interface CodingJobDefinitionDialogData {
   codingJob?: CodingJob;
@@ -645,15 +645,14 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
       data: dialogData
     });
 
-    const result = await dialogRef.afterClosed().toPromise();
-    if (result === true) {
-      this.createBulkJobs(dialogData);
+    const result: BulkCreationResult | false = await dialogRef.afterClosed().toPromise();
+    if (result && result.confirmed) {
+      this.createBulkJobs(dialogData, result);
     }
   }
 
-  private async createBulkJobs(data: BulkCreationData): Promise<void> {
+  private async createBulkJobs(data: BulkCreationData, displayOptions: BulkCreationResult): Promise<void> {
     this.isSaving = true;
-
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
       this.snackBar.open(this.translateService.instant('coding-job-definition-dialog.snackbars.no-workspace-selected'), this.translateService.instant('common.close'), { duration: 3000 });
@@ -679,7 +678,10 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
         variables: [variable],
         variableBundles: [],
         assignedVariables: [variable],
-        assignedVariableBundles: []
+        assignedVariableBundles: [],
+        showScore: displayOptions.showScore,
+        allowComments: displayOptions.allowComments,
+        suppressGeneralInstructions: displayOptions.suppressGeneralInstructions
       };
       try {
         const createdJob = await this.backendService.createCodingJob(workspaceId, codingJob).toPromise();
@@ -705,7 +707,10 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
         variables: bundle.variables,
         variableBundles: [bundle],
         assignedVariables: bundle.variables,
-        assignedVariableBundles: [bundle]
+        assignedVariableBundles: [bundle],
+        showScore: displayOptions.showScore,
+        allowComments: displayOptions.allowComments,
+        suppressGeneralInstructions: displayOptions.suppressGeneralInstructions
       };
       try {
         const createdJob = await this.backendService.createCodingJob(workspaceId, codingJob).toPromise();

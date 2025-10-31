@@ -91,3 +91,14 @@ ALTER TABLE "public"."job_definitions" DROP COLUMN IF EXISTS "coding_job_id";
 -- rollback ALTER TABLE "public"."job_definitions" ADD COLUMN "coding_job_id" INTEGER NULL;
 -- rollback ALTER TABLE "public"."job_definitions" ADD CONSTRAINT "UQ_job_definitions_coding_job_id" UNIQUE ("coding_job_id");
 -- rollback ALTER TABLE "public"."job_definitions" ADD CONSTRAINT "FK_job_definitions_coding_job_id" FOREIGN KEY ("coding_job_id") REFERENCES "public"."coding_job"("id") ON DELETE CASCADE ON UPDATE NO ACTION;
+
+-- changeset jurei733:7
+-- comment: Add coding display options to coding_job table for controlling UI elements during coding
+
+ALTER TABLE "public"."coding_job" ADD COLUMN "show_score" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "public"."coding_job" ADD COLUMN "allow_comments" BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE "public"."coding_job" ADD COLUMN "suppress_general_instructions" BOOLEAN NOT NULL DEFAULT false;
+
+-- rollback ALTER TABLE "public"."coding_job" DROP COLUMN IF EXISTS "show_score";
+-- rollback ALTER TABLE "public"."coding_job" DROP COLUMN IF EXISTS "allow_comments";
+-- rollback ALTER TABLE "public"."coding_job" DROP COLUMN IF EXISTS "suppress_general_instructions";

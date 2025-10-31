@@ -38,6 +38,11 @@ export class ReplayCodingService {
   isSubmittingJob: boolean = false;
   isResumingJob: boolean = false;
 
+  // Coding display options
+  showScore = false;
+  allowComments = true;
+  suppressGeneralInstructions = false;
+
   resetCodingData() {
     this.codingScheme = null;
     this.currentVariableId = '';
@@ -100,6 +105,9 @@ export class ReplayCodingService {
         this.backendService.getCodingJob(workspaceId, jobId)
       );
       this.codingJobComment = codingJob.comment || '';
+      this.showScore = codingJob.showScore || false;
+      this.allowComments = codingJob.allowComments !== undefined ? codingJob.allowComments : true;
+      this.suppressGeneralInstructions = codingJob.suppressGeneralInstructions || false;
     } catch (error) {
       // Ignore errors when loading saved coding progress
     }

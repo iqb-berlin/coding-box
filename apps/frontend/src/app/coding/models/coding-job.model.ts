@@ -29,6 +29,9 @@ export interface CodingJob {
   doubleCodingAbsolute?: number;
   doubleCodingPercentage?: number;
   jobDefinitionId?: number;
+  showScore?: boolean;
+  allowComments?: boolean;
+  suppressGeneralInstructions?: boolean;
 }
 
 export interface Variable {

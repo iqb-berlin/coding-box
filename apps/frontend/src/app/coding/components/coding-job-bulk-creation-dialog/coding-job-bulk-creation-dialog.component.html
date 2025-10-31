@@ -37,6 +37,24 @@
       </div>
     </div>
 
+    <div class="display-options-section">
+      <h3>Anzeigeoptionen für Kodieraufträge</h3>
+      <p class="section-description">Steuern Sie, welche Elemente während der Kodierung angezeigt werden sollen.</p>
+
+      <form [formGroup]="displayOptionsForm" class="display-options-controls">
+        <mat-checkbox formControlName="showScore" class="display-option-checkbox">
+          Scores anzeigen
+        </mat-checkbox>
+
+        <mat-checkbox formControlName="allowComments" class="display-option-checkbox">
+          Kommentare erlauben
+        </mat-checkbox>
+
+        <mat-checkbox formControlName="suppressGeneralInstructions" class="display-option-checkbox">
+          Allgemeine Anweisungen ausblenden
+        </mat-checkbox>
+      </form>
+    </div>
 
   </div>
 

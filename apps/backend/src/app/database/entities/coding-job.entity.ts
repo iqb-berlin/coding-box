@@ -42,6 +42,15 @@ export class CodingJob {
   @Column({ default: 'pending' })
     status: string;
 
+  @Column({ name: 'show_score', default: false })
+    showScore: boolean;
+
+  @Column({ name: 'allow_comments', default: true })
+    allowComments: boolean;
+
+  @Column({ name: 'suppress_general_instructions', default: false })
+    suppressGeneralInstructions: boolean;
+
   @Column({ nullable: true })
     training_id?: number;
 

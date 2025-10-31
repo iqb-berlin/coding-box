@@ -62,7 +62,7 @@
           <div class="code-content">
             <span class="code-info">
               <span class="code-id">{{ item.id }}</span>
-              <span class="code-score" *ngIf="item.score !== undefined">{{ 'code-selector.score-label' | translate }} {{ item.score }}</span>
+              <span class="code-score" *ngIf="item.score !== undefined && showScore">{{ 'code-selector.score-label' | translate }} {{ item.score }}</span>
             </span>
           </div>
           <div class="code-instruction" *ngIf="item.manualInstruction" [innerHTML]="getSafeHtml(item.manualInstruction)"></div>
