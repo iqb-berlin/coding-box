@@ -94,7 +94,7 @@ export class CodingJobService {
   async getCodingJobs(
     workspaceId: number,
     page: number = 1,
-    limit: number = 10
+    limit?: number
   ): Promise<{ data: (CodingJob & {
       assignedCoders?: number[];
       assignedVariables?: { unitName: string; variableId: string }[];
@@ -103,10 +103,11 @@ export class CodingJobService {
       codedUnits?: number;
       totalUnits?: number;
       openUnits?: number;
-    })[]; total: number; totalOpenUnits?: number; page: number; limit: number }> {
+    })[]; total: number; totalOpenUnits?: number; page: number; limit?: number }> {
     const validPage = page > 0 ? page : 1;
-    const validLimit = limit > 0 ? limit : 10;
-    const skip = (validPage - 1) * validLimit;
+    const shouldPaginate = limit !== undefined && limit > 0;
+    const skip = shouldPaginate ? (validPage - 1) * limit : undefined;
+    const take = shouldPaginate ? limit : undefined;
 
     const total = await this.codingJobRepository.count({
       where: { workspace_id: workspaceId }
@@ -117,7 +118,7 @@ export class CodingJobService {
       relations: ['training'],
       order: { created_at: 'DESC' },
       skip,
-      take: validLimit
+      take
     });
 
     const jobIds = jobs.map(job => job.id);
@@ -192,7 +193,7 @@ export class CodingJobService {
       total,
       totalOpenUnits,
       page: validPage,
-      limit: validLimit
+      limit
     };
   }
 
@@ -878,6 +879,83 @@ export class CodingJobService {
     await this.codingJobUnitRepository.save(codingJobUnits);
   }
 
+  private distributeDoubleCodingEvenly(
+    doubleCodingResponses: ResponseEntity[],
+    sortedCoders: { id: number; name: string; username: string }[]
+  ): { response: ResponseEntity; coders: { id: number; name: string }[] }[] {
+    const assignments: { response: ResponseEntity; coders: { id: number; name: string }[] }[] = [];
+    const numCoders = sortedCoders.length;
+
+    // Track how many double-coding assignments each coder has received
+    const doubleCodingCounts = new Map(sortedCoders.map(c => [c.id, 0]));
+
+    for (const response of doubleCodingResponses) {
+      // Find the two coders with the least double-coding assignments
+      const coderCounts = sortedCoders.map(coder => ({
+        id: coder.id,
+        name: coder.name,
+        count: doubleCodingCounts.get(coder.id) || 0
+      }));
+
+      coderCounts.sort((a, b) => a.count - b.count);
+
+      // Pick the two coders with lowest counts (break ties by name for consistency)
+      const selectedCoders = coderCounts
+        .slice(0, Math.min(2, numCoders))
+        .sort((a, b) => a.name.localeCompare(b.name));
+
+      assignments.push({
+        response,
+        coders: selectedCoders.map(c => ({ id: c.id, name: c.name }))
+      });
+
+      // Update counts
+      selectedCoders.forEach(coder => {
+        doubleCodingCounts.set(coder.id, (doubleCodingCounts.get(coder.id) || 0) + 1);
+      });
+    }
+
+    return assignments;
+  }
+
+  private distributeCasesForVariable(
+    responses: ResponseEntity[],
+    doubleCodingResponses: ResponseEntity[],
+    sortedCoders: { id: number; name: string; username: string }[]
+  ): ResponseEntity[][] {
+    const numCoders = sortedCoders.length;
+    const coderCases: ResponseEntity[][] = sortedCoders.map(() => []);
+
+    const singleCodingResponses = responses.filter(r => !doubleCodingResponses.some(dc => dc.id === r.id));
+
+    // First, assign all double-coded cases to all coders (since double-coding means all coders get the same cases)
+    sortedCoders.forEach((coder, coderIndex) => {
+      doubleCodingResponses.forEach(doubleCodingResponse => {
+        coderCases[coderIndex].push(doubleCodingResponse);
+      });
+    });
+
+    const totalSingleCases = singleCodingResponses.length;
+    const baseCasesPerCoder = Math.floor(totalSingleCases / numCoders);
+    const remainder = totalSingleCases % numCoders;
+
+    // Distribute single cases equally among coders
+    sortedCoders.forEach((coder, index) => {
+      let casesForCoder = baseCasesPerCoder;
+      if (index < remainder) {
+        casesForCoder += 1;
+      }
+
+      // Simple round-robin distribution
+      const startIndex = index * baseCasesPerCoder + Math.min(index, remainder);
+      const endIndex = startIndex + casesForCoder;
+      const casesSlice = singleCodingResponses.slice(startIndex, endIndex);
+      coderCases[index].push(...casesSlice);
+    });
+
+    return coderCases;
+  }
+
   async getResponsesForVariables(workspaceId: number, variables: { unitName: string; variableId: string }[]): Promise<ResponseEntity[]> {
     if (variables.length === 0) {
       return [];
@@ -888,9 +966,7 @@ export class CodingJobService {
       .leftJoinAndSelect('unit.booklet', 'booklet')
       .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
       .leftJoinAndSelect('booklet.person', 'person')
-      .leftJoin('unit.booklet', 'unit_booklet_filter')
-      .leftJoin('unit_booklet_filter.workspace_user', 'workspace_user')
-      .where('workspace_user.workspace_id = :workspaceId', { workspaceId });
+      .where('person.workspace_id = :workspaceId', { workspaceId });
 
     const conditions: string[] = [];
     const parameters: Record<string, string> = {};
@@ -912,18 +988,127 @@ export class CodingJobService {
       .getMany();
   }
 
+  async calculateDistribution(
+    workspaceId: number,
+    request: {
+      selectedVariables: { unitName: string; variableId: string }[];
+      selectedVariableBundles?: { id: number; name: string; variables: { unitName: string; variableId: string }[] }[];
+      selectedCoders: { id: number; name: string; username: string }[];
+      doubleCodingAbsolute?: number;
+      doubleCodingPercentage?: number;
+    }
+  ): Promise<{
+      distribution: Record<string, Record<string, number>>;
+      doubleCodingInfo: Record<string, { totalCases: number; doubleCodedCases: number; singleCodedCasesAssigned: number; doubleCodedCasesPerCoder: Record<string, number> }>;
+    }> {
+    const {
+      selectedVariables, selectedCoders, doubleCodingAbsolute, doubleCodingPercentage
+    } = request;
+    const distribution: Record<string, Record<string, number>> = {};
+    const doubleCodingInfo: Record<string, { totalCases: number; doubleCodedCases: number; singleCodedCasesAssigned: number; doubleCodedCasesPerCoder: Record<string, number> }> = {};
+
+    const allResponses = await this.getResponsesForVariables(workspaceId, selectedVariables);
+
+    const variableResponseMap = new Map<string, ResponseEntity[]>();
+    const variableKeyFunc = (unitName: string, variableId: string) => `${unitName}::${variableId}`;
+
+    allResponses.forEach(response => {
+      if (response.unit?.name && response.variableid) {
+        const key = variableKeyFunc(response.unit.name, response.variableid);
+        if (!variableResponseMap.has(key)) {
+          variableResponseMap.set(key, []);
+        }
+        variableResponseMap.get(key)!.push(response);
+      }
+    });
+
+    const sortedCoders = [...selectedCoders].sort((a, b) => a.name.localeCompare(b.name));
+
+    for (const variable of selectedVariables) {
+      const variableKey = variableKeyFunc(variable.unitName, variable.variableId);
+      const responses = variableResponseMap.get(variableKey) || [];
+      const totalCases = responses.length;
+
+      distribution[variableKey] = {};
+      doubleCodingInfo[variableKey] = {
+        totalCases: totalCases,
+        doubleCodedCases: 0,
+        singleCodedCasesAssigned: 0,
+        doubleCodedCasesPerCoder: {}
+      };
+
+      if (totalCases === 0) {
+        sortedCoders.forEach(coder => {
+          distribution[variableKey][coder.name] = 0;
+        });
+        continue;
+      }
+
+      let doubleCodingCount = 0;
+      if (doubleCodingAbsolute && doubleCodingAbsolute > 0) {
+        doubleCodingCount = Math.min(doubleCodingAbsolute, totalCases);
+      } else if (doubleCodingPercentage && doubleCodingPercentage > 0) {
+        doubleCodingCount = Math.floor((doubleCodingPercentage / 100) * totalCases);
+      }
+
+      // Randomly select cases for double coding
+      const shuffledResponses = [...responses].sort(() => Math.random() - 0.5);
+      const doubleCodingResponses = shuffledResponses.slice(0, doubleCodingCount);
+      const singleCodingResponses = shuffledResponses.slice(doubleCodingCount);
+
+      doubleCodingInfo[variableKey].doubleCodedCases = doubleCodingCount;
+      doubleCodingInfo[variableKey].singleCodedCasesAssigned = singleCodingResponses.length;
+
+      // Initialize double coding tracking
+      sortedCoders.forEach(coder => {
+        doubleCodingInfo[variableKey].doubleCodedCasesPerCoder[coder.name] = 0;
+      });
+
+      // Distribute cases for this variable among coders to balance total workload
+      const caseDistribution = this.distributeCasesForVariable(
+        responses,
+        doubleCodingResponses,
+        sortedCoders
+      );
+
+      // Assign double-coded cases and track distribution
+      const doubleCodingAssignments = this.distributeDoubleCodingEvenly(
+        doubleCodingResponses,
+        sortedCoders
+      );
+      for (const { coders: assignedCoders } of doubleCodingAssignments) {
+        for (const coder of assignedCoders) {
+          doubleCodingInfo[variableKey].doubleCodedCasesPerCoder[coder.name] += 1;
+        }
+      }
+
+      // Calculate case counts for each coder
+      for (let i = 0; i < sortedCoders.length; i++) {
+        const coder = sortedCoders[i];
+        const coderCases = caseDistribution[i];
+
+        distribution[variableKey][coder.name] = coderCases.length;
+      }
+    }
+
+    return { distribution, doubleCodingInfo };
+  }
+
   async createDistributedCodingJobs(
     workspaceId: number,
     request: {
       selectedVariables: { unitName: string; variableId: string }[];
       selectedVariableBundles?: { id: number; name: string; variables: { unitName: string; variableId: string }[] }[];
       selectedCoders: { id: number; name: string; username: string }[];
+      doubleCodingAbsolute?: number;
+      doubleCodingPercentage?: number;
     }
   ): Promise<{
       success: boolean;
       jobsCreated: number;
       message: string;
       distribution: Record<string, Record<string, number>>;
+      doubleCodingInfo: Record<string, { totalCases: number; doubleCodedCases: number; singleCodedCasesAssigned: number; doubleCodedCasesPerCoder: Record<string, number> }>;
       jobs: {
         coderId: number;
         coderName: string;
@@ -935,8 +1120,11 @@ export class CodingJobService {
     }> {
     this.logger.log(`Creating distributed coding jobs for workspace ${workspaceId}`);
 
-    const { selectedVariables, selectedCoders } = request;
+    const {
+      selectedVariables, selectedCoders, doubleCodingAbsolute, doubleCodingPercentage
+    } = request;
     const distribution: Record<string, Record<string, number>> = {};
+    const doubleCodingInfo: Record<string, { totalCases: number; doubleCodedCases: number; singleCodedCasesAssigned: number; doubleCodedCasesPerCoder: Record<string, number> }> = {};
     const createdJobs: {
       coderId: number;
       coderName: string;
@@ -967,16 +1155,22 @@ export class CodingJobService {
       // Sort coders alphabetically for deterministic distribution
       const sortedCoders = [...selectedCoders].sort((a, b) => a.name.localeCompare(b.name));
 
-      // Create distribution matrix and jobs
+      // Create distribution matrix and jobs with double coding support
       for (const variable of selectedVariables) {
         const variableKey = variableKeyFunc(variable.unitName, variable.variableId);
         const responses = variableResponseMap.get(variableKey) || [];
         const totalCases = responses.length;
 
         distribution[variableKey] = {};
+        doubleCodingInfo[variableKey] = {
+          totalCases: totalCases,
+          doubleCodedCases: 0,
+          singleCodedCasesAssigned: 0,
+          doubleCodedCasesPerCoder: {}
+        };
 
         if (totalCases === 0) {
-        // No cases for this variable, create empty jobs
+          // No cases for this variable, create empty jobs
           for (const coder of sortedCoders) {
             distribution[variableKey][coder.name] = 0;
             const jobName = generateJobName(coder.name, variable.unitName, variable.variableId, 0);
@@ -999,22 +1193,56 @@ export class CodingJobService {
           continue;
         }
 
-        // Distribute cases equally among coders
-        const baseCasesPerCoder = Math.floor(totalCases / sortedCoders.length);
-        const remainder = totalCases % sortedCoders.length;
+        let doubleCodingCount = 0;
+        if (doubleCodingAbsolute && doubleCodingAbsolute > 0) {
+          doubleCodingCount = Math.min(doubleCodingAbsolute, totalCases);
+        } else if (doubleCodingPercentage && doubleCodingPercentage > 0) {
+          doubleCodingCount = Math.floor((doubleCodingPercentage / 100) * totalCases);
+        }
 
-        // Assign base cases plus remainder (first coders get extra case)
-        let responseIndex = 0;
+        // Randomly select cases for double coding
+        const shuffledResponses = [...responses].sort(() => Math.random() - 0.5);
+        const doubleCodingResponses = shuffledResponses.slice(0, doubleCodingCount);
+        const singleCodingResponses = shuffledResponses.slice(doubleCodingCount);
+
+        doubleCodingInfo[variableKey].doubleCodedCases = doubleCodingCount;
+        doubleCodingInfo[variableKey].singleCodedCasesAssigned = singleCodingResponses.length;
+
+        sortedCoders.forEach(coder => {
+          doubleCodingInfo[variableKey].doubleCodedCasesPerCoder[coder.name] = 0;
+        });
+
+        // Distribute cases for this variable among coders to balance total workload
+        const caseDistribution = this.distributeCasesForVariable(
+          responses,
+          doubleCodingResponses,
+          sortedCoders
+        );
+
+        // Assign double-coded cases and track distribution
+        const doubleCodingAssignments = this.distributeDoubleCodingEvenly(
+          doubleCodingResponses,
+          sortedCoders
+        );
+        for (const { coders: assignedCoders } of doubleCodingAssignments) {
+          for (const coder of assignedCoders) {
+            doubleCodingInfo[variableKey].doubleCodedCasesPerCoder[coder.name] += 1;
+          }
+        }
+
+        // Create jobs based on the balanced distribution
         for (let i = 0; i < sortedCoders.length; i++) {
           const coder = sortedCoders[i];
-          const casesForCoder = baseCasesPerCoder + (i < remainder ? 1 : 0);
-          const endIndex = responseIndex + casesForCoder;
-          const coderResponses = responses.slice(responseIndex, endIndex);
+          const coderCases = caseDistribution[i];
+          const singleCases = coderCases.filter(c => !doubleCodingResponses.some(dc => dc.id === c.id));
+          const doubleCases = coderCases.filter(c => doubleCodingResponses.some(dc => dc.id === c.id));
 
-          distribution[variableKey][coder.name] = casesForCoder;
+          const caseCountForCoder = singleCases.length + doubleCases.length;
 
-          if (casesForCoder > 0) {
-            const jobName = generateJobName(coder.name, variable.unitName, variable.variableId, casesForCoder);
+          distribution[variableKey][coder.name] = caseCountForCoder;
+
+          if (caseCountForCoder > 0) {
+            const jobName = generateJobName(coder.name, variable.unitName, variable.variableId, caseCountForCoder);
 
             const codingJob = await this.createCodingJobWithUnitSubset(
               workspaceId,
@@ -1023,7 +1251,7 @@ export class CodingJobService {
                 assignedCoders: [coder.id],
                 variables: [variable]
               },
-              coderResponses.map(r => r.id)
+              coderCases.map(r => r.id)
             );
 
             createdJobs.push({
@@ -1032,9 +1260,10 @@ export class CodingJobService {
               variable: { unitName: variable.unitName, variableId: variable.variableId },
               jobId: codingJob.id,
               jobName: jobName,
-              caseCount: casesForCoder
+              caseCount: caseCountForCoder
             });
           } else {
+            // Create empty job if no cases assigned
             const jobName = generateJobName(coder.name, variable.unitName, variable.variableId, 0);
 
             const codingJob = await this.createCodingJob(workspaceId, {
@@ -1052,8 +1281,6 @@ export class CodingJobService {
               caseCount: 0
             });
           }
-
-          responseIndex = endIndex;
         }
       }
 
@@ -1064,6 +1291,7 @@ export class CodingJobService {
         jobsCreated: createdJobs.length,
         message: `Created ${createdJobs.length} distributed coding jobs`,
         distribution,
+        doubleCodingInfo,
         jobs: createdJobs
       };
     } catch (error) {
@@ -1073,6 +1301,7 @@ export class CodingJobService {
         jobsCreated: 0,
         message: `Failed to create distributed jobs: ${error.message}`,
         distribution: {},
+        doubleCodingInfo: {},
         jobs: []
       };
     }

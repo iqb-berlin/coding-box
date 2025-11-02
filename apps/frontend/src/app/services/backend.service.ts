@@ -614,12 +614,15 @@ export class BackendService {
   createDistributedCodingJobs(
     workspaceId: number,
     selectedVariables: { unitName: string; variableId: string }[],
-    selectedCoders: { id: number; name: string; username: string }[]
+    selectedCoders: { id: number; name: string; username: string }[],
+    doubleCodingAbsolute?: number,
+    doubleCodingPercentage?: number
   ): Observable<{
       success: boolean;
       jobsCreated: number;
       message: string;
       distribution: Record<string, Record<string, number>>;
+      doubleCodingInfo: Record<string, { totalCases: number; doubleCodedCases: number; singleCodedCasesAssigned: number; doubleCodedCasesPerCoder: Record<string, number> }>;
       jobs: {
         coderId: number;
         coderName: string;
@@ -629,7 +632,20 @@ export class BackendService {
         caseCount: number;
       }[];
     }> {
-    return this.codingService.createDistributedCodingJobs(workspaceId, selectedVariables, selectedCoders);
+    return this.codingService.createDistributedCodingJobs(workspaceId, selectedVariables, selectedCoders, doubleCodingAbsolute, doubleCodingPercentage);
+  }
+
+  calculateDistribution(
+    workspaceId: number,
+    selectedVariables: { unitName: string; variableId: string }[],
+    selectedCoders: { id: number; name: string; username: string }[],
+    doubleCodingAbsolute?: number,
+    doubleCodingPercentage?: number
+  ): Observable<{
+      distribution: Record<string, Record<string, number>>;
+      doubleCodingInfo: Record<string, { totalCases: number; doubleCodedCases: number; singleCodedCasesAssigned: number; doubleCodedCasesPerCoder: Record<string, number> }>;
+    }> {
+    return this.codingService.calculateDistribution(workspaceId, selectedVariables, selectedCoders, doubleCodingAbsolute, doubleCodingPercentage);
   }
 
   createValidationTask(
@@ -814,13 +830,20 @@ export class BackendService {
 
   getCodingJobs(
     workspaceId: number,
-    page: number = 1,
-    limit: number = 10
+    page?: number,
+    limit?: number
   ): Observable<PaginatedResponse<CodingJob>> {
     const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job`;
-    const params = new HttpParams()
-      .set('page', page.toString())
-      .set('limit', limit.toString());
+    let params = new HttpParams();
+
+    if (page !== undefined) {
+      params = params.set('page', page.toString());
+    }
+
+    if (limit !== undefined) {
+      params = params.set('limit', limit.toString());
+    }
+
     return this.http.get<PaginatedResponse<CodingJob>>(url, { params });
   }
 

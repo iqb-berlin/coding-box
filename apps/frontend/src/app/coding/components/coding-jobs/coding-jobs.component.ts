@@ -4,6 +4,7 @@ import {
 import { CommonModule } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { MatSort, MatSortModule } from '@angular/material/sort';
+import { MatPaginator, MatPaginatorModule } from '@angular/material/paginator';
 import {
   MatFormField, MatLabel, MatOption, MatSelect
 } from '@angular/material/select';
@@ -20,7 +21,7 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatIcon } from '@angular/material/icon';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
-import { MatAnchor, MatButton, MatIconButton } from '@angular/material/button';
+import { MatAnchor, MatIconButton } from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { Router } from '@angular/router';
 import { AppService } from '../../../services/app.service';
@@ -56,7 +57,7 @@ import { CoderTraining } from '../../models/coder-training.model';
     MatRowDef,
     MatColumnDef,
     MatSortModule,
-    MatButton,
+    MatPaginatorModule,
     MatDialogModule,
     MatTooltipModule,
     MatIconButton,
@@ -93,6 +94,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
   originalData: CodingJob[] = [];
 
   @ViewChild(MatSort) sort!: MatSort;
+  @ViewChild(MatPaginator) paginator!: MatPaginator;
 
   private handleWindowFocus = () => {
     this.loadCodingJobs();
@@ -111,6 +113,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
 
   ngAfterViewInit(): void {
     this.dataSource.sort = this.sort;
+    this.dataSource.paginator = this.paginator;
   }
 
   loadCodingJobs(): void {
@@ -349,12 +352,10 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
   }
 
   editCodingJob(job: CodingJob): void {
-    const selectedJob = job;
-
     const dialogRef = this.dialog.open(CodingJobDefinitionDialogComponent, {
       width: '1200px',
       data: {
-        codingJob: selectedJob,
+        codingJob: job,
         isEdit: true,
         preloadedVariables: this.preloadedVariables || []
       } as CodingJobDefinitionDialogData

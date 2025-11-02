@@ -154,6 +154,13 @@
 
     </mat-table>
 
+    <mat-paginator
+      [pageSizeOptions]="[10, 25, 50, 100]"
+      showFirstLastButtons
+      [length]="dataSource.data.length"
+      *ngIf="dataSource.data.length > 0">
+    </mat-paginator>
+
     @if (dataSource.data.length === 0) {
       <div class="no-data-message">
         <p>Keine Kodierjobs vorhanden. Erstellen Sie eine neue Kodierjob-Definition mit dem Button oben.</p>

@@ -379,12 +379,15 @@ export class CodingService {
   createDistributedCodingJobs(
     workspaceId: number,
     selectedVariables: { unitName: string; variableId: string }[],
-    selectedCoders: { id: number; name: string; username: string }[]
+    selectedCoders: { id: number; name: string; username: string }[],
+    doubleCodingAbsolute?: number,
+    doubleCodingPercentage?: number
   ): Observable<{
       success: boolean;
       jobsCreated: number;
       message: string;
       distribution: Record<string, Record<string, number>>;
+      doubleCodingInfo: Record<string, { totalCases: number; doubleCodedCases: number; singleCodedCasesAssigned: number; doubleCodedCasesPerCoder: Record<string, number> }>;
       jobs: {
         coderId: number;
         coderName: string;
@@ -400,6 +403,7 @@ export class CodingService {
       jobsCreated: number;
       message: string;
       distribution: Record<string, Record<string, number>>;
+      doubleCodingInfo: Record<string, { totalCases: number; doubleCodedCases: number; singleCodedCasesAssigned: number; doubleCodedCasesPerCoder: Record<string, number> }>;
       jobs: {
         coderId: number;
         coderName: string;
@@ -412,7 +416,9 @@ export class CodingService {
       `${this.serverUrl}admin/workspace/${workspaceId}/coding/create-distributed-jobs`,
       {
         selectedVariables,
-        selectedCoders
+        selectedCoders,
+        doubleCodingAbsolute,
+        doubleCodingPercentage
       },
       { headers: this.authHeader }
     )
@@ -422,7 +428,40 @@ export class CodingService {
           jobsCreated: 0,
           message: 'Failed to create distributed jobs',
           distribution: {},
+          doubleCodingInfo: {},
           jobs: []
+        }))
+      );
+  }
+
+  calculateDistribution(
+    workspaceId: number,
+    selectedVariables: { unitName: string; variableId: string }[],
+    selectedCoders: { id: number; name: string; username: string }[],
+    doubleCodingAbsolute?: number,
+    doubleCodingPercentage?: number
+  ): Observable<{
+      distribution: Record<string, Record<string, number>>;
+      doubleCodingInfo: Record<string, { totalCases: number; doubleCodedCases: number; singleCodedCasesAssigned: number; doubleCodedCasesPerCoder: Record<string, number> }>;
+    }> {
+    return this.http
+      .post<{
+      distribution: Record<string, Record<string, number>>;
+      doubleCodingInfo: Record<string, { totalCases: number; doubleCodedCases: number; singleCodedCasesAssigned: number; doubleCodedCasesPerCoder: Record<string, number> }>;
+    }>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/coding/calculate-distribution`,
+      {
+        selectedVariables,
+        selectedCoders,
+        doubleCodingAbsolute,
+        doubleCodingPercentage
+      },
+      { headers: this.authHeader }
+    )
+      .pipe(
+        catchError(() => of({
+          distribution: {},
+          doubleCodingInfo: {}
         }))
       );
   }

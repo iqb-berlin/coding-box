@@ -7,8 +7,70 @@
 
   <div class="dialog-content">
     <p class="info-text">
-      {{ 'coding-job-bulk-creation-dialog.description' | translate }}
+      @if (data.creationResults) {
+        {{ 'coding-job-bulk-creation-dialog.results-description' | translate }}
+      } @else {
+        {{ 'coding-job-bulk-creation-dialog.description' | translate }}
+      }
     </p>
+
+    @if ((data.creationResults && data.creationResults.doubleCodingInfo) || doubleCodingPreview) {
+      <div class="double-coding-summary">
+        <h3 class="section-title">
+          <mat-icon>repeat</mat-icon>
+          {{ 'coding-job-bulk-creation-dialog.double-coding-summary.title' | translate }}
+        </h3>
+
+        <div class="double-coding-matrix">
+          <div class="matrix-container">
+            <!-- Header row for double coding -->
+            <div class="matrix-header">
+              <div class="matrix-cell header-cell variable-header">{{ 'coding-job-bulk-creation-dialog.double-coding-summary.variable' | translate }}</div>
+              <div class="matrix-cell header-cell">{{ 'coding-job-bulk-creation-dialog.double-coding-summary.total-cases' | translate }}</div>
+              <div class="matrix-cell header-cell">{{ 'coding-job-bulk-creation-dialog.double-coding-summary.double-coded' | translate }}</div>
+              <div class="matrix-cell header-cell">{{ 'coding-job-bulk-creation-dialog.double-coding-summary.single-coded' | translate }}</div>
+              @for (coder of data.selectedCoders; track coder.id) {
+                <div class="matrix-cell header-cell coder-header">
+                  <mat-icon>person</mat-icon>
+                  {{ coder.name }}
+                </div>
+              }
+            </div>
+
+            <!-- Data rows for double coding -->
+            @for (variableKey of objectKeys((data.creationResults?.doubleCodingInfo || doubleCodingPreview?.doubleCodingInfo)!); track variableKey) {
+              <div class="matrix-row">
+                <div class="matrix-cell variable-cell">
+                  <div class="variable-name">{{ getVariableDisplayNameFromKey(variableKey) }}</div>
+                </div>
+                <div class="matrix-cell data-cell">
+                  {{ (data.creationResults?.doubleCodingInfo || doubleCodingPreview?.doubleCodingInfo)![variableKey].totalCases }}
+                </div>
+                <div class="matrix-cell data-cell double-coded-cell">
+                  <span class="double-coded-indicator">{{ (data.creationResults?.doubleCodingInfo || doubleCodingPreview?.doubleCodingInfo)![variableKey].doubleCodedCases }}</span>
+                  @if ((data.creationResults?.doubleCodingInfo || doubleCodingPreview?.doubleCodingInfo)![variableKey].doubleCodedCases > 0) {
+                    <mat-icon class="double-coding-icon">repeat</mat-icon>
+                  }
+                </div>
+                <div class="matrix-cell data-cell">
+                  {{ (data.creationResults?.doubleCodingInfo || doubleCodingPreview?.doubleCodingInfo)![variableKey].singleCodedCasesAssigned }}
+                </div>
+                @for (coder of data.selectedCoders; track coder.id) {
+                  <div class="matrix-cell data-cell">
+                    {{ (data.creationResults?.doubleCodingInfo || doubleCodingPreview?.doubleCodingInfo)![variableKey].doubleCodedCasesPerCoder?.[coder.name] || 0 }}
+                  </div>
+                }
+              </div>
+            }
+          </div>
+        </div>
+
+        <div class="double-coding-info">
+          <mat-icon class="info-icon">info</mat-icon>
+          <span>{{ 'coding-job-bulk-creation-dialog.double-coding-summary.info-text' | translate }}</span>
+        </div>
+      </div>
+    }
 
     <div class="distribution-summary">
       <h3 class="section-title">
