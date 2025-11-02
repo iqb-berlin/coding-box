@@ -55,6 +55,12 @@
       }
     }
 
+    .action-buttons {
+      display: flex;
+      gap: 4px;
+      align-items: center;
+    }
+
     tr {
       &:hover {
         background-color: #fafafa;

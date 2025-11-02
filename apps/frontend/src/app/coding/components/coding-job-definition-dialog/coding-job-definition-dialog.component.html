@@ -60,7 +60,7 @@
 
         <div class="coding-display-options-section" *ngIf="data.mode === 'job'">
           <h4>{{ 'coding-job-definition-dialog.coding-display-options.title' | translate }}</h4>
-          <p class="section-description">Steuern Sie, welche Elemente während der Kodierung angezeigt werden sollen.</p>
+          <p class="section-description">{{ 'coding-job-definition-dialog.coding-display-options.description' | translate }}</p>
 
           <div class="display-options-controls">
             <mat-checkbox formControlName="showScore" class="display-option-checkbox">
@@ -112,7 +112,7 @@
         <!-- Selection summary section that's always visible -->
         <div class="selection-summary-container">
           <div class="selection-card">
-            <h4>Ausgewählte Elemente</h4>
+            <h4>{{ 'coding-job-definition-dialog.selection-summary.title' | translate }}</h4>
             <div class="selection-counts">
               <div class="count-item">
                 <span class="count-label">Variablen:</span>
@@ -140,7 +140,7 @@
               <mat-expansion-panel class="selection-details">
                 <mat-expansion-panel-header>
                   <mat-panel-title>
-                    Auswahldetails anzeigen
+                    {{ 'coding-job-definition-dialog.selection-summary.details' | translate }}
                   </mat-panel-title>
                 </mat-expansion-panel-header>
 

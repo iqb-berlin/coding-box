@@ -14,10 +14,31 @@
 
   <div *ngIf="!isLoading && jobDefinitions.length > 0">
     <table mat-table [dataSource]="jobDefinitions" class="job-definitions-table">
-      <!-- ID Column -->
-      <ng-container matColumnDef="id">
-        <th mat-header-cell *matHeaderCellDef>{{ 'coding-job-definitions.table-headers.id' | translate }}</th>
-        <td mat-cell *matCellDef="let definition">{{ definition.id }}</td>
+      <!-- Actions Column -->
+      <ng-container matColumnDef="actions">
+        <th mat-header-cell *matHeaderCellDef>{{ 'coding-job-definitions.table-headers.actions' | translate }}</th>
+        <td mat-cell *matCellDef="let definition" class="actions-cell">
+          <div class="action-buttons">
+            <button mat-icon-button *ngIf="definition.status === 'approved'" (click)="createCodingJobFromDefinition(definition)" title="{{ 'coding-job-definitions.actions.create-coding-jobs' | translate }}">
+              <mat-icon>play_arrow</mat-icon>
+            </button>
+            <button mat-icon-button (click)="editDefinition(definition)" title="{{ 'coding-job-definitions.actions.edit' | translate }}">
+              <mat-icon>edit</mat-icon>
+            </button>
+            <button mat-icon-button *ngIf="definition.status === 'draft'" (click)="submitForReview(definition)" title="{{ 'coding-job-definitions.actions.submit-for-review' | translate }}">
+              <mat-icon>send</mat-icon>
+            </button>
+            <button mat-icon-button *ngIf="definition.status === 'pending_review'" (click)="approveDefinition(definition)" title="{{ 'coding-job-definitions.actions.approve' | translate }}">
+              <mat-icon>check_circle</mat-icon>
+            </button>
+            <button mat-icon-button *ngIf="definition.status === 'pending_review'" (click)="rejectDefinition(definition)" title="{{ 'coding-job-definitions.actions.reject' | translate }}">
+              <mat-icon>cancel</mat-icon>
+            </button>
+            <button mat-icon-button (click)="deleteDefinition(definition)" title="{{ 'coding-job-definitions.actions.delete' | translate }}">
+              <mat-icon>delete</mat-icon>
+            </button>
+          </div>
+        </td>
       </ng-container>
 
       <!-- Status Column -->
@@ -30,11 +51,11 @@
         </td>
       </ng-container>
 
-      <!-- Variables Count Column -->
-      <ng-container matColumnDef="variablesCount">
+      <!-- Variables Column -->
+      <ng-container matColumnDef="variables">
         <th mat-header-cell *matHeaderCellDef>{{ 'coding-job-definitions.table-headers.variables' | translate }}</th>
         <td mat-cell *matCellDef="let definition">
-          {{ getVariablesCount(definition) }}
+          {{ getVariableNames(definition) }}
         </td>
       </ng-container>
 
@@ -42,7 +63,7 @@
       <ng-container matColumnDef="codersCount">
         <th mat-header-cell *matHeaderCellDef>{{ 'coding-job-definitions.table-headers.coders' | translate }}</th>
         <td mat-cell *matCellDef="let definition">
-          {{ getCodersCount(definition) }}
+          {{ getCoderNames(definition) }}
         </td>
       </ng-container>
 
@@ -50,51 +71,7 @@
       <ng-container matColumnDef="bundlesCount">
         <th mat-header-cell *matHeaderCellDef>{{ 'coding-job-definitions.table-headers.bundles' | translate }}</th>
         <td mat-cell *matCellDef="let definition">
-          {{ getBundlesCount(definition) }}
-        </td>
-      </ng-container>
-
-      <!-- Created At Column -->
-      <ng-container matColumnDef="createdAt">
-        <th mat-header-cell *matHeaderCellDef>{{ 'coding-job-definitions.table-headers.created-at' | translate }}</th>
-        <td mat-cell *matCellDef="let definition">
-          {{ formatDate(definition.created_at) }}
-        </td>
-      </ng-container>
-
-      <!-- Actions Column -->
-      <ng-container matColumnDef="actions">
-        <th mat-header-cell *matHeaderCellDef>{{ 'coding-job-definitions.table-headers.actions' | translate }}</th>
-        <td mat-cell *matCellDef="let definition" class="actions-cell">
-          <button mat-icon-button [matMenuTriggerFor]="menu" [disabled]="!canPerformActions(definition)">
-            <mat-icon>more_vert</mat-icon>
-          </button>
-          <mat-menu #menu="matMenu">
-            <button mat-menu-item (click)="editDefinition(definition)">
-              <mat-icon>edit</mat-icon>
-              {{ 'coding-job-definitions.actions.edit' | translate }}
-            </button>
-            <button mat-menu-item *ngIf="definition.status === 'draft'" (click)="submitForReview(definition)">
-              <mat-icon>send</mat-icon>
-              {{ 'coding-job-definitions.actions.submit-for-review' | translate }}
-            </button>
-            <button mat-menu-item *ngIf="definition.status === 'pending_review'" (click)="approveDefinition(definition)">
-              <mat-icon>check_circle</mat-icon>
-              {{ 'coding-job-definitions.actions.approve' | translate }}
-            </button>
-            <button mat-menu-item *ngIf="definition.status === 'pending_review'" (click)="rejectDefinition(definition)">
-              <mat-icon>cancel</mat-icon>
-              {{ 'coding-job-definitions.actions.reject' | translate }}
-            </button>
-            <button mat-menu-item *ngIf="definition.status === 'approved'" (click)="createCodingJobFromDefinition(definition)">
-              <mat-icon>play_arrow</mat-icon>
-              {{ 'coding-job-definitions.actions.create-coding-jobs' | translate }}
-            </button>
-            <button mat-menu-item (click)="deleteDefinition(definition)">
-              <mat-icon>delete</mat-icon>
-              {{ 'coding-job-definitions.actions.delete' | translate }}
-            </button>
-          </mat-menu>
+          {{ getBundleNames(definition) }}
         </td>
       </ng-container>
 

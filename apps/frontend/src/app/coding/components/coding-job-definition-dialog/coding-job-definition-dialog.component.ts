@@ -557,24 +557,24 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
             next: results => {
               const lastJob = results.filter(Boolean).pop() || { ...updatedJob, assignedCoders: selectedCoderIds };
               this.isSaving = false;
-              this.snackBar.open(this.translateService.instant('coding-job-definition-dialog.snackbars.job-updated-success'), this.translateService.instant('close'), { duration: 3000 });
+              this.snackBar.open(this.translateService.instant('coding-job-definition-dialog.snackbars.job-updated-success'), this.translateService.instant('common.close'), { duration: 3000 });
               this.dialogRef.close(lastJob);
             },
             error: () => {
               this.isSaving = false;
-              this.snackBar.open(this.translateService.instant('coding-job-definition-dialog.snackbars.job-updated-coder-failed'), this.translateService.instant('close'), { duration: 5000 });
+              this.snackBar.open(this.translateService.instant('coding-job-definition-dialog.snackbars.job-updated-coder-failed'), this.translateService.instant('common.close'), { duration: 5000 });
               this.dialogRef.close({ ...updatedJob, assignedCoders: selectedCoderIds });
             }
           });
         } else {
           this.isSaving = false;
-          this.snackBar.open('Coding job updated successfully', 'Close', { duration: 3000 });
+          this.snackBar.open(this.translateService.instant('coding-job-definition-dialog.snackbars.job-updated-success'), this.translateService.instant('common.close'), { duration: 3000 });
           this.dialogRef.close(updatedJob);
         }
       },
       error: error => {
         this.isSaving = false;
-        this.snackBar.open(`Error updating coding job: ${error.message}`, 'Close', { duration: 5000 });
+        this.snackBar.open(this.translateService.instant('coding-job-definition-dialog.snackbars.error-updating-job', { error: error.message }), this.translateService.instant('common.close'), { duration: 5000 });
       }
     });
   }
@@ -611,24 +611,24 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
             next: results => {
               const lastJob = results.filter(Boolean).pop() || { ...createdJob, assignedCoders: selectedCoderIds };
               this.isSaving = false;
-              this.snackBar.open('Coding job created successfully', 'Close', { duration: 3000 });
+              this.snackBar.open(this.translateService.instant('coding-job-definition-dialog.snackbars.job-created-success'), this.translateService.instant('common.close'), { duration: 3000 });
               this.dialogRef.close(lastJob);
             },
             error: () => {
               this.isSaving = false;
-              this.snackBar.open('Job created, but assigning coders failed', 'Close', { duration: 5000 });
+              this.snackBar.open(this.translateService.instant('coding-job-definition-dialog.snackbars.job-created-coder-failed'), this.translateService.instant('common.close'), { duration: 5000 });
               this.dialogRef.close({ ...createdJob, assignedCoders: selectedCoderIds });
             }
           });
         } else {
           this.isSaving = false;
-          this.snackBar.open('Coding job created successfully', 'Close', { duration: 3000 });
+          this.snackBar.open(this.translateService.instant('coding-job-definition-dialog.snackbars.job-created-success'), this.translateService.instant('common.close'), { duration: 3000 });
           this.dialogRef.close(createdJob);
         }
       },
       error: error => {
         this.isSaving = false;
-        this.snackBar.open(`Error creating coding job: ${error.message}`, 'Close', { duration: 5000 });
+        this.snackBar.open(this.translateService.instant('coding-job-definition-dialog.snackbars.error-creating-job', { error: error.message }), this.translateService.instant('common.close'), { duration: 5000 });
       }
     });
   }
@@ -675,15 +675,15 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
       ).toPromise();
 
       if (result && result.success) {
-        this.snackBar.open(result.message, 'Close', { duration: 3000 });
+        this.snackBar.open(result.message, this.translateService.instant('common.close'), { duration: 3000 });
         this.dialogRef.close({ bulkJobCreation: true, distributedJobs: result.jobs });
       } else if (result) {
-        this.snackBar.open(`Failed to create distributed jobs: ${result.message}`, 'Close', { duration: 5000 });
+        this.snackBar.open(this.translateService.instant('coding-job-definition-dialog.snackbars.bulk-creation-failed-with-message', { message: result.message }), this.translateService.instant('common.close'), { duration: 5000 });
       } else {
-        this.snackBar.open('Failed to create distributed jobs: No response from server', 'Close', { duration: 5000 });
+        this.snackBar.open(this.translateService.instant('coding-job-definition-dialog.snackbars.bulk-creation-no-response'), this.translateService.instant('common.close'), { duration: 5000 });
       }
     } catch (error) {
-      this.snackBar.open(`Error creating distributed jobs: ${error instanceof Error ? error.message : error}`, 'Close', { duration: 5000 });
+      this.snackBar.open(this.translateService.instant('coding-job-definition-dialog.snackbars.bulk-creation-failed', { error: error instanceof Error ? error.message : error }), this.translateService.instant('common.close'), { duration: 5000 });
     }
 
     this.isSaving = false;
@@ -738,12 +738,12 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
     this.backendService.createJobDefinition(workspaceId, jobDefinition).subscribe({
       next: createdDefinition => {
         this.isSaving = false;
-        this.snackBar.open('Job definition created successfully', 'Close', { duration: 3000 });
+        this.snackBar.open(this.translateService.instant('coding-job-definition-dialog.snackbars.definition-created-success'), this.translateService.instant('common.close'), { duration: 3000 });
         this.dialogRef.close(createdDefinition);
       },
       error: error => {
         this.isSaving = false;
-        this.snackBar.open(`Error creating job definition: ${error.message}`, 'Close', { duration: 5000 });
+        this.snackBar.open(this.translateService.instant('coding-job-definition-dialog.snackbars.error-creating-definition', { error: error.message }), this.translateService.instant('common.close'), { duration: 5000 });
       }
     });
   }
@@ -777,12 +777,12 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
     this.backendService.updateJobDefinition(workspaceId, this.data.jobDefinitionId!, jobDefinition).subscribe({
       next: updatedDefinition => {
         this.isSaving = false;
-        this.snackBar.open('Job definition updated successfully', 'Close', { duration: 3000 });
+        this.snackBar.open(this.translateService.instant('coding-job-definition-dialog.snackbars.definition-updated-success'), this.translateService.instant('common.close'), { duration: 3000 });
         this.dialogRef.close(updatedDefinition);
       },
       error: error => {
         this.isSaving = false;
-        this.snackBar.open(`Error updating job definition: ${error.message}`, 'Close', { duration: 5000 });
+        this.snackBar.open(this.translateService.instant('coding-job-definition-dialog.snackbars.error-updating-definition', { error: error.message }), this.translateService.instant('common.close'), { duration: 5000 });
       }
     });
   }
@@ -817,12 +817,12 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
     this.backendService.createJobDefinition(workspaceId, jobDefinition).subscribe({
       next: createdDefinition => {
         this.isSaving = false;
-        this.snackBar.open('Job definition submitted for review', 'Close', { duration: 3000 });
+        this.snackBar.open(this.translateService.instant('coding-job-definition-dialog.snackbars.definition-submitted-review'), this.translateService.instant('common.close'), { duration: 3000 });
         this.dialogRef.close(createdDefinition);
       },
       error: error => {
         this.isSaving = false;
-        this.snackBar.open(`Error submitting for review: ${error.message}`, 'Close', { duration: 5000 });
+        this.snackBar.open(this.translateService.instant('coding-job-definition-dialog.snackbars.error-submitting-review', { error: error.message }), this.translateService.instant('common.close'), { duration: 5000 });
       }
     });
   }

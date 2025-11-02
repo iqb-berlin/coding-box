@@ -14,6 +14,7 @@ import { MatMenuModule } from '@angular/material/menu';
 import { MatDialog } from '@angular/material/dialog';
 import { MatCardModule } from '@angular/material/card';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { MatChipsModule } from '@angular/material/chips';
 import { Subject, takeUntil, forkJoin } from 'rxjs';
 import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
@@ -37,6 +38,11 @@ interface JobDefinition {
   updated_at?: Date;
 }
 
+interface Coder {
+  id: number;
+  name: string;
+}
+
 @Component({
   selector: 'coding-box-coding-job-definitions',
   templateUrl: './coding-job-definitions.component.html',
@@ -49,7 +55,8 @@ interface JobDefinition {
     MatIconModule,
     MatButtonModule,
     MatMenuModule,
-    MatCardModule
+    MatCardModule,
+    MatChipsModule
   ]
 })
 export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
@@ -64,24 +71,37 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
 
   jobDefinitions: JobDefinition[] = [];
   isLoading = false;
+  coders: Coder[] = [];
 
   displayedColumns: string[] = [
-    'id',
+    'actions',
     'status',
-    'variablesCount',
+    'variables',
     'codersCount',
-    'bundlesCount',
-    'createdAt',
-    'actions'
+    'bundlesCount'
   ];
 
   ngOnInit(): void {
+    this.loadCoders();
     this.loadJobDefinitions();
   }
 
   ngOnDestroy(): void {
     this.destroy$.next();
     this.destroy$.complete();
+  }
+
+  private loadCoders(): void {
+    this.coderService.getCoders()
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: coders => {
+          this.coders = coders || [];
+        },
+        error: () => {
+          this.coders = [];
+        }
+      });
   }
 
   private loadJobDefinitions(): void {
@@ -118,6 +138,35 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
 
   getBundlesCount(definition: JobDefinition): number {
     return definition.assignedVariableBundles?.length || 0;
+  }
+
+  getCoderNames(definition: JobDefinition): string {
+    if (!definition.assignedCoders || definition.assignedCoders.length === 0) {
+      return '-';
+    }
+    const coderNames = definition.assignedCoders
+      .map(id => this.coders.find(c => c.id === id)?.name)
+      .filter(name => name)
+      .join(', ');
+    return coderNames || '-';
+  }
+
+  getBundleNames(definition: JobDefinition): string {
+    if (!definition.assignedVariableBundles || definition.assignedVariableBundles.length === 0) {
+      return '-';
+    }
+    return definition.assignedVariableBundles
+      .map(bundle => bundle.name)
+      .join(', ');
+  }
+
+  getVariableNames(definition: JobDefinition): string {
+    if (!definition.assignedVariables || definition.assignedVariables.length === 0) {
+      return '-';
+    }
+    return definition.assignedVariables
+      .map(variable => `${variable.unitName}.${variable.variableId}`)
+      .join(', ');
   }
 
   formatDate(date: Date | string): string {
@@ -397,6 +446,6 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
   }
 
   private showError(message: string): void {
-    this.snackBar.open(message, 'Schließen', { duration: 5000 });
+    this.snackBar.open(message, this.translateService.instant('common.close'), { duration: 5000 });
   }
 }
