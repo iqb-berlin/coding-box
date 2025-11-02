@@ -1268,6 +1268,14 @@
     "buttons": {
       "cancel": "Abbrechen",
       "confirm": "{{count}} kodierer-spezifische Aufträge erstellen"
+    },
+    "double-coding-summary": {
+      "variable": "Variable",
+      "total-cases": "Gesamt Fälle",
+      "double-coded": "Doppelt kodiert",
+      "single-coded": "Einfach kodiert",
+      "title": "Zusammenfassung der Doppelkodierung",
+      "info-text": "Diese Zusammenfassung zeigt die Anzahl der doppelt und einfach kodierten Fälle."
     }
   }
 }

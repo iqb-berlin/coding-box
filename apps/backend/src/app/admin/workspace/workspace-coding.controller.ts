@@ -15,6 +15,7 @@ import { WorkspaceCodingService } from '../../database/services/workspace-coding
 import { CoderTrainingService } from '../../database/services/coder-training.service';
 import { CodingListService } from '../../database/services/coding-list.service';
 import { PersonService } from '../../database/services/person.service';
+import { CodingJobService } from '../../database/services/coding-job.service';
 import { ResponseEntity } from '../../database/entities/response.entity';
 import { JobDefinition } from '../../database/entities/job-definition.entity';
 import { VariableAnalysisItemDto } from '../../../../../../api-dto/coding/variable-analysis-item.dto';
@@ -38,7 +39,8 @@ export class WorkspaceCodingController {
     private missingsProfilesService: MissingsProfilesService,
     private personService: PersonService,
     private codingListService: CodingListService,
-    private coderTrainingService: CoderTrainingService
+    private coderTrainingService: CoderTrainingService,
+    private codingJobService: CodingJobService
   ) {}
 
   @Get(':workspace_id/coding')
@@ -1637,6 +1639,110 @@ export class WorkspaceCodingController {
     return this.workspaceCodingService.applyCodingResults(workspace_id, jobId);
   }
 
+  @Post(':workspace_id/coding/calculate-distribution')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiBody({
+    description: 'Calculate distribution for coding jobs (preview mode)',
+    schema: {
+      type: 'object',
+      properties: {
+        selectedVariables: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              unitName: { type: 'string' },
+              variableId: { type: 'string' }
+            }
+          }
+        },
+        selectedVariableBundles: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'number' },
+              name: { type: 'string' },
+              variables: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    unitName: { type: 'string' },
+                    variableId: { type: 'string' }
+                  }
+                }
+              }
+            }
+          }
+        },
+        selectedCoders: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'number' },
+              name: { type: 'string' },
+              username: { type: 'string' }
+            }
+          }
+        },
+        doubleCodingAbsolute: { type: 'number' },
+        doubleCodingPercentage: { type: 'number' }
+      },
+      required: ['selectedVariables', 'selectedCoders']
+    }
+  })
+  @ApiOkResponse({
+    description: 'Distribution calculated successfully.',
+    schema: {
+      type: 'object',
+      properties: {
+        distribution: {
+          type: 'object',
+          description: 'Case distribution matrix',
+          additionalProperties: {
+            type: 'object',
+            additionalProperties: { type: 'number' }
+          }
+        },
+        doubleCodingInfo: {
+          type: 'object',
+          description: 'Double coding information',
+          additionalProperties: {
+            type: 'object',
+            properties: {
+              totalCases: { type: 'number' },
+              doubleCodedCases: { type: 'number' },
+              singleCodedCasesAssigned: { type: 'number' },
+              doubleCodedCasesPerCoder: {
+                type: 'object',
+                additionalProperties: { type: 'number' }
+              }
+            }
+          }
+        }
+      }
+    }
+  })
+  async calculateDistribution(
+    @WorkspaceId() workspace_id: number,
+      @Body() body: {
+        selectedVariables: { unitName: string; variableId: string }[];
+        selectedVariableBundles?: { id: number; name: string; variables: { unitName: string; variableId: string }[] }[];
+        selectedCoders: { id: number; name: string; username: string }[];
+        doubleCodingAbsolute?: number;
+        doubleCodingPercentage?: number;
+      }
+  ): Promise<{
+        distribution: Record<string, Record<string, number>>;
+        doubleCodingInfo: Record<string, { totalCases: number; doubleCodedCases: number; singleCodedCasesAssigned: number; doubleCodedCasesPerCoder: Record<string, number> }>;
+      }> {
+    return this.codingJobService.calculateDistribution(workspace_id, body);
+  }
+
   @Post(':workspace_id/coding/create-distributed-jobs')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiTags('coding')
@@ -1686,7 +1792,9 @@ export class WorkspaceCodingController {
               username: { type: 'string' }
             }
           }
-        }
+        },
+        doubleCodingAbsolute: { type: 'number' },
+        doubleCodingPercentage: { type: 'number' }
       },
       required: ['selectedVariables', 'selectedCoders']
     }
@@ -1705,6 +1813,22 @@ export class WorkspaceCodingController {
           additionalProperties: {
             type: 'object',
             additionalProperties: { type: 'number' }
+          }
+        },
+        doubleCodingInfo: {
+          type: 'object',
+          description: 'Double coding information',
+          additionalProperties: {
+            type: 'object',
+            properties: {
+              totalCases: { type: 'number' },
+              doubleCodedCases: { type: 'number' },
+              singleCodedCasesAssigned: { type: 'number' },
+              doubleCodedCasesPerCoder: {
+                type: 'object',
+                additionalProperties: { type: 'number' }
+              }
+            }
           }
         },
         jobs: {
@@ -1736,12 +1860,15 @@ export class WorkspaceCodingController {
         selectedVariables: { unitName: string; variableId: string }[];
         selectedVariableBundles?: { id: number; name: string; variables: { unitName: string; variableId: string }[] }[];
         selectedCoders: { id: number; name: string; username: string }[];
+        doubleCodingAbsolute?: number;
+        doubleCodingPercentage?: number;
       }
   ): Promise<{
         success: boolean;
         jobsCreated: number;
         message: string;
         distribution: Record<string, Record<string, number>>;
+        doubleCodingInfo: Record<string, { totalCases: number; doubleCodedCases: number; singleCodedCasesAssigned: number; doubleCodedCasesPerCoder: Record<string, number> }>;
         jobs: {
           coderId: number;
           coderName: string;

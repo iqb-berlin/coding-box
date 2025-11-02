@@ -1573,12 +1573,15 @@ export class WorkspaceCodingService {
       selectedVariables: { unitName: string; variableId: string }[];
       selectedVariableBundles?: { id: number; name: string; variables: { unitName: string; variableId: string }[] }[];
       selectedCoders: { id: number; name: string; username: string }[];
+      doubleCodingAbsolute?: number;
+      doubleCodingPercentage?: number;
     }
   ): Promise<{
       success: boolean;
       jobsCreated: number;
       message: string;
       distribution: Record<string, Record<string, number>>;
+      doubleCodingInfo: Record<string, { totalCases: number; doubleCodedCases: number; singleCodedCasesAssigned: number; doubleCodedCasesPerCoder: Record<string, number> }>;
       jobs: {
         coderId: number;
         coderName: string;

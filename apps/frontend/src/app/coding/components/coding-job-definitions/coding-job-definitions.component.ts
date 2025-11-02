@@ -15,12 +15,11 @@ import { MatDialog } from '@angular/material/dialog';
 import { MatCardModule } from '@angular/material/card';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatChipsModule } from '@angular/material/chips';
-import { Subject, takeUntil, forkJoin } from 'rxjs';
+import { Subject, takeUntil } from 'rxjs';
 import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
 import { Variable, VariableBundle } from '../../models/coding-job.model';
 import { CoderService } from '../../services/coder.service';
-import { CodingJobService } from '../../services/coding-job.service';
 import { CodingJobDefinitionDialogComponent, CodingJobDefinitionDialogData } from '../coding-job-definition-dialog/coding-job-definition-dialog.component';
 import { CodingJobBulkCreationDialogComponent, BulkCreationData } from '../coding-job-bulk-creation-dialog/coding-job-bulk-creation-dialog.component';
 
@@ -65,7 +64,6 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
   private snackBar = inject(MatSnackBar);
   private dialog = inject(MatDialog);
   private coderService = inject(CoderService);
-  private codingJobService = inject(CodingJobService);
   private translateService = inject(TranslateService);
   private destroy$ = new Subject<void>();
 
@@ -128,18 +126,6 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
       });
   }
 
-  getVariablesCount(definition: JobDefinition): number {
-    return definition.assignedVariables?.length || 0;
-  }
-
-  getCodersCount(definition: JobDefinition): number {
-    return definition.assignedCoders?.length || 0;
-  }
-
-  getBundlesCount(definition: JobDefinition): number {
-    return definition.assignedVariableBundles?.length || 0;
-  }
-
   getCoderNames(definition: JobDefinition): string {
     if (!definition.assignedCoders || definition.assignedCoders.length === 0) {
       return '-';
@@ -197,12 +183,6 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
         this.loadJobDefinitions();
       }
     });
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  canPerformActions(definition: JobDefinition): boolean {
-    // TODO: Add permission checks here based on user role
-    return true;
   }
 
   editDefinition(definition: JobDefinition): void {
@@ -344,7 +324,9 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
       const dialogData: BulkCreationData = {
         selectedVariables: definition.assignedVariables || [],
         selectedVariableBundles: definition.assignedVariableBundles || [],
-        selectedCoders: selectedCoders
+        selectedCoders: selectedCoders,
+        doubleCodingAbsolute: definition.doubleCodingAbsolute,
+        doubleCodingPercentage: definition.doubleCodingPercentage
       };
       const dialogRef = this.dialog.open(CodingJobBulkCreationDialogComponent, {
         width: '1200px',
@@ -354,92 +336,70 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
       const result = await dialogRef.afterClosed().toPromise();
 
       if (result && result.confirmed) {
-        this.createBulkJobsFromDefinition(dialogData, definition, workspaceId, result);
+        this.createBulkJobsFromDefinition(dialogData, workspaceId);
       }
     } catch (error) {
       this.showError(this.translateService.instant('coding-job-definitions.messages.snackbar.coders-loading-failed', { error: (error as Error).message }));
     }
   }
 
-  private async createBulkJobsFromDefinition(data: BulkCreationData, definition: JobDefinition, workspaceId: number, displayOptions: { showScore: boolean; allowComments: boolean; suppressGeneralInstructions: boolean }): Promise<void> {
-    const selectedCoderIds = data.selectedCoders.map(c => c.id);
-    let successCount = 0;
-    let errorCount = 0;
+  private async createBulkJobsFromDefinition(data: BulkCreationData, workspaceId: number): Promise<void> {
+    try {
+      const mappedCoders = data.selectedCoders.map(coder => ({
+        id: coder.id,
+        name: coder.name,
+        username: coder.name
+      }));
 
-    for (const variable of data.selectedVariables) {
-      const jobName = `${variable.unitName}_${variable.variableId}`;
-      const codingJob = {
-        id: 0,
-        workspace_id: workspaceId,
-        name: jobName,
-        status: 'pending',
-        created_at: new Date(),
-        updated_at: new Date(),
-        assignedCoders: selectedCoderIds,
-        variables: [variable],
-        variableBundles: [],
-        assignedVariables: [variable],
-        assignedVariableBundles: [],
-        durationSeconds: definition.durationSeconds,
-        maxCodingCases: definition.maxCodingCases,
-        doubleCodingAbsolute: definition.doubleCodingAbsolute,
-        doubleCodingPercentage: definition.doubleCodingPercentage,
-        jobDefinitionId: definition.id,
-        showScore: displayOptions.showScore,
-        allowComments: displayOptions.allowComments,
-        suppressGeneralInstructions: displayOptions.suppressGeneralInstructions
-      };
-
-      try {
-        const createdJob = await this.backendService.createCodingJob(workspaceId, codingJob).toPromise();
-        if (createdJob?.id && selectedCoderIds.length > 0) {
-          await forkJoin(selectedCoderIds.map(id => this.codingJobService.assignCoder(createdJob.id, id))).toPromise();
+      const allVariables = [...data.selectedVariables];
+      if (data.selectedVariableBundles) {
+        for (const bundle of data.selectedVariableBundles) {
+          allVariables.push(...bundle.variables);
         }
-        successCount += 1;
-      } catch (error) {
-        errorCount += 1;
       }
-    }
 
-    for (const bundle of data.selectedVariableBundles) {
-      const jobName = bundle.name;
-      const codingJob = {
-        id: 0,
-        workspace_id: workspaceId,
-        name: jobName,
-        status: 'pending',
-        created_at: new Date(),
-        updated_at: new Date(),
-        assignedCoders: selectedCoderIds,
-        variables: bundle.variables,
-        variableBundles: [bundle],
-        assignedVariables: bundle.variables,
-        assignedVariableBundles: [bundle],
-        durationSeconds: definition.durationSeconds,
-        maxCodingCases: definition.maxCodingCases,
-        doubleCodingAbsolute: definition.doubleCodingAbsolute,
-        doubleCodingPercentage: definition.doubleCodingPercentage,
-        jobDefinitionId: definition.id,
-        showScore: displayOptions.showScore,
-        allowComments: displayOptions.allowComments,
-        suppressGeneralInstructions: displayOptions.suppressGeneralInstructions
-      };
+      const result = await this.backendService.createDistributedCodingJobs(
+        workspaceId,
+        allVariables,
+        mappedCoders,
+        data.doubleCodingAbsolute,
+        data.doubleCodingPercentage
+      ).toPromise();
 
-      try {
-        const createdJob = await this.backendService.createCodingJob(workspaceId, codingJob).toPromise();
-        if (createdJob?.id && selectedCoderIds.length > 0) {
-          await forkJoin(selectedCoderIds.map(id => this.codingJobService.assignCoder(createdJob.id, id))).toPromise();
+      if (result && result.success) {
+        this.snackBar.open(result.message, this.translateService.instant('common.close'), { duration: 3000 });
+
+        const hasDoubleCoding = (data.doubleCodingAbsolute && data.doubleCodingAbsolute > 0) ||
+                                (data.doubleCodingPercentage && data.doubleCodingPercentage > 0);
+
+        if (hasDoubleCoding) {
+          const dialogData: BulkCreationData = {
+            selectedVariables: data.selectedVariables,
+            selectedVariableBundles: data.selectedVariableBundles,
+            selectedCoders: data.selectedCoders,
+            doubleCodingAbsolute: data.doubleCodingAbsolute,
+            doubleCodingPercentage: data.doubleCodingPercentage,
+            creationResults: {
+              doubleCodingInfo: result.doubleCodingInfo,
+              jobs: result.jobs
+            }
+          };
+
+          const dialogRef = this.dialog.open(CodingJobBulkCreationDialogComponent, {
+            width: '1200px',
+            data: dialogData,
+            disableClose: false
+          });
+
+          await dialogRef.afterClosed().toPromise();
         }
-        successCount += 1;
-      } catch (error) {
-        errorCount += 1;
+      } else if (result) {
+        this.snackBar.open(this.translateService.instant('coding-job-definition-dialog.snackbars.bulk-creation-failed-with-message', { message: result.message }), this.translateService.instant('common.close'), { duration: 5000 });
+      } else {
+        this.snackBar.open(this.translateService.instant('coding-job-definition-dialog.snackbars.bulk-creation-no-response'), this.translateService.instant('common.close'), { duration: 5000 });
       }
-    }
-
-    if (errorCount === 0) {
-      this.snackBar.open(this.translateService.instant('coding-job-definitions.messages.snackbar.jobs-created', { count: successCount }), this.translateService.instant('common.close'), { duration: 3000 });
-    } else {
-      this.snackBar.open(this.translateService.instant('coding-job-definitions.messages.snackbar.jobs-created-partial', { successCount, errorCount }), this.translateService.instant('common.close'), { duration: 5000 });
+    } catch (error) {
+      this.snackBar.open(this.translateService.instant('coding-job-definition-dialog.snackbars.bulk-creation-failed', { error: error instanceof Error ? error.message : error }), this.translateService.instant('common.close'), { duration: 5000 });
     }
 
     this.loadJobDefinitions();

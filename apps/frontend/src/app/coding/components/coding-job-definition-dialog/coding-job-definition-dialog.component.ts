@@ -58,6 +58,23 @@ export interface JobDefinition {
   updated_at?: Date;
 }
 
+interface CreationResults {
+  doubleCodingInfo: Record<string, {
+    totalCases: number;
+    doubleCodedCases: number;
+    singleCodedCasesAssigned: number;
+    doubleCodedCasesPerCoder: Record<string, number>;
+  }>;
+  jobs: {
+    coderId: number;
+    coderName: string;
+    variable: { unitName: string; variableId: string };
+    jobId: number;
+    jobName: string;
+    caseCount: number;
+  }[];
+}
+
 @Component({
   selector: 'coding-box-coding-job-definition-dialog',
   templateUrl: './coding-job-definition-dialog.component.html',
@@ -141,9 +158,9 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
   ) {}
 
   ngOnInit(): void {
-    if (this.data.codingJob?.doubleCodingAbsolute !== null && this.data.codingJob?.doubleCodingAbsolute !== undefined) {
+    if (this.data.codingJob?.doubleCodingAbsolute !== null && this.data.codingJob?.doubleCodingAbsolute !== undefined && this.data.codingJob.doubleCodingAbsolute > 0) {
       this.doubleCodingMode = 'absolute';
-    } else if (this.data.codingJob?.doubleCodingPercentage !== null && this.data.codingJob?.doubleCodingPercentage !== undefined) {
+    } else if (this.data.codingJob?.doubleCodingPercentage !== null && this.data.codingJob?.doubleCodingPercentage !== undefined && this.data.codingJob.doubleCodingPercentage > 0) {
       this.doubleCodingMode = 'percentage';
     } else {
       this.doubleCodingMode = 'absolute'; // default
@@ -263,7 +280,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
   initForm(): void {
     const formFields: Record<string, [string | number | null | undefined, ValidatorFn[]]> = {
       durationSeconds: [this.data.codingJob?.durationSeconds || null, [Validators.min(1)]],
-      maxCodingCases: [null, [Validators.min(1)]],
+      maxCodingCases: [this.data.codingJob?.maxCodingCases || null, [Validators.min(1)]],
       doubleCodingAbsolute: [this.data.codingJob?.doubleCodingAbsolute ?? 0, []],
       doubleCodingPercentage: [this.data.codingJob?.doubleCodingPercentage ?? 0, []]
     };
@@ -637,7 +654,9 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
     const dialogData: BulkCreationData = {
       selectedVariables: this.selectedVariables.selected,
       selectedVariableBundles: this.selectedVariableBundles.selected,
-      selectedCoders: this.selectedCoders.selected
+      selectedCoders: this.selectedCoders.selected,
+      doubleCodingAbsolute: this.codingJobForm.value.doubleCodingAbsolute,
+      doubleCodingPercentage: this.codingJobForm.value.doubleCodingPercentage
     };
 
     const dialogRef = this.matDialog.open(CodingJobBulkCreationDialogComponent, {
@@ -649,6 +668,25 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
     if (result && result.confirmed) {
       this.createBulkJobs(dialogData, result);
     }
+  }
+
+  private async openBulkCreationResultsDialog(creationResults: CreationResults): Promise<void> {
+    const dialogData: BulkCreationData = {
+      selectedVariables: this.selectedVariables.selected,
+      selectedVariableBundles: this.selectedVariableBundles.selected,
+      selectedCoders: this.selectedCoders.selected,
+      doubleCodingAbsolute: this.codingJobForm.value.doubleCodingAbsolute,
+      doubleCodingPercentage: this.codingJobForm.value.doubleCodingPercentage,
+      creationResults: creationResults
+    };
+
+    const dialogRef = this.matDialog.open(CodingJobBulkCreationDialogComponent, {
+      width: '1200px',
+      data: dialogData,
+      disableClose: false
+    });
+
+    await dialogRef.afterClosed().toPromise();
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -671,11 +709,19 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
       const result = await this.backendService.createDistributedCodingJobs(
         workspaceId,
         data.selectedVariables,
-        mappedCoders
+        mappedCoders,
+        this.codingJobForm.value.doubleCodingAbsolute,
+        this.codingJobForm.value.doubleCodingPercentage
       ).toPromise();
 
       if (result && result.success) {
         this.snackBar.open(result.message, this.translateService.instant('common.close'), { duration: 3000 });
+
+        await this.openBulkCreationResultsDialog({
+          doubleCodingInfo: result.doubleCodingInfo,
+          jobs: result.jobs
+        });
+
         this.dialogRef.close({ bulkJobCreation: true, distributedJobs: result.jobs });
       } else if (result) {
         this.snackBar.open(this.translateService.instant('coding-job-definition-dialog.snackbars.bulk-creation-failed-with-message', { message: result.message }), this.translateService.instant('common.close'), { duration: 5000 });
@@ -683,14 +729,20 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
         this.snackBar.open(this.translateService.instant('coding-job-definition-dialog.snackbars.bulk-creation-no-response'), this.translateService.instant('common.close'), { duration: 5000 });
       }
     } catch (error) {
-      this.snackBar.open(this.translateService.instant('coding-job-definition-dialog.snackbars.bulk-creation-failed', { error: error instanceof Error ? error.message : error }), this.translateService.instant('common.close'), { duration: 5000 });
+      this.snackBar.open(this.translateService.instant('coding-job-definition-dialog.snackbars.bulk-creation-failed', { error: error instanceof Error ? error.message : String(error) }), this.translateService.instant('common.close'), { duration: 5000 });
     }
 
     this.isSaving = false;
   }
 
   toggleDoubleCodingMode(): void {
-    this.doubleCodingMode = this.doubleCodingMode === 'absolute' ? 'percentage' : 'absolute';
+    if (this.doubleCodingMode === 'absolute') {
+      this.doubleCodingMode = 'percentage';
+      this.codingJobForm.get('doubleCodingAbsolute')?.setValue(0);
+    } else {
+      this.doubleCodingMode = 'absolute';
+      this.codingJobForm.get('doubleCodingPercentage')?.setValue(0);
+    }
   }
 
   get currentDoubleCodingControl(): FormControl {

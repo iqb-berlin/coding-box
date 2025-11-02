@@ -3,6 +3,7 @@ import {
 } from '@angular/core';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { MatSort, MatSortModule } from '@angular/material/sort';
+import { MatPaginator, MatPaginatorModule } from '@angular/material/paginator';
 import {
   MatCell, MatCellDef, MatColumnDef,
   MatHeaderCell,
@@ -54,6 +55,7 @@ import { WorkspaceFullDto } from '../../../../../../../api-dto/workspaces/worksp
     MatRowDef,
     MatColumnDef,
     MatSortModule,
+    MatPaginatorModule,
     MatIconButton,
     MatTooltipModule,
     MatFormField,
@@ -89,6 +91,7 @@ export class MyCodingJobsComponent implements OnInit, AfterViewInit, OnDestroy {
   currentWorkspaces: WorkspaceFullDto[] = [];
 
   @ViewChild(MatSort) sort!: MatSort;
+  @ViewChild(MatPaginator) paginator!: MatPaginator;
 
   private handleWindowFocus = () => {
     if (this.isAuthorized) {
@@ -113,6 +116,7 @@ export class MyCodingJobsComponent implements OnInit, AfterViewInit, OnDestroy {
 
   ngAfterViewInit(): void {
     this.dataSource.sort = this.sort;
+    this.dataSource.paginator = this.paginator;
   }
 
   ngOnDestroy(): void {

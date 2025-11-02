@@ -416,43 +416,6 @@
               <div class="selection-summary">
                 <p>{{ selectedVariableBundles.selected.length }} Variablenbündel ausgewählt</p>
               </div>
-
-              @if (selectedVariableBundles.selected.length > 0) {
-                <div class="bundle-preview-container">
-                  <h4>Vorschau der ausgewählten Variablenbündel</h4>
-                  <mat-accordion>
-                    @for (bundle of selectedVariableBundles.selected; track bundle.id) {
-                        <mat-expansion-panel>
-                          <mat-expansion-panel-header>
-                            <mat-panel-title>
-                              {{ bundle.name }}
-                            </mat-panel-title>
-                            <mat-panel-description>
-                              {{ getVariableCount(bundle) }} Variablen
-                            </mat-panel-description>
-                          </mat-expansion-panel-header>
-
-                        <table class="preview-table">
-                          <thead>
-                            <tr>
-                              <th>Aufgaben-ID</th>
-                              <th>Variablen-ID</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            @for (variable of bundle.variables; track variable.unitName + variable.variableId) {
-                              <tr>
-                                <td>{{ variable.unitName }}</td>
-                                <td>{{ variable.variableId }}</td>
-                              </tr>
-                            }
-                          </tbody>
-                        </table>
-                      </mat-expansion-panel>
-                    }
-                  </mat-accordion>
-                </div>
-              }
             }
 
             @if (!isLoadingBundles && variableBundles.length === 0) {

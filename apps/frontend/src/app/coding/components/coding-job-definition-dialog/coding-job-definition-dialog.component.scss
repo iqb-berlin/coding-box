@@ -596,36 +596,3 @@
     }
   }
 }
-
-.bundle-preview-container {
-  margin-top: 24px;
-  border: 1px solid rgba(0, 0, 0, 0.12);
-  border-radius: 4px;
-  padding: 16px;
-  background-color: rgba(0, 0, 0, 0.02);
-}
-
-.preview-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: 8px;
-
-  th, td {
-    padding: 8px;
-    text-align: left;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.12);
-  }
-
-  th {
-    font-weight: 500;
-    color: rgba(0, 0, 0, 0.87);
-  }
-
-  tr:last-child td {
-    border-bottom: none;
-  }
-
-  tr:hover {
-    background-color: rgba(0, 0, 0, 0.04);
-  }
-}
