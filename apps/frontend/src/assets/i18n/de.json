@@ -1165,14 +1165,22 @@
       "job-created-coder-failed": "Auftrag erstellt, aber Zuweisung von Kodierern fehlgeschlagen",
       "error-update-template": "Fehler beim Aktualisieren des Kodierauftrags",
       "error-create-template": "Fehler beim Erstellen des Kodierauftrags",
+      "error-updating-job": "Fehler beim Aktualisieren des Kodierauftrags: {{error}}",
+      "error-creating-job": "Fehler beim Erstellen des Kodierauftrags: {{error}}",
       "bulk-created-success": "{{successCount}} Kodieraufträge erfolgreich erstellt",
       "bulk-created-partial": "{{successCount}} Aufträge erstellt, {{errorCount}} fehlgeschlagen",
+      "bulk-creation-failed": "Verteilte Erstellung von Kodieraufträgen fehlgeschlagen: {{error}}",
+      "bulk-creation-no-response": "Verteilte Erstellung von Kodieraufträgen fehlgeschlagen: Keine Antwort vom Server",
+      "bulk-creation-failed-with-message": "Verteilte Erstellung von Kodieraufträgen fehlgeschlagen: {{message}}",
       "definition-created-success": "Job-Definition erfolgreich erstellt",
       "error-create-definition": "Fehler beim Erstellen der Job-Definition",
+      "error-creating-definition": "Fehler beim Erstellen der Job-Definition: {{error}}",
       "definition-updated-success": "Job-Definition erfolgreich aktualisiert",
       "error-update-definition": "Fehler beim Aktualisieren der Job-Definition",
+      "error-updating-definition": "Fehler beim Aktualisieren der Job-Definition: {{error}}",
       "definition-submitted-review": "Job-Definition zur Prüfung eingereicht",
-      "error-submit-review": "Fehler beim Einreichen zur Prüfung"
+      "error-submit-review": "Fehler beim Einreichen zur Prüfung",
+      "error-submitting-review": "Fehler beim Einreichen zur Prüfung: {{error}}"
     },
     "status": {
       "definition": {
