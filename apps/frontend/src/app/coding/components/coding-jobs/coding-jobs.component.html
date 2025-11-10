@@ -4,48 +4,57 @@
   }
   @if (!isLoading) {
     <div class="fx-row-center-center-stretch fx-gap-16 header-row">
-      <mat-form-field appearance="outline" class="filter-field">
-        <mat-label>Name filtern</mat-label>
-        <mat-select [(value)]="selectedJobName" (selectionChange)="onJobNameFilterChange()">
-          <mat-option [value]="null">Alle Namen</mat-option>
-          <mat-option *ngFor="let job of originalData" [value]="job.name">
-            {{job.name}}
-          </mat-option>
-        </mat-select>
-      </mat-form-field>
+      <div class="fx-row-center-center fx-gap-16 filters-row">
+        <mat-form-field appearance="outline" class="filter-field">
+          <mat-label>Name filtern</mat-label>
+          <mat-select [(value)]="selectedJobName" (selectionChange)="onJobNameFilterChange()">
+            <mat-option [value]="null">Alle Namen</mat-option>
+            <mat-option *ngFor="let job of originalData" [value]="job.name">
+              {{job.name}}
+            </mat-option>
+          </mat-select>
+        </mat-form-field>
 
-      <mat-form-field appearance="outline" class="filter-field">
-        <mat-label>Kodierer filtern</mat-label>
-        <mat-select [(value)]="selectedCoderId" (selectionChange)="onCoderFilterChange()">
-          <mat-option [value]="null">Alle Kodierer</mat-option>
-          <mat-option *ngFor="let coder of allCoders" [value]="coder.id">
-            {{coder.displayName || coder.name}}
-          </mat-option>
-        </mat-select>
-      </mat-form-field>
+        <mat-form-field appearance="outline" class="filter-field">
+          <mat-label>Kodierer filtern</mat-label>
+          <mat-select [(value)]="selectedCoderId" (selectionChange)="onCoderFilterChange()">
+            <mat-option [value]="null">Alle Kodierer</mat-option>
+            <mat-option *ngFor="let coder of allCoders" [value]="coder.id">
+              {{coder.displayName || coder.name}}
+            </mat-option>
+          </mat-select>
+        </mat-form-field>
 
-      <mat-form-field appearance="outline" class="filter-field">
-        <mat-label>Status filtern</mat-label>
-        <mat-select [(value)]="selectedStatus" (selectionChange)="onStatusFilterChange()">
-          <mat-option [value]="null">Alle Status</mat-option>
-          <mat-option value="active">Aktiv</mat-option>
-          <mat-option value="completed">Abgeschlossen</mat-option>
-          <mat-option value="pending">Ausstehend</mat-option>
-          <mat-option value="paused">Pausiert</mat-option>
-          <mat-option value="open">Offen</mat-option>
-          <mat-option value="review">Zur Überprüfung</mat-option>
-        </mat-select>
-      </mat-form-field>
+        <mat-form-field appearance="outline" class="filter-field">
+          <mat-label>Status filtern</mat-label>
+          <mat-select [(value)]="selectedStatus" (selectionChange)="onStatusFilterChange()">
+            <mat-option [value]="null">Alle Status</mat-option>
+            <mat-option value="active">Aktiv</mat-option>
+            <mat-option value="completed">Abgeschlossen</mat-option>
+            <mat-option value="pending">Ausstehend</mat-option>
+            <mat-option value="paused">Pausiert</mat-option>
+            <mat-option value="open">Offen</mat-option>
+            <mat-option value="review">Zur Überprüfung</mat-option>
+          </mat-select>
+        </mat-form-field>
 
-      <mat-form-field appearance="outline" class="filter-field">
-        <mat-label>Nach Training filtern</mat-label>
-        <mat-select [(value)]="selectedTrainingId" (selectionChange)="onTrainingFilterChange()">
-          <mat-option [value]="null">Alle Trainings</mat-option>
-          <mat-option *ngFor="let training of coderTrainings" [value]="training.id">
-            {{training.label}}
-          </mat-option>
-        </mat-select>
+        <mat-form-field appearance="outline" class="filter-field">
+          <mat-label>Nach Training filtern</mat-label>
+          <mat-select [(value)]="selectedTrainingId" (selectionChange)="onTrainingFilterChange()">
+            <mat-option [value]="null">Alle Trainings</mat-option>
+            <mat-option *ngFor="let training of coderTrainings" [value]="training.id">
+              {{training.label}}
+            </mat-option>
+          </mat-select>
       </mat-form-field>
+      </div>
+
+      <div class="fx-row-center-center fx-gap-16">
+        <button mat-raised-button color="warn" (click)="bulkDeleteCodingJobs()" [disabled]="selection.selected.length === 0" class="bulk-delete-button">
+          <mat-icon>delete_sweep</mat-icon>
+          {{ selection.selected.length }} löschen
+        </button>
+      </div>
     </div>
 
     <mat-table [dataSource]="dataSource" matSort class="coding-jobs-table">
@@ -53,7 +62,21 @@
       <mat-row *matRowDef="let row; columns: displayedColumns;">
       </mat-row>
 
-
+      <ng-container matColumnDef="select">
+        <mat-header-cell *matHeaderCellDef>
+          <mat-checkbox (change)="$event ? masterToggle() : null"
+                        [checked]="selection.hasValue() && isAllSelected()"
+                        [indeterminate]="selection.hasValue() && !isAllSelected()"
+                        [aria-label]="checkboxLabel()">
+          </mat-checkbox>
+        </mat-header-cell>
+        <mat-cell *matCellDef="let row">
+          <mat-checkbox (change)="$event ? selection.toggle(row) : null"
+                        [checked]="selection.isSelected(row)"
+                        [aria-label]="checkboxLabel(row)">
+          </mat-checkbox>
+        </mat-cell>
+      </ng-container>
 
       <ng-container matColumnDef="actions">
         <mat-header-cell *matHeaderCellDef>Aktionen</mat-header-cell>
