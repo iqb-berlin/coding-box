@@ -21,7 +21,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { SelectionModel } from '@angular/cdk/collections';
 import { MatIcon } from '@angular/material/icon';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
-import { MatAnchor, MatIconButton } from '@angular/material/button';
+import { MatIconButton } from '@angular/material/button';
 import { DatePipe, NgClass, NgFor } from '@angular/common';
 import { Router } from '@angular/router';
 import { forkJoin } from 'rxjs';
@@ -48,7 +48,6 @@ import { WorkspaceFullDto } from '../../../../../../../api-dto/workspaces/worksp
     MatRow,
     MatProgressSpinner,
     MatTable,
-    MatAnchor,
     MatHeaderCellDef,
     MatCellDef,
     MatHeaderRowDef,
