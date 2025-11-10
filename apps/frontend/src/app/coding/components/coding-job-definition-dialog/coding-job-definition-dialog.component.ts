@@ -174,7 +174,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
       this.loadCoders(this.data.codingJob.id);
     }
 
-    if (!this.data.isEdit && this.data.mode === 'definition') {
+    if (this.data.mode === 'definition') {
       this.loadExistingJobDefinitions();
     }
 
@@ -445,11 +445,12 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
   }
 
   isVariableDisabled(variable: Variable): boolean {
-    if (this.data.isEdit && this.data.mode === 'definition') {
+    if (this.data.mode !== 'definition') {
       return false;
     }
 
-    if (this.data.mode !== 'definition') {
+    // Allow variables that were originally assigned to the current job definition being edited
+    if (this.data.isEdit && this.isVariableOriginallyAssigned(variable)) {
       return false;
     }
 
@@ -489,7 +490,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
 
   isAllSelected(): boolean {
     const numSelected = this.selectedVariables.selected.length;
-    const numRows = this.dataSource.data.length;
+    const numRows = this.dataSource.filteredData.length;
     return numSelected === numRows && numRows > 0;
   }
 
@@ -497,7 +498,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
     if (this.isAllSelected()) {
       this.selectedVariables.clear();
     } else {
-      this.dataSource.data.forEach(row => this.selectedVariables.select(row));
+      this.dataSource.filteredData.forEach(row => this.selectedVariables.select(row));
     }
   }
 
