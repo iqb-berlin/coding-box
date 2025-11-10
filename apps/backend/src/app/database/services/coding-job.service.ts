@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import {
   Repository, In, Not, IsNull
 } from 'typeorm';
+import { statusStringToNumber } from '../utils/response-status-converter';
 import { SaveCodingProgressDto } from '../../admin/coding-job/dto/save-coding-progress.dto';
 import { CodingJob } from '../entities/coding-job.entity';
 import { CodingJobCoder } from '../entities/coding-job-coder.entity';
@@ -682,9 +683,6 @@ export class CodingJobService {
     return notesMap;
   }
 
-  /**
-   * Generate composite key for coding progress using same logic as frontend
-   */
   private generateCodingProgressKey(testPerson: string, unitId: string, variableId: string): string {
     let bookletId = 'default';
     if (testPerson) {
@@ -966,7 +964,8 @@ export class CodingJobService {
       .leftJoinAndSelect('unit.booklet', 'booklet')
       .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
       .leftJoinAndSelect('booklet.person', 'person')
-      .where('person.workspace_id = :workspaceId', { workspaceId });
+      .where('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('response.status_v1 = :status', { status: statusStringToNumber('CODING_INCOMPLETE') });
 
     const conditions: string[] = [];
     const parameters: Record<string, string> = {};
@@ -1051,7 +1050,6 @@ export class CodingJobService {
         doubleCodingCount = Math.floor((doubleCodingPercentage / 100) * totalCases);
       }
 
-      // Randomly select cases for double coding
       const shuffledResponses = [...responses].sort(() => Math.random() - 0.5);
       const doubleCodingResponses = shuffledResponses.slice(0, doubleCodingCount);
       const singleCodingResponses = shuffledResponses.slice(doubleCodingCount);
@@ -1059,19 +1057,16 @@ export class CodingJobService {
       doubleCodingInfo[variableKey].doubleCodedCases = doubleCodingCount;
       doubleCodingInfo[variableKey].singleCodedCasesAssigned = singleCodingResponses.length;
 
-      // Initialize double coding tracking
       sortedCoders.forEach(coder => {
         doubleCodingInfo[variableKey].doubleCodedCasesPerCoder[coder.name] = 0;
       });
 
-      // Distribute cases for this variable among coders to balance total workload
       const caseDistribution = this.distributeCasesForVariable(
         responses,
         doubleCodingResponses,
         sortedCoders
       );
 
-      // Assign double-coded cases and track distribution
       const doubleCodingAssignments = this.distributeDoubleCodingEvenly(
         doubleCodingResponses,
         sortedCoders
@@ -1135,7 +1130,6 @@ export class CodingJobService {
     }[] = [];
 
     try {
-      // Get all response units for the selected variables
       const allResponses = await this.getResponsesForVariables(workspaceId, selectedVariables);
 
       // Group responses by variable
@@ -1170,7 +1164,6 @@ export class CodingJobService {
         };
 
         if (totalCases === 0) {
-          // No cases for this variable, create empty jobs
           for (const coder of sortedCoders) {
             distribution[variableKey][coder.name] = 0;
             const jobName = generateJobName(coder.name, variable.unitName, variable.variableId, 0);
@@ -1200,7 +1193,6 @@ export class CodingJobService {
           doubleCodingCount = Math.floor((doubleCodingPercentage / 100) * totalCases);
         }
 
-        // Randomly select cases for double coding
         const shuffledResponses = [...responses].sort(() => Math.random() - 0.5);
         const doubleCodingResponses = shuffledResponses.slice(0, doubleCodingCount);
         const singleCodingResponses = shuffledResponses.slice(doubleCodingCount);
@@ -1212,14 +1204,12 @@ export class CodingJobService {
           doubleCodingInfo[variableKey].doubleCodedCasesPerCoder[coder.name] = 0;
         });
 
-        // Distribute cases for this variable among coders to balance total workload
         const caseDistribution = this.distributeCasesForVariable(
           responses,
           doubleCodingResponses,
           sortedCoders
         );
 
-        // Assign double-coded cases and track distribution
         const doubleCodingAssignments = this.distributeDoubleCodingEvenly(
           doubleCodingResponses,
           sortedCoders
@@ -1230,7 +1220,6 @@ export class CodingJobService {
           }
         }
 
-        // Create jobs based on the balanced distribution
         for (let i = 0; i < sortedCoders.length; i++) {
           const coder = sortedCoders[i];
           const coderCases = caseDistribution[i];
@@ -1263,7 +1252,6 @@ export class CodingJobService {
               caseCount: caseCountForCoder
             });
           } else {
-            // Create empty job if no cases assigned
             const jobName = generateJobName(coder.name, variable.unitName, variable.variableId, 0);
 
             const codingJob = await this.createCodingJob(workspaceId, {
@@ -1309,7 +1297,6 @@ export class CodingJobService {
 }
 
 function generateJobName(coderName: string, unitName: string, variableId: string, caseCount: number): string {
-  // Clean names to avoid issues with special characters
   const cleanCoderName = coderName.replace(/[^a-zA-Z0-9-_]/g, '_');
   const cleanUnitName = unitName.replace(/[^a-zA-Z0-9-_]/g, '_');
   const cleanVariableId = variableId.replace(/[^a-zA-Z0-9-_]/g, '_');
