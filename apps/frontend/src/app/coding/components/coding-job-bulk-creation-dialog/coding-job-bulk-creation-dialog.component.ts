@@ -8,6 +8,7 @@ import { MatDividerModule } from '@angular/material/divider';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { TranslateModule } from '@ngx-translate/core';
+import { A11yModule } from '@angular/cdk/a11y';
 import { VariableBundle, Variable } from '../../models/coding-job.model';
 import { Coder } from '../../models/coder.model';
 import { BackendService } from '../../../services/backend.service';
@@ -81,7 +82,8 @@ interface DistributionMatrixRow {
     MatDividerModule,
     MatChipsModule,
     MatCheckboxModule,
-    TranslateModule
+    TranslateModule,
+    A11yModule
   ]
 })
 export class CodingJobBulkCreationDialogComponent {
