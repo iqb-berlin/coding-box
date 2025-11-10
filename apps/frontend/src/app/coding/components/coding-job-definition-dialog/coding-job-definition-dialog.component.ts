@@ -366,8 +366,21 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
     if (workspaceId) {
       this.backendService.getVariableBundles(workspaceId).subscribe({
         next: bundles => {
-          this.variableBundles = bundles;
-          this.bundlesDataSource.data = bundles;
+          // Enrich bundle variables with responseCount from the main variables array
+          const enrichedBundles = bundles.map(bundle => ({
+            ...bundle,
+            variables: bundle.variables.map(bundleVar => {
+              // Find the matching variable in the main variables array to get responseCount
+              const matchingVar = this.variables.find(v => v.unitName === bundleVar.unitName && v.variableId === bundleVar.variableId);
+              return {
+                ...bundleVar,
+                responseCount: matchingVar?.responseCount || 0
+              };
+            })
+          }));
+
+          this.variableBundles = enrichedBundles;
+          this.bundlesDataSource.data = enrichedBundles;
           this.isLoadingBundles = false;
           if (this.data.isEdit && this.data.codingJob) {
             const assignedBundles = this.data.codingJob.variableBundles || this.data.codingJob.assignedVariableBundles;
