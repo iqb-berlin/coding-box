@@ -285,7 +285,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
 
   initForm(): void {
     const formFields: Record<string, [string | number | null | undefined, ValidatorFn[]]> = {
-      durationSeconds: [this.data.codingJob?.durationSeconds || null, [Validators.min(1)]],
+      durationSeconds: [this.data.codingJob?.durationSeconds || 1, [Validators.min(1)]],
       maxCodingCases: [this.data.codingJob?.maxCodingCases || null, [Validators.min(1)]],
       doubleCodingAbsolute: [this.data.codingJob?.doubleCodingAbsolute ?? 0, []],
       doubleCodingPercentage: [this.data.codingJob?.doubleCodingPercentage ?? 0, []]
