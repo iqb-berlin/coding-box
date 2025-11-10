@@ -127,11 +127,11 @@ export class CodingJobBulkCreationDialogComponent {
         this.data.doubleCodingPercentage
       ).toPromise();
 
-      if (result) {
-        this.data.distribution = result.distribution;
-        this.data.doubleCodingInfo = result.doubleCodingInfo;
-        this.initializeFromData();
-      } else {
+      this.data.distribution = result?.distribution || {};
+      this.data.doubleCodingInfo = result?.doubleCodingInfo || {};
+      this.initializeFromData();
+
+      if (!result || Object.keys(result.distribution || {}).length === 0) {
         this.distributionMatrix = this.calculateDistributionFrontend();
         this.doubleCodingPreview = this.calculateDoubleCodingPreviewFrontend();
         this.jobPreviews = this.createJobPreviews();
