@@ -106,10 +106,6 @@
       </div>
 
       <div class="form-section">
-        <h3>{{ 'coding-job-definition-dialog.sections.variable-bundles.title' | translate }}</h3>
-        <p class="section-description">{{ 'coding-job-definition-dialog.sections.variable-bundles.description' | translate }}</p>
-
-        <!-- Selection summary section that's always visible -->
         <div class="selection-summary-container">
           <div class="selection-card">
             <h4>{{ 'coding-job-definition-dialog.selection-summary.title' | translate }}</h4>
@@ -196,7 +192,7 @@
               @if (!isLoadingAvailableCoders && availableCoders.length > 0) {
                 <!-- Quick selection tools -->
                 <div class="quick-selection-tools">
-                  <button mat-stroked-button color="primary" (click)="masterCoderToggle()" class="select-all-button">
+                  <button mat-stroked-button color="primary" type="button" (click)="masterCoderToggle()" class="select-all-button">
                     <mat-icon>{{ isAllCodersSelected() ? 'deselect' : 'select_all' }}</mat-icon>
                     {{ isAllCodersSelected() ? 'Alle abwählen' : 'Alle auswählen' }}
                   </button>
@@ -209,7 +205,7 @@
                 <div class="coders-grid-container">
                   <div class="coders-grid">
                     @for (coder of availableCoders; track coder.id) {
-                      <div class="coder-card"
+                        <div class="coder-card"
                            [class.selected]="selectedCoders.isSelected(coder)"
                            (click)="selectedCoders.toggle(coder)">
                         <div class="coder-avatar">
@@ -218,9 +214,6 @@
                         <div class="coder-details">
                           <h3 class="coder-name">
                             {{ coder.displayName || coder.name }}
-                            @if (data.isEdit && isCoderOriginallyAssigned(coder)) {
-                              <mat-icon class="assigned-indicator" matTooltip="Bereits diesem Kodierjob zugewiesen" matTooltipPosition="above">check_circle</mat-icon>
-                            }
                           </h3>
                           <p class="coder-username">{{ coder.name }}</p>
                           @if (coder.email) {
@@ -287,7 +280,7 @@
             @if (!isLoadingVariableAnalysis && variables.length > 0) {
               <!-- Quick selection tools -->
               <div class="quick-selection-tools">
-                <button mat-stroked-button color="primary" (click)="masterToggle()" class="select-all-button">
+                <button mat-stroked-button color="primary" type="button" (click)="masterToggle()" class="select-all-button">
                   <mat-icon>{{ isAllSelected() ? 'deselect' : 'select_all' }}</mat-icon>
                   {{ isAllSelected() ? 'Alle abwählen' : 'Alle auswählen' }}
                 </button>
@@ -312,9 +305,7 @@
                             @if (variable.responseCount != null) {
                               <span class="response-count">({{ variable.responseCount }})</span>
                             }
-                            @if (data.isEdit && isVariableOriginallyAssigned(variable)) {
-                              <mat-icon class="assigned-indicator" matTooltip="Bereits diesem Kodierjob zugewiesen" matTooltipPosition="above">check_circle</mat-icon>
-                            }
+
                             @if (isVariableDisabled(variable)) {
                               <mat-icon class="disabled-indicator" matTooltip="Bereits in anderen Definitionen verwendet" matTooltipPosition="above">block</mat-icon>
                             }
@@ -377,9 +368,6 @@
                       <div class="bundle-card-header">
                         <h3 class="bundle-name">
                           {{ bundle.name }}
-                          @if (data.isEdit && isBundleOriginallyAssigned(bundle)) {
-                            <mat-icon class="assigned-indicator" matTooltip="Bereits diesem Kodierjob zugewiesen" matTooltipPosition="above">check_circle</mat-icon>
-                          }
                         </h3>
                       </div>
                         <div class="bundle-card-content">
