@@ -57,7 +57,7 @@
                 </div>
                 @for (coder of data.selectedCoders; track coder.id) {
                   <div class="matrix-cell data-cell">
-                    {{ (data.creationResults?.doubleCodingInfo || doubleCodingPreview?.doubleCodingInfo)![variableKey].doubleCodedCasesPerCoder?.[coder.name] || 0 }}
+                    {{ (data.creationResults?.doubleCodingInfo || doubleCodingPreview?.doubleCodingInfo)![variableKey].doubleCodedCasesPerCoder[coder.name] || 0 }}
                   </div>
                 }
               </div>
