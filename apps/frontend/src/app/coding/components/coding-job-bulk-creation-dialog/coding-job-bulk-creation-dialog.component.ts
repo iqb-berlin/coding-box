@@ -217,15 +217,29 @@ export class CodingJobBulkCreationDialogComponent {
 
     for (const variable of this.data.selectedVariables) {
       const totalCases = variable.responseCount || 0;
-      const baseCasesPerCoder = Math.floor(totalCases / sortedCoders.length);
-      const remainder = totalCases % sortedCoders.length;
+
+      let doubleCodingCount = 0;
+      if (this.data.doubleCodingAbsolute && this.data.doubleCodingAbsolute > 0) {
+        doubleCodingCount = Math.min(this.data.doubleCodingAbsolute, totalCases);
+      } else if (this.data.doubleCodingPercentage && this.data.doubleCodingPercentage > 0) {
+        doubleCodingCount = Math.floor((this.data.doubleCodingPercentage / 100) * totalCases);
+      }
+
+      const singleCodingCases = totalCases - doubleCodingCount;
+      const baseCasesPerCoder = Math.floor(singleCodingCases / sortedCoders.length);
+      const remainder = singleCodingCases % sortedCoders.length;
 
       const coderCases: Record<string, number> = {};
 
-      // Assign cases to each coder
+      // Assign single coding cases to each coder
       for (let i = 0; i < sortedCoders.length; i++) {
         const coder = sortedCoders[i];
         coderCases[coder.name] = baseCasesPerCoder + (i < remainder ? 1 : 0);
+      }
+
+      // Add double coded cases to all coders (since each double coded case is assigned to all coders)
+      for (const coder of sortedCoders) {
+        coderCases[coder.name] += doubleCodingCount;
       }
 
       matrix.push({
@@ -349,16 +363,37 @@ export class CodingJobBulkCreationDialogComponent {
   }
 
   private getCaseCountForCoder(variable: Variable, coder: Coder): number {
+    if (this.data.distribution && this.data.doubleCodingInfo) {
+      const variableKey = `${variable.unitName}::${variable.variableId}`;
+      const coderCases = this.data.distribution[variableKey];
+      const coderName = this.data.selectedCoders.find(c => c.id === coder.id)?.name;
+      if (coderCases && coderName) {
+        return coderCases[coderName] || 0;
+      }
+    }
+
+    // Fallback to calculation when backend data is not available
     const sortedCoders = [...this.data.selectedCoders].sort((a, b) => a.name.localeCompare(b.name));
     const coderIndex = sortedCoders.findIndex(c => c.id === coder.id);
 
     if (coderIndex === -1) return 0;
 
     const totalCases = variable.responseCount || 0;
-    const baseCasesPerCoder = Math.floor(totalCases / sortedCoders.length);
-    const remainder = totalCases % sortedCoders.length;
 
-    return baseCasesPerCoder + (coderIndex < remainder ? 1 : 0);
+    // Calculate double coding requirements
+    let doubleCodingCount = 0;
+    if (this.data.doubleCodingAbsolute && this.data.doubleCodingAbsolute > 0) {
+      doubleCodingCount = Math.min(this.data.doubleCodingAbsolute, totalCases);
+    } else if (this.data.doubleCodingPercentage && this.data.doubleCodingPercentage > 0) {
+      doubleCodingCount = Math.floor((this.data.doubleCodingPercentage / 100) * totalCases);
+    }
+
+    const singleCodingCases = totalCases - doubleCodingCount;
+    const baseCasesPerCoder = Math.floor(singleCodingCases / sortedCoders.length);
+    const remainder = singleCodingCases % sortedCoders.length;
+
+    const singleCases = baseCasesPerCoder + (coderIndex < remainder ? 1 : 0);
+    return singleCases + doubleCodingCount;
   }
 
   private initForm(): void {
@@ -398,7 +433,6 @@ export class CodingJobBulkCreationDialogComponent {
     const jobNameParts = job.name.split('_');
     if (jobNameParts.length < 3) return 0;
 
-    // Case count is the last part
     const caseCountStr = jobNameParts[jobNameParts.length - 1];
     const caseCount = parseInt(caseCountStr, 10);
     return Number.isNaN(caseCount) ? 0 : caseCount;
