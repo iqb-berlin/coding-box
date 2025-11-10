@@ -427,7 +427,7 @@
       <button mat-raised-button color="primary" (click)="onSubmit()" [disabled]="codingJobForm.invalid">
         {{ data.isEdit ? 'Definition speichern' : 'Definition erstellen' }}
       </button>
-      <button mat-stroked-button color="accent" (click)="onSubmitForReview()" [disabled]="codingJobForm.invalid" *ngIf="!data.isEdit">
+      <button mat-stroked-button color="primary" (click)="onSubmitForReview()" [disabled]="codingJobForm.invalid" *ngIf="!data.isEdit">
         <mat-icon>send</mat-icon>
         Zur Prüfung einreichen
       </button>
