@@ -307,7 +307,7 @@
                             }
 
                             @if (isVariableDisabled(variable)) {
-                              <mat-icon class="disabled-indicator" matTooltip="Bereits in anderen Definitionen verwendet" matTooltipPosition="above">block</mat-icon>
+                              <mat-icon class="disabled-indicator" matTooltip="{{ getVariableDisabledReason(variable) }}" matTooltipPosition="above">block</mat-icon>
                             }
                           </div>
                         </div>
@@ -364,7 +364,7 @@
                   @for (bundle of bundlesDataSource.filteredData; track bundle.id) {
                     <div class="bundle-card"
                          [class.selected]="selectedVariableBundles.isSelected(bundle)"
-                         (click)="selectedVariableBundles.toggle(bundle)">
+                         (click)="toggleBundleSelection(bundle)">
                       <div class="bundle-card-header">
                         <h3 class="bundle-name">
                           {{ bundle.name }}

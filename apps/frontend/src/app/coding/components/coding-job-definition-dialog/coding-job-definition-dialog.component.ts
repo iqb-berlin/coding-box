@@ -225,7 +225,13 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
 
     this.backendService.getJobDefinitions(workspaceId).subscribe({
       next: definitions => {
-        this.existingJobDefinitions = definitions;
+        // When editing an existing job definition, exclude the current job definition
+        // from the list to prevent its variables from being incorrectly disabled
+        if (this.data.isEdit && this.data.jobDefinitionId) {
+          this.existingJobDefinitions = definitions.filter(def => def.id !== this.data.jobDefinitionId);
+        } else {
+          this.existingJobDefinitions = definitions;
+        }
         this.buildDisabledVariablesSet();
       },
       error: () => {
@@ -467,10 +473,33 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
       return false;
     }
 
+    // Disable variables that are included in currently selected variable bundles
+    const isInSelectedBundle = this.selectedVariableBundles.selected.some(bundle => bundle.variables.some(bundleVar => bundleVar.unitName === variable.unitName && bundleVar.variableId === variable.variableId
+    )
+    );
+
+    if (isInSelectedBundle) {
+      return true; // Disable variables in selected bundles
+    }
+
+    // Disable variables used in other job definitions
     const makeKey = (unitName: string, variableId: string) => `${unitName?.trim().toLowerCase() || ''}::${variableId?.trim().toLowerCase() || ''}`;
 
     const key = makeKey(variable.unitName || '', variable.variableId || '');
     return this.disabledVariableKeys.has(key);
+  }
+
+  getVariableDisabledReason(variable: Variable): string {
+    // Check if variable is included in currently selected variable bundle
+    const selectedBundle = this.selectedVariableBundles.selected.find(bundle => bundle.variables.some(bundleVar => bundleVar.unitName === variable.unitName && bundleVar.variableId === variable.variableId
+    )
+    );
+
+    if (selectedBundle) {
+      return `Bereits in Variablenbündel "${selectedBundle.name}" enthalten`;
+    }
+
+    return 'Bereits in anderen Definitionen verwendet';
   }
 
   getVariableCount(bundle: VariableBundle): number {
@@ -747,6 +776,26 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
     }
 
     this.isSaving = false;
+  }
+
+  toggleBundleSelection(bundle: VariableBundle): void {
+    const wasSelected = this.selectedVariableBundles.isSelected(bundle);
+    this.selectedVariableBundles.toggle(bundle);
+    const isNowSelected = this.selectedVariableBundles.isSelected(bundle);
+
+    if (!wasSelected && isNowSelected) {
+      this.removeConflictingIndividualSelections(bundle);
+    }
+  }
+
+  private removeConflictingIndividualSelections(bundle: VariableBundle): void {
+    const variablesToRemove = this.selectedVariables.selected.filter(variable => bundle.variables.some(bundleVar => bundleVar.unitName === variable.unitName && bundleVar.variableId === variable.variableId
+    )
+    );
+
+    variablesToRemove.forEach(variable => {
+      this.selectedVariables.deselect(variable);
+    });
   }
 
   toggleDoubleCodingMode(): void {
