@@ -75,8 +75,7 @@ export class UnitsReplayComponent {
       currentUnit.variableId || ''
     );
 
-    const hasSelection = this.codingService.selectedCodes.has(compositeKey) ||
-                        this.codingService.openSelections.has(compositeKey);
+    const hasSelection = this.codingService.selectedCodes.has(compositeKey);
     const nextJumpableIndex = this.codingService.getNextJumpableUnitIndex(data, data.currentUnitIndex);
     return hasSelection && nextJumpableIndex >= 0;
   }

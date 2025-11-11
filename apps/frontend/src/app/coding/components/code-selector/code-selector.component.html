@@ -71,8 +71,8 @@
 
       <div class="uncertain-codes-section">
         <div class="code-row"
-             [class.selected]="item.id === selectedCode"
-             *ngFor="let item of uncertainCodes;"
+             [class.selected]="item.id === selectedCodingIssueOption"
+             *ngFor="let item of codingIssueOptionCodes;"
              (click)="onSelect(item.id)">
           <div class="code-content">
             <span class="uncertain-text">{{ item.label }}</span>

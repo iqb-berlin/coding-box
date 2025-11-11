@@ -102,3 +102,17 @@ ALTER TABLE "public"."coding_job" ADD COLUMN "suppress_general_instructions" BOO
 -- rollback ALTER TABLE "public"."coding_job" DROP COLUMN IF EXISTS "show_score";
 -- rollback ALTER TABLE "public"."coding_job" DROP COLUMN IF EXISTS "allow_comments";
 -- rollback ALTER TABLE "public"."coding_job" DROP COLUMN IF EXISTS "suppress_general_instructions";
+
+-- changeset jurei733:8
+-- comment: Add uncertain column to coding_job_unit table for storing uncertain coding information as integer
+
+ALTER TABLE "public"."coding_job_unit" ADD COLUMN "uncertain" INTEGER NULL;
+
+-- rollback ALTER TABLE "public"."coding_job_unit" DROP COLUMN "uncertain";
+
+-- changeset jurei733:9
+-- comment: Rename uncertain column to coding_issue_option to match entity property naming
+
+ALTER TABLE "public"."coding_job_unit" RENAME COLUMN "uncertain" TO "coding_issue_option";
+
+-- rollback ALTER TABLE "public"."coding_job_unit" RENAME COLUMN "coding_issue_option" TO "uncertain";
