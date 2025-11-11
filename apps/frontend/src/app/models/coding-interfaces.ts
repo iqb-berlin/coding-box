@@ -34,7 +34,7 @@ export interface Rule {
   parameters: string[];
 }
 
-export interface UncertainDto {
+export interface CodingIssueDto {
   id: string;
   label: string;
   description: string;
@@ -43,7 +43,8 @@ export interface UncertainDto {
 
 export interface CodeSelectedEvent {
   variableId: string;
-  code: Code | UncertainDto | null;
+  code: Code | CodingIssueDto | null;
+  codingIssueOption?: CodingIssueDto | null;
 }
 
 export interface SelectableItem {

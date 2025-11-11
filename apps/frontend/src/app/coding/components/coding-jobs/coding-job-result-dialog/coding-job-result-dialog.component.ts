@@ -27,9 +27,10 @@ interface CodingResult {
   personLogin: string;
   personCode: string;
   testPerson: string;
-  code?: string;
+  code?: string | number;
   codeLabel?: string;
   score?: number;
+  codingIssueOptionLabel?: string;
 }
 
 @Component({
@@ -69,7 +70,8 @@ export class CodingJobResultDialogComponent implements OnInit {
     'testPerson',
     'variableId',
     'code',
-    'score'
+    'score',
+    'codingIssueOption'
   ];
 
   constructor(
@@ -102,7 +104,7 @@ export class CodingJobResultDialogComponent implements OnInit {
             const codingResults: CodingResult[] = unitsResult.map(unit => {
               const testPerson = `${unit.personLogin}@${unit.personCode}@${unit.bookletName}`;
               const progressKey = `${testPerson}::${unit.bookletName}::${unit.unitName}::${unit.variableId}`;
-              const progress = progressResult[progressKey] as { id?: string; label?: string; score?: number } | undefined;
+              const progress = progressResult[progressKey] as { id?: string; label?: string; score?: number; codingIssueOption?: number } | undefined;
 
               return {
                 unitName: unit.unitName,
@@ -114,7 +116,8 @@ export class CodingJobResultDialogComponent implements OnInit {
                 testPerson: `${unit.personLogin}@${unit.personCode}`,
                 code: progress?.id,
                 codeLabel: progress?.label,
-                score: progress?.score
+                score: progress?.score,
+                codingIssueOptionLabel: progress?.codingIssueOption ? this.getCodingIssueOption(progress.codingIssueOption) : undefined
               };
             });
 
@@ -170,39 +173,51 @@ export class CodingJobResultDialogComponent implements OnInit {
   }
 
   getCodeDisplay(result: CodingResult): string {
-    if (this.isOpen(result)) {
-      return 'offen';
-    }
     if (result.code !== undefined && result.code !== null) {
-      return result.code;
+      if (this.isCodingIssueOption(result)) {
+        return '';
+      }
+      return result.code.toString();
     }
     return 'Nicht kodiert';
   }
 
   getScoreDisplay(result: CodingResult): string {
-    if (this.isOpen(result)) {
-      return 'offen';
+    if (this.isCodingIssueOption(result)) {
+      return result.codeLabel || '';
     }
     if (result.score !== undefined && result.score !== null) {
       return result.score.toString();
     }
     if (this.hasCode(result)) {
-      return 'offen';
+      return '';
     }
     return 'Nicht kodiert';
   }
 
   hasCode(result: CodingResult): boolean {
-    return result.code !== undefined && result.code !== null && !this.isOpen(result);
+    return result.code !== undefined && result.code !== null;
   }
 
-  isOpen(result: CodingResult): boolean {
-    return result.codeLabel === 'OPEN';
+  isCodingIssueOption(result: CodingResult): boolean {
+    if (result.code === undefined || result.code === null) return false;
+    const codeNum = typeof result.code === 'number' ? result.code : parseInt(result.code.toString(), 10);
+    return codeNum < 0;
+  }
+
+  getCodingIssueOption(codingIssueOptionId: number): string {
+    const mapping: { [key: number]: string } = {
+      [-1]: 'Code-Vergabe unsicher',
+      [-2]: 'Neuer Code nötig',
+      [-3]: 'Ungültig (Spaßantwort)',
+      [-4]: 'Technische Probleme'
+    };
+    return mapping[codingIssueOptionId] || 'Unknown';
   }
 
   getCellClasses(result: CodingResult): string {
-    if (this.isOpen(result)) {
-      return 'open';
+    if (this.isCodingIssueOption(result)) {
+      return 'uncertain';
     }
     return this.hasCode(result) ? 'coded' : 'not-coded';
   }

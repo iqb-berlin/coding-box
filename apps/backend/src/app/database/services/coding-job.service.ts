@@ -562,6 +562,7 @@ export class CodingJobService {
       if (progress.isOpen) {
         codingJobUnit.code = null;
         codingJobUnit.score = null;
+        codingJobUnit.coding_issue_option = null;
       }
     } else {
       codingJobUnit.code = progress.selectedCode.id;
@@ -570,6 +571,7 @@ export class CodingJobService {
       if (score !== undefined) {
         codingJobUnit.score = score;
       }
+      codingJobUnit.coding_issue_option = (progress.selectedCode).codingIssueOption || null;
     }
 
     if (progress.notes !== undefined) {
@@ -642,6 +644,10 @@ export class CodingJobService {
 
         if (unit.score !== null) {
           progressMap[compositeKey].score = unit.score;
+        }
+
+        if (unit.coding_issue_option !== null) {
+          (progressMap[compositeKey]).codingIssueOption = unit.coding_issue_option;
         }
       }
     });

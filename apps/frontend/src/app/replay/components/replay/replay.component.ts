@@ -702,17 +702,8 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     await this.codingService.handleCodeSelected(event, this.testPerson, this.unitId, this.workspaceId, this.unitsData);
   }
 
-  onOpenChanged(isOpen: boolean): void {
-    this.codingService.handleOpenChanged(isOpen, this.testPerson, this.unitId, this.workspaceId, this.unitsData);
-  }
-
   getCoderNotes(): string {
     return this.codingService.getNotes(this.testPerson, this.unitId, this.codingService.currentVariableId);
-  }
-
-  isUnitOpen(): boolean {
-    const compositeKey = this.codingService.generateCompositeKey(this.testPerson, this.unitId, this.codingService.currentVariableId);
-    return this.codingService.openSelections.has(compositeKey);
   }
 
   onNotesChanged(notes: string): void {
@@ -730,7 +721,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   getOpenCount(): number {
-    return this.codingService.getOpenCount(this.unitsData);
+    return this.codingService.getOpenCount();
   }
 
   getProgressPercentage(): number {
