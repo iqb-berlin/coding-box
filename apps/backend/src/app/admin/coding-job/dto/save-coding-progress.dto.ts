@@ -41,6 +41,7 @@ export class SaveCodingProgressDto {
     code?: string;
     label?: string;
     score?: number;
+    codingIssueOption?: number | null;
     [key: string]: unknown;
   };
 

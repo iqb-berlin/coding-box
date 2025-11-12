@@ -15,6 +15,8 @@ import { MissingsProfile } from './missings-profile.entity';
 import { CodingJobUnit } from './coding-job-unit.entity';
 // eslint-disable-next-line import/no-cycle
 import { CodingJobCoder } from './coding-job-coder.entity';
+// eslint-disable-next-line import/no-cycle
+import { JobDefinition } from './job-definition.entity';
 
 /**
  * Entity for coding jobs
@@ -40,6 +42,15 @@ export class CodingJob {
   @Column({ default: 'pending' })
     status: string;
 
+  @Column({ name: 'show_score', default: false })
+    showScore: boolean;
+
+  @Column({ name: 'allow_comments', default: true })
+    allowComments: boolean;
+
+  @Column({ name: 'suppress_general_instructions', default: false })
+    suppressGeneralInstructions: boolean;
+
   @Column({ nullable: true })
     training_id?: number;
 
@@ -53,6 +64,13 @@ export class CodingJob {
   @ManyToOne(() => MissingsProfile)
   @JoinColumn({ name: 'missings_profile_id' })
     missingsProfile?: MissingsProfile;
+
+  @Column({ name: 'job_definition_id', nullable: true })
+    job_definition_id?: number;
+
+  @ManyToOne(() => JobDefinition, jobDefinition => jobDefinition.codingJobs, { nullable: true })
+  @JoinColumn({ name: 'job_definition_id' })
+    jobDefinition?: JobDefinition;
 
   @CreateDateColumn()
     created_at: Date;

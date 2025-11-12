@@ -93,4 +93,67 @@ export class CreateCodingJobDto {
   @IsNumber()
   @IsOptional()
     missings_profile_id?: number;
+
+  @ApiProperty({
+    description: 'Duration in seconds for one coding task',
+    example: 300,
+    required: false
+  })
+  @IsNumber()
+  @IsOptional()
+    durationSeconds?: number;
+
+  @ApiProperty({
+    description: 'Absolute number of cases that should be double coded',
+    example: 10,
+    required: false
+  })
+  @IsNumber()
+  @IsOptional()
+    doubleCodingAbsolute?: number;
+
+  @ApiProperty({
+    description: 'Percentage (0-100) of cases that should be double coded',
+    example: 25.5,
+    required: false
+  })
+  @IsNumber()
+  @IsOptional()
+    doubleCodingPercentage?: number;
+
+  @ApiProperty({
+    description: 'ID of the job definition this job is created from',
+    example: 1,
+    required: false
+  })
+  @IsNumber()
+  @IsOptional()
+    jobDefinitionId?: number;
+
+  @ApiProperty({
+    description: 'Whether to show scores in the coding interface',
+    example: false,
+    default: false,
+    required: false
+  })
+  @IsOptional()
+    showScore?: boolean;
+
+  @ApiProperty({
+    description: 'Whether to allow comments in the coding interface',
+    example: true,
+    default: true,
+    required: false
+  })
+  @IsOptional()
+    allowComments?: boolean;
+
+  @ApiProperty({
+    description: 'Whether to suppress general instructions in the coding interface',
+    example: false,
+    default: false,
+    required: false
+  })
+  @IsOptional()
+    suppressGeneralInstructions?: boolean;
 }

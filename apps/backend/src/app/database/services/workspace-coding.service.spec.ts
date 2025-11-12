@@ -8,6 +8,13 @@ import Persons from '../entities/persons.entity';
 import { Unit } from '../entities/unit.entity';
 import { Booklet } from '../entities/booklet.entity';
 import { ResponseEntity } from '../entities/response.entity';
+import { CodingJob } from '../entities/coding-job.entity';
+import { CodingJobCoder } from '../entities/coding-job-coder.entity';
+import { CodingJobVariable } from '../entities/coding-job-variable.entity';
+import { CodingJobVariableBundle } from '../entities/coding-job-variable-bundle.entity';
+import { CodingJobUnit } from '../entities/coding-job-unit.entity';
+import { JobDefinition } from '../entities/job-definition.entity';
+import { VariableBundle } from '../entities/variable-bundle.entity';
 import { Setting } from '../entities/setting.entity';
 import { JobQueueService } from '../../job-queue/job-queue.service';
 import { CacheService } from '../../cache/cache.service';
@@ -17,6 +24,8 @@ import { VariableAnalysisReplayService } from './variable-analysis-replay.servic
 import { ExportValidationResultsService } from './export-validation-results.service';
 import { ExternalCodingImportService } from './external-coding-import.service';
 import { BullJobManagementService } from './bull-job-management.service';
+import { CodingResultsService } from './coding-results.service';
+import { CodingJobService } from './coding-job.service';
 
 describe('WorkspaceCodingService - Unit Variable Filtering', () => {
   let service: WorkspaceCodingService;
@@ -92,6 +101,8 @@ describe('WorkspaceCodingService - Unit Variable Filtering', () => {
         { provide: ExportValidationResultsService, useValue: {} },
         { provide: ExternalCodingImportService, useValue: {} },
         { provide: BullJobManagementService, useValue: {} },
+        { provide: CodingResultsService, useValue: {} },
+        { provide: CodingJobService, useValue: {} },
         { provide: getRepositoryToken(FileUpload), useValue: {} },
         {
           provide: getRepositoryToken(Persons),
@@ -136,6 +147,13 @@ describe('WorkspaceCodingService - Unit Variable Filtering', () => {
             }
           }
         },
+        { provide: getRepositoryToken(CodingJob), useValue: {} },
+        { provide: getRepositoryToken(CodingJobCoder), useValue: {} },
+        { provide: getRepositoryToken(CodingJobVariable), useValue: {} },
+        { provide: getRepositoryToken(CodingJobVariableBundle), useValue: {} },
+        { provide: getRepositoryToken(CodingJobUnit), useValue: {} },
+        { provide: getRepositoryToken(JobDefinition), useValue: {} },
+        { provide: getRepositoryToken(VariableBundle), useValue: {} },
         { provide: getRepositoryToken(Setting), useValue: {} }
       ]
     }).compile();

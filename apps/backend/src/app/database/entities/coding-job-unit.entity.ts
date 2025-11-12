@@ -58,6 +58,9 @@ export class CodingJobUnit {
   @Column({ nullable: true, type: 'text' })
     notes: string | null;
 
+  @Column({ nullable: true })
+    coding_issue_option: number | null;
+
   @CreateDateColumn()
     created_at: Date;
 

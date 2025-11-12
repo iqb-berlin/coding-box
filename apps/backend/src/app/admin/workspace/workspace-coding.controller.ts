@@ -15,23 +15,32 @@ import { WorkspaceCodingService } from '../../database/services/workspace-coding
 import { CoderTrainingService } from '../../database/services/coder-training.service';
 import { CodingListService } from '../../database/services/coding-list.service';
 import { PersonService } from '../../database/services/person.service';
+import { CodingJobService } from '../../database/services/coding-job.service';
 import { ResponseEntity } from '../../database/entities/response.entity';
+import { JobDefinition } from '../../database/entities/job-definition.entity';
 import { VariableAnalysisItemDto } from '../../../../../../api-dto/coding/variable-analysis-item.dto';
 import { ValidateCodingCompletenessRequestDto } from '../../../../../../api-dto/coding/validate-coding-completeness-request.dto';
 import { ValidateCodingCompletenessResponseDto } from '../../../../../../api-dto/coding/validate-coding-completeness-response.dto';
 import { ExportValidationResultsRequestDto } from '../../../../../../api-dto/coding/export-validation-results-request.dto';
 import { ExternalCodingImportDto } from '../../../../../../api-dto/coding/external-coding-import.dto';
 import { MissingsProfilesService } from '../../database/services/missings-profiles.service';
+import { JobDefinitionService } from '../../database/services/job-definition.service';
+import { CodingJob } from '../../database/entities/coding-job.entity';
+import { CreateJobDefinitionDto } from '../coding-job/dto/create-job-definition.dto';
+import { UpdateJobDefinitionDto } from '../coding-job/dto/update-job-definition.dto';
+import { ApproveJobDefinitionDto } from '../coding-job/dto/approve-job-definition.dto';
 
 @ApiTags('Admin Workspace Coding')
 @Controller('admin/workspace')
 export class WorkspaceCodingController {
   constructor(
     private workspaceCodingService: WorkspaceCodingService,
+    private jobDefinitionService: JobDefinitionService,
     private missingsProfilesService: MissingsProfilesService,
     private personService: PersonService,
     private codingListService: CodingListService,
-    private coderTrainingService: CoderTrainingService
+    private coderTrainingService: CoderTrainingService,
+    private codingJobService: CodingJobService
   ) {}
 
   @Get(':workspace_id/coding')
@@ -54,7 +63,7 @@ export class WorkspaceCodingController {
   @Get(':workspace_id/coding/manual')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiParam({ name: 'workspace_id', type: Number })
-  async getManualTestPersons(@Query('testPersons') testPersons: string, @WorkspaceId() workspace_id: number): Promise<unknown> {
+  async getManualTestPersons(@Query('testPersons') testPersons: string, @WorkspaceId() /* eslint-disable-next-line @typescript-eslint/no-unused-vars */ workspace_id: number): Promise<Array<ResponseEntity & { unitname: string }>> {
     return this.workspaceCodingService.getManualTestPersons(workspace_id, testPersons);
   }
 
@@ -1154,7 +1163,6 @@ export class WorkspaceCodingController {
       throw new Error('At least one valid training ID must be provided');
     }
 
-    // Get coding results for all training jobs combined
     return this.coderTrainingService.getTrainingCodingComparison(workspace_id, trainingIds);
   }
 
@@ -1418,5 +1426,458 @@ export class WorkspaceCodingController {
       validPage,
       validLimit
     );
+  }
+
+  @Post(':workspace_id/coding/job-definitions')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiBody({
+    description: 'Create a new job definition',
+    type: CreateJobDefinitionDto
+  })
+  @ApiOkResponse({
+    description: 'Job definition created successfully.'
+  })
+  async createJobDefinition(
+    @WorkspaceId() workspace_id: number,
+      @Body() createDto: CreateJobDefinitionDto
+  ): Promise<JobDefinition> {
+    return this.jobDefinitionService.createJobDefinition(createDto);
+  }
+
+  @Get(':workspace_id/coding/job-definitions')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiOkResponse({
+    description: 'List of job definitions retrieved successfully.',
+    schema: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'number' },
+          status: { type: 'string' },
+          assigned_variables: { type: 'array' },
+          assigned_variable_bundles: { type: 'array' },
+          assigned_coders: { type: 'array' },
+          duration_seconds: { type: 'number' },
+          max_coding_cases: { type: 'number' },
+          double_coding_absolute: { type: 'number' },
+          double_coding_percentage: { type: 'number' },
+          created_at: { type: 'string', format: 'date-time' },
+          updated_at: { type: 'string', format: 'date-time' }
+        }
+      }
+    }
+  })
+  async getJobDefinitions(@WorkspaceId() workspace_id: number): Promise<JobDefinition[]> {
+    return this.jobDefinitionService.getJobDefinitions(workspace_id);
+  }
+
+  @Get(':workspace_id/coding/job-definitions/approved')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiOkResponse({
+    description: 'List of approved job definitions retrieved successfully.',
+    schema: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'number' },
+          assigned_variables: { type: 'array' },
+          assigned_variable_bundles: { type: 'array' },
+          assigned_coders: { type: 'array' },
+          duration_seconds: { type: 'number' },
+          max_coding_cases: { type: 'number' },
+          double_coding_absolute: { type: 'number' },
+          double_coding_percentage: { type: 'number' },
+          created_at: { type: 'string', format: 'date-time' },
+          updated_at: { type: 'string', format: 'date-time' }
+        }
+      }
+    }
+  })
+  async getApprovedJobDefinitions(): Promise<JobDefinition[]> {
+    return this.jobDefinitionService.getApprovedJobDefinitions();
+  }
+
+  @Get(':workspace_id/coding/job-definitions/:id')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiParam({ name: 'id', type: Number, description: 'Job definition ID' })
+  @ApiOkResponse({
+    description: 'Job definition retrieved successfully.'
+  })
+  async getJobDefinition(
+    @WorkspaceId() workspace_id: number,
+      @Param('id') id: number
+  ): Promise<JobDefinition> {
+    return this.jobDefinitionService.getJobDefinition(id);
+  }
+
+  @Put(':workspace_id/coding/job-definitions/:id')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiParam({ name: 'id', type: Number, description: 'Job definition ID' })
+  @ApiBody({
+    description: 'Update job definition',
+    type: UpdateJobDefinitionDto
+  })
+  @ApiOkResponse({
+    description: 'Job definition updated successfully.'
+  })
+  async updateJobDefinition(
+    @WorkspaceId() workspace_id: number,
+      @Param('id') id: number,
+      @Body() updateDto: UpdateJobDefinitionDto
+  ): Promise<JobDefinition> {
+    return this.jobDefinitionService.updateJobDefinition(id, updateDto);
+  }
+
+  @Put(':workspace_id/coding/job-definitions/:id/approve')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiParam({ name: 'id', type: Number, description: 'Job definition ID' })
+  @ApiBody({
+    description: 'Approve job definition',
+    type: ApproveJobDefinitionDto
+  })
+  @ApiOkResponse({
+    description: 'Job definition approved successfully.'
+  })
+  async approveJobDefinition(
+    @WorkspaceId() workspace_id: number,
+      @Param('id') id: number,
+      @Body() approveDto: ApproveJobDefinitionDto
+  ): Promise<JobDefinition> {
+    return this.jobDefinitionService.approveJobDefinition(id, approveDto);
+  }
+
+  @Delete(':workspace_id/coding/job-definitions/:id')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiParam({ name: 'id', type: Number, description: 'Job definition ID' })
+  @ApiOkResponse({
+    description: 'Job definition deleted successfully.',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        message: { type: 'string' }
+      }
+    }
+  })
+  async deleteJobDefinition(
+    @WorkspaceId() workspace_id: number,
+      @Param('id') id: number
+  ): Promise<{ success: boolean; message: string }> {
+    await this.jobDefinitionService.deleteJobDefinition(id);
+    return { success: true, message: 'Job definition deleted successfully' };
+  }
+
+  @Post(':workspace_id/coding/job-definitions/:id/create-job')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiParam({ name: 'id', type: Number, description: 'Job definition ID' })
+  @ApiOkResponse({
+    description: 'Coding job created successfully from job definition.'
+  })
+  async createCodingJobFromDefinition(
+    @WorkspaceId() workspace_id: number,
+      @Param('id') id: number
+  ): Promise<CodingJob> {
+    return this.jobDefinitionService.createCodingJobFromDefinition(id, workspace_id);
+  }
+
+  @Post(':workspace_id/coding/jobs/:jobId/apply-results')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiParam({ name: 'jobId', type: Number, description: 'Coding job ID to apply results for' })
+  @ApiOkResponse({
+    description: 'Coding results applied successfully to response database.',
+    schema: {
+      type: 'object',
+      properties: {
+        success: {
+          type: 'boolean',
+          description: 'Whether the application was successful'
+        },
+        updatedResponsesCount: {
+          type: 'number',
+          description: 'Number of responses updated'
+        },
+        skippedReviewCount: {
+          type: 'number',
+          description: 'Number of responses skipped for manual review'
+        },
+        message: {
+          type: 'string',
+          description: 'Detailed message about the operation'
+        }
+      }
+    }
+  })
+  async applyCodingResults(
+    @WorkspaceId() workspace_id: number,
+      @Param('jobId') jobId: number
+  ): Promise<{
+        success: boolean;
+        updatedResponsesCount: number;
+        skippedReviewCount: number;
+        message: string;
+      }> {
+    return this.workspaceCodingService.applyCodingResults(workspace_id, jobId);
+  }
+
+  @Post(':workspace_id/coding/calculate-distribution')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiBody({
+    description: 'Calculate distribution for coding jobs (preview mode)',
+    schema: {
+      type: 'object',
+      properties: {
+        selectedVariables: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              unitName: { type: 'string' },
+              variableId: { type: 'string' }
+            }
+          }
+        },
+        selectedVariableBundles: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'number' },
+              name: { type: 'string' },
+              variables: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    unitName: { type: 'string' },
+                    variableId: { type: 'string' }
+                  }
+                }
+              }
+            }
+          }
+        },
+        selectedCoders: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'number' },
+              name: { type: 'string' },
+              username: { type: 'string' }
+            }
+          }
+        },
+        doubleCodingAbsolute: { type: 'number' },
+        doubleCodingPercentage: { type: 'number' }
+      },
+      required: ['selectedVariables', 'selectedCoders']
+    }
+  })
+  @ApiOkResponse({
+    description: 'Distribution calculated successfully.',
+    schema: {
+      type: 'object',
+      properties: {
+        distribution: {
+          type: 'object',
+          description: 'Case distribution matrix',
+          additionalProperties: {
+            type: 'object',
+            additionalProperties: { type: 'number' }
+          }
+        },
+        doubleCodingInfo: {
+          type: 'object',
+          description: 'Double coding information',
+          additionalProperties: {
+            type: 'object',
+            properties: {
+              totalCases: { type: 'number' },
+              doubleCodedCases: { type: 'number' },
+              singleCodedCasesAssigned: { type: 'number' },
+              doubleCodedCasesPerCoder: {
+                type: 'object',
+                additionalProperties: { type: 'number' }
+              }
+            }
+          }
+        }
+      }
+    }
+  })
+  async calculateDistribution(
+    @WorkspaceId() workspace_id: number,
+      @Body() body: {
+        selectedVariables: { unitName: string; variableId: string }[];
+        selectedVariableBundles?: { id: number; name: string; variables: { unitName: string; variableId: string }[] }[];
+        selectedCoders: { id: number; name: string; username: string }[];
+        doubleCodingAbsolute?: number;
+        doubleCodingPercentage?: number;
+      }
+  ): Promise<{
+        distribution: Record<string, Record<string, number>>;
+        doubleCodingInfo: Record<string, { totalCases: number; doubleCodedCases: number; singleCodedCasesAssigned: number; doubleCodedCasesPerCoder: Record<string, number> }>;
+      }> {
+    return this.codingJobService.calculateDistribution(workspace_id, body);
+  }
+
+  @Post(':workspace_id/coding/create-distributed-jobs')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiBody({
+    description: 'Create distributed coding jobs with equal case distribution',
+    schema: {
+      type: 'object',
+      properties: {
+        selectedVariables: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              unitName: { type: 'string' },
+              variableId: { type: 'string' }
+            }
+          }
+        },
+        selectedVariableBundles: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'number' },
+              name: { type: 'string' },
+              variables: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    unitName: { type: 'string' },
+                    variableId: { type: 'string' }
+                  }
+                }
+              }
+            }
+          }
+        },
+        selectedCoders: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'number' },
+              name: { type: 'string' },
+              username: { type: 'string' }
+            }
+          }
+        },
+        doubleCodingAbsolute: { type: 'number' },
+        doubleCodingPercentage: { type: 'number' }
+      },
+      required: ['selectedVariables', 'selectedCoders']
+    }
+  })
+  @ApiOkResponse({
+    description: 'Distributed coding jobs created successfully.',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        jobsCreated: { type: 'number' },
+        message: { type: 'string' },
+        distribution: {
+          type: 'object',
+          description: 'Case distribution matrix',
+          additionalProperties: {
+            type: 'object',
+            additionalProperties: { type: 'number' }
+          }
+        },
+        doubleCodingInfo: {
+          type: 'object',
+          description: 'Double coding information',
+          additionalProperties: {
+            type: 'object',
+            properties: {
+              totalCases: { type: 'number' },
+              doubleCodedCases: { type: 'number' },
+              singleCodedCasesAssigned: { type: 'number' },
+              doubleCodedCasesPerCoder: {
+                type: 'object',
+                additionalProperties: { type: 'number' }
+              }
+            }
+          }
+        },
+        jobs: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              coderId: { type: 'number' },
+              coderName: { type: 'string' },
+              variable: {
+                type: 'object',
+                properties: {
+                  unitName: { type: 'string' },
+                  variableId: { type: 'string' }
+                }
+              },
+              jobId: { type: 'number' },
+              jobName: { type: 'string' },
+              caseCount: { type: 'number' }
+            }
+          }
+        }
+      }
+    }
+  })
+  async createDistributedCodingJobs(
+    @WorkspaceId() workspace_id: number,
+      @Body() body: {
+        selectedVariables: { unitName: string; variableId: string }[];
+        selectedVariableBundles?: { id: number; name: string; variables: { unitName: string; variableId: string }[] }[];
+        selectedCoders: { id: number; name: string; username: string }[];
+        doubleCodingAbsolute?: number;
+        doubleCodingPercentage?: number;
+      }
+  ): Promise<{
+        success: boolean;
+        jobsCreated: number;
+        message: string;
+        distribution: Record<string, Record<string, number>>;
+        doubleCodingInfo: Record<string, { totalCases: number; doubleCodedCases: number; singleCodedCasesAssigned: number; doubleCodedCasesPerCoder: Record<string, number> }>;
+        jobs: {
+          coderId: number;
+          coderName: string;
+          variable: { unitName: string; variableId: string };
+          jobId: number;
+          jobName: string;
+          caseCount: number;
+        }[];
+      }> {
+    return this.workspaceCodingService.createDistributedCodingJobs(workspace_id, body);
   }
 }
