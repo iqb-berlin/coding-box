@@ -64,7 +64,14 @@
           <p class="section-description">Wählen Sie eine Testperson aus, um deren Ergebnisse anzuzeigen</p>
           <mat-divider></mat-divider>
 
-          @if (isLoading && !isSearching) {
+          @if (isDeletingTestPersons) {
+            <div class="loading-container">
+              <mat-spinner class="mat-spinner"></mat-spinner>
+              <p class="loading-text">Testpersonen werden gelöscht...</p>
+            </div>
+          }
+
+          @if (isLoading && !isSearching && !isDeletingTestPersons) {
             <div class="loading-container">
               <mat-spinner class="mat-spinner"></mat-spinner>
               <p class="loading-text">Daten werden geladen...</p>
