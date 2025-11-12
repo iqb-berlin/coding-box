@@ -9,7 +9,7 @@
         </a>
       }
       <a mat-raised-button [color]="showManualCoding ? 'accent' : 'primary'" (click)="toggleManualCoding()" >
-        <mat-icon>keyboard</mat-icon>
+        <mat-icon>{{ showManualCoding ? 'arrow_back' : 'keyboard' }}</mat-icon>
         {{ showManualCoding ? ('coding-management.buttons.back-to-overview' | translate) : ('coding-management.buttons.manual-code' | translate) }}
       </a>
 

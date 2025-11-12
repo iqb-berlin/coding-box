@@ -2,7 +2,6 @@ import {
   BadRequestException,
   Body,
   Controller,
-  DefaultValuePipe,
   Delete,
   Get,
   NotFoundException,
@@ -10,7 +9,6 @@ import {
   ParseIntPipe,
   Post,
   Put,
-  Query,
   UseGuards
 } from '@nestjs/common';
 import {
@@ -21,7 +19,6 @@ import {
   ApiOkResponse,
   ApiOperation,
   ApiParam,
-  ApiQuery,
   ApiTags
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
@@ -45,7 +42,7 @@ export class CodingJobController {
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Get all coding jobs',
-    description: 'Retrieves all coding jobs for a workspace with pagination'
+    description: 'Retrieves all coding jobs for a workspace'
   })
   @ApiParam({
     name: 'workspace_id',
@@ -53,29 +50,9 @@ export class CodingJobController {
     required: true,
     description: 'Unique identifier for the workspace'
   })
-  @ApiQuery({
-    name: 'page',
-    required: false,
-    description: 'Page number for pagination',
-    type: Number
-  })
-  @ApiQuery({
-    name: 'limit',
-    required: false,
-    description: 'Number of items per page',
-    type: Number
-  })
   @ApiOkResponse({
     description: 'List of coding jobs retrieved successfully',
-    schema: {
-      type: 'object',
-      properties: {
-        data: { type: 'array', items: { $ref: '#/components/schemas/CodingJobDto' } },
-        total: { type: 'number' },
-        page: { type: 'number' },
-        limit: { type: 'number' }
-      }
-    }
+    type: [CodingJobDto]
   })
   @ApiBadRequestResponse({
     description: 'Invalid input data.'
@@ -84,23 +61,16 @@ export class CodingJobController {
     description: 'Workspace not found.'
   })
   async getCodingJobs(
-    @WorkspaceId() workspaceId: number,
-      @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
-      @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number
-  ): Promise<{ data: CodingJobDto[]; total: number; page: number; limit: number }> {
+    @WorkspaceId() workspaceId: number
+  ): Promise<CodingJobDto[]> {
     try {
-      const result = await this.codingJobService.getCodingJobs(workspaceId, page, limit);
-      return {
-        data: result.data.map(job => CodingJobDto.fromEntity(
-          job,
-          job.assignedCoders || [],
-          job.assignedVariables || [],
-          job.assignedVariableBundles || []
-        )),
-        total: result.total,
-        page: result.page,
-        limit: result.limit
-      };
+      const result = await this.codingJobService.getCodingJobs(workspaceId);
+      return result.data.map(job => CodingJobDto.fromEntity(
+        job,
+        job.assignedCoders || [],
+        job.assignedVariables || [],
+        job.assignedVariableBundles || []
+      ));
     } catch (error) {
       if (error instanceof NotFoundException) {
         throw error;

@@ -62,7 +62,7 @@
           <div class="code-content">
             <span class="code-info">
               <span class="code-id">{{ item.id }}</span>
-              <span class="code-score" *ngIf="item.score !== undefined">{{ 'code-selector.score-label' | translate }} {{ item.score }}</span>
+              <span class="code-score" *ngIf="item.score !== undefined && showScore">{{ 'code-selector.score-label' | translate }} {{ item.score }}</span>
             </span>
           </div>
           <div class="code-instruction" *ngIf="item.manualInstruction" [innerHTML]="getSafeHtml(item.manualInstruction)"></div>
@@ -71,8 +71,8 @@
 
       <div class="uncertain-codes-section">
         <div class="code-row"
-             [class.selected]="item.id === selectedCode"
-             *ngFor="let item of uncertainCodes;"
+             [class.selected]="item.id === selectedCodingIssueOption"
+             *ngFor="let item of codingIssueOptionCodes;"
              (click)="onSelect(item.id)">
           <div class="code-content">
             <span class="uncertain-text">{{ item.label }}</span>

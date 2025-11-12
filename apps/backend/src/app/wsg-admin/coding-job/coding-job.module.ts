@@ -7,6 +7,7 @@ import { CodingJobCoder } from '../../database/entities/coding-job-coder.entity'
 import { CodingJobVariable } from '../../database/entities/coding-job-variable.entity';
 import { CodingJobVariableBundle } from '../../database/entities/coding-job-variable-bundle.entity';
 import { CodingJobUnit } from '../../database/entities/coding-job-unit.entity';
+import { JobDefinition } from '../../database/entities/job-definition.entity';
 import { VariableBundle } from '../../database/entities/variable-bundle.entity';
 import { ResponseEntity } from '../../database/entities/response.entity';
 import { Unit } from '../../database/entities/unit.entity';
@@ -21,6 +22,7 @@ import { AuthModule } from '../../auth/auth.module';
       CodingJobVariable,
       CodingJobVariableBundle,
       CodingJobUnit,
+      JobDefinition,
       VariableBundle,
       ResponseEntity,
       Unit,
