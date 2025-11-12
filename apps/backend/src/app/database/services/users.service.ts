@@ -21,7 +21,7 @@ export class UsersService {
   ) {
   }
 
-  async findAllFull(workspaceId?: number): Promise<UserFullDto[]> {
+  async getAllUsers(workspaceId?: number): Promise<UserFullDto[]> {
     const validUsers = new Set<number>();
     if (workspaceId) {
       const workspaceUsers = await this.workspaceUserRepository.find({
@@ -40,7 +40,7 @@ export class UsersService {
       }));
   }
 
-  async findAllUsers(workspaceId?: number): Promise<WorkspaceUserInListDto[]> {
+  async getUsersWithWorkspaceAccess(workspaceId?: number): Promise<WorkspaceUserInListDto[]> {
     this.logger.log(`Returning users${workspaceId ? ` for workspaceId: ${workspaceId}` : '.'}`);
     const validUsers = workspaceId ?
       await this.workspaceUserRepository.find({ where: { workspaceId } }) :
@@ -60,7 +60,7 @@ export class UsersService {
       }));
   }
 
-  async patchAllUsers(workspaceId: number, users: UserInListDto[]): Promise<boolean> {
+  async updateUsersAccess(workspaceId: number, users: UserInListDto[]): Promise<boolean> {
     this.logger.log('Patch users access rights');
     const updatePromises = users
       .map(user => this.workspaceUserRepository
@@ -81,7 +81,7 @@ export class UsersService {
     return !!user;
   }
 
-  async findUserWorkspaceIds(userId: number): Promise<number[]> {
+  async getUserWorkspaces(userId: number): Promise<number[]> {
     this.logger.log(`Retrieving workspace IDs for user with ID: ${userId}`);
     const workspaces = await this.workspaceUserRepository
       .find({ where: { userId: userId } });
@@ -107,18 +107,18 @@ export class UsersService {
     } as UserFullDto;
   }
 
-  async editUser(userId: number, change: UserFullDto): Promise<UserFullDto> {
-    this.logger.log(`Editing user with id: ${userId}`);
+  async updateUser(userId: number, userData: UserFullDto): Promise<UserFullDto> {
+    this.logger.log(`Updating user with id: ${userId}`);
     const existingUser = await this.usersRepository.findOne({ where: { id: userId } });
     if (!existingUser) {
       this.logger.warn(`User with id: ${userId} not found.`);
       throw new Error(`User with id: ${userId} not found.`);
     }
-    const updatedUser = await this.usersRepository.save({ id: userId, ...change });
+    const updatedUser = await this.usersRepository.save({ id: userId, ...userData });
     return updatedUser;
   }
 
-  async setUserWorkspaces(userId: number, workspaceIds: number[]): Promise<boolean> {
+  async assignUserWorkspaces(userId: number, workspaceIds: number[]): Promise<boolean> {
     this.logger.log(`Setting workspaces for user with ID: ${userId}`);
     const entries = workspaceIds.map(workspaceId => ({ userId, workspaceId, accessLevel: 3 }));
     try {

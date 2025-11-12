@@ -23,7 +23,7 @@ export class AppController {
   @UseGuards(JwtAuthGuard)
   @ApiOkResponse({ description: 'User auth data successfully retrieved.' })
   @ApiTags('auth')
-  async findCanDos(@Query('identity')identity:string): Promise<AuthDataDto> {
+  async getUserAuthData(@Query('identity') identity: string): Promise<AuthDataDto> {
     const user = await this.usersService.findUserByIdentity(identity);
     const workspaces = await this.workspaceUsersService.findAllUserWorkspaces(identity);
     return <AuthDataDto><unknown>{
@@ -43,8 +43,8 @@ export class AppController {
   }
 
   @Post('tc_authentication')
-  async authenticate(
-    @Body() credentials: { username: string, password: string, server:string, url:string }
+  async authenticateTestCenter(
+    @Body() credentials: { username: string, password: string, server: string, url: string }
   ): Promise<Record<string, unknown>> {
     return this.testCenterService.authenticate(credentials);
   }
