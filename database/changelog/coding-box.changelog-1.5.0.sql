@@ -116,3 +116,15 @@ ALTER TABLE "public"."coding_job_unit" ADD COLUMN "uncertain" INTEGER NULL;
 ALTER TABLE "public"."coding_job_unit" RENAME COLUMN "uncertain" TO "coding_issue_option";
 
 -- rollback ALTER TABLE "public"."coding_job_unit" RENAME COLUMN "coding_issue_option" TO "uncertain";
+
+-- changeset jurei733:10
+-- comment: Drop obsolete person table (singular) as it was replaced by persons table
+
+DROP TABLE IF EXISTS person;
+
+-- rollback CREATE TABLE person (
+--   id SERIAL PRIMARY KEY NOT NULL,
+--   "group" TEXT NOT NULL,
+--   login TEXT NOT NULL,
+--   code TEXT NULL
+-- );
