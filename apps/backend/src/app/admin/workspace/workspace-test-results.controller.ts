@@ -91,13 +91,11 @@ export class WorkspaceTestResultsController {
       items: {
         type: 'object',
         properties: {
-          id: { type: 'number', description: 'ID of the test result' },
-          personid: { type: 'number', description: 'ID of the person' },
-          name: { type: 'string', description: 'Name of the person' },
-          size: { type: 'number', description: 'Size of the test results' },
+          id: { type: 'number', description: 'ID of the booklet' },
+          name: { type: 'string', description: 'Name of the booklet' },
           logs: {
             type: 'array',
-            description: 'Logs associated with the test',
+            description: 'Logs associated with the booklet',
             items: {
               type: 'object',
               properties: {
@@ -111,12 +109,11 @@ export class WorkspaceTestResultsController {
           },
           units: {
             type: 'array',
-            description: 'Units associated with the test',
+            description: 'Units associated with the booklet',
             items: {
               type: 'object',
               properties: {
                 id: { type: 'number' },
-                bookletid: { type: 'number' },
                 name: { type: 'string' },
                 alias: { type: 'string', nullable: true },
                 results: {
@@ -125,20 +122,27 @@ export class WorkspaceTestResultsController {
                     type: 'object',
                     properties: {
                       id: { type: 'number' },
-                      unitid: { type: 'number' }
+                      unitid: { type: 'number' },
+                      variableid: { type: 'string' },
+                      status: { type: 'string' },
+                      value: { type: 'string' },
+                      subform: { type: 'string' },
+                      code: { type: 'number', nullable: true },
+                      score: { type: 'number', nullable: true },
+                      codedstatus: { type: 'string', nullable: true }
                     }
                   }
                 },
-                logs: {
+                tags: {
                   type: 'array',
                   items: {
                     type: 'object',
                     properties: {
                       id: { type: 'number' },
-                      unitid: { type: 'number' },
-                      ts: { type: 'string', description: 'Timestamp' },
-                      key: { type: 'string' },
-                      parameter: { type: 'string' }
+                      unitId: { type: 'number' },
+                      tag: { type: 'string' },
+                      color: { type: 'string', nullable: true },
+                      createdAt: { type: 'string', format: 'date-time' }
                     }
                   }
                 }
@@ -156,17 +160,14 @@ export class WorkspaceTestResultsController {
       @Param('personId') personId: number
   ): Promise<{
         id: number;
-        personid: number;
         name: string;
-        size: number;
         logs: { id: number; bookletid: number; ts: string; parameter: string, key: string }[];
         units: {
           id: number;
-          bookletid: number;
           name: string;
           alias: string | null;
-          results: { id: number; unitid: number }[];
-          logs: { id: number; unitid: number; ts: string; key: string; parameter: string }[];
+          results: { id: number; unitid: number; variableid: string; status: string; value: string; subform: string; code?: number; score?: number; codedstatus?: string }[];
+          tags: { id: number; unitId: number; tag: string; color?: string; createdAt: Date }[];
         }[];
       }[]> {
     return this.workspaceTestResultsService.findPersonTestResults(personId, workspace_id);
