@@ -55,6 +55,13 @@
             </mat-cell>
           </ng-container>
 
+          <ng-container matColumnDef="codingIssueOption">
+            <mat-header-cell *matHeaderCellDef mat-sort-header>Kodierungshinweis</mat-header-cell>
+            <mat-cell *matCellDef="let result" [ngClass]="getCellClasses(result)">
+              {{result.codingIssueOptionLabel || '-'}}
+            </mat-cell>
+          </ng-container>
+
           <mat-header-row *matHeaderRowDef="displayedColumns"></mat-header-row>
           <mat-row *matRowDef="let row; columns: displayedColumns;"></mat-row>
         </mat-table>
@@ -75,5 +82,13 @@
 
   <div class="dialog-actions">
     <button mat-raised-button mat-dialog-close color="primary">Schließen</button>
+    <button mat-raised-button
+            color="accent"
+            [disabled]="isLoading"
+            (click)="applyCodingResults()"
+            matTooltip="Kodierergebnisse auf Datenbank anwenden">
+      <mat-icon>input</mat-icon>
+      Ergebnisse anwenden
+    </button>
   </div>
 </div>

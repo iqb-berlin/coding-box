@@ -1043,5 +1043,239 @@
   },
   "export-coding-book": {
     "validation-file": "Validierungs-Kodierliste"
+  },
+
+  "coding-job-definition-dialog": {
+    "job-definition": {
+      "edit": "Job-Definition bearbeiten",
+      "create": "Neue Job-Definition erstellen",
+      "save": "Definition speichern",
+      "create-btn": "Definition erstellen",
+      "submit-for-review": "Zur Prüfung einreichen"
+    },
+    "job": {
+      "edit": "Kodierjob bearbeiten",
+      "create": "Neuer Kodierjob erstellen",
+      "save": "Job speichern",
+      "create-btn": "Job erstellen"
+    },
+    "sections": {
+      "general-info": "Allgemeine Informationen",
+      "double-coding": {
+        "title": "Doppelkodierung",
+        "description": "Konfiguriere, welche Fälle doppelt kodiert werden sollen."
+      },
+      "variable-bundles": {
+        "title": "Variablenbündel",
+        "description": "Wählen Sie die Variablen und Variablenbündel aus, die diesem Kodierjob zugeordnet werden sollen."
+      }
+    },
+    "form-fields": {
+      "status-label": "Status",
+      "duration-label": "Dauer für eine Kodieraufgabe (Sekunden)",
+      "duration-placeholder": "z.B. 300 (5 Minuten)",
+      "duration-hint": "Optionale Angabe der erwarteten Bearbeitungszeit für eine einzelne Kodieraufgabe in Sekunden",
+      "duration-error": "Die Dauer muss mindestens 1 Sekunde betragen",
+      "max-cases-label": "Maximale Anzahl Kodierfälle",
+      "max-cases-placeholder": "z.B. 100",
+      "max-cases-hint": "Optionale Angabe der maximalen Anzahl von Kodierfällen. Bei mehr verfügbaren Fällen wird zufällig ausgewählt.",
+      "max-cases-error": "Die maximale Anzahl muss mindestens 1 betragen"
+    },
+    "double-coding": {
+      "modes": {
+        "absolute": "Absolute Anzahl",
+        "percentage": "Prozent"
+      },
+      "labels": {
+        "absolute": "Absolute Anzahl",
+        "percentage": "Prozent"
+      },
+      "placeholders": {
+        "absolute": "z.B. 10 Fälle",
+        "percentage": "z.B. 25.5 für 25.5%"
+      },
+      "percentage-hint": "Der Prozentsatz muss zwischen 0 und 100 liegen"
+    },
+    "selection-summary": {
+      "title": "Ausgewählte Elemente",
+      "variables": "Variablen:",
+      "variable-bundles": "Variablenbündel:",
+      "coders": "Kodierer:",
+      "total-cases": "Gesamt Kodierfälle:",
+      "estimated-time": "Geschätzte Zeit:",
+      "details": "Auswahldetails anzeigen",
+      "selected-variables": "Ausgewählte Variablen",
+      "selected-variable-bundles": "Ausgewählte Variablenbündel"
+    },
+    "tabs": {
+      "coders": "Kodierer",
+      "individual-variables": "Einzelne Variablen",
+      "variable-bundles": "Variablenbündel"
+    },
+    "filters": {
+      "unit-name": "Aufgaben-ID Filter",
+      "unit-name-placeholder": "Filter nach Aufgaben-ID",
+      "variable-id": "Variablen-ID Filter",
+      "variable-id-placeholder": "Filter nach Variablen-ID",
+      "bundle-name": "Name Filter",
+      "bundle-name-placeholder": "Filter nach Namen",
+      "apply": "Filter anwenden",
+      "clear": "Filter zurücksetzen"
+    },
+    "loading": {
+      "coders": "Lade verfügbare Kodierer...",
+      "variables": "Lade Variablen...",
+      "bundles": "Lade Variablenbündel..."
+    },
+    "selection": {
+      "select-all": "Alle auswählen",
+      "deselect-all": "Alle abwählen",
+      "coders-selected": "von {{total}} Kodierern ausgewählt",
+      "variables-selected": "von {{total}} Variablen ausgewählt",
+      "bundles-selected": "{{count}} Variablenbündel ausgewählt"
+    },
+    "empty-states": {
+      "no-coders": "Keine Kodierer verfügbar",
+      "no-coders-description": "Im Arbeitsbereich sind keine Kodierer verfügbar. Fügen Sie zuerst Benutzer zum Arbeitsbereich hinzu.",
+      "no-variables": "Keine Variablen verfügbar",
+      "no-variables-description": "Es wurden keine Variablen gefunden. Bitte überprüfen Sie Ihre Filter oder versuchen Sie es später erneut.",
+      "no-bundles": "Keine Variablenbündel verfügbar",
+      "no-bundles-description": "Es wurden keine Variablenbündel gefunden. Bitte erstellen Sie zuerst Variablenbündel über die Variablenbündel-Verwaltung."
+    },
+    "coders-section": {
+      "description": "Wählen Sie die Kodierer aus, die diesem Job zugewiesen werden sollen.",
+      "assigned-tooltip": "Bereits diesem Kodierjob zugewiesen"
+    },
+    "bundles": {
+      "no-description": "Keine Beschreibung",
+      "variables-count": "{{count}} Variablen",
+      "variables-preview": "Enthaltene Variablen:",
+      "no-variables": "Keine Variablen enthalten",
+      "preview-title": "Vorschau der ausgewählten Variablenbündel",
+      "table-headers": {
+        "unit-id": "Aufgaben-ID",
+        "variable-id": "Variablen-ID"
+      }
+    },
+    "snackbars": {
+      "no-workspace-selected": "Kein Arbeitsbereich ausgewählt",
+      "job-updated-success": "Kodierauftrag erfolgreich aktualisiert",
+      "job-updated-coder-failed": "Kodierauftrag aktualisiert, aber Zuweisung von Kodierern fehlgeschlagen",
+      "job-created-success": "Kodierauftrag erfolgreich erstellt",
+      "job-created-coder-failed": "Auftrag erstellt, aber Zuweisung von Kodierern fehlgeschlagen",
+      "error-update-template": "Fehler beim Aktualisieren des Kodierauftrags",
+      "error-create-template": "Fehler beim Erstellen des Kodierauftrags",
+      "error-updating-job": "Fehler beim Aktualisieren des Kodierauftrags: {{error}}",
+      "error-creating-job": "Fehler beim Erstellen des Kodierauftrags: {{error}}",
+      "bulk-created-success": "{{successCount}} Kodieraufträge erfolgreich erstellt",
+      "bulk-created-partial": "{{successCount}} Aufträge erstellt, {{errorCount}} fehlgeschlagen",
+      "bulk-creation-failed": "Verteilte Erstellung von Kodieraufträgen fehlgeschlagen: {{error}}",
+      "bulk-creation-no-response": "Verteilte Erstellung von Kodieraufträgen fehlgeschlagen: Keine Antwort vom Server",
+      "bulk-creation-failed-with-message": "Verteilte Erstellung von Kodieraufträgen fehlgeschlagen: {{message}}",
+      "definition-created-success": "Job-Definition erfolgreich erstellt",
+      "error-create-definition": "Fehler beim Erstellen der Job-Definition",
+      "error-creating-definition": "Fehler beim Erstellen der Job-Definition: {{error}}",
+      "definition-updated-success": "Job-Definition erfolgreich aktualisiert",
+      "error-update-definition": "Fehler beim Aktualisieren der Job-Definition",
+      "error-updating-definition": "Fehler beim Aktualisieren der Job-Definition: {{error}}",
+      "definition-submitted-review": "Job-Definition zur Prüfung eingereicht",
+      "error-submit-review": "Fehler beim Einreichen zur Prüfung",
+      "error-submitting-review": "Fehler beim Einreichen zur Prüfung: {{error}}"
+    },
+    "status": {
+      "definition": {
+        "draft": "Entwurf",
+        "pending-review": "Warten auf Genehmigung",
+        "approved": "Genehmigt"
+      },
+      "job": {
+        "pending": "Ausstehend",
+        "active": "Aktiv",
+        "completed": "Abgeschlossen"
+      }
+    },
+    "job-count": {
+      "label": "Erstellte Kodieraufträge:",
+      "none": "Mindestens eine Variable muss ausgewählt werden",
+      "single": "Ein Kodierauftrag wird erstellt",
+      "multiple": "Multiple Kodieraufträge werden erstellt"
+    }
+  },
+  "coding-job-definitions": {
+    "title": "Job-Definitionen",
+    "create-new": "Neue Definition erstellen",
+    "loading": "Lade Job-Definitionen...",
+    "table-headers": {
+      "id": "ID",
+      "status": "Status",
+      "variables": "Variablen",
+      "coders": "Kodierer",
+      "bundles": "Bündel",
+      "created-at": "Erstellt am",
+      "actions": "Aktionen"
+    },
+    "actions": {
+      "edit": "Bearbeiten",
+      "submit-for-review": "Zur Prüfung einreichen",
+      "approve": "Genehmigen",
+      "reject": "Ablehnen",
+      "create-coding-jobs": "Kodier-Jobs erstellen",
+      "delete": "Löschen"
+    },
+    "messages": {
+      "empty-state": "Keine Job-Definitionen gefunden",
+      "snackbar": {
+        "submitted-for-review": "Job-Definition wurde zur Prüfung eingereicht",
+        "submit-failed": "Fehler beim Einreichen zur Prüfung: {{error}}",
+        "approved": "Job-Definition wurde genehmigt",
+        "approve-failed": "Fehler bei der Genehmigung: {{error}}",
+        "rejected": "Job-Definition wurde abgelehnt und wieder als Entwurf markiert",
+        "reject-failed": "Fehler bei der Ablehnung: {{error}}",
+        "deleted": "Job-Definition wurde gelöscht",
+        "delete-failed": "Fehler beim Löschen: {{error}}",
+        "jobs-created": "{{count}} Kodier-Jobs wurden erfolgreich erstellt",
+        "jobs-created-partial": "{{successCount}} Jobs erstellt, {{errorCount}} fehlgeschlagen",
+        "coders-loading-failed": "Fehler beim Laden der Kodierer: {{error}}",
+        "no-workspace": "No workspace selected"
+      }
+    }
+  },
+
+  "coding-job-bulk-creation-dialog": {
+    "title": "Verteilte Erstellung von Kodieraufträgen",
+    "description": "Die ausgewählten Variablen werden gleichmäßig auf die ausgewählten Kodierer verteilt:",
+    "distribution-summary": {
+      "title": "Verteilungsübersicht",
+      "variable": "Variable",
+      "total": "Gesamt",
+      "cases": "Fälle",
+      "grand-total": "GESAMT:",
+      "notice": "Hinweis:",
+      "notice-text": "Fälle werden gleichmäßig auf die Kodierer verteilt. Bei ungeraden Zahlen bekommen die ersten Kodierer (alphabetisch) einen zusätzlichen Fall."
+    },
+    "jobs-summary": {
+      "title": "Zu erstellende Aufträge",
+      "description": "{{count}} Kodieraufträge werden erstellt:",
+      "details": "{{unitName}} → {{variableId}}"
+    },
+    "display-options": {
+      "title": "Anzeigeoptionen für Kodieraufträge",
+      "description": "Steuern Sie, welche Elemente während der Kodierung angezeigt werden sollen.",
+      "show-score": "Scores anzeigen",
+      "allow-comments": "Kommentare erlauben",
+      "suppress-instructions": "Allgemeine Anweisungen ausblenden"
+    },
+    "buttons": {
+      "cancel": "Abbrechen",
+      "confirm": "{{count}} kodierer-spezifische Aufträge erstellen"
+    },
+    "double-coding-summary": {
+      "variable": "Variable",
+      "total-cases": "Gesamt Fälle",
+      "double-coded": "Doppelt kodiert",
+      "single-coded": "Einfach kodiert",
+      "title": "Zusammenfassung der Doppelkodierung",
+      "info-text": "Diese Zusammenfassung zeigt die Anzahl der doppelt und einfach kodierten Fälle."
+    }
   }
 }

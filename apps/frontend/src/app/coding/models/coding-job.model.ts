@@ -24,11 +24,20 @@ export interface CodingJob {
   missings_profile?: MissingsProfilesDto;
   training_id?: number;
   training?: CoderTraining;
+  durationSeconds?: number;
+  maxCodingCases?: number;
+  doubleCodingAbsolute?: number;
+  doubleCodingPercentage?: number;
+  jobDefinitionId?: number;
+  showScore?: boolean;
+  allowComments?: boolean;
+  suppressGeneralInstructions?: boolean;
 }
 
 export interface Variable {
   unitName: string;
   variableId: string;
+  responseCount?: number;
 }
 
 export interface VariableBundle {

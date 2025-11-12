@@ -20,7 +20,7 @@ import {
   CodeSelectedEvent,
   CodingScheme,
   SelectableItem,
-  UncertainDto,
+  CodingIssueDto,
   VariableCoding
 } from '../../../models/coding-interfaces';
 
@@ -35,7 +35,6 @@ export class CodeSelectorComponent implements OnChanges {
   @Input() codingScheme!: string | CodingScheme;
   @Input() variableId!: string;
   @Input() preSelectedCodeId: number | null = null;
-  @Input() isOpen: boolean = false;
   @Input() coderNotes: string = '';
   @Input() showProgress: boolean = false;
   @Input() completedCount: number = 0;
@@ -48,9 +47,11 @@ export class CodeSelectorComponent implements OnChanges {
   @Input() isPausingJob: boolean = false;
   @Input() unitsData: UnitsReplay | null = null;
   @Input() codingService!: ReplayCodingService;
+  @Input() showScore: boolean = true;
+  @Input() allowComments: boolean = true;
+  @Input() suppressGeneralInstructions: boolean = false;
 
   @Output() codeSelected = new EventEmitter<CodeSelectedEvent>();
-  @Output() openChanged = new EventEmitter<boolean>();
   @Output() notesChanged = new EventEmitter<string>();
   @Output() openNavigateDialog = new EventEmitter<void>();
   @Output() openCommentDialog = new EventEmitter<void>();
@@ -59,6 +60,7 @@ export class CodeSelectorComponent implements OnChanges {
 
   selectableItems: SelectableItem[] = [];
   selectedCode: number | null = null;
+  selectedCodingIssueOption: number | null = null;
   constructor(private sanitizer: DomSanitizer) {}
 
   ngOnChanges(changes: SimpleChanges): void {
@@ -99,30 +101,30 @@ export class CodeSelectorComponent implements OnChanges {
         originalCode: code
       }));
 
-      const uncertainOptions: SelectableItem[] = [
+      const codingIssueOptions: SelectableItem[] = [
         {
           id: -1,
           label: 'Code-Vergabe unsicher',
-          type: 'UNCERTAIN'
+          type: 'codingIssueOption'
         },
         {
           id: -2,
           label: 'Neuer Code nötig',
-          type: 'UNCERTAIN'
+          type: 'codingIssueOption'
         },
         {
           id: -3,
           label: 'Ungültig (Spaßantwort)',
-          type: 'UNCERTAIN'
+          type: 'codingIssueOption'
         },
         {
           id: -4,
           label: 'Technische Probleme',
-          type: 'UNCERTAIN'
+          type: 'codingIssueOption'
         }
       ];
 
-      this.selectableItems = [...codeItems, ...uncertainOptions];
+      this.selectableItems = [...codeItems, ...codingIssueOptions];
       setTimeout(() => this.selectPreSelectedCode(), 0);
     } else {
       this.selectableItems = [];
@@ -131,6 +133,7 @@ export class CodeSelectorComponent implements OnChanges {
 
   private selectPreSelectedCode(): void {
     this.selectedCode = null;
+    this.selectedCodingIssueOption = null;
     if (this.preSelectedCodeId === null) {
       return;
     }
@@ -139,11 +142,20 @@ export class CodeSelectorComponent implements OnChanges {
     }
     const preSelectedItem = this.selectableItems.find(item => item.id === this.preSelectedCodeId);
     if (preSelectedItem) {
-      this.selectedCode = this.preSelectedCodeId;
-      this.codeSelected.emit({
-        variableId: this.variableId,
-        code: this.createCodeOrUncertainDto(preSelectedItem)
-      });
+      if (preSelectedItem.type === 'codingIssueOption') {
+        this.selectedCodingIssueOption = this.preSelectedCodeId;
+        this.codeSelected.emit({
+          variableId: this.variableId,
+          code: null,
+          codingIssueOption: this.createCodeOrCodingIssueOption(preSelectedItem) as CodingIssueDto
+        });
+      } else {
+        this.selectedCode = this.preSelectedCodeId;
+        this.codeSelected.emit({
+          variableId: this.variableId,
+          code: this.createCodeOrCodingIssueOption(preSelectedItem)
+        });
+      }
     }
   }
 
@@ -151,11 +163,11 @@ export class CodeSelectorComponent implements OnChanges {
     return this.sanitizer.bypassSecurityTrustHtml(instructions);
   }
 
-  private createCodeOrUncertainDto(item: SelectableItem): Code | UncertainDto {
+  private createCodeOrCodingIssueOption(item: SelectableItem): Code | CodingIssueDto {
     if (item.originalCode) {
       return item.originalCode;
     }
-    if (item.type === 'UNCERTAIN') {
+    if (item.type === 'codingIssueOption') {
       return {
         id: `uncertain-${item.id}`,
         label: item.label,
@@ -167,33 +179,41 @@ export class CodeSelectorComponent implements OnChanges {
   }
 
   onSelect(codeId: number): void {
-    this.selectedCode = codeId;
     const selectedItem = this.selectableItems.find(item => item.id === codeId);
-    if (selectedItem) {
-      this.codeSelected.emit({
-        variableId: this.variableId,
-        code: this.createCodeOrUncertainDto(selectedItem)
-      });
-
-      if (selectedItem.type === 'UNCERTAIN') {
-        this.openChanged.emit(true);
-      }
+    if (!selectedItem) return;
+    if (selectedItem.type === 'codingIssueOption') {
+      this.selectedCodingIssueOption = codeId;
+    } else {
+      this.selectedCode = codeId;
     }
+    const codeDto = this.selectedCode !== null ? this.createCodeOrCodingIssueOption(
+      this.selectableItems.find(item => item.id === this.selectedCode)!
+    ) : null;
+    const codingIssueOption = this.selectedCodingIssueOption !== null ? this.createCodeOrCodingIssueOption(
+      this.selectableItems.find(item => item.id === this.selectedCodingIssueOption)!
+    ) as CodingIssueDto : null;
+    this.codeSelected.emit({
+      variableId: this.variableId,
+      code: codeDto,
+      codingIssueOption: codingIssueOption
+    });
   }
 
   get regularCodes(): SelectableItem[] {
-    return this.selectableItems.filter(item => item.type !== 'UNCERTAIN');
+    return this.selectableItems.filter(item => item.type !== 'codingIssueOption');
   }
 
-  get uncertainCodes(): SelectableItem[] {
-    return this.selectableItems.filter(item => item.type === 'UNCERTAIN');
+  get codingIssueOptionCodes(): SelectableItem[] {
+    return this.selectableItems.filter(item => item.type === 'codingIssueOption');
   }
 
   deselectAll(): void {
     this.selectedCode = null;
+    this.selectedCodingIssueOption = null;
     this.codeSelected.emit({
       variableId: this.variableId,
-      code: null
+      code: null,
+      codingIssueOption: null
     });
   }
 
@@ -252,8 +272,7 @@ export class CodeSelectorComponent implements OnChanges {
       currentUnit.variableId || ''
     );
 
-    const hasSelection = this.codingService.selectedCodes.has(compositeKey) ||
-                        this.codingService.openSelections.has(compositeKey);
+    const hasSelection = this.codingService.selectedCodes.has(compositeKey);
     const nextUncodedIndex = this.codingService.findNextUncodedUnitIndex(data, data.currentUnitIndex + 1);
     return hasSelection && nextUncodedIndex >= 0;
   }

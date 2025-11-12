@@ -76,7 +76,10 @@ mat-cell {
   color: #555;
 }
 
-
+.mat-column-select {
+  flex: 0 0 60px;
+  justify-content: center;
+}
 
 .mat-column-name, .mat-column-description {
   flex: 1 1 25%;

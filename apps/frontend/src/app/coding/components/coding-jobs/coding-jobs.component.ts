@@ -4,6 +4,7 @@ import {
 import { CommonModule } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { MatSort, MatSortModule } from '@angular/material/sort';
+import { MatPaginator, MatPaginatorModule } from '@angular/material/paginator';
 import {
   MatFormField, MatLabel, MatOption, MatSelect
 } from '@angular/material/select';
@@ -20,14 +21,16 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatIcon } from '@angular/material/icon';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
-import { MatAnchor, MatButton, MatIconButton } from '@angular/material/button';
+import { MatAnchor, MatIconButton, MatButton } from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatCheckbox } from '@angular/material/checkbox';
+import { SelectionModel } from '@angular/cdk/collections';
 import { Router } from '@angular/router';
 import { AppService } from '../../../services/app.service';
 import { BackendService } from '../../../services/backend.service';
 
 import { CodingJob, Variable, VariableBundle } from '../../models/coding-job.model';
-import { CodingJobDialogComponent } from '../coding-job-dialog/coding-job-dialog.component';
+import { CodingJobDefinitionDialogComponent, CodingJobDefinitionDialogData } from '../coding-job-definition-dialog/coding-job-definition-dialog.component';
 import { ConfirmDialogComponent } from '../../../shared/confirm-dialog/confirm-dialog.component';
 import { Coder } from '../../models/coder.model';
 import { CoderService } from '../../services/coder.service';
@@ -56,10 +59,12 @@ import { CoderTraining } from '../../models/coder-training.model';
     MatRowDef,
     MatColumnDef,
     MatSortModule,
-    MatButton,
+    MatPaginatorModule,
     MatDialogModule,
     MatTooltipModule,
     MatIconButton,
+    MatButton,
+    MatCheckbox,
     MatFormField,
     MatLabel,
     MatSelect,
@@ -81,8 +86,9 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
   private jobDetailsCache = new Map<number, { variables?: Variable[], variableBundles?: VariableBundle[] }>();
   private preloadedVariables: Variable[] | null = null;
 
-  displayedColumns: string[] = ['actions', 'name', 'description', 'status', 'assignedCoders', 'variables', 'variableBundles', 'progress', 'createdAt', 'updatedAt'];
+  displayedColumns: string[] = ['select', 'actions', 'name', 'description', 'status', 'assignedCoders', 'variables', 'variableBundles', 'progress', 'createdAt', 'updatedAt'];
   dataSource = new MatTableDataSource<CodingJob>([]);
+  selection = new SelectionModel<CodingJob>(true, []);
   isLoading = false;
 
   coderTrainings: CoderTraining[] = [];
@@ -93,6 +99,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
   originalData: CodingJob[] = [];
 
   @ViewChild(MatSort) sort!: MatSort;
+  @ViewChild(MatPaginator) paginator!: MatPaginator;
 
   private handleWindowFocus = () => {
     this.loadCodingJobs();
@@ -111,6 +118,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
 
   ngAfterViewInit(): void {
     this.dataSource.sort = this.sort;
+    this.dataSource.paginator = this.paginator;
   }
 
   loadCodingJobs(): void {
@@ -186,16 +194,19 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
   }
 
   onStatusFilterChange(): void {
+    this.selection.clear();
     this.applyAllFilters();
     this.applyFilter();
   }
 
   onCoderFilterChange(): void {
+    this.selection.clear();
     this.applyAllFilters();
     this.applyFilter();
   }
 
   onJobNameFilterChange(): void {
+    this.selection.clear();
     this.applyAllFilters();
     this.applyFilter();
   }
@@ -320,12 +331,12 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
   }
 
   createCodingJob(): void {
-    const dialogRef = this.dialog.open(CodingJobDialogComponent, {
-      width: '900px',
+    const dialogRef = this.dialog.open(CodingJobDefinitionDialogComponent, {
+      width: '1200px',
       data: {
         isEdit: false,
         preloadedVariables: this.preloadedVariables || []
-      }
+      } as CodingJobDefinitionDialogData
     });
 
     dialogRef.afterClosed().subscribe(result => {
@@ -349,15 +360,13 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
   }
 
   editCodingJob(job: CodingJob): void {
-    const selectedJob = job;
-
-    const dialogRef = this.dialog.open(CodingJobDialogComponent, {
-      width: '900px',
+    const dialogRef = this.dialog.open(CodingJobDefinitionDialogComponent, {
+      width: '1200px',
       data: {
-        codingJob: selectedJob,
+        codingJob: job,
         isEdit: true,
         preloadedVariables: this.preloadedVariables || []
-      }
+      } as CodingJobDefinitionDialogData
     });
 
     dialogRef.afterClosed().subscribe(editResult => {
@@ -756,5 +765,94 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
         workspaceId: workspaceId
       }
     });
+  }
+
+  isAllSelected(): boolean {
+    const numSelected = this.selection.selected.length;
+    const numRows = this.dataSource.data.length;
+    return numSelected === numRows;
+  }
+
+  masterToggle(): void {
+    this.isAllSelected() ?
+      this.selection.clear() :
+      this.dataSource.data.forEach(row => this.selection.select(row));
+  }
+
+  checkboxLabel(row?: CodingJob): string {
+    if (!row) {
+      return `${this.isAllSelected() ? 'deselect' : 'select'} all`;
+    }
+    return `${this.selection.isSelected(row) ? 'deselect' : 'select'} row ${row.id + 1}`;
+  }
+
+  bulkDeleteCodingJobs(): void {
+    const selectedJobs = this.selection.selected;
+    if (selectedJobs.length === 0) {
+      this.snackBar.open('Keine Kodierjobs ausgewählt', 'Schließen', { duration: 3000 });
+      return;
+    }
+
+    const jobNames = selectedJobs.map(job => `"${job.name}"`).join(', ');
+    const confirmMessage = `Möchten Sie wirklich ${selectedJobs.length} Kodierjob(s) löschen?\n\n${jobNames}`;
+
+    const dialogRef = this.dialog.open(ConfirmDialogComponent, {
+      width: '500px',
+      data: {
+        title: 'Massenlöschung bestätigen',
+        message: confirmMessage,
+        confirmButtonText: 'Alle löschen',
+        cancelButtonText: 'Abbrechen'
+      }
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result) {
+        this.performBulkDelete(selectedJobs);
+      }
+    });
+  }
+
+  private async performBulkDelete(jobs: CodingJob[]): Promise<void> {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      this.snackBar.open('Kein Workspace ausgewählt', 'Schließen', { duration: 3000 });
+      return;
+    }
+
+    const loadingSnack = this.snackBar.open(`Lösche ${jobs.length} Kodierjob(s)...`, '', { duration: 3000 });
+
+    let successCount = 0;
+    let failureCount = 0;
+    const failedJobs: string[] = [];
+
+    for (const job of jobs) {
+      try {
+        const response = await this.backendService.deleteCodingJob(workspaceId, job.id).toPromise();
+        if (response?.success) {
+          successCount += 1;
+        } else {
+          failureCount += 1;
+          failedJobs.push(job.name);
+        }
+      } catch (error) {
+        failureCount += 1;
+        failedJobs.push(job.name);
+      }
+    }
+
+    loadingSnack.dismiss();
+
+    this.selection.clear();
+
+    if (failureCount === 0) {
+      this.snackBar.open(`${successCount} Kodierjob(s) erfolgreich gelöscht`, 'Schließen', { duration: 3000 });
+    } else if (successCount === 0) {
+      this.snackBar.open(`Fehler beim Löschen aller ${failureCount} Kodierjob(s)`, 'Schließen', { duration: 5000 });
+    } else {
+      this.snackBar.open(`${successCount} Kodierjob(s) erfolgreich gelöscht, ${failureCount} fehlgeschlagen: ${failedJobs.join(', ')}`, 'Schließen', { duration: 5000 });
+    }
+
+    this.loadCodingJobs();
   }
 }

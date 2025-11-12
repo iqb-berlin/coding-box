@@ -65,6 +65,34 @@ type ReplayStatisticsResponse = {
   errorMessage?: string;
 };
 
+interface JobDefinitionApiResponse {
+  id?: number;
+  status?: 'draft' | 'pending_review' | 'approved';
+  assigned_variables?: import('../coding/models/coding-job.model').Variable[];
+  assigned_variable_bundles?: import('../coding/models/coding-job.model').VariableBundle[];
+  assigned_coders?: number[];
+  duration_seconds?: number;
+  max_coding_cases?: number;
+  double_coding_absolute?: number;
+  double_coding_percentage?: number;
+  created_at?: Date;
+  updated_at?: Date;
+}
+
+interface JobDefinition {
+  id?: number;
+  status?: 'draft' | 'pending_review' | 'approved';
+  assignedVariables?: import('../coding/models/coding-job.model').Variable[];
+  assignedVariableBundles?: import('../coding/models/coding-job.model').VariableBundle[];
+  assignedCoders?: number[];
+  durationSeconds?: number;
+  maxCodingCases?: number;
+  doubleCodingAbsolute?: number;
+  doubleCodingPercentage?: number;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
 interface PaginatedResponse<T> {
   data: T[];
   total: number;
@@ -583,6 +611,43 @@ export class BackendService {
     return this.variableAnalysisService.deleteJob(workspaceId, jobId);
   }
 
+  createDistributedCodingJobs(
+    workspaceId: number,
+    selectedVariables: { unitName: string; variableId: string }[],
+    selectedCoders: { id: number; name: string; username: string }[],
+    doubleCodingAbsolute?: number,
+    doubleCodingPercentage?: number
+  ): Observable<{
+      success: boolean;
+      jobsCreated: number;
+      message: string;
+      distribution: Record<string, Record<string, number>>;
+      doubleCodingInfo: Record<string, { totalCases: number; doubleCodedCases: number; singleCodedCasesAssigned: number; doubleCodedCasesPerCoder: Record<string, number> }>;
+      jobs: {
+        coderId: number;
+        coderName: string;
+        variable: { unitName: string; variableId: string };
+        jobId: number;
+        jobName: string;
+        caseCount: number;
+      }[];
+    }> {
+    return this.codingService.createDistributedCodingJobs(workspaceId, selectedVariables, selectedCoders, doubleCodingAbsolute, doubleCodingPercentage);
+  }
+
+  calculateDistribution(
+    workspaceId: number,
+    selectedVariables: { unitName: string; variableId: string }[],
+    selectedCoders: { id: number; name: string; username: string }[],
+    doubleCodingAbsolute?: number,
+    doubleCodingPercentage?: number
+  ): Observable<{
+      distribution: Record<string, Record<string, number>>;
+      doubleCodingInfo: Record<string, { totalCases: number; doubleCodedCases: number; singleCodedCasesAssigned: number; doubleCodedCasesPerCoder: Record<string, number> }>;
+    }> {
+    return this.codingService.calculateDistribution(workspaceId, selectedVariables, selectedCoders, doubleCodingAbsolute, doubleCodingPercentage);
+  }
+
   createValidationTask(
     workspaceId: number,
     type: 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'groupResponses' | 'deleteResponses' | 'deleteAllResponses' | 'duplicateResponses',
@@ -765,13 +830,20 @@ export class BackendService {
 
   getCodingJobs(
     workspaceId: number,
-    page: number = 1,
-    limit: number = 10
+    page?: number,
+    limit?: number
   ): Observable<PaginatedResponse<CodingJob>> {
     const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job`;
-    const params = new HttpParams()
-      .set('page', page.toString())
-      .set('limit', limit.toString());
+    let params = new HttpParams();
+
+    if (page !== undefined) {
+      params = params.set('page', page.toString());
+    }
+
+    if (limit !== undefined) {
+      params = params.set('limit', limit.toString());
+    }
+
     return this.http.get<PaginatedResponse<CodingJob>>(url, { params });
   }
 
@@ -1006,8 +1078,65 @@ export class BackendService {
     return this.http.get<Array<{ responseId: number; unitName: string; unitAlias: string | null; variableId: string; variableAnchor: string; bookletName: string; personLogin: string; personCode: string }>>(url);
   }
 
+  applyCodingResults(
+    workspaceId: number,
+    codingJobId: number
+  ): Observable<{
+      success: boolean;
+      updatedResponsesCount: number;
+      skippedReviewCount: number;
+      message: string;
+    }> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/jobs/${codingJobId}/apply-results`;
+    return this.http.post<{
+      success: boolean;
+      updatedResponsesCount: number;
+      skippedReviewCount: number;
+      message: string;
+    }>(url, {});
+  }
+
   getUnitVariables(workspaceId: number): Observable<{ unitName: string; variables: string[] }[]> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/files/unit-variables`;
     return this.http.get<{ unitName: string; variables: string[] }[]>(url);
+  }
+
+  createJobDefinition(workspaceId: number, jobDefinition: Omit<import('../coding/components/coding-job-definition-dialog/coding-job-definition-dialog.component').JobDefinition, 'id'>): Observable<JobDefinition> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/job-definitions`;
+    return this.http.post<JobDefinition>(url, jobDefinition);
+  }
+
+  updateJobDefinition(workspaceId: number, jobDefinitionId: number, jobDefinition: Partial<import('../coding/components/coding-job-definition-dialog/coding-job-definition-dialog.component').JobDefinition>): Observable<JobDefinition> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/job-definitions/${jobDefinitionId}`;
+    return this.http.put<JobDefinition>(url, jobDefinition);
+  }
+
+  approveJobDefinition(workspaceId: number, jobDefinitionId: number, status: 'pending_review' | 'approved'): Observable<JobDefinition> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/job-definitions/${jobDefinitionId}/approve`;
+    return this.http.put<JobDefinition>(url, { status });
+  }
+
+  getJobDefinitions(workspaceId: number): Observable<JobDefinition[]> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/job-definitions`;
+    return this.http.get<JobDefinitionApiResponse[]>(url).pipe(
+      map((definitions: JobDefinitionApiResponse[]) => definitions.map(def => ({
+        id: def.id,
+        status: def.status,
+        assignedVariables: def.assigned_variables,
+        assignedVariableBundles: def.assigned_variable_bundles,
+        assignedCoders: def.assigned_coders,
+        durationSeconds: def.duration_seconds,
+        maxCodingCases: def.max_coding_cases,
+        doubleCodingAbsolute: def.double_coding_absolute,
+        doubleCodingPercentage: def.double_coding_percentage,
+        createdAt: def.created_at,
+        updatedAt: def.updated_at
+      })))
+    );
+  }
+
+  deleteJobDefinition(workspaceId: number, jobDefinitionId: number): Observable<{ success: boolean; message: string }> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/job-definitions/${jobDefinitionId}`;
+    return this.http.delete<{ success: boolean; message: string }>(url);
   }
 }
