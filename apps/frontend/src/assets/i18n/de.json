@@ -181,6 +181,21 @@
     "export-description": "Diese Komponente wird für den Export der Daten nach Kodierung und Bereinigung verwendet.",
     "export-placeholder": "Die Funktionalität zum Datenexport wird in einer zukünftigen Version implementiert.",
     "export-action-button": "Datenexport starten",
+    "export-formats": {
+      "aggregated": "Aggregierte Ansicht",
+      "aggregated-description": "Alle Variablen und Testpersonen in einer aggregierten Tabelle",
+      "by-coder": "Nach Kodierer",
+      "by-coder-description": "Separate Tabellen für jeden Kodierer mit seinen Variablen und Testpersonen",
+      "by-variable": "Nach Variable",
+      "by-variable-description": "Separate Tabellen für jede Variable mit allen Kodierern und Testpersonen"
+    },
+    "export-exporting": "Export läuft...",
+    "export-success": "Export erfolgreich abgeschlossen",
+    "export-errors": {
+      "no-workspace": "Kein Arbeitsbereich ausgewählt",
+      "invalid-format": "Ungültiges Exportformat",
+      "export-failed": "Export fehlgeschlagen"
+    },
     "no-access": "Sie haben keinen Zugriff auf diesen Arbeitsbereich. Bitte kontaktieren Sie den Studienadministrator für Zugriff."
   },
   "search-filter": {
