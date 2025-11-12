@@ -227,6 +227,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   isUploadingResults: boolean = false;
   isSearching: boolean = false;
   isLoadingBooklets: boolean = false;
+  isDeletingTestPersons: boolean = false;
   unitTags: UnitTagDto[] = [];
   unitTagsMap: Map<number, UnitTagDto[]> = new Map();
   unitNotes: UnitNoteDto[] = [];
@@ -904,7 +905,15 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   }
 
   deleteSelectedPersons(): void {
-    this.isLoading = true;
+    this.booklets = [];
+    this.responses = [];
+    this.logs = [];
+    this.bookletLogs = [];
+    this.selectedUnit = undefined;
+    this.unitTagsMap.clear();
+    this.unitNotesMap.clear();
+
+    this.isDeletingTestPersons = true;
     const selectedTestPersons = this.selection.selected;
     this.backendService.deleteTestPersons(
       this.appService.selectedWorkspaceId,
@@ -924,7 +933,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           { duration: 1000 }
         );
       }
-      this.isLoading = false;
+      this.isDeletingTestPersons = false;
       this.selection.clear();
     });
   }
