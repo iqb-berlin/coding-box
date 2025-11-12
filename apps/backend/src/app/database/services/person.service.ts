@@ -695,8 +695,12 @@ export class PersonService {
             let value: string | null;
             if (response.value === null) {
               value = null;
-            } else {
+            } else if (typeof response.value === 'object' || Array.isArray(response.value)) {
+              // For objects and arrays, use JSON.stringify to properly serialize
               value = JSON.stringify(response.value);
+            } else {
+              // For primitive values (string, number, boolean), convert to string without extra quotes
+              value = String(response.value);
             }
 
             return {
