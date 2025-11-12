@@ -145,7 +145,8 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
     version: 'v1' as 'v1' | 'v2' | 'v3',
     code: '',
     group: '',
-    bookletName: ''
+    bookletName: '',
+    variableId: ''
   };
 
   private filterTimer?: NodeJS.Timeout;
@@ -365,7 +366,8 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
       version: 'v1',
       code: '',
       group: '',
-      bookletName: ''
+      bookletName: '',
+      variableId: ''
     };
     this.data = [];
     this.dataSource.data = [];
