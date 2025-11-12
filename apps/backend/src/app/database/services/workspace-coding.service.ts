@@ -13,7 +13,13 @@ import Persons from '../entities/persons.entity';
 import { Unit } from '../entities/unit.entity';
 import { Booklet } from '../entities/booklet.entity';
 import { ResponseEntity } from '../entities/response.entity';
-import { Setting } from '../entities/setting.entity';
+import { CodingJob } from '../entities/coding-job.entity';
+import { CodingJobCoder } from '../entities/coding-job-coder.entity';
+import { CodingJobVariable } from '../entities/coding-job-variable.entity';
+import { CodingJobVariableBundle } from '../entities/coding-job-variable-bundle.entity';
+import { CodingJobUnit } from '../entities/coding-job-unit.entity';
+import { JobDefinition } from '../entities/job-definition.entity';
+import { VariableBundle } from '../entities/variable-bundle.entity';
 import { CodingStatistics, CodingStatisticsWithJob } from './shared-types';
 import { CodebookGenerator } from '../../admin/code-book/codebook-generator.class';
 import { CodeBookContentSetting, UnitPropertiesForCodebook, Missing } from '../../admin/code-book/codebook.interfaces';
@@ -28,6 +34,8 @@ import { ExportValidationResultsService } from './export-validation-results.serv
 import { ExternalCodingImportService, ExternalCodingImportBody } from './external-coding-import.service';
 import { BullJobManagementService } from './bull-job-management.service';
 import { WorkspaceFilesService } from './workspace-files.service';
+import { CodingResultsService } from './coding-results.service';
+import { CodingJobService } from './coding-job.service';
 
 interface CodedResponse {
   id: number;
@@ -54,8 +62,20 @@ export class WorkspaceCodingService {
     private bookletRepository: Repository<Booklet>,
     @InjectRepository(ResponseEntity)
     private responseRepository: Repository<ResponseEntity>,
-    @InjectRepository(Setting)
-    private settingRepository: Repository<Setting>,
+    @InjectRepository(CodingJob)
+    private codingJobRepository: Repository<CodingJob>,
+    @InjectRepository(CodingJobCoder)
+    private codingJobCoderRepository: Repository<CodingJobCoder>,
+    @InjectRepository(CodingJobVariable)
+    private codingJobVariableRepository: Repository<CodingJobVariable>,
+    @InjectRepository(CodingJobVariableBundle)
+    private codingJobVariableBundleRepository: Repository<CodingJobVariableBundle>,
+    @InjectRepository(CodingJobUnit)
+    private codingJobUnitRepository: Repository<CodingJobUnit>,
+    @InjectRepository(JobDefinition)
+    private jobDefinitionRepository: Repository<JobDefinition>,
+    @InjectRepository(VariableBundle)
+    private variableBundleRepository: Repository<VariableBundle>,
     private jobQueueService: JobQueueService,
     private cacheService: CacheService,
     private missingsProfilesService: MissingsProfilesService,
@@ -64,7 +84,9 @@ export class WorkspaceCodingService {
     private exportValidationResultsService: ExportValidationResultsService,
     private externalCodingImportService: ExternalCodingImportService,
     private bullJobManagementService: BullJobManagementService,
-    private workspaceFilesService: WorkspaceFilesService
+    private workspaceFilesService: WorkspaceFilesService,
+    private codingResultsService: CodingResultsService,
+    private codingJobService: CodingJobService
   ) {}
 
   private codingSchemeCache: Map<string, { scheme: CodingScheme; timestamp: number }> = new Map();
@@ -990,7 +1012,7 @@ export class WorkspaceCodingService {
     };
   }
 
-  async getManualTestPersons(workspace_id: number, personIds?: string): Promise<unknown> {
+  async getManualTestPersons(workspace_id: number, personIds?: string): Promise<Array<ResponseEntity & { unitname: string }>> {
     this.logger.log(
       `Fetching responses for workspace_id = ${workspace_id} ${
         personIds ? `and personIds = ${personIds}` : ''
@@ -1219,11 +1241,9 @@ export class WorkspaceCodingService {
           totalPages: cachedResults.metadata.totalPages,
           hasNextPage: cachedResults.metadata.hasNextPage,
           hasPreviousPage: cachedResults.metadata.hasPreviousPage,
-          cacheKey // Include cache key in response for subsequent requests
+          cacheKey
         };
       }
-
-      this.logger.log(`No cached results found. Processing all ${expectedCombinations.length} combinations for workspace ${workspaceId}`);
 
       const allResults: ValidationResultDto[] = [];
       let totalMissingCount = 0;
@@ -1319,14 +1339,14 @@ export class WorkspaceCodingService {
   async getCodingIncompleteVariables(
     workspaceId: number,
     unitName?: string
-  ): Promise<{ unitName: string; variableId: string }[]> {
+  ): Promise<{ unitName: string; variableId: string; responseCount: number }[]> {
     try {
       if (unitName) {
         this.logger.log(`Querying CODING_INCOMPLETE variables for workspace ${workspaceId} and unit ${unitName} (not cached)`);
         return await this.fetchCodingIncompleteVariablesFromDb(workspaceId, unitName);
       }
       const cacheKey = this.generateIncompleteVariablesCacheKey(workspaceId);
-      const cachedResult = await this.cacheService.get<{ unitName: string; variableId: string }[]>(cacheKey);
+      const cachedResult = await this.cacheService.get<{ unitName: string; variableId: string; responseCount: number }[]>(cacheKey);
       if (cachedResult) {
         this.logger.log(`Retrieved ${cachedResult.length} CODING_INCOMPLETE variables from cache for workspace ${workspaceId}`);
         return cachedResult;
@@ -1340,7 +1360,6 @@ export class WorkspaceCodingService {
       } else {
         this.logger.warn(`Failed to cache CODING_INCOMPLETE variables for workspace ${workspaceId}`);
       }
-
       return result;
     } catch (error) {
       this.logger.error(`Error getting CODING_INCOMPLETE variables: ${error.message}`, error.stack);
@@ -1351,11 +1370,11 @@ export class WorkspaceCodingService {
   private async fetchCodingIncompleteVariablesFromDb(
     workspaceId: number,
     unitName?: string
-  ): Promise<{ unitName: string; variableId: string }[]> {
+  ): Promise<{ unitName: string; variableId: string; responseCount: number }[]> {
     const queryBuilder = this.responseRepository.createQueryBuilder('response')
-      .distinct()
       .select('unit.name', 'unitName')
       .addSelect('response.variableid', 'variableId')
+      .addSelect('COUNT(response.id)', 'responseCount')
       .leftJoin('response.unit', 'unit')
       .leftJoin('unit.booklet', 'booklet')
       .leftJoin('booklet.person', 'person')
@@ -1365,6 +1384,10 @@ export class WorkspaceCodingService {
     if (unitName) {
       queryBuilder.andWhere('unit.name = :unitName', { unitName });
     }
+
+    queryBuilder
+      .groupBy('unit.name')
+      .addGroupBy('response.variableid');
 
     const rawResults = await queryBuilder.getRawMany();
 
@@ -1382,10 +1405,11 @@ export class WorkspaceCodingService {
 
     const result = filteredResult.map(row => ({
       unitName: row.unitName,
-      variableId: row.variableId
+      variableId: row.variableId,
+      responseCount: parseInt(row.responseCount, 10)
     }));
 
-    this.logger.log(`Found ${rawResults.length} CODING_INCOMPLETE variables, filtered to ${filteredResult.length} valid variables${unitName ? ` for unit ${unitName}` : ''}`);
+    this.logger.log(`Found ${rawResults.length} CODING_INCOMPLETE variable groups, filtered to ${filteredResult.length} valid variables${unitName ? ` for unit ${unitName}` : ''}`);
 
     return result;
   }
@@ -1532,5 +1556,41 @@ export class WorkspaceCodingService {
       this.logger.error(`Error getting responses by status: ${error.message}`, error.stack);
       throw new Error('Could not retrieve responses. Please check the database connection or query.');
     }
+  }
+
+  async applyCodingResults(workspaceId: number, codingJobId: number): Promise<{
+    success: boolean;
+    updatedResponsesCount: number;
+    skippedReviewCount: number;
+    message: string;
+  }> {
+    return this.codingResultsService.applyCodingResults(workspaceId, codingJobId);
+  }
+
+  async createDistributedCodingJobs(
+    workspaceId: number,
+    request: {
+      selectedVariables: { unitName: string; variableId: string }[];
+      selectedVariableBundles?: { id: number; name: string; variables: { unitName: string; variableId: string }[] }[];
+      selectedCoders: { id: number; name: string; username: string }[];
+      doubleCodingAbsolute?: number;
+      doubleCodingPercentage?: number;
+    }
+  ): Promise<{
+      success: boolean;
+      jobsCreated: number;
+      message: string;
+      distribution: Record<string, Record<string, number>>;
+      doubleCodingInfo: Record<string, { totalCases: number; doubleCodedCases: number; singleCodedCasesAssigned: number; doubleCodedCasesPerCoder: Record<string, number> }>;
+      jobs: {
+        coderId: number;
+        coderName: string;
+        variable: { unitName: string; variableId: string };
+        jobId: number;
+        jobName: string;
+        caseCount: number;
+      }[];
+    }> {
+    return this.codingJobService.createDistributedCodingJobs(workspaceId, request);
   }
 }

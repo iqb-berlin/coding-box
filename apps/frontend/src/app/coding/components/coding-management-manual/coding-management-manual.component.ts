@@ -13,6 +13,7 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import * as ExcelJS from 'exceljs';
 import { Subject, takeUntil } from 'rxjs';
 import { CodingJobsComponent } from '../coding-jobs/coding-jobs.component';
+import { CodingJobDefinitionsComponent } from '../coding-job-definitions/coding-job-definitions.component';
 import { VariableBundleManagerComponent } from '../variable-bundle-manager/variable-bundle-manager.component';
 import { CoderTrainingComponent, VariableConfig } from '../coder-training/coder-training.component';
 import { Coder } from '../../models/coder.model';
@@ -35,6 +36,7 @@ import { CoderTrainingsListComponent } from '../coder-trainings-list/coder-train
     TranslateModule,
     MatAnchor,
     CodingJobsComponent,
+    CodingJobDefinitionsComponent,
     MatIcon,
     MatButton,
     MatProgressBarModule,
@@ -100,7 +102,6 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     return this.validationResults?.hasPreviousPage || false;
   }
 
-  // Comparison table pagination getters
   get comparisonTotalPages(): number {
     if (!this.importResults?.affectedRows) return 0;
     return Math.ceil(this.importResults.affectedRows.length / this.comparisonPageSize);
@@ -173,9 +174,6 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     this.destroy$.complete();
   }
 
-  /**
-   * Handle external coding file selection event
-   */
   onExternalCodingFileSelected(event: Event): void {
     const input = event.target as HTMLInputElement;
 
@@ -193,16 +191,10 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     this.processExternalCodingFile(file);
   }
 
-  /**
-   * Check if the file is a CSV or Excel file
-   */
   private isExcelOrCsvFile(file: File): boolean {
     return file.name.endsWith('.xlsx') || file.name.endsWith('.xls') || file.name.endsWith('.csv');
   }
 
-  /**
-   * Process external coding file upload with real-time progress tracking
-   */
   private async processExternalCodingFile(file: File): Promise<void> {
     this.isLoading = true;
     this.validationStateService.startValidation();
@@ -220,23 +212,18 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       this.validationStateService.updateProgress(10, this.translateService.instant('coding-management-manual.progress.file-processing'));
       const fileData = await this.fileToBase64(file);
 
-      // Start import with progress tracking via Server-Sent Events
       await this.testPersonCodingService.importExternalCodingWithProgress(
         workspaceId,
         {
           file: fileData,
           fileName: file.name
         },
-        // onProgress callback
         (progress: number, message: string) => {
           this.validationStateService.updateProgress(progress, message);
         },
         // onComplete callback
         (result: ExternalCodingImportResultDto) => {
-          // Reset validation state to hide progress UI
           this.validationStateService.resetValidation();
-
-          // Store import results and show comparison table
           this.importResults = result;
           this.showComparisonTable = true;
           this.comparisonCurrentPage = 1;
@@ -244,7 +231,6 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
           this.showSuccess(this.translateService.instant('coding-management-manual.success.import-completed', { updatedRows: result.updatedRows, processedRows: result.processedRows }));
 
           if (result.errors && result.errors.length > 0) {
-            // For warnings, we could show a different message, but keeping simple
             this.showError(this.translateService.instant('error.general', { error: `${result.errors.length} Warnungen aufgetreten. Details in der Konsole.` }));
           }
 
@@ -264,16 +250,12 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     }
   }
 
-  /**
-   * Convert file to base64 string
-   */
   private fileToBase64(file: File): Promise<string> {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.readAsDataURL(file);
       reader.onload = () => {
         const result = reader.result as string;
-        // Remove data:application/...;base64, prefix
         const base64Data = result.split(',')[1];
         resolve(base64Data);
       };
@@ -303,16 +285,10 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     }, 0);
   }
 
-  /**
-   * Check if the file is an Excel file
-   */
   private isExcelFile(file: File): boolean {
     return file.name.endsWith('.xlsx') || file.name.endsWith('.xls');
   }
 
-  /**
-   * Read Excel file and parse data using exceljs
-   */
   private readExcelFile(file: File): void {
     const workbook = new ExcelJS.Workbook();
     const reader = new FileReader();
@@ -379,9 +355,6 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     reader.readAsArrayBuffer(file);
   }
 
-  /**
-   * Map parsed data to ExpectedCombinationDto[]
-   */
   private mapToExpectedCombinations(data: Record<string, string>[]): ExpectedCombinationDto[] {
     return data.map(item => ({
       unit_key: item.unit_key || '',
@@ -392,20 +365,13 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     }));
   }
 
-  /**
-   * Validate coding completeness with pagination
-   */
   private validateCodingCompleteness(expectedCombinations: ExpectedCombinationDto[]): void {
-    // Store expected combinations for pagination
     this.expectedCombinations = expectedCombinations;
-    this.currentPage = 1; // Reset to first page
+    this.currentPage = 1;
 
     this.loadValidationPage(1);
   }
 
-  /**
-   * Load a specific page of validation results
-   */
   private loadValidationPage(page: number): void {
     const workspaceId = this.appService.selectedWorkspaceId;
 
@@ -432,36 +398,18 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     });
   }
 
-  /**
-   * Navigate to the next page
-   */
   nextPage(): void {
     if (this.hasNextPage) {
       this.loadValidationPage(this.currentPage + 1);
     }
   }
 
-  /**
-   * Navigate to the previous page
-   */
   previousPage(): void {
     if (this.hasPreviousPage) {
       this.loadValidationPage(this.currentPage - 1);
     }
   }
 
-  /**
-   * Navigate to a specific page
-   */
-  goToPage(page: number): void {
-    if (page >= 1 && page <= this.totalPages) {
-      this.loadValidationPage(page);
-    }
-  }
-
-  /**
-   * Change page size and reload current page
-   */
   changePageSize(newPageSize: number): void {
     this.pageSize = newPageSize;
     this.loadValidationPage(1); // Reset to first page when changing page size
@@ -479,20 +427,11 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     }
   }
 
-  goToComparisonPage(page: number): void {
-    if (page >= 1 && page <= this.comparisonTotalPages) {
-      this.comparisonCurrentPage = page;
-    }
-  }
-
   changeComparisonPageSize(newPageSize: number): void {
     this.comparisonPageSize = newPageSize;
     this.comparisonCurrentPage = 1;
   }
 
-  /**
-   * Download validation results as Excel file using cache key
-   */
   downloadExcel(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
 
@@ -541,9 +480,6 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     });
   }
 
-  /**
-   * Download comparison table as Excel file
-   */
   downloadComparisonTable(): void {
     if (!this.importResults || !this.importResults.affectedRows || this.importResults.affectedRows.length === 0) {
       this.showError('Keine Vergleichsdaten zum Herunterladen verfügbar.');
@@ -553,11 +489,9 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     this.isLoading = true;
 
     try {
-      // Create a new workbook
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet('Import Vergleich');
 
-      // Add headers
       const headers = [
         'Unit Alias',
         'Variable ID',
@@ -635,17 +569,11 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     }
   }
 
-  /**
-   * Close the comparison table
-   */
   closeComparisonTable(): void {
     this.showComparisonTable = false;
     this.importResults = null;
   }
 
-  /**
-   * Show error message
-   */
   private showError(message: string): void {
     this.snackBar.open(message, 'Schließen', {
       duration: 5000,
@@ -653,9 +581,6 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     });
   }
 
-  /**
-   * Show success message
-   */
   private showSuccess(message: string): void {
     this.snackBar.open(message, 'Schließen', {
       duration: 5000,

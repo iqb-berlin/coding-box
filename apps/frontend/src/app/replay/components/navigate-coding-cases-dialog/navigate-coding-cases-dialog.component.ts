@@ -87,10 +87,6 @@ export class NavigateCodingCasesDialogComponent implements OnInit {
       unit.variableId
     );
 
-    if (this.data.codingService.openSelections.has(compositeKey)) {
-      return 'OPEN';
-    }
-
     const selectedCode = this.data.codingService.selectedCodes.get(compositeKey);
     if (selectedCode) {
       return selectedCode.label;

@@ -1,0 +1,192 @@
+<div class="bulk-dialog-container">
+  <h2 class="dialog-title" cdkFocusInitial>
+    <mat-icon class="title-icon">library_add</mat-icon>
+    {{ 'coding-job-bulk-creation-dialog.title' | translate }}
+  </h2>
+  <mat-divider></mat-divider>
+
+  <div class="dialog-content">
+    <p class="info-text">
+      @if (data.creationResults) {
+        {{ 'coding-job-bulk-creation-dialog.results-description' | translate }}
+      } @else {
+        {{ 'coding-job-bulk-creation-dialog.description' | translate }}
+      }
+    </p>
+
+    @if ((data.creationResults && data.creationResults.doubleCodingInfo) || doubleCodingPreview) {
+      <div class="double-coding-summary">
+        <h3 class="section-title">
+          <mat-icon>repeat</mat-icon>
+          {{ 'coding-job-bulk-creation-dialog.double-coding-summary.title' | translate }}
+        </h3>
+
+        <div class="double-coding-matrix">
+          <div class="matrix-container">
+            <!-- Header row for double coding -->
+            <div class="matrix-header">
+              <div class="matrix-cell header-cell variable-header">{{ 'coding-job-bulk-creation-dialog.double-coding-summary.variable' | translate }}</div>
+              <div class="matrix-cell header-cell">{{ 'coding-job-bulk-creation-dialog.double-coding-summary.total-cases' | translate }}</div>
+              <div class="matrix-cell header-cell">{{ 'coding-job-bulk-creation-dialog.double-coding-summary.double-coded' | translate }}</div>
+              <div class="matrix-cell header-cell">{{ 'coding-job-bulk-creation-dialog.double-coding-summary.single-coded' | translate }}</div>
+              @for (coder of data.selectedCoders; track coder.id) {
+                <div class="matrix-cell header-cell coder-header">
+                  <mat-icon>person</mat-icon>
+                  {{ coder.name }}
+                </div>
+              }
+            </div>
+
+            <!-- Data rows for double coding -->
+            @for (variableKey of objectKeys((data.creationResults?.doubleCodingInfo || doubleCodingPreview?.doubleCodingInfo)!); track variableKey) {
+              <div class="matrix-row">
+                <div class="matrix-cell variable-cell">
+                  <div class="variable-name">{{ getVariableDisplayNameFromKey(variableKey) }}</div>
+                </div>
+                <div class="matrix-cell data-cell">
+                  {{ (data.creationResults?.doubleCodingInfo || doubleCodingPreview?.doubleCodingInfo)![variableKey].totalCases }}
+                </div>
+                <div class="matrix-cell data-cell double-coded-cell">
+                  <span class="double-coded-indicator">{{ (data.creationResults?.doubleCodingInfo || doubleCodingPreview?.doubleCodingInfo)![variableKey].doubleCodedCases }}</span>
+                  @if ((data.creationResults?.doubleCodingInfo || doubleCodingPreview?.doubleCodingInfo)![variableKey].doubleCodedCases > 0) {
+                    <mat-icon class="double-coding-icon">repeat</mat-icon>
+                  }
+                </div>
+                <div class="matrix-cell data-cell">
+                  {{ (data.creationResults?.doubleCodingInfo || doubleCodingPreview?.doubleCodingInfo)![variableKey].singleCodedCasesAssigned }}
+                </div>
+                @for (coder of data.selectedCoders; track coder.id) {
+                  <div class="matrix-cell data-cell">
+                    {{ (data.creationResults?.doubleCodingInfo || doubleCodingPreview?.doubleCodingInfo)![variableKey].doubleCodedCasesPerCoder[coder.name] || 0 }}
+                  </div>
+                }
+              </div>
+            }
+          </div>
+        </div>
+
+        <div class="double-coding-info">
+          <mat-icon class="info-icon">info</mat-icon>
+          <span>{{ 'coding-job-bulk-creation-dialog.double-coding-summary.info-text' | translate }}</span>
+        </div>
+      </div>
+    }
+
+    <div class="distribution-summary">
+      <h3 class="section-title">
+        <mat-icon>table_chart</mat-icon>
+        {{ 'coding-job-bulk-creation-dialog.distribution-summary.title' | translate }}
+      </h3>
+
+      @if (distributionMatrix && distributionMatrix.length > 0) {
+        <div class="distribution-matrix">
+          <div class="matrix-container">
+            <!-- Header row with coder names -->
+            <div class="matrix-header">
+              <div class="matrix-cell header-cell variable-header">{{ 'coding-job-bulk-creation-dialog.distribution-summary.variable' | translate }}</div>
+              @for (coder of data.selectedCoders; track coder.id) {
+                <div class="matrix-cell header-cell coder-header">
+                  <mat-icon>person</mat-icon>
+                  {{ coder.name }}
+                </div>
+              }
+              <div class="matrix-cell header-cell total-header">{{ 'coding-job-bulk-creation-dialog.distribution-summary.total' | translate }}</div>
+            </div>
+
+            <!-- Data rows -->
+            @for (row of distributionMatrix; track row.variableKey) {
+              <div class="matrix-row">
+                <div class="matrix-cell variable-cell">
+                  <div class="variable-name">{{ getVariableDisplayName(row.variable) }}</div>
+                  <div class="variable-data">({{ row.totalCases }} {{ 'coding-job-bulk-creation-dialog.distribution-summary.cases' | translate }})</div>
+                </div>
+                @for (coder of data.selectedCoders; track coder.id) {
+                  <div class="matrix-cell data-cell">
+                    {{ row.coderCases[coder.name] || 0 }}
+                  </div>
+                }
+                <div class="matrix-cell total-cell">
+                  <strong>{{ row.totalCases }}</strong>
+                </div>
+              </div>
+            }
+
+            <!-- Total row -->
+            <div class="matrix-row total-row">
+              <div class="matrix-cell variable-cell total-cell">{{ 'coding-job-bulk-creation-dialog.distribution-summary.grand-total' | translate }}</div>
+              @for (coder of data.selectedCoders; track coder.id) {
+                <div class="matrix-cell data-cell total-cell">
+                  <strong>{{ getCoderTotal(coder.name) }}</strong>
+                </div>
+              }
+              <div class="matrix-cell total-cell grand-total">
+                <strong>{{ getGrandTotal() }}</strong>
+              </div>
+            </div>
+          </div>
+        </div>
+      }
+
+      <div class="distribution-info">
+        <p><strong>{{ 'coding-job-bulk-creation-dialog.distribution-summary.notice' | translate }}</strong> {{ 'coding-job-bulk-creation-dialog.distribution-summary.notice-text' | translate }}</p>
+      </div>
+    </div>
+
+    <div class="jobs-summary">
+      <h3 class="section-title">
+        <mat-icon>work</mat-icon>
+        {{ 'coding-job-bulk-creation-dialog.jobs-summary.title' | translate }}
+      </h3>
+      <p class="section-description">
+        <strong>{{ jobPreviews.length }}</strong> {{ 'coding-job-bulk-creation-dialog.jobs-summary.description' | translate:{count: jobPreviews.length} }}
+      </p>
+      <div class="jobs-list">
+        @for (job of jobPreviews; track job.name) {
+          <div class="job-preview-item">
+            <mat-icon class="job-icon">task</mat-icon>
+            <div class="job-content">
+              <div class="job-name">{{ job.name }}</div>
+              @if (job.variable) {
+                <div class="job-details">
+                  <mat-icon>description</mat-icon>
+                  {{ job.variable.unitName }} → {{ job.variable.variableId }}
+                </div>
+              }
+            </div>
+            <span class="case-count">{{ getJobCaseCount(job) }}</span>
+          </div>
+        }
+      </div>
+    </div>
+
+    <div class="display-options-section">
+      <h3 class="section-title">
+        <mat-icon>settings</mat-icon>
+        {{ 'coding-job-bulk-creation-dialog.display-options.title' | translate }}
+      </h3>
+      <p class="section-description">{{ 'coding-job-bulk-creation-dialog.display-options.description' | translate }}</p>
+
+      <form [formGroup]="displayOptionsForm" class="display-options-controls">
+        <mat-checkbox formControlName="showScore" class="display-option-checkbox">
+          {{ 'coding-job-bulk-creation-dialog.display-options.show-score' | translate }}
+        </mat-checkbox>
+
+        <mat-checkbox formControlName="allowComments" class="display-option-checkbox">
+          {{ 'coding-job-bulk-creation-dialog.display-options.allow-comments' | translate }}
+        </mat-checkbox>
+
+        <mat-checkbox formControlName="suppressGeneralInstructions" class="display-option-checkbox">
+          {{ 'coding-job-bulk-creation-dialog.display-options.suppress-instructions' | translate }}
+        </mat-checkbox>
+      </form>
+    </div>
+
+  </div>
+
+  <div class="dialog-actions">
+    <button mat-button (click)="onCancel()">{{ 'coding-job-bulk-creation-dialog.buttons.cancel' | translate }}</button>
+    <button mat-raised-button color="primary" (click)="onConfirm()">
+      {{ 'coding-job-bulk-creation-dialog.buttons.confirm' | translate:{count: jobPreviews.length} }}
+    </button>
+  </div>
+</div>
