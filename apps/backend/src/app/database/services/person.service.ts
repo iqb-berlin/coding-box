@@ -395,10 +395,10 @@ export class PersonService {
       .map(chunk => {
         try {
           const chunkContent: TcMergeResponse[] = JSON.parse(chunk.content);
-          return { id: chunk.id, responses: chunkContent };
+          return { id: chunk.subForm, responses: chunkContent };
         } catch (error) {
           this.logger.error(`Error parsing chunk content for chunk ID ${chunk.id}: ${error.message}`);
-          return { id: chunk.id, responses: [] };
+          return { id: chunk.subForm, responses: [] };
         }
       });
   }
