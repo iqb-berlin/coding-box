@@ -1880,4 +1880,94 @@ export class WorkspaceCodingController {
       }> {
     return this.workspaceCodingService.createDistributedCodingJobs(workspace_id, body);
   }
+
+  @Get(':workspace_id/coding/export/aggregated')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiOkResponse({
+    description: 'Aggregated coding results exported as Excel',
+    content: {
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': {
+        schema: {
+          type: 'string',
+          format: 'binary'
+        }
+      }
+    }
+  })
+  async exportCodingResultsAggregated(
+    @WorkspaceId() workspace_id: number,
+      @Res() res: Response
+  ): Promise<void> {
+    try {
+      const buffer = await this.workspaceCodingService.exportCodingResultsAggregated(workspace_id);
+
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename=coding-results-aggregated-${new Date().toISOString().slice(0, 10)}.xlsx`);
+      res.send(buffer);
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+
+  @Get(':workspace_id/coding/export/by-coder')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiOkResponse({
+    description: 'Coding results by coder exported as Excel',
+    content: {
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': {
+        schema: {
+          type: 'string',
+          format: 'binary'
+        }
+      }
+    }
+  })
+  async exportCodingResultsByCoder(
+    @WorkspaceId() workspace_id: number,
+      @Res() res: Response
+  ): Promise<void> {
+    try {
+      const buffer = await this.workspaceCodingService.exportCodingResultsByCoder(workspace_id);
+
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename=coding-results-by-coder-${new Date().toISOString().slice(0, 10)}.xlsx`);
+      res.send(buffer);
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+
+  @Get(':workspace_id/coding/export/by-variable')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiOkResponse({
+    description: 'Coding results by variable exported as Excel',
+    content: {
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': {
+        schema: {
+          type: 'string',
+          format: 'binary'
+        }
+      }
+    }
+  })
+  async exportCodingResultsByVariable(
+    @WorkspaceId() workspace_id: number,
+      @Res() res: Response
+  ): Promise<void> {
+    try {
+      const buffer = await this.workspaceCodingService.exportCodingResultsByVariable(workspace_id);
+
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename=coding-results-by-variable-${new Date().toISOString().slice(0, 10)}.xlsx`);
+      res.send(buffer);
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  }
 }

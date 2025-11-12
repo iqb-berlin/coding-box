@@ -7,14 +7,24 @@
     <mat-card-content>
       <p>{{ 'ws-admin.export-description' | translate }}</p>
 
-      <!-- Placeholder for future export functionality -->
-      <div class="placeholder-message">
-        <p>{{ 'ws-admin.export-placeholder' | translate }}</p>
+      <div class="format-options">
+        <mat-radio-group [(ngModel)]="selectedFormat">
+          <div class="format-option" *ngFor="let format of exportFormats">
+            <mat-radio-button [value]="format.value">
+              {{ format.label | translate }}
+            </mat-radio-button>
+            <span class="format-description">{{ format.description | translate }}</span>
+          </div>
+        </mat-radio-group>
       </div>
     </mat-card-content>
-    <mat-card-actions>
-      <button mat-raised-button color="primary" disabled>
-        {{ 'ws-admin.export-action-button' | translate }}
+    <mat-card-actions align="end">
+      <button mat-raised-button color="primary" (click)="onExport()" [disabled]="isExporting">
+        <span *ngIf="!isExporting">{{ 'ws-admin.export-action-button' | translate }}</span>
+        <span *ngIf="isExporting">
+          <mat-spinner diameter="20" style="display: inline-block; margin-right: 8px;"></mat-spinner>
+          {{ 'ws-admin.export.exporting' | translate }}
+        </span>
       </button>
     </mat-card-actions>
   </mat-card>

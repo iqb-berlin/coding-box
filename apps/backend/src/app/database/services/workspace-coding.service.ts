@@ -5,6 +5,7 @@ import { CodingScheme } from '@iqbspecs/coding-scheme/coding-scheme.interface';
 import * as Autocoder from '@iqb/responses';
 import * as cheerio from 'cheerio';
 import * as crypto from 'crypto';
+import * as ExcelJS from 'exceljs';
 import { statusNumberToString, statusStringToNumber } from '../utils/response-status-converter';
 import { CacheService } from '../../cache/cache.service';
 import { MissingsProfilesService } from './missings-profiles.service';
@@ -381,7 +382,8 @@ export class WorkspaceCodingService {
                 updateData.code_v1 = response.code_v1;
               }
               if (response.status_v1 !== undefined) {
-                updateData.status_v1 = statusStringToNumber(response.status_v1);
+                const statusNumber = statusStringToNumber(response.status_v1);
+                updateData.status_v1 = statusNumber;
               }
               if (response.score_v1 !== undefined) {
                 updateData.score_v1 = response.score_v1;
@@ -391,11 +393,14 @@ export class WorkspaceCodingService {
                 updateData.code_v3 = response.code_v3;
               }
               if (response.status_v3 !== undefined) {
-                updateData.status_v3 = statusStringToNumber(response.status_v3);
+                const statusNumber = statusStringToNumber(response.status_v3);
+                updateData.status_v3 = statusNumber;
+                this.logger.debug(`Response ${response.id}: status_v3='${response.status_v3}' -> statusNumber=${statusNumber}`);
               }
               if (response.score_v3 !== undefined) {
                 updateData.score_v3 = response.score_v3;
               }
+
               if (Object.keys(updateData).length > 0) {
                 return queryRunner.manager.update(ResponseEntity, response.id, updateData);
               }
@@ -442,7 +447,7 @@ export class WorkspaceCodingService {
 
   private async processAndCodeResponses(
     units: Unit[],
-    unitToResponsesMap: Map<number, ResponseEntity[]>,
+    unitToResponsesMap: Map<number | string, ResponseEntity[]>,
     unitToCodingSchemeRefMap: Map<number, string>,
     fileIdToCodingSchemeMap: Map<string, CodingScheme>,
     allResponses: ResponseEntity[],
@@ -471,10 +476,8 @@ export class WorkspaceCodingService {
           (fileIdToCodingSchemeMap.get(codingSchemeRef) || emptyScheme) :
           emptyScheme;
         for (const response of responses) {
-          // Determine which status field to use as input for autocoder
-          let inputStatus = response.status; // default for run 1
+          let inputStatus = response.status;
           if (autoCoderRun === 2) {
-            // For run 2, use status_v2 if available, otherwise status_v1
             inputStatus = response.status_v2 || response.status_v1 || response.status;
           }
 
@@ -1592,5 +1595,456 @@ export class WorkspaceCodingService {
       }[];
     }> {
     return this.codingJobService.createDistributedCodingJobs(workspaceId, request);
+  }
+
+  private getLatestCode(response: ResponseEntity): { code: number | null; score: number | null; version: string } {
+    // Priority: v3 > v2 > v1
+    if (response.code_v3 !== null && response.code_v3 !== undefined) {
+      return { code: response.code_v3, score: response.score_v3, version: 'v3' };
+    }
+    if (response.code_v2 !== null && response.code_v2 !== undefined) {
+      return { code: response.code_v2, score: response.score_v2, version: 'v2' };
+    }
+    return { code: response.code_v1, score: response.score_v1, version: 'v1' };
+  }
+
+  private generateUniqueWorksheetName(workbook: ExcelJS.Workbook, baseName: string): string {
+    // Clean the base name and limit to 20 characters initially
+    // First decode any URL encoding, then replace special characters with underscores
+    let cleanName = decodeURIComponent(baseName).replace(/[^a-zA-Z0-9\s\-_]/g, '_').substring(0, 20).trim();
+
+    // If empty after cleaning, use a default
+    if (!cleanName) {
+      cleanName = 'Sheet';
+    }
+
+    let finalName = cleanName;
+    let counter = 1;
+
+    // Keep trying until we find a unique name
+    while (workbook.getWorksheet(finalName)) {
+      const suffix = `_${counter}`;
+      const availableLength = 31 - suffix.length; // Excel limit is 31 chars
+      finalName = cleanName.substring(0, availableLength) + suffix;
+      counter += 1;
+
+      // Safety check to prevent infinite loop
+      if (counter > 1000) {
+        finalName = `Sheet_${Date.now()}`;
+        break;
+      }
+    }
+
+    return finalName;
+  }
+
+  async exportCodingResultsAggregated(workspaceId: number): Promise<Buffer> {
+    this.logger.log(`Exporting aggregated coding results for workspace ${workspaceId}`);
+
+    try {
+      // Get all responses with coding data
+      const responses = await this.responseRepository.find({
+        where: { },
+        relations: ['unit', 'unit.booklet', 'unit.booklet.person', 'unit.booklet.bookletinfo'],
+        select: {
+          id: true,
+          variableid: true,
+          code_v1: true,
+          score_v1: true,
+          code_v2: true,
+          score_v2: true,
+          code_v3: true,
+          score_v3: true,
+          unit: {
+            id: true,
+            name: true,
+            alias: true,
+            booklet: {
+              id: true,
+              person: {
+                id: true,
+                login: true,
+                code: true,
+                group: true
+              },
+              bookletinfo: {
+                id: true,
+                name: true
+              }
+            }
+          }
+        }
+      });
+
+      // Filter responses that belong to the workspace and have coding data
+      const workspaceResponses = responses.filter(response => {
+        const person = response.unit?.booklet?.person;
+        return person?.workspace_id === workspaceId &&
+               (response.code_v1 !== null || response.code_v2 !== null || response.code_v3 !== null);
+      });
+
+      if (workspaceResponses.length === 0) {
+        throw new Error('No coded responses found for this workspace');
+      }
+
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet('Coding Results');
+
+      // Create pivot table: testpersons as rows, variables as columns
+      const testPersonMap = new Map<string, Map<string, { code: number | null; score: number | null }>>();
+      const variableSet = new Set<string>();
+      const testPersonList: string[] = [];
+
+      // Collect all data
+      for (const response of workspaceResponses) {
+        const person = response.unit?.booklet?.person;
+        const testPersonKey = `${person?.login}_${person?.code}`;
+        const variableId = response.variableid;
+        const latestCoding = this.getLatestCode(response);
+
+        if (!testPersonMap.has(testPersonKey)) {
+          testPersonMap.set(testPersonKey, new Map());
+          testPersonList.push(testPersonKey);
+        }
+
+        testPersonMap.get(testPersonKey)!.set(variableId, {
+          code: latestCoding.code,
+          score: latestCoding.score
+        });
+        variableSet.add(variableId);
+      }
+
+      const variables = Array.from(variableSet).sort();
+
+      // Set up headers
+      const headers = ['Test Person Login', 'Test Person Code', 'Group', ...variables];
+      worksheet.columns = headers.map(header => ({ header, key: header, width: 15 }));
+
+      // Add data rows
+      for (const testPersonKey of testPersonList) {
+        const [login, code] = testPersonKey.split('_');
+        const personData = testPersonMap.get(testPersonKey)!;
+
+        // Find group for this test person
+        const group = workspaceResponses.find(r => r.unit?.booklet?.person?.login === login &&
+          r.unit?.booklet?.person?.code === code
+        )?.unit?.booklet?.person?.group || '';
+
+        const row: Record<string, string | number | null> = {
+          'Test Person Login': login,
+          'Test Person Code': code,
+          Group: group
+        };
+
+        for (const variable of variables) {
+          const coding = personData.get(variable);
+          row[variable] = coding?.code ?? '';
+        }
+
+        worksheet.addRow(row);
+      }
+
+      // Style the header row
+      worksheet.getRow(1).font = { bold: true };
+      worksheet.getRow(1).fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFE0E0E0' }
+      };
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      return Buffer.from(buffer);
+    } catch (error) {
+      this.logger.error(`Error exporting aggregated coding results: ${error.message}`, error.stack);
+      throw new Error('Could not export aggregated coding results. Please check the database connection or query.');
+    }
+  }
+
+  async exportCodingResultsByCoder(workspaceId: number): Promise<Buffer> {
+    this.logger.log(`Exporting coding results by coder for workspace ${workspaceId}`);
+
+    try {
+      // Get coding jobs with their assignments
+      const codingJobs = await this.codingJobRepository.find({
+        where: { workspace_id: workspaceId },
+        relations: ['codingJobCoders', 'codingJobCoders.user', 'codingJobUnits', 'codingJobUnits.response', 'codingJobUnits.response.unit']
+      });
+
+      if (codingJobs.length === 0) {
+        throw new Error('No coding jobs found for this workspace');
+      }
+
+      // Get coding job variables separately
+      const jobIds = codingJobs.map(job => job.id);
+      const codingJobVariables = await this.codingJobVariableRepository.find({
+        where: { coding_job_id: In(jobIds) }
+      });
+
+      // Group variables by job ID
+      const variablesByJobId = new Map<number, CodingJobVariable[]>();
+      codingJobVariables.forEach(variable => {
+        if (!variablesByJobId.has(variable.coding_job_id)) {
+          variablesByJobId.set(variable.coding_job_id, []);
+        }
+        variablesByJobId.get(variable.coding_job_id)!.push(variable);
+      });
+
+      const workbook = new ExcelJS.Workbook();
+
+      // Group jobs by coder
+      const coderJobs = new Map<string, CodingJob[]>();
+
+      for (const job of codingJobs) {
+        for (const jobCoder of job.codingJobCoders) {
+          const coderKey = `${jobCoder.user.username}_${jobCoder.user.id}`;
+          if (!coderJobs.has(coderKey)) {
+            coderJobs.set(coderKey, []);
+          }
+          coderJobs.get(coderKey)!.push(job);
+        }
+      }
+
+      // Create a sheet for each coder
+      for (const [coderKey, jobs] of coderJobs) {
+        const [coderName] = coderKey.split('_');
+        const worksheetName = this.generateUniqueWorksheetName(workbook, coderName);
+        const worksheet = workbook.addWorksheet(worksheetName);
+
+        // Collect all variables and testpersons for this coder
+        const variableSet = new Set<string>();
+        const testPersonMap = new Map<string, Map<string, { code: number | null; score: number | null }>>();
+        const testPersonList: string[] = [];
+
+        for (const job of jobs) {
+          // Get responses for this job's variables and units
+          const unitIds = job.codingJobUnits.map(ju => ju.response?.unit?.id).filter((id): id is number => id !== undefined);
+          const jobVariables = variablesByJobId.get(job.id) || [];
+          const variableIds = jobVariables.map(jv => jv.variable_id);
+
+          if (unitIds.length === 0 || variableIds.length === 0) continue;
+
+          const responses = await this.responseRepository.find({
+            where: {
+              unitid: In(unitIds),
+              variableid: In(variableIds)
+            },
+            relations: ['unit', 'unit.booklet', 'unit.booklet.person'],
+            select: {
+              id: true,
+              variableid: true,
+              code_v1: true,
+              score_v1: true,
+              code_v2: true,
+              score_v2: true,
+              code_v3: true,
+              score_v3: true,
+              unit: {
+                id: true,
+                booklet: {
+                  id: true,
+                  person: {
+                    id: true,
+                    login: true,
+                    code: true,
+                    group: true
+                  }
+                }
+              }
+            }
+          });
+
+          for (const response of responses) {
+            const person = response.unit?.booklet?.person;
+            const testPersonKey = `${person?.login}_${person?.code}`;
+            const variableId = response.variableid;
+            const latestCoding = this.getLatestCode(response);
+
+            if (!testPersonMap.has(testPersonKey)) {
+              testPersonMap.set(testPersonKey, new Map());
+              testPersonList.push(testPersonKey);
+            }
+
+            testPersonMap.get(testPersonKey)!.set(variableId, {
+              code: latestCoding.code,
+              score: latestCoding.score
+            });
+            variableSet.add(variableId);
+          }
+        }
+
+        const variables = Array.from(variableSet).sort();
+
+        if (variables.length === 0) continue;
+
+        // Set up headers
+        const headers = ['Test Person Login', 'Test Person Code', 'Group', ...variables];
+        worksheet.columns = headers.map(header => ({ header, key: header, width: 15 }));
+
+        // Add data rows
+        for (const testPersonKey of testPersonList) {
+          const [login, code] = testPersonKey.split('_');
+          const personData = testPersonMap.get(testPersonKey)!;
+
+          // Find group for this test person
+          const group = Array.from(testPersonMap.values()).find((data: Map<string, { code: number | null; score: number | null }>) => data.has(variables[0])
+          ) ? 'Group' : ''; // Simplified - would need to look up actual group
+
+          const row: Record<string, string | number | null> = {
+            'Test Person Login': login,
+            'Test Person Code': code,
+            Group: group
+          };
+
+          for (const variable of variables) {
+            const coding = personData.get(variable);
+            row[variable] = coding?.code ?? '';
+          }
+
+          worksheet.addRow(row);
+        }
+
+        // Style the header row
+        worksheet.getRow(1).font = { bold: true };
+        worksheet.getRow(1).fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FFE0E0E0' }
+        };
+      }
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      return Buffer.from(buffer);
+    } catch (error) {
+      this.logger.error(`Error exporting coding results by coder: ${error.message}`, error.stack);
+      throw new Error('Could not export coding results by coder. Please check the database connection or query.');
+    }
+  }
+
+  async exportCodingResultsByVariable(workspaceId: number): Promise<Buffer> {
+    this.logger.log(`Exporting coding results by variable for workspace ${workspaceId}`);
+
+    try {
+      // Get all unique variables in the workspace
+      const variableResults = await this.responseRepository
+        .createQueryBuilder('response')
+        .select('DISTINCT response.variableid', 'variableId')
+        .leftJoin('response.unit', 'unit')
+        .leftJoin('unit.booklet', 'booklet')
+        .leftJoin('booklet.person', 'person')
+        .where('person.workspace_id = :workspaceId', { workspaceId })
+        .andWhere('(response.code_v1 IS NOT NULL OR response.code_v2 IS NOT NULL OR response.code_v3 IS NOT NULL)')
+        .getRawMany();
+
+      const variables = variableResults.map((row: { variableId: string }) => row.variableId).sort();
+
+      if (variables.length === 0) {
+        throw new Error('No coded variables found for this workspace');
+      }
+
+      const workbook = new ExcelJS.Workbook();
+
+      // Create a sheet for each variable
+      for (const variableId of variables) {
+        const worksheetName = this.generateUniqueWorksheetName(workbook, variableId);
+        const worksheet = workbook.addWorksheet(worksheetName);
+
+        // Get all responses for this variable
+        const responses = await this.responseRepository.find({
+          where: { variableid: variableId },
+          relations: ['unit', 'unit.booklet', 'unit.booklet.person'],
+          select: {
+            id: true,
+            code_v1: true,
+            score_v1: true,
+            code_v2: true,
+            score_v2: true,
+            code_v3: true,
+            score_v3: true,
+            unit: {
+              id: true,
+              booklet: {
+                id: true,
+                person: {
+                  id: true,
+                  login: true,
+                  code: true,
+                  group: true
+                }
+              }
+            }
+          }
+        });
+
+        // Filter responses that belong to this workspace
+        const workspaceResponses = responses.filter(response => {
+          const person = response.unit?.booklet?.person;
+          return person?.workspace_id === workspaceId;
+        });
+
+        if (workspaceResponses.length === 0) continue;
+
+        // Create pivot: testpersons as rows, coders as columns
+        const testPersonMap = new Map<string, Map<string, { code: number | null; score: number | null }>>();
+        const testPersonList: string[] = [];
+
+        for (const response of workspaceResponses) {
+          const person = response.unit?.booklet?.person;
+          const testPersonKey = `${person?.login}_${person?.code}`;
+          const coderKey = testPersonKey; // In this context, each testperson represents a "coder" who provided the coding
+          const latestCoding = this.getLatestCode(response);
+
+          if (!testPersonMap.has(testPersonKey)) {
+            testPersonMap.set(testPersonKey, new Map());
+            testPersonList.push(testPersonKey);
+          }
+
+          testPersonMap.get(testPersonKey)!.set(coderKey, {
+            code: latestCoding.code,
+            score: latestCoding.score
+          });
+        }
+
+        // Set up headers
+        const headers = ['Test Person Login', 'Test Person Code', 'Group', ...testPersonList.map(tp => `Coder_${tp}`)];
+        worksheet.columns = headers.map(header => ({ header, key: header, width: 15 }));
+
+        // Add data rows (one row per testperson who has this variable)
+        for (const testPersonKey of testPersonList) {
+          const [login, code] = testPersonKey.split('_');
+          const personData = testPersonMap.get(testPersonKey)!;
+
+          // Find group for this test person
+          const group = workspaceResponses.find(r => `${r.unit?.booklet?.person?.login}_${r.unit?.booklet?.person?.code}` === testPersonKey
+          )?.unit?.booklet?.person?.group || '';
+
+          const row: Record<string, string | number | null> = {
+            'Test Person Login': login,
+            'Test Person Code': code,
+            Group: group
+          };
+
+          for (const coderKey of testPersonList) {
+            const coding = personData.get(coderKey);
+            row[`Coder_${coderKey}`] = coding?.code ?? '';
+          }
+
+          worksheet.addRow(row);
+        }
+
+        // Style the header row
+        worksheet.getRow(1).font = { bold: true };
+        worksheet.getRow(1).fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FFE0E0E0' }
+        };
+      }
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      return Buffer.from(buffer);
+    } catch (error) {
+      this.logger.error(`Error exporting coding results by variable: ${error.message}`, error.stack);
+      throw new Error('Could not export coding results by variable. Please check the database connection or query.');
+    }
   }
 }
