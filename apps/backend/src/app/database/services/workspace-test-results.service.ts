@@ -395,7 +395,7 @@ export class WorkspaceTestResultsService {
         status: response.status
       };
 
-      const subformKey = response.subform || 'elementCodes';
+      const subformKey = response.subform || '';
 
       if (!responsesBySubform[subformKey]) {
         responsesBySubform[subformKey] = [];
@@ -410,7 +410,7 @@ export class WorkspaceTestResultsService {
       );
 
       return {
-        id: subform === 'default' ? 'elementCodes' : subform,
+        id: subform || '',
         content: uniqueResponses
       };
     });
