@@ -2059,4 +2059,97 @@ export class WorkspaceCodingController {
       res.status(500).json({ error: error.message });
     }
   }
+
+  @Get(':workspace_id/coding/double-coded-review')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    description: 'Page number for pagination (default: 1)',
+    type: Number
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    description: 'Number of items per page (default: 50, max: 100)',
+    type: Number
+  })
+  @ApiOkResponse({
+    description: 'Double-coded variables retrieved for review',
+    schema: {
+      type: 'object',
+      properties: {
+        data: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              unitName: { type: 'string', description: 'Name of the unit' },
+              variableId: { type: 'string', description: 'Variable ID' },
+              personLogin: { type: 'string', description: 'Person login' },
+              personCode: { type: 'string', description: 'Person code' },
+              bookletName: { type: 'string', description: 'Booklet name' },
+              givenAnswer: { type: 'string', description: 'The given answer by the test person' },
+              coderResults: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    coderId: { type: 'number', description: 'Coder user ID' },
+                    coderName: { type: 'string', description: 'Coder name' },
+                    jobId: { type: 'number', description: 'Coding job ID' },
+                    code: { type: 'number', nullable: true, description: 'Code given by the coder' },
+                    score: { type: 'number', nullable: true, description: 'Score given by the coder' },
+                    notes: { type: 'string', nullable: true, description: 'Notes from the coder' },
+                    codedAt: { type: 'string', format: 'date-time', description: 'When the coding was done' }
+                  }
+                },
+                description: 'Results from all coders who coded this variable'
+              }
+            }
+          }
+        },
+        total: { type: 'number', description: 'Total number of double-coded variables' },
+        page: { type: 'number', description: 'Current page number' },
+        limit: { type: 'number', description: 'Number of items per page' }
+      }
+    }
+  })
+  async getDoubleCodedVariablesForReview(
+    @WorkspaceId() workspace_id: number,
+                   @Query('page') page: number = 1,
+                   @Query('limit') limit: number = 50
+  ): Promise<{
+        data: Array<{
+          unitName: string;
+          variableId: string;
+          personLogin: string;
+          personCode: string;
+          bookletName: string;
+          givenAnswer: string;
+          coderResults: Array<{
+            coderId: number;
+            coderName: string;
+            jobId: number;
+            code: number | null;
+            score: number | null;
+            notes: string | null;
+            codedAt: Date;
+          }>;
+        }>;
+        total: number;
+        page: number;
+        limit: number;
+      }> {
+    const validPage = Math.max(1, page);
+    const validLimit = Math.min(Math.max(1, limit), 100); // Max 100 items per page for review
+
+    return this.workspaceCodingService.getDoubleCodedVariablesForReview(
+      workspace_id,
+      validPage,
+      validLimit
+    );
+  }
 }

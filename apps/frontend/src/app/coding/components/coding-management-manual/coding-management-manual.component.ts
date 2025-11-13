@@ -27,6 +27,7 @@ import {
   ValidationStateService
 } from '../../services/validation-state.service';
 import { CoderTrainingsListComponent } from '../coder-trainings-list/coder-trainings-list.component';
+import { DoubleCodedReviewComponent } from '../double-coded-review/double-coded-review.component';
 
 @Component({
   selector: 'coding-box-coding-management-manual',
@@ -43,6 +44,7 @@ import { CoderTrainingsListComponent } from '../coder-trainings-list/coder-train
     VariableBundleManagerComponent,
     CoderTrainingComponent,
     CoderTrainingsListComponent,
+    DoubleCodedReviewComponent,
     CommonModule
   ]
 })

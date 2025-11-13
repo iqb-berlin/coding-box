@@ -1294,5 +1294,32 @@
       "title": "Zusammenfassung der Doppelkodierung",
       "info-text": "Diese Zusammenfassung zeigt die Anzahl der doppelt und einfach kodierten Fälle."
     }
+  },
+
+  "double-coded-review": {
+    "title": "Doppelkodierung überprüfen",
+    "description": "Überprüfen und vergleichen Sie die Ergebnisse der Doppelkodierung, um die Qualität der Kodierung sicherzustellen.",
+    "loading": "Doppelkodierungsdaten werden geladen...",
+    "no-data": {
+      "title": "Keine Daten verfügbar",
+      "message": "Es sind keine doppelkodierten Variablen zur Überprüfung verfügbar."
+    },
+    "table-title": "Doppelkodierte Variablen",
+    "table-subtitle": "{{count}} Variable(n) zur Überprüfung",
+    "columns": {
+      "unit-variable": "Aufgabe/Variable",
+      "person-info": "Personeninformationen",
+      "given-answer": "Gegebene Antwort",
+      "coder-results": "Kodierergebnisse",
+      "selection": "Auswahl"
+    },
+    "code-label": "Code",
+    "score-label": "Bewertung",
+    "apply-decisions": "Entscheidungen anwenden",
+    "errors": {
+      "no-workspace-selected": "Kein Arbeitsbereich ausgewählt",
+      "failed-to-load": "Fehler beim Laden der doppelkodierten Variablen",
+      "review-applied": "Überprüfungsentscheidungen erfolgreich angewendet"
+    }
   }
 }
