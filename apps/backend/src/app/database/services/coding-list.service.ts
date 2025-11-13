@@ -106,13 +106,14 @@ export class CodingListService {
         }
       }
 
-      // 4) Map responses to output and filter by excludedPairs and variable id substrings
+      // 4) Map responses to output and filter by excludedPairs, variable id substrings, and empty values
       const filtered = (responses).filter(r => {
         const unitKey = r.unit?.name || '';
         const variableId = r.variableid || '';
         const hasExcludedPair = excludedPairs.has(`${unitKey}||${variableId}`);
         const hasExcludedSubstring = /image|text|audio|frame|video|_0/i.test(variableId);
-        return !hasExcludedPair && !hasExcludedSubstring;
+        const hasValue = r.value != null && r.value.trim() !== '';
+        return !hasExcludedPair && !hasExcludedSubstring && hasValue;
       });
 
       const result = filtered.map(response => {
@@ -257,8 +258,9 @@ export class CodingListService {
             const unitAlias = unit?.alias || '';
             const variableId = response.variableid || '';
 
-            // skip derived/solver/no-base variables and variable IDs containing 'image' or 'text'
-            if (excludedPairs.has(`${unitKey}||${variableId}`) || /image|text|audio|frame|video|_0/i.test(variableId)) {
+            // skip derived/solver/no-base variables, variable IDs containing 'image' or 'text', and empty values
+            const hasValue = response.value != null && response.value.trim() !== '';
+            if (excludedPairs.has(`${unitKey}||${variableId}`) || /image|text|audio|frame|video|_0/i.test(variableId) || !hasValue) {
               continue;
             }
 

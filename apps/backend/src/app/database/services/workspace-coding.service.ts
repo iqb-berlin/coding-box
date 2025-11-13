@@ -36,6 +36,7 @@ import { BullJobManagementService } from './bull-job-management.service';
 import { WorkspaceFilesService } from './workspace-files.service';
 import { CodingResultsService } from './coding-results.service';
 import { CodingJobService } from './coding-job.service';
+import { CodingExportService } from './coding-export.service';
 
 interface CodedResponse {
   id: number;
@@ -86,7 +87,8 @@ export class WorkspaceCodingService {
     private bullJobManagementService: BullJobManagementService,
     private workspaceFilesService: WorkspaceFilesService,
     private codingResultsService: CodingResultsService,
-    private codingJobService: CodingJobService
+    private codingJobService: CodingJobService,
+    private codingExportService: CodingExportService
   ) {}
 
   private codingSchemeCache: Map<string, { scheme: CodingScheme; timestamp: number }> = new Map();
@@ -391,11 +393,14 @@ export class WorkspaceCodingService {
                 updateData.code_v3 = response.code_v3;
               }
               if (response.status_v3 !== undefined) {
-                updateData.status_v3 = statusStringToNumber(response.status_v3);
+                const statusNumber = statusStringToNumber(response.status_v3);
+                updateData.status_v3 = statusNumber;
+                this.logger.debug(`Response ${response.id}: status_v3='${response.status_v3}' -> statusNumber=${statusNumber}`);
               }
               if (response.score_v3 !== undefined) {
                 updateData.score_v3 = response.score_v3;
               }
+
               if (Object.keys(updateData).length > 0) {
                 return queryRunner.manager.update(ResponseEntity, response.id, updateData);
               }
@@ -442,7 +447,7 @@ export class WorkspaceCodingService {
 
   private async processAndCodeResponses(
     units: Unit[],
-    unitToResponsesMap: Map<number, ResponseEntity[]>,
+    unitToResponsesMap: Map<number | string, ResponseEntity[]>,
     unitToCodingSchemeRefMap: Map<number, string>,
     fileIdToCodingSchemeMap: Map<string, CodingScheme>,
     allResponses: ResponseEntity[],
@@ -471,10 +476,8 @@ export class WorkspaceCodingService {
           (fileIdToCodingSchemeMap.get(codingSchemeRef) || emptyScheme) :
           emptyScheme;
         for (const response of responses) {
-          // Determine which status field to use as input for autocoder
-          let inputStatus = response.status; // default for run 1
+          let inputStatus = response.status;
           if (autoCoderRun === 2) {
-            // For run 2, use status_v2 if available, otherwise status_v1
             inputStatus = response.status_v2 || response.status_v1 || response.status;
           }
 
@@ -1592,5 +1595,17 @@ export class WorkspaceCodingService {
       }[];
     }> {
     return this.codingJobService.createDistributedCodingJobs(workspaceId, request);
+  }
+
+  async exportCodingResultsAggregated(workspaceId: number): Promise<Buffer> {
+    return this.codingExportService.exportCodingResultsAggregated(workspaceId);
+  }
+
+  async exportCodingResultsByCoder(workspaceId: number): Promise<Buffer> {
+    return this.codingExportService.exportCodingResultsByCoder(workspaceId);
+  }
+
+  async exportCodingResultsByVariable(workspaceId: number): Promise<Buffer> {
+    return this.codingExportService.exportCodingResultsByVariable(workspaceId);
   }
 }

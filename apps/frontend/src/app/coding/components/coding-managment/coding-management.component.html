@@ -163,6 +163,11 @@
                 <input matInput [(ngModel)]="filterParams.bookletName" (input)="onFilterChange()" placeholder="{{ 'coding-management.filters.booklet-name-placeholder' | translate }}">
               </mat-form-field>
 
+              <mat-form-field appearance="outline" class="filter-field">
+                <mat-label>{{ 'coding-management.filters.variable-id' | translate }}</mat-label>
+                <input matInput [(ngModel)]="filterParams.variableId" (input)="onFilterChange()" placeholder="{{ 'coding-management.filters.variable-id-placeholder' | translate }}">
+              </mat-form-field>
+
               <button mat-button (click)="clearFilters()" [disabled]="isFilterLoading">
                 <mat-icon>clear</mat-icon>
                 {{ 'coding-management.filters.clear' | translate }}

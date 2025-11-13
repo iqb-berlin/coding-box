@@ -1139,4 +1139,28 @@ export class BackendService {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/job-definitions/${jobDefinitionId}`;
     return this.http.delete<{ success: boolean; message: string }>(url);
   }
+
+  exportCodingResultsAggregated(workspaceId: number): Observable<Blob> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/aggregated`;
+    return this.http.get(url, {
+      responseType: 'blob',
+      headers: this.authHeader
+    });
+  }
+
+  exportCodingResultsByCoder(workspaceId: number): Observable<Blob> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/by-coder`;
+    return this.http.get(url, {
+      responseType: 'blob',
+      headers: this.authHeader
+    });
+  }
+
+  exportCodingResultsByVariable(workspaceId: number): Observable<Blob> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/by-variable`;
+    return this.http.get(url, {
+      responseType: 'blob',
+      headers: this.authHeader
+    });
+  }
 }

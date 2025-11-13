@@ -122,9 +122,4 @@ ALTER TABLE "public"."coding_job_unit" RENAME COLUMN "uncertain" TO "coding_issu
 
 DROP TABLE IF EXISTS person;
 
--- rollback CREATE TABLE person (
---   id SERIAL PRIMARY KEY NOT NULL,
---   "group" TEXT NOT NULL,
---   login TEXT NOT NULL,
---   code TEXT NULL
--- );
+-- rollback CREATE TABLE person (id SERIAL PRIMARY KEY NOT NULL, "group" TEXT NOT NULL, login TEXT NOT NULL, code TEXT NULL);
