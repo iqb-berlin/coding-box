@@ -58,6 +58,27 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   validationProgress: ValidationProgress | null = null;
   isLoading = false;
 
+  codingProgressOverview: {
+    totalCasesToCode: number;
+    completedCases: number;
+    completionPercentage: number;
+  } | null = null;
+
+  variableCoverageOverview: {
+    totalVariables: number;
+    coveredVariables: number;
+    missingVariables: number;
+    coveragePercentage: number;
+    variableCaseCounts: { unitName: string; variableId: string; caseCount: number }[];
+  } | null = null;
+
+  caseCoverageOverview: {
+    totalCasesToCode: number;
+    casesInJobs: number;
+    unassignedCases: number;
+    coveragePercentage: number;
+  } | null = null;
+
   importResults: {
     message: string;
     processedRows: number;
@@ -115,6 +136,13 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     return this.comparisonCurrentPage > 1;
   }
 
+  get completionPercentage(): number {
+    if (!this.validationResults || this.validationResults.total === 0) {
+      return 0;
+    }
+    return ((this.validationResults.total - this.validationResults.missing) / this.validationResults.total) * 100;
+  }
+
   get paginatedAffectedRows(): Array<{
     unitAlias: string;
     variableId: string;
@@ -167,6 +195,9 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     const currentProgress = this.validationStateService.getValidationProgress();
     this.validationProgress = currentProgress;
     this.isLoading = currentProgress.status === 'loading' || currentProgress.status === 'processing';
+    this.loadCodingProgressOverview();
+    this.loadVariableCoverageOverview();
+    this.loadCaseCoverageOverview();
   }
 
   ngOnDestroy(): void {
@@ -594,6 +625,60 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
   closeCoderTraining(): void {
     this.showCoderTraining = false;
+  }
+
+  private loadCodingProgressOverview(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      return;
+    }
+
+    this.testPersonCodingService.getCodingProgressOverview(workspaceId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: overview => {
+          this.codingProgressOverview = overview;
+        },
+        error: () => {
+          this.codingProgressOverview = null;
+        }
+      });
+  }
+
+  private loadVariableCoverageOverview(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      return;
+    }
+
+    this.testPersonCodingService.getVariableCoverageOverview(workspaceId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: overview => {
+          this.variableCoverageOverview = overview;
+        },
+        error: () => {
+          this.variableCoverageOverview = null;
+        }
+      });
+  }
+
+  private loadCaseCoverageOverview(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      return;
+    }
+
+    this.testPersonCodingService.getCaseCoverageOverview(workspaceId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: overview => {
+          this.caseCoverageOverview = overview;
+        },
+        error: () => {
+          this.caseCoverageOverview = null;
+        }
+      });
   }
 
   onTrainingStart(data: { selectedCoders: Coder[], variableConfigs: VariableConfig[] }): void {

@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import {
+  In, IsNull, Not, Repository
+} from 'typeorm';
 import { CodingScheme } from '@iqbspecs/coding-scheme/coding-scheme.interface';
 import * as Autocoder from '@iqb/responses';
 import * as cheerio from 'cheerio';
@@ -1607,5 +1609,178 @@ export class WorkspaceCodingService {
 
   async exportCodingResultsByVariable(workspaceId: number): Promise<Buffer> {
     return this.codingExportService.exportCodingResultsByVariable(workspaceId);
+  }
+
+  async getCodingProgressOverview(workspaceId: number): Promise<{
+    totalCasesToCode: number;
+    completedCases: number;
+    completionPercentage: number;
+  }> {
+    const totalCasesToCode = await this.responseRepository.createQueryBuilder('response')
+      .leftJoin('response.unit', 'unit')
+      .leftJoin('unit.booklet', 'booklet')
+      .leftJoin('booklet.person', 'person')
+      .where('response.status_v1 = :status', { status: statusStringToNumber('CODING_INCOMPLETE') })
+      .andWhere('person.workspace_id = :workspaceId', { workspaceId })
+      .getCount();
+
+    // Get completed coding job units (where code is not null)
+    const completedCases = await this.codingJobUnitRepository.count({
+      where: {
+        coding_job: { workspace_id: workspaceId },
+        code: Not(IsNull())
+      }
+    });
+
+    const completionPercentage = totalCasesToCode > 0 ? (completedCases / totalCasesToCode) * 100 : 0;
+
+    return {
+      totalCasesToCode,
+      completedCases,
+      completionPercentage
+    };
+  }
+
+  async getCaseCoverageOverview(workspaceId: number): Promise<{
+    totalCasesToCode: number;
+    casesInJobs: number;
+    unassignedCases: number;
+    coveragePercentage: number;
+  }> {
+    // Get total CODING_INCOMPLETE responses
+    const totalCasesToCode = await this.responseRepository.createQueryBuilder('response')
+      .leftJoin('response.unit', 'unit')
+      .leftJoin('unit.booklet', 'booklet')
+      .leftJoin('booklet.person', 'person')
+      .where('response.status_v1 = :status', { status: statusStringToNumber('CODING_INCOMPLETE') })
+      .andWhere('person.workspace_id = :workspaceId', { workspaceId })
+      .getCount();
+
+    // Get CODING_INCOMPLETE responses that are assigned to coding jobs
+    // Query from CodingJobUnit and join to ResponseEntity
+    const casesInJobs = await this.codingJobUnitRepository.createQueryBuilder('cju')
+      .innerJoin('cju.response', 'response')
+      .leftJoin('response.unit', 'unit')
+      .leftJoin('unit.booklet', 'booklet')
+      .leftJoin('booklet.person', 'person')
+      .where('response.status_v1 = :status', { status: statusStringToNumber('CODING_INCOMPLETE') })
+      .andWhere('person.workspace_id = :workspaceId', { workspaceId })
+      .getCount();
+
+    const unassignedCases = totalCasesToCode - casesInJobs;
+    const coveragePercentage = totalCasesToCode > 0 ? (casesInJobs / totalCasesToCode) * 100 : 0;
+
+    return {
+      totalCasesToCode,
+      casesInJobs,
+      unassignedCases,
+      coveragePercentage
+    };
+  }
+
+  async getVariableCoverageOverview(workspaceId: number): Promise<{
+    totalVariables: number;
+    coveredVariables: number;
+    missingVariables: number;
+    coveragePercentage: number;
+    variableCaseCounts: { unitName: string; variableId: string; caseCount: number }[];
+  }> {
+    try {
+      this.logger.log(`Getting variable coverage overview for workspace ${workspaceId} (CODING_INCOMPLETE variables only)`);
+
+      // Get only variables that have CODING_INCOMPLETE responses (variables that actually need coding)
+      const incompleteVariablesResult = await this.responseRepository.createQueryBuilder('response')
+        .select('unit.name', 'unitName')
+        .addSelect('response.variableid', 'variableId')
+        .addSelect('COUNT(response.id)', 'caseCount')
+        .leftJoin('response.unit', 'unit')
+        .leftJoin('unit.booklet', 'booklet')
+        .leftJoin('booklet.person', 'person')
+        .where('response.status_v1 = :status', { status: statusStringToNumber('CODING_INCOMPLETE') })
+        .andWhere('person.workspace_id = :workspaceId', { workspaceId })
+        .groupBy('unit.name')
+        .addGroupBy('response.variableid')
+        .getRawMany();
+
+      // Create set of variables that need coding (have CODING_INCOMPLETE responses)
+      const variablesNeedingCoding = new Set<string>();
+      const variableCaseCounts: { unitName: string; variableId: string; caseCount: number }[] = [];
+
+      incompleteVariablesResult.forEach(row => {
+        const variableKey = `${row.unitName}:${row.variableId}`;
+        variablesNeedingCoding.add(variableKey);
+        variableCaseCounts.push({
+          unitName: row.unitName,
+          variableId: row.variableId,
+          caseCount: parseInt(row.caseCount, 10)
+        });
+      });
+
+      // Get all job definitions and their assigned variables
+      const jobDefinitions = await this.jobDefinitionRepository.find({
+        where: { status: 'approved' }
+      });
+
+      const coveredVariables = new Set<string>();
+
+      for (const definition of jobDefinitions) {
+        // Add directly assigned variables
+        if (definition.assigned_variables) {
+          definition.assigned_variables.forEach(variable => {
+            const variableKey = `${variable.unitName}:${variable.variableId}`;
+            // Only count as covered if this variable actually needs coding
+            if (variablesNeedingCoding.has(variableKey)) {
+              coveredVariables.add(variableKey);
+            }
+          });
+        }
+
+        // Add variables from assigned bundles
+        if (definition.assigned_variable_bundles) {
+          const bundleIds = definition.assigned_variable_bundles.map(bundle => bundle.id);
+          const variableBundles = await this.variableBundleRepository.find({
+            where: { id: In(bundleIds) }
+          });
+
+          variableBundles.forEach(bundle => {
+            if (bundle.variables) {
+              bundle.variables.forEach(variable => {
+                const variableKey = `${variable.unitName}:${variable.variableId}`;
+                // Only count as covered if this variable actually needs coding
+                if (variablesNeedingCoding.has(variableKey)) {
+                  coveredVariables.add(variableKey);
+                }
+              });
+            }
+          });
+        }
+      }
+
+      // Calculate missing variables (variables that need coding but are not covered by job definitions)
+      const missingVariables = new Set<string>();
+      variablesNeedingCoding.forEach(variableKey => {
+        if (!coveredVariables.has(variableKey)) {
+          missingVariables.add(variableKey);
+        }
+      });
+
+      const totalVariables = variablesNeedingCoding.size;
+      const coveredCount = coveredVariables.size;
+      const missingCount = missingVariables.size;
+      const coveragePercentage = totalVariables > 0 ? (coveredCount / totalVariables) * 100 : 0;
+
+      this.logger.log(`Variable coverage for workspace ${workspaceId}: ${coveredCount}/${totalVariables} CODING_INCOMPLETE variables covered (${coveragePercentage.toFixed(1)}%)`);
+
+      return {
+        totalVariables,
+        coveredVariables: coveredCount,
+        missingVariables: missingCount,
+        coveragePercentage,
+        variableCaseCounts
+      };
+    } catch (error) {
+      this.logger.error(`Error getting variable coverage overview: ${error.message}`, error.stack);
+      throw new Error('Could not get variable coverage overview. Please check the database connection.');
+    }
   }
 }

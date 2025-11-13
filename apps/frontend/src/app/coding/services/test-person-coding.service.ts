@@ -371,6 +371,29 @@ export class TestPersonCodingService {
     }
   }
 
+  getCodingProgressOverview(workspaceId: number): Observable<{
+    totalCasesToCode: number;
+    completedCases: number;
+    completionPercentage: number;
+  }> {
+    return this.http
+      .get<{
+      totalCasesToCode: number;
+      completedCases: number;
+      completionPercentage: number;
+    }>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/coding/progress-overview`,
+      { headers: this.authHeader }
+    )
+      .pipe(
+        catchError(() => of({
+          totalCasesToCode: 0,
+          completedCases: 0,
+          completionPercentage: 0
+        }))
+      );
+  }
+
   generateCoderTrainingPackages(
     workspaceId: number,
     selectedCoders: { id: number; name: string }[],
@@ -419,6 +442,61 @@ export class TestPersonCodingService {
     )
       .pipe(
         catchError(() => of([]))
+      );
+  }
+
+  getVariableCoverageOverview(workspaceId: number): Observable<{
+    totalVariables: number;
+    coveredVariables: number;
+    missingVariables: number;
+    coveragePercentage: number;
+    variableCaseCounts: { unitName: string; variableId: string; caseCount: number }[];
+  }> {
+    return this.http
+      .get<{
+      totalVariables: number;
+      coveredVariables: number;
+      missingVariables: number;
+      coveragePercentage: number;
+      variableCaseCounts: { unitName: string; variableId: string; caseCount: number }[];
+    }>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/coding/variable-coverage-overview`,
+      { headers: this.authHeader }
+    )
+      .pipe(
+        catchError(() => of({
+          totalVariables: 0,
+          coveredVariables: 0,
+          missingVariables: 0,
+          coveragePercentage: 0,
+          variableCaseCounts: []
+        }))
+      );
+  }
+
+  getCaseCoverageOverview(workspaceId: number): Observable<{
+    totalCasesToCode: number;
+    casesInJobs: number;
+    unassignedCases: number;
+    coveragePercentage: number;
+  }> {
+    return this.http
+      .get<{
+      totalCasesToCode: number;
+      casesInJobs: number;
+      unassignedCases: number;
+      coveragePercentage: number;
+    }>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/coding/case-coverage-overview`,
+      { headers: this.authHeader }
+    )
+      .pipe(
+        catchError(() => of({
+          totalCasesToCode: 0,
+          casesInJobs: 0,
+          unassignedCases: 0,
+          coveragePercentage: 0
+        }))
       );
   }
 }

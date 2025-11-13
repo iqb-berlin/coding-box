@@ -120,6 +120,154 @@
   .statistics-content {
     margin: 20px 0;
 
+    .coding-progress-section {
+      margin-bottom: 30px;
+
+      .statistics-card {
+        background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+        border: 1px solid rgba(25, 118, 210, 0.2);
+        box-shadow: 0 2px 8px rgba(25, 118, 210, 0.1);
+
+        .section-title {
+          color: #1976d2;
+        }
+
+        .coverage-stats {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+          gap: 16px;
+          margin-bottom: 20px;
+
+          .stat-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            background-color: rgba(255, 255, 255, 0.7);
+            border-radius: 8px;
+            border: 1px solid rgba(0, 0, 0, 0.05);
+
+            .stat-label {
+              font-weight: 500;
+              color: #555;
+              font-size: 14px;
+            }
+
+            .stat-value {
+              font-weight: 600;
+              font-size: 16px;
+              color: #333;
+
+              &.covered {
+                color: #4caf50;
+              }
+
+              &.missing {
+                color: #f44336;
+              }
+
+              &.percentage {
+                color: #2196f3;
+                font-size: 18px;
+              }
+            }
+          }
+        }
+
+        .coverage-bar {
+          width: 100%;
+          height: 12px;
+          background-color: rgba(255, 255, 255, 0.5);
+          border-radius: 6px;
+          overflow: hidden;
+          box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
+
+          .coverage-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4caf50 0%, #66bb6a 100%);
+            border-radius: 6px;
+            transition: width 0.5s ease-in-out;
+            box-shadow: 0 0 4px rgba(76, 175, 80, 0.3);
+          }
+        }
+      }
+    }
+
+    .variable-coverage-section, .case-coverage-section {
+      margin-bottom: 20px;
+
+      .statistics-card {
+        background-color: #fafafa;
+        border: 1px solid rgba(0, 0, 0, 0.05);
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+
+        .section-title {
+          color: #666;
+          font-size: 18px;
+          font-weight: 500;
+        }
+
+        .coverage-stats {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+          gap: 16px;
+          margin-bottom: 20px;
+
+          .stat-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            background-color: rgba(255, 255, 255, 0.7);
+            border-radius: 8px;
+            border: 1px solid rgba(0, 0, 0, 0.05);
+
+            .stat-label {
+              font-weight: 500;
+              color: #555;
+              font-size: 14px;
+            }
+
+            .stat-value {
+              font-weight: 600;
+              font-size: 16px;
+              color: #333;
+
+              &.covered {
+                color: #4caf50;
+              }
+
+              &.missing {
+                color: #f44336;
+              }
+
+              &.percentage {
+                color: #2196f3;
+                font-size: 18px;
+              }
+            }
+          }
+        }
+
+        .coverage-bar {
+          width: 100%;
+          height: 12px;
+          background-color: rgba(255, 255, 255, 0.5);
+          border-radius: 6px;
+          overflow: hidden;
+          box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
+
+          .coverage-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4caf50 0%, #66bb6a 100%);
+            border-radius: 6px;
+            transition: width 0.5s ease-in-out;
+            box-shadow: 0 0 4px rgba(76, 175, 80, 0.3);
+          }
+        }
+      }
+    }
+
     .coder-list-container, .coding-jobs-container, .variable-bundle-container {
       margin-bottom: 20px;
     }
@@ -363,6 +511,64 @@
       margin-bottom: 5px;
       color: #e65100;
       font-size: 13px;
+    }
+  }
+
+  // Completion Percentage Display
+  .completion-percentage-display {
+    margin-bottom: 24px;
+
+    .percentage-card {
+      background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+      border-radius: 12px;
+      padding: 20px;
+      border: 1px solid rgba(25, 118, 210, 0.2);
+      box-shadow: 0 2px 8px rgba(25, 118, 210, 0.1);
+
+      .percentage-content {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        margin-bottom: 16px;
+
+        .percentage-value {
+          font-size: 36px;
+          font-weight: 700;
+          color: #1976d2;
+          margin-bottom: 4px;
+          text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+        }
+
+        .percentage-label {
+          font-size: 16px;
+          font-weight: 500;
+          color: #424242;
+          margin-bottom: 8px;
+        }
+
+        .percentage-details {
+          font-size: 14px;
+          color: #666;
+          text-align: center;
+        }
+      }
+
+      .percentage-bar {
+        width: 100%;
+        height: 8px;
+        background-color: rgba(255, 255, 255, 0.5);
+        border-radius: 4px;
+        overflow: hidden;
+        box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
+
+        .percentage-fill {
+          height: 100%;
+          background: linear-gradient(90deg, #4caf50 0%, #66bb6a 100%);
+          border-radius: 4px;
+          transition: width 0.5s ease-in-out;
+          box-shadow: 0 0 4px rgba(76, 175, 80, 0.3);
+        }
+      }
     }
   }
 }
