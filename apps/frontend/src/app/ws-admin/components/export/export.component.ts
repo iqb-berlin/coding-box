@@ -41,18 +41,18 @@ export class ExportComponent {
   exportFormats = [
     {
       value: 'aggregated' as ExportFormat,
-      label: 'ws-admin.export.formats.aggregated',
-      description: 'ws-admin.export.formats.aggregated-description'
+      label: this.translateService.instant('ws-admin.export-formats.aggregated'),
+      description: this.translateService.instant('ws-admin.export-formats.aggregated-description')
     },
     {
       value: 'by-coder' as ExportFormat,
-      label: 'ws-admin.export.formats.by-coder',
-      description: 'ws-admin.export.formats.by-coder-description'
+      label: this.translateService.instant('ws-admin.export-formats.by-coder'),
+      description: this.translateService.instant('ws-admin.export-formats.by-coder-description')
     },
     {
       value: 'by-variable' as ExportFormat,
-      label: 'ws-admin.export.formats.by-variable',
-      description: 'ws-admin.export.formats.by-variable-description'
+      label: this.translateService.instant('ws-admin.export-formats.by-variable'),
+      description: this.translateService.instant('ws-admin.export-formats.by-variable-description')
     }
   ];
 
