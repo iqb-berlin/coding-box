@@ -1080,6 +1080,211 @@ describe('WorkspaceCodingService', () => {
     });
   });
 
+  describe('exportCodingResultsByVariable', () => {
+    const workspaceId = 1;
+
+    beforeEach(() => {
+      // Mock ExcelJS
+      jest.mock('exceljs', () => ({
+        Workbook: jest.fn().mockImplementation(() => ({
+          addWorksheet: jest.fn().mockReturnValue({
+            columns: [],
+            addRow: jest.fn(),
+            getRow: jest.fn().mockReturnValue({
+              font: {},
+              fill: {}
+            })
+          }),
+          getWorksheet: jest.fn().mockReturnValue(null),
+          xlsx: {
+            writeBuffer: jest.fn().mockResolvedValue(Buffer.from('mock-excel-data'))
+          }
+        }))
+      }));
+
+      // Mock environment variables
+      process.env.EXPORT_MAX_WORKSHEETS = '10';
+      process.env.EXPORT_MAX_RESPONSES_PER_WORKSHEET = '1000';
+      process.env.EXPORT_BATCH_SIZE = '5';
+    });
+
+    afterEach(() => {
+      // Reset environment variables
+      delete process.env.EXPORT_MAX_WORKSHEETS;
+      delete process.env.EXPORT_MAX_RESPONSES_PER_WORKSHEET;
+      delete process.env.EXPORT_BATCH_SIZE;
+    });
+
+    it('should successfully export coding results by variable', async () => {
+      // Mock the unit-variable combinations
+      const mockUnitVariableResults = [
+        { unitName: 'UNIT_1', variableId: 'var1' },
+        { unitName: 'UNIT_2', variableId: 'var2' }
+      ];
+
+      responseRepository.createQueryBuilder = jest.fn().mockReturnValue({
+        select: jest.fn().mockReturnThis(),
+        addSelect: jest.fn().mockReturnThis(),
+        leftJoin: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        groupBy: jest.fn().mockReturnThis(),
+        addGroupBy: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        getRawMany: jest.fn().mockResolvedValue(mockUnitVariableResults)
+      });
+
+      // Mock response count
+      responseRepository.count = jest.fn().mockResolvedValue(50);
+
+      // Mock responses
+      const mockResponses = [
+        {
+          id: 1,
+          variableid: 'var1',
+          code_v1: 1,
+          score_v1: 85,
+          unit: {
+            booklet: {
+              person: {
+                login: 'test_person_1',
+                code: 'code_1',
+                group: 'group_1'
+              }
+            }
+          }
+        }
+      ];
+
+      responseRepository.find = jest.fn().mockResolvedValue(mockResponses);
+
+      const result = await service.exportCodingResultsByVariable(workspaceId);
+
+      expect(result).toBeInstanceOf(Buffer);
+      expect(responseRepository.createQueryBuilder).toHaveBeenCalled();
+      expect(responseRepository.count).toHaveBeenCalled();
+      expect(responseRepository.find).toHaveBeenCalled();
+    });
+
+    it('should throw error when no coded variables found', async () => {
+      responseRepository.createQueryBuilder = jest.fn().mockReturnValue({
+        select: jest.fn().mockReturnThis(),
+        addSelect: jest.fn().mockReturnThis(),
+        leftJoin: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        groupBy: jest.fn().mockReturnThis(),
+        addGroupBy: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        getRawMany: jest.fn().mockResolvedValue([])
+      });
+
+      await expect(service.exportCodingResultsByVariable(workspaceId))
+        .rejects.toThrow('No coded variables found for this workspace');
+    });
+
+    it('should limit worksheets when exceeding MAX_WORKSHEETS', async () => {
+      // Set low limit for testing
+      process.env.EXPORT_MAX_WORKSHEETS = '1';
+
+      const mockUnitVariableResults = [
+        { unitName: 'UNIT_1', variableId: 'var1' },
+        { unitName: 'UNIT_2', variableId: 'var2' },
+        { unitName: 'UNIT_3', variableId: 'var3' }
+      ];
+
+      responseRepository.createQueryBuilder = jest.fn().mockReturnValue({
+        select: jest.fn().mockReturnThis(),
+        addSelect: jest.fn().mockReturnThis(),
+        leftJoin: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        groupBy: jest.fn().mockReturnThis(),
+        addGroupBy: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        getRawMany: jest.fn().mockResolvedValue(mockUnitVariableResults)
+      });
+
+      responseRepository.count = jest.fn().mockResolvedValue(50);
+      responseRepository.find = jest.fn().mockResolvedValue([]);
+
+      const result = await service.exportCodingResultsByVariable(workspaceId);
+
+      expect(result).toBeInstanceOf(Buffer);
+      // Should only process 1 worksheet due to limit
+    });
+
+    it('should skip worksheets with too many responses', async () => {
+      process.env.EXPORT_MAX_RESPONSES_PER_WORKSHEET = '10';
+
+      const mockUnitVariableResults = [
+        { unitName: 'UNIT_1', variableId: 'var1' }
+      ];
+
+      responseRepository.createQueryBuilder = jest.fn().mockReturnValue({
+        select: jest.fn().mockReturnThis(),
+        addSelect: jest.fn().mockReturnThis(),
+        leftJoin: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        groupBy: jest.fn().mockReturnThis(),
+        addGroupBy: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        getRawMany: jest.fn().mockResolvedValue(mockUnitVariableResults)
+      });
+
+      // Mock count exceeding limit
+      responseRepository.count = jest.fn().mockResolvedValue(50);
+      responseRepository.find = jest.fn().mockResolvedValue([]);
+
+      const result = await service.exportCodingResultsByVariable(workspaceId);
+
+      expect(result).toBeInstanceOf(Buffer);
+      // Should skip the worksheet due to too many responses
+    });
+
+    it('should handle database errors during export', async () => {
+      responseRepository.createQueryBuilder = jest.fn().mockReturnValue({
+        select: jest.fn().mockReturnThis(),
+        addSelect: jest.fn().mockReturnThis(),
+        leftJoin: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        groupBy: jest.fn().mockReturnThis(),
+        addGroupBy: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        getRawMany: jest.fn().mockRejectedValue(new Error('Database error'))
+      });
+
+      await expect(service.exportCodingResultsByVariable(workspaceId))
+        .rejects.toThrow('Could not export coding results by variable');
+    });
+
+    it('should throw error when no worksheets could be created', async () => {
+      const mockUnitVariableResults = [
+        { unitName: 'UNIT_1', variableId: 'var1' }
+      ];
+
+      responseRepository.createQueryBuilder = jest.fn().mockReturnValue({
+        select: jest.fn().mockReturnThis(),
+        addSelect: jest.fn().mockReturnThis(),
+        leftJoin: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        groupBy: jest.fn().mockReturnThis(),
+        addGroupBy: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        getRawMany: jest.fn().mockResolvedValue(mockUnitVariableResults)
+      });
+
+      // Mock count as 0 (no responses)
+      responseRepository.count = jest.fn().mockResolvedValue(0);
+
+      await expect(service.exportCodingResultsByVariable(workspaceId))
+        .rejects.toThrow('No worksheets could be created within the memory limits');
+    });
+  });
+
   describe('getManualTestPersons', () => {
     const workspaceId = 1;
     const personIds = '1,2';
