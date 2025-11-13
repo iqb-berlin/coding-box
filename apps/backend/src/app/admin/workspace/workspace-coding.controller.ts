@@ -2152,4 +2152,24 @@ export class WorkspaceCodingController {
       validLimit
     );
   }
+
+  @Get(':workspace_id/coding-job/:codingJobId/notes')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiParam({ name: 'codingJobId', type: Number, description: 'ID of the coding job' })
+  @ApiOkResponse({
+    description: 'Coding notes retrieved successfully.',
+    schema: {
+      type: 'object',
+      description: 'Map of composite keys to notes',
+      additionalProperties: { type: 'string' }
+    }
+  })
+  async getCodingJobNotes(
+    @WorkspaceId() workspace_id: number,
+      @Param('codingJobId') codingJobId: number
+  ): Promise<Record<string, string>> {
+    return this.codingJobService.getCodingNotes(codingJobId);
+  }
 }
