@@ -56,8 +56,9 @@ export class WorkspaceCodingController {
   @ApiOkResponse({
     description: 'Coding statistics retrieved successfully.'
   })
-  async codeTestPersons(@Query('testPersons') testPersons: string, @WorkspaceId() workspace_id: number, @Query('autoCoderRun') autoCoderRun: number = 1): Promise<CodingStatistics> {
-    return this.workspaceCodingService.codeTestPersons(workspace_id, testPersons, autoCoderRun);
+  async codeTestPersons(@Query('testPersons') testPersons: string, @WorkspaceId() workspace_id: number, @Query('autoCoderRun') autoCoderRun: string): Promise<CodingStatistics> {
+    const autoCoderRunNumber = parseInt(autoCoderRun, 10) || 1;
+    return this.workspaceCodingService.codeTestPersons(workspace_id, testPersons, autoCoderRunNumber);
   }
 
   @Get(':workspace_id/coding/manual')
