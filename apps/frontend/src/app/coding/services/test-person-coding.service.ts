@@ -565,4 +565,56 @@ export class TestPersonCodingService {
         }))
       );
   }
+
+  getCohensKappaStatistics(
+    workspaceId: number,
+    unitName?: string,
+    variableId?: string
+  ): Observable<Array<{
+      unitName: string;
+      variableId: string;
+      coderPairs: Array<{
+        coder1Id: number;
+        coder1Name: string;
+        coder2Id: number;
+        coder2Name: string;
+        kappa: number | null;
+        agreement: number;
+        totalItems: number;
+        validPairs: number;
+        interpretation: string;
+      }>;
+    }>> {
+    let params = new HttpParams();
+
+    if (unitName) {
+      params = params.set('unitName', unitName);
+    }
+    if (variableId) {
+      params = params.set('variableId', variableId);
+    }
+
+    return this.http
+      .get<Array<{
+      unitName: string;
+      variableId: string;
+      coderPairs: Array<{
+        coder1Id: number;
+        coder1Name: string;
+        coder2Id: number;
+        coder2Name: string;
+        kappa: number | null;
+        agreement: number;
+        totalItems: number;
+        validPairs: number;
+        interpretation: string;
+      }>;
+    }>>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/coding/cohens-kappa`,
+      { headers: this.authHeader, params }
+    )
+      .pipe(
+        catchError(() => of([]))
+      );
+  }
 }

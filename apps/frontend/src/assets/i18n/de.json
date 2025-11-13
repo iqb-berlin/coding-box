@@ -1316,6 +1316,16 @@
     "code-label": "Code",
     "score-label": "Bewertung",
     "apply-decisions": "Entscheidungen anwenden",
+    "kappa": {
+      "title": "Cohen's Kappa Statistik",
+      "subtitle": "Inter-Rater Agreement für doppelkodierte Variablen",
+      "description": "Cohen's Kappa misst die Übereinstimmung zwischen Kodierern unter Berücksichtigung der zufälligen Übereinstimmung.",
+      "poor": "Schlecht",
+      "fair": "Ausreichend",
+      "moderate": "Moderat",
+      "substantial": "Substantiell",
+      "almost-perfect": "Fast perfekt"
+    },
     "errors": {
       "no-workspace-selected": "Kein Arbeitsbereich ausgewählt",
       "failed-to-load": "Fehler beim Laden der doppelkodierten Variablen",
