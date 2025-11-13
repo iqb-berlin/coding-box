@@ -183,11 +183,11 @@
     "export-action-button": "Datenexport starten",
     "export-formats": {
       "aggregated": "Aggregierte Ansicht",
-      "aggregated-description": "Alle Variablen und Testpersonen in einer aggregierten Tabelle",
+      "aggregated-description": " Alle Variablen und Testpersonen in einer aggregierten Tabelle",
       "by-coder": "Nach Kodierer",
-      "by-coder-description": "Separate Tabellen für jeden Kodierer mit seinen Variablen und Testpersonen",
+      "by-coder-description": " Separate Tabellen für jeden Kodierer mit seinen Variablen und Testpersonen",
       "by-variable": "Nach Variable",
-      "by-variable-description": "Separate Tabellen für jede Variable mit allen Kodierern und Testpersonen"
+      "by-variable-description": " Separate Tabellen für jede Variable mit allen Kodierern und Testpersonen"
     },
     "export-exporting": "Export läuft...",
     "export-success": "Export erfolgreich abgeschlossen",
@@ -738,6 +738,8 @@
       "person-group-placeholder": "Person-Gruppe eingeben...",
       "booklet-name": "Testheft-Name",
       "booklet-name-placeholder": "Testheft-Name eingeben...",
+      "variable-id": "Variablen-ID",
+      "variable-id-placeholder": "Variablen-ID eingeben...",
       "clear": "Filter löschen"
     },
     "aria": {

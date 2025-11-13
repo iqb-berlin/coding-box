@@ -28,4 +28,28 @@
     display: flex;
     justify-content: flex-end;
   }
+
+  .format-options {
+    margin-top: 20px;
+
+    .format-option {
+      margin-bottom: 16px;
+
+      mat-radio-button {
+        width: 100%;
+
+        .format-label {
+          font-weight: 500;
+          margin-bottom: 4px;
+        }
+
+        .format-description {
+          font-size: 0.875em;
+          color: #666;
+          line-height: 1.4;
+          margin-left: 24px; // Align with radio button content
+        }
+      }
+    }
+  }
 }

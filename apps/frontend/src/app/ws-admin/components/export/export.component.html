@@ -11,9 +11,9 @@
         <mat-radio-group [(ngModel)]="selectedFormat">
           <div class="format-option" *ngFor="let format of exportFormats">
             <mat-radio-button [value]="format.value">
-              {{ format.label | translate }}
+              <div class="format-label">{{ format.label }}</div>
+              <div class="format-description">{{ format.description }}</div>
             </mat-radio-button>
-            <span class="format-description">{{ format.description | translate }}</span>
           </div>
         </mat-radio-group>
       </div>
