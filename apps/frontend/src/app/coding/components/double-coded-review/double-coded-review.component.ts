@@ -38,6 +38,22 @@ interface DoubleCodedItem {
   selectedCoderResult?: CoderResult;
 }
 
+interface KappaStatistics {
+  unitName: string;
+  variableId: string;
+  coderPairs: Array<{
+    coder1Id: number;
+    coder1Name: string;
+    coder2Id: number;
+    coder2Name: string;
+    kappa: number | null;
+    agreement: number;
+    totalItems: number;
+    validPairs: number;
+    interpretation: string;
+  }>;
+}
+
 @Component({
   selector: 'coding-box-double-coded-review',
   templateUrl: './double-coded-review.component.html',
@@ -80,6 +96,7 @@ export class DoubleCodedReviewComponent implements OnInit {
   currentPage = 1;
   pageSize = 10;
   isLoading = false;
+  kappaStatistics: KappaStatistics[] = [];
 
   selectionForm!: FormGroup;
 
@@ -118,6 +135,7 @@ export class DoubleCodedReviewComponent implements OnInit {
       return;
     }
 
+    // Load both double-coded data and Kappa statistics
     this.testPersonCodingService.getDoubleCodedVariablesForReview(
       workspaceId,
       this.currentPage,
@@ -130,12 +148,28 @@ export class DoubleCodedReviewComponent implements OnInit {
         }));
         this.totalItems = response.total;
         this.updateForm();
-        this.isLoading = false;
+
+        // Load Kappa statistics after loading the main data
+        this.loadKappaStatistics(workspaceId);
       },
       error: () => {
         this.translateService.get('double-coded-review.errors.failed-to-load').subscribe(message => {
           this.showError(message);
         });
+        this.isLoading = false;
+      }
+    });
+  }
+
+  private loadKappaStatistics(workspaceId: number): void {
+    this.testPersonCodingService.getCohensKappaStatistics(workspaceId).subscribe({
+      next: statistics => {
+        this.kappaStatistics = statistics;
+        this.isLoading = false;
+      },
+      error: () => {
+        // Kappa statistics are optional, so don't show error if they fail to load
+        this.kappaStatistics = [];
         this.isLoading = false;
       }
     });
@@ -197,5 +231,15 @@ export class DoubleCodedReviewComponent implements OnInit {
   getSelectedValue(item: DoubleCodedItem): string {
     const selected = this.getSelectedCoderResult(item);
     return selected ? selected.coderId.toString() : '';
+  }
+
+  getKappaClass(kappa: number | null): string {
+    if (kappa === null) return 'kappa-na';
+    if (kappa < 0) return 'kappa-poor';
+    if (kappa < 0.2) return 'kappa-poor';
+    if (kappa < 0.4) return 'kappa-fair';
+    if (kappa < 0.6) return 'kappa-moderate';
+    if (kappa < 0.8) return 'kappa-substantial';
+    return 'kappa-perfect';
   }
 }

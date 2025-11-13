@@ -27,6 +27,87 @@
           </mat-card-content>
         </mat-card>
       } @else {
+        <!-- Cohen's Kappa Statistics Section -->
+        <mat-card class="kappa-card">
+          <mat-card-header>
+            <mat-card-title>
+              <mat-icon>analytics</mat-icon>
+              {{ 'double-coded-review.kappa.title' | translate }}
+            </mat-card-title>
+            <mat-card-subtitle>{{ 'double-coded-review.kappa.subtitle' | translate }}</mat-card-subtitle>
+          </mat-card-header>
+          <mat-card-content>
+            <div class="kappa-info">
+              <p>{{ 'double-coded-review.kappa.description' | translate }}</p>
+
+              @if (kappaStatistics.length === 0) {
+                <div class="no-kappa-data">
+                  <mat-icon>info</mat-icon>
+                  <p>Keine Cohen's Kappa Statistiken verfügbar</p>
+                </div>
+              } @else {
+                <div class="kappa-results">
+                  @for (stat of kappaStatistics; track stat.unitName + stat.variableId) {
+                    <div class="kappa-unit-variable">
+                      <h4>{{ stat.unitName }} - {{ stat.variableId }}</h4>
+                      <div class="kappa-pairs">
+                        @for (pair of stat.coderPairs; track pair.coder1Id + '-' + pair.coder2Id) {
+                          <div class="kappa-pair">
+                            <div class="coder-names">
+                              <span class="coder1">{{ pair.coder1Name }}</span>
+                              <span class="vs">vs</span>
+                              <span class="coder2">{{ pair.coder2Name }}</span>
+                            </div>
+                            <div class="kappa-values">
+                              <div class="kappa-value">
+                                <span class="label">Kappa:</span>
+                                <span class="value" [class]="getKappaClass(pair.kappa)">
+                                  {{ pair.kappa !== null ? (pair.kappa | number:'1.3-3') : 'N/A' }}
+                                </span>
+                              </div>
+                              <div class="agreement-value">
+                                <span class="label">Übereinstimmung:</span>
+                                <span class="value">{{ (pair.agreement * 100) | number:'1.1-1' }}%</span>
+                              </div>
+                              <div class="interpretation">
+                                <span class="interpretation-text">{{ pair.interpretation }}</span>
+                              </div>
+                            </div>
+                          </div>
+                        }
+                      </div>
+                    </div>
+                  }
+                </div>
+              }
+
+              <div class="kappa-scale">
+                <h4>Interpretationsskala:</h4>
+                <div class="kappa-scale-item">
+                  <span class="kappa-range">< 0.20</span>
+                  <span class="kappa-label">{{ 'double-coded-review.kappa.poor' | translate }}</span>
+                </div>
+                <div class="kappa-scale-item">
+                  <span class="kappa-range">0.21 - 0.40</span>
+                  <span class="kappa-label">{{ 'double-coded-review.kappa.fair' | translate }}</span>
+                </div>
+                <div class="kappa-scale-item">
+                  <span class="kappa-range">0.41 - 0.60</span>
+                  <span class="kappa-label">{{ 'double-coded-review.kappa.moderate' | translate }}</span>
+                </div>
+                <div class="kappa-scale-item">
+                  <span class="kappa-range">0.61 - 0.80</span>
+                  <span class="kappa-label">{{ 'double-coded-review.kappa.substantial' | translate }}</span>
+                </div>
+                <div class="kappa-scale-item">
+                  <span class="kappa-range">> 0.81</span>
+                  <span class="kappa-label">{{ 'double-coded-review.kappa.almost-perfect' | translate }}</span>
+                </div>
+              </div>
+            </div>
+          </mat-card-content>
+        </mat-card>
+
         <mat-card class="review-card">
           <mat-card-header>
             <mat-card-title>{{ 'double-coded-review.table-title' | translate }}</mat-card-title>
