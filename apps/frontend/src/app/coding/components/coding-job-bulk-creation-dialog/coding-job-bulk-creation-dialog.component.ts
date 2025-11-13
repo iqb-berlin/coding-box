@@ -7,6 +7,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatCheckboxModule } from '@angular/material/checkbox';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { TranslateModule } from '@ngx-translate/core';
 import { A11yModule } from '@angular/cdk/a11y';
 import { VariableBundle, Variable } from '../../models/coding-job.model';
@@ -82,6 +83,7 @@ interface DistributionMatrixRow {
     MatDividerModule,
     MatChipsModule,
     MatCheckboxModule,
+    MatProgressSpinnerModule,
     TranslateModule,
     A11yModule
   ]
