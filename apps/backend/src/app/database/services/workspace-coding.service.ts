@@ -1642,10 +1642,17 @@ export class WorkspaceCodingService {
     this.logger.log(`Exporting aggregated coding results for workspace ${workspaceId}`);
 
     try {
-      // Get all responses with coding data
       const responses = await this.responseRepository.find({
-        where: { },
         relations: ['unit', 'unit.booklet', 'unit.booklet.person', 'unit.booklet.bookletinfo'],
+        where: {
+          unit: {
+            booklet: {
+              person: {
+                workspace_id: workspaceId
+              }
+            }
+          }
+        },
         select: {
           id: true,
           variableid: true,
@@ -1676,12 +1683,8 @@ export class WorkspaceCodingService {
         }
       });
 
-      // Filter responses that belong to the workspace and have coding data
-      const workspaceResponses = responses.filter(response => {
-        const person = response.unit?.booklet?.person;
-        return person?.workspace_id === workspaceId &&
-               (response.code_v1 !== null || response.code_v2 !== null || response.code_v3 !== null);
-      });
+      const workspaceResponses = responses.filter(response => response.code_v1 !== null || response.code_v2 !== null || response.code_v3 !== null
+      );
 
       if (workspaceResponses.length === 0) {
         throw new Error('No coded responses found for this workspace');
@@ -1876,16 +1879,13 @@ export class WorkspaceCodingService {
 
         if (variables.length === 0) continue;
 
-        // Set up headers
         const headers = ['Test Person Login', 'Test Person Code', 'Group', ...variables];
         worksheet.columns = headers.map(header => ({ header, key: header, width: 15 }));
 
-        // Add data rows
         for (const testPersonKey of testPersonList) {
           const [login, code] = testPersonKey.split('_');
           const personData = testPersonMap.get(testPersonKey)!;
 
-          // Find group for this test person
           const group = Array.from(testPersonMap.values()).find((data: Map<string, { code: number | null; score: number | null }>) => data.has(variables[0])
           ) ? 'Group' : ''; // Simplified - would need to look up actual group
 
@@ -1924,7 +1924,6 @@ export class WorkspaceCodingService {
     this.logger.log(`Exporting coding results by variable for workspace ${workspaceId}`);
 
     try {
-      // Get all unique variables in the workspace
       const variableResults = await this.responseRepository
         .createQueryBuilder('response')
         .select('DISTINCT response.variableid', 'variableId')
@@ -1948,7 +1947,6 @@ export class WorkspaceCodingService {
         const worksheetName = this.generateUniqueWorksheetName(workbook, variableId);
         const worksheet = workbook.addWorksheet(worksheetName);
 
-        // Get all responses for this variable
         const responses = await this.responseRepository.find({
           where: { variableid: variableId },
           relations: ['unit', 'unit.booklet', 'unit.booklet.person'],
@@ -2004,16 +2002,13 @@ export class WorkspaceCodingService {
           });
         }
 
-        // Set up headers
         const headers = ['Test Person Login', 'Test Person Code', 'Group', ...testPersonList.map(tp => `Coder_${tp}`)];
         worksheet.columns = headers.map(header => ({ header, key: header, width: 15 }));
 
-        // Add data rows (one row per testperson who has this variable)
         for (const testPersonKey of testPersonList) {
           const [login, code] = testPersonKey.split('_');
           const personData = testPersonMap.get(testPersonKey)!;
 
-          // Find group for this test person
           const group = workspaceResponses.find(r => `${r.unit?.booklet?.person?.login}_${r.unit?.booklet?.person?.code}` === testPersonKey
           )?.unit?.booklet?.person?.group || '';
 
@@ -2031,7 +2026,6 @@ export class WorkspaceCodingService {
           worksheet.addRow(row);
         }
 
-        // Style the header row
         worksheet.getRow(1).font = { bold: true };
         worksheet.getRow(1).fill = {
           type: 'pattern',
