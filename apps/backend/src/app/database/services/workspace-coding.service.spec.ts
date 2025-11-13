@@ -106,9 +106,9 @@ describe('WorkspaceCodingService', () => {
   };
 
   const mockCodingExportService = {
-    exportCodingResultsAggregated: jest.fn(),
-    exportCodingResultsByCoder: jest.fn(),
-    exportCodingResultsByVariable: jest.fn()
+    exportCodingResultsAggregated: jest.fn().mockResolvedValue(Buffer.from('test-export-data')),
+    exportCodingResultsByCoder: jest.fn().mockResolvedValue(Buffer.from('test-export-data')),
+    exportCodingResultsByVariable: jest.fn().mockResolvedValue(Buffer.from('test-export-data'))
   };
 
   const mockExportValidationResultsService = {
@@ -1034,54 +1034,21 @@ describe('WorkspaceCodingService', () => {
     });
 
     it('should successfully export aggregated coding results', async () => {
-      // Mock the response data with relations
-      const mockResponses = [
-        {
-          id: 1,
-          variableid: 'var1',
-          code_v1: 1,
-          score_v1: 85,
-          unit: {
-            name: 'UNIT_1',
-            alias: 'ALIAS_1',
-            booklet: {
-              person: {
-                login: 'test_person_1',
-                code: 'code_1',
-                group: 'group_1'
-              }
-            }
-          }
-        }
-      ];
-
-      responseRepository.find = jest.fn().mockResolvedValue(mockResponses);
-
       const result = await service.exportCodingResultsAggregated(workspaceId);
 
       expect(result).toBeInstanceOf(Buffer);
-      expect(responseRepository.find).toHaveBeenCalledWith({
-        relations: ['unit', 'unit.booklet', 'unit.booklet.person', 'unit.booklet.bookletinfo'],
-        where: {
-          unit: {
-            booklet: {
-              person: {
-                workspace_id: workspaceId
-              }
-            }
-          }
-        },
-        select: expect.any(Object)
-      });
+      expect(mockCodingExportService.exportCodingResultsAggregated).toHaveBeenCalledWith(workspaceId);
     });
 
     it('should throw error when no coded responses found', async () => {
+      mockCodingExportService.exportCodingResultsAggregated.mockRejectedValueOnce(new Error('Could not export aggregated coding results'));
+
       await expect(service.exportCodingResultsAggregated(workspaceId))
         .rejects.toThrow('Could not export aggregated coding results');
     });
 
     it('should handle database errors during export', async () => {
-      responseRepository.find = jest.fn().mockRejectedValue(new Error('Database error'));
+      mockCodingExportService.exportCodingResultsAggregated.mockRejectedValueOnce(new Error('Could not export aggregated coding results'));
 
       await expect(service.exportCodingResultsAggregated(workspaceId))
         .rejects.toThrow('Could not export aggregated coding results');
@@ -1124,68 +1091,14 @@ describe('WorkspaceCodingService', () => {
     });
 
     it('should successfully export coding results by variable', async () => {
-      // Mock the unit-variable combinations
-      const mockUnitVariableResults = [
-        { unitName: 'UNIT_1', variableId: 'var1' },
-        { unitName: 'UNIT_2', variableId: 'var2' }
-      ];
-
-      responseRepository.createQueryBuilder = jest.fn().mockReturnValue({
-        select: jest.fn().mockReturnThis(),
-        addSelect: jest.fn().mockReturnThis(),
-        leftJoin: jest.fn().mockReturnThis(),
-        where: jest.fn().mockReturnThis(),
-        andWhere: jest.fn().mockReturnThis(),
-        groupBy: jest.fn().mockReturnThis(),
-        addGroupBy: jest.fn().mockReturnThis(),
-        orderBy: jest.fn().mockReturnThis(),
-        getRawMany: jest.fn().mockResolvedValue(mockUnitVariableResults)
-      });
-
-      // Mock response count
-      responseRepository.count = jest.fn().mockResolvedValue(50);
-
-      // Mock responses
-      const mockResponses = [
-        {
-          id: 1,
-          variableid: 'var1',
-          code_v1: 1,
-          score_v1: 85,
-          unit: {
-            booklet: {
-              person: {
-                login: 'test_person_1',
-                code: 'code_1',
-                group: 'group_1'
-              }
-            }
-          }
-        }
-      ];
-
-      responseRepository.find = jest.fn().mockResolvedValue(mockResponses);
-
       const result = await service.exportCodingResultsByVariable(workspaceId);
 
       expect(result).toBeInstanceOf(Buffer);
-      expect(responseRepository.createQueryBuilder).toHaveBeenCalled();
-      expect(responseRepository.count).toHaveBeenCalled();
-      expect(responseRepository.find).toHaveBeenCalled();
+      expect(mockCodingExportService.exportCodingResultsByVariable).toHaveBeenCalledWith(workspaceId);
     });
 
     it('should throw error when no coded variables found', async () => {
-      responseRepository.createQueryBuilder = jest.fn().mockReturnValue({
-        select: jest.fn().mockReturnThis(),
-        addSelect: jest.fn().mockReturnThis(),
-        leftJoin: jest.fn().mockReturnThis(),
-        where: jest.fn().mockReturnThis(),
-        andWhere: jest.fn().mockReturnThis(),
-        groupBy: jest.fn().mockReturnThis(),
-        addGroupBy: jest.fn().mockReturnThis(),
-        orderBy: jest.fn().mockReturnThis(),
-        getRawMany: jest.fn().mockResolvedValue([])
-      });
+      mockCodingExportService.exportCodingResultsByVariable.mockRejectedValueOnce(new Error('No coded variables found for this workspace'));
 
       await expect(service.exportCodingResultsByVariable(workspaceId))
         .rejects.toThrow('No coded variables found for this workspace');
@@ -1252,41 +1165,14 @@ describe('WorkspaceCodingService', () => {
     });
 
     it('should handle database errors during export', async () => {
-      responseRepository.createQueryBuilder = jest.fn().mockReturnValue({
-        select: jest.fn().mockReturnThis(),
-        addSelect: jest.fn().mockReturnThis(),
-        leftJoin: jest.fn().mockReturnThis(),
-        where: jest.fn().mockReturnThis(),
-        andWhere: jest.fn().mockReturnThis(),
-        groupBy: jest.fn().mockReturnThis(),
-        addGroupBy: jest.fn().mockReturnThis(),
-        orderBy: jest.fn().mockReturnThis(),
-        getRawMany: jest.fn().mockRejectedValue(new Error('Database error'))
-      });
+      mockCodingExportService.exportCodingResultsByVariable.mockRejectedValueOnce(new Error('Could not export coding results by variable'));
 
       await expect(service.exportCodingResultsByVariable(workspaceId))
         .rejects.toThrow('Could not export coding results by variable');
     });
 
     it('should throw error when no worksheets could be created', async () => {
-      const mockUnitVariableResults = [
-        { unitName: 'UNIT_1', variableId: 'var1' }
-      ];
-
-      responseRepository.createQueryBuilder = jest.fn().mockReturnValue({
-        select: jest.fn().mockReturnThis(),
-        addSelect: jest.fn().mockReturnThis(),
-        leftJoin: jest.fn().mockReturnThis(),
-        where: jest.fn().mockReturnThis(),
-        andWhere: jest.fn().mockReturnThis(),
-        groupBy: jest.fn().mockReturnThis(),
-        addGroupBy: jest.fn().mockReturnThis(),
-        orderBy: jest.fn().mockReturnThis(),
-        getRawMany: jest.fn().mockResolvedValue(mockUnitVariableResults)
-      });
-
-      // Mock count as 0 (no responses)
-      responseRepository.count = jest.fn().mockResolvedValue(0);
+      mockCodingExportService.exportCodingResultsByVariable.mockRejectedValueOnce(new Error('No worksheets could be created within the memory limits'));
 
       await expect(service.exportCodingResultsByVariable(workspaceId))
         .rejects.toThrow('No worksheets could be created within the memory limits');
