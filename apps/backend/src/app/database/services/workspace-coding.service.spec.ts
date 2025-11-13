@@ -26,6 +26,7 @@ import { ExternalCodingImportService } from './external-coding-import.service';
 import { BullJobManagementService } from './bull-job-management.service';
 import { CodingResultsService } from './coding-results.service';
 import { CodingJobService } from './coding-job.service';
+import { CodingExportService } from './coding-export.service';
 import { CodebookGenerator } from '../../admin/code-book/codebook-generator.class';
 
 // Mock imports for dynamic requires
@@ -102,6 +103,12 @@ describe('WorkspaceCodingService', () => {
 
   const mockCodingResultsService = {
     applyCodingResults: jest.fn()
+  };
+
+  const mockCodingExportService = {
+    exportCodingResultsAggregated: jest.fn(),
+    exportCodingResultsByCoder: jest.fn(),
+    exportCodingResultsByVariable: jest.fn()
   };
 
   const mockExportValidationResultsService = {
@@ -209,6 +216,7 @@ describe('WorkspaceCodingService', () => {
         { provide: BullJobManagementService, useValue: mockBullJobManagementService },
         { provide: CodingResultsService, useValue: mockCodingResultsService },
         { provide: CodingJobService, useValue: mockCodingJobService },
+        { provide: CodingExportService, useValue: mockCodingExportService },
         {
           provide: getRepositoryToken(FileUpload),
           useValue: {
