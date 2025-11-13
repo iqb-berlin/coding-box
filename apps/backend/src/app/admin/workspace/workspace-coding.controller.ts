@@ -16,6 +16,7 @@ import { CoderTrainingService } from '../../database/services/coder-training.ser
 import { CodingListService } from '../../database/services/coding-list.service';
 import { PersonService } from '../../database/services/person.service';
 import { CodingJobService } from '../../database/services/coding-job.service';
+import { CodingExportService } from '../../database/services/coding-export.service';
 import { ResponseEntity } from '../../database/entities/response.entity';
 import { JobDefinition } from '../../database/entities/job-definition.entity';
 import { VariableAnalysisItemDto } from '../../../../../../api-dto/coding/variable-analysis-item.dto';
@@ -40,7 +41,8 @@ export class WorkspaceCodingController {
     private personService: PersonService,
     private codingListService: CodingListService,
     private coderTrainingService: CoderTrainingService,
-    private codingJobService: CodingJobService
+    private codingJobService: CodingJobService,
+    private codingExportService: CodingExportService
   ) {}
 
   @Get(':workspace_id/coding')
@@ -1902,7 +1904,7 @@ export class WorkspaceCodingController {
       @Res() res: Response
   ): Promise<void> {
     try {
-      const buffer = await this.workspaceCodingService.exportCodingResultsAggregated(workspace_id);
+      const buffer = await this.codingExportService.exportCodingResultsAggregated(workspace_id);
 
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       res.setHeader('Content-Disposition', `attachment; filename=coding-results-aggregated-${new Date().toISOString().slice(0, 10)}.xlsx`);
@@ -1932,7 +1934,7 @@ export class WorkspaceCodingController {
       @Res() res: Response
   ): Promise<void> {
     try {
-      const buffer = await this.workspaceCodingService.exportCodingResultsByCoder(workspace_id);
+      const buffer = await this.codingExportService.exportCodingResultsByCoder(workspace_id);
 
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       res.setHeader('Content-Disposition', `attachment; filename=coding-results-by-coder-${new Date().toISOString().slice(0, 10)}.xlsx`);
@@ -1962,7 +1964,7 @@ export class WorkspaceCodingController {
       @Res() res: Response
   ): Promise<void> {
     try {
-      const buffer = await this.workspaceCodingService.exportCodingResultsByVariable(workspace_id);
+      const buffer = await this.codingExportService.exportCodingResultsByVariable(workspace_id);
 
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       res.setHeader('Content-Disposition', `attachment; filename=coding-results-by-variable-${new Date().toISOString().slice(0, 10)}.xlsx`);
