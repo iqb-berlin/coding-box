@@ -817,6 +817,92 @@ export class WorkspaceCodingController {
     );
   }
 
+  @Get(':workspace_id/coding/progress-overview')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiOkResponse({
+    description: 'Coding progress overview retrieved successfully.',
+    schema: {
+      type: 'object',
+      properties: {
+        totalCasesToCode: { type: 'number', description: 'Total number of cases that need to be coded' },
+        completedCases: { type: 'number', description: 'Number of cases that have been completed through coding jobs' },
+        completionPercentage: { type: 'number', description: 'Percentage of coding completion' }
+      }
+    }
+  })
+  async getCodingProgressOverview(@WorkspaceId() workspace_id: number): Promise<{
+    totalCasesToCode: number;
+    completedCases: number;
+    completionPercentage: number;
+  }> {
+    return this.workspaceCodingService.getCodingProgressOverview(workspace_id);
+  }
+
+  @Get(':workspace_id/coding/case-coverage-overview')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiOkResponse({
+    description: 'Case coverage overview retrieved successfully.',
+    schema: {
+      type: 'object',
+      properties: {
+        totalCasesToCode: { type: 'number', description: 'Total number of cases that need to be coded' },
+        casesInJobs: { type: 'number', description: 'Number of cases assigned to coding jobs' },
+        unassignedCases: { type: 'number', description: 'Number of cases not assigned to any coding job' },
+        coveragePercentage: { type: 'number', description: 'Percentage of cases covered by coding jobs' }
+      }
+    }
+  })
+  async getCaseCoverageOverview(@WorkspaceId() workspace_id: number): Promise<{
+    totalCasesToCode: number;
+    casesInJobs: number;
+    unassignedCases: number;
+    coveragePercentage: number;
+  }> {
+    return this.workspaceCodingService.getCaseCoverageOverview(workspace_id);
+  }
+
+  @Get(':workspace_id/coding/variable-coverage-overview')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiOkResponse({
+    description: 'Variable coverage overview retrieved successfully.',
+    schema: {
+      type: 'object',
+      properties: {
+        totalVariables: { type: 'number', description: 'Total number of potential variables from unit XML files' },
+        coveredVariables: { type: 'number', description: 'Number of variables covered by job definitions' },
+        missingVariables: { type: 'number', description: 'Number of variables not covered by job definitions' },
+        coveragePercentage: { type: 'number', description: 'Percentage of variables covered by job definitions' },
+        variableCaseCounts: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              unitName: { type: 'string', description: 'Unit name' },
+              variableId: { type: 'string', description: 'Variable ID' },
+              caseCount: { type: 'number', description: 'Number of coding cases for this variable' }
+            }
+          },
+          description: 'List of all variables with their case counts'
+        }
+      }
+    }
+  })
+  async getVariableCoverageOverview(@WorkspaceId() workspace_id: number): Promise<{
+    totalVariables: number;
+    coveredVariables: number;
+    missingVariables: number;
+    coveragePercentage: number;
+    variableCaseCounts: { unitName: string; variableId: string; caseCount: number }[];
+  }> {
+    return this.workspaceCodingService.getVariableCoverageOverview(workspace_id);
+  }
+
   @Post(':workspace_id/coding/external-coding-import/stream')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiTags('coding')
