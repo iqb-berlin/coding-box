@@ -16,6 +16,7 @@ import { CoderTrainingService } from '../../database/services/coder-training.ser
 import { CodingListService } from '../../database/services/coding-list.service';
 import { PersonService } from '../../database/services/person.service';
 import { CodingJobService } from '../../database/services/coding-job.service';
+import { CodingExportService } from '../../database/services/coding-export.service';
 import { ResponseEntity } from '../../database/entities/response.entity';
 import { JobDefinition } from '../../database/entities/job-definition.entity';
 import { VariableAnalysisItemDto } from '../../../../../../api-dto/coding/variable-analysis-item.dto';
@@ -40,7 +41,8 @@ export class WorkspaceCodingController {
     private personService: PersonService,
     private codingListService: CodingListService,
     private coderTrainingService: CoderTrainingService,
-    private codingJobService: CodingJobService
+    private codingJobService: CodingJobService,
+    private codingExportService: CodingExportService
   ) {}
 
   @Get(':workspace_id/coding')
@@ -56,8 +58,9 @@ export class WorkspaceCodingController {
   @ApiOkResponse({
     description: 'Coding statistics retrieved successfully.'
   })
-  async codeTestPersons(@Query('testPersons') testPersons: string, @WorkspaceId() workspace_id: number, @Query('autoCoderRun') autoCoderRun: number = 1): Promise<CodingStatistics> {
-    return this.workspaceCodingService.codeTestPersons(workspace_id, testPersons, autoCoderRun);
+  async codeTestPersons(@Query('testPersons') testPersons: string, @WorkspaceId() workspace_id: number, @Query('autoCoderRun') autoCoderRun: string): Promise<CodingStatistics> {
+    const autoCoderRunNumber = parseInt(autoCoderRun, 10) || 1;
+    return this.workspaceCodingService.codeTestPersons(workspace_id, testPersons, autoCoderRunNumber);
   }
 
   @Get(':workspace_id/coding/manual')
@@ -1879,5 +1882,95 @@ export class WorkspaceCodingController {
         }[];
       }> {
     return this.workspaceCodingService.createDistributedCodingJobs(workspace_id, body);
+  }
+
+  @Get(':workspace_id/coding/export/aggregated')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiOkResponse({
+    description: 'Aggregated coding results exported as Excel',
+    content: {
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': {
+        schema: {
+          type: 'string',
+          format: 'binary'
+        }
+      }
+    }
+  })
+  async exportCodingResultsAggregated(
+    @WorkspaceId() workspace_id: number,
+      @Res() res: Response
+  ): Promise<void> {
+    try {
+      const buffer = await this.codingExportService.exportCodingResultsAggregated(workspace_id);
+
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename=coding-results-aggregated-${new Date().toISOString().slice(0, 10)}.xlsx`);
+      res.send(buffer);
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+
+  @Get(':workspace_id/coding/export/by-coder')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiOkResponse({
+    description: 'Coding results by coder exported as Excel',
+    content: {
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': {
+        schema: {
+          type: 'string',
+          format: 'binary'
+        }
+      }
+    }
+  })
+  async exportCodingResultsByCoder(
+    @WorkspaceId() workspace_id: number,
+      @Res() res: Response
+  ): Promise<void> {
+    try {
+      const buffer = await this.codingExportService.exportCodingResultsByCoder(workspace_id);
+
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename=coding-results-by-coder-${new Date().toISOString().slice(0, 10)}.xlsx`);
+      res.send(buffer);
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+
+  @Get(':workspace_id/coding/export/by-variable')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiOkResponse({
+    description: 'Coding results by variable exported as Excel',
+    content: {
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': {
+        schema: {
+          type: 'string',
+          format: 'binary'
+        }
+      }
+    }
+  })
+  async exportCodingResultsByVariable(
+    @WorkspaceId() workspace_id: number,
+      @Res() res: Response
+  ): Promise<void> {
+    try {
+      const buffer = await this.codingExportService.exportCodingResultsByVariable(workspace_id);
+
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename=coding-results-by-variable-${new Date().toISOString().slice(0, 10)}.xlsx`);
+      res.send(buffer);
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
   }
 }

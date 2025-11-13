@@ -70,6 +70,7 @@ import { ExportValidationResultsService } from './services/export-validation-res
 import { ExternalCodingImportService } from './services/external-coding-import.service';
 import { BullJobManagementService } from './services/bull-job-management.service';
 import { CodingResultsService } from './services/coding-results.service';
+import { CodingExportService } from './services/coding-export.service';
 
 @Module({
   imports: [
@@ -176,7 +177,8 @@ import { CodingResultsService } from './services/coding-results.service';
     ExportValidationResultsService,
     ExternalCodingImportService,
     BullJobManagementService,
-    CodingResultsService
+    CodingResultsService,
+    CodingExportService
   ],
   exports: [
     User,
@@ -215,7 +217,8 @@ import { CodingResultsService } from './services/coding-results.service';
     ExportValidationResultsService,
     ExternalCodingImportService,
     BullJobManagementService,
-    CodingResultsService
+    CodingResultsService,
+    CodingExportService
   ]
 })
 export class DatabaseModule {}
