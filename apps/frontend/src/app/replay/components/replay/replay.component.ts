@@ -814,7 +814,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         if (prevIndex >= 0) {
           this.handleUnitChanged(this.unitsData.units[prevIndex]);
         }
-      } else if (['1', '2', '3', '4', '5', '6', '7', '8', '9'].includes(keyboardEvent.key) && this.codingService.currentVariableId) {
+      } else if (['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'].includes(keyboardEvent.key) && this.codingService.currentVariableId) {
         keyboardEvent.preventDefault();
         const codeId = parseInt(keyboardEvent.key, 10);
         if (this.codingService.codingScheme) {
