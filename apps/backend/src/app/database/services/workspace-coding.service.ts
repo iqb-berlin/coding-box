@@ -1783,4 +1783,139 @@ export class WorkspaceCodingService {
       throw new Error('Could not get variable coverage overview. Please check the database connection.');
     }
   }
+
+  async getDoubleCodedVariablesForReview(
+    workspaceId: number,
+    page: number = 1,
+    limit: number = 50
+  ): Promise<{
+      data: Array<{
+        unitName: string;
+        variableId: string;
+        personLogin: string;
+        personCode: string;
+        bookletName: string;
+        givenAnswer: string;
+        coderResults: Array<{
+          coderId: number;
+          coderName: string;
+          jobId: number;
+          code: number | null;
+          score: number | null;
+          notes: string | null;
+          codedAt: Date;
+        }>;
+      }>;
+      total: number;
+      page: number;
+      limit: number;
+    }> {
+    try {
+      this.logger.log(`Getting double-coded variables for review in workspace ${workspaceId}`);
+
+      // First, find response IDs that have been coded by multiple coders
+      // We do this by grouping CodingJobUnit by response_id and counting distinct coding_job_id
+      const doubleCodedResponseIds = await this.codingJobUnitRepository
+        .createQueryBuilder('cju')
+        .select('cju.response_id', 'responseId')
+        .addSelect('COUNT(DISTINCT cju.coding_job_id)', 'jobCount')
+        .leftJoin('cju.coding_job', 'cj')
+        .leftJoin('cj.codingJobCoders', 'cjc')
+        .where('cj.workspace_id = :workspaceId', { workspaceId })
+        .andWhere('cju.code IS NOT NULL') // Only include coded responses
+        .groupBy('cju.response_id')
+        .having('COUNT(DISTINCT cju.coding_job_id) > 1') // Multiple jobs coded this response
+        .getRawMany();
+
+      const responseIds = doubleCodedResponseIds.map(row => row.responseId);
+
+      if (responseIds.length === 0) {
+        return {
+          data: [],
+          total: 0,
+          page,
+          limit
+        };
+      }
+
+      // Get total count for pagination
+      const total = responseIds.length;
+
+      // Apply pagination to response IDs
+      const startIndex = (page - 1) * limit;
+      const endIndex = Math.min(startIndex + limit, responseIds.length);
+      const paginatedResponseIds = responseIds.slice(startIndex, endIndex);
+
+      // Now get detailed information for these responses
+      const codingJobUnits = await this.codingJobUnitRepository.find({
+        where: { response_id: In(paginatedResponseIds) },
+        relations: ['coding_job', 'coding_job.codingJobCoders', 'coding_job.codingJobCoders.user', 'response', 'response.unit', 'response.unit.booklet', 'response.unit.booklet.person']
+      });
+
+      // Group by response to create the review data structure
+      const responseGroups = new Map<number, {
+        unitName: string;
+        variableId: string;
+        personLogin: string;
+        personCode: string;
+        bookletName: string;
+        givenAnswer: string;
+        coderResults: Array<{
+          coderId: number;
+          coderName: string;
+          jobId: number;
+          code: number | null;
+          score: number | null;
+          notes: string | null;
+          codedAt: Date;
+        }>;
+      }>();
+
+      for (const unit of codingJobUnits) {
+        const responseId = unit.response_id;
+
+        if (!responseGroups.has(responseId)) {
+          responseGroups.set(responseId, {
+            unitName: unit.response?.unit?.name || '',
+            variableId: unit.variable_id,
+            personLogin: unit.response?.unit?.booklet?.person?.login || '',
+            personCode: unit.response?.unit?.booklet?.person?.code || '',
+            bookletName: unit.response?.unit?.booklet?.bookletinfo?.name || '',
+            givenAnswer: unit.response?.value || '',
+            coderResults: []
+          });
+        }
+
+        const group = responseGroups.get(responseId)!;
+
+        // Find the coder for this coding job
+        const coder = unit.coding_job?.codingJobCoders?.[0]; // Assuming one coder per job
+        if (coder) {
+          group.coderResults.push({
+            coderId: coder.user_id,
+            coderName: coder.user?.username || `Coder ${coder.user_id}`,
+            jobId: unit.coding_job_id,
+            code: unit.code,
+            score: unit.score,
+            notes: unit.notes,
+            codedAt: unit.created_at
+          });
+        }
+      }
+
+      const data = Array.from(responseGroups.values());
+
+      this.logger.log(`Found ${total} double-coded variables for review in workspace ${workspaceId}, returning page ${page} with ${data.length} items`);
+
+      return {
+        data,
+        total,
+        page,
+        limit
+      };
+    } catch (error) {
+      this.logger.error(`Error getting double-coded variables for review: ${error.message}`, error.stack);
+      throw new Error('Could not get double-coded variables for review. Please check the database connection.');
+    }
+  }
 }

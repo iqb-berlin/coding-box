@@ -1,0 +1,142 @@
+<div class="double-coded-review-container">
+  <div class="header-section">
+    <h2 class="page-title">
+      <mat-icon>compare</mat-icon>
+      {{ 'double-coded-review.title' | translate }}
+    </h2>
+    <p class="page-description">
+      {{ 'double-coded-review.description' | translate }}
+    </p>
+  </div>
+
+  <div class="content-section">
+    @if (isLoading) {
+      <div class="loading-container">
+        <mat-spinner diameter="40"></mat-spinner>
+        <p>{{ 'double-coded-review.loading' | translate }}</p>
+      </div>
+    } @else {
+      @if (data.length === 0) {
+        <mat-card class="no-data-card">
+          <mat-card-content>
+            <div class="no-data-content">
+              <mat-icon class="no-data-icon">info</mat-icon>
+              <h3>{{ 'double-coded-review.no-data.title' | translate }}</h3>
+              <p>{{ 'double-coded-review.no-data.message' | translate }}</p>
+            </div>
+          </mat-card-content>
+        </mat-card>
+      } @else {
+        <mat-card class="review-card">
+          <mat-card-header>
+            <mat-card-title>{{ 'double-coded-review.table-title' | translate }}</mat-card-title>
+            <mat-card-subtitle>{{ 'double-coded-review.table-subtitle' | translate:{count: totalItems} }}</mat-card-subtitle>
+          </mat-card-header>
+
+          <mat-card-content>
+            <form [formGroup]="selectionForm">
+              <table mat-table [dataSource]="data" class="review-table">
+                <!-- Unit & Variable Column -->
+                <ng-container matColumnDef="unitVariable">
+                  <th mat-header-cell *matHeaderCellDef>{{ 'double-coded-review.columns.unit-variable' | translate }}</th>
+                  <td mat-cell *matCellDef="let element">
+                    <div class="unit-variable-cell">
+                      <div class="unit-name">{{ element.unitName }}</div>
+                      <div class="variable-id">{{ element.variableId }}</div>
+                    </div>
+                  </td>
+                </ng-container>
+
+                <!-- Person Info Column -->
+                <ng-container matColumnDef="personInfo">
+                  <th mat-header-cell *matHeaderCellDef>{{ 'double-coded-review.columns.person-info' | translate }}</th>
+                  <td mat-cell *matCellDef="let element">
+                    <div class="person-info-cell">
+                      <div class="person-login">{{ element.personLogin }}</div>
+                      <div class="person-code">{{ element.personCode }}</div>
+                      <div class="booklet-name">{{ element.bookletName }}</div>
+                    </div>
+                  </td>
+                </ng-container>
+
+                <!-- Given Answer Column -->
+                <ng-container matColumnDef="givenAnswer">
+                  <th mat-header-cell *matHeaderCellDef>{{ 'double-coded-review.columns.given-answer' | translate }}</th>
+                  <td mat-cell *matCellDef="let element">
+                    <div class="given-answer-cell">
+                      {{ element.givenAnswer || 'N/A' }}
+                    </div>
+                  </td>
+                </ng-container>
+
+                <!-- Coder Results Column -->
+                <ng-container matColumnDef="coderResults">
+                  <th mat-header-cell *matHeaderCellDef>{{ 'double-coded-review.columns.coder-results' | translate }}</th>
+                  <td mat-cell *matCellDef="let element">
+                    <div class="coder-results-cell">
+                      @for (result of element.coderResults; track result.coderId) {
+                        <div class="coder-result-item">
+                          <div class="coder-name">{{ result.coderName }}</div>
+                          <div class="coder-details">
+                            <span class="code-value">{{ 'double-coded-review.code-label' | translate }}: {{ result.code || 'N/A' }}</span>
+                            @if (result.score !== null) {
+                              <span class="score-value">{{ 'double-coded-review.score-label' | translate }}: {{ result.score }}</span>
+                            }
+                            @if (result.notes) {
+                              <span class="notes-indicator" title="{{ result.notes }}">
+                                <mat-icon>comment</mat-icon>
+                              </span>
+                            }
+                          </div>
+                        </div>
+                      }
+                    </div>
+                  </td>
+                </ng-container>
+
+                <!-- Selection Column -->
+                <ng-container matColumnDef="selection">
+                  <th mat-header-cell *matHeaderCellDef>{{ 'double-coded-review.columns.selection' | translate }}</th>
+                  <td mat-cell *matCellDef="let element; let i = index">
+                    <mat-radio-group
+                      [formControlName]="'item_' + i"
+                      (change)="onSelectionChange(element, $event.value)"
+                      class="coder-selection">
+                      @for (result of element.coderResults; track result.coderId) {
+                        <mat-radio-button [value]="result.coderId.toString()" class="coder-radio">
+                          {{ result.coderName }}
+                        </mat-radio-button>
+                      }
+                    </mat-radio-group>
+                  </td>
+                </ng-container>
+
+                <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+                <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+              </table>
+            </form>
+
+            <mat-paginator
+              [length]="totalItems"
+              [pageSize]="pageSize"
+              [pageSizeOptions]="[5, 10, 25, 50]"
+              (page)="onPageChange($event)"
+              showFirstLastButtons>
+            </mat-paginator>
+          </mat-card-content>
+
+          <mat-card-actions>
+            <button
+              mat-raised-button
+              color="primary"
+              (click)="applyReviewDecisions()"
+              [disabled]="data.length === 0">
+              <mat-icon>check_circle</mat-icon>
+              {{ 'double-coded-review.apply-decisions' | translate }}
+            </button>
+          </mat-card-actions>
+        </mat-card>
+      }
+    }
+  </div>
+</div>

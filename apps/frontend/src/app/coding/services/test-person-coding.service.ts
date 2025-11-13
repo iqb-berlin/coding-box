@@ -499,4 +499,70 @@ export class TestPersonCodingService {
         }))
       );
   }
+
+  getDoubleCodedVariablesForReview(
+    workspaceId: number,
+    page: number = 1,
+    limit: number = 50
+  ): Observable<{
+      data: Array<{
+        unitName: string;
+        variableId: string;
+        personLogin: string;
+        personCode: string;
+        bookletName: string;
+        givenAnswer: string;
+        coderResults: Array<{
+          coderId: number;
+          coderName: string;
+          jobId: number;
+          code: number | null;
+          score: number | null;
+          notes: string | null;
+          codedAt: string;
+        }>;
+      }>;
+      total: number;
+      page: number;
+      limit: number;
+    }> {
+    const params = new HttpParams()
+      .set('page', page.toString())
+      .set('limit', limit.toString());
+
+    return this.http
+      .get<{
+      data: Array<{
+        unitName: string;
+        variableId: string;
+        personLogin: string;
+        personCode: string;
+        bookletName: string;
+        givenAnswer: string;
+        coderResults: Array<{
+          coderId: number;
+          coderName: string;
+          jobId: number;
+          code: number | null;
+          score: number | null;
+          notes: string | null;
+          codedAt: string;
+        }>;
+      }>;
+      total: number;
+      page: number;
+      limit: number;
+    }>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/coding/double-coded-review`,
+      { headers: this.authHeader, params }
+    )
+      .pipe(
+        catchError(() => of({
+          data: [],
+          total: 0,
+          page,
+          limit
+        }))
+      );
+  }
 }
