@@ -54,6 +54,14 @@
           <mat-icon>delete_sweep</mat-icon>
           {{ selection.selected.length }} löschen
         </button>
+        <button mat-button (click)="openDoubleCodedReviewDialog()">
+          <mat-icon>compare</mat-icon>
+          Doppelkodierung-Review
+        </button>
+        <button mat-button (click)="openCohensKappaStatisticsDialog()">
+          <mat-icon>analytics</mat-icon>
+          Cohen's Kappa
+        </button>
       </div>
     </div>
 

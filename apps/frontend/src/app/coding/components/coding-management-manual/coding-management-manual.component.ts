@@ -10,6 +10,7 @@ import { MatAnchor, MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import * as ExcelJS from 'exceljs';
 import { Subject, takeUntil } from 'rxjs';
 import { CodingJobsComponent } from '../coding-jobs/coding-jobs.component';
@@ -41,10 +42,10 @@ import { DoubleCodedReviewComponent } from '../double-coded-review/double-coded-
     MatIcon,
     MatButton,
     MatProgressBarModule,
+    MatDialogModule,
     VariableBundleManagerComponent,
     CoderTrainingComponent,
     CoderTrainingsListComponent,
-    DoubleCodedReviewComponent,
     CommonModule
   ]
 })
@@ -54,6 +55,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   private snackBar = inject(MatSnackBar);
   private validationStateService = inject(ValidationStateService);
   private translateService = inject(TranslateService);
+  private dialog = inject(MatDialog);
   private destroy$ = new Subject<void>();
 
   validationResults: ValidateCodingCompletenessResponseDto | null = null;
@@ -79,6 +81,27 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     casesInJobs: number;
     unassignedCases: number;
     coveragePercentage: number;
+  } | null = null;
+
+  workspaceKappaSummary: {
+    coderPairs: Array<{
+      coder1Id: number;
+      coder1Name: string;
+      coder2Id: number;
+      coder2Name: string;
+      kappa: number | null;
+      agreement: number;
+      totalSharedResponses: number;
+      validPairs: number;
+      interpretation: string;
+    }>;
+    workspaceSummary: {
+      totalDoubleCodedResponses: number;
+      totalCoderPairs: number;
+      averageKappa: number | null;
+      variablesIncluded: number;
+      codersIncluded: number;
+    };
   } | null = null;
 
   importResults: {
@@ -200,6 +223,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     this.loadCodingProgressOverview();
     this.loadVariableCoverageOverview();
     this.loadCaseCoverageOverview();
+    this.loadWorkspaceKappaSummary();
   }
 
   ngOnDestroy(): void {
@@ -629,6 +653,16 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     this.showCoderTraining = false;
   }
 
+  openDoubleCodedReviewDialog(): void {
+    this.dialog.open(DoubleCodedReviewComponent, {
+      width: '90vw',
+      maxWidth: '1400px',
+      height: '90vh',
+      maxHeight: '900px',
+      data: {}
+    });
+  }
+
   private loadCodingProgressOverview(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
@@ -681,6 +715,68 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
           this.caseCoverageOverview = null;
         }
       });
+  }
+
+  private loadWorkspaceKappaSummary(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      return;
+    }
+
+    this.testPersonCodingService.getWorkspaceCohensKappaSummary(workspaceId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: summary => {
+          this.workspaceKappaSummary = summary;
+        },
+        error: () => {
+          this.workspaceKappaSummary = null;
+        }
+      });
+  }
+
+  getKappaInterpretationText(kappa: number | null): string {
+    if (kappa === null) {
+      return 'Keine Daten verfügbar';
+    }
+    if (kappa < 0) {
+      return 'Schlechte Übereinstimmung (weniger als zufällig)';
+    }
+    if (kappa < 0.2) {
+      return 'Schwache Übereinstimmung';
+    }
+    if (kappa < 0.4) {
+      return 'Mäßige Übereinstimmung';
+    }
+    if (kappa < 0.6) {
+      return 'Akzeptable Übereinstimmung';
+    }
+    if (kappa < 0.8) {
+      return 'Gute Übereinstimmung';
+    }
+    return 'Ausgezeichnete Übereinstimmung';
+  }
+
+  getKappaInterpretationClass(kappa: number | null): string {
+    if (kappa === null) {
+      return 'kappa-no-data';
+    }
+    if (kappa < 0) {
+      return 'kappa-poor';
+    }
+    if (kappa < 0.2) {
+      return 'kappa-poor';
+    }
+    if (kappa < 0.4) {
+      return 'kappa-fair';
+    }
+    if (kappa < 0.6) {
+      return 'kappa-moderate';
+    }
+    if (kappa < 0.8) {
+      return 'kappa-good';
+    }
+    return 'kappa-excellent';
   }
 
   onTrainingStart(data: { selectedCoders: Coder[], variableConfigs: VariableConfig[] }): void {
