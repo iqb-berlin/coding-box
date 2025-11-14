@@ -131,6 +131,13 @@ ALTER TABLE "public"."coding_job_unit" ADD COLUMN "updated_at" TIMESTAMP WITHOUT
 
 -- rollback ALTER TABLE "public"."coding_job_unit" DROP COLUMN "updated_at";
 
+-- changeset jurei733:11b
+-- comment: Drop response_id constraint before dropping responses table to prevent migration errors
+
+ALTER TABLE "public"."responses" DROP CONSTRAINT IF EXISTS "response_id";
+
+-- rollback ALTER TABLE "public"."responses" ADD CONSTRAINT "response_id" UNIQUE ("unit_id", "test_person");
+
 -- changeset jurei733:12
 -- comment: Drop obsolete responses table (legacy table storing raw test response data)
 
