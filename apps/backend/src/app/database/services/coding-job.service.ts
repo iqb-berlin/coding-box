@@ -308,6 +308,9 @@ export class CodingJobService {
       codingJob.codingJob.description = updateCodingJobDto.description;
     }
     if (updateCodingJobDto.status !== undefined) {
+      if (codingJob.codingJob.status === 'results_applied') {
+        throw new Error(`Cannot change status of coding job ${id} because it has already been applied to results (status: results_applied)`);
+      }
       codingJob.codingJob.status = updateCodingJobDto.status;
     }
     if (updateCodingJobDto.comment !== undefined) {
