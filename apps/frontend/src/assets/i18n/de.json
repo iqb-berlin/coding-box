@@ -187,7 +187,11 @@
       "by-coder": "Nach Kodierer",
       "by-coder-description": " Separate Tabellen für jeden Kodierer mit seinen Variablen und Testpersonen",
       "by-variable": "Nach Variable",
-      "by-variable-description": " Separate Tabellen für jede Variable mit allen Kodierern und Testpersonen"
+      "by-variable-description": " Separate Tabellen für jede Variable mit allen Kodierern und Testpersonen",
+      "detailed": "Detaillierte Ansicht",
+      "detailed-description": "Detaillierte Kodierergebnisse mit Zeitstempeln als CSV",
+      "coding-times": "Kodierzeiten-Bericht",
+      "coding-times-description": "Durchschnittliche Kodierzeiten nach Kodierer und Variable (Zeitspannen >10 Minuten werden ignoriert)"
     },
     "export-exporting": "Export läuft...",
     "export-success": "Export erfolgreich abgeschlossen",
