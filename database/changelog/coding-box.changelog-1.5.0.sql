@@ -139,6 +139,14 @@ SELECT 1 WHERE EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schem
 
 -- rollback ALTER TABLE "public"."responses" ADD CONSTRAINT "response_id" UNIQUE ("unit_id", "test_person");
 
+-- changeset jurei733:11c
+-- comment: Clean up unit_state column before dropping responses table to prevent rollback conflicts
+
+-- Check if responses table exists (no-op since table is already dropped)
+SELECT 1 WHERE EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'responses');
+
+-- rollback ALTER TABLE "public"."responses" ADD COLUMN "unit_state" jsonb default '{}'::jsonb;
+
 -- changeset jurei733:12
 -- comment: Drop obsolete responses table (legacy table storing raw test response data)
 
