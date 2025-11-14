@@ -1359,7 +1359,7 @@ export class WorkspaceCodingService {
       this.logger.log(`Cache miss: Querying CODING_INCOMPLETE variables for workspace ${workspaceId}`);
       const result = await this.fetchCodingIncompleteVariablesFromDb(workspaceId);
 
-      const cacheSet = await this.cacheService.set(cacheKey, result, 0);
+      const cacheSet = await this.cacheService.set(cacheKey, result, 300); // Cache for 5 minutes
       if (cacheSet) {
         this.logger.log(`Cached ${result.length} CODING_INCOMPLETE variables for workspace ${workspaceId}`);
       } else {
@@ -1453,7 +1453,14 @@ export class WorkspaceCodingService {
         updatedScore: number | null;
       }>;
     }> {
-    return this.externalCodingImportService.importExternalCodingWithProgress(workspaceId, body, progressCallback);
+    const result = await this.externalCodingImportService.importExternalCodingWithProgress(workspaceId, body, progressCallback);
+
+    if (result.updatedRows > 0) {
+      await this.invalidateIncompleteVariablesCache(workspaceId);
+      this.logger.log(`Invalidated incomplete variables cache for workspace ${workspaceId} after importing ${result.updatedRows} external coding results`);
+    }
+
+    return result;
   }
 
   async importExternalCoding(
@@ -1569,7 +1576,14 @@ export class WorkspaceCodingService {
     skippedReviewCount: number;
     message: string;
   }> {
-    return this.codingResultsService.applyCodingResults(workspaceId, codingJobId);
+    const result = await this.codingResultsService.applyCodingResults(workspaceId, codingJobId);
+
+    if (result.success && result.updatedResponsesCount > 0) {
+      await this.invalidateIncompleteVariablesCache(workspaceId);
+      this.logger.log(`Invalidated incomplete variables cache for workspace ${workspaceId} after applying ${result.updatedResponsesCount} coding results`);
+    }
+
+    return result;
   }
 
   async createDistributedCodingJobs(
