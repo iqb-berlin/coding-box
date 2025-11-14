@@ -79,6 +79,8 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   caseCoverageOverview: {
     totalCasesToCode: number;
     casesInJobs: number;
+    doubleCodedCases: number;
+    singleCodedCases: number;
     unassignedCases: number;
     coveragePercentage: number;
   } | null = null;

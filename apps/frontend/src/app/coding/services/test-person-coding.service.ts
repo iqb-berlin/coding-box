@@ -477,6 +477,8 @@ export class TestPersonCodingService {
   getCaseCoverageOverview(workspaceId: number): Observable<{
     totalCasesToCode: number;
     casesInJobs: number;
+    doubleCodedCases: number;
+    singleCodedCases: number;
     unassignedCases: number;
     coveragePercentage: number;
   }> {
@@ -484,6 +486,8 @@ export class TestPersonCodingService {
       .get<{
       totalCasesToCode: number;
       casesInJobs: number;
+      doubleCodedCases: number;
+      singleCodedCases: number;
       unassignedCases: number;
       coveragePercentage: number;
     }>(
@@ -494,6 +498,8 @@ export class TestPersonCodingService {
         catchError(() => of({
           totalCasesToCode: 0,
           casesInJobs: 0,
+          doubleCodedCases: 0,
+          singleCodedCases: 0,
           unassignedCases: 0,
           coveragePercentage: 0
         }))
