@@ -134,7 +134,8 @@ ALTER TABLE "public"."coding_job_unit" ADD COLUMN "updated_at" TIMESTAMP WITHOUT
 -- changeset jurei733:11b
 -- comment: Drop response_id constraint before dropping responses table to prevent migration errors
 
-ALTER TABLE "public"."responses" DROP CONSTRAINT IF EXISTS "response_id";
+-- Skip if table doesn't exist (already dropped)
+SELECT 1 WHERE EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'responses');
 
 -- rollback ALTER TABLE "public"."responses" ADD CONSTRAINT "response_id" UNIQUE ("unit_id", "test_person");
 
@@ -143,7 +144,7 @@ ALTER TABLE "public"."responses" DROP CONSTRAINT IF EXISTS "response_id";
 
 DROP TABLE IF EXISTS "public"."responses";
 
--- rollback CREATE TABLE "public"."responses" ("id" SERIAL PRIMARY KEY, "unit_id" VARCHAR(50) NOT NULL, "test_person" VARCHAR(100), "test_group" VARCHAR(100), "workspace_id" INTEGER NOT NULL, "responses" JSONB, "created_at" TIMESTAMP WITH TIME ZONE DEFAULT now());
+-- rollback CREATE TABLE "public"."responses" ("id" SERIAL PRIMARY KEY, "unit_id" VARCHAR(50) NOT NULL, "test_person" VARCHAR(100), "test_group" VARCHAR(100), "workspace_id" INTEGER NOT NULL, "responses" JSONB, "booklet_id" VARCHAR(100), "created_at" TIMESTAMP WITH TIME ZONE DEFAULT now());
 
 -- changeset jurei733:13
 -- comment: Drop obsolete logs table (legacy table storing log entries)
