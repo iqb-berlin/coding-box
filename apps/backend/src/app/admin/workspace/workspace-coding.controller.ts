@@ -2302,6 +2302,66 @@ export class WorkspaceCodingController {
     }
   }
 
+  @Get(':workspace_id/coding/export/detailed')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiOkResponse({
+    description: 'Detailed coding results exported as CSV',
+    content: {
+      'text/csv': {
+        schema: {
+          type: 'string',
+          format: 'binary'
+        }
+      }
+    }
+  })
+  async exportCodingResultsDetailed(
+    @WorkspaceId() workspace_id: number,
+      @Res() res: Response
+  ): Promise<void> {
+    try {
+      const buffer = await this.codingExportService.exportCodingResultsDetailed(workspace_id);
+
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename=coding-results-detailed-${new Date().toISOString().slice(0, 10)}.csv`);
+      res.send(buffer);
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+
+  @Get(':workspace_id/coding/export/coding-times')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiOkResponse({
+    description: 'Coding times report exported as Excel',
+    content: {
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': {
+        schema: {
+          type: 'string',
+          format: 'binary'
+        }
+      }
+    }
+  })
+  async exportCodingTimesReport(
+    @WorkspaceId() workspace_id: number,
+      @Res() res: Response
+  ): Promise<void> {
+    try {
+      const buffer = await this.codingExportService.exportCodingTimesReport(workspace_id);
+
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename=coding-times-report-${new Date().toISOString().slice(0, 10)}.xlsx`);
+      res.send(buffer);
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+
   @Get(':workspace_id/coding/double-coded-review')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiTags('coding')

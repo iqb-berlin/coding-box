@@ -3,6 +3,7 @@ import {
   Column,
   PrimaryGeneratedColumn,
   CreateDateColumn,
+  UpdateDateColumn,
   ManyToOne,
   JoinColumn
 } from 'typeorm';
@@ -63,6 +64,9 @@ export class CodingJobUnit {
 
   @CreateDateColumn()
     created_at: Date;
+
+  @UpdateDateColumn()
+    updated_at: Date;
 
   @ManyToOne(() => CodingJob)
   @JoinColumn({ name: 'coding_job_id' })
