@@ -1300,6 +1300,17 @@ export class CodingJobService {
       };
     }
   }
+
+  async hasCodingIssues(codingJobId: number): Promise<boolean> {
+    const codingJobUnits = await this.codingJobUnitRepository.find({
+      where: { coding_job_id: codingJobId },
+      select: ['code', 'coding_issue_option']
+    });
+
+    return codingJobUnits.some(unit => unit.coding_issue_option !== null ||
+      (unit.code !== null && unit.code < 0)
+    );
+  }
 }
 
 function generateJobName(coderName: string, unitName: string, variableId: string, caseCount: number): string {

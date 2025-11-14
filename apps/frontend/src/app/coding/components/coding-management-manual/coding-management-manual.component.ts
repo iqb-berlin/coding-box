@@ -10,7 +10,7 @@ import { MatAnchor, MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
-import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { MatDialogModule } from '@angular/material/dialog';
 import * as ExcelJS from 'exceljs';
 import { Subject, takeUntil } from 'rxjs';
 import { CodingJobsComponent } from '../coding-jobs/coding-jobs.component';
@@ -23,12 +23,12 @@ import { ExpectedCombinationDto } from '../../../../../../../api-dto/coding/expe
 import { ValidateCodingCompletenessResponseDto } from '../../../../../../../api-dto/coding/validate-coding-completeness-response.dto';
 import { ExternalCodingImportResultDto } from '../../../../../../../api-dto/coding/external-coding-import-result.dto';
 import { AppService } from '../../../services/app.service';
+import { BackendService } from '../../../services/backend.service';
 import {
   ValidationProgress,
   ValidationStateService
 } from '../../services/validation-state.service';
 import { CoderTrainingsListComponent } from '../coder-trainings-list/coder-trainings-list.component';
-import { DoubleCodedReviewComponent } from '../double-coded-review/double-coded-review.component';
 
 @Component({
   selector: 'coding-box-coding-management-manual',
@@ -51,11 +51,11 @@ import { DoubleCodedReviewComponent } from '../double-coded-review/double-coded-
 })
 export class CodingManagementManualComponent implements OnInit, OnDestroy {
   private testPersonCodingService = inject(TestPersonCodingService);
+  private backendService = inject(BackendService);
   private appService = inject(AppService);
   private snackBar = inject(MatSnackBar);
   private validationStateService = inject(ValidationStateService);
   private translateService = inject(TranslateService);
-  private dialog = inject(MatDialog);
   private destroy$ = new Subject<void>();
 
   validationResults: ValidateCodingCompletenessResponseDto | null = null;
@@ -101,6 +101,22 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       averageKappa: number | null;
       variablesIncluded: number;
       codersIncluded: number;
+    };
+  } | null = null;
+
+  codingIncompleteVariables: { unitName: string; variableId: string; responseCount: number }[] = [];
+  statusDistribution: { [status: string]: number } = {};
+  appliedResultsOverview: {
+    totalIncompleteVariables: number;
+    totalIncompleteResponses: number;
+    appliedResponses: number;
+    remainingResponses: number;
+    completionPercentage: number;
+    finalStatusBreakdown: {
+      codingComplete: number;
+      invalid: number;
+      codingError: number;
+      other: number;
     };
   } | null = null;
 
@@ -161,13 +177,6 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     return this.comparisonCurrentPage > 1;
   }
 
-  get completionPercentage(): number {
-    if (!this.validationResults || this.validationResults.total === 0) {
-      return 0;
-    }
-    return ((this.validationResults.total - this.validationResults.missing) / this.validationResults.total) * 100;
-  }
-
   get paginatedAffectedRows(): Array<{
     unitAlias: string;
     variableId: string;
@@ -224,6 +233,9 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     this.loadVariableCoverageOverview();
     this.loadCaseCoverageOverview();
     this.loadWorkspaceKappaSummary();
+    this.loadCodingIncompleteVariables();
+    this.loadStatusDistribution();
+    this.loadAppliedResultsOverview();
   }
 
   ngOnDestroy(): void {
@@ -571,7 +583,6 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         fgColor: { argb: 'FFE0E0E0' }
       };
 
-      // Add data rows
       this.importResults.affectedRows.forEach(row => {
         worksheet.addRow([
           row.unitAlias,
@@ -586,7 +597,6 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         ]);
       });
 
-      // Auto-fit columns
       worksheet.columns.forEach(column => {
         if (column) {
           let maxLength = 0;
@@ -602,7 +612,6 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         }
       });
 
-      // Generate Excel file
       workbook.xlsx.writeBuffer().then(buffer => {
         const blob = new Blob([buffer], {
           type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
@@ -651,16 +660,6 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
   closeCoderTraining(): void {
     this.showCoderTraining = false;
-  }
-
-  openDoubleCodedReviewDialog(): void {
-    this.dialog.open(DoubleCodedReviewComponent, {
-      width: '90vw',
-      maxWidth: '1400px',
-      height: '90vh',
-      maxHeight: '900px',
-      data: {}
-    });
   }
 
   private loadCodingProgressOverview(): void {
@@ -735,48 +734,107 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       });
   }
 
-  getKappaInterpretationText(kappa: number | null): string {
-    if (kappa === null) {
-      return 'Keine Daten verfügbar';
+  private loadCodingIncompleteVariables(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      return;
     }
-    if (kappa < 0) {
-      return 'Schlechte Übereinstimmung (weniger als zufällig)';
-    }
-    if (kappa < 0.2) {
-      return 'Schwache Übereinstimmung';
-    }
-    if (kappa < 0.4) {
-      return 'Mäßige Übereinstimmung';
-    }
-    if (kappa < 0.6) {
-      return 'Akzeptable Übereinstimmung';
-    }
-    if (kappa < 0.8) {
-      return 'Gute Übereinstimmung';
-    }
-    return 'Ausgezeichnete Übereinstimmung';
+
+    this.backendService.getCodingIncompleteVariables(workspaceId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (variables: { unitName: string; variableId: string; responseCount: number }[]) => {
+          this.codingIncompleteVariables = variables;
+          this.loadAppliedResultsOverview();
+        },
+        error: () => {
+          this.codingIncompleteVariables = [];
+          this.loadAppliedResultsOverview();
+        }
+      });
   }
 
-  getKappaInterpretationClass(kappa: number | null): string {
-    if (kappa === null) {
-      return 'kappa-no-data';
+  private loadStatusDistribution(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      return;
     }
-    if (kappa < 0) {
-      return 'kappa-poor';
+
+    this.backendService.getCodingStatistics(workspaceId, 'v1')
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: statistics => {
+          this.statusDistribution = {
+            CODING_INCOMPLETE: statistics.statusCounts['4'] || 0,
+            CODING_COMPLETE: statistics.statusCounts['5'] || 0,
+            INVALID: statistics.statusCounts['6'] || 0,
+            CODING_ERROR: statistics.statusCounts['7'] || 0
+          };
+          this.loadAppliedResultsOverview();
+        },
+        error: () => {
+          this.statusDistribution = {
+            CODING_INCOMPLETE: 0,
+            CODING_COMPLETE: 0,
+            INVALID: 0,
+            CODING_ERROR: 0
+          };
+          this.loadAppliedResultsOverview();
+        }
+      });
+  }
+
+  private loadAppliedResultsOverview(): void {
+    if (this.codingIncompleteVariables.length > 0) {
+      const totalIncompleteResponses = this.codingIncompleteVariables.reduce((sum, variable) => sum + variable.responseCount, 0);
+      const workspaceId = this.appService.selectedWorkspaceId;
+      if (workspaceId) {
+        this.backendService.getAppliedResultsCount(workspaceId, this.codingIncompleteVariables)
+          .pipe(takeUntil(this.destroy$))
+          .subscribe({
+            next: (appliedResponses: number) => {
+              const remainingResponses = totalIncompleteResponses - appliedResponses;
+              const completionPercentage = totalIncompleteResponses > 0 ? (appliedResponses / totalIncompleteResponses) * 100 : 0;
+
+              this.appliedResultsOverview = {
+                totalIncompleteVariables: this.codingIncompleteVariables.length,
+                totalIncompleteResponses: totalIncompleteResponses,
+                appliedResponses: appliedResponses,
+                remainingResponses: Math.max(0, remainingResponses),
+                completionPercentage: Math.min(100, completionPercentage),
+                finalStatusBreakdown: {
+                  codingComplete: this.statusDistribution.CODING_COMPLETE || 0,
+                  invalid: this.statusDistribution.INVALID || 0,
+                  codingError: this.statusDistribution.CODING_ERROR || 0,
+                  other: 0
+                }
+              };
+            },
+            error: () => {
+              const appliedResponses = (this.statusDistribution.CODING_COMPLETE || 0) +
+                                       (this.statusDistribution.INVALID || 0) +
+                                       (this.statusDistribution.CODING_ERROR || 0);
+
+              const remainingResponses = totalIncompleteResponses - appliedResponses;
+              const completionPercentage = totalIncompleteResponses > 0 ? (appliedResponses / totalIncompleteResponses) * 100 : 0;
+
+              this.appliedResultsOverview = {
+                totalIncompleteVariables: this.codingIncompleteVariables.length,
+                totalIncompleteResponses: totalIncompleteResponses,
+                appliedResponses: appliedResponses,
+                remainingResponses: Math.max(0, remainingResponses),
+                completionPercentage: Math.min(100, completionPercentage),
+                finalStatusBreakdown: {
+                  codingComplete: this.statusDistribution.CODING_COMPLETE || 0,
+                  invalid: this.statusDistribution.INVALID || 0,
+                  codingError: this.statusDistribution.CODING_ERROR || 0,
+                  other: 0 // Could be expanded to include other statuses
+                }
+              };
+            }
+          });
+      }
     }
-    if (kappa < 0.2) {
-      return 'kappa-poor';
-    }
-    if (kappa < 0.4) {
-      return 'kappa-fair';
-    }
-    if (kappa < 0.6) {
-      return 'kappa-moderate';
-    }
-    if (kappa < 0.8) {
-      return 'kappa-good';
-    }
-    return 'kappa-excellent';
   }
 
   onTrainingStart(data: { selectedCoders: Coder[], variableConfigs: VariableConfig[] }): void {

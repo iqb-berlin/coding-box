@@ -1611,6 +1611,108 @@ export class WorkspaceCodingService {
     return this.codingExportService.exportCodingResultsByVariable(workspaceId);
   }
 
+  async bulkApplyCodingResults(workspaceId: number): Promise<{
+    success: boolean;
+    jobsProcessed: number;
+    totalUpdatedResponses: number;
+    totalSkippedReview: number;
+    message: string;
+    results: Array<{
+      jobId: number;
+      jobName: string;
+      hasIssues: boolean;
+      skipped: boolean;
+      result?: {
+        success: boolean;
+        updatedResponsesCount: number;
+        skippedReviewCount: number;
+        message: string;
+      };
+    }>;
+  }> {
+    this.logger.log(`Starting bulk apply coding results for workspace ${workspaceId}`);
+
+    const codingJobs = await this.codingJobRepository.find({
+      where: { workspace_id: workspaceId },
+      select: ['id', 'name']
+    });
+
+    const results: Array<{
+      jobId: number;
+      jobName: string;
+      hasIssues: boolean;
+      skipped: boolean;
+      result?: {
+        success: boolean;
+        updatedResponsesCount: number;
+        skippedReviewCount: number;
+        message: string;
+      };
+    }> = [];
+
+    let totalUpdatedResponses = 0;
+    let totalSkippedReview = 0;
+    let jobsProcessed = 0;
+
+    for (const job of codingJobs) {
+      const hasIssues = await this.codingJobService.hasCodingIssues(job.id);
+
+      if (hasIssues) {
+        results.push({
+          jobId: job.id,
+          jobName: job.name,
+          hasIssues: true,
+          skipped: true
+        });
+        continue;
+      }
+
+      try {
+        const applyResult = await this.applyCodingResults(workspaceId, job.id);
+        results.push({
+          jobId: job.id,
+          jobName: job.name,
+          hasIssues: false,
+          skipped: false,
+          result: applyResult
+        });
+
+        if (applyResult.success) {
+          totalUpdatedResponses += applyResult.updatedResponsesCount;
+          totalSkippedReview += applyResult.skippedReviewCount;
+          jobsProcessed += 1;
+        }
+      } catch (error) {
+        this.logger.error(`Error applying results for job ${job.id}: ${error.message}`);
+        results.push({
+          jobId: job.id,
+          jobName: job.name,
+          hasIssues: false,
+          skipped: false,
+          result: {
+            success: false,
+            updatedResponsesCount: 0,
+            skippedReviewCount: 0,
+            message: `Error: ${error.message}`
+          }
+        });
+      }
+    }
+
+    const message = `Bulk apply completed. Processed ${jobsProcessed} jobs, updated ${totalUpdatedResponses} responses, skipped ${totalSkippedReview} for review. ${results.filter(r => r.hasIssues).length} jobs skipped due to coding issues.`;
+
+    this.logger.log(message);
+
+    return {
+      success: true,
+      jobsProcessed,
+      totalUpdatedResponses,
+      totalSkippedReview,
+      message,
+      results
+    };
+  }
+
   async getCodingProgressOverview(workspaceId: number): Promise<{
     totalCasesToCode: number;
     completedCases: number;
@@ -1916,6 +2018,62 @@ export class WorkspaceCodingService {
     } catch (error) {
       this.logger.error(`Error getting double-coded variables for review: ${error.message}`, error.stack);
       throw new Error('Could not get double-coded variables for review. Please check the database connection.');
+    }
+  }
+
+  async getAppliedResultsCount(
+    workspaceId: number,
+    incompleteVariables: { unitName: string; variableId: string }[]
+  ): Promise<number> {
+    try {
+      this.logger.log(`Getting applied results count for ${incompleteVariables.length} CODING_INCOMPLETE variables in workspace ${workspaceId}`);
+
+      if (incompleteVariables.length === 0) {
+        return 0;
+      }
+
+      let totalAppliedCount = 0;
+
+      // Process variables in batches to avoid query complexity
+      const batchSize = 50;
+      for (let i = 0; i < incompleteVariables.length; i += batchSize) {
+        const batch = incompleteVariables.slice(i, i + batchSize);
+
+        // Build conditions for this batch
+        const conditions = batch.map(variable => `(unit.name = '${variable.unitName.replace(/'/g, "''")}' AND response.variableid = '${variable.variableId.replace(/'/g, "''")}')`
+        ).join(' OR ');
+
+        const query = `
+          SELECT COUNT(response.id) as applied_count
+          FROM response
+          INNER JOIN unit ON response.unitid = unit.id
+          INNER JOIN booklet ON unit.bookletid = booklet.id
+          INNER JOIN persons person ON booklet.personid = person.id
+          WHERE person.workspace_id = $1
+            AND response.status_v1 = $2
+            AND (${conditions})
+            AND response.status_v2 IN ($3, $4, $5)
+        `;
+
+        const result = await this.responseRepository.query(query, [
+          workspaceId,
+          statusStringToNumber('CODING_INCOMPLETE'), // status_v1 = CODING_INCOMPLETE
+          statusStringToNumber('CODING_COMPLETE'), // status_v2 = CODING_COMPLETE
+          statusStringToNumber('INVALID'), // status_v2 = INVALID
+          statusStringToNumber('CODING_ERROR') // status_v2 = CODING_ERROR
+        ]);
+
+        const batchCount = parseInt(result[0]?.applied_count || '0', 10);
+        totalAppliedCount += batchCount;
+
+        this.logger.debug(`Batch ${Math.floor(i / batchSize) + 1}: ${batchCount} applied results`);
+      }
+
+      this.logger.log(`Total applied results count for workspace ${workspaceId}: ${totalAppliedCount}`);
+      return totalAppliedCount;
+    } catch (error) {
+      this.logger.error(`Error getting applied results count: ${error.message}`, error.stack);
+      throw new Error('Could not get applied results count. Please check the database connection.');
     }
   }
 

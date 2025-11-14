@@ -882,13 +882,21 @@ export class BackendService {
   getCodingIncompleteVariables(
     workspaceId: number,
     unitName?: string
-  ): Observable<{ unitName: string; variableId: string }[]> {
+  ): Observable<{ unitName: string; variableId: string; responseCount: number }[]> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/incomplete-variables`;
     let params = new HttpParams();
     if (unitName) {
       params = params.set('unitName', unitName);
     }
-    return this.http.get<{ unitName: string; variableId: string }[]>(url, { params });
+    return this.http.get<{ unitName: string; variableId: string; responseCount: number }[]>(url, { params });
+  }
+
+  getAppliedResultsCount(
+    workspaceId: number,
+    incompleteVariables: { unitName: string; variableId: string }[]
+  ): Observable<number> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/applied-results-count`;
+    return this.http.post<number>(url, { incompleteVariables });
   }
 
   createCoderTrainingJobs(
@@ -1093,6 +1101,49 @@ export class BackendService {
       updatedResponsesCount: number;
       skippedReviewCount: number;
       message: string;
+    }>(url, {});
+  }
+
+  bulkApplyCodingResults(
+    workspaceId: number
+  ): Observable<{
+      success: boolean;
+      jobsProcessed: number;
+      totalUpdatedResponses: number;
+      totalSkippedReview: number;
+      message: string;
+      results: Array<{
+        jobId: number;
+        jobName: string;
+        hasIssues: boolean;
+        skipped: boolean;
+        result?: {
+          success: boolean;
+          updatedResponsesCount: number;
+          skippedReviewCount: number;
+          message: string;
+        };
+      }>;
+    }> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/jobs/bulk-apply-results`;
+    return this.http.post<{
+      success: boolean;
+      jobsProcessed: number;
+      totalUpdatedResponses: number;
+      totalSkippedReview: number;
+      message: string;
+      results: Array<{
+        jobId: number;
+        jobName: string;
+        hasIssues: boolean;
+        skipped: boolean;
+        result?: {
+          success: boolean;
+          updatedResponsesCount: number;
+          skippedReviewCount: number;
+          message: string;
+        };
+      }>;
     }>(url, {});
   }
 

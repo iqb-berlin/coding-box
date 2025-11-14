@@ -88,7 +88,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
   private jobDetailsCache = new Map<number, { variables?: Variable[], variableBundles?: VariableBundle[] }>();
   private preloadedVariables: Variable[] | null = null;
 
-  displayedColumns: string[] = ['select', 'actions', 'name', 'description', 'status', 'assignedCoders', 'variables', 'variableBundles', 'progress', 'createdAt', 'updatedAt'];
+  displayedColumns: string[] = ['select', 'actions', 'name', 'description', 'status', 'assignedCoders', 'variables', 'variableBundles', 'progress', 'createdAt', 'updatedAt', 'hasIssues'];
   dataSource = new MatTableDataSource<CodingJob>([]);
   selection = new SelectionModel<CodingJob>(true, []);
   isLoading = false;
@@ -137,7 +137,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
         this.preloadedVariables = variables;
 
         this.backendService.getCodingJobs(workspaceId).subscribe({
-          next: response => {
+          next: async response => {
             this.coderNamesByJobId.clear();
             const processedData = response.data.map(job => ({
               ...job,
@@ -145,6 +145,17 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
               updatedAt: job.updated_at ? new Date(job.updated_at) : new Date(),
               assignedVariableBundles: job.assignedVariableBundles ?? job.variableBundles ?? []
             }));
+
+            // Load hasIssues information for each job
+            for (const job of processedData) {
+              try {
+                // Note: We'll need to add a backend endpoint to check hasIssues
+                // For now, we'll set it to false as a placeholder
+                job.hasIssues = false;
+              } catch (error) {
+                job.hasIssues = false;
+              }
+            }
 
             this.originalData = [...processedData];
             this.dataSource.data = processedData;
@@ -531,6 +542,8 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
         return 'status-active';
       case 'completed':
         return 'status-completed';
+      case 'results_applied':
+        return 'status-results-applied';
       case 'pending':
         return 'status-pending';
       case 'paused':
@@ -550,6 +563,8 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
         return 'Aktiv';
       case 'completed':
         return 'Abgeschlossen';
+      case 'results_applied':
+        return 'Ergebnisse angewendet';
       case 'pending':
         return 'Ausstehend';
       case 'paused':
@@ -876,5 +891,85 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
     }
 
     this.loadCodingJobs();
+  }
+
+  applyCodingResults(job: CodingJob): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      this.snackBar.open('Kein Workspace ausgewählt', 'Schließen', { duration: 3000 });
+      return;
+    }
+
+    const loadingSnack = this.snackBar.open(`Wende Ergebnisse für Kodierjob "${job.name}" an...`, '', { duration: 3000 });
+
+    this.backendService.applyCodingResults(workspaceId, job.id).subscribe({
+      next: result => {
+        loadingSnack.dismiss();
+        if (result.success) {
+          this.snackBar.open(`Ergebnisse erfolgreich angewendet: ${result.updatedResponsesCount} Antworten aktualisiert`, 'Schließen', { duration: 3000 });
+          this.loadCodingJobs(); // Refresh the list to show updated status
+        } else {
+          this.snackBar.open(`Fehler beim Anwenden der Ergebnisse: ${result.message}`, 'Schließen', { duration: 5000 });
+        }
+      },
+      error: error => {
+        loadingSnack.dismiss();
+        this.snackBar.open(`Fehler beim Anwenden der Ergebnisse: ${error.message || 'Unbekannter Fehler'}`, 'Schließen', { duration: 5000 });
+      }
+    });
+  }
+
+  bulkApplyCodingResults(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      this.snackBar.open('Kein Workspace ausgewählt', 'Schließen', { duration: 3000 });
+      return;
+    }
+
+    const confirmMessage = 'Möchten Sie die Ergebnisse für alle Kodierjobs ohne Kodierungsprobleme anwenden? Jobs mit Problemen werden übersprungen.';
+
+    const dialogRef = this.dialog.open(ConfirmDialogComponent, {
+      width: '500px',
+      data: {
+        title: 'Massenanwendung bestätigen',
+        message: confirmMessage,
+        confirmButtonText: 'Anwenden',
+        cancelButtonText: 'Abbrechen'
+      }
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result) {
+        this.performBulkApply();
+      }
+    });
+  }
+
+  private performBulkApply(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      this.snackBar.open('Kein Workspace ausgewählt', 'Schließen', { duration: 3000 });
+      return;
+    }
+
+    const loadingSnack = this.snackBar.open('Wende Ergebnisse für alle geeigneten Kodierjobs an...', '', { duration: 3000 });
+
+    this.backendService.bulkApplyCodingResults(workspaceId).subscribe({
+      next: result => {
+        loadingSnack.dismiss();
+        if (result.success) {
+          const skippedCount = result.results.filter(r => r.skipped).length;
+          const processedCount = result.jobsProcessed;
+          this.snackBar.open(`Massenanwendung abgeschlossen: ${processedCount} Jobs verarbeitet, ${result.totalUpdatedResponses} Antworten aktualisiert${skippedCount > 0 ? `, ${skippedCount} Jobs übersprungen` : ''}`, 'Schließen', { duration: 5000 });
+          this.loadCodingJobs(); // Refresh the list
+        } else {
+          this.snackBar.open(`Fehler bei der Massenanwendung: ${result.message}`, 'Schließen', { duration: 5000 });
+        }
+      },
+      error: error => {
+        loadingSnack.dismiss();
+        this.snackBar.open(`Fehler bei der Massenanwendung: ${error.message || 'Unbekannter Fehler'}`, 'Schließen', { duration: 5000 });
+      }
+    });
   }
 }
