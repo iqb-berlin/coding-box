@@ -278,6 +278,121 @@
       border-top: 1px solid rgba(0, 0, 0, 0.1);
     }
 
+    // Workspace-wide Cohen's Kappa Styles
+    .workspace-kappa-section {
+      margin-bottom: 20px;
+
+      .statistics-card {
+        background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%);
+        border: 1px solid rgba(156, 39, 176, 0.2);
+        box-shadow: 0 2px 8px rgba(156, 39, 176, 0.1);
+
+        .section-title {
+          color: #7b1fa2;
+          font-size: 18px;
+          font-weight: 500;
+        }
+
+        .kappa-stats {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+          gap: 16px;
+          margin-bottom: 20px;
+
+          .stat-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            background-color: rgba(255, 255, 255, 0.7);
+            border-radius: 8px;
+            border: 1px solid rgba(0, 0, 0, 0.05);
+
+            .stat-label {
+              font-weight: 500;
+              color: #555;
+              font-size: 14px;
+            }
+
+            .stat-value {
+              font-weight: 600;
+              font-size: 16px;
+              color: #333;
+
+              &.kappa {
+                font-size: 18px;
+                font-weight: 700;
+
+                &.kappa-excellent {
+                  color: #2e7d32;
+                }
+
+                &.kappa-good {
+                  color: #388e3c;
+                }
+
+                &.kappa-moderate {
+                  color: #f57c00;
+                }
+
+                &.kappa-fair {
+                  color: #f9a825;
+                }
+
+                &.kappa-poor {
+                  color: #d32f2f;
+                }
+              }
+            }
+          }
+        }
+
+        .kappa-interpretation {
+          margin-top: 15px;
+
+          .interpretation-text {
+            background-color: rgba(255, 255, 255, 0.8);
+            padding: 12px;
+            border-radius: 6px;
+            border-left: 4px solid #7b1fa2;
+            font-size: 14px;
+            line-height: 1.4;
+
+            strong {
+              color: #7b1fa2;
+            }
+
+            span {
+              &.kappa-excellent {
+                color: #2e7d32;
+                font-weight: 600;
+              }
+
+              &.kappa-good {
+                color: #388e3c;
+                font-weight: 600;
+              }
+
+              &.kappa-moderate {
+                color: #f57c00;
+                font-weight: 600;
+              }
+
+              &.kappa-fair {
+                color: #f9a825;
+                font-weight: 600;
+              }
+
+              &.kappa-poor {
+                color: #d32f2f;
+                font-weight: 600;
+              }
+            }
+          }
+        }
+      }
+    }
+
     h3 {
       font-size: 18px;
       font-weight: 500;

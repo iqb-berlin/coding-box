@@ -1918,4 +1918,145 @@ export class WorkspaceCodingService {
       throw new Error('Could not get double-coded variables for review. Please check the database connection.');
     }
   }
+
+  async getWorkspaceCohensKappaSummary(
+    workspaceId: number
+  ): Promise<{
+      coderPairs: Array<{
+        coder1Id: number;
+        coder1Name: string;
+        coder2Id: number;
+        coder2Name: string;
+        kappa: number | null;
+        agreement: number;
+        totalSharedResponses: number;
+        validPairs: number;
+        interpretation: string;
+      }>;
+      workspaceSummary: {
+        totalDoubleCodedResponses: number;
+        totalCoderPairs: number;
+        averageKappa: number | null;
+        variablesIncluded: number;
+        codersIncluded: number;
+      };
+    }> {
+    try {
+      this.logger.log(`Calculating workspace-wide Cohen's Kappa for double-coded incomplete variables in workspace ${workspaceId}`);
+
+      // Get all double-coded responses for incomplete variables
+      const doubleCodedData = await this.getDoubleCodedVariablesForReview(workspaceId, 1, 10000); // Get all data
+
+      if (doubleCodedData.total === 0) {
+        return {
+          coderPairs: [],
+          workspaceSummary: {
+            totalDoubleCodedResponses: 0,
+            totalCoderPairs: 0,
+            averageKappa: null,
+            variablesIncluded: 0,
+            codersIncluded: 0
+          }
+        };
+      }
+
+      // Collect all coder pairs and their coding data across all responses
+      const coderPairData = new Map<string, {
+        coder1Id: number;
+        coder1Name: string;
+        coder2Id: number;
+        coder2Name: string;
+        codes: Array<{ code1: number | null; code2: number | null }>;
+      }>();
+
+      // Track unique variables and coders
+      const uniqueVariables = new Set<string>();
+      const uniqueCoders = new Set<number>();
+
+      for (const item of doubleCodedData.data) {
+        uniqueVariables.add(`${item.unitName}:${item.variableId}`);
+
+        // Get all coder pairs for this response
+        const coders = item.coderResults;
+        for (let i = 0; i < coders.length; i++) {
+          for (let j = i + 1; j < coders.length; j++) {
+            const coder1 = coders[i];
+            const coder2 = coders[j];
+
+            uniqueCoders.add(coder1.coderId);
+            uniqueCoders.add(coder2.coderId);
+
+            // Create a consistent key for the coder pair
+            const pairKey = coder1.coderId < coder2.coderId ?
+              `${coder1.coderId}-${coder2.coderId}` :
+              `${coder2.coderId}-${coder1.coderId}`;
+
+            if (!coderPairData.has(pairKey)) {
+              coderPairData.set(pairKey, {
+                coder1Id: coder1.coderId < coder2.coderId ? coder1.coderId : coder2.coderId,
+                coder1Name: coder1.coderId < coder2.coderId ? coder1.coderName : coder2.coderName,
+                coder2Id: coder1.coderId < coder2.coderId ? coder2.coderId : coder1.coderId,
+                coder2Name: coder1.coderId < coder2.coderId ? coder2.coderName : coder1.coderName,
+                codes: []
+              });
+            }
+
+            // Add the coding pair (ensuring consistent order)
+            const pair = coderPairData.get(pairKey)!;
+            if (coder1.coderId < coder2.coderId) {
+              pair.codes.push({
+                code1: coder1.code,
+                code2: coder2.code
+              });
+            } else {
+              pair.codes.push({
+                code1: coder2.code,
+                code2: coder1.code
+              });
+            }
+          }
+        }
+      }
+
+      // Calculate Cohen's Kappa for each coder pair
+      const coderPairs = [];
+      let totalKappa = 0;
+      let validKappaCount = 0;
+
+      for (const pair of coderPairData.values()) {
+        const kappaResults = this.codingStatisticsService.calculateCohensKappa([pair]);
+
+        if (kappaResults.length > 0) {
+          const result = kappaResults[0];
+          coderPairs.push(result);
+
+          if (result.kappa !== null && !Number.isNaN(result.kappa)) {
+            totalKappa += result.kappa;
+            validKappaCount += 1;
+          }
+        }
+      }
+
+      // Calculate workspace summary
+      const averageKappa = validKappaCount > 0 ? totalKappa / validKappaCount : null;
+
+      const workspaceSummary = {
+        totalDoubleCodedResponses: doubleCodedData.total,
+        totalCoderPairs: coderPairs.length,
+        averageKappa: Math.round((averageKappa || 0) * 1000) / 1000,
+        variablesIncluded: uniqueVariables.size,
+        codersIncluded: uniqueCoders.size
+      };
+
+      this.logger.log(`Calculated workspace-wide Cohen's Kappa: ${coderPairs.length} coder pairs, ${uniqueVariables.size} variables, ${uniqueCoders.size} coders, average kappa: ${averageKappa}`);
+
+      return {
+        coderPairs,
+        workspaceSummary
+      };
+    } catch (error) {
+      this.logger.error(`Error calculating workspace-wide Cohen's Kappa: ${error.message}`, error.stack);
+      throw new Error('Could not calculate workspace-wide Cohen\'s Kappa. Please check the database connection.');
+    }
+  }
 }

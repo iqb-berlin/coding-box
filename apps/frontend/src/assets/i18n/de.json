@@ -1296,6 +1296,15 @@
     }
   },
 
+  "kappa": {
+    "poor": "Schlechte Übereinstimmung (weniger als zufällig)",
+    "slight": "Schwache Übereinstimmung",
+    "fair": "Mäßige Übereinstimmung",
+    "moderate": "Akzeptable Übereinstimmung",
+    "substantial": "Substantielle Übereinstimmung",
+    "almost_perfect": "Nahezu perfekte Übereinstimmung"
+  },
+
   "double-coded-review": {
     "title": "Doppelkodierung überprüfen",
     "description": "Überprüfen und vergleichen Sie die Ergebnisse der Doppelkodierung, um die Qualität der Kodierung sicherzustellen.",

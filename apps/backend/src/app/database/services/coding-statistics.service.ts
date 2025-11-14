@@ -300,17 +300,17 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
       // Interpret Kappa value
       let interpretation: string;
       if (kappa < 0) {
-        interpretation = 'Poor agreement (less than chance)';
+        interpretation = 'kappa.poor';
       } else if (kappa < 0.2) {
-        interpretation = 'Slight agreement';
+        interpretation = 'kappa.slight';
       } else if (kappa < 0.4) {
-        interpretation = 'Fair agreement';
+        interpretation = 'kappa.fair';
       } else if (kappa < 0.6) {
-        interpretation = 'Moderate agreement';
+        interpretation = 'kappa.moderate';
       } else if (kappa < 0.8) {
-        interpretation = 'Substantial agreement';
+        interpretation = 'kappa.substantial';
       } else {
-        interpretation = 'Almost perfect agreement';
+        interpretation = 'kappa.almost_perfect';
       }
 
       results.push({

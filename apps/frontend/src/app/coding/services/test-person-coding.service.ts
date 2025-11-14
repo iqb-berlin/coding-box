@@ -570,21 +570,30 @@ export class TestPersonCodingService {
     workspaceId: number,
     unitName?: string,
     variableId?: string
-  ): Observable<Array<{
-      unitName: string;
-      variableId: string;
-      coderPairs: Array<{
-        coder1Id: number;
-        coder1Name: string;
-        coder2Id: number;
-        coder2Name: string;
-        kappa: number | null;
-        agreement: number;
-        totalItems: number;
-        validPairs: number;
-        interpretation: string;
+  ): Observable<{
+      variables: Array<{
+        unitName: string;
+        variableId: string;
+        coderPairs: Array<{
+          coder1Id: number;
+          coder1Name: string;
+          coder2Id: number;
+          coder2Name: string;
+          kappa: number | null;
+          agreement: number;
+          totalItems: number;
+          validPairs: number;
+          interpretation: string;
+        }>;
       }>;
-    }>> {
+      workspaceSummary: {
+        totalDoubleCodedResponses: number;
+        totalCoderPairs: number;
+        averageKappa: number | null;
+        variablesIncluded: number;
+        codersIncluded: number;
+      };
+    }> {
     let params = new HttpParams();
 
     if (unitName) {
@@ -595,9 +604,50 @@ export class TestPersonCodingService {
     }
 
     return this.http
-      .get<Array<{
-      unitName: string;
-      variableId: string;
+      .get<{
+      variables: Array<{
+        unitName: string;
+        variableId: string;
+        coderPairs: Array<{
+          coder1Id: number;
+          coder1Name: string;
+          coder2Id: number;
+          coder2Name: string;
+          kappa: number | null;
+          agreement: number;
+          totalItems: number;
+          validPairs: number;
+          interpretation: string;
+        }>;
+      }>;
+      workspaceSummary: {
+        totalDoubleCodedResponses: number;
+        totalCoderPairs: number;
+        averageKappa: number | null;
+        variablesIncluded: number;
+        codersIncluded: number;
+      };
+    }>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/coding/cohens-kappa`,
+      { headers: this.authHeader, params }
+    )
+      .pipe(
+        catchError(() => of({
+          variables: [],
+          workspaceSummary: {
+            totalDoubleCodedResponses: 0,
+            totalCoderPairs: 0,
+            averageKappa: null,
+            variablesIncluded: 0,
+            codersIncluded: 0
+          }
+        }))
+      );
+  }
+
+  getWorkspaceCohensKappaSummary(
+    workspaceId: number
+  ): Observable<{
       coderPairs: Array<{
         coder1Id: number;
         coder1Name: string;
@@ -605,16 +655,53 @@ export class TestPersonCodingService {
         coder2Name: string;
         kappa: number | null;
         agreement: number;
-        totalItems: number;
+        totalSharedResponses: number;
         validPairs: number;
         interpretation: string;
       }>;
-    }>>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/coding/cohens-kappa`,
-      { headers: this.authHeader, params }
+      workspaceSummary: {
+        totalDoubleCodedResponses: number;
+        totalCoderPairs: number;
+        averageKappa: number | null;
+        variablesIncluded: number;
+        codersIncluded: number;
+      };
+    }> {
+    return this.http
+      .get<{
+      coderPairs: Array<{
+        coder1Id: number;
+        coder1Name: string;
+        coder2Id: number;
+        coder2Name: string;
+        kappa: number | null;
+        agreement: number;
+        totalSharedResponses: number;
+        validPairs: number;
+        interpretation: string;
+      }>;
+      workspaceSummary: {
+        totalDoubleCodedResponses: number;
+        totalCoderPairs: number;
+        averageKappa: number | null;
+        variablesIncluded: number;
+        codersIncluded: number;
+      };
+    }>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/coding/cohens-kappa/workspace-summary`,
+      { headers: this.authHeader }
     )
       .pipe(
-        catchError(() => of([]))
+        catchError(() => of({
+          coderPairs: [],
+          workspaceSummary: {
+            totalDoubleCodedResponses: 0,
+            totalCoderPairs: 0,
+            averageKappa: null,
+            variablesIncluded: 0,
+            codersIncluded: 0
+          }
+        }))
       );
   }
 }
