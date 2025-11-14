@@ -805,7 +805,8 @@ export class WorkspaceCodingController {
         type: 'object',
         properties: {
           unitName: { type: 'string', description: 'Unit name' },
-          variableId: { type: 'string', description: 'Variable ID' }
+          variableId: { type: 'string', description: 'Variable ID' },
+          responseCount: { type: 'number', description: 'Number of responses for this variable' }
         }
       }
     }
@@ -813,7 +814,7 @@ export class WorkspaceCodingController {
   async getCodingIncompleteVariables(
     @WorkspaceId() workspace_id: number,
       @Query('unitName') unitName?: string
-  ): Promise<{ unitName: string; variableId: string }[]> {
+  ): Promise<{ unitName: string; variableId: string; responseCount: number }[]> {
     return this.workspaceCodingService.getCodingIncompleteVariables(
       workspace_id,
       unitName
