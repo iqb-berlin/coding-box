@@ -1,0 +1,452 @@
+.double-coded-review-container {
+  padding: 0;
+  max-width: none;
+  margin: 0;
+
+  .header-section {
+    margin-bottom: 32px;
+
+    .page-title {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 8px;
+      font-size: 28px;
+      font-weight: 500;
+      color: #1976d2;
+
+      mat-icon {
+        font-size: 32px;
+        width: 32px;
+        height: 32px;
+      }
+    }
+
+    .page-description {
+      font-size: 16px;
+      color: #666;
+      margin: 0;
+    }
+  }
+
+  .content-section {
+    .loading-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 64px 0;
+
+      p {
+        margin-top: 16px;
+        color: #666;
+        font-size: 16px;
+      }
+    }
+
+    .no-data-card {
+      .no-data-content {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        padding: 64px 24px;
+
+        .no-data-icon {
+          font-size: 64px;
+          width: 64px;
+          height: 64px;
+          color: #ccc;
+          margin-bottom: 16px;
+        }
+
+        h3 {
+          margin: 0 0 8px 0;
+          color: #666;
+          font-size: 20px;
+          font-weight: 500;
+        }
+
+        p {
+          margin: 0;
+          color: #999;
+          font-size: 16px;
+        }
+      }
+    }
+
+    .kappa-card {
+      margin-bottom: 24px;
+
+      mat-card-header {
+        mat-card-title {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+
+          mat-icon {
+            color: #1976d2;
+          }
+        }
+      }
+
+      .kappa-info {
+        p {
+          margin-bottom: 16px;
+          color: #666;
+          font-size: 14px;
+          line-height: 1.5;
+        }
+
+        .no-kappa-data {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          padding: 32px;
+          background-color: #f8f9fa;
+          border-radius: 8px;
+          border: 1px solid #e9ecef;
+
+          mat-icon {
+            font-size: 48px;
+            width: 48px;
+            height: 48px;
+            color: #ccc;
+            margin-bottom: 16px;
+          }
+
+          p {
+            margin: 0;
+            color: #666;
+            font-size: 16px;
+          }
+        }
+
+        .kappa-results {
+          margin-bottom: 24px;
+
+          .kappa-unit-variable {
+            margin-bottom: 20px;
+            padding: 16px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            border: 1px solid #e9ecef;
+
+            h4 {
+              margin: 0 0 16px 0;
+              color: #1976d2;
+              font-size: 16px;
+              font-weight: 600;
+            }
+
+            .kappa-pairs {
+              display: flex;
+              flex-direction: column;
+              gap: 12px;
+
+              .kappa-pair {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 12px 16px;
+                background-color: white;
+                border-radius: 6px;
+                border: 1px solid #e0e0e0;
+
+                .coder-names {
+                  display: flex;
+                  align-items: center;
+                  gap: 8px;
+                  font-weight: 500;
+
+                  .coder1, .coder2 {
+                    color: #1976d2;
+                  }
+
+                  .vs {
+                    color: #666;
+                    font-weight: normal;
+                  }
+                }
+
+                .kappa-values {
+                  display: flex;
+                  gap: 20px;
+                  align-items: center;
+
+                  .kappa-value, .agreement-value, .interpretation {
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+
+                    .label {
+                      font-size: 12px;
+                      color: #666;
+                      margin-bottom: 2px;
+                      font-weight: 500;
+                    }
+
+                    .value {
+                      font-size: 16px;
+                      font-weight: 600;
+
+                      &.kappa-poor {
+                        color: #d32f2f;
+                      }
+
+                      &.kappa-fair {
+                        color: #f57c00;
+                      }
+
+                      &.kappa-moderate {
+                        color: #fbc02d;
+                      }
+
+                      &.kappa-substantial {
+                        color: #388e3c;
+                      }
+
+                      &.kappa-perfect {
+                        color: #1976d2;
+                      }
+
+                      &.kappa-na {
+                        color: #999;
+                      }
+                    }
+
+                    .interpretation-text {
+                      font-size: 12px;
+                      color: #666;
+                      font-style: italic;
+                      text-align: center;
+                      max-width: 120px;
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        .kappa-scale {
+          border-top: 1px solid #e9ecef;
+          padding-top: 16px;
+
+          h4 {
+            margin: 0 0 16px 0;
+            color: #333;
+            font-size: 14px;
+            font-weight: 600;
+          }
+
+          .kappa-scale-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 12px 16px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            border: 1px solid #e9ecef;
+            min-width: 120px;
+
+            .kappa-range {
+              font-weight: 600;
+              color: #1976d2;
+              font-size: 14px;
+              margin-bottom: 4px;
+            }
+
+            .kappa-label {
+              font-size: 12px;
+              color: #666;
+              text-align: center;
+            }
+          }
+        }
+      }
+    }
+
+    .review-card {
+      .review-table {
+        width: 100%;
+        margin-bottom: 24px;
+
+        th {
+          background-color: #f5f5f5;
+          font-weight: 600;
+          font-size: 14px;
+          padding: 16px 12px;
+        }
+
+        td {
+          padding: 16px 12px;
+          vertical-align: top;
+        }
+
+        .unit-variable-cell {
+          .unit-name {
+            font-weight: 500;
+            color: #1976d2;
+            margin-bottom: 4px;
+          }
+
+          .variable-id {
+            font-size: 14px;
+            color: #666;
+          }
+        }
+
+        .person-info-cell {
+          .person-login {
+            font-weight: 500;
+            margin-bottom: 2px;
+          }
+
+          .person-code {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 2px;
+          }
+
+          .booklet-name {
+            font-size: 14px;
+            color: #999;
+          }
+        }
+
+        .given-answer-cell {
+          font-family: monospace;
+          background-color: #f9f9f9;
+          padding: 8px 12px;
+          border-radius: 4px;
+          max-width: 200px;
+          word-break: break-word;
+        }
+
+        .coder-results-cell {
+          .coder-result-item {
+            margin-bottom: 12px;
+            padding: 8px 12px;
+            background-color: #f8f9fa;
+            border-radius: 6px;
+            border-left: 4px solid #1976d2;
+
+            &:last-child {
+              margin-bottom: 0;
+            }
+
+            .coder-name {
+              font-weight: 500;
+              color: #1976d2;
+              margin-bottom: 4px;
+              display: block;
+            }
+
+            .coder-details {
+              display: flex;
+              gap: 16px;
+              flex-wrap: wrap;
+              align-items: center;
+
+              .code-value {
+                font-weight: 500;
+                color: #333;
+              }
+
+              .score-value {
+                color: #666;
+                font-size: 14px;
+              }
+
+              .notes-indicator {
+                color: #ff9800;
+                cursor: help;
+
+                mat-icon {
+                  font-size: 18px;
+                  width: 18px;
+                  height: 18px;
+                }
+              }
+            }
+          }
+        }
+
+        .coder-selection {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+
+          .coder-radio {
+            margin-bottom: 4px;
+          }
+        }
+      }
+
+      mat-card-actions {
+        padding: 16px 24px;
+        justify-content: flex-end;
+      }
+    }
+  }
+}
+
+// Responsive design
+@media (max-width: 1200px) {
+  .double-coded-review-container {
+    padding: 16px;
+
+    .review-table {
+      font-size: 14px;
+
+      th, td {
+        padding: 12px 8px;
+      }
+    }
+  }
+}
+
+@media (max-width: 768px) {
+  .double-coded-review-container {
+    padding: 12px;
+
+    .header-section {
+      .page-title {
+        font-size: 24px;
+
+        mat-icon {
+          font-size: 28px;
+          width: 28px;
+          height: 28px;
+        }
+      }
+
+      .page-description {
+        font-size: 14px;
+      }
+    }
+
+    .review-card {
+      .review-table {
+        th, td {
+          padding: 8px 4px;
+          font-size: 12px;
+        }
+
+        .coder-results-cell {
+          .coder-result-item {
+            padding: 6px 8px;
+
+            .coder-details {
+              flex-direction: column;
+              align-items: flex-start;
+              gap: 4px;
+            }
+          }
+        }
+      }
+    }
+  }
+}

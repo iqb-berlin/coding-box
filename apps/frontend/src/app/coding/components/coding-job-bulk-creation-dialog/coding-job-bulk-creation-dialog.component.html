@@ -1,5 +1,5 @@
 <div class="bulk-dialog-container">
-  <h2 class="dialog-title" cdkFocusInitial>
+  <h2 class="dialog-title">
     <mat-icon class="title-icon">library_add</mat-icon>
     {{ 'coding-job-bulk-creation-dialog.title' | translate }}
   </h2>
@@ -14,7 +14,14 @@
       }
     </p>
 
-    @if ((data.creationResults && data.creationResults.doubleCodingInfo) || doubleCodingPreview) {
+    @if (isLoading) {
+      <div class="loading-container">
+        <mat-spinner diameter="40"></mat-spinner>
+        <p class="loading-text">Berechne Verteilung und erstelle Vorschau...</p>
+      </div>
+    }
+
+    @if (!isLoading && ((data.creationResults && data.creationResults.doubleCodingInfo) || doubleCodingPreview)) {
       <div class="double-coding-summary">
         <h3 class="section-title">
           <mat-icon>repeat</mat-icon>
@@ -72,6 +79,7 @@
       </div>
     }
 
+    @if (!isLoading) {
     <div class="distribution-summary">
       <h3 class="section-title">
         <mat-icon>table_chart</mat-icon>
@@ -131,7 +139,9 @@
         <p><strong>{{ 'coding-job-bulk-creation-dialog.distribution-summary.notice' | translate }}</strong> {{ 'coding-job-bulk-creation-dialog.distribution-summary.notice-text' | translate }}</p>
       </div>
     </div>
+    }
 
+    @if (!isLoading) {
     <div class="jobs-summary">
       <h3 class="section-title">
         <mat-icon>work</mat-icon>
@@ -158,7 +168,9 @@
         }
       </div>
     </div>
+    }
 
+    @if (!isLoading) {
     <div class="display-options-section">
       <h3 class="section-title">
         <mat-icon>settings</mat-icon>
@@ -180,6 +192,7 @@
         </mat-checkbox>
       </form>
     </div>
+    }
 
   </div>
 

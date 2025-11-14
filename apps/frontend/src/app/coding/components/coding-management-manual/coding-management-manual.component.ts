@@ -10,6 +10,7 @@ import { MatAnchor, MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import * as ExcelJS from 'exceljs';
 import { Subject, takeUntil } from 'rxjs';
 import { CodingJobsComponent } from '../coding-jobs/coding-jobs.component';
@@ -27,6 +28,7 @@ import {
   ValidationStateService
 } from '../../services/validation-state.service';
 import { CoderTrainingsListComponent } from '../coder-trainings-list/coder-trainings-list.component';
+import { DoubleCodedReviewComponent } from '../double-coded-review/double-coded-review.component';
 
 @Component({
   selector: 'coding-box-coding-management-manual',
@@ -40,6 +42,7 @@ import { CoderTrainingsListComponent } from '../coder-trainings-list/coder-train
     MatIcon,
     MatButton,
     MatProgressBarModule,
+    MatDialogModule,
     VariableBundleManagerComponent,
     CoderTrainingComponent,
     CoderTrainingsListComponent,
@@ -52,11 +55,54 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   private snackBar = inject(MatSnackBar);
   private validationStateService = inject(ValidationStateService);
   private translateService = inject(TranslateService);
+  private dialog = inject(MatDialog);
   private destroy$ = new Subject<void>();
 
   validationResults: ValidateCodingCompletenessResponseDto | null = null;
   validationProgress: ValidationProgress | null = null;
   isLoading = false;
+
+  codingProgressOverview: {
+    totalCasesToCode: number;
+    completedCases: number;
+    completionPercentage: number;
+  } | null = null;
+
+  variableCoverageOverview: {
+    totalVariables: number;
+    coveredVariables: number;
+    missingVariables: number;
+    coveragePercentage: number;
+    variableCaseCounts: { unitName: string; variableId: string; caseCount: number }[];
+  } | null = null;
+
+  caseCoverageOverview: {
+    totalCasesToCode: number;
+    casesInJobs: number;
+    unassignedCases: number;
+    coveragePercentage: number;
+  } | null = null;
+
+  workspaceKappaSummary: {
+    coderPairs: Array<{
+      coder1Id: number;
+      coder1Name: string;
+      coder2Id: number;
+      coder2Name: string;
+      kappa: number | null;
+      agreement: number;
+      totalSharedResponses: number;
+      validPairs: number;
+      interpretation: string;
+    }>;
+    workspaceSummary: {
+      totalDoubleCodedResponses: number;
+      totalCoderPairs: number;
+      averageKappa: number | null;
+      variablesIncluded: number;
+      codersIncluded: number;
+    };
+  } | null = null;
 
   importResults: {
     message: string;
@@ -115,6 +161,13 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     return this.comparisonCurrentPage > 1;
   }
 
+  get completionPercentage(): number {
+    if (!this.validationResults || this.validationResults.total === 0) {
+      return 0;
+    }
+    return ((this.validationResults.total - this.validationResults.missing) / this.validationResults.total) * 100;
+  }
+
   get paginatedAffectedRows(): Array<{
     unitAlias: string;
     variableId: string;
@@ -167,6 +220,10 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     const currentProgress = this.validationStateService.getValidationProgress();
     this.validationProgress = currentProgress;
     this.isLoading = currentProgress.status === 'loading' || currentProgress.status === 'processing';
+    this.loadCodingProgressOverview();
+    this.loadVariableCoverageOverview();
+    this.loadCaseCoverageOverview();
+    this.loadWorkspaceKappaSummary();
   }
 
   ngOnDestroy(): void {
@@ -594,6 +651,132 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
   closeCoderTraining(): void {
     this.showCoderTraining = false;
+  }
+
+  openDoubleCodedReviewDialog(): void {
+    this.dialog.open(DoubleCodedReviewComponent, {
+      width: '90vw',
+      maxWidth: '1400px',
+      height: '90vh',
+      maxHeight: '900px',
+      data: {}
+    });
+  }
+
+  private loadCodingProgressOverview(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      return;
+    }
+
+    this.testPersonCodingService.getCodingProgressOverview(workspaceId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: overview => {
+          this.codingProgressOverview = overview;
+        },
+        error: () => {
+          this.codingProgressOverview = null;
+        }
+      });
+  }
+
+  private loadVariableCoverageOverview(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      return;
+    }
+
+    this.testPersonCodingService.getVariableCoverageOverview(workspaceId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: overview => {
+          this.variableCoverageOverview = overview;
+        },
+        error: () => {
+          this.variableCoverageOverview = null;
+        }
+      });
+  }
+
+  private loadCaseCoverageOverview(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      return;
+    }
+
+    this.testPersonCodingService.getCaseCoverageOverview(workspaceId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: overview => {
+          this.caseCoverageOverview = overview;
+        },
+        error: () => {
+          this.caseCoverageOverview = null;
+        }
+      });
+  }
+
+  private loadWorkspaceKappaSummary(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      return;
+    }
+
+    this.testPersonCodingService.getWorkspaceCohensKappaSummary(workspaceId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: summary => {
+          this.workspaceKappaSummary = summary;
+        },
+        error: () => {
+          this.workspaceKappaSummary = null;
+        }
+      });
+  }
+
+  getKappaInterpretationText(kappa: number | null): string {
+    if (kappa === null) {
+      return 'Keine Daten verfügbar';
+    }
+    if (kappa < 0) {
+      return 'Schlechte Übereinstimmung (weniger als zufällig)';
+    }
+    if (kappa < 0.2) {
+      return 'Schwache Übereinstimmung';
+    }
+    if (kappa < 0.4) {
+      return 'Mäßige Übereinstimmung';
+    }
+    if (kappa < 0.6) {
+      return 'Akzeptable Übereinstimmung';
+    }
+    if (kappa < 0.8) {
+      return 'Gute Übereinstimmung';
+    }
+    return 'Ausgezeichnete Übereinstimmung';
+  }
+
+  getKappaInterpretationClass(kappa: number | null): string {
+    if (kappa === null) {
+      return 'kappa-no-data';
+    }
+    if (kappa < 0) {
+      return 'kappa-poor';
+    }
+    if (kappa < 0.2) {
+      return 'kappa-poor';
+    }
+    if (kappa < 0.4) {
+      return 'kappa-fair';
+    }
+    if (kappa < 0.6) {
+      return 'kappa-moderate';
+    }
+    if (kappa < 0.8) {
+      return 'kappa-good';
+    }
+    return 'kappa-excellent';
   }
 
   onTrainingStart(data: { selectedCoders: Coder[], variableConfigs: VariableConfig[] }): void {

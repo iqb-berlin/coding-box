@@ -36,6 +36,8 @@ import { Coder } from '../../models/coder.model';
 import { CoderService } from '../../services/coder.service';
 import { CodingJobResultDialogComponent } from './coding-job-result-dialog/coding-job-result-dialog.component';
 import { CoderTraining } from '../../models/coder-training.model';
+import { DoubleCodedReviewComponent } from '../double-coded-review/double-coded-review.component';
+import { CohensKappaStatisticsComponent } from '../cohens-kappa-statistics/cohens-kappa-statistics.component';
 
 @Component({
   selector: 'coding-box-coding-jobs',
@@ -784,6 +786,26 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
       return `${this.isAllSelected() ? 'deselect' : 'select'} all`;
     }
     return `${this.selection.isSelected(row) ? 'deselect' : 'select'} row ${row.id + 1}`;
+  }
+
+  openDoubleCodedReviewDialog(): void {
+    this.dialog.open(DoubleCodedReviewComponent, {
+      width: '90vw',
+      maxWidth: '1400px',
+      height: '90vh',
+      maxHeight: '900px',
+      data: {}
+    });
+  }
+
+  openCohensKappaStatisticsDialog(): void {
+    this.dialog.open(CohensKappaStatisticsComponent, {
+      width: '90vw',
+      maxWidth: '1400px',
+      height: '90vh',
+      maxHeight: '900px',
+      data: {}
+    });
   }
 
   bulkDeleteCodingJobs(): void {

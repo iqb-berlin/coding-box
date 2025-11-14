@@ -201,4 +201,131 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
     this.logger.log(`Refreshing coding statistics for workspace ${workspace_id}`);
     return this.getCodingStatistics(workspace_id, version, true); // skipCache = true
   }
+
+  /**
+   * Calculate Cohen's Kappa for inter-rater agreement between coders
+   * @param coderPairs Array of coder pairs with their coding data
+   * @returns Cohen's Kappa coefficient and related statistics
+   */
+  calculateCohensKappa(coderPairs: Array<{
+    coder1Id: number;
+    coder1Name: string;
+    coder2Id: number;
+    coder2Name: string;
+    codes: Array<{ code1: number | null; code2: number | null }>;
+  }>): Array<{
+      coder1Id: number;
+      coder1Name: string;
+      coder2Id: number;
+      coder2Name: string;
+      kappa: number;
+      agreement: number;
+      totalItems: number;
+      validPairs: number;
+      interpretation: string;
+    }> {
+    const results = [];
+
+    for (const pair of coderPairs) {
+      const { codes } = pair;
+
+      // Filter out pairs where either coder has null code
+      const validCodes = codes.filter(c => c.code1 !== null && c.code2 !== null);
+
+      if (validCodes.length === 0) {
+        results.push({
+          coder1Id: pair.coder1Id,
+          coder1Name: pair.coder1Name,
+          coder2Id: pair.coder2Id,
+          coder2Name: pair.coder2Name,
+          kappa: null,
+          agreement: 0,
+          totalItems: codes.length,
+          validPairs: 0,
+          interpretation: 'No valid coding pairs'
+        });
+        continue;
+      }
+
+      // Create confusion matrix
+      const codeSet = new Set<number>();
+      validCodes.forEach(c => {
+        codeSet.add(c.code1!);
+        codeSet.add(c.code2!);
+      });
+      const uniqueCodes = Array.from(codeSet).sort();
+
+      const matrix: number[][] = [];
+      for (let i = 0; i < uniqueCodes.length; i++) {
+        matrix[i] = new Array(uniqueCodes.length).fill(0);
+      }
+
+      // Fill confusion matrix
+      validCodes.forEach(c => {
+        const rowIndex = uniqueCodes.indexOf(c.code1!);
+        const colIndex = uniqueCodes.indexOf(c.code2!);
+        matrix[rowIndex][colIndex] += 1;
+      });
+
+      // Calculate observed agreement (Po)
+      let observedAgreement = 0;
+      for (let i = 0; i < uniqueCodes.length; i++) {
+        observedAgreement += matrix[i][i];
+      }
+      observedAgreement /= validCodes.length;
+
+      // Calculate expected agreement by chance (Pe)
+      let expectedAgreement = 0;
+      const rowTotals = matrix.map(row => row.reduce((sum, val) => sum + val, 0));
+      const colTotals = matrix[0].map((_, colIndex) => matrix.reduce((sum, row) => sum + row[colIndex], 0)
+      );
+
+      for (let i = 0; i < uniqueCodes.length; i++) {
+        expectedAgreement += (rowTotals[i] * colTotals[i]) / (validCodes.length * validCodes.length);
+      }
+
+      // Calculate Cohen's Kappa
+      let kappa: number;
+      if (expectedAgreement === 1) {
+        kappa = 1; // Perfect expected agreement
+      } else {
+        kappa = (observedAgreement - expectedAgreement) / (1 - expectedAgreement);
+      }
+
+      // Handle edge cases
+      if (Number.isNaN(kappa) || !Number.isFinite(kappa)) {
+        kappa = 0;
+      }
+
+      // Interpret Kappa value
+      let interpretation: string;
+      if (kappa < 0) {
+        interpretation = 'kappa.poor';
+      } else if (kappa < 0.2) {
+        interpretation = 'kappa.slight';
+      } else if (kappa < 0.4) {
+        interpretation = 'kappa.fair';
+      } else if (kappa < 0.6) {
+        interpretation = 'kappa.moderate';
+      } else if (kappa < 0.8) {
+        interpretation = 'kappa.substantial';
+      } else {
+        interpretation = 'kappa.almost_perfect';
+      }
+
+      results.push({
+        coder1Id: pair.coder1Id,
+        coder1Name: pair.coder1Name,
+        coder2Id: pair.coder2Id,
+        coder2Name: pair.coder2Name,
+        kappa: Math.round(kappa * 1000) / 1000, // Round to 3 decimal places
+        agreement: Math.round(observedAgreement * 1000) / 1000,
+        totalItems: codes.length,
+        validPairs: validCodes.length,
+        interpretation
+      });
+    }
+
+    return results;
+  }
 }
