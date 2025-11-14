@@ -37,6 +37,7 @@ export class ReplayCodingService {
   isCodingJobPaused: boolean = false;
   isSubmittingJob: boolean = false;
   isResumingJob: boolean = false;
+  isCodingJobFinalized: boolean = false; // true when status is 'results_applied'
 
   // Coding display options
   showScore = false;
@@ -103,6 +104,7 @@ export class ReplayCodingService {
       this.showScore = codingJob.showScore || false;
       this.allowComments = codingJob.allowComments !== undefined ? codingJob.allowComments : true;
       this.suppressGeneralInstructions = codingJob.suppressGeneralInstructions || false;
+      this.isCodingJobFinalized = codingJob.status === 'results_applied';
     } catch (error) {
       // Ignore errors when loading saved coding progress
     }

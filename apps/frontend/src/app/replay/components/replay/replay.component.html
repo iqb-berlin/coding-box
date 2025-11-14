@@ -47,6 +47,7 @@
             [showScore]="codingService.showScore"
             [allowComments]="codingService.allowComments"
             [suppressGeneralInstructions]="codingService.suppressGeneralInstructions"
+            [isReadOnly]="codingService.isCodingJobFinalized"
             (codeSelected)="onCodeSelected($event)"
             (notesChanged)="onNotesChanged($event)"
             (openNavigateDialog)="openNavigateDialog()"
