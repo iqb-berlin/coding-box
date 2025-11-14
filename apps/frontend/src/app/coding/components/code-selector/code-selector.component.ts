@@ -50,6 +50,7 @@ export class CodeSelectorComponent implements OnChanges {
   @Input() showScore: boolean = true;
   @Input() allowComments: boolean = true;
   @Input() suppressGeneralInstructions: boolean = false;
+  @Input() isReadOnly: boolean = false;
 
   @Output() codeSelected = new EventEmitter<CodeSelectedEvent>();
   @Output() notesChanged = new EventEmitter<string>();
@@ -179,6 +180,7 @@ export class CodeSelectorComponent implements OnChanges {
   }
 
   onSelect(codeId: number): void {
+    if (this.isReadOnly) return;
     const selectedItem = this.selectableItems.find(item => item.id === codeId);
     if (!selectedItem) return;
     if (selectedItem.type === 'codingIssueOption') {

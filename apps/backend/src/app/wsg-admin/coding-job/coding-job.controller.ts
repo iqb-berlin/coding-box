@@ -281,7 +281,9 @@ export class WsgCodingJobController {
       const onlyOpen = job.codingJob.status === 'pending';
       const items = await this.codingJobService.getCodingJobUnits(id, onlyOpen);
 
-      await this.codingJobService.updateCodingJob(id, workspaceId, { status: 'active' });
+      if (job.codingJob.status !== 'results_applied') {
+        await this.codingJobService.updateCodingJob(id, workspaceId, { status: 'active' });
+      }
 
       return { total: items.length, items };
     } catch (error) {
