@@ -639,7 +639,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   onUnitClick(unit: Unit, booklet: Booklet): void {
     const mappedResponses = unit.results.map((response: UnitResult) => ({
       ...response,
-      status: this.mapStatusToString(Number(response.status)),
+      status: response.status,
       expanded: false
     }));
     this.responses = Array.from(mappedResponses);
