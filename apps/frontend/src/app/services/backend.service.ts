@@ -1171,4 +1171,12 @@ export class BackendService {
       headers: this.authHeader
     });
   }
+
+  exportCodingTimesReport(workspaceId: number): Observable<Blob> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/coding-times`;
+    return this.http.get(url, {
+      responseType: 'blob',
+      headers: this.authHeader
+    });
+  }
 }
