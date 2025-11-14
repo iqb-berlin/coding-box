@@ -751,6 +751,11 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     }
   }
 
+  dismissCompletionOverlay(): void {
+    // Allow users to continue navigating through cases even after job completion
+    this.codingService.isCodingJobCompleted = false;
+  }
+
   openCommentDialog(): void {
     const dialogRef = this.dialog.open(CodingJobCommentDialogComponent, {
       width: '500px',

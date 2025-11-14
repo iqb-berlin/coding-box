@@ -273,10 +273,24 @@
     font-size: 16px;
     line-height: 1.5;
   }
+
+  .completion-buttons {
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+    align-items: center;
+  }
 }
 
 .submit-button {
   min-width: 150px;
+  padding: 12px 24px;
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.close-button {
+  min-width: 100px;
   padding: 12px 24px;
   font-size: 16px;
   font-weight: 500;
