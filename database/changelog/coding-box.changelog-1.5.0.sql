@@ -130,3 +130,17 @@ DROP TABLE IF EXISTS person;
 ALTER TABLE "public"."coding_job_unit" ADD COLUMN "updated_at" TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT NOW();
 
 -- rollback ALTER TABLE "public"."coding_job_unit" DROP COLUMN "updated_at";
+
+-- changeset jurei733:12
+-- comment: Drop obsolete responses table (legacy table storing raw test response data)
+
+DROP TABLE IF EXISTS "public"."responses";
+
+-- rollback CREATE TABLE "public"."responses" ("id" SERIAL PRIMARY KEY, "unit_id" VARCHAR(50) NOT NULL, "test_person" VARCHAR(100), "test_group" VARCHAR(100), "workspace_id" INTEGER NOT NULL, "responses" JSONB, "created_at" TIMESTAMP WITH TIME ZONE DEFAULT now());
+
+-- changeset jurei733:13
+-- comment: Drop obsolete logs table (legacy table storing log entries)
+
+DROP TABLE IF EXISTS "public"."logs";
+
+-- rollback CREATE TABLE "public"."logs" ("id" SERIAL PRIMARY KEY, "unit_id" VARCHAR(50) NOT NULL, "test_group" VARCHAR(100), "workspace_id" INTEGER NOT NULL, "log_entry" VARCHAR(100), "timestamp" BIGINT, "booklet_id" VARCHAR(100));
