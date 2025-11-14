@@ -83,14 +83,22 @@
       <div class="completion-dialog">
         <h2>{{ 'replay.CODING_JOB_COMPLETED' | translate }}</h2>
         <p>{{ 'replay.ALL_REPLAYS_CODED_MESSAGE' | translate }}</p>
-        <button
-          mat-raised-button
-          color="primary"
-          (click)="submitCodingJob()"
-          [disabled]="codingService.isSubmittingJob"
-          class="submit-button">
-          {{ codingService.isSubmittingJob ? ('replay.SUBMITTING_JOB' | translate) : ('replay.SUBMIT_JOB' | translate) }}
-        </button>
+        <div class="completion-buttons">
+          <button
+            mat-button
+            (click)="dismissCompletionOverlay()"
+            class="close-button">
+            {{ 'common.close' | translate }}
+          </button>
+          <button
+            mat-raised-button
+            color="primary"
+            (click)="submitCodingJob()"
+            [disabled]="codingService.isSubmittingJob"
+            class="submit-button">
+            {{ codingService.isSubmittingJob ? ('replay.SUBMITTING_JOB' | translate) : ('replay.SUBMIT_JOB' | translate) }}
+          </button>
+        </div>
       </div>
     </div>
   }
