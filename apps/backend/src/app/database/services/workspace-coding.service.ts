@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import {
+  In, IsNull, Not, Repository
+} from 'typeorm';
 import { CodingScheme } from '@iqbspecs/coding-scheme/coding-scheme.interface';
 import * as Autocoder from '@iqb/responses';
 import * as cheerio from 'cheerio';
@@ -1607,5 +1609,454 @@ export class WorkspaceCodingService {
 
   async exportCodingResultsByVariable(workspaceId: number): Promise<Buffer> {
     return this.codingExportService.exportCodingResultsByVariable(workspaceId);
+  }
+
+  async getCodingProgressOverview(workspaceId: number): Promise<{
+    totalCasesToCode: number;
+    completedCases: number;
+    completionPercentage: number;
+  }> {
+    const totalCasesToCode = await this.responseRepository.createQueryBuilder('response')
+      .leftJoin('response.unit', 'unit')
+      .leftJoin('unit.booklet', 'booklet')
+      .leftJoin('booklet.person', 'person')
+      .where('response.status_v1 = :status', { status: statusStringToNumber('CODING_INCOMPLETE') })
+      .andWhere('person.workspace_id = :workspaceId', { workspaceId })
+      .getCount();
+
+    // Get completed coding job units (where code is not null)
+    const completedCases = await this.codingJobUnitRepository.count({
+      where: {
+        coding_job: { workspace_id: workspaceId },
+        code: Not(IsNull())
+      }
+    });
+
+    const completionPercentage = totalCasesToCode > 0 ? (completedCases / totalCasesToCode) * 100 : 0;
+
+    return {
+      totalCasesToCode,
+      completedCases,
+      completionPercentage
+    };
+  }
+
+  async getCaseCoverageOverview(workspaceId: number): Promise<{
+    totalCasesToCode: number;
+    casesInJobs: number;
+    unassignedCases: number;
+    coveragePercentage: number;
+  }> {
+    // Get total CODING_INCOMPLETE responses
+    const totalCasesToCode = await this.responseRepository.createQueryBuilder('response')
+      .leftJoin('response.unit', 'unit')
+      .leftJoin('unit.booklet', 'booklet')
+      .leftJoin('booklet.person', 'person')
+      .where('response.status_v1 = :status', { status: statusStringToNumber('CODING_INCOMPLETE') })
+      .andWhere('person.workspace_id = :workspaceId', { workspaceId })
+      .getCount();
+
+    // Get CODING_INCOMPLETE responses that are assigned to coding jobs
+    // Query from CodingJobUnit and join to ResponseEntity
+    const casesInJobs = await this.codingJobUnitRepository.createQueryBuilder('cju')
+      .innerJoin('cju.response', 'response')
+      .leftJoin('response.unit', 'unit')
+      .leftJoin('unit.booklet', 'booklet')
+      .leftJoin('booklet.person', 'person')
+      .where('response.status_v1 = :status', { status: statusStringToNumber('CODING_INCOMPLETE') })
+      .andWhere('person.workspace_id = :workspaceId', { workspaceId })
+      .getCount();
+
+    const unassignedCases = totalCasesToCode - casesInJobs;
+    const coveragePercentage = totalCasesToCode > 0 ? (casesInJobs / totalCasesToCode) * 100 : 0;
+
+    return {
+      totalCasesToCode,
+      casesInJobs,
+      unassignedCases,
+      coveragePercentage
+    };
+  }
+
+  async getVariableCoverageOverview(workspaceId: number): Promise<{
+    totalVariables: number;
+    coveredVariables: number;
+    missingVariables: number;
+    coveragePercentage: number;
+    variableCaseCounts: { unitName: string; variableId: string; caseCount: number }[];
+  }> {
+    try {
+      this.logger.log(`Getting variable coverage overview for workspace ${workspaceId} (CODING_INCOMPLETE variables only)`);
+
+      // Get only variables that have CODING_INCOMPLETE responses (variables that actually need coding)
+      const incompleteVariablesResult = await this.responseRepository.createQueryBuilder('response')
+        .select('unit.name', 'unitName')
+        .addSelect('response.variableid', 'variableId')
+        .addSelect('COUNT(response.id)', 'caseCount')
+        .leftJoin('response.unit', 'unit')
+        .leftJoin('unit.booklet', 'booklet')
+        .leftJoin('booklet.person', 'person')
+        .where('response.status_v1 = :status', { status: statusStringToNumber('CODING_INCOMPLETE') })
+        .andWhere('person.workspace_id = :workspaceId', { workspaceId })
+        .groupBy('unit.name')
+        .addGroupBy('response.variableid')
+        .getRawMany();
+
+      // Create set of variables that need coding (have CODING_INCOMPLETE responses)
+      const variablesNeedingCoding = new Set<string>();
+      const variableCaseCounts: { unitName: string; variableId: string; caseCount: number }[] = [];
+
+      incompleteVariablesResult.forEach(row => {
+        const variableKey = `${row.unitName}:${row.variableId}`;
+        variablesNeedingCoding.add(variableKey);
+        variableCaseCounts.push({
+          unitName: row.unitName,
+          variableId: row.variableId,
+          caseCount: parseInt(row.caseCount, 10)
+        });
+      });
+
+      // Get all job definitions and their assigned variables
+      const jobDefinitions = await this.jobDefinitionRepository.find({
+        where: { status: 'approved' }
+      });
+
+      const coveredVariables = new Set<string>();
+
+      for (const definition of jobDefinitions) {
+        // Add directly assigned variables
+        if (definition.assigned_variables) {
+          definition.assigned_variables.forEach(variable => {
+            const variableKey = `${variable.unitName}:${variable.variableId}`;
+            // Only count as covered if this variable actually needs coding
+            if (variablesNeedingCoding.has(variableKey)) {
+              coveredVariables.add(variableKey);
+            }
+          });
+        }
+
+        // Add variables from assigned bundles
+        if (definition.assigned_variable_bundles) {
+          const bundleIds = definition.assigned_variable_bundles.map(bundle => bundle.id);
+          const variableBundles = await this.variableBundleRepository.find({
+            where: { id: In(bundleIds) }
+          });
+
+          variableBundles.forEach(bundle => {
+            if (bundle.variables) {
+              bundle.variables.forEach(variable => {
+                const variableKey = `${variable.unitName}:${variable.variableId}`;
+                // Only count as covered if this variable actually needs coding
+                if (variablesNeedingCoding.has(variableKey)) {
+                  coveredVariables.add(variableKey);
+                }
+              });
+            }
+          });
+        }
+      }
+
+      // Calculate missing variables (variables that need coding but are not covered by job definitions)
+      const missingVariables = new Set<string>();
+      variablesNeedingCoding.forEach(variableKey => {
+        if (!coveredVariables.has(variableKey)) {
+          missingVariables.add(variableKey);
+        }
+      });
+
+      const totalVariables = variablesNeedingCoding.size;
+      const coveredCount = coveredVariables.size;
+      const missingCount = missingVariables.size;
+      const coveragePercentage = totalVariables > 0 ? (coveredCount / totalVariables) * 100 : 0;
+
+      this.logger.log(`Variable coverage for workspace ${workspaceId}: ${coveredCount}/${totalVariables} CODING_INCOMPLETE variables covered (${coveragePercentage.toFixed(1)}%)`);
+
+      return {
+        totalVariables,
+        coveredVariables: coveredCount,
+        missingVariables: missingCount,
+        coveragePercentage,
+        variableCaseCounts
+      };
+    } catch (error) {
+      this.logger.error(`Error getting variable coverage overview: ${error.message}`, error.stack);
+      throw new Error('Could not get variable coverage overview. Please check the database connection.');
+    }
+  }
+
+  async getDoubleCodedVariablesForReview(
+    workspaceId: number,
+    page: number = 1,
+    limit: number = 50
+  ): Promise<{
+      data: Array<{
+        unitName: string;
+        variableId: string;
+        personLogin: string;
+        personCode: string;
+        bookletName: string;
+        givenAnswer: string;
+        coderResults: Array<{
+          coderId: number;
+          coderName: string;
+          jobId: number;
+          code: number | null;
+          score: number | null;
+          notes: string | null;
+          codedAt: Date;
+        }>;
+      }>;
+      total: number;
+      page: number;
+      limit: number;
+    }> {
+    try {
+      this.logger.log(`Getting double-coded variables for review in workspace ${workspaceId}`);
+
+      // First, find response IDs that have been coded by multiple coders
+      // We do this by grouping CodingJobUnit by response_id and counting distinct coding_job_id
+      const doubleCodedResponseIds = await this.codingJobUnitRepository
+        .createQueryBuilder('cju')
+        .select('cju.response_id', 'responseId')
+        .addSelect('COUNT(DISTINCT cju.coding_job_id)', 'jobCount')
+        .leftJoin('cju.coding_job', 'cj')
+        .leftJoin('cj.codingJobCoders', 'cjc')
+        .where('cj.workspace_id = :workspaceId', { workspaceId })
+        .andWhere('cju.code IS NOT NULL') // Only include coded responses
+        .groupBy('cju.response_id')
+        .having('COUNT(DISTINCT cju.coding_job_id) > 1') // Multiple jobs coded this response
+        .getRawMany();
+
+      const responseIds = doubleCodedResponseIds.map(row => row.responseId);
+
+      if (responseIds.length === 0) {
+        return {
+          data: [],
+          total: 0,
+          page,
+          limit
+        };
+      }
+
+      // Get total count for pagination
+      const total = responseIds.length;
+
+      // Apply pagination to response IDs
+      const startIndex = (page - 1) * limit;
+      const endIndex = Math.min(startIndex + limit, responseIds.length);
+      const paginatedResponseIds = responseIds.slice(startIndex, endIndex);
+
+      // Now get detailed information for these responses
+      const codingJobUnits = await this.codingJobUnitRepository.find({
+        where: { response_id: In(paginatedResponseIds) },
+        relations: ['coding_job', 'coding_job.codingJobCoders', 'coding_job.codingJobCoders.user', 'response', 'response.unit', 'response.unit.booklet', 'response.unit.booklet.person']
+      });
+
+      // Group by response to create the review data structure
+      const responseGroups = new Map<number, {
+        unitName: string;
+        variableId: string;
+        personLogin: string;
+        personCode: string;
+        bookletName: string;
+        givenAnswer: string;
+        coderResults: Array<{
+          coderId: number;
+          coderName: string;
+          jobId: number;
+          code: number | null;
+          score: number | null;
+          notes: string | null;
+          codedAt: Date;
+        }>;
+      }>();
+
+      for (const unit of codingJobUnits) {
+        const responseId = unit.response_id;
+
+        if (!responseGroups.has(responseId)) {
+          responseGroups.set(responseId, {
+            unitName: unit.response?.unit?.name || '',
+            variableId: unit.variable_id,
+            personLogin: unit.response?.unit?.booklet?.person?.login || '',
+            personCode: unit.response?.unit?.booklet?.person?.code || '',
+            bookletName: unit.response?.unit?.booklet?.bookletinfo?.name || '',
+            givenAnswer: unit.response?.value || '',
+            coderResults: []
+          });
+        }
+
+        const group = responseGroups.get(responseId)!;
+
+        // Find the coder for this coding job
+        const coder = unit.coding_job?.codingJobCoders?.[0]; // Assuming one coder per job
+        if (coder) {
+          group.coderResults.push({
+            coderId: coder.user_id,
+            coderName: coder.user?.username || `Coder ${coder.user_id}`,
+            jobId: unit.coding_job_id,
+            code: unit.code,
+            score: unit.score,
+            notes: unit.notes,
+            codedAt: unit.created_at
+          });
+        }
+      }
+
+      const data = Array.from(responseGroups.values());
+
+      this.logger.log(`Found ${total} double-coded variables for review in workspace ${workspaceId}, returning page ${page} with ${data.length} items`);
+
+      return {
+        data,
+        total,
+        page,
+        limit
+      };
+    } catch (error) {
+      this.logger.error(`Error getting double-coded variables for review: ${error.message}`, error.stack);
+      throw new Error('Could not get double-coded variables for review. Please check the database connection.');
+    }
+  }
+
+  async getWorkspaceCohensKappaSummary(
+    workspaceId: number
+  ): Promise<{
+      coderPairs: Array<{
+        coder1Id: number;
+        coder1Name: string;
+        coder2Id: number;
+        coder2Name: string;
+        kappa: number | null;
+        agreement: number;
+        totalSharedResponses: number;
+        validPairs: number;
+        interpretation: string;
+      }>;
+      workspaceSummary: {
+        totalDoubleCodedResponses: number;
+        totalCoderPairs: number;
+        averageKappa: number | null;
+        variablesIncluded: number;
+        codersIncluded: number;
+      };
+    }> {
+    try {
+      this.logger.log(`Calculating workspace-wide Cohen's Kappa for double-coded incomplete variables in workspace ${workspaceId}`);
+
+      // Get all double-coded responses for incomplete variables
+      const doubleCodedData = await this.getDoubleCodedVariablesForReview(workspaceId, 1, 10000); // Get all data
+
+      if (doubleCodedData.total === 0) {
+        return {
+          coderPairs: [],
+          workspaceSummary: {
+            totalDoubleCodedResponses: 0,
+            totalCoderPairs: 0,
+            averageKappa: null,
+            variablesIncluded: 0,
+            codersIncluded: 0
+          }
+        };
+      }
+
+      // Collect all coder pairs and their coding data across all responses
+      const coderPairData = new Map<string, {
+        coder1Id: number;
+        coder1Name: string;
+        coder2Id: number;
+        coder2Name: string;
+        codes: Array<{ code1: number | null; code2: number | null }>;
+      }>();
+
+      // Track unique variables and coders
+      const uniqueVariables = new Set<string>();
+      const uniqueCoders = new Set<number>();
+
+      for (const item of doubleCodedData.data) {
+        uniqueVariables.add(`${item.unitName}:${item.variableId}`);
+
+        // Get all coder pairs for this response
+        const coders = item.coderResults;
+        for (let i = 0; i < coders.length; i++) {
+          for (let j = i + 1; j < coders.length; j++) {
+            const coder1 = coders[i];
+            const coder2 = coders[j];
+
+            uniqueCoders.add(coder1.coderId);
+            uniqueCoders.add(coder2.coderId);
+
+            // Create a consistent key for the coder pair
+            const pairKey = coder1.coderId < coder2.coderId ?
+              `${coder1.coderId}-${coder2.coderId}` :
+              `${coder2.coderId}-${coder1.coderId}`;
+
+            if (!coderPairData.has(pairKey)) {
+              coderPairData.set(pairKey, {
+                coder1Id: coder1.coderId < coder2.coderId ? coder1.coderId : coder2.coderId,
+                coder1Name: coder1.coderId < coder2.coderId ? coder1.coderName : coder2.coderName,
+                coder2Id: coder1.coderId < coder2.coderId ? coder2.coderId : coder1.coderId,
+                coder2Name: coder1.coderId < coder2.coderId ? coder2.coderName : coder1.coderName,
+                codes: []
+              });
+            }
+
+            // Add the coding pair (ensuring consistent order)
+            const pair = coderPairData.get(pairKey)!;
+            if (coder1.coderId < coder2.coderId) {
+              pair.codes.push({
+                code1: coder1.code,
+                code2: coder2.code
+              });
+            } else {
+              pair.codes.push({
+                code1: coder2.code,
+                code2: coder1.code
+              });
+            }
+          }
+        }
+      }
+
+      // Calculate Cohen's Kappa for each coder pair
+      const coderPairs = [];
+      let totalKappa = 0;
+      let validKappaCount = 0;
+
+      for (const pair of coderPairData.values()) {
+        const kappaResults = this.codingStatisticsService.calculateCohensKappa([pair]);
+
+        if (kappaResults.length > 0) {
+          const result = kappaResults[0];
+          coderPairs.push(result);
+
+          if (result.kappa !== null && !Number.isNaN(result.kappa)) {
+            totalKappa += result.kappa;
+            validKappaCount += 1;
+          }
+        }
+      }
+
+      // Calculate workspace summary
+      const averageKappa = validKappaCount > 0 ? totalKappa / validKappaCount : null;
+
+      const workspaceSummary = {
+        totalDoubleCodedResponses: doubleCodedData.total,
+        totalCoderPairs: coderPairs.length,
+        averageKappa: Math.round((averageKappa || 0) * 1000) / 1000,
+        variablesIncluded: uniqueVariables.size,
+        codersIncluded: uniqueCoders.size
+      };
+
+      this.logger.log(`Calculated workspace-wide Cohen's Kappa: ${coderPairs.length} coder pairs, ${uniqueVariables.size} variables, ${uniqueCoders.size} coders, average kappa: ${averageKappa}`);
+
+      return {
+        coderPairs,
+        workspaceSummary
+      };
+    } catch (error) {
+      this.logger.error(`Error calculating workspace-wide Cohen's Kappa: ${error.message}`, error.stack);
+      throw new Error('Could not calculate workspace-wide Cohen\'s Kappa. Please check the database connection.');
+    }
   }
 }
