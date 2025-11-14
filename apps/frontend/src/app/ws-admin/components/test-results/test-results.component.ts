@@ -198,16 +198,6 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   private searchSubject = new Subject<string>();
   private searchSubscription: Subscription | null = null;
   private readonly SEARCH_DEBOUNCE_TIME = 800;
-
-  private responseStatusMap = new Map(responseStatesNumericMap.map(entry => [entry.key, entry.value]));
-
-  /**
-   * Maps numeric response status to string
-   */
-  private mapStatusToString(status: number): string {
-    return this.responseStatusMap.get(status) || 'UNKNOWN';
-  }
-
   selection = new SelectionModel<P>(true, []);
   dataSource !: MatTableDataSource<P>;
   displayedColumns: string[] = ['select', 'code', 'group', 'login', 'uploaded_at'];
