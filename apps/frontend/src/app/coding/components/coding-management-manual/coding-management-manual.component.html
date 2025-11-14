@@ -1,7 +1,5 @@
 <div class="fx-column-start-start fx-gap-10 coding-container">
 
-
-
   <div *ngIf="validationProgress && (validationProgress.status === 'loading' || validationProgress.status === 'processing')"
        class="fx-column-start-start fx-gap-10 validation-progress">
     <div class="statistics-card">
@@ -341,6 +339,33 @@
           </div>
         </div>
 
+        <!-- Applied Results Section -->
+        <div *ngIf="appliedResultsOverview" class="applied-results-section">
+          <div class="statistics-card">
+            <h2 class="section-title">{{ 'applied-results-overview.title' | translate }}</h2>
+            <div class="coverage-stats">
+              <div class="stat-item">
+                <span class="stat-label">{{ 'applied-results-overview.coding-incomplete' | translate }}</span>
+                <span class="stat-value">{{appliedResultsOverview.totalIncompleteResponses}}</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">{{ 'applied-results-overview.applied-results' | translate }}</span>
+                <span class="stat-value covered">{{appliedResultsOverview.appliedResponses}}</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">{{ 'applied-results-overview.remaining' | translate }}</span>
+                <span class="stat-value missing">{{appliedResultsOverview.remainingResponses}}</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">{{ 'applied-results-overview.completion-progress' | translate }}</span>
+                <span class="stat-value percentage">{{appliedResultsOverview.completionPercentage | number:'1.1-1'}}%</span>
+              </div>
+            </div>
+            <div class="coverage-bar">
+              <div class="coverage-fill" [style.width.%]="appliedResultsOverview.completionPercentage"></div>
+            </div>
+          </div>
+        </div>
 
         <div class="coding-jobs-container">
           <h3>Kodierjobs</h3>

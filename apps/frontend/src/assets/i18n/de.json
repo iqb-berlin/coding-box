@@ -1344,5 +1344,22 @@
       "failed-to-load": "Fehler beim Laden der doppelkodierten Variablen",
       "review-applied": "Überprüfungsentscheidungen erfolgreich angewendet"
     }
+  },
+
+  "applied-results-overview": {
+    "title": "Überblick über angewendete Ergebnisse",
+    "description": "Überblick über angewendete Kodierungsergebnisse und verbleibende Arbeit für manuell kodierte Variablen",
+    "variables-requiring-manual-coding": "Variablen, die manuelle Kodierung erfordern",
+    "variables-with-incomplete-status": "Variablen mit CODING_INCOMPLETE Status",
+    "response-status-summary": "Zusammenfassung des Antwortstatus",
+    "coding-incomplete": "CODING_INCOMPLETE:",
+    "applied-results": "Angewendete Ergebnisse:",
+    "remaining": "Verbleibend:",
+    "completion-progress": "Fertigstellungsfortschritt",
+    "responses-have-been-applied": "der Antworten wurden angewendet",
+    "final-status-distribution": "Endgültige Statusverteilung",
+    "coding-complete": "CODING_COMPLETE:",
+    "invalid": "INVALID:",
+    "coding-error": "CODING_ERROR:"
   }
 }

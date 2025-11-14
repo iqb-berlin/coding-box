@@ -32,6 +32,7 @@ export interface CodingJob {
   showScore?: boolean;
   allowComments?: boolean;
   suppressGeneralInstructions?: boolean;
+  hasIssues?: boolean;
 }
 
 export interface Variable {

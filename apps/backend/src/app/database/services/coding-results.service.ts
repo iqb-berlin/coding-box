@@ -27,6 +27,17 @@ export class CodingResultsService {
   }> {
     this.logger.log(`Applying coding results for coding job ${codingJobId} in workspace ${workspaceId}`);
 
+    // Check if coding job is completed before allowing application
+    const codingJob = await this.codingJobService.getCodingJobById(codingJobId);
+    if (codingJob.status !== 'completed') {
+      return {
+        success: false,
+        updatedResponsesCount: 0,
+        skippedReviewCount: 0,
+        message: `Coding job must be completed before applying results. Current status: ${codingJob.status}`
+      };
+    }
+
     const responsesToUpdate: {
       responseId: number;
       code_v2: number | null;
@@ -131,6 +142,9 @@ export class CodingResultsService {
         }
 
         await queryRunner.commitTransaction();
+
+        // Update coding job status to 'results_applied' after successful application
+        await this.codingJobService.updateCodingJob(codingJobId, workspaceId, { status: 'results_applied' });
 
         await this.invalidateIncompleteVariablesCache(workspaceId);
         await this.codingStatisticsService.refreshStatistics(workspaceId);

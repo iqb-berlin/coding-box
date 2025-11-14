@@ -820,6 +820,47 @@ export class WorkspaceCodingController {
     );
   }
 
+  @Post(':workspace_id/coding/applied-results-count')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiBody({
+    description: 'List of CODING_INCOMPLETE variables to check for applied results',
+    schema: {
+      type: 'object',
+      properties: {
+        incompleteVariables: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              unitName: { type: 'string', description: 'Unit name' },
+              variableId: { type: 'string', description: 'Variable ID' }
+            }
+          },
+          description: 'List of variables that are CODING_INCOMPLETE'
+        }
+      },
+      required: ['incompleteVariables']
+    }
+  })
+  @ApiOkResponse({
+    description: 'Count of applied results for CODING_INCOMPLETE variables.',
+    schema: {
+      type: 'number',
+      description: 'Number of responses that were CODING_INCOMPLETE but have been changed to final statuses in status_v2'
+    }
+  })
+  async getAppliedResultsCount(
+    @WorkspaceId() workspace_id: number,
+      @Body() body: { incompleteVariables: { unitName: string; variableId: string }[] }
+  ): Promise<number> {
+    return this.workspaceCodingService.getAppliedResultsCount(
+      workspace_id,
+      body.incompleteVariables
+    );
+  }
+
   @Get(':workspace_id/coding/progress-overview')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiTags('coding')
@@ -1968,6 +2009,85 @@ export class WorkspaceCodingController {
         message: string;
       }> {
     return this.workspaceCodingService.applyCodingResults(workspace_id, jobId);
+  }
+
+  @Post(':workspace_id/coding/jobs/bulk-apply-results')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiOkResponse({
+    description: 'Bulk apply coding results for all jobs without issues.',
+    schema: {
+      type: 'object',
+      properties: {
+        success: {
+          type: 'boolean',
+          description: 'Whether the bulk operation was successful'
+        },
+        jobsProcessed: {
+          type: 'number',
+          description: 'Number of jobs processed'
+        },
+        totalUpdatedResponses: {
+          type: 'number',
+          description: 'Total number of responses updated across all jobs'
+        },
+        totalSkippedReview: {
+          type: 'number',
+          description: 'Total number of responses skipped for manual review'
+        },
+        message: {
+          type: 'string',
+          description: 'Summary message of the bulk operation'
+        },
+        results: {
+          type: 'array',
+          description: 'Detailed results for each job',
+          items: {
+            type: 'object',
+            properties: {
+              jobId: { type: 'number', description: 'Job ID' },
+              jobName: { type: 'string', description: 'Job name' },
+              hasIssues: { type: 'boolean', description: 'Whether the job has coding issues' },
+              skipped: { type: 'boolean', description: 'Whether the job was skipped' },
+              result: {
+                type: 'object',
+                description: 'Apply result (only present if not skipped)',
+                properties: {
+                  success: { type: 'boolean' },
+                  updatedResponsesCount: { type: 'number' },
+                  skippedReviewCount: { type: 'number' },
+                  message: { type: 'string' }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  })
+  async bulkApplyCodingResults(
+    @WorkspaceId() workspace_id: number
+  ): Promise<{
+        success: boolean;
+        jobsProcessed: number;
+        totalUpdatedResponses: number;
+        totalSkippedReview: number;
+        message: string;
+        results: Array<{
+          jobId: number;
+          jobName: string;
+          hasIssues: boolean;
+          skipped: boolean;
+          result?: {
+            success: boolean;
+            updatedResponsesCount: number;
+            skippedReviewCount: number;
+            message: string;
+          };
+        }>;
+      }> {
+    return this.workspaceCodingService.bulkApplyCodingResults(workspace_id);
   }
 
   @Post(':workspace_id/coding/calculate-distribution')

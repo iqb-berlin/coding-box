@@ -31,6 +31,7 @@
             <mat-option [value]="null">Alle Status</mat-option>
             <mat-option value="active">Aktiv</mat-option>
             <mat-option value="completed">Abgeschlossen</mat-option>
+            <mat-option value="results_applied">Ergebnisse angewendet</mat-option>
             <mat-option value="pending">Ausstehend</mat-option>
             <mat-option value="paused">Pausiert</mat-option>
             <mat-option value="open">Offen</mat-option>
@@ -41,7 +42,7 @@
         <mat-form-field appearance="outline" class="filter-field">
           <mat-label>Nach Training filtern</mat-label>
           <mat-select [(value)]="selectedTrainingId" (selectionChange)="onTrainingFilterChange()">
-            <mat-option [value]="null">Alle Trainings</mat-option>
+            <mat-option [value]="null">Kein Training</mat-option>
             <mat-option *ngFor="let training of coderTrainings" [value]="training.id">
               {{training.label}}
             </mat-option>
@@ -50,6 +51,10 @@
       </div>
 
       <div class="fx-row-center-center fx-gap-16">
+        <button mat-raised-button color="primary" (click)="bulkApplyCodingResults()" class="bulk-apply-button">
+          <mat-icon>check_circle</mat-icon>
+          Alle Ergebnisse anwenden
+        </button>
         <button mat-raised-button color="warn" (click)="bulkDeleteCodingJobs()" [disabled]="selection.selected.length === 0" class="bulk-delete-button">
           <mat-icon>delete_sweep</mat-icon>
           {{ selection.selected.length }} löschen
@@ -116,6 +121,12 @@
               <mat-icon>restart_alt</mat-icon>
             </button>
           }
+          <button mat-icon-button (click)="applyCodingResults(element)"
+                  matTooltip="Ergebnisse anwenden"
+                  aria-label="Ergebnisse anwenden"
+                  [disabled]="element.status !== 'completed'">
+            <mat-icon>check_circle</mat-icon>
+          </button>
         </mat-cell>
       </ng-container>
 
@@ -182,6 +193,16 @@
         </mat-cell>
       </ng-container>
 
+      <ng-container matColumnDef="hasIssues">
+        <mat-header-cell *matHeaderCellDef mat-sort-header>Probleme</mat-header-cell>
+        <mat-cell *matCellDef="let element" [class.has-issues]="element.hasIssues">
+          @if (element.hasIssues) {
+            <mat-icon matTooltip="Kodierungsprobleme vorhanden" class="issues-icon">warning</mat-icon>
+          } @else {
+            <mat-icon matTooltip="Keine Probleme" class="no-issues-icon">check_circle</mat-icon>
+          }
+        </mat-cell>
+      </ng-container>
 
     </mat-table>
 
