@@ -895,6 +895,8 @@ export class WorkspaceCodingController {
       properties: {
         totalCasesToCode: { type: 'number', description: 'Total number of cases that need to be coded' },
         casesInJobs: { type: 'number', description: 'Number of cases assigned to coding jobs' },
+        doubleCodedCases: { type: 'number', description: 'Number of cases that are double-coded' },
+        singleCodedCases: { type: 'number', description: 'Number of cases that are single-coded' },
         unassignedCases: { type: 'number', description: 'Number of cases not assigned to any coding job' },
         coveragePercentage: { type: 'number', description: 'Percentage of cases covered by coding jobs' }
       }
@@ -903,6 +905,8 @@ export class WorkspaceCodingController {
   async getCaseCoverageOverview(@WorkspaceId() workspace_id: number): Promise<{
     totalCasesToCode: number;
     casesInJobs: number;
+    doubleCodedCases: number;
+    singleCodedCases: number;
     unassignedCases: number;
     coveragePercentage: number;
   }> {
