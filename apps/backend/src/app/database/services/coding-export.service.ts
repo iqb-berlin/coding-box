@@ -13,6 +13,7 @@ import { ResponseEntity } from '../entities/response.entity';
 import { CodingJob } from '../entities/coding-job.entity';
 import { CodingJobCoder } from '../entities/coding-job-coder.entity';
 import { CodingJobVariable } from '../entities/coding-job-variable.entity';
+import { CodingJobUnit } from '../entities/coding-job-unit.entity';
 
 @Injectable()
 export class CodingExportService {
@@ -33,6 +34,8 @@ export class CodingExportService {
     private codingJobCoderRepository: Repository<CodingJobCoder>,
     @InjectRepository(CodingJobVariable)
     private codingJobVariableRepository: Repository<CodingJobVariable>,
+    @InjectRepository(CodingJobUnit)
+    private codingJobUnitRepository: Repository<CodingJobUnit>,
     private cacheService: CacheService,
     private missingsProfilesService: MissingsProfilesService,
     private workspaceFilesService: WorkspaceFilesService
@@ -592,6 +595,91 @@ export class CodingExportService {
     } catch (error) {
       this.logger.error(`Error exporting coding results by variable: ${error.message}`, error.stack);
       throw new Error(`Could not export coding results by variable: ${error.message}. This may be due to memory constraints with large datasets.`);
+    }
+  }
+
+  async exportCodingResultsDetailed(workspaceId: number): Promise<Buffer> {
+    this.logger.log(`Exporting detailed coding results for workspace ${workspaceId}`);
+
+    try {
+      // Get all coding job units with related data
+      const codingJobUnits = await this.codingJobUnitRepository.find({
+        where: {
+          coding_job: {
+            workspace_id: workspaceId
+          }
+        },
+        relations: [
+          'coding_job',
+          'coding_job.codingJobCoders',
+          'coding_job.codingJobCoders.user',
+          'response',
+          'response.unit',
+          'response.unit.booklet',
+          'response.unit.booklet.person'
+        ],
+        order: {
+          created_at: 'ASC'
+        }
+      });
+
+      this.logger.log(`Found ${codingJobUnits.length} coding job units for workspace ${workspaceId}`);
+
+      // Create CSV content
+      const csvRows: string[] = [];
+
+      // Add header row
+      csvRows.push('"Person";"Kodierer";"Variable";"Kommentar";"Kodierzeitpunkt";"Code"');
+
+      // Process each coding job unit
+      for (const unit of codingJobUnits) {
+        // Skip if no code was assigned
+        if (unit.code === null || unit.code === undefined) {
+          continue;
+        }
+
+        // Get person identifier (prefer code, fallback to login)
+        const person = unit.response?.unit?.booklet?.person;
+        const personId = person?.code || person?.login || '';
+
+        // Get coder name (take first coder if multiple assigned to job)
+        const coder = unit.coding_job?.codingJobCoders?.[0]?.user?.username || '';
+
+        // Format timestamp (use updated_at for when coding was actually performed)
+        const timestamp = unit.updated_at ?
+          new Date(unit.updated_at).toLocaleString('de-DE', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+          }).replace(',', '') : '';
+
+        // Escape quotes and wrap in quotes
+        const escapeCsvField = (field: string): string => `"${field.replace(/"/g, '""')}"`;
+
+        // Create CSV row
+        const row = [
+          escapeCsvField(personId),
+          escapeCsvField(coder),
+          escapeCsvField(unit.variable_id),
+          escapeCsvField(unit.notes || ''),
+          escapeCsvField(timestamp),
+          escapeCsvField(unit.code.toString())
+        ].join(';');
+
+        csvRows.push(row);
+      }
+
+      this.logger.log(`Generated ${csvRows.length - 1} CSV rows for workspace ${workspaceId}`);
+
+      // Convert to buffer
+      const csvContent = csvRows.join('\n');
+      return Buffer.from(csvContent, 'utf-8');
+    } catch (error) {
+      this.logger.error(`Error exporting detailed coding results: ${error.message}`, error.stack);
+      throw new Error(`Could not export detailed coding results: ${error.message}`);
     }
   }
 
