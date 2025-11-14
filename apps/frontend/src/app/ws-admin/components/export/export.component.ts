@@ -11,7 +11,7 @@ import { Observable } from 'rxjs';
 import { AppService } from '../../../services/app.service';
 import { BackendService } from '../../../services/backend.service';
 
-export type ExportFormat = 'aggregated' | 'by-coder' | 'by-variable' | 'detailed';
+export type ExportFormat = 'aggregated' | 'by-coder' | 'by-variable' | 'detailed' | 'coding-times';
 
 @Component({
   selector: 'coding-box-export',
@@ -58,6 +58,11 @@ export class ExportComponent {
       value: 'detailed' as ExportFormat,
       label: this.translateService.instant('ws-admin.export-formats.detailed'),
       description: this.translateService.instant('ws-admin.export-formats.detailed-description')
+    },
+    {
+      value: 'coding-times' as ExportFormat,
+      label: this.translateService.instant('ws-admin.export-formats.coding-times'),
+      description: this.translateService.instant('ws-admin.export-formats.coding-times-description')
     }
   ];
 
@@ -93,6 +98,10 @@ export class ExportComponent {
       case 'detailed':
         exportMethod = this.backendService.exportCodingResultsDetailed(workspaceId);
         filename = `coding-results-detailed-${new Date().toISOString().slice(0, 10)}.csv`;
+        break;
+      case 'coding-times':
+        exportMethod = this.backendService.exportCodingTimesReport(workspaceId);
+        filename = `coding-times-report-${new Date().toISOString().slice(0, 10)}.xlsx`;
         break;
       default:
         this.snackBar.open(
