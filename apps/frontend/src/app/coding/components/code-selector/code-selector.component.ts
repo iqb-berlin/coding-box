@@ -242,7 +242,7 @@ export class CodeSelectorComponent implements OnChanges {
     }
 
     const currentIndex = data.currentUnitIndex;
-    const nextIndex = this.codingService.findNextUncodedUnitIndex(data, currentIndex + 1);
+    const nextIndex = currentIndex + 1;
     if (nextIndex >= 0 && nextIndex < data.units.length) {
       this.unitChanged.emit(data.units[nextIndex]);
     }
@@ -265,18 +265,8 @@ export class CodeSelectorComponent implements OnChanges {
     const data = this.unitsData;
     if (!data || !data.units.length) return false;
 
-    const currentUnit = data.units[data.currentUnitIndex];
-    if (!currentUnit) return false;
-
-    const compositeKey = this.codingService.generateCompositeKey(
-      currentUnit.testPerson || '',
-      currentUnit.name,
-      currentUnit.variableId || ''
-    );
-
-    const hasSelection = this.codingService.selectedCodes.has(compositeKey);
-    const nextUncodedIndex = this.codingService.findNextUncodedUnitIndex(data, data.currentUnitIndex + 1);
-    return hasSelection && nextUncodedIndex >= 0;
+    const nextIndex = data.currentUnitIndex + 1;
+    return nextIndex < data.units.length;
   }
 
   hasPreviousUnit(): boolean {
