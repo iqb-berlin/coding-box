@@ -76,7 +76,10 @@ mat-cell {
   color: #555;
 }
 
-
+.mat-column-select {
+  flex: 0 0 60px;
+  justify-content: center;
+}
 
 .mat-column-name, .mat-column-description {
   flex: 1 1 25%;
@@ -147,6 +150,24 @@ mat-cell {
   justify-content: flex-start;
 }
 
+.mat-column-hasIssues {
+  flex: 0 0 100px;
+  justify-content: center;
+}
+
+.has-issues {
+  background-color: rgba(255, 87, 34, 0.1);
+  border-left: 4px solid #ff5722;
+}
+
+.issues-icon {
+  color: #ff5722;
+}
+
+.no-issues-icon {
+  color: #4caf50;
+}
+
 .mat-column-viewResults {
   flex: 0 0 70px;
   justify-content: center;
@@ -177,6 +198,15 @@ mat-cell {
   background-color: rgba(33, 150, 243, 0.1);
 }
 
+.status-results-applied {
+  color: #4caf50;
+  font-weight: 500;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background-color: rgba(76, 175, 80, 0.15);
+  border: 1px solid rgba(76, 175, 80, 0.3);
+}
+
 .status-pending {
   color: #ff9800;
   font-weight: 500;
@@ -189,6 +219,12 @@ mat-cell {
   background-color: rgba(156, 39, 176, 0.1);
   color: #6a1b9a;
   border: 1px solid rgba(156, 39, 176, 0.2);
+}
+
+.status-review {
+  background-color: rgba(255, 193, 7, 0.1);
+  color: #f57f17;
+  border: 1px solid rgba(255, 193, 7, 0.2);
 }
 
 .no-data-message {

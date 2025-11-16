@@ -80,7 +80,8 @@ export type Chunk = {
   id: string,
   content: string,
   ts: number,
-  responseType: string
+  responseType: string,
+  subForm: string
 };
 
 export type TcMergeSubForms = {

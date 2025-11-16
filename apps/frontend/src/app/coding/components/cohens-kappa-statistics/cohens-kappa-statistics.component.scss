@@ -1,0 +1,383 @@
+.cohens-kappa-container {
+  padding: 0;
+  max-width: none;
+  margin: 0;
+
+  .content-section {
+    .loading-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 64px 0;
+
+      p {
+        margin-top: 16px;
+        color: #666;
+        font-size: 16px;
+      }
+    }
+
+    .workspace-kappa-card {
+      margin-bottom: 24px;
+
+      .kappa-stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 16px;
+        margin-bottom: 16px;
+
+        .stat-item {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 12px 16px;
+          background-color: #f8f9fa;
+          border-radius: 8px;
+          border: 1px solid #e9ecef;
+
+          .stat-label {
+            font-weight: 500;
+            color: #333;
+          }
+
+          .stat-value {
+            font-weight: 600;
+            color: #1976d2;
+
+            &.kappa {
+              &.kappa-excellent {
+                color: #1976d2;
+              }
+
+              &.kappa-good {
+                color: #388e3c;
+              }
+
+              &.kappa-fair {
+                color: #fbc02d;
+              }
+
+              &.kappa-poor {
+                color: #d32f2f;
+              }
+            }
+          }
+        }
+      }
+
+      .kappa-interpretation {
+        .interpretation-text {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 12px 16px;
+          background-color: #f8f9fa;
+          border-radius: 8px;
+          border: 1px solid #e9ecef;
+
+          strong {
+            color: #333;
+          }
+
+          span {
+            &.kappa-excellent {
+              color: #1976d2;
+              font-weight: 600;
+            }
+
+            &.kappa-good {
+              color: #388e3c;
+              font-weight: 600;
+            }
+
+            &.kappa-fair {
+              color: #fbc02d;
+              font-weight: 600;
+            }
+
+            &.kappa-poor {
+              color: #d32f2f;
+              font-weight: 600;
+            }
+
+            &.kappa-no-data {
+              color: #999;
+              font-style: italic;
+            }
+          }
+        }
+      }
+    }
+
+    .kappa-card {
+      margin-bottom: 24px;
+
+      .kappa-info {
+        p {
+          margin-bottom: 16px;
+          color: #666;
+          font-size: 14px;
+          line-height: 1.5;
+        }
+
+        .no-kappa-data {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          padding: 32px;
+          background-color: #f8f9fa;
+          border-radius: 8px;
+          border: 1px solid #e9ecef;
+
+          mat-icon {
+            font-size: 48px;
+            width: 48px;
+            height: 48px;
+            color: #ccc;
+            margin-bottom: 16px;
+          }
+
+          p {
+            margin: 0;
+            color: #666;
+            font-size: 16px;
+          }
+        }
+
+        .kappa-results {
+          margin-bottom: 24px;
+
+          .kappa-unit-variable {
+            margin-bottom: 20px;
+            padding: 16px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            border: 1px solid #e9ecef;
+
+            h4 {
+              margin: 0 0 16px 0;
+              color: #1976d2;
+              font-size: 16px;
+              font-weight: 600;
+            }
+
+            .kappa-pairs {
+              display: flex;
+              flex-direction: column;
+              gap: 12px;
+
+              .kappa-pair {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 12px 16px;
+                background-color: white;
+                border-radius: 6px;
+                border: 1px solid #e0e0e0;
+
+                .coder-names {
+                  display: flex;
+                  align-items: center;
+                  gap: 8px;
+                  font-weight: 500;
+
+                  .coder1, .coder2 {
+                    color: #1976d2;
+                  }
+
+                  .vs {
+                    color: #666;
+                    font-weight: normal;
+                  }
+                }
+
+                .kappa-values {
+                  display: flex;
+                  gap: 20px;
+                  align-items: center;
+
+                  .kappa-value, .agreement-value, .interpretation {
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+
+                    .label {
+                      font-size: 12px;
+                      color: #666;
+                      margin-bottom: 2px;
+                      font-weight: 500;
+                    }
+
+                    .value {
+                      font-size: 16px;
+                      font-weight: 600;
+
+                      &.kappa-poor {
+                        color: #d32f2f;
+                      }
+
+                      &.kappa-fair {
+                        color: #f57c00;
+                      }
+
+                      &.kappa-moderate {
+                        color: #fbc02d;
+                      }
+
+                      &.kappa-substantial {
+                        color: #388e3c;
+                      }
+
+                      &.kappa-perfect {
+                        color: #1976d2;
+                      }
+
+                      &.kappa-na {
+                        color: #999;
+                      }
+                    }
+
+                    .interpretation-text {
+                      font-size: 12px;
+                      color: #666;
+                      font-style: italic;
+                      text-align: center;
+                      max-width: 120px;
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        .interpretation-scale-container {
+          border-top: 1px solid #e9ecef;
+          padding-top: 16px;
+          margin-bottom: 16px;
+
+          .scale-toggle-btn {
+            width: 100%;
+            justify-content: flex-start;
+            padding: 8px 0;
+            font-size: 14px;
+            color: #666;
+            border-radius: 4px;
+            transition: background-color 0.2s ease;
+
+            &:hover {
+              background-color: #f8f9fa;
+            }
+
+            mat-icon {
+              margin-right: 8px;
+              font-size: 18px;
+              width: 18px;
+              height: 18px;
+            }
+          }
+
+          .interpretation-scale {
+            margin-top: 12px;
+            margin-left: 16px;
+            padding: 16px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            border: 1px solid #e9ecef;
+
+            .scale-header {
+              display: flex;
+              align-items: center;
+              margin-bottom: 12px;
+
+              .scale-icon {
+                margin-right: 8px;
+                font-size: 18px;
+              }
+
+              .scale-title {
+                font-weight: 600;
+                color: #1976d2;
+                font-size: 14px;
+              }
+            }
+
+            .scale-items {
+              display: flex;
+              flex-direction: column;
+              gap: 8px;
+
+              .scale-item {
+                display: flex;
+                align-items: center;
+                padding: 4px 0 4px 16px;
+                gap: 12px;
+
+                .scale-range {
+                  min-width: 120px;
+                  font-size: 13px;
+                  font-family: monospace;
+                }
+
+                .scale-label {
+                  font-size: 13px;
+                  color: #555;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+// Responsive design
+@media (max-width: 1200px) {
+  .cohens-kappa-container {
+    padding: 16px;
+
+    .kappa-stats {
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    }
+  }
+}
+
+@media (max-width: 768px) {
+  .cohens-kappa-container {
+    padding: 12px;
+
+    .workspace-kappa-card {
+      .kappa-stats {
+        grid-template-columns: 1fr;
+
+        .stat-item {
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 4px;
+        }
+      }
+    }
+
+    .kappa-card {
+      .kappa-results {
+        .kappa-unit-variable {
+          .kappa-pairs {
+            .kappa-pair {
+              flex-direction: column;
+              align-items: flex-start;
+              gap: 12px;
+
+              .kappa-values {
+                width: 100%;
+                justify-content: space-around;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

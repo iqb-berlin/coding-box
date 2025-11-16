@@ -1,17 +1,17 @@
 <div class="booklet-navigation">
   <div class="navigation-controls">
-    <button class="nav-button prev-button" [disabled]="!hasPreviousUnit()" (click)="previousUnit()">
-      <span class="nav-icon">←</span> Vorherige Aufgabe
+    <button mat-icon-button [disabled]="!hasPreviousUnit()" (click)="previousUnit()" matTooltip="Vorherige Aufgabe" class="nav-button prev-button">
+      <mat-icon>chevron_left</mat-icon>
     </button>
 
     <div class="unit-position">
-      <span class="current-position">{{ currentUnitIndex + 1 }}</span>
+      <span class="current-position">{{ (unitsData()?.currentUnitIndex || 0) + 1 }}</span>
       <span class="position-separator">/</span>
       <span class="total-units">{{ totalUnits }}</span>
     </div>
 
-    <button class="nav-button next-button" [disabled]="!hasNextUnit()" (click)="nextUnit()">
-      Nächste Aufgabe <span class="nav-icon">→</span>
+    <button mat-icon-button [disabled]="!hasNextUnit()" (click)="nextUnit()" matTooltip="Nächste Aufgabe" class="nav-button next-button">
+      <mat-icon>chevron_right</mat-icon>
     </button>
   </div>
 </div>

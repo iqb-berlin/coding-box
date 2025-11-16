@@ -1,43 +1,47 @@
 import {
   Component,
   input,
-  output
+  output,
+  inject
 } from '@angular/core';
+import { MatButtonModule } from '@angular/material/button';
+import { MatIconModule } from '@angular/material/icon';
+import { MatTooltipModule } from '@angular/material/tooltip';
+import { TranslateModule } from '@ngx-translate/core';
 import { UnitsReplay, UnitsReplayUnit } from '../../../services/units-replay.service';
+import { ReplayCodingService } from '../../../services/replay-coding.service';
 
 @Component({
   selector: 'coding-box-units-replay',
+  imports: [MatButtonModule, MatIconModule, MatTooltipModule, TranslateModule],
   templateUrl: './units-replay.component.html',
   styleUrls: ['./units-replay.component.scss'],
   standalone: true
 })
 export class UnitsReplayComponent {
+  private codingService = inject(ReplayCodingService);
+
   unitsData = input<UnitsReplay | null>(null);
+  freeNavigation = input<boolean>(false);
   unitChanged = output<UnitsReplayUnit>();
 
-  currentUnitIndex = 0;
-  totalUnits = 0;
-
-  // Getters for the current state
-  get currentUnit(): UnitsReplayUnit | null {
-    const data = this.unitsData();
-    if (!data || !data.units || data.units.length === 0) {
-      return null;
-    }
-    return data.units[data.currentUnitIndex];
-  }
-
-  // Navigation methods
   nextUnit(): void {
     const data = this.unitsData();
-    if (!data || !this.hasNextUnit()) {
+    if (!data) {
       return;
     }
 
-    const nextIndex = data.currentUnitIndex + 1;
-    if (nextIndex < data.units.length) {
-      const nextUnit = data.units[nextIndex];
-      this.unitChanged.emit(nextUnit);
+    if (this.freeNavigation()) {
+      const nextIndex = data.currentUnitIndex + 1;
+      if (nextIndex < data.units.length) {
+        this.unitChanged.emit(data.units[nextIndex]);
+      }
+    } else {
+      const currentIndex = data.currentUnitIndex;
+      const nextIndex = this.codingService.getNextJumpableUnitIndex(data, currentIndex);
+      if (nextIndex >= 0 && nextIndex < data.units.length) {
+        this.unitChanged.emit(data.units[nextIndex]);
+      }
     }
   }
 
@@ -56,9 +60,24 @@ export class UnitsReplayComponent {
 
   hasNextUnit(): boolean {
     const data = this.unitsData();
-    if (!data) return false;
+    if (!data || !data.units.length) return false;
 
-    return data.currentUnitIndex < data.units.length - 1;
+    if (this.freeNavigation()) {
+      return data.currentUnitIndex + 1 < data.units.length;
+    }
+
+    const currentUnit = data.units[data.currentUnitIndex];
+    if (!currentUnit) return false;
+
+    const compositeKey = this.codingService.generateCompositeKey(
+      currentUnit.testPerson || '',
+      currentUnit.name,
+      currentUnit.variableId || ''
+    );
+
+    const hasSelection = this.codingService.selectedCodes.has(compositeKey);
+    const nextJumpableIndex = this.codingService.getNextJumpableUnitIndex(data, data.currentUnitIndex);
+    return hasSelection && nextJumpableIndex >= 0;
   }
 
   hasPreviousUnit(): boolean {
@@ -68,15 +87,7 @@ export class UnitsReplayComponent {
     return data.currentUnitIndex > 0;
   }
 
-  // Update the current state based on the input
-  ngOnChanges(): void {
-    const data = this.unitsData();
-    if (data) {
-      this.currentUnitIndex = data.currentUnitIndex;
-      this.totalUnits = data.units.length;
-    } else {
-      this.currentUnitIndex = 0;
-      this.totalUnits = 0;
-    }
+  get totalUnits(): number {
+    return this.unitsData()?.units.length || 0;
   }
 }

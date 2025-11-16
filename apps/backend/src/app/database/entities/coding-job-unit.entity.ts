@@ -3,6 +3,7 @@ import {
   Column,
   PrimaryGeneratedColumn,
   CreateDateColumn,
+  UpdateDateColumn,
   ManyToOne,
   JoinColumn
 } from 'typeorm';
@@ -55,8 +56,17 @@ export class CodingJobUnit {
   @Column({ default: false })
     is_open: boolean;
 
+  @Column({ nullable: true, type: 'text' })
+    notes: string | null;
+
+  @Column({ nullable: true })
+    coding_issue_option: number | null;
+
   @CreateDateColumn()
     created_at: Date;
+
+  @UpdateDateColumn()
+    updated_at: Date;
 
   @ManyToOne(() => CodingJob)
   @JoinColumn({ name: 'coding_job_id' })

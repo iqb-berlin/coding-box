@@ -10,9 +10,11 @@ import { MatAnchor, MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
+import { MatDialogModule } from '@angular/material/dialog';
 import * as ExcelJS from 'exceljs';
 import { Subject, takeUntil } from 'rxjs';
 import { CodingJobsComponent } from '../coding-jobs/coding-jobs.component';
+import { CodingJobDefinitionsComponent } from '../coding-job-definitions/coding-job-definitions.component';
 import { VariableBundleManagerComponent } from '../variable-bundle-manager/variable-bundle-manager.component';
 import { CoderTrainingComponent, VariableConfig } from '../coder-training/coder-training.component';
 import { Coder } from '../../models/coder.model';
@@ -21,6 +23,7 @@ import { ExpectedCombinationDto } from '../../../../../../../api-dto/coding/expe
 import { ValidateCodingCompletenessResponseDto } from '../../../../../../../api-dto/coding/validate-coding-completeness-response.dto';
 import { ExternalCodingImportResultDto } from '../../../../../../../api-dto/coding/external-coding-import-result.dto';
 import { AppService } from '../../../services/app.service';
+import { BackendService } from '../../../services/backend.service';
 import {
   ValidationProgress,
   ValidationStateService
@@ -35,9 +38,11 @@ import { CoderTrainingsListComponent } from '../coder-trainings-list/coder-train
     TranslateModule,
     MatAnchor,
     CodingJobsComponent,
+    CodingJobDefinitionsComponent,
     MatIcon,
     MatButton,
     MatProgressBarModule,
+    MatDialogModule,
     VariableBundleManagerComponent,
     CoderTrainingComponent,
     CoderTrainingsListComponent,
@@ -46,6 +51,7 @@ import { CoderTrainingsListComponent } from '../coder-trainings-list/coder-train
 })
 export class CodingManagementManualComponent implements OnInit, OnDestroy {
   private testPersonCodingService = inject(TestPersonCodingService);
+  private backendService = inject(BackendService);
   private appService = inject(AppService);
   private snackBar = inject(MatSnackBar);
   private validationStateService = inject(ValidationStateService);
@@ -55,6 +61,66 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   validationResults: ValidateCodingCompletenessResponseDto | null = null;
   validationProgress: ValidationProgress | null = null;
   isLoading = false;
+
+  codingProgressOverview: {
+    totalCasesToCode: number;
+    completedCases: number;
+    completionPercentage: number;
+  } | null = null;
+
+  variableCoverageOverview: {
+    totalVariables: number;
+    coveredVariables: number;
+    missingVariables: number;
+    coveragePercentage: number;
+    variableCaseCounts: { unitName: string; variableId: string; caseCount: number }[];
+  } | null = null;
+
+  caseCoverageOverview: {
+    totalCasesToCode: number;
+    casesInJobs: number;
+    doubleCodedCases: number;
+    singleCodedCases: number;
+    unassignedCases: number;
+    coveragePercentage: number;
+  } | null = null;
+
+  workspaceKappaSummary: {
+    coderPairs: Array<{
+      coder1Id: number;
+      coder1Name: string;
+      coder2Id: number;
+      coder2Name: string;
+      kappa: number | null;
+      agreement: number;
+      totalSharedResponses: number;
+      validPairs: number;
+      interpretation: string;
+    }>;
+    workspaceSummary: {
+      totalDoubleCodedResponses: number;
+      totalCoderPairs: number;
+      averageKappa: number | null;
+      variablesIncluded: number;
+      codersIncluded: number;
+    };
+  } | null = null;
+
+  codingIncompleteVariables: { unitName: string; variableId: string; responseCount: number }[] = [];
+  statusDistribution: { [status: string]: number } = {};
+  appliedResultsOverview: {
+    totalIncompleteVariables: number;
+    totalIncompleteResponses: number;
+    appliedResponses: number;
+    remainingResponses: number;
+    completionPercentage: number;
+    finalStatusBreakdown: {
+      codingComplete: number;
+      invalid: number;
+      codingError: number;
+      other: number;
+    };
+  } | null = null;
 
   importResults: {
     message: string;
@@ -100,7 +166,6 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     return this.validationResults?.hasPreviousPage || false;
   }
 
-  // Comparison table pagination getters
   get comparisonTotalPages(): number {
     if (!this.importResults?.affectedRows) return 0;
     return Math.ceil(this.importResults.affectedRows.length / this.comparisonPageSize);
@@ -166,6 +231,13 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     const currentProgress = this.validationStateService.getValidationProgress();
     this.validationProgress = currentProgress;
     this.isLoading = currentProgress.status === 'loading' || currentProgress.status === 'processing';
+    this.loadCodingProgressOverview();
+    this.loadVariableCoverageOverview();
+    this.loadCaseCoverageOverview();
+    this.loadWorkspaceKappaSummary();
+    this.loadCodingIncompleteVariables();
+    this.loadStatusDistribution();
+    this.loadAppliedResultsOverview();
   }
 
   ngOnDestroy(): void {
@@ -173,9 +245,6 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     this.destroy$.complete();
   }
 
-  /**
-   * Handle external coding file selection event
-   */
   onExternalCodingFileSelected(event: Event): void {
     const input = event.target as HTMLInputElement;
 
@@ -193,16 +262,10 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     this.processExternalCodingFile(file);
   }
 
-  /**
-   * Check if the file is a CSV or Excel file
-   */
   private isExcelOrCsvFile(file: File): boolean {
     return file.name.endsWith('.xlsx') || file.name.endsWith('.xls') || file.name.endsWith('.csv');
   }
 
-  /**
-   * Process external coding file upload with real-time progress tracking
-   */
   private async processExternalCodingFile(file: File): Promise<void> {
     this.isLoading = true;
     this.validationStateService.startValidation();
@@ -220,23 +283,18 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       this.validationStateService.updateProgress(10, this.translateService.instant('coding-management-manual.progress.file-processing'));
       const fileData = await this.fileToBase64(file);
 
-      // Start import with progress tracking via Server-Sent Events
       await this.testPersonCodingService.importExternalCodingWithProgress(
         workspaceId,
         {
           file: fileData,
           fileName: file.name
         },
-        // onProgress callback
         (progress: number, message: string) => {
           this.validationStateService.updateProgress(progress, message);
         },
         // onComplete callback
         (result: ExternalCodingImportResultDto) => {
-          // Reset validation state to hide progress UI
           this.validationStateService.resetValidation();
-
-          // Store import results and show comparison table
           this.importResults = result;
           this.showComparisonTable = true;
           this.comparisonCurrentPage = 1;
@@ -244,7 +302,6 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
           this.showSuccess(this.translateService.instant('coding-management-manual.success.import-completed', { updatedRows: result.updatedRows, processedRows: result.processedRows }));
 
           if (result.errors && result.errors.length > 0) {
-            // For warnings, we could show a different message, but keeping simple
             this.showError(this.translateService.instant('error.general', { error: `${result.errors.length} Warnungen aufgetreten. Details in der Konsole.` }));
           }
 
@@ -264,16 +321,12 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     }
   }
 
-  /**
-   * Convert file to base64 string
-   */
   private fileToBase64(file: File): Promise<string> {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.readAsDataURL(file);
       reader.onload = () => {
         const result = reader.result as string;
-        // Remove data:application/...;base64, prefix
         const base64Data = result.split(',')[1];
         resolve(base64Data);
       };
@@ -303,16 +356,10 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     }, 0);
   }
 
-  /**
-   * Check if the file is an Excel file
-   */
   private isExcelFile(file: File): boolean {
     return file.name.endsWith('.xlsx') || file.name.endsWith('.xls');
   }
 
-  /**
-   * Read Excel file and parse data using exceljs
-   */
   private readExcelFile(file: File): void {
     const workbook = new ExcelJS.Workbook();
     const reader = new FileReader();
@@ -379,9 +426,6 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     reader.readAsArrayBuffer(file);
   }
 
-  /**
-   * Map parsed data to ExpectedCombinationDto[]
-   */
   private mapToExpectedCombinations(data: Record<string, string>[]): ExpectedCombinationDto[] {
     return data.map(item => ({
       unit_key: item.unit_key || '',
@@ -392,20 +436,13 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     }));
   }
 
-  /**
-   * Validate coding completeness with pagination
-   */
   private validateCodingCompleteness(expectedCombinations: ExpectedCombinationDto[]): void {
-    // Store expected combinations for pagination
     this.expectedCombinations = expectedCombinations;
-    this.currentPage = 1; // Reset to first page
+    this.currentPage = 1;
 
     this.loadValidationPage(1);
   }
 
-  /**
-   * Load a specific page of validation results
-   */
   private loadValidationPage(page: number): void {
     const workspaceId = this.appService.selectedWorkspaceId;
 
@@ -432,36 +469,18 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     });
   }
 
-  /**
-   * Navigate to the next page
-   */
   nextPage(): void {
     if (this.hasNextPage) {
       this.loadValidationPage(this.currentPage + 1);
     }
   }
 
-  /**
-   * Navigate to the previous page
-   */
   previousPage(): void {
     if (this.hasPreviousPage) {
       this.loadValidationPage(this.currentPage - 1);
     }
   }
 
-  /**
-   * Navigate to a specific page
-   */
-  goToPage(page: number): void {
-    if (page >= 1 && page <= this.totalPages) {
-      this.loadValidationPage(page);
-    }
-  }
-
-  /**
-   * Change page size and reload current page
-   */
   changePageSize(newPageSize: number): void {
     this.pageSize = newPageSize;
     this.loadValidationPage(1); // Reset to first page when changing page size
@@ -479,20 +498,11 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     }
   }
 
-  goToComparisonPage(page: number): void {
-    if (page >= 1 && page <= this.comparisonTotalPages) {
-      this.comparisonCurrentPage = page;
-    }
-  }
-
   changeComparisonPageSize(newPageSize: number): void {
     this.comparisonPageSize = newPageSize;
     this.comparisonCurrentPage = 1;
   }
 
-  /**
-   * Download validation results as Excel file using cache key
-   */
   downloadExcel(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
 
@@ -541,9 +551,6 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     });
   }
 
-  /**
-   * Download comparison table as Excel file
-   */
   downloadComparisonTable(): void {
     if (!this.importResults || !this.importResults.affectedRows || this.importResults.affectedRows.length === 0) {
       this.showError('Keine Vergleichsdaten zum Herunterladen verfügbar.');
@@ -553,11 +560,9 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     this.isLoading = true;
 
     try {
-      // Create a new workbook
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet('Import Vergleich');
 
-      // Add headers
       const headers = [
         'Unit Alias',
         'Variable ID',
@@ -580,7 +585,6 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         fgColor: { argb: 'FFE0E0E0' }
       };
 
-      // Add data rows
       this.importResults.affectedRows.forEach(row => {
         worksheet.addRow([
           row.unitAlias,
@@ -595,7 +599,6 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         ]);
       });
 
-      // Auto-fit columns
       worksheet.columns.forEach(column => {
         if (column) {
           let maxLength = 0;
@@ -611,7 +614,6 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         }
       });
 
-      // Generate Excel file
       workbook.xlsx.writeBuffer().then(buffer => {
         const blob = new Blob([buffer], {
           type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
@@ -635,17 +637,11 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     }
   }
 
-  /**
-   * Close the comparison table
-   */
   closeComparisonTable(): void {
     this.showComparisonTable = false;
     this.importResults = null;
   }
 
-  /**
-   * Show error message
-   */
   private showError(message: string): void {
     this.snackBar.open(message, 'Schließen', {
       duration: 5000,
@@ -653,9 +649,6 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     });
   }
 
-  /**
-   * Show success message
-   */
   private showSuccess(message: string): void {
     this.snackBar.open(message, 'Schließen', {
       duration: 5000,
@@ -669,6 +662,181 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
   closeCoderTraining(): void {
     this.showCoderTraining = false;
+  }
+
+  private loadCodingProgressOverview(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      return;
+    }
+
+    this.testPersonCodingService.getCodingProgressOverview(workspaceId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: overview => {
+          this.codingProgressOverview = overview;
+        },
+        error: () => {
+          this.codingProgressOverview = null;
+        }
+      });
+  }
+
+  private loadVariableCoverageOverview(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      return;
+    }
+
+    this.testPersonCodingService.getVariableCoverageOverview(workspaceId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: overview => {
+          this.variableCoverageOverview = overview;
+        },
+        error: () => {
+          this.variableCoverageOverview = null;
+        }
+      });
+  }
+
+  private loadCaseCoverageOverview(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      return;
+    }
+
+    this.testPersonCodingService.getCaseCoverageOverview(workspaceId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: overview => {
+          this.caseCoverageOverview = overview;
+        },
+        error: () => {
+          this.caseCoverageOverview = null;
+        }
+      });
+  }
+
+  private loadWorkspaceKappaSummary(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      return;
+    }
+
+    this.testPersonCodingService.getWorkspaceCohensKappaSummary(workspaceId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: summary => {
+          this.workspaceKappaSummary = summary;
+        },
+        error: () => {
+          this.workspaceKappaSummary = null;
+        }
+      });
+  }
+
+  private loadCodingIncompleteVariables(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      return;
+    }
+
+    this.backendService.getCodingIncompleteVariables(workspaceId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (variables: { unitName: string; variableId: string; responseCount: number }[]) => {
+          this.codingIncompleteVariables = variables;
+          this.loadAppliedResultsOverview();
+        },
+        error: () => {
+          this.codingIncompleteVariables = [];
+          this.loadAppliedResultsOverview();
+        }
+      });
+  }
+
+  private loadStatusDistribution(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      return;
+    }
+
+    this.backendService.getCodingStatistics(workspaceId, 'v1')
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: statistics => {
+          this.statusDistribution = {
+            CODING_INCOMPLETE: statistics.statusCounts['4'] || 0,
+            CODING_COMPLETE: statistics.statusCounts['5'] || 0,
+            INVALID: statistics.statusCounts['6'] || 0,
+            CODING_ERROR: statistics.statusCounts['7'] || 0
+          };
+          this.loadAppliedResultsOverview();
+        },
+        error: () => {
+          this.statusDistribution = {
+            CODING_INCOMPLETE: 0,
+            CODING_COMPLETE: 0,
+            INVALID: 0,
+            CODING_ERROR: 0
+          };
+          this.loadAppliedResultsOverview();
+        }
+      });
+  }
+
+  private loadAppliedResultsOverview(): void {
+    if (this.codingIncompleteVariables.length > 0) {
+      const totalIncompleteResponses = this.codingIncompleteVariables.reduce((sum, variable) => sum + variable.responseCount, 0);
+      const workspaceId = this.appService.selectedWorkspaceId;
+      if (workspaceId) {
+        this.backendService.getAppliedResultsCount(workspaceId, this.codingIncompleteVariables)
+          .pipe(takeUntil(this.destroy$))
+          .subscribe({
+            next: (appliedResponses: number) => {
+              const remainingResponses = totalIncompleteResponses - appliedResponses;
+              const completionPercentage = totalIncompleteResponses > 0 ? (appliedResponses / totalIncompleteResponses) * 100 : 0;
+
+              this.appliedResultsOverview = {
+                totalIncompleteVariables: this.codingIncompleteVariables.length,
+                totalIncompleteResponses: totalIncompleteResponses,
+                appliedResponses: appliedResponses,
+                remainingResponses: Math.max(0, remainingResponses),
+                completionPercentage: Math.min(100, completionPercentage),
+                finalStatusBreakdown: {
+                  codingComplete: this.statusDistribution.CODING_COMPLETE || 0,
+                  invalid: this.statusDistribution.INVALID || 0,
+                  codingError: this.statusDistribution.CODING_ERROR || 0,
+                  other: 0
+                }
+              };
+            },
+            error: () => {
+              const appliedResponses = (this.statusDistribution.CODING_COMPLETE || 0) +
+                                       (this.statusDistribution.INVALID || 0) +
+                                       (this.statusDistribution.CODING_ERROR || 0);
+
+              const remainingResponses = totalIncompleteResponses - appliedResponses;
+              const completionPercentage = totalIncompleteResponses > 0 ? (appliedResponses / totalIncompleteResponses) * 100 : 0;
+
+              this.appliedResultsOverview = {
+                totalIncompleteVariables: this.codingIncompleteVariables.length,
+                totalIncompleteResponses: totalIncompleteResponses,
+                appliedResponses: appliedResponses,
+                remainingResponses: Math.max(0, remainingResponses),
+                completionPercentage: Math.min(100, completionPercentage),
+                finalStatusBreakdown: {
+                  codingComplete: this.statusDistribution.CODING_COMPLETE || 0,
+                  invalid: this.statusDistribution.INVALID || 0,
+                  codingError: this.statusDistribution.CODING_ERROR || 0,
+                  other: 0 // Could be expanded to include other statuses
+                }
+              };
+            }
+          });
+      }
+    }
   }
 
   onTrainingStart(data: { selectedCoders: Coder[], variableConfigs: VariableConfig[] }): void {

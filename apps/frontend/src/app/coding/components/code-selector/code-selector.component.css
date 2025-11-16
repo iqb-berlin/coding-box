@@ -1,14 +1,39 @@
-.selector-card {
-  display: block;
-  margin: 8px 0;
-}
+
 
 .code-row {
   display: flex;
   flex-direction: column;
-  padding: 6px 0;
-  border-bottom: 1px solid #e0e0e0;
-  margin-bottom: 8px;
+  padding: 8px 12px;
+  margin-bottom: 4px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+  border: 2px solid transparent;
+}
+
+.code-row:hover {
+  background-color: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.2);
+}
+
+.code-row.selected {
+  background-color: #e3f2fd;
+  border-color: #2196f3;
+  font-weight: 500;
+}
+
+.code-row.selected .code-id {
+  font-weight: 700;
+  color: #1976d2;
+}
+
+.code-row.selected .uncertain-text {
+  color: #1976d2;
+  font-weight: 600;
+}
+
+.code-content {
+  pointer-events: none;
 }
 
 .code-info {
@@ -39,4 +64,161 @@
 .hint {
   color: rgba(0, 0, 0, 0.54);
   font-style: italic;
+}
+
+::ng-deep .mat-mdc-divider {
+  margin: 16px 0;
+}
+
+.section-divider {
+  margin: 20px 0;
+}
+
+.deselect-container {
+  text-align: center;
+  margin: 8px 0;
+}
+
+.deselect-button {
+  font-size: 0.8rem;
+  color: rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+  padding: 4px 12px;
+  background-color: transparent;
+  transition: background-color 0.2s ease;
+}
+
+.deselect-button:hover {
+  background-color: rgba(0, 0, 0, 0.04);
+  color: rgba(0, 0, 0, 0.8);
+}
+
+.notes-field {
+  width: 100%;
+}
+
+::ng-deep .notes-field .mat-mdc-form-field .mat-mdc-text-field-wrapper {
+  width: 100%;
+}
+
+::ng-deep .notes-field .mat-mdc-text-field-wrapper .mat-mdc-form-field-flex {
+  width: 100%;
+}
+
+::ng-deep .notes-field textarea {
+  width: 100%;
+  box-sizing: border-box;
+  max-height: 80px;
+  overflow-y: auto;
+  resize: none;
+}
+
+/* Enhanced Progress Section */
+.progress-info {
+  text-align: center;
+  padding: 12px 8px;
+  margin-bottom: 12px;
+  background: rgba(0, 0, 0, 0.04);
+  border-radius: 8px;
+  font-size: 14px;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.progress-text {
+  font-weight: 500;
+  color: rgba(0, 0, 0, 0.87);
+}
+
+.progress-numbers {
+  font-weight: 600;
+  color: #1976d2;
+  margin: 0 8px;
+}
+
+.progress-percentage {
+  color: rgba(0, 0, 0, 0.6);
+}
+
+.progress-open {
+  display: block;
+  margin-top: 4px;
+  color: #f57c00;
+  font-size: 13px;
+}
+
+.custom-progress-bar {
+  margin-bottom: 16px;
+  height: 10px;
+  border-radius: 5px;
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.custom-progress-bar ::ng-deep .mat-mdc-progress-bar-primary-bar {
+  border-radius: 5px;
+}
+
+/* Progress colors are dynamically set via Material theme colors */
+
+.progress-actions {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 8px 0;
+}
+
+.selector-content {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.codes-section {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.scrollable-codes {
+  flex: 1;
+  overflow-y: auto;
+  max-height: none;
+}
+
+.fixed-section {
+  flex-shrink: 0;
+}
+
+.uncertain-codes-section {
+  margin-top: 16px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.nav-button {
+  margin: 0 8px;
+}
+
+.unit-position {
+  display: flex;
+  align-items: center;
+  font-weight: 500;
+  color: rgba(0, 0, 0, 0.87);
+  min-width: 60px;
+  justify-content: center;
+}
+
+.unit-position .current-position {
+  font-weight: 600;
+  color: #1976d2;
+}
+
+.unit-position .total-units {
+  color: rgba(0, 0, 0, 0.6);
+}
+
+.position-separator {
+  margin: 0 4px;
 }

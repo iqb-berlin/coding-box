@@ -85,8 +85,8 @@ export class WsgCodingJobController {
   async getCodingJobs(
     @WorkspaceId() workspaceId: number,
       @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
-      @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number
-  ): Promise<{ data: CodingJobDto[]; total: number; totalOpenUnits: number; page: number; limit: number }> {
+      @Query('limit', new ParseIntPipe({ optional: true })) limit?: number
+  ): Promise<{ data: CodingJobDto[]; total: number; totalOpenUnits: number; page: number; limit?: number }> {
     try {
       const result = await this.codingJobService.getCodingJobs(workspaceId, page, limit);
       return {
@@ -281,7 +281,9 @@ export class WsgCodingJobController {
       const onlyOpen = job.codingJob.status === 'pending';
       const items = await this.codingJobService.getCodingJobUnits(id, onlyOpen);
 
-      await this.codingJobService.updateCodingJob(id, workspaceId, { status: 'active' });
+      if (job.codingJob.status !== 'results_applied') {
+        await this.codingJobService.updateCodingJob(id, workspaceId, { status: 'active' });
+      }
 
       return { total: items.length, items };
     } catch (error) {

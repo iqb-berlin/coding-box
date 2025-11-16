@@ -258,18 +258,7 @@ export class ExportDialogComponent implements OnInit, OnDestroy {
         window.URL.revokeObjectURL(url);
         this.isValidating = false;
       },
-      error: error => {
-        let errorMessage = 'Fehler beim Herunterladen der Excel-Datei';
-        if (error.status === 404) {
-          errorMessage = 'Validierungsdaten nicht gefunden. Bitte führen Sie zuerst eine neue Validierung durch.';
-        } else if (error.status === 400) {
-          errorMessage = 'Ungültiger Cache-Schlüssel. Bitte führen Sie eine neue Validierung durch.';
-        } else if (error.status === 500) {
-          errorMessage = 'Server-Fehler beim Generieren der Excel-Datei. Bitte versuchen Sie es später erneut.';
-        } else if (error.status === 0) {
-          errorMessage = 'Netzwerk-Fehler. Bitte überprüfen Sie Ihre Internetverbindung.';
-        }
-        console.error('Download validation Excel error:', errorMessage);
+      error: () => {
         this.isValidating = false;
       }
     });

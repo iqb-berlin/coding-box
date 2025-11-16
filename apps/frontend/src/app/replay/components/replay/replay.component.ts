@@ -5,6 +5,9 @@ import {
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { MatIconModule } from '@angular/material/icon';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 import { ActivatedRoute, Params } from '@angular/router';
@@ -28,7 +31,9 @@ import { scrollToElementByAlias, highlightAspectSectionWithAnchor } from '../../
 import { UnitsReplay, UnitsReplayUnit } from '../../../services/units-replay.service';
 import { UnitsReplayComponent } from '../units-replay/units-replay.component';
 import { CodeSelectorComponent } from '../../../coding/components/code-selector/code-selector.component';
-import { ReplayCodingService } from '../../services/replay-coding.service';
+import { CodingJobCommentDialogComponent } from '../../../coding/components/coding-job-comment-dialog/coding-job-comment-dialog.component';
+import { NavigateCodingCasesDialogComponent, NavigateCodingCasesDialogData } from '../navigate-coding-cases-dialog/navigate-coding-cases-dialog.component';
+import { ReplayCodingService } from '../../../services/replay-coding.service';
 
 @Component({
   providers: [ReplayCodingService],
@@ -37,6 +42,9 @@ import { ReplayCodingService } from '../../services/replay-coding.service';
     MatFormFieldModule,
     MatInputModule,
     MatButtonModule,
+    MatDialogModule,
+    MatIconModule,
+    MatTooltipModule,
     ReactiveFormsModule,
     TranslateModule,
     UnitPlayerComponent,
@@ -54,6 +62,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   private route = inject(ActivatedRoute);
   private errorSnackBar = inject(MatSnackBar);
   private pageErrorSnackBar = inject(MatSnackBar);
+  private dialog = inject(MatDialog);
   codingService = inject(ReplayCodingService);
 
   player: string = '';
@@ -66,7 +75,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   isPrintMode: boolean = false;
   testPerson: string = '';
   unitId: string = '';
-  isBookletMode: boolean = false;
+  isCodingMode: boolean = false;
   isBookletReplayMode: boolean = false; // for replays without coding features
   currentUnitIndex: number = 0;
   totalUnits: number = 0;
@@ -143,9 +152,9 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         this.workspaceId = Number(workspace);
 
         const queryParams = await firstValueFrom(this.route.queryParams);
-        this.isBookletMode = queryParams.mode === 'booklet';
-        this.isBookletReplayMode = queryParams.mode === 'booklet' && !queryParams.bookletKey; // replays from test results don't have bookletKey
-        if (this.isBookletMode) {
+        this.isCodingMode = queryParams.mode === 'coding';
+        this.isBookletReplayMode = queryParams.mode === 'booklet-view';
+        if (this.isCodingMode) {
           let deserializedUnits = null as UnitsReplay | null;
 
           if (queryParams.unitsData) {
@@ -180,7 +189,6 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
               const jobId = this.codingService.codingJobId;
               this.codingService.updateCodingJobStatus(this.workspaceId, jobId, 'active');
               await this.codingService.loadSavedCodingProgress(this.workspaceId, jobId);
-              await this.codingService.loadCodingJobMissings(this.workspaceId, jobId);
             }
           }
         }
@@ -344,9 +352,10 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     this.reloadKey += 1;
     this.responses = unitData.response;
 
-    // Set coding scheme for booklet mode from vocs data
-    if (this.isBookletMode && unitData.vocs && unitData.vocs[0] && unitData.vocs[0].data) {
+    if (this.isCodingMode && unitData.vocs && unitData.vocs[0] && unitData.vocs[0].data) {
       this.codingService.setCodingSchemeFromVocsData(unitData.vocs[0].data);
+    } else if (this.isCodingMode && !this.codingService.codingScheme) {
+      this.loadCodingSchemeForCodingJob();
     }
   }
 
@@ -632,7 +641,6 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       if (workspace) {
         this.getUnitData(Number(workspace), this.authToken).then(unitData => {
           this.setUnitProperties(unitData);
-          // After loading new unit data, try to highlight using current anchor
           setTimeout(() => {
             if (this.unitPlayerComponent?.hostingIframe?.nativeElement && this.anchor) {
               highlightAspectSectionWithAnchor(this.unitPlayerComponent.hostingIframe.nativeElement, this.anchor);
@@ -694,8 +702,18 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     await this.codingService.handleCodeSelected(event, this.testPerson, this.unitId, this.workspaceId, this.unitsData);
   }
 
-  onOpenChanged(isOpen: boolean): void {
-    this.codingService.handleOpenChanged(isOpen, this.testPerson, this.unitId, this.workspaceId, this.unitsData);
+  getCoderNotes(): string {
+    return this.codingService.getNotes(this.testPerson, this.unitId, this.codingService.currentVariableId);
+  }
+
+  onNotesChanged(notes: string): void {
+    this.codingService.saveNotes(
+      this.workspaceId,
+      this.testPerson,
+      this.unitId,
+      this.codingService.currentVariableId,
+      notes
+    );
   }
 
   getCompletedCount(): number {
@@ -703,7 +721,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   getOpenCount(): number {
-    return this.codingService.getOpenCount(this.unitsData);
+    return this.codingService.getOpenCount();
   }
 
   getProgressPercentage(): number {
@@ -712,11 +730,6 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
   getPreSelectedCodeId(variableId: string): number | null {
     return this.codingService.getPreSelectedCodeId(this.testPerson, this.unitId, variableId);
-  }
-
-  isUnitOpen(): boolean {
-    const compositeKey = this.codingService.generateCompositeKey(this.testPerson, this.unitId, this.codingService.currentVariableId);
-    return this.codingService.openSelections.has(compositeKey);
   }
 
   pauseCodingJob(): void {
@@ -738,19 +751,87 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     }
   }
 
+  dismissCompletionOverlay(): void {
+    // Allow users to continue navigating through cases even after job completion
+    this.codingService.isCodingJobCompleted = false;
+  }
+
+  openCommentDialog(): void {
+    const dialogRef = this.dialog.open(CodingJobCommentDialogComponent, {
+      width: '500px',
+      data: { comment: this.codingService.codingJobComment }
+    });
+
+    dialogRef.afterClosed().subscribe(async (result: string) => {
+      if (result !== undefined && result !== this.codingService.codingJobComment) {
+        await this.codingService.saveCodingJobComment(this.workspaceId, result);
+      }
+    });
+  }
+
+  openNavigateDialog(): void {
+    if (!this.unitsData) return;
+
+    const dialogData: NavigateCodingCasesDialogData = {
+      unitsData: this.unitsData,
+      codingService: this.codingService,
+      testPerson: this.testPerson
+    };
+
+    const dialogRef = this.dialog.open(NavigateCodingCasesDialogComponent, {
+      width: '800px',
+      data: dialogData
+    });
+
+    dialogRef.afterClosed().subscribe((selectedUnit: UnitsReplayUnit | undefined) => {
+      if (selectedUnit) {
+        this.handleUnitChanged(selectedUnit);
+      }
+    });
+  }
+
   onKeyDown(event: Event): void {
     const keyboardEvent = event as KeyboardEvent;
-    if (keyboardEvent.key === 'Enter' && this.isBookletMode && this.unitsData) {
-      if (this.codingService.currentVariableId) {
+    if (this.isCodingMode && this.unitsData) {
+      // Check for Enter key - navigate to next unit (existing functionality)
+      if (keyboardEvent.key === 'Enter' && this.codingService.currentVariableId) {
         const compositeKey = this.codingService.generateCompositeKey(this.testPerson, this.unitId, this.codingService.currentVariableId);
         const hasSelection = this.codingService.selectedCodes.has(compositeKey);
 
         if (hasSelection) {
           keyboardEvent.preventDefault();
-          // Navigate to next unit - find the next unit index
-          const nextIndex = this.codingService.findFirstUncodedUnitIndex(this.unitsData);
+          const currentIndex = this.unitsData.currentUnitIndex;
+          const nextIndex = this.codingService.getNextJumpableUnitIndex(this.unitsData, currentIndex);
           if (nextIndex >= 0 && nextIndex < this.unitsData.units.length) {
             this.handleUnitChanged(this.unitsData.units[nextIndex]);
+          }
+        }
+      } else if (keyboardEvent.key === 'ArrowRight') {
+        keyboardEvent.preventDefault();
+        const currentIndex = this.unitsData.currentUnitIndex;
+        const nextIndex = this.codingService.getNextJumpableUnitIndex(this.unitsData, currentIndex);
+        if (nextIndex >= 0 && nextIndex < this.unitsData.units.length) {
+          this.handleUnitChanged(this.unitsData.units[nextIndex]);
+        }
+      } else if (keyboardEvent.key === 'ArrowLeft' && this.unitsData.currentUnitIndex > 0) {
+        keyboardEvent.preventDefault();
+        const prevIndex = this.unitsData.currentUnitIndex - 1;
+        if (prevIndex >= 0) {
+          this.handleUnitChanged(this.unitsData.units[prevIndex]);
+        }
+      } else if (['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'].includes(keyboardEvent.key) && this.codingService.currentVariableId) {
+        keyboardEvent.preventDefault();
+        const codeId = parseInt(keyboardEvent.key, 10);
+        if (this.codingService.codingScheme) {
+          const variableCoding = this.codingService.codingScheme.variableCodings.find((v: any) => v.alias === this.codingService.currentVariableId);
+          if (variableCoding) {
+            const code = variableCoding.codes.find((c: any) => c.id === codeId);
+            if (code) {
+              this.onCodeSelected({
+                variableId: this.codingService.currentVariableId,
+                code: code
+              });
+            }
           }
         }
       }
@@ -762,5 +843,36 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     if (this.codingService.codingJobId && this.workspaceId && !this.codingService.isCodingJobCompleted) {
       this.codingService.updateCodingJobStatus(this.workspaceId, this.codingService.codingJobId, 'paused');
     }
+  }
+
+  private loadCodingSchemeForCodingJob(): void {
+    if (!this.unitDef) return;
+
+    const codingSchemeRef = this.extractCodingSchemeRefFromXml(this.unitDef);
+    if (codingSchemeRef) {
+      this.backendService.getCodingSchemeFile(this.workspaceId, codingSchemeRef)
+        .pipe(catchError(() => of(null)))
+        .subscribe(fileData => {
+          if (fileData && fileData.base64Data) {
+            this.codingService.setCodingSchemeFromVocsData(fileData.base64Data);
+          }
+        });
+    }
+  }
+
+  private extractCodingSchemeRefFromXml(xmlContent: string): string | null {
+    try {
+      const parser = new DOMParser();
+      const xmlDoc = parser.parseFromString(xmlContent, 'text/xml');
+      const codingSchemeRefElement = xmlDoc.querySelector('CodingSchemeRef');
+
+      if (codingSchemeRefElement && codingSchemeRefElement.textContent) {
+        return codingSchemeRefElement.textContent.trim();
+      }
+    } catch (error) {
+      // Ignore parsing errors
+    }
+
+    return null;
   }
 }

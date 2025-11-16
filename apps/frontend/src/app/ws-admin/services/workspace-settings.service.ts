@@ -12,11 +12,11 @@ export class WorkspaceSettingsService {
   private serverUrl = inject(SERVER_URL);
 
   getWorkspaceSetting(workspaceId: number, key: string): Observable<WorkspaceSettings> {
-    return this.http.get<WorkspaceSettings>(`${this.serverUrl}/api/workspace/${workspaceId}/settings/${key}`);
+    return this.http.get<WorkspaceSettings>(`${this.serverUrl}/workspace/${workspaceId}/settings/${key}`);
   }
 
   setWorkspaceSetting(workspaceId: number, key: string, value: string, description?: string): Observable<WorkspaceSettings> {
-    return this.http.post<WorkspaceSettings>(`${this.serverUrl}/api/workspace/${workspaceId}/settings`, {
+    return this.http.post<WorkspaceSettings>(`${this.serverUrl}/workspace/${workspaceId}/settings`, {
       key,
       value,
       description
@@ -24,13 +24,13 @@ export class WorkspaceSettingsService {
   }
 
   updateWorkspaceSetting(workspaceId: number, settingId: number, value: string): Observable<WorkspaceSettings> {
-    return this.http.put<WorkspaceSettings>(`${this.serverUrl}/api/workspace/${workspaceId}/settings/${settingId}`, {
+    return this.http.put<WorkspaceSettings>(`${this.serverUrl}/workspace/${workspaceId}/settings/${settingId}`, {
       value
     });
   }
 
   deleteWorkspaceSetting(workspaceId: number, settingId: number): Observable<void> {
-    return this.http.delete<void>(`${this.serverUrl}/api/workspace/${workspaceId}/settings/${settingId}`);
+    return this.http.delete<void>(`${this.serverUrl}/workspace/${workspaceId}/settings/${settingId}`);
   }
 
   getAutoFetchCodingStatistics(workspaceId: number): Observable<boolean> {

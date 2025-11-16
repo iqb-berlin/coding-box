@@ -2,73 +2,32 @@ import {
   Component, EventEmitter, Input, OnChanges, Output, SimpleChanges
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { MatCardModule } from '@angular/material/card';
-import { MatListModule } from '@angular/material/list';
-import { MatRadioModule } from '@angular/material/radio';
-import { MatButtonModule } from '@angular/material/button';
-import { MatCheckboxModule } from '@angular/material/checkbox';
 import { FormsModule } from '@angular/forms';
+import { MatListModule } from '@angular/material/list';
+import { MatButtonModule } from '@angular/material/button';
+import { MatDividerModule } from '@angular/material/divider';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
+import { MatIconModule } from '@angular/material/icon';
+import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { TranslateModule } from '@ngx-translate/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
-import { MissingDto } from '../../../../../../../api-dto/coding/missings-profiles.dto';
-
-export interface CodingScheme {
-  variableCodings: VariableCoding[];
-  version: string;
-}
-
-export interface VariableCoding {
-  id: string;
-  alias: string;
-  label: string;
-  sourceType: string;
-  processing: string[];
-  codeModel: string;
-  codes: Code[];
-  manualInstruction: string;
-}
-
-export interface Code {
-  id: number;
-  type: 'FULL_CREDIT' | 'RESIDUAL';
-  label: string;
-  score: number;
-  ruleSetOperatorAnd: boolean;
-  ruleSets: RuleSet[];
-  manualInstruction: string;
-}
-
-export interface RuleSet {
-  ruleOperatorAnd: boolean;
-  rules: Rule[];
-}
-
-export interface Rule {
-  method: string;
-  parameters: string[];
-}
-
-export interface CodeSelectedEvent {
-  variableId: string;
-  code: Code | MissingDto;
-}
-
-export interface SelectableItem {
-  id: number;
-  label: string;
-  type: string;
-  score?: number;
-  manualInstruction?: string;
-  description?: string;
-  isMissing: boolean;
-  originalCode?: Code;
-  originalMissing?: MissingDto;
-}
+import { UnitsReplay, UnitsReplayUnit } from '../../../services/units-replay.service';
+import { ReplayCodingService } from '../../../services/replay-coding.service';
+import {
+  Code,
+  CodeSelectedEvent,
+  CodingScheme,
+  SelectableItem,
+  CodingIssueDto,
+  VariableCoding
+} from '../../../models/coding-interfaces';
 
 @Component({
   selector: 'app-code-selector',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatCardModule, MatListModule, MatRadioModule, MatButtonModule, MatCheckboxModule, TranslateModule],
+  imports: [CommonModule, FormsModule, MatListModule, MatButtonModule, MatDividerModule, MatFormFieldModule, MatInputModule, MatIconModule, MatTooltipModule, MatProgressBarModule, TranslateModule],
   templateUrl: './code-selector.component.html',
   styleUrls: ['./code-selector.component.css']
 })
@@ -76,15 +35,33 @@ export class CodeSelectorComponent implements OnChanges {
   @Input() codingScheme!: string | CodingScheme;
   @Input() variableId!: string;
   @Input() preSelectedCodeId: number | null = null;
-  @Input() missings: MissingDto[] = [];
-  @Input() isOpen: boolean = false;
+  @Input() coderNotes: string = '';
+  @Input() showProgress: boolean = false;
+  @Input() completedCount: number = 0;
+  @Input() totalUnits: number = 0;
+  @Input() progressPercentage: number = 0;
+  @Input() openCount: number = 0;
+  @Input() isCodingActive: boolean = false;
+  @Input() hasCodingJob: boolean = false;
+  @Input() isCodingJobCompleted: boolean = false;
+  @Input() isPausingJob: boolean = false;
+  @Input() unitsData: UnitsReplay | null = null;
+  @Input() codingService!: ReplayCodingService;
+  @Input() showScore: boolean = true;
+  @Input() allowComments: boolean = true;
+  @Input() suppressGeneralInstructions: boolean = false;
+  @Input() isReadOnly: boolean = false;
 
   @Output() codeSelected = new EventEmitter<CodeSelectedEvent>();
-  @Output() openChanged = new EventEmitter<boolean>();
+  @Output() notesChanged = new EventEmitter<string>();
+  @Output() openNavigateDialog = new EventEmitter<void>();
+  @Output() openCommentDialog = new EventEmitter<void>();
+  @Output() pauseCodingJob = new EventEmitter<void>();
+  @Output() unitChanged = new EventEmitter<UnitsReplayUnit>();
 
   selectableItems: SelectableItem[] = [];
   selectedCode: number | null = null;
-
+  selectedCodingIssueOption: number | null = null;
   constructor(private sanitizer: DomSanitizer) {}
 
   ngOnChanges(changes: SimpleChanges): void {
@@ -114,28 +91,41 @@ export class CodeSelectorComponent implements OnChanges {
       scheme = this.codingScheme;
     }
 
-    const variableCoding = scheme.variableCodings.find(v => v.alias === this.variableId);
+    const variableCoding = scheme.variableCodings.find((v: VariableCoding) => v.alias === this.variableId);
     if (variableCoding) {
-      const codeItems: SelectableItem[] = variableCoding.codes.map(code => ({
+      const codeItems: SelectableItem[] = variableCoding.codes.map((code: Code) => ({
         id: code.id,
         label: code.label,
         type: code.type,
         score: code.score,
         manualInstruction: code.manualInstruction,
-        isMissing: false,
         originalCode: code
       }));
 
-      const missingItems: SelectableItem[] = this.missings.map(missing => ({
-        id: missing.code,
-        label: missing.label,
-        type: 'MISSING',
-        description: missing.description,
-        isMissing: true,
-        originalMissing: missing
-      }));
+      const codingIssueOptions: SelectableItem[] = [
+        {
+          id: -1,
+          label: 'Code-Vergabe unsicher',
+          type: 'codingIssueOption'
+        },
+        {
+          id: -2,
+          label: 'Neuer Code nötig',
+          type: 'codingIssueOption'
+        },
+        {
+          id: -3,
+          label: 'Ungültig (Spaßantwort)',
+          type: 'codingIssueOption'
+        },
+        {
+          id: -4,
+          label: 'Technische Probleme',
+          type: 'codingIssueOption'
+        }
+      ];
 
-      this.selectableItems = [...codeItems, ...missingItems];
+      this.selectableItems = [...codeItems, ...codingIssueOptions];
       setTimeout(() => this.selectPreSelectedCode(), 0);
     } else {
       this.selectableItems = [];
@@ -144,6 +134,7 @@ export class CodeSelectorComponent implements OnChanges {
 
   private selectPreSelectedCode(): void {
     this.selectedCode = null;
+    this.selectedCodingIssueOption = null;
     if (this.preSelectedCodeId === null) {
       return;
     }
@@ -152,11 +143,20 @@ export class CodeSelectorComponent implements OnChanges {
     }
     const preSelectedItem = this.selectableItems.find(item => item.id === this.preSelectedCodeId);
     if (preSelectedItem) {
-      this.selectedCode = this.preSelectedCodeId;
-      this.codeSelected.emit({
-        variableId: this.variableId,
-        code: preSelectedItem.isMissing ? preSelectedItem.originalMissing! : preSelectedItem.originalCode!
-      });
+      if (preSelectedItem.type === 'codingIssueOption') {
+        this.selectedCodingIssueOption = this.preSelectedCodeId;
+        this.codeSelected.emit({
+          variableId: this.variableId,
+          code: null,
+          codingIssueOption: this.createCodeOrCodingIssueOption(preSelectedItem) as CodingIssueDto
+        });
+      } else {
+        this.selectedCode = this.preSelectedCodeId;
+        this.codeSelected.emit({
+          variableId: this.variableId,
+          code: this.createCodeOrCodingIssueOption(preSelectedItem)
+        });
+      }
     }
   }
 
@@ -164,21 +164,133 @@ export class CodeSelectorComponent implements OnChanges {
     return this.sanitizer.bypassSecurityTrustHtml(instructions);
   }
 
+  private createCodeOrCodingIssueOption(item: SelectableItem): Code | CodingIssueDto {
+    if (item.originalCode) {
+      return item.originalCode;
+    }
+    if (item.type === 'codingIssueOption') {
+      return {
+        id: `uncertain-${item.id}`,
+        label: item.label,
+        description: '',
+        code: item.id
+      };
+    }
+    throw new Error(`Invalid item type for conversion: ${item.type}`);
+  }
+
   onSelect(codeId: number): void {
-    this.selectedCode = codeId;
+    if (this.isReadOnly) return;
     const selectedItem = this.selectableItems.find(item => item.id === codeId);
-    if (selectedItem) {
-      this.codeSelected.emit({
-        variableId: this.variableId,
-        code: selectedItem.isMissing ? selectedItem.originalMissing! : selectedItem.originalCode!
-      });
+    if (!selectedItem) return;
+    if (selectedItem.type === 'codingIssueOption') {
+      this.selectedCodingIssueOption = codeId;
+    } else {
+      this.selectedCode = codeId;
+    }
+    const codeDto = this.selectedCode !== null ? this.createCodeOrCodingIssueOption(
+      this.selectableItems.find(item => item.id === this.selectedCode)!
+    ) : null;
+    const codingIssueOption = this.selectedCodingIssueOption !== null ? this.createCodeOrCodingIssueOption(
+      this.selectableItems.find(item => item.id === this.selectedCodingIssueOption)!
+    ) as CodingIssueDto : null;
+    this.codeSelected.emit({
+      variableId: this.variableId,
+      code: codeDto,
+      codingIssueOption: codingIssueOption
+    });
+  }
+
+  get regularCodes(): SelectableItem[] {
+    return this.selectableItems.filter(item => item.type !== 'codingIssueOption');
+  }
+
+  get codingIssueOptionCodes(): SelectableItem[] {
+    return this.selectableItems.filter(item => item.type === 'codingIssueOption');
+  }
+
+  deselectAll(): void {
+    this.selectedCode = null;
+    this.selectedCodingIssueOption = null;
+    this.codeSelected.emit({
+      variableId: this.variableId,
+      code: null,
+      codingIssueOption: null
+    });
+  }
+
+  onNavigateClick(): void {
+    this.openNavigateDialog.emit();
+  }
+
+  onCommentClick(): void {
+    this.openCommentDialog.emit();
+  }
+
+  onPauseClick(): void {
+    this.pauseCodingJob.emit();
+  }
+
+  onNotesChanged(): void {
+    this.notesChanged.emit(this.coderNotes);
+  }
+
+  nextUnit(): void {
+    const data = this.unitsData;
+    if (!data) {
+      return;
+    }
+
+    const currentIndex = data.currentUnitIndex;
+    const nextIndex = this.codingService.findNextUncodedUnitIndex(data, currentIndex + 1);
+    if (nextIndex >= 0 && nextIndex < data.units.length) {
+      this.unitChanged.emit(data.units[nextIndex]);
     }
   }
 
-  onOpenChanged(): void {
-    if (this.isOpen) {
-      this.selectedCode = null;
+  previousUnit(): void {
+    const data = this.unitsData;
+    if (!data || !this.hasPreviousUnit()) {
+      return;
     }
-    this.openChanged.emit(this.isOpen);
+
+    const prevIndex = data.currentUnitIndex - 1;
+    if (prevIndex >= 0) {
+      const prevUnit = data.units[prevIndex];
+      this.unitChanged.emit(prevUnit);
+    }
+  }
+
+  hasNextUnit(): boolean {
+    const data = this.unitsData;
+    if (!data || !data.units.length) return false;
+
+    const currentUnit = data.units[data.currentUnitIndex];
+    if (!currentUnit) return false;
+
+    const compositeKey = this.codingService.generateCompositeKey(
+      currentUnit.testPerson || '',
+      currentUnit.name,
+      currentUnit.variableId || ''
+    );
+
+    const hasSelection = this.codingService.selectedCodes.has(compositeKey);
+    const nextUncodedIndex = this.codingService.findNextUncodedUnitIndex(data, data.currentUnitIndex + 1);
+    return hasSelection && nextUncodedIndex >= 0;
+  }
+
+  hasPreviousUnit(): boolean {
+    const data = this.unitsData;
+    if (!data) return false;
+
+    return data.currentUnitIndex > 0;
+  }
+
+  get totalNavigationUnits(): number {
+    return this.unitsData?.units.length || 0;
+  }
+
+  get currentNavigationIndex(): number {
+    return (this.unitsData?.currentUnitIndex || 0) + 1;
   }
 }

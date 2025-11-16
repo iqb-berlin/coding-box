@@ -43,18 +43,13 @@ export class WorkspaceTestResultsService {
 
   async findPersonTestResults(personId: number, workspaceId: number): Promise<{
     id: number;
-    personid: number;
     name: string;
-    size: number;
     logs: { id: number; bookletid: number; ts: string; parameter: string, key: string }[];
-    sessions: { id: number; browser: string; os: string; screen: string; ts: string }[];
     units: {
       id: number;
-      bookletid: number;
       name: string;
       alias: string | null;
-      results: { id: number; unitid: number }[];
-      logs: { id: number; unitid: number; ts: string; key: string; parameter: string }[];
+      results: { id: number; unitid: number; variableid: string; status: string; value: string; subform: string; code?: number; score?: number; codedstatus?: string }[];
       tags: { id: number; unitId: number; tag: string; color?: string; createdAt: Date }[];
     }[];
   }[]> {
@@ -75,10 +70,7 @@ export class WorkspaceTestResultsService {
         .where('booklet.personid = :personId', { personId })
         .select([
           'booklet.id',
-          'booklet.personid',
-          'bookletinfo.id',
-          'bookletinfo.name',
-          'bookletinfo.size'
+          'bookletinfo.name'
         ])
         .getMany();
 
@@ -112,12 +104,22 @@ export class WorkspaceTestResultsService {
 
       const unitIds = units.map(unit => unit.id);
 
-      const unitResultMap = new Map<number, { id: number; unitid: number }[]>();
+      const unitResultMap = new Map<number, { id: number; unitid: number; variableid: string; status: string; value: string; subform: string; code?: number; score?: number; codedstatus?: string }[]>();
       units.forEach(unit => {
         if (unit.responses) {
           const uniqueResponses = Array.from(
             new Map(unit.responses.map(response => [response.id, response])).values()
-          );
+          ).map(response => ({
+            id: response.id,
+            unitid: response.unitid,
+            variableid: response.variableid,
+            status: statusNumberToString(response.status) || 'UNSET',
+            value: response.value || '',
+            subform: response.subform || '',
+            code: response.code_v1,
+            score: response.score_v1,
+            codedstatus: statusNumberToString(response.status_v1) || 'UNSET'
+          }));
           unitResultMap.set(unit.id, uniqueResponses);
         }
       });
@@ -127,33 +129,6 @@ export class WorkspaceTestResultsService {
         .where('bookletLog.bookletid IN (:...bookletIds)', { bookletIds })
         .select(['bookletLog.id', 'bookletLog.bookletid', 'bookletLog.ts', 'bookletLog.parameter', 'bookletLog.key'])
         .getMany();
-
-      const sessions = await this.sessionRepository
-        .createQueryBuilder('session')
-        .innerJoin('session.booklet', 'booklet')
-        .where('booklet.id IN (:...bookletIds)', { bookletIds })
-        .select(['session.id', 'session.browser', 'session.os', 'session.screen', 'session.ts', 'booklet.id'])
-        .getMany();
-
-      const unitLogs = await this.unitLogRepository
-        .createQueryBuilder('unitLog')
-        .where('unitLog.unitid IN (:...unitIds)', { unitIds })
-        .select(['unitLog.id', 'unitLog.unitid', 'unitLog.ts', 'unitLog.key', 'unitLog.parameter'])
-        .getMany();
-
-      const unitLogsMap = new Map<number, { id: number; unitid: number; ts: string; key: string; parameter: string }[]>();
-      unitLogs.forEach(log => {
-        if (!unitLogsMap.has(log.unitid)) {
-          unitLogsMap.set(log.unitid, []);
-        }
-        unitLogsMap.get(log.unitid)?.push({
-          id: log.id,
-          unitid: log.unitid,
-          ts: log.ts.toString(),
-          key: log.key,
-          parameter: log.parameter
-        });
-      });
 
       const unitTagsMap = new Map<number, { id: number; unitId: number; tag: string; color?: string; createdAt: Date }[]>();
 
@@ -167,23 +142,6 @@ export class WorkspaceTestResultsService {
           unitTagsMap.get(tag.unitId)?.push(tag);
         });
       }
-
-      const sessionsMap = new Map<number, { id: number; browser: string; os: string; screen: string; ts: string }[]>();
-      sessions.forEach(session => {
-        const bookletId = session.booklet?.id;
-        if (bookletId && !sessionsMap.has(bookletId)) {
-          sessionsMap.set(bookletId, []);
-        }
-        if (bookletId) {
-          sessionsMap.get(bookletId)?.push({
-            id: session.id,
-            browser: session.browser,
-            os: session.os,
-            screen: session.screen,
-            ts: session.ts?.toString()
-          });
-        }
-      });
 
       const bookletLogsMap = new Map<number, { id: number; bookletid: number; ts: string; key: string; parameter: string }[]>();
       bookletLogs.forEach(log => {
@@ -209,18 +167,13 @@ export class WorkspaceTestResultsService {
 
       return booklets.map(booklet => ({
         id: booklet.id,
-        personid: booklet.personid,
         name: booklet.bookletinfo.name,
-        size: booklet.bookletinfo.size,
         logs: bookletLogsMap.get(booklet.id) || [],
-        sessions: sessionsMap.get(booklet.id) || [],
         units: (unitsMap.get(booklet.id) || []).map(unit => ({
           id: unit.id,
-          bookletid: unit.bookletid,
           name: unit.name,
           alias: unit.alias,
           results: unitResultMap.get(unit.id) || [],
-          logs: unitLogsMap.get(unit.id) || [],
           tags: unitTagsMap.get(unit.id) || []
         }))
       }));
@@ -395,7 +348,7 @@ export class WorkspaceTestResultsService {
         status: response.status
       };
 
-      const subformKey = response.subform || 'elementCodes';
+      const subformKey = response.subform || '';
 
       if (!responsesBySubform[subformKey]) {
         responsesBySubform[subformKey] = [];
@@ -410,7 +363,7 @@ export class WorkspaceTestResultsService {
       );
 
       return {
-        id: subform === 'default' ? 'elementCodes' : subform,
+        id: subform || '',
         content: uniqueResponses
       };
     });
