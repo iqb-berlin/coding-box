@@ -92,7 +92,7 @@
     "@angular/compiler-cli": "20.0.3",
     "@golevelup/ts-jest": "^0.5.0",
     "@iqb/eslint-config": "^2.1.1",
-    "@nx/angular": "21.5.2",
+    "@nx/angular": "22.0.3",
     "@nx/cypress": "21.2.0",
     "@nx/esbuild": "21.2.0",
     "@nx/eslint": "21.2.0",
