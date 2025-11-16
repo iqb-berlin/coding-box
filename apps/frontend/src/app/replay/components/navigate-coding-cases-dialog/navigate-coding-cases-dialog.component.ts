@@ -89,7 +89,7 @@ export class NavigateCodingCasesDialogComponent implements OnInit {
 
     const selectedCode = this.data.codingService.selectedCodes.get(compositeKey);
     if (selectedCode) {
-      return selectedCode.label;
+      return selectedCode.code || String(selectedCode.id);
     }
 
     return '';
