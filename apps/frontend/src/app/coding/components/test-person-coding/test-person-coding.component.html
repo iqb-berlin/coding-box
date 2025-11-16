@@ -15,6 +15,10 @@
             </mat-select>
             <mat-hint>{{ 'test-person-coding.select-groups-hint' | translate }}</mat-hint>
           </mat-form-field>
+          <button mat-button type="button" [disabled]="selectedGroups.length === 0" (click)="deselectAllGroups()">
+            <mat-icon>clear_all</mat-icon>
+            {{ 'test-person-coding.deselect-all-groups' | translate }}
+          </button>
         </div>
 
         <div class="autocoder-run-selection">

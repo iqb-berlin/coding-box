@@ -886,6 +886,7 @@
     },
     "select-groups-label": "Testpersonengruppen auswählen",
     "select-groups-hint": "Wählen Sie eine oder mehrere Gruppen zum Kodieren aus",
+    "deselect-all-groups": "Alle abwählen",
     "loading-groups": "Gruppen werden geladen...",
     "no-groups": "Keine Gruppen verfügbar",
     "code-selected-groups": "Ausgewählte Gruppen kodieren",
