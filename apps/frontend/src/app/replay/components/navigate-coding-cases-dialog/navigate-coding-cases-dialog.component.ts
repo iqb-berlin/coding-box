@@ -60,7 +60,7 @@ export class NavigateCodingCasesDialogComponent implements OnInit {
       if (unit.variableId && this.data.codingService.isUnitCoded(unit)) {
         const givenCode = this.getGivenCode(unit);
         const comments = this.data.codingService.getNotes(
-          this.data.testPerson,
+          unit.testPerson || this.data.testPerson,
           unit.name,
           unit.variableId
         );
@@ -82,7 +82,7 @@ export class NavigateCodingCasesDialogComponent implements OnInit {
     if (!unit.variableId) return '';
 
     const compositeKey = this.data.codingService.generateCompositeKey(
-      this.data.testPerson,
+      unit.testPerson || this.data.testPerson,
       unit.name,
       unit.variableId
     );
