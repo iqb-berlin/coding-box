@@ -1,10 +1,11 @@
-<div class="replay-container" [class.print-mode]="isPrintMode" [class.booklet-mode]="isBookletMode" (window:keydown)="onKeyDown($any($event))">
+<div class="replay-container" [class.print-mode]="isPrintMode" [class.booklet-mode]="isCodingMode" (window:keydown)="onKeyDown($any($event))">
   <cb-spinner [isLoaded]="isLoaded"></cb-spinner>
 
-  @if (isBookletMode) {
-    @if (isBookletMode && !!player && unitDef) {
+  @if (isCodingMode || isBookletReplayMode) {
+    @if (isBookletReplayMode && !!player && unitDef) {
       <coding-box-units-replay
         [unitsData]="unitsData"
+        [freeNavigation]="isBookletReplayMode"
         (unitChanged)="handleUnitChanged($event)">
       </coding-box-units-replay>
     }
@@ -25,16 +26,34 @@
         }
       </div>
 
-      @if (codingService.codingScheme && codingService.currentVariableId && !isBookletReplayMode) {
+      @if (isCodingMode && codingService.codingScheme && codingService.currentVariableId) {
         <div class="code-selector-container">
           <app-code-selector
             [codingScheme]="codingService.codingScheme"
             [variableId]="codingService.currentVariableId"
             [preSelectedCodeId]="getPreSelectedCodeId(codingService.currentVariableId)"
-            [missings]="codingService.missings"
-            [isOpen]="isUnitOpen()"
+            [coderNotes]="getCoderNotes()"
+            [showProgress]="!!codingService.codingJobId"
+            [completedCount]="getCompletedCount()"
+            [totalUnits]="totalUnits"
+            [progressPercentage]="getProgressPercentage()"
+            [openCount]="getOpenCount()"
+            [isCodingActive]="!!codingService.codingJobId && !isBookletReplayMode"
+            [hasCodingJob]="!!codingService.codingJobId"
+            [isCodingJobCompleted]="codingService.isCodingJobCompleted"
+            [isPausingJob]="codingService.isPausingJob"
+            [unitsData]="unitsData"
+            [codingService]="codingService"
+            [showScore]="codingService.showScore"
+            [allowComments]="codingService.allowComments"
+            [suppressGeneralInstructions]="codingService.suppressGeneralInstructions"
+            [isReadOnly]="codingService.isCodingJobFinalized"
             (codeSelected)="onCodeSelected($event)"
-            (openChanged)="onOpenChanged($event)">
+            (notesChanged)="onNotesChanged($event)"
+            (openNavigateDialog)="openNavigateDialog()"
+            (openCommentDialog)="openCommentDialog()"
+            (pauseCodingJob)="pauseCodingJob()"
+            (unitChanged)="handleUnitChanged($event)">
           </app-code-selector>
         </div>
       }
@@ -54,30 +73,7 @@
     }
   }
 
-  @if (isBookletMode && unitsData && !isBookletReplayMode) {
-    <div class="coding-progress">
-      <div class="progress-info">
-        <span class="progress-text">{{ 'replay.coding-progress' | translate }}</span>
-        <span class="progress-numbers">{{ getCompletedCount() }}/{{ unitsData.units.length }}</span>
-        <span class="progress-percentage">({{ getProgressPercentage() }}%)</span>
-        @if (getOpenCount() > 0) {
-          <span class="progress-open">{{ 'replay.open-count' | translate }}: {{ getOpenCount() }}</span>
-        }
-      </div>
-      <div class="progress-bar">
-        <div class="progress-fill" [style.width.%]="getProgressPercentage()"></div>
-      </div>
-      @if (codingService.codingJobId && !codingService.isCodingJobCompleted) {
-        <button
-          mat-raised-button
-          (click)="pauseCodingJob()"
-          [disabled]="codingService.isPausingJob"
-          class="pause-button">
-          {{ codingService.isPausingJob ? ('replay.pausing' | translate) : ('replay.pause-coding' | translate) }}
-        </button>
-      }
-    </div>
-  }
+
 
   @if (testPerson && unitId) {
     <div class="watermark">{{ testPerson }} - {{ unitId }}</div>
@@ -88,14 +84,22 @@
       <div class="completion-dialog">
         <h2>{{ 'replay.CODING_JOB_COMPLETED' | translate }}</h2>
         <p>{{ 'replay.ALL_REPLAYS_CODED_MESSAGE' | translate }}</p>
-        <button
-          mat-raised-button
-          color="primary"
-          (click)="submitCodingJob()"
-          [disabled]="codingService.isSubmittingJob"
-          class="submit-button">
-          {{ codingService.isSubmittingJob ? ('replay.SUBMITTING_JOB' | translate) : ('replay.SUBMIT_JOB' | translate) }}
-        </button>
+        <div class="completion-buttons">
+          <button
+            mat-button
+            (click)="dismissCompletionOverlay()"
+            class="close-button">
+            {{ 'common.close' | translate }}
+          </button>
+          <button
+            mat-raised-button
+            color="primary"
+            (click)="submitCodingJob()"
+            [disabled]="codingService.isSubmittingJob"
+            class="submit-button">
+            {{ codingService.isSubmittingJob ? ('replay.SUBMITTING_JOB' | translate) : ('replay.SUBMIT_JOB' | translate) }}
+          </button>
+        </div>
       </div>
     </div>
   }

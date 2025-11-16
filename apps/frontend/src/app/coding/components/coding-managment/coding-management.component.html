@@ -9,7 +9,7 @@
         </a>
       }
       <a mat-raised-button [color]="showManualCoding ? 'accent' : 'primary'" (click)="toggleManualCoding()" >
-        <mat-icon>keyboard</mat-icon>
+        <mat-icon>{{ showManualCoding ? 'arrow_back' : 'keyboard' }}</mat-icon>
         {{ showManualCoding ? ('coding-management.buttons.back-to-overview' | translate) : ('coding-management.buttons.manual-code' | translate) }}
       </a>
 
@@ -163,6 +163,11 @@
                 <input matInput [(ngModel)]="filterParams.bookletName" (input)="onFilterChange()" placeholder="{{ 'coding-management.filters.booklet-name-placeholder' | translate }}">
               </mat-form-field>
 
+              <mat-form-field appearance="outline" class="filter-field">
+                <mat-label>{{ 'coding-management.filters.variable-id' | translate }}</mat-label>
+                <input matInput [(ngModel)]="filterParams.variableId" (input)="onFilterChange()" placeholder="{{ 'coding-management.filters.variable-id-placeholder' | translate }}">
+              </mat-form-field>
+
               <button mat-button (click)="clearFilters()" [disabled]="isFilterLoading">
                 <mat-icon>clear</mat-icon>
                 {{ 'coding-management.filters.clear' | translate }}
@@ -228,19 +233,27 @@
                             <span class="clickable-cell" (click)="showUnitXml(element.unit.name)" [matTooltip]="'coding-management.tooltips.show-unit-xml' | translate">
                               {{ element[column] }}
                             </span>
-                          } @else {
-                              @if (column === 'codedstatus') {
-                                {{ getStatusString(element[column]) }}
-                              } @else if (column === 'person_code') {
-                                {{ element.person_code || element.login_code }}
-                              } @else if (column === 'person_group') {
-                                {{ element.person_group || element.login_group }}
-                              } @else if (column === 'booklet_id') {
-                                {{ element.booklet_id }}
-                              } @else {
-                                {{ element[column] }}
-                              }
-                          }
+        } @else {
+            @if (column === 'codedstatus') {
+              {{ getStatusString(element[column]) }}
+            } @else if (column === 'code') {
+
+                {{ element[column] }}
+            } @else if (column === 'score') {
+                {{ element[column] }}
+
+            } @else if (column === 'person_code') {
+              {{ element.person_code || element.login_code }}
+            } @else if (column === 'person_login') {
+              {{ element.login_name }}
+            } @else if (column === 'person_group') {
+              {{ element.person_group || element.login_group }}
+            } @else if (column === 'booklet_id') {
+              {{ element.booklet_id }}
+            } @else {
+              {{ element[column] }}
+            }
+          }
                         }
                       </td>
                     </ng-container>

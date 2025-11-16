@@ -94,18 +94,6 @@ export class MissingsProfilesService {
     iqbStandardProfile.label = 'IQB-Standard';
     iqbStandardProfile.setMissings([
       {
-        id: 'mbd',
-        label: 'missing by design',
-        description: 'Antwort liegt nicht vor, weil das Item der Testperson planmäßig nicht präsentiert wurde.',
-        code: -94
-      },
-      {
-        id: 'mnr',
-        label: 'missing not reached',
-        description: '(1) Item wurde nicht gesehen und (2) es folgen nur nicht gesehene Items. Die Testperson hat vor diesem Item mit der Bearbeitung des Testhefts aufgehört. \nDer Missing Code wird nicht durch Kodierende vergeben, sondern muss ggf. nach bereits erfolgter Kodierung aus "missing by intention" rekodiert werden.',
-        code: -96
-      },
-      {
         id: 'mci',
         label: 'missing coding impossible',
         description: '(1) Item müsste/könnte bearbeitet worden sein, aber (2) Antwort ist aufgrund technischer Probleme (z.B. Scanfehler) nicht auswertbar.',

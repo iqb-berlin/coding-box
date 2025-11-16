@@ -41,6 +41,13 @@ export class CodingJobDto {
     status: string;
 
   @ApiProperty({
+    description: 'Comment for the coding job',
+    example: 'This coding job requires special attention',
+    required: false
+  })
+    comment?: string;
+
+  @ApiProperty({
     description: 'Date and time when the coding job was created',
     example: '2025-08-06T10:05:00.000Z'
   })
@@ -153,6 +160,7 @@ export class CodingJobDto {
     dto.name = entity.name;
     dto.description = entity.description;
     dto.status = entity.status;
+    dto.comment = entity.comment;
     dto.created_at = entity.created_at;
     dto.updated_at = entity.updated_at;
     dto.missings_profile_id = entity.missings_profile_id;

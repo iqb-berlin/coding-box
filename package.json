@@ -1,6 +1,6 @@
 {
   "name": "coding-box",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "author": "IQB - Institut zur Qualitätsentwicklung im Bildungswesen",
   "license": "MIT",
   "scripts": {
@@ -80,7 +80,7 @@
     "stream": "^0.0.2",
     "timers": "^0.1.1",
     "tslib": "^2.3.0",
-    "typeorm": "^0.3.20",
+    "typeorm": "^0.3.27",
     "xml2js": "^0.6.2",
     "zone.js": "0.15.0"
   },

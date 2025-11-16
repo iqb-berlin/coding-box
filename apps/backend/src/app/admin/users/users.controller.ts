@@ -32,8 +32,8 @@ export class UsersController {
   @ApiBadRequestResponse({ description: 'Invalid workspace ID' })
   @ApiNotFoundResponse({ description: 'Workspace not found' })
   @ApiTags('users access')
-  async findAll(@Param('workspaceId') workspaceId:number): Promise<WorkspaceUserInListDto[] | UserFullDto[]> {
-    return this.usersService.findAllUsers(workspaceId);
+  async getUsersWithWorkspaceAccess(@Param('workspaceId') workspaceId: number): Promise<WorkspaceUserInListDto[] | UserFullDto[]> {
+    return this.usersService.getUsersWithWorkspaceAccess(workspaceId);
   }
 
   @Patch('access/:workspaceId')
@@ -49,8 +49,8 @@ export class UsersController {
   @ApiBadRequestResponse({ description: 'Invalid workspace ID or user data' })
   @ApiNotFoundResponse({ description: 'Workspace or users not found' })
   @ApiTags('users access')
-  async patchAll(@Param('workspaceId') workspaceId:number, @Body() users: UserInListDto[]): Promise<boolean> {
-    return this.usersService.patchAllUsers(workspaceId, users);
+  async updateUsersAccess(@Param('workspaceId') workspaceId: number, @Body() users: UserInListDto[]): Promise<boolean> {
+    return this.usersService.updateUsersAccess(workspaceId, users);
   }
 
   @Get('full')
@@ -63,8 +63,8 @@ export class UsersController {
   })
   @ApiBadRequestResponse({ description: 'Failed to retrieve users' })
   @ApiTags('admin users')
-  async findAllFull(): Promise<UserFullDto[]> {
-    return this.usersService.findAllFull();
+  async getAllUsers(): Promise<UserFullDto[]> {
+    return this.usersService.getAllUsers();
   }
 
   @Patch(':userId')
@@ -77,8 +77,8 @@ export class UsersController {
   @ApiBadRequestResponse({ description: 'Invalid user ID or data' })
   @ApiNotFoundResponse({ description: 'User not found' })
   @ApiTags('admin users')
-  async editUser(@Param('userId') userId:number, @Body() change: UserFullDto): Promise<UserFullDto> {
-    return this.usersService.editUser(userId, change);
+  async updateUser(@Param('userId') userId: number, @Body() userData: UserFullDto): Promise<UserFullDto> {
+    return this.usersService.updateUser(userId, userData);
   }
 
   @Get(':userId/workspaces')
@@ -99,15 +99,15 @@ export class UsersController {
   @ApiBadRequestResponse({ description: 'Invalid user ID' })
   @ApiNotFoundResponse({ description: 'User not found' })
   @ApiTags('admin users')
-  async findUserWorkspaces(@Param('userId') userId:number): Promise<number[]> {
-    return this.usersService.findUserWorkspaceIds(userId);
+  async getUserWorkspaces(@Param('userId') userId: number): Promise<number[]> {
+    return this.usersService.getUserWorkspaces(userId);
   }
 
   @Delete(':ids')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({
-    summary: 'Delete users',
+    summary: 'Delete users by IDs',
     description: 'Deletes one or more users by their IDs (separated by semicolons)'
   })
   @ApiParam({
@@ -120,7 +120,7 @@ export class UsersController {
   @ApiBadRequestResponse({ description: 'Invalid user IDs' })
   @ApiNotFoundResponse({ description: 'One or more users not found' })
   @ApiTags('admin users')
-  async remove(@Param('ids') ids: string, @Req() req): Promise<void> {
+  async deleteUsersByIds(@Param('ids') ids: string, @Req() req): Promise<void> {
     const idsAsNumberArray: number[] = [];
     ids.split(';').forEach(s => idsAsNumberArray.push(parseInt(s, 10)));
     return this.usersService.removeIds(idsAsNumberArray, req.user.id);
@@ -145,7 +145,7 @@ export class UsersController {
   @ApiBadRequestResponse({ description: 'Invalid user IDs' })
   @ApiNotFoundResponse({ description: 'One or more users not found' })
   @ApiMethodNotAllowedResponse({ description: 'Active admin user must not be deleted' })
-  async removeIds(@Query('id') ids: number[], @Req() req): Promise<void> {
+  async deleteUsersByQuery(@Query('id') ids: number[], @Req() req): Promise<void> {
     return this.usersService.removeIds(ids, req.user.id);
   }
 
@@ -153,7 +153,7 @@ export class UsersController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({
-    summary: 'Set user workspaces',
+    summary: 'Assign user workspaces',
     description: 'Assigns workspaces to a user'
   })
   @ApiParam({
@@ -177,9 +177,9 @@ export class UsersController {
   @ApiBadRequestResponse({ description: 'Invalid user ID or workspace IDs' })
   @ApiNotFoundResponse({ description: 'User or workspaces not found' })
   @ApiTags('admin users')
-  async setUserWorkspaces(@Body() workspaceIds: number[],
+  async assignUserWorkspaces(@Body() workspaceIds: number[],
     @Param('userId') userId: number) {
-    return this.usersService.setUserWorkspaces(userId, workspaceIds);
+    return this.usersService.assignUserWorkspaces(userId, workspaceIds);
   }
 
   @Post()

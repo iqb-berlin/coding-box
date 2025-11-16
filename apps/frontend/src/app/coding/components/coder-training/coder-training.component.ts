@@ -97,18 +97,15 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   availableVariables: { unitName: string; variableId: string }[] = [];
   availableBundles: VariableBundle[] = [];
   selectedBundleIds: Set<number> = new Set();
-  availableMissingsProfiles: { label: string; id: number }[] = [];
   isLoading = false;
   isLoadingVariables = false;
   isLoadingBundles = false;
-  isLoadingMissingsProfiles = false;
 
   trainingForm: FormGroup;
 
   constructor() {
     this.trainingForm = this.fb.group({
       trainingLabel: ['', [Validators.required]],
-      missingsProfileId: [null],
       variables: this.fb.array([])
     });
 
@@ -120,7 +117,6 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     this.loadCoders();
     this.loadAvailableVariables();
     this.loadVariableBundles();
-    this.loadMissingsProfiles();
   }
 
   ngOnDestroy(): void {
@@ -193,41 +189,14 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   }
 
   loadCoders(): void {
-    this.isLoading = true;
     this.coderService.getCoders()
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (coders: Coder[]) => {
           this.coders = coders;
-          this.isLoading = false;
         },
         error: () => {
           this.showError('Fehler beim Laden der Kodierer');
-          this.isLoading = false;
-        }
-      });
-  }
-
-  private loadMissingsProfiles(): void {
-    this.isLoadingMissingsProfiles = true;
-    const workspaceId = this.appService.selectedWorkspaceId;
-
-    if (!workspaceId) {
-      this.showError('Kein Arbeitsbereich ausgewählt');
-      this.isLoadingMissingsProfiles = false;
-      return;
-    }
-
-    this.backendService.getMissingsProfiles(workspaceId)
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: profiles => {
-          this.availableMissingsProfiles = profiles;
-          this.isLoadingMissingsProfiles = false;
-        },
-        error: () => {
-          this.showError('Fehler beim Laden der Missings-Profile');
-          this.isLoadingMissingsProfiles = false;
         }
       });
   }
@@ -524,9 +493,8 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     }
 
     const trainingLabel = this.trainingForm.get('trainingLabel')?.value || '';
-    const missingsProfileId = this.trainingForm.get('missingsProfileId')?.value;
 
-    this.backendService.createCoderTrainingJobs(workspaceId, selectedCoders, variableConfigs, trainingLabel, missingsProfileId)
+    this.backendService.createCoderTrainingJobs(workspaceId, selectedCoders, variableConfigs, trainingLabel)
       .subscribe({
         next: result => {
           this.isLoading = false;

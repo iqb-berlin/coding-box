@@ -198,16 +198,6 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   private searchSubject = new Subject<string>();
   private searchSubscription: Subscription | null = null;
   private readonly SEARCH_DEBOUNCE_TIME = 800;
-
-  private responseStatusMap = new Map(responseStatesNumericMap.map(entry => [entry.key, entry.value]));
-
-  /**
-   * Maps numeric response status to string
-   */
-  private mapStatusToString(status: number): string {
-    return this.responseStatusMap.get(status) || 'UNKNOWN';
-  }
-
   selection = new SelectionModel<P>(true, []);
   dataSource !: MatTableDataSource<P>;
   displayedColumns: string[] = ['select', 'code', 'group', 'login', 'uploaded_at'];
@@ -227,6 +217,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   isUploadingResults: boolean = false;
   isSearching: boolean = false;
   isLoadingBooklets: boolean = false;
+  isDeletingTestPersons: boolean = false;
   unitTags: UnitTagDto[] = [];
   unitTagsMap: Map<number, UnitTagDto[]> = new Map();
   unitNotes: UnitNoteDto[] = [];
@@ -638,7 +629,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   onUnitClick(unit: Unit, booklet: Booklet): void {
     const mappedResponses = unit.results.map((response: UnitResult) => ({
       ...response,
-      status: this.mapStatusToString(Number(response.status)),
+      status: response.status,
       expanded: false
     }));
     this.responses = Array.from(mappedResponses);
@@ -904,7 +895,15 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   }
 
   deleteSelectedPersons(): void {
-    this.isLoading = true;
+    this.booklets = [];
+    this.responses = [];
+    this.logs = [];
+    this.bookletLogs = [];
+    this.selectedUnit = undefined;
+    this.unitTagsMap.clear();
+    this.unitNotesMap.clear();
+
+    this.isDeletingTestPersons = true;
     const selectedTestPersons = this.selection.selected;
     this.backendService.deleteTestPersons(
       this.appService.selectedWorkspaceId,
@@ -924,7 +923,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           { duration: 1000 }
         );
       }
-      this.isLoading = false;
+      this.isDeletingTestPersons = false;
       this.selection.clear();
     });
   }

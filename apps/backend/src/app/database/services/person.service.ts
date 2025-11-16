@@ -395,10 +395,10 @@ export class PersonService {
       .map(chunk => {
         try {
           const chunkContent: TcMergeResponse[] = JSON.parse(chunk.content);
-          return { id: chunk.id, responses: chunkContent };
+          return { id: chunk.subForm, responses: chunkContent };
         } catch (error) {
           this.logger.error(`Error parsing chunk content for chunk ID ${chunk.id}: ${error.message}`);
-          return { id: chunk.id, responses: [] };
+          return { id: chunk.subForm, responses: [] };
         }
       });
   }
@@ -695,8 +695,12 @@ export class PersonService {
             let value: string | null;
             if (response.value === null) {
               value = null;
-            } else {
+            } else if (typeof response.value === 'object' || Array.isArray(response.value)) {
+              // For objects and arrays, use JSON.stringify to properly serialize
               value = JSON.stringify(response.value);
+            } else {
+              // For primitive values (string, number, boolean), convert to string without extra quotes
+              value = String(response.value);
             }
 
             return {

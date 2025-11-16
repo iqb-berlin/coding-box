@@ -32,7 +32,6 @@
     overflow-y: auto;
   }
 
-  // Hide the navigation when not enough space
   @media (max-width: 1200px) {
     .replay-content {
       flex-direction: column;
@@ -47,7 +46,6 @@
     }
   }
 
-  // Ensure the navigation bar stays at the top
   coding-box-booklet-replay {
     position: sticky;
     top: 0;
@@ -55,7 +53,6 @@
   }
 }
 
-// Booklet navigation styles
 .booklet-navigation {
   background-color: #f5f9ff;
   padding: 12px 20px;
@@ -134,7 +131,6 @@
   color: #757575;
 }
 
-// Watermark styles
 .watermark {
   position: absolute;
   bottom: 15px;
@@ -151,7 +147,6 @@
   font-weight: 500;
 }
 
-// Coding progress styles
 .coding-progress {
   position: absolute;
   top: 15px;
@@ -162,7 +157,7 @@
   padding: 12px 16px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   z-index: 100;
-  min-width: 200px;
+  min-width: 280px;
   backdrop-filter: blur(5px);
 }
 
@@ -226,7 +221,6 @@
   }
 }
 
-// Responsive adjustments for progress bar
 @media (max-width: 768px) {
   .coding-progress {
     position: relative;
@@ -243,7 +237,6 @@
   }
 }
 
-// Completion overlay styles
 .completion-overlay {
   position: fixed;
   top: 0;
@@ -280,6 +273,13 @@
     font-size: 16px;
     line-height: 1.5;
   }
+
+  .completion-buttons {
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+    align-items: center;
+  }
 }
 
 .submit-button {
@@ -289,7 +289,13 @@
   font-weight: 500;
 }
 
-// Pause overlay styles (similar to completion overlay)
+.close-button {
+  min-width: 100px;
+  padding: 12px 24px;
+  font-size: 16px;
+  font-weight: 500;
+}
+
 .pause-overlay {
   position: fixed;
   top: 0;
@@ -332,5 +338,75 @@
   min-width: 150px;
   padding: 12px 24px;
   font-size: 16px;
+  font-weight: 500;
+}
+
+.progress-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 12px;
+}
+
+.navigate-button {
+  background-color: rgba(255, 255, 255, 0.9);
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+
+  &:hover {
+    background-color: #f5f5f5;
+    border-color: #1976d2;
+  }
+
+  mat-icon {
+    font-size: 24px;
+    color: #666;
+  }
+
+  &:hover mat-icon {
+    color: #1976d2;
+  }
+}
+
+.comment-button {
+  background-color: rgba(255, 255, 255, 0.9);
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+
+  &:hover {
+    background-color: #f5f5f5;
+    border-color: #1976d2;
+  }
+
+  mat-icon {
+    font-size: 24px;
+    color: #666;
+  }
+
+  &:hover mat-icon {
+    color: #1976d2;
+  }
+}
+
+.pause-button {
+  min-width: 120px;
+  padding: 8px 16px;
+  font-size: 14px;
   font-weight: 500;
 }

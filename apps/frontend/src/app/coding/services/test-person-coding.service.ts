@@ -371,6 +371,29 @@ export class TestPersonCodingService {
     }
   }
 
+  getCodingProgressOverview(workspaceId: number): Observable<{
+    totalCasesToCode: number;
+    completedCases: number;
+    completionPercentage: number;
+  }> {
+    return this.http
+      .get<{
+      totalCasesToCode: number;
+      completedCases: number;
+      completionPercentage: number;
+    }>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/coding/progress-overview`,
+      { headers: this.authHeader }
+    )
+      .pipe(
+        catchError(() => of({
+          totalCasesToCode: 0,
+          completedCases: 0,
+          completionPercentage: 0
+        }))
+      );
+  }
+
   generateCoderTrainingPackages(
     workspaceId: number,
     selectedCoders: { id: number; name: string }[],
@@ -419,6 +442,272 @@ export class TestPersonCodingService {
     )
       .pipe(
         catchError(() => of([]))
+      );
+  }
+
+  getVariableCoverageOverview(workspaceId: number): Observable<{
+    totalVariables: number;
+    coveredVariables: number;
+    missingVariables: number;
+    coveragePercentage: number;
+    variableCaseCounts: { unitName: string; variableId: string; caseCount: number }[];
+  }> {
+    return this.http
+      .get<{
+      totalVariables: number;
+      coveredVariables: number;
+      missingVariables: number;
+      coveragePercentage: number;
+      variableCaseCounts: { unitName: string; variableId: string; caseCount: number }[];
+    }>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/coding/variable-coverage-overview`,
+      { headers: this.authHeader }
+    )
+      .pipe(
+        catchError(() => of({
+          totalVariables: 0,
+          coveredVariables: 0,
+          missingVariables: 0,
+          coveragePercentage: 0,
+          variableCaseCounts: []
+        }))
+      );
+  }
+
+  getCaseCoverageOverview(workspaceId: number): Observable<{
+    totalCasesToCode: number;
+    casesInJobs: number;
+    doubleCodedCases: number;
+    singleCodedCases: number;
+    unassignedCases: number;
+    coveragePercentage: number;
+  }> {
+    return this.http
+      .get<{
+      totalCasesToCode: number;
+      casesInJobs: number;
+      doubleCodedCases: number;
+      singleCodedCases: number;
+      unassignedCases: number;
+      coveragePercentage: number;
+    }>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/coding/case-coverage-overview`,
+      { headers: this.authHeader }
+    )
+      .pipe(
+        catchError(() => of({
+          totalCasesToCode: 0,
+          casesInJobs: 0,
+          doubleCodedCases: 0,
+          singleCodedCases: 0,
+          unassignedCases: 0,
+          coveragePercentage: 0
+        }))
+      );
+  }
+
+  getDoubleCodedVariablesForReview(
+    workspaceId: number,
+    page: number = 1,
+    limit: number = 50
+  ): Observable<{
+      data: Array<{
+        unitName: string;
+        variableId: string;
+        personLogin: string;
+        personCode: string;
+        bookletName: string;
+        givenAnswer: string;
+        coderResults: Array<{
+          coderId: number;
+          coderName: string;
+          jobId: number;
+          code: number | null;
+          score: number | null;
+          notes: string | null;
+          codedAt: string;
+        }>;
+      }>;
+      total: number;
+      page: number;
+      limit: number;
+    }> {
+    const params = new HttpParams()
+      .set('page', page.toString())
+      .set('limit', limit.toString());
+
+    return this.http
+      .get<{
+      data: Array<{
+        unitName: string;
+        variableId: string;
+        personLogin: string;
+        personCode: string;
+        bookletName: string;
+        givenAnswer: string;
+        coderResults: Array<{
+          coderId: number;
+          coderName: string;
+          jobId: number;
+          code: number | null;
+          score: number | null;
+          notes: string | null;
+          codedAt: string;
+        }>;
+      }>;
+      total: number;
+      page: number;
+      limit: number;
+    }>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/coding/double-coded-review`,
+      { headers: this.authHeader, params }
+    )
+      .pipe(
+        catchError(() => of({
+          data: [],
+          total: 0,
+          page,
+          limit
+        }))
+      );
+  }
+
+  getCohensKappaStatistics(
+    workspaceId: number,
+    unitName?: string,
+    variableId?: string
+  ): Observable<{
+      variables: Array<{
+        unitName: string;
+        variableId: string;
+        coderPairs: Array<{
+          coder1Id: number;
+          coder1Name: string;
+          coder2Id: number;
+          coder2Name: string;
+          kappa: number | null;
+          agreement: number;
+          totalItems: number;
+          validPairs: number;
+          interpretation: string;
+        }>;
+      }>;
+      workspaceSummary: {
+        totalDoubleCodedResponses: number;
+        totalCoderPairs: number;
+        averageKappa: number | null;
+        variablesIncluded: number;
+        codersIncluded: number;
+      };
+    }> {
+    let params = new HttpParams();
+
+    if (unitName) {
+      params = params.set('unitName', unitName);
+    }
+    if (variableId) {
+      params = params.set('variableId', variableId);
+    }
+
+    return this.http
+      .get<{
+      variables: Array<{
+        unitName: string;
+        variableId: string;
+        coderPairs: Array<{
+          coder1Id: number;
+          coder1Name: string;
+          coder2Id: number;
+          coder2Name: string;
+          kappa: number | null;
+          agreement: number;
+          totalItems: number;
+          validPairs: number;
+          interpretation: string;
+        }>;
+      }>;
+      workspaceSummary: {
+        totalDoubleCodedResponses: number;
+        totalCoderPairs: number;
+        averageKappa: number | null;
+        variablesIncluded: number;
+        codersIncluded: number;
+      };
+    }>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/coding/cohens-kappa`,
+      { headers: this.authHeader, params }
+    )
+      .pipe(
+        catchError(() => of({
+          variables: [],
+          workspaceSummary: {
+            totalDoubleCodedResponses: 0,
+            totalCoderPairs: 0,
+            averageKappa: null,
+            variablesIncluded: 0,
+            codersIncluded: 0
+          }
+        }))
+      );
+  }
+
+  getWorkspaceCohensKappaSummary(
+    workspaceId: number
+  ): Observable<{
+      coderPairs: Array<{
+        coder1Id: number;
+        coder1Name: string;
+        coder2Id: number;
+        coder2Name: string;
+        kappa: number | null;
+        agreement: number;
+        totalSharedResponses: number;
+        validPairs: number;
+        interpretation: string;
+      }>;
+      workspaceSummary: {
+        totalDoubleCodedResponses: number;
+        totalCoderPairs: number;
+        averageKappa: number | null;
+        variablesIncluded: number;
+        codersIncluded: number;
+      };
+    }> {
+    return this.http
+      .get<{
+      coderPairs: Array<{
+        coder1Id: number;
+        coder1Name: string;
+        coder2Id: number;
+        coder2Name: string;
+        kappa: number | null;
+        agreement: number;
+        totalSharedResponses: number;
+        validPairs: number;
+        interpretation: string;
+      }>;
+      workspaceSummary: {
+        totalDoubleCodedResponses: number;
+        totalCoderPairs: number;
+        averageKappa: number | null;
+        variablesIncluded: number;
+        codersIncluded: number;
+      };
+    }>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/coding/cohens-kappa/workspace-summary`,
+      { headers: this.authHeader }
+    )
+      .pipe(
+        catchError(() => of({
+          coderPairs: [],
+          workspaceSummary: {
+            totalDoubleCodedResponses: 0,
+            totalCoderPairs: 0,
+            averageKappa: null,
+            variablesIncluded: 0,
+            codersIncluded: 0
+          }
+        }))
       );
   }
 }

@@ -6,6 +6,7 @@ export interface CodingJob {
   workspace_id: number;
   name: string;
   description?: string;
+  comment?: string;
   status: string;
   created_at: Date;
   updated_at: Date;
@@ -23,11 +24,21 @@ export interface CodingJob {
   missings_profile?: MissingsProfilesDto;
   training_id?: number;
   training?: CoderTraining;
+  durationSeconds?: number;
+  maxCodingCases?: number;
+  doubleCodingAbsolute?: number;
+  doubleCodingPercentage?: number;
+  jobDefinitionId?: number;
+  showScore?: boolean;
+  allowComments?: boolean;
+  suppressGeneralInstructions?: boolean;
+  hasIssues?: boolean;
 }
 
 export interface Variable {
   unitName: string;
   variableId: string;
+  responseCount?: number;
 }
 
 export interface VariableBundle {

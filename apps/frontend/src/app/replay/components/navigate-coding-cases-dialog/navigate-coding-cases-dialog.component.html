@@ -1,0 +1,65 @@
+<h1 mat-dialog-title>{{ 'replay.navigate-dialog.title' | translate }}</h1>
+
+<div mat-dialog-content>
+  <div class="navigation-table-container">
+    <table
+      mat-table
+      [dataSource]="dataSource"
+      matSort
+      class="navigation-table">
+
+      <!-- Position Column -->
+      <ng-container matColumnDef="position">
+        <th mat-header-cell *matHeaderCellDef mat-sort-header>
+          {{ 'replay.navigate-dialog.position' | translate }}
+        </th>
+        <td mat-cell *matCellDef="let element" (click)="onRowClicked(element)" class="clickable-row">
+          {{ element.position }}
+        </td>
+      </ng-container>
+
+      <!-- Case Nr Variable Column -->
+      <ng-container matColumnDef="caseNumberVariable">
+        <th mat-header-cell *matHeaderCellDef mat-sort-header>
+          {{ 'replay.navigate-dialog.case-number-variable' | translate }}
+        </th>
+        <td mat-cell *matCellDef="let element" (click)="onRowClicked(element)" class="clickable-row">
+          {{ element.caseNumberVariable }}
+        </td>
+      </ng-container>
+
+      <!-- Given Code Column -->
+      <ng-container matColumnDef="givenCode">
+        <th mat-header-cell *matHeaderCellDef mat-sort-header>
+          {{ 'replay.navigate-dialog.given-code' | translate }}
+        </th>
+        <td mat-cell *matCellDef="let element" (click)="onRowClicked(element)" class="clickable-row">
+          {{ element.givenCode }}
+        </td>
+      </ng-container>
+
+      <!-- Comments Column -->
+      <ng-container matColumnDef="comments">
+        <th mat-header-cell *matHeaderCellDef mat-sort-header>
+          {{ 'replay.navigate-dialog.comments' | translate }}
+        </th>
+        <td mat-cell *matCellDef="let element" (click)="onRowClicked(element)" class="clickable-row">
+          {{ element.comments || '-' }}
+        </td>
+      </ng-container>
+
+      <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+      <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+    </table>
+  </div>
+
+  <ng-container *ngIf="dataSource.data.length === 0">
+    <p class="no-units-message">{{ 'replay.navigate-dialog.no-coded-units' | translate }}</p>
+  </ng-container>
+</div>
+
+<div mat-dialog-actions align="end">
+  <button mat-stroked-button (click)="closeDialog()">
+    {{ 'replay.navigate-dialog.close' | translate }}
+  </button>
+</div>
