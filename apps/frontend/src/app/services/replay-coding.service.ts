@@ -300,6 +300,12 @@ export class ReplayCodingService {
     return selectedCode ? selectedCode.id : null;
   }
 
+  getPreSelectedCodingIssueOptionId(testPerson: string, unitId: string, variableId: string): number | null {
+    const compositeKey = this.generateCompositeKey(testPerson, unitId, variableId);
+    const selectedCode = this.selectedCodes.get(compositeKey);
+    return selectedCode && selectedCode.codingIssueOption ? selectedCode.codingIssueOption : null;
+  }
+
   getNotes(testPerson: string, unitId: string, variableId: string): string {
     const compositeKey = this.generateCompositeKey(testPerson, unitId, variableId);
     return this.notes.get(compositeKey) || '';
