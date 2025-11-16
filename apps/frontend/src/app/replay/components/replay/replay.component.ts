@@ -732,6 +732,10 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     return this.codingService.getPreSelectedCodeId(this.testPerson, this.unitId, variableId);
   }
 
+  getPreSelectedCodingIssueOptionId(variableId: string): number | null {
+    return this.codingService.getPreSelectedCodingIssueOptionId(this.testPerson, this.unitId, variableId);
+  }
+
   pauseCodingJob(): void {
     if (this.codingService.codingJobId) {
       this.codingService.pauseCodingJob(this.workspaceId, this.codingService.codingJobId);

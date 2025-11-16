@@ -35,6 +35,7 @@ export class CodeSelectorComponent implements OnChanges {
   @Input() codingScheme!: string | CodingScheme;
   @Input() variableId!: string;
   @Input() preSelectedCodeId: number | null = null;
+  @Input() preSelectedCodingIssueOptionId: number | null = null;
   @Input() coderNotes: string = '';
   @Input() showProgress: boolean = false;
   @Input() completedCount: number = 0;
@@ -68,7 +69,7 @@ export class CodeSelectorComponent implements OnChanges {
     if (changes.codingScheme || changes.variableId || changes.missings) {
       this.loadCodes();
     }
-    if (changes.preSelectedCodeId) {
+    if (changes.preSelectedCodeId || changes.preSelectedCodingIssueOptionId) {
       this.selectPreSelectedCode();
     }
   }
@@ -135,28 +136,42 @@ export class CodeSelectorComponent implements OnChanges {
   private selectPreSelectedCode(): void {
     this.selectedCode = null;
     this.selectedCodingIssueOption = null;
-    if (this.preSelectedCodeId === null) {
-      return;
-    }
+
     if (this.selectableItems.length === 0) {
       return;
     }
-    const preSelectedItem = this.selectableItems.find(item => item.id === this.preSelectedCodeId);
-    if (preSelectedItem) {
-      if (preSelectedItem.type === 'codingIssueOption') {
-        this.selectedCodingIssueOption = this.preSelectedCodeId;
-        this.codeSelected.emit({
-          variableId: this.variableId,
-          code: null,
-          codingIssueOption: this.createCodeOrCodingIssueOption(preSelectedItem) as CodingIssueDto
-        });
-      } else {
-        this.selectedCode = this.preSelectedCodeId;
-        this.codeSelected.emit({
-          variableId: this.variableId,
-          code: this.createCodeOrCodingIssueOption(preSelectedItem)
-        });
+
+    if (this.preSelectedCodeId !== null) {
+      const preSelectedItem = this.selectableItems.find(item => item.id === this.preSelectedCodeId);
+      if (preSelectedItem) {
+        if (preSelectedItem.type === 'codingIssueOption') {
+          this.selectedCodingIssueOption = this.preSelectedCodeId;
+        } else {
+          this.selectedCode = this.preSelectedCodeId;
+        }
       }
+    }
+
+    if (this.preSelectedCodingIssueOptionId !== null) {
+      const codingIssueItem = this.selectableItems.find(item => item.id === this.preSelectedCodingIssueOptionId);
+      if (codingIssueItem && codingIssueItem.type === 'codingIssueOption') {
+        this.selectedCodingIssueOption = this.preSelectedCodingIssueOptionId;
+      }
+    }
+
+    const codeDto = this.selectedCode !== null ? this.createCodeOrCodingIssueOption(
+      this.selectableItems.find(item => item.id === this.selectedCode)!
+    ) : null;
+    const codingIssueOption = this.selectedCodingIssueOption !== null ? this.createCodeOrCodingIssueOption(
+      this.selectableItems.find(item => item.id === this.selectedCodingIssueOption)!
+    ) as CodingIssueDto : null;
+
+    if (codeDto || codingIssueOption) {
+      this.codeSelected.emit({
+        variableId: this.variableId,
+        code: codeDto,
+        codingIssueOption: codingIssueOption
+      });
     }
   }
 

@@ -39,6 +39,16 @@ import { CoderTraining } from '../../models/coder-training.model';
 import { DoubleCodedReviewComponent } from '../double-coded-review/double-coded-review.component';
 import { CohensKappaStatisticsComponent } from '../cohens-kappa-statistics/cohens-kappa-statistics.component';
 
+interface SavedCode {
+  id: number;
+  code?: string;
+  label: string;
+  score?: number;
+  description?: string;
+  codingIssueOption?: number;
+  [key: string]: unknown;
+}
+
 @Component({
   selector: 'coding-box-coding-jobs',
   templateUrl: './coding-jobs.component.html',
@@ -146,16 +156,17 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
               assignedVariableBundles: job.assignedVariableBundles ?? job.variableBundles ?? []
             }));
 
-            // Load hasIssues information for each job
-            for (const job of processedData) {
+            await Promise.all(processedData.map(async job => {
               try {
-                // Note: We'll need to add a backend endpoint to check hasIssues
-                // For now, we'll set it to false as a placeholder
-                job.hasIssues = false;
+                const progressResult = await this.backendService.getCodingProgress(workspaceId, job.id).toPromise();
+                job.hasIssues = progressResult ? Object.values(progressResult as Record<string, SavedCode>).some(progress => progress && typeof progress === 'object' && 'id' in progress &&
+                  ((typeof progress.id === 'number' && progress.id < 0) ||
+                   (progress.codingIssueOption !== null && progress.codingIssueOption !== undefined))
+                ) : false;
               } catch (error) {
                 job.hasIssues = false;
               }
-            }
+            }));
 
             this.originalData = [...processedData];
             this.dataSource.data = processedData;
@@ -172,9 +183,8 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
         });
       },
       error: () => {
-        // Still load coding jobs even if variables fail to load
         this.backendService.getCodingJobs(workspaceId).subscribe({
-          next: response => {
+          next: async response => {
             this.coderNamesByJobId.clear();
             const processedData = response.data.map(job => ({
               ...job,
@@ -183,13 +193,25 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
               assignedVariableBundles: job.assignedVariableBundles ?? job.variableBundles ?? []
             }));
 
+            await Promise.all(processedData.map(async job => {
+              try {
+                const progressResult = await this.backendService.getCodingProgress(workspaceId, job.id).toPromise();
+                job.hasIssues = progressResult ? Object.values(progressResult as Record<string, SavedCode>).some(progress => progress && typeof progress === 'object' && 'id' in progress &&
+                  ((typeof progress.id === 'number' && progress.id < 0) ||
+                   (progress.codingIssueOption !== null && progress.codingIssueOption !== undefined))
+                ) : false;
+              } catch (error) {
+                // If we can't get progress data, assume no issues
+                job.hasIssues = false;
+              }
+            }));
+
             this.originalData = [...processedData];
             this.dataSource.data = processedData;
             this.updateCoderNamesMap(processedData);
 
             this.jobDetailsCache.clear();
             this.isLoading = false;
-            // Apply current filter after loading
             this.onTrainingFilterChange();
           },
           error: () => {
@@ -202,7 +224,6 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
   }
 
   applyFilter(): void {
-    // Apply all filters since text search is removed
     this.applyAllFilters();
   }
 
