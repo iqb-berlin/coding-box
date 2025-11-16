@@ -779,7 +779,8 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     };
 
     const dialogRef = this.dialog.open(NavigateCodingCasesDialogComponent, {
-      width: '800px',
+      width: '1200px',
+      height: '80vh',
       data: dialogData
     });
 

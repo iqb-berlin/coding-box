@@ -11,7 +11,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { UnitsReplay, UnitsReplayUnit } from '../../../services/units-replay.service';
 import { ReplayCodingService } from '../../../services/replay-coding.service';
@@ -62,7 +62,7 @@ export class CodeSelectorComponent implements OnChanges {
   selectableItems: SelectableItem[] = [];
   selectedCode: number | null = null;
   selectedCodingIssueOption: number | null = null;
-  constructor(private sanitizer: DomSanitizer) {}
+  constructor(private sanitizer: DomSanitizer, private translateService: TranslateService) {}
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes.codingScheme || changes.variableId || changes.missings) {
@@ -105,22 +105,22 @@ export class CodeSelectorComponent implements OnChanges {
       const codingIssueOptions: SelectableItem[] = [
         {
           id: -1,
-          label: 'Code-Vergabe unsicher',
+          label: this.translateService.instant('code-selector.coding-issue-options.code-assignment-uncertain'),
           type: 'codingIssueOption'
         },
         {
           id: -2,
-          label: 'Neuer Code nötig',
+          label: this.translateService.instant('code-selector.coding-issue-options.new-code-needed'),
           type: 'codingIssueOption'
         },
         {
           id: -3,
-          label: 'Ungültig (Spaßantwort)',
+          label: this.translateService.instant('code-selector.coding-issue-options.invalid-joke-answer'),
           type: 'codingIssueOption'
         },
         {
           id: -4,
-          label: 'Technische Probleme',
+          label: this.translateService.instant('code-selector.coding-issue-options.technical-problems'),
           type: 'codingIssueOption'
         }
       ];

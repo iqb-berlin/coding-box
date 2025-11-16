@@ -3,7 +3,7 @@ import {
   ViewChild
 } from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { MatTableModule, MatTableDataSource } from '@angular/material/table';
 import { MatSort, MatSortModule } from '@angular/material/sort';
 import { MatPaginator, MatPaginatorIntl, MatPaginatorModule } from '@angular/material/paginator';
@@ -62,6 +62,7 @@ export class CodingJobResultDialogComponent implements OnInit {
 
   private backendService = inject(BackendService);
   private snackBar = inject(MatSnackBar);
+  private translateService = inject(TranslateService);
 
   isLoading = true;
   dataSource = new MatTableDataSource<CodingResult>([]);
@@ -206,13 +207,18 @@ export class CodingJobResultDialogComponent implements OnInit {
   }
 
   getCodingIssueOption(codingIssueOptionId: number): string {
-    const mapping: { [key: number]: string } = {
-      [-1]: 'Code-Vergabe unsicher',
-      [-2]: 'Neuer Code nötig',
-      [-3]: 'Ungültig (Spaßantwort)',
-      [-4]: 'Technische Probleme'
+    const keyMapping: { [key: number]: string } = {
+      [-1]: 'code-selector.coding-issue-options.code-assignment-uncertain',
+      [-2]: 'code-selector.coding-issue-options.new-code-needed',
+      [-3]: 'code-selector.coding-issue-options.invalid-joke-answer',
+      [-4]: 'code-selector.coding-issue-options.technical-problems'
     };
-    return mapping[codingIssueOptionId] || 'Unknown';
+
+    const translationKey = keyMapping[codingIssueOptionId];
+    if (translationKey) {
+      return this.translateService.instant(translationKey);
+    }
+    return 'Unknown';
   }
 
   getCellClasses(result: CodingResult): string {

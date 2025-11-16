@@ -545,9 +545,9 @@
     "navigate-dialog": {
       "title": "Kodierte Fälle navigieren",
       "position": "Position",
-      "case-number-variable": "Fall Nr. Variable",
+      "case-number-variable": "Variable",
       "given-code": "Gegebener Code",
-      "comments": "Kommentare",
+      "comments": "Kommentar",
       "close": "Schließen",
       "no-coded-units": "Keine kodierten Einheiten gefunden."
     }
@@ -560,7 +560,13 @@
     "score-label": "Bewertung:",
     "no-codes-found": "Keine Codes gefunden für Variable",
     "coder-notes": "Notiz zu diesem Kodierfall",
-    "coder-notes-placeholder": "Notiz zu diesem Kodierfall"
+    "coder-notes-placeholder": "Notiz zu diesem Kodierfall",
+    "coding-issue-options": {
+      "code-assignment-uncertain": "Code-Vergabe unsicher",
+      "new-code-needed": "Neuer Code nötig",
+      "invalid-joke-answer": "Ungültig (Spaßantwort)",
+      "technical-problems": "Technische Probleme"
+    }
   },
 
   "ws-settings": {
