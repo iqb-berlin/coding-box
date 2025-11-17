@@ -37,9 +37,7 @@ export class ReplayCodingService {
   isCodingJobPaused: boolean = false;
   isSubmittingJob: boolean = false;
   isResumingJob: boolean = false;
-  isCodingJobFinalized: boolean = false; // true when status is 'results_applied'
-
-  // Coding display options
+  isCodingJobFinalized: boolean = false;
   showScore = false;
   allowComments = true;
   suppressGeneralInstructions = false;
@@ -285,7 +283,6 @@ export class ReplayCodingService {
   }
 
   getOpenCount(): number {
-    // Open functionality removed - always return 0
     return 0;
   }
 
@@ -357,7 +354,7 @@ export class ReplayCodingService {
 
   async pauseCodingJob(workspaceId: number, jobId: number): Promise<void> {
     if (!jobId || !workspaceId) return;
-
+    if (this.isCodingJobCompleted) return;
     this.isPausingJob = true;
 
     try {
