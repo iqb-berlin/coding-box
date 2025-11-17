@@ -391,6 +391,14 @@ export class ReplayCodingService {
     try {
       await this.updateCodingJobStatus(workspaceId, jobId, 'completed');
       this.isSubmittingJob = false;
+
+      const bookletKey = `replay_booklet_${jobId}`;
+      try {
+        localStorage.removeItem(bookletKey);
+      } catch (e) {
+        // Ignore cleanup errors
+      }
+
       this.snackBar.open(this.translate.instant('replay.coding-job-submitted-successfully'), this.translate.instant('replay.close'), {
         duration: 3000,
         panelClass: ['snackbar-success']
