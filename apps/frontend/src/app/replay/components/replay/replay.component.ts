@@ -168,8 +168,6 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
               }
             } catch (e) {
               // ignore parse errors
-            } finally {
-              try { localStorage.removeItem(key); } catch { /* empty */ }
             }
           }
 

@@ -498,7 +498,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
         this.appService
           .createToken(this.appService.selectedWorkspaceId, this.appService.loggedUser?.sub || '', 1)
           .subscribe(token => {
-            const bookletKey = `replay_booklet_${selectedJob.id}_${Date.now()}`;
+            const bookletKey = `replay_booklet_${selectedJob.id}`;
             try {
               localStorage.setItem(bookletKey, JSON.stringify(bookletData));
             } catch (e) {
@@ -723,7 +723,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
                 this.appService
                   .createToken(this.appService.selectedWorkspaceId, this.appService.loggedUser?.sub || '', 1)
                   .subscribe(token => {
-                    const bookletKey = `replay_booklet_${restartedJob.id}_${Date.now()}`;
+                    const bookletKey = `replay_booklet_${restartedJob.id}`;
                     try {
                       localStorage.setItem(bookletKey, JSON.stringify(bookletData));
                     } catch (e) {
