@@ -25,7 +25,7 @@ import { ResourcePackageService } from './resource-package.service';
 import { ValidationService } from './validation.service';
 import { UnitService } from './unit.service';
 import { ImportService, ImportOptions, Result } from './import.service';
-import { AuthenticationService } from './authentication.service';
+import { AuthenticationService, ServerResponse } from './authentication.service';
 import { VariableAnalysisService, VariableAnalysisResultDto } from './variable-analysis.service';
 import { VariableAnalysisJobDto } from '../models/variable-analysis-job.dto';
 import { ValidationTaskDto } from '../models/validation-task.dto';
@@ -64,6 +64,8 @@ type ReplayStatisticsResponse = {
   success?: boolean;
   errorMessage?: string;
 };
+
+type AuthResponse = Required<Pick<ServerResponse, 'token' | 'claims'>>;
 
 interface JobDefinitionApiResponse {
   id?: number;
@@ -371,9 +373,8 @@ export class BackendService {
     return this.testResultService.getPersonTestResults(workspaceId, personId);
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  authenticate(username:string, password:string, server:string, url:string): Observable<any> {
-    return this.authenticationService.authenticate(username, password, server, url);
+  authenticate(username:string, password:string, server:string, url:string): Observable<AuthResponse> {
+    return this.authenticationService.authenticate(username, password, server, url) as Observable<AuthResponse>;
   }
 
   importWorkspaceFiles(workspace_id: number,
@@ -1093,14 +1094,16 @@ export class BackendService {
       success: boolean;
       updatedResponsesCount: number;
       skippedReviewCount: number;
-      message: string;
+      messageKey: string;
+      messageParams?: Record<string, unknown>;
     }> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/jobs/${codingJobId}/apply-results`;
     return this.http.post<{
       success: boolean;
       updatedResponsesCount: number;
       skippedReviewCount: number;
-      message: string;
+      messageKey: string;
+      messageParams?: Record<string, unknown>;
     }>(url, {});
   }
 

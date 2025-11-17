@@ -80,7 +80,7 @@ export class ReplayCodingService {
 
       Object.keys(savedProgress).forEach(compositeKey => {
         const partialCode = savedProgress[compositeKey];
-        if (partialCode?.id && partialCode.id !== -1) {
+        if (partialCode?.id !== null && partialCode?.id !== undefined) {
           const fullCode = this.findCodeById(partialCode.id);
           const toStore: SavedCode = fullCode ? this.convertCodeToSavedCode(fullCode) : partialCode;
           this.selectedCodes.set(compositeKey, toStore);

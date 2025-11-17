@@ -7,6 +7,9 @@ export interface ServerResponse {
   success: boolean;
   token?: string;
   message?: string;
+  claims?: {
+    workspaceAdmin: import('../ws-admin/components/test-center-import/test-center-import.component').WorkspaceAdmin[];
+  };
 }
 
 @Injectable({

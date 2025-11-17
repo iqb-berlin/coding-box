@@ -930,7 +930,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
           this.snackBar.open(`Ergebnisse erfolgreich angewendet: ${result.updatedResponsesCount} Antworten aktualisiert`, 'Schließen', { duration: 3000 });
           this.loadCodingJobs(); // Refresh the list to show updated status
         } else {
-          this.snackBar.open(`Fehler beim Anwenden der Ergebnisse: ${result.message}`, 'Schließen', { duration: 5000 });
+          this.snackBar.open(`Fehler beim Anwenden der Ergebnisse: ${this.translateService.instant(result.messageKey, result.messageParams || {})}`, 'Schließen', { duration: 5000 });
         }
       },
       error: error => {
