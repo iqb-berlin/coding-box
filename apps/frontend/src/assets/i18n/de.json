@@ -1368,5 +1368,17 @@
     "coding-complete": "CODING_COMPLETE:",
     "invalid": "INVALID:",
     "coding-error": "CODING_ERROR:"
+  },
+
+  "coding-results": {
+    "apply": {
+      "error": {
+        "not-completed": "Der Kodierungsauftrag muss abgeschlossen sein, bevor Ergebnisse angewendet werden können. Aktueller Status: {{status}}"
+      },
+      "success": {
+        "no-responses": "Keine Antworten zu aktualisieren. Alle Kodierungsergebnisse erfordern eine manuelle Überprüfung.",
+        "bulk": "Kodierungsergebnisse erfolgreich auf {{count}} Antworten angewendet ({{skipped}} für manuelle Überprüfung übersprungen)."
+      }
+    }
   }
 }

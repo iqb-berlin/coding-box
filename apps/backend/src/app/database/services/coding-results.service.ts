@@ -23,7 +23,8 @@ export class CodingResultsService {
     success: boolean;
     updatedResponsesCount: number;
     skippedReviewCount: number;
-    message: string;
+    messageKey: string;
+    messageParams?: Record<string, unknown>;
   }> {
     this.logger.log(`Applying coding results for coding job ${codingJobId} in workspace ${workspaceId}`);
 
@@ -34,7 +35,8 @@ export class CodingResultsService {
         success: false,
         updatedResponsesCount: 0,
         skippedReviewCount: 0,
-        message: `Coding job must be completed before applying results. Current status: ${codingJob.status}`
+        messageKey: 'coding-results.apply.error.not-completed',
+        messageParams: { status: codingJob.status }
       };
     }
 
@@ -109,7 +111,7 @@ export class CodingResultsService {
           success: true,
           updatedResponsesCount: 0,
           skippedReviewCount,
-          message: 'No responses to update. All coding results require manual review.'
+          messageKey: 'coding-results.apply.success.no-responses'
         };
       }
 
@@ -153,18 +155,19 @@ export class CodingResultsService {
           success: true,
           updatedResponsesCount: responsesToUpdate.length,
           skippedReviewCount,
-          message: `Successfully applied coding results to ${responsesToUpdate.length} responses (${skippedReviewCount} skipped for manual review).`
+          messageKey: 'coding-results.apply.success.bulk',
+          messageParams: { count: responsesToUpdate.length, skipped: skippedReviewCount }
         };
       } catch (error) {
         await queryRunner.rollbackTransaction();
         this.logger.error(`Error updating responses: ${error.message}`, error.stack);
-        throw new Error(`Failed to apply coding results: ${error.message}`);
+        throw new Error(`Fehler beim Anwenden der Kodierungsergebnisse: ${error.message}`);
       } finally {
         await queryRunner.release();
       }
     } catch (error) {
       this.logger.error(`Error applying coding results: ${error.message}`, error.stack);
-      throw new Error(`Failed to apply coding results: ${error.message}`);
+      throw new Error(`Fehler beim Anwenden der Kodierungsergebnisse: ${error.message}`);
     }
   }
 

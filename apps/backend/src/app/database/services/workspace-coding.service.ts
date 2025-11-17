@@ -1574,7 +1574,8 @@ export class WorkspaceCodingService {
     success: boolean;
     updatedResponsesCount: number;
     skippedReviewCount: number;
-    message: string;
+    messageKey: string;
+    messageParams?: Record<string, unknown>;
   }> {
     const result = await this.codingResultsService.applyCodingResults(workspaceId, codingJobId);
 
@@ -1688,7 +1689,12 @@ export class WorkspaceCodingService {
           jobName: job.name,
           hasIssues: false,
           skipped: false,
-          result: applyResult
+          result: {
+            success: applyResult.success,
+            updatedResponsesCount: applyResult.updatedResponsesCount,
+            skippedReviewCount: applyResult.skippedReviewCount,
+            message: applyResult.messageKey || 'Apply result'
+          }
         });
 
         if (applyResult.success) {
