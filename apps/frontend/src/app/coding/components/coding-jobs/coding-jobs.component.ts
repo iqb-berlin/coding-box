@@ -393,36 +393,6 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
     });
   }
 
-  editCodingJob(job: CodingJob): void {
-    const dialogRef = this.dialog.open(CodingJobDefinitionDialogComponent, {
-      width: '1200px',
-      data: {
-        codingJob: job,
-        isEdit: true,
-        preloadedVariables: this.preloadedVariables || []
-      } as CodingJobDefinitionDialogData
-    });
-
-    dialogRef.afterClosed().subscribe(editResult => {
-      if (editResult) {
-        const workspaceId = this.appService.selectedWorkspaceId;
-        if (!workspaceId) {
-          this.snackBar.open('Kein Workspace ausgewählt', 'Schließen', { duration: 3000 });
-          return;
-        }
-        this.backendService.updateCodingJob(workspaceId, editResult.id, editResult).subscribe({
-          next: updatedJob => {
-            this.loadCodingJobs();
-            this.snackBar.open(`Kodierjob "${updatedJob.name}" wurde aktualisiert`, 'Schließen', { duration: 3000 });
-          },
-          error: () => {
-            this.snackBar.open(`Fehler beim Aktualisieren von Kodierjob "${editResult.name}"`, 'Schließen', { duration: 3000 });
-          }
-        });
-      }
-    });
-  }
-
   private getNextId(): number {
     const jobs = this.dataSource.data;
     return jobs.length > 0 ?
