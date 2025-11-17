@@ -1788,23 +1788,23 @@ export class WorkspaceCodingService {
       .andWhere('person.workspace_id = :workspaceId', { workspaceId })
       .getCount();
 
-    const doubleCodedCases = await this.codingJobUnitRepository.createQueryBuilder('cju')
-      .select('cju.response_id')
+    const uniqueCasesInJobsResult = await this.codingJobUnitRepository.createQueryBuilder('cju')
       .innerJoin('cju.response', 'response')
       .leftJoin('response.unit', 'unit')
       .leftJoin('unit.booklet', 'booklet')
       .leftJoin('booklet.person', 'person')
-      .leftJoin('cju.coding_job', 'cj')
       .where('response.status_v1 = :status', { status: statusStringToNumber('CODING_INCOMPLETE') })
       .andWhere('person.workspace_id = :workspaceId', { workspaceId })
-      .andWhere('cju.code IS NOT NULL') // Only count coded responses
-      .groupBy('cju.response_id')
-      .having('COUNT(DISTINCT cj.id) > 1') // Multiple jobs coded this response
-      .getCount();
+      .select('COUNT(DISTINCT cju.response_id)', 'count')
+      .getRawOne();
 
-    const singleCodedCases = casesInJobs - doubleCodedCases;
-    const unassignedCases = totalCasesToCode - casesInJobs;
-    const coveragePercentage = totalCasesToCode > 0 ? (casesInJobs / totalCasesToCode) * 100 : 0;
+    const uniqueCasesInJobs = parseInt(uniqueCasesInJobsResult?.count || '0', 10);
+
+    const doubleCodedCases = casesInJobs - uniqueCasesInJobs;
+
+    const singleCodedCases = uniqueCasesInJobs;
+    const unassignedCases = totalCasesToCode - uniqueCasesInJobs;
+    const coveragePercentage = totalCasesToCode > 0 ? (uniqueCasesInJobs / totalCasesToCode) * 100 : 0;
 
     return {
       totalCasesToCode,
