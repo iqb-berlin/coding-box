@@ -13,6 +13,7 @@ import {
   Query,
   UseGuards
 } from '@nestjs/common';
+
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
@@ -470,6 +471,60 @@ export class WsgCodingJobController {
         throw error;
       }
       throw new BadRequestException(`Failed to retrieve coding progress: ${error.message}`);
+    }
+  }
+
+  @Get('progress/bulk')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get bulk coding progress',
+    description: 'Retrieves saved partial coding progress for multiple coding jobs in bulk'
+  })
+  @ApiParam({
+    name: 'workspace_id',
+    type: Number,
+    required: true,
+    description: 'The ID of the workspace'
+  })
+  @ApiQuery({
+    name: 'jobIds',
+    required: true,
+    description: 'Comma-separated list of coding job IDs',
+    type: String
+  })
+  @ApiOkResponse({
+    description: 'Bulk coding progress retrieved successfully',
+    schema: {
+      type: 'object',
+      additionalProperties: {
+        type: 'object',
+        additionalProperties: { type: 'object' }
+      }
+    }
+  })
+  @ApiNotFoundResponse({
+    description: 'One or more coding jobs not found.'
+  })
+  async getBulkCodingProgress(
+    @WorkspaceId() workspaceId: number,
+      @Query('jobIds') jobIdsParam: string
+  ): Promise<Record<number, Record<string, unknown>>> {
+    try {
+      const jobIds = jobIdsParam.split(',')
+        .map(id => parseInt(id.trim(), 10))
+        .filter(id => Number.isFinite(id) && id > 0);
+
+      if (jobIds.length === 0) {
+        throw new BadRequestException('Invalid job IDs provided');
+      }
+
+      return await this.codingJobService.getBulkCodingProgress(jobIds, workspaceId);
+    } catch (error) {
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
+        throw error;
+      }
+      throw new BadRequestException(`Failed to retrieve bulk coding progress: ${error.message}`);
     }
   }
 

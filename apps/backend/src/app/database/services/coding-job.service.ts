@@ -1323,6 +1323,30 @@ export class CodingJobService {
       (unit.code !== null && unit.code < 0)
     );
   }
+
+  async getBulkCodingProgress(codingJobIds: number[], workspaceId: number): Promise<Record<number, Record<string, SaveCodingProgressDto['selectedCode']>>> {
+    if (codingJobIds.length === 0) {
+      return {};
+    }
+
+    const codingJobs = await this.codingJobRepository.find({
+      where: { id: In(codingJobIds), workspace_id: workspaceId },
+      select: ['id', 'workspace_id']
+    });
+
+    if (codingJobs.length !== codingJobIds.length) {
+      throw new NotFoundException('One or more coding jobs not found in the workspace');
+    }
+
+    const progressMap: Record<number, Record<string, SaveCodingProgressDto['selectedCode']>> = {};
+
+    await Promise.all(codingJobs.map(async job => {
+      const progress = await this.getCodingProgress(job.id);
+      progressMap[job.id] = progress;
+    }));
+
+    return progressMap;
+  }
 }
 
 function generateJobName(coderName: string, unitName: string, variableId: string, caseCount: number): string {
