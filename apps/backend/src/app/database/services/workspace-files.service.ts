@@ -1599,7 +1599,9 @@ ${bookletRefs}
         return [];
       }
 
-      const filteredUnitFiles = unitFiles.filter(file => file.file_id === schemeFileId && !file.file_id.includes('VOCS'));
+      const filteredUnitFiles = unitFiles.filter(file => file.file_id.toUpperCase() === schemeFileId.toUpperCase() &&
+        !file.file_id.includes('VOCS')
+      );
 
       if (filteredUnitFiles.length === 0) {
         this.logger.warn(`No Unit files with file_id ${schemeFileId} (without VOCS) found in workspace ${workspaceId}`);
