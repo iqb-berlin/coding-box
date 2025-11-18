@@ -1374,7 +1374,8 @@
   "coding-results": {
     "apply": {
       "error": {
-        "not-completed": "Der Kodierungsauftrag muss abgeschlossen sein, bevor Ergebnisse angewendet werden können. Aktueller Status: {{status}}"
+        "not-completed": "Der Kodierungsauftrag muss abgeschlossen sein, bevor Ergebnisse angewendet werden können. Aktueller Status: {{status}}",
+        "uncertain-issues-present": "Ergebnisse können nicht angewendet werden, da {{count}} ungewisse Kodierreaktionen (Typ -1 oder -2) vorhanden sind. Bitte überprüfen Sie diese manuell zuerst."
       },
       "success": {
         "no-responses": "Keine Antworten zu aktualisieren. Alle Kodierungsergebnisse erfordern eine manuelle Überprüfung.",

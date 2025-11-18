@@ -51,6 +51,19 @@ export class CodingResultsService {
       const codingJobUnits = await this.codingJobService.getCodingJobUnits(codingJobId);
       const codingProgress = await this.codingJobService.getCodingProgress(codingJobId);
 
+      const uncertainIssues = Object.values(codingProgress).filter(p => typeof p.id === 'number' && (p.id === -1 || p.id === -2)
+      );
+
+      if (uncertainIssues.length > 0) {
+        return {
+          success: false,
+          updatedResponsesCount: 0,
+          skippedReviewCount: 0,
+          messageKey: 'coding-results.apply.error.uncertain-issues-present',
+          messageParams: { count: uncertainIssues.length }
+        };
+      }
+
       let skippedReviewCount = 0;
 
       for (const unit of codingJobUnits) {
