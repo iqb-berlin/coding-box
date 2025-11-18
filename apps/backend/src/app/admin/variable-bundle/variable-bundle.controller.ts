@@ -32,7 +32,7 @@ import { CreateVariableBundleDto } from './dto/create-variable-bundle.dto';
 import { UpdateVariableBundleDto } from './dto/update-variable-bundle.dto';
 import { VariableDto } from './dto/variable.dto';
 
-@ApiTags('Variable Bundles')
+@ApiTags('Variablenbündel')
 @Controller('admin/workspace/:workspace_id/variable-bundle')
 export class VariableBundleController {
   constructor(private readonly variableBundleService: VariableBundleService) {}
