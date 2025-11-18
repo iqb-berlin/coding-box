@@ -156,17 +156,22 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
               assignedVariableBundles: job.assignedVariableBundles ?? job.variableBundles ?? []
             }));
 
-            await Promise.all(processedData.map(async job => {
-              try {
-                const progressResult = await this.backendService.getCodingProgress(workspaceId, job.id).toPromise();
+            const jobIds = processedData.map(job => job.id);
+            try {
+              const bulkProgressResult = await this.backendService.getBulkCodingProgress(workspaceId, jobIds).toPromise();
+
+              processedData.forEach(job => {
+                const progressResult = bulkProgressResult?.[job.id];
                 job.hasIssues = progressResult ? Object.values(progressResult as Record<string, SavedCode>).some(progress => progress && typeof progress === 'object' && 'id' in progress &&
                   ((typeof progress.id === 'number' && progress.id < 0) ||
                    (progress.codingIssueOption !== null && progress.codingIssueOption !== undefined))
                 ) : false;
-              } catch (error) {
+              });
+            } catch (error) {
+              processedData.forEach(job => {
                 job.hasIssues = false;
-              }
-            }));
+              });
+            }
 
             this.originalData = [...processedData];
             this.dataSource.data = processedData;
@@ -193,18 +198,23 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
               assignedVariableBundles: job.assignedVariableBundles ?? job.variableBundles ?? []
             }));
 
-            await Promise.all(processedData.map(async job => {
-              try {
-                const progressResult = await this.backendService.getCodingProgress(workspaceId, job.id).toPromise();
+            const fallbackJobIds = processedData.map(job => job.id);
+            try {
+              const fallbackBulkProgressResult = await this.backendService.getBulkCodingProgress(workspaceId, fallbackJobIds).toPromise();
+
+              processedData.forEach(job => {
+                const progressResult = fallbackBulkProgressResult?.[job.id];
                 job.hasIssues = progressResult ? Object.values(progressResult as Record<string, SavedCode>).some(progress => progress && typeof progress === 'object' && 'id' in progress &&
                   ((typeof progress.id === 'number' && progress.id < 0) ||
                    (progress.codingIssueOption !== null && progress.codingIssueOption !== undefined))
                 ) : false;
-              } catch (error) {
-                // If we can't get progress data, assume no issues
+              });
+            } catch (fallbackError) {
+              // If bulk fetch fails, fall back to individual calls as a last resort
+              processedData.forEach(job => {
                 job.hasIssues = false;
-              }
-            }));
+              });
+            }
 
             this.originalData = [...processedData];
             this.dataSource.data = processedData;

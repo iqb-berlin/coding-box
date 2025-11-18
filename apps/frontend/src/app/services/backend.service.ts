@@ -1071,7 +1071,13 @@ export class BackendService {
 
   getCodingProgress(workspaceId: number, codingJobId: number): Observable<Record<string, unknown>> {
     const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job/${codingJobId}/progress`;
-    return this.http.get<Record<string, unknown>>(url);
+    return this.http.get<Record<string, unknown>>(url, { headers: this.authHeader });
+  }
+
+  getBulkCodingProgress(workspaceId: number, jobIds: number[]): Observable<Record<number, Record<string, unknown>>> {
+    const jobIdsParam = jobIds.join(',');
+    const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job/progress/bulk?jobIds=${jobIdsParam}`;
+    return this.http.get<Record<number, Record<string, unknown>>>(url, { headers: this.authHeader });
   }
 
   getCodingNotes(workspaceId: number, codingJobId: number): Observable<Record<string, string> | null> {
