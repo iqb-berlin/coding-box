@@ -1997,9 +1997,13 @@ export class WorkspaceCodingController {
           type: 'number',
           description: 'Number of responses skipped for manual review'
         },
-        message: {
+        messageKey: {
           type: 'string',
-          description: 'Detailed message about the operation'
+          description: 'Translation key for the message'
+        },
+        messageParams: {
+          type: 'object',
+          description: 'Parameters for the translation'
         }
       }
     }
@@ -2011,7 +2015,8 @@ export class WorkspaceCodingController {
         success: boolean;
         updatedResponsesCount: number;
         skippedReviewCount: number;
-        message: string;
+        messageKey: string;
+        messageParams?: Record<string, unknown>;
       }> {
     return this.workspaceCodingService.applyCodingResults(workspace_id, jobId);
   }

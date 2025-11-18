@@ -446,6 +446,16 @@ export class CodingJobBulkCreationDialogComponent {
     return Object.keys(obj);
   }
 
+  getDoubleCodingGridTemplate(): string {
+    const coderColumns = '80px '.repeat(this.data.selectedCoders.length);
+    return `200px 80px 80px 80px ${coderColumns}`.trim();
+  }
+
+  getDistributionGridTemplate(): string {
+    const coderColumns = '80px '.repeat(this.data.selectedCoders.length);
+    return `200px ${coderColumns}60px`.trim();
+  }
+
   getVariableDisplayNameFromKey(variableKey: string): string {
     // Convert "unitName::variableId" format to display format
     const parts = variableKey.split('::');

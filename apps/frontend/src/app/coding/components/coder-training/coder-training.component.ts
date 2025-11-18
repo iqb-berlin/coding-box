@@ -135,6 +135,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     if (!workspaceId) {
       this.showError('Kein Arbeitsbereich ausgewählt');
       this.isLoadingVariables = false;
+      this.changeDetectorRef.markForCheck();
       return;
     }
 
@@ -147,11 +148,13 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
           if (variables.length === 0) {
             this.addVariable();
           }
+          this.changeDetectorRef.markForCheck();
         },
         error: () => {
           this.showError('Fehler beim Laden der verfügbaren Variablen');
           this.isLoadingVariables = false;
           this.addVariable();
+          this.changeDetectorRef.markForCheck();
         }
       });
   }
@@ -194,9 +197,11 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       .subscribe({
         next: (coders: Coder[]) => {
           this.coders = coders;
+          this.changeDetectorRef.markForCheck();
         },
         error: () => {
           this.showError('Fehler beim Laden der Kodierer');
+          this.changeDetectorRef.markForCheck();
         }
       });
   }
@@ -208,19 +213,22 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     if (!workspaceId) {
       this.showError('Kein Arbeitsbereich ausgewählt');
       this.isLoadingBundles = false;
+      this.changeDetectorRef.markForCheck();
       return;
     }
 
-    this.variableBundleService.getBundles(1, 100) // Load all bundles with reasonable limit
+    this.variableBundleService.getBundles(1, 100)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: ({ bundles }) => {
           this.availableBundles = bundles;
           this.isLoadingBundles = false;
+          this.changeDetectorRef.markForCheck();
         },
         error: () => {
           this.showError('Fehler beim Laden der Variable-Bundles');
           this.isLoadingBundles = false;
+          this.changeDetectorRef.markForCheck();
         }
       });
   }
@@ -489,6 +497,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     if (!workspaceId) {
       this.showError('Kein Arbeitsbereich ausgewählt');
       this.isLoading = false;
+      this.changeDetectorRef.markForCheck();
       return;
     }
 
@@ -498,8 +507,9 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       .subscribe({
         next: result => {
           this.isLoading = false;
+          this.changeDetectorRef.markForCheck();
           if (result.success) {
-            this.showSuccess(`Erfolgreich ${result.jobsCreated} Kodierungsaufträge für ${selectedCoders.length} Kodierer erstellt`);
+            this.showSuccess(`Erfolgreich ${result.jobsCreated} Kodierungsaufträge für ${selectedCoders.length} Kodierungsaufträge für ${selectedCoders.length} Kodierer erstellt`);
             this.startTraining.emit({ selectedCoders, variableConfigs });
             this.onClose();
           } else {
@@ -508,6 +518,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
         },
         error: () => {
           this.isLoading = false;
+          this.changeDetectorRef.markForCheck();
           this.showError('Fehler beim Erstellen der Kodierungsaufträge');
         }
       });

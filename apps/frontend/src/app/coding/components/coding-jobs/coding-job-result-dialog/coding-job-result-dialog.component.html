@@ -7,10 +7,27 @@
   </div>
 
   <div class="filter-section">
-    <coding-box-search-filter
-      [title]="'Kodierergebnisse filtern'"
-      (valueChange)="applyFilter($event)">
-    </coding-box-search-filter>
+    <div class="filter-grid">
+      <mat-form-field appearance="outline">
+        <mat-label>Aufgabe filtern</mat-label>
+        <input matInput [(ngModel)]="unitNameFilter" (input)="onUnitNameFilterChange()">
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>Variable filtern</mat-label>
+        <input matInput [(ngModel)]="variableFilter" (input)="onVariableFilterChange()">
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>Kodierungshinweis filtern</mat-label>
+        <input matInput [(ngModel)]="codingIssueFilter" (input)="onCodingIssueFilterChange()">
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>Testperson filtern</mat-label>
+        <input matInput [(ngModel)]="testPersonFilter" (input)="onTestPersonFilterChange()">
+      </mat-form-field>
+    </div>
   </div>
 
   @if (isLoading) {
@@ -23,7 +40,7 @@
       @if (dataSource.data.length > 0) {
         <mat-table [dataSource]="dataSource" matSort class="coding-results-table">
           <ng-container matColumnDef="unitName">
-            <mat-header-cell *matHeaderCellDef mat-sort-header>Einheit</mat-header-cell>
+            <mat-header-cell *matHeaderCellDef mat-sort-header>Aufgabe</mat-header-cell>
             <mat-cell *matCellDef="let result">{{result.unitName}}
               <span *ngIf="result.unitAlias && result.unitAlias !== result.unitName" class="unit-alias">
                 ({{result.unitAlias}})
@@ -62,15 +79,25 @@
             </mat-cell>
           </ng-container>
 
+          <ng-container matColumnDef="actions">
+            <mat-header-cell *matHeaderCellDef>Aktionen</mat-header-cell>
+            <mat-cell *matCellDef="let result">
+              <button *ngIf="isCodingIssueOption(result)" mat-icon-button color="primary"
+                      (click)="reviewCodingResult(result)" matTooltip="Kodierungs-Hinweis überprüfen">
+                <mat-icon>replay</mat-icon>
+              </button>
+              <button *ngIf="isNewCodeNeeded(result)" mat-icon-button color="accent"
+                      (click)="editCodingScheme(result)" matTooltip="Kodierungsschema bearbeiten">
+                <mat-icon>edit</mat-icon>
+              </button>
+            </mat-cell>
+          </ng-container>
+
           <mat-header-row *matHeaderRowDef="displayedColumns"></mat-header-row>
           <mat-row *matRowDef="let row; columns: displayedColumns;"></mat-row>
         </mat-table>
 
-        <mat-paginator
-          [pageSizeOptions]="[10, 25, 50, 100]"
-          showFirstLastButtons
-          aria-label="Wähle eine Seite der Kodierergebnisse">
-        </mat-paginator>
+
       } @else {
         <div class="no-data-message">
           <p>Keine Kodierergebnisse verfügbar.</p>

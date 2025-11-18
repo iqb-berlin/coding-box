@@ -1096,7 +1096,7 @@ ${bookletRefs}
       let fileContent: string | Buffer;
       let extractedInfo = {};
 
-      const textFileExtensions = ['.xml', '.html', '.htm', '.xhtml', '.txt', '.json', '.csv'];
+      const textFileExtensions = ['.xml', '.html', '.htm', '.xhtml', '.txt', '.json', '.csv', '.voud', '.vocs', '.vomd'];
 
       if (textFileExtensions.includes(fileExtension)) {
         // For text files, convert buffer to UTF8 string
@@ -1153,7 +1153,7 @@ ${bookletRefs}
         structured_data: structuredData
       });
 
-      await this.fileUploadRepository.save(fileUpload);
+      await this.fileUploadRepository.upsert(fileUpload, ['file_id', 'workspace_id']);
       this.logger.log(`Successfully processed octet-stream file: ${file.originalname} as ${fileType}`);
     } catch (error) {
       this.logger.error(`Error processing octet-stream file ${file.originalname}: ${error.message}`, error.stack);
@@ -1599,7 +1599,9 @@ ${bookletRefs}
         return [];
       }
 
-      const filteredUnitFiles = unitFiles.filter(file => file.file_id === schemeFileId && !file.file_id.includes('VOCS'));
+      const filteredUnitFiles = unitFiles.filter(file => file.file_id.toUpperCase() === schemeFileId.toUpperCase() &&
+        !file.file_id.includes('VOCS')
+      );
 
       if (filteredUnitFiles.length === 0) {
         this.logger.warn(`No Unit files with file_id ${schemeFileId} (without VOCS) found in workspace ${workspaceId}`);

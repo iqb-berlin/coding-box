@@ -78,13 +78,13 @@
     <div class="section">
       <div class="section-header">
         <h3 class="section-subtitle">
-          Variable Bundles
+          Variablenbündel
           <span *ngIf="isLoadingBundles" class="loading-text">
             <mat-progress-spinner mode="indeterminate" diameter="16" style="display: inline-block; margin-left: 8px;"></mat-progress-spinner>
-            Lade Variable-Bundles...
+            Lade Variablenbündel...
           </span>
           <span *ngIf="!isLoadingBundles && availableBundles.length > 0" class="bundle-count">
-            ({{availableBundles.length}} verfügbare Bundles)
+            ({{availableBundles.length}} verfügbare Variablenbündel)
           </span>
         </h3>
       </div>
@@ -92,8 +92,8 @@
       <div *ngIf="!isLoadingBundles && availableBundles.length > 0" class="bundle-selection">
         <div class="bundle-select-container">
           <mat-form-field appearance="outline" class="bundle-select-field">
-            <mat-label>Variable Bundles auswählen</mat-label>
-            <mat-select placeholder="Bundles auswählen" multiple [value]="selectedBundleArray" (selectionChange)="onBundleSelectionChange($event.value)">
+            <mat-label>Variablenbündel auswählen</mat-label>
+            <mat-select placeholder="Variablenbündel auswählen" multiple [value]="selectedBundleArray" (selectionChange)="onBundleSelectionChange($event.value)">
               <mat-option *ngFor="let bundle of availableBundles" [value]="bundle.id"
                 [matTooltip]="bundle.description || ''"
                 matTooltipPosition="above">
@@ -106,7 +106,7 @@
 
         <!-- Selected Bundle Chips -->
         <div *ngIf="selectedBundleIds.size > 0" class="selected-bundles">
-          <h5>Ausgewählte Bundles:</h5>
+          <h5>Ausgewählte Variablenbündel:</h5>
           <mat-chip-set>
             <mat-chip
               *ngFor="let bundleId of selectedBundleIds"
@@ -122,7 +122,7 @@
 
       <div *ngIf="!isLoadingBundles && availableBundles.length === 0" class="no-bundles-message">
         <mat-icon>inventory_2</mat-icon>
-        <p>Keine Variable-Bundles verfügbar</p>
+        <p>Keine Variablenbündel verfügbar</p>
       </div>
     </div>
 
@@ -152,7 +152,7 @@
           <div formArrayName="variables">
             <div
               class="variable-item"
-              *ngFor="let item of groupedVariables.manual; let i = index"
+              *ngFor="let item of groupedVariables.manual"
               [formGroupName]="item.index">
 
               <mat-form-field appearance="outline" class="variable-name-field">
@@ -220,7 +220,7 @@
           <div formArrayName="variables" class="bundle-variables-list">
             <div
               class="variable-item bundle-variable-item"
-              *ngFor="let item of bundleGroup.variables; let i = index"
+              *ngFor="let item of bundleGroup.variables"
               [formGroupName]="item.index">
 
               <div class="variable-info">
@@ -230,6 +230,7 @@
                          formControlName="variableId"
                          readonly
                          [matTooltip]="item.control.get('unitId')?.value + ' - ' + item.control.get('variableId')?.value">
+                  <input type="hidden" formControlName="unitId">
                 </mat-form-field>
 
                 <mat-form-field appearance="outline" class="sample-count-field bundle-sample-display">
@@ -238,7 +239,7 @@
                          type="number"
                          formControlName="sampleCount"
                          readonly
-                         [matTooltip]="'Erb value: ' + item.control.get('sampleCount')?.value + ' (gesetzt durch Bundle)'">
+                         [matTooltip]="'Aktueller Wert: ' + item.control.get('sampleCount')?.value + ' (gesetzt durch Bundle)'">
                   <mat-hint>Bundle gesteuert</mat-hint>
                 </mat-form-field>
               </div>
@@ -295,10 +296,10 @@
             <strong>{{getTotalSamples()}}</strong>
           </li>
           <li *ngIf="variablesFormArray.length === 0 && availableBundles.length > 0">
-            Verfügbare Variable-Bundles: <strong>{{availableBundles.length}}</strong>
+            Verfügbare Variablenbündel: <strong>{{availableBundles.length}}</strong>
           </li>
           <li *ngIf="variablesFormArray.length === 0 && availableBundles.length > 0">
-            <em>Wählen Sie ein Bundle aus, um Variablen hinzuzufügen</em>
+            <em>Wählen Sie ein Variablenbündel aus, um Variablen hinzuzufügen</em>
           </li>
         </ul>
       </div>

@@ -86,9 +86,7 @@ export class CodingExportService {
 
   async exportCodingResultsAggregated(workspaceId: number): Promise<Buffer> {
     this.logger.log(`Exporting aggregated coding results for workspace ${workspaceId}`);
-
     const BATCH_SIZE = parseInt(process.env.EXPORT_AGGREGATED_BATCH_SIZE || '10000', 10);
-    const MAX_TOTAL_RESPONSES = parseInt(process.env.EXPORT_AGGREGATED_MAX_RESPONSES || '500000', 10);
 
     try {
       const unitVariables = await this.workspaceFilesService.getUnitVariableMap(workspaceId);
@@ -112,25 +110,19 @@ export class CodingExportService {
         throw new Error('No coded responses found for this workspace');
       }
 
-      if (totalCount > MAX_TOTAL_RESPONSES) {
-        throw new Error(`Too many coded responses (${totalCount}) for aggregated export. Maximum allowed: ${MAX_TOTAL_RESPONSES}. Consider using variable-specific exports instead.`);
-      }
-
       this.logger.log(`Processing ${totalCount} coded responses in batches of ${BATCH_SIZE} for workspace ${workspaceId}`);
 
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet('Coding Results');
 
-      // Create pivot table: testpersons as rows, variables as columns
       const testPersonMap = new Map<string, Map<string, { code: number | null; score: number | null }>>();
       const variableSet = new Set<string>();
       const testPersonList: string[] = [];
-      const personGroups = new Map<string, string>(); // Cache for person groups
+      const personGroups = new Map<string, string>();
 
       let processedCount = 0;
       let offset = 0;
 
-      // Process responses in batches
       while (offset < totalCount) {
         const batchSize = Math.min(BATCH_SIZE, totalCount - offset);
 
@@ -138,23 +130,24 @@ export class CodingExportService {
 
         const batchResponses = await this.responseRepository
           .createQueryBuilder('response')
-          .leftJoinAndSelect('response.unit', 'unit')
-          .leftJoinAndSelect('unit.booklet', 'booklet')
-          .leftJoinAndSelect('booklet.person', 'person')
+          .leftJoin('response.unit', 'unit')
+          .leftJoin('unit.booklet', 'booklet')
+          .leftJoin('booklet.person', 'person')
           .select([
             'response.id',
             'response.variableid',
-            'response.code_v1',
-            'response.score_v1',
-            'response.code_v2',
-            'response.score_v2',
-            'response.code_v3',
-            'response.score_v3',
+            `CASE
+              WHEN response.code_v3 IS NOT NULL THEN response.code_v3
+              WHEN response.code_v2 IS NOT NULL THEN response.code_v2
+              ELSE response.code_v1
+            END AS latest_code`,
+            `CASE
+              WHEN response.code_v3 IS NOT NULL THEN response.score_v3
+              WHEN response.code_v2 IS NOT NULL THEN response.score_v2
+              ELSE response.score_v1
+            END AS latest_score`,
             'unit.id',
             'unit.name',
-            'unit.alias',
-            'booklet.id',
-            'person.id',
             'person.login',
             'person.code',
             'person.group'
@@ -164,27 +157,29 @@ export class CodingExportService {
           .orderBy('response.id', 'ASC')
           .skip(offset)
           .take(batchSize)
-          .getMany();
+          .getRawMany();
 
         // Filter responses to only include valid unit-variable combinations
         const filteredBatchResponses = batchResponses.filter(response => {
-          const unitName = response.unit?.name?.toUpperCase();
+          const unitName = response.unit_name?.toUpperCase();
           const validVars = validVariableSets.get(unitName || '');
           return validVars?.has(response.variableid);
         });
 
         // Process this batch
         for (const response of filteredBatchResponses) {
-          const person = response.unit?.booklet?.person;
-          if (!person) continue;
-
-          const testPersonKey = `${person.login}_${person.code}`;
+          const testPersonKey = `${response.person_login}_${response.person_code}`;
           const variableId = response.variableid;
-          const latestCoding = this.getLatestCode(response);
+          const unitId = response.unit_id;
+
+          // Skip if unit ID is missing
+          if (!unitId) continue;
+
+          const compositeVariableKey = `${unitId}_${variableId}`;
 
           // Cache person group
           if (!personGroups.has(testPersonKey)) {
-            personGroups.set(testPersonKey, person.group || '');
+            personGroups.set(testPersonKey, response.person_group || '');
           }
 
           if (!testPersonMap.has(testPersonKey)) {
@@ -192,17 +187,16 @@ export class CodingExportService {
             testPersonList.push(testPersonKey);
           }
 
-          testPersonMap.get(testPersonKey)!.set(variableId, {
-            code: latestCoding.code,
-            score: latestCoding.score
+          testPersonMap.get(testPersonKey)!.set(compositeVariableKey, {
+            code: response.latest_code,
+            score: response.latest_score
           });
-          variableSet.add(variableId);
+          variableSet.add(compositeVariableKey);
         }
 
         processedCount += batchResponses.length;
         offset += batchSize;
 
-        // Force garbage collection between batches if available
         if (global.gc) {
           global.gc();
         }
@@ -211,12 +205,9 @@ export class CodingExportService {
       this.logger.log(`Processed ${processedCount} responses total. Creating Excel file with ${testPersonList.length} test persons and ${variableSet.size} variables.`);
 
       const variables = Array.from(variableSet).sort();
-
-      // Set up headers
       const headers = ['Test Person Login', 'Test Person Code', 'Group', ...variables];
       worksheet.columns = headers.map(header => ({ header, key: header, width: 15 }));
 
-      // Add data rows
       for (const testPersonKey of testPersonList) {
         const [login, code] = testPersonKey.split('_');
         const personData = testPersonMap.get(testPersonKey)!;
@@ -261,7 +252,6 @@ export class CodingExportService {
     this.logger.log(`Exporting coding results by coder for workspace ${workspaceId}`);
 
     try {
-      // Get coding jobs with their assignments
       const codingJobs = await this.codingJobRepository.find({
         where: { workspace_id: workspaceId },
         relations: ['codingJobCoders', 'codingJobCoders.user', 'codingJobUnits', 'codingJobUnits.response', 'codingJobUnits.response.unit']
@@ -271,7 +261,6 @@ export class CodingExportService {
         throw new Error('No coding jobs found for this workspace');
       }
 
-      // Get coding job variables separately
       const jobIds = codingJobs.map(job => job.id);
       const codingJobVariables = await this.codingJobVariableRepository.find({
         where: { coding_job_id: In(jobIds) }
@@ -287,8 +276,6 @@ export class CodingExportService {
       });
 
       const workbook = new ExcelJS.Workbook();
-
-      // Group jobs by coder
       const coderJobs = new Map<string, CodingJob[]>();
 
       for (const job of codingJobs) {
@@ -337,6 +324,7 @@ export class CodingExportService {
               score_v3: true,
               unit: {
                 id: true,
+                name: true,
                 booklet: {
                   id: true,
                   person: {
@@ -354,6 +342,8 @@ export class CodingExportService {
             const person = response.unit?.booklet?.person;
             const testPersonKey = `${person?.login}_${person?.code}`;
             const variableId = response.variableid;
+            const unitName = response.unit?.name;
+            const compositeKey = unitName ? `${unitName}_${variableId}` : variableId;
             const latestCoding = this.getLatestCode(response);
 
             if (!testPersonMap.has(testPersonKey)) {
@@ -361,11 +351,11 @@ export class CodingExportService {
               testPersonList.push(testPersonKey);
             }
 
-            testPersonMap.get(testPersonKey)!.set(variableId, {
+            testPersonMap.get(testPersonKey)!.set(compositeKey, {
               code: latestCoding.code,
               score: latestCoding.score
             });
-            variableSet.add(variableId);
+            variableSet.add(compositeKey);
           }
         }
 
@@ -416,13 +406,11 @@ export class CodingExportService {
   async exportCodingResultsByVariable(workspaceId: number): Promise<Buffer> {
     this.logger.log(`Exporting coding results by variable for workspace ${workspaceId} (CODING_INCOMPLETE only)`);
 
-    // Memory safety limits - configurable via environment variables
     const MAX_WORKSHEETS = parseInt(process.env.EXPORT_MAX_WORKSHEETS || '100', 10);
     const MAX_RESPONSES_PER_WORKSHEET = parseInt(process.env.EXPORT_MAX_RESPONSES_PER_WORKSHEET || '10000', 10);
     const BATCH_SIZE = parseInt(process.env.EXPORT_BATCH_SIZE || '50', 10);
 
     try {
-      // First, get the list of CODING_INCOMPLETE variables
       const incompleteVariables = await this.getCodingIncompleteVariables(workspaceId);
 
       if (incompleteVariables.length === 0) {

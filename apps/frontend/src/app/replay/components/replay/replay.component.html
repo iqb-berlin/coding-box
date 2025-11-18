@@ -32,6 +32,7 @@
             [codingScheme]="codingService.codingScheme"
             [variableId]="codingService.currentVariableId"
             [preSelectedCodeId]="getPreSelectedCodeId(codingService.currentVariableId)"
+            [preSelectedCodingIssueOptionId]="getPreSelectedCodingIssueOptionId(codingService.currentVariableId)"
             [coderNotes]="getCoderNotes()"
             [showProgress]="!!codingService.codingJobId"
             [completedCount]="getCompletedCount()"

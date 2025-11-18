@@ -11,7 +11,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { UnitsReplay, UnitsReplayUnit } from '../../../services/units-replay.service';
 import { ReplayCodingService } from '../../../services/replay-coding.service';
@@ -35,6 +35,7 @@ export class CodeSelectorComponent implements OnChanges {
   @Input() codingScheme!: string | CodingScheme;
   @Input() variableId!: string;
   @Input() preSelectedCodeId: number | null = null;
+  @Input() preSelectedCodingIssueOptionId: number | null = null;
   @Input() coderNotes: string = '';
   @Input() showProgress: boolean = false;
   @Input() completedCount: number = 0;
@@ -62,13 +63,13 @@ export class CodeSelectorComponent implements OnChanges {
   selectableItems: SelectableItem[] = [];
   selectedCode: number | null = null;
   selectedCodingIssueOption: number | null = null;
-  constructor(private sanitizer: DomSanitizer) {}
+  constructor(private sanitizer: DomSanitizer, private translateService: TranslateService) {}
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes.codingScheme || changes.variableId || changes.missings) {
       this.loadCodes();
     }
-    if (changes.preSelectedCodeId) {
+    if (changes.preSelectedCodeId || changes.preSelectedCodingIssueOptionId) {
       this.selectPreSelectedCode();
     }
   }
@@ -105,22 +106,22 @@ export class CodeSelectorComponent implements OnChanges {
       const codingIssueOptions: SelectableItem[] = [
         {
           id: -1,
-          label: 'Code-Vergabe unsicher',
+          label: this.translateService.instant('code-selector.coding-issue-options.code-assignment-uncertain'),
           type: 'codingIssueOption'
         },
         {
           id: -2,
-          label: 'Neuer Code nötig',
+          label: this.translateService.instant('code-selector.coding-issue-options.new-code-needed'),
           type: 'codingIssueOption'
         },
         {
           id: -3,
-          label: 'Ungültig (Spaßantwort)',
+          label: this.translateService.instant('code-selector.coding-issue-options.invalid-joke-answer'),
           type: 'codingIssueOption'
         },
         {
           id: -4,
-          label: 'Technische Probleme',
+          label: this.translateService.instant('code-selector.coding-issue-options.technical-problems'),
           type: 'codingIssueOption'
         }
       ];
@@ -135,28 +136,42 @@ export class CodeSelectorComponent implements OnChanges {
   private selectPreSelectedCode(): void {
     this.selectedCode = null;
     this.selectedCodingIssueOption = null;
-    if (this.preSelectedCodeId === null) {
-      return;
-    }
+
     if (this.selectableItems.length === 0) {
       return;
     }
-    const preSelectedItem = this.selectableItems.find(item => item.id === this.preSelectedCodeId);
-    if (preSelectedItem) {
-      if (preSelectedItem.type === 'codingIssueOption') {
-        this.selectedCodingIssueOption = this.preSelectedCodeId;
-        this.codeSelected.emit({
-          variableId: this.variableId,
-          code: null,
-          codingIssueOption: this.createCodeOrCodingIssueOption(preSelectedItem) as CodingIssueDto
-        });
-      } else {
-        this.selectedCode = this.preSelectedCodeId;
-        this.codeSelected.emit({
-          variableId: this.variableId,
-          code: this.createCodeOrCodingIssueOption(preSelectedItem)
-        });
+
+    if (this.preSelectedCodeId !== null) {
+      const preSelectedItem = this.selectableItems.find(item => item.id === this.preSelectedCodeId);
+      if (preSelectedItem) {
+        if (preSelectedItem.type === 'codingIssueOption') {
+          this.selectedCodingIssueOption = this.preSelectedCodeId;
+        } else {
+          this.selectedCode = this.preSelectedCodeId;
+        }
       }
+    }
+
+    if (this.preSelectedCodingIssueOptionId !== null) {
+      const codingIssueItem = this.selectableItems.find(item => item.id === this.preSelectedCodingIssueOptionId);
+      if (codingIssueItem && codingIssueItem.type === 'codingIssueOption') {
+        this.selectedCodingIssueOption = this.preSelectedCodingIssueOptionId;
+      }
+    }
+
+    const codeDto = this.selectedCode !== null ? this.createCodeOrCodingIssueOption(
+      this.selectableItems.find(item => item.id === this.selectedCode)!
+    ) : null;
+    const codingIssueOption = this.selectedCodingIssueOption !== null ? this.createCodeOrCodingIssueOption(
+      this.selectableItems.find(item => item.id === this.selectedCodingIssueOption)!
+    ) as CodingIssueDto : null;
+
+    if (codeDto || codingIssueOption) {
+      this.codeSelected.emit({
+        variableId: this.variableId,
+        code: codeDto,
+        codingIssueOption: codingIssueOption
+      });
     }
   }
 
@@ -242,7 +257,7 @@ export class CodeSelectorComponent implements OnChanges {
     }
 
     const currentIndex = data.currentUnitIndex;
-    const nextIndex = this.codingService.findNextUncodedUnitIndex(data, currentIndex + 1);
+    const nextIndex = currentIndex + 1;
     if (nextIndex >= 0 && nextIndex < data.units.length) {
       this.unitChanged.emit(data.units[nextIndex]);
     }
@@ -265,18 +280,8 @@ export class CodeSelectorComponent implements OnChanges {
     const data = this.unitsData;
     if (!data || !data.units.length) return false;
 
-    const currentUnit = data.units[data.currentUnitIndex];
-    if (!currentUnit) return false;
-
-    const compositeKey = this.codingService.generateCompositeKey(
-      currentUnit.testPerson || '',
-      currentUnit.name,
-      currentUnit.variableId || ''
-    );
-
-    const hasSelection = this.codingService.selectedCodes.has(compositeKey);
-    const nextUncodedIndex = this.codingService.findNextUncodedUnitIndex(data, data.currentUnitIndex + 1);
-    return hasSelection && nextUncodedIndex >= 0;
+    const nextIndex = data.currentUnitIndex + 1;
+    return nextIndex < data.units.length;
   }
 
   hasPreviousUnit(): boolean {

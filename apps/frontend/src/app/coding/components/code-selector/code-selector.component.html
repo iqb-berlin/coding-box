@@ -34,6 +34,7 @@
       <mat-icon>directions</mat-icon>
     </button>
     <button
+      mat-icon-button
       (click)="onCommentClick()"
       class="comment-button"
       matTooltip="{{ 'coding.comment-dialog.title' | translate }}">
@@ -64,10 +65,10 @@
           <div class="code-content">
             <span class="code-info">
               <span class="code-id">{{ item.id }}</span>
-              <span class="code-score" *ngIf="item.score !== undefined && showScore">{{ 'code-selector.score-label' | translate }} {{ item.score }}</span>
+              <span class="code-score" *ngIf="showScore && item.score !== undefined">{{ 'code-selector.score-label' | translate }} {{ item.score }}</span>
             </span>
           </div>
-          <div class="code-instruction" *ngIf="item.manualInstruction" [innerHTML]="getSafeHtml(item.manualInstruction)"></div>
+          <div class="code-instruction" *ngIf="!suppressGeneralInstructions && item.manualInstruction" [innerHTML]="getSafeHtml(item.manualInstruction)"></div>
         </div>
       </div>
 
@@ -91,14 +92,16 @@
   </div>
 
   <div class="deselect-container fixed-section">
-    <button mat-button class="deselect-button" (click)="deselectAll()">Code-Auswahl entfernen</button>
+    <button mat-button class="deselect-button" (click)="deselectAll()">Auswahl entfernen</button>
   </div>
 
-  <mat-form-field appearance="outline" class="notes-field fixed-section">
-    <textarea matInput
-      [(ngModel)]="coderNotes"
-      (input)="onNotesChanged()"
-      placeholder="{{ 'code-selector.coder-notes-placeholder' | translate }}"
-      rows="3"></textarea>
-  </mat-form-field>
+  @if (allowComments) {
+    <mat-form-field appearance="outline" class="notes-field fixed-section">
+      <textarea matInput
+        [(ngModel)]="coderNotes"
+        (input)="onNotesChanged()"
+        placeholder="{{ 'code-selector.coder-notes-placeholder' | translate }}"
+        rows="3"></textarea>
+    </mat-form-field>
+  }
 </div>

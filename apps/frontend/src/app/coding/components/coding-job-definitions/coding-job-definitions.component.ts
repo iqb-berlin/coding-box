@@ -2,7 +2,9 @@ import {
   Component,
   OnDestroy,
   OnInit,
-  inject
+  inject,
+  Output,
+  EventEmitter
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -42,6 +44,13 @@ interface Coder {
   name: string;
 }
 
+interface BulkCreationResult {
+  confirmed: boolean;
+  showScore: boolean;
+  allowComments: boolean;
+  suppressGeneralInstructions: boolean;
+}
+
 @Component({
   selector: 'coding-box-coding-job-definitions',
   templateUrl: './coding-job-definitions.component.html',
@@ -69,6 +78,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
 
   jobDefinitions: JobDefinition[] = [];
   isLoading = false;
+  isBulkCreating = false;
   coders: Coder[] = [];
 
   displayedColumns: string[] = [
@@ -78,6 +88,8 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
     'codersCount',
     'bundlesCount'
   ];
+
+  @Output() bulkCreationCompleted = new EventEmitter<void>();
 
   ngOnInit(): void {
     this.loadCoders();
@@ -336,14 +348,15 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
       const result = await dialogRef.afterClosed().toPromise();
 
       if (result && result.confirmed) {
-        this.createBulkJobsFromDefinition(dialogData, workspaceId);
+        this.createBulkJobsFromDefinition(dialogData, workspaceId, result);
       }
     } catch (error) {
       this.showError(this.translateService.instant('coding-job-definitions.messages.snackbar.coders-loading-failed', { error: (error as Error).message }));
     }
   }
 
-  private async createBulkJobsFromDefinition(data: BulkCreationData, workspaceId: number): Promise<void> {
+  private async createBulkJobsFromDefinition(data: BulkCreationData, workspaceId: number, creationResult: BulkCreationResult): Promise<void> {
+    this.isBulkCreating = true;
     try {
       const mappedCoders = data.selectedCoders.map(coder => ({
         id: coder.id,
@@ -367,31 +380,27 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
       ).toPromise();
 
       if (result && result.success) {
+        if (creationResult) {
+          const updatePromises = result.jobs.map(job => (
+            this.backendService.updateCodingJob(workspaceId, job.jobId, {
+              showScore: creationResult.showScore,
+              allowComments: creationResult.allowComments,
+              suppressGeneralInstructions: creationResult.suppressGeneralInstructions
+            }).toPromise()
+          ));
+
+          await Promise.allSettled(updatePromises);
+        }
+
         this.snackBar.open(result.message, this.translateService.instant('common.close'), { duration: 3000 });
 
         const hasDoubleCoding = (data.doubleCodingAbsolute && data.doubleCodingAbsolute > 0) ||
                                 (data.doubleCodingPercentage && data.doubleCodingPercentage > 0);
 
+        // Removed reopening of dialog for double-coding preview as requested
+        // The double-coding info is still available if needed in the results
         if (hasDoubleCoding) {
-          const dialogData: BulkCreationData = {
-            selectedVariables: data.selectedVariables,
-            selectedVariableBundles: data.selectedVariableBundles,
-            selectedCoders: data.selectedCoders,
-            doubleCodingAbsolute: data.doubleCodingAbsolute,
-            doubleCodingPercentage: data.doubleCodingPercentage,
-            creationResults: {
-              doubleCodingInfo: result.doubleCodingInfo,
-              jobs: result.jobs
-            }
-          };
-
-          const dialogRef = this.dialog.open(CodingJobBulkCreationDialogComponent, {
-            width: '1200px',
-            data: dialogData,
-            disableClose: false
-          });
-
-          await dialogRef.afterClosed().toPromise();
+          // Dialog no longer reopens - user continues with closed dialog flow
         }
       } else if (result) {
         this.snackBar.open(this.translateService.instant('coding-job-definition-dialog.snackbars.bulk-creation-failed-with-message', { message: result.message }), this.translateService.instant('common.close'), { duration: 5000 });
@@ -400,9 +409,13 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
       }
     } catch (error) {
       this.snackBar.open(this.translateService.instant('coding-job-definition-dialog.snackbars.bulk-creation-failed', { error: error instanceof Error ? error.message : error }), this.translateService.instant('common.close'), { duration: 5000 });
+    } finally {
+      this.isBulkCreating = false;
     }
 
     this.loadJobDefinitions();
+    // Emit event to notify parent component to reload coding jobs list
+    this.bulkCreationCompleted.emit();
   }
 
   private showError(message: string): void {

@@ -319,6 +319,15 @@ export class CodingJobService {
     if (updateCodingJobDto.missingsProfileId !== undefined) {
       codingJob.codingJob.missings_profile_id = updateCodingJobDto.missingsProfileId;
     }
+    if (updateCodingJobDto.showScore !== undefined) {
+      codingJob.codingJob.showScore = updateCodingJobDto.showScore;
+    }
+    if (updateCodingJobDto.allowComments !== undefined) {
+      codingJob.codingJob.allowComments = updateCodingJobDto.allowComments;
+    }
+    if (updateCodingJobDto.suppressGeneralInstructions !== undefined) {
+      codingJob.codingJob.suppressGeneralInstructions = updateCodingJobDto.suppressGeneralInstructions;
+    }
 
     const savedCodingJob = await this.codingJobRepository.save(codingJob.codingJob);
 
@@ -1313,6 +1322,30 @@ export class CodingJobService {
     return codingJobUnits.some(unit => unit.coding_issue_option !== null ||
       (unit.code !== null && unit.code < 0)
     );
+  }
+
+  async getBulkCodingProgress(codingJobIds: number[], workspaceId: number): Promise<Record<number, Record<string, SaveCodingProgressDto['selectedCode']>>> {
+    if (codingJobIds.length === 0) {
+      return {};
+    }
+
+    const codingJobs = await this.codingJobRepository.find({
+      where: { id: In(codingJobIds), workspace_id: workspaceId },
+      select: ['id', 'workspace_id']
+    });
+
+    if (codingJobs.length !== codingJobIds.length) {
+      throw new NotFoundException('One or more coding jobs not found in the workspace');
+    }
+
+    const progressMap: Record<number, Record<string, SaveCodingProgressDto['selectedCode']>> = {};
+
+    await Promise.all(codingJobs.map(async job => {
+      const progress = await this.getCodingProgress(job.id);
+      progressMap[job.id] = progress;
+    }));
+
+    return progressMap;
   }
 }
 

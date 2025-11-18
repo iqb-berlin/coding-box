@@ -28,6 +28,14 @@
         </td>
       </ng-container>
 
+      <!-- Test Person Column -->
+      <ng-container matColumnDef="testPerson">
+        <th mat-header-cell *matHeaderCellDef mat-sort-header>Testperson</th>
+        <td mat-cell *matCellDef="let element" (click)="onRowClicked(element)" class="clickable-row">
+          {{ element.testPerson }}
+        </td>
+      </ng-container>
+
       <!-- Given Code Column -->
       <ng-container matColumnDef="givenCode">
         <th mat-header-cell *matHeaderCellDef mat-sort-header>
@@ -35,6 +43,16 @@
         </th>
         <td mat-cell *matCellDef="let element" (click)="onRowClicked(element)" class="clickable-row">
           {{ element.givenCode }}
+        </td>
+      </ng-container>
+
+      <!-- Coding Issue Column -->
+      <ng-container matColumnDef="codingIssue">
+        <th mat-header-cell *matHeaderCellDef mat-sort-header>
+          Kodierungshinweis
+        </th>
+        <td mat-cell *matCellDef="let element" (click)="onRowClicked(element)" class="clickable-row">
+          {{ element.codingIssue || '-' }}
         </td>
       </ng-container>
 
