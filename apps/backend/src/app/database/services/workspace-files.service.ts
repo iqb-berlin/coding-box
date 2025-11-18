@@ -1096,7 +1096,7 @@ ${bookletRefs}
       let fileContent: string | Buffer;
       let extractedInfo = {};
 
-      const textFileExtensions = ['.xml', '.html', '.htm', '.xhtml', '.txt', '.json', '.csv'];
+      const textFileExtensions = ['.xml', '.html', '.htm', '.xhtml', '.txt', '.json', '.csv', '.voud', '.vocs', '.vomd'];
 
       if (textFileExtensions.includes(fileExtension)) {
         // For text files, convert buffer to UTF8 string

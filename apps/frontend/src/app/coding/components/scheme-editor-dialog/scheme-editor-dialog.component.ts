@@ -207,16 +207,12 @@ export class SchemeEditorDialogComponent implements OnInit {
       return;
     }
 
-    // Always save to the same location as the scheme was loaded from: {fileId}.VOCS
-    const schemeFilename = `${this.data.fileId}.VOCS`;
+    const schemeFilename = this.data.fileName;
     this.backendService.getFilesList(this.data.workspaceId, 1, 10000, 'Resource')
       .subscribe({
         next: response => {
-          // Find existing VOCS file with the same filename
           const existingFile = response.data?.find(file => file.filename === schemeFilename && file.file_type === 'Resource');
-
           if (existingFile) {
-            // Delete the existing file
             this.backendService.deleteFiles(this.data.workspaceId, [existingFile.id])
               .subscribe(deleteSuccess => {
                 if (deleteSuccess) {
