@@ -86,6 +86,10 @@
                       (click)="reviewCodingResult(result)" matTooltip="Kodierungs-Hinweis überprüfen">
                 <mat-icon>replay</mat-icon>
               </button>
+              <button *ngIf="isNewCodeNeeded(result)" mat-icon-button color="accent"
+                      (click)="editCodingScheme(result)" matTooltip="Kodierungsschema bearbeiten">
+                <mat-icon>edit</mat-icon>
+              </button>
             </mat-cell>
           </ng-container>
 

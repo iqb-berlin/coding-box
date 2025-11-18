@@ -5,7 +5,9 @@ import {
   HostListener
 } from '@angular/core';
 import { Subject, debounceTime } from 'rxjs';
-import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
+import {
+  MAT_DIALOG_DATA, MatDialogModule, MatDialogRef, MatDialog
+} from '@angular/material/dialog';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { MatTableModule, MatTableDataSource } from '@angular/material/table';
 import { MatSort, MatSortModule } from '@angular/material/sort';
@@ -24,6 +26,7 @@ import { Router } from '@angular/router';
 import { BackendService } from '../../../../services/backend.service';
 import { AppService } from '../../../../services/app.service';
 import { CodingJob } from '../../../models/coding-job.model';
+import { SchemeEditorDialogComponent } from '../../scheme-editor-dialog/scheme-editor-dialog.component';
 
 import { UnitsReplay, UnitsReplayUnit } from '../../../../services/units-replay.service';
 
@@ -70,6 +73,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy {
   private snackBar = inject(MatSnackBar);
   private translateService = inject(TranslateService);
   private router = inject(Router);
+  private dialog = inject(MatDialog);
 
   isLoading = true;
   dataSource = new MatTableDataSource<CodingResult>([]);
@@ -297,6 +301,16 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy {
     return result.codingIssueOptionLabel !== null && result.codingIssueOptionLabel !== undefined;
   }
 
+  isNewCodeNeeded(result: CodingResult): boolean {
+    // Check if this is specifically the "new-code-needed" coding issue (code -2)
+    if (result.code !== undefined && result.code !== null) {
+      const codeNum = typeof result.code === 'number' ? result.code : parseInt(result.code.toString(), 10);
+      return codeNum === -2;
+    }
+    // Also check if the label indicates new code is needed
+    return result.codingIssueOptionLabel === this.getCodingIssueOption(-2);
+  }
+
   getCodingIssueOption(codingIssueOptionId: number): string {
     const keyMapping: { [key: number]: string } = {
       [-1]: 'code-selector.coding-issue-options.code-assignment-uncertain',
@@ -371,6 +385,64 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy {
       error: () => {
         loadingSnackBar.dismiss();
         this.snackBar.open('Fehler beim Erstellen des Authentisierungs-Tokens', 'Schließen', { duration: 3000 });
+      }
+    });
+  }
+
+  editCodingScheme(result: CodingResult): void {
+    if (!result || !this.isNewCodeNeeded(result)) {
+      this.snackBar.open('Nur "Neuer Code erforderlich" Fälle können bearbeitet werden', 'Schließen', { duration: 3000 });
+      return;
+    }
+
+    // Use unitAlias as coding scheme reference, fallback to unitName if not available
+    const codingSchemeRef = result.unitAlias;
+    if (!codingSchemeRef) {
+      this.snackBar.open('Kein Kodierungsschema-Referenz gefunden für diese Einheit', 'Schließen', { duration: 3000 });
+      return;
+    }
+
+    // Fetch the coding scheme content
+    this.backendService.getCodingSchemeFile(this.data.workspaceId, codingSchemeRef).subscribe({
+      next: schemeFile => {
+        if (!schemeFile) {
+          this.snackBar.open('Kodierungsschema-Datei nicht gefunden', 'Schließen', { duration: 3000 });
+          return;
+        }
+
+        // Decode base64 scheme content
+        let schemeContent = schemeFile.base64Data;
+        try {
+          schemeContent = atob(schemeFile.base64Data);
+        } catch (error) {
+          // If decoding fails, use as-is
+          schemeContent = schemeFile.base64Data;
+        }
+
+        // Open scheme editor dialog
+        const dialogRef = this.dialog.open(SchemeEditorDialogComponent, {
+          width: '90vw',
+          height: '90vh',
+          maxWidth: '1200px',
+          data: {
+            workspaceId: this.data.workspaceId,
+            fileId: codingSchemeRef, // Use the reference as fileId for saving logic
+            fileName: schemeFile.filename,
+            content: schemeContent
+          }
+        });
+
+        // Handle dialog close
+        dialogRef.afterClosed().subscribe(dialogResult => {
+          if (dialogResult === true) {
+            // Scheme was saved successfully, refresh the results
+            this.snackBar.open('Kodierungsschema erfolgreich aktualisiert', 'Schließen', { duration: 3000 });
+            this.loadCodingResults();
+          }
+        });
+      },
+      error: () => {
+        this.snackBar.open('Fehler beim Laden des Kodierungsschemas', 'Schließen', { duration: 3000 });
       }
     });
   }
