@@ -73,13 +73,14 @@
       </div>
     </div>
 
-    @if (isLoading) {
+    @if (isLoading || isDownloadingAllFiles) {
       <div class="loading-container">
         <mat-spinner class="mat-spinner"></mat-spinner>
-        @if (isValidating) {
+        @if (isDownloadingAllFiles) {
+          <p class="loading-text">ZIP-Datei wird erstellt und heruntergeladen...</p>
+        } @else if (isValidating) {
           <p class="loading-text">Validierung wird durchgeführt...</p>
-        }
-        @if (!isValidating) {
+        } @else {
           <p class="loading-text">Dateiliste wird geladen...</p>
         }
       </div>
