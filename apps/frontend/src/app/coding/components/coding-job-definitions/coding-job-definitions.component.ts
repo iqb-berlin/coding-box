@@ -42,6 +42,13 @@ interface Coder {
   name: string;
 }
 
+interface BulkCreationResult {
+  confirmed: boolean;
+  showScore: boolean;
+  allowComments: boolean;
+  suppressGeneralInstructions: boolean;
+}
+
 @Component({
   selector: 'coding-box-coding-job-definitions',
   templateUrl: './coding-job-definitions.component.html',
@@ -336,14 +343,14 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
       const result = await dialogRef.afterClosed().toPromise();
 
       if (result && result.confirmed) {
-        this.createBulkJobsFromDefinition(dialogData, workspaceId);
+        this.createBulkJobsFromDefinition(dialogData, workspaceId, result);
       }
     } catch (error) {
       this.showError(this.translateService.instant('coding-job-definitions.messages.snackbar.coders-loading-failed', { error: (error as Error).message }));
     }
   }
 
-  private async createBulkJobsFromDefinition(data: BulkCreationData, workspaceId: number): Promise<void> {
+  private async createBulkJobsFromDefinition(data: BulkCreationData, workspaceId: number, creationResult: BulkCreationResult): Promise<void> {
     try {
       const mappedCoders = data.selectedCoders.map(coder => ({
         id: coder.id,
@@ -367,6 +374,18 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
       ).toPromise();
 
       if (result && result.success) {
+        if (creationResult) {
+          const updatePromises = result.jobs.map(job => (
+            this.backendService.updateCodingJob(workspaceId, job.jobId, {
+              showScore: creationResult.showScore,
+              allowComments: creationResult.allowComments,
+              suppressGeneralInstructions: creationResult.suppressGeneralInstructions
+            }).toPromise()
+          ));
+
+          await Promise.allSettled(updatePromises);
+        }
+
         this.snackBar.open(result.message, this.translateService.instant('common.close'), { duration: 3000 });
 
         const hasDoubleCoding = (data.doubleCodingAbsolute && data.doubleCodingAbsolute > 0) ||
