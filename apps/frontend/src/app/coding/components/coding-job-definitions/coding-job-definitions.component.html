@@ -12,6 +12,11 @@
     <span>{{ 'coding-job-definitions.loading' | translate }}</span>
   </div>
 
+  <div *ngIf="isBulkCreating" class="bulk-creation-loading-container">
+    <mat-spinner diameter="30"></mat-spinner>
+    <span>{{ 'coding-job-definitions.bulk-creation-in-progress' | translate }}</span>
+  </div>
+
   <div *ngIf="!isLoading && jobDefinitions.length > 0">
     <table mat-table [dataSource]="jobDefinitions" class="job-definitions-table">
       <!-- Actions Column -->

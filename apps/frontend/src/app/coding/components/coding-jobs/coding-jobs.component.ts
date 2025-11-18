@@ -39,6 +39,16 @@ import { CoderTraining } from '../../models/coder-training.model';
 import { DoubleCodedReviewComponent } from '../double-coded-review/double-coded-review.component';
 import { CohensKappaStatisticsComponent } from '../cohens-kappa-statistics/cohens-kappa-statistics.component';
 
+interface SavedCode {
+  id: number;
+  code?: string;
+  label: string;
+  score?: number;
+  description?: string;
+  codingIssueOption?: number;
+  [key: string]: unknown;
+}
+
 @Component({
   selector: 'coding-box-coding-jobs',
   templateUrl: './coding-jobs.component.html',
@@ -146,15 +156,21 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
               assignedVariableBundles: job.assignedVariableBundles ?? job.variableBundles ?? []
             }));
 
-            // Load hasIssues information for each job
-            for (const job of processedData) {
-              try {
-                // Note: We'll need to add a backend endpoint to check hasIssues
-                // For now, we'll set it to false as a placeholder
+            const jobIds = processedData.map(job => job.id);
+            try {
+              const bulkProgressResult = await this.backendService.getBulkCodingProgress(workspaceId, jobIds).toPromise();
+
+              processedData.forEach(job => {
+                const progressResult = bulkProgressResult?.[job.id];
+                job.hasIssues = progressResult ? Object.values(progressResult as Record<string, SavedCode>).some(progress => progress && typeof progress === 'object' && 'id' in progress &&
+                  ((typeof progress.id === 'number' && progress.id < 0) ||
+                   (progress.codingIssueOption !== null && progress.codingIssueOption !== undefined))
+                ) : false;
+              });
+            } catch (error) {
+              processedData.forEach(job => {
                 job.hasIssues = false;
-              } catch (error) {
-                job.hasIssues = false;
-              }
+              });
             }
 
             this.originalData = [...processedData];
@@ -172,9 +188,8 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
         });
       },
       error: () => {
-        // Still load coding jobs even if variables fail to load
         this.backendService.getCodingJobs(workspaceId).subscribe({
-          next: response => {
+          next: async response => {
             this.coderNamesByJobId.clear();
             const processedData = response.data.map(job => ({
               ...job,
@@ -183,13 +198,30 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
               assignedVariableBundles: job.assignedVariableBundles ?? job.variableBundles ?? []
             }));
 
+            const fallbackJobIds = processedData.map(job => job.id);
+            try {
+              const fallbackBulkProgressResult = await this.backendService.getBulkCodingProgress(workspaceId, fallbackJobIds).toPromise();
+
+              processedData.forEach(job => {
+                const progressResult = fallbackBulkProgressResult?.[job.id];
+                job.hasIssues = progressResult ? Object.values(progressResult as Record<string, SavedCode>).some(progress => progress && typeof progress === 'object' && 'id' in progress &&
+                  ((typeof progress.id === 'number' && progress.id < 0) ||
+                   (progress.codingIssueOption !== null && progress.codingIssueOption !== undefined))
+                ) : false;
+              });
+            } catch (fallbackError) {
+              // If bulk fetch fails, fall back to individual calls as a last resort
+              processedData.forEach(job => {
+                job.hasIssues = false;
+              });
+            }
+
             this.originalData = [...processedData];
             this.dataSource.data = processedData;
             this.updateCoderNamesMap(processedData);
 
             this.jobDetailsCache.clear();
             this.isLoading = false;
-            // Apply current filter after loading
             this.onTrainingFilterChange();
           },
           error: () => {
@@ -202,7 +234,6 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
   }
 
   applyFilter(): void {
-    // Apply all filters since text search is removed
     this.applyAllFilters();
   }
 
@@ -372,36 +403,6 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
     });
   }
 
-  editCodingJob(job: CodingJob): void {
-    const dialogRef = this.dialog.open(CodingJobDefinitionDialogComponent, {
-      width: '1200px',
-      data: {
-        codingJob: job,
-        isEdit: true,
-        preloadedVariables: this.preloadedVariables || []
-      } as CodingJobDefinitionDialogData
-    });
-
-    dialogRef.afterClosed().subscribe(editResult => {
-      if (editResult) {
-        const workspaceId = this.appService.selectedWorkspaceId;
-        if (!workspaceId) {
-          this.snackBar.open('Kein Workspace ausgewählt', 'Schließen', { duration: 3000 });
-          return;
-        }
-        this.backendService.updateCodingJob(workspaceId, editResult.id, editResult).subscribe({
-          next: updatedJob => {
-            this.loadCodingJobs();
-            this.snackBar.open(`Kodierjob "${updatedJob.name}" wurde aktualisiert`, 'Schließen', { duration: 3000 });
-          },
-          error: () => {
-            this.snackBar.open(`Fehler beim Aktualisieren von Kodierjob "${editResult.name}"`, 'Schließen', { duration: 3000 });
-          }
-        });
-      }
-    });
-  }
-
   private getNextId(): number {
     const jobs = this.dataSource.data;
     return jobs.length > 0 ?
@@ -507,7 +508,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
         this.appService
           .createToken(this.appService.selectedWorkspaceId, this.appService.loggedUser?.sub || '', 1)
           .subscribe(token => {
-            const bookletKey = `replay_booklet_${selectedJob.id}_${Date.now()}`;
+            const bookletKey = `replay_booklet_${selectedJob.id}`;
             try {
               localStorage.setItem(bookletKey, JSON.stringify(bookletData));
             } catch (e) {
@@ -732,7 +733,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
                 this.appService
                   .createToken(this.appService.selectedWorkspaceId, this.appService.loggedUser?.sub || '', 1)
                   .subscribe(token => {
-                    const bookletKey = `replay_booklet_${restartedJob.id}_${Date.now()}`;
+                    const bookletKey = `replay_booklet_${restartedJob.id}`;
                     try {
                       localStorage.setItem(bookletKey, JSON.stringify(bookletData));
                     } catch (e) {
@@ -909,7 +910,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
           this.snackBar.open(`Ergebnisse erfolgreich angewendet: ${result.updatedResponsesCount} Antworten aktualisiert`, 'Schließen', { duration: 3000 });
           this.loadCodingJobs(); // Refresh the list to show updated status
         } else {
-          this.snackBar.open(`Fehler beim Anwenden der Ergebnisse: ${result.message}`, 'Schließen', { duration: 5000 });
+          this.snackBar.open(`Fehler beim Anwenden der Ergebnisse: ${this.translateService.instant(result.messageKey, result.messageParams || {})}`, 'Schließen', { duration: 5000 });
         }
       },
       error: error => {

@@ -1,12 +1,20 @@
 import {
-  Component, Inject, inject, OnInit,
-  ViewChild
+  Component, Inject, OnInit, OnDestroy,
+  ViewChild,
+  inject,
+  HostListener
 } from '@angular/core';
-import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
-import { TranslateModule } from '@ngx-translate/core';
+import { Subject, debounceTime } from 'rxjs';
+import {
+  MAT_DIALOG_DATA, MatDialogModule, MatDialogRef, MatDialog
+} from '@angular/material/dialog';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { MatTableModule, MatTableDataSource } from '@angular/material/table';
 import { MatSort, MatSortModule } from '@angular/material/sort';
-import { MatPaginator, MatPaginatorIntl, MatPaginatorModule } from '@angular/material/paginator';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
+import { FormsModule } from '@angular/forms';
+
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
@@ -14,10 +22,13 @@ import { CommonModule, NgClass } from '@angular/common';
 
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTooltip } from '@angular/material/tooltip';
+import { Router } from '@angular/router';
 import { BackendService } from '../../../../services/backend.service';
-import { SearchFilterComponent } from '../../../../shared/search-filter/search-filter.component';
+import { AppService } from '../../../../services/app.service';
 import { CodingJob } from '../../../models/coding-job.model';
-import { GermanPaginatorIntl } from '../../../../shared/services/german-paginator-intl.service';
+import { SchemeEditorDialogComponent } from '../../scheme-editor-dialog/scheme-editor-dialog.component';
+
+import { UnitsReplay, UnitsReplayUnit } from '../../../../services/units-replay.service';
 
 interface CodingResult {
   unitName: string;
@@ -44,24 +55,25 @@ interface CodingResult {
     MatDialogModule,
     MatTableModule,
     MatSortModule,
-    MatPaginatorModule,
+    MatFormFieldModule,
+    MatInputModule,
+    FormsModule,
     MatProgressSpinner,
     MatButtonModule,
     MatIcon,
     NgClass,
-    SearchFilterComponent,
     MatTooltip
-  ],
-  providers: [
-    { provide: MatPaginatorIntl, useClass: GermanPaginatorIntl }
   ]
 })
-export class CodingJobResultDialogComponent implements OnInit {
+export class CodingJobResultDialogComponent implements OnInit, OnDestroy {
   @ViewChild(MatSort) sort!: MatSort;
-  @ViewChild(MatPaginator) paginator!: MatPaginator;
 
   private backendService = inject(BackendService);
+  private appService = inject(AppService);
   private snackBar = inject(MatSnackBar);
+  private translateService = inject(TranslateService);
+  private router = inject(Router);
+  private dialog = inject(MatDialog);
 
   isLoading = true;
   dataSource = new MatTableDataSource<CodingResult>([]);
@@ -71,8 +83,17 @@ export class CodingJobResultDialogComponent implements OnInit {
     'variableId',
     'code',
     'score',
-    'codingIssueOption'
+    'codingIssueOption',
+    'actions'
   ];
+
+  private refreshSubject = new Subject<void>();
+  private isDestroyed = false;
+
+  unitNameFilter = '';
+  variableFilter = '';
+  codingIssueFilter = '';
+  testPersonFilter = '';
 
   constructor(
     public dialogRef: MatDialogRef<CodingJobResultDialogComponent>,
@@ -81,11 +102,31 @@ export class CodingJobResultDialogComponent implements OnInit {
 
   ngOnInit(): void {
     this.loadCodingResults();
+    this.setupAutoRefresh();
+  }
+
+  ngOnDestroy(): void {
+    this.isDestroyed = true;
+    this.refreshSubject.complete();
+  }
+
+  private setupAutoRefresh(): void {
+    this.refreshSubject.pipe(debounceTime(1000)).subscribe(() => {
+      if (!this.isDestroyed) {
+        this.loadCodingResults();
+      }
+    });
+  }
+
+  @HostListener('window:focus', ['$event'])
+  onWindowFocus(): void {
+    this.refreshSubject.next();
   }
 
   ngAfterViewInit(): void {
     this.dataSource.sort = this.sort;
-    this.dataSource.paginator = this.paginator;
+    this.dataSource.filterPredicate = this.createFilterPredicate();
+    this.applyFilters();
   }
 
   loadCodingResults(): void {
@@ -137,8 +178,59 @@ export class CodingJobResultDialogComponent implements OnInit {
     });
   }
 
-  applyFilter(filterValue: string): void {
-    this.dataSource.filter = filterValue.trim().toLowerCase();
+  private createFilterPredicate(): (data: CodingResult, filter: string) => boolean {
+    return (data: CodingResult, filter: string): boolean => {
+      const filters = JSON.parse(filter);
+
+      // Check unit name filter (includes unitName and unitAlias)
+      const unitFilter = filters.unitName?.toLowerCase() || '';
+      if (unitFilter && !data.unitName.toLowerCase().includes(unitFilter) &&
+          !(data.unitAlias && data.unitAlias.toLowerCase().includes(unitFilter))) {
+        return false;
+      }
+
+      // Check variable filter
+      const variableFilter = filters.variable?.toLowerCase() || '';
+      if (variableFilter && !data.variableId.toLowerCase().includes(variableFilter)) {
+        return false;
+      }
+
+      // Check coding issue filter
+      const codingIssueFilter = filters.codingIssue?.toLowerCase() || '';
+      if (codingIssueFilter && !(data.codingIssueOptionLabel && data.codingIssueOptionLabel.toLowerCase().includes(codingIssueFilter))) {
+        return false;
+      }
+
+      // Check test person filter
+      const testPersonFilter = filters.testPerson?.toLowerCase() || '';
+      return !(testPersonFilter && !data.testPerson.toLowerCase().includes(testPersonFilter));
+    };
+  }
+
+  applyFilters(): void {
+    const filterObj = {
+      unitName: this.unitNameFilter,
+      variable: this.variableFilter,
+      codingIssue: this.codingIssueFilter,
+      testPerson: this.testPersonFilter
+    };
+    this.dataSource.filter = JSON.stringify(filterObj);
+  }
+
+  onUnitNameFilterChange(): void {
+    this.applyFilters();
+  }
+
+  onVariableFilterChange(): void {
+    this.applyFilters();
+  }
+
+  onCodingIssueFilterChange(): void {
+    this.applyFilters();
+  }
+
+  onTestPersonFilterChange(): void {
+    this.applyFilters();
   }
 
   applyCodingResults(): void {
@@ -146,7 +238,7 @@ export class CodingJobResultDialogComponent implements OnInit {
     this.backendService.applyCodingResults(this.data.workspaceId, this.data.codingJob.id).subscribe({
       next: result => {
         this.isLoading = false;
-        let message = result.message;
+        let message = this.translateService.instant(result.messageKey, result.messageParams || {});
         if (result.success) {
           if (result.updatedResponsesCount > 0) {
             message += `\n\nAktualisiert: ${result.updatedResponsesCount} Antworten`;
@@ -200,19 +292,38 @@ export class CodingJobResultDialogComponent implements OnInit {
   }
 
   isCodingIssueOption(result: CodingResult): boolean {
-    if (result.code === undefined || result.code === null) return false;
-    const codeNum = typeof result.code === 'number' ? result.code : parseInt(result.code.toString(), 10);
-    return codeNum < 0;
+    // Check for negative code (coding issue option as code) OR presence of coding issue option label
+    if (result.code !== undefined && result.code !== null) {
+      const codeNum = typeof result.code === 'number' ? result.code : parseInt(result.code.toString(), 10);
+      if (codeNum < 0) return true;
+    }
+    // Also check for codingIssueOptionLabel which indicates a coding issue option is set (even with a regular code)
+    return result.codingIssueOptionLabel !== null && result.codingIssueOptionLabel !== undefined;
+  }
+
+  isNewCodeNeeded(result: CodingResult): boolean {
+    // Check if this is specifically the "new-code-needed" coding issue (code -2)
+    if (result.code !== undefined && result.code !== null) {
+      const codeNum = typeof result.code === 'number' ? result.code : parseInt(result.code.toString(), 10);
+      return codeNum === -2;
+    }
+    // Also check if the label indicates new code is needed
+    return result.codingIssueOptionLabel === this.getCodingIssueOption(-2);
   }
 
   getCodingIssueOption(codingIssueOptionId: number): string {
-    const mapping: { [key: number]: string } = {
-      [-1]: 'Code-Vergabe unsicher',
-      [-2]: 'Neuer Code nötig',
-      [-3]: 'Ungültig (Spaßantwort)',
-      [-4]: 'Technische Probleme'
+    const keyMapping: { [key: number]: string } = {
+      [-1]: 'code-selector.coding-issue-options.code-assignment-uncertain',
+      [-2]: 'code-selector.coding-issue-options.new-code-needed',
+      [-3]: 'code-selector.coding-issue-options.invalid-joke-answer',
+      [-4]: 'code-selector.coding-issue-options.technical-problems'
     };
-    return mapping[codingIssueOptionId] || 'Unknown';
+
+    const translationKey = keyMapping[codingIssueOptionId];
+    if (translationKey) {
+      return this.translateService.instant(translationKey);
+    }
+    return 'Unknown';
   }
 
   getCellClasses(result: CodingResult): string {
@@ -220,5 +331,128 @@ export class CodingJobResultDialogComponent implements OnInit {
       return 'uncertain';
     }
     return this.hasCode(result) ? 'coded' : 'not-coded';
+  }
+
+  reviewCodingResult(result: CodingResult): void {
+    if (!result || !this.isCodingIssueOption(result)) {
+      this.snackBar.open('Nur Kodierungs-Hinweis-Fälle können überprüft werden', 'Schließen', { duration: 3000 });
+      return;
+    }
+
+    const loadingSnackBar = this.snackBar.open('Öffne Kodierungs-Interface...', '', { duration: 3000 });
+
+    this.appService.createToken(this.data.workspaceId, this.appService.loggedUser?.sub || '', 3600).subscribe({
+      next: (token: string) => {
+        loadingSnackBar.dismiss();
+
+        const testPerson = `${result.personLogin}@${result.personCode}`;
+
+        const reviewUnit: UnitsReplayUnit = {
+          id: 0, // Not needed for replay
+          name: result.unitName,
+          alias: result.unitAlias,
+          bookletId: 0, // Not needed for replay
+          testPerson: testPerson,
+          variableId: result.variableId,
+          variableAnchor: result.variableId
+        };
+
+        const unitsData: UnitsReplay = {
+          id: this.data.codingJob.id, // Use original coding job ID
+          name: `${this.data.codingJob.name} - Review: ${result.variableId}`,
+          units: [reviewUnit],
+          currentUnitIndex: 0
+        };
+
+        const serializedUnits = this.serializeUnitsData(unitsData);
+
+        const queryParams = {
+          auth: token,
+          mode: 'coding',
+          unitsData: serializedUnits
+        };
+
+        const unitName = result.unitAlias || result.unitName || '';
+        const url = this.router
+          .serializeUrl(
+            this.router.createUrlTree(
+              [`replay/${testPerson}@${result.bookletName}/${unitName}/0/${result.variableId}`],
+              { queryParams: queryParams })
+          );
+
+        window.open(`#/${url}`, '_blank');
+      },
+      error: () => {
+        loadingSnackBar.dismiss();
+        this.snackBar.open('Fehler beim Erstellen des Authentisierungs-Tokens', 'Schließen', { duration: 3000 });
+      }
+    });
+  }
+
+  editCodingScheme(result: CodingResult): void {
+    if (!result || !this.isNewCodeNeeded(result)) {
+      this.snackBar.open('Nur "Neuer Code erforderlich" Fälle können bearbeitet werden', 'Schließen', { duration: 3000 });
+      return;
+    }
+
+    // Use unitAlias as coding scheme reference, fallback to unitName if not available
+    const codingSchemeRef = result.unitAlias;
+    if (!codingSchemeRef) {
+      this.snackBar.open('Kein Kodierungsschema-Referenz gefunden für diese Einheit', 'Schließen', { duration: 3000 });
+      return;
+    }
+
+    // Fetch the coding scheme content
+    this.backendService.getCodingSchemeFile(this.data.workspaceId, codingSchemeRef).subscribe({
+      next: schemeFile => {
+        if (!schemeFile) {
+          this.snackBar.open('Kodierungsschema-Datei nicht gefunden', 'Schließen', { duration: 3000 });
+          return;
+        }
+
+        // Decode base64 scheme content
+        let schemeContent = schemeFile.base64Data;
+        try {
+          schemeContent = atob(schemeFile.base64Data);
+        } catch (error) {
+          // If decoding fails, use as-is
+          schemeContent = schemeFile.base64Data;
+        }
+
+        // Open scheme editor dialog
+        const dialogRef = this.dialog.open(SchemeEditorDialogComponent, {
+          width: '90vw',
+          height: '90vh',
+          maxWidth: '1200px',
+          data: {
+            workspaceId: this.data.workspaceId,
+            fileId: codingSchemeRef, // Use the reference as fileId for saving logic
+            fileName: schemeFile.filename,
+            content: schemeContent
+          }
+        });
+
+        // Handle dialog close
+        dialogRef.afterClosed().subscribe(dialogResult => {
+          if (dialogResult === true) {
+            // Scheme was saved successfully, refresh the results
+            this.snackBar.open('Kodierungsschema erfolgreich aktualisiert', 'Schließen', { duration: 3000 });
+            this.loadCodingResults();
+          }
+        });
+      },
+      error: () => {
+        this.snackBar.open('Fehler beim Laden des Kodierungsschemas', 'Schließen', { duration: 3000 });
+      }
+    });
+  }
+
+  private serializeUnitsData(unitsData: UnitsReplay): string {
+    try {
+      const jsonString = JSON.stringify(unitsData);
+      return btoa(jsonString);
+    } catch (error) {
+      return '';
+    }
   }
 }

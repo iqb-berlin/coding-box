@@ -37,9 +37,7 @@ export class ReplayCodingService {
   isCodingJobPaused: boolean = false;
   isSubmittingJob: boolean = false;
   isResumingJob: boolean = false;
-  isCodingJobFinalized: boolean = false; // true when status is 'results_applied'
-
-  // Coding display options
+  isCodingJobFinalized: boolean = false;
   showScore = false;
   allowComments = true;
   suppressGeneralInstructions = false;
@@ -80,7 +78,7 @@ export class ReplayCodingService {
 
       Object.keys(savedProgress).forEach(compositeKey => {
         const partialCode = savedProgress[compositeKey];
-        if (partialCode?.id && partialCode.id !== -1) {
+        if (partialCode?.id !== null && partialCode?.id !== undefined) {
           const fullCode = this.findCodeById(partialCode.id);
           const toStore: SavedCode = fullCode ? this.convertCodeToSavedCode(fullCode) : partialCode;
           this.selectedCodes.set(compositeKey, toStore);
@@ -285,7 +283,6 @@ export class ReplayCodingService {
   }
 
   getOpenCount(): number {
-    // Open functionality removed - always return 0
     return 0;
   }
 
@@ -298,6 +295,12 @@ export class ReplayCodingService {
     const compositeKey = this.generateCompositeKey(testPerson, unitId, variableId);
     const selectedCode = this.selectedCodes.get(compositeKey);
     return selectedCode ? selectedCode.id : null;
+  }
+
+  getPreSelectedCodingIssueOptionId(testPerson: string, unitId: string, variableId: string): number | null {
+    const compositeKey = this.generateCompositeKey(testPerson, unitId, variableId);
+    const selectedCode = this.selectedCodes.get(compositeKey);
+    return selectedCode && selectedCode.codingIssueOption ? selectedCode.codingIssueOption : null;
   }
 
   getNotes(testPerson: string, unitId: string, variableId: string): string {
@@ -351,7 +354,7 @@ export class ReplayCodingService {
 
   async pauseCodingJob(workspaceId: number, jobId: number): Promise<void> {
     if (!jobId || !workspaceId) return;
-
+    if (this.isCodingJobCompleted) return;
     this.isPausingJob = true;
 
     try {
@@ -385,6 +388,14 @@ export class ReplayCodingService {
     try {
       await this.updateCodingJobStatus(workspaceId, jobId, 'completed');
       this.isSubmittingJob = false;
+
+      const bookletKey = `replay_booklet_${jobId}`;
+      try {
+        localStorage.removeItem(bookletKey);
+      } catch (e) {
+        // Ignore cleanup errors
+      }
+
       this.snackBar.open(this.translate.instant('replay.coding-job-submitted-successfully'), this.translate.instant('replay.close'), {
         duration: 3000,
         panelClass: ['snackbar-success']

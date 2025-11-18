@@ -71,8 +71,9 @@ export class CoderTrainingService {
       return responses;
     }
 
-    const shuffled = [...responses].sort(() => Math.random() - 0.5);
-    return shuffled.slice(0, sampleCount);
+    // Sort by response ID for deterministic, consistent ordering across all coders
+    const sorted = [...responses].sort((a, b) => a.responseId - b.responseId);
+    return sorted.slice(0, sampleCount);
   }
 
   async generateCoderTrainingPackages(
@@ -82,6 +83,73 @@ export class CoderTrainingService {
   ): Promise<TrainingPackage[]> {
     this.logger.log(`Generating coder training packages for workspace ${workspaceId} with ${selectedCoders.length} coders and ${variableConfigs.length} variable configs`);
 
+    // Pre-sample responses for each variable configuration to ensure consistency across all coders
+    const sampledResponsesByConfig: Map<string, CoderTrainingResponse[]> = new Map();
+
+    for (const config of variableConfigs) {
+      const variableId = config.variableId;
+      const unitId = config.unitId;
+      const sampleCount = config.sampleCount;
+      const configKey = `${unitId}:${variableId}`;
+
+      this.logger.log(`Querying CODING_INCOMPLETE responses for unit ${unitId}, variable ${variableId}`);
+
+      const responses = await this.responseRepository.find({
+        where: {
+          status_v1: statusStringToNumber('CODING_INCOMPLETE'),
+          variableid: variableId
+        },
+        relations: ['unit', 'unit.booklet', 'unit.booklet.person', 'unit.booklet.bookletinfo'],
+        select: {
+          id: true,
+          value: true,
+          variableid: true,
+          status_v1: true,
+          code_v1: true,
+          score_v1: true,
+          unit: {
+            id: true,
+            name: true,
+            alias: true,
+            booklet: {
+              id: true,
+              person: {
+                id: true,
+                login: true,
+                code: true,
+                group: true
+              },
+              bookletinfo: {
+                id: true,
+                name: true
+              }
+            }
+          }
+        }
+      });
+
+      const unitResponses = responses.filter(r => r.unit?.alias === unitId);
+      this.logger.log(`Found ${unitResponses.length} CODING_INCOMPLETE responses for unit ${unitId}, variable ${variableId}`);
+      const transformedResponses: CoderTrainingResponse[] = unitResponses.map(r => ({
+        responseId: r.id,
+        unitAlias: r.unit?.alias || '',
+        variableId: r.variableid,
+        unitName: r.unit?.name || '',
+        value: r.value,
+        personLogin: r.unit?.booklet?.person?.login || '',
+        personCode: r.unit?.booklet?.person?.code || '',
+        personGroup: r.unit?.booklet?.person?.group || '',
+        bookletName: r.unit?.booklet?.bookletinfo?.name || '',
+        variable: r.variableid
+      }));
+
+      const sampledResponses = this.sampleResponses(transformedResponses, sampleCount);
+      sampledResponsesByConfig.set(configKey, sampledResponses);
+
+      this.logger.log(`Sampled ${sampledResponses.length} consistent responses for unit ${unitId}, variable ${variableId}`);
+    }
+
+    // Create training packages for each coder using the pre-sampled responses
     const result: TrainingPackage[] = [];
 
     for (const coder of selectedCoders) {
@@ -89,68 +157,12 @@ export class CoderTrainingService {
       const coderName = coder.name;
       const coderResponses: CoderTrainingResponse[] = [];
 
-      this.logger.log(`Processing coder ${coderName} (ID: ${coderId})`);
+      this.logger.log(`Assigning consistent training samples to coder ${coderName} (ID: ${coderId})`);
 
       for (const config of variableConfigs) {
-        const variableId = config.variableId;
-        const unitId = config.unitId;
-        const sampleCount = config.sampleCount;
-
-        this.logger.log(`Querying CODING_INCOMPLETE responses for unit ${unitId}, variable ${variableId}`);
-
-        const responses = await this.responseRepository.find({
-          where: {
-            status_v1: statusStringToNumber('CODING_INCOMPLETE'),
-            variableid: variableId
-          },
-          relations: ['unit', 'unit.booklet', 'unit.booklet.person', 'unit.booklet.bookletinfo'],
-          select: {
-            id: true,
-            value: true,
-            variableid: true,
-            status_v1: true,
-            code_v1: true,
-            score_v1: true,
-            unit: {
-              id: true,
-              name: true,
-              alias: true,
-              booklet: {
-                id: true,
-                person: {
-                  id: true,
-                  login: true,
-                  code: true,
-                  group: true
-                },
-                bookletinfo: {
-                  id: true,
-                  name: true
-                }
-              }
-            }
-          }
-        });
-
-        const unitResponses = responses.filter(r => r.unit?.alias === unitId);
-        this.logger.log(`Found ${unitResponses.length} CODING_INCOMPLETE responses for unit ${unitId}, variable ${variableId}`);
-        const transformedResponses: CoderTrainingResponse[] = unitResponses.map(r => ({
-          responseId: r.id,
-          unitAlias: r.unit?.alias || '',
-          variableId: r.variableid,
-          unitName: r.unit?.name || '',
-          value: r.value,
-          personLogin: r.unit?.booklet?.person?.login || '',
-          personCode: r.unit?.booklet?.person?.code || '',
-          personGroup: r.unit?.booklet?.person?.group || '',
-          bookletName: r.unit?.booklet?.bookletinfo?.name || '',
-          variable: r.variableid
-        }));
-
-        const sampledResponses = this.sampleResponses(transformedResponses, sampleCount);
+        const configKey = `${config.unitId}:${config.variableId}`;
+        const sampledResponses = sampledResponsesByConfig.get(configKey)!;
         coderResponses.push(...sampledResponses);
-
-        this.logger.log(`Selected ${sampledResponses.length} sample responses for unit ${unitId}, variable ${variableId}`);
       }
 
       result.push({
@@ -159,10 +171,10 @@ export class CoderTrainingService {
         responses: coderResponses
       });
 
-      this.logger.log(`Generated training package for coder ${coderName} with ${coderResponses.length} responses`);
+      this.logger.log(`Generated consistent training package for coder ${coderName} with ${coderResponses.length} responses`);
     }
 
-    this.logger.log(`Completed generating coder training packages. Total packages: ${result.length}`);
+    this.logger.log(`Completed generating consistent coder training packages. Total packages: ${result.length}`);
     return result;
   }
 

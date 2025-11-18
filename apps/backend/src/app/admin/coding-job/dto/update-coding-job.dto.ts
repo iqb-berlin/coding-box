@@ -5,6 +5,7 @@ import {
   IsArray,
   IsEnum,
   IsNumber,
+  IsBoolean,
   ValidateNested
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -140,4 +141,31 @@ export class UpdateCodingJobDto {
   @IsNumber()
   @IsOptional()
     doubleCodingPercentage?: number;
+
+  @ApiProperty({
+    description: 'Whether to show scores in the code selector',
+    example: true,
+    required: false
+  })
+  @IsBoolean()
+  @IsOptional()
+    showScore?: boolean;
+
+  @ApiProperty({
+    description: 'Whether to allow comments in the code selector',
+    example: true,
+    required: false
+  })
+  @IsBoolean()
+  @IsOptional()
+    allowComments?: boolean;
+
+  @ApiProperty({
+    description: 'Whether to suppress general instructions in the code selector',
+    example: false,
+    required: false
+  })
+  @IsBoolean()
+  @IsOptional()
+    suppressGeneralInstructions?: boolean;
 }

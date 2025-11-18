@@ -404,6 +404,10 @@ export class TestPersonCodingComponent implements OnInit {
     return parts.join(' ');
   }
 
+  deselectAllGroups(): void {
+    this.selectedGroups = [];
+  }
+
   truncateText(text: string, maxLength: number): string {
     if (!text) return '';
     return text.length > maxLength ? `${text.substring(0, maxLength)}...` : text;

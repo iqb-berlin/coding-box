@@ -96,6 +96,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   tableCheckboxSelection = new SelectionModel<FilesInListDto>(true, []);
   isLoading = false;
   isValidating = false;
+  isDownloadingAllFiles = false;
   selectedFileType: string = '';
   selectedFileSize: string = '';
   fileTypes: string[] = [];
@@ -258,7 +259,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   }
 
   downloadAllFilesAsZip(): void {
-    this.isLoading = true;
+    this.isDownloadingAllFiles = true;
     this.backendService.downloadWorkspaceFilesAsZip(this.appService.selectedWorkspaceId).subscribe({
       next: (blob: Blob) => {
         const url = window.URL.createObjectURL(blob);
@@ -269,7 +270,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
         anchor.click();
         document.body.removeChild(anchor);
         window.URL.revokeObjectURL(url);
-        this.isLoading = false;
+        this.isDownloadingAllFiles = false;
 
         this.snackBar.open(
           'ZIP-Datei wurde erfolgreich heruntergeladen.',
@@ -278,7 +279,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
         );
       },
       error: () => {
-        this.isLoading = false;
+        this.isDownloadingAllFiles = false;
         this.snackBar.open(
           'Fehler beim Herunterladen der ZIP-Datei.',
           this.translate.instant('error'),

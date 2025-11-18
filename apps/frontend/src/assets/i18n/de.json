@@ -545,9 +545,9 @@
     "navigate-dialog": {
       "title": "Kodierte Fälle navigieren",
       "position": "Position",
-      "case-number-variable": "Fall Nr. Variable",
+      "case-number-variable": "Variable",
       "given-code": "Gegebener Code",
-      "comments": "Kommentare",
+      "comments": "Kommentar",
       "close": "Schließen",
       "no-coded-units": "Keine kodierten Einheiten gefunden."
     }
@@ -560,7 +560,13 @@
     "score-label": "Bewertung:",
     "no-codes-found": "Keine Codes gefunden für Variable",
     "coder-notes": "Notiz zu diesem Kodierfall",
-    "coder-notes-placeholder": "Notiz zu diesem Kodierfall"
+    "coder-notes-placeholder": "Notiz zu diesem Kodierfall",
+    "coding-issue-options": {
+      "code-assignment-uncertain": "Code-Vergabe unsicher",
+      "new-code-needed": "Neuer Code nötig",
+      "invalid-joke-answer": "Ungültig (Spaßantwort)",
+      "technical-problems": "Technische Probleme"
+    }
   },
 
   "ws-settings": {
@@ -886,6 +892,7 @@
     },
     "select-groups-label": "Testpersonengruppen auswählen",
     "select-groups-hint": "Wählen Sie eine oder mehrere Gruppen zum Kodieren aus",
+    "deselect-all-groups": "Alle abwählen",
     "loading-groups": "Gruppen werden geladen...",
     "no-groups": "Keine Gruppen verfügbar",
     "code-selected-groups": "Ausgewählte Gruppen kodieren",
@@ -1226,6 +1233,7 @@
     "title": "Job-Definitionen",
     "create-new": "Neue Definition erstellen",
     "loading": "Lade Job-Definitionen...",
+    "bulk-creation-in-progress": "Kodier-Jobs werden erstellt...",
     "table-headers": {
       "id": "ID",
       "status": "Status",
@@ -1361,5 +1369,18 @@
     "coding-complete": "CODING_COMPLETE:",
     "invalid": "INVALID:",
     "coding-error": "CODING_ERROR:"
+  },
+
+  "coding-results": {
+    "apply": {
+      "error": {
+        "not-completed": "Der Kodierungsauftrag muss abgeschlossen sein, bevor Ergebnisse angewendet werden können. Aktueller Status: {{status}}",
+        "uncertain-issues-present": "Ergebnisse können nicht angewendet werden, da {{count}} ungewisse Kodierreaktionen (Typ -1 oder -2) vorhanden sind. Bitte überprüfen Sie diese manuell zuerst."
+      },
+      "success": {
+        "no-responses": "Keine Antworten zu aktualisieren. Alle Kodierungsergebnisse erfordern eine manuelle Überprüfung.",
+        "bulk": "Kodierungsergebnisse erfolgreich auf {{count}} Antworten angewendet ({{skipped}} für manuelle Überprüfung übersprungen)."
+      }
+    }
   }
 }

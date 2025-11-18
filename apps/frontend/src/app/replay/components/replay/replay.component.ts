@@ -168,8 +168,6 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
               }
             } catch (e) {
               // ignore parse errors
-            } finally {
-              try { localStorage.removeItem(key); } catch { /* empty */ }
             }
           }
 
@@ -732,6 +730,10 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     return this.codingService.getPreSelectedCodeId(this.testPerson, this.unitId, variableId);
   }
 
+  getPreSelectedCodingIssueOptionId(variableId: string): number | null {
+    return this.codingService.getPreSelectedCodingIssueOptionId(this.testPerson, this.unitId, variableId);
+  }
+
   pauseCodingJob(): void {
     if (this.codingService.codingJobId) {
       this.codingService.pauseCodingJob(this.workspaceId, this.codingService.codingJobId);
@@ -779,7 +781,8 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     };
 
     const dialogRef = this.dialog.open(NavigateCodingCasesDialogComponent, {
-      width: '800px',
+      width: '1200px',
+      height: '80vh',
       data: dialogData
     });
 

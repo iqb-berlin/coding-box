@@ -2,7 +2,8 @@ import {
   Component,
   OnDestroy,
   OnInit,
-  inject
+  inject,
+  ViewChild
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateService, TranslateModule } from '@ngx-translate/core';
@@ -50,6 +51,9 @@ import { CoderTrainingsListComponent } from '../coder-trainings-list/coder-train
   ]
 })
 export class CodingManagementManualComponent implements OnInit, OnDestroy {
+  @ViewChild(CodingJobsComponent) codingJobsComponent?: CodingJobsComponent;
+  @ViewChild(CodingJobDefinitionsComponent) codingJobDefinitionsComponent?: CodingJobDefinitionsComponent;
+
   private testPersonCodingService = inject(TestPersonCodingService);
   private backendService = inject(BackendService);
   private appService = inject(AppService);
@@ -662,6 +666,12 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
   closeCoderTraining(): void {
     this.showCoderTraining = false;
+  }
+
+  reloadCodingJobsList(): void {
+    if (this.codingJobsComponent) {
+      this.codingJobsComponent.loadCodingJobs();
+    }
   }
 
   private loadCodingProgressOverview(): void {
