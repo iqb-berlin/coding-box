@@ -1153,7 +1153,7 @@ ${bookletRefs}
         structured_data: structuredData
       });
 
-      await this.fileUploadRepository.save(fileUpload);
+      await this.fileUploadRepository.upsert(fileUpload, ['file_id', 'workspace_id']);
       this.logger.log(`Successfully processed octet-stream file: ${file.originalname} as ${fileType}`);
     } catch (error) {
       this.logger.error(`Error processing octet-stream file ${file.originalname}: ${error.message}`, error.stack);

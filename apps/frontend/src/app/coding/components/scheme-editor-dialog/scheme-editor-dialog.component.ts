@@ -207,71 +207,48 @@ export class SchemeEditorDialogComponent implements OnInit {
       return;
     }
 
+    // Always save to the same location as the scheme was loaded from: {fileId}.VOCS
+    const schemeFilename = `${this.data.fileId}.VOCS`;
     this.backendService.getFilesList(this.data.workspaceId, 1, 10000, 'Resource')
       .subscribe({
         next: response => {
-          if (response.data && response.data.length > 0) {
-            const vocsFiles = response.data.filter(file => file.filename.endsWith('.VOCS'));
+          // Find existing VOCS file with the same filename
+          const existingFile = response.data?.find(file => file.filename === schemeFilename && file.file_type === 'Resource');
 
-            if (vocsFiles.length > 0) {
-              // Delete the existing VOCS file
-              this.backendService.deleteFiles(this.data.workspaceId, [vocsFiles[0].id])
-                .subscribe(deleteSuccess => {
-                  if (deleteSuccess) {
-                    const blob = new Blob([this.unitScheme.scheme], { type: 'application/json' });
-                    const file = new File([blob], vocsFiles[0].filename, { type: 'application/json' });
-
-                    const formData = new FormData();
-                    formData.append('files', file);
-
-                    this.backendService.uploadTestFiles(this.data.workspaceId, formData)
-                      .subscribe(uploadSuccess => {
-                        if (uploadSuccess) {
-                          this.snackBar.open('Scheme saved successfully', 'Success', { duration: 3000 });
-                          this.dialogRef.close(true);
-                        } else {
-                          this.snackBar.open('Failed to save scheme', 'Error', { duration: 3000 });
-                        }
-                      });
-                  } else {
-                    this.snackBar.open('Failed to update scheme', 'Error', { duration: 3000 });
-                  }
-                });
-            } else {
-              this.saveOriginalFile();
-            }
+          if (existingFile) {
+            // Delete the existing file
+            this.backendService.deleteFiles(this.data.workspaceId, [existingFile.id])
+              .subscribe(deleteSuccess => {
+                if (deleteSuccess) {
+                  this.uploadSchemeFile(schemeFilename);
+                } else {
+                  this.snackBar.open('Failed to update scheme', 'Error', { duration: 3000 });
+                }
+              });
           } else {
-            this.saveOriginalFile();
+            this.uploadSchemeFile(schemeFilename);
           }
         },
         error: () => {
-          this.snackBar.open('Failed to fetch Resource files', 'Error', { duration: 3000 });
-          this.saveOriginalFile();
+          this.snackBar.open('Failed to fetch files list', 'Error', { duration: 3000 });
         }
       });
   }
 
-  private saveOriginalFile(): void {
-    this.backendService.deleteFiles(this.data.workspaceId, [+this.data.fileId])
-      .subscribe(deleteSuccess => {
-        if (deleteSuccess) {
-          const blob = new Blob([this.unitScheme.scheme], { type: 'application/json' });
-          const file = new File([blob], this.data.fileName, { type: 'application/json' });
+  private uploadSchemeFile(filename: string): void {
+    const blob = new Blob([this.unitScheme.scheme], { type: 'application/octet-stream' });
+    const file = new File([blob], filename, { type: 'application/octet-stream' });
 
-          const formData = new FormData();
-          formData.append('files', file);
+    const formData = new FormData();
+    formData.append('files', file);
 
-          this.backendService.uploadTestFiles(this.data.workspaceId, formData)
-            .subscribe(uploadSuccess => {
-              if (uploadSuccess) {
-                this.snackBar.open('Scheme saved successfully', 'Success', { duration: 3000 });
-                this.dialogRef.close(true);
-              } else {
-                this.snackBar.open('Failed to save scheme', 'Error', { duration: 3000 });
-              }
-            });
+    this.backendService.uploadTestFiles(this.data.workspaceId, formData)
+      .subscribe(uploadSuccess => {
+        if (uploadSuccess) {
+          this.snackBar.open('Scheme saved successfully', 'Success', { duration: 3000 });
+          this.dialogRef.close(true);
         } else {
-          this.snackBar.open('Failed to update scheme', 'Error', { duration: 3000 });
+          this.snackBar.open('Failed to save scheme', 'Error', { duration: 3000 });
         }
       });
   }
