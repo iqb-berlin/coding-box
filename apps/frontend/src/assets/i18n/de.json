@@ -1233,6 +1233,7 @@
     "title": "Job-Definitionen",
     "create-new": "Neue Definition erstellen",
     "loading": "Lade Job-Definitionen...",
+    "bulk-creation-in-progress": "Kodier-Jobs werden erstellt...",
     "table-headers": {
       "id": "ID",
       "status": "Status",
