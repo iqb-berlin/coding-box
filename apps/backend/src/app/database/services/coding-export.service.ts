@@ -118,7 +118,7 @@ export class CodingExportService {
       const testPersonMap = new Map<string, Map<string, { code: number | null; score: number | null }>>();
       const variableSet = new Set<string>();
       const testPersonList: string[] = [];
-      const personGroups = new Map<string, string>(); // Cache for person groups
+      const personGroups = new Map<string, string>();
 
       let processedCount = 0;
       let offset = 0;
@@ -128,7 +128,6 @@ export class CodingExportService {
 
         this.logger.log(`Processing batch ${Math.floor(offset / BATCH_SIZE) + 1}/${Math.ceil(totalCount / BATCH_SIZE)} (${batchSize} responses)`);
 
-        // Optimized query: Select only latest code directly in SQL and reduce selected fields
         const batchResponses = await this.responseRepository
           .createQueryBuilder('response')
           .leftJoin('response.unit', 'unit')
@@ -137,7 +136,6 @@ export class CodingExportService {
           .select([
             'response.id',
             'response.variableid',
-            // Use CASE to select latest code and score directly in SQL
             `CASE
               WHEN response.code_v3 IS NOT NULL THEN response.code_v3
               WHEN response.code_v2 IS NOT NULL THEN response.code_v2
@@ -199,7 +197,6 @@ export class CodingExportService {
         processedCount += batchResponses.length;
         offset += batchSize;
 
-        // Force garbage collection between batches if available
         if (global.gc) {
           global.gc();
         }
@@ -208,12 +205,9 @@ export class CodingExportService {
       this.logger.log(`Processed ${processedCount} responses total. Creating Excel file with ${testPersonList.length} test persons and ${variableSet.size} variables.`);
 
       const variables = Array.from(variableSet).sort();
-
-      // Set up headers
       const headers = ['Test Person Login', 'Test Person Code', 'Group', ...variables];
       worksheet.columns = headers.map(header => ({ header, key: header, width: 15 }));
 
-      // Add data rows
       for (const testPersonKey of testPersonList) {
         const [login, code] = testPersonKey.split('_');
         const personData = testPersonMap.get(testPersonKey)!;
@@ -258,7 +252,6 @@ export class CodingExportService {
     this.logger.log(`Exporting coding results by coder for workspace ${workspaceId}`);
 
     try {
-      // Get coding jobs with their assignments
       const codingJobs = await this.codingJobRepository.find({
         where: { workspace_id: workspaceId },
         relations: ['codingJobCoders', 'codingJobCoders.user', 'codingJobUnits', 'codingJobUnits.response', 'codingJobUnits.response.unit']
@@ -268,7 +261,6 @@ export class CodingExportService {
         throw new Error('No coding jobs found for this workspace');
       }
 
-      // Get coding job variables separately
       const jobIds = codingJobs.map(job => job.id);
       const codingJobVariables = await this.codingJobVariableRepository.find({
         where: { coding_job_id: In(jobIds) }
@@ -284,8 +276,6 @@ export class CodingExportService {
       });
 
       const workbook = new ExcelJS.Workbook();
-
-      // Group jobs by coder
       const coderJobs = new Map<string, CodingJob[]>();
 
       for (const job of codingJobs) {
@@ -334,6 +324,7 @@ export class CodingExportService {
               score_v3: true,
               unit: {
                 id: true,
+                name: true,
                 booklet: {
                   id: true,
                   person: {
@@ -351,6 +342,8 @@ export class CodingExportService {
             const person = response.unit?.booklet?.person;
             const testPersonKey = `${person?.login}_${person?.code}`;
             const variableId = response.variableid;
+            const unitName = response.unit?.name;
+            const compositeKey = unitName ? `${unitName}_${variableId}` : variableId;
             const latestCoding = this.getLatestCode(response);
 
             if (!testPersonMap.has(testPersonKey)) {
@@ -358,11 +351,11 @@ export class CodingExportService {
               testPersonList.push(testPersonKey);
             }
 
-            testPersonMap.get(testPersonKey)!.set(variableId, {
+            testPersonMap.get(testPersonKey)!.set(compositeKey, {
               code: latestCoding.code,
               score: latestCoding.score
             });
-            variableSet.add(variableId);
+            variableSet.add(compositeKey);
           }
         }
 
@@ -413,13 +406,11 @@ export class CodingExportService {
   async exportCodingResultsByVariable(workspaceId: number): Promise<Buffer> {
     this.logger.log(`Exporting coding results by variable for workspace ${workspaceId} (CODING_INCOMPLETE only)`);
 
-    // Memory safety limits - configurable via environment variables
     const MAX_WORKSHEETS = parseInt(process.env.EXPORT_MAX_WORKSHEETS || '100', 10);
     const MAX_RESPONSES_PER_WORKSHEET = parseInt(process.env.EXPORT_MAX_RESPONSES_PER_WORKSHEET || '10000', 10);
     const BATCH_SIZE = parseInt(process.env.EXPORT_BATCH_SIZE || '50', 10);
 
     try {
-      // First, get the list of CODING_INCOMPLETE variables
       const incompleteVariables = await this.getCodingIncompleteVariables(workspaceId);
 
       if (incompleteVariables.length === 0) {
