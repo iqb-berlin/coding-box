@@ -319,6 +319,15 @@ export class CodingJobService {
     if (updateCodingJobDto.missingsProfileId !== undefined) {
       codingJob.codingJob.missings_profile_id = updateCodingJobDto.missingsProfileId;
     }
+    if (updateCodingJobDto.showScore !== undefined) {
+      codingJob.codingJob.showScore = updateCodingJobDto.showScore;
+    }
+    if (updateCodingJobDto.allowComments !== undefined) {
+      codingJob.codingJob.allowComments = updateCodingJobDto.allowComments;
+    }
+    if (updateCodingJobDto.suppressGeneralInstructions !== undefined) {
+      codingJob.codingJob.suppressGeneralInstructions = updateCodingJobDto.suppressGeneralInstructions;
+    }
 
     const savedCodingJob = await this.codingJobRepository.save(codingJob.codingJob);
 
