@@ -18,8 +18,9 @@ export class JobDefinitionService {
     private codingJobService: CodingJobService
   ) {}
 
-  async createJobDefinition(createDto: CreateJobDefinitionDto): Promise<JobDefinition> {
+  async createJobDefinition(createDto: CreateJobDefinitionDto, workspaceId: number): Promise<JobDefinition> {
     const jobDefinition = this.jobDefinitionRepository.create({
+      workspace_id: workspaceId,
       status: createDto.status ?? 'draft',
       assigned_variables: createDto.assignedVariables,
       assigned_variable_bundles: createDto.assignedVariableBundles,
@@ -47,7 +48,7 @@ export class JobDefinitionService {
 
   async getJobDefinitions(workspaceId?: number): Promise<JobDefinition[]> {
     const whereClause = workspaceId ? {
-      ...(!workspaceId ? {} : {})
+      workspace_id: workspaceId
     } : {};
 
     return this.jobDefinitionRepository.find({
@@ -106,9 +107,20 @@ export class JobDefinitionService {
     await this.jobDefinitionRepository.remove(jobDefinition);
   }
 
-  async getApprovedJobDefinitions(): Promise<JobDefinition[]> {
+  async getApprovedJobDefinitions(workspaceId?: number): Promise<JobDefinition[]> {
+    if (workspaceId) {
+      return this.jobDefinitionRepository.find({
+        where: {
+          status: 'approved' as const,
+          workspace_id: workspaceId
+        },
+        order: { created_at: 'DESC' }
+      });
+    }
     return this.jobDefinitionRepository.find({
-      where: { status: 'approved' },
+      where: {
+        status: 'approved' as const
+      },
       order: { created_at: 'DESC' }
     });
   }
