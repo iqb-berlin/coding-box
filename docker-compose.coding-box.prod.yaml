@@ -27,6 +27,7 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_PREFIX: ${REDIS_PREFIX:-coding-box}
+      BACKEND_CALLBACK_BASE_PATH: auth/callback
     volumes:
       - "backend_vol:/usr/src/coding-box-backend/packages"
     restart: always
