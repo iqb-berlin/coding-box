@@ -489,7 +489,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
           name: item.unitAlias || item.unitName,
           alias: item.unitAlias || null,
           bookletId: 0,
-          testPerson: `${item.personLogin}@${item.personCode}@${item.bookletName}`,
+          testPerson: `${item.personLogin}@${item.personCode}@${item.personGroup || ''}@${item.bookletName}`,
           variableId: item.variableId,
           variableAnchor: item.variableAnchor
         }));
@@ -714,7 +714,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
                   name: item.unitAlias || item.unitName,
                   alias: item.unitAlias || null,
                   bookletId: 0,
-                  testPerson: `${item.personLogin}@${item.personCode}@${item.bookletName}`,
+                  testPerson: `${item.personLogin}@${item.personCode}@${item.personGroup || ''}@${item.bookletName}`,
                   variableId: item.variableId,
                   variableAnchor: item.variableAnchor
                 }));
@@ -776,7 +776,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
       return;
     }
     this.dialog.open(CodingJobResultDialogComponent, {
-      width: '1200px',
+      width: '1400px',
       height: '80vh',
       data: {
         codingJob: job,

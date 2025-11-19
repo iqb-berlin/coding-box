@@ -14,6 +14,14 @@ import { UnitTagService } from './unit-tag.service';
 import { JournalService } from './journal.service';
 import { CacheService } from '../../cache/cache.service';
 
+interface PersonWhere {
+  code: string;
+  login: string;
+  workspace_id: number;
+  consider: boolean;
+  group?: string;
+}
+
 @Injectable()
 export class WorkspaceTestResultsService {
   private readonly logger = new Logger(WorkspaceTestResultsService.name);
@@ -273,14 +281,24 @@ export class WorkspaceTestResultsService {
 
     this.logger.log(`Cache miss for responses: workspace=${workspaceId}, testPerson=${connector}, unitId=${unitId}`);
 
-    const [login, code, bookletId] = connector.split('@');
+    const parts = connector.split('@');
+    const login = parts[0];
+    const code = parts[1];
+    const group = parts.length >= 4 ? parts[2] : undefined;
+    const bookletId = parts[parts.length - 1];
     const queryBuilder = this.unitRepository.createQueryBuilder('unit')
       .innerJoinAndSelect('unit.responses', 'response')
       .innerJoin('unit.booklet', 'booklet')
       .innerJoin('booklet.person', 'person')
       .innerJoin('booklet.bookletinfo', 'bookletinfo')
       .where('person.login = :login', { login })
-      .andWhere('person.code = :code', { code })
+      .andWhere('person.code = :code', { code });
+
+    if (group) {
+      queryBuilder.andWhere('person.group = :group', { group });
+    }
+
+    queryBuilder
       .andWhere('person.workspace_id = :workspaceId', { workspaceId })
       .andWhere('person.consider = :consider', { consider: true })
       .andWhere('bookletinfo.name = :bookletId', { bookletId })
@@ -289,14 +307,22 @@ export class WorkspaceTestResultsService {
     const unit = await queryBuilder.getOne();
 
     if (!unit) {
+      const personWhere: PersonWhere = {
+        code, login, workspace_id: workspaceId, consider: true
+      };
+      if (group) {
+        personWhere.group = group;
+      }
+
       const person = await this.personsRepository.findOne({
-        where: {
-          code, login, workspace_id: workspaceId, consider: true
-        }
+        where: personWhere
       });
 
       if (!person) {
-        throw new Error(`Person mit Login ${login} und Code ${code} wurde nicht gefunden.`);
+        const searchDescription = group ?
+          `Person mit Login ${login}, Code ${code} und Gruppe ${group}` :
+          `Person mit Login ${login} und Code ${code}`;
+        throw new Error(`${searchDescription} wurde nicht gefunden.`);
       }
 
       const bookletInfo = await this.bookletInfoRepository.findOne({
