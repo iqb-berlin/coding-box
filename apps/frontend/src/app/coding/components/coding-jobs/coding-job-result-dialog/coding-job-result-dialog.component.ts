@@ -37,6 +37,7 @@ interface CodingResult {
   bookletName: string;
   personLogin: string;
   personCode: string;
+  personGroup: string;
   testPerson: string;
   code?: string | number;
   codeLabel?: string;
@@ -154,7 +155,8 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy {
                 bookletName: unit.bookletName,
                 personLogin: unit.personLogin,
                 personCode: unit.personCode,
-                testPerson: `${unit.personLogin}@${unit.personCode}`,
+                personGroup: unit.personGroup,
+                testPerson: `${unit.personLogin}@${unit.personCode}@${unit.personGroup}`,
                 code: progress?.id,
                 codeLabel: progress?.label,
                 score: progress?.score,
@@ -411,7 +413,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy {
         }
 
         // Decode base64 scheme content
-        let schemeContent = schemeFile.base64Data;
+        let schemeContent: string;
         try {
           schemeContent = atob(schemeFile.base64Data);
         } catch (error) {

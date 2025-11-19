@@ -123,6 +123,7 @@ export class CodingListService {
         const bookletInfo = booklet?.bookletinfo;
         const loginName = person?.login || '';
         const loginCode = person?.code || '';
+        const loginGroup = person?.group || '';
         const bookletId = bookletInfo?.name || '';
         const unitKey = unit?.name || '';
         const unitAlias = unit?.alias || '';
@@ -131,13 +132,14 @@ export class CodingListService {
         const variablePage = unitVarPages?.get(variableId) || '0';
         const variableAnchor = variableId;
 
-        const url = `${server}/#/replay/${loginName}@${loginCode}@${bookletId}/${unitKey}/${variablePage}/${variableAnchor}?auth=${authToken}`;
+        const url = `${server}/#/replay/${loginName}@${loginCode}@${loginGroup}@${bookletId}/${unitKey}/${variablePage}/${variableAnchor}?auth=${authToken}`;
 
         return {
           unit_key: unitKey,
           unit_alias: unitAlias,
           login_name: loginName,
           login_code: loginCode,
+          login_group: loginGroup,
           booklet_id: bookletId,
           variable_id: variableId,
           variable_page: variablePage,
@@ -253,6 +255,7 @@ export class CodingListService {
             const bookletInfo = booklet?.bookletinfo;
             const loginName = person?.login || '';
             const loginCode = person?.code || '';
+            const loginGroup = person?.group || '';
             const bookletId = bookletInfo?.name || '';
             const unitKey = unit?.name || '';
             const unitAlias = unit?.alias || '';
@@ -268,13 +271,14 @@ export class CodingListService {
             const variablePage = unitVarPages?.get(variableId) || '0';
             const variableAnchor = variableId;
 
-            const url = `${serverUrl}/#/replay/${loginName}@${loginCode}@${bookletId}/${unitKey}/${variablePage}/${variableAnchor}?auth=${authToken}`;
+            const url = `${serverUrl}/#/replay/${loginName}@${loginCode}@${loginGroup}@${bookletId}/${unitKey}/${variablePage}/${variableAnchor}?auth=${authToken}`;
 
             const ok = csvStream.write({
               unit_key: unitKey,
               unit_alias: unitAlias,
               login_name: loginName,
               login_code: loginCode,
+              login_group: loginGroup,
               booklet_id: bookletId,
               variable_id: variableId,
               variable_page: variablePage,
@@ -312,6 +316,7 @@ export class CodingListService {
       { header: 'unit_alias', key: 'unit_alias', width: 30 },
       { header: 'login_name', key: 'login_name', width: 25 },
       { header: 'login_code', key: 'login_code', width: 25 },
+      { header: 'login_group', key: 'login_group', width: 25 },
       { header: 'booklet_id', key: 'booklet_id', width: 30 },
       { header: 'variable_id', key: 'variable_id', width: 30 },
       { header: 'variable_page', key: 'variable_page', width: 15 },
