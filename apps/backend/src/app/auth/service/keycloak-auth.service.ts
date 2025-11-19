@@ -26,11 +26,20 @@ export interface KeycloakUserInfo {
 @Injectable()
 export class KeycloakAuthService {
   private readonly logger = new Logger(KeycloakAuthService.name);
+  private readonly keycloakUrl: string;
+  private readonly keycloakRealm: string;
+  private readonly clientId: string;
+  private readonly clientSecret: string;
 
   constructor(
     private readonly httpService: HttpService,
     private readonly configService: ConfigService
-  ) {}
+  ) {
+    this.keycloakUrl = this.configService.get<string>('KEYCLOAK_URL');
+    this.keycloakRealm = this.configService.get<string>('KEYCLOAK_REALM');
+    this.clientId = this.configService.get<string>('KEYCLOAK_CLIENT_ID');
+    this.clientSecret = this.configService.get<string>('KEYCLOAK_CLIENT_SECRET');
+  }
 
   /**
    * Generate the Keycloak authorization URL for the Authorization Code flow
@@ -39,18 +48,14 @@ export class KeycloakAuthService {
    * @returns Authorization URL
    */
   getAuthorizationUrl(state: string, redirectUri: string): string {
-    const keycloakUrl = this.configService.get<string>('KEYCLOAK_URL');
-    const keycloakRealm = this.configService.get<string>('KEYCLOAK_REALM');
-    const clientId = this.configService.get<string>('KEYCLOAK_CLIENT_ID');
-
-    if (!keycloakUrl || !keycloakRealm || !clientId) {
+    if (!this.keycloakUrl || !this.keycloakRealm || !this.clientId) {
       throw new UnauthorizedException('Keycloak configuration is missing');
     }
 
-    const authUrl = `${keycloakUrl}realms/${keycloakRealm}/protocol/openid-connect/auth`;
+    const authUrl = `${this.keycloakUrl}realms/${this.keycloakRealm}/protocol/openid-connect/auth`;
     const params = new URLSearchParams({
       response_type: 'code',
-      client_id: clientId,
+      client_id: this.clientId,
       redirect_uri: redirectUri,
       state: state,
       scope: 'openid profile email'
@@ -66,21 +71,16 @@ export class KeycloakAuthService {
    * @returns Token response from Keycloak
    */
   async exchangeCodeForToken(code: string, redirectUri: string): Promise<KeycloakTokenResponse> {
-    const keycloakUrl = this.configService.get<string>('KEYCLOAK_URL');
-    const keycloakRealm = this.configService.get<string>('KEYCLOAK_REALM');
-    const clientId = this.configService.get<string>('KEYCLOAK_CLIENT_ID');
-    const clientSecret = this.configService.get<string>('KEYCLOAK_CLIENT_SECRET');
-
-    if (!keycloakUrl || !keycloakRealm || !clientId || !clientSecret) {
+    if (!this.keycloakUrl || !this.keycloakRealm || !this.clientId || !this.clientSecret) {
       throw new UnauthorizedException('Keycloak configuration is missing');
     }
 
-    const tokenEndpoint = `${keycloakUrl}realms/${keycloakRealm}/protocol/openid-connect/token`;
+    const tokenEndpoint = `${this.keycloakUrl}realms/${this.keycloakRealm}/protocol/openid-connect/token`;
 
     const params = new URLSearchParams({
       grant_type: 'authorization_code',
-      client_id: clientId,
-      client_secret: clientSecret,
+      client_id: this.clientId,
+      client_secret: this.clientSecret,
       code: code,
       redirect_uri: redirectUri
     });
@@ -110,14 +110,11 @@ export class KeycloakAuthService {
    * @returns User information
    */
   async getUserInfo(accessToken: string): Promise<KeycloakUserInfo> {
-    const keycloakUrl = this.configService.get<string>('KEYCLOAK_URL');
-    const keycloakRealm = this.configService.get<string>('KEYCLOAK_REALM');
-
-    if (!keycloakUrl || !keycloakRealm) {
+    if (!this.keycloakUrl || !this.keycloakRealm) {
       throw new UnauthorizedException('Keycloak configuration is missing');
     }
 
-    const userinfoEndpoint = `${keycloakUrl}realms/${keycloakRealm}/protocol/openid-connect/userinfo`;
+    const userinfoEndpoint = `${this.keycloakUrl}realms/${this.keycloakRealm}/protocol/openid-connect/userinfo`;
 
     try {
       const response = await firstValueFrom(
@@ -141,17 +138,13 @@ export class KeycloakAuthService {
    * @returns Logout URL
    */
   getLogoutUrl(idToken: string, redirectUri: string): string {
-    const keycloakUrl = this.configService.get<string>('KEYCLOAK_URL');
-    const keycloakRealm = this.configService.get<string>('KEYCLOAK_REALM');
-    const clientId = this.configService.get<string>('KEYCLOAK_CLIENT_ID');
-
-    if (!keycloakUrl || !keycloakRealm || !clientId) {
+    if (!this.keycloakUrl || !this.keycloakRealm || !this.clientId) {
       throw new UnauthorizedException('Keycloak configuration is missing');
     }
 
-    const logoutUrl = `${keycloakUrl}realms/${keycloakRealm}/protocol/openid-connect/logout`;
+    const logoutUrl = `${this.keycloakUrl}realms/${this.keycloakRealm}/protocol/openid-connect/logout`;
     const params = new URLSearchParams({
-      client_id: clientId,
+      client_id: this.clientId,
       id_token_hint: idToken,
       post_logout_redirect_uri: redirectUri
     });
@@ -165,25 +158,20 @@ export class KeycloakAuthService {
    * @returns Promise that resolves when logout is complete
    */
   async logoutWithRefreshToken(refreshToken: string): Promise<void> {
-    const keycloakUrl = this.configService.get<string>('KEYCLOAK_URL');
-    const keycloakRealm = this.configService.get<string>('KEYCLOAK_REALM');
-    const clientId = this.configService.get<string>('KEYCLOAK_CLIENT_ID');
-    const clientSecret = this.configService.get<string>('KEYCLOAK_CLIENT_SECRET');
-
-    if (!keycloakUrl || !keycloakRealm || !clientId) {
+    if (!this.keycloakUrl || !this.keycloakRealm || !this.clientId) {
       throw new UnauthorizedException('Keycloak configuration is missing');
     }
 
-    const logoutEndpoint = `${keycloakUrl}realms/${keycloakRealm}/protocol/openid-connect/logout`;
+    const logoutEndpoint = `${this.keycloakUrl}realms/${this.keycloakRealm}/protocol/openid-connect/logout`;
 
     const params = new URLSearchParams({
-      client_id: clientId,
+      client_id: this.clientId,
       refresh_token: refreshToken
     });
 
     // Add client_secret only for confidential clients
-    if (clientSecret) {
-      params.append('client_secret', clientSecret);
+    if (this.clientSecret) {
+      params.append('client_secret', this.clientSecret);
     }
 
     try {
@@ -210,18 +198,14 @@ export class KeycloakAuthService {
    * @returns Profile management URL
    */
   getProfileUrl(redirectUri?: string): string {
-    const keycloakUrl = this.configService.get<string>('KEYCLOAK_URL');
-    const keycloakRealm = this.configService.get<string>('KEYCLOAK_REALM');
-    const clientId = this.configService.get<string>('KEYCLOAK_CLIENT_ID');
-
-    if (!keycloakUrl || !keycloakRealm || !clientId) {
+    if (!this.keycloakUrl || !this.keycloakRealm || !this.clientId) {
       throw new UnauthorizedException('Keycloak configuration is missing');
     }
 
-    const profileUrl = `${keycloakUrl}realms/${keycloakRealm}/account`;
+    const profileUrl = `${this.keycloakUrl}realms/${this.keycloakRealm}/account`;
     if (redirectUri) {
       const params = new URLSearchParams({
-        referrer: clientId,
+        referrer: this.clientId,
         referrer_uri: redirectUri
       });
       return `${profileUrl}?${params.toString()}`;
