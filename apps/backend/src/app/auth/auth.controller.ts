@@ -249,7 +249,11 @@ export class AuthController {
         let errorRedirectUri;
         if (state && typeof state === 'string' && state.includes(':')) {
           const [, encodedRedirectUri] = state.split(':', 2);
-          errorRedirectUri = decodeURIComponent(encodedRedirectUri);
+          try {
+            errorRedirectUri = decodeURIComponent(encodedRedirectUri);
+          } catch (error) {
+            this.logger.warn('Invalid encoded redirect URI in state');
+          }
         }
 
         const errorUrl = (errorRedirectUri && this.isAllowedRedirect(errorRedirectUri)) ?
@@ -262,7 +266,11 @@ export class AuthController {
       let finalRedirectUri;
       if (state && typeof state === 'string' && state.includes(':')) {
         const [, encodedRedirectUri] = state.split(':', 2);
-        finalRedirectUri = decodeURIComponent(encodedRedirectUri);
+        try {
+          finalRedirectUri = decodeURIComponent(encodedRedirectUri);
+        } catch (error) {
+          this.logger.warn('Invalid encoded redirect URI in state');
+        }
       }
 
       const callbackUri = this.getCallbackUri();
@@ -317,7 +325,11 @@ export class AuthController {
       let errorRedirectUri;
       if (state && typeof state === 'string' && state.includes(':')) {
         const [, encodedRedirectUri] = state.split(':', 2);
-        errorRedirectUri = decodeURIComponent(encodedRedirectUri);
+        try {
+          errorRedirectUri = decodeURIComponent(encodedRedirectUri);
+        } catch (decodeError) {
+          this.logger.warn('Invalid encoded redirect URI in state during error handling');
+        }
       }
 
       const errorUrl = (errorRedirectUri && this.isAllowedRedirect(errorRedirectUri)) ?
