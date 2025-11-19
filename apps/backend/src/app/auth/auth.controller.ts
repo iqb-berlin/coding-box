@@ -6,6 +6,7 @@ import {
   ApiTags, ApiOkResponse, ApiBadRequestResponse, ApiUnauthorizedResponse, ApiBody, ApiQuery, ApiOperation
 } from '@nestjs/swagger';
 import { Response } from 'express';
+import { ConfigService } from '@nestjs/config';
 import { OAuth2ClientCredentialsService, ClientCredentialsRequest, ClientCredentialsTokenResponse } from './service/oauth2-client-credentials.service';
 import { KeycloakAuthService, KeycloakUserInfo } from './service/keycloak-auth.service';
 import { AuthService } from './service/auth.service';
@@ -19,7 +20,8 @@ export class AuthController {
   constructor(
     private readonly oauth2ClientCredentialsService: OAuth2ClientCredentialsService,
     private readonly keycloakAuthService: KeycloakAuthService,
-    private readonly authService: AuthService
+    private readonly authService: AuthService,
+    private readonly configService: ConfigService
   ) {}
 
   /**
@@ -73,8 +75,21 @@ export class AuthController {
           return true;
         }
 
-        // Prevent redirects to Keycloak URL for security
-        return false;
+        // Validate against the given KEYCLOAK_URL and prevent redirects to it for security
+        const keycloakUrl = this.configService.get<string>('KEYCLOAK_URL');
+        if (keycloakUrl) {
+          try {
+            const keycloakOrigin = new URL(keycloakUrl).origin;
+            if (redirectUrl.origin === keycloakOrigin) {
+              return false;
+            }
+          } catch {
+            // Invalid KEYCLOAK_URL, ignore
+          }
+        }
+
+        // Allow other external URLs
+        return true;
       }
 
       return false;
