@@ -250,7 +250,7 @@ export class AuthController {
       }
 
       let finalRedirectUri = redirectUri;
-      if (state && state.includes(':')) {
+      if (state && typeof state === 'string' && state.includes(':')) {
         const [, encodedRedirectUri] = state.split(':', 2);
         finalRedirectUri = decodeURIComponent(encodedRedirectUri);
       }
@@ -305,7 +305,7 @@ export class AuthController {
       this.logger.error('Keycloak callback failed:', error);
       // Decode redirect URI from state for error handling too
       let errorRedirectUri = redirectUri;
-      if (state && state.includes(':')) {
+      if (state && typeof state === 'string' && state.includes(':')) {
         const [, encodedRedirectUri] = state.split(':', 2);
         errorRedirectUri = decodeURIComponent(encodedRedirectUri);
       }
