@@ -172,7 +172,7 @@ export class AppComponent implements OnInit, OnDestroy {
         this.location.replaceState(newUrl);
       }
     } catch (error) {
-      // Silently handle authentication callback errors
+      this.authService.login();
     }
   }
 }
