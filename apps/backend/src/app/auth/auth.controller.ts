@@ -51,6 +51,31 @@ export class AuthController {
     return `${protocol}://${host}/auth/callback`.replace(/\/+/g, '/').replace(':/', '://');
   }
 
+  private isAllowedRedirect(url: string): boolean {
+    if (!url || typeof url !== 'string') {
+      return false;
+    }
+
+    try {
+      if (url.startsWith('/')) {
+        return true;
+      }
+
+      if (url.startsWith('http')) {
+        const redirectCallbackUri = this.getCallbackUri();
+        const callbackUrl = new URL(redirectCallbackUri);
+        const allowedOrigin = callbackUrl.origin;
+
+        const redirectUrl = new URL(url);
+        return redirectUrl.origin === allowedOrigin;
+      }
+
+      return false;
+    } catch {
+      return false;
+    }
+  }
+
   /**
    * Exchange client credentials for an access token using OAuth2 Client Credentials Flow
    * @param credentials - Client ID and secret
@@ -184,10 +209,10 @@ export class AuthController {
     // Encode redirect URI in state parameter to avoid duplicate redirect_uri parameters
     const baseState = Math.random().toString(36).substring(2, 15);
     const state = redirectUri ? `${baseState}:${encodeURIComponent(redirectUri)}` : baseState;
-    const callbackUri = this.getCallbackUri();
+    const loginCallbackUri = this.getCallbackUri();
 
     // Get authorization URL with proper OAuth redirect_uri (callback)
-    const authUrl = this.keycloakAuthService.getAuthorizationUrl(state, callbackUri);
+    const authUrl = this.keycloakAuthService.getAuthorizationUrl(state, loginCallbackUri);
     res.redirect(authUrl);
   }
 
@@ -217,7 +242,7 @@ export class AuthController {
     try {
       if (!code) {
         this.logger.error('Authorization code is required');
-        const errorUrl = redirectUri ?
+        const errorUrl = (redirectUri && this.isAllowedRedirect(redirectUri)) ?
           `${redirectUri}?error=authentication_failed` :
           '/login?error=authentication_failed';
         res.redirect(errorUrl);
@@ -249,8 +274,15 @@ export class AuthController {
       await this.authService.storeKeycloakUser(userData);
 
       // Return Keycloak tokens directly instead of creating internal ones
-      if (finalRedirectUri) {
-        const redirectUrl = new URL(finalRedirectUri);
+      if (finalRedirectUri && this.isAllowedRedirect(finalRedirectUri)) {
+        let redirectUrl: URL;
+        if (finalRedirectUri.startsWith('http')) {
+          redirectUrl = new URL(finalRedirectUri);
+        } else {
+          // Relative URL, construct absolute
+          const callbackUrl = new URL(callbackUri);
+          redirectUrl = new URL(finalRedirectUri, callbackUrl.origin);
+        }
         redirectUrl.searchParams.set('token', tokenResponse.access_token);
         if (tokenResponse.id_token) {
           redirectUrl.searchParams.set('id_token', tokenResponse.id_token);
@@ -278,7 +310,7 @@ export class AuthController {
         errorRedirectUri = decodeURIComponent(encodedRedirectUri);
       }
 
-      const errorUrl = errorRedirectUri ?
+      const errorUrl = (errorRedirectUri && this.isAllowedRedirect(errorRedirectUri)) ?
         `${errorRedirectUri}?error=authentication_failed` :
         '/login?error=authentication_failed';
       res.redirect(errorUrl);
