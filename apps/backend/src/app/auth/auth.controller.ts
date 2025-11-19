@@ -73,19 +73,7 @@ export class AuthController {
           return true;
         }
 
-        // Also allow redirects to Keycloak origin for authentication-related redirects
-        const keycloakUrl = process.env.KEYCLOAK_URL;
-        if (keycloakUrl) {
-          try {
-            const keycloakOrigin = new URL(keycloakUrl).origin;
-            if (redirectUrl.origin === keycloakOrigin) {
-              return true;
-            }
-          } catch {
-            // Ignore invalid KEYCLOAK_URL configuration
-          }
-        }
-
+        // Prevent redirects to Keycloak URL for security
         return false;
       }
 
@@ -239,7 +227,6 @@ export class AuthController {
    * Handle Keycloak callback after authentication
    * @param code - Authorization code from Keycloak
    * @param state - State parameter for security
-   * @param redirectUri - Original redirect URI
    * @param res - Express response object
    */
   @Get('callback')
@@ -249,11 +236,9 @@ export class AuthController {
   })
   @ApiQuery({ name: 'code', description: 'Authorization code from Keycloak' })
   @ApiQuery({ name: 'state', description: 'State parameter for security' })
-  @ApiQuery({ name: 'redirect_uri', required: false, description: 'Original redirect URI' })
   async callback(
     @Query('code') code: string,
       @Query('state') state: string,
-      @Query('redirect_uri') redirectUri: string,
       @Res() res: Response
   ): Promise<void> {
     this.logger.log('Processing Keycloak callback');
@@ -261,14 +246,20 @@ export class AuthController {
     try {
       if (!code) {
         this.logger.error('Authorization code is required');
-        const errorUrl = (redirectUri && this.isAllowedRedirect(redirectUri)) ?
-          `${redirectUri}?error=authentication_failed` :
+        let errorRedirectUri;
+        if (state && typeof state === 'string' && state.includes(':')) {
+          const [, encodedRedirectUri] = state.split(':', 2);
+          errorRedirectUri = decodeURIComponent(encodedRedirectUri);
+        }
+
+        const errorUrl = (errorRedirectUri && this.isAllowedRedirect(errorRedirectUri)) ?
+          `${errorRedirectUri}?error=authentication_failed` :
           '/login?error=authentication_failed';
         res.redirect(errorUrl);
         return;
       }
 
-      let finalRedirectUri = redirectUri;
+      let finalRedirectUri;
       if (state && typeof state === 'string' && state.includes(':')) {
         const [, encodedRedirectUri] = state.split(':', 2);
         finalRedirectUri = decodeURIComponent(encodedRedirectUri);
@@ -323,7 +314,7 @@ export class AuthController {
     } catch (error) {
       this.logger.error('Keycloak callback failed:', error);
       // Decode redirect URI from state for error handling too
-      let errorRedirectUri = redirectUri;
+      let errorRedirectUri;
       if (state && typeof state === 'string' && state.includes(':')) {
         const [, encodedRedirectUri] = state.split(':', 2);
         errorRedirectUri = decodeURIComponent(encodedRedirectUri);
