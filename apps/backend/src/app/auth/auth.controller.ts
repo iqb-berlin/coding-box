@@ -67,7 +67,26 @@ export class AuthController {
         const allowedOrigin = callbackUrl.origin;
 
         const redirectUrl = new URL(url);
-        return redirectUrl.origin === allowedOrigin;
+
+        // Allow redirects to the same origin as the callback URI
+        if (redirectUrl.origin === allowedOrigin) {
+          return true;
+        }
+
+        // Also allow redirects to Keycloak origin for authentication-related redirects
+        const keycloakUrl = process.env.KEYCLOAK_URL;
+        if (keycloakUrl) {
+          try {
+            const keycloakOrigin = new URL(keycloakUrl).origin;
+            if (redirectUrl.origin === keycloakOrigin) {
+              return true;
+            }
+          } catch {
+            // Ignore invalid KEYCLOAK_URL configuration
+          }
+        }
+
+        return false;
       }
 
       return false;
