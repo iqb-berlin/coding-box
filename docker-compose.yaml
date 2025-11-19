@@ -65,7 +65,6 @@ services:
         condition: service_healthy
     environment:
       API_HOST: backend
-      JWT_SECRET: ${JWT_SECRET}
       <<: [ *env-redis, *env-postgres, *env-keycloak ]
     networks:
       - application-network
