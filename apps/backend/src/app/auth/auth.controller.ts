@@ -36,21 +36,10 @@ export class AuthController {
     const protocol = process.env.NODE_ENV === 'production' ? 'https' : 'http';
     const host = process.env.SERVER_NAME || 'localhost';
     const port = process.env.API_PORT || '3333';
-    const basePath = backendUrl || '';
-    const apiHost = process.env.API_HOST;
-    const isDockerEnv = apiHost && apiHost !== 'localhost';
+    const callbackBasePath = process.env.BACKEND_CALLBACK_BASE_PATH || 'auth/callback';
 
-    if (host === 'localhost' && !isDockerEnv) {
-      return `${protocol}://${host}:${port}/${basePath}auth/callback`.replace(/\/+/g, '/').replace(':/', '://');
-    }
-
-    if (isDockerEnv && host === 'localhost') {
-      // For Docker dev environment, use localhost with port for external access
-      return `${protocol}://${host}:${port}/${basePath}api/auth/callback`.replace(/\/+/g, '/').replace(':/', '://');
-    }
-
-    // For Docker/production environments, nginx handles /api/ routing, so exclude it from callback URL
-    return `${protocol}://${host}/auth/callback`.replace(/\/+/g, '/').replace(':/', '://');
+    const hostWithPort = host === 'localhost' ? `${host}:${port}` : host;
+    return `${protocol}://${hostWithPort}/${callbackBasePath}`.replace(/\/+/g, '/').replace(':/', '://');
   }
 
   private isAllowedRedirect(url: string): boolean {
