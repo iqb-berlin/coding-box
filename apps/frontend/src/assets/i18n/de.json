@@ -1371,6 +1371,30 @@
     "coding-error": "CODING_ERROR:"
   },
 
+  "coding-validation-results": {
+    "title": "Validierungsergebnisse",
+    "download-button": "Als Excel herunterladen",
+    "close-button": "Schließen",
+    "previous-page": "Vorherige",
+    "next-page": "Nächste",
+    "page-size": "Einträge pro Seite:",
+    "table": {
+      "headers": {
+        "unit-key": "Aufgabe",
+        "login-name": "Login-Name",
+        "login-group": "Login-Gruppe",
+        "login-code": "Login-Code",
+        "booklet-id": "Testheft",
+        "variable-id": "Variable",
+        "status": "Status"
+      },
+      "status": {
+        "missing": "Fehlend",
+        "present": "Vorhanden"
+      }
+    }
+  },
+
   "coding-results": {
     "apply": {
       "error": {
