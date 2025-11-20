@@ -268,7 +268,7 @@ export class ExportDialogComponent implements OnInit, OnDestroy {
     });
   }
 
-  private openValidationResultsDialog(results: ValidateCodingCompletenessResponseDto): void {
+  openValidationResultsDialog(results: ValidateCodingCompletenessResponseDto): void {
     this.matDialog.open(CodingValidationResultsDialogComponent, {
       width: '90vw',
       maxWidth: '1400px',
