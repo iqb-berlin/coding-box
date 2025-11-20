@@ -4,10 +4,14 @@ import {
   PrimaryGeneratedColumn,
   CreateDateColumn,
   UpdateDateColumn,
-  OneToMany
+  OneToMany,
+  ManyToOne,
+  JoinColumn,
+  Index
 } from 'typeorm';
 // eslint-disable-next-line import/no-cycle
 import { CodingJob } from './coding-job.entity';
+import Workspace from './workspace.entity';
 
 export type JobDefinitionStatus = 'draft' | 'pending_review' | 'approved';
 
@@ -25,6 +29,14 @@ export interface JobDefinitionVariableBundle {
 export class JobDefinition {
   @PrimaryGeneratedColumn()
     id: number;
+
+  @Column({ type: 'int' })
+  @Index()
+    workspace_id: number;
+
+  @ManyToOne(() => Workspace, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'workspace_id' })
+    workspace: Workspace;
 
   @OneToMany(() => CodingJob, codingJob => codingJob.jobDefinition, { cascade: false })
     codingJobs: CodingJob[];
