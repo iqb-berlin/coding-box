@@ -1,0 +1,154 @@
+.validation-results-dialog {
+  .statistics-card {
+    width: 100%;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    border: 1px solid #e0e0e0;
+    padding: 24px;
+    margin-bottom: 16px;
+
+    .section-title {
+      margin: 0 0 8px 0;
+      font-size: 20px;
+      font-weight: 500;
+      color: #333;
+    }
+
+    .section-description {
+      margin: 0;
+      color: #666;
+      font-size: 14px;
+    }
+
+    hr {
+      border: none;
+      border-top: 1px solid #e0e0e0;
+      margin: 16px 0;
+    }
+
+    .pagination-controls {
+      margin: 16px 0;
+      color: #666;
+      font-size: 14px;
+
+      .pagination-info {
+        margin: 0 8px;
+        font-weight: 500;
+      }
+
+      label {
+        margin-right: 8px;
+        font-weight: 500;
+      }
+
+      select {
+        padding: 4px 8px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        background: white;
+        font-size: 14px;
+      }
+    }
+
+    .validation-content {
+      margin: 16px 0;
+      overflow-x: auto;
+
+      .results-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+
+        th {
+          background: #f5f5f5;
+          padding: 12px 8px;
+          text-align: left;
+          border-bottom: 2px solid #e0e0e0;
+          font-weight: 600;
+          color: #333;
+          white-space: nowrap;
+        }
+
+        td {
+          padding: 8px;
+          border-bottom: 1px solid #e0e0e0;
+          vertical-align: top;
+
+          &.missing {
+            background-color: #ffebee;
+          }
+
+          // Status chip styling
+          ::ng-deep .mat-mdc-chip {
+            border-radius: 16px !important;
+            height: 28px !important;
+
+            &.status-present {
+              background-color: #e8f5e8 !important;
+              color: #2e7d2e !important;
+              border-color: #4caf50 !important;
+
+              mat-icon {
+                color: #2e7d2e !important;
+              }
+            }
+
+            &.status-missing {
+              background-color: #ffebee !important;
+              color: #c62828 !important;
+              border-color: #f44336 !important;
+
+              mat-icon {
+                color: #c62828 !important;
+              }
+            }
+
+            mat-icon {
+              font-size: 16px !important;
+              height: 16px !important;
+              width: 16px !important;
+              margin-right: 4px !important;
+            }
+
+            .mdc-evolution-chip__cell,
+            .mat-mdc-chip-action-label {
+              font-size: 12px !important;
+              line-height: 1 !important;
+              padding: 4px 8px !important;
+            }
+          }
+        }
+
+        tr:hover {
+          background-color: #f9f9f9;
+        }
+      }
+    }
+  }
+}
+
+.fx-column-start-start {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: flex-start;
+}
+
+.fx-row-space-between-center {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.fx-row-center-center {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+}
+
+.fx-gap-10 {
+  gap: 10px;
+}
