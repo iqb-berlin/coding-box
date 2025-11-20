@@ -86,7 +86,7 @@
                       (click)="reviewCodingResult(result)" matTooltip="Kodierungs-Hinweis überprüfen">
                 <mat-icon>replay</mat-icon>
               </button>
-              <button *ngIf="isNewCodeNeeded(result)" mat-icon-button color="accent"
+              <button *ngIf="isNewCodeNeeded(result)" mat-icon-button color="primary"
                       (click)="editCodingScheme(result)" matTooltip="Kodierungsschema bearbeiten">
                 <mat-icon>edit</mat-icon>
               </button>
@@ -111,7 +111,7 @@
     <button mat-raised-button mat-dialog-close color="primary">Schließen</button>
     <button mat-raised-button
             color="accent"
-            [disabled]="isLoading"
+            [disabled]="isLoading || data.codingJob.status === 'results_applied'"
             (click)="applyCodingResults()"
             matTooltip="Kodierergebnisse auf Datenbank anwenden">
       <mat-icon>input</mat-icon>

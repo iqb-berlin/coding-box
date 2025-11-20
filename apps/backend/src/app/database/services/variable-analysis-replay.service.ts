@@ -186,6 +186,7 @@ export class VariableAnalysisReplayService {
         .addSelect('response.variableid', 'variableId')
         .addSelect('person.login', 'loginName')
         .addSelect('person.code', 'loginCode')
+        .addSelect('person.group', 'loginGroup')
         .addSelect('bookletinfo.name', 'bookletId')
         .leftJoin('response.unit', 'unit')
         .leftJoin('unit.booklet', 'booklet')
@@ -209,16 +210,18 @@ export class VariableAnalysisReplayService {
         .addGroupBy('response.variableid')
         .addGroupBy('person.login')
         .addGroupBy('person.code')
+        .addGroupBy('person.group')
         .addGroupBy('bookletinfo.name');
 
       const sampleInfoResults = await sampleInfoQuery.getRawMany();
 
-      const sampleInfoMap = new Map<string, { loginName: string; loginCode: string; bookletId: string }>();
+      const sampleInfoMap = new Map<string, { loginName: string; loginCode: string; loginGroup: string; bookletId: string }>();
       for (const result of sampleInfoResults) {
         const key = `${result.unitId}|${result.variableId}`;
         sampleInfoMap.set(key, {
           loginName: result.loginName || '',
           loginCode: result.loginCode || '',
+          loginGroup: result.loginGroup || '',
           bookletId: result.bookletId || ''
         });
       }
@@ -255,10 +258,11 @@ export class VariableAnalysisReplayService {
         const sampleInfo = sampleInfoMap.get(`${unitId}|${variableId}`);
         const loginName = sampleInfo?.loginName || '';
         const loginCode = sampleInfo?.loginCode || '';
+        const loginGroup = sampleInfo?.loginGroup || '';
         const bookletId = sampleInfo?.bookletId || '';
 
         const variablePage = '0';
-        const replayUrl = `${serverUrl}/#/replay/${loginName}@${loginCode}@${bookletId}/${unitId}/${variablePage}/${variableId}?auth=${authToken}`;
+        const replayUrl = `${serverUrl}/#/replay/${loginName}@${loginCode}@${loginGroup}@${bookletId}/${unitId}/${variablePage}/${variableId}?auth=${authToken}`;
 
         result.push({
           replayUrl,

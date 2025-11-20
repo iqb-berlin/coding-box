@@ -246,16 +246,25 @@ export class ReplayCodingService {
     this.checkCodingJobCompletion(unitsData);
   }
 
+  private normalizeTestPerson(testPerson: string): string {
+    const parts = testPerson.split('@');
+    if (parts.length === 4) {
+      return `${parts[0]}@${parts[1]}@${parts[3]}`; // login@code@booklet
+    }
+    return testPerson; // assume 3 parts is already normalized
+  }
+
   generateCompositeKey(testPerson: string, unitId: string, variableId: string): string {
+    const normalizedTestPerson = this.normalizeTestPerson(testPerson);
     let bookletId = 'default';
-    if (testPerson) {
-      const parts = testPerson.split('@');
+    if (normalizedTestPerson) {
+      const parts = normalizedTestPerson.split('@');
       if (parts.length >= 3) {
         bookletId = parts[2];
       }
     }
 
-    return `${testPerson}::${bookletId}::${unitId}::${variableId}`;
+    return `${normalizedTestPerson}::${bookletId}::${unitId}::${variableId}`;
   }
 
   checkCodingJobCompletion(unitsData: UnitsReplay | null): void {

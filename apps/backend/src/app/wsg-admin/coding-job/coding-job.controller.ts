@@ -266,7 +266,8 @@ export class WsgCodingJobController {
               variableAnchor: { type: 'string' },
               bookletName: { type: 'string' },
               personLogin: { type: 'string' },
-              personCode: { type: 'string' }
+              personCode: { type: 'string' },
+              personGroup: { type: 'string' }
             }
           }
         }
@@ -276,7 +277,7 @@ export class WsgCodingJobController {
   async startCodingJob(
     @WorkspaceId() workspaceId: number,
       @Param('id', ParseIntPipe) id: number
-  ): Promise<{ total: number; items: Array<{ responseId: number; unitName: string; unitAlias: string | null; variableId: string; variableAnchor: string; bookletName: string; personLogin: string; personCode: string }> }> {
+  ): Promise<{ total: number; items: Array<{ responseId: number; unitName: string; unitAlias: string | null; variableId: string; variableAnchor: string; bookletName: string; personLogin: string; personCode: string; personGroup: string }> }> {
     try {
       const job = await this.codingJobService.getCodingJob(id, workspaceId);
       const onlyOpen = job.codingJob.status === 'pending';
@@ -572,7 +573,7 @@ export class WsgCodingJobController {
   async getCodingJobUnits(
     @WorkspaceId() workspaceId: number,
       @Param('id', ParseIntPipe) id: number
-  ): Promise<Array<{ responseId: number; unitName: string; unitAlias: string | null; variableId: string; variableAnchor: string; bookletName: string; personLogin: string; personCode: string }>> {
+  ): Promise<Array<{ responseId: number; unitName: string; unitAlias: string | null; variableId: string; variableAnchor: string; bookletName: string; personLogin: string; personCode: string; personGroup: string }>> {
     try {
       await this.codingJobService.getCodingJob(id, workspaceId);
       return await this.codingJobService.getCodingJobUnits(id, false);
