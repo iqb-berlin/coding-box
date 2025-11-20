@@ -1909,7 +1909,7 @@ export class WorkspaceCodingController {
     @WorkspaceId() workspace_id: number,
       @Body() createDto: CreateJobDefinitionDto
   ): Promise<JobDefinition> {
-    return this.jobDefinitionService.createJobDefinition(createDto);
+    return this.jobDefinitionService.createJobDefinition(createDto, workspace_id);
   }
 
   @Get(':workspace_id/coding/job-definitions')
@@ -1967,8 +1967,8 @@ export class WorkspaceCodingController {
       }
     }
   })
-  async getApprovedJobDefinitions(): Promise<JobDefinition[]> {
-    return this.jobDefinitionService.getApprovedJobDefinitions();
+  async getApprovedJobDefinitions(@WorkspaceId() workspaceId: number): Promise<JobDefinition[]> {
+    return this.jobDefinitionService.getApprovedJobDefinitions(workspaceId);
   }
 
   @Get(':workspace_id/coding/job-definitions/:id')
