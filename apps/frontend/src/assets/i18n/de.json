@@ -1066,7 +1066,8 @@
       "data-extraction-progress": "Daten werden extrahiert ({{current}}/{{total}})...",
       "data-preparation": "Daten werden für Validierung vorbereitet...",
       "validation-running": "Validierung wird durchgeführt...",
-      "validation-page-progress": "Validierung wird durchgeführt (Seite {{page}})..."
+      "validation-page-progress": "Validierung wird durchgeführt (Seite {{page}})...",
+      "view-results-button": "Validierungs Ergebnisse anzeigen"
     }
   },
   "export-coding-book": {
