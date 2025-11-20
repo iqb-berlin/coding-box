@@ -47,6 +47,9 @@ export class CodingJobUnit {
   @Column()
     person_code: string;
 
+  @Column()
+    person_group: string;
+
   @Column({ nullable: true })
     code: number | null;
 

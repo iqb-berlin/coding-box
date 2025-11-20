@@ -13,7 +13,7 @@ import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
 import { WorkspaceCodingService } from '../../database/services/workspace-coding.service';
 import { CoderTrainingService } from '../../database/services/coder-training.service';
-import { CodingListService } from '../../database/services/coding-list.service';
+import { CodingListService, CodingItem } from '../../database/services/coding-list.service';
 import { PersonService } from '../../database/services/person.service';
 import { CodingJobService } from '../../database/services/coding-job.service';
 import { CodingExportService } from '../../database/services/coding-export.service';
@@ -126,6 +126,95 @@ export class WorkspaceCodingController {
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="coding-list-${new Date().toISOString().slice(0, 10)}.xlsx"`);
     res.send(excelData);
+  }
+
+  @Get(':workspace_id/coding/coding-list/json')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiQuery({
+    name: 'authToken',
+    required: true,
+    description: 'Authentication token for generating replay URLs',
+    type: String
+  })
+  @ApiQuery({
+    name: 'serverUrl',
+    required: false,
+    description: 'Server URL to use for generating links',
+    type: String
+  })
+  @ApiOkResponse({
+    description: 'Coding list exported as JSON',
+    content: {
+      'application/json': {
+        schema: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              unit_key: { type: 'string' },
+              unit_alias: { type: 'string' },
+              login_name: { type: 'string' },
+              login_code: { type: 'string' },
+              login_group: { type: 'string' },
+              booklet_id: { type: 'string' },
+              variable_id: { type: 'string' },
+              variable_page: { type: 'string' },
+              variable_anchor: { type: 'string' },
+              url: { type: 'string' }
+            }
+          }
+        }
+      }
+    }
+  })
+  async getCodingListAsJson(@WorkspaceId() workspace_id: number, @Query('authToken') authToken: string, @Query('serverUrl') serverUrl: string, @Res() res: Response): Promise<void> {
+    this.logger.log(`Starting JSON export for workspace ${workspace_id}`);
+
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename="coding-list-${new Date().toISOString().slice(0, 10)}.json"`);
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+
+    try {
+      res.write('[');
+      const stream = await this.codingListService.getCodingListJsonStream(workspace_id, authToken || '', serverUrl || '');
+      let first = true;
+      stream.on('data', (item: CodingItem) => {
+        if (!first) {
+          res.write(',');
+        } else {
+          first = false;
+        }
+        res.write(JSON.stringify(item));
+
+        // Force garbage collection hint
+        if (global.gc) {
+          global.gc();
+        }
+      });
+
+      stream.on('end', () => {
+        res.write(']');
+        res.end();
+        this.logger.log(`JSON export completed for workspace ${workspace_id}`);
+      });
+
+      stream.on('error', (error: Error) => {
+        this.logger.error(`Error during JSON export: ${error.message}`);
+        if (!res.headersSent) {
+          res.status(500).json({ error: 'Export failed' });
+        } else {
+          res.end();
+        }
+      });
+    } catch (error) {
+      this.logger.error(`Failed to start JSON export: ${error.message}`);
+      if (!res.headersSent) {
+        res.status(500).json({ error: 'Export initialization failed' });
+      }
+    }
   }
 
   @Get(':workspace_id/coding/statistics')

@@ -482,10 +482,11 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
           if (this.testPerson) {
             const parts = this.testPerson.split('@');
-            if (parts.length > 0) {
+            if (parts.length >= 3) {
               testPersonLogin = parts[0];
               testPersonCode = parts[1];
-              bookletId = parts[2];
+              // Support both old format (3 parts: login@code@booklet) and new format (4 parts: login@code@group@booklet)
+              bookletId = parts.length === 4 ? parts[3] : parts[2];
             }
           }
           if (authToken) {
@@ -582,11 +583,12 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       let bookletId = '';
 
       if (this.testPerson) {
-        const parts = this.testPerson.split(':');
-        if (parts.length > 0) {
+        const parts = this.testPerson.split('@');
+        if (parts.length >= 3) {
           testPersonLogin = parts[0];
           testPersonCode = parts[1];
-          bookletId = parts[2];
+          // Support both old format (3 parts: login@code@booklet) and new format (4 parts: login@code@group@booklet)
+          bookletId = parts.length === 4 ? parts[3] : parts[2];
         }
       }
       const replayUrl = window.location.href;

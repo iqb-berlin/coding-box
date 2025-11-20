@@ -552,17 +552,29 @@ export class CodingJobService {
     const testPersonParts = progress.testPerson.split('@');
     const personLogin = testPersonParts[0] || '';
     const personCode = testPersonParts[1] || '';
-    const bookletName = testPersonParts[2] || '';
+    const bookletName = testPersonParts[testPersonParts.length - 1] || '';
+    let personGroup: string | undefined;
+
+    // Handle new 4-part URL format: login@code@group@booklet
+    if (testPersonParts.length === 4) {
+      personGroup = testPersonParts[2];
+    }
+
+    const whereCondition: Partial<CodingJobUnit> = {
+      coding_job_id: codingJobId,
+      unit_name: progress.unitId,
+      variable_id: progress.variableId,
+      person_login: personLogin,
+      person_code: personCode,
+      booklet_name: bookletName
+    };
+
+    if (personGroup !== undefined) {
+      whereCondition.person_group = personGroup;
+    }
 
     const codingJobUnit = await this.codingJobUnitRepository.findOne({
-      where: {
-        coding_job_id: codingJobId,
-        unit_name: progress.unitId,
-        variable_id: progress.variableId,
-        person_login: personLogin,
-        person_code: personCode,
-        booklet_name: bookletName
-      }
+      where: whereCondition
     });
 
     if (!codingJobUnit) {
@@ -713,7 +725,7 @@ export class CodingJobService {
     return `${testPerson}::${bookletId}::${unitId}::${variableId}`;
   }
 
-  async getCodingJobUnits(codingJobId: number, onlyOpen: boolean = false): Promise<{ responseId: number; unitName: string; unitAlias: string | null; variableId: string; variableAnchor: string; bookletName: string; personLogin: string; personCode: string; notes: string | null }[]> {
+  async getCodingJobUnits(codingJobId: number, onlyOpen: boolean = false): Promise<{ responseId: number; unitName: string; unitAlias: string | null; variableId: string; variableAnchor: string; bookletName: string; personLogin: string; personCode: string; personGroup: string; notes: string | null }[]> {
     const whereClause: { coding_job_id: number; is_open?: boolean } = { coding_job_id: codingJobId };
 
     if (onlyOpen) {
@@ -731,6 +743,7 @@ export class CodingJobService {
         'booklet_name',
         'person_login',
         'person_code',
+        'person_group',
         'notes'
       ],
       order: {
@@ -751,6 +764,7 @@ export class CodingJobService {
       bookletName: unit.booklet_name,
       personLogin: unit.person_login,
       personCode: unit.person_code,
+      personGroup: unit.person_group,
       notes: unit.notes
     }));
   }
@@ -771,7 +785,8 @@ export class CodingJobService {
       variable_anchor: response.variableid,
       booklet_name: response.unit?.booklet?.bookletinfo?.name || '',
       person_login: response.unit?.booklet?.person?.login || '',
-      person_code: response.unit?.booklet?.person?.code || ''
+      person_code: response.unit?.booklet?.person?.code || '',
+      person_group: response.unit?.booklet?.person?.group || ''
     }));
 
     await this.codingJobUnitRepository.save(codingJobUnits);
@@ -889,7 +904,8 @@ export class CodingJobService {
       variable_anchor: response.variableid,
       booklet_name: response.unit?.booklet?.bookletinfo?.name || '',
       person_login: response.unit?.booklet?.person?.login || '',
-      person_code: response.unit?.booklet?.person?.code || ''
+      person_code: response.unit?.booklet?.person?.code || '',
+      person_group: response.unit?.booklet?.person?.group || ''
     }));
 
     await this.codingJobUnitRepository.save(codingJobUnits);
@@ -1341,8 +1357,7 @@ export class CodingJobService {
     const progressMap: Record<number, Record<string, SaveCodingProgressDto['selectedCode']>> = {};
 
     await Promise.all(codingJobs.map(async job => {
-      const progress = await this.getCodingProgress(job.id);
-      progressMap[job.id] = progress;
+      progressMap[job.id] = await this.getCodingProgress(job.id);
     }));
 
     return progressMap;
