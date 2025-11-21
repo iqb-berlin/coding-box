@@ -1746,10 +1746,12 @@ export class WorkspaceCodingService {
       .andWhere('person.workspace_id = :workspaceId', { workspaceId })
       .getCount();
 
-    // Get completed coding job units (where code is not null)
     const completedCases = await this.codingJobUnitRepository.count({
       where: {
-        coding_job: { workspace_id: workspaceId },
+        coding_job: {
+          workspace_id: workspaceId,
+          training_id: IsNull()
+        },
         code: Not(IsNull())
       }
     });
@@ -1781,20 +1783,24 @@ export class WorkspaceCodingService {
 
     const casesInJobs = await this.codingJobUnitRepository.createQueryBuilder('cju')
       .innerJoin('cju.response', 'response')
+      .leftJoin('cju.coding_job', 'coding_job')
       .leftJoin('response.unit', 'unit')
       .leftJoin('unit.booklet', 'booklet')
       .leftJoin('booklet.person', 'person')
       .where('response.status_v1 = :status', { status: statusStringToNumber('CODING_INCOMPLETE') })
       .andWhere('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('coding_job.training_id IS NULL')
       .getCount();
 
     const uniqueCasesInJobsResult = await this.codingJobUnitRepository.createQueryBuilder('cju')
       .innerJoin('cju.response', 'response')
+      .leftJoin('cju.coding_job', 'coding_job')
       .leftJoin('response.unit', 'unit')
       .leftJoin('unit.booklet', 'booklet')
       .leftJoin('booklet.person', 'person')
       .where('response.status_v1 = :status', { status: statusStringToNumber('CODING_INCOMPLETE') })
       .andWhere('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('coding_job.training_id IS NULL')
       .select('COUNT(DISTINCT cju.response_id)', 'count')
       .getRawOne();
 
