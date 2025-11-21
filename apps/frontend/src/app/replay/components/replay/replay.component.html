@@ -77,7 +77,7 @@
 
 
   @if (testPerson && unitId) {
-    <div class="watermark">{{ testPerson }} - {{ unitId }}</div>
+    <div [class]="'watermark' + (isCodingMode && codingService.codingScheme && codingService.currentVariableId ? ' code-selector-active' : '')">{{ testPerson }} - {{ unitId }}</div>
   }
 
   @if (codingService.isCodingJobCompleted && !isBookletReplayMode) {
@@ -120,4 +120,5 @@
       </div>
     </div>
   }
+
 </div>
