@@ -831,8 +831,8 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
       return;
     }
 
-    const jobNames = selectedJobs.map(job => `"${job.name}"`).join(', ');
-    const confirmMessage = `Möchten Sie wirklich ${selectedJobs.length} Kodierjob(s) löschen?\n\n${jobNames}`;
+    const jobNamesHTML = selectedJobs.map(job => `"${job.name}"`).join('<br>');
+    const confirmMessage = `Möchten Sie wirklich ${selectedJobs.length} Kodierjob(s) löschen?<br><br>${jobNamesHTML}`;
 
     const dialogRef = this.dialog.open(ConfirmDialogComponent, {
       width: '500px',
