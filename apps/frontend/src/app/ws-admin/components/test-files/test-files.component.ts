@@ -245,7 +245,11 @@ export class TestFilesComponent implements OnInit, OnDestroy {
     this.backendService.downloadFile(this.appService.selectedWorkspaceId, row.id).subscribe({
       next: (res: FileDownloadDto) => {
         const decodedString = atob(res.base64Data);
-        const blob = new Blob([decodedString], { type: 'application/xml' });
+        const byteArray = new Uint8Array(decodedString.length);
+        for (let i = 0; i < decodedString.length; i++) {
+          byteArray[i] = decodedString.charCodeAt(i);
+        }
+        const blob = new Blob([byteArray], { type: res.mimeType || 'application/xml' });
         const url = window.URL.createObjectURL(blob);
         const anchor = document.createElement('a');
         anchor.href = url;
