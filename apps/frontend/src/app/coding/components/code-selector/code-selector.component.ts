@@ -241,6 +241,10 @@ export class CodeSelectorComponent implements OnChanges {
     return this.selectedCodingIssueOption === -3 || this.selectedCodingIssueOption === -4;
   }
 
+  private hasCurrentSelection(): boolean {
+    return this.selectedCode !== null || this.selectedCodingIssueOption !== null;
+  }
+
   deselectAll(): void {
     this.selectedCode = null;
     this.selectedCodingIssueOption = null;
@@ -273,6 +277,10 @@ export class CodeSelectorComponent implements OnChanges {
       return;
     }
 
+    if (!this.isReadOnly && !this.hasCurrentSelection()) {
+      return;
+    }
+
     const currentIndex = data.currentUnitIndex;
     const nextIndex = currentIndex + 1;
     if (nextIndex >= 0 && nextIndex < data.units.length) {
@@ -298,7 +306,13 @@ export class CodeSelectorComponent implements OnChanges {
     if (!data || !data.units.length) return false;
 
     const nextIndex = data.currentUnitIndex + 1;
-    return nextIndex < data.units.length;
+    const hasNext = nextIndex < data.units.length;
+
+    if (this.isReadOnly) {
+      return hasNext;
+    }
+
+    return hasNext && this.hasCurrentSelection();
   }
 
   hasPreviousUnit(): boolean {
