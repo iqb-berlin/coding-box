@@ -43,6 +43,8 @@ interface CodingResult {
   codeLabel?: string;
   score?: number;
   codingIssueOptionLabel?: string;
+  givenCode?: string | number;
+  givenScore?: number;
 }
 
 @Component({
@@ -143,7 +145,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy {
 
         this.backendService.getCodingProgress(this.data.workspaceId, this.data.codingJob.id).subscribe({
           next: progressResult => {
-            const codingResults: CodingResult[] = unitsResult.map(unit => {
+            this.dataSource.data = unitsResult.map(unit => {
               const testPerson = `${unit.personLogin}@${unit.personCode}@${unit.bookletName}`;
               const progressKey = `${testPerson}::${unit.bookletName}::${unit.unitName}::${unit.variableId}`;
               const progress = progressResult[progressKey] as { id?: string; label?: string; score?: number; codingIssueOption?: number } | undefined;
@@ -160,11 +162,11 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy {
                 code: progress?.id,
                 codeLabel: progress?.label,
                 score: progress?.score,
-                codingIssueOptionLabel: progress?.codingIssueOption ? this.getCodingIssueOption(progress.codingIssueOption) : undefined
+                codingIssueOptionLabel: progress?.codingIssueOption ? this.getCodingIssueOption(progress.codingIssueOption) : undefined,
+                givenCode: progress?.codingIssueOption && progress?.id && this.isPositiveCode(progress.id) ? progress.id : undefined,
+                givenScore: progress?.codingIssueOption && progress?.score !== undefined && progress?.score !== null ? progress.score : undefined
               };
             });
-
-            this.dataSource.data = codingResults;
             this.isLoading = false;
           },
           error: () => {
@@ -269,6 +271,9 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy {
   getCodeDisplay(result: CodingResult): string {
     if (result.code !== undefined && result.code !== null) {
       if (this.isCodingIssueOption(result)) {
+        if (result.givenCode !== undefined && result.givenCode !== null) {
+          return `${result.givenCode} (unsicher)`;
+        }
         return '';
       }
       return result.code.toString();
@@ -278,6 +283,9 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy {
 
   getScoreDisplay(result: CodingResult): string {
     if (this.isCodingIssueOption(result)) {
+      if (result.givenScore !== undefined && result.givenScore !== null) {
+        return `${result.givenScore} (unsicher)`;
+      }
       return result.codeLabel || '';
     }
     if (result.score !== undefined && result.score !== null) {
@@ -293,23 +301,27 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy {
     return result.code !== undefined && result.code !== null;
   }
 
+  private isPositiveCode(code: string | number): boolean {
+    if (typeof code === 'number') {
+      return code > 0;
+    }
+    const numCode = parseInt(code, 10);
+    return !Number.isNaN(numCode) && numCode > 0;
+  }
+
   isCodingIssueOption(result: CodingResult): boolean {
-    // Check for negative code (coding issue option as code) OR presence of coding issue option label
     if (result.code !== undefined && result.code !== null) {
       const codeNum = typeof result.code === 'number' ? result.code : parseInt(result.code.toString(), 10);
       if (codeNum < 0) return true;
     }
-    // Also check for codingIssueOptionLabel which indicates a coding issue option is set (even with a regular code)
     return result.codingIssueOptionLabel !== null && result.codingIssueOptionLabel !== undefined;
   }
 
   isNewCodeNeeded(result: CodingResult): boolean {
-    // Check if this is specifically the "new-code-needed" coding issue (code -2)
     if (result.code !== undefined && result.code !== null) {
       const codeNum = typeof result.code === 'number' ? result.code : parseInt(result.code.toString(), 10);
       return codeNum === -2;
     }
-    // Also check if the label indicates new code is needed
     return result.codingIssueOptionLabel === this.getCodingIssueOption(-2);
   }
 
@@ -330,6 +342,9 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy {
 
   getCellClasses(result: CodingResult): string {
     if (this.isCodingIssueOption(result)) {
+      if (result.givenCode !== undefined && result.givenCode !== null) {
+        return 'uncertain-with-code';
+      }
       return 'uncertain';
     }
     return this.hasCode(result) ? 'coded' : 'not-coded';
@@ -397,14 +412,12 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy {
       return;
     }
 
-    // Use unitAlias as coding scheme reference, fallback to unitName if not available
     const codingSchemeRef = result.unitAlias;
     if (!codingSchemeRef) {
       this.snackBar.open('Kein Kodierungsschema-Referenz gefunden für diese Einheit', 'Schließen', { duration: 3000 });
       return;
     }
 
-    // Fetch the coding scheme content
     this.backendService.getCodingSchemeFile(this.data.workspaceId, codingSchemeRef).subscribe({
       next: schemeFile => {
         if (!schemeFile) {
@@ -412,16 +425,13 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy {
           return;
         }
 
-        // Decode base64 scheme content
         let schemeContent: string;
         try {
           schemeContent = atob(schemeFile.base64Data);
         } catch (error) {
-          // If decoding fails, use as-is
           schemeContent = schemeFile.base64Data;
         }
 
-        // Open scheme editor dialog
         const dialogRef = this.dialog.open(SchemeEditorDialogComponent, {
           width: '90vw',
           height: '90vh',
@@ -434,10 +444,8 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy {
           }
         });
 
-        // Handle dialog close
         dialogRef.afterClosed().subscribe(dialogResult => {
           if (dialogResult === true) {
-            // Scheme was saved successfully, refresh the results
             this.snackBar.open('Kodierungsschema erfolgreich aktualisiert', 'Schließen', { duration: 3000 });
             this.loadCodingResults();
           }
