@@ -53,7 +53,8 @@ export class CodingJobsController {
     @Param('id', ParseIntPipe) id: number
   ): Promise<CodingJobDto> {
     try {
-      return await this.codingJobService.getCodingJobById(id);
+      const result = await this.codingJobService.getCodingJobById(id);
+      return CodingJobDto.fromEntity(result);
     } catch (error) {
       if (error instanceof NotFoundException) {
         throw error;

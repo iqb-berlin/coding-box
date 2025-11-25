@@ -23,7 +23,10 @@ export class JobDefinitionService {
       workspace_id: workspaceId,
       status: createDto.status ?? 'draft',
       assigned_variables: createDto.assignedVariables,
-      assigned_variable_bundles: createDto.assignedVariableBundles,
+      assigned_variable_bundles: createDto.assignedVariableBundles?.map(bundle => ({
+        id: bundle.id,
+        name: bundle.name
+      })),
       assigned_coders: createDto.assignedCoders,
       duration_seconds: createDto.durationSeconds,
       max_coding_cases: createDto.maxCodingCases,
@@ -43,6 +46,24 @@ export class JobDefinitionService {
       throw new NotFoundException(`Job definition with ID ${id} not found`);
     }
 
+    if (jobDefinition.assigned_variable_bundles && jobDefinition.assigned_variable_bundles.length > 0) {
+      const bundleIds = jobDefinition.assigned_variable_bundles.map(b => b.id);
+      const fullBundles = await this.variableBundleRepository.find({
+        where: { id: In(bundleIds) }
+      });
+      jobDefinition.assigned_variable_bundles = fullBundles.map(bundle => ({
+        id: bundle.id,
+        name: bundle.name,
+        description: bundle.description,
+        createdAt: bundle.created_at,
+        updatedAt: bundle.updated_at,
+        variables: bundle.variables
+      }));
+      if (fullBundles.length < bundleIds.length) {
+        await this.jobDefinitionRepository.save(jobDefinition);
+      }
+    }
+
     return jobDefinition;
   }
 
@@ -51,10 +72,29 @@ export class JobDefinitionService {
       workspace_id: workspaceId
     } : {};
 
-    return this.jobDefinitionRepository.find({
+    const definitions = await this.jobDefinitionRepository.find({
       where: whereClause,
       order: { created_at: 'DESC' }
     });
+
+    for (const definition of definitions) {
+      if (definition.assigned_variable_bundles && definition.assigned_variable_bundles.length > 0) {
+        const bundleIds = definition.assigned_variable_bundles.map(b => b.id);
+        const fullBundles = await this.variableBundleRepository.find({
+          where: { id: In(bundleIds) }
+        });
+        definition.assigned_variable_bundles = fullBundles.map(bundle => ({
+          id: bundle.id,
+          name: bundle.name,
+          description: bundle.description,
+          createdAt: bundle.created_at,
+          updatedAt: bundle.updated_at,
+          variables: bundle.variables
+        }));
+      }
+    }
+
+    return definitions;
   }
 
   async updateJobDefinition(id: number, updateDto: UpdateJobDefinitionDto): Promise<JobDefinition> {
@@ -67,7 +107,10 @@ export class JobDefinitionService {
       jobDefinition.assigned_variables = updateDto.assignedVariables;
     }
     if (updateDto.assignedVariableBundles !== undefined) {
-      jobDefinition.assigned_variable_bundles = updateDto.assignedVariableBundles;
+      jobDefinition.assigned_variable_bundles = updateDto.assignedVariableBundles?.map(bundle => ({
+        id: bundle.id,
+        name: bundle.name
+      }));
     }
     if (updateDto.assignedCoders !== undefined) {
       jobDefinition.assigned_coders = updateDto.assignedCoders;
@@ -132,23 +175,24 @@ export class JobDefinitionService {
       throw new Error('Only approved job definitions can be used to create coding jobs');
     }
 
-    const allVariables = jobDefinition.assigned_variables || [];
-    if (jobDefinition.assigned_variable_bundles) {
-      const bundleIds = jobDefinition.assigned_variable_bundles.map(bundle => bundle.id);
-      const variableBundles = await this.variableBundleRepository.find({
-        where: { id: In(bundleIds) }
-      });
-      variableBundles.forEach(bundle => {
-        if (bundle.variables) {
-          allVariables.push(...bundle.variables);
-        }
-      });
-    }
+    const variableBundleIds = jobDefinition.assigned_variable_bundles?.map(bundle => bundle.id) || [];
+    const fullVariableBundles = variableBundleIds.length > 0 ?
+      await this.variableBundleRepository.find({
+        where: { id: In(variableBundleIds) }
+      }) :
+      [];
+
+    const bundleVariables = fullVariableBundles.flatMap(bundle => bundle.variables || []);
+    const bundleVariableKeys = new Set(bundleVariables.map(v => `${v.unitName}-${v.variableId}`));
+
+    const filteredVariables = (jobDefinition.assigned_variables || []).filter(v => !bundleVariableKeys.has(`${v.unitName}-${v.variableId}`)
+    );
 
     const codingJobData = {
       name: `Coding Job from Definition ${jobDefinitionId}`,
       status: 'pending',
-      variables: allVariables,
+      variables: filteredVariables,
+      variableBundles: fullVariableBundles,
       assignedCoders: jobDefinition.assigned_coders || [],
       durationSeconds: jobDefinition.duration_seconds,
       doubleCodingAbsolute: jobDefinition.double_coding_absolute,

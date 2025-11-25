@@ -227,7 +227,7 @@ export class CodingJobService {
     const codingJobVariables = await this.codingJobVariableRepository.find({
       where: { coding_job_id: id }
     });
-    const variables = codingJobVariables.map(variable => ({
+    let variables = codingJobVariables.map(variable => ({
       unitName: variable.unit_name,
       variableId: variable.variable_id
     }));
@@ -239,6 +239,10 @@ export class CodingJobService {
     const variableBundles = await this.variableBundleRepository.find({
       where: { id: In(variableBundleIds) }
     });
+
+    // Include variables from bundles
+    const bundleVariables = variableBundles.flatMap(bundle => bundle.variables || []);
+    variables = [...variables, ...bundleVariables];
 
     return {
       codingJob,
@@ -747,11 +751,11 @@ export class CodingJobService {
         'notes'
       ],
       order: {
+        variable_id: 'ASC',
         unit_name: 'ASC',
         booklet_name: 'ASC',
         person_login: 'ASC',
-        person_code: 'ASC',
-        variable_id: 'ASC'
+        person_code: 'ASC'
       }
     });
 
@@ -1040,30 +1044,45 @@ export class CodingJobService {
     const distribution: Record<string, Record<string, number>> = {};
     const doubleCodingInfo: Record<string, { totalCases: number; doubleCodedCases: number; singleCodedCasesAssigned: number; doubleCodedCasesPerCoder: Record<string, number> }> = {};
 
-    const allResponses = await this.getResponsesForVariables(workspaceId, selectedVariables);
+    const items: Array<{ type: 'bundle' | 'variable'; item: { id: number; name: string; variables: { unitName: string; variableId: string }[] } | { unitName: string; variableId: string } }> = [];
+    const allVariables: { unitName: string; variableId: string }[] = [];
 
-    const variableResponseMap = new Map<string, ResponseEntity[]>();
-    const variableKeyFunc = (unitName: string, variableId: string) => `${unitName}::${variableId}`;
-
-    allResponses.forEach(response => {
-      if (response.unit?.name && response.variableid) {
-        const key = variableKeyFunc(response.unit.name, response.variableid);
-        if (!variableResponseMap.has(key)) {
-          variableResponseMap.set(key, []);
-        }
-        variableResponseMap.get(key)!.push(response);
+    if (request.selectedVariableBundles) {
+      for (const bundle of request.selectedVariableBundles) {
+        items.push({ type: 'bundle', item: bundle });
+        allVariables.push(...bundle.variables);
       }
-    });
+    }
+
+    for (const variable of selectedVariables) {
+      items.push({ type: 'variable', item: variable });
+      allVariables.push(variable);
+    }
+
+    const allResponses = await this.getResponsesForVariables(workspaceId, allVariables);
 
     const sortedCoders = [...selectedCoders].sort((a, b) => a.name.localeCompare(b.name));
 
-    for (const variable of selectedVariables) {
-      const variableKey = variableKeyFunc(variable.unitName, variable.variableId);
-      const responses = variableResponseMap.get(variableKey) || [];
+    for (const itemObj of items) {
+      let itemVariables: { unitName: string; variableId: string }[];
+      let itemKey = '';
+
+      if (itemObj.type === 'bundle') {
+        const bundleItem = itemObj.item as { id: number; name: string; variables: { unitName: string; variableId: string }[] };
+        itemVariables = bundleItem.variables;
+        itemKey = bundleItem.name;
+      } else {
+        const variableItem = itemObj.item as { unitName: string; variableId: string };
+        itemVariables = [variableItem];
+        itemKey = `${variableItem.unitName}::${variableItem.variableId}`;
+      }
+
+      const responses = allResponses.filter(response => itemVariables.some(v => v.unitName === response.unit?.name && v.variableId === response.variableid)
+      );
       const totalCases = responses.length;
 
-      distribution[variableKey] = {};
-      doubleCodingInfo[variableKey] = {
+      distribution[itemKey] = {};
+      doubleCodingInfo[itemKey] = {
         totalCases: totalCases,
         doubleCodedCases: 0,
         singleCodedCasesAssigned: 0,
@@ -1072,7 +1091,7 @@ export class CodingJobService {
 
       if (totalCases === 0) {
         sortedCoders.forEach(coder => {
-          distribution[variableKey][coder.name] = 0;
+          distribution[itemKey][coder.name] = 0;
         });
         continue;
       }
@@ -1084,15 +1103,18 @@ export class CodingJobService {
         doubleCodingCount = Math.floor((doubleCodingPercentage / 100) * totalCases);
       }
 
-      const shuffledResponses = [...responses].sort(() => Math.random() - 0.5);
-      const doubleCodingResponses = shuffledResponses.slice(0, doubleCodingCount);
-      const singleCodingResponses = shuffledResponses.slice(doubleCodingCount);
+      const sortedResponses = [...responses].sort((a, b) => {
+        if (a.variableid !== b.variableid) return a.variableid.localeCompare(b.variableid);
+        return a.id - b.id;
+      });
+      const doubleCodingResponses = sortedResponses.slice(0, doubleCodingCount);
+      const singleCodingResponses = sortedResponses.slice(doubleCodingCount);
 
-      doubleCodingInfo[variableKey].doubleCodedCases = doubleCodingCount;
-      doubleCodingInfo[variableKey].singleCodedCasesAssigned = singleCodingResponses.length;
+      doubleCodingInfo[itemKey].doubleCodedCases = doubleCodingCount;
+      doubleCodingInfo[itemKey].singleCodedCasesAssigned = singleCodingResponses.length;
 
       sortedCoders.forEach(coder => {
-        doubleCodingInfo[variableKey].doubleCodedCasesPerCoder[coder.name] = 0;
+        doubleCodingInfo[itemKey].doubleCodedCasesPerCoder[coder.name] = 0;
       });
 
       const caseDistribution = this.distributeCasesForVariable(
@@ -1107,7 +1129,7 @@ export class CodingJobService {
       );
       for (const { coders: assignedCoders } of doubleCodingAssignments) {
         for (const coder of assignedCoders) {
-          doubleCodingInfo[variableKey].doubleCodedCasesPerCoder[coder.name] += 1;
+          doubleCodingInfo[itemKey].doubleCodedCasesPerCoder[coder.name] += 1;
         }
       }
 
@@ -1116,7 +1138,7 @@ export class CodingJobService {
         const coder = sortedCoders[i];
         const coderCases = caseDistribution[i];
 
-        distribution[variableKey][coder.name] = coderCases.length;
+        distribution[itemKey][coder.name] = coderCases.length;
       }
     }
 
@@ -1150,7 +1172,7 @@ export class CodingJobService {
     this.logger.log(`Creating distributed coding jobs for workspace ${workspaceId}`);
 
     const {
-      selectedVariables, selectedCoders, doubleCodingAbsolute, doubleCodingPercentage
+      selectedVariables, selectedVariableBundles, selectedCoders, doubleCodingAbsolute, doubleCodingPercentage
     } = request;
     const distribution: Record<string, Record<string, number>> = {};
     const doubleCodingInfo: Record<string, { totalCases: number; doubleCodedCases: number; singleCodedCasesAssigned: number; doubleCodedCasesPerCoder: Record<string, number> }> = {};
@@ -1164,33 +1186,46 @@ export class CodingJobService {
     }[] = [];
 
     try {
-      const allResponses = await this.getResponsesForVariables(workspaceId, selectedVariables);
+    // Determine items to process
+      const items: Array<{ type: 'bundle' | 'variable'; item: { id: number; name: string; variables: { unitName: string; variableId: string }[] } | { unitName: string; variableId: string } }> = [];
+      const allVariables: { unitName: string; variableId: string }[] = [];
 
-      // Group responses by variable
-      const variableResponseMap = new Map<string, ResponseEntity[]>();
-      const variableKeyFunc = (unitName: string, variableId: string) => `${unitName}::${variableId}`;
-
-      allResponses.forEach(response => {
-        if (response.unit?.name && response.variableid) {
-          const key = variableKeyFunc(response.unit.name, response.variableid);
-          if (!variableResponseMap.has(key)) {
-            variableResponseMap.set(key, []);
-          }
-          variableResponseMap.get(key)!.push(response);
+      if (selectedVariableBundles) {
+        for (const bundle of selectedVariableBundles) {
+          items.push({ type: 'bundle', item: bundle });
+          allVariables.push(...bundle.variables);
         }
-      });
+      }
+
+      for (const variable of selectedVariables) {
+        items.push({ type: 'variable', item: variable });
+        allVariables.push(variable);
+      } const allResponses = await this.getResponsesForVariables(workspaceId, allVariables);
 
       // Sort coders alphabetically for deterministic distribution
       const sortedCoders = [...selectedCoders].sort((a, b) => a.name.localeCompare(b.name));
 
       // Create distribution matrix and jobs with double coding support
-      for (const variable of selectedVariables) {
-        const variableKey = variableKeyFunc(variable.unitName, variable.variableId);
-        const responses = variableResponseMap.get(variableKey) || [];
+      for (const itemObj of items) {
+        let itemVariables: { unitName: string; variableId: string }[];
+        let itemKey = '';
+
+        if (itemObj.type === 'bundle') {
+          const bundleItem = itemObj.item as { id: number; name: string; variables: { unitName: string; variableId: string }[] };
+          itemVariables = bundleItem.variables;
+          itemKey = bundleItem.name;
+        } else {
+          const variableItem = itemObj.item as { unitName: string; variableId: string };
+          itemVariables = [variableItem];
+          itemKey = `${variableItem.unitName}::${variableItem.variableId}`;
+        }
+
+        const responses = allResponses.filter(response => itemVariables.some(v => v.unitName === response.unit?.name && v.variableId === response.variableid)
+        );
         const totalCases = responses.length;
 
-        distribution[variableKey] = {};
-        doubleCodingInfo[variableKey] = {
+        distribution[itemKey] = {};
+        doubleCodingInfo[itemKey] = {
           totalCases: totalCases,
           doubleCodedCases: 0,
           singleCodedCasesAssigned: 0,
@@ -1199,23 +1234,8 @@ export class CodingJobService {
 
         if (totalCases === 0) {
           for (const coder of sortedCoders) {
-            distribution[variableKey][coder.name] = 0;
-            const jobName = generateJobName(coder.name, variable.unitName, variable.variableId, 0);
-
-            const codingJob = await this.createCodingJob(workspaceId, {
-              name: jobName,
-              assignedCoders: [coder.id],
-              variables: [variable]
-            });
-
-            createdJobs.push({
-              coderId: coder.id,
-              coderName: coder.name,
-              variable: { unitName: variable.unitName, variableId: variable.variableId },
-              jobId: codingJob.id,
-              jobName: jobName,
-              caseCount: 0
-            });
+            distribution[itemKey][coder.name] = 0;
+            doubleCodingInfo[itemKey].doubleCodedCasesPerCoder[coder.name] = 0;
           }
           continue;
         }
@@ -1227,15 +1247,43 @@ export class CodingJobService {
           doubleCodingCount = Math.floor((doubleCodingPercentage / 100) * totalCases);
         }
 
-        const shuffledResponses = [...responses].sort(() => Math.random() - 0.5);
-        const doubleCodingResponses = shuffledResponses.slice(0, doubleCodingCount);
-        const singleCodingResponses = shuffledResponses.slice(doubleCodingCount);
+        const sortedResponses = [...responses].sort((a, b) => {
+          // First by variableid
+          if (a.variableid !== b.variableid) return a.variableid.localeCompare(b.variableid);
 
-        doubleCodingInfo[variableKey].doubleCodedCases = doubleCodingCount;
-        doubleCodingInfo[variableKey].singleCodedCasesAssigned = singleCodingResponses.length;
+          // Then by unit id (unit.name)
+          const aUnitName = a.unit?.name || '';
+          const bUnitName = b.unit?.name || '';
+          if (aUnitName !== bUnitName) return aUnitName.localeCompare(bUnitName);
+
+          // Then by testperson: login, code, group, booklet.name
+          const aLogin = a.unit?.booklet?.person?.login || '';
+          const bLogin = b.unit?.booklet?.person?.login || '';
+          if (aLogin !== bLogin) return aLogin.localeCompare(bLogin);
+
+          const aCode = a.unit?.booklet?.person?.code || '';
+          const bCode = b.unit?.booklet?.person?.code || '';
+          if (aCode !== bCode) return aCode.localeCompare(bCode);
+
+          const aGroup = a.unit?.booklet?.person?.group || '';
+          const bGroup = b.unit?.booklet?.person?.group || '';
+          if (aGroup !== bGroup) return aGroup.localeCompare(bGroup);
+
+          const aBooklet = a.unit?.booklet?.bookletinfo?.name || '';
+          const bBooklet = b.unit?.booklet?.bookletinfo?.name || '';
+          if (aBooklet !== bBooklet) return aBooklet.localeCompare(bBooklet);
+
+          // Finally by id
+          return a.id - b.id;
+        });
+        const doubleCodingResponses = sortedResponses.slice(0, doubleCodingCount);
+        const singleCodingResponses = sortedResponses.slice(doubleCodingCount);
+
+        doubleCodingInfo[itemKey].doubleCodedCases = doubleCodingCount;
+        doubleCodingInfo[itemKey].singleCodedCasesAssigned = singleCodingResponses.length;
 
         sortedCoders.forEach(coder => {
-          doubleCodingInfo[variableKey].doubleCodedCasesPerCoder[coder.name] = 0;
+          doubleCodingInfo[itemKey].doubleCodedCasesPerCoder[coder.name] = 0;
         });
 
         const caseDistribution = this.distributeCasesForVariable(
@@ -1250,7 +1298,7 @@ export class CodingJobService {
         );
         for (const { coders: assignedCoders } of doubleCodingAssignments) {
           for (const coder of assignedCoders) {
-            doubleCodingInfo[variableKey].doubleCodedCasesPerCoder[coder.name] += 1;
+            doubleCodingInfo[itemKey].doubleCodedCasesPerCoder[coder.name] += 1;
           }
         }
 
@@ -1262,17 +1310,25 @@ export class CodingJobService {
 
           const caseCountForCoder = singleCases.length + doubleCases.length;
 
-          distribution[variableKey][coder.name] = caseCountForCoder;
+          distribution[itemKey][coder.name] = caseCountForCoder;
 
           if (caseCountForCoder > 0) {
-            const jobName = generateJobName(coder.name, variable.unitName, variable.variableId, caseCountForCoder);
+            const jobName = generateJobName(
+              coder.name, 
+              itemObj.type === 'bundle' ? itemKey : (itemObj.item as { unitName: string; variableId: string }).unitName, 
+              itemObj.type === 'bundle' ? '' : (itemObj.item as { unitName: string; variableId: string }).variableId, 
+              caseCountForCoder
+            );
 
             const codingJob = await this.createCodingJobWithUnitSubset(
               workspaceId,
               {
                 name: jobName,
                 assignedCoders: [coder.id],
-                variables: [variable]
+                ...(itemObj.type === 'bundle' ?
+                  { variableBundleIds: [(itemObj.item as { id: number; name: string; variables: { unitName: string; variableId: string }[] }).id] } :
+                  { variables: itemVariables }
+                )
               },
               coderCases.map(r => r.id)
             );
@@ -1280,27 +1336,10 @@ export class CodingJobService {
             createdJobs.push({
               coderId: coder.id,
               coderName: coder.name,
-              variable: { unitName: variable.unitName, variableId: variable.variableId },
+              variable: { unitName: itemKey, variableId: '' },
               jobId: codingJob.id,
               jobName: jobName,
               caseCount: caseCountForCoder
-            });
-          } else {
-            const jobName = generateJobName(coder.name, variable.unitName, variable.variableId, 0);
-
-            const codingJob = await this.createCodingJob(workspaceId, {
-              name: jobName,
-              assignedCoders: [coder.id],
-              variables: [variable]
-            });
-
-            createdJobs.push({
-              coderId: coder.id,
-              coderName: coder.name,
-              variable: { unitName: variable.unitName, variableId: variable.variableId },
-              jobId: codingJob.id,
-              jobName: jobName,
-              caseCount: 0
             });
           }
         }

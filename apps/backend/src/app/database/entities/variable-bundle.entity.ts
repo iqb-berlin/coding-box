@@ -3,8 +3,11 @@ import {
   Column,
   PrimaryGeneratedColumn,
   CreateDateColumn,
-  UpdateDateColumn
+  UpdateDateColumn,
+  OneToMany
 } from 'typeorm';
+// eslint-disable-next-line import/no-cycle
+import { CodingJobVariableBundle } from './coding-job-variable-bundle.entity';
 
 /**
  * Entity for variable bundles
@@ -37,4 +40,7 @@ export class VariableBundle {
 
   @UpdateDateColumn()
     updated_at: Date;
+
+  @OneToMany(() => CodingJobVariableBundle, codingJobVariableBundle => codingJobVariableBundle.variable_bundle, { cascade: true })
+    codingJobVariableBundles: CodingJobVariableBundle[];
 }

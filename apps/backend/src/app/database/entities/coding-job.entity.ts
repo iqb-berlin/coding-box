@@ -17,6 +17,13 @@ import { CodingJobUnit } from './coding-job-unit.entity';
 import { CodingJobCoder } from './coding-job-coder.entity';
 // eslint-disable-next-line import/no-cycle
 import { JobDefinition } from './job-definition.entity';
+// eslint-disable-next-line import/no-cycle
+import { CodingJobVariableBundle } from './coding-job-variable-bundle.entity';
+
+export interface Variable {
+  unitName: string;
+  variableId: string;
+}
 
 /**
  * Entity for coding jobs
@@ -83,4 +90,7 @@ export class CodingJob {
 
   @OneToMany(() => CodingJobCoder, codingJobCoder => codingJobCoder.coding_job, { cascade: true })
     codingJobCoders: CodingJobCoder[];
+
+  @OneToMany(() => CodingJobVariableBundle, codingJobVariableBundle => codingJobVariableBundle.coding_job, { cascade: true })
+    codingJobVariableBundles: CodingJobVariableBundle[];
 }
