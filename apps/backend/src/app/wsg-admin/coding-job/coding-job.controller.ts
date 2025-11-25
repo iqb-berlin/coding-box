@@ -5,7 +5,6 @@ import {
   DefaultValuePipe,
   Delete,
   Get,
-  NotFoundException,
   Param,
   ParseIntPipe,
   Post,
@@ -88,21 +87,14 @@ export class WsgCodingJobController {
       @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
       @Query('limit', new ParseIntPipe({ optional: true })) limit?: number
   ): Promise<{ data: CodingJobDto[]; total: number; totalOpenUnits: number; page: number; limit?: number }> {
-    try {
-      const result = await this.codingJobService.getCodingJobs(workspaceId, page, limit);
-      return {
-        data: result.data.map(job => CodingJobDto.fromEntity(job, job.assignedCoders, job.assignedVariables, job.assignedVariableBundles)),
-        total: result.total,
-        totalOpenUnits: result.totalOpenUnits,
-        page: result.page,
-        limit: result.limit
-      };
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      throw new BadRequestException(`Failed to retrieve coding jobs: ${error.message}`);
-    }
+    const result = await this.codingJobService.getCodingJobs(workspaceId, page, limit);
+    return {
+      data: result.data.map(job => CodingJobDto.fromEntity(job, job.assignedCoders, job.assignedVariables, job.assignedVariableBundles)),
+      total: result.total,
+      totalOpenUnits: result.totalOpenUnits,
+      page: result.page,
+      limit: result.limit
+    };
   }
 
   @Get(':id')
@@ -135,15 +127,8 @@ export class WsgCodingJobController {
     @WorkspaceId() workspaceId: number,
       @Param('id', ParseIntPipe) id: number
   ): Promise<CodingJobDto> {
-    try {
-      const result = await this.codingJobService.getCodingJob(id, workspaceId);
-      return CodingJobDto.fromEntity(result.codingJob, result.assignedCoders, result.variables, result.variableBundles.map(vb => ({ name: vb.name, variables: vb.variables })));
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      throw new BadRequestException(`Failed to retrieve coding job: ${error.message}`);
-    }
+    const result = await this.codingJobService.getCodingJob(id, workspaceId);
+    return CodingJobDto.fromEntity(result.codingJob, result.assignedCoders, result.variables, result.variableBundles.map(vb => ({ name: vb.name, variables: vb.variables })));
   }
 
   @Post()
@@ -215,18 +200,11 @@ export class WsgCodingJobController {
       @Param('id', ParseIntPipe) id: number,
       @Body() updateCodingJobDto: UpdateCodingJobDto
   ): Promise<CodingJobDto> {
-    try {
-      return await this.codingJobService.updateCodingJob(
-        id,
-        workspaceId,
-        updateCodingJobDto
-      );
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      throw new BadRequestException(`Failed to update coding job: ${error.message}`);
-    }
+    return this.codingJobService.updateCodingJob(
+      id,
+      workspaceId,
+      updateCodingJobDto
+    );
   }
 
   @Post(':id/start')
@@ -278,22 +256,15 @@ export class WsgCodingJobController {
     @WorkspaceId() workspaceId: number,
       @Param('id', ParseIntPipe) id: number
   ): Promise<{ total: number; items: Array<{ responseId: number; unitName: string; unitAlias: string | null; variableId: string; variableAnchor: string; bookletName: string; personLogin: string; personCode: string; personGroup: string }> }> {
-    try {
-      const job = await this.codingJobService.getCodingJob(id, workspaceId);
-      const onlyOpen = job.codingJob.status === 'pending';
-      const items = await this.codingJobService.getCodingJobUnits(id, onlyOpen);
+    const job = await this.codingJobService.getCodingJob(id, workspaceId);
+    const onlyOpen = job.codingJob.status === 'pending';
+    const items = await this.codingJobService.getCodingJobUnits(id, onlyOpen);
 
-      if (job.codingJob.status !== 'results_applied') {
-        await this.codingJobService.updateCodingJob(id, workspaceId, { status: 'active' });
-      }
-
-      return { total: items.length, items };
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      throw new BadRequestException(`Failed to start coding job: ${error.message}`);
+    if (job.codingJob.status !== 'results_applied') {
+      await this.codingJobService.updateCodingJob(id, workspaceId, { status: 'active' });
     }
+
+    return { total: items.length, items };
   }
 
   @Delete(':id')
@@ -331,14 +302,7 @@ export class WsgCodingJobController {
     @WorkspaceId() workspaceId: number,
       @Param('id', ParseIntPipe) id: number
   ): Promise<{ success: boolean }> {
-    try {
-      return await this.codingJobService.deleteCodingJob(id, workspaceId);
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      throw new BadRequestException(`Failed to delete coding job: ${error.message}`);
-    }
+    return this.codingJobService.deleteCodingJob(id, workspaceId);
   }
 
   @Post(':id/progress')
@@ -375,16 +339,9 @@ export class WsgCodingJobController {
       @Param('id', ParseIntPipe) id: number,
       @Body() saveCodingProgressDto: SaveCodingProgressDto
   ): Promise<CodingJobDto> {
-    try {
-      await this.codingJobService.getCodingJob(id, workspaceId);
-      const codingJob = await this.codingJobService.saveCodingProgress(id, saveCodingProgressDto);
-      return CodingJobDto.fromEntity(codingJob);
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      throw new BadRequestException(`Failed to save coding progress: ${error.message}`);
-    }
+    await this.codingJobService.getCodingJob(id, workspaceId);
+    const codingJob = await this.codingJobService.saveCodingProgress(id, saveCodingProgressDto);
+    return CodingJobDto.fromEntity(codingJob);
   }
 
   @Post(':id/restart-open-units')
@@ -420,15 +377,8 @@ export class WsgCodingJobController {
     @WorkspaceId() workspaceId: number,
       @Param('id', ParseIntPipe) id: number
   ): Promise<CodingJobDto> {
-    try {
-      const codingJob = await this.codingJobService.restartCodingJobWithOpenUnits(id, workspaceId);
-      return CodingJobDto.fromEntity(codingJob);
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      throw new BadRequestException(`Failed to restart coding job: ${error.message}`);
-    }
+    const codingJob = await this.codingJobService.restartCodingJobWithOpenUnits(id, workspaceId);
+    return CodingJobDto.fromEntity(codingJob);
   }
 
   @Get(':id/progress')
@@ -464,15 +414,8 @@ export class WsgCodingJobController {
     @WorkspaceId() workspaceId: number,
       @Param('id', ParseIntPipe) id: number
   ): Promise<Record<string, unknown>> {
-    try {
-      await this.codingJobService.getCodingJob(id, workspaceId);
-      return await this.codingJobService.getCodingProgress(id);
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      throw new BadRequestException(`Failed to retrieve coding progress: ${error.message}`);
-    }
+    await this.codingJobService.getCodingJob(id, workspaceId);
+    return this.codingJobService.getCodingProgress(id);
   }
 
   @Get('progress/bulk')
@@ -511,22 +454,15 @@ export class WsgCodingJobController {
     @WorkspaceId() workspaceId: number,
       @Query('jobIds') jobIdsParam: string
   ): Promise<Record<number, Record<string, unknown>>> {
-    try {
-      const jobIds = jobIdsParam.split(',')
-        .map(id => parseInt(id.trim(), 10))
-        .filter(id => Number.isFinite(id) && id > 0);
+    const jobIds = jobIdsParam.split(',')
+      .map(id => parseInt(id.trim(), 10))
+      .filter(id => Number.isFinite(id) && id > 0);
 
-      if (jobIds.length === 0) {
-        throw new BadRequestException('Invalid job IDs provided');
-      }
-
-      return await this.codingJobService.getBulkCodingProgress(jobIds, workspaceId);
-    } catch (error) {
-      if (error instanceof NotFoundException || error instanceof BadRequestException) {
-        throw error;
-      }
-      throw new BadRequestException(`Failed to retrieve bulk coding progress: ${error.message}`);
+    if (jobIds.length === 0) {
+      throw new BadRequestException('Invalid job IDs provided');
     }
+
+    return this.codingJobService.getBulkCodingProgress(jobIds, workspaceId);
   }
 
   @Get(':id/units')
@@ -574,14 +510,7 @@ export class WsgCodingJobController {
     @WorkspaceId() workspaceId: number,
       @Param('id', ParseIntPipe) id: number
   ): Promise<Array<{ responseId: number; unitName: string; unitAlias: string | null; variableId: string; variableAnchor: string; bookletName: string; personLogin: string; personCode: string; personGroup: string }>> {
-    try {
-      await this.codingJobService.getCodingJob(id, workspaceId);
-      return await this.codingJobService.getCodingJobUnits(id, false);
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      throw new BadRequestException(`Failed to retrieve coding job units: ${error.message}`);
-    }
+    await this.codingJobService.getCodingJob(id, workspaceId);
+    return this.codingJobService.getCodingJobUnits(id, false);
   }
 }

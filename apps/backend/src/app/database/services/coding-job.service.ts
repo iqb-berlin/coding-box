@@ -1314,9 +1314,9 @@ export class CodingJobService {
 
           if (caseCountForCoder > 0) {
             const jobName = generateJobName(
-              coder.name, 
-              itemObj.type === 'bundle' ? itemKey : (itemObj.item as { unitName: string; variableId: string }).unitName, 
-              itemObj.type === 'bundle' ? '' : (itemObj.item as { unitName: string; variableId: string }).variableId, 
+              coder.name,
+              itemObj.type === 'bundle' ? itemKey : (itemObj.item as { unitName: string; variableId: string }).unitName,
+              itemObj.type === 'bundle' ? '' : (itemObj.item as { unitName: string; variableId: string }).variableId,
               caseCountForCoder
             );
 
