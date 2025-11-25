@@ -7,6 +7,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatCheckboxModule } from '@angular/material/checkbox';
+import { MatSnackBarModule, MatSnackBar } from '@angular/material/snack-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { TranslateModule } from '@ngx-translate/core';
 import { A11yModule } from '@angular/cdk/a11y';
@@ -63,7 +64,8 @@ export interface BulkCreationResult {
 }
 
 interface DistributionMatrixRow {
-  variable: { unitName: string; variableId: string };
+  variable?: { unitName: string; variableId: string };
+  bundle?: VariableBundle;
   variableKey: string;
   totalCases: number;
   coderCases: Record<string, number>;
@@ -84,6 +86,7 @@ interface DistributionMatrixRow {
     MatChipsModule,
     MatCheckboxModule,
     MatProgressSpinnerModule,
+    MatSnackBarModule,
     TranslateModule,
     A11yModule
   ]
@@ -91,6 +94,7 @@ interface DistributionMatrixRow {
 export class CodingJobBulkCreationDialogComponent {
   private fb = inject(FormBuilder);
   private backendService = inject(BackendService);
+  private snackBar = inject(MatSnackBar);
   displayOptionsForm!: FormGroup;
   jobPreviews: JobPreview[] = [];
   distributionMatrix: DistributionMatrixRow[] = [];
@@ -117,9 +121,8 @@ export class CodingJobBulkCreationDialogComponent {
     try {
       const workspaceId = (this.backendService as { appService?: { selectedWorkspaceId?: number } }).appService?.selectedWorkspaceId;
       if (!workspaceId) {
-        this.distributionMatrix = this.calculateDistributionFrontend();
-        this.doubleCodingPreview = this.calculateDoubleCodingPreviewFrontend();
-        this.jobPreviews = this.createJobPreviews();
+        this.snackBar.open('No workspace selected', 'Close', { duration: 3000 });
+        this.isLoading = false;
         return;
       }
 
@@ -128,7 +131,8 @@ export class CodingJobBulkCreationDialogComponent {
         this.data.selectedVariables,
         this.data.selectedCoders.map(coder => ({ ...coder, username: coder.name })),
         this.data.doubleCodingAbsolute,
-        this.data.doubleCodingPercentage
+        this.data.doubleCodingPercentage,
+        this.data.selectedVariableBundles
       ).toPromise();
 
       this.data.distribution = result?.distribution || {};
@@ -136,15 +140,13 @@ export class CodingJobBulkCreationDialogComponent {
       this.initializeFromData();
 
       if (!result || Object.keys(result.distribution || {}).length === 0) {
-        this.distributionMatrix = this.calculateDistributionFrontend();
-        this.doubleCodingPreview = this.calculateDoubleCodingPreviewFrontend();
-        this.jobPreviews = this.createJobPreviews();
+        this.snackBar.open('No distribution calculated', 'Close', { duration: 3000 });
+        this.isLoading = false;
+      } else {
+        this.isLoading = false;
       }
     } catch (error) {
-      this.distributionMatrix = this.calculateDistributionFrontend();
-      this.doubleCodingPreview = this.calculateDoubleCodingPreviewFrontend();
-      this.jobPreviews = this.createJobPreviews();
-    } finally {
+      this.snackBar.open(`Failed to calculate distribution: ${error instanceof Error ? error.message : error}`, 'Close', { duration: 5000 });
       this.isLoading = false;
     }
   }
@@ -154,15 +156,25 @@ export class CodingJobBulkCreationDialogComponent {
 
     this.distributionMatrix = [];
     for (const [variableKey, coderCases] of Object.entries(this.data.distribution)) {
-      const [unitName, variableId] = variableKey.split('::');
       const totalCases = Object.values(coderCases).reduce((sum, count) => sum + count, 0);
 
-      this.distributionMatrix.push({
-        variable: { unitName, variableId },
-        variableKey,
-        totalCases,
-        coderCases
-      });
+      if (variableKey.includes('::')) {
+        const [unitName, variableId] = variableKey.split('::');
+        this.distributionMatrix.push({
+          variable: { unitName, variableId },
+          variableKey,
+          totalCases,
+          coderCases
+        });
+      } else {
+        const bundle = this.data.selectedVariableBundles?.find(b => b.name === variableKey);
+        this.distributionMatrix.push({
+          bundle,
+          variableKey,
+          totalCases,
+          coderCases
+        });
+      }
     }
 
     if (Object.keys(this.data.doubleCodingInfo).length > 0) {
@@ -183,9 +195,12 @@ export class CodingJobBulkCreationDialogComponent {
       distribution[variableKey] = {};
 
       this.data.selectedCoders.forEach(coder => {
-        const job = this.data.creationResults!.jobs.find(j => `${j.variable.unitName}::${j.variable.variableId}` === variableKey &&
-          j.coderId === coder.id
-        );
+        const job = this.data.creationResults!.jobs.find(j => {
+          if (variableKey.includes('::')) {
+            return `${j.variable.unitName}::${j.variable.variableId}` === variableKey && j.coderId === coder.id;
+          }
+          return j.variable.unitName === variableKey && j.variable.variableId === '' && j.coderId === coder.id;
+        });
         distribution[variableKey][coder.name] = job?.caseCount || 0;
       });
     }
@@ -200,161 +215,31 @@ export class CodingJobBulkCreationDialogComponent {
     // Sort coders alphabetically for deterministic job naming
     const sortedCoders = [...this.data.selectedCoders].sort((a, b) => a.name.localeCompare(b.name));
 
-    // Create one job per coder-variable combination
-    for (const variable of this.data.selectedVariables) {
+    const items: (Variable | VariableBundle)[] = [];
+    if (this.data.selectedVariableBundles) {
+      items.push(...this.data.selectedVariableBundles);
+    }
+    items.push(...this.data.selectedVariables);
+
+    for (const item of items) {
       for (const coder of sortedCoders) {
-        const caseCount = this.getCaseCountForCoder(variable, coder);
-        const jobName = this.generateJobName(coder.name, variable.unitName, variable.variableId, caseCount);
-        previews.push({
-          name: jobName,
-          variable
-        });
+        const caseCount = this.getCaseCountForCoder(item, coder);
+        let jobName = '';
+        let preview: JobPreview;
+
+        if ('variables' in item) { // bundle
+          jobName = this.generateJobName(coder.name, item.name, '', caseCount);
+          preview = { name: jobName, bundle: item };
+        } else { // variable
+          jobName = this.generateJobName(coder.name, item.unitName, item.variableId, caseCount);
+          preview = { name: jobName, variable: item };
+        }
+
+        previews.push(preview);
       }
     }
 
     return previews;
-  }
-
-  private calculateDistributionFrontend(): DistributionMatrixRow[] {
-    const matrix: DistributionMatrixRow[] = [];
-    const sortedCoders = [...this.data.selectedCoders].sort((a, b) => a.name.localeCompare(b.name));
-
-    for (const variable of this.data.selectedVariables) {
-      const totalCases = variable.responseCount || 0;
-
-      let doubleCodingCount = 0;
-      if (this.data.doubleCodingAbsolute && this.data.doubleCodingAbsolute > 0) {
-        doubleCodingCount = Math.min(this.data.doubleCodingAbsolute, totalCases);
-      } else if (this.data.doubleCodingPercentage && this.data.doubleCodingPercentage > 0) {
-        doubleCodingCount = Math.floor((this.data.doubleCodingPercentage / 100) * totalCases);
-      }
-
-      const singleCodingCases = totalCases - doubleCodingCount;
-      const baseCasesPerCoder = Math.floor(singleCodingCases / sortedCoders.length);
-      const remainder = singleCodingCases % sortedCoders.length;
-
-      const coderCases: Record<string, number> = {};
-
-      // Assign single coding cases to each coder
-      for (let i = 0; i < sortedCoders.length; i++) {
-        const coder = sortedCoders[i];
-        coderCases[coder.name] = baseCasesPerCoder + (i < remainder ? 1 : 0);
-      }
-
-      // Add double coded cases to all coders (since each double coded case is assigned to all coders)
-      for (const coder of sortedCoders) {
-        coderCases[coder.name] += doubleCodingCount;
-      }
-
-      matrix.push({
-        variable: { unitName: variable.unitName, variableId: variable.variableId },
-        variableKey: `${variable.unitName}::${variable.variableId}`,
-        totalCases: totalCases,
-        coderCases
-      });
-    }
-
-    return matrix;
-  }
-
-  private calculateDoubleCodingPreviewFrontend(): DoubleCodingPreview | undefined {
-    if ((!this.data.doubleCodingAbsolute || this.data.doubleCodingAbsolute <= 0) &&
-        (!this.data.doubleCodingPercentage || this.data.doubleCodingPercentage <= 0)) {
-      return undefined;
-    }
-
-    const sortedCoders = [...this.data.selectedCoders].sort((a, b) => a.name.localeCompare(b.name));
-    const doubleCodingInfo: Record<string, {
-      totalCases: number;
-      doubleCodedCases: number;
-      singleCodedCasesAssigned: number;
-      doubleCodedCasesPerCoder: Record<string, number>;
-    }> = {};
-
-    for (const variable of this.data.selectedVariables) {
-      const variableKey = `${variable.unitName}::${variable.variableId}`;
-      const totalCases = variable.responseCount || 0;
-
-      // Calculate double coding requirements
-      let doubleCodingCount = 0;
-      if (this.data.doubleCodingAbsolute && this.data.doubleCodingAbsolute > 0) {
-        doubleCodingCount = Math.min(this.data.doubleCodingAbsolute, totalCases);
-      } else if (this.data.doubleCodingPercentage && this.data.doubleCodingPercentage > 0) {
-        doubleCodingCount = Math.floor((this.data.doubleCodingPercentage / 100) * totalCases);
-      }
-
-      const singleCodedCasesAssigned = Math.max(0, totalCases - doubleCodingCount);
-
-      // Initialize tracking
-      const doubleCodedCasesPerCoder: Record<string, number> = {};
-      sortedCoders.forEach(coder => {
-        doubleCodedCasesPerCoder[coder.name] = 0;
-      });
-
-      // Simulate distribution of double coding cases evenly among coders
-      // Each double coding case goes to 2 coders, so we track how many double coding assignments each coder gets
-      if (doubleCodingCount > 0) {
-        const assignments = this.distributeDoubleCodingEvenlyFrontend(doubleCodingCount, sortedCoders);
-        assignments.forEach(assignment => {
-          doubleCodedCasesPerCoder[assignment.coder.name] += assignment.count;
-        });
-      }
-
-      doubleCodingInfo[variableKey] = {
-        totalCases,
-        doubleCodedCases: doubleCodingCount,
-        singleCodedCasesAssigned,
-        doubleCodedCasesPerCoder
-      };
-    }
-
-    return { doubleCodingInfo };
-  }
-
-  private distributeDoubleCodingEvenlyFrontend(
-    totalDoubleCodingCases: number,
-    sortedCoders: Coder[]
-  ): Array<{ coder: Coder; count: number }> {
-    const assignments: Array<{ coder: Coder; count: number }> = [];
-
-    // Track how many assignments each coder has received
-    const assignmentCounts = new Map<Coder, number>();
-    sortedCoders.forEach(coder => assignmentCounts.set(coder, 0));
-
-    // For preview purposes, we'll evenly distribute the double coding assignments
-    // In reality, each case gets assigned to 2 coders, but here we calculate the expected count per coder
-    for (let i = 0; i < totalDoubleCodingCases; i++) {
-      // Find the coder with the least assignments so far
-      let minCount = Infinity;
-      let selectedCoder: Coder | null = null;
-
-      for (const coder of sortedCoders) {
-        const currentCount = assignmentCounts.get(coder) || 0;
-        if (currentCount < minCount) {
-          minCount = currentCount;
-          selectedCoder = coder;
-        } else if (currentCount === minCount && selectedCoder) {
-          // Break ties by name for consistency
-          if (coder.name.localeCompare(selectedCoder.name) < 0) {
-            selectedCoder = coder;
-          }
-        }
-      }
-
-      if (selectedCoder) {
-        assignmentCounts.set(selectedCoder, (assignmentCounts.get(selectedCoder) || 0) + 1);
-      }
-    }
-
-    // Convert to array format
-    for (const coder of sortedCoders) {
-      assignments.push({
-        coder,
-        count: assignmentCounts.get(coder) || 0
-      });
-    }
-
-    return assignments;
   }
 
   private generateJobName(coderName: string, unitName: string, variableId: string, caseCount: number): string {
@@ -366,10 +251,20 @@ export class CodingJobBulkCreationDialogComponent {
     return `${cleanCoderName}_${cleanUnitName}_${cleanVariableId}_${caseCount}`;
   }
 
-  private getCaseCountForCoder(variable: Variable, coder: Coder): number {
+  private getCaseCountForCoder(item: Variable | VariableBundle, coder: Coder): number {
+    let itemKey;
+    let totalCases;
+
+    if ('variables' in item) { // bundle
+      itemKey = item.name;
+      totalCases = item.variables.reduce((sum, v) => sum + (v.responseCount || 0), 0);
+    } else { // variable
+      itemKey = `${item.unitName}::${item.variableId}`;
+      totalCases = item.responseCount || 0;
+    }
+
     if (this.data.distribution && this.data.doubleCodingInfo) {
-      const variableKey = `${variable.unitName}::${variable.variableId}`;
-      const coderCases = this.data.distribution[variableKey];
+      const coderCases = this.data.distribution[itemKey];
       const coderName = this.data.selectedCoders.find(c => c.id === coder.id)?.name;
       if (coderCases && coderName) {
         return coderCases[coderName] || 0;
@@ -381,8 +276,6 @@ export class CodingJobBulkCreationDialogComponent {
     const coderIndex = sortedCoders.findIndex(c => c.id === coder.id);
 
     if (coderIndex === -1) return 0;
-
-    const totalCases = variable.responseCount || 0;
 
     // Calculate double coding requirements
     let doubleCodingCount = 0;
@@ -421,19 +314,24 @@ export class CodingJobBulkCreationDialogComponent {
   }
 
   getJobCaseCount(job: JobPreview): number {
-    if (!job.variable) return 0;
-
     if (this.data.creationResults?.jobs) {
-      const resultJob = this.data.creationResults.jobs.find(j => j.variable.unitName === job.variable?.unitName &&
-        j.variable.variableId === job.variable.variableId &&
-        j.jobName === job.name
-      );
+      const resultJob = this.data.creationResults.jobs.find(j => {
+        if (job.variable) {
+          return j.variable.unitName === job.variable.unitName &&
+            j.variable.variableId === job.variable.variableId &&
+            j.jobName === job.name;
+        } if (job.bundle) {
+          return j.variable.unitName === job.bundle.name &&
+            j.variable.variableId === '' &&
+            j.jobName === job.name;
+        }
+        return false;
+      });
       if (resultJob) {
         return resultJob.caseCount;
       }
     }
 
-    // Extract coder name from beginning of job name
     const jobNameParts = job.name.split('_');
     if (jobNameParts.length < 3) return 0;
 

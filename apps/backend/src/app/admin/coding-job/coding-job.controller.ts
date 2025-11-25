@@ -29,7 +29,6 @@ import { CodingJobDto } from './dto/coding-job.dto';
 import { CreateCodingJobDto } from './dto/create-coding-job.dto';
 import { UpdateCodingJobDto } from './dto/update-coding-job.dto';
 import { AssignCodersDto } from './dto/assign-coders.dto';
-import { VariableBundleDto } from '../variable-bundle/dto/variable-bundle.dto';
 import { VariableDto } from '../variable-bundle/dto/variable.dto';
 
 @ApiTags('Admin Coding Jobs')
@@ -119,7 +118,6 @@ export class CodingJobController {
         variableDto.variableId = v.variableId;
         return variableDto;
       });
-      dto.variable_bundles = result.variableBundles.map(vb => VariableBundleDto.fromEntity(vb));
       return dto;
     } catch (error) {
       if (error instanceof NotFoundException) {

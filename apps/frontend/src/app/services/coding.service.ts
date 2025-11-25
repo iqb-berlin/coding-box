@@ -381,7 +381,8 @@ export class CodingService {
     selectedVariables: { unitName: string; variableId: string }[],
     selectedCoders: { id: number; name: string; username: string }[],
     doubleCodingAbsolute?: number,
-    doubleCodingPercentage?: number
+    doubleCodingPercentage?: number,
+    selectedVariableBundles?: { id: number; name: string; variables: { unitName: string; variableId: string }[] }[]
   ): Observable<{
       success: boolean;
       jobsCreated: number;
@@ -418,7 +419,8 @@ export class CodingService {
         selectedVariables,
         selectedCoders,
         doubleCodingAbsolute,
-        doubleCodingPercentage
+        doubleCodingPercentage,
+        selectedVariableBundles
       },
       { headers: this.authHeader }
     )
@@ -439,7 +441,8 @@ export class CodingService {
     selectedVariables: { unitName: string; variableId: string }[],
     selectedCoders: { id: number; name: string; username: string }[],
     doubleCodingAbsolute?: number,
-    doubleCodingPercentage?: number
+    doubleCodingPercentage?: number,
+    selectedVariableBundles?: { id: number; name: string; variables: { unitName: string; variableId: string }[] }[]
   ): Observable<{
       distribution: Record<string, Record<string, number>>;
       doubleCodingInfo: Record<string, { totalCases: number; doubleCodedCases: number; singleCodedCasesAssigned: number; doubleCodedCasesPerCoder: Record<string, number> }>;
@@ -454,7 +457,8 @@ export class CodingService {
         selectedVariables,
         selectedCoders,
         doubleCodingAbsolute,
-        doubleCodingPercentage
+        doubleCodingPercentage,
+        selectedVariableBundles
       },
       { headers: this.authHeader }
     )

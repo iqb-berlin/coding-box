@@ -449,19 +449,24 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
   }
 
   getProgress(job: CodingJob): string {
-    if (!job.totalUnits || job.totalUnits === 0) {
+    if (!job) {
+      return 'Keine Daten';
+    }
+
+    const totalUnits = job.totalUnits ?? 0;
+    const codedUnits = job.codedUnits ?? 0;
+    const openUnits = job.openUnits ?? 0;
+    const progress = job.progress ?? 0;
+
+    if (totalUnits === 0) {
       return 'Keine Aufgaben';
     }
-    const progress = job.progress || 0;
-    const coded = job.codedUnits || 0;
-    const total = job.totalUnits;
-    const openCount = job.openUnits || 0;
 
-    if (openCount > 0) {
-      return `${progress}% (${coded}/${total}, ${openCount} offen)`;
+    if (openUnits > 0) {
+      return `${progress}% (${codedUnits}/${totalUnits}, ${openUnits} offen)`;
     }
 
-    return `${progress}% (${coded}/${total})`;
+    return `${progress}% (${codedUnits}/${totalUnits})`;
   }
 
   startCodingJob(job: CodingJob): void {

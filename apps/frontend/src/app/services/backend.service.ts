@@ -9,7 +9,7 @@ import { UnitTagDto } from 'api-dto/unit-tags/unit-tag.dto';
 import { CreateUnitTagDto } from 'api-dto/unit-tags/create-unit-tag.dto';
 import { CreateWorkspaceDto } from 'api-dto/workspaces/create-workspace-dto';
 import { PaginatedWorkspacesDto } from 'api-dto/workspaces/paginated-workspaces-dto';
-import { CodingJob, VariableBundle } from '../coding/models/coding-job.model';
+import { CodingJob, Variable, VariableBundle } from '../coding/models/coding-job.model';
 import { AppService } from './app.service';
 import { TestGroupsInfoDto } from '../../../../../api-dto/files/test-groups-info.dto';
 import { SERVER_URL } from '../injection-tokens';
@@ -617,7 +617,8 @@ export class BackendService {
     selectedVariables: { unitName: string; variableId: string }[],
     selectedCoders: { id: number; name: string; username: string }[],
     doubleCodingAbsolute?: number,
-    doubleCodingPercentage?: number
+    doubleCodingPercentage?: number,
+    selectedVariableBundles?: { id: number; name: string; variables: { unitName: string; variableId: string }[] }[]
   ): Observable<{
       success: boolean;
       jobsCreated: number;
@@ -633,7 +634,7 @@ export class BackendService {
         caseCount: number;
       }[];
     }> {
-    return this.codingService.createDistributedCodingJobs(workspaceId, selectedVariables, selectedCoders, doubleCodingAbsolute, doubleCodingPercentage);
+    return this.codingService.createDistributedCodingJobs(workspaceId, selectedVariables, selectedCoders, doubleCodingAbsolute, doubleCodingPercentage, selectedVariableBundles);
   }
 
   calculateDistribution(
@@ -641,12 +642,13 @@ export class BackendService {
     selectedVariables: { unitName: string; variableId: string }[],
     selectedCoders: { id: number; name: string; username: string }[],
     doubleCodingAbsolute?: number,
-    doubleCodingPercentage?: number
+    doubleCodingPercentage?: number,
+    selectedVariableBundles?: { id: number; name: string; variables: { unitName: string; variableId: string }[] }[]
   ): Observable<{
       distribution: Record<string, Record<string, number>>;
       doubleCodingInfo: Record<string, { totalCases: number; doubleCodedCases: number; singleCodedCasesAssigned: number; doubleCodedCasesPerCoder: Record<string, number> }>;
     }> {
-    return this.codingService.calculateDistribution(workspaceId, selectedVariables, selectedCoders, doubleCodingAbsolute, doubleCodingPercentage);
+    return this.codingService.calculateDistribution(workspaceId, selectedVariables, selectedCoders, doubleCodingAbsolute, doubleCodingPercentage, selectedVariableBundles);
   }
 
   createValidationTask(
@@ -829,6 +831,32 @@ export class BackendService {
       );
   }
 
+  private mapApiCodingJob(job: unknown): CodingJob {
+    if (!job) {
+      return job as CodingJob;
+    }
+
+    const apiJob = job as Record<string, unknown>;
+
+    const mapped: Partial<CodingJob> = {
+      ...apiJob,
+      assignedCoders: (apiJob.assignedCoders ?? apiJob.assigned_coders ?? []) as number[],
+      assignedVariables: (apiJob.assignedVariables ?? apiJob.assigned_variables ?? apiJob.variables ?? []) as Variable[],
+      variables: (apiJob.variables ?? apiJob.assigned_variables ?? apiJob.assignedVariables ?? []) as Variable[],
+      assignedVariableBundles: (apiJob.assignedVariableBundles ?? apiJob.assigned_variable_bundles ?? apiJob.variableBundles ?? apiJob.variable_bundles ?? []) as VariableBundle[],
+      variableBundles: (apiJob.variableBundles ?? apiJob.variable_bundles ?? apiJob.assigned_variable_bundles ?? apiJob.assignedVariableBundles ?? []) as VariableBundle[],
+      progress: (apiJob.progress ?? 0) as number,
+      codedUnits: (apiJob.codedUnits ?? apiJob.coded_units ?? apiJob.coded ?? 0) as number,
+      totalUnits: (apiJob.totalUnits ?? apiJob.total_units ?? apiJob.total ?? 0) as number,
+      openUnits: (apiJob.openUnits ?? apiJob.open_units ?? apiJob.open ?? 0) as number,
+      created_at: (apiJob.created_at ?? apiJob.createdAt) as Date,
+      updated_at: (apiJob.updated_at ?? apiJob.updatedAt) as Date,
+      workspace_id: (apiJob.workspace_id ?? apiJob.workspaceId) as number
+    };
+
+    return mapped as CodingJob;
+  }
+
   getCodingJobs(
     workspaceId: number,
     page?: number,
@@ -845,12 +873,19 @@ export class BackendService {
       params = params.set('limit', limit.toString());
     }
 
-    return this.http.get<PaginatedResponse<CodingJob>>(url, { params });
+    return this.http.get<PaginatedResponse<unknown>>(url, { params }).pipe(
+      map(response => ({
+        ...response,
+        data: (response.data || []).map((j: unknown) => this.mapApiCodingJob(j))
+      }))
+    );
   }
 
   getCodingJob(workspaceId: number, codingJobId: number): Observable<CodingJob> {
     const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job/${codingJobId}`;
-    return this.http.get<CodingJob>(url);
+    return this.http.get<unknown>(url).pipe(
+      map(job => this.mapApiCodingJob(job))
+    );
   }
 
   createCodingJob(workspaceId: number, codingJob: Omit<CodingJob, 'id' | 'createdAt' | 'updatedAt'>): Observable<CodingJob> {

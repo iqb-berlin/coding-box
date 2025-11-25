@@ -91,7 +91,7 @@ export class WsgCodingJobController {
     try {
       const result = await this.codingJobService.getCodingJobs(workspaceId, page, limit);
       return {
-        data: result.data,
+        data: result.data.map(job => CodingJobDto.fromEntity(job, job.assignedCoders, job.assignedVariables, job.assignedVariableBundles)),
         total: result.total,
         totalOpenUnits: result.totalOpenUnits,
         page: result.page,
@@ -137,7 +137,7 @@ export class WsgCodingJobController {
   ): Promise<CodingJobDto> {
     try {
       const result = await this.codingJobService.getCodingJob(id, workspaceId);
-      return result.codingJob;
+      return CodingJobDto.fromEntity(result.codingJob, result.assignedCoders, result.variables, result.variableBundles.map(vb => ({ name: vb.name, variables: vb.variables })));
     } catch (error) {
       if (error instanceof NotFoundException) {
         throw error;
