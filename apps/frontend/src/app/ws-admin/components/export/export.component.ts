@@ -49,6 +49,7 @@ export class ExportComponent {
   outputCommentsInsteadOfCodes = false;
   anonymizeCoders = false;
   usePseudoCoders = false;
+  doubleCodingMethod: 'new-row-per-variable' | 'new-column-per-coder' | 'most-frequent' = 'most-frequent';
 
   exportFormats = [
     {
@@ -113,7 +114,17 @@ export class ExportComponent {
 
       switch (this.selectedFormat) {
         case 'aggregated':
-          exportMethod = this.backendService.exportCodingResultsAggregated(workspaceId, this.outputCommentsInsteadOfCodes, this.includeReplayUrl, authToken);
+          exportMethod = this.backendService.exportCodingResultsAggregated(
+            workspaceId,
+            this.outputCommentsInsteadOfCodes,
+            this.includeReplayUrl,
+            this.anonymizeCoders,
+            this.usePseudoCoders,
+            this.doubleCodingMethod,
+            this.includeComments,
+            this.includeModalValue,
+            authToken
+          );
           filename = `coding-results-aggregated-${new Date().toISOString().slice(0, 10)}.xlsx`;
           break;
         case 'by-coder':

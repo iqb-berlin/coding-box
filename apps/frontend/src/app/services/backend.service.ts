@@ -1235,7 +1235,17 @@ export class BackendService {
     return this.http.delete<{ success: boolean; message: string }>(url);
   }
 
-  exportCodingResultsAggregated(workspaceId: number, outputCommentsInsteadOfCodes = false, includeReplayUrl = false, authToken = ''): Observable<Blob> {
+  exportCodingResultsAggregated(
+    workspaceId: number,
+    outputCommentsInsteadOfCodes = false,
+    includeReplayUrl = false,
+    anonymizeCoders = false,
+    usePseudoCoders = false,
+    doubleCodingMethod: 'new-row-per-variable' | 'new-column-per-coder' | 'most-frequent' = 'most-frequent',
+    includeComments = false,
+    includeModalValue = false,
+    authToken = ''
+  ): Observable<Blob> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/aggregated`;
     let params = new HttpParams();
     if (outputCommentsInsteadOfCodes) {
@@ -1243,6 +1253,21 @@ export class BackendService {
     }
     if (includeReplayUrl) {
       params = params.set('includeReplayUrl', 'true');
+    }
+    if (anonymizeCoders) {
+      params = params.set('anonymizeCoders', 'true');
+    }
+    if (usePseudoCoders) {
+      params = params.set('usePseudoCoders', 'true');
+    }
+    if (doubleCodingMethod) {
+      params = params.set('doubleCodingMethod', doubleCodingMethod);
+    }
+    if (includeComments) {
+      params = params.set('includeComments', 'true');
+    }
+    if (includeModalValue) {
+      params = params.set('includeModalValue', 'true');
     }
     if (authToken) {
       params = params.set('authToken', authToken);
