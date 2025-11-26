@@ -1,12 +1,12 @@
 import {
   Controller,
-  Get, Param, Post, Put, Query, Res, UseGuards, Body, Delete, Logger
+  Get, Param, Post, Put, Query, Req, Res, UseGuards, Body, Delete, Logger
 } from '@nestjs/common';
 import {
   ApiOkResponse,
   ApiParam, ApiQuery, ApiTags, ApiBody
 } from '@nestjs/swagger';
-import { Response } from 'express';
+import { Request, Response } from 'express';
 import { CodingStatistics } from '../../database/services/shared-types';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
@@ -2490,6 +2490,18 @@ export class WorkspaceCodingController {
     type: Boolean,
     description: 'Output comments in code columns instead of code values'
   })
+  @ApiQuery({
+    name: 'includeReplayUrl',
+    required: false,
+    type: Boolean,
+    description: 'Include replay URL column with hyperlinks to play back tasks'
+  })
+  @ApiQuery({
+    name: 'authToken',
+    required: false,
+    type: String,
+    description: 'Authentication token for generating replay URLs'
+  })
   @ApiOkResponse({
     description: 'Aggregated coding results exported as Excel',
     content: {
@@ -2504,11 +2516,15 @@ export class WorkspaceCodingController {
   async exportCodingResultsAggregated(
     @WorkspaceId() workspace_id: number,
       @Res() res: Response,
-      @Query('outputCommentsInsteadOfCodes') outputCommentsInsteadOfCodes?: string
+      @Req() req: Request,
+      @Query('outputCommentsInsteadOfCodes') outputCommentsInsteadOfCodes?: string,
+      @Query('includeReplayUrl') includeReplayUrl?: string,
+      @Query('authToken') authToken?: string
   ): Promise<void> {
     try {
       const outputCommentsParam = outputCommentsInsteadOfCodes === 'true';
-      const buffer = await this.codingExportService.exportCodingResultsAggregated(workspace_id, outputCommentsParam);
+      const includeReplayUrlParam = includeReplayUrl === 'true';
+      const buffer = await this.codingExportService.exportCodingResultsAggregated(workspace_id, outputCommentsParam, includeReplayUrlParam, authToken || '', req);
 
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       res.setHeader('Content-Disposition', `attachment; filename=coding-results-aggregated-${new Date().toISOString().slice(0, 10)}.xlsx`);
@@ -2528,6 +2544,18 @@ export class WorkspaceCodingController {
     type: Boolean,
     description: 'Output comments in code columns instead of code values'
   })
+  @ApiQuery({
+    name: 'includeReplayUrl',
+    required: false,
+    type: Boolean,
+    description: 'Include replay URL column with hyperlinks to play back tasks'
+  })
+  @ApiQuery({
+    name: 'authToken',
+    required: false,
+    type: String,
+    description: 'Authentication token for generating replay URLs'
+  })
   @ApiOkResponse({
     description: 'Coding results by coder exported as Excel',
     content: {
@@ -2542,11 +2570,15 @@ export class WorkspaceCodingController {
   async exportCodingResultsByCoder(
     @WorkspaceId() workspace_id: number,
       @Res() res: Response,
-      @Query('outputCommentsInsteadOfCodes') outputCommentsInsteadOfCodes?: string
+      @Req() req: Request,
+      @Query('outputCommentsInsteadOfCodes') outputCommentsInsteadOfCodes?: string,
+      @Query('includeReplayUrl') includeReplayUrl?: string,
+      @Query('authToken') authToken?: string
   ): Promise<void> {
     try {
       const outputCommentsParam = outputCommentsInsteadOfCodes === 'true';
-      const buffer = await this.codingExportService.exportCodingResultsByCoder(workspace_id, outputCommentsParam);
+      const includeReplayUrlParam = includeReplayUrl === 'true';
+      const buffer = await this.codingExportService.exportCodingResultsByCoder(workspace_id, outputCommentsParam, includeReplayUrlParam, authToken || '', req);
 
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       res.setHeader('Content-Disposition', `attachment; filename=coding-results-by-coder-${new Date().toISOString().slice(0, 10)}.xlsx`);
@@ -2584,6 +2616,18 @@ export class WorkspaceCodingController {
     type: Boolean,
     description: 'Output comments in code columns instead of code values'
   })
+  @ApiQuery({
+    name: 'includeReplayUrl',
+    required: false,
+    type: Boolean,
+    description: 'Include replay URL column with hyperlinks to play back tasks'
+  })
+  @ApiQuery({
+    name: 'authToken',
+    required: false,
+    type: String,
+    description: 'Authentication token for generating replay URLs'
+  })
   @ApiOkResponse({
     description: 'Coding results by variable exported as Excel',
     content: {
@@ -2598,17 +2642,21 @@ export class WorkspaceCodingController {
   async exportCodingResultsByVariable(
     @WorkspaceId() workspace_id: number,
       @Res() res: Response,
+      @Req() req: Request,
       @Query('includeModalValue') includeModalValue?: string,
       @Query('includeDoubleCoded') includeDoubleCoded?: string,
       @Query('includeComments') includeComments?: string,
-      @Query('outputCommentsInsteadOfCodes') outputCommentsInsteadOfCodes?: string
+      @Query('outputCommentsInsteadOfCodes') outputCommentsInsteadOfCodes?: string,
+      @Query('includeReplayUrl') includeReplayUrl?: string,
+      @Query('authToken') authToken?: string
   ): Promise<void> {
     try {
       const includeModal = includeModalValue === 'true';
       const includeDouble = includeDoubleCoded === 'true';
       const includeCommentsParam = includeComments === 'true';
       const outputCommentsParam = outputCommentsInsteadOfCodes === 'true';
-      const buffer = await this.codingExportService.exportCodingResultsByVariable(workspace_id, includeModal, includeDouble, includeCommentsParam, outputCommentsParam); res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      const includeReplayUrlParam = includeReplayUrl === 'true';
+      const buffer = await this.codingExportService.exportCodingResultsByVariable(workspace_id, includeModal, includeDouble, includeCommentsParam, outputCommentsParam, includeReplayUrlParam, authToken || '', req); res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       res.setHeader('Content-Disposition', `attachment; filename=coding-results-by-variable-${new Date().toISOString().slice(0, 10)}.xlsx`);
       res.send(buffer);
     } catch (error) {
@@ -2626,6 +2674,18 @@ export class WorkspaceCodingController {
     type: Boolean,
     description: 'Output comments in code column instead of code values'
   })
+  @ApiQuery({
+    name: 'includeReplayUrl',
+    required: false,
+    type: Boolean,
+    description: 'Include replay URL column with hyperlinks to play back tasks'
+  })
+  @ApiQuery({
+    name: 'authToken',
+    required: false,
+    type: String,
+    description: 'Authentication token for generating replay URLs'
+  })
   @ApiOkResponse({
     description: 'Detailed coding results exported as CSV',
     content: {
@@ -2640,11 +2700,15 @@ export class WorkspaceCodingController {
   async exportCodingResultsDetailed(
     @WorkspaceId() workspace_id: number,
       @Res() res: Response,
-      @Query('outputCommentsInsteadOfCodes') outputCommentsInsteadOfCodes?: string
+      @Req() req: Request,
+      @Query('outputCommentsInsteadOfCodes') outputCommentsInsteadOfCodes?: string,
+      @Query('includeReplayUrl') includeReplayUrl?: string,
+      @Query('authToken') authToken?: string
   ): Promise<void> {
     try {
       const outputCommentsParam = outputCommentsInsteadOfCodes === 'true';
-      const buffer = await this.codingExportService.exportCodingResultsDetailed(workspace_id, outputCommentsParam);
+      const includeReplayUrlParam = includeReplayUrl === 'true';
+      const buffer = await this.codingExportService.exportCodingResultsDetailed(workspace_id, outputCommentsParam, includeReplayUrlParam, authToken || '', req);
 
       res.setHeader('Content-Type', 'text/csv');
       res.setHeader('Content-Disposition', `attachment; filename=coding-results-detailed-${new Date().toISOString().slice(0, 10)}.csv`);

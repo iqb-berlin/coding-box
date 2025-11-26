@@ -204,6 +204,8 @@
       "include-double-coded-tooltip": "Es wird eine Spalte hinzugefügt, die anzeigt, ob der Fall doppelt kodiert wurde (1) oder nicht (0).",
       "include-comments": "Füge Kommentarspalte hinzu",
       "include-comments-tooltip": "Es wird eine Spalte hinzugefügt mit den Kommentaren aller Kodierer.",
+      "include-replay-url": "Hyperlinks hinzufügen",
+      "include-replay-url-tooltip": "Es wird eine Spalte hinzugefügt mit den Hyperlinks zum Abspielen der Aufgaben.",
       "output-comments-instead-of-codes": "Kommentare ausgeben statt Codes",
       "output-comments-instead-of-codes-tooltip": "Die Kommentare der Kodierer werden in die Codezeilen geschrieben"
     },
@@ -212,7 +214,8 @@
     "export-errors": {
       "no-workspace": "Kein Arbeitsbereich ausgewählt",
       "invalid-format": "Ungültiges Exportformat",
-      "export-failed": "Export fehlgeschlagen"
+      "export-failed": "Export fehlgeschlagen",
+      "token-failed": "Token-Generierung fehlgeschlagen"
     },
     "no-access": "Sie haben keinen Zugriff auf diesen Arbeitsbereich. Bitte kontaktieren Sie den Studienadministrator für Zugriff."
   },
