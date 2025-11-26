@@ -1368,7 +1368,7 @@
     "variables-requiring-manual-coding": "Variablen, die manuelle Kodierung erfordern",
     "variables-with-incomplete-status": "Variablen mit CODING_INCOMPLETE Status",
     "response-status-summary": "Zusammenfassung des Antwortstatus",
-    "coding-incomplete": "CODING_INCOMPLETE:",
+    "coding-incomplete": "Gesamt zu kodierende Fälle:",
     "applied-results": "Angewendete Ergebnisse:",
     "remaining": "Verbleibend:",
     "completion-progress": "Fertigstellungsfortschritt",

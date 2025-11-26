@@ -51,8 +51,8 @@
       </div>
 
       <div class="fx-row-center-center fx-gap-16">
-        <button mat-raised-button color="primary" (click)="bulkApplyCodingResults()" class="bulk-apply-button">
-          <mat-icon>check_circle</mat-icon>
+        <button mat-button (click)="bulkApplyCodingResults()" class="bulk-apply-button">
+          <mat-icon>rule</mat-icon>
           Alle Ergebnisse anwenden
         </button>
         <button mat-raised-button color="warn" (click)="bulkDeleteCodingJobs()" [disabled]="selection.selected.length === 0" class="bulk-delete-button">
