@@ -79,6 +79,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
   private jobDefinitionChangeSubject = new Subject<void>();
   private statisticsRefreshSubject = new Subject<void>();
+  private codingJobsChangeSubject = new Subject<void>();
 
   codingProgressOverview: {
     totalCasesToCode: number;
@@ -235,7 +236,6 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     this.validationProgress = currentProgress;
     this.isLoading = currentProgress.status === 'loading' || currentProgress.status === 'processing';
 
-    // Set up debounced statistics refresh for job definition changes
     this.jobDefinitionChangeSubject
       .pipe(
         debounceTime(500),
@@ -243,6 +243,18 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       )
       .subscribe(() => {
         this.loadVariableCoverageOverview();
+      });
+
+    this.codingJobsChangeSubject
+      .pipe(
+        debounceTime(400),
+        takeUntil(this.destroy$)
+      )
+      .subscribe(() => {
+        this.loadCodingProgressOverview();
+        this.loadCaseCoverageOverview();
+        this.loadCodingIncompleteVariables();
+        this.loadStatusDistribution();
       });
 
     this.loadCodingProgressOverview();
@@ -505,6 +517,11 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     if (this.codingJobsComponent) {
       this.codingJobsComponent.loadCodingJobs();
     }
+    this.codingJobsChangeSubject.next();
+  }
+
+  onCodingJobsChanged(): void {
+    this.codingJobsChangeSubject.next();
   }
 
   private loadCodingProgressOverview(): void {

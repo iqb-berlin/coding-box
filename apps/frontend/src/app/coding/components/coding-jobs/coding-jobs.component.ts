@@ -1,5 +1,5 @@
 import {
-  Component, OnInit, ViewChild, AfterViewInit, inject
+  Component, OnInit, ViewChild, AfterViewInit, inject, Output, EventEmitter
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -113,6 +113,8 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
   @ViewChild(MatSort) sort!: MatSort;
   @ViewChild(MatPaginator) paginator!: MatPaginator;
 
+  @Output() jobsChanged = new EventEmitter<void>();
+
   private handleWindowFocus = () => {
     this.loadCodingJobs();
   };
@@ -180,6 +182,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
             this.jobDetailsCache.clear();
             this.isLoading = false;
             this.onTrainingFilterChange();
+            this.jobsChanged.emit();
           },
           error: () => {
             this.snackBar.open('Fehler beim Laden der Kodierjobs', 'Schließen', { duration: 3000 });
@@ -223,6 +226,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
             this.jobDetailsCache.clear();
             this.isLoading = false;
             this.onTrainingFilterChange();
+            this.jobsChanged.emit();
           },
           error: () => {
             this.snackBar.open('Fehler beim Laden der Kodierjobs', 'Schließen', { duration: 3000 });
@@ -436,6 +440,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
             if (response.success) {
               this.snackBar.open(`Kodierjob "${job.name}" wurde erfolgreich gelöscht`, 'Schließen', { duration: 3000 });
               this.loadCodingJobs();
+              this.jobsChanged.emit();
             } else {
               this.snackBar.open(`Fehler beim Löschen von Kodierjob "${job.name}"`, 'Schließen', { duration: 3000 });
             }
@@ -780,12 +785,19 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
       this.snackBar.open('Kein Workspace ausgewählt', 'Schließen', { duration: 3000 });
       return;
     }
-    this.dialog.open(CodingJobResultDialogComponent, {
+    const dialogRef = this.dialog.open(CodingJobResultDialogComponent, {
       width: '1400px',
       height: '80vh',
       data: {
         codingJob: job,
         workspaceId: workspaceId
+      }
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result?.resultsApplied) {
+        this.loadCodingJobs();
+        this.jobsChanged.emit();
       }
     });
   }
@@ -897,6 +909,9 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
     }
 
     this.loadCodingJobs();
+    if (successCount > 0) {
+      this.jobsChanged.emit();
+    }
   }
 
   applyCodingResults(job: CodingJob): void {
