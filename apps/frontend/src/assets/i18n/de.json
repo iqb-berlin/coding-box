@@ -207,7 +207,11 @@
       "include-replay-url": "Hyperlinks hinzufügen",
       "include-replay-url-tooltip": "Es wird eine Spalte hinzugefügt mit den Hyperlinks zum Abspielen der Aufgaben.",
       "output-comments-instead-of-codes": "Kommentare ausgeben statt Codes",
-      "output-comments-instead-of-codes-tooltip": "Die Kommentare der Kodierer werden in die Codezeilen geschrieben"
+      "output-comments-instead-of-codes-tooltip": "Die Kommentare der Kodierer werden in die Codezeilen geschrieben",
+      "anonymize-coders": "Kodierer anonymisieren",
+      "anonymize-coders-tooltip": "Kodierer werden in 'K1', 'K2' usw. umbenannt und in eine zufällige Reihenfolge gebracht. Über Variablen und Personen bleiben diese Kodierer aber erhalten.",
+      "use-pseudo-coders": "Pseudo Kodierer",
+      "use-pseudo-coders-tooltip": "Doppelkodierungen werden immer in 'K1' und 'K2' umbenannt, auch wenn es über die Personen und Variablen unterschiedliche Kodierer waren (Vermeidung fehlender Werte)"
     },
     "export-exporting": "Export läuft...",
     "export-success": "Export erfolgreich abgeschlossen",

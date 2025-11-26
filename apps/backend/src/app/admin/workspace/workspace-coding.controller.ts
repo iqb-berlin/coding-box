@@ -2556,6 +2556,18 @@ export class WorkspaceCodingController {
     type: String,
     description: 'Authentication token for generating replay URLs'
   })
+  @ApiQuery({
+    name: 'anonymizeCoders',
+    required: false,
+    type: Boolean,
+    description: 'Anonymize coder names (rename to K1, K2, etc. in random order)'
+  })
+  @ApiQuery({
+    name: 'usePseudoCoders',
+    required: false,
+    type: Boolean,
+    description: 'Use pseudo coder names for double-coding (always K1 and K2)'
+  })
   @ApiOkResponse({
     description: 'Coding results by coder exported as Excel',
     content: {
@@ -2573,12 +2585,16 @@ export class WorkspaceCodingController {
       @Req() req: Request,
       @Query('outputCommentsInsteadOfCodes') outputCommentsInsteadOfCodes?: string,
       @Query('includeReplayUrl') includeReplayUrl?: string,
-      @Query('authToken') authToken?: string
+      @Query('authToken') authToken?: string,
+      @Query('anonymizeCoders') anonymizeCoders?: string,
+      @Query('usePseudoCoders') usePseudoCoders?: string
   ): Promise<void> {
     try {
       const outputCommentsParam = outputCommentsInsteadOfCodes === 'true';
       const includeReplayUrlParam = includeReplayUrl === 'true';
-      const buffer = await this.codingExportService.exportCodingResultsByCoder(workspace_id, outputCommentsParam, includeReplayUrlParam, authToken || '', req);
+      const anonymizeCodersParam = anonymizeCoders === 'true';
+      const usePseudoCodersParam = usePseudoCoders === 'true';
+      const buffer = await this.codingExportService.exportCodingResultsByCoder(workspace_id, outputCommentsParam, includeReplayUrlParam, anonymizeCodersParam, usePseudoCodersParam, authToken || '', req);
 
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       res.setHeader('Content-Disposition', `attachment; filename=coding-results-by-coder-${new Date().toISOString().slice(0, 10)}.xlsx`);
@@ -2628,6 +2644,18 @@ export class WorkspaceCodingController {
     type: String,
     description: 'Authentication token for generating replay URLs'
   })
+  @ApiQuery({
+    name: 'anonymizeCoders',
+    required: false,
+    type: Boolean,
+    description: 'Anonymize coder names (rename to K1, K2, etc. in random order)'
+  })
+  @ApiQuery({
+    name: 'usePseudoCoders',
+    required: false,
+    type: Boolean,
+    description: 'Use pseudo coder names for double-coding (always K1 and K2)'
+  })
   @ApiOkResponse({
     description: 'Coding results by variable exported as Excel',
     content: {
@@ -2648,7 +2676,9 @@ export class WorkspaceCodingController {
       @Query('includeComments') includeComments?: string,
       @Query('outputCommentsInsteadOfCodes') outputCommentsInsteadOfCodes?: string,
       @Query('includeReplayUrl') includeReplayUrl?: string,
-      @Query('authToken') authToken?: string
+      @Query('authToken') authToken?: string,
+      @Query('anonymizeCoders') anonymizeCoders?: string,
+      @Query('usePseudoCoders') usePseudoCoders?: string
   ): Promise<void> {
     try {
       const includeModal = includeModalValue === 'true';
@@ -2656,7 +2686,9 @@ export class WorkspaceCodingController {
       const includeCommentsParam = includeComments === 'true';
       const outputCommentsParam = outputCommentsInsteadOfCodes === 'true';
       const includeReplayUrlParam = includeReplayUrl === 'true';
-      const buffer = await this.codingExportService.exportCodingResultsByVariable(workspace_id, includeModal, includeDouble, includeCommentsParam, outputCommentsParam, includeReplayUrlParam, authToken || '', req); res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      const anonymizeCodersParam = anonymizeCoders === 'true';
+      const usePseudoCodersParam = usePseudoCoders === 'true';
+      const buffer = await this.codingExportService.exportCodingResultsByVariable(workspace_id, includeModal, includeDouble, includeCommentsParam, outputCommentsParam, includeReplayUrlParam, anonymizeCodersParam, usePseudoCodersParam, authToken || '', req); res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       res.setHeader('Content-Disposition', `attachment; filename=coding-results-by-variable-${new Date().toISOString().slice(0, 10)}.xlsx`);
       res.send(buffer);
     } catch (error) {
@@ -2686,6 +2718,18 @@ export class WorkspaceCodingController {
     type: String,
     description: 'Authentication token for generating replay URLs'
   })
+  @ApiQuery({
+    name: 'anonymizeCoders',
+    required: false,
+    type: Boolean,
+    description: 'Anonymize coder names (rename to K1, K2, etc. in random order)'
+  })
+  @ApiQuery({
+    name: 'usePseudoCoders',
+    required: false,
+    type: Boolean,
+    description: 'Use pseudo coder names for double-coding (always K1 and K2)'
+  })
   @ApiOkResponse({
     description: 'Detailed coding results exported as CSV',
     content: {
@@ -2703,12 +2747,16 @@ export class WorkspaceCodingController {
       @Req() req: Request,
       @Query('outputCommentsInsteadOfCodes') outputCommentsInsteadOfCodes?: string,
       @Query('includeReplayUrl') includeReplayUrl?: string,
-      @Query('authToken') authToken?: string
+      @Query('authToken') authToken?: string,
+      @Query('anonymizeCoders') anonymizeCoders?: string,
+      @Query('usePseudoCoders') usePseudoCoders?: string
   ): Promise<void> {
     try {
       const outputCommentsParam = outputCommentsInsteadOfCodes === 'true';
       const includeReplayUrlParam = includeReplayUrl === 'true';
-      const buffer = await this.codingExportService.exportCodingResultsDetailed(workspace_id, outputCommentsParam, includeReplayUrlParam, authToken || '', req);
+      const anonymizeCodersParam = anonymizeCoders === 'true';
+      const usePseudoCodersParam = usePseudoCoders === 'true';
+      const buffer = await this.codingExportService.exportCodingResultsDetailed(workspace_id, outputCommentsParam, includeReplayUrlParam, anonymizeCodersParam, usePseudoCodersParam, authToken || '', req);
 
       res.setHeader('Content-Type', 'text/csv');
       res.setHeader('Content-Disposition', `attachment; filename=coding-results-detailed-${new Date().toISOString().slice(0, 10)}.csv`);
@@ -2722,6 +2770,18 @@ export class WorkspaceCodingController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiQuery({
+    name: 'anonymizeCoders',
+    required: false,
+    type: Boolean,
+    description: 'Anonymize coder names (rename to K1, K2, etc. in random order)'
+  })
+  @ApiQuery({
+    name: 'usePseudoCoders',
+    required: false,
+    type: Boolean,
+    description: 'Use pseudo coder names for double-coding (always K1 and K2)'
+  })
   @ApiOkResponse({
     description: 'Coding times report exported as Excel',
     content: {
@@ -2735,10 +2795,14 @@ export class WorkspaceCodingController {
   })
   async exportCodingTimesReport(
     @WorkspaceId() workspace_id: number,
-      @Res() res: Response
+      @Res() res: Response,
+      @Query('anonymizeCoders') anonymizeCoders?: string,
+      @Query('usePseudoCoders') usePseudoCoders?: string
   ): Promise<void> {
     try {
-      const buffer = await this.codingExportService.exportCodingTimesReport(workspace_id);
+      const anonymizeCodersParam = anonymizeCoders === 'true';
+      const usePseudoCodersParam = usePseudoCoders === 'true';
+      const buffer = await this.codingExportService.exportCodingTimesReport(workspace_id, anonymizeCodersParam, usePseudoCodersParam);
 
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       res.setHeader('Content-Disposition', `attachment; filename=coding-times-report-${new Date().toISOString().slice(0, 10)}.xlsx`);

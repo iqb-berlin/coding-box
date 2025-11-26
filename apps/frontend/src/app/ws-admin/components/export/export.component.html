@@ -54,6 +54,21 @@
           [matTooltip]="'ws-admin.export-options.output-comments-instead-of-codes-tooltip' | translate">
           {{ 'ws-admin.export-options.output-comments-instead-of-codes' | translate }}
         </mat-checkbox>
+        <mat-checkbox
+          *ngIf="selectedFormat !== 'aggregated'"
+          [(ngModel)]="anonymizeCoders"
+          color="primary"
+          [matTooltip]="'ws-admin.export-options.anonymize-coders-tooltip' | translate">
+          {{ 'ws-admin.export-options.anonymize-coders' | translate }}
+        </mat-checkbox>
+        <div class="sub-option" *ngIf="anonymizeCoders && selectedFormat !== 'aggregated'">
+          <mat-checkbox
+            [(ngModel)]="usePseudoCoders"
+            color="primary"
+            [matTooltip]="'ws-admin.export-options.use-pseudo-coders-tooltip' | translate">
+            {{ 'ws-admin.export-options.use-pseudo-coders' | translate }}
+          </mat-checkbox>
+        </div>
       </div>
     </mat-card-content>
     <mat-card-actions align="end">
