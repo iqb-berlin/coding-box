@@ -7,13 +7,17 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateService, TranslateModule } from '@ngx-translate/core';
-import { MatAnchor, MatButton } from '@angular/material/button';
+import { MatAnchor, MatButton, MatIconButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatDialogModule } from '@angular/material/dialog';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import * as ExcelJS from 'exceljs';
-import { Subject, takeUntil } from 'rxjs';
+import {
+  Subject, takeUntil, debounceTime, finalize
+} from 'rxjs';
 import { CodingJobsComponent } from '../coding-jobs/coding-jobs.component';
 import { CodingJobDefinitionsComponent } from '../coding-job-definitions/coding-job-definitions.component';
 import { VariableBundleManagerComponent } from '../variable-bundle-manager/variable-bundle-manager.component';
@@ -41,8 +45,11 @@ import { CoderTrainingsListComponent } from '../coder-trainings-list/coder-train
     CodingJobDefinitionsComponent,
     MatIcon,
     MatButton,
+    MatIconButton,
     MatProgressBarModule,
+    MatProgressSpinnerModule,
     MatDialogModule,
+    MatTooltipModule,
     VariableBundleManagerComponent,
     CoderTrainingComponent,
     CoderTrainingsListComponent,
@@ -64,6 +71,15 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   validationProgress: ValidationProgress | null = null;
   isLoading = false;
 
+  // Granular loading states
+  isLoadingVariableCoverage = false;
+  isLoadingCaseCoverage = false;
+  isLoadingCodingProgress = false;
+  isLoadingKappaSummary = false;
+
+  private jobDefinitionChangeSubject = new Subject<void>();
+  private statisticsRefreshSubject = new Subject<void>();
+
   codingProgressOverview: {
     totalCasesToCode: number;
     completedCases: number;
@@ -73,9 +89,25 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   variableCoverageOverview: {
     totalVariables: number;
     coveredVariables: number;
+    coveredByDraft: number;
+    coveredByPendingReview: number;
+    coveredByApproved: number;
+    conflictedVariables: number;
     missingVariables: number;
     coveragePercentage: number;
     variableCaseCounts: { unitName: string; variableId: string; caseCount: number }[];
+    coverageByStatus: {
+      draft: string[];
+      pending_review: string[];
+      approved: string[];
+      conflicted: Array<{
+        variableKey: string;
+        conflictingDefinitions: Array<{
+          id: number;
+          status: string;
+        }>;
+      }>;
+    };
   } | null = null;
 
   caseCoverageOverview: {
@@ -202,6 +234,17 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     const currentProgress = this.validationStateService.getValidationProgress();
     this.validationProgress = currentProgress;
     this.isLoading = currentProgress.status === 'loading' || currentProgress.status === 'processing';
+
+    // Set up debounced statistics refresh for job definition changes
+    this.jobDefinitionChangeSubject
+      .pipe(
+        debounceTime(500),
+        takeUntil(this.destroy$)
+      )
+      .subscribe(() => {
+        this.loadVariableCoverageOverview();
+      });
+
     this.loadCodingProgressOverview();
     this.loadVariableCoverageOverview();
     this.loadCaseCoverageOverview();
@@ -214,6 +257,9 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this.destroy$.next();
     this.destroy$.complete();
+
+    this.jobDefinitionChangeSubject.complete();
+    this.statisticsRefreshSubject.complete();
   }
 
   onExternalCodingFileSelected(event: Event): void {
@@ -437,6 +483,24 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     this.showCoderTraining = false;
   }
 
+  onJobDefinitionChanged(): void {
+    this.jobDefinitionChangeSubject.next();
+  }
+
+  refreshVariableCoverageOnly(): void {
+    this.loadVariableCoverageOverview();
+  }
+
+  refreshAllStatistics(): void {
+    this.loadCodingProgressOverview();
+    this.loadVariableCoverageOverview();
+    this.loadCaseCoverageOverview();
+    this.loadWorkspaceKappaSummary();
+    this.loadCodingIncompleteVariables();
+    this.loadStatusDistribution();
+    this.loadAppliedResultsOverview();
+  }
+
   reloadCodingJobsList(): void {
     if (this.codingJobsComponent) {
       this.codingJobsComponent.loadCodingJobs();
@@ -449,8 +513,14 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       return;
     }
 
+    this.isLoadingCodingProgress = true;
     this.testPersonCodingService.getCodingProgressOverview(workspaceId)
-      .pipe(takeUntil(this.destroy$))
+      .pipe(
+        takeUntil(this.destroy$),
+        finalize(() => {
+          this.isLoadingCodingProgress = false;
+        })
+      )
       .subscribe({
         next: overview => {
           this.codingProgressOverview = overview;
@@ -467,8 +537,14 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       return;
     }
 
+    this.isLoadingVariableCoverage = true;
     this.testPersonCodingService.getVariableCoverageOverview(workspaceId)
-      .pipe(takeUntil(this.destroy$))
+      .pipe(
+        takeUntil(this.destroy$),
+        finalize(() => {
+          this.isLoadingVariableCoverage = false;
+        })
+      )
       .subscribe({
         next: overview => {
           this.variableCoverageOverview = overview;
@@ -485,8 +561,14 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       return;
     }
 
+    this.isLoadingCaseCoverage = true;
     this.testPersonCodingService.getCaseCoverageOverview(workspaceId)
-      .pipe(takeUntil(this.destroy$))
+      .pipe(
+        takeUntil(this.destroy$),
+        finalize(() => {
+          this.isLoadingCaseCoverage = false;
+        })
+      )
       .subscribe({
         next: overview => {
           this.caseCoverageOverview = overview;
@@ -503,8 +585,14 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       return;
     }
 
+    this.isLoadingKappaSummary = true;
     this.testPersonCodingService.getWorkspaceCohensKappaSummary(workspaceId)
-      .pipe(takeUntil(this.destroy$))
+      .pipe(
+        takeUntil(this.destroy$),
+        finalize(() => {
+          this.isLoadingKappaSummary = false;
+        })
+      )
       .subscribe({
         next: summary => {
           this.workspaceKappaSummary = summary;
@@ -638,5 +726,18 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
           this.showError('Fehler beim Generieren der Kodierer-Schulungspakete');
         }
       });
+  }
+
+  getStatusLabel(status: string): string {
+    switch (status) {
+      case 'draft':
+        return 'Entwurf';
+      case 'pending_review':
+        return 'Warten auf Genehmigung';
+      case 'approved':
+        return 'Genehmigt';
+      default:
+        return status;
+    }
   }
 }

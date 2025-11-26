@@ -166,7 +166,7 @@
 
       <div class="statistics-content">
         <!-- Coding Progress Overview -->
-        <div *ngIf="codingProgressOverview" class="coding-progress-section">
+        <div *ngIf="codingProgressOverview" class="coding-progress-section statistics-section" [class.blurred-content]="isLoadingCodingProgress">
           <div class="statistics-card">
             <h2 class="section-title">Kodierungsfortschritt</h2>
             <div class="coverage-stats">
@@ -191,16 +191,36 @@
               <div class="coverage-fill" [style.width.%]="codingProgressOverview.completionPercentage"></div>
             </div>
           </div>
+          <div *ngIf="isLoadingCodingProgress" class="loading-overlay">
+            <div class="loading-content">
+              <mat-spinner diameter="40"></mat-spinner>
+              <div class="loading-text">{{ 'coding-management-manual.loading.coding-progress' | translate }}</div>
+            </div>
+          </div>
         </div>
 
         <div class="job-definitions-container">
-          <coding-box-coding-job-definitions (bulkCreationCompleted)="reloadCodingJobsList()"></coding-box-coding-job-definitions>
+          <coding-box-coding-job-definitions
+            (bulkCreationCompleted)="reloadCodingJobsList()"
+            (jobDefinitionChanged)="onJobDefinitionChanged()"></coding-box-coding-job-definitions>
         </div>
 
         <!-- Variable Coverage Statistics -->
-        <div *ngIf="variableCoverageOverview" class="variable-coverage-section">
+        <div *ngIf="variableCoverageOverview" class="variable-coverage-section statistics-section" [class.blurred-content]="isLoadingVariableCoverage">
           <div class="statistics-card">
-            <h2 class="section-title">Variablenabdeckung</h2>
+            <h2 class="section-title">
+              Variablenabdeckung
+              <button mat-icon-button (click)="refreshVariableCoverageOnly()" matTooltip="Variablenabdeckung aktualisieren">
+                <mat-icon>refresh</mat-icon>
+              </button>
+              <span *ngIf="variableCoverageOverview.conflictedVariables > 0" class="conflict-badge"
+                    matTooltip="Es gibt Konflikte bei der Variablenzuordnung">
+                <mat-icon>warning</mat-icon>
+                {{variableCoverageOverview.conflictedVariables}} Konflikte
+              </span>
+            </h2>
+
+            <!-- Overall Coverage Stats -->
             <div class="coverage-stats">
               <div class="stat-item">
                 <span class="stat-label">Gesamt Variablen:</span>
@@ -219,14 +239,77 @@
                 <span class="stat-value percentage">{{variableCoverageOverview.coveragePercentage | number:'1.1-1'}}%</span>
               </div>
             </div>
+
+            <!-- Status Breakdown -->
+            <div class="status-breakdown">
+              <div class="status-stats">
+                <div class="status-item draft">
+                  <mat-icon class="status-icon">edit</mat-icon>
+                  <div class="status-content">
+                    <span class="status-label">Entwurf:</span>
+                    <span class="status-value">{{variableCoverageOverview.coveredByDraft}}</span>
+                  </div>
+                </div>
+                <div class="status-item pending">
+                  <mat-icon class="status-icon">schedule</mat-icon>
+                  <div class="status-content">
+                    <span class="status-label">Warten auf Genehmigung:</span>
+                    <span class="status-value">{{variableCoverageOverview.coveredByPendingReview}}</span>
+                  </div>
+                </div>
+                <div class="status-item approved">
+                  <mat-icon class="status-icon">check_circle</mat-icon>
+                  <div class="status-content">
+                    <span class="status-label">Genehmigt:</span>
+                    <span class="status-value">{{variableCoverageOverview.coveredByApproved}}</span>
+                  </div>
+                </div>
+                <div class="status-item conflict" *ngIf="variableCoverageOverview.conflictedVariables > 0">
+                  <mat-icon class="status-icon">error</mat-icon>
+                  <div class="status-content">
+                    <span class="status-label">Konflikte:</span>
+                    <span class="status-value">{{variableCoverageOverview.conflictedVariables}}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Conflicts Details -->
+            <div class="conflicts-section" *ngIf="variableCoverageOverview.coverageByStatus.conflicted.length > 0">
+              <h3 class="conflicts-title">
+                <mat-icon>warning</mat-icon>
+                Variablenkonflikte
+              </h3>
+              <div class="conflicts-list">
+                <div *ngFor="let conflict of variableCoverageOverview.coverageByStatus.conflicted" class="conflict-item">
+                  <div class="conflict-variable">
+                    <mat-icon>code</mat-icon>
+                    <span>{{conflict.variableKey}}</span>
+                  </div>
+                  <div class="conflict-definitions">
+                    <span class="conflict-label">Zugeordnet zu:</span>
+                    <span *ngFor="let def of conflict.conflictingDefinitions; let last = last" class="conflict-definition">
+                      Definition #{{def.id}} ({{getStatusLabel(def.status)}}){{!last ? ', ' : ''}}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <div class="coverage-bar">
               <div class="coverage-fill" [style.width.%]="variableCoverageOverview.coveragePercentage"></div>
+            </div>
+          </div>
+          <div *ngIf="isLoadingVariableCoverage" class="loading-overlay">
+            <div class="loading-content">
+              <mat-spinner diameter="40"></mat-spinner>
+              <div class="loading-text">{{ 'coding-management-manual.loading.variable-coverage' | translate }}</div>
             </div>
           </div>
         </div>
 
         <!-- Case Coverage Statistics -->
-        <div *ngIf="caseCoverageOverview" class="case-coverage-section">
+        <div *ngIf="caseCoverageOverview" class="case-coverage-section statistics-section" [class.blurred-content]="isLoadingCaseCoverage">
           <div class="statistics-card">
             <h2 class="section-title">Fälle in Jobdefinitionen</h2>
             <div class="coverage-stats">
@@ -257,6 +340,12 @@
             </div>
             <div class="coverage-bar">
               <div class="coverage-fill" [style.width.%]="caseCoverageOverview.coveragePercentage"></div>
+            </div>
+          </div>
+          <div *ngIf="isLoadingCaseCoverage" class="loading-overlay">
+            <div class="loading-content">
+              <mat-spinner diameter="40"></mat-spinner>
+              <div class="loading-text">{{ 'coding-management-manual.loading.case-coverage' | translate }}</div>
             </div>
           </div>
         </div>
