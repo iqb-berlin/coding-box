@@ -203,7 +203,9 @@
       "include-double-coded": "Füge Doppelkodierung-Indikator hinzu",
       "include-double-coded-tooltip": "Es wird eine Spalte hinzugefügt, die anzeigt, ob der Fall doppelt kodiert wurde (1) oder nicht (0).",
       "include-comments": "Füge Kommentarspalte hinzu",
-      "include-comments-tooltip": "Es wird eine Spalte hinzugefügt mit den Kommentaren aller Kodierer."
+      "include-comments-tooltip": "Es wird eine Spalte hinzugefügt mit den Kommentaren aller Kodierer.",
+      "output-comments-instead-of-codes": "Kommentare ausgeben statt Codes",
+      "output-comments-instead-of-codes-tooltip": "Die Kommentare der Kodierer werden in die Codezeilen geschrieben"
     },
     "export-exporting": "Export läuft...",
     "export-success": "Export erfolgreich abgeschlossen",

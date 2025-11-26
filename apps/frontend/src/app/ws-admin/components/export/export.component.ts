@@ -44,6 +44,7 @@ export class ExportComponent {
   includeModalValue = false;
   includeDoubleCoded = false;
   includeComments = false;
+  outputCommentsInsteadOfCodes = false;
 
   exportFormats = [
     {
@@ -91,19 +92,19 @@ export class ExportComponent {
 
     switch (this.selectedFormat) {
       case 'aggregated':
-        exportMethod = this.backendService.exportCodingResultsAggregated(workspaceId);
+        exportMethod = this.backendService.exportCodingResultsAggregated(workspaceId, this.outputCommentsInsteadOfCodes);
         filename = `coding-results-aggregated-${new Date().toISOString().slice(0, 10)}.xlsx`;
         break;
       case 'by-coder':
-        exportMethod = this.backendService.exportCodingResultsByCoder(workspaceId);
+        exportMethod = this.backendService.exportCodingResultsByCoder(workspaceId, this.outputCommentsInsteadOfCodes);
         filename = `coding-results-by-coder-${new Date().toISOString().slice(0, 10)}.xlsx`;
         break;
       case 'by-variable':
-        exportMethod = this.backendService.exportCodingResultsByVariable(workspaceId, this.includeModalValue, this.includeDoubleCoded, this.includeComments);
+        exportMethod = this.backendService.exportCodingResultsByVariable(workspaceId, this.includeModalValue, this.includeDoubleCoded, this.includeComments, this.outputCommentsInsteadOfCodes);
         filename = `coding-results-by-variable-${new Date().toISOString().slice(0, 10)}.xlsx`;
         break;
       case 'detailed':
-        exportMethod = this.backendService.exportCodingResultsDetailed(workspaceId);
+        exportMethod = this.backendService.exportCodingResultsDetailed(workspaceId, this.outputCommentsInsteadOfCodes);
         filename = `coding-results-detailed-${new Date().toISOString().slice(0, 10)}.csv`;
         break;
       case 'coding-times':

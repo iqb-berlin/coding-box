@@ -18,25 +18,34 @@
         </mat-radio-group>
       </div>
 
-      <div *ngIf="selectedFormat === 'by-variable'" class="export-options-section">
+      <div class="export-options-section">
         <h3>{{ 'ws-admin.export-options-title' | translate }}</h3>
+        <div *ngIf="selectedFormat === 'by-variable'">
+          <mat-checkbox
+            [(ngModel)]="includeModalValue"
+            color="primary"
+            [matTooltip]="'ws-admin.export-options.include-modal-value-tooltip' | translate">
+            {{ 'ws-admin.export-options.include-modal-value' | translate }}
+          </mat-checkbox>
+          <mat-checkbox
+            [(ngModel)]="includeDoubleCoded"
+            color="primary"
+            [matTooltip]="'ws-admin.export-options.include-double-coded-tooltip' | translate">
+            {{ 'ws-admin.export-options.include-double-coded' | translate }}
+          </mat-checkbox>
+          <mat-checkbox
+            [(ngModel)]="includeComments"
+            color="primary"
+            [matTooltip]="'ws-admin.export-options.include-comments-tooltip' | translate">
+            {{ 'ws-admin.export-options.include-comments' | translate }}
+          </mat-checkbox>
+        </div>
         <mat-checkbox
-          [(ngModel)]="includeModalValue"
+          *ngIf="selectedFormat !== 'detailed' && selectedFormat !== 'coding-times'"
+          [(ngModel)]="outputCommentsInsteadOfCodes"
           color="primary"
-          [matTooltip]="'ws-admin.export-options.include-modal-value-tooltip' | translate">
-          {{ 'ws-admin.export-options.include-modal-value' | translate }}
-        </mat-checkbox>
-        <mat-checkbox
-          [(ngModel)]="includeDoubleCoded"
-          color="primary"
-          [matTooltip]="'ws-admin.export-options.include-double-coded-tooltip' | translate">
-          {{ 'ws-admin.export-options.include-double-coded' | translate }}
-        </mat-checkbox>
-        <mat-checkbox
-          [(ngModel)]="includeComments"
-          color="primary"
-          [matTooltip]="'ws-admin.export-options.include-comments-tooltip' | translate">
-          {{ 'ws-admin.export-options.include-comments' | translate }}
+          [matTooltip]="'ws-admin.export-options.output-comments-instead-of-codes-tooltip' | translate">
+          {{ 'ws-admin.export-options.output-comments-instead-of-codes' | translate }}
         </mat-checkbox>
       </div>
     </mat-card-content>
