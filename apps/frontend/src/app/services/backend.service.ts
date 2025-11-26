@@ -1251,11 +1251,22 @@ export class BackendService {
     });
   }
 
-  exportCodingResultsByVariable(workspaceId: number): Observable<Blob> {
+  exportCodingResultsByVariable(workspaceId: number, includeModalValue = false, includeDoubleCoded = false, includeComments = false): Observable<Blob> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/by-variable`;
+    let params = new HttpParams();
+    if (includeModalValue) {
+      params = params.set('includeModalValue', 'true');
+    }
+    if (includeDoubleCoded) {
+      params = params.set('includeDoubleCoded', 'true');
+    }
+    if (includeComments) {
+      params = params.set('includeComments', 'true');
+    }
     return this.http.get(url, {
       responseType: 'blob',
-      headers: this.authHeader
+      headers: this.authHeader,
+      params
     });
   }
 

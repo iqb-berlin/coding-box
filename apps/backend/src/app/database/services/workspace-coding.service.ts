@@ -1622,8 +1622,8 @@ export class WorkspaceCodingService {
     return this.codingExportService.exportCodingResultsByCoder(workspaceId);
   }
 
-  async exportCodingResultsByVariable(workspaceId: number): Promise<Buffer> {
-    return this.codingExportService.exportCodingResultsByVariable(workspaceId);
+  async exportCodingResultsByVariable(workspaceId: number, includeModalValue = false, includeDoubleCoded = false, includeComments = false): Promise<Buffer> {
+    return this.codingExportService.exportCodingResultsByVariable(workspaceId, includeModalValue, includeDoubleCoded, includeComments);
   }
 
   async bulkApplyCodingResults(workspaceId: number): Promise<{

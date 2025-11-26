@@ -5,6 +5,8 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatRadioModule } from '@angular/material/radio';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import { MatCheckboxModule } from '@angular/material/checkbox';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { FormsModule } from '@angular/forms';
 import { CommonModule } from '@angular/common';
 import { Observable } from 'rxjs';
@@ -25,6 +27,8 @@ export type ExportFormat = 'aggregated' | 'by-coder' | 'by-variable' | 'detailed
     MatRadioModule,
     MatProgressSpinnerModule,
     MatSnackBarModule,
+    MatCheckboxModule,
+    MatTooltipModule,
     FormsModule,
     CommonModule
   ]
@@ -37,6 +41,9 @@ export class ExportComponent {
 
   selectedFormat: ExportFormat = 'aggregated';
   isExporting = false;
+  includeModalValue = false;
+  includeDoubleCoded = false;
+  includeComments = false;
 
   exportFormats = [
     {
@@ -92,7 +99,7 @@ export class ExportComponent {
         filename = `coding-results-by-coder-${new Date().toISOString().slice(0, 10)}.xlsx`;
         break;
       case 'by-variable':
-        exportMethod = this.backendService.exportCodingResultsByVariable(workspaceId);
+        exportMethod = this.backendService.exportCodingResultsByVariable(workspaceId, this.includeModalValue, this.includeDoubleCoded, this.includeComments);
         filename = `coding-results-by-variable-${new Date().toISOString().slice(0, 10)}.xlsx`;
         break;
       case 'detailed':

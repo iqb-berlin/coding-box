@@ -17,6 +17,28 @@
           </div>
         </mat-radio-group>
       </div>
+
+      <div *ngIf="selectedFormat === 'by-variable'" class="export-options-section">
+        <h3>{{ 'ws-admin.export-options-title' | translate }}</h3>
+        <mat-checkbox
+          [(ngModel)]="includeModalValue"
+          color="primary"
+          [matTooltip]="'ws-admin.export-options.include-modal-value-tooltip' | translate">
+          {{ 'ws-admin.export-options.include-modal-value' | translate }}
+        </mat-checkbox>
+        <mat-checkbox
+          [(ngModel)]="includeDoubleCoded"
+          color="primary"
+          [matTooltip]="'ws-admin.export-options.include-double-coded-tooltip' | translate">
+          {{ 'ws-admin.export-options.include-double-coded' | translate }}
+        </mat-checkbox>
+        <mat-checkbox
+          [(ngModel)]="includeComments"
+          color="primary"
+          [matTooltip]="'ws-admin.export-options.include-comments-tooltip' | translate">
+          {{ 'ws-admin.export-options.include-comments' | translate }}
+        </mat-checkbox>
+      </div>
     </mat-card-content>
     <mat-card-actions align="end">
       <button mat-raised-button color="primary" (click)="onExport()" [disabled]="isExporting">
