@@ -59,6 +59,7 @@ import { CoderTrainingsListComponent } from '../coder-trainings-list/coder-train
 export class CodingManagementManualComponent implements OnInit, OnDestroy {
   @ViewChild(CodingJobsComponent) codingJobsComponent?: CodingJobsComponent;
   @ViewChild(CodingJobDefinitionsComponent) codingJobDefinitionsComponent?: CodingJobDefinitionsComponent;
+  @ViewChild(CoderTrainingsListComponent) coderTrainingsListComponent?: CoderTrainingsListComponent;
 
   private testPersonCodingService = inject(TestPersonCodingService);
   private backendService = inject(BackendService);
@@ -520,6 +521,12 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     this.codingJobsChangeSubject.next();
   }
 
+  reloadCoderTrainingsList(): void {
+    if (this.coderTrainingsListComponent) {
+      this.coderTrainingsListComponent.loadCoderTrainings();
+    }
+  }
+
   onCodingJobsChanged(): void {
     this.codingJobsChangeSubject.next();
   }
@@ -738,6 +745,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
             `Schulung erfolgreich generiert: ${packages.length} Kodierer-Pakete mit insgesamt ${totalResponses} Antworten erstellt`
           );
           this.closeCoderTraining();
+          this.reloadCoderTrainingsList();
         },
         error: () => {
           this.showError('Fehler beim Generieren der Kodierer-Schulungspakete');

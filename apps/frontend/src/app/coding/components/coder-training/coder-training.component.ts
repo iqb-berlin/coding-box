@@ -34,6 +34,7 @@ import { Coder } from '../../models/coder.model';
 import { VariableBundle } from '../../models/coding-job.model';
 import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
+import { BackendMessageTranslatorService } from '../../services/backend-message-translator.service';
 
 export interface VariableConfig {
   variableId: string;
@@ -83,6 +84,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   private backendService = inject(BackendService);
   private appService = inject(AppService);
   private fb = inject(FormBuilder);
+  private backendMessageTranslator = inject(BackendMessageTranslatorService);
 
   // Cached grouped variables data
   private _groupedVariables: VariableGrouping = { manual: [], bundles: [] };
@@ -463,14 +465,6 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     return firstVariable?.get('sampleCount')?.value || 10;
   }
 
-  hasManualVariables(): boolean {
-    return this._groupedVariables.manual.length > 0;
-  }
-
-  getBundleGroups(): typeof this._groupedVariables.bundles {
-    return this._groupedVariables.bundles;
-  }
-
   trackByCoderId(index: number, coder: Coder): number {
     return coder.id;
   }
@@ -509,11 +503,17 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
           this.isLoading = false;
           this.changeDetectorRef.markForCheck();
           if (result.success) {
-            this.showSuccess(`Erfolgreich ${result.jobsCreated} Kodierungsaufträge für ${selectedCoders.length} Kodierungsaufträge für ${selectedCoders.length} Kodierer erstellt`);
+            const translatedMessage = result.message ?
+              this.backendMessageTranslator.translateMessage(result.message) :
+              `Erfolgreich ${result.jobsCreated} Kodierungsaufträge für ${selectedCoders.length} Kodierer erstellt`;
+            this.showSuccess(translatedMessage);
             this.startTraining.emit({ selectedCoders, variableConfigs });
             this.onClose();
           } else {
-            this.showError(`Fehler beim Erstellen der Kodierungsaufträge: ${result.message}`);
+            const translatedError = result.message ?
+              this.backendMessageTranslator.translateMessage(result.message) :
+              'Fehler beim Erstellen der Kodierungsaufträge';
+            this.showError(translatedError);
           }
         },
         error: () => {

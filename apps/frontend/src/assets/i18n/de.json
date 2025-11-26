@@ -304,10 +304,6 @@
         "button": "Ergebnisse vergleichen",
         "notEnough": "Um Ergebnisse zu vergleichen, werden mindestens zwei Kodierer-Schulungen benötigt."
       },
-      "create": {
-        "button": "Neue Schulung erstellen",
-        "first": "Erste Schulung erstellen"
-      },
       "loading": "Lade Kodierer-Schulungen...",
       "empty": {
         "title": "Keine Kodierer-Schulungen vorhanden",
@@ -336,8 +332,25 @@
           "message": "Sind Sie sicher, dass Sie die Schulung \"{{label}}\" mit {{count}} {{jobText}} löschen möchten?",
           "warning": "Diese Aktion kann nicht rückgängig gemacht werden."
         },
+        "success": "Schulung '{{label}}' mit {{count}} Kodierjobs wurde gelöscht",
         "error": {
-          "generic": "Fehler beim Löschen der Schulung: {{error}}"
+          "generic": "Fehler beim Löschen der Schulung: {{error}}",
+          "not-found": "Schulung mit ID {{trainingId}} nicht in Workspace {{workspaceId}} gefunden"
+        }
+      },
+      "create": {
+        "button": "Neue Schulung erstellen",
+        "first": "Erste Schulung erstellen",
+        "success": "Erfolgreich {{count}} Kodierjobs erstellt",
+        "error": {
+          "generic": "Fehler beim Erstellen der Kodierjobs: {{error}}"
+        }
+      },
+      "update": {
+        "success": "Schulung erfolgreich aktualisiert: {{label}}",
+        "error": {
+          "generic": "Fehler beim Aktualisieren der Schulung: {{error}}",
+          "not-found": "Schulung mit ID {{trainingId}} nicht in Workspace {{workspaceId}} gefunden"
         }
       }
     },

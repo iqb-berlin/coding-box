@@ -42,45 +42,28 @@ export class BackendMessageTranslatorService {
     'Internal server error': 'backend-messages.internal-server-error'
   };
 
-  /**
-   * Translates a backend message to German if a matching translation key exists.
-   * Returns the translated message or the original message if no translation is found.
-   *
-   * @param backendMessage The raw message from the backend API
-   * @returns The translated message or original message if no translation exists
-   */
   translateMessage(backendMessage: string): string {
     if (!backendMessage || backendMessage.trim() === '') {
       return backendMessage;
     }
 
-    // Check if message exists in the mapping
     const translationKey = this.messageMap[backendMessage.trim()];
 
     if (translationKey) {
-      // Try to get the translation
       const translated = this.translateService.instant(translationKey);
 
-      // Return translated message if it's different from the key (meaning translation was found)
-      // If translation fails, it returns the key itself, so we check for that
       return translated !== translationKey ? translated : backendMessage;
     }
 
-    // Check for dynamic messages (e.g., "Job X cancelled successfully")
     const dynamicTranslation = this.translateDynamicMessage(backendMessage);
     if (dynamicTranslation) {
       return dynamicTranslation;
     }
 
-    // If no translation found, return original message
     return backendMessage;
   }
 
-  /**
-   * Attempts to translate messages with dynamic content like "Job {id} cancelled successfully"
-   */
   private translateDynamicMessage(message: string): string | null {
-    // Check for job-related messages with IDs
     const jobCancelledMatch = message.match(/^Job (.+) cancelled successfully$/i);
     if (jobCancelledMatch) {
       return this.translateService.instant('test-person-coding.job-cancelled-by-id', { id: jobCancelledMatch[1] });
@@ -91,20 +74,47 @@ export class BackendMessageTranslatorService {
       return this.translateService.instant('test-person-coding.job-deleted-by-id', { id: jobDeletedMatch[1] });
     }
 
-    // Add more dynamic patterns as needed
-
-    return null;
-  }
-
-  /**
-   * Returns a fallback translated message if backend message is empty or null
-   */
-  getTranslatedMessageOrFallback(backendMessage: string | undefined, fallbackKey: string): string {
-    if (!backendMessage || backendMessage.trim() === '') {
-      return this.translateService.instant(fallbackKey);
+    const trainingCreatedMatch = message.match(/^Successfully created (\d+) coding jobs?$/i);
+    if (trainingCreatedMatch) {
+      return this.translateService.instant('trainings.create.success', { count: trainingCreatedMatch[1] });
     }
 
-    const translated = this.translateMessage(backendMessage);
-    return translated || this.translateService.instant(fallbackKey);
+    const trainingUpdatedMatch = message.match(/^Training label updated to: (.+)$/i);
+    if (trainingUpdatedMatch) {
+      return this.translateService.instant('trainings.update.success', { label: trainingUpdatedMatch[1] });
+    }
+
+    const trainingDeletedMatch = message.match(/^Training '(.+)' with (\d+) coding jobs? has been deleted$/i);
+    if (trainingDeletedMatch) {
+      return this.translateService.instant('trainings.delete.success', {
+        label: trainingDeletedMatch[1],
+        count: trainingDeletedMatch[2]
+      });
+    }
+
+    const trainingCreateErrorMatch = message.match(/^Failed to create coding jobs: (.+)$/i);
+    if (trainingCreateErrorMatch) {
+      return this.translateService.instant('trainings.create.error.generic', { error: trainingCreateErrorMatch[1] });
+    }
+
+    const trainingUpdateErrorMatch = message.match(/^Failed to update training label: (.+)$/i);
+    if (trainingUpdateErrorMatch) {
+      return this.translateService.instant('trainings.update.error.generic', { error: trainingUpdateErrorMatch[1] });
+    }
+
+    const trainingNotFoundMatch = message.match(/^Training with ID (\d+) not found in workspace (\d+)$/i);
+    if (trainingNotFoundMatch) {
+      return this.translateService.instant('trainings.update.error.not-found', {
+        trainingId: trainingNotFoundMatch[1],
+        workspaceId: trainingNotFoundMatch[2]
+      });
+    }
+
+    const trainingDeleteErrorMatch = message.match(/^Failed to delete training: (.+)$/i);
+    if (trainingDeleteErrorMatch) {
+      return this.translateService.instant('trainings.delete.error.generic', { error: trainingDeleteErrorMatch[1] });
+    }
+
+    return null;
   }
 }
