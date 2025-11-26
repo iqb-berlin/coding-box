@@ -254,6 +254,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy {
             duration: 5000,
             panelClass: ['success-snackbar']
           });
+          this.dialogRef.close({ resultsApplied: true });
         } else {
           this.snackBar.open(`Fehler beim Anwenden der Ergebnisse: ${message}`, 'Schließen', {
             duration: 5000,
