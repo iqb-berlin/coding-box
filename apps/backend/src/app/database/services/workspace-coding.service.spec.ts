@@ -1094,7 +1094,7 @@ describe('WorkspaceCodingService', () => {
       const result = await service.exportCodingResultsByVariable(workspaceId);
 
       expect(result).toBeInstanceOf(Buffer);
-      expect(mockCodingExportService.exportCodingResultsByVariable).toHaveBeenCalledWith(workspaceId);
+      expect(mockCodingExportService.exportCodingResultsByVariable).toHaveBeenCalledWith(workspaceId, false, false, false, false);
     });
 
     it('should throw error when no coded variables found', async () => {
