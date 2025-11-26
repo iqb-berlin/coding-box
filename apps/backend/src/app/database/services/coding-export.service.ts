@@ -740,11 +740,14 @@ export class CodingExportService {
 
             // Build coder name mapping for this variable if anonymization is enabled
             const coderList = Array.from(coderSet).sort();
-            const coderNameMapping = anonymizeCoders && usePseudoCoders ?
-              this.buildCoderNameMapping(coderList, true) : // Pseudo mode: deterministic K1/K2 per variable
-              anonymizeCoders ?
-                this.buildCoderNameMapping(coderList, false) : // Regular: random mapping
-                null;
+            let coderNameMapping: Map<string, string> | null;
+            if (anonymizeCoders && usePseudoCoders) {
+              coderNameMapping = this.buildCoderNameMapping(coderList, true); // Pseudo mode: deterministic K1/K2 per variable
+            } else if (anonymizeCoders) {
+              coderNameMapping = this.buildCoderNameMapping(coderList, false); // Regular: random mapping
+            } else {
+              coderNameMapping = null;
+            }
 
             // Apply anonymization to coder names in headers
             const displayCoderList = coderNameMapping ?
