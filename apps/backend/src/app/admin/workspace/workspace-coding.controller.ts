@@ -2544,6 +2544,24 @@ export class WorkspaceCodingController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiQuery({
+    name: 'includeModalValue',
+    required: false,
+    type: Boolean,
+    description: 'Include modal value and deviation count columns'
+  })
+  @ApiQuery({
+    name: 'includeDoubleCoded',
+    required: false,
+    type: Boolean,
+    description: 'Include double coding indicator column (0 or 1)'
+  })
+  @ApiQuery({
+    name: 'includeComments',
+    required: false,
+    type: Boolean,
+    description: 'Include comments column with all coders comments'
+  })
   @ApiOkResponse({
     description: 'Coding results by variable exported as Excel',
     content: {
@@ -2557,12 +2575,14 @@ export class WorkspaceCodingController {
   })
   async exportCodingResultsByVariable(
     @WorkspaceId() workspace_id: number,
-      @Res() res: Response
+      @Res() res: Response,
+      @Query('includeModalValue') includeModalValue?: string,
+      @Query('includeDoubleCoded') includeDoubleCoded?: string
   ): Promise<void> {
     try {
-      const buffer = await this.codingExportService.exportCodingResultsByVariable(workspace_id);
-
-      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      const includeModal = includeModalValue === 'true';
+      const includeDouble = includeDoubleCoded === 'true';
+      const buffer = await this.codingExportService.exportCodingResultsByVariable(workspace_id, includeModal, includeDouble); res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       res.setHeader('Content-Disposition', `attachment; filename=coding-results-by-variable-${new Date().toISOString().slice(0, 10)}.xlsx`);
       res.send(buffer);
     } catch (error) {

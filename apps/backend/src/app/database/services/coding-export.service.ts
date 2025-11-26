@@ -403,12 +403,18 @@ export class CodingExportService {
     }
   }
 
-  async exportCodingResultsByVariable(workspaceId: number): Promise<Buffer> {
-    this.logger.log(`Exporting coding results by variable for workspace ${workspaceId} (CODING_INCOMPLETE only)`);
+  async exportCodingResultsByVariable(workspaceId: number, includeModalValue = false, includeDoubleCoded = false, includeComments = false): Promise<Buffer> {
+    this.logger.log(`Exporting coding results by variable for workspace ${workspaceId} (CODING_INCOMPLETE only)${includeModalValue ? ' with modal value' : ''}${includeDoubleCoded ? ' with double coding indicator' : ''}${includeComments ? ' with comments' : ''}`);
 
     const MAX_WORKSHEETS = parseInt(process.env.EXPORT_MAX_WORKSHEETS || '100', 10);
     const MAX_RESPONSES_PER_WORKSHEET = parseInt(process.env.EXPORT_MAX_RESPONSES_PER_WORKSHEET || '10000', 10);
     const BATCH_SIZE = parseInt(process.env.EXPORT_BATCH_SIZE || '50', 10);
+
+    // Column header constants
+    const MODAL_VALUE_HEADER = 'Häufigster Wert';
+    const DEVIATION_COUNT_HEADER = 'Anzahl der Abweichungen';
+    const DOUBLE_CODED_HEADER = 'Doppelkodierung';
+    const COMMENTS_HEADER = 'Kommentare';
 
     try {
       const incompleteVariables = await this.getCodingIncompleteVariables(workspaceId);
@@ -470,87 +476,183 @@ export class CodingExportService {
         // Process each combination in the current batch
         for (const { unitName, variableId } of batch) {
           try {
-            // Get response count first to check limits
-            const responseCount = await this.responseRepository.count({
+            // Get coding job units for this specific unit-variable combination
+            const codingJobUnits = await this.codingJobUnitRepository.find({
               where: {
-                variableid: variableId,
-                unit: {
-                  name: unitName,
-                  booklet: {
-                    person: {
-                      workspace_id: workspaceId
-                    }
-                  }
+                unit_name: unitName,
+                variable_id: variableId,
+                coding_job: {
+                  workspace_id: workspaceId
                 }
-              }
+              },
+              relations: [
+                'coding_job',
+                'coding_job.codingJobCoders',
+                'coding_job.codingJobCoders.user',
+                'response',
+                'response.unit',
+                'response.unit.booklet',
+                'response.unit.booklet.person'
+              ],
+              take: MAX_RESPONSES_PER_WORKSHEET * 10 // Allow for multiple coders per response
             });
 
-            if (responseCount === 0) continue;
-
-            // Skip if too many responses for this worksheet
-            if (responseCount > MAX_RESPONSES_PER_WORKSHEET) {
-              this.logger.warn(`Skipping worksheet ${unitName}_${variableId}: too many responses (${responseCount} > ${MAX_RESPONSES_PER_WORKSHEET})`);
-              continue;
-            }
+            if (codingJobUnits.length === 0) continue;
 
             const worksheetName = this.generateUniqueWorksheetName(workbook, `${unitName}_${variableId}`);
             const worksheet = workbook.addWorksheet(worksheetName);
 
-            // Get responses for this specific unit-variable combination with pagination
-            const responses = await this.responseRepository.find({
-              where: {
-                variableid: variableId,
-                unit: {
-                  name: unitName,
-                  booklet: {
-                    person: {
-                      workspace_id: workspaceId
-                    }
-                  }
+            // Group coding results by test person and coder
+            const testPersonMap = new Map<string, Map<string, number | null>>();
+            const testPersonComments = new Map<string, Map<string, string | null>>();
+            const coderSet = new Set<string>();
+            const testPersonData = new Map<string, { login: string; code: string; group: string }>();
+
+            for (const unit of codingJobUnits) {
+              // Skip if no code was assigned
+              if (unit.code === null || unit.code === undefined) {
+                continue;
+              }
+
+              const person = unit.response?.unit?.booklet?.person;
+              const testPersonKey = `${person?.login || ''}_${person?.code || ''}`;
+
+              // Get coder name (take first coder if multiple assigned to job)
+              const coderName = unit.coding_job?.codingJobCoders?.[0]?.user?.username || 'Unknown';
+              coderSet.add(coderName);
+
+              // Store test person data
+              if (!testPersonData.has(testPersonKey)) {
+                testPersonData.set(testPersonKey, {
+                  login: person?.login || '',
+                  code: person?.code || '',
+                  group: person?.group || ''
+                });
+              }
+
+              // Store coding result
+              if (!testPersonMap.has(testPersonKey)) {
+                testPersonMap.set(testPersonKey, new Map());
+              }
+              testPersonMap.get(testPersonKey)!.set(coderName, unit.code);
+
+              // Store comments if includeComments is enabled
+              if (includeComments) {
+                if (!testPersonComments.has(testPersonKey)) {
+                  testPersonComments.set(testPersonKey, new Map());
                 }
-              },
-              relations: ['unit', 'unit.booklet', 'unit.booklet.person'],
-              select: {
-                id: true,
-                code_v1: true,
-                score_v1: true,
-                code_v2: true,
-                score_v2: true,
-                code_v3: true,
-                score_v3: true,
-                unit: {
-                  id: true,
-                  booklet: {
-                    id: true,
-                    person: {
-                      id: true,
-                      login: true,
-                      code: true,
-                      group: true
-                    }
-                  }
+                if (unit.notes) {
+                  testPersonComments.get(testPersonKey)!.set(coderName, unit.notes);
                 }
-              },
-              take: MAX_RESPONSES_PER_WORKSHEET // Safety limit
-            });
+              }
+            }
 
-            if (responses.length === 0) continue;
+            if (testPersonMap.size === 0) continue;
 
-            // Create simple table: testpersons as rows with their coding
-            const headers = ['Test Person Login', 'Test Person Code', 'Group', 'Code', 'Score'];
-            worksheet.columns = headers.map(header => ({ header, key: header, width: 15 }));
+            // Create headers: Test Person Login, Test Person Code, Group, then each coder
+            const coderList = Array.from(coderSet).sort();
+            const baseHeaders = ['Test Person Login', 'Test Person Code', 'Group', ...coderList];
 
-            for (const response of responses) {
-              const person = response.unit?.booklet?.person;
-              const latestCoding = this.getLatestCode(response);
+            // Add modal value columns if requested
+            if (includeModalValue) {
+              baseHeaders.push(MODAL_VALUE_HEADER, DEVIATION_COUNT_HEADER);
+            }
+
+            // Add double coding indicator column if requested
+            if (includeDoubleCoded) {
+              baseHeaders.push(DOUBLE_CODED_HEADER);
+            }
+
+            // Add comments column if requested
+            if (includeComments) {
+              baseHeaders.push(COMMENTS_HEADER);
+            }
+
+            worksheet.columns = baseHeaders.map(header => ({ header, key: header, width: 15 }));
+
+            // Add rows for each test person
+            for (const [testPersonKey, codings] of testPersonMap) {
+              const personData = testPersonData.get(testPersonKey)!;
 
               const row: Record<string, string | number | null> = {
-                'Test Person Login': person?.login || '',
-                'Test Person Code': person?.code || '',
-                Group: person?.group || '',
-                Code: latestCoding.code,
-                Score: latestCoding.score
+                'Test Person Login': personData.login,
+                'Test Person Code': personData.code,
+                Group: personData.group
               };
+
+              // Add coding values for each coder
+              const codeValues: (number | null)[] = [];
+              for (const coder of coderList) {
+                const code = codings.get(coder) ?? null;
+                // Display empty cell for negative codes (coding issues)
+                row[coder] = (code !== null && code >= 0) ? code : '';
+                // Only include non-negative codes in modal value calculation
+                if (code !== null && code >= 0) {
+                  codeValues.push(code);
+                }
+              }
+
+              // Calculate modal value and deviations if requested
+              if (includeModalValue && codeValues.length > 0) {
+                // Count frequency of each code
+                const frequencyMap = new Map<number, number>();
+                for (const code of codeValues) {
+                  frequencyMap.set(code, (frequencyMap.get(code) || 0) + 1);
+                }
+
+                // Find the maximum frequency
+                let maxFrequency = 0;
+                for (const freq of frequencyMap.values()) {
+                  if (freq > maxFrequency) {
+                    maxFrequency = freq;
+                  }
+                }
+
+                // Collect all codes with the maximum frequency
+                const modalCandidates: number[] = [];
+                for (const [code, freq] of frequencyMap.entries()) {
+                  if (freq === maxFrequency) {
+                    modalCandidates.push(code);
+                  }
+                }
+
+                // Select randomly if there are multiple modal values (tie)
+                const modalValue = modalCandidates.length > 0 ?
+                  modalCandidates[Math.floor(Math.random() * modalCandidates.length)] :
+                  null;
+
+                // Count deviations from modal value (number of coders who used a different code)
+                const deviations = modalValue !== null ?
+                  codeValues.filter(code => code !== modalValue).length :
+                  0;
+
+                row[MODAL_VALUE_HEADER] = modalValue ?? '';
+                row[DEVIATION_COUNT_HEADER] = deviations;
+              } else if (includeModalValue) {
+                row[MODAL_VALUE_HEADER] = '';
+                row[DEVIATION_COUNT_HEADER] = '';
+              }
+
+              if (includeDoubleCoded) {
+                const codedByCount = coderList.filter(coder => {
+                  const code = codings.get(coder) ?? null;
+                  return code !== null && code >= 0;
+                }).length;
+                row[DOUBLE_CODED_HEADER] = codedByCount > 1 ? 1 : 0;
+              }
+
+              if (includeComments) {
+                const comments = testPersonComments.get(testPersonKey);
+                if (comments && comments.size > 0) {
+                  const commentsList = coderList.map(coder => {
+                    const comment = comments.get(coder);
+                    return comment ? `${coder}: ${comment}` : null;
+                  }).filter(c => c !== null);
+                  row[COMMENTS_HEADER] = commentsList.length > 0 ? commentsList.join(' | ') : '';
+                } else {
+                  row[COMMENTS_HEADER] = '';
+                }
+              }
 
               worksheet.addRow(row);
             }
@@ -777,19 +879,16 @@ export class CodingExportService {
         this.logger.warn(`No coded coding job units found for workspace ${workspaceId}`);
       }
 
-      // If no coded units found, return empty Excel file with headers
       if (codingJobUnits.length === 0) {
         const workbook = new ExcelJS.Workbook();
         const worksheet = workbook.addWorksheet('Kodierzeiten-Bericht');
 
-        // Create basic headers
         worksheet.columns = [
           { header: 'Unit', key: 'unit', width: 20 },
           { header: 'Variable', key: 'variable', width: 20 },
           { header: 'Gesamt', key: 'gesamt', width: 15 }
         ];
 
-        // Style header row
         worksheet.getRow(1).font = { bold: true };
         worksheet.getRow(1).fill = {
           type: 'pattern',
@@ -805,18 +904,15 @@ export class CodingExportService {
         return Buffer.from(buffer);
       }
 
-      // Group by coder and collect all their coding timestamps (across all variables)
       const coderTimestamps = new Map<string, Date[]>();
 
       for (const unit of codingJobUnits) {
-        // Skip if no timestamp or no coders
         if (!unit.updated_at || !unit.coding_job?.codingJobCoders?.length) {
           continue;
         }
 
         const timestamp = new Date(unit.updated_at);
 
-        // For each coder assigned to this job, add the timestamp
         for (const jobCoder of unit.coding_job.codingJobCoders) {
           const coderName = jobCoder.user?.username || 'Unknown';
 
@@ -828,14 +924,12 @@ export class CodingExportService {
         }
       }
 
-      // Calculate average coding times per coder (across all their coding actions)
       const coderAverages = new Map<string, number | null>();
       for (const [coderName, timestamps] of coderTimestamps) {
         const avgTime = this.calculateAverageCodingTime(timestamps);
         coderAverages.set(coderName, avgTime);
       }
 
-      // Now get variable-unit combinations and their coder assignments
       const variableUnitCoders = new Map<string, Set<string>>();
 
       for (const unit of codingJobUnits) {
@@ -849,7 +943,6 @@ export class CodingExportService {
           variableUnitCoders.set(variableUnitKey, new Set());
         }
 
-        // Add all coders assigned to this job
         for (const jobCoder of unit.coding_job?.codingJobCoders || []) {
           const coderName = jobCoder.user?.username || 'Unknown';
           variableUnitCoders.get(variableUnitKey)!.add(coderName);
@@ -858,19 +951,15 @@ export class CodingExportService {
 
       const coderList = Array.from(coderTimestamps.keys()).sort();
 
-      // Create Excel workbook with single pivot table sheet
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet('Kodierzeiten-Bericht');
 
-      // Create headers: Unit, Variable, then each coder, then Gesamt
-      const headers = [
+      worksheet.columns = [
         { header: 'Unit', key: 'unit', width: 20 },
         { header: 'Variable', key: 'variable', width: 20 },
         ...coderList.map(coder => ({ header: coder, key: coder, width: 15 })),
         { header: 'Gesamt', key: 'gesamt', width: 15 }
       ];
-
-      worksheet.columns = headers;
 
       // Process each variable-unit combination
       const sortedVariableUnitKeys = Array.from(variableUnitCoders.keys()).sort();
@@ -879,14 +968,12 @@ export class CodingExportService {
         const [unitName, variableId] = variableUnitKey.split('|');
         const assignedCoders = variableUnitCoders.get(variableUnitKey)!;
 
-        // Create row data
         const rowData: { [key: string]: string | number | null } = {
           unit: unitName,
           variable: variableId,
           gesamt: null // Will be calculated from assigned coders
         };
 
-        // Add each coder's average (only if they are assigned to this variable-unit)
         let totalTimeSum = 0;
         let totalValidCodings = 0;
 
@@ -903,7 +990,6 @@ export class CodingExportService {
           }
         }
 
-        // Calculate overall average for this variable-unit (average of assigned coders' averages)
         rowData.gesamt = totalValidCodings > 0 ? Math.round((totalTimeSum / totalValidCodings) * 100) / 100 : null;
 
         worksheet.addRow(rowData);

@@ -181,6 +181,9 @@
     "export-description": "Diese Komponente wird für den Export der Daten nach Kodierung und Bereinigung verwendet.",
     "export-placeholder": "Die Funktionalität zum Datenexport wird in einer zukünftigen Version implementiert.",
     "export-action-button": "Datenexport starten",
+    "export.exporting": "Datenexport läuft...",
+    "export.success": "Datenexport erfolgreich abgeschlossen",
+    "export.errors.export-failed": "Datenexport fehlgeschlagen",
     "export-formats": {
       "aggregated": "Aggregierte Ansicht",
       "aggregated-description": " Alle Variablen und Testpersonen in einer aggregierten Tabelle",
@@ -192,6 +195,15 @@
       "detailed-description": "Detaillierte Kodierergebnisse mit Zeitstempeln als CSV",
       "coding-times": "Kodierzeiten-Bericht",
       "coding-times-description": "Durchschnittliche Kodierzeiten nach Kodierer und Variable (Zeitspannen >10 Minuten werden ignoriert)"
+    },
+    "export-options-title": "Exportoptionen",
+    "export-options": {
+      "include-modal-value": "Füge Modalwert hinzu",
+      "include-modal-value-tooltip": "Es werden zwei Spalten hinzugefügt: Häufigster Wert und Anzahl der Abweichungen davon.",
+      "include-double-coded": "Füge Doppelkodierung-Indikator hinzu",
+      "include-double-coded-tooltip": "Es wird eine Spalte hinzugefügt, die anzeigt, ob der Fall doppelt kodiert wurde (1) oder nicht (0).",
+      "include-comments": "Füge Kommentarspalte hinzu",
+      "include-comments-tooltip": "Es wird eine Spalte hinzugefügt mit den Kommentaren aller Kodierer."
     },
     "export-exporting": "Export läuft...",
     "export-success": "Export erfolgreich abgeschlossen",
