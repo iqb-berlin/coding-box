@@ -114,6 +114,27 @@ export class CodingExportService {
     return finalName;
   }
 
+  private buildCoderNameMapping(coders: string[], usePseudo: boolean): Map<string, string> {
+    const mapping = new Map<string, string>();
+
+    if (usePseudo) {
+      // For pseudo mode: always use K1 and K2 for any pair of coders
+      // Sort alphabetically for deterministic assignment
+      const sortedCoders = [...coders].sort();
+      sortedCoders.forEach((coder, index) => {
+        mapping.set(coder, `K${index + 1}`);
+      });
+    } else {
+      // For regular anonymization: shuffle and assign K1, K2, K3, etc.
+      const shuffledCoders = [...coders].sort(() => Math.random() - 0.5);
+      shuffledCoders.forEach((coder, index) => {
+        mapping.set(coder, `K${index + 1}`);
+      });
+    }
+
+    return mapping;
+  }
+
   async exportCodingResultsAggregated(workspaceId: number, outputCommentsInsteadOfCodes = false, includeReplayUrl = false, authToken = '', req?: Request): Promise<Buffer> {
     this.logger.log(`Exporting aggregated coding results for workspace ${workspaceId}${outputCommentsInsteadOfCodes ? ' with comments instead of codes' : ''}${includeReplayUrl ? ' with replay URLs' : ''}`);
     const BATCH_SIZE = parseInt(process.env.EXPORT_AGGREGATED_BATCH_SIZE || '10000', 10);
@@ -347,8 +368,8 @@ export class CodingExportService {
     }
   }
 
-  async exportCodingResultsByCoder(workspaceId: number, outputCommentsInsteadOfCodes = false, includeReplayUrl = false, authToken = '', req?: Request): Promise<Buffer> {
-    this.logger.log(`Exporting coding results by coder for workspace ${workspaceId}${outputCommentsInsteadOfCodes ? ' with comments instead of codes' : ''}${includeReplayUrl ? ' with replay URLs' : ''}`);
+  async exportCodingResultsByCoder(workspaceId: number, outputCommentsInsteadOfCodes = false, includeReplayUrl = false, anonymizeCoders = false, usePseudoCoders = false, authToken = '', req?: Request): Promise<Buffer> {
+    this.logger.log(`Exporting coding results by coder for workspace ${workspaceId}${outputCommentsInsteadOfCodes ? ' with comments instead of codes' : ''}${includeReplayUrl ? ' with replay URLs' : ''}${anonymizeCoders ? ' with anonymized coders' : ''}${usePseudoCoders ? ' using pseudo coders' : ''}`);
 
     try {
       const codingJobs = await this.codingJobRepository.find({
@@ -377,8 +398,11 @@ export class CodingExportService {
       const workbook = new ExcelJS.Workbook();
       const coderJobs = new Map<string, CodingJob[]>();
 
+      // Collect all coder names for anonymization mapping
+      const allCoderNames = new Set<string>();
       for (const job of codingJobs) {
         for (const jobCoder of job.codingJobCoders) {
+          allCoderNames.add(jobCoder.user.username);
           const coderKey = `${jobCoder.user.username}_${jobCoder.user.id}`;
           if (!coderJobs.has(coderKey)) {
             coderJobs.set(coderKey, []);
@@ -387,10 +411,16 @@ export class CodingExportService {
         }
       }
 
+      // Build coder name mapping if anonymization is enabled
+      const coderNameMapping = anonymizeCoders ?
+        this.buildCoderNameMapping(Array.from(allCoderNames), usePseudoCoders) :
+        null;
+
       // Create a sheet for each coder
       for (const [coderKey, jobs] of coderJobs) {
         const [coderName] = coderKey.split('_');
-        const worksheetName = this.generateUniqueWorksheetName(workbook, coderName);
+        const displayName = anonymizeCoders && coderNameMapping ? coderNameMapping.get(coderName) || coderName : coderName;
+        const worksheetName = this.generateUniqueWorksheetName(workbook, displayName);
         const worksheet = workbook.addWorksheet(worksheetName);
 
         // Collect all variables and testpersons for this coder
@@ -561,8 +591,8 @@ export class CodingExportService {
     }
   }
 
-  async exportCodingResultsByVariable(workspaceId: number, includeModalValue = false, includeDoubleCoded = false, includeComments = false, outputCommentsInsteadOfCodes = false, includeReplayUrl = false, authToken = '', req?: Request): Promise<Buffer> {
-    this.logger.log(`Exporting coding results by variable for workspace ${workspaceId} (CODING_INCOMPLETE only)${includeModalValue ? ' with modal value' : ''}${includeDoubleCoded ? ' with double coding indicator' : ''}${includeComments ? ' with comments' : ''}${outputCommentsInsteadOfCodes ? ' with comments instead of codes' : ''}${includeReplayUrl ? ' with replay URLs' : ''}`);
+  async exportCodingResultsByVariable(workspaceId: number, includeModalValue = false, includeDoubleCoded = false, includeComments = false, outputCommentsInsteadOfCodes = false, includeReplayUrl = false, anonymizeCoders = false, usePseudoCoders = false, authToken = '', req?: Request): Promise<Buffer> {
+    this.logger.log(`Exporting coding results by variable for workspace ${workspaceId} (CODING_INCOMPLETE only)${includeModalValue ? ' with modal value' : ''}${includeDoubleCoded ? ' with double coding indicator' : ''}${includeComments ? ' with comments' : ''}${outputCommentsInsteadOfCodes ? ' with comments instead of codes' : ''}${includeReplayUrl ? ' with replay URLs' : ''}${anonymizeCoders ? ' with anonymized coders' : ''}${usePseudoCoders ? ' using pseudo coders' : ''}`);
 
     const MAX_WORKSHEETS = parseInt(process.env.EXPORT_MAX_WORKSHEETS || '100', 10);
     const MAX_RESPONSES_PER_WORKSHEET = parseInt(process.env.EXPORT_MAX_RESPONSES_PER_WORKSHEET || '10000', 10);
@@ -708,8 +738,20 @@ export class CodingExportService {
 
             if (testPersonMap.size === 0) continue;
 
-            // Create headers: Test Person Login, Test Person Code, Group, then each coder
+            // Build coder name mapping for this variable if anonymization is enabled
             const coderList = Array.from(coderSet).sort();
+            const coderNameMapping = anonymizeCoders && usePseudoCoders ?
+              this.buildCoderNameMapping(coderList, true) : // Pseudo mode: deterministic K1/K2 per variable
+              anonymizeCoders ?
+                this.buildCoderNameMapping(coderList, false) : // Regular: random mapping
+                null;
+
+            // Apply anonymization to coder names in headers
+            const displayCoderList = coderNameMapping ?
+              coderList.map(coder => coderNameMapping.get(coder) || coder) :
+              coderList;
+
+            // Create headers: Test Person Login, Test Person Code, Group, then each coder
             const baseHeaders = ['Test Person Login', 'Test Person Code', 'Group'];
 
             // Add Replay URL column if requested
@@ -717,7 +759,7 @@ export class CodingExportService {
               baseHeaders.push('Replay URL');
             }
 
-            baseHeaders.push(...coderList);
+            baseHeaders.push(...displayCoderList);
 
             // Add modal value columns if requested
             if (includeModalValue) {
@@ -763,17 +805,19 @@ export class CodingExportService {
 
               // Add coding values for each coder
               const codeValues: (number | null)[] = [];
-              for (const coder of coderList) {
+              for (let coderIndex = 0; coderIndex < coderList.length; coderIndex++) {
+                const coder = coderList[coderIndex];
+                const displayCoder = displayCoderList[coderIndex];
                 const code = codings.get(coder) ?? null;
 
                 if (outputCommentsInsteadOfCodes) {
                   // Output comments instead of codes
                   const comments = testPersonComments.get(testPersonKey);
                   const comment = comments?.get(coder);
-                  row[coder] = comment || '';
+                  row[displayCoder] = comment || '';
                 } else {
                   // Display empty cell for negative codes (coding issues)
-                  row[coder] = (code !== null && code >= 0) ? code : '';
+                  row[displayCoder] = (code !== null && code >= 0) ? code : '';
                 }
 
                 // Only include non-negative codes in modal value calculation
@@ -880,8 +924,8 @@ export class CodingExportService {
     }
   }
 
-  async exportCodingResultsDetailed(workspaceId: number, outputCommentsInsteadOfCodes = false, includeReplayUrl = false, authToken = '', req?: Request): Promise<Buffer> {
-    this.logger.log(`Exporting detailed coding results for workspace ${workspaceId}${outputCommentsInsteadOfCodes ? ' with comments instead of codes' : ''}${includeReplayUrl ? ' with replay URLs' : ''}`);
+  async exportCodingResultsDetailed(workspaceId: number, outputCommentsInsteadOfCodes = false, includeReplayUrl = false, anonymizeCoders = false, usePseudoCoders = false, authToken = '', req?: Request): Promise<Buffer> {
+    this.logger.log(`Exporting detailed coding results for workspace ${workspaceId}${outputCommentsInsteadOfCodes ? ' with comments instead of codes' : ''}${includeReplayUrl ? ' with replay URLs' : ''}${anonymizeCoders ? ' with anonymized coders' : ''}${usePseudoCoders ? ' using pseudo coders' : ''}`);
 
     try {
       // Get all coding job units with related data
@@ -907,6 +951,29 @@ export class CodingExportService {
 
       this.logger.log(`Found ${codingJobUnits.length} coding job units for workspace ${workspaceId}`);
 
+      // Build coder name mapping if anonymization is enabled
+      let coderNameMapping: Map<string, string> | null = null;
+      if (anonymizeCoders) {
+        if (usePseudoCoders) {
+          // For pseudo mode in detailed export: build per variable+person mapping
+          // We'll build this dynamically as we process units
+          coderNameMapping = new Map<string, string>();
+        } else {
+          // For regular anonymization: collect all unique coders first
+          const allCoders = new Set<string>();
+          for (const unit of codingJobUnits) {
+            const coderName = unit.coding_job?.codingJobCoders?.[0]?.user?.username || '';
+            if (coderName) {
+              allCoders.add(coderName);
+            }
+          }
+          coderNameMapping = this.buildCoderNameMapping(Array.from(allCoders), false);
+        }
+      }
+
+      // For pseudo mode: track per variable+person coder mappings
+      const pseudoCoderMappings = new Map<string, Map<string, string>>();
+
       // Create CSV content
       const csvRows: string[] = [];
 
@@ -929,7 +996,32 @@ export class CodingExportService {
         const personId = person?.code || person?.login || '';
 
         // Get coder name (take first coder if multiple assigned to job)
-        const coder = unit.coding_job?.codingJobCoders?.[0]?.user?.username || '';
+        let coder = unit.coding_job?.codingJobCoders?.[0]?.user?.username || '';
+
+        // Apply anonymization if enabled
+        if (anonymizeCoders && coder) {
+          if (usePseudoCoders) {
+            // For pseudo mode: build per variable+person mapping
+            const varPersonKey = `${unit.variable_id}_${personId}`;
+            if (!pseudoCoderMappings.has(varPersonKey)) {
+              pseudoCoderMappings.set(varPersonKey, new Map<string, string>());
+            }
+            const varPersonMap = pseudoCoderMappings.get(varPersonKey)!;
+
+            if (!varPersonMap.has(coder)) {
+              // Assign K1, K2, etc. in alphabetical order
+              const existingCoders = Array.from(varPersonMap.keys()).sort();
+              existingCoders.push(coder);
+              const sortedCoders = existingCoders.sort();
+              const index = sortedCoders.indexOf(coder);
+              varPersonMap.set(coder, `K${index + 1}`);
+            }
+            coder = varPersonMap.get(coder)!;
+          } else {
+            // Regular anonymization: use global mapping
+            coder = coderNameMapping?.get(coder) || coder;
+          }
+        }
 
         // Format timestamp (use updated_at for when coding was actually performed)
         const timestamp = unit.updated_at ?
@@ -1027,8 +1119,8 @@ export class CodingExportService {
     return result;
   }
 
-  async exportCodingTimesReport(workspaceId: number): Promise<Buffer> {
-    this.logger.log(`Exporting coding times report for workspace ${workspaceId}`);
+  async exportCodingTimesReport(workspaceId: number, anonymizeCoders = false, usePseudoCoders = false): Promise<Buffer> {
+    this.logger.log(`Exporting coding times report for workspace ${workspaceId}${anonymizeCoders ? ' with anonymized coders' : ''}${usePseudoCoders ? ' using pseudo coders' : ''}`);
 
     try {
       // Get all coding job units with codes (completed coding) and related data
@@ -1075,6 +1167,19 @@ export class CodingExportService {
       });
 
       this.logger.log(`Found ${codingJobUnits.length} coded coding job units for workspace ${workspaceId}`);
+
+      // Build coder name mapping if anonymization is enabled
+      let coderNameMapping: Map<string, string> | null = null;
+      if (anonymizeCoders) {
+        const allCoders = new Set<string>();
+        for (const unit of codingJobUnits) {
+          const coderName = unit.coding_job?.codingJobCoders?.[0]?.user?.username || '';
+          if (coderName) {
+            allCoders.add(coderName);
+          }
+        }
+        coderNameMapping = this.buildCoderNameMapping(Array.from(allCoders), usePseudoCoders);
+      }
 
       // Debug: Log sample data
       if (codingJobUnits.length > 0) {
@@ -1163,13 +1268,18 @@ export class CodingExportService {
 
       const coderList = Array.from(coderTimestamps.keys()).sort();
 
+      // Apply anonymization to coder list for column headers
+      const displayCoderList = coderNameMapping ?
+        coderList.map(coder => coderNameMapping.get(coder) || coder) :
+        coderList;
+
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet('Kodierzeiten-Bericht');
 
       worksheet.columns = [
         { header: 'Unit', key: 'unit', width: 20 },
         { header: 'Variable', key: 'variable', width: 20 },
-        ...coderList.map(coder => ({ header: coder, key: coder, width: 15 })),
+        ...displayCoderList.map((displayCoder, index) => ({ header: displayCoder, key: `coder_${index}`, width: 15 })),
         { header: 'Gesamt', key: 'gesamt', width: 15 }
       ];
 
@@ -1189,16 +1299,19 @@ export class CodingExportService {
         let totalTimeSum = 0;
         let totalValidCodings = 0;
 
-        for (const coderName of coderList) {
+        for (let i = 0; i < coderList.length; i++) {
+          const coderName = coderList[i];
+          const columnKey = `coder_${i}`;
+
           if (assignedCoders.has(coderName)) {
             const avgTime = coderAverages.get(coderName);
-            rowData[coderName] = avgTime !== null ? Math.round(avgTime! * 100) / 100 : null;
+            rowData[columnKey] = avgTime !== null ? Math.round(avgTime! * 100) / 100 : null;
             if (avgTime !== null) {
               totalTimeSum += avgTime;
               totalValidCodings += 1;
             }
           } else {
-            rowData[coderName] = null;
+            rowData[columnKey] = null;
           }
         }
 
@@ -1231,7 +1344,7 @@ export class CodingExportService {
 
   private calculateAverageCodingTime(timestamps: Date[]): number | null {
     if (timestamps.length < 2) {
-      return null; // Need at least 2 timestamps to calculate time spans
+      return null;
     }
 
     // Sort timestamps chronologically

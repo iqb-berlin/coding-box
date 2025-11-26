@@ -1254,7 +1254,7 @@ export class BackendService {
     });
   }
 
-  exportCodingResultsByCoder(workspaceId: number, outputCommentsInsteadOfCodes = false, includeReplayUrl = false, authToken = ''): Observable<Blob> {
+  exportCodingResultsByCoder(workspaceId: number, outputCommentsInsteadOfCodes = false, includeReplayUrl = false, anonymizeCoders = false, usePseudoCoders = false, authToken = ''): Observable<Blob> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/by-coder`;
     let params = new HttpParams();
     if (outputCommentsInsteadOfCodes) {
@@ -1262,6 +1262,12 @@ export class BackendService {
     }
     if (includeReplayUrl) {
       params = params.set('includeReplayUrl', 'true');
+    }
+    if (anonymizeCoders) {
+      params = params.set('anonymizeCoders', 'true');
+    }
+    if (usePseudoCoders) {
+      params = params.set('usePseudoCoders', 'true');
     }
     if (authToken) {
       params = params.set('authToken', authToken);
@@ -1273,7 +1279,7 @@ export class BackendService {
     });
   }
 
-  exportCodingResultsByVariable(workspaceId: number, includeModalValue = false, includeDoubleCoded = false, includeComments = false, outputCommentsInsteadOfCodes = false, includeReplayUrl = false, authToken = ''): Observable<Blob> {
+  exportCodingResultsByVariable(workspaceId: number, includeModalValue = false, includeDoubleCoded = false, includeComments = false, outputCommentsInsteadOfCodes = false, includeReplayUrl = false, anonymizeCoders = false, usePseudoCoders = false, authToken = ''): Observable<Blob> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/by-variable`;
     let params = new HttpParams();
     if (includeModalValue) {
@@ -1291,6 +1297,12 @@ export class BackendService {
     if (includeReplayUrl) {
       params = params.set('includeReplayUrl', 'true');
     }
+    if (anonymizeCoders) {
+      params = params.set('anonymizeCoders', 'true');
+    }
+    if (usePseudoCoders) {
+      params = params.set('usePseudoCoders', 'true');
+    }
     if (authToken) {
       params = params.set('authToken', authToken);
     }
@@ -1301,7 +1313,7 @@ export class BackendService {
     });
   }
 
-  exportCodingResultsDetailed(workspaceId: number, outputCommentsInsteadOfCodes = false, includeReplayUrl = false, authToken = ''): Observable<Blob> {
+  exportCodingResultsDetailed(workspaceId: number, outputCommentsInsteadOfCodes = false, includeReplayUrl = false, anonymizeCoders = false, usePseudoCoders = false, authToken = ''): Observable<Blob> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/detailed`;
     let params = new HttpParams();
     if (outputCommentsInsteadOfCodes) {
@@ -1310,6 +1322,12 @@ export class BackendService {
     if (includeReplayUrl) {
       params = params.set('includeReplayUrl', 'true');
     }
+    if (anonymizeCoders) {
+      params = params.set('anonymizeCoders', 'true');
+    }
+    if (usePseudoCoders) {
+      params = params.set('usePseudoCoders', 'true');
+    }
     if (authToken) {
       params = params.set('authToken', authToken);
     }
@@ -1320,11 +1338,19 @@ export class BackendService {
     });
   }
 
-  exportCodingTimesReport(workspaceId: number): Observable<Blob> {
+  exportCodingTimesReport(workspaceId: number, anonymizeCoders = false, usePseudoCoders = false): Observable<Blob> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/coding-times`;
+    let params = new HttpParams();
+    if (anonymizeCoders) {
+      params = params.set('anonymizeCoders', 'true');
+    }
+    if (usePseudoCoders) {
+      params = params.set('usePseudoCoders', 'true');
+    }
     return this.http.get(url, {
       responseType: 'blob',
-      headers: this.authHeader
+      headers: this.authHeader,
+      params
     });
   }
 }
