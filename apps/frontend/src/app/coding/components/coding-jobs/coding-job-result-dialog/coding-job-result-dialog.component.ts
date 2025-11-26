@@ -320,9 +320,17 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy {
   isNewCodeNeeded(result: CodingResult): boolean {
     if (result.code !== undefined && result.code !== null) {
       const codeNum = typeof result.code === 'number' ? result.code : parseInt(result.code.toString(), 10);
-      return codeNum === -2;
+      if (codeNum === -2) return true;
     }
-    return result.codingIssueOptionLabel === this.getCodingIssueOption(-2);
+
+    if (result.codingIssueOptionLabel) {
+      const expectedLabel = this.getCodingIssueOption(-2);
+      // Check for exact match or if label contains the expected text
+      return result.codingIssueOptionLabel === expectedLabel ||
+             result.codingIssueOptionLabel.includes('Neuer Code') ||
+             result.codingIssueOptionLabel.includes('new-code-needed');
+    }
+    return false;
   }
 
   getCodingIssueOption(codingIssueOptionId: number): string {
