@@ -90,6 +90,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
   ];
 
   @Output() bulkCreationCompleted = new EventEmitter<void>();
+  @Output() jobDefinitionChanged = new EventEmitter<void>();
 
   ngOnInit(): void {
     this.loadCoders();
@@ -167,12 +168,6 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
       .join(', ');
   }
 
-  formatDate(date: Date | string): string {
-    if (!date) return '-';
-    const d = new Date(date);
-    return d.toLocaleDateString();
-  }
-
   getStatusLabel(status: string): string {
     return this.translateService.instant(`coding-job-definition-dialog.status.definition.${status}`) || status || '-';
   }
@@ -193,6 +188,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
     dialogRef.afterClosed().subscribe(result => {
       if (result) {
         this.loadJobDefinitions();
+        this.jobDefinitionChanged.emit();
       }
     });
   }
@@ -230,6 +226,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
     dialogRef.afterClosed().subscribe(result => {
       if (result) {
         this.loadJobDefinitions();
+        this.jobDefinitionChanged.emit();
       }
     });
   }
@@ -248,6 +245,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
         next: () => {
           this.snackBar.open(this.translateService.instant('coding-job-definitions.messages.snackbar.submitted-for-review'), this.translateService.instant('common.close'), { duration: 3000 });
           this.loadJobDefinitions();
+          this.jobDefinitionChanged.emit();
         },
         error: error => {
           this.showError(this.translateService.instant('coding-job-definitions.messages.snackbar.submit-failed', { error: error.message }));
@@ -290,6 +288,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
         next: () => {
           this.snackBar.open(this.translateService.instant('coding-job-definitions.messages.snackbar.rejected'), this.translateService.instant('common.close'), { duration: 3000 });
           this.loadJobDefinitions();
+          this.jobDefinitionChanged.emit();
         },
         error: error => {
           this.showError(this.translateService.instant('coding-job-definitions.messages.snackbar.reject-failed', { error: error.message }));
@@ -311,6 +310,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
         next: () => {
           this.snackBar.open(this.translateService.instant('coding-job-definitions.messages.snackbar.deleted'), this.translateService.instant('common.close'), { duration: 3000 });
           this.loadJobDefinitions();
+          this.jobDefinitionChanged.emit();
         },
         error: error => {
           this.showError(this.translateService.instant('coding-job-definitions.messages.snackbar.delete-failed', { error: error.message }));

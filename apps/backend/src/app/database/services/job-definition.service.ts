@@ -1,12 +1,15 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable, NotFoundException, BadRequestException, forwardRef, Inject
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
-import { JobDefinition } from '../entities/job-definition.entity';
+import { JobDefinition, JobDefinitionVariable, JobDefinitionVariableBundle } from '../entities/job-definition.entity';
 import { VariableBundle } from '../entities/variable-bundle.entity';
 import { CodingJobService } from './coding-job.service';
 import { CreateJobDefinitionDto } from '../../admin/coding-job/dto/create-job-definition.dto';
 import { UpdateJobDefinitionDto } from '../../admin/coding-job/dto/update-job-definition.dto';
 import { ApproveJobDefinitionDto } from '../../admin/coding-job/dto/approve-job-definition.dto';
+import { WorkspaceCodingService } from './workspace-coding.service';
 
 @Injectable()
 export class JobDefinitionService {
@@ -15,10 +18,102 @@ export class JobDefinitionService {
     private jobDefinitionRepository: Repository<JobDefinition>,
     @InjectRepository(VariableBundle)
     private variableBundleRepository: Repository<VariableBundle>,
-    private codingJobService: CodingJobService
+    private codingJobService: CodingJobService,
+    @Inject(forwardRef(() => WorkspaceCodingService))
+    private workspaceCodingService: WorkspaceCodingService
   ) {}
 
+  private async checkVariableConflicts(
+    workspaceId: number,
+    assignedVariables: JobDefinitionVariable[],
+    assignedVariableBundles: JobDefinitionVariableBundle[],
+    excludeDefinitionId?: number
+  ): Promise<string[]> {
+    const queryBuilder = this.jobDefinitionRepository.createQueryBuilder('definition')
+      .where('definition.workspace_id = :workspaceId', { workspaceId });
+
+    if (excludeDefinitionId) {
+      queryBuilder.andWhere('definition.id != :excludeDefinitionId', { excludeDefinitionId });
+    }
+
+    const existingDefinitions = await queryBuilder.getMany();
+
+    const newVariables = new Set<string>();
+
+    if (assignedVariables) {
+      assignedVariables.forEach(variable => {
+        newVariables.add(`${variable.unitName}:${variable.variableId}`);
+      });
+    }
+
+    if (assignedVariableBundles) {
+      const bundleIds = assignedVariableBundles.map(bundle => bundle.id);
+      if (bundleIds.length > 0) {
+        const variableBundles = await this.variableBundleRepository.find({
+          where: { id: In(bundleIds) }
+        });
+
+        variableBundles.forEach(bundle => {
+          if (bundle.variables) {
+            bundle.variables.forEach(variable => {
+              newVariables.add(`${variable.unitName}:${variable.variableId}`);
+            });
+          }
+        });
+      }
+    }
+
+    const conflictingVariables: string[] = [];
+
+    for (const existingDefinition of existingDefinitions) {
+      const existingVariables = new Set<string>();
+
+      if (existingDefinition.assigned_variables) {
+        existingDefinition.assigned_variables.forEach(variable => {
+          existingVariables.add(`${variable.unitName}:${variable.variableId}`);
+        });
+      }
+
+      if (existingDefinition.assigned_variable_bundles) {
+        const bundleIds = existingDefinition.assigned_variable_bundles.map(bundle => bundle.id);
+        if (bundleIds.length > 0) {
+          const variableBundles = await this.variableBundleRepository.find({
+            where: { id: In(bundleIds) }
+          });
+
+          variableBundles.forEach(bundle => {
+            if (bundle.variables) {
+              bundle.variables.forEach(variable => {
+                existingVariables.add(`${variable.unitName}:${variable.variableId}`);
+              });
+            }
+          });
+        }
+      }
+
+      newVariables.forEach(variableKey => {
+        if (existingVariables.has(variableKey) && !conflictingVariables.includes(variableKey)) {
+          conflictingVariables.push(variableKey);
+        }
+      });
+    }
+
+    return conflictingVariables;
+  }
+
   async createJobDefinition(createDto: CreateJobDefinitionDto, workspaceId: number): Promise<JobDefinition> {
+    const conflicts = await this.checkVariableConflicts(
+      workspaceId,
+      createDto.assignedVariables || [],
+      createDto.assignedVariableBundles || []
+    );
+
+    if (conflicts.length > 0) {
+      throw new BadRequestException(
+        `The following variables are already assigned to other job definitions in this workspace: ${conflicts.join(', ')}`
+      );
+    }
+
     const jobDefinition = this.jobDefinitionRepository.create({
       workspace_id: workspaceId,
       status: createDto.status ?? 'draft',
@@ -34,7 +129,8 @@ export class JobDefinitionService {
       double_coding_percentage: createDto.doubleCodingPercentage
     });
 
-    return this.jobDefinitionRepository.save(jobDefinition);
+    const savedDefinition = await this.jobDefinitionRepository.save(jobDefinition);
+    return savedDefinition;
   }
 
   async getJobDefinition(id: number): Promise<JobDefinition> {
@@ -100,6 +196,28 @@ export class JobDefinitionService {
   async updateJobDefinition(id: number, updateDto: UpdateJobDefinitionDto): Promise<JobDefinition> {
     const jobDefinition = await this.getJobDefinition(id);
 
+    if (updateDto.assignedVariables !== undefined || updateDto.assignedVariableBundles !== undefined) {
+      const variablesToCheck = updateDto.assignedVariables !== undefined ?
+        updateDto.assignedVariables :
+        jobDefinition.assigned_variables || [];
+      const bundlesToCheck = updateDto.assignedVariableBundles !== undefined ?
+        updateDto.assignedVariableBundles :
+        jobDefinition.assigned_variable_bundles || [];
+
+      const conflicts = await this.checkVariableConflicts(
+        jobDefinition.workspace_id,
+        variablesToCheck,
+        bundlesToCheck,
+        id
+      );
+
+      if (conflicts.length > 0) {
+        throw new BadRequestException(
+          `The following variables are already assigned to other job definitions in this workspace: ${conflicts.join(', ')}`
+        );
+      }
+    }
+
     if (updateDto.status !== undefined) {
       jobDefinition.status = updateDto.status;
     }
@@ -128,7 +246,8 @@ export class JobDefinitionService {
       jobDefinition.double_coding_percentage = updateDto.doubleCodingPercentage;
     }
 
-    return this.jobDefinitionRepository.save(jobDefinition);
+    const savedDefinition = await this.jobDefinitionRepository.save(jobDefinition);
+    return savedDefinition;
   }
 
   async approveJobDefinition(id: number, approveDto: ApproveJobDefinitionDto): Promise<JobDefinition> {
@@ -142,7 +261,8 @@ export class JobDefinitionService {
       throw new Error(`Invalid status transition from ${jobDefinition.status} to ${approveDto.status}`);
     }
 
-    return this.jobDefinitionRepository.save(jobDefinition);
+    const savedDefinition = await this.jobDefinitionRepository.save(jobDefinition);
+    return savedDefinition;
   }
 
   async deleteJobDefinition(id: number): Promise<void> {

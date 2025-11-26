@@ -1013,7 +1013,11 @@ export class WorkspaceCodingController {
       type: 'object',
       properties: {
         totalVariables: { type: 'number', description: 'Total number of potential variables from unit XML files' },
-        coveredVariables: { type: 'number', description: 'Number of variables covered by job definitions' },
+        coveredVariables: { type: 'number', description: 'Total number of variables covered by job definitions' },
+        coveredByDraft: { type: 'number', description: 'Number of variables covered by draft job definitions' },
+        coveredByPendingReview: { type: 'number', description: 'Number of variables covered by pending review job definitions' },
+        coveredByApproved: { type: 'number', description: 'Number of variables covered by approved job definitions' },
+        conflictedVariables: { type: 'number', description: 'Number of variables assigned to multiple job definitions' },
         missingVariables: { type: 'number', description: 'Number of variables not covered by job definitions' },
         coveragePercentage: { type: 'number', description: 'Percentage of variables covered by job definitions' },
         variableCaseCounts: {
@@ -1027,6 +1031,35 @@ export class WorkspaceCodingController {
             }
           },
           description: 'List of all variables with their case counts'
+        },
+        coverageByStatus: {
+          type: 'object',
+          properties: {
+            draft: { type: 'array', items: { type: 'string' }, description: 'Variables covered by draft definitions' },
+            pending_review: { type: 'array', items: { type: 'string' }, description: 'Variables covered by pending review definitions' },
+            approved: { type: 'array', items: { type: 'string' }, description: 'Variables covered by approved definitions' },
+            conflicted: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  variableKey: { type: 'string', description: 'Variable key in format unitName:variableId' },
+                  conflictingDefinitions: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      properties: {
+                        id: { type: 'number', description: 'Job definition ID' },
+                        status: { type: 'string', description: 'Job definition status' }
+                      }
+                    }
+                  }
+                }
+              },
+              description: 'Variables assigned to multiple definitions with conflict details'
+            }
+          },
+          description: 'Coverage breakdown by job definition status'
         }
       }
     }
@@ -1034,9 +1067,25 @@ export class WorkspaceCodingController {
   async getVariableCoverageOverview(@WorkspaceId() workspace_id: number): Promise<{
     totalVariables: number;
     coveredVariables: number;
+    coveredByDraft: number;
+    coveredByPendingReview: number;
+    coveredByApproved: number;
+    conflictedVariables: number;
     missingVariables: number;
     coveragePercentage: number;
     variableCaseCounts: { unitName: string; variableId: string; caseCount: number }[];
+    coverageByStatus: {
+      draft: string[];
+      pending_review: string[];
+      approved: string[];
+      conflicted: Array<{
+        variableKey: string;
+        conflictingDefinitions: Array<{
+          id: number;
+          status: string;
+        }>;
+      }>;
+    };
   }> {
     return this.workspaceCodingService.getVariableCoverageOverview(workspace_id);
   }

@@ -985,6 +985,12 @@
       "data-preparation": "Daten werden für Validierung vorbereitet...",
       "validation-progress": "Validierung wird durchgeführt (Seite {{page}})..."
     },
+    "loading": {
+      "variable-coverage": "Variablenabdeckung wird geladen...",
+      "case-coverage": "Fallabdeckung wird geladen...",
+      "coding-progress": "Kodierungsfortschritt wird geladen...",
+      "kappa-summary": "Kappa-Statistiken werden geladen..."
+    },
     "titles": {
       "validation-running": "Validierung läuft",
       "validation-results": "Validierungsergebnisse",
@@ -1215,6 +1221,7 @@
       "definition": {
         "draft": "Entwurf",
         "pending-review": "Warten auf Genehmigung",
+        "pending_review": "Warten auf Genehmigung",
         "approved": "Genehmigt"
       },
       "job": {

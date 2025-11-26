@@ -202,9 +202,31 @@
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 
         .section-title {
+          display: flex;
+          align-items: center;
+          gap: 12px;
           color: #666;
           font-size: 18px;
           font-weight: 500;
+
+          .conflict-badge {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 8px;
+            background-color: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #856404;
+
+            mat-icon {
+              font-size: 16px;
+              height: 16px;
+              width: 16px;
+            }
+          }
         }
 
         .coverage-stats {
@@ -797,6 +819,201 @@
     .coder-training-modal {
       max-width: 98vw;
       max-height: 98vh;
+    }
+  }
+}
+
+// Statistics loading overlay styles
+.statistics-section {
+  position: relative;
+
+  .loading-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(2px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    border-radius: 12px;
+    animation: fadeInOverlay 0.3s ease-in-out;
+
+    .loading-content {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+
+      mat-spinner {
+        opacity: 0.8;
+      }
+
+      .loading-text {
+        font-size: 14px;
+        color: #1976d2;
+        font-weight: 500;
+        text-align: center;
+      }
+    }
+  }
+
+  &.blurred-content .statistics-card {
+    filter: blur(1px);
+    pointer-events: none;
+    opacity: 0.7;
+  }
+}
+
+// Status breakdown and conflicts styles
+.status-breakdown {
+  margin: 20px 0;
+  padding: 16px;
+  background-color: rgba(255, 255, 255, 0.7);
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+
+  .breakdown-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #555;
+    margin: 0 0 16px 0;
+  }
+
+  .status-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 12px;
+
+    .status-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 6px;
+      border: 1px solid transparent;
+
+      .status-icon {
+        font-size: 18px;
+        height: 18px;
+        width: 18px;
+      }
+
+      .status-content {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex: 1;
+
+        .status-label {
+          font-weight: 500;
+          font-size: 13px;
+        }
+
+        .status-value {
+          font-weight: 600;
+          font-size: 14px;
+        }
+      }
+
+      &.draft {
+        background-color: #f3f4f6;
+        border-color: #9ca3af;
+        .status-icon { color: #6b7280; }
+        .status-value { color: #374151; }
+      }
+
+      &.pending {
+        background-color: transparent;
+        border-color: #fbbf24;
+        .status-icon { color: #d97706; }
+        .status-value { color: #92400e; }
+      }
+
+      &.approved {
+        background-color: transparent;
+        border-color: #22c55e;
+        .status-icon { color: #16a34a; }
+        .status-value { color: #166534; }
+      }
+
+      &.conflict {
+        background-color: #fee2e2;
+        border-color: #f87171;
+        .status-icon { color: #dc2626; }
+        .status-value { color: #991b1b; }
+      }
+    }
+  }
+}
+
+.conflicts-section {
+  margin: 20px 0;
+  padding: 16px;
+  background-color: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+
+  .conflicts-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    color: #dc2626;
+    margin: 0 0 12px 0;
+
+    mat-icon {
+      font-size: 20px;
+      height: 20px;
+      width: 20px;
+    }
+  }
+
+  .conflicts-list {
+    .conflict-item {
+      margin-bottom: 12px;
+      padding: 8px 12px;
+      background-color: #fff;
+      border: 1px solid #f87171;
+      border-radius: 6px;
+
+      &:last-child {
+        margin-bottom: 0;
+      }
+
+      .conflict-variable {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-weight: 600;
+        color: #991b1b;
+        margin-bottom: 4px;
+
+        mat-icon {
+          font-size: 16px;
+          height: 16px;
+          width: 16px;
+        }
+      }
+
+      .conflict-definitions {
+        font-size: 13px;
+        color: #7f1d1d;
+
+        .conflict-label {
+          font-weight: 500;
+          margin-right: 4px;
+        }
+
+        .conflict-definition {
+          font-weight: 600;
+        }
+      }
     }
   }
 }
