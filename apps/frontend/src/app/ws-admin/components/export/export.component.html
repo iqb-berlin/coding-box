@@ -41,6 +41,13 @@
           </mat-checkbox>
         </div>
         <mat-checkbox
+          *ngIf="selectedFormat !== 'coding-times'"
+          [(ngModel)]="includeReplayUrl"
+          color="primary"
+          [matTooltip]="'ws-admin.export-options.include-replay-url-tooltip' | translate">
+          {{ 'ws-admin.export-options.include-replay-url' | translate }}
+        </mat-checkbox>
+        <mat-checkbox
           *ngIf="selectedFormat !== 'detailed' && selectedFormat !== 'coding-times'"
           [(ngModel)]="outputCommentsInsteadOfCodes"
           color="primary"
