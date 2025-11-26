@@ -6,7 +6,9 @@ import {
   ManyToOne,
   JoinColumn
 } from 'typeorm';
+// eslint-disable-next-line import/no-cycle
 import { CodingJob } from './coding-job.entity';
+// eslint-disable-next-line import/no-cycle
 import { VariableBundle } from './variable-bundle.entity';
 
 /**
