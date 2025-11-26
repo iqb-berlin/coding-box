@@ -1192,6 +1192,10 @@
         "variable-id": "Variablen-ID"
       }
     },
+    "validation": {
+      "coder-required": "Es muss mindestens ein Kodierer ausgewählt werden",
+      "variable-or-bundle-required": "Es muss mindestens eine Variable oder ein Variablenbündel ausgewählt werden"
+    },
     "snackbars": {
       "no-workspace-selected": "Kein Arbeitsbereich ausgewählt",
       "job-updated-success": "Kodierauftrag erfolgreich aktualisiert",

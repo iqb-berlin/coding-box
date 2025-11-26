@@ -564,6 +564,24 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
     }
 
     if (this.data.mode === 'definition') {
+      if (this.selectedCoders.selected.length === 0) {
+        this.snackBar.open(
+          this.translateService.instant('coding-job-definition-dialog.validation.coder-required'),
+          this.translateService.instant('common.close'),
+          { duration: 5000 }
+        );
+        return;
+      }
+
+      if (this.selectedVariables.selected.length === 0 && this.selectedVariableBundles.selected.length === 0) {
+        this.snackBar.open(
+          this.translateService.instant('coding-job-definition-dialog.validation.variable-or-bundle-required'),
+          this.translateService.instant('common.close'),
+          { duration: 5000 }
+        );
+        return;
+      }
+
       if (this.data.isEdit && this.data.jobDefinitionId) {
         this.submitDefinitionUpdate();
       } else {
@@ -904,6 +922,26 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
 
   onSubmitForReview(): void {
     if (this.codingJobForm.invalid) {
+      return;
+    }
+
+    // Validate that at least one coder is selected
+    if (this.selectedCoders.selected.length === 0) {
+      this.snackBar.open(
+        this.translateService.instant('coding-job-definition-dialog.validation.coder-required'),
+        this.translateService.instant('common.close'),
+        { duration: 5000 }
+      );
+      return;
+    }
+
+    // Validate that at least one variable or variable bundle is selected
+    if (this.selectedVariables.selected.length === 0 && this.selectedVariableBundles.selected.length === 0) {
+      this.snackBar.open(
+        this.translateService.instant('coding-job-definition-dialog.validation.variable-or-bundle-required'),
+        this.translateService.instant('common.close'),
+        { duration: 5000 }
+      );
       return;
     }
 
