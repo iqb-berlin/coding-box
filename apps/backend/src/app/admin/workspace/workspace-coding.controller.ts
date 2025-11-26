@@ -2484,6 +2484,12 @@ export class WorkspaceCodingController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiQuery({
+    name: 'outputCommentsInsteadOfCodes',
+    required: false,
+    type: Boolean,
+    description: 'Output comments in code columns instead of code values'
+  })
   @ApiOkResponse({
     description: 'Aggregated coding results exported as Excel',
     content: {
@@ -2497,10 +2503,12 @@ export class WorkspaceCodingController {
   })
   async exportCodingResultsAggregated(
     @WorkspaceId() workspace_id: number,
-      @Res() res: Response
+      @Res() res: Response,
+      @Query('outputCommentsInsteadOfCodes') outputCommentsInsteadOfCodes?: string
   ): Promise<void> {
     try {
-      const buffer = await this.codingExportService.exportCodingResultsAggregated(workspace_id);
+      const outputCommentsParam = outputCommentsInsteadOfCodes === 'true';
+      const buffer = await this.codingExportService.exportCodingResultsAggregated(workspace_id, outputCommentsParam);
 
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       res.setHeader('Content-Disposition', `attachment; filename=coding-results-aggregated-${new Date().toISOString().slice(0, 10)}.xlsx`);
@@ -2514,6 +2522,12 @@ export class WorkspaceCodingController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiQuery({
+    name: 'outputCommentsInsteadOfCodes',
+    required: false,
+    type: Boolean,
+    description: 'Output comments in code columns instead of code values'
+  })
   @ApiOkResponse({
     description: 'Coding results by coder exported as Excel',
     content: {
@@ -2527,10 +2541,12 @@ export class WorkspaceCodingController {
   })
   async exportCodingResultsByCoder(
     @WorkspaceId() workspace_id: number,
-      @Res() res: Response
+      @Res() res: Response,
+      @Query('outputCommentsInsteadOfCodes') outputCommentsInsteadOfCodes?: string
   ): Promise<void> {
     try {
-      const buffer = await this.codingExportService.exportCodingResultsByCoder(workspace_id);
+      const outputCommentsParam = outputCommentsInsteadOfCodes === 'true';
+      const buffer = await this.codingExportService.exportCodingResultsByCoder(workspace_id, outputCommentsParam);
 
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       res.setHeader('Content-Disposition', `attachment; filename=coding-results-by-coder-${new Date().toISOString().slice(0, 10)}.xlsx`);
@@ -2562,6 +2578,12 @@ export class WorkspaceCodingController {
     type: Boolean,
     description: 'Include comments column with all coders comments'
   })
+  @ApiQuery({
+    name: 'outputCommentsInsteadOfCodes',
+    required: false,
+    type: Boolean,
+    description: 'Output comments in code columns instead of code values'
+  })
   @ApiOkResponse({
     description: 'Coding results by variable exported as Excel',
     content: {
@@ -2577,12 +2599,16 @@ export class WorkspaceCodingController {
     @WorkspaceId() workspace_id: number,
       @Res() res: Response,
       @Query('includeModalValue') includeModalValue?: string,
-      @Query('includeDoubleCoded') includeDoubleCoded?: string
+      @Query('includeDoubleCoded') includeDoubleCoded?: string,
+      @Query('includeComments') includeComments?: string,
+      @Query('outputCommentsInsteadOfCodes') outputCommentsInsteadOfCodes?: string
   ): Promise<void> {
     try {
       const includeModal = includeModalValue === 'true';
       const includeDouble = includeDoubleCoded === 'true';
-      const buffer = await this.codingExportService.exportCodingResultsByVariable(workspace_id, includeModal, includeDouble); res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      const includeCommentsParam = includeComments === 'true';
+      const outputCommentsParam = outputCommentsInsteadOfCodes === 'true';
+      const buffer = await this.codingExportService.exportCodingResultsByVariable(workspace_id, includeModal, includeDouble, includeCommentsParam, outputCommentsParam); res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       res.setHeader('Content-Disposition', `attachment; filename=coding-results-by-variable-${new Date().toISOString().slice(0, 10)}.xlsx`);
       res.send(buffer);
     } catch (error) {
@@ -2594,6 +2620,12 @@ export class WorkspaceCodingController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiQuery({
+    name: 'outputCommentsInsteadOfCodes',
+    required: false,
+    type: Boolean,
+    description: 'Output comments in code column instead of code values'
+  })
   @ApiOkResponse({
     description: 'Detailed coding results exported as CSV',
     content: {
@@ -2607,10 +2639,12 @@ export class WorkspaceCodingController {
   })
   async exportCodingResultsDetailed(
     @WorkspaceId() workspace_id: number,
-      @Res() res: Response
+      @Res() res: Response,
+      @Query('outputCommentsInsteadOfCodes') outputCommentsInsteadOfCodes?: string
   ): Promise<void> {
     try {
-      const buffer = await this.codingExportService.exportCodingResultsDetailed(workspace_id);
+      const outputCommentsParam = outputCommentsInsteadOfCodes === 'true';
+      const buffer = await this.codingExportService.exportCodingResultsDetailed(workspace_id, outputCommentsParam);
 
       res.setHeader('Content-Type', 'text/csv');
       res.setHeader('Content-Disposition', `attachment; filename=coding-results-detailed-${new Date().toISOString().slice(0, 10)}.csv`);

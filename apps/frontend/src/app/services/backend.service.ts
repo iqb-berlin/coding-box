@@ -1235,23 +1235,33 @@ export class BackendService {
     return this.http.delete<{ success: boolean; message: string }>(url);
   }
 
-  exportCodingResultsAggregated(workspaceId: number): Observable<Blob> {
+  exportCodingResultsAggregated(workspaceId: number, outputCommentsInsteadOfCodes = false): Observable<Blob> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/aggregated`;
+    let params = new HttpParams();
+    if (outputCommentsInsteadOfCodes) {
+      params = params.set('outputCommentsInsteadOfCodes', 'true');
+    }
     return this.http.get(url, {
       responseType: 'blob',
-      headers: this.authHeader
+      headers: this.authHeader,
+      params
     });
   }
 
-  exportCodingResultsByCoder(workspaceId: number): Observable<Blob> {
+  exportCodingResultsByCoder(workspaceId: number, outputCommentsInsteadOfCodes = false): Observable<Blob> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/by-coder`;
+    let params = new HttpParams();
+    if (outputCommentsInsteadOfCodes) {
+      params = params.set('outputCommentsInsteadOfCodes', 'true');
+    }
     return this.http.get(url, {
       responseType: 'blob',
-      headers: this.authHeader
+      headers: this.authHeader,
+      params
     });
   }
 
-  exportCodingResultsByVariable(workspaceId: number, includeModalValue = false, includeDoubleCoded = false, includeComments = false): Observable<Blob> {
+  exportCodingResultsByVariable(workspaceId: number, includeModalValue = false, includeDoubleCoded = false, includeComments = false, outputCommentsInsteadOfCodes = false): Observable<Blob> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/by-variable`;
     let params = new HttpParams();
     if (includeModalValue) {
@@ -1263,6 +1273,9 @@ export class BackendService {
     if (includeComments) {
       params = params.set('includeComments', 'true');
     }
+    if (outputCommentsInsteadOfCodes) {
+      params = params.set('outputCommentsInsteadOfCodes', 'true');
+    }
     return this.http.get(url, {
       responseType: 'blob',
       headers: this.authHeader,
@@ -1270,11 +1283,16 @@ export class BackendService {
     });
   }
 
-  exportCodingResultsDetailed(workspaceId: number): Observable<Blob> {
+  exportCodingResultsDetailed(workspaceId: number, outputCommentsInsteadOfCodes = false): Observable<Blob> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/detailed`;
+    let params = new HttpParams();
+    if (outputCommentsInsteadOfCodes) {
+      params = params.set('outputCommentsInsteadOfCodes', 'true');
+    }
     return this.http.get(url, {
       responseType: 'blob',
-      headers: this.authHeader
+      headers: this.authHeader,
+      params
     });
   }
 

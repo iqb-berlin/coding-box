@@ -84,8 +84,8 @@ export class CodingExportService {
     return finalName;
   }
 
-  async exportCodingResultsAggregated(workspaceId: number): Promise<Buffer> {
-    this.logger.log(`Exporting aggregated coding results for workspace ${workspaceId}`);
+  async exportCodingResultsAggregated(workspaceId: number, outputCommentsInsteadOfCodes = false): Promise<Buffer> {
+    this.logger.log(`Exporting aggregated coding results for workspace ${workspaceId}${outputCommentsInsteadOfCodes ? ' with comments instead of codes' : ''}`);
     const BATCH_SIZE = parseInt(process.env.EXPORT_AGGREGATED_BATCH_SIZE || '10000', 10);
 
     try {
@@ -116,9 +116,41 @@ export class CodingExportService {
       const worksheet = workbook.addWorksheet('Coding Results');
 
       const testPersonMap = new Map<string, Map<string, { code: number | null; score: number | null }>>();
+      const testPersonComments = new Map<string, Map<string, string | null>>();
       const variableSet = new Set<string>();
       const testPersonList: string[] = [];
       const personGroups = new Map<string, string>();
+
+      if (outputCommentsInsteadOfCodes) {
+        const codingJobUnits = await this.codingJobUnitRepository.find({
+          where: {
+            coding_job: {
+              workspace_id: workspaceId
+            }
+          },
+          relations: [
+            'response',
+            'response.unit',
+            'response.unit.booklet',
+            'response.unit.booklet.person'
+          ]
+        });
+
+        for (const unit of codingJobUnits) {
+          if (!unit.notes) continue;
+
+          const person = unit.response?.unit?.booklet?.person;
+          const testPersonKey = `${person?.login || ''}_${person?.code || ''}`;
+          const unitId = unit.response?.unit?.id;
+          const variableId = unit.variable_id;
+          const compositeVariableKey = `${unitId}_${variableId}`;
+
+          if (!testPersonComments.has(testPersonKey)) {
+            testPersonComments.set(testPersonKey, new Map());
+          }
+          testPersonComments.get(testPersonKey)!.set(compositeVariableKey, unit.notes);
+        }
+      }
 
       let processedCount = 0;
       let offset = 0;
@@ -221,7 +253,13 @@ export class CodingExportService {
 
         for (const variable of variables) {
           const coding = personData.get(variable);
-          row[variable] = coding?.code ?? '';
+          if (outputCommentsInsteadOfCodes) {
+            const comments = testPersonComments.get(testPersonKey);
+            const comment = comments?.get(variable);
+            row[variable] = comment || '';
+          } else {
+            row[variable] = coding?.code ?? '';
+          }
         }
 
         worksheet.addRow(row);
@@ -248,8 +286,8 @@ export class CodingExportService {
     }
   }
 
-  async exportCodingResultsByCoder(workspaceId: number): Promise<Buffer> {
-    this.logger.log(`Exporting coding results by coder for workspace ${workspaceId}`);
+  async exportCodingResultsByCoder(workspaceId: number, outputCommentsInsteadOfCodes = false): Promise<Buffer> {
+    this.logger.log(`Exporting coding results by coder for workspace ${workspaceId}${outputCommentsInsteadOfCodes ? ' with comments instead of codes' : ''}`);
 
     try {
       const codingJobs = await this.codingJobRepository.find({
@@ -297,6 +335,7 @@ export class CodingExportService {
         // Collect all variables and testpersons for this coder
         const variableSet = new Set<string>();
         const testPersonMap = new Map<string, Map<string, { code: number | null; score: number | null }>>();
+        const testPersonComments = new Map<string, Map<string, string | null>>();
         const testPersonList: string[] = [];
 
         for (const job of jobs) {
@@ -357,6 +396,23 @@ export class CodingExportService {
             });
             variableSet.add(compositeKey);
           }
+
+          // Fetch comments if needed
+          if (outputCommentsInsteadOfCodes) {
+            for (const unit of job.codingJobUnits) {
+              if (!unit.notes) continue;
+
+              const person = unit.response?.unit?.booklet?.person;
+              const testPersonKey = `${person?.login}_${person?.code}`;
+              const unitName = unit.response?.unit?.name;
+              const compositeKey = unitName ? `${unitName}_${unit.variable_id}` : unit.variable_id;
+
+              if (!testPersonComments.has(testPersonKey)) {
+                testPersonComments.set(testPersonKey, new Map());
+              }
+              testPersonComments.get(testPersonKey)!.set(compositeKey, unit.notes);
+            }
+          }
         }
 
         const variables = Array.from(variableSet).sort();
@@ -380,7 +436,13 @@ export class CodingExportService {
 
           for (const variable of variables) {
             const coding = personData.get(variable);
-            row[variable] = coding?.code ?? '';
+            if (outputCommentsInsteadOfCodes) {
+              const comments = testPersonComments.get(testPersonKey);
+              const comment = comments?.get(variable);
+              row[variable] = comment || '';
+            } else {
+              row[variable] = coding?.code ?? '';
+            }
           }
 
           worksheet.addRow(row);
@@ -403,8 +465,8 @@ export class CodingExportService {
     }
   }
 
-  async exportCodingResultsByVariable(workspaceId: number, includeModalValue = false, includeDoubleCoded = false, includeComments = false): Promise<Buffer> {
-    this.logger.log(`Exporting coding results by variable for workspace ${workspaceId} (CODING_INCOMPLETE only)${includeModalValue ? ' with modal value' : ''}${includeDoubleCoded ? ' with double coding indicator' : ''}${includeComments ? ' with comments' : ''}`);
+  async exportCodingResultsByVariable(workspaceId: number, includeModalValue = false, includeDoubleCoded = false, includeComments = false, outputCommentsInsteadOfCodes = false): Promise<Buffer> {
+    this.logger.log(`Exporting coding results by variable for workspace ${workspaceId} (CODING_INCOMPLETE only)${includeModalValue ? ' with modal value' : ''}${includeDoubleCoded ? ' with double coding indicator' : ''}${includeComments ? ' with comments' : ''}${outputCommentsInsteadOfCodes ? ' with comments instead of codes' : ''}`);
 
     const MAX_WORKSHEETS = parseInt(process.env.EXPORT_MAX_WORKSHEETS || '100', 10);
     const MAX_RESPONSES_PER_WORKSHEET = parseInt(process.env.EXPORT_MAX_RESPONSES_PER_WORKSHEET || '10000', 10);
@@ -584,8 +646,17 @@ export class CodingExportService {
               const codeValues: (number | null)[] = [];
               for (const coder of coderList) {
                 const code = codings.get(coder) ?? null;
-                // Display empty cell for negative codes (coding issues)
-                row[coder] = (code !== null && code >= 0) ? code : '';
+
+                if (outputCommentsInsteadOfCodes) {
+                  // Output comments instead of codes
+                  const comments = testPersonComments.get(testPersonKey);
+                  const comment = comments?.get(coder);
+                  row[coder] = comment || '';
+                } else {
+                  // Display empty cell for negative codes (coding issues)
+                  row[coder] = (code !== null && code >= 0) ? code : '';
+                }
+
                 // Only include non-negative codes in modal value calculation
                 if (code !== null && code >= 0) {
                   codeValues.push(code);
@@ -690,8 +761,8 @@ export class CodingExportService {
     }
   }
 
-  async exportCodingResultsDetailed(workspaceId: number): Promise<Buffer> {
-    this.logger.log(`Exporting detailed coding results for workspace ${workspaceId}`);
+  async exportCodingResultsDetailed(workspaceId: number, outputCommentsInsteadOfCodes = false): Promise<Buffer> {
+    this.logger.log(`Exporting detailed coding results for workspace ${workspaceId}${outputCommentsInsteadOfCodes ? ' with comments instead of codes' : ''}`);
 
     try {
       // Get all coding job units with related data
@@ -756,7 +827,7 @@ export class CodingExportService {
           escapeCsvField(personId),
           escapeCsvField(coder),
           escapeCsvField(unit.variable_id),
-          escapeCsvField(unit.notes || ''),
+          escapeCsvField(outputCommentsInsteadOfCodes ? (unit.notes || '') : unit.code.toString()),
           escapeCsvField(timestamp),
           escapeCsvField(unit.code.toString())
         ].join(';');
