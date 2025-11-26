@@ -2497,6 +2497,36 @@ export class WorkspaceCodingController {
     description: 'Include replay URL column with hyperlinks to play back tasks'
   })
   @ApiQuery({
+    name: 'anonymizeCoders',
+    required: false,
+    type: Boolean,
+    description: 'Anonymize coder names in the export'
+  })
+  @ApiQuery({
+    name: 'usePseudoCoders',
+    required: false,
+    type: Boolean,
+    description: 'Use pseudo coder names (K1, K2) for double-coding'
+  })
+  @ApiQuery({
+    name: 'doubleCodingMethod',
+    required: false,
+    enum: ['new-row-per-variable', 'new-column-per-coder', 'most-frequent'],
+    description: 'Method for handling double-coding: new-row-per-variable, new-column-per-coder, or most-frequent (default)'
+  })
+  @ApiQuery({
+    name: 'includeComments',
+    required: false,
+    type: Boolean,
+    description: 'Include comments column with all coder comments'
+  })
+  @ApiQuery({
+    name: 'includeModalValue',
+    required: false,
+    type: Boolean,
+    description: 'Include modal value and deviation count columns'
+  })
+  @ApiQuery({
     name: 'authToken',
     required: false,
     type: String,
@@ -2519,12 +2549,34 @@ export class WorkspaceCodingController {
       @Req() req: Request,
       @Query('outputCommentsInsteadOfCodes') outputCommentsInsteadOfCodes?: string,
       @Query('includeReplayUrl') includeReplayUrl?: string,
+      @Query('anonymizeCoders') anonymizeCoders?: string,
+      @Query('usePseudoCoders') usePseudoCoders?: string,
+      @Query('doubleCodingMethod') doubleCodingMethod?: string,
+      @Query('includeComments') includeComments?: string,
+      @Query('includeModalValue') includeModalValue?: string,
       @Query('authToken') authToken?: string
   ): Promise<void> {
     try {
       const outputCommentsParam = outputCommentsInsteadOfCodes === 'true';
       const includeReplayUrlParam = includeReplayUrl === 'true';
-      const buffer = await this.codingExportService.exportCodingResultsAggregated(workspace_id, outputCommentsParam, includeReplayUrlParam, authToken || '', req);
+      const anonymizeCodersParam = anonymizeCoders === 'true';
+      const usePseudoCodersParam = usePseudoCoders === 'true';
+      const doubleCodingMethodParam = (doubleCodingMethod as 'new-row-per-variable' | 'new-column-per-coder' | 'most-frequent') || 'most-frequent';
+      const includeCommentsParam = includeComments === 'true';
+      const includeModalValueParam = includeModalValue === 'true';
+
+      const buffer = await this.codingExportService.exportCodingResultsAggregated(
+        workspace_id,
+        outputCommentsParam,
+        includeReplayUrlParam,
+        anonymizeCodersParam,
+        usePseudoCodersParam,
+        doubleCodingMethodParam,
+        includeCommentsParam,
+        includeModalValueParam,
+        authToken || '',
+        req
+      );
 
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       res.setHeader('Content-Disposition', `attachment; filename=coding-results-aggregated-${new Date().toISOString().slice(0, 10)}.xlsx`);

@@ -20,6 +20,43 @@
 
       <div class="export-options-section">
         <h3>{{ 'ws-admin.export-options-title' | translate }}</h3>
+        
+        <!-- Double-coding method section for aggregated export -->
+        <div *ngIf="selectedFormat === 'aggregated'" class="double-coding-section">
+          <h4>{{ 'ws-admin.export-options.double-coding-method-title' | translate }}</h4>
+          <mat-radio-group [(ngModel)]="doubleCodingMethod" class="double-coding-radio-group">
+            <mat-radio-button value="most-frequent" color="primary"
+              [matTooltip]="'ws-admin.export-options.most-frequent-random-tooltip' | translate">
+              {{ 'ws-admin.export-options.most-frequent-random' | translate }}
+            </mat-radio-button>
+            <mat-radio-button value="new-row-per-variable" color="primary"
+              [matTooltip]="'ws-admin.export-options.new-row-per-variable-tooltip' | translate">
+              {{ 'ws-admin.export-options.new-row-per-variable' | translate }}
+            </mat-radio-button>
+            <mat-radio-button value="new-column-per-coder" color="primary"
+              [matTooltip]="'ws-admin.export-options.new-column-per-coder-tooltip' | translate">
+              {{ 'ws-admin.export-options.new-column-per-coder' | translate }}
+            </mat-radio-button>
+          </mat-radio-group>
+          
+          <!-- Additional options for new-row-per-variable and new-column-per-coder -->
+          <div *ngIf="doubleCodingMethod !== 'most-frequent'" class="sub-option">
+            <mat-checkbox
+              [(ngModel)]="includeModalValue"
+              color="primary"
+              [matTooltip]="'ws-admin.export-options.include-modal-value-tooltip' | translate">
+              {{ 'ws-admin.export-options.include-modal-value' | translate }}
+            </mat-checkbox>
+            <mat-checkbox
+              [(ngModel)]="includeComments"
+              color="primary"
+              [matTooltip]="'ws-admin.export-options.include-comments-tooltip' | translate">
+              {{ 'ws-admin.export-options.include-comments' | translate }}
+            </mat-checkbox>
+          </div>
+        </div>
+        
+        <!-- Options specific to by-variable export -->
         <div *ngIf="selectedFormat === 'by-variable'">
           <mat-checkbox
             [(ngModel)]="includeModalValue"
@@ -40,6 +77,8 @@
             {{ 'ws-admin.export-options.include-comments' | translate }}
           </mat-checkbox>
         </div>
+        
+        <!-- General export options -->
         <mat-checkbox
           *ngIf="selectedFormat !== 'coding-times'"
           [(ngModel)]="includeReplayUrl"
@@ -55,13 +94,12 @@
           {{ 'ws-admin.export-options.output-comments-instead-of-codes' | translate }}
         </mat-checkbox>
         <mat-checkbox
-          *ngIf="selectedFormat !== 'aggregated'"
           [(ngModel)]="anonymizeCoders"
           color="primary"
           [matTooltip]="'ws-admin.export-options.anonymize-coders-tooltip' | translate">
           {{ 'ws-admin.export-options.anonymize-coders' | translate }}
         </mat-checkbox>
-        <div class="sub-option" *ngIf="anonymizeCoders && selectedFormat !== 'aggregated'">
+        <div class="sub-option" *ngIf="anonymizeCoders">
           <mat-checkbox
             [(ngModel)]="usePseudoCoders"
             color="primary"
