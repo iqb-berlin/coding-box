@@ -928,14 +928,14 @@
       }
 
       &.pending {
-        background-color: transparent;
+        background-color: #fef3c7;
         border-color: #fbbf24;
         .status-icon { color: #d97706; }
         .status-value { color: #92400e; }
       }
 
       &.approved {
-        background-color: transparent;
+        background-color: #dcfce7;
         border-color: #22c55e;
         .status-icon { color: #16a34a; }
         .status-value { color: #166534; }

@@ -176,7 +176,6 @@ export class CodingExportService {
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet('Coding Results');
 
-      // Load all coding job units with their relations
       const codingJobUnits = await this.codingJobUnitRepository.find({
         where: {
           coding_job: {

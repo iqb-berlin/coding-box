@@ -16,7 +16,7 @@ import { MatDialogModule } from '@angular/material/dialog';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import * as ExcelJS from 'exceljs';
 import {
-  Subject, takeUntil, debounceTime, finalize
+  Subject, takeUntil, debounceTime, distinctUntilChanged, finalize
 } from 'rxjs';
 import { CodingJobsComponent } from '../coding-jobs/coding-jobs.component';
 import { CodingJobDefinitionsComponent } from '../coding-job-definitions/coding-job-definitions.component';
@@ -59,7 +59,6 @@ import { CoderTrainingsListComponent } from '../coder-trainings-list/coder-train
 export class CodingManagementManualComponent implements OnInit, OnDestroy {
   @ViewChild(CodingJobsComponent) codingJobsComponent?: CodingJobsComponent;
   @ViewChild(CodingJobDefinitionsComponent) codingJobDefinitionsComponent?: CodingJobDefinitionsComponent;
-  @ViewChild(CoderTrainingsListComponent) coderTrainingsListComponent?: CoderTrainingsListComponent;
 
   private testPersonCodingService = inject(TestPersonCodingService);
   private backendService = inject(BackendService);
@@ -78,9 +77,9 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   isLoadingCodingProgress = false;
   isLoadingKappaSummary = false;
 
+  // Debouncing for job definition changes
   private jobDefinitionChangeSubject = new Subject<void>();
   private statisticsRefreshSubject = new Subject<void>();
-  private codingJobsChangeSubject = new Subject<void>();
 
   codingProgressOverview: {
     totalCasesToCode: number;
@@ -237,25 +236,14 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     this.validationProgress = currentProgress;
     this.isLoading = currentProgress.status === 'loading' || currentProgress.status === 'processing';
 
+    // Set up debounced statistics refresh
     this.jobDefinitionChangeSubject
       .pipe(
         debounceTime(500),
         takeUntil(this.destroy$)
       )
       .subscribe(() => {
-        this.loadVariableCoverageOverview();
-      });
-
-    this.codingJobsChangeSubject
-      .pipe(
-        debounceTime(400),
-        takeUntil(this.destroy$)
-      )
-      .subscribe(() => {
-        this.loadCodingProgressOverview();
-        this.loadCaseCoverageOverview();
-        this.loadCodingIncompleteVariables();
-        this.loadStatusDistribution();
+        this.refreshAllStatistics();
       });
 
     this.loadCodingProgressOverview();
@@ -496,15 +484,20 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     this.showCoderTraining = false;
   }
 
+  /**
+   * Event handler for job definition changes (create, update, delete)
+   * Uses debouncing to prevent excessive API calls
+   */
   onJobDefinitionChanged(): void {
+    console.log('Job definition changed, triggering refresh...');
     this.jobDefinitionChangeSubject.next();
   }
 
-  refreshVariableCoverageOnly(): void {
-    this.loadVariableCoverageOverview();
-  }
-
+  /**
+   * Refreshes all statistics with individual loading states
+   */
   refreshAllStatistics(): void {
+    console.log('Refreshing all statistics after job definition change...');
     this.loadCodingProgressOverview();
     this.loadVariableCoverageOverview();
     this.loadCaseCoverageOverview();
@@ -518,17 +511,6 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     if (this.codingJobsComponent) {
       this.codingJobsComponent.loadCodingJobs();
     }
-    this.codingJobsChangeSubject.next();
-  }
-
-  reloadCoderTrainingsList(): void {
-    if (this.coderTrainingsListComponent) {
-      this.coderTrainingsListComponent.loadCoderTrainings();
-    }
-  }
-
-  onCodingJobsChanged(): void {
-    this.codingJobsChangeSubject.next();
   }
 
   private loadCodingProgressOverview(): void {
@@ -561,6 +543,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       return;
     }
 
+    console.log('Loading variable coverage overview for workspace:', workspaceId);
     this.isLoadingVariableCoverage = true;
     this.testPersonCodingService.getVariableCoverageOverview(workspaceId)
       .pipe(
@@ -571,9 +554,11 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       )
       .subscribe({
         next: overview => {
+          console.log('Variable coverage overview loaded:', overview);
           this.variableCoverageOverview = overview;
         },
-        error: () => {
+        error: error => {
+          console.error('Error loading variable coverage overview:', error);
           this.variableCoverageOverview = null;
         }
       });
@@ -745,7 +730,6 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
             `Schulung erfolgreich generiert: ${packages.length} Kodierer-Pakete mit insgesamt ${totalResponses} Antworten erstellt`
           );
           this.closeCoderTraining();
-          this.reloadCoderTrainingsList();
         },
         error: () => {
           this.showError('Fehler beim Generieren der Kodierer-Schulungspakete');

@@ -200,7 +200,7 @@
         </div>
 
         <div class="job-definitions-container">
-          <coding-box-coding-job-definitions
+          <coding-box-coding-job-definitions 
             (bulkCreationCompleted)="reloadCodingJobsList()"
             (jobDefinitionChanged)="onJobDefinitionChanged()"></coding-box-coding-job-definitions>
         </div>
@@ -210,16 +210,16 @@
           <div class="statistics-card">
             <h2 class="section-title">
               Variablenabdeckung
-              <button mat-icon-button (click)="refreshVariableCoverageOnly()" matTooltip="Variablenabdeckung aktualisieren">
+              <button mat-icon-button (click)="refreshAllStatistics()" matTooltip="Statistiken manuell aktualisieren">
                 <mat-icon>refresh</mat-icon>
               </button>
-              <span *ngIf="variableCoverageOverview.conflictedVariables > 0" class="conflict-badge"
+              <span *ngIf="variableCoverageOverview.conflictedVariables > 0" class="conflict-badge" 
                     matTooltip="Es gibt Konflikte bei der Variablenzuordnung">
                 <mat-icon>warning</mat-icon>
                 {{variableCoverageOverview.conflictedVariables}} Konflikte
               </span>
             </h2>
-
+            
             <!-- Overall Coverage Stats -->
             <div class="coverage-stats">
               <div class="stat-item">
@@ -242,6 +242,7 @@
 
             <!-- Status Breakdown -->
             <div class="status-breakdown">
+              <h3 class="breakdown-title">Abdeckung nach Status</h3>
               <div class="status-stats">
                 <div class="status-item draft">
                   <mat-icon class="status-icon">edit</mat-icon>
@@ -308,14 +309,10 @@
           </div>
         </div>
 
-        <div class="coding-jobs-container">
-          <h3>Kodierjobs</h3>
-          <coding-box-coding-jobs (jobsChanged)="onCodingJobsChanged()"></coding-box-coding-jobs>
-        </div>
         <!-- Case Coverage Statistics -->
         <div *ngIf="caseCoverageOverview" class="case-coverage-section statistics-section" [class.blurred-content]="isLoadingCaseCoverage">
           <div class="statistics-card">
-            <h2 class="section-title">Fälle in Kodierjobs</h2>
+            <h2 class="section-title">Fälle in Jobdefinitionen</h2>
             <div class="coverage-stats">
               <div class="stat-item">
                 <span class="stat-label">Gesamt zu kodierende Fälle:</span>
@@ -380,6 +377,11 @@
               <div class="coverage-fill" [style.width.%]="appliedResultsOverview.completionPercentage"></div>
             </div>
           </div>
+        </div>
+
+        <div class="coding-jobs-container">
+          <h3>Kodierjobs</h3>
+          <coding-box-coding-jobs></coding-box-coding-jobs>
         </div>
         <div class="coder-training-list-container">
           <h3>Kodierer-Schulungen</h3>

@@ -10,6 +10,33 @@ export interface TestPersonCodingJobData {
   autoCoderRun?: number;
 }
 
+export interface ExportJobData {
+  workspaceId: number;
+  userId: number;
+  exportType: 'aggregated' | 'by-coder' | 'by-variable' | 'detailed' | 'coding-times';
+  outputCommentsInsteadOfCodes?: boolean;
+  includeReplayUrl?: boolean;
+  anonymizeCoders?: boolean;
+  usePseudoCoders?: boolean;
+  doubleCodingMethod?: 'new-row-per-variable' | 'new-column-per-coder' | 'most-frequent';
+  includeComments?: boolean;
+  includeModalValue?: boolean;
+  includeDoubleCoded?: boolean;
+  excludeAutoCoded?: boolean;
+  authToken?: string;
+}
+
+export interface ExportJobResult {
+  fileId: string;
+  fileName: string;
+  filePath: string;
+  fileSize: number;
+  workspaceId: number;
+  userId: number;
+  exportType: string;
+  createdAt: number;
+}
+
 export interface RedisConnectionStatus {
   connected: boolean;
   message: string;
@@ -36,7 +63,8 @@ export class JobQueueService {
 
   constructor(
     @InjectQueue('test-person-coding') private testPersonCodingQueue: Queue,
-    @InjectQueue('coding-statistics') private codingStatisticsQueue: Queue
+    @InjectQueue('coding-statistics') private codingStatisticsQueue: Queue,
+    @InjectQueue('data-export') private dataExportQueue: Queue
   ) {}
 
   async addTestPersonCodingJob(
@@ -97,6 +125,59 @@ export class JobQueueService {
       return true;
     } catch (error) {
       this.logger.error(`Error deleting job: ${error.message}`, error.stack);
+      return false;
+    }
+  }
+
+  async addExportJob(
+    data: ExportJobData,
+    options?: JobOptions
+  ): Promise<Job<ExportJobData>> {
+    this.logger.log(`Adding export job for workspace ${data.workspaceId}, type: ${data.exportType}`);
+    return this.dataExportQueue.add(data, options);
+  }
+
+  async getExportJob(jobId: string): Promise<Job<ExportJobData>> {
+    return this.dataExportQueue.getJob(jobId);
+  }
+
+  async getExportJobs(workspaceId: number): Promise<Job<ExportJobData>[]> {
+    this.logger.log(`Fetching all export jobs for workspace ${workspaceId}`);
+    const jobs = await this.dataExportQueue.getJobs(['completed', 'failed', 'active', 'waiting', 'delayed']);
+    this.logger.log(`Found ${jobs.length} export jobs in total`);
+    return jobs.filter(job => job.data.workspaceId === workspaceId);
+  }
+
+  async cancelExportJob(jobId: string): Promise<boolean> {
+    const job = await this.dataExportQueue.getJob(jobId);
+    if (!job) {
+      this.logger.warn(`Export job with ID ${jobId} not found`);
+      return false;
+    }
+
+    try {
+      await job.remove();
+      this.logger.log(`Export job ${jobId} has been cancelled`);
+      return true;
+    } catch (error) {
+      this.logger.error(`Error cancelling export job: ${error.message}`, error.stack);
+      return false;
+    }
+  }
+
+  async deleteExportJob(jobId: string): Promise<boolean> {
+    const job = await this.dataExportQueue.getJob(jobId);
+    if (!job) {
+      this.logger.warn(`Export job with ID ${jobId} not found`);
+      return false;
+    }
+
+    try {
+      await job.remove();
+      this.logger.log(`Export job ${jobId} has been deleted`);
+      return true;
+    } catch (error) {
+      this.logger.error(`Error deleting export job: ${error.message}`, error.stack);
       return false;
     }
   }

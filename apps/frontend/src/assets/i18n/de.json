@@ -338,6 +338,10 @@
         "button": "Ergebnisse vergleichen",
         "notEnough": "Um Ergebnisse zu vergleichen, werden mindestens zwei Kodierer-Schulungen benötigt."
       },
+      "create": {
+        "button": "Neue Schulung erstellen",
+        "first": "Erste Schulung erstellen"
+      },
       "loading": "Lade Kodierer-Schulungen...",
       "empty": {
         "title": "Keine Kodierer-Schulungen vorhanden",
