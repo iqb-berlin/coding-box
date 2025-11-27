@@ -198,6 +198,10 @@
     },
     "export-options-title": "Exportoptionen",
     "export-options": {
+      "exclude-auto-coded": "Nur manuell kodierte Variablen exportieren",
+      "exclude-auto-coded-tooltip": "Beschränkt den Export auf Variablen mit CODING_INCOMPLETE Status. Standardmäßig werden alle Variablen exportiert.",
+      "include-auto-coded": "Automatisch kodierte Variablen einbeziehen",
+      "include-auto-coded-tooltip": "Erweitert den Export um alle Variablen, die nicht manuell kodiert werden müssen. Standardmäßig werden nur Variablen mit CODING_INCOMPLETE Status exportiert.",
       "only-manual-coding": "Nur manuell zu kodierende Variablen",
       "only-manual-coding-tooltip": "Exportiert nur Variablen, die manuell kodiert werden sollen (CODING_INCOMPLETE Variablen). Diese Option ist standardmäßig aktiviert.",
       "include-modal-value": "Füge Modalwerte hinzu",
