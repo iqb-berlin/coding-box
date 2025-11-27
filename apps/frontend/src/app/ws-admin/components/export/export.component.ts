@@ -50,7 +50,7 @@ export class ExportComponent {
   anonymizeCoders = false;
   usePseudoCoders = false;
   doubleCodingMethod: 'new-row-per-variable' | 'new-column-per-coder' | 'most-frequent' = 'most-frequent';
-  onlyManualCoding = true;
+  excludeAutoCoded = true;
 
   exportFormats = [
     {
@@ -140,24 +140,24 @@ export class ExportComponent {
             this.includeComments,
             this.includeModalValue,
             authToken,
-            this.onlyManualCoding
+            this.excludeAutoCoded
           );
           filename = `coding-results-aggregated-${new Date().toISOString().slice(0, 10)}.xlsx`;
           break;
         case 'by-coder':
-          exportMethod = this.backendService.exportCodingResultsByCoder(workspaceId, this.outputCommentsInsteadOfCodes, this.includeReplayUrl, this.anonymizeCoders, this.usePseudoCoders, authToken);
+          exportMethod = this.backendService.exportCodingResultsByCoder(workspaceId, this.outputCommentsInsteadOfCodes, this.includeReplayUrl, this.anonymizeCoders, this.usePseudoCoders, authToken, this.excludeAutoCoded);
           filename = `coding-results-by-coder-${new Date().toISOString().slice(0, 10)}.xlsx`;
           break;
         case 'by-variable':
-          exportMethod = this.backendService.exportCodingResultsByVariable(workspaceId, this.includeModalValue, this.includeDoubleCoded, this.includeComments, this.outputCommentsInsteadOfCodes, this.includeReplayUrl, this.anonymizeCoders, this.usePseudoCoders, authToken);
+          exportMethod = this.backendService.exportCodingResultsByVariable(workspaceId, this.includeModalValue, this.includeDoubleCoded, this.includeComments, this.outputCommentsInsteadOfCodes, this.includeReplayUrl, this.anonymizeCoders, this.usePseudoCoders, authToken, this.excludeAutoCoded);
           filename = `coding-results-by-variable-${new Date().toISOString().slice(0, 10)}.xlsx`;
           break;
         case 'detailed':
-          exportMethod = this.backendService.exportCodingResultsDetailed(workspaceId, this.outputCommentsInsteadOfCodes, this.includeReplayUrl, this.anonymizeCoders, this.usePseudoCoders, authToken);
+          exportMethod = this.backendService.exportCodingResultsDetailed(workspaceId, this.outputCommentsInsteadOfCodes, this.includeReplayUrl, this.anonymizeCoders, this.usePseudoCoders, authToken, this.excludeAutoCoded);
           filename = `coding-results-detailed-${new Date().toISOString().slice(0, 10)}.csv`;
           break;
         case 'coding-times':
-          exportMethod = this.backendService.exportCodingTimesReport(workspaceId, this.anonymizeCoders, this.usePseudoCoders);
+          exportMethod = this.backendService.exportCodingTimesReport(workspaceId, this.anonymizeCoders, this.usePseudoCoders, this.excludeAutoCoded);
           filename = `coding-times-report-${new Date().toISOString().slice(0, 10)}.xlsx`;
           break;
         default:

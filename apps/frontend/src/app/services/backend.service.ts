@@ -1247,7 +1247,7 @@ export class BackendService {
     includeComments: boolean,
     includeModalValue: boolean,
     authToken: string,
-    onlyManualCoding: boolean
+    excludeAutoCoded: boolean
   ): Observable<Blob> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/aggregated`;
     let params = new HttpParams()
@@ -1258,7 +1258,7 @@ export class BackendService {
       .set('doubleCodingMethod', doubleCodingMethod)
       .set('includeComments', String(includeComments))
       .set('includeModalValue', String(includeModalValue))
-      .set('onlyManualCoding', String(onlyManualCoding));
+      .set('excludeAutoCoded', String(excludeAutoCoded));
     if (authToken) {
       params = params.set('authToken', authToken);
     }
@@ -1275,14 +1275,16 @@ export class BackendService {
     includeReplayUrl: boolean,
     anonymizeCoders: boolean,
     usePseudoCoders: boolean,
-    authToken: string
+    authToken: string,
+    excludeAutoCoded: boolean
   ): Observable<Blob> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/by-coder`;
     let params = new HttpParams()
       .set('outputCommentsInsteadOfCodes', String(outputCommentsInsteadOfCodes))
       .set('includeReplayUrl', String(includeReplayUrl))
       .set('anonymizeCoders', String(anonymizeCoders))
-      .set('usePseudoCoders', String(usePseudoCoders));
+      .set('usePseudoCoders', String(usePseudoCoders))
+      .set('excludeAutoCoded', String(excludeAutoCoded));
     if (authToken) {
       params = params.set('authToken', authToken);
     }
@@ -1302,7 +1304,8 @@ export class BackendService {
     includeReplayUrl: boolean,
     anonymizeCoders: boolean,
     usePseudoCoders: boolean,
-    authToken: string
+    authToken: string,
+    excludeAutoCoded: boolean
   ): Observable<Blob> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/by-variable`;
     let params = new HttpParams()
@@ -1312,7 +1315,8 @@ export class BackendService {
       .set('outputCommentsInsteadOfCodes', String(outputCommentsInsteadOfCodes))
       .set('includeReplayUrl', String(includeReplayUrl))
       .set('anonymizeCoders', String(anonymizeCoders))
-      .set('usePseudoCoders', String(usePseudoCoders));
+      .set('usePseudoCoders', String(usePseudoCoders))
+      .set('excludeAutoCoded', String(excludeAutoCoded));
     if (authToken) {
       params = params.set('authToken', authToken);
     }
@@ -1329,14 +1333,16 @@ export class BackendService {
     includeReplayUrl: boolean,
     anonymizeCoders: boolean,
     usePseudoCoders: boolean,
-    authToken: string
+    authToken: string,
+    excludeAutoCoded: boolean
   ): Observable<Blob> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/detailed`;
     let params = new HttpParams()
       .set('outputCommentsInsteadOfCodes', String(outputCommentsInsteadOfCodes))
       .set('includeReplayUrl', String(includeReplayUrl))
       .set('anonymizeCoders', String(anonymizeCoders))
-      .set('usePseudoCoders', String(usePseudoCoders));
+      .set('usePseudoCoders', String(usePseudoCoders))
+      .set('excludeAutoCoded', String(excludeAutoCoded));
     if (authToken) {
       params = params.set('authToken', authToken);
     }
@@ -1350,12 +1356,14 @@ export class BackendService {
   exportCodingTimesReport(
     workspaceId: number,
     anonymizeCoders: boolean,
-    usePseudoCoders: boolean
+    usePseudoCoders: boolean,
+    excludeAutoCoded: boolean
   ): Observable<Blob> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/coding-times`;
     const params = new HttpParams()
       .set('anonymizeCoders', String(anonymizeCoders))
-      .set('usePseudoCoders', String(usePseudoCoders));
+      .set('usePseudoCoders', String(usePseudoCoders))
+      .set('excludeAutoCoded', String(excludeAutoCoded));
     return this.http.get(url, {
       params,
       responseType: 'blob',

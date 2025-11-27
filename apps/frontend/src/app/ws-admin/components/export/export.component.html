@@ -20,16 +20,9 @@
 
       <div class="export-options-section">
         <h3>{{ 'ws-admin.export-options-title' | translate }}</h3>
-        
+
         <!-- Double-coding method section for aggregated export -->
         <div *ngIf="selectedFormat === 'aggregated'" class="double-coding-section">
-          <mat-checkbox
-            [(ngModel)]="onlyManualCoding"
-            color="primary"
-            [matTooltip]="'ws-admin.export-options.only-manual-coding-tooltip' | translate">
-            {{ 'ws-admin.export-options.only-manual-coding' | translate }}
-          </mat-checkbox>
-          
           <h4>{{ 'ws-admin.export-options.double-coding-method-title' | translate }}</h4>
           <mat-radio-group [(ngModel)]="doubleCodingMethod" (ngModelChange)="onDoubleCodingMethodChange()" class="double-coding-radio-group">
             <mat-radio-button value="most-frequent" color="primary"
@@ -45,7 +38,7 @@
               {{ 'ws-admin.export-options.new-column-per-coder' | translate }}
             </mat-radio-button>
           </mat-radio-group>
-          
+
           <!-- Additional options for new-row-per-variable and new-column-per-coder -->
           <div *ngIf="doubleCodingMethod !== 'most-frequent'" class="sub-option">
             <mat-checkbox
@@ -62,7 +55,7 @@
             </mat-checkbox>
           </div>
         </div>
-        
+
         <!-- Options specific to by-variable export -->
         <div *ngIf="selectedFormat === 'by-variable'">
           <mat-checkbox
@@ -84,7 +77,7 @@
             {{ 'ws-admin.export-options.include-comments' | translate }}
           </mat-checkbox>
         </div>
-        
+
         <!-- General export options -->
         <mat-checkbox
           *ngIf="selectedFormat !== 'coding-times' && selectedFormat !== 'by-coder' && (selectedFormat !== 'aggregated' || doubleCodingMethod === 'new-row-per-variable')"
@@ -115,6 +108,13 @@
           </mat-checkbox>
         </div>
       </div>
+
+      <mat-checkbox
+        [(ngModel)]="excludeAutoCoded"
+        color="primary"
+        [matTooltip]="'ws-admin.export-options.exclude-auto-coded-tooltip' | translate">
+        {{ 'ws-admin.export-options.exclude-auto-coded' | translate }}
+      </mat-checkbox>
     </mat-card-content>
     <mat-card-actions align="end">
       <button mat-raised-button color="primary" (click)="onExport()" [disabled]="isExporting">

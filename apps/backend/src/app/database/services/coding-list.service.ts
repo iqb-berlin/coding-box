@@ -8,6 +8,7 @@ import { ResponseEntity } from '../entities/response.entity';
 import { extractVariableLocation } from '../../utils/voud/extractVariableLocation';
 import { statusStringToNumber } from '../utils/response-status-converter';
 import { LRUCache } from './lru-cache';
+import { WorkspaceFilesService } from './workspace-files.service';
 
 export interface CodingItem {
   unit_key: string;
@@ -38,7 +39,8 @@ export class CodingListService {
     @InjectRepository(FileUpload)
     private readonly fileUploadRepository: Repository<FileUpload>,
     @InjectRepository(ResponseEntity)
-    private readonly responseRepository: Repository<ResponseEntity>
+    private readonly responseRepository: Repository<ResponseEntity>,
+    private readonly workspaceFilesService: WorkspaceFilesService
   ) {}
 
   private async loadVoudData(unitName: string, workspaceId: number): Promise<Map<string, string>> {
@@ -598,11 +600,26 @@ export class CodingListService {
        AND response.variableid NOT LIKE '%_0' ESCAPE '\\'`
     );
 
-    // Exclude empty values
     queryBuilder.andWhere(
       '(response.value IS NOT NULL AND response.value != \'\')'
     );
 
-    return queryBuilder.getRawMany();
+    const rawResults = await queryBuilder.getRawMany();
+
+    const unitVariableMap = await this.workspaceFilesService.getUnitVariableMap(workspaceId);
+
+    const validVariableSets = new Map<string, Set<string>>();
+    unitVariableMap.forEach((variables: Set<string>, unitName: string) => {
+      validVariableSets.set(unitName.toUpperCase(), variables);
+    });
+
+    const filteredResults = rawResults.filter(row => {
+      const unitNamesValidVars = validVariableSets.get(row.unitName?.toUpperCase());
+      return unitNamesValidVars?.has(row.variableId);
+    });
+
+    this.logger.log(`Found ${rawResults.length} CODING_INCOMPLETE variable groups, filtered to ${filteredResults.length} valid variables`);
+
+    return filteredResults;
   }
 }

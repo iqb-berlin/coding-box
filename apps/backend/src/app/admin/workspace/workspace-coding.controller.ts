@@ -2533,10 +2533,10 @@ export class WorkspaceCodingController {
     description: 'Authentication token for generating replay URLs'
   })
   @ApiQuery({
-    name: 'onlyManualCoding',
+    name: 'excludeAutoCoded',
     required: false,
     type: Boolean,
-    description: 'Export only variables that require manual coding (CODING_INCOMPLETE variables). Default: true'
+    description: 'Exclude automatically coded variables, limiting export to manually coded (CODING_INCOMPLETE) variables only. Default: false'
   })
   @ApiOkResponse({
     description: 'Aggregated coding results exported as Excel',
@@ -2561,7 +2561,7 @@ export class WorkspaceCodingController {
       @Query('includeComments') includeComments?: string,
       @Query('includeModalValue') includeModalValue?: string,
       @Query('authToken') authToken?: string,
-      @Query('onlyManualCoding') onlyManualCoding?: string
+      @Query('excludeAutoCoded') excludeAutoCoded?: string
   ): Promise<void> {
     try {
       const outputCommentsParam = outputCommentsInsteadOfCodes === 'true';
@@ -2571,7 +2571,7 @@ export class WorkspaceCodingController {
       const doubleCodingMethodParam = (doubleCodingMethod as 'new-row-per-variable' | 'new-column-per-coder' | 'most-frequent') || 'most-frequent';
       const includeCommentsParam = includeComments === 'true';
       const includeModalValueParam = includeModalValue === 'true';
-      const onlyManualCodingParam = onlyManualCoding !== 'false'; // Default true
+      const excludeAutoCodedParam = excludeAutoCoded === 'true'; // Default false
 
       const buffer = await this.codingExportService.exportCodingResultsAggregated(
         workspace_id,
@@ -2584,7 +2584,7 @@ export class WorkspaceCodingController {
         includeModalValueParam,
         authToken || '',
         req,
-        onlyManualCodingParam
+        excludeAutoCodedParam
       );
 
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -2629,6 +2629,12 @@ export class WorkspaceCodingController {
     type: Boolean,
     description: 'Use pseudo coder names for double-coding (always K1 and K2)'
   })
+  @ApiQuery({
+    name: 'excludeAutoCoded',
+    required: false,
+    type: Boolean,
+    description: 'Exclude automatically coded variables, limiting export to manually coded (CODING_INCOMPLETE) variables only. Default: false'
+  })
   @ApiOkResponse({
     description: 'Coding results by coder exported as Excel',
     content: {
@@ -2648,14 +2654,16 @@ export class WorkspaceCodingController {
       @Query('includeReplayUrl') includeReplayUrl?: string,
       @Query('authToken') authToken?: string,
       @Query('anonymizeCoders') anonymizeCoders?: string,
-      @Query('usePseudoCoders') usePseudoCoders?: string
+      @Query('usePseudoCoders') usePseudoCoders?: string,
+      @Query('excludeAutoCoded') excludeAutoCoded?: string
   ): Promise<void> {
     try {
       const outputCommentsParam = outputCommentsInsteadOfCodes === 'true';
       const includeReplayUrlParam = includeReplayUrl === 'true';
       const anonymizeCodersParam = anonymizeCoders === 'true';
       const usePseudoCodersParam = usePseudoCoders === 'true';
-      const buffer = await this.codingExportService.exportCodingResultsByCoder(workspace_id, outputCommentsParam, includeReplayUrlParam, anonymizeCodersParam, usePseudoCodersParam, authToken || '', req);
+      const excludeAutoCodedParam = excludeAutoCoded === 'true';
+      const buffer = await this.codingExportService.exportCodingResultsByCoder(workspace_id, outputCommentsParam, includeReplayUrlParam, anonymizeCodersParam, usePseudoCodersParam, authToken || '', req, excludeAutoCodedParam);
 
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       res.setHeader('Content-Disposition', `attachment; filename=coding-results-by-coder-${new Date().toISOString().slice(0, 10)}.xlsx`);
@@ -2717,6 +2725,12 @@ export class WorkspaceCodingController {
     type: Boolean,
     description: 'Use pseudo coder names for double-coding (always K1 and K2)'
   })
+  @ApiQuery({
+    name: 'excludeAutoCoded',
+    required: false,
+    type: Boolean,
+    description: 'Exclude automatically coded variables, limiting export to manually coded (CODING_INCOMPLETE) variables only. Default: false'
+  })
   @ApiOkResponse({
     description: 'Coding results by variable exported as Excel',
     content: {
@@ -2739,7 +2753,8 @@ export class WorkspaceCodingController {
       @Query('includeReplayUrl') includeReplayUrl?: string,
       @Query('authToken') authToken?: string,
       @Query('anonymizeCoders') anonymizeCoders?: string,
-      @Query('usePseudoCoders') usePseudoCoders?: string
+      @Query('usePseudoCoders') usePseudoCoders?: string,
+      @Query('excludeAutoCoded') excludeAutoCoded?: string
   ): Promise<void> {
     try {
       const includeModal = includeModalValue === 'true';
@@ -2749,7 +2764,8 @@ export class WorkspaceCodingController {
       const includeReplayUrlParam = includeReplayUrl === 'true';
       const anonymizeCodersParam = anonymizeCoders === 'true';
       const usePseudoCodersParam = usePseudoCoders === 'true';
-      const buffer = await this.codingExportService.exportCodingResultsByVariable(workspace_id, includeModal, includeDouble, includeCommentsParam, outputCommentsParam, includeReplayUrlParam, anonymizeCodersParam, usePseudoCodersParam, authToken || '', req); res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      const excludeAutoCodedParam = excludeAutoCoded === 'true';
+      const buffer = await this.codingExportService.exportCodingResultsByVariable(workspace_id, includeModal, includeDouble, includeCommentsParam, outputCommentsParam, includeReplayUrlParam, anonymizeCodersParam, usePseudoCodersParam, authToken || '', req, excludeAutoCodedParam); res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       res.setHeader('Content-Disposition', `attachment; filename=coding-results-by-variable-${new Date().toISOString().slice(0, 10)}.xlsx`);
       res.send(buffer);
     } catch (error) {
@@ -2791,6 +2807,12 @@ export class WorkspaceCodingController {
     type: Boolean,
     description: 'Use pseudo coder names for double-coding (always K1 and K2)'
   })
+  @ApiQuery({
+    name: 'excludeAutoCoded',
+    required: false,
+    type: Boolean,
+    description: 'Exclude automatically coded variables, limiting export to manually coded (CODING_INCOMPLETE) variables only. Default: false'
+  })
   @ApiOkResponse({
     description: 'Detailed coding results exported as CSV',
     content: {
@@ -2810,14 +2832,16 @@ export class WorkspaceCodingController {
       @Query('includeReplayUrl') includeReplayUrl?: string,
       @Query('authToken') authToken?: string,
       @Query('anonymizeCoders') anonymizeCoders?: string,
-      @Query('usePseudoCoders') usePseudoCoders?: string
+      @Query('usePseudoCoders') usePseudoCoders?: string,
+      @Query('excludeAutoCoded') excludeAutoCoded?: string
   ): Promise<void> {
     try {
       const outputCommentsParam = outputCommentsInsteadOfCodes === 'true';
       const includeReplayUrlParam = includeReplayUrl === 'true';
       const anonymizeCodersParam = anonymizeCoders === 'true';
       const usePseudoCodersParam = usePseudoCoders === 'true';
-      const buffer = await this.codingExportService.exportCodingResultsDetailed(workspace_id, outputCommentsParam, includeReplayUrlParam, anonymizeCodersParam, usePseudoCodersParam, authToken || '', req);
+      const excludeAutoCodedParam = excludeAutoCoded === 'true';
+      const buffer = await this.codingExportService.exportCodingResultsDetailed(workspace_id, outputCommentsParam, includeReplayUrlParam, anonymizeCodersParam, usePseudoCodersParam, authToken || '', req, excludeAutoCodedParam);
 
       res.setHeader('Content-Type', 'text/csv');
       res.setHeader('Content-Disposition', `attachment; filename=coding-results-detailed-${new Date().toISOString().slice(0, 10)}.csv`);
@@ -2843,6 +2867,12 @@ export class WorkspaceCodingController {
     type: Boolean,
     description: 'Use pseudo coder names for double-coding (always K1 and K2)'
   })
+  @ApiQuery({
+    name: 'excludeAutoCoded',
+    required: false,
+    type: Boolean,
+    description: 'Exclude automatically coded variables, limiting export to manually coded (CODING_INCOMPLETE) variables only. Default: false'
+  })
   @ApiOkResponse({
     description: 'Coding times report exported as Excel',
     content: {
@@ -2858,12 +2888,14 @@ export class WorkspaceCodingController {
     @WorkspaceId() workspace_id: number,
       @Res() res: Response,
       @Query('anonymizeCoders') anonymizeCoders?: string,
-      @Query('usePseudoCoders') usePseudoCoders?: string
+      @Query('usePseudoCoders') usePseudoCoders?: string,
+      @Query('excludeAutoCoded') excludeAutoCoded?: string
   ): Promise<void> {
     try {
       const anonymizeCodersParam = anonymizeCoders === 'true';
       const usePseudoCodersParam = usePseudoCoders === 'true';
-      const buffer = await this.codingExportService.exportCodingTimesReport(workspace_id, anonymizeCodersParam, usePseudoCodersParam);
+      const excludeAutoCodedParam = excludeAutoCoded === 'true';
+      const buffer = await this.codingExportService.exportCodingTimesReport(workspace_id, anonymizeCodersParam, usePseudoCodersParam, excludeAutoCodedParam);
 
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       res.setHeader('Content-Disposition', `attachment; filename=coding-times-report-${new Date().toISOString().slice(0, 10)}.xlsx`);
