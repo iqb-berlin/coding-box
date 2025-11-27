@@ -198,6 +198,8 @@
     },
     "export-options-title": "Exportoptionen",
     "export-options": {
+      "only-manual-coding": "Nur manuell zu kodierende Variablen",
+      "only-manual-coding-tooltip": "Exportiert nur Variablen, die manuell kodiert werden sollen (CODING_INCOMPLETE Variablen). Diese Option ist standardmäßig aktiviert.",
       "include-modal-value": "Füge Modalwerte hinzu",
       "include-modal-value-tooltip": "Es werden zwei Spalten hinzugefügt: Häufigster Wert und Anzahl der Abweichungen davon.",
       "include-double-coded": "Füge Doppelkodierung-Indikator hinzu",

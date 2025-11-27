@@ -50,6 +50,7 @@ export class ExportComponent {
   anonymizeCoders = false;
   usePseudoCoders = false;
   doubleCodingMethod: 'new-row-per-variable' | 'new-column-per-coder' | 'most-frequent' = 'most-frequent';
+  onlyManualCoding = true;
 
   exportFormats = [
     {
@@ -78,6 +79,21 @@ export class ExportComponent {
       description: this.translateService.instant('ws-admin.export-formats.coding-times-description')
     }
   ];
+
+  onFormatChange(): void {
+    this.clearReplayUrlIfNeeded();
+  }
+
+  onDoubleCodingMethodChange(): void {
+    this.clearReplayUrlIfNeeded();
+  }
+
+  private clearReplayUrlIfNeeded(): void {
+    if (this.selectedFormat === 'coding-times' ||
+        (this.selectedFormat === 'aggregated' && this.doubleCodingMethod === 'new-column-per-coder')) {
+      this.includeReplayUrl = false;
+    }
+  }
 
   onExport(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
@@ -117,13 +133,14 @@ export class ExportComponent {
           exportMethod = this.backendService.exportCodingResultsAggregated(
             workspaceId,
             this.outputCommentsInsteadOfCodes,
-            this.includeReplayUrl,
+            this.doubleCodingMethod === 'new-row-per-variable' ? this.includeReplayUrl : false,
             this.anonymizeCoders,
             this.usePseudoCoders,
             this.doubleCodingMethod,
             this.includeComments,
             this.includeModalValue,
-            authToken
+            authToken,
+            this.onlyManualCoding
           );
           filename = `coding-results-aggregated-${new Date().toISOString().slice(0, 10)}.xlsx`;
           break;

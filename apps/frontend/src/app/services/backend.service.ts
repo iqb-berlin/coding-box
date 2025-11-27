@@ -924,6 +924,8 @@ export class BackendService {
     if (unitName) {
       params = params.set('unitName', unitName);
     }
+    // Add cache-busting parameter to ensure fresh data after job definition changes
+    params = params.set('_t', Date.now().toString());
     return this.http.get<{ unitName: string; variableId: string; responseCount: number }[]>(url, { params });
   }
 
@@ -1237,145 +1239,127 @@ export class BackendService {
 
   exportCodingResultsAggregated(
     workspaceId: number,
-    outputCommentsInsteadOfCodes = false,
-    includeReplayUrl = false,
-    anonymizeCoders = false,
-    usePseudoCoders = false,
-    doubleCodingMethod: 'new-row-per-variable' | 'new-column-per-coder' | 'most-frequent' = 'most-frequent',
-    includeComments = false,
-    includeModalValue = false,
-    authToken = ''
+    outputCommentsInsteadOfCodes: boolean,
+    includeReplayUrl: boolean,
+    anonymizeCoders: boolean,
+    usePseudoCoders: boolean,
+    doubleCodingMethod: string,
+    includeComments: boolean,
+    includeModalValue: boolean,
+    authToken: string,
+    onlyManualCoding: boolean
   ): Observable<Blob> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/aggregated`;
-    let params = new HttpParams();
-    if (outputCommentsInsteadOfCodes) {
-      params = params.set('outputCommentsInsteadOfCodes', 'true');
-    }
-    if (includeReplayUrl) {
-      params = params.set('includeReplayUrl', 'true');
-    }
-    if (anonymizeCoders) {
-      params = params.set('anonymizeCoders', 'true');
-    }
-    if (usePseudoCoders) {
-      params = params.set('usePseudoCoders', 'true');
-    }
-    if (doubleCodingMethod) {
-      params = params.set('doubleCodingMethod', doubleCodingMethod);
-    }
-    if (includeComments) {
-      params = params.set('includeComments', 'true');
-    }
-    if (includeModalValue) {
-      params = params.set('includeModalValue', 'true');
-    }
+    let params = new HttpParams()
+      .set('outputCommentsInsteadOfCodes', String(outputCommentsInsteadOfCodes))
+      .set('includeReplayUrl', String(includeReplayUrl))
+      .set('anonymizeCoders', String(anonymizeCoders))
+      .set('usePseudoCoders', String(usePseudoCoders))
+      .set('doubleCodingMethod', doubleCodingMethod)
+      .set('includeComments', String(includeComments))
+      .set('includeModalValue', String(includeModalValue))
+      .set('onlyManualCoding', String(onlyManualCoding));
     if (authToken) {
       params = params.set('authToken', authToken);
     }
     return this.http.get(url, {
+      params,
       responseType: 'blob',
-      headers: this.authHeader,
-      params
+      headers: this.authHeader
     });
   }
 
-  exportCodingResultsByCoder(workspaceId: number, outputCommentsInsteadOfCodes = false, includeReplayUrl = false, anonymizeCoders = false, usePseudoCoders = false, authToken = ''): Observable<Blob> {
+  exportCodingResultsByCoder(
+    workspaceId: number,
+    outputCommentsInsteadOfCodes: boolean,
+    includeReplayUrl: boolean,
+    anonymizeCoders: boolean,
+    usePseudoCoders: boolean,
+    authToken: string
+  ): Observable<Blob> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/by-coder`;
-    let params = new HttpParams();
-    if (outputCommentsInsteadOfCodes) {
-      params = params.set('outputCommentsInsteadOfCodes', 'true');
-    }
-    if (includeReplayUrl) {
-      params = params.set('includeReplayUrl', 'true');
-    }
-    if (anonymizeCoders) {
-      params = params.set('anonymizeCoders', 'true');
-    }
-    if (usePseudoCoders) {
-      params = params.set('usePseudoCoders', 'true');
-    }
+    let params = new HttpParams()
+      .set('outputCommentsInsteadOfCodes', String(outputCommentsInsteadOfCodes))
+      .set('includeReplayUrl', String(includeReplayUrl))
+      .set('anonymizeCoders', String(anonymizeCoders))
+      .set('usePseudoCoders', String(usePseudoCoders));
     if (authToken) {
       params = params.set('authToken', authToken);
     }
     return this.http.get(url, {
+      params,
       responseType: 'blob',
-      headers: this.authHeader,
-      params
+      headers: this.authHeader
     });
   }
 
-  exportCodingResultsByVariable(workspaceId: number, includeModalValue = false, includeDoubleCoded = false, includeComments = false, outputCommentsInsteadOfCodes = false, includeReplayUrl = false, anonymizeCoders = false, usePseudoCoders = false, authToken = ''): Observable<Blob> {
+  exportCodingResultsByVariable(
+    workspaceId: number,
+    includeModalValue: boolean,
+    includeDoubleCoded: boolean,
+    includeComments: boolean,
+    outputCommentsInsteadOfCodes: boolean,
+    includeReplayUrl: boolean,
+    anonymizeCoders: boolean,
+    usePseudoCoders: boolean,
+    authToken: string
+  ): Observable<Blob> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/by-variable`;
-    let params = new HttpParams();
-    if (includeModalValue) {
-      params = params.set('includeModalValue', 'true');
-    }
-    if (includeDoubleCoded) {
-      params = params.set('includeDoubleCoded', 'true');
-    }
-    if (includeComments) {
-      params = params.set('includeComments', 'true');
-    }
-    if (outputCommentsInsteadOfCodes) {
-      params = params.set('outputCommentsInsteadOfCodes', 'true');
-    }
-    if (includeReplayUrl) {
-      params = params.set('includeReplayUrl', 'true');
-    }
-    if (anonymizeCoders) {
-      params = params.set('anonymizeCoders', 'true');
-    }
-    if (usePseudoCoders) {
-      params = params.set('usePseudoCoders', 'true');
-    }
+    let params = new HttpParams()
+      .set('includeModalValue', String(includeModalValue))
+      .set('includeDoubleCoded', String(includeDoubleCoded))
+      .set('includeComments', String(includeComments))
+      .set('outputCommentsInsteadOfCodes', String(outputCommentsInsteadOfCodes))
+      .set('includeReplayUrl', String(includeReplayUrl))
+      .set('anonymizeCoders', String(anonymizeCoders))
+      .set('usePseudoCoders', String(usePseudoCoders));
     if (authToken) {
       params = params.set('authToken', authToken);
     }
     return this.http.get(url, {
+      params,
       responseType: 'blob',
-      headers: this.authHeader,
-      params
+      headers: this.authHeader
     });
   }
 
-  exportCodingResultsDetailed(workspaceId: number, outputCommentsInsteadOfCodes = false, includeReplayUrl = false, anonymizeCoders = false, usePseudoCoders = false, authToken = ''): Observable<Blob> {
+  exportCodingResultsDetailed(
+    workspaceId: number,
+    outputCommentsInsteadOfCodes: boolean,
+    includeReplayUrl: boolean,
+    anonymizeCoders: boolean,
+    usePseudoCoders: boolean,
+    authToken: string
+  ): Observable<Blob> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/detailed`;
-    let params = new HttpParams();
-    if (outputCommentsInsteadOfCodes) {
-      params = params.set('outputCommentsInsteadOfCodes', 'true');
-    }
-    if (includeReplayUrl) {
-      params = params.set('includeReplayUrl', 'true');
-    }
-    if (anonymizeCoders) {
-      params = params.set('anonymizeCoders', 'true');
-    }
-    if (usePseudoCoders) {
-      params = params.set('usePseudoCoders', 'true');
-    }
+    let params = new HttpParams()
+      .set('outputCommentsInsteadOfCodes', String(outputCommentsInsteadOfCodes))
+      .set('includeReplayUrl', String(includeReplayUrl))
+      .set('anonymizeCoders', String(anonymizeCoders))
+      .set('usePseudoCoders', String(usePseudoCoders));
     if (authToken) {
       params = params.set('authToken', authToken);
     }
     return this.http.get(url, {
+      params,
       responseType: 'blob',
-      headers: this.authHeader,
-      params
+      headers: this.authHeader
     });
   }
 
-  exportCodingTimesReport(workspaceId: number, anonymizeCoders = false, usePseudoCoders = false): Observable<Blob> {
+  exportCodingTimesReport(
+    workspaceId: number,
+    anonymizeCoders: boolean,
+    usePseudoCoders: boolean
+  ): Observable<Blob> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/coding-times`;
-    let params = new HttpParams();
-    if (anonymizeCoders) {
-      params = params.set('anonymizeCoders', 'true');
-    }
-    if (usePseudoCoders) {
-      params = params.set('usePseudoCoders', 'true');
-    }
+    const params = new HttpParams()
+      .set('anonymizeCoders', String(anonymizeCoders))
+      .set('usePseudoCoders', String(usePseudoCoders));
     return this.http.get(url, {
+      params,
       responseType: 'blob',
-      headers: this.authHeader,
-      params
+      headers: this.authHeader
     });
   }
 }

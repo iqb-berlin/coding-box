@@ -9,6 +9,7 @@ import { statusStringToNumber } from '../utils/response-status-converter';
 import { CacheService } from '../../cache/cache.service';
 import { MissingsProfilesService } from './missings-profiles.service';
 import { WorkspaceFilesService } from './workspace-files.service';
+import { CodingListService } from './coding-list.service';
 import FileUpload from '../entities/file_upload.entity';
 import Persons from '../entities/persons.entity';
 import { Unit } from '../entities/unit.entity';
@@ -41,7 +42,8 @@ export class CodingExportService {
     private codingJobUnitRepository: Repository<CodingJobUnit>,
     private cacheService: CacheService,
     private missingsProfilesService: MissingsProfilesService,
-    private workspaceFilesService: WorkspaceFilesService
+    private workspaceFilesService: WorkspaceFilesService,
+    private codingListService: CodingListService
   ) {}
 
   private generateReplayUrl(
@@ -145,232 +147,205 @@ export class CodingExportService {
     includeComments = false,
     includeModalValue = false,
     authToken = '',
-    req?: Request
+    req?: Request,
+    onlyManualCoding = true
   ): Promise<Buffer> {
-    this.logger.log(`Exporting aggregated coding results for workspace ${workspaceId} with method: ${doubleCodingMethod}${outputCommentsInsteadOfCodes ? ' with comments instead of codes' : ''}${includeReplayUrl ? ' with replay URLs' : ''}${anonymizeCoders ? ' with anonymized coders' : ''}`);
+    this.logger.log(`Exporting aggregated coding results for workspace ${workspaceId} with method: ${doubleCodingMethod}${outputCommentsInsteadOfCodes ? ' with comments instead of codes' : ''}${includeReplayUrl ? ' with replay URLs' : ''}${anonymizeCoders ? ' with anonymized coders' : ''}${onlyManualCoding ? ' (manual coding only)' : ''}`);
 
     // Route to appropriate export method based on doubleCodingMethod
     if (doubleCodingMethod === 'new-row-per-variable') {
-      return this.exportAggregatedNewRowPerVariable(workspaceId, outputCommentsInsteadOfCodes, includeReplayUrl, anonymizeCoders, usePseudoCoders, includeComments, includeModalValue, authToken, req);
+      return this.exportAggregatedNewRowPerVariable(workspaceId, outputCommentsInsteadOfCodes, includeReplayUrl, anonymizeCoders, usePseudoCoders, includeComments, includeModalValue, authToken, req, onlyManualCoding);
     } if (doubleCodingMethod === 'new-column-per-coder') {
-      return this.exportAggregatedNewColumnPerCoder(workspaceId, outputCommentsInsteadOfCodes, includeReplayUrl, anonymizeCoders, usePseudoCoders, includeComments, includeModalValue, authToken, req);
+      return this.exportAggregatedNewColumnPerCoder(workspaceId, outputCommentsInsteadOfCodes, anonymizeCoders, usePseudoCoders, includeComments, includeModalValue, onlyManualCoding);
     }
 
-    // Default: most-frequent method (existing logic)
-    const BATCH_SIZE = parseInt(process.env.EXPORT_AGGREGATED_BATCH_SIZE || '10000', 10);
+    // Default: most-frequent method - aggregates multiple coders' codes and outputs modal value
+    this.logger.log(`Exporting aggregated results with most-frequent method for workspace ${workspaceId}`);
 
     try {
-      const unitVariables = await this.workspaceFilesService.getUnitVariableMap(workspaceId);
-      const validVariableSets = new Map<string, Set<string>>();
-      unitVariables.forEach((vars: Set<string>, unitName: string) => {
-        validVariableSets.set(unitName.toUpperCase(), vars);
-      });
-
-      const validUnitNames = Array.from(validVariableSets.keys());
-      const totalCount = await this.responseRepository
-        .createQueryBuilder('response')
-        .leftJoin('response.unit', 'unit')
-        .leftJoin('unit.booklet', 'booklet')
-        .leftJoin('booklet.person', 'person')
-        .where('person.workspace_id = :workspaceId', { workspaceId })
-        .andWhere('UPPER(unit.name) IN (:...validUnitNames)', { validUnitNames })
-        .andWhere('(response.code_v1 IS NOT NULL OR response.code_v2 IS NOT NULL OR response.code_v3 IS NOT NULL)')
-        .getCount();
-
-      if (totalCount === 0) {
-        throw new Error('No coded responses found for this workspace');
+      let manualCodingVariableSet: Set<string> | null = null;
+      if (onlyManualCoding) {
+        const codingListVariables = await this.codingListService.getCodingListVariables(workspaceId);
+        if (codingListVariables.length === 0) {
+          throw new Error('No manual coding variables found in the coding list for this workspace');
+        }
+        this.logger.log(`Found ${codingListVariables.length} unique unit-variable combinations for workspace ${workspaceId}`);
+        manualCodingVariableSet = new Set<string>();
+        codingListVariables.forEach(item => {
+          manualCodingVariableSet.add(`${item.unitName}|${item.variableId}`);
+        });
       }
-
-      this.logger.log(`Processing ${totalCount} coded responses in batches of ${BATCH_SIZE} for workspace ${workspaceId}`);
 
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet('Coding Results');
 
-      const testPersonMap = new Map<string, Map<string, { code: number | null; score: number | null }>>();
-      const testPersonComments = new Map<string, Map<string, string | null>>();
-      const variableSet = new Set<string>();
+      // Load all coding job units with their relations
+      const codingJobUnits = await this.codingJobUnitRepository.find({
+        where: {
+          coding_job: {
+            workspace_id: workspaceId
+          }
+        },
+        relations: [
+          'coding_job',
+          'coding_job.codingJobCoders',
+          'coding_job.codingJobCoders.user',
+          'response',
+          'response.unit',
+          'response.unit.booklet',
+          'response.unit.booklet.bookletinfo',
+          'response.unit.booklet.person'
+        ]
+      });
+
+      if (codingJobUnits.length === 0) {
+        throw new Error('No coding jobs found for this workspace');
+      }
+
+      // Data structures for aggregation
+      // Map: testPersonKey -> variableKey -> array of codes from different coders
+      const testPersonVariableCodes = new Map<string, Map<string, number[]>>();
+      const testPersonVariableComments = new Map<string, Map<string, string[]>>();
       const testPersonList: string[] = [];
+      const variableSet = new Set<string>();
       const personGroups = new Map<string, string>();
       const personBooklets = new Map<string, string>();
       const variableUnitNames = new Map<string, string>();
 
-      if (outputCommentsInsteadOfCodes) {
-        const codingJobUnits = await this.codingJobUnitRepository.find({
-          where: {
-            coding_job: {
-              workspace_id: workspaceId
-            }
-          },
-          relations: [
-            'response',
-            'response.unit',
-            'response.unit.booklet',
-            'response.unit.booklet.person'
-          ]
-        });
+      // Process all coding job units and collect codes from different coders
+      for (const unit of codingJobUnits) {
+        const person = unit.response?.unit?.booklet?.person;
+        if (!person) continue;
 
-        for (const unit of codingJobUnits) {
-          if (!unit.notes) continue;
+        const testPersonKey = `${person.login}_${person.code}`;
+        const variableId = unit.variable_id;
+        const unitName = unit.unit_name;
 
-          const person = unit.response?.unit?.booklet?.person;
-          const testPersonKey = `${person?.login || ''}_${person?.code || ''}`;
-          const unitId = unit.response?.unit?.id;
-          const variableId = unit.variable_id;
-          const compositeVariableKey = `${unitId}_${variableId}`;
+        if (!unitName || !variableId) continue;
 
-          if (!testPersonComments.has(testPersonKey)) {
-            testPersonComments.set(testPersonKey, new Map());
+        // Apply manual coding filter
+        if (manualCodingVariableSet) {
+          const variableKey = `${unitName}|${variableId}`;
+          if (!manualCodingVariableSet.has(variableKey)) {
+            continue;
           }
-          testPersonComments.get(testPersonKey)!.set(compositeVariableKey, unit.notes);
+        }
+
+        const compositeVariableKey = `${unitName}_${variableId}`;
+
+        // Get the code from this coder
+        const code = unit.response?.code_v3 ?? unit.response?.code_v2 ?? unit.response?.code_v1 ?? null;
+        const comment = unit.notes || null;
+
+        // Initialize data structures
+        if (!testPersonVariableCodes.has(testPersonKey)) {
+          testPersonVariableCodes.set(testPersonKey, new Map());
+          testPersonVariableComments.set(testPersonKey, new Map());
+          testPersonList.push(testPersonKey);
+        }
+
+        if (!testPersonVariableCodes.get(testPersonKey)!.has(compositeVariableKey)) {
+          testPersonVariableCodes.get(testPersonKey)!.set(compositeVariableKey, []);
+          testPersonVariableComments.get(testPersonKey)!.set(compositeVariableKey, []);
+        }
+
+        // Collect code from this coder
+        if (code !== null && code !== undefined) {
+          testPersonVariableCodes.get(testPersonKey)!.get(compositeVariableKey)!.push(code);
+        }
+
+        // Collect comment if present
+        if (comment) {
+          const coderName = unit.coding_job?.codingJobCoders?.[0]?.user?.username || `Job ${unit.coding_job_id}`;
+          testPersonVariableComments.get(testPersonKey)!.get(compositeVariableKey)!.push(`${coderName}: ${comment}`);
+        }
+
+        variableSet.add(compositeVariableKey);
+
+        // Cache metadata
+        if (!personGroups.has(testPersonKey)) {
+          personGroups.set(testPersonKey, person.group || '');
+        }
+        if (!personBooklets.has(testPersonKey)) {
+          const bookletName = unit.response?.unit?.booklet?.bookletinfo?.name || '';
+          personBooklets.set(testPersonKey, bookletName);
+        }
+        if (!variableUnitNames.has(compositeVariableKey)) {
+          variableUnitNames.set(compositeVariableKey, unitName || '');
         }
       }
 
-      let processedCount = 0;
-      let offset = 0;
+      this.logger.log(`Processed ${codingJobUnits.length} coding job units. Creating Excel file with ${testPersonList.length} test persons and ${variableSet.size} variables.`);
 
-      while (offset < totalCount) {
-        const batchSize = Math.min(BATCH_SIZE, totalCount - offset);
+      // Calculate modal values for each person-variable combination
+      const testPersonModalValues = new Map<string, Map<string, { modalValue: number | null; deviationCount: number }>>();
 
-        this.logger.log(`Processing batch ${Math.floor(offset / BATCH_SIZE) + 1}/${Math.ceil(totalCount / BATCH_SIZE)} (${batchSize} responses)`);
+      for (const testPersonKey of testPersonList) {
+        testPersonModalValues.set(testPersonKey, new Map());
+        const variableCodes = testPersonVariableCodes.get(testPersonKey)!;
 
-        const batchResponses = await this.responseRepository
-          .createQueryBuilder('response')
-          .leftJoin('response.unit', 'unit')
-          .leftJoin('unit.booklet', 'booklet')
-          .leftJoin('booklet.bookletinfo', 'bookletinfo')
-          .leftJoin('booklet.person', 'person')
-          .select([
-            'response.id',
-            'response.variableid',
-            `CASE
-              WHEN response.code_v3 IS NOT NULL THEN response.code_v3
-              WHEN response.code_v2 IS NOT NULL THEN response.code_v2
-              ELSE response.code_v1
-            END AS latest_code`,
-            `CASE
-              WHEN response.code_v3 IS NOT NULL THEN response.score_v3
-              WHEN response.code_v2 IS NOT NULL THEN response.score_v2
-              ELSE response.score_v1
-            END AS latest_score`,
-            'unit.id',
-            'unit.name',
-            'bookletinfo.name',
-            'person.login',
-            'person.code',
-            'person.group'
-          ])
-          .where('person.workspace_id = :workspaceId', { workspaceId })
-          .andWhere('(response.code_v1 IS NOT NULL OR response.code_v2 IS NOT NULL OR response.code_v3 IS NOT NULL)')
-          .orderBy('response.id', 'ASC')
-          .skip(offset)
-          .take(batchSize)
-          .getRawMany();
-
-        // Filter responses to only include valid unit-variable combinations
-        const filteredBatchResponses = batchResponses.filter(response => {
-          const unitName = response.unit_name?.toUpperCase();
-          const validVars = validVariableSets.get(unitName || '');
-          return validVars?.has(response.variableid);
-        });
-
-        // Process this batch
-        for (const response of filteredBatchResponses) {
-          const testPersonKey = `${response.person_login}_${response.person_code}`;
-          const variableId = response.variableid;
-          const unitId = response.unit_id;
-
-          // Skip if unit ID is missing
-          if (!unitId) continue;
-
-          const compositeVariableKey = `${unitId}_${variableId}`;
-
-          // Cache person group and booklet
-          if (!personGroups.has(testPersonKey)) {
-            personGroups.set(testPersonKey, response.person_group || '');
+        for (const [variableKey, codes] of variableCodes.entries()) {
+          if (codes.length > 0) {
+            const modalResult = this.calculateModalValue(codes);
+            testPersonModalValues.get(testPersonKey)!.set(variableKey, modalResult);
+          } else {
+            testPersonModalValues.get(testPersonKey)!.set(variableKey, { modalValue: null, deviationCount: 0 });
           }
-          if (!personBooklets.has(testPersonKey)) {
-            personBooklets.set(testPersonKey, response.booklet_name || '');
-          }
-
-          // Cache unit name for this variable
-          if (!variableUnitNames.has(compositeVariableKey)) {
-            variableUnitNames.set(compositeVariableKey, response.unit_name || '');
-          }
-
-          if (!testPersonMap.has(testPersonKey)) {
-            testPersonMap.set(testPersonKey, new Map());
-            testPersonList.push(testPersonKey);
-          }
-
-          testPersonMap.get(testPersonKey)!.set(compositeVariableKey, {
-            code: response.latest_code,
-            score: response.latest_score
-          });
-          variableSet.add(compositeVariableKey);
-        }
-
-        processedCount += batchResponses.length;
-        offset += batchSize;
-
-        if (global.gc) {
-          global.gc();
         }
       }
 
-      this.logger.log(`Processed ${processedCount} responses total. Creating Excel file with ${testPersonList.length} test persons and ${variableSet.size} variables.`);
-
+      // Build headers
       const variables = Array.from(variableSet).sort();
-      const baseHeaders = ['Test Person Login', 'Test Person Code', 'Group'];
+      const baseHeaders = ['Test Person Login', 'Test Person Code', 'Test Person Group'];
       if (includeReplayUrl) {
         baseHeaders.push('Replay URL');
       }
+
       const headers = [...baseHeaders, ...variables];
+
       worksheet.columns = headers.map(header => ({ header, key: header, width: header === 'Replay URL' ? 60 : 15 }));
 
+      // Create rows
       for (const testPersonKey of testPersonList) {
         const [login, code] = testPersonKey.split('_');
-        const personData = testPersonMap.get(testPersonKey)!;
         const group = personGroups.get(testPersonKey) || '';
         const bookletName = personBooklets.get(testPersonKey) || '';
+        const modalValues = testPersonModalValues.get(testPersonKey)!;
+        const comments = testPersonVariableComments.get(testPersonKey)!;
 
         const row: Record<string, string | number | null> = {
           'Test Person Login': login,
           'Test Person Code': code,
-          Group: group
+          'Test Person Group': group
         };
 
-        // Add replay URL if requested - use first variable with data
         if (includeReplayUrl && req) {
           let replayUrl = '';
           for (const variable of variables) {
-            if (personData.has(variable)) {
-              const [varId] = variable.split('_').slice(1);
+            if (modalValues.has(variable)) {
+              const variableId = variable.split('_').slice(1).join('_');
               const unitName = variableUnitNames.get(variable) || '';
-              replayUrl = this.generateReplayUrl(req, login, code, group, bookletName, unitName, varId, authToken);
+              replayUrl = this.generateReplayUrl(req, login, code, group, bookletName, unitName, variableId, authToken);
               break;
             }
           }
           row['Replay URL'] = replayUrl;
         }
 
+        // Add modal values or comments for each variable
         for (const variable of variables) {
-          const coding = personData.get(variable);
+          const modalData = modalValues.get(variable);
+          const variableComments = comments.get(variable);
+
           if (outputCommentsInsteadOfCodes) {
-            const comments = testPersonComments.get(testPersonKey);
-            const comment = comments?.get(variable);
-            row[variable] = comment || '';
+            row[variable] = variableComments ? variableComments.join(' | ') : '';
           } else {
-            row[variable] = coding?.code ?? '';
+            row[variable] = modalData?.modalValue ?? '';
           }
         }
 
         worksheet.addRow(row);
       }
-
-      // Clear memory-intensive data structures
-      testPersonMap.clear();
-      variableSet.clear();
-      personGroups.clear();
 
       // Style the header row
       worksheet.getRow(1).font = { bold: true };
@@ -383,8 +358,8 @@ export class CodingExportService {
       const buffer = await workbook.xlsx.writeBuffer();
       return Buffer.from(buffer);
     } catch (error) {
-      this.logger.error(`Error exporting aggregated coding results: ${error.message}`, error.stack);
-      throw new Error(`Could not export aggregated coding results: ${error.message}. This may be due to memory constraints with large datasets. Consider using smaller batch sizes or variable-specific exports.`);
+      this.logger.error(`Error exporting aggregated coding results (most-frequent): ${error.message}`, error.stack);
+      throw new Error(`Could not export aggregated coding results: ${error.message}`);
     }
   }
 
@@ -397,7 +372,8 @@ export class CodingExportService {
     includeComments: boolean,
     includeModalValue: boolean,
     authToken: string,
-    req?: Request
+    req?: Request,
+    onlyManualCoding = true
   ): Promise<Buffer> {
     this.logger.log(`Exporting aggregated results with new-row-per-variable method for workspace ${workspaceId}`);
 
@@ -406,10 +382,22 @@ export class CodingExportService {
     const COMMENTS_HEADER = 'Kommentare';
 
     try {
+      let manualCodingVariableSet: Set<string> | null = null;
+      if (onlyManualCoding) {
+        const codingListVariables = await this.codingListService.getCodingListVariables(workspaceId);
+        if (codingListVariables.length === 0) {
+          throw new Error('No manual coding variables found in the coding list for this workspace');
+        }
+        this.logger.log(`Found ${codingListVariables.length} unique unit-variable combinations for workspace ${workspaceId}`);
+        manualCodingVariableSet = new Set<string>();
+        codingListVariables.forEach(item => {
+          manualCodingVariableSet.add(`${item.unitName}|${item.variableId}`);
+        });
+      }
+
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet('Coding Results');
 
-      // Get all coding job units with their coders and responses
       const codingJobUnits = await this.codingJobUnitRepository.find({
         where: {
           coding_job: {
@@ -431,7 +419,6 @@ export class CodingExportService {
         throw new Error('No coding jobs found for this workspace');
       }
 
-      // Structure: testPersonKey_variableKey -> coderName -> { code, score, comment }
       const dataMap = new Map<string, Map<string, { code: number | null; score: number | null; comment: string | null }>>();
       const testPersons = new Set<string>();
       const variables = new Set<string>();
@@ -440,13 +427,11 @@ export class CodingExportService {
       const variableUnitNames = new Map<string, string>();
       const allCoders = new Set<string>();
 
-      // Build coder mapping for anonymization
       let coderMapping: Map<string, string> | null = null;
       if (anonymizeCoders) {
-        coderMapping = this.buildCoderMapping(codingJobUnits);
+        coderMapping = this.buildCoderMapping(codingJobUnits, usePseudoCoders);
       }
 
-      // Process all coding job units
       for (const unit of codingJobUnits) {
         const person = unit.response?.unit?.booklet?.person;
         if (!person) continue;
@@ -454,11 +439,17 @@ export class CodingExportService {
         const testPersonKey = `${person.login}_${person.code}`;
         const variableId = unit.variable_id;
         const unitName = unit.unit_name;
-        const unitId = unit.response?.unit?.id;
 
-        if (!unitId || !variableId) continue;
+        if (!unitName || !variableId) continue;
 
-        const compositeVariableKey = `${unitId}_${variableId}`;
+        if (manualCodingVariableSet) {
+          const variableKey = `${unitName}|${variableId}`;
+          if (!manualCodingVariableSet.has(variableKey)) {
+            continue;
+          }
+        }
+
+        const compositeVariableKey = `${unitName}_${variableId}`;
         const rowKey = `${testPersonKey}_${compositeVariableKey}`;
 
         // Get coder name from the job's assigned coders (take first coder for the job)
@@ -499,10 +490,7 @@ export class CodingExportService {
 
       // Build headers: Base columns + Coders + Optional columns
       const coderList = Array.from(allCoders).sort();
-      const baseHeaders = ['Test Person Login', 'Test Person Code', 'Variable', 'Group'];
-      if (includeReplayUrl) {
-        baseHeaders.push('Replay URL');
-      }
+      const baseHeaders = ['Test Person Login', 'Test Person Code', 'Test Person Group', 'Variable'];
 
       const headers = [...baseHeaders, ...coderList];
 
@@ -511,7 +499,12 @@ export class CodingExportService {
       }
       if (includeComments) {
         headers.push(COMMENTS_HEADER);
-      } worksheet.columns = headers.map(header => ({ header, key: header, width: header === 'Replay URL' ? 60 : 15 }));
+      }
+      if (includeReplayUrl) {
+        headers.push('Replay URL');
+      }
+
+      worksheet.columns = headers.map(header => ({ header, key: header, width: header === 'Replay URL' ? 60 : 15 }));
 
       // Create rows: one row per person-variable combination
       const sortedTestPersons = Array.from(testPersons).sort();
@@ -530,13 +523,12 @@ export class CodingExportService {
 
           const variableId = compositeVariableKey.split('_').slice(1).join('_');
           const unitName = variableUnitNames.get(compositeVariableKey) || '';
-          const rowLabel = `${testPersonKey}_${variableId}`;
 
           const row: Record<string, string | number | null> = {
             'Test Person Login': login,
             'Test Person Code': code,
-            Variable: rowLabel,
-            Group: group
+            'Test Person Group': group,
+            Variable: variableId
           };
 
           // Add replay URL
@@ -602,13 +594,11 @@ export class CodingExportService {
   private async exportAggregatedNewColumnPerCoder(
     workspaceId: number,
     outputCommentsInsteadOfCodes: boolean,
-    includeReplayUrl: boolean,
     anonymizeCoders: boolean,
     usePseudoCoders: boolean,
     includeComments: boolean,
     includeModalValue: boolean,
-    authToken: string,
-    req?: Request
+    onlyManualCoding = true
   ): Promise<Buffer> {
     this.logger.log(`Exporting aggregated results with new-column-per-coder method for workspace ${workspaceId}`);
 
@@ -617,6 +607,21 @@ export class CodingExportService {
     const COMMENTS_HEADER = 'Kommentare';
 
     try {
+      // Get manual coding variables filter if enabled
+      let manualCodingVariableSet: Set<string> | null = null;
+      if (onlyManualCoding) {
+        const codingListVariables = await this.codingListService.getCodingListVariables(workspaceId);
+        if (codingListVariables.length === 0) {
+          throw new Error('No manual coding variables found in the coding list for this workspace');
+        }
+        this.logger.log(`Found ${codingListVariables.length} unique unit-variable combinations for workspace ${workspaceId}`);
+        // Create set of unit-variable combinations
+        manualCodingVariableSet = new Set<string>();
+        codingListVariables.forEach(item => {
+          manualCodingVariableSet.add(`${item.unitName}|${item.variableId}`);
+        });
+      }
+
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet('Coding Results');
 
@@ -654,7 +659,7 @@ export class CodingExportService {
       // Build coder mapping for anonymization
       let coderMapping: Map<string, string> | null = null;
       if (anonymizeCoders) {
-        coderMapping = this.buildCoderMapping(codingJobUnits);
+        coderMapping = this.buildCoderMapping(codingJobUnits, usePseudoCoders);
       }
 
       // Process all coding job units
@@ -665,11 +670,17 @@ export class CodingExportService {
         const testPersonKey = `${person.login}_${person.code}`;
         const variableId = unit.variable_id;
         const unitName = unit.unit_name;
-        const unitId = unit.response?.unit?.id;
 
-        if (!unitId || !variableId) continue;
+        if (!unitName || !variableId) continue;
 
-        const compositeVariableKey = `${unitId}_${variableId}`;
+        if (manualCodingVariableSet) {
+          const variableKey = `${unitName}|${variableId}`;
+          if (!manualCodingVariableSet.has(variableKey)) {
+            continue;
+          }
+        }
+
+        const compositeVariableKey = `${unitName}_${variableId}`;
 
         // Get coder name from the job's assigned coders (take first coder for the job)
         const coder = unit.coding_job?.codingJobCoders?.[0];
@@ -711,19 +722,14 @@ export class CodingExportService {
 
       // Build headers: Base columns + Variable_Coder columns + Optional columns
       const sortedColumns = Array.from(variableCoderColumns).sort();
-      const baseHeaders = ['Test Person Login', 'Test Person Code', 'Group'];
-      if (includeReplayUrl) {
-        baseHeaders.push('Replay URL');
-      }
+      const baseHeaders = ['Test Person Login', 'Test Person Code', 'Test Person Group'];
 
       // Create column labels like "Variablenname_Kodierer"
       const columnLabels = sortedColumns.map(col => {
         const parts = col.split('_');
         const coderName = parts[parts.length - 1];
         const variableKey = parts.slice(0, -1).join('_');
-        const metadata = variableMetadata.get(variableKey);
-        const variableId = metadata?.variableId || variableKey;
-        return `${variableId}_${coderName}`;
+        return `${variableKey}_${coderName}`;
       });
 
       const headers = [...baseHeaders, ...columnLabels];
@@ -741,7 +747,6 @@ export class CodingExportService {
       for (const testPersonKey of sortedTestPersons) {
         const [login, code] = testPersonKey.split('_');
         const group = personGroups.get(testPersonKey) || '';
-        const bookletName = personBooklets.get(testPersonKey) || '';
         const personData = dataMap.get(testPersonKey);
 
         if (!personData || personData.size === 0) continue;
@@ -749,24 +754,8 @@ export class CodingExportService {
         const row: Record<string, string | number | null> = {
           'Test Person Login': login,
           'Test Person Code': code,
-          Group: group
+          'Test Person Group': group
         };
-
-        // Add replay URL (use first variable with data)
-        if (includeReplayUrl && req) {
-          let replayUrl = '';
-          for (const columnKey of sortedColumns) {
-            if (personData.has(columnKey)) {
-              const variableKey = columnKey.split('_').slice(0, -1).join('_');
-              const metadata = variableMetadata.get(variableKey);
-              if (metadata) {
-                replayUrl = this.generateReplayUrl(req, login, code, group, bookletName, metadata.unitName, metadata.variableId, authToken);
-                break;
-              }
-            }
-          }
-          row['Replay URL'] = replayUrl;
-        }
 
         // Add variable-coder data
         const allCodes: number[] = [];
@@ -826,20 +815,24 @@ export class CodingExportService {
     }
   }
 
-  private buildCoderMapping(codingJobUnits: CodingJobUnit[]): Map<string, string> {
+  private buildCoderMapping(codingJobUnits: CodingJobUnit[], usePseudo = false): Map<string, string> {
     const coderMapping = new Map<string, string>();
     const allCoders = new Set<string>();
 
-    // Collect all unique coders
     for (const unit of codingJobUnits) {
       const coder = unit.coding_job?.codingJobCoders?.[0];
       const coderName = coder?.user?.username || `Job ${unit.coding_job_id}`;
       allCoders.add(coderName);
     }
 
-    // Create mapping
-    const sortedCoders = Array.from(allCoders).sort();
-    sortedCoders.forEach((coderName, index) => {
+    let codersList: string[];
+    if (usePseudo) {
+      codersList = Array.from(allCoders).sort();
+    } else {
+      codersList = Array.from(allCoders).sort(() => Math.random() - 0.5);
+    }
+
+    codersList.forEach((coderName, index) => {
       coderMapping.set(coderName, `K${index + 1}`);
     });
 
@@ -851,13 +844,11 @@ export class CodingExportService {
       return { modalValue: 0, deviationCount: 0 };
     }
 
-    // Count occurrences
     const frequency = new Map<number, number>();
     codes.forEach(code => {
       frequency.set(code, (frequency.get(code) || 0) + 1);
     });
 
-    // Find most frequent code
     let maxFrequency = 0;
     const modalCodes: number[] = [];
 
@@ -871,7 +862,6 @@ export class CodingExportService {
       }
     });
 
-    // If tie, pick randomly
     const modalValue = modalCodes[Math.floor(Math.random() * modalCodes.length)];
     const deviationCount = codes.length - maxFrequency;
 
@@ -896,7 +886,6 @@ export class CodingExportService {
         where: { coding_job_id: In(jobIds) }
       });
 
-      // Group variables by job ID
       const variablesByJobId = new Map<number, CodingJobVariable[]>();
       codingJobVariables.forEach(variable => {
         if (!variablesByJobId.has(variable.coding_job_id)) {
@@ -908,7 +897,6 @@ export class CodingExportService {
       const workbook = new ExcelJS.Workbook();
       const coderJobs = new Map<string, CodingJob[]>();
 
-      // Collect all coder names for anonymization mapping
       const allCoderNames = new Set<string>();
       for (const job of codingJobs) {
         for (const jobCoder of job.codingJobCoders) {
@@ -921,12 +909,10 @@ export class CodingExportService {
         }
       }
 
-      // Build coder name mapping if anonymization is enabled
       const coderNameMapping = anonymizeCoders ?
         this.buildCoderNameMapping(Array.from(allCoderNames), usePseudoCoders) :
         null;
 
-      // Create a sheet for each coder
       for (const [coderKey, jobs] of coderJobs) {
         const [coderName] = coderKey.split('_');
         const displayName = anonymizeCoders && coderNameMapping ? coderNameMapping.get(coderName) || coderName : coderName;
@@ -1036,7 +1022,7 @@ export class CodingExportService {
 
         if (variables.length === 0) continue;
 
-        const baseHeaders = ['Test Person Login', 'Test Person Code', 'Group'];
+        const baseHeaders = ['Test Person Login', 'Test Person Code', 'Test Person Group'];
         if (includeReplayUrl) {
           baseHeaders.push('Replay URL');
         }
@@ -1052,7 +1038,7 @@ export class CodingExportService {
           const row: Record<string, string | number | null> = {
             'Test Person Login': login,
             'Test Person Code': code,
-            Group: group
+            'Test Person Group': group
           };
 
           // Add replay URL if requested - use first variable with data
@@ -1265,7 +1251,7 @@ export class CodingExportService {
               coderList;
 
             // Create headers: Test Person Login, Test Person Code, Group, then each coder
-            const baseHeaders = ['Test Person Login', 'Test Person Code', 'Group'];
+            const baseHeaders = ['Test Person Login', 'Test Person Code', 'Test Person Group'];
 
             // Add Replay URL column if requested
             if (includeReplayUrl) {
@@ -1298,12 +1284,12 @@ export class CodingExportService {
               const row: Record<string, string | number | null> = {
                 'Test Person Login': personData.login,
                 'Test Person Code': personData.code,
-                Group: personData.group
+                'Test Person Group': personData.group
               };
 
               // Add replay URL if requested
               if (includeReplayUrl && req) {
-                const replayUrl = this.generateReplayUrl(
+                row['Replay URL'] = this.generateReplayUrl(
                   req,
                   personData.login,
                   personData.code,
@@ -1313,7 +1299,6 @@ export class CodingExportService {
                   variableId,
                   authToken
                 );
-                row['Replay URL'] = replayUrl;
               }
 
               // Add coding values for each coder
@@ -1529,13 +1514,37 @@ export class CodingExportService {
 
         const escapeCsvField = (field: string): string => `"${field.replace(/"/g, '""')}"`;
 
+        const getCodingIssueText = (issueOption: number | null): string => {
+          if (!issueOption) return '';
+          const issueTexts: { [key: number]: string } = {
+            1: 'Code-Vergabe unsicher',
+            2: 'Neuer Code nötig',
+            3: 'Ungültig (Spaßantwort)',
+            4: 'Technische Probleme'
+          };
+          return issueTexts[issueOption] || '';
+        };
+
+        let commentValue: string;
+        if (outputCommentsInsteadOfCodes) {
+          commentValue = unit.notes || '';
+        } else if (unit.coding_issue_option) {
+          commentValue = getCodingIssueText(unit.coding_issue_option);
+        } else if (unit.code === 0) {
+          commentValue = '';
+        } else {
+          commentValue = unit.notes || '';
+        }
+
+        const codeValue = (unit.code >= -4 && unit.code <= -1) ? '' : unit.code.toString();
+
         const rowFields = [
           escapeCsvField(personId),
           escapeCsvField(coder),
           escapeCsvField(unit.variable_id),
-          escapeCsvField(outputCommentsInsteadOfCodes ? (unit.notes || '') : unit.code.toString()),
+          escapeCsvField(commentValue),
           escapeCsvField(timestamp),
-          escapeCsvField(unit.code.toString())
+          escapeCsvField(codeValue)
         ];
 
         if (includeReplayUrl && req) {
