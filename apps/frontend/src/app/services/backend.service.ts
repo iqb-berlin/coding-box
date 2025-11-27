@@ -1237,136 +1237,114 @@ export class BackendService {
     return this.http.delete<{ success: boolean; message: string }>(url);
   }
 
-  exportCodingResultsAggregated(
-    workspaceId: number,
-    outputCommentsInsteadOfCodes: boolean,
-    includeReplayUrl: boolean,
-    anonymizeCoders: boolean,
-    usePseudoCoders: boolean,
-    doubleCodingMethod: string,
-    includeComments: boolean,
-    includeModalValue: boolean,
-    authToken: string,
-    excludeAutoCoded: boolean
-  ): Observable<Blob> {
+  exportCodingResultsAggregated(workspaceId: number): Observable<Blob> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/aggregated`;
-    let params = new HttpParams()
-      .set('outputCommentsInsteadOfCodes', String(outputCommentsInsteadOfCodes))
-      .set('includeReplayUrl', String(includeReplayUrl))
-      .set('anonymizeCoders', String(anonymizeCoders))
-      .set('usePseudoCoders', String(usePseudoCoders))
-      .set('doubleCodingMethod', doubleCodingMethod)
-      .set('includeComments', String(includeComments))
-      .set('includeModalValue', String(includeModalValue))
-      .set('excludeAutoCoded', String(excludeAutoCoded));
-    if (authToken) {
-      params = params.set('authToken', authToken);
-    }
     return this.http.get(url, {
-      params,
       responseType: 'blob',
       headers: this.authHeader
     });
   }
 
-  exportCodingResultsByCoder(
-    workspaceId: number,
-    outputCommentsInsteadOfCodes: boolean,
-    includeReplayUrl: boolean,
-    anonymizeCoders: boolean,
-    usePseudoCoders: boolean,
-    authToken: string,
-    excludeAutoCoded: boolean
-  ): Observable<Blob> {
+  exportCodingResultsByCoder(workspaceId: number): Observable<Blob> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/by-coder`;
-    let params = new HttpParams()
-      .set('outputCommentsInsteadOfCodes', String(outputCommentsInsteadOfCodes))
-      .set('includeReplayUrl', String(includeReplayUrl))
-      .set('anonymizeCoders', String(anonymizeCoders))
-      .set('usePseudoCoders', String(usePseudoCoders))
-      .set('excludeAutoCoded', String(excludeAutoCoded));
-    if (authToken) {
-      params = params.set('authToken', authToken);
-    }
     return this.http.get(url, {
-      params,
       responseType: 'blob',
       headers: this.authHeader
     });
   }
 
-  exportCodingResultsByVariable(
-    workspaceId: number,
-    includeModalValue: boolean,
-    includeDoubleCoded: boolean,
-    includeComments: boolean,
-    outputCommentsInsteadOfCodes: boolean,
-    includeReplayUrl: boolean,
-    anonymizeCoders: boolean,
-    usePseudoCoders: boolean,
-    authToken: string,
-    excludeAutoCoded: boolean
-  ): Observable<Blob> {
+  exportCodingResultsByVariable(workspaceId: number): Observable<Blob> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/by-variable`;
-    let params = new HttpParams()
-      .set('includeModalValue', String(includeModalValue))
-      .set('includeDoubleCoded', String(includeDoubleCoded))
-      .set('includeComments', String(includeComments))
-      .set('outputCommentsInsteadOfCodes', String(outputCommentsInsteadOfCodes))
-      .set('includeReplayUrl', String(includeReplayUrl))
-      .set('anonymizeCoders', String(anonymizeCoders))
-      .set('usePseudoCoders', String(usePseudoCoders))
-      .set('excludeAutoCoded', String(excludeAutoCoded));
-    if (authToken) {
-      params = params.set('authToken', authToken);
-    }
     return this.http.get(url, {
-      params,
       responseType: 'blob',
       headers: this.authHeader
     });
   }
 
-  exportCodingResultsDetailed(
-    workspaceId: number,
-    outputCommentsInsteadOfCodes: boolean,
-    includeReplayUrl: boolean,
-    anonymizeCoders: boolean,
-    usePseudoCoders: boolean,
-    authToken: string,
-    excludeAutoCoded: boolean
-  ): Observable<Blob> {
+  exportCodingResultsDetailed(workspaceId: number): Observable<Blob> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/detailed`;
-    let params = new HttpParams()
-      .set('outputCommentsInsteadOfCodes', String(outputCommentsInsteadOfCodes))
-      .set('includeReplayUrl', String(includeReplayUrl))
-      .set('anonymizeCoders', String(anonymizeCoders))
-      .set('usePseudoCoders', String(usePseudoCoders))
-      .set('excludeAutoCoded', String(excludeAutoCoded));
-    if (authToken) {
-      params = params.set('authToken', authToken);
-    }
     return this.http.get(url, {
-      params,
       responseType: 'blob',
       headers: this.authHeader
     });
   }
 
-  exportCodingTimesReport(
-    workspaceId: number,
-    anonymizeCoders: boolean,
-    usePseudoCoders: boolean,
-    excludeAutoCoded: boolean
-  ): Observable<Blob> {
+  exportCodingTimesReport(workspaceId: number): Observable<Blob> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/coding-times`;
-    const params = new HttpParams()
-      .set('anonymizeCoders', String(anonymizeCoders))
-      .set('usePseudoCoders', String(usePseudoCoders))
-      .set('excludeAutoCoded', String(excludeAutoCoded));
     return this.http.get(url, {
-      params,
       responseType: 'blob',
+      headers: this.authHeader
+    });
+  }
+
+  // Background export job methods
+  startExportJob(workspaceId: number, exportConfig: {
+    exportType: 'aggregated' | 'by-coder' | 'by-variable' | 'detailed' | 'coding-times';
+    userId: number;
+    outputCommentsInsteadOfCodes?: boolean;
+    includeReplayUrl?: boolean;
+    anonymizeCoders?: boolean;
+    usePseudoCoders?: boolean;
+    doubleCodingMethod?: 'new-row-per-variable' | 'new-column-per-coder' | 'most-frequent';
+    includeComments?: boolean;
+    includeModalValue?: boolean;
+    includeDoubleCoded?: boolean;
+    excludeAutoCoded?: boolean;
+    authToken?: string;
+  }): Observable<{ jobId: string; message: string }> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/start`;
+    return this.http.post<{ jobId: string; message: string }>(url, exportConfig, {
+      headers: this.authHeader
+    });
+  }
+
+  getExportJobStatus(workspaceId: number, jobId: string): Observable<{
+    status: string;
+    progress: number;
+    result?: any;
+    error?: string;
+  }> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/job/${jobId}`;
+    return this.http.get<{
+      status: string;
+      progress: number;
+      result?: any;
+      error?: string;
+    }>(url, {
+      headers: this.authHeader
+    });
+  }
+
+  downloadExportFile(workspaceId: number, jobId: string): Observable<Blob> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/job/${jobId}/download`;
+    return this.http.get(url, {
+      responseType: 'blob',
+      headers: this.authHeader
+    });
+  }
+
+  getExportJobs(workspaceId: number): Observable<Array<{
+    jobId: string;
+    status: string;
+    progress: number;
+    exportType: string;
+    createdAt: number;
+  }>> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/jobs`;
+    return this.http.get<Array<{
+      jobId: string;
+      status: string;
+      progress: number;
+      exportType: string;
+      createdAt: number;
+    }>>(url, {
+      headers: this.authHeader
+    });
+  }
+
+  deleteExportJob(workspaceId: number, jobId: string): Observable<{ success: boolean; message: string }> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/job/${jobId}`;
+    return this.http.delete<{ success: boolean; message: string }>(url, {
       headers: this.authHeader
     });
   }

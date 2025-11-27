@@ -18,6 +18,8 @@ import { PersonService } from '../../database/services/person.service';
 import { CodingJobService } from '../../database/services/coding-job.service';
 import { CodingExportService } from '../../database/services/coding-export.service';
 import { CodingStatisticsService } from '../../database/services/coding-statistics.service';
+import { JobQueueService, ExportJobData, ExportJobResult } from '../../job-queue/job-queue.service';
+import { CacheService } from '../../cache/cache.service';
 import { ResponseEntity } from '../../database/entities/response.entity';
 import { JobDefinition } from '../../database/entities/job-definition.entity';
 import { VariableAnalysisItemDto } from '../../../../../../api-dto/coding/variable-analysis-item.dto';
@@ -45,7 +47,9 @@ export class WorkspaceCodingController {
     private coderTrainingService: CoderTrainingService,
     private codingJobService: CodingJobService,
     private codingExportService: CodingExportService,
-    private codingStatisticsService: CodingStatisticsService
+    private codingStatisticsService: CodingStatisticsService,
+    private jobQueueService: JobQueueService,
+    private cacheService: CacheService
   ) {}
 
   @Get(':workspace_id/coding')
@@ -2478,6 +2482,312 @@ export class WorkspaceCodingController {
         }[];
       }> {
     return this.workspaceCodingService.createDistributedCodingJobs(workspace_id, body);
+  }
+
+  @Post(':workspace_id/coding/export/start')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiBody({
+    description: 'Export job configuration',
+    schema: {
+      type: 'object',
+      required: ['exportType', 'userId'],
+      properties: {
+        exportType: {
+          type: 'string',
+          enum: ['aggregated', 'by-coder', 'by-variable', 'detailed', 'coding-times'],
+          description: 'Type of export to generate'
+        },
+        userId: {
+          type: 'number',
+          description: 'ID of the user requesting the export'
+        },
+        outputCommentsInsteadOfCodes: { type: 'boolean' },
+        includeReplayUrl: { type: 'boolean' },
+        anonymizeCoders: { type: 'boolean' },
+        usePseudoCoders: { type: 'boolean' },
+        doubleCodingMethod: {
+          type: 'string',
+          enum: ['new-row-per-variable', 'new-column-per-coder', 'most-frequent']
+        },
+        includeComments: { type: 'boolean' },
+        includeModalValue: { type: 'boolean' },
+        includeDoubleCoded: { type: 'boolean' },
+        excludeAutoCoded: { type: 'boolean' },
+        authToken: { type: 'string' }
+      }
+    }
+  })
+  @ApiOkResponse({
+    description: 'Export job created successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        jobId: { type: 'string', description: 'ID of the created export job' },
+        message: { type: 'string' }
+      }
+    }
+  })
+  async startExportJob(
+    @WorkspaceId() workspace_id: number,
+    @Body() body: Omit<ExportJobData, 'workspaceId'>
+  ): Promise<{ jobId: string; message: string }> {
+    try {
+      const job = await this.jobQueueService.addExportJob({
+        ...body,
+        workspaceId: workspace_id
+      });
+
+      this.logger.log(`Export job ${job.id} created for workspace ${workspace_id}, type: ${body.exportType}`);
+
+      return {
+        jobId: job.id.toString(),
+        message: `Export job created successfully. Job ID: ${job.id}`
+      };
+    } catch (error) {
+      this.logger.error(`Error creating export job: ${error.message}`, error.stack);
+      throw error;
+    }
+  }
+
+  @Get(':workspace_id/coding/export/job/:jobId')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiParam({ name: 'jobId', type: String, description: 'ID of the export job' })
+  @ApiOkResponse({
+    description: 'Export job status retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        status: {
+          type: 'string',
+          enum: ['pending', 'processing', 'completed', 'failed', 'cancelled'],
+          description: 'Current status of the export job'
+        },
+        progress: {
+          type: 'number',
+          description: 'Progress percentage (0-100)'
+        },
+        result: {
+          type: 'object',
+          description: 'Export metadata (only available when status is completed)'
+        },
+        error: {
+          type: 'string',
+          description: 'Error message (only available when status is failed)'
+        }
+      }
+    }
+  })
+  async getExportJobStatus(@Param('jobId') jobId: string): Promise<{
+    status: string;
+    progress: number;
+    result?: any;
+    error?: string;
+  } | { error: string }> {
+    try {
+      const job = await this.jobQueueService.getExportJob(jobId);
+      if (!job) {
+        return { error: `Export job with ID ${jobId} not found` };
+      }
+
+      const state = await job.getState();
+      const progress = await job.progress();
+      const failedReason = job.failedReason;
+
+      let status: string;
+      switch (state) {
+        case 'completed':
+          status = 'completed';
+          break;
+        case 'failed':
+          status = 'failed';
+          break;
+        case 'active':
+          status = 'processing';
+          break;
+        case 'waiting':
+        case 'delayed':
+          status = 'pending';
+          break;
+        case 'paused':
+          status = 'paused';
+          break;
+        default:
+          status = state;
+      }
+
+      const response: any = {
+        status,
+        progress: typeof progress === 'number' ? progress : 0
+      };
+
+      if (status === 'completed') {
+        response.result = job.returnvalue;
+      }
+
+      if (status === 'failed' && failedReason) {
+        response.error = failedReason;
+      }
+
+      return response;
+    } catch (error) {
+      this.logger.error(`Error getting export job status: ${error.message}`, error.stack);
+      return { error: error.message };
+    }
+  }
+
+  @Get(':workspace_id/coding/export/job/:jobId/download')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiParam({ name: 'jobId', type: String, description: 'ID of the export job' })
+  @ApiOkResponse({
+    description: 'Export file downloaded successfully',
+    content: {
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': {
+        schema: {
+          type: 'string',
+          format: 'binary'
+        }
+      }
+    }
+  })
+  async downloadExport(
+    @Param('jobId') jobId: string,
+    @WorkspaceId() workspace_id: number,
+    @Res() res: Response
+  ): Promise<void> {
+    try {
+      // Get export metadata from cache
+      const metadata = await this.cacheService.get<ExportJobResult>(`export-result:${jobId}`);
+      
+      if (!metadata) {
+        res.status(404).json({ error: 'Export file not found or expired' });
+        return;
+      }
+
+      // Verify workspace access
+      if (metadata.workspaceId !== workspace_id) {
+        res.status(403).json({ error: 'Access denied to this export' });
+        return;
+      }
+
+      const filePath = metadata.filePath;
+      const fs = await import('fs');
+      
+      if (!fs.existsSync(filePath)) {
+        res.status(404).json({ error: 'Export file not found on disk' });
+        return;
+      }
+
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename="${metadata.fileName}"`);
+      res.setHeader('Content-Length', metadata.fileSize);
+
+      const fileStream = fs.createReadStream(filePath);
+      fileStream.pipe(res);
+    } catch (error) {
+      this.logger.error(`Error downloading export: ${error.message}`, error.stack);
+      res.status(500).json({ error: error.message });
+    }
+  }
+
+  @Get(':workspace_id/coding/export/jobs')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiOkResponse({
+    description: 'List of export jobs for the workspace',
+    schema: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          jobId: { type: 'string' },
+          status: { type: 'string' },
+          progress: { type: 'number' },
+          exportType: { type: 'string' },
+          createdAt: { type: 'number' }
+        }
+      }
+    }
+  })
+  async getExportJobs(@WorkspaceId() workspace_id: number): Promise<any[]> {
+    try {
+      const jobs = await this.jobQueueService.getExportJobs(workspace_id);
+      
+      const jobStatuses = await Promise.all(
+        jobs.map(async job => {
+          const state = await job.getState();
+          const progress = await job.progress();
+          
+          return {
+            jobId: job.id.toString(),
+            status: state,
+            progress: typeof progress === 'number' ? progress : 0,
+            exportType: job.data.exportType,
+            createdAt: job.timestamp
+          };
+        })
+      );
+
+      return jobStatuses;
+    } catch (error) {
+      this.logger.error(`Error getting export jobs: ${error.message}`, error.stack);
+      throw error;
+    }
+  }
+
+  @Delete(':workspace_id/coding/export/job/:jobId')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiParam({ name: 'jobId', type: String, description: 'ID of the export job to delete' })
+  @ApiOkResponse({
+    description: 'Export job deleted successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        message: { type: 'string' }
+      }
+    }
+  })
+  async deleteExportJob(@Param('jobId') jobId: string): Promise<{ success: boolean; message: string }> {
+    try {
+      const success = await this.jobQueueService.deleteExportJob(jobId);
+      
+      if (success) {
+        // Also delete cached metadata and file
+        const metadata = await this.cacheService.get<ExportJobResult>(`export-result:${jobId}`);
+        if (metadata && metadata.filePath) {
+          const fs = await import('fs');
+          if (fs.existsSync(metadata.filePath)) {
+            fs.unlinkSync(metadata.filePath);
+          }
+        }
+        await this.cacheService.delete(`export-result:${jobId}`);
+        
+        return {
+          success: true,
+          message: 'Export job deleted successfully'
+        };
+      }
+      
+      return {
+        success: false,
+        message: 'Export job not found'
+      };
+    } catch (error) {
+      this.logger.error(`Error deleting export job: ${error.message}`, error.stack);
+      return {
+        success: false,
+        message: error.message
+      };
+    }
   }
 
   @Get(':workspace_id/coding/export/aggregated')
