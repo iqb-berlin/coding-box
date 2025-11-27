@@ -198,7 +198,7 @@
     },
     "export-options-title": "Exportoptionen",
     "export-options": {
-      "include-modal-value": "Füge Modalwert hinzu",
+      "include-modal-value": "Füge Modalwerte hinzu",
       "include-modal-value-tooltip": "Es werden zwei Spalten hinzugefügt: Häufigster Wert und Anzahl der Abweichungen davon.",
       "include-double-coded": "Füge Doppelkodierung-Indikator hinzu",
       "include-double-coded-tooltip": "Es wird eine Spalte hinzugefügt, die anzeigt, ob der Fall doppelt kodiert wurde (1) oder nicht (0).",
