@@ -2532,6 +2532,12 @@ export class WorkspaceCodingController {
     type: String,
     description: 'Authentication token for generating replay URLs'
   })
+  @ApiQuery({
+    name: 'onlyManualCoding',
+    required: false,
+    type: Boolean,
+    description: 'Export only variables that require manual coding (CODING_INCOMPLETE variables). Default: true'
+  })
   @ApiOkResponse({
     description: 'Aggregated coding results exported as Excel',
     content: {
@@ -2554,7 +2560,8 @@ export class WorkspaceCodingController {
       @Query('doubleCodingMethod') doubleCodingMethod?: string,
       @Query('includeComments') includeComments?: string,
       @Query('includeModalValue') includeModalValue?: string,
-      @Query('authToken') authToken?: string
+      @Query('authToken') authToken?: string,
+      @Query('onlyManualCoding') onlyManualCoding?: string
   ): Promise<void> {
     try {
       const outputCommentsParam = outputCommentsInsteadOfCodes === 'true';
@@ -2564,6 +2571,7 @@ export class WorkspaceCodingController {
       const doubleCodingMethodParam = (doubleCodingMethod as 'new-row-per-variable' | 'new-column-per-coder' | 'most-frequent') || 'most-frequent';
       const includeCommentsParam = includeComments === 'true';
       const includeModalValueParam = includeModalValue === 'true';
+      const onlyManualCodingParam = onlyManualCoding !== 'false'; // Default true
 
       const buffer = await this.codingExportService.exportCodingResultsAggregated(
         workspace_id,
@@ -2575,7 +2583,8 @@ export class WorkspaceCodingController {
         includeCommentsParam,
         includeModalValueParam,
         authToken || '',
-        req
+        req,
+        onlyManualCodingParam
       );
 
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');

@@ -33,6 +33,10 @@ interface CodingScheme {
   variableCodings?: CodingSchemeVariableCoding[];
 }
 
+type VariableReference = { unitName: string; variableId: string };
+type BundleItem = { id: number; name: string; variables: VariableReference[] };
+type DistributionItem = { type: 'bundle' | 'variable'; item: BundleItem | VariableReference };
+
 @Injectable()
 export class CodingJobService {
   private readonly logger = new Logger(CodingJobService.name);
@@ -1044,8 +1048,8 @@ export class CodingJobService {
     const distribution: Record<string, Record<string, number>> = {};
     const doubleCodingInfo: Record<string, { totalCases: number; doubleCodedCases: number; singleCodedCasesAssigned: number; doubleCodedCasesPerCoder: Record<string, number> }> = {};
 
-    const items: Array<{ type: 'bundle' | 'variable'; item: { id: number; name: string; variables: { unitName: string; variableId: string }[] } | { unitName: string; variableId: string } }> = [];
-    const allVariables: { unitName: string; variableId: string }[] = [];
+    const items: DistributionItem[] = [];
+    const allVariables: VariableReference[] = [];
 
     if (request.selectedVariableBundles) {
       for (const bundle of request.selectedVariableBundles) {
@@ -1068,11 +1072,11 @@ export class CodingJobService {
       let itemKey = '';
 
       if (itemObj.type === 'bundle') {
-        const bundleItem = itemObj.item as { id: number; name: string; variables: { unitName: string; variableId: string }[] };
+        const bundleItem = itemObj.item as BundleItem;
         itemVariables = bundleItem.variables;
         itemKey = bundleItem.name;
       } else {
-        const variableItem = itemObj.item as { unitName: string; variableId: string };
+        const variableItem = itemObj.item as VariableReference;
         itemVariables = [variableItem];
         itemKey = `${variableItem.unitName}::${variableItem.variableId}`;
       }
@@ -1172,7 +1176,7 @@ export class CodingJobService {
     this.logger.log(`Creating distributed coding jobs for workspace ${workspaceId}`);
 
     const {
-      selectedVariables, selectedVariableBundles, selectedCoders, doubleCodingAbsolute, doubleCodingPercentage
+      selectedVariables, selectedCoders, doubleCodingAbsolute, doubleCodingPercentage
     } = request;
     const distribution: Record<string, Record<string, number>> = {};
     const doubleCodingInfo: Record<string, { totalCases: number; doubleCodedCases: number; singleCodedCasesAssigned: number; doubleCodedCasesPerCoder: Record<string, number> }> = {};
@@ -1187,11 +1191,11 @@ export class CodingJobService {
 
     try {
     // Determine items to process
-      const items: Array<{ type: 'bundle' | 'variable'; item: { id: number; name: string; variables: { unitName: string; variableId: string }[] } | { unitName: string; variableId: string } }> = [];
-      const allVariables: { unitName: string; variableId: string }[] = [];
+      const items: DistributionItem[] = [];
+      const allVariables: VariableReference[] = [];
 
-      if (selectedVariableBundles) {
-        for (const bundle of selectedVariableBundles) {
+      if (request.selectedVariableBundles) {
+        for (const bundle of request.selectedVariableBundles) {
           items.push({ type: 'bundle', item: bundle });
           allVariables.push(...bundle.variables);
         }
@@ -1211,11 +1215,11 @@ export class CodingJobService {
         let itemKey = '';
 
         if (itemObj.type === 'bundle') {
-          const bundleItem = itemObj.item as { id: number; name: string; variables: { unitName: string; variableId: string }[] };
+          const bundleItem = itemObj.item as BundleItem;
           itemVariables = bundleItem.variables;
           itemKey = bundleItem.name;
         } else {
-          const variableItem = itemObj.item as { unitName: string; variableId: string };
+          const variableItem = itemObj.item as VariableReference;
           itemVariables = [variableItem];
           itemKey = `${variableItem.unitName}::${variableItem.variableId}`;
         }

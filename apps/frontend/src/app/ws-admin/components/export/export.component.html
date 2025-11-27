@@ -8,7 +8,7 @@
       <p>{{ 'ws-admin.export-description' | translate }}</p>
 
       <div class="format-options">
-        <mat-radio-group [(ngModel)]="selectedFormat">
+        <mat-radio-group [(ngModel)]="selectedFormat" (ngModelChange)="onFormatChange()">
           <div class="format-option" *ngFor="let format of exportFormats">
             <mat-radio-button [value]="format.value">
               <div class="format-label">{{ format.label }}</div>
@@ -23,8 +23,15 @@
         
         <!-- Double-coding method section for aggregated export -->
         <div *ngIf="selectedFormat === 'aggregated'" class="double-coding-section">
+          <mat-checkbox
+            [(ngModel)]="onlyManualCoding"
+            color="primary"
+            [matTooltip]="'ws-admin.export-options.only-manual-coding-tooltip' | translate">
+            {{ 'ws-admin.export-options.only-manual-coding' | translate }}
+          </mat-checkbox>
+          
           <h4>{{ 'ws-admin.export-options.double-coding-method-title' | translate }}</h4>
-          <mat-radio-group [(ngModel)]="doubleCodingMethod" class="double-coding-radio-group">
+          <mat-radio-group [(ngModel)]="doubleCodingMethod" (ngModelChange)="onDoubleCodingMethodChange()" class="double-coding-radio-group">
             <mat-radio-button value="most-frequent" color="primary"
               [matTooltip]="'ws-admin.export-options.most-frequent-random-tooltip' | translate">
               {{ 'ws-admin.export-options.most-frequent-random' | translate }}
@@ -80,7 +87,7 @@
         
         <!-- General export options -->
         <mat-checkbox
-          *ngIf="selectedFormat !== 'coding-times'"
+          *ngIf="selectedFormat !== 'coding-times' && selectedFormat !== 'by-coder' && (selectedFormat !== 'aggregated' || doubleCodingMethod === 'new-row-per-variable')"
           [(ngModel)]="includeReplayUrl"
           color="primary"
           [matTooltip]="'ws-admin.export-options.include-replay-url-tooltip' | translate">
