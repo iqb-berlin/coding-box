@@ -18,11 +18,10 @@ import { ResponseEntity } from '../entities/response.entity';
 import FileUpload from '../entities/file_upload.entity';
 import { Setting } from '../entities/setting.entity';
 
-/**
- * Flags for controlling how responses are matched/aggregated by value.
- * Note: This enum is duplicated from api-dto/coding/response-matching-mode.dto.ts
- * to avoid path resolution issues in the Docker build.
- */
+function isSafeKey(key: string): boolean {
+  return key !== '__proto__' && key !== 'constructor' && key !== 'prototype';
+}
+
 enum ResponseMatchingFlag {
   NO_AGGREGATION = 'NO_AGGREGATION',
   IGNORE_CASE = 'IGNORE_CASE',
@@ -1200,6 +1199,7 @@ export class CodingJobService {
       // Use unique cases count for distribution when aggregating
       const totalCases = uniqueCases;
 
+      if (!isSafeKey(itemKey)) continue;
       distribution[itemKey] = {};
       doubleCodingInfo[itemKey] = {
         totalCases: totalCases,
@@ -1210,7 +1210,9 @@ export class CodingJobService {
 
       if (totalCases === 0) {
         sortedCoders.forEach(coder => {
-          distribution[itemKey][coder.name] = 0;
+          if (isSafeKey(coder.name)) {
+            distribution[itemKey][coder.name] = 0;
+          }
         });
         continue;
       }
@@ -1233,7 +1235,9 @@ export class CodingJobService {
       doubleCodingInfo[itemKey].singleCodedCasesAssigned = singleCodingResponses.length;
 
       sortedCoders.forEach(coder => {
-        doubleCodingInfo[itemKey].doubleCodedCasesPerCoder[coder.name] = 0;
+        if (isSafeKey(coder.name)) {
+          doubleCodingInfo[itemKey].doubleCodedCasesPerCoder[coder.name] = 0;
+        }
       });
 
       const caseDistribution = this.distributeCasesForVariable(
@@ -1256,8 +1260,9 @@ export class CodingJobService {
       for (let i = 0; i < sortedCoders.length; i++) {
         const coder = sortedCoders[i];
         const coderCases = caseDistribution[i];
-
-        distribution[itemKey][coder.name] = coderCases.length;
+        if (isSafeKey(coder.name)) {
+          distribution[itemKey][coder.name] = coderCases.length;
+        }
       }
     }
 
@@ -1363,6 +1368,7 @@ export class CodingJobService {
         // Use unique cases count for distribution when aggregating
         const totalCases = uniqueCases;
 
+        if (!isSafeKey(itemKey)) continue;
         distribution[itemKey] = {};
         doubleCodingInfo[itemKey] = {
           totalCases: totalCases,
@@ -1373,8 +1379,10 @@ export class CodingJobService {
 
         if (totalCases === 0) {
           for (const coder of sortedCoders) {
-            distribution[itemKey][coder.name] = 0;
-            doubleCodingInfo[itemKey].doubleCodedCasesPerCoder[coder.name] = 0;
+            if (isSafeKey(coder.name)) {
+              distribution[itemKey][coder.name] = 0;
+              doubleCodingInfo[itemKey].doubleCodedCasesPerCoder[coder.name] = 0;
+            }
           }
           continue;
         }
@@ -1422,7 +1430,9 @@ export class CodingJobService {
         doubleCodingInfo[itemKey].singleCodedCasesAssigned = singleCodingResponses.length;
 
         sortedCoders.forEach(coder => {
-          doubleCodingInfo[itemKey].doubleCodedCasesPerCoder[coder.name] = 0;
+          if (isSafeKey(coder.name)) {
+            doubleCodingInfo[itemKey].doubleCodedCasesPerCoder[coder.name] = 0;
+          }
         });
 
         const caseDistribution = this.distributeCasesForVariable(
@@ -1437,7 +1447,9 @@ export class CodingJobService {
         );
         for (const { coders: assignedCoders } of doubleCodingAssignments) {
           for (const coder of assignedCoders) {
-            doubleCodingInfo[itemKey].doubleCodedCasesPerCoder[coder.name] += 1;
+            if (isSafeKey(coder.name)) {
+              doubleCodingInfo[itemKey].doubleCodedCasesPerCoder[coder.name] += 1;
+            }
           }
         }
 
@@ -1449,7 +1461,9 @@ export class CodingJobService {
 
           const caseCountForCoder = singleCases.length + doubleCases.length;
 
-          distribution[itemKey][coder.name] = caseCountForCoder;
+          if (isSafeKey(coder.name)) {
+            distribution[itemKey][coder.name] = caseCountForCoder;
+          }
 
           if (caseCountForCoder > 0) {
             const jobName = generateJobName(
