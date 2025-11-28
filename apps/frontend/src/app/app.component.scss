@@ -64,6 +64,15 @@ img{
   gap: 10px;
 }
 
+.workspace-name {
+  color: lightgrey;
+  font-size: 1rem;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Spinner container */
 .spinner-container {
   width: 100%;
