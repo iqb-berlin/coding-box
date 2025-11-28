@@ -119,6 +119,10 @@ export class CodingListService {
     return exclusions;
   }
 
+  async getVariablePageMap(unitName: string, workspaceId: number): Promise<Map<string, string>> {
+    return this.loadVoudData(unitName, workspaceId);
+  }
+
   private async processResponseItem(
     response: ResponseEntity,
     authToken: string,

@@ -1,4 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  Injectable, Logger, Inject, forwardRef
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Connection, Repository } from 'typeorm';
 import Persons from '../entities/persons.entity';
@@ -13,6 +15,7 @@ import { Session } from '../entities/session.entity';
 import { UnitTagService } from './unit-tag.service';
 import { JournalService } from './journal.service';
 import { CacheService } from '../../cache/cache.service';
+import { CodingListService } from './coding-list.service';
 
 interface PersonWhere {
   code: string;
@@ -46,7 +49,9 @@ export class WorkspaceTestResultsService {
     private readonly connection: Connection,
     private readonly unitTagService: UnitTagService,
     private readonly journalService: JournalService,
-    private readonly cacheService: CacheService
+    private readonly cacheService: CacheService,
+    @Inject(forwardRef(() => CodingListService))
+    private readonly codingListService: CodingListService
   ) {}
 
   async findPersonTestResults(personId: number, workspaceId: number): Promise<{
@@ -769,6 +774,7 @@ export class WorkspaceTestResultsService {
         personLogin: string;
         personCode: string;
         personGroup: string;
+        variablePage?: string;
       }[];
       total: number;
     }> {
@@ -840,11 +846,20 @@ export class WorkspaceTestResultsService {
 
       this.logger.log(`Found ${total} responses matching the criteria in workspace: ${workspaceId}, returning ${responses.length} for page ${page}`);
 
+      // Pre-load variable page maps for all unique units
+      const uniqueUnitNames = [...new Set(responses.map(r => r.unit.name))];
+      const variablePageMaps = new Map<string, Map<string, string>>();
+      for (const unitName of uniqueUnitNames) {
+        const pageMap = await this.codingListService.getVariablePageMap(unitName, workspaceId);
+        variablePageMaps.set(unitName, pageMap);
+      }
+
       const version = searchParams.version || 'v1';
       const data = responses.map(response => {
         const code = response[`code_${version}` as keyof ResponseEntity] as number;
         const score = response[`score_${version}` as keyof ResponseEntity] as number;
         const codedStatus = response[`status_${version}` as keyof ResponseEntity] as number;
+        const variablePage = variablePageMaps.get(response.unit.name)?.get(response.variableid) || '0';
 
         return {
           responseId: response.id,
@@ -862,7 +877,8 @@ export class WorkspaceTestResultsService {
           personId: response.unit.booklet.person.id,
           personLogin: response.unit.booklet.person.login,
           personCode: response.unit.booklet.person.code,
-          personGroup: response.unit.booklet.person.group
+          personGroup: response.unit.booklet.person.group,
+          variablePage
         };
       });
 
