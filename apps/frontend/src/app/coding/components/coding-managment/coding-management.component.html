@@ -82,7 +82,18 @@
               <div class="statistics-content">
                 <div class="statistic-item">
                   <span class="statistic-label">{{ 'coding-management.statistics.total-responses' | translate }}</span>
-                  <span class="statistic-value">{{ codingStatistics.totalResponses }}</span>
+                  <span class="statistic-value">
+                    {{ codingStatistics.totalResponses }}
+                    @if (getTotalResponsesDifference() !== null) {
+                      <span class="difference-value" [ngClass]="{
+                        'difference-positive': getTotalResponsesDifference()! > 0,
+                        'difference-negative': getTotalResponsesDifference()! < 0,
+                        'difference-neutral': getTotalResponsesDifference() === 0
+                      }" [matTooltip]="getDifferenceTooltip()">
+                        ({{ formatDifference(getTotalResponsesDifference()) }})
+                      </span>
+                    }
+                  </span>
                 </div>
                 @for (status of getStatuses(); track status) {
                   <div class="statistic-item">
@@ -95,8 +106,17 @@
                       }
                     </span>
                     <span class="statistic-value">
-                      {{ codingStatistics.statusCounts[status] }}
+                      {{ codingStatistics.statusCounts[status] || 0 }}
                       <span class="percentage">({{ getStatusPercentage(status) }}%)</span>
+                      @if (getStatusDifference(status) !== null) {
+                        <span class="difference-value" [ngClass]="{
+                          'difference-positive': getStatusDifference(status)! > 0,
+                          'difference-negative': getStatusDifference(status)! < 0,
+                          'difference-neutral': getStatusDifference(status) === 0
+                        }" [matTooltip]="getDifferenceTooltip()">
+                          {{ formatDifference(getStatusDifference(status)) }}
+                        </span>
+                      }
                     </span>
                   </div>
                 }
