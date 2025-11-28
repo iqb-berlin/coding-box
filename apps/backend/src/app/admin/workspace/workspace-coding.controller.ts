@@ -2531,7 +2531,7 @@ export class WorkspaceCodingController {
   })
   async startExportJob(
     @WorkspaceId() workspace_id: number,
-    @Body() body: Omit<ExportJobData, 'workspaceId'>
+      @Body() body: Omit<ExportJobData, 'workspaceId'>
   ): Promise<{ jobId: string; message: string }> {
     try {
       const job = await this.jobQueueService.addExportJob({
@@ -2584,7 +2584,16 @@ export class WorkspaceCodingController {
   async getExportJobStatus(@Param('jobId') jobId: string): Promise<{
     status: string;
     progress: number;
-    result?: any;
+    result?: {
+      fileId: string;
+      fileName: string;
+      filePath: string;
+      fileSize: number;
+      workspaceId: number;
+      userId: number;
+      exportType: string;
+      createdAt: number;
+    };
     error?: string;
   } | { error: string }> {
     try {
@@ -2619,20 +2628,12 @@ export class WorkspaceCodingController {
           status = state;
       }
 
-      const response: any = {
+      return {
         status,
-        progress: typeof progress === 'number' ? progress : 0
+        progress: typeof progress === 'number' ? progress : 0,
+        ...(status === 'completed' && job.returnvalue ? { result: job.returnvalue } : {}),
+        ...(status === 'failed' && failedReason ? { error: failedReason } : {})
       };
-
-      if (status === 'completed') {
-        response.result = job.returnvalue;
-      }
-
-      if (status === 'failed' && failedReason) {
-        response.error = failedReason;
-      }
-
-      return response;
     } catch (error) {
       this.logger.error(`Error getting export job status: ${error.message}`, error.stack);
       return { error: error.message };
@@ -2657,19 +2658,17 @@ export class WorkspaceCodingController {
   })
   async downloadExport(
     @Param('jobId') jobId: string,
-    @WorkspaceId() workspace_id: number,
-    @Res() res: Response
+      @WorkspaceId() workspace_id: number,
+      @Res() res: Response
   ): Promise<void> {
     try {
-      // Get export metadata from cache
       const metadata = await this.cacheService.get<ExportJobResult>(`export-result:${jobId}`);
-      
+
       if (!metadata) {
         res.status(404).json({ error: 'Export file not found or expired' });
         return;
       }
 
-      // Verify workspace access
       if (metadata.workspaceId !== workspace_id) {
         res.status(403).json({ error: 'Access denied to this export' });
         return;
@@ -2677,7 +2676,7 @@ export class WorkspaceCodingController {
 
       const filePath = metadata.filePath;
       const fs = await import('fs');
-      
+
       if (!fs.existsSync(filePath)) {
         res.status(404).json({ error: 'Export file not found on disk' });
         return;
@@ -2715,15 +2714,21 @@ export class WorkspaceCodingController {
       }
     }
   })
-  async getExportJobs(@WorkspaceId() workspace_id: number): Promise<any[]> {
+  async getExportJobs(@WorkspaceId() workspace_id: number): Promise<Array<{
+    jobId: string;
+    status: string;
+    progress: number;
+    exportType: string;
+    createdAt: number;
+  }>> {
     try {
       const jobs = await this.jobQueueService.getExportJobs(workspace_id);
-      
-      const jobStatuses = await Promise.all(
+
+      return await Promise.all(
         jobs.map(async job => {
           const state = await job.getState();
           const progress = await job.progress();
-          
+
           return {
             jobId: job.id.toString(),
             status: state,
@@ -2733,8 +2738,6 @@ export class WorkspaceCodingController {
           };
         })
       );
-
-      return jobStatuses;
     } catch (error) {
       this.logger.error(`Error getting export jobs: ${error.message}`, error.stack);
       throw error;
@@ -2759,9 +2762,8 @@ export class WorkspaceCodingController {
   async deleteExportJob(@Param('jobId') jobId: string): Promise<{ success: boolean; message: string }> {
     try {
       const success = await this.jobQueueService.deleteExportJob(jobId);
-      
+
       if (success) {
-        // Also delete cached metadata and file
         const metadata = await this.cacheService.get<ExportJobResult>(`export-result:${jobId}`);
         if (metadata && metadata.filePath) {
           const fs = await import('fs');
@@ -2770,13 +2772,13 @@ export class WorkspaceCodingController {
           }
         }
         await this.cacheService.delete(`export-result:${jobId}`);
-        
+
         return {
           success: true,
           message: 'Export job deleted successfully'
         };
       }
-      
+
       return {
         success: false,
         message: 'Export job not found'

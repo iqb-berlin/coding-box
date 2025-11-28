@@ -117,17 +117,11 @@
       </mat-checkbox>
     </mat-card-content>
     <mat-card-actions align="end">
-      <div class="export-progress" *ngIf="isExporting">
-        <div class="progress-info">
-          <span>{{ 'ws-admin.export.progress' | translate }}: {{ exportProgress }}%</span>
-          <mat-spinner diameter="20" style="display: inline-block; margin-left: 8px;"></mat-spinner>
-        </div>
-        <mat-progress-bar mode="determinate" [value]="exportProgress" color="primary"></mat-progress-bar>
-      </div>
-      <button mat-raised-button color="primary" (click)="onExport()" [disabled]="isExporting">
-        <span *ngIf="!isExporting">{{ 'ws-admin.export-action-button' | translate }}</span>
-        <span *ngIf="isExporting">
-          {{ 'ws-admin.export.exporting' | translate }}
+      <button mat-raised-button color="primary" (click)="onExport()" [disabled]="isStartingExport">
+        <span *ngIf="!isStartingExport">{{ 'ws-admin.export-action-button' | translate }}</span>
+        <span *ngIf="isStartingExport">
+          <mat-spinner diameter="20" style="display: inline-block; margin-right: 8px;"></mat-spinner>
+          {{ 'ws-admin.export.starting' | translate }}
         </span>
       </button>
     </mat-card-actions>

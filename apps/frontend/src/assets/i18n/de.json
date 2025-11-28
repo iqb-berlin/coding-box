@@ -28,6 +28,12 @@
   "status-processing": "Wird bearbeitet",
   "status-completed": "Abgeschlossen",
   "status-failed": "Fehlgeschlagen",
+  "export-toast": {
+    "title": "Datenexport",
+    "download": "Herunterladen",
+    "remove": "Entfernen",
+    "clear-all": "Alle löschen"
+  },
   "status-cancelled": "Abgebrochen",
   "status-paused": "Pausiert",
 
@@ -182,6 +188,7 @@
     "export-placeholder": "Die Funktionalität zum Datenexport wird in einer zukünftigen Version implementiert.",
     "export-action-button": "Datenexport starten",
     "export.exporting": "Datenexport läuft...",
+    "export.starting": "Export wird gestartet...",
     "export.success": "Datenexport erfolgreich abgeschlossen",
     "export.errors.export-failed": "Datenexport fehlgeschlagen",
     "export-formats": {
@@ -337,10 +344,6 @@
       "compare": {
         "button": "Ergebnisse vergleichen",
         "notEnough": "Um Ergebnisse zu vergleichen, werden mindestens zwei Kodierer-Schulungen benötigt."
-      },
-      "create": {
-        "button": "Neue Schulung erstellen",
-        "first": "Erste Schulung erstellen"
       },
       "loading": "Lade Kodierer-Schulungen...",
       "empty": {
