@@ -1099,6 +1099,18 @@
     },
     "import": {
       "errors-and-warnings": "Fehler und Warnungen"
+    },
+    "response-matching": {
+      "title": "Antwort-Matching",
+      "description": "Legen Sie fest, wann Antworten von verschiedenen Testpersonen als gleicher Fall behandelt werden sollen.",
+      "no-aggregation": "Nicht aggregieren (jede Antwort ist ein eigener Fall)",
+      "ignore-case": "Groß-/Kleinschreibung ignorieren",
+      "ignore-whitespace": "Leerzeichen ignorieren",
+      "hint-exact": "Aktuelle Einstellung: Exakte Übereinstimmung - Antworten werden nur bei identischem Wert zusammengefasst.",
+      "hint-no-aggregation": "Aktuelle Einstellung: Keine Aggregation - Jede Antwort wird als separater Fall behandelt.",
+      "hint-aggregating": "Aktuelle Einstellung: Antworten werden unter Berücksichtigung der gewählten Optionen zusammengefasst.",
+      "save-success": "Matching-Einstellungen gespeichert",
+      "save-error": "Fehler beim Speichern der Matching-Einstellungen"
     }
   },
 

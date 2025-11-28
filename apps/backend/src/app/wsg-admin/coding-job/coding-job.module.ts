@@ -12,6 +12,7 @@ import { VariableBundle } from '../../database/entities/variable-bundle.entity';
 import { ResponseEntity } from '../../database/entities/response.entity';
 import { Unit } from '../../database/entities/unit.entity';
 import FileUpload from '../../database/entities/file_upload.entity';
+import { Setting } from '../../database/entities/setting.entity';
 import { AuthModule } from '../../auth/auth.module';
 
 @Module({
@@ -26,7 +27,8 @@ import { AuthModule } from '../../auth/auth.module';
       VariableBundle,
       ResponseEntity,
       Unit,
-      FileUpload
+      FileUpload,
+      Setting
     ]),
     AuthModule
   ],

@@ -389,6 +389,8 @@ export class CodingService {
       message: string;
       distribution: Record<string, Record<string, number>>;
       doubleCodingInfo: Record<string, { totalCases: number; doubleCodedCases: number; singleCodedCasesAssigned: number; doubleCodedCasesPerCoder: Record<string, number> }>;
+      aggregationInfo: Record<string, { uniqueCases: number; totalResponses: number }>;
+      matchingFlags: string[];
       jobs: {
         coderId: number;
         coderName: string;
@@ -405,6 +407,8 @@ export class CodingService {
       message: string;
       distribution: Record<string, Record<string, number>>;
       doubleCodingInfo: Record<string, { totalCases: number; doubleCodedCases: number; singleCodedCasesAssigned: number; doubleCodedCasesPerCoder: Record<string, number> }>;
+      aggregationInfo: Record<string, { uniqueCases: number; totalResponses: number }>;
+      matchingFlags: string[];
       jobs: {
         coderId: number;
         coderName: string;
@@ -431,6 +435,8 @@ export class CodingService {
           message: 'Failed to create distributed jobs',
           distribution: {},
           doubleCodingInfo: {},
+          aggregationInfo: {},
+          matchingFlags: [],
           jobs: []
         }))
       );
@@ -446,11 +452,15 @@ export class CodingService {
   ): Observable<{
       distribution: Record<string, Record<string, number>>;
       doubleCodingInfo: Record<string, { totalCases: number; doubleCodedCases: number; singleCodedCasesAssigned: number; doubleCodedCasesPerCoder: Record<string, number> }>;
+      aggregationInfo: Record<string, { uniqueCases: number; totalResponses: number }>;
+      matchingFlags: string[];
     }> {
     return this.http
       .post<{
       distribution: Record<string, Record<string, number>>;
       doubleCodingInfo: Record<string, { totalCases: number; doubleCodedCases: number; singleCodedCasesAssigned: number; doubleCodedCasesPerCoder: Record<string, number> }>;
+      aggregationInfo: Record<string, { uniqueCases: number; totalResponses: number }>;
+      matchingFlags: string[];
     }>(
       `${this.serverUrl}admin/workspace/${workspaceId}/coding/calculate-distribution`,
       {
@@ -465,7 +475,9 @@ export class CodingService {
       .pipe(
         catchError(() => of({
           distribution: {},
-          doubleCodingInfo: {}
+          doubleCodingInfo: {},
+          aggregationInfo: {},
+          matchingFlags: []
         }))
       );
   }

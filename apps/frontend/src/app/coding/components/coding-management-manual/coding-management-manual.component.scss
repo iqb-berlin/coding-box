@@ -1017,3 +1017,92 @@
     }
   }
 }
+
+// Response Matching Mode Configuration Styles
+.response-matching-section {
+  margin-bottom: 20px;
+  padding: 16px;
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+
+  .subsection-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    color: #1976d2;
+    margin: 0 0 8px 0;
+
+    mat-icon {
+      font-size: 20px;
+      height: 20px;
+      width: 20px;
+    }
+
+    .loading-indicator {
+      display: inline-flex;
+      margin-left: 8px;
+    }
+  }
+
+  .subsection-description {
+    font-size: 13px;
+    color: #666;
+    margin: 0 0 16px 0;
+    line-height: 1.4;
+  }
+
+  .matching-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: 12px;
+
+    &.disabled {
+      opacity: 0.6;
+      pointer-events: none;
+    }
+
+    mat-checkbox {
+      &::ng-deep .mdc-form-field {
+        font-size: 14px;
+      }
+    }
+  }
+
+  .matching-mode-hint {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 13px;
+    color: #666;
+    background-color: rgba(25, 118, 210, 0.05);
+    padding: 10px 12px;
+    border-radius: 6px;
+    border-left: 3px solid #1976d2;
+    margin: 0;
+
+    mat-icon {
+      font-size: 18px;
+      height: 18px;
+      width: 18px;
+      color: #1976d2;
+      flex-shrink: 0;
+    }
+
+    span {
+      line-height: 1.4;
+    }
+  }
+}
+
+@media (max-width: 768px) {
+  .response-matching-section {
+    .matching-options {
+      flex-direction: column;
+      gap: 12px;
+    }
+  }
+}
