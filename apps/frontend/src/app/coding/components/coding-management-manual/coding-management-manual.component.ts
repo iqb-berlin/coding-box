@@ -59,7 +59,6 @@ import { CoderTrainingsListComponent } from '../coder-trainings-list/coder-train
 export class CodingManagementManualComponent implements OnInit, OnDestroy {
   @ViewChild(CodingJobsComponent) codingJobsComponent?: CodingJobsComponent;
   @ViewChild(CodingJobDefinitionsComponent) codingJobDefinitionsComponent?: CodingJobDefinitionsComponent;
-  @ViewChild(CoderTrainingsListComponent) coderTrainingsListComponent?: CoderTrainingsListComponent;
 
   private testPersonCodingService = inject(TestPersonCodingService);
   private backendService = inject(BackendService);
@@ -78,9 +77,9 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   isLoadingCodingProgress = false;
   isLoadingKappaSummary = false;
 
+  // Debouncing for job definition changes
   private jobDefinitionChangeSubject = new Subject<void>();
   private statisticsRefreshSubject = new Subject<void>();
-  private codingJobsChangeSubject = new Subject<void>();
 
   codingProgressOverview: {
     totalCasesToCode: number;
@@ -237,25 +236,14 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     this.validationProgress = currentProgress;
     this.isLoading = currentProgress.status === 'loading' || currentProgress.status === 'processing';
 
+    // Set up debounced statistics refresh
     this.jobDefinitionChangeSubject
       .pipe(
         debounceTime(500),
         takeUntil(this.destroy$)
       )
       .subscribe(() => {
-        this.loadVariableCoverageOverview();
-      });
-
-    this.codingJobsChangeSubject
-      .pipe(
-        debounceTime(400),
-        takeUntil(this.destroy$)
-      )
-      .subscribe(() => {
-        this.loadCodingProgressOverview();
-        this.loadCaseCoverageOverview();
-        this.loadCodingIncompleteVariables();
-        this.loadStatusDistribution();
+        this.refreshAllStatistics();
       });
 
     this.loadCodingProgressOverview();
@@ -496,14 +484,17 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     this.showCoderTraining = false;
   }
 
+  /**
+   * Event handler for job definition changes (create, update, delete)
+   * Uses debouncing to prevent excessive API calls
+   */
   onJobDefinitionChanged(): void {
     this.jobDefinitionChangeSubject.next();
   }
 
-  refreshVariableCoverageOnly(): void {
-    this.loadVariableCoverageOverview();
-  }
-
+  /**
+   * Refreshes all statistics with individual loading states
+   */
   refreshAllStatistics(): void {
     this.loadCodingProgressOverview();
     this.loadVariableCoverageOverview();
@@ -518,17 +509,6 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     if (this.codingJobsComponent) {
       this.codingJobsComponent.loadCodingJobs();
     }
-    this.codingJobsChangeSubject.next();
-  }
-
-  reloadCoderTrainingsList(): void {
-    if (this.coderTrainingsListComponent) {
-      this.coderTrainingsListComponent.loadCoderTrainings();
-    }
-  }
-
-  onCodingJobsChanged(): void {
-    this.codingJobsChangeSubject.next();
   }
 
   private loadCodingProgressOverview(): void {
@@ -745,7 +725,6 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
             `Schulung erfolgreich generiert: ${packages.length} Kodierer-Pakete mit insgesamt ${totalResponses} Antworten erstellt`
           );
           this.closeCoderTraining();
-          this.reloadCoderTrainingsList();
         },
         error: () => {
           this.showError('Fehler beim Generieren der Kodierer-Schulungspakete');

@@ -28,6 +28,13 @@
   "status-processing": "Wird bearbeitet",
   "status-completed": "Abgeschlossen",
   "status-failed": "Fehlgeschlagen",
+  "export-toast": {
+    "title": "Datenexport",
+    "download": "Herunterladen",
+    "remove": "Entfernen",
+    "clear-all": "Alle löschen",
+    "cancel": "Abbrechen"
+  },
   "status-cancelled": "Abgebrochen",
   "status-paused": "Pausiert",
 
@@ -181,6 +188,11 @@
     "export-description": "Diese Komponente wird für den Export der Daten nach Kodierung und Bereinigung verwendet.",
     "export-placeholder": "Die Funktionalität zum Datenexport wird in einer zukünftigen Version implementiert.",
     "export-action-button": "Datenexport starten",
+    "export.exporting": "Datenexport läuft...",
+    "export.starting": "Export wird gestartet...",
+    "export.success": "Datenexport erfolgreich abgeschlossen",
+    "export.errors.export-failed": "Datenexport fehlgeschlagen",
+    "export.job-started": "Datenexport gestartet",
     "export-formats": {
       "aggregated": "Aggregierte Ansicht",
       "aggregated-description": " Alle Variablen und Testpersonen in einer aggregierten Tabelle",
@@ -193,12 +205,43 @@
       "coding-times": "Kodierzeiten-Bericht",
       "coding-times-description": "Durchschnittliche Kodierzeiten nach Kodierer und Variable (Zeitspannen >10 Minuten werden ignoriert)"
     },
+    "export-options-title": "Exportoptionen",
+    "export-options": {
+      "exclude-auto-coded": "Nur manuell kodierte Variablen exportieren",
+      "exclude-auto-coded-tooltip": "Beschränkt den Export auf Variablen mit CODING_INCOMPLETE Status. Standardmäßig werden alle Variablen exportiert.",
+      "include-auto-coded": "Automatisch kodierte Variablen einbeziehen",
+      "include-auto-coded-tooltip": "Erweitert den Export um alle Variablen, die nicht manuell kodiert werden müssen. Standardmäßig werden nur Variablen mit CODING_INCOMPLETE Status exportiert.",
+      "only-manual-coding": "Nur manuell zu kodierende Variablen",
+      "only-manual-coding-tooltip": "Exportiert nur Variablen, die manuell kodiert werden sollen (CODING_INCOMPLETE Variablen). Diese Option ist standardmäßig aktiviert.",
+      "include-modal-value": "Füge Modalwerte hinzu",
+      "include-modal-value-tooltip": "Es werden zwei Spalten hinzugefügt: Häufigster Wert und Anzahl der Abweichungen davon.",
+      "include-double-coded": "Füge Doppelkodierung-Indikator hinzu",
+      "include-double-coded-tooltip": "Es wird eine Spalte hinzugefügt, die anzeigt, ob der Fall doppelt kodiert wurde (1) oder nicht (0).",
+      "include-comments": "Füge Kommentarspalte hinzu",
+      "include-comments-tooltip": "Es wird eine Spalte hinzugefügt mit den Kommentaren aller Kodierer.",
+      "include-replay-url": "Hyperlinks hinzufügen",
+      "include-replay-url-tooltip": "Es wird eine Spalte hinzugefügt mit den Hyperlinks zum Abspielen der Aufgaben.",
+      "output-comments-instead-of-codes": "Kommentare ausgeben statt Codes",
+      "output-comments-instead-of-codes-tooltip": "Die Kommentare der Kodierer werden in die Codezeilen geschrieben",
+      "anonymize-coders": "Kodierer anonymisieren",
+      "anonymize-coders-tooltip": "Kodierer werden in 'K1', 'K2' usw. umbenannt und in eine zufällige Reihenfolge gebracht. Über Variablen und Personen bleiben diese Kodierer aber erhalten.",
+      "use-pseudo-coders": "Pseudo Kodierer",
+      "use-pseudo-coders-tooltip": "Doppelkodierungen werden immer in 'K1' und 'K2' umbenannt, auch wenn es über die Personen und Variablen unterschiedliche Kodierer waren (Vermeidung fehlender Werte)",
+      "double-coding-method-title": "Verfahren, wenn pro Variable und Person mehrere Kodierer einen Code geliefert haben (Doppelkodierungen)",
+      "new-row-per-variable": "pro Variable neue Zeile",
+      "new-row-per-variable-tooltip": "Spalten bilden die Kodierer, als Zeilen sind die Personen genutzt und pro Variable hat die Person eine weitere Zeile. Beispiel für eine Zeilenbeschriftung: Testperson_Variablenname",
+      "new-column-per-coder": "pro Kodierer neue Spalte",
+      "new-column-per-coder-tooltip": "Spalte bilden die Variablen, als Zeilen sind die Personen genutzt und pro Kodierer hat die Variable eine weitere Spalte. Beispiel für Spaltenbeschriftung: Variablenname_Kodierer",
+      "most-frequent-random": "Kodierer: häufigster/Zufall",
+      "most-frequent-random-tooltip": "Es wird der häufigste Code genommen. Bei Gleichverteilung wird ein Code zufällig ausgewählt."
+    },
     "export-exporting": "Export läuft...",
     "export-success": "Export erfolgreich abgeschlossen",
     "export-errors": {
       "no-workspace": "Kein Arbeitsbereich ausgewählt",
       "invalid-format": "Ungültiges Exportformat",
-      "export-failed": "Export fehlgeschlagen"
+      "export-failed": "Export fehlgeschlagen",
+      "token-failed": "Token-Generierung fehlgeschlagen"
     },
     "no-access": "Sie haben keinen Zugriff auf diesen Arbeitsbereich. Bitte kontaktieren Sie den Studienadministrator für Zugriff."
   },

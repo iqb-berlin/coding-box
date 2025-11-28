@@ -924,6 +924,8 @@ export class BackendService {
     if (unitName) {
       params = params.set('unitName', unitName);
     }
+    // Add cache-busting parameter to ensure fresh data after job definition changes
+    params = params.set('_t', Date.now().toString());
     return this.http.get<{ unitName: string; variableId: string; responseCount: number }[]>(url, { params });
   }
 
@@ -1271,6 +1273,103 @@ export class BackendService {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/coding-times`;
     return this.http.get(url, {
       responseType: 'blob',
+      headers: this.authHeader
+    });
+  }
+
+  // Background export job methods
+  startExportJob(workspaceId: number, exportConfig: {
+    exportType: 'aggregated' | 'by-coder' | 'by-variable' | 'detailed' | 'coding-times';
+    userId: number;
+    outputCommentsInsteadOfCodes?: boolean;
+    includeReplayUrl?: boolean;
+    anonymizeCoders?: boolean;
+    usePseudoCoders?: boolean;
+    doubleCodingMethod?: 'new-row-per-variable' | 'new-column-per-coder' | 'most-frequent';
+    includeComments?: boolean;
+    includeModalValue?: boolean;
+    includeDoubleCoded?: boolean;
+    excludeAutoCoded?: boolean;
+    authToken?: string;
+  }): Observable<{ jobId: string; message: string }> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/start`;
+    return this.http.post<{ jobId: string; message: string }>(url, exportConfig, {
+      headers: this.authHeader
+    });
+  }
+
+  getExportJobStatus(workspaceId: number, jobId: string): Observable<{
+    status: string;
+    progress: number;
+    result?: {
+      fileId: string;
+      fileName: string;
+      filePath: string;
+      fileSize: number;
+      workspaceId: number;
+      userId: number;
+      exportType: string;
+      createdAt: number;
+    };
+    error?: string;
+  }> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/job/${jobId}`;
+    return this.http.get<{
+      status: string;
+      progress: number;
+      result?: {
+        fileId: string;
+        fileName: string;
+        filePath: string;
+        fileSize: number;
+        workspaceId: number;
+        userId: number;
+        exportType: string;
+        createdAt: number;
+      };
+      error?: string;
+    }>(url, {
+      headers: this.authHeader
+    });
+  }
+
+  downloadExportFile(workspaceId: number, jobId: string): Observable<Blob> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/job/${jobId}/download`;
+    return this.http.get(url, {
+      responseType: 'blob',
+      headers: this.authHeader
+    });
+  }
+
+  getExportJobs(workspaceId: number): Observable<Array<{
+    jobId: string;
+    status: string;
+    progress: number;
+    exportType: string;
+    createdAt: number;
+  }>> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/jobs`;
+    return this.http.get<Array<{
+      jobId: string;
+      status: string;
+      progress: number;
+      exportType: string;
+      createdAt: number;
+    }>>(url, {
+      headers: this.authHeader
+    });
+  }
+
+  deleteExportJob(workspaceId: number, jobId: string): Observable<{ success: boolean; message: string }> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/job/${jobId}`;
+    return this.http.delete<{ success: boolean; message: string }>(url, {
+      headers: this.authHeader
+    });
+  }
+
+  cancelExportJob(workspaceId: number, jobId: string): Observable<{ success: boolean; message: string }> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/job/${jobId}/cancel`;
+    return this.http.post<{ success: boolean; message: string }>(url, {}, {
       headers: this.authHeader
     });
   }

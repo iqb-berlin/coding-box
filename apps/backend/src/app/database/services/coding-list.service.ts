@@ -8,6 +8,7 @@ import { ResponseEntity } from '../entities/response.entity';
 import { extractVariableLocation } from '../../utils/voud/extractVariableLocation';
 import { statusStringToNumber } from '../utils/response-status-converter';
 import { LRUCache } from './lru-cache';
+import { WorkspaceFilesService } from './workspace-files.service';
 
 export interface CodingItem {
   unit_key: string;
@@ -38,7 +39,8 @@ export class CodingListService {
     @InjectRepository(FileUpload)
     private readonly fileUploadRepository: Repository<FileUpload>,
     @InjectRepository(ResponseEntity)
-    private readonly responseRepository: Repository<ResponseEntity>
+    private readonly responseRepository: Repository<ResponseEntity>,
+    private readonly workspaceFilesService: WorkspaceFilesService
   ) {}
 
   private async loadVoudData(unitName: string, workspaceId: number): Promise<Map<string, string>> {
@@ -531,5 +533,93 @@ export class CodingListService {
         this.errorListener(error);
       }
     }
+  }
+
+  async getCodingListVariables(workspaceId: number): Promise<Array<{ unitName: string; variableId: string }>> {
+    const queryBuilder = this.responseRepository.createQueryBuilder('response')
+      .innerJoin('response.unit', 'unit')
+      .innerJoin('unit.booklet', 'booklet')
+      .innerJoin('booklet.person', 'person')
+      .select('unit.name', 'unitName')
+      .addSelect('response.variableid', 'variableId')
+      .distinct(true)
+      .where('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('response.status_v1 = :status', { status: statusStringToNumber('CODING_INCOMPLETE') });
+
+    interface VocsScheme { variableCodings?: { id: string; sourceType?: string }[] }
+
+    const vocsFiles = await this.fileUploadRepository.find({
+      where: {
+        workspace_id: workspaceId,
+        file_type: 'Resource',
+        file_id: Like('%.VOCS')
+      },
+      select: ['file_id', 'data']
+    });
+
+    const excludedPairs = new Set<string>(); // key: `${unitKey}||${variableId}`
+    for (const file of vocsFiles) {
+      try {
+        const unitKey = file.file_id.replace('.VOCS', '');
+        const data = typeof (file).data === 'string' ? JSON.parse((file).data) : (file).data;
+        const scheme = data as VocsScheme;
+        const vars = scheme?.variableCodings || [];
+        for (const vc of vars) {
+          if (vc && vc.id && vc.sourceType && vc.sourceType === 'BASE_NO_VALUE') {
+            excludedPairs.add(`${unitKey}||${vc.id}`);
+          }
+        }
+      } catch (e) {
+        this.logger.error(`Error parsing VOCS file ${file.file_id}: ${e.message}`);
+      }
+    }
+
+    if (excludedPairs.size > 0) {
+      const exclusionConditions: string[] = [];
+      const exclusionParams: Record<string, string> = {};
+
+      Array.from(excludedPairs).forEach((pair, index) => {
+        const [unitKey, varId] = pair.split('||');
+        const unitParam = `unit${index}`;
+        const varParam = `var${index}`;
+        exclusionConditions.push(`NOT (unit.name = :${unitParam} AND response.variableid = :${varParam})`);
+        exclusionParams[unitParam] = unitKey;
+        exclusionParams[varParam] = varId;
+      });
+
+      queryBuilder.andWhere(`(${exclusionConditions.join(' AND ')})`, exclusionParams);
+    }
+
+    // Exclude media variables and derived variables
+    queryBuilder.andWhere(
+      `response.variableid NOT LIKE 'image%'
+       AND response.variableid NOT LIKE 'text%'
+       AND response.variableid NOT LIKE 'audio%'
+       AND response.variableid NOT LIKE 'frame%'
+       AND response.variableid NOT LIKE 'video%'
+       AND response.variableid NOT LIKE '%_0' ESCAPE '\\'`
+    );
+
+    queryBuilder.andWhere(
+      '(response.value IS NOT NULL AND response.value != \'\')'
+    );
+
+    const rawResults = await queryBuilder.getRawMany();
+
+    const unitVariableMap = await this.workspaceFilesService.getUnitVariableMap(workspaceId);
+
+    const validVariableSets = new Map<string, Set<string>>();
+    unitVariableMap.forEach((variables: Set<string>, unitName: string) => {
+      validVariableSets.set(unitName.toUpperCase(), variables);
+    });
+
+    const filteredResults = rawResults.filter(row => {
+      const unitNamesValidVars = validVariableSets.get(row.unitName?.toUpperCase());
+      return unitNamesValidVars?.has(row.variableId);
+    });
+
+    this.logger.log(`Found ${rawResults.length} CODING_INCOMPLETE variable groups, filtered to ${filteredResults.length} valid variables`);
+
+    return filteredResults;
   }
 }
