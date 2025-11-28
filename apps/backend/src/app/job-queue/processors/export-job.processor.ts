@@ -27,6 +27,13 @@ export class ExportJobProcessor {
   async process(job: Job<ExportJobData>): Promise<ExportJobResult> {
     this.logger.log(`Processing export job ${job.id} for workspace ${job.data.workspaceId}, type: ${job.data.exportType}`);
 
+    const validExportTypes = ['aggregated', 'by-coder', 'by-variable', 'detailed', 'coding-times'];
+    if (!validExportTypes.includes(job.data.exportType)) {
+      const errorMessage = `Unknown export type: ${job.data.exportType}`;
+      this.logger.error(`Error processing export job ${job.id}: ${errorMessage}`);
+      throw new Error(errorMessage);
+    }
+
     try {
       await job.progress(10);
 
@@ -43,9 +50,9 @@ export class ExportJobProcessor {
 
       await job.progress(20);
 
-      // Generate the export based on type
       let buffer: Buffer;
-      
+
+      // eslint-disable-next-line default-case
       switch (job.data.exportType) {
         case 'aggregated':
           buffer = await this.codingExportService.exportCodingResultsAggregated(
@@ -114,8 +121,7 @@ export class ExportJobProcessor {
           );
           break;
 
-        default:
-          throw new Error(`Unknown export type: ${job.data.exportType}`);
+        // no default - exportType is validated at the start of the method
       }
 
       await job.progress(90);

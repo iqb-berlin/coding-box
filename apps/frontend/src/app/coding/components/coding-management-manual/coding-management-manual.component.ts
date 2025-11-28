@@ -16,7 +16,7 @@ import { MatDialogModule } from '@angular/material/dialog';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import * as ExcelJS from 'exceljs';
 import {
-  Subject, takeUntil, debounceTime, distinctUntilChanged, finalize
+  Subject, takeUntil, debounceTime, finalize
 } from 'rxjs';
 import { CodingJobsComponent } from '../coding-jobs/coding-jobs.component';
 import { CodingJobDefinitionsComponent } from '../coding-job-definitions/coding-job-definitions.component';
@@ -489,7 +489,6 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
    * Uses debouncing to prevent excessive API calls
    */
   onJobDefinitionChanged(): void {
-    console.log('Job definition changed, triggering refresh...');
     this.jobDefinitionChangeSubject.next();
   }
 
@@ -497,7 +496,6 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
    * Refreshes all statistics with individual loading states
    */
   refreshAllStatistics(): void {
-    console.log('Refreshing all statistics after job definition change...');
     this.loadCodingProgressOverview();
     this.loadVariableCoverageOverview();
     this.loadCaseCoverageOverview();
@@ -543,7 +541,6 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       return;
     }
 
-    console.log('Loading variable coverage overview for workspace:', workspaceId);
     this.isLoadingVariableCoverage = true;
     this.testPersonCodingService.getVariableCoverageOverview(workspaceId)
       .pipe(
@@ -554,11 +551,9 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       )
       .subscribe({
         next: overview => {
-          console.log('Variable coverage overview loaded:', overview);
           this.variableCoverageOverview = overview;
         },
-        error: error => {
-          console.error('Error loading variable coverage overview:', error);
+        error: () => {
           this.variableCoverageOverview = null;
         }
       });
