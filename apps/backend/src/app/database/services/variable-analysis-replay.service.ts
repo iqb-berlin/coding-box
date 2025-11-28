@@ -5,6 +5,7 @@ import FileUpload from '../entities/file_upload.entity';
 import { ResponseEntity } from '../entities/response.entity';
 import { VariableAnalysisItemDto } from '../../../../../../api-dto/coding/variable-analysis-item.dto';
 import { WorkspaceFilesService } from './workspace-files.service';
+import { CodingListService } from './coding-list.service';
 
 @Injectable()
 export class VariableAnalysisReplayService {
@@ -15,7 +16,8 @@ export class VariableAnalysisReplayService {
     private fileUploadRepository: Repository<FileUpload>,
     @InjectRepository(ResponseEntity)
     private responseRepository: Repository<ResponseEntity>,
-    private workspaceFilesService: WorkspaceFilesService
+    private workspaceFilesService: WorkspaceFilesService,
+    private codingListService: CodingListService
   ) {}
 
   async getVariableAnalysis(
@@ -228,6 +230,14 @@ export class VariableAnalysisReplayService {
 
       const result: VariableAnalysisItemDto[] = [];
 
+      // Pre-load variable page maps for all unique units
+      const uniqueUnitIds = new Set(aggregatedResults.map(item => item.unitId));
+      const variablePageMaps = new Map<string, Map<string, string>>();
+      for (const unitId of uniqueUnitIds) {
+        const pageMap = await this.codingListService.getVariablePageMap(unitId, workspace_id);
+        variablePageMaps.set(unitId, pageMap);
+      }
+
       for (const item of aggregatedResults) {
         const unitId = item.unitId;
         const variableId = item.variableId;
@@ -261,7 +271,8 @@ export class VariableAnalysisReplayService {
         const loginGroup = sampleInfo?.loginGroup || '';
         const bookletId = sampleInfo?.bookletId || '';
 
-        const variablePage = '0';
+        // Get variable page from VOUD data
+        const variablePage = variablePageMaps.get(unitId)?.get(variableId) || '0';
         const replayUrl = `${serverUrl}/#/replay/${loginName}@${loginCode}@${loginGroup}@${bookletId}/${unitId}/${variablePage}/${variableId}?auth=${authToken}`;
 
         result.push({

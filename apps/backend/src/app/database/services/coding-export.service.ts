@@ -46,6 +46,28 @@ export class CodingExportService {
     private codingListService: CodingListService
   ) {}
 
+  private variablePageMapsCache = new Map<string, Map<string, string>>();
+  private currentWorkspaceId: number | null = null;
+
+  private clearPageMapsCache(): void {
+    this.variablePageMapsCache.clear();
+    this.currentWorkspaceId = null;
+  }
+
+  private async getVariablePage(unitName: string, variableId: string, workspaceId: number): Promise<string> {
+    if (this.currentWorkspaceId !== workspaceId) {
+      this.clearPageMapsCache();
+      this.currentWorkspaceId = workspaceId;
+    }
+
+    if (!this.variablePageMapsCache.has(unitName)) {
+      const pageMap = await this.codingListService.getVariablePageMap(unitName, workspaceId);
+      this.variablePageMapsCache.set(unitName, pageMap);
+    }
+
+    return this.variablePageMapsCache.get(unitName)?.get(variableId) || '0';
+  }
+
   private generateReplayUrl(
     req: Request,
     loginName: string,
@@ -54,6 +76,7 @@ export class CodingExportService {
     bookletId: string,
     unitName: string,
     variableId: string,
+    variablePage: string,
     authToken: string
   ): string {
     if (!loginName || !loginCode || !bookletId || !unitName || !variableId) {
@@ -61,18 +84,32 @@ export class CodingExportService {
     }
 
     const baseUrl = `${req.protocol}://${req.get('host')}`;
-    const variablePage = '0';
 
     const encodedLoginName = encodeURIComponent(loginName);
     const encodedLoginCode = encodeURIComponent(loginCode);
     const encodedGroup = encodeURIComponent(group || '');
     const encodedBookletId = encodeURIComponent(bookletId);
     const encodedUnitName = encodeURIComponent(unitName);
-    const encodedVariablePage = encodeURIComponent(variablePage);
+    const encodedVariablePage = encodeURIComponent(variablePage || '0');
     const encodedVariableId = encodeURIComponent(variableId);
     const encodedAuthToken = encodeURIComponent(authToken || '');
 
     return `${baseUrl}/#/replay/${encodedLoginName}@${encodedLoginCode}@${encodedGroup}@${encodedBookletId}/${encodedUnitName}/${encodedVariablePage}/${encodedVariableId}?auth=${encodedAuthToken}`;
+  }
+
+  private async generateReplayUrlWithPageLookup(
+    req: Request,
+    loginName: string,
+    loginCode: string,
+    group: string,
+    bookletId: string,
+    unitName: string,
+    variableId: string,
+    workspaceId: number,
+    authToken: string
+  ): Promise<string> {
+    const variablePage = await this.getVariablePage(unitName, variableId, workspaceId);
+    return this.generateReplayUrl(req, loginName, loginCode, group, bookletId, unitName, variableId, variablePage, authToken);
   }
 
   private getLatestCode(response: ResponseEntity): { code: number | null; score: number | null; version: string } {
@@ -152,6 +189,8 @@ export class CodingExportService {
     checkCancellation?: () => Promise<void>
   ): Promise<Buffer> {
     this.logger.log(`Exporting aggregated coding results for workspace ${workspaceId} with method: ${doubleCodingMethod}${outputCommentsInsteadOfCodes ? ' with comments instead of codes' : ''}${includeReplayUrl ? ' with replay URLs' : ''}${anonymizeCoders ? ' with anonymized coders' : ''}${excludeAutoCoded ? ' (manual coding only)' : ' (including auto-coded)'}`);
+
+    this.clearPageMapsCache();
 
     if (doubleCodingMethod === 'new-row-per-variable') {
       return this.exportAggregatedNewRowPerVariable(workspaceId, outputCommentsInsteadOfCodes, includeReplayUrl, anonymizeCoders, usePseudoCoders, includeComments, includeModalValue, authToken, req, excludeAutoCoded, checkCancellation);
@@ -314,7 +353,7 @@ export class CodingExportService {
             if (modalValues.has(variable)) {
               const variableId = variable.split('_').slice(1).join('_');
               const unitName = variableUnitNames.get(variable) || '';
-              replayUrl = this.generateReplayUrl(req, login, code, group, bookletName, unitName, variableId, authToken);
+              replayUrl = await this.generateReplayUrlWithPageLookup(req, login, code, group, bookletName, unitName, variableId, workspaceId, authToken);
               break;
             }
           }
@@ -525,7 +564,7 @@ export class CodingExportService {
 
           // Add replay URL
           if (includeReplayUrl && req) {
-            row['Replay URL'] = this.generateReplayUrl(req, login, code, group, bookletName, unitName, variableId, authToken);
+            row['Replay URL'] = await this.generateReplayUrlWithPageLookup(req, login, code, group, bookletName, unitName, variableId, workspaceId, authToken);
           }
 
           // Add coder codes/comments
@@ -866,6 +905,9 @@ export class CodingExportService {
   async exportCodingResultsByCoder(workspaceId: number, outputCommentsInsteadOfCodes = false, includeReplayUrl = false, anonymizeCoders = false, usePseudoCoders = false, authToken = '', req?: Request, excludeAutoCoded = false, checkCancellation?: () => Promise<void>): Promise<Buffer> {
     this.logger.log(`Exporting coding results by coder for workspace ${workspaceId}${outputCommentsInsteadOfCodes ? ' with comments instead of codes' : ''}${includeReplayUrl ? ' with replay URLs' : ''}${anonymizeCoders ? ' with anonymized coders' : ''}${usePseudoCoders ? ' using pseudo coders' : ''}${excludeAutoCoded ? ' (manual coding only)' : ''}`);
 
+    // Clear page maps cache at start of export
+    this.clearPageMapsCache();
+
     // Check for cancellation before starting
     if (checkCancellation) await checkCancellation();
 
@@ -1070,7 +1112,7 @@ export class CodingExportService {
                 const parts = variable.split('_');
                 const varId = parts[parts.length - 1];
                 const unitName = variableUnitNames.get(variable) || '';
-                replayUrl = this.generateReplayUrl(req, login, code, group, bookletName, unitName, varId, authToken);
+                replayUrl = await this.generateReplayUrlWithPageLookup(req, login, code, group, bookletName, unitName, varId, workspaceId, authToken);
                 break;
               }
             }
@@ -1111,6 +1153,8 @@ export class CodingExportService {
   async exportCodingResultsByVariable(workspaceId: number, includeModalValue = false, includeDoubleCoded = false, includeComments = false, outputCommentsInsteadOfCodes = false, includeReplayUrl = false, anonymizeCoders = false, usePseudoCoders = false, authToken = '', req?: Request, excludeAutoCoded = false, checkCancellation?: () => Promise<void>): Promise<Buffer> {
     this.logger.log(`Exporting coding results by variable for workspace ${workspaceId}${excludeAutoCoded ? ' (CODING_INCOMPLETE only)' : ''}${includeModalValue ? ' with modal value' : ''}${includeDoubleCoded ? ' with double coding indicator' : ''}${includeComments ? ' with comments' : ''}${outputCommentsInsteadOfCodes ? ' with comments instead of codes' : ''}${includeReplayUrl ? ' with replay URLs' : ''}${anonymizeCoders ? ' with anonymized coders' : ''}${usePseudoCoders ? ' using pseudo coders' : ''}`);
 
+    // Clear page maps cache at start of export
+    this.clearPageMapsCache();
     const MAX_WORKSHEETS = parseInt(process.env.EXPORT_MAX_WORKSHEETS || '100', 10);
     const MAX_RESPONSES_PER_WORKSHEET = parseInt(process.env.EXPORT_MAX_RESPONSES_PER_WORKSHEET || '10000', 10);
     const BATCH_SIZE = parseInt(process.env.EXPORT_BATCH_SIZE || '50', 10);
@@ -1304,7 +1348,7 @@ export class CodingExportService {
               };
 
               if (includeReplayUrl && req) {
-                row['Replay URL'] = this.generateReplayUrl(
+                row['Replay URL'] = await this.generateReplayUrlWithPageLookup(
                   req,
                   personData.login,
                   personData.code,
@@ -1312,6 +1356,7 @@ export class CodingExportService {
                   personData.booklet,
                   unitName,
                   variableId,
+                  workspaceId,
                   authToken
                 );
               }
@@ -1442,6 +1487,9 @@ export class CodingExportService {
 
   async exportCodingResultsDetailed(workspaceId: number, outputCommentsInsteadOfCodes = false, includeReplayUrl = false, anonymizeCoders = false, usePseudoCoders = false, authToken = '', req?: Request, excludeAutoCoded = false, checkCancellation?: () => Promise<void>): Promise<Buffer> {
     this.logger.log(`Exporting detailed coding results for workspace ${workspaceId}${outputCommentsInsteadOfCodes ? ' with comments instead of codes' : ''}${includeReplayUrl ? ' with replay URLs' : ''}${anonymizeCoders ? ' with anonymized coders' : ''}${usePseudoCoders ? ' using pseudo coders' : ''}${excludeAutoCoded ? ' (manual coding only)' : ''}`);
+
+    // Clear page maps cache at start of export
+    this.clearPageMapsCache();
 
     // Check for cancellation before starting
     if (checkCancellation) await checkCancellation();
@@ -1591,7 +1639,7 @@ export class CodingExportService {
           const bookletName = unit.response?.unit?.booklet?.bookletinfo?.name || '';
           const unitName = unit.response?.unit?.name || '';
           const group = person?.group || '';
-          const replayUrl = this.generateReplayUrl(
+          const replayUrl = await this.generateReplayUrlWithPageLookup(
             req,
             person?.login || '',
             person?.code || '',
@@ -1599,6 +1647,7 @@ export class CodingExportService {
             bookletName,
             unitName,
             unit.variable_id,
+            workspaceId,
             authToken
           );
           rowFields.push(escapeCsvField(replayUrl));

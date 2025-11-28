@@ -594,7 +594,8 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
           login_code: item.personCode || '',
           booklet_id: item.bookletName || '',
           person_code: item.personCode || '',
-          person_group: item.personGroup || ''
+          person_group: item.personGroup || '',
+          variable_page: item.variablePage || '0'
         })) as Success[];
         this.dataSource.data = this.data;
         this.totalRecords = response.total;
@@ -652,7 +653,7 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
   }
 
   openReplay(response: Success): void {
-    const page = '0';
+    const page = response.variable_page || '0';
     const workspaceId = this.appService.selectedWorkspaceId;
 
     if (!response.login_name || !response.login_code || !response.booklet_id) {

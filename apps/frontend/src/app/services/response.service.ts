@@ -164,6 +164,7 @@ export class ResponseService {
         personLogin: string;
         personCode: string;
         personGroup: string;
+        variablePage?: string;
       }[];
       total: number;
     }> {
