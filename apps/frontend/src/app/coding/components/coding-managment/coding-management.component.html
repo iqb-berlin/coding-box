@@ -18,6 +18,10 @@
           <mat-icon>list</mat-icon>
           {{ 'coding-management.buttons.coding-list' | translate }}
         </a>
+        <a mat-raised-button color="primary" (click)="openCodingReportDialog()">
+          <mat-icon>assessment</mat-icon>
+          {{ 'coding-management.buttons.coding-report' | translate }}
+        </a>
       }
       @if (!showManualCoding) {
         <a mat-raised-button color="primary" (click)="openExportCodingBook()">

@@ -34,6 +34,8 @@ import { DatabaseAdminController } from './database/database-admin.controller';
 import { DatabaseExportService } from './database/database-export.service';
 import { JobQueueModule } from '../job-queue/job-queue.module';
 import { CacheModule } from '../cache/cache.module';
+import { WorkspaceCodingReportController } from './workspace/workspace-coding-report.controller';
+import { WorkspaceCodingReportModule } from './workspace/workspace-coding-report.module';
 
 @Module({
   imports: [
@@ -43,7 +45,8 @@ import { CacheModule } from '../cache/cache.module';
     TypeOrmModule.forFeature([FileUpload, Setting]),
     VariableBundleModule,
     JobQueueModule,
-    CacheModule
+    CacheModule,
+    WorkspaceCodingReportModule
   ],
   controllers: [
     UsersController,
@@ -68,7 +71,8 @@ import { CacheModule } from '../cache/cache.module';
     ReplayStatisticsController,
     VariableBundleController,
     CodingJobsController,
-    DatabaseAdminController
+    DatabaseAdminController,
+    WorkspaceCodingReportController
   ],
   providers: [
     BookletInfoService,

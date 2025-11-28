@@ -1,0 +1,32 @@
+<div mat-dialog-title class="fx-column-start-start title">
+	<span>{{ 'coding-report.title' | translate }}</span>
+	<mat-form-field class="filter">
+		<mat-label>{{'coding-report.filter-by' | translate}}</mat-label>
+		<input matInput (keyup)="applyFilter($event)" #input>
+	</mat-form-field>
+	<mat-slide-toggle class="toggle" [checked]="codedVariablesOnly" (toggleChange)="toggleChange()">
+		{{ 'coding-report.coded-variables-only' | translate }}
+	</mat-slide-toggle>
+</div>
+<mat-dialog-content>
+	<ng-container *ngIf="isLoading; else tableBlock">
+		<mat-spinner></mat-spinner>
+	</ng-container>
+	<ng-template #tableBlock>
+		<table mat-table [dataSource]="dataSource" matSort>
+			<ng-container *ngFor="let column of displayedColumns" [matColumnDef]="column">
+				<th mat-header-cell *matHeaderCellDef mat-sort-header> {{ 'coding-report.' + column | translate}}</th>
+				<td mat-cell [innerHTML]="element[column]" *matCellDef="let element"></td>
+			</ng-container>
+			<tr mat-header-row  *matHeaderRowDef="displayedColumns;sticky:true"></tr>
+			<tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+		</table>
+	</ng-template>
+</mat-dialog-content>
+<mat-dialog-actions align="end" >
+	<button mat-raised-button
+					color="primary"
+					type="button">
+		{{ 'coding-report.close' | translate }}
+	</button>
+</mat-dialog-actions>
