@@ -1,7 +1,7 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
-  Repository, In, Not, IsNull
+  Repository, In, Not, IsNull, Connection, EntityManager
 } from 'typeorm';
 import { statusStringToNumber } from '../utils/response-status-converter';
 import { SaveCodingProgressDto } from '../../admin/coding-job/dto/save-coding-progress.dto';
@@ -59,7 +59,8 @@ export class CodingJobService {
     @InjectRepository(ResponseEntity)
     private responseRepository: Repository<ResponseEntity>,
     @InjectRepository(FileUpload)
-    private fileUploadRepository: Repository<FileUpload>
+    private fileUploadRepository: Repository<FileUpload>,
+    private connection: Connection
   ) {}
 
   async getCodingJobProgress(jobId: number): Promise<{ progress: number; coded: number; total: number; open: number }> {
@@ -260,46 +261,49 @@ export class CodingJobService {
     workspaceId: number,
     createCodingJobDto: CreateCodingJobDto
   ): Promise<CodingJob> {
-    const codingJob = this.codingJobRepository.create({
-      workspace_id: workspaceId,
-      name: createCodingJobDto.name,
-      description: createCodingJobDto.description,
-      status: createCodingJobDto.status || 'pending',
-      missings_profile_id: createCodingJobDto.missings_profile_id,
-      job_definition_id: createCodingJobDto.jobDefinitionId
-    });
+    return this.connection.transaction(async manager => {
+      const codingJobRepo = manager.getRepository(CodingJob);
+      const codingJob = codingJobRepo.create({
+        workspace_id: workspaceId,
+        name: createCodingJobDto.name,
+        description: createCodingJobDto.description,
+        status: createCodingJobDto.status || 'pending',
+        missings_profile_id: createCodingJobDto.missings_profile_id,
+        job_definition_id: createCodingJobDto.jobDefinitionId
+      });
 
-    const savedCodingJob = await this.codingJobRepository.save(codingJob);
+      const savedCodingJob = await codingJobRepo.save(codingJob);
 
-    if (createCodingJobDto.assignedCoders && createCodingJobDto.assignedCoders.length > 0) {
-      await this.assignCoders(savedCodingJob.id, createCodingJobDto.assignedCoders);
-    }
+      if (createCodingJobDto.assignedCoders && createCodingJobDto.assignedCoders.length > 0) {
+        await this.assignCoders(savedCodingJob.id, createCodingJobDto.assignedCoders, manager);
+      }
 
-    if (createCodingJobDto.variables && createCodingJobDto.variables.length > 0) {
-      await this.assignVariables(savedCodingJob.id, createCodingJobDto.variables);
-    }
+      if (createCodingJobDto.variables && createCodingJobDto.variables.length > 0) {
+        await this.assignVariables(savedCodingJob.id, createCodingJobDto.variables, manager);
+      }
 
-    if (createCodingJobDto.variableBundleIds && createCodingJobDto.variableBundleIds.length > 0) {
-      await this.assignVariableBundles(savedCodingJob.id, createCodingJobDto.variableBundleIds);
-    } else if (createCodingJobDto.variableBundles && createCodingJobDto.variableBundles.length > 0) {
-      if (createCodingJobDto.variableBundles[0].id) {
-        const bundleIds = createCodingJobDto.variableBundles
-          .filter(bundle => bundle.id)
-          .map(bundle => bundle.id);
+      if (createCodingJobDto.variableBundleIds && createCodingJobDto.variableBundleIds.length > 0) {
+        await this.assignVariableBundles(savedCodingJob.id, createCodingJobDto.variableBundleIds, manager);
+      } else if (createCodingJobDto.variableBundles && createCodingJobDto.variableBundles.length > 0) {
+        if (createCodingJobDto.variableBundles[0].id) {
+          const bundleIds = createCodingJobDto.variableBundles
+            .filter(bundle => bundle.id)
+            .map(bundle => bundle.id);
 
-        if (bundleIds.length > 0) {
-          await this.assignVariableBundles(savedCodingJob.id, bundleIds);
-        }
-      } else {
-        const variables = createCodingJobDto.variableBundles.flatMap(bundle => bundle.variables || []);
-        if (variables.length > 0) {
-          await this.assignVariables(savedCodingJob.id, variables);
+          if (bundleIds.length > 0) {
+            await this.assignVariableBundles(savedCodingJob.id, bundleIds, manager);
+          }
+        } else {
+          const variables = createCodingJobDto.variableBundles.flatMap(bundle => bundle.variables || []);
+          if (variables.length > 0) {
+            await this.assignVariables(savedCodingJob.id, variables, manager);
+          }
         }
       }
-    }
-    await this.saveCodingJobUnits(savedCodingJob.id);
+      await this.saveCodingJobUnits(savedCodingJob.id, manager);
 
-    return savedCodingJob;
+      return savedCodingJob;
+    });
   }
 
   async updateCodingJob(
@@ -390,39 +394,44 @@ export class CodingJobService {
     return { success: true };
   }
 
-  async assignCoders(codingJobId: number, userIds: number[]): Promise<CodingJobCoder[]> {
-    await this.codingJobCoderRepository.delete({ coding_job_id: codingJobId });
-    const coders = userIds.map(userId => this.codingJobCoderRepository.create({
+  async assignCoders(codingJobId: number, userIds: number[], manager?: EntityManager): Promise<CodingJobCoder[]> {
+    const repo = manager ? manager.getRepository(CodingJobCoder) : this.codingJobCoderRepository;
+    await repo.delete({ coding_job_id: codingJobId });
+    const coders = userIds.map(userId => repo.create({
       coding_job_id: codingJobId,
       user_id: userId
     }));
 
-    return this.codingJobCoderRepository.save(coders);
+    return repo.save(coders);
   }
 
   private async assignVariables(
     codingJobId: number,
-    variables: { unitName: string; variableId: string }[]
+    variables: { unitName: string; variableId: string }[],
+    manager?: EntityManager
   ): Promise<CodingJobVariable[]> {
-    const codingJobVariables = variables.map(variable => this.codingJobVariableRepository.create({
+    const repo = manager ? manager.getRepository(CodingJobVariable) : this.codingJobVariableRepository;
+    const codingJobVariables = variables.map(variable => repo.create({
       coding_job_id: codingJobId,
       unit_name: variable.unitName,
       variable_id: variable.variableId
     }));
 
-    return this.codingJobVariableRepository.save(codingJobVariables);
+    return repo.save(codingJobVariables);
   }
 
   private async assignVariableBundles(
     codingJobId: number,
-    variableBundleIds: number[]
+    variableBundleIds: number[],
+    manager?: EntityManager
   ): Promise<CodingJobVariableBundle[]> {
-    const variableBundles = variableBundleIds.map(variableBundleId => this.codingJobVariableBundleRepository.create({
+    const repo = manager ? manager.getRepository(CodingJobVariableBundle) : this.codingJobVariableBundleRepository;
+    const variableBundles = variableBundleIds.map(variableBundleId => repo.create({
       coding_job_id: codingJobId,
       variable_bundle_id: variableBundleId
     }));
 
-    return this.codingJobVariableBundleRepository.save(variableBundles);
+    return repo.save(variableBundles);
   }
 
   async getCodingJobsByCoder(coderId: number): Promise<CodingJob[]> {
@@ -490,12 +499,16 @@ export class CodingJobService {
     };
   }
 
-  async getResponsesForCodingJob(codingJobId: number): Promise<ResponseEntity[]> {
-    const codingJobVariables = await this.codingJobVariableRepository.find({
+  async getResponsesForCodingJob(codingJobId: number, manager?: EntityManager): Promise<ResponseEntity[]> {
+    const variableRepo = manager ? manager.getRepository(CodingJobVariable) : this.codingJobVariableRepository;
+    const bundleRepo = manager ? manager.getRepository(CodingJobVariableBundle) : this.codingJobVariableBundleRepository;
+    const responseRepo = manager ? manager.getRepository(ResponseEntity) : this.responseRepository;
+
+    const codingJobVariables = await variableRepo.find({
       where: { coding_job_id: codingJobId }
     });
 
-    const codingJobVariableBundles = await this.codingJobVariableBundleRepository.find({
+    const codingJobVariableBundles = await bundleRepo.find({
       where: { coding_job_id: codingJobId },
       relations: ['variable_bundle']
     });
@@ -519,7 +532,7 @@ export class CodingJobService {
       return [];
     }
 
-    const queryBuilder = this.responseRepository.createQueryBuilder('response')
+    const queryBuilder = responseRepo.createQueryBuilder('response')
       .leftJoinAndSelect('response.unit', 'unit')
       .leftJoinAndSelect('unit.booklet', 'booklet')
       .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
@@ -777,14 +790,15 @@ export class CodingJobService {
     }));
   }
 
-  private async saveCodingJobUnits(codingJobId: number): Promise<void> {
-    const responses = await this.getResponsesForCodingJob(codingJobId);
+  private async saveCodingJobUnits(codingJobId: number, manager?: EntityManager): Promise<void> {
+    const responses = await this.getResponsesForCodingJob(codingJobId, manager);
 
     if (responses.length === 0) {
       return;
     }
 
-    const codingJobUnits = responses.map(response => this.codingJobUnitRepository.create({
+    const repo = manager ? manager.getRepository(CodingJobUnit) : this.codingJobUnitRepository;
+    const codingJobUnits = responses.map(response => repo.create({
       coding_job_id: codingJobId,
       response_id: response.id,
       unit_name: response.unit?.name || '',
@@ -797,7 +811,7 @@ export class CodingJobService {
       person_group: response.unit?.booklet?.person?.group || ''
     }));
 
-    await this.codingJobUnitRepository.save(codingJobUnits);
+    await repo.save(codingJobUnits);
   }
 
   private async getCodingSchemes(unitAliases: string[], workspaceId: number): Promise<Map<string, CodingScheme>> {
@@ -850,51 +864,55 @@ export class CodingJobService {
     createCodingJobDto: CreateCodingJobDto,
     unitSubset: number[]
   ): Promise<CodingJob> {
-    const codingJob = this.codingJobRepository.create({
-      workspace_id: workspaceId,
-      name: createCodingJobDto.name,
-      description: createCodingJobDto.description,
-      status: createCodingJobDto.status || 'pending',
-      missings_profile_id: createCodingJobDto.missings_profile_id,
-      job_definition_id: createCodingJobDto.jobDefinitionId
-    });
+    return this.connection.transaction(async manager => {
+      const codingJobRepo = manager.getRepository(CodingJob);
+      const codingJob = codingJobRepo.create({
+        workspace_id: workspaceId,
+        name: createCodingJobDto.name,
+        description: createCodingJobDto.description,
+        status: createCodingJobDto.status || 'pending',
+        missings_profile_id: createCodingJobDto.missings_profile_id,
+        job_definition_id: createCodingJobDto.jobDefinitionId
+      });
 
-    const savedCodingJob = await this.codingJobRepository.save(codingJob);
+      const savedCodingJob = await codingJobRepo.save(codingJob);
 
-    if (createCodingJobDto.assignedCoders && createCodingJobDto.assignedCoders.length > 0) {
-      await this.assignCoders(savedCodingJob.id, createCodingJobDto.assignedCoders);
-    }
+      if (createCodingJobDto.assignedCoders && createCodingJobDto.assignedCoders.length > 0) {
+        await this.assignCoders(savedCodingJob.id, createCodingJobDto.assignedCoders, manager);
+      }
 
-    if (createCodingJobDto.variables && createCodingJobDto.variables.length > 0) {
-      await this.assignVariables(savedCodingJob.id, createCodingJobDto.variables);
-    }
+      if (createCodingJobDto.variables && createCodingJobDto.variables.length > 0) {
+        await this.assignVariables(savedCodingJob.id, createCodingJobDto.variables, manager);
+      }
 
-    if (createCodingJobDto.variableBundleIds && createCodingJobDto.variableBundleIds.length > 0) {
-      await this.assignVariableBundles(savedCodingJob.id, createCodingJobDto.variableBundleIds);
-    } else if (createCodingJobDto.variableBundles && createCodingJobDto.variableBundles.length > 0) {
-      if (createCodingJobDto.variableBundles[0].id) {
-        const bundleIds = createCodingJobDto.variableBundles
-          .filter(bundle => bundle.id)
-          .map(bundle => bundle.id);
+      if (createCodingJobDto.variableBundleIds && createCodingJobDto.variableBundleIds.length > 0) {
+        await this.assignVariableBundles(savedCodingJob.id, createCodingJobDto.variableBundleIds, manager);
+      } else if (createCodingJobDto.variableBundles && createCodingJobDto.variableBundles.length > 0) {
+        if (createCodingJobDto.variableBundles[0].id) {
+          const bundleIds = createCodingJobDto.variableBundles
+            .filter(bundle => bundle.id)
+            .map(bundle => bundle.id);
 
-        if (bundleIds.length > 0) {
-          await this.assignVariableBundles(savedCodingJob.id, bundleIds);
-        }
-      } else {
-        const variables = createCodingJobDto.variableBundles.flatMap(bundle => bundle.variables || []);
-        if (variables.length > 0) {
-          await this.assignVariables(savedCodingJob.id, variables);
+          if (bundleIds.length > 0) {
+            await this.assignVariableBundles(savedCodingJob.id, bundleIds, manager);
+          }
+        } else {
+          const variables = createCodingJobDto.variableBundles.flatMap(bundle => bundle.variables || []);
+          if (variables.length > 0) {
+            await this.assignVariables(savedCodingJob.id, variables, manager);
+          }
         }
       }
-    }
 
-    await this.saveCodingJobUnitsSubset(savedCodingJob.id, unitSubset);
+      await this.saveCodingJobUnitsSubset(savedCodingJob.id, unitSubset, manager);
 
-    return savedCodingJob;
+      return savedCodingJob;
+    });
   }
 
-  private async saveCodingJobUnitsSubset(codingJobId: number, responseIds: number[]): Promise<void> {
-    const responses = await this.responseRepository.find({
+  private async saveCodingJobUnitsSubset(codingJobId: number, responseIds: number[], manager?: EntityManager): Promise<void> {
+    const responseRepo = manager ? manager.getRepository(ResponseEntity) : this.responseRepository;
+    const responses = await responseRepo.find({
       where: { id: In(responseIds) },
       relations: ['unit', 'unit.booklet', 'unit.booklet.bookletinfo', 'unit.booklet.person']
     });
@@ -903,7 +921,8 @@ export class CodingJobService {
       return;
     }
 
-    const codingJobUnits = responses.map(response => this.codingJobUnitRepository.create({
+    const unitRepo = manager ? manager.getRepository(CodingJobUnit) : this.codingJobUnitRepository;
+    const codingJobUnits = responses.map(response => unitRepo.create({
       coding_job_id: codingJobId,
       response_id: response.id,
       unit_name: response.unit?.name || '',
@@ -916,7 +935,7 @@ export class CodingJobService {
       person_group: response.unit?.booklet?.person?.group || ''
     }));
 
-    await this.codingJobUnitRepository.save(codingJobUnits);
+    await unitRepo.save(codingJobUnits);
   }
 
   private distributeDoubleCodingEvenly(
