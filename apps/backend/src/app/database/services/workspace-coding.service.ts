@@ -1614,16 +1614,16 @@ export class WorkspaceCodingService {
     return this.codingJobService.createDistributedCodingJobs(workspaceId, request);
   }
 
-  async exportCodingResultsAggregated(workspaceId: number): Promise<Buffer> {
-    return this.codingExportService.exportCodingResultsAggregated(workspaceId);
+  async exportCodingResultsAggregated(workspaceId: number, outputCommentsInsteadOfCodes = false): Promise<Buffer> {
+    return this.codingExportService.exportCodingResultsAggregated(workspaceId, outputCommentsInsteadOfCodes);
   }
 
-  async exportCodingResultsByCoder(workspaceId: number): Promise<Buffer> {
-    return this.codingExportService.exportCodingResultsByCoder(workspaceId);
+  async exportCodingResultsByCoder(workspaceId: number, outputCommentsInsteadOfCodes = false): Promise<Buffer> {
+    return this.codingExportService.exportCodingResultsByCoder(workspaceId, outputCommentsInsteadOfCodes);
   }
 
-  async exportCodingResultsByVariable(workspaceId: number): Promise<Buffer> {
-    return this.codingExportService.exportCodingResultsByVariable(workspaceId);
+  async exportCodingResultsByVariable(workspaceId: number, includeModalValue = false, includeDoubleCoded = false, includeComments = false, outputCommentsInsteadOfCodes = false): Promise<Buffer> {
+    return this.codingExportService.exportCodingResultsByVariable(workspaceId, includeModalValue, includeDoubleCoded, includeComments, outputCommentsInsteadOfCodes);
   }
 
   async bulkApplyCodingResults(workspaceId: number): Promise<{

@@ -4,12 +4,16 @@ import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
 import { MatRadioModule } from '@angular/material/radio';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import { MatCheckboxModule } from '@angular/material/checkbox';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { FormsModule } from '@angular/forms';
 import { CommonModule } from '@angular/common';
 import { Observable } from 'rxjs';
+import { catchError } from 'rxjs/operators';
 import { AppService } from '../../../services/app.service';
-import { BackendService } from '../../../services/backend.service';
+import { ExportJobService } from '../../../services/export-job.service';
 
 export type ExportFormat = 'aggregated' | 'by-coder' | 'by-variable' | 'detailed' | 'coding-times';
 
@@ -24,19 +28,31 @@ export type ExportFormat = 'aggregated' | 'by-coder' | 'by-variable' | 'detailed
     MatButtonModule,
     MatRadioModule,
     MatProgressSpinnerModule,
+    MatProgressBarModule,
     MatSnackBarModule,
+    MatCheckboxModule,
+    MatTooltipModule,
     FormsModule,
     CommonModule
   ]
 })
 export class ExportComponent {
   private appService = inject(AppService);
-  private backendService = inject(BackendService);
+  private exportJobService = inject(ExportJobService);
   private translateService = inject(TranslateService);
   private snackBar = inject(MatSnackBar);
 
   selectedFormat: ExportFormat = 'aggregated';
-  isExporting = false;
+  isStartingExport = false;
+  includeModalValue = false;
+  includeDoubleCoded = false;
+  includeComments = false;
+  includeReplayUrl = false;
+  outputCommentsInsteadOfCodes = false;
+  anonymizeCoders = false;
+  usePseudoCoders = false;
+  doubleCodingMethod: 'new-row-per-variable' | 'new-column-per-coder' | 'most-frequent' = 'most-frequent';
+  excludeAutoCoded = true;
 
   exportFormats = [
     {
@@ -66,6 +82,21 @@ export class ExportComponent {
     }
   ];
 
+  onFormatChange(): void {
+    this.clearReplayUrlIfNeeded();
+  }
+
+  onDoubleCodingMethodChange(): void {
+    this.clearReplayUrlIfNeeded();
+  }
+
+  private clearReplayUrlIfNeeded(): void {
+    if (this.selectedFormat === 'coding-times' ||
+        (this.selectedFormat === 'aggregated' && this.doubleCodingMethod === 'new-column-per-coder')) {
+      this.includeReplayUrl = false;
+    }
+  }
+
   onExport(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
@@ -77,68 +108,52 @@ export class ExportComponent {
       return;
     }
 
-    this.isExporting = true;
+    this.isStartingExport = true;
 
-    let exportMethod: Observable<Blob>;
-    let filename: string;
-
-    switch (this.selectedFormat) {
-      case 'aggregated':
-        exportMethod = this.backendService.exportCodingResultsAggregated(workspaceId);
-        filename = `coding-results-aggregated-${new Date().toISOString().slice(0, 10)}.xlsx`;
-        break;
-      case 'by-coder':
-        exportMethod = this.backendService.exportCodingResultsByCoder(workspaceId);
-        filename = `coding-results-by-coder-${new Date().toISOString().slice(0, 10)}.xlsx`;
-        break;
-      case 'by-variable':
-        exportMethod = this.backendService.exportCodingResultsByVariable(workspaceId);
-        filename = `coding-results-by-variable-${new Date().toISOString().slice(0, 10)}.xlsx`;
-        break;
-      case 'detailed':
-        exportMethod = this.backendService.exportCodingResultsDetailed(workspaceId);
-        filename = `coding-results-detailed-${new Date().toISOString().slice(0, 10)}.csv`;
-        break;
-      case 'coding-times':
-        exportMethod = this.backendService.exportCodingTimesReport(workspaceId);
-        filename = `coding-times-report-${new Date().toISOString().slice(0, 10)}.xlsx`;
-        break;
-      default:
+    const loggedUser = this.appService.loggedUser;
+    const tokenObservable = this.includeReplayUrl && loggedUser?.sub ?
+      this.appService.createToken(workspaceId, loggedUser.sub, 60).pipe(catchError(() => {
         this.snackBar.open(
-          this.translateService.instant('ws-admin.export.errors.invalid-format'),
+          this.translateService.instant('ws-admin.export.errors.token-failed'),
           this.translateService.instant('close'),
           { duration: 5000 }
         );
-        this.isExporting = false;
-        return;
-    }
+        this.isStartingExport = false;
+        throw new Error('Token generation failed');
+      })) :
+      new Observable<string>(subscriber => {
+        subscriber.next('');
+        subscriber.complete();
+      });
 
-    exportMethod.subscribe({
-      next: (blob: Blob) => {
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(url);
+    tokenObservable.subscribe(authToken => {
+      const userId = loggedUser?.id || 0;
 
-        this.snackBar.open(
-          this.translateService.instant('ws-admin.export.success'),
-          this.translateService.instant('close'),
-          { duration: 5000 }
-        );
-        this.isExporting = false;
-      },
-      error: () => {
-        this.snackBar.open(
-          this.translateService.instant('ws-admin.export.errors.export-failed'),
-          this.translateService.instant('close'),
-          { duration: 5000 }
-        );
-        this.isExporting = false;
-      }
+      // Prepare export configuration
+      const exportConfig = {
+        exportType: this.selectedFormat,
+        userId,
+        outputCommentsInsteadOfCodes: this.outputCommentsInsteadOfCodes,
+        includeReplayUrl: this.includeReplayUrl,
+        anonymizeCoders: this.anonymizeCoders,
+        usePseudoCoders: this.usePseudoCoders,
+        doubleCodingMethod: this.doubleCodingMethod,
+        includeComments: this.includeComments,
+        includeModalValue: this.includeModalValue,
+        includeDoubleCoded: this.includeDoubleCoded,
+        excludeAutoCoded: this.excludeAutoCoded,
+        authToken
+      };
+
+      this.exportJobService.startJob(workspaceId, exportConfig);
+
+      this.snackBar.open(
+        this.translateService.instant('ws-admin.export.job-started'),
+        this.translateService.instant('close'),
+        { duration: 3000 }
+      );
+
+      this.isStartingExport = false;
     });
   }
 }

@@ -14,10 +14,11 @@ import { BackendService } from './services/backend.service';
 import { WrappedIconComponent } from './shared/wrapped-icon/wrapped-icon.component';
 import { UserMenuComponent } from './sys-admin/components/user-menu/user-menu.component';
 import { AuthDataDto } from '../../../../api-dto/auth-data-dto';
+import { ExportToastComponent } from './components/export-toast/export-toast.component';
 
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, MatSlideToggleModule, MatProgressSpinner, RouterLink, TranslateModule, MatTooltip, MatButton, UserMenuComponent, WrappedIconComponent],
+  imports: [RouterOutlet, MatSlideToggleModule, MatProgressSpinner, RouterLink, TranslateModule, MatTooltip, MatButton, UserMenuComponent, WrappedIconComponent, ExportToastComponent],
   templateUrl: './app.component.html',
   styleUrl: './app.component.scss',
   providers: [AuthService]
