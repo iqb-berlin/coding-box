@@ -24,6 +24,7 @@ export interface ExportJobData {
   includeDoubleCoded?: boolean;
   excludeAutoCoded?: boolean;
   authToken?: string;
+  isCancelled?: boolean;
 }
 
 export interface ExportJobResult {
@@ -156,11 +157,69 @@ export class JobQueueService {
     }
 
     try {
+      const state = await job.getState();
+
+      // For waiting/delayed jobs, we can remove them directly
+      if (state === 'waiting' || state === 'delayed') {
+        await job.remove();
+        this.logger.log(`Export job ${jobId} has been cancelled and removed from queue`);
+        return true;
+      }
+
+      // For active jobs, we can't remove them - the processor will check the isCancelled flag
+      // and handle the cancellation. We use discard() to prevent retries.
+      if (state === 'active') {
+        await job.discard();
+        this.logger.log(`Export job ${jobId} is active, marked for cancellation (will stop at next checkpoint)`);
+        return true;
+      }
+
+      // For completed/failed jobs, just log and return true
+      if (state === 'completed' || state === 'failed') {
+        this.logger.log(`Export job ${jobId} is already ${state}, no action needed`);
+        return true;
+      }
+
+      // Fallback: try to remove
       await job.remove();
       this.logger.log(`Export job ${jobId} has been cancelled`);
       return true;
     } catch (error) {
       this.logger.error(`Error cancelling export job: ${error.message}`, error.stack);
+      return false;
+    }
+  }
+
+  async markExportJobCancelled(jobId: string): Promise<boolean> {
+    const job = await this.dataExportQueue.getJob(jobId);
+    if (!job) {
+      this.logger.warn(`Export job with ID ${jobId} not found for cancellation marking`);
+      return false;
+    }
+
+    try {
+      const updatedData = {
+        ...job.data,
+        isCancelled: true
+      };
+      await job.update(updatedData);
+      this.logger.log(`Export job ${jobId} has been marked as cancelled`);
+      return true;
+    } catch (error) {
+      this.logger.error(`Error marking export job as cancelled: ${error.message}`, error.stack);
+      return false;
+    }
+  }
+
+  async isExportJobCancelled(jobId: string): Promise<boolean> {
+    try {
+      const job = await this.dataExportQueue.getJob(jobId);
+      if (!job) {
+        return false;
+      }
+      return job.data.isCancelled === true;
+    } catch (error) {
+      this.logger.error(`Error checking export job cancellation: ${error.message}`, error.stack);
       return false;
     }
   }

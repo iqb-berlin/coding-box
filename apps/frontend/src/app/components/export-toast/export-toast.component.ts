@@ -77,6 +77,8 @@ export class ExportToastComponent implements OnInit, OnDestroy {
         return 'check_circle';
       case 'failed':
         return 'error';
+      case 'cancelled':
+        return 'cancel';
       default:
         return 'help';
     }
@@ -105,8 +107,12 @@ export class ExportToastComponent implements OnInit, OnDestroy {
     this.exportJobService.removeJob(job.jobId);
   }
 
+  cancelJob(job: ExportJob): void {
+    this.exportJobService.cancelJob(job);
+  }
+
   clearCompleted(): void {
-    const completedJobs = this.jobs.filter(j => j.status === 'completed' || j.status === 'failed');
+    const completedJobs = this.jobs.filter(j => j.status === 'completed' || j.status === 'failed' || j.status === 'cancelled');
     completedJobs.forEach(job => this.exportJobService.removeJob(job.jobId));
   }
 }

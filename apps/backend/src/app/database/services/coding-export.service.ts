@@ -148,55 +148,60 @@ export class CodingExportService {
     includeModalValue = false,
     authToken = '',
     req?: Request,
-    excludeAutoCoded = false
+    excludeAutoCoded = false,
+    checkCancellation?: () => Promise<void>
   ): Promise<Buffer> {
     this.logger.log(`Exporting aggregated coding results for workspace ${workspaceId} with method: ${doubleCodingMethod}${outputCommentsInsteadOfCodes ? ' with comments instead of codes' : ''}${includeReplayUrl ? ' with replay URLs' : ''}${anonymizeCoders ? ' with anonymized coders' : ''}${excludeAutoCoded ? ' (manual coding only)' : ' (including auto-coded)'}`);
 
     if (doubleCodingMethod === 'new-row-per-variable') {
-      return this.exportAggregatedNewRowPerVariable(workspaceId, outputCommentsInsteadOfCodes, includeReplayUrl, anonymizeCoders, usePseudoCoders, includeComments, includeModalValue, authToken, req, excludeAutoCoded);
+      return this.exportAggregatedNewRowPerVariable(workspaceId, outputCommentsInsteadOfCodes, includeReplayUrl, anonymizeCoders, usePseudoCoders, includeComments, includeModalValue, authToken, req, excludeAutoCoded, checkCancellation);
     } if (doubleCodingMethod === 'new-column-per-coder') {
-      return this.exportAggregatedNewColumnPerCoder(workspaceId, outputCommentsInsteadOfCodes, anonymizeCoders, usePseudoCoders, includeComments, includeModalValue, excludeAutoCoded);
+      return this.exportAggregatedNewColumnPerCoder(workspaceId, outputCommentsInsteadOfCodes, anonymizeCoders, usePseudoCoders, includeComments, includeModalValue, excludeAutoCoded, checkCancellation);
     }
     this.logger.log(`Exporting aggregated results with most-frequent method for workspace ${workspaceId}`);
 
-    try {
-      let manualCodingVariableSet: Set<string> | null = null;
-      if (excludeAutoCoded) {
-        const codingListVariables = await this.codingListService.getCodingListVariables(workspaceId);
-        if (codingListVariables.length === 0) {
-          throw new Error('No manual coding variables found in the coding list for this workspace');
-        }
-        this.logger.log(`Found ${codingListVariables.length} unique unit-variable combinations for workspace ${workspaceId}`);
-        manualCodingVariableSet = new Set<string>();
-        codingListVariables.forEach(item => {
-          manualCodingVariableSet.add(`${item.unitName}|${item.variableId}`);
-        });
-      }
+    if (checkCancellation) await checkCancellation();
 
+    let manualCodingVariableSet: Set<string> | null = null;
+    if (excludeAutoCoded) {
+      const codingListVariables = await this.codingListService.getCodingListVariables(workspaceId);
+      if (codingListVariables.length === 0) {
+        throw new Error('No manual coding variables found in the coding list for this workspace');
+      }
+      this.logger.log(`Found ${codingListVariables.length} unique unit-variable combinations for workspace ${workspaceId}`);
+      manualCodingVariableSet = new Set<string>();
+      codingListVariables.forEach(item => {
+        manualCodingVariableSet.add(`${item.unitName}|${item.variableId}`);
+      });
+    }
+
+    const codingJobUnits = await this.codingJobUnitRepository.find({
+      where: {
+        coding_job: {
+          workspace_id: workspaceId
+        }
+      },
+      relations: [
+        'coding_job',
+        'coding_job.codingJobCoders',
+        'coding_job.codingJobCoders.user',
+        'response',
+        'response.unit',
+        'response.unit.booklet',
+        'response.unit.booklet.bookletinfo',
+        'response.unit.booklet.person'
+      ]
+    });
+
+    if (codingJobUnits.length === 0) {
+      throw new Error('No coding jobs found for this workspace');
+    }
+
+    if (checkCancellation) await checkCancellation();
+
+    try {
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet('Coding Results');
-
-      const codingJobUnits = await this.codingJobUnitRepository.find({
-        where: {
-          coding_job: {
-            workspace_id: workspaceId
-          }
-        },
-        relations: [
-          'coding_job',
-          'coding_job.codingJobCoders',
-          'coding_job.codingJobCoders.user',
-          'response',
-          'response.unit',
-          'response.unit.booklet',
-          'response.unit.booklet.bookletinfo',
-          'response.unit.booklet.person'
-        ]
-      });
-
-      if (codingJobUnits.length === 0) {
-        throw new Error('No coding jobs found for this workspace');
-      }
 
       const testPersonVariableCodes = new Map<string, Map<string, number[]>>();
       const testPersonVariableComments = new Map<string, Map<string, string[]>>();
@@ -357,7 +362,8 @@ export class CodingExportService {
     includeModalValue: boolean,
     authToken: string,
     req?: Request,
-    excludeAutoCoded = false
+    excludeAutoCoded = false,
+    checkCancellation?: () => Promise<void>
   ): Promise<Buffer> {
     this.logger.log(`Exporting aggregated results with new-row-per-variable method for workspace ${workspaceId}`);
 
@@ -365,43 +371,45 @@ export class CodingExportService {
     const DEVIATION_COUNT_HEADER = 'Anzahl der Abweichungen';
     const COMMENTS_HEADER = 'Kommentare';
 
-    try {
-      let manualCodingVariableSet: Set<string> | null = null;
-      if (excludeAutoCoded) {
-        const codingListVariables = await this.codingListService.getCodingListVariables(workspaceId);
-        if (codingListVariables.length === 0) {
-          throw new Error('No manual coding variables found in the coding list for this workspace');
-        }
-        this.logger.log(`Found ${codingListVariables.length} unique unit-variable combinations for workspace ${workspaceId}`);
-        manualCodingVariableSet = new Set<string>();
-        codingListVariables.forEach(item => {
-          manualCodingVariableSet.add(`${item.unitName}|${item.variableId}`);
-        });
-      }
+    if (checkCancellation) await checkCancellation();
 
+    let manualCodingVariableSet: Set<string> | null = null;
+    if (excludeAutoCoded) {
+      const codingListVariables = await this.codingListService.getCodingListVariables(workspaceId);
+      if (codingListVariables.length === 0) {
+        throw new Error('No manual coding variables found in the coding list for this workspace');
+      }
+      this.logger.log(`Found ${codingListVariables.length} unique unit-variable combinations for workspace ${workspaceId}`);
+      manualCodingVariableSet = new Set<string>();
+      codingListVariables.forEach(item => {
+        manualCodingVariableSet.add(`${item.unitName}|${item.variableId}`);
+      });
+    }
+
+    const codingJobUnits = await this.codingJobUnitRepository.find({
+      where: {
+        coding_job: {
+          workspace_id: workspaceId
+        }
+      },
+      relations: [
+        'coding_job',
+        'coding_job.codingJobCoders',
+        'coding_job.codingJobCoders.user',
+        'response',
+        'response.unit',
+        'response.unit.booklet',
+        'response.unit.booklet.person'
+      ]
+    });
+
+    if (codingJobUnits.length === 0) {
+      throw new Error('No coding jobs found for this workspace');
+    }
+
+    try {
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet('Coding Results');
-
-      const codingJobUnits = await this.codingJobUnitRepository.find({
-        where: {
-          coding_job: {
-            workspace_id: workspaceId
-          }
-        },
-        relations: [
-          'coding_job',
-          'coding_job.codingJobCoders',
-          'coding_job.codingJobCoders.user',
-          'response',
-          'response.unit',
-          'response.unit.booklet',
-          'response.unit.booklet.person'
-        ]
-      });
-
-      if (codingJobUnits.length === 0) {
-        throw new Error('No coding jobs found for this workspace');
-      }
 
       const dataMap = new Map<string, Map<string, { code: number | null; score: number | null; comment: string | null }>>();
       const testPersons = new Set<string>();
@@ -582,7 +590,8 @@ export class CodingExportService {
     usePseudoCoders: boolean,
     includeComments: boolean,
     includeModalValue: boolean,
-    excludeAutoCoded = false
+    excludeAutoCoded = false,
+    checkCancellation?: () => Promise<void>
   ): Promise<Buffer> {
     this.logger.log(`Exporting aggregated results with new-column-per-coder method for workspace ${workspaceId}`);
 
@@ -590,46 +599,48 @@ export class CodingExportService {
     const DEVIATION_COUNT_HEADER = 'Anzahl der Abweichungen';
     const COMMENTS_HEADER = 'Kommentare';
 
-    try {
-      // Get manual coding variables filter if enabled
-      let manualCodingVariableSet: Set<string> | null = null;
-      if (excludeAutoCoded) {
-        const codingListVariables = await this.codingListService.getCodingListVariables(workspaceId);
-        if (codingListVariables.length === 0) {
-          throw new Error('No manual coding variables found in the coding list for this workspace');
-        }
-        this.logger.log(`Found ${codingListVariables.length} unique unit-variable combinations for workspace ${workspaceId}`);
-        // Create set of unit-variable combinations
-        manualCodingVariableSet = new Set<string>();
-        codingListVariables.forEach(item => {
-          manualCodingVariableSet.add(`${item.unitName}|${item.variableId}`);
-        });
-      }
+    if (checkCancellation) await checkCancellation();
 
+    // Get manual coding variables filter if enabled
+    let manualCodingVariableSet: Set<string> | null = null;
+    if (excludeAutoCoded) {
+      const codingListVariables = await this.codingListService.getCodingListVariables(workspaceId);
+      if (codingListVariables.length === 0) {
+        throw new Error('No manual coding variables found in the coding list for this workspace');
+      }
+      this.logger.log(`Found ${codingListVariables.length} unique unit-variable combinations for workspace ${workspaceId}`);
+      // Create set of unit-variable combinations
+      manualCodingVariableSet = new Set<string>();
+      codingListVariables.forEach(item => {
+        manualCodingVariableSet.add(`${item.unitName}|${item.variableId}`);
+      });
+    }
+
+    // Get all coding job units with their coders and responses
+    const codingJobUnits = await this.codingJobUnitRepository.find({
+      where: {
+        coding_job: {
+          workspace_id: workspaceId
+        }
+      },
+      relations: [
+        'coding_job',
+        'coding_job.codingJobCoders',
+        'coding_job.codingJobCoders.user',
+        'response',
+        'response.unit',
+        'response.unit.booklet',
+        'response.unit.booklet.person'
+      ]
+    });
+
+    if (codingJobUnits.length === 0) {
+      throw new Error('No coding jobs found for this workspace');
+    }
+
+    try {
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet('Coding Results');
-
-      // Get all coding job units with their coders and responses
-      const codingJobUnits = await this.codingJobUnitRepository.find({
-        where: {
-          coding_job: {
-            workspace_id: workspaceId
-          }
-        },
-        relations: [
-          'coding_job',
-          'coding_job.codingJobCoders',
-          'coding_job.codingJobCoders.user',
-          'response',
-          'response.unit',
-          'response.unit.booklet',
-          'response.unit.booklet.person'
-        ]
-      });
-
-      if (codingJobUnits.length === 0) {
-        throw new Error('No coding jobs found for this workspace');
-      }
 
       // Structure: testPersonKey -> variableKey_coderName -> { code, score, comment }
       const dataMap = new Map<string, Map<string, { code: number | null; score: number | null; comment: string | null }>>();
@@ -852,31 +863,37 @@ export class CodingExportService {
     return { modalValue, deviationCount };
   }
 
-  async exportCodingResultsByCoder(workspaceId: number, outputCommentsInsteadOfCodes = false, includeReplayUrl = false, anonymizeCoders = false, usePseudoCoders = false, authToken = '', req?: Request, excludeAutoCoded = false): Promise<Buffer> {
+  async exportCodingResultsByCoder(workspaceId: number, outputCommentsInsteadOfCodes = false, includeReplayUrl = false, anonymizeCoders = false, usePseudoCoders = false, authToken = '', req?: Request, excludeAutoCoded = false, checkCancellation?: () => Promise<void>): Promise<Buffer> {
     this.logger.log(`Exporting coding results by coder for workspace ${workspaceId}${outputCommentsInsteadOfCodes ? ' with comments instead of codes' : ''}${includeReplayUrl ? ' with replay URLs' : ''}${anonymizeCoders ? ' with anonymized coders' : ''}${usePseudoCoders ? ' using pseudo coders' : ''}${excludeAutoCoded ? ' (manual coding only)' : ''}`);
 
-    try {
-      let manualCodingVariableSet: Set<string> | null = null;
-      if (excludeAutoCoded) {
-        const codingListVariables = await this.codingListService.getCodingListVariables(workspaceId);
-        if (codingListVariables.length === 0) {
-          throw new Error('No manual coding variables found in the coding list for this workspace');
-        }
-        manualCodingVariableSet = new Set<string>();
-        codingListVariables.forEach(item => {
-          manualCodingVariableSet.add(`${item.unitName}|${item.variableId}`);
-        });
-      }
+    // Check for cancellation before starting
+    if (checkCancellation) await checkCancellation();
 
-      const codingJobs = await this.codingJobRepository.find({
-        where: { workspace_id: workspaceId },
-        relations: ['codingJobCoders', 'codingJobCoders.user', 'codingJobUnits', 'codingJobUnits.response', 'codingJobUnits.response.unit']
+    let manualCodingVariableSet: Set<string> | null = null;
+    if (excludeAutoCoded) {
+      const codingListVariables = await this.codingListService.getCodingListVariables(workspaceId);
+      if (codingListVariables.length === 0) {
+        throw new Error('No manual coding variables found in the coding list for this workspace');
+      }
+      manualCodingVariableSet = new Set<string>();
+      codingListVariables.forEach(item => {
+        manualCodingVariableSet.add(`${item.unitName}|${item.variableId}`);
       });
+    }
 
-      if (codingJobs.length === 0) {
-        throw new Error('No coding jobs found for this workspace');
-      }
+    const codingJobs = await this.codingJobRepository.find({
+      where: { workspace_id: workspaceId },
+      relations: ['codingJobCoders', 'codingJobCoders.user', 'codingJobUnits', 'codingJobUnits.response', 'codingJobUnits.response.unit']
+    });
 
+    if (codingJobs.length === 0) {
+      throw new Error('No coding jobs found for this workspace');
+    }
+
+    // Check for cancellation after data fetch
+    if (checkCancellation) await checkCancellation();
+
+    try {
       const jobIds = codingJobs.map(job => job.id);
       const codingJobVariables = await this.codingJobVariableRepository.find({
         where: { coding_job_id: In(jobIds) }
@@ -1091,7 +1108,7 @@ export class CodingExportService {
     }
   }
 
-  async exportCodingResultsByVariable(workspaceId: number, includeModalValue = false, includeDoubleCoded = false, includeComments = false, outputCommentsInsteadOfCodes = false, includeReplayUrl = false, anonymizeCoders = false, usePseudoCoders = false, authToken = '', req?: Request, excludeAutoCoded = false): Promise<Buffer> {
+  async exportCodingResultsByVariable(workspaceId: number, includeModalValue = false, includeDoubleCoded = false, includeComments = false, outputCommentsInsteadOfCodes = false, includeReplayUrl = false, anonymizeCoders = false, usePseudoCoders = false, authToken = '', req?: Request, excludeAutoCoded = false, checkCancellation?: () => Promise<void>): Promise<Buffer> {
     this.logger.log(`Exporting coding results by variable for workspace ${workspaceId}${excludeAutoCoded ? ' (CODING_INCOMPLETE only)' : ''}${includeModalValue ? ' with modal value' : ''}${includeDoubleCoded ? ' with double coding indicator' : ''}${includeComments ? ' with comments' : ''}${outputCommentsInsteadOfCodes ? ' with comments instead of codes' : ''}${includeReplayUrl ? ' with replay URLs' : ''}${anonymizeCoders ? ' with anonymized coders' : ''}${usePseudoCoders ? ' using pseudo coders' : ''}`);
 
     const MAX_WORKSHEETS = parseInt(process.env.EXPORT_MAX_WORKSHEETS || '100', 10);
@@ -1104,61 +1121,66 @@ export class CodingExportService {
     const DOUBLE_CODED_HEADER = 'Doppelkodierung';
     const COMMENTS_HEADER = 'Kommentare';
 
+    // Check for cancellation before starting
+    if (checkCancellation) await checkCancellation();
+
+    let incompleteVariables: Array<{ unitName: string; variableId: string }> = [];
+    if (excludeAutoCoded) {
+      incompleteVariables = await this.codingListService.getCodingListVariables(workspaceId);
+
+      if (incompleteVariables.length === 0) {
+        throw new Error('No CODING_INCOMPLETE variables found for this workspace');
+      }
+      this.logger.log(`Found ${incompleteVariables.length} CODING_INCOMPLETE variables for workspace ${workspaceId}`);
+    }
+
+    // Create a filter set for quick lookup: "unitName|variableId"
+    const incompleteVariableSet = new Set<string>();
+    if (excludeAutoCoded) {
+      incompleteVariables.forEach(variable => {
+        incompleteVariableSet.add(`${variable.unitName}|${variable.variableId}`);
+      });
+    }
+
+    // Get distinct unit-variable combinations for CODING_INCOMPLETE responses only
+    const unitVariableResults = await this.responseRepository
+      .createQueryBuilder('response')
+      .select('unit.name', 'unitName')
+      .addSelect('response.variableid', 'variableId')
+      .leftJoin('response.unit', 'unit')
+      .leftJoin('unit.booklet', 'booklet')
+      .leftJoin('booklet.person', 'person')
+      .where('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('response.status_v1 = :status', { status: statusStringToNumber('CODING_INCOMPLETE') })
+      .groupBy('unit.name')
+      .addGroupBy('response.variableid')
+      .orderBy('unit.name', 'ASC')
+      .addOrderBy('response.variableid', 'ASC')
+      .getRawMany();
+
+    // Filter to only include variables that are in the incomplete set
+    const filteredUnitVariableResults = unitVariableResults.filter(result => incompleteVariableSet.has(`${result.unitName}|${result.variableId}`)
+    );
+
+    this.logger.log(`Filtered to ${filteredUnitVariableResults.length} unit-variable combinations from ${unitVariableResults.length} total CODING_INCOMPLETE responses`);
+
+    if (filteredUnitVariableResults.length === 0) {
+      throw new Error('No CODING_INCOMPLETE variables with responses found for this workspace');
+    }
+
+    // Check if we exceed the worksheet limit
+    if (filteredUnitVariableResults.length > MAX_WORKSHEETS) {
+      this.logger.warn(`Too many unit-variable combinations (${filteredUnitVariableResults.length}) for workspace ${workspaceId}. Limiting to ${MAX_WORKSHEETS} worksheets.`);
+      filteredUnitVariableResults.splice(MAX_WORKSHEETS); // Truncate to limit
+    }
+
+    this.logger.log(`Processing ${filteredUnitVariableResults.length} unit-variable combinations in batches of ${BATCH_SIZE}`);
+
+    let processedCombinations = 0;
+    let resultBuffer: Buffer;
+
     try {
-      let incompleteVariables: Array<{ unitName: string; variableId: string }> = [];
-      if (excludeAutoCoded) {
-        incompleteVariables = await this.codingListService.getCodingListVariables(workspaceId);
-
-        if (incompleteVariables.length === 0) {
-          throw new Error('No CODING_INCOMPLETE variables found for this workspace');
-        }
-        this.logger.log(`Found ${incompleteVariables.length} CODING_INCOMPLETE variables for workspace ${workspaceId}`);
-      }
-
-      // Create a filter set for quick lookup: "unitName|variableId"
-      const incompleteVariableSet = new Set<string>();
-      if (excludeAutoCoded) {
-        incompleteVariables.forEach(variable => {
-          incompleteVariableSet.add(`${variable.unitName}|${variable.variableId}`);
-        });
-      }
-
-      // Get distinct unit-variable combinations for CODING_INCOMPLETE responses only
-      const unitVariableResults = await this.responseRepository
-        .createQueryBuilder('response')
-        .select('unit.name', 'unitName')
-        .addSelect('response.variableid', 'variableId')
-        .leftJoin('response.unit', 'unit')
-        .leftJoin('unit.booklet', 'booklet')
-        .leftJoin('booklet.person', 'person')
-        .where('person.workspace_id = :workspaceId', { workspaceId })
-        .andWhere('response.status_v1 = :status', { status: statusStringToNumber('CODING_INCOMPLETE') })
-        .groupBy('unit.name')
-        .addGroupBy('response.variableid')
-        .orderBy('unit.name', 'ASC')
-        .addOrderBy('response.variableid', 'ASC')
-        .getRawMany();
-
-      // Filter to only include variables that are in the incomplete set
-      const filteredUnitVariableResults = unitVariableResults.filter(result => incompleteVariableSet.has(`${result.unitName}|${result.variableId}`)
-      );
-
-      this.logger.log(`Filtered to ${filteredUnitVariableResults.length} unit-variable combinations from ${unitVariableResults.length} total CODING_INCOMPLETE responses`);
-
-      if (filteredUnitVariableResults.length === 0) {
-        throw new Error('No CODING_INCOMPLETE variables with responses found for this workspace');
-      }
-
-      // Check if we exceed the worksheet limit
-      if (filteredUnitVariableResults.length > MAX_WORKSHEETS) {
-        this.logger.warn(`Too many unit-variable combinations (${filteredUnitVariableResults.length}) for workspace ${workspaceId}. Limiting to ${MAX_WORKSHEETS} worksheets.`);
-        filteredUnitVariableResults.splice(MAX_WORKSHEETS); // Truncate to limit
-      }
-
-      this.logger.log(`Processing ${filteredUnitVariableResults.length} unit-variable combinations in batches of ${BATCH_SIZE}`);
-
       const workbook = new ExcelJS.Workbook();
-      let processedCombinations = 0;
 
       // Process in batches to avoid memory spikes
       for (let i = 0; i < filteredUnitVariableResults.length; i += BATCH_SIZE) {
@@ -1403,56 +1425,62 @@ export class CodingExportService {
 
       this.logger.log(`Successfully processed ${processedCombinations} worksheets for workspace ${workspaceId}`);
 
-      if (processedCombinations === 0) {
-        throw new Error('No worksheets could be created within the memory limits. Try reducing the dataset size or increasing the limits.');
-      }
-
       const buffer = await workbook.xlsx.writeBuffer();
-      return Buffer.from(buffer);
+      resultBuffer = Buffer.from(buffer);
     } catch (error) {
       this.logger.error(`Error exporting coding results by variable: ${error.message}`, error.stack);
       throw new Error(`Could not export coding results by variable: ${error.message}. This may be due to memory constraints with large datasets.`);
     }
+
+    // Check after try-catch to avoid 'throw of exception caught locally'
+    if (processedCombinations === 0) {
+      throw new Error('No worksheets could be created within the memory limits. Try reducing the dataset size or increasing the limits.');
+    }
+
+    return resultBuffer;
   }
 
-  async exportCodingResultsDetailed(workspaceId: number, outputCommentsInsteadOfCodes = false, includeReplayUrl = false, anonymizeCoders = false, usePseudoCoders = false, authToken = '', req?: Request, excludeAutoCoded = false): Promise<Buffer> {
+  async exportCodingResultsDetailed(workspaceId: number, outputCommentsInsteadOfCodes = false, includeReplayUrl = false, anonymizeCoders = false, usePseudoCoders = false, authToken = '', req?: Request, excludeAutoCoded = false, checkCancellation?: () => Promise<void>): Promise<Buffer> {
     this.logger.log(`Exporting detailed coding results for workspace ${workspaceId}${outputCommentsInsteadOfCodes ? ' with comments instead of codes' : ''}${includeReplayUrl ? ' with replay URLs' : ''}${anonymizeCoders ? ' with anonymized coders' : ''}${usePseudoCoders ? ' using pseudo coders' : ''}${excludeAutoCoded ? ' (manual coding only)' : ''}`);
 
-    try {
-      let manualCodingVariableSet: Set<string> | null = null;
-      if (excludeAutoCoded) {
-        const codingListVariables = await this.codingListService.getCodingListVariables(workspaceId);
-        if (codingListVariables.length === 0) {
-          throw new Error('No manual coding variables found in the coding list for this workspace');
-        }
-        manualCodingVariableSet = new Set<string>();
-        codingListVariables.forEach(item => {
-          manualCodingVariableSet.add(`${item.unitName}|${item.variableId}`);
-        });
+    // Check for cancellation before starting
+    if (checkCancellation) await checkCancellation();
+
+    let manualCodingVariableSet: Set<string> | null = null;
+    if (excludeAutoCoded) {
+      const codingListVariables = await this.codingListService.getCodingListVariables(workspaceId);
+      if (codingListVariables.length === 0) {
+        throw new Error('No manual coding variables found in the coding list for this workspace');
       }
-
-      const codingJobUnits = await this.codingJobUnitRepository.find({
-        where: {
-          coding_job: {
-            workspace_id: workspaceId
-          }
-        },
-        relations: [
-          'coding_job',
-          'coding_job.codingJobCoders',
-          'coding_job.codingJobCoders.user',
-          'response',
-          'response.unit',
-          'response.unit.booklet',
-          'response.unit.booklet.person'
-        ],
-        order: {
-          created_at: 'ASC'
-        }
+      manualCodingVariableSet = new Set<string>();
+      codingListVariables.forEach(item => {
+        manualCodingVariableSet.add(`${item.unitName}|${item.variableId}`);
       });
+    }
 
-      this.logger.log(`Found ${codingJobUnits.length} coding job units for workspace ${workspaceId}`);
+    const codingJobUnits = await this.codingJobUnitRepository.find({
+      where: {
+        coding_job: {
+          workspace_id: workspaceId
+        }
+      },
+      relations: [
+        'coding_job',
+        'coding_job.codingJobCoders',
+        'coding_job.codingJobCoders.user',
+        'response',
+        'response.unit',
+        'response.unit.booklet',
+        'response.unit.booklet.person'
+      ],
+      order: {
+        created_at: 'ASC'
+      }
+    });
 
+    this.logger.log(`Found ${codingJobUnits.length} coding job units for workspace ${workspaceId}`);
+
+    try {
       let coderNameMapping: Map<string, string> | null = null;
       if (anonymizeCoders) {
         if (usePseudoCoders) {
@@ -1589,66 +1617,69 @@ export class CodingExportService {
     }
   }
 
-  async exportCodingTimesReport(workspaceId: number, anonymizeCoders = false, usePseudoCoders = false, excludeAutoCoded = false): Promise<Buffer> {
+  async exportCodingTimesReport(workspaceId: number, anonymizeCoders = false, usePseudoCoders = false, excludeAutoCoded = false, checkCancellation?: () => Promise<void>): Promise<Buffer> {
     this.logger.log(`Exporting coding times report for workspace ${workspaceId}${anonymizeCoders ? ' with anonymized coders' : ''}${usePseudoCoders ? ' using pseudo coders' : ''}${excludeAutoCoded ? ' (manual coding only)' : ''}`);
 
-    try {
-      let manualCodingVariableSet: Set<string> | null = null;
-      if (excludeAutoCoded) {
-        const codingListVariables = await this.codingListService.getCodingListVariables(workspaceId);
-        if (codingListVariables.length === 0) {
-          throw new Error('No manual coding variables found in the coding list for this workspace');
-        }
-        manualCodingVariableSet = new Set<string>();
-        codingListVariables.forEach(item => {
-          manualCodingVariableSet.add(`${item.unitName}|${item.variableId}`);
-        });
-      }
+    // Check for cancellation before starting
+    if (checkCancellation) await checkCancellation();
 
-      const codingJobUnits = await this.codingJobUnitRepository.find({
-        where: {
-          coding_job: {
-            workspace_id: workspaceId
-          },
-          code: Not(IsNull()) // Only include units that have been coded
+    let manualCodingVariableSet: Set<string> | null = null;
+    if (excludeAutoCoded) {
+      const codingListVariables = await this.codingListService.getCodingListVariables(workspaceId);
+      if (codingListVariables.length === 0) {
+        throw new Error('No manual coding variables found in the coding list for this workspace');
+      }
+      manualCodingVariableSet = new Set<string>();
+      codingListVariables.forEach(item => {
+        manualCodingVariableSet.add(`${item.unitName}|${item.variableId}`);
+      });
+    }
+
+    const codingJobUnits = await this.codingJobUnitRepository.find({
+      where: {
+        coding_job: {
+          workspace_id: workspaceId
         },
-        relations: [
-          'coding_job',
-          'coding_job.codingJobCoders',
-          'coding_job.codingJobCoders.user',
-          'response',
-          'response.unit'
-        ],
-        select: {
+        code: Not(IsNull()) // Only include units that have been coded
+      },
+      relations: [
+        'coding_job',
+        'coding_job.codingJobCoders',
+        'coding_job.codingJobCoders.user',
+        'response',
+        'response.unit'
+      ],
+      select: {
+        id: true,
+        variable_id: true,
+        updated_at: true,
+        code: true,
+        coding_job: {
           id: true,
-          variable_id: true,
-          updated_at: true,
-          code: true,
-          coding_job: {
+          codingJobCoders: {
             id: true,
-            codingJobCoders: {
+            user: {
               id: true,
-              user: {
-                id: true,
-                username: true
-              }
-            }
-          },
-          response: {
-            id: true,
-            unit: {
-              id: true,
-              name: true
+              username: true
             }
           }
         },
-        order: {
-          updated_at: 'ASC'
+        response: {
+          id: true,
+          unit: {
+            id: true,
+            name: true
+          }
         }
-      });
+      },
+      order: {
+        updated_at: 'ASC'
+      }
+    });
 
-      this.logger.log(`Found ${codingJobUnits.length} coded coding job units for workspace ${workspaceId}`);
+    this.logger.log(`Found ${codingJobUnits.length} coded coding job units for workspace ${workspaceId}`);
 
+    try {
       let coderNameMapping: Map<string, string> | null = null;
       if (anonymizeCoders) {
         const allCoders = new Set<string>();
