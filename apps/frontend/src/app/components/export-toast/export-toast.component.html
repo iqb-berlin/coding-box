@@ -36,6 +36,13 @@
           <div class="job-actions">
             <button
               mat-icon-button
+              *ngIf="job.status === 'waiting' || job.status === 'active'"
+              (click)="cancelJob(job)"
+              matTooltip="{{ 'export-toast.cancel' | translate }}">
+              <mat-icon>cancel</mat-icon>
+            </button>
+            <button
+              mat-icon-button
               *ngIf="job.status === 'completed'"
               (click)="downloadFile(job)"
               matTooltip="{{ 'export-toast.download' | translate }}">
@@ -43,7 +50,7 @@
             </button>
             <button
               mat-icon-button
-              *ngIf="job.status === 'completed' || job.status === 'failed'"
+              *ngIf="job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled'"
               (click)="removeJob(job)"
               matTooltip="{{ 'export-toast.remove' | translate }}">
               <mat-icon>close</mat-icon>

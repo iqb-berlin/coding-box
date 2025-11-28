@@ -1301,14 +1301,32 @@ export class BackendService {
   getExportJobStatus(workspaceId: number, jobId: string): Observable<{
     status: string;
     progress: number;
-    result?: any;
+    result?: {
+      fileId: string;
+      fileName: string;
+      filePath: string;
+      fileSize: number;
+      workspaceId: number;
+      userId: number;
+      exportType: string;
+      createdAt: number;
+    };
     error?: string;
   }> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/job/${jobId}`;
     return this.http.get<{
       status: string;
       progress: number;
-      result?: any;
+      result?: {
+        fileId: string;
+        fileName: string;
+        filePath: string;
+        fileSize: number;
+        workspaceId: number;
+        userId: number;
+        exportType: string;
+        createdAt: number;
+      };
       error?: string;
     }>(url, {
       headers: this.authHeader
@@ -1345,6 +1363,13 @@ export class BackendService {
   deleteExportJob(workspaceId: number, jobId: string): Observable<{ success: boolean; message: string }> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/job/${jobId}`;
     return this.http.delete<{ success: boolean; message: string }>(url, {
+      headers: this.authHeader
+    });
+  }
+
+  cancelExportJob(workspaceId: number, jobId: string): Observable<{ success: boolean; message: string }> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/job/${jobId}/cancel`;
+    return this.http.post<{ success: boolean; message: string }>(url, {}, {
       headers: this.authHeader
     });
   }

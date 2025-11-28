@@ -32,7 +32,8 @@
     "title": "Datenexport",
     "download": "Herunterladen",
     "remove": "Entfernen",
-    "clear-all": "Alle löschen"
+    "clear-all": "Alle löschen",
+    "cancel": "Abbrechen"
   },
   "status-cancelled": "Abgebrochen",
   "status-paused": "Pausiert",
@@ -191,6 +192,7 @@
     "export.starting": "Export wird gestartet...",
     "export.success": "Datenexport erfolgreich abgeschlossen",
     "export.errors.export-failed": "Datenexport fehlgeschlagen",
+    "export.job-started": "Datenexport gestartet",
     "export-formats": {
       "aggregated": "Aggregierte Ansicht",
       "aggregated-description": " Alle Variablen und Testpersonen in einer aggregierten Tabelle",

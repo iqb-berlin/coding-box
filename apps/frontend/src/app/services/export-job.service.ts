@@ -8,7 +8,7 @@ import { BackendService } from './backend.service';
 export interface ExportJob {
   jobId: string;
   workspaceId: number;
-  status: 'waiting' | 'active' | 'completed' | 'failed';
+  status: 'waiting' | 'active' | 'completed' | 'failed' | 'cancelled';
   progress: number;
   exportType: string;
   result?: {
@@ -58,6 +58,10 @@ export class ExportJobService implements OnDestroy {
 
   get failedJobs(): ExportJob[] {
     return this.jobsSubject.value.filter(job => job.status === 'failed');
+  }
+
+  get cancelledJobs(): ExportJob[] {
+    return this.jobsSubject.value.filter(job => job.status === 'cancelled');
   }
 
   startJob(workspaceId: number, config: ExportJobConfig): void {
@@ -117,7 +121,7 @@ export class ExportJobService implements OnDestroy {
           });
 
           // Stop polling when job is done
-          if (mappedStatus === 'completed' || mappedStatus === 'failed') {
+          if (mappedStatus === 'completed' || mappedStatus === 'failed' || mappedStatus === 'cancelled') {
             this.stopPollingForJob(jobId);
           }
         },
@@ -144,6 +148,8 @@ export class ExportJobService implements OnDestroy {
         return 'completed';
       case 'failed':
         return 'failed';
+      case 'cancelled':
+        return 'cancelled';
       default:
         return 'waiting';
     }
@@ -161,6 +167,23 @@ export class ExportJobService implements OnDestroy {
     this.stopPollingForJob(jobId);
     const currentJobs = this.jobsSubject.value;
     this.jobsSubject.next(currentJobs.filter(job => job.jobId !== jobId));
+  }
+
+  cancelJob(job: ExportJob): void {
+    this.backendService.cancelExportJob(job.workspaceId, job.jobId).subscribe({
+      next: response => {
+        if (response.success) {
+          // Stop polling for this job
+          this.stopPollingForJob(job.jobId);
+          // Update job status to cancelled
+          this.updateJob(job.jobId, { status: 'cancelled' });
+        }
+      },
+      error: () => {
+        // On error, still try to stop polling
+        this.stopPollingForJob(job.jobId);
+      }
+    });
   }
 
   downloadFile(workspaceId: number, jobId: string, exportType: string): void {

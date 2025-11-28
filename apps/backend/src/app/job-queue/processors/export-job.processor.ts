@@ -8,9 +8,10 @@ import {
 import { Job } from 'bull';
 import * as path from 'path';
 import * as fs from 'fs';
-import { ExportJobData, ExportJobResult } from '../job-queue.service';
+import { ExportJobData, ExportJobResult, JobQueueService } from '../job-queue.service';
 import { CodingExportService } from '../../database/services/coding-export.service';
 import { CacheService } from '../../cache/cache.service';
+import { ExportJobCancelledException } from '../exceptions/export-job-cancelled.exception';
 
 @Injectable()
 @Processor('data-export')
@@ -20,8 +21,25 @@ export class ExportJobProcessor {
   constructor(
     @Inject(forwardRef(() => CodingExportService))
     private codingExportService: CodingExportService,
-    private cacheService: CacheService
+    private cacheService: CacheService,
+    private jobQueueService: JobQueueService
   ) {}
+
+  private async checkCancellation(job: Job<ExportJobData>, filePath?: string): Promise<void> {
+    if (job.data.isCancelled || await this.jobQueueService.isExportJobCancelled(job.id.toString())) {
+      this.logger.log(`Export job ${job.id} cancellation detected`);
+      // Clean up partial file if it exists
+      if (filePath && fs.existsSync(filePath)) {
+        try {
+          fs.unlinkSync(filePath);
+          this.logger.log(`Cleaned up partial export file: ${filePath}`);
+        } catch (cleanupError) {
+          this.logger.warn(`Failed to clean up partial file ${filePath}: ${cleanupError.message}`);
+        }
+      }
+      throw new ExportJobCancelledException(job.id);
+    }
+  }
 
   @Process()
   async process(job: Job<ExportJobData>): Promise<ExportJobResult> {
@@ -34,7 +52,12 @@ export class ExportJobProcessor {
       throw new Error(errorMessage);
     }
 
+    let filePath: string | undefined;
+
     try {
+      // Check for cancellation before starting
+      await this.checkCancellation(job);
+
       await job.progress(10);
 
       // Ensure temp directory exists
@@ -44,11 +67,19 @@ export class ExportJobProcessor {
       }
 
       const fileName = `export_${job.id}_${Date.now()}.xlsx`;
-      const filePath = path.join(tempDir, fileName);
+      filePath = path.join(tempDir, fileName);
 
       this.logger.log(`Generating export file: ${filePath}`);
 
+      // Check for cancellation before generating export
+      await this.checkCancellation(job, filePath);
+
       await job.progress(20);
+
+      // Create cancellation check callback for granular checks in export service
+      const checkCancellation = async (): Promise<void> => {
+        await this.checkCancellation(job, filePath);
+      };
 
       let buffer: Buffer;
 
@@ -66,7 +97,8 @@ export class ExportJobProcessor {
             job.data.includeModalValue || false,
             job.data.authToken || '',
             undefined, // req is not available in background job
-            job.data.excludeAutoCoded || false
+            job.data.excludeAutoCoded || false,
+            checkCancellation
           );
           break;
 
@@ -79,7 +111,8 @@ export class ExportJobProcessor {
             job.data.usePseudoCoders || false,
             job.data.authToken || '',
             undefined, // req is not available in background job
-            job.data.excludeAutoCoded || false
+            job.data.excludeAutoCoded || false,
+            checkCancellation
           );
           break;
 
@@ -95,7 +128,8 @@ export class ExportJobProcessor {
             job.data.usePseudoCoders || false,
             job.data.authToken || '',
             undefined, // req is not available in background job
-            job.data.excludeAutoCoded || false
+            job.data.excludeAutoCoded || false,
+            checkCancellation
           );
           break;
 
@@ -108,7 +142,8 @@ export class ExportJobProcessor {
             job.data.usePseudoCoders || false,
             job.data.authToken || '',
             undefined, // req is not available in background job
-            job.data.excludeAutoCoded || false
+            job.data.excludeAutoCoded || false,
+            checkCancellation
           );
           break;
 
@@ -117,17 +152,24 @@ export class ExportJobProcessor {
             job.data.workspaceId,
             job.data.anonymizeCoders || false,
             job.data.usePseudoCoders || false,
-            job.data.excludeAutoCoded || false
+            job.data.excludeAutoCoded || false,
+            checkCancellation
           );
           break;
 
         // no default - exportType is validated at the start of the method
       }
 
+      // Check for cancellation after export generation
+      await this.checkCancellation(job, filePath);
+
       await job.progress(90);
 
       // Write buffer to file
       fs.writeFileSync(filePath, buffer);
+
+      // Check for cancellation before caching
+      await this.checkCancellation(job, filePath);
 
       const stats = fs.statSync(filePath);
       const fileSize = stats.size;
@@ -157,6 +199,10 @@ export class ExportJobProcessor {
       this.logger.log(`Job ${job.id} completed successfully`);
       return metadata;
     } catch (error) {
+      if (error instanceof ExportJobCancelledException) {
+        this.logger.log(`Export job ${job.id} was cancelled`);
+        throw error;
+      }
       this.logger.error(`Error processing export job ${job.id}: ${error.message}`, error.stack);
       throw error;
     }

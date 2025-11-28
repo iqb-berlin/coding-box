@@ -2792,6 +2792,88 @@ export class WorkspaceCodingController {
     }
   }
 
+  @Post(':workspace_id/coding/export/job/:jobId/cancel')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiParam({ name: 'jobId', type: String, description: 'ID of the export job to cancel' })
+  @ApiOkResponse({
+    description: 'Export job cancelled successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        message: { type: 'string' }
+      }
+    }
+  })
+  async cancelExportJob(@Param('jobId') jobId: string): Promise<{ success: boolean; message: string }> {
+    try {
+      // First, check the job state
+      const job = await this.jobQueueService.getExportJob(jobId);
+      if (!job) {
+        return {
+          success: false,
+          message: 'Export job not found'
+        };
+      }
+
+      const state = await job.getState();
+
+      // Check if job is already completed or failed
+      if (state === 'completed') {
+        return {
+          success: false,
+          message: 'Job already completed'
+        };
+      }
+
+      if (state === 'failed') {
+        return {
+          success: false,
+          message: 'Job already failed'
+        };
+      }
+
+      // Mark the job as cancelled (for active jobs to check)
+      await this.jobQueueService.markExportJobCancelled(jobId);
+
+      // Try to remove the job from queue
+      const removed = await this.jobQueueService.cancelExportJob(jobId);
+
+      // Clean up any cached metadata and temp files
+      const metadata = await this.cacheService.get<ExportJobResult>(`export-result:${jobId}`);
+      if (metadata && metadata.filePath) {
+        const fs = await import('fs');
+        if (fs.existsSync(metadata.filePath)) {
+          fs.unlinkSync(metadata.filePath);
+          this.logger.log(`Cleaned up export file: ${metadata.filePath}`);
+        }
+      }
+      await this.cacheService.delete(`export-result:${jobId}`);
+
+      if (removed) {
+        this.logger.log(`Export job ${jobId} cancelled and removed from queue`);
+        return {
+          success: true,
+          message: 'Export job cancelled successfully'
+        };
+      }
+      // Job was marked as cancelled but couldn't be removed (may be actively processing)
+      this.logger.log(`Export job ${jobId} marked as cancelled (job is actively processing)`);
+      return {
+        success: true,
+        message: 'Export job cancellation requested (job will stop at next checkpoint)'
+      };
+    } catch (error) {
+      this.logger.error(`Error cancelling export job: ${error.message}`, error.stack);
+      return {
+        success: false,
+        message: error.message
+      };
+    }
+  }
+
   @Get(':workspace_id/coding/export/aggregated')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiTags('coding')
