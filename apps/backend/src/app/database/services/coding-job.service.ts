@@ -16,6 +16,18 @@ import { UpdateCodingJobDto } from '../../admin/coding-job/dto/update-coding-job
 import { VariableBundle } from '../entities/variable-bundle.entity';
 import { ResponseEntity } from '../entities/response.entity';
 import FileUpload from '../entities/file_upload.entity';
+import { Setting } from '../entities/setting.entity';
+
+/**
+ * Flags for controlling how responses are matched/aggregated by value.
+ * Note: This enum is duplicated from api-dto/coding/response-matching-mode.dto.ts
+ * to avoid path resolution issues in the Docker build.
+ */
+enum ResponseMatchingFlag {
+  NO_AGGREGATION = 'NO_AGGREGATION',
+  IGNORE_CASE = 'IGNORE_CASE',
+  IGNORE_WHITESPACE = 'IGNORE_WHITESPACE'
+}
 
 interface CodingSchemeCode {
   id: number | string;
@@ -60,6 +72,8 @@ export class CodingJobService {
     private responseRepository: Repository<ResponseEntity>,
     @InjectRepository(FileUpload)
     private fileUploadRepository: Repository<FileUpload>,
+    @InjectRepository(Setting)
+    private settingRepository: Repository<Setting>,
     private connection: Connection
   ) {}
 
@@ -1015,6 +1029,70 @@ export class CodingJobService {
     return coderCases;
   }
 
+  async getResponseMatchingMode(workspaceId: number): Promise<ResponseMatchingFlag[]> {
+    const settingKey = `workspace-${workspaceId}-response-matching-mode`;
+    const setting = await this.settingRepository.findOne({
+      where: { key: settingKey }
+    });
+
+    if (!setting) {
+      return []; // Default: exact match (no flags)
+    }
+
+    try {
+      const parsed = JSON.parse(setting.content);
+      return parsed.flags || [];
+    } catch {
+      return [];
+    }
+  }
+
+  normalizeValue(value: string | null, flags: ResponseMatchingFlag[]): string {
+    if (value === null || value === undefined) {
+      return '';
+    }
+
+    let normalized = value;
+
+    if (flags.includes(ResponseMatchingFlag.IGNORE_CASE)) {
+      normalized = normalized.toLowerCase();
+    }
+
+    if (flags.includes(ResponseMatchingFlag.IGNORE_WHITESPACE)) {
+      normalized = normalized.replace(/\s+/g, '');
+    }
+
+    return normalized;
+  }
+
+  aggregateResponsesByValue(
+    responses: ResponseEntity[],
+    flags: ResponseMatchingFlag[]
+  ): { normalizedValue: string; responses: ResponseEntity[]; totalResponses: number }[] {
+    if (flags.includes(ResponseMatchingFlag.NO_AGGREGATION)) {
+      return responses.map(r => ({
+        normalizedValue: r.value || '',
+        responses: [r],
+        totalResponses: 1
+      }));
+    }
+
+    const groups = new Map<string, ResponseEntity[]>();
+
+    for (const response of responses) {
+      const normalizedValue = this.normalizeValue(response.value, flags);
+      const existing = groups.get(normalizedValue) || [];
+      existing.push(response);
+      groups.set(normalizedValue, existing);
+    }
+
+    return Array.from(groups.entries()).map(([normalizedValue, groupResponses]) => ({
+      normalizedValue,
+      responses: groupResponses,
+      totalResponses: groupResponses.length
+    }));
+  }
+
   async getResponsesForVariables(workspaceId: number, variables: { unitName: string; variableId: string }[]): Promise<ResponseEntity[]> {
     if (variables.length === 0) {
       return [];
@@ -1060,12 +1138,18 @@ export class CodingJobService {
   ): Promise<{
       distribution: Record<string, Record<string, number>>;
       doubleCodingInfo: Record<string, { totalCases: number; doubleCodedCases: number; singleCodedCasesAssigned: number; doubleCodedCasesPerCoder: Record<string, number> }>;
+      aggregationInfo: Record<string, { uniqueCases: number; totalResponses: number }>;
+      matchingFlags: ResponseMatchingFlag[];
     }> {
     const {
       selectedVariables, selectedCoders, doubleCodingAbsolute, doubleCodingPercentage
     } = request;
     const distribution: Record<string, Record<string, number>> = {};
     const doubleCodingInfo: Record<string, { totalCases: number; doubleCodedCases: number; singleCodedCasesAssigned: number; doubleCodedCasesPerCoder: Record<string, number> }> = {};
+    const aggregationInfo: Record<string, { uniqueCases: number; totalResponses: number }> = {};
+
+    // Get response matching mode for this workspace
+    const matchingFlags = await this.getResponseMatchingMode(workspaceId);
 
     const items: DistributionItem[] = [];
     const allVariables: VariableReference[] = [];
@@ -1102,7 +1186,19 @@ export class CodingJobService {
 
       const responses = allResponses.filter(response => itemVariables.some(v => v.unitName === response.unit?.name && v.variableId === response.variableid)
       );
-      const totalCases = responses.length;
+      const totalResponses = responses.length;
+
+      // Calculate aggregation info based on matching mode
+      const aggregatedGroups = this.aggregateResponsesByValue(responses, matchingFlags);
+      const uniqueCases = aggregatedGroups.length;
+
+      aggregationInfo[itemKey] = {
+        uniqueCases,
+        totalResponses
+      };
+
+      // Use unique cases count for distribution when aggregating
+      const totalCases = uniqueCases;
 
       distribution[itemKey] = {};
       doubleCodingInfo[itemKey] = {
@@ -1165,7 +1261,9 @@ export class CodingJobService {
       }
     }
 
-    return { distribution, doubleCodingInfo };
+    return {
+      distribution, doubleCodingInfo, aggregationInfo, matchingFlags
+    };
   }
 
   async createDistributedCodingJobs(
@@ -1183,6 +1281,8 @@ export class CodingJobService {
       message: string;
       distribution: Record<string, Record<string, number>>;
       doubleCodingInfo: Record<string, { totalCases: number; doubleCodedCases: number; singleCodedCasesAssigned: number; doubleCodedCasesPerCoder: Record<string, number> }>;
+      aggregationInfo: Record<string, { uniqueCases: number; totalResponses: number }>;
+      matchingFlags: ResponseMatchingFlag[];
       jobs: {
         coderId: number;
         coderName: string;
@@ -1199,6 +1299,7 @@ export class CodingJobService {
     } = request;
     const distribution: Record<string, Record<string, number>> = {};
     const doubleCodingInfo: Record<string, { totalCases: number; doubleCodedCases: number; singleCodedCasesAssigned: number; doubleCodedCasesPerCoder: Record<string, number> }> = {};
+    const aggregationInfo: Record<string, { uniqueCases: number; totalResponses: number }> = {};
     const createdJobs: {
       coderId: number;
       coderName: string;
@@ -1207,6 +1308,9 @@ export class CodingJobService {
       jobName: string;
       caseCount: number;
     }[] = [];
+
+    // Get response matching mode for this workspace
+    const matchingFlags = await this.getResponseMatchingMode(workspaceId);
 
     try {
     // Determine items to process
@@ -1245,7 +1349,19 @@ export class CodingJobService {
 
         const responses = allResponses.filter(response => itemVariables.some(v => v.unitName === response.unit?.name && v.variableId === response.variableid)
         );
-        const totalCases = responses.length;
+        const totalResponses = responses.length;
+
+        // Calculate aggregation info based on matching mode
+        const aggregatedGroups = this.aggregateResponsesByValue(responses, matchingFlags);
+        const uniqueCases = aggregatedGroups.length;
+
+        aggregationInfo[itemKey] = {
+          uniqueCases,
+          totalResponses
+        };
+
+        // Use unique cases count for distribution when aggregating
+        const totalCases = uniqueCases;
 
         distribution[itemKey] = {};
         doubleCodingInfo[itemKey] = {
@@ -1376,6 +1492,8 @@ export class CodingJobService {
         message: `Created ${createdJobs.length} distributed coding jobs`,
         distribution,
         doubleCodingInfo,
+        aggregationInfo,
+        matchingFlags,
         jobs: createdJobs
       };
     } catch (error) {
@@ -1386,6 +1504,8 @@ export class CodingJobService {
         message: `Failed to create distributed jobs: ${error.message}`,
         distribution: {},
         doubleCodingInfo: {},
+        aggregationInfo: {},
+        matchingFlags: [],
         jobs: []
       };
     }

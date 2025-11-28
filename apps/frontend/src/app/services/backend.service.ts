@@ -625,6 +625,8 @@ export class BackendService {
       message: string;
       distribution: Record<string, Record<string, number>>;
       doubleCodingInfo: Record<string, { totalCases: number; doubleCodedCases: number; singleCodedCasesAssigned: number; doubleCodedCasesPerCoder: Record<string, number> }>;
+      aggregationInfo: Record<string, { uniqueCases: number; totalResponses: number }>;
+      matchingFlags: string[];
       jobs: {
         coderId: number;
         coderName: string;
@@ -647,6 +649,8 @@ export class BackendService {
   ): Observable<{
       distribution: Record<string, Record<string, number>>;
       doubleCodingInfo: Record<string, { totalCases: number; doubleCodedCases: number; singleCodedCasesAssigned: number; doubleCodedCasesPerCoder: Record<string, number> }>;
+      aggregationInfo: Record<string, { uniqueCases: number; totalResponses: number }>;
+      matchingFlags: string[];
     }> {
     return this.codingService.calculateDistribution(workspaceId, selectedVariables, selectedCoders, doubleCodingAbsolute, doubleCodingPercentage, selectedVariableBundles);
   }

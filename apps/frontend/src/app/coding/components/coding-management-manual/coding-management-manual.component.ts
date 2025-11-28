@@ -14,6 +14,7 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatDialogModule } from '@angular/material/dialog';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatCheckboxModule } from '@angular/material/checkbox';
 import * as ExcelJS from 'exceljs';
 import {
   Subject, takeUntil, debounceTime, finalize
@@ -33,6 +34,7 @@ import {
   ValidationStateService
 } from '../../services/validation-state.service';
 import { CoderTrainingsListComponent } from '../coder-trainings-list/coder-trainings-list.component';
+import { WorkspaceSettingsService, ResponseMatchingFlag } from '../../../ws-admin/services/workspace-settings.service';
 
 @Component({
   selector: 'coding-box-coding-management-manual',
@@ -53,7 +55,8 @@ import { CoderTrainingsListComponent } from '../coder-trainings-list/coder-train
     VariableBundleManagerComponent,
     CoderTrainingComponent,
     CoderTrainingsListComponent,
-    CommonModule
+    CommonModule,
+    MatCheckboxModule
   ]
 })
 export class CodingManagementManualComponent implements OnInit, OnDestroy {
@@ -66,6 +69,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   private snackBar = inject(MatSnackBar);
   private validationStateService = inject(ValidationStateService);
   private translateService = inject(TranslateService);
+  private workspaceSettingsService = inject(WorkspaceSettingsService);
   private destroy$ = new Subject<void>();
 
   validationProgress: ValidationProgress | null = null;
@@ -76,6 +80,12 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   isLoadingCaseCoverage = false;
   isLoadingCodingProgress = false;
   isLoadingKappaSummary = false;
+
+  // Response matching mode configuration
+  responseMatchingFlags: ResponseMatchingFlag[] = [];
+  isLoadingMatchingMode = false;
+  isSavingMatchingMode = false;
+  ResponseMatchingFlag = ResponseMatchingFlag; // Expose enum to template
 
   // Debouncing for job definition changes
   private jobDefinitionChangeSubject = new Subject<void>();
@@ -253,6 +263,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     this.loadCodingIncompleteVariables();
     this.loadStatusDistribution();
     this.loadAppliedResultsOverview();
+    this.loadResponseMatchingMode();
   }
 
   ngOnDestroy(): void {
@@ -743,5 +754,85 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       default:
         return status;
     }
+  }
+
+  private loadResponseMatchingMode(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      return;
+    }
+
+    this.isLoadingMatchingMode = true;
+    this.workspaceSettingsService.getResponseMatchingMode(workspaceId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: flags => {
+          this.responseMatchingFlags = flags;
+          this.isLoadingMatchingMode = false;
+        },
+        error: () => {
+          this.responseMatchingFlags = [];
+          this.isLoadingMatchingMode = false;
+        }
+      });
+  }
+
+  hasMatchingFlag(flag: ResponseMatchingFlag): boolean {
+    return this.responseMatchingFlags.includes(flag);
+  }
+
+  toggleMatchingFlag(flag: ResponseMatchingFlag): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      return;
+    }
+
+    let newFlags: ResponseMatchingFlag[];
+
+    if (flag === ResponseMatchingFlag.NO_AGGREGATION) {
+      if (this.hasMatchingFlag(flag)) {
+        newFlags = [];
+      } else {
+        newFlags = [ResponseMatchingFlag.NO_AGGREGATION];
+      }
+    } else {
+      newFlags = this.responseMatchingFlags.filter(f => f !== ResponseMatchingFlag.NO_AGGREGATION);
+      if (this.hasMatchingFlag(flag)) {
+        newFlags = newFlags.filter(f => f !== flag);
+      } else {
+        newFlags = [...newFlags, flag];
+      }
+    }
+
+    this.saveResponseMatchingMode(newFlags);
+  }
+
+  private saveResponseMatchingMode(flags: ResponseMatchingFlag[]): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      return;
+    }
+
+    this.isSavingMatchingMode = true;
+    this.workspaceSettingsService.setResponseMatchingMode(workspaceId, flags)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: () => {
+          this.responseMatchingFlags = flags;
+          this.isSavingMatchingMode = false;
+          this.showSuccess(this.translateService.instant('coding-management-manual.response-matching.save-success'));
+        },
+        error: () => {
+          this.isSavingMatchingMode = false;
+          this.showError(this.translateService.instant('coding-management-manual.response-matching.save-error'));
+        }
+      });
+  }
+
+  isMatchingOptionDisabled(flag: ResponseMatchingFlag): boolean {
+    if (flag === ResponseMatchingFlag.NO_AGGREGATION) {
+      return false;
+    }
+    return this.hasMatchingFlag(ResponseMatchingFlag.NO_AGGREGATION);
   }
 }

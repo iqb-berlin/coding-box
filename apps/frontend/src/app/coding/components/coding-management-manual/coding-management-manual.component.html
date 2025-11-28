@@ -164,6 +164,58 @@
       </div>
       <hr>
 
+      <!-- Response Matching Mode Configuration -->
+      <div class="response-matching-section">
+        <h3 class="subsection-title">
+          <mat-icon>compare_arrows</mat-icon>
+          {{ 'coding-management-manual.response-matching.title' | translate }}
+          <span *ngIf="isLoadingMatchingMode || isSavingMatchingMode" class="loading-indicator">
+            <mat-spinner diameter="16"></mat-spinner>
+          </span>
+        </h3>
+        <p class="subsection-description">{{ 'coding-management-manual.response-matching.description' | translate }}</p>
+        
+        <div class="matching-options" [class.disabled]="isLoadingMatchingMode || isSavingMatchingMode">
+          <mat-checkbox
+            [checked]="hasMatchingFlag(ResponseMatchingFlag.NO_AGGREGATION)"
+            (change)="toggleMatchingFlag(ResponseMatchingFlag.NO_AGGREGATION)"
+            [disabled]="isLoadingMatchingMode || isSavingMatchingMode"
+            color="primary">
+            {{ 'coding-management-manual.response-matching.no-aggregation' | translate }}
+          </mat-checkbox>
+          
+          <mat-checkbox
+            [checked]="hasMatchingFlag(ResponseMatchingFlag.IGNORE_CASE)"
+            (change)="toggleMatchingFlag(ResponseMatchingFlag.IGNORE_CASE)"
+            [disabled]="isLoadingMatchingMode || isSavingMatchingMode || isMatchingOptionDisabled(ResponseMatchingFlag.IGNORE_CASE)"
+            color="primary">
+            {{ 'coding-management-manual.response-matching.ignore-case' | translate }}
+          </mat-checkbox>
+          
+          <mat-checkbox
+            [checked]="hasMatchingFlag(ResponseMatchingFlag.IGNORE_WHITESPACE)"
+            (change)="toggleMatchingFlag(ResponseMatchingFlag.IGNORE_WHITESPACE)"
+            [disabled]="isLoadingMatchingMode || isSavingMatchingMode || isMatchingOptionDisabled(ResponseMatchingFlag.IGNORE_WHITESPACE)"
+            color="primary">
+            {{ 'coding-management-manual.response-matching.ignore-whitespace' | translate }}
+          </mat-checkbox>
+        </div>
+        
+        <p class="matching-mode-hint">
+          <mat-icon>info</mat-icon>
+          <span *ngIf="responseMatchingFlags.length === 0">
+            {{ 'coding-management-manual.response-matching.hint-exact' | translate }}
+          </span>
+          <span *ngIf="hasMatchingFlag(ResponseMatchingFlag.NO_AGGREGATION)">
+            {{ 'coding-management-manual.response-matching.hint-no-aggregation' | translate }}
+          </span>
+          <span *ngIf="!hasMatchingFlag(ResponseMatchingFlag.NO_AGGREGATION) && responseMatchingFlags.length > 0">
+            {{ 'coding-management-manual.response-matching.hint-aggregating' | translate }}
+          </span>
+        </p>
+      </div>
+      <hr>
+
       <div class="statistics-content">
         <!-- Coding Progress Overview -->
         <div *ngIf="codingProgressOverview" class="coding-progress-section statistics-section" [class.blurred-content]="isLoadingCodingProgress">

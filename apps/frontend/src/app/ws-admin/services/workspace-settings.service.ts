@@ -4,6 +4,20 @@ import { Observable } from 'rxjs';
 import { SERVER_URL } from '../../injection-tokens';
 import { WorkspaceSettings } from '../models/workspace-settings.model';
 
+export enum ResponseMatchingFlag {
+  NO_AGGREGATION = 'NO_AGGREGATION',
+  IGNORE_CASE = 'IGNORE_CASE',
+  IGNORE_WHITESPACE = 'IGNORE_WHITESPACE'
+}
+
+export interface ResponseMatchingModeDto {
+  flags: ResponseMatchingFlag[];
+}
+
+export const DEFAULT_RESPONSE_MATCHING_MODE: ResponseMatchingModeDto = {
+  flags: []
+};
+
 @Injectable({
   providedIn: 'root'
 })
@@ -61,6 +75,37 @@ export class WorkspaceSettingsService {
       'auto-fetch-coding-statistics',
       value,
       'Controls whether coding statistics are automatically fetched in the coding management component'
+    );
+  }
+
+  getResponseMatchingMode(workspaceId: number): Observable<ResponseMatchingFlag[]> {
+    return new Observable(observer => {
+      this.getWorkspaceSetting(workspaceId, 'response-matching-mode')
+        .subscribe({
+          next: setting => {
+            try {
+              const parsed = JSON.parse(setting.value);
+              observer.next(parsed.flags ?? DEFAULT_RESPONSE_MATCHING_MODE.flags);
+            } catch {
+              observer.next(DEFAULT_RESPONSE_MATCHING_MODE.flags);
+            }
+            observer.complete();
+          },
+          error: () => {
+            observer.next(DEFAULT_RESPONSE_MATCHING_MODE.flags);
+            observer.complete();
+          }
+        });
+    });
+  }
+
+  setResponseMatchingMode(workspaceId: number, flags: ResponseMatchingFlag[]): Observable<WorkspaceSettings> {
+    const value = JSON.stringify({ flags });
+    return this.setWorkspaceSetting(
+      workspaceId,
+      'response-matching-mode',
+      value,
+      'Controls how responses are aggregated by value similarity for coding case distribution'
     );
   }
 }
