@@ -4,8 +4,10 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JobQueueService } from './job-queue.service';
 import { TestPersonCodingProcessor } from './processors/test-person-coding.processor';
 import { CodingStatisticsProcessor } from './processors/coding-statistics.processor';
+import { ExportJobProcessor } from './processors/export-job.processor';
 // eslint-disable-next-line import/no-cycle
 import { DatabaseModule } from '../database/database.module';
+import { CacheModule } from '../cache/cache.module';
 
 @Module({
   imports: [
@@ -26,9 +28,13 @@ import { DatabaseModule } from '../database/database.module';
     BullModule.registerQueue({
       name: 'coding-statistics'
     }),
-    forwardRef(() => DatabaseModule)
+    BullModule.registerQueue({
+      name: 'data-export'
+    }),
+    forwardRef(() => DatabaseModule),
+    CacheModule
   ],
-  providers: [JobQueueService, TestPersonCodingProcessor, CodingStatisticsProcessor],
+  providers: [JobQueueService, TestPersonCodingProcessor, CodingStatisticsProcessor, ExportJobProcessor],
   exports: [JobQueueService]
 })
 export class JobQueueModule {}

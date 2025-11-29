@@ -482,10 +482,11 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
           if (this.testPerson) {
             const parts = this.testPerson.split('@');
-            if (parts.length > 0) {
+            if (parts.length >= 3) {
               testPersonLogin = parts[0];
               testPersonCode = parts[1];
-              bookletId = parts[2];
+              // Support both old format (3 parts: login@code@booklet) and new format (4 parts: login@code@group@booklet)
+              bookletId = parts.length === 4 ? parts[3] : parts[2];
             }
           }
           if (authToken) {
@@ -582,11 +583,12 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       let bookletId = '';
 
       if (this.testPerson) {
-        const parts = this.testPerson.split(':');
-        if (parts.length > 0) {
+        const parts = this.testPerson.split('@');
+        if (parts.length >= 3) {
           testPersonLogin = parts[0];
           testPersonCode = parts[1];
-          bookletId = parts[2];
+          // Support both old format (3 parts: login@code@booklet) and new format (4 parts: login@code@group@booklet)
+          bookletId = parts.length === 4 ? parts[3] : parts[2];
         }
       }
       const replayUrl = window.location.href;
@@ -811,10 +813,15 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         }
       } else if (keyboardEvent.key === 'ArrowRight') {
         keyboardEvent.preventDefault();
-        const currentIndex = this.unitsData.currentUnitIndex;
-        const nextIndex = this.codingService.getNextJumpableUnitIndex(this.unitsData, currentIndex);
-        if (nextIndex >= 0 && nextIndex < this.unitsData.units.length) {
-          this.handleUnitChanged(this.unitsData.units[nextIndex]);
+        const compositeKey = this.codingService.generateCompositeKey(this.testPerson, this.unitId, this.codingService.currentVariableId);
+        const hasSelection = this.codingService.selectedCodes.has(compositeKey);
+
+        if (hasSelection || this.codingService.isCodingJobFinalized) {
+          const currentIndex = this.unitsData.currentUnitIndex;
+          const nextIndex = this.codingService.getNextJumpableUnitIndex(this.unitsData, currentIndex);
+          if (nextIndex >= 0 && nextIndex < this.unitsData.units.length) {
+            this.handleUnitChanged(this.unitsData.units[nextIndex]);
+          }
         }
       } else if (keyboardEvent.key === 'ArrowLeft' && this.unitsData.currentUnitIndex > 0) {
         keyboardEvent.preventDefault();

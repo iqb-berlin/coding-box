@@ -1,7 +1,7 @@
 import {
   Component, inject, OnInit, OnDestroy
 } from '@angular/core';
-import { MatDialogRef, MatDialogModule } from '@angular/material/dialog';
+import { MatDialogRef, MatDialogModule, MatDialog } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { MatRadioModule } from '@angular/material/radio';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
@@ -20,6 +20,7 @@ import { ExpectedCombinationDto } from '../../../../../../../api-dto/coding/expe
 import {
   ValidateCodingCompletenessResponseDto
 } from '../../../../../../../api-dto/coding/validate-coding-completeness-response.dto';
+import { CodingValidationResultsDialogComponent } from '../coding-validation-results-dialog/coding-validation-results-dialog.component';
 
 export type ExportFormat = 'json' | 'csv' | 'excel';
 
@@ -49,6 +50,7 @@ export class ExportDialogComponent implements OnInit, OnDestroy {
   private appService = inject(AppService);
   private validationStateService = inject(ValidationStateService);
   private translate = inject(TranslateService);
+  private matDialog = inject(MatDialog);
   private destroy$ = new Subject<void>();
 
   selectedFormat: ExportFormat = 'json';
@@ -74,6 +76,8 @@ export class ExportDialogComponent implements OnInit, OnDestroy {
         this.validationResults = results;
         if (results) {
           this.validationCacheKey = results.cacheKey || null;
+          // Open validation results dialog when validation completes
+          this.openValidationResultsDialog(results);
         }
       });
 
@@ -260,6 +264,19 @@ export class ExportDialogComponent implements OnInit, OnDestroy {
       },
       error: () => {
         this.isValidating = false;
+      }
+    });
+  }
+
+  openValidationResultsDialog(results: ValidateCodingCompletenessResponseDto): void {
+    this.matDialog.open(CodingValidationResultsDialogComponent, {
+      width: '90vw',
+      maxWidth: '1400px',
+      maxHeight: '90vh',
+      data: {
+        validationResults: results,
+        validationCacheKey: this.validationCacheKey,
+        expectedCombinations: this.expectedCombinations
       }
     });
   }

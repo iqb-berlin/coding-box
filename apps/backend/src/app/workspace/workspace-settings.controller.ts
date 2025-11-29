@@ -5,7 +5,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Setting } from '../database/entities/setting.entity';
 
-@Controller('api/workspace/:workspaceId/settings')
+@Controller('workspace/:workspaceId/settings')
 export class WorkspaceSettingsController {
   constructor(
     @InjectRepository(Setting)
@@ -23,13 +23,20 @@ export class WorkspaceSettingsController {
     });
 
     if (!setting) {
-      // Return default for auto-fetch-coding-statistics if not found
       if (key === 'auto-fetch-coding-statistics') {
         return {
           id: 0,
           key: settingKey,
           value: JSON.stringify({ enabled: true }),
           description: 'Controls whether coding statistics are automatically fetched in the coding management component'
+        };
+      }
+      if (key === 'response-matching-mode') {
+        return {
+          id: 0,
+          key: settingKey,
+          value: JSON.stringify({ flags: [] }),
+          description: 'Controls how responses are aggregated by value similarity for coding case distribution'
         };
       }
       throw new Error(`Setting ${key} not found for workspace ${workspaceId}`);
@@ -49,8 +56,6 @@ export class WorkspaceSettingsController {
     @Body() createSettingDto: { key: string; value: string; description?: string }
   ) {
     const settingKey = `workspace-${workspaceId}-${createSettingDto.key}`;
-
-    // Check if setting already exists, update if it does
     const existingSetting = await this.settingRepository.findOne({
       where: { key: settingKey }
     });
@@ -66,7 +71,6 @@ export class WorkspaceSettingsController {
       };
     }
 
-    // Create new setting
     const newSetting = this.settingRepository.create({
       key: settingKey,
       content: createSettingDto.value

@@ -1,10 +1,8 @@
 <div class="dialog-container">
   <h2 class="dialog-title">
-    <!-- Job Definition Mode -->
     <ng-container *ngIf="data.mode === 'definition'">
       {{ (data.isEdit ? 'coding-job-definition-dialog.job-definition.edit' : 'coding-job-definition-dialog.job-definition.create') | translate }}
     </ng-container>
-    <!-- Job Mode -->
     <ng-container *ngIf="data.mode === 'job'">
       {{ (data.isEdit ? 'coding-job-definition-dialog.job.edit' : 'coding-job-definition-dialog.job.create') | translate }}
     </ng-container>
@@ -177,7 +175,6 @@
         </div>
 
         <mat-tab-group>
-          <!-- Tab for coders selection -->
           <mat-tab label="Kodierer">
             <div class="coders-tab-content">
               <p class="section-description">Wählen Sie die Kodierer aus, die diesem Job zugewiesen werden sollen.</p>
@@ -190,7 +187,6 @@
               }
 
               @if (!isLoadingAvailableCoders && availableCoders.length > 0) {
-                <!-- Quick selection tools -->
                 <div class="quick-selection-tools">
                   <button mat-stroked-button color="primary" type="button" (click)="masterCoderToggle()" class="select-all-button">
                     <mat-icon>{{ isAllCodersSelected() ? 'deselect' : 'select_all' }}</mat-icon>
@@ -201,7 +197,6 @@
                   </div>
                 </div>
 
-                <!-- Coders grid view -->
                 <div class="coders-grid-container">
                   <div class="coders-grid">
                     @for (coder of availableCoders; track coder.id) {
@@ -236,9 +231,7 @@
             </div>
           </mat-tab>
 
-          <!-- Tab for individual variables -->
           <mat-tab label="Einzelne Variablen">
-            <!-- Filter controls -->
             <div class="filter-container">
               <div class="filter-row">
                 <mat-form-field class="filter-field">
@@ -278,7 +271,6 @@
             }
 
             @if (!isLoadingVariableAnalysis && variables.length > 0) {
-              <!-- Quick selection tools -->
               <div class="quick-selection-tools">
                 <button mat-stroked-button color="primary" type="button" (click)="masterToggle()" class="select-all-button">
                   <mat-icon>{{ isAllSelected() ? 'deselect' : 'select_all' }}</mat-icon>
@@ -289,7 +281,6 @@
                 </div>
               </div>
 
-              <!-- Variables grid view -->
               <div class="variables-grid-container">
                 <div class="variables-grid">
                   @for (variable of dataSource.filteredData; track variable.unitName + variable.variableId) {
@@ -327,7 +318,6 @@
             }
           </mat-tab>
           <mat-tab label="Variablenbündel">
-            <!-- Filter controls -->
             <div class="filter-container">
               <div class="filter-row">
                 <mat-form-field class="filter-field">
@@ -422,18 +412,19 @@
   <div class="dialog-actions">
     <button mat-button (click)="onCancel()">Abbrechen</button>
 
-    <!-- Job Definition Mode Buttons -->
     <ng-container *ngIf="data.mode === 'definition'">
-      <button mat-raised-button color="primary" (click)="onSubmit()" [disabled]="codingJobForm.invalid">
+      <button mat-raised-button color="primary" (click)="onSubmit()"
+        [disabled]="codingJobForm.invalid || selectedCoders.selected.length === 0 || (selectedVariables.selected.length === 0 && selectedVariableBundles.selected.length === 0)">
         {{ data.isEdit ? 'Definition speichern' : 'Definition erstellen' }}
       </button>
-      <button mat-stroked-button color="primary" (click)="onSubmitForReview()" [disabled]="codingJobForm.invalid" *ngIf="!data.isEdit">
+      <button mat-stroked-button color="primary" (click)="onSubmitForReview()"
+        [disabled]="codingJobForm.invalid || selectedCoders.selected.length === 0 || (selectedVariables.selected.length === 0 && selectedVariableBundles.selected.length === 0)"
+        *ngIf="!data.isEdit">
         <mat-icon>send</mat-icon>
         Zur Prüfung einreichen
       </button>
     </ng-container>
 
-    <!-- Job Mode Buttons -->
     <ng-container *ngIf="data.mode === 'job'">
       <button mat-raised-button color="primary" (click)="onSubmit()" [disabled]="codingJobForm.invalid">
         {{ data.isEdit ? 'Job speichern' : 'Job erstellen' }}

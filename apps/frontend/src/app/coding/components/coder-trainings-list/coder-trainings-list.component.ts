@@ -30,6 +30,7 @@ import { AppService } from '../../../services/app.service';
 import { CodingResultsComparisonComponent } from '../coding-results-comparison/coding-results-comparison.component';
 import { DeleteConfirmationDialog } from './delete-confirmation-dialog.component';
 import { TrainingJobsDialogComponent } from './training-jobs-dialog.component';
+import { BackendMessageTranslatorService } from '../../services/backend-message-translator.service';
 
 @Component({
   selector: 'coding-box-coder-trainings-list',
@@ -59,6 +60,7 @@ export class CoderTrainingsListComponent implements OnInit, OnDestroy {
   private dialog = inject(MatDialog);
   private snackBar = inject(MatSnackBar);
   private translate = inject(TranslateService);
+  private backendMessageTranslator = inject(BackendMessageTranslatorService);
   private destroy$ = new Subject<void>();
 
   @Input() showCreateButton = true;
@@ -139,13 +141,19 @@ export class CoderTrainingsListComponent implements OnInit, OnDestroy {
       .subscribe({
         next: response => {
           if (response.success) {
-            this.snackBar.open(response.message, this.translate.instant('common.close'), { duration: 3000 });
+            const translatedMessage = response.message ?
+              this.backendMessageTranslator.translateMessage(response.message) :
+              this.translate.instant('trainings.update.success', { label: this.editingLabel });
+            this.snackBar.open(translatedMessage, this.translate.instant('common.close'), { duration: 3000 });
             this.editingTrainingId = null;
             this.editingLabel = '';
             this.loadCoderTrainings();
           } else {
+            const translatedError = response.message ?
+              this.backendMessageTranslator.translateMessage(response.message) :
+              this.translate.instant('error.general', { error: response.message });
             this.snackBar.open(
-              this.translate.instant('error.general', { error: response.message }),
+              translatedError,
               this.translate.instant('common.close'),
               { duration: 5000 }
             );
@@ -262,11 +270,17 @@ export class CoderTrainingsListComponent implements OnInit, OnDestroy {
       .subscribe({
         next: response => {
           if (response.success) {
-            this.snackBar.open(response.message, this.translate.instant('common.close'), { duration: 5000 });
+            const translatedMessage = response.message ?
+              this.backendMessageTranslator.translateMessage(response.message) :
+              this.translate.instant('trainings.delete.success', { label: training.label, count: training.jobsCount });
+            this.snackBar.open(translatedMessage, this.translate.instant('common.close'), { duration: 5000 });
             this.loadCoderTrainings(); // Refresh the list
           } else {
+            const translatedError = response.message ?
+              this.backendMessageTranslator.translateMessage(response.message) :
+              this.translate.instant('error.general', { error: response.message });
             this.snackBar.open(
-              this.translate.instant('error.general', { error: response.message }),
+              translatedError,
               this.translate.instant('common.close'),
               { duration: 5000 }
             );

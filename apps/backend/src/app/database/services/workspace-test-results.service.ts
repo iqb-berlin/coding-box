@@ -1,4 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  Injectable, Logger, Inject, forwardRef
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Connection, Repository } from 'typeorm';
 import Persons from '../entities/persons.entity';
@@ -13,6 +15,15 @@ import { Session } from '../entities/session.entity';
 import { UnitTagService } from './unit-tag.service';
 import { JournalService } from './journal.service';
 import { CacheService } from '../../cache/cache.service';
+import { CodingListService } from './coding-list.service';
+
+interface PersonWhere {
+  code: string;
+  login: string;
+  workspace_id: number;
+  consider: boolean;
+  group?: string;
+}
 
 @Injectable()
 export class WorkspaceTestResultsService {
@@ -38,7 +49,9 @@ export class WorkspaceTestResultsService {
     private readonly connection: Connection,
     private readonly unitTagService: UnitTagService,
     private readonly journalService: JournalService,
-    private readonly cacheService: CacheService
+    private readonly cacheService: CacheService,
+    @Inject(forwardRef(() => CodingListService))
+    private readonly codingListService: CodingListService
   ) {}
 
   async findPersonTestResults(personId: number, workspaceId: number): Promise<{
@@ -273,14 +286,24 @@ export class WorkspaceTestResultsService {
 
     this.logger.log(`Cache miss for responses: workspace=${workspaceId}, testPerson=${connector}, unitId=${unitId}`);
 
-    const [login, code, bookletId] = connector.split('@');
+    const parts = connector.split('@');
+    const login = parts[0];
+    const code = parts[1];
+    const group = parts.length >= 4 ? parts[2] : undefined;
+    const bookletId = parts[parts.length - 1];
     const queryBuilder = this.unitRepository.createQueryBuilder('unit')
       .innerJoinAndSelect('unit.responses', 'response')
       .innerJoin('unit.booklet', 'booklet')
       .innerJoin('booklet.person', 'person')
       .innerJoin('booklet.bookletinfo', 'bookletinfo')
       .where('person.login = :login', { login })
-      .andWhere('person.code = :code', { code })
+      .andWhere('person.code = :code', { code });
+
+    if (group) {
+      queryBuilder.andWhere('person.group = :group', { group });
+    }
+
+    queryBuilder
       .andWhere('person.workspace_id = :workspaceId', { workspaceId })
       .andWhere('person.consider = :consider', { consider: true })
       .andWhere('bookletinfo.name = :bookletId', { bookletId })
@@ -289,14 +312,22 @@ export class WorkspaceTestResultsService {
     const unit = await queryBuilder.getOne();
 
     if (!unit) {
+      const personWhere: PersonWhere = {
+        code, login, workspace_id: workspaceId, consider: true
+      };
+      if (group) {
+        personWhere.group = group;
+      }
+
       const person = await this.personsRepository.findOne({
-        where: {
-          code, login, workspace_id: workspaceId, consider: true
-        }
+        where: personWhere
       });
 
       if (!person) {
-        throw new Error(`Person mit Login ${login} und Code ${code} wurde nicht gefunden.`);
+        const searchDescription = group ?
+          `Person mit Login ${login}, Code ${code} und Gruppe ${group}` :
+          `Person mit Login ${login} und Code ${code}`;
+        throw new Error(`${searchDescription} wurde nicht gefunden.`);
       }
 
       const bookletInfo = await this.bookletInfoRepository.findOne({
@@ -743,6 +774,7 @@ export class WorkspaceTestResultsService {
         personLogin: string;
         personCode: string;
         personGroup: string;
+        variablePage?: string;
       }[];
       total: number;
     }> {
@@ -814,11 +846,20 @@ export class WorkspaceTestResultsService {
 
       this.logger.log(`Found ${total} responses matching the criteria in workspace: ${workspaceId}, returning ${responses.length} for page ${page}`);
 
+      // Pre-load variable page maps for all unique units
+      const uniqueUnitNames = [...new Set(responses.map(r => r.unit.name))];
+      const variablePageMaps = new Map<string, Map<string, string>>();
+      for (const unitName of uniqueUnitNames) {
+        const pageMap = await this.codingListService.getVariablePageMap(unitName, workspaceId);
+        variablePageMaps.set(unitName, pageMap);
+      }
+
       const version = searchParams.version || 'v1';
       const data = responses.map(response => {
         const code = response[`code_${version}` as keyof ResponseEntity] as number;
         const score = response[`score_${version}` as keyof ResponseEntity] as number;
         const codedStatus = response[`status_${version}` as keyof ResponseEntity] as number;
+        const variablePage = variablePageMaps.get(response.unit.name)?.get(response.variableid) || '0';
 
         return {
           responseId: response.id,
@@ -836,7 +877,8 @@ export class WorkspaceTestResultsService {
           personId: response.unit.booklet.person.id,
           personLogin: response.unit.booklet.person.login,
           personCode: response.unit.booklet.person.code,
-          personGroup: response.unit.booklet.person.group
+          personGroup: response.unit.booklet.person.group,
+          variablePage
         };
       });
 

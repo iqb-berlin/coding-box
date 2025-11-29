@@ -2,6 +2,7 @@ import {
   Component, ViewChild, AfterViewInit, OnInit, OnDestroy, inject
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { CommonModule } from '@angular/common';
 import {
   catchError,
   finalize,
@@ -11,7 +12,9 @@ import {
   takeUntil,
   takeWhile
 } from 'rxjs/operators';
-import { of, Subject, timer } from 'rxjs';
+import {
+  of, Subject, timer, forkJoin
+} from 'rxjs';
 import {
   MatCell, MatCellDef,
   MatColumnDef,
@@ -61,6 +64,7 @@ import { GermanPaginatorIntl } from '../../../shared/services/german-paginator-i
     { provide: MatPaginatorIntl, useClass: GermanPaginatorIntl }
   ],
   imports: [
+    CommonModule,
     MatTable,
     MatColumnDef,
     MatHeaderCell,
@@ -130,6 +134,9 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
     totalResponses: 0,
     statusCounts: {}
   };
+
+  referenceStatistics: CodingStatistics | null = null;
+  referenceVersion: 'v1' | 'v2' | null = null;
 
   selectedStatisticsVersion: 'v1' | 'v2' | 'v3' = 'v1';
 
@@ -206,6 +213,8 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
   fetchCodingStatistics(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     this.isLoadingStatistics = true;
+    this.referenceStatistics = null;
+    this.referenceVersion = null;
 
     this.backendService.createCodingStatisticsJob(workspaceId)
       .pipe(
@@ -213,26 +222,90 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
       )
       .subscribe(({ jobId }) => {
         if (!jobId) {
-          this.backendService.getCodingStatistics(workspaceId, this.selectedStatisticsVersion)
-            .pipe(
-              catchError(() => {
-                this.snackBar.open(this.translateService.instant('coding-management.descriptions.error-statistics'), this.translateService.instant('close'), {
-                  duration: 5000,
-                  panelClass: ['error-snackbar']
-                });
-                return of({
-                  totalResponses: 0,
-                  statusCounts: {}
-                });
-              }),
-              finalize(() => {
-                this.isLoadingStatistics = false;
-              })
-            )
-            .subscribe(statistics => {
-              this.codingStatistics = statistics;
-              this.statisticsLoaded = true;
-            });
+          if (this.selectedStatisticsVersion === 'v2') {
+            // v2 compares to v1
+            forkJoin({
+              current: this.backendService.getCodingStatistics(workspaceId, 'v2'),
+              reference: this.backendService.getCodingStatistics(workspaceId, 'v1')
+            })
+              .pipe(
+                catchError(() => {
+                  this.snackBar.open(this.translateService.instant('coding-management.descriptions.error-statistics'), this.translateService.instant('close'), {
+                    duration: 5000,
+                    panelClass: ['error-snackbar']
+                  });
+                  return of({
+                    current: { totalResponses: 0, statusCounts: {} },
+                    reference: { totalResponses: 0, statusCounts: {} }
+                  });
+                }),
+                finalize(() => {
+                  this.isLoadingStatistics = false;
+                })
+              )
+              .subscribe(({ current, reference }) => {
+                this.codingStatistics = current;
+                this.referenceStatistics = reference;
+                this.referenceVersion = 'v1';
+                this.statisticsLoaded = true;
+              });
+          } else if (this.selectedStatisticsVersion === 'v3') {
+            // v3 compares to v2 if v2 has data, otherwise to v1
+            forkJoin({
+              current: this.backendService.getCodingStatistics(workspaceId, 'v3'),
+              v2Stats: this.backendService.getCodingStatistics(workspaceId, 'v2'),
+              v1Stats: this.backendService.getCodingStatistics(workspaceId, 'v1')
+            })
+              .pipe(
+                catchError(() => {
+                  this.snackBar.open(this.translateService.instant('coding-management.descriptions.error-statistics'), this.translateService.instant('close'), {
+                    duration: 5000,
+                    panelClass: ['error-snackbar']
+                  });
+                  return of({
+                    current: { totalResponses: 0, statusCounts: {} },
+                    v2Stats: { totalResponses: 0, statusCounts: {} },
+                    v1Stats: { totalResponses: 0, statusCounts: {} }
+                  });
+                }),
+                finalize(() => {
+                  this.isLoadingStatistics = false;
+                })
+              )
+              .subscribe(({ current, v2Stats, v1Stats }) => {
+                this.codingStatistics = current;
+                // Use v2 as reference if v2 differs from v1 (manual coding was done), otherwise use v1
+                if (this.statisticsDiffer(v2Stats, v1Stats)) {
+                  this.referenceStatistics = v2Stats;
+                  this.referenceVersion = 'v2';
+                } else {
+                  this.referenceStatistics = v1Stats;
+                  this.referenceVersion = 'v1';
+                }
+                this.statisticsLoaded = true;
+              });
+          } else {
+            this.backendService.getCodingStatistics(workspaceId, this.selectedStatisticsVersion)
+              .pipe(
+                catchError(() => {
+                  this.snackBar.open(this.translateService.instant('coding-management.descriptions.error-statistics'), this.translateService.instant('close'), {
+                    duration: 5000,
+                    panelClass: ['error-snackbar']
+                  });
+                  return of({
+                    totalResponses: 0,
+                    statusCounts: {}
+                  });
+                }),
+                finalize(() => {
+                  this.isLoadingStatistics = false;
+                })
+              )
+              .subscribe(statistics => {
+                this.codingStatistics = statistics;
+                this.statisticsLoaded = true;
+              });
+          }
           return;
         }
 
@@ -249,6 +322,32 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
             if (status.status === 'completed' && status.result) {
               this.codingStatistics = status.result;
               this.statisticsLoaded = true;
+              // Fetch reference statistics
+              if (this.selectedStatisticsVersion === 'v2') {
+                this.backendService.getCodingStatistics(workspaceId, 'v1')
+                  .pipe(catchError(() => of({ totalResponses: 0, statusCounts: {} })))
+                  .subscribe(ref => {
+                    this.referenceStatistics = ref;
+                    this.referenceVersion = 'v1';
+                  });
+              } else if (this.selectedStatisticsVersion === 'v3') {
+                // For v3, check if v2 has data, otherwise use v1
+                forkJoin({
+                  v2Stats: this.backendService.getCodingStatistics(workspaceId, 'v2'),
+                  v1Stats: this.backendService.getCodingStatistics(workspaceId, 'v1')
+                })
+                  .pipe(catchError(() => of({ v2Stats: { totalResponses: 0, statusCounts: {} }, v1Stats: { totalResponses: 0, statusCounts: {} } })))
+                  .subscribe(({ v2Stats, v1Stats }) => {
+                    // Use v2 as reference if v2 differs from v1 (manual coding was done), otherwise use v1
+                    if (this.statisticsDiffer(v2Stats, v1Stats)) {
+                      this.referenceStatistics = v2Stats;
+                      this.referenceVersion = 'v2';
+                    } else {
+                      this.referenceStatistics = v1Stats;
+                      this.referenceVersion = 'v1';
+                    }
+                  });
+              }
             } else if (['failed', 'cancelled', 'paused'].includes(status.status)) {
               this.snackBar.open(`Statistik-Job ${status.status}`, 'Schließen', { duration: 5000, panelClass: ['error-snackbar'] });
             }
@@ -261,6 +360,8 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
     this.dataSource.data = [];
     this.currentStatusFilter = null;
     this.totalRecords = 0;
+    this.referenceStatistics = null;
+    this.referenceVersion = null;
 
     if (this.statisticsLoaded) {
       this.fetchCodingStatistics();
@@ -268,7 +369,70 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
   }
 
   getStatuses(): string[] {
-    return Object.keys(this.codingStatistics.statusCounts);
+    const currentStatuses = Object.keys(this.codingStatistics.statusCounts);
+    if (this.referenceStatistics) {
+      const referenceStatuses = Object.keys(this.referenceStatistics.statusCounts);
+      const allStatuses = new Set([...currentStatuses, ...referenceStatuses]);
+      return Array.from(allStatuses);
+    }
+    return currentStatuses;
+  }
+
+  getStatusDifference(status: string): number | null {
+    if (!this.referenceStatistics || (this.selectedStatisticsVersion !== 'v2' && this.selectedStatisticsVersion !== 'v3')) {
+      return null;
+    }
+    // Don't show differences if current version has no data yet (coding job hasn't run)
+    if (this.codingStatistics.totalResponses === 0) {
+      return null;
+    }
+    const currentCount = this.codingStatistics.statusCounts[status] || 0;
+    const referenceCount = this.referenceStatistics.statusCounts[status] || 0;
+    return currentCount - referenceCount;
+  }
+
+  getTotalResponsesDifference(): number | null {
+    if (!this.referenceStatistics || (this.selectedStatisticsVersion !== 'v2' && this.selectedStatisticsVersion !== 'v3')) {
+      return null;
+    }
+    // Don't show differences if current version has no data yet (coding job hasn't run)
+    if (this.codingStatistics.totalResponses === 0) {
+      return null;
+    }
+    return this.codingStatistics.totalResponses - this.referenceStatistics.totalResponses;
+  }
+
+  getDifferenceTooltip(): string {
+    if (this.referenceVersion === 'v1') {
+      return this.translateService.instant('coding-management.statistics.difference-tooltip-v1');
+    }
+    if (this.referenceVersion === 'v2') {
+      return this.translateService.instant('coding-management.statistics.difference-tooltip-v2');
+    }
+    return '';
+  }
+
+  formatDifference(diff: number | null): string {
+    if (diff === null) return '';
+    if (diff > 0) return `+${diff}`;
+    if (diff < 0) return `${diff}`;
+    return '±0';
+  }
+
+  private statisticsDiffer(stats1: CodingStatistics, stats2: CodingStatistics): boolean {
+    if (stats1.totalResponses !== stats2.totalResponses) {
+      return true;
+    }
+    const allStatuses = new Set([
+      ...Object.keys(stats1.statusCounts),
+      ...Object.keys(stats2.statusCounts)
+    ]);
+    for (const status of allStatuses) {
+      if ((stats1.statusCounts[status] || 0) !== (stats2.statusCounts[status] || 0)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   getStatusPercentage(status: string): number {
@@ -430,7 +594,8 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
           login_code: item.personCode || '',
           booklet_id: item.bookletName || '',
           person_code: item.personCode || '',
-          person_group: item.personGroup || ''
+          person_group: item.personGroup || '',
+          variable_page: item.variablePage || '0'
         })) as Success[];
         this.dataSource.data = this.data;
         this.totalRecords = response.total;
@@ -488,7 +653,7 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
   }
 
   openReplay(response: Success): void {
-    const page = '0';
+    const page = response.variable_page || '0';
     const workspaceId = this.appService.selectedWorkspaceId;
 
     if (!response.login_name || !response.login_code || !response.booklet_id) {
@@ -512,7 +677,7 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
         if (!token) {
           return;
         }
-        const url = `${window.location.origin}/#/replay/${response.login_name}@${response.login_code}@${response.booklet_id}/${response.unitname}/${page}/${response.variableid}?auth=${token}`;
+        const url = `${window.location.origin}/#/replay/${response.login_name}@${response.login_code}@${response.login_group}@${response.booklet_id}/${response.unitname}/${page}/${response.variableid}?auth=${token}`;
         window.open(url, '_blank');
       }
       );

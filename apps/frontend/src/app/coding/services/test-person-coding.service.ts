@@ -339,7 +339,6 @@ export class TestPersonCodingService {
 
           buffer += decoder.decode(value, { stream: true });
 
-          // Process complete lines from the buffer
           const lines = buffer.split('\n');
           buffer = lines.pop() || ''; // Keep incomplete line in buffer
 
@@ -448,17 +447,49 @@ export class TestPersonCodingService {
   getVariableCoverageOverview(workspaceId: number): Observable<{
     totalVariables: number;
     coveredVariables: number;
+    coveredByDraft: number;
+    coveredByPendingReview: number;
+    coveredByApproved: number;
+    conflictedVariables: number;
     missingVariables: number;
     coveragePercentage: number;
     variableCaseCounts: { unitName: string; variableId: string; caseCount: number }[];
+    coverageByStatus: {
+      draft: string[];
+      pending_review: string[];
+      approved: string[];
+      conflicted: Array<{
+        variableKey: string;
+        conflictingDefinitions: Array<{
+          id: number;
+          status: string;
+        }>;
+      }>;
+    };
   }> {
     return this.http
       .get<{
       totalVariables: number;
       coveredVariables: number;
+      coveredByDraft: number;
+      coveredByPendingReview: number;
+      coveredByApproved: number;
+      conflictedVariables: number;
       missingVariables: number;
       coveragePercentage: number;
       variableCaseCounts: { unitName: string; variableId: string; caseCount: number }[];
+      coverageByStatus: {
+        draft: string[];
+        pending_review: string[];
+        approved: string[];
+        conflicted: Array<{
+          variableKey: string;
+          conflictingDefinitions: Array<{
+            id: number;
+            status: string;
+          }>;
+        }>;
+      };
     }>(
       `${this.serverUrl}admin/workspace/${workspaceId}/coding/variable-coverage-overview`,
       { headers: this.authHeader }
@@ -467,9 +498,19 @@ export class TestPersonCodingService {
         catchError(() => of({
           totalVariables: 0,
           coveredVariables: 0,
+          coveredByDraft: 0,
+          coveredByPendingReview: 0,
+          coveredByApproved: 0,
+          conflictedVariables: 0,
           missingVariables: 0,
           coveragePercentage: 0,
-          variableCaseCounts: []
+          variableCaseCounts: [],
+          coverageByStatus: {
+            draft: [],
+            pending_review: [],
+            approved: [],
+            conflicted: []
+          }
         }))
       );
   }

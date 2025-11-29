@@ -14,4 +14,5 @@ export interface Success {
   login_group?: string;
   booklet_id?: string;
   codingSchemeRef?: string;
+  variable_page?: string;
 }

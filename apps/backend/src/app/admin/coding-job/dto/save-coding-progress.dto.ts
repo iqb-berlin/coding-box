@@ -9,8 +9,8 @@ import {
  */
 export class SaveCodingProgressDto {
   @ApiProperty({
-    description: 'Test person identifier (login@code@bookletId)',
-    example: 'testuser@123@testbooklet'
+    description: 'Test person identifier (login@code@bookletId or login@code@group@bookletId)',
+    example: 'testuser@123@g1@testbooklet'
   })
   @IsString()
     testPerson: string;

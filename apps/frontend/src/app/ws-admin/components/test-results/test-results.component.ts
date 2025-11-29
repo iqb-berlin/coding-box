@@ -39,7 +39,6 @@ import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDivider } from '@angular/material/divider';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { responseStatesNumericMap } from '@iqbspecs/response/response.interface';
 import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
 import { TestResultService } from '../../../services/test-result.service';
@@ -492,7 +491,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
             const url = this.router
               .serializeUrl(
                 this.router.createUrlTree(
-                  [`replay/${this.testPerson.login}@${this.testPerson.code}@${booklet.name}/${firstUnit.name}/0/0`],
+                  [`replay/${this.testPerson.login}@${this.testPerson.code}@${this.testPerson.group}@${booklet.name}/${firstUnit.name}/0/0`],
                   { queryParams: queryParams })
               );
 
@@ -520,7 +519,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
         const url = this.router
           .serializeUrl(
             this.router.createUrlTree(
-              [`replay/${this.testPerson.login}@${this.testPerson.code}@${this.selectedBooklet}/${this.selectedUnit?.alias}/0/0`],
+              [`replay/${this.testPerson.login}@${this.testPerson.code}@${this.testPerson.group}@${this.selectedBooklet}/${this.selectedUnit?.alias}/0/0`],
               { queryParams: queryParams })
           );
         window.open(`#/${url}`, '_blank');
