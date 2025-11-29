@@ -32,6 +32,8 @@ import { VariableBundleController } from './variable-bundle/variable-bundle.cont
 import { CodingJobsController } from './coding-jobs/coding-jobs.controller';
 import { DatabaseAdminController } from './database/database-admin.controller';
 import { DatabaseExportService } from './database/database-export.service';
+import { JobQueueModule } from '../job-queue/job-queue.module';
+import { CacheModule } from '../cache/cache.module';
 
 @Module({
   imports: [
@@ -39,7 +41,9 @@ import { DatabaseExportService } from './database/database-export.service';
     AuthModule,
     HttpModule,
     TypeOrmModule.forFeature([FileUpload, Setting]),
-    VariableBundleModule
+    VariableBundleModule,
+    JobQueueModule,
+    CacheModule
   ],
   controllers: [
     UsersController,

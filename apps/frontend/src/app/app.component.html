@@ -9,7 +9,6 @@
   @if (!url.path().includes('replay') && !url.path().includes('print-view'))
   {
     <div class="fx-row-space-between-center app-header">
-      <!-- Logo-Link -->
       <a [routerLink]="['/']" [attr.aria-label]="'home.go-home' | translate">
         <img
           [src]="appService.appLogo.data"
@@ -24,9 +23,12 @@
         [class.margin-logged-out]="!authService.isLoggedIn()">
         IQB-Kodierbox
       </h1>
-      
+
       <div class="admin-section">
-        <!-- Admin-Link -->
+        @if (currentWorkspaceName) {
+          <span class="workspace-name" [matTooltip]="currentWorkspaceName">{{ currentWorkspaceName }}</span>
+        }
+
         @if (authData.isAdmin || authService.getRoles().includes('admin')) {
           <button
             mat-button
@@ -50,4 +52,5 @@
   }
 
   <router-outlet></router-outlet>
+  <coding-box-export-toast></coding-box-export-toast>
 </div>

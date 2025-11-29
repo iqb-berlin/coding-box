@@ -7,13 +7,18 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateService, TranslateModule } from '@ngx-translate/core';
-import { MatAnchor, MatButton } from '@angular/material/button';
+import { MatAnchor, MatButton, MatIconButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatDialogModule } from '@angular/material/dialog';
+import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatCheckboxModule } from '@angular/material/checkbox';
 import * as ExcelJS from 'exceljs';
-import { Subject, takeUntil } from 'rxjs';
+import {
+  Subject, takeUntil, debounceTime, finalize
+} from 'rxjs';
 import { CodingJobsComponent } from '../coding-jobs/coding-jobs.component';
 import { CodingJobDefinitionsComponent } from '../coding-job-definitions/coding-job-definitions.component';
 import { VariableBundleManagerComponent } from '../variable-bundle-manager/variable-bundle-manager.component';
@@ -21,7 +26,6 @@ import { CoderTrainingComponent, VariableConfig } from '../coder-training/coder-
 import { Coder } from '../../models/coder.model';
 import { TestPersonCodingService } from '../../services/test-person-coding.service';
 import { ExpectedCombinationDto } from '../../../../../../../api-dto/coding/expected-combination.dto';
-import { ValidateCodingCompletenessResponseDto } from '../../../../../../../api-dto/coding/validate-coding-completeness-response.dto';
 import { ExternalCodingImportResultDto } from '../../../../../../../api-dto/coding/external-coding-import-result.dto';
 import { AppService } from '../../../services/app.service';
 import { BackendService } from '../../../services/backend.service';
@@ -30,6 +34,7 @@ import {
   ValidationStateService
 } from '../../services/validation-state.service';
 import { CoderTrainingsListComponent } from '../coder-trainings-list/coder-trainings-list.component';
+import { WorkspaceSettingsService, ResponseMatchingFlag } from '../../../ws-admin/services/workspace-settings.service';
 
 @Component({
   selector: 'coding-box-coding-management-manual',
@@ -42,12 +47,16 @@ import { CoderTrainingsListComponent } from '../coder-trainings-list/coder-train
     CodingJobDefinitionsComponent,
     MatIcon,
     MatButton,
+    MatIconButton,
     MatProgressBarModule,
+    MatProgressSpinnerModule,
     MatDialogModule,
+    MatTooltipModule,
     VariableBundleManagerComponent,
     CoderTrainingComponent,
     CoderTrainingsListComponent,
-    CommonModule
+    CommonModule,
+    MatCheckboxModule
   ]
 })
 export class CodingManagementManualComponent implements OnInit, OnDestroy {
@@ -60,11 +69,27 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   private snackBar = inject(MatSnackBar);
   private validationStateService = inject(ValidationStateService);
   private translateService = inject(TranslateService);
+  private workspaceSettingsService = inject(WorkspaceSettingsService);
   private destroy$ = new Subject<void>();
 
-  validationResults: ValidateCodingCompletenessResponseDto | null = null;
   validationProgress: ValidationProgress | null = null;
   isLoading = false;
+
+  // Granular loading states
+  isLoadingVariableCoverage = false;
+  isLoadingCaseCoverage = false;
+  isLoadingCodingProgress = false;
+  isLoadingKappaSummary = false;
+
+  // Response matching mode configuration
+  responseMatchingFlags: ResponseMatchingFlag[] = [];
+  isLoadingMatchingMode = false;
+  isSavingMatchingMode = false;
+  ResponseMatchingFlag = ResponseMatchingFlag; // Expose enum to template
+
+  // Debouncing for job definition changes
+  private jobDefinitionChangeSubject = new Subject<void>();
+  private statisticsRefreshSubject = new Subject<void>();
 
   codingProgressOverview: {
     totalCasesToCode: number;
@@ -75,9 +100,25 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   variableCoverageOverview: {
     totalVariables: number;
     coveredVariables: number;
+    coveredByDraft: number;
+    coveredByPendingReview: number;
+    coveredByApproved: number;
+    conflictedVariables: number;
     missingVariables: number;
     coveragePercentage: number;
     variableCaseCounts: { unitName: string; variableId: string; caseCount: number }[];
+    coverageByStatus: {
+      draft: string[];
+      pending_review: string[];
+      approved: string[];
+      conflicted: Array<{
+        variableKey: string;
+        conflictingDefinitions: Array<{
+          id: number;
+          status: string;
+        }>;
+      }>;
+    };
   } | null = null;
 
   caseCoverageOverview: {
@@ -150,25 +191,10 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   showComparisonTable = false;
   showCoderTraining = false;
 
-  currentPage = 1;
-  pageSize = 50;
   expectedCombinations: ExpectedCombinationDto[] = [];
-  validationCacheKey: string | null = null;
 
   comparisonCurrentPage = 1;
   comparisonPageSize = 100;
-
-  get totalPages(): number {
-    return this.validationResults?.totalPages || 0;
-  }
-
-  get hasNextPage(): boolean {
-    return this.validationResults?.hasNextPage || false;
-  }
-
-  get hasPreviousPage(): boolean {
-    return this.validationResults?.hasPreviousPage || false;
-  }
 
   get comparisonTotalPages(): number {
     if (!this.importResults?.affectedRows) return 0;
@@ -216,25 +242,20 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         }
       });
 
-    this.validationStateService.validationResults$
-      .pipe(takeUntil(this.destroy$))
-      .subscribe(results => {
-        this.validationResults = results;
-
-        if (results) {
-          this.validationCacheKey = results.cacheKey || null;
-          this.showSuccess(this.translateService.instant('coding-management-manual.success.validation-completed', { missing: results.missing, total: results.total }));
-        }
-      });
-
-    const currentResults = this.validationStateService.getValidationResults();
-    if (currentResults) {
-      this.validationResults = currentResults;
-    }
-
     const currentProgress = this.validationStateService.getValidationProgress();
     this.validationProgress = currentProgress;
     this.isLoading = currentProgress.status === 'loading' || currentProgress.status === 'processing';
+
+    // Set up debounced statistics refresh
+    this.jobDefinitionChangeSubject
+      .pipe(
+        debounceTime(500),
+        takeUntil(this.destroy$)
+      )
+      .subscribe(() => {
+        this.refreshAllStatistics();
+      });
+
     this.loadCodingProgressOverview();
     this.loadVariableCoverageOverview();
     this.loadCaseCoverageOverview();
@@ -242,11 +263,15 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     this.loadCodingIncompleteVariables();
     this.loadStatusDistribution();
     this.loadAppliedResultsOverview();
+    this.loadResponseMatchingMode();
   }
 
   ngOnDestroy(): void {
     this.destroy$.next();
     this.destroy$.complete();
+
+    this.jobDefinitionChangeSubject.complete();
+    this.statisticsRefreshSubject.complete();
   }
 
   onExternalCodingFileSelected(event: Event): void {
@@ -338,157 +363,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     });
   }
 
-  /**
-   * Handle file selection event
-   */
-  onFileSelected(event: Event): void {
-    const input = event.target as HTMLInputElement;
-
-    if (!input.files || input.files.length === 0) {
-      this.showError('Keine Datei ausgewählt');
-      return;
-    }
-
-    const file = input.files[0];
-    if (!this.isExcelFile(file)) {
-      this.showError('Bitte wählen Sie eine Excel-Datei aus (.xlsx, .xls)');
-      return;
-    }
-    this.validationStateService.startValidation();
-    setTimeout(() => {
-      this.readExcelFile(file);
-    }, 0);
-  }
-
-  private isExcelFile(file: File): boolean {
-    return file.name.endsWith('.xlsx') || file.name.endsWith('.xls');
-  }
-
-  private readExcelFile(file: File): void {
-    const workbook = new ExcelJS.Workbook();
-    const reader = new FileReader();
-
-    reader.onload = async (e: ProgressEvent<FileReader>) => {
-      try {
-        const buffer = e.target?.result as ArrayBuffer;
-        this.validationStateService.updateProgress(10, 'Excel-Datei wird geladen...');
-        await workbook.xlsx.load(buffer);
-        this.validationStateService.updateProgress(30, 'Excel-Datei wird verarbeitet...');
-        const worksheet = workbook.getWorksheet(1);
-        if (!worksheet || worksheet.rowCount <= 1) {
-          this.validationStateService.setValidationError('Die Datei enthält keine gültigen Daten');
-          return;
-        }
-        const headers: string[] = [];
-        worksheet.getRow(1).eachCell(cell => {
-          headers.push(cell.value?.toString() || '');
-        });
-
-        this.validationStateService.updateProgress(40, 'Daten werden extrahiert...');
-        const data: Record<string, string>[] = [];
-        const totalRows = worksheet.rowCount - 1;
-
-        for (let rowNumber = 2; rowNumber <= worksheet.rowCount; rowNumber++) {
-          const row = worksheet.getRow(rowNumber);
-          const rowData: Record<string, string> = {};
-
-          headers.forEach((header, index) => {
-            const cell = row.getCell(index + 1);
-            rowData[header.trim()] = cell.value?.toString() || '';
-          });
-
-          data.push(rowData);
-
-          if (rowNumber % 100 === 0 || rowNumber === worksheet.rowCount) {
-            const progress = 40 + Math.floor(((rowNumber - 2) / totalRows) * 20);
-            this.validationStateService.updateProgress(
-              progress,
-              `Daten werden extrahiert (${rowNumber - 1}/${totalRows})...`
-            );
-          }
-        }
-
-        if (data.length === 0) {
-          this.validationStateService.setValidationError('Die Datei enthält keine gültigen Daten');
-          return;
-        }
-
-        this.validationStateService.updateProgress(60, 'Daten werden für Validierung vorbereitet...');
-        const expectedCombinations = this.mapToExpectedCombinations(data);
-
-        this.validationStateService.updateProgress(70, 'Validierung wird durchgeführt...');
-        this.validateCodingCompleteness(expectedCombinations);
-      } catch (error) {
-        this.validationStateService.setValidationError('Fehler beim Parsen der Excel-Datei');
-      }
-    };
-
-    reader.onerror = () => {
-      this.validationStateService.setValidationError('Fehler beim Lesen der Datei');
-    };
-
-    reader.readAsArrayBuffer(file);
-  }
-
-  private mapToExpectedCombinations(data: Record<string, string>[]): ExpectedCombinationDto[] {
-    return data.map(item => ({
-      unit_key: item.unit_key || '',
-      login_name: item.login_name || '',
-      login_code: item.login_code || '',
-      booklet_id: item.booklet_id || '',
-      variable_id: item.variable_id || ''
-    }));
-  }
-
-  private validateCodingCompleteness(expectedCombinations: ExpectedCombinationDto[]): void {
-    this.expectedCombinations = expectedCombinations;
-    this.currentPage = 1;
-
-    this.loadValidationPage(1);
-  }
-
-  private loadValidationPage(page: number): void {
-    const workspaceId = this.appService.selectedWorkspaceId;
-
-    if (!workspaceId) {
-      this.validationStateService.setValidationError('Kein Arbeitsbereich ausgewählt');
-      return;
-    }
-
-    this.validationStateService.updateProgress(80, `Validierung wird durchgeführt (Seite ${page})...`);
-    this.currentPage = page;
-
-    this.testPersonCodingService.validateCodingCompleteness(
-      workspaceId,
-      this.expectedCombinations,
-      page,
-      this.pageSize
-    ).subscribe({
-      next: results => {
-        this.validationStateService.setValidationResults(results);
-      },
-      error: () => {
-        this.validationStateService.setValidationError('Fehler bei der Validierung');
-      }
-    });
-  }
-
-  nextPage(): void {
-    if (this.hasNextPage) {
-      this.loadValidationPage(this.currentPage + 1);
-    }
-  }
-
-  previousPage(): void {
-    if (this.hasPreviousPage) {
-      this.loadValidationPage(this.currentPage - 1);
-    }
-  }
-
-  changePageSize(newPageSize: number): void {
-    this.pageSize = newPageSize;
-    this.loadValidationPage(1); // Reset to first page when changing page size
-  }
+  // Note: Validation functionality has been moved to the export dialog and dedicated validation results dialog
 
   nextComparisonPage(): void {
     if (this.comparisonHasNextPage) {
@@ -505,54 +380,6 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   changeComparisonPageSize(newPageSize: number): void {
     this.comparisonPageSize = newPageSize;
     this.comparisonCurrentPage = 1;
-  }
-
-  downloadExcel(): void {
-    const workspaceId = this.appService.selectedWorkspaceId;
-
-    if (!workspaceId || !this.validationCacheKey) {
-      this.showError('Keine Daten zum Herunterladen verfügbar. Bitte führen Sie zuerst eine Validierung durch.');
-      return;
-    }
-
-    this.isLoading = true;
-
-    this.testPersonCodingService.downloadValidationResultsAsExcel(
-      workspaceId,
-      this.validationCacheKey
-    ).subscribe({
-      next: blob => {
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        const timestamp = new Date().toISOString().slice(0, 10);
-        link.download = `validation-results-${timestamp}.xlsx`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
-
-        this.showSuccess('Excel-Datei wurde erfolgreich heruntergeladen');
-        this.isLoading = false;
-      },
-      error: error => {
-        let errorMessage = 'Fehler beim Herunterladen der Excel-Datei';
-        if (error.status === 404) {
-          errorMessage = 'Validierungsdaten nicht gefunden. Bitte führen Sie zuerst eine neue Validierung durch.';
-        } else if (error.status === 400) {
-          errorMessage = 'Ungültiger Cache-Schlüssel. Bitte führen Sie eine neue Validierung durch.';
-        } else if (error.status === 500) {
-          errorMessage = 'Server-Fehler beim Generieren der Excel-Datei. Bitte versuchen Sie es später erneut.';
-        } else if (error.status === 0) {
-          errorMessage = 'Netzwerk-Fehler. Bitte überprüfen Sie Ihre Internetverbindung.';
-        } else if (error.message && error.message.includes('cache')) {
-          errorMessage = 'Die Validierungsdaten sind nicht mehr verfügbar. Bitte führen Sie eine neue Validierung durch.';
-        }
-
-        this.showError(errorMessage);
-        this.isLoading = false;
-      }
-    });
   }
 
   downloadComparisonTable(): void {
@@ -668,6 +495,27 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     this.showCoderTraining = false;
   }
 
+  /**
+   * Event handler for job definition changes (create, update, delete)
+   * Uses debouncing to prevent excessive API calls
+   */
+  onJobDefinitionChanged(): void {
+    this.jobDefinitionChangeSubject.next();
+  }
+
+  /**
+   * Refreshes all statistics with individual loading states
+   */
+  refreshAllStatistics(): void {
+    this.loadCodingProgressOverview();
+    this.loadVariableCoverageOverview();
+    this.loadCaseCoverageOverview();
+    this.loadWorkspaceKappaSummary();
+    this.loadCodingIncompleteVariables();
+    this.loadStatusDistribution();
+    this.loadAppliedResultsOverview();
+  }
+
   reloadCodingJobsList(): void {
     if (this.codingJobsComponent) {
       this.codingJobsComponent.loadCodingJobs();
@@ -680,8 +528,14 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       return;
     }
 
+    this.isLoadingCodingProgress = true;
     this.testPersonCodingService.getCodingProgressOverview(workspaceId)
-      .pipe(takeUntil(this.destroy$))
+      .pipe(
+        takeUntil(this.destroy$),
+        finalize(() => {
+          this.isLoadingCodingProgress = false;
+        })
+      )
       .subscribe({
         next: overview => {
           this.codingProgressOverview = overview;
@@ -698,8 +552,14 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       return;
     }
 
+    this.isLoadingVariableCoverage = true;
     this.testPersonCodingService.getVariableCoverageOverview(workspaceId)
-      .pipe(takeUntil(this.destroy$))
+      .pipe(
+        takeUntil(this.destroy$),
+        finalize(() => {
+          this.isLoadingVariableCoverage = false;
+        })
+      )
       .subscribe({
         next: overview => {
           this.variableCoverageOverview = overview;
@@ -716,8 +576,14 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       return;
     }
 
+    this.isLoadingCaseCoverage = true;
     this.testPersonCodingService.getCaseCoverageOverview(workspaceId)
-      .pipe(takeUntil(this.destroy$))
+      .pipe(
+        takeUntil(this.destroy$),
+        finalize(() => {
+          this.isLoadingCaseCoverage = false;
+        })
+      )
       .subscribe({
         next: overview => {
           this.caseCoverageOverview = overview;
@@ -734,8 +600,14 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       return;
     }
 
+    this.isLoadingKappaSummary = true;
     this.testPersonCodingService.getWorkspaceCohensKappaSummary(workspaceId)
-      .pipe(takeUntil(this.destroy$))
+      .pipe(
+        takeUntil(this.destroy$),
+        finalize(() => {
+          this.isLoadingKappaSummary = false;
+        })
+      )
       .subscribe({
         next: summary => {
           this.workspaceKappaSummary = summary;
@@ -869,5 +741,98 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
           this.showError('Fehler beim Generieren der Kodierer-Schulungspakete');
         }
       });
+  }
+
+  getStatusLabel(status: string): string {
+    switch (status) {
+      case 'draft':
+        return 'Entwurf';
+      case 'pending_review':
+        return 'Warten auf Genehmigung';
+      case 'approved':
+        return 'Genehmigt';
+      default:
+        return status;
+    }
+  }
+
+  private loadResponseMatchingMode(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      return;
+    }
+
+    this.isLoadingMatchingMode = true;
+    this.workspaceSettingsService.getResponseMatchingMode(workspaceId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: flags => {
+          this.responseMatchingFlags = flags;
+          this.isLoadingMatchingMode = false;
+        },
+        error: () => {
+          this.responseMatchingFlags = [];
+          this.isLoadingMatchingMode = false;
+        }
+      });
+  }
+
+  hasMatchingFlag(flag: ResponseMatchingFlag): boolean {
+    return this.responseMatchingFlags.includes(flag);
+  }
+
+  toggleMatchingFlag(flag: ResponseMatchingFlag): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      return;
+    }
+
+    let newFlags: ResponseMatchingFlag[];
+
+    if (flag === ResponseMatchingFlag.NO_AGGREGATION) {
+      if (this.hasMatchingFlag(flag)) {
+        newFlags = [];
+      } else {
+        newFlags = [ResponseMatchingFlag.NO_AGGREGATION];
+      }
+    } else {
+      newFlags = this.responseMatchingFlags.filter(f => f !== ResponseMatchingFlag.NO_AGGREGATION);
+      if (this.hasMatchingFlag(flag)) {
+        newFlags = newFlags.filter(f => f !== flag);
+      } else {
+        newFlags = [...newFlags, flag];
+      }
+    }
+
+    this.saveResponseMatchingMode(newFlags);
+  }
+
+  private saveResponseMatchingMode(flags: ResponseMatchingFlag[]): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      return;
+    }
+
+    this.isSavingMatchingMode = true;
+    this.workspaceSettingsService.setResponseMatchingMode(workspaceId, flags)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: () => {
+          this.responseMatchingFlags = flags;
+          this.isSavingMatchingMode = false;
+          this.showSuccess(this.translateService.instant('coding-management-manual.response-matching.save-success'));
+        },
+        error: () => {
+          this.isSavingMatchingMode = false;
+          this.showError(this.translateService.instant('coding-management-manual.response-matching.save-error'));
+        }
+      });
+  }
+
+  isMatchingOptionDisabled(flag: ResponseMatchingFlag): boolean {
+    if (flag === ResponseMatchingFlag.NO_AGGREGATION) {
+      return false;
+    }
+    return this.hasMatchingFlag(ResponseMatchingFlag.NO_AGGREGATION);
   }
 }

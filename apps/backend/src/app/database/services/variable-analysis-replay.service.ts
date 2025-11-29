@@ -5,6 +5,7 @@ import FileUpload from '../entities/file_upload.entity';
 import { ResponseEntity } from '../entities/response.entity';
 import { VariableAnalysisItemDto } from '../../../../../../api-dto/coding/variable-analysis-item.dto';
 import { WorkspaceFilesService } from './workspace-files.service';
+import { CodingListService } from './coding-list.service';
 
 @Injectable()
 export class VariableAnalysisReplayService {
@@ -15,7 +16,8 @@ export class VariableAnalysisReplayService {
     private fileUploadRepository: Repository<FileUpload>,
     @InjectRepository(ResponseEntity)
     private responseRepository: Repository<ResponseEntity>,
-    private workspaceFilesService: WorkspaceFilesService
+    private workspaceFilesService: WorkspaceFilesService,
+    private codingListService: CodingListService
   ) {}
 
   async getVariableAnalysis(
@@ -186,6 +188,7 @@ export class VariableAnalysisReplayService {
         .addSelect('response.variableid', 'variableId')
         .addSelect('person.login', 'loginName')
         .addSelect('person.code', 'loginCode')
+        .addSelect('person.group', 'loginGroup')
         .addSelect('bookletinfo.name', 'bookletId')
         .leftJoin('response.unit', 'unit')
         .leftJoin('unit.booklet', 'booklet')
@@ -209,21 +212,31 @@ export class VariableAnalysisReplayService {
         .addGroupBy('response.variableid')
         .addGroupBy('person.login')
         .addGroupBy('person.code')
+        .addGroupBy('person.group')
         .addGroupBy('bookletinfo.name');
 
       const sampleInfoResults = await sampleInfoQuery.getRawMany();
 
-      const sampleInfoMap = new Map<string, { loginName: string; loginCode: string; bookletId: string }>();
+      const sampleInfoMap = new Map<string, { loginName: string; loginCode: string; loginGroup: string; bookletId: string }>();
       for (const result of sampleInfoResults) {
         const key = `${result.unitId}|${result.variableId}`;
         sampleInfoMap.set(key, {
           loginName: result.loginName || '',
           loginCode: result.loginCode || '',
+          loginGroup: result.loginGroup || '',
           bookletId: result.bookletId || ''
         });
       }
 
       const result: VariableAnalysisItemDto[] = [];
+
+      // Pre-load variable page maps for all unique units
+      const uniqueUnitIds = new Set(aggregatedResults.map(item => item.unitId));
+      const variablePageMaps = new Map<string, Map<string, string>>();
+      for (const unitId of uniqueUnitIds) {
+        const pageMap = await this.codingListService.getVariablePageMap(unitId, workspace_id);
+        variablePageMaps.set(unitId, pageMap);
+      }
 
       for (const item of aggregatedResults) {
         const unitId = item.unitId;
@@ -255,10 +268,12 @@ export class VariableAnalysisReplayService {
         const sampleInfo = sampleInfoMap.get(`${unitId}|${variableId}`);
         const loginName = sampleInfo?.loginName || '';
         const loginCode = sampleInfo?.loginCode || '';
+        const loginGroup = sampleInfo?.loginGroup || '';
         const bookletId = sampleInfo?.bookletId || '';
 
-        const variablePage = '0';
-        const replayUrl = `${serverUrl}/#/replay/${loginName}@${loginCode}@${bookletId}/${unitId}/${variablePage}/${variableId}?auth=${authToken}`;
+        // Get variable page from VOUD data
+        const variablePage = variablePageMaps.get(unitId)?.get(variableId) || '0';
+        const replayUrl = `${serverUrl}/#/replay/${loginName}@${loginCode}@${loginGroup}@${bookletId}/${unitId}/${variablePage}/${variableId}?auth=${authToken}`;
 
         result.push({
           replayUrl,

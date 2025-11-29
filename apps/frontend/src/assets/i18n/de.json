@@ -28,6 +28,13 @@
   "status-processing": "Wird bearbeitet",
   "status-completed": "Abgeschlossen",
   "status-failed": "Fehlgeschlagen",
+  "export-toast": {
+    "title": "Datenexport",
+    "download": "Herunterladen",
+    "remove": "Entfernen",
+    "clear-all": "Alle löschen",
+    "cancel": "Abbrechen"
+  },
   "status-cancelled": "Abgebrochen",
   "status-paused": "Pausiert",
 
@@ -181,6 +188,11 @@
     "export-description": "Diese Komponente wird für den Export der Daten nach Kodierung und Bereinigung verwendet.",
     "export-placeholder": "Die Funktionalität zum Datenexport wird in einer zukünftigen Version implementiert.",
     "export-action-button": "Datenexport starten",
+    "export.exporting": "Datenexport läuft...",
+    "export.starting": "Export wird gestartet...",
+    "export.success": "Datenexport erfolgreich abgeschlossen",
+    "export.errors.export-failed": "Datenexport fehlgeschlagen",
+    "export.job-started": "Datenexport gestartet",
     "export-formats": {
       "aggregated": "Aggregierte Ansicht",
       "aggregated-description": " Alle Variablen und Testpersonen in einer aggregierten Tabelle",
@@ -193,12 +205,43 @@
       "coding-times": "Kodierzeiten-Bericht",
       "coding-times-description": "Durchschnittliche Kodierzeiten nach Kodierer und Variable (Zeitspannen >10 Minuten werden ignoriert)"
     },
+    "export-options-title": "Exportoptionen",
+    "export-options": {
+      "exclude-auto-coded": "Nur manuell kodierte Variablen exportieren",
+      "exclude-auto-coded-tooltip": "Beschränkt den Export auf Variablen mit CODING_INCOMPLETE Status. Standardmäßig werden alle Variablen exportiert.",
+      "include-auto-coded": "Automatisch kodierte Variablen einbeziehen",
+      "include-auto-coded-tooltip": "Erweitert den Export um alle Variablen, die nicht manuell kodiert werden müssen. Standardmäßig werden nur Variablen mit CODING_INCOMPLETE Status exportiert.",
+      "only-manual-coding": "Nur manuell zu kodierende Variablen",
+      "only-manual-coding-tooltip": "Exportiert nur Variablen, die manuell kodiert werden sollen (CODING_INCOMPLETE Variablen). Diese Option ist standardmäßig aktiviert.",
+      "include-modal-value": "Füge Modalwerte hinzu",
+      "include-modal-value-tooltip": "Es werden zwei Spalten hinzugefügt: Häufigster Wert und Anzahl der Abweichungen davon.",
+      "include-double-coded": "Füge Doppelkodierung-Indikator hinzu",
+      "include-double-coded-tooltip": "Es wird eine Spalte hinzugefügt, die anzeigt, ob der Fall doppelt kodiert wurde (1) oder nicht (0).",
+      "include-comments": "Füge Kommentarspalte hinzu",
+      "include-comments-tooltip": "Es wird eine Spalte hinzugefügt mit den Kommentaren aller Kodierer.",
+      "include-replay-url": "Hyperlinks hinzufügen",
+      "include-replay-url-tooltip": "Es wird eine Spalte hinzugefügt mit den Hyperlinks zum Abspielen der Aufgaben.",
+      "output-comments-instead-of-codes": "Kommentare ausgeben statt Codes",
+      "output-comments-instead-of-codes-tooltip": "Die Kommentare der Kodierer werden in die Codezeilen geschrieben",
+      "anonymize-coders": "Kodierer anonymisieren",
+      "anonymize-coders-tooltip": "Kodierer werden in 'K1', 'K2' usw. umbenannt und in eine zufällige Reihenfolge gebracht. Über Variablen und Personen bleiben diese Kodierer aber erhalten.",
+      "use-pseudo-coders": "Pseudo Kodierer",
+      "use-pseudo-coders-tooltip": "Doppelkodierungen werden immer in 'K1' und 'K2' umbenannt, auch wenn es über die Personen und Variablen unterschiedliche Kodierer waren (Vermeidung fehlender Werte)",
+      "double-coding-method-title": "Verfahren, wenn pro Variable und Person mehrere Kodierer einen Code geliefert haben (Doppelkodierungen)",
+      "new-row-per-variable": "pro Variable neue Zeile",
+      "new-row-per-variable-tooltip": "Spalten bilden die Kodierer, als Zeilen sind die Personen genutzt und pro Variable hat die Person eine weitere Zeile. Beispiel für eine Zeilenbeschriftung: Testperson_Variablenname",
+      "new-column-per-coder": "pro Kodierer neue Spalte",
+      "new-column-per-coder-tooltip": "Spalte bilden die Variablen, als Zeilen sind die Personen genutzt und pro Kodierer hat die Variable eine weitere Spalte. Beispiel für Spaltenbeschriftung: Variablenname_Kodierer",
+      "most-frequent-random": "Kodierer: häufigster/Zufall",
+      "most-frequent-random-tooltip": "Es wird der häufigste Code genommen. Bei Gleichverteilung wird ein Code zufällig ausgewählt."
+    },
     "export-exporting": "Export läuft...",
     "export-success": "Export erfolgreich abgeschlossen",
     "export-errors": {
       "no-workspace": "Kein Arbeitsbereich ausgewählt",
       "invalid-format": "Ungültiges Exportformat",
-      "export-failed": "Export fehlgeschlagen"
+      "export-failed": "Export fehlgeschlagen",
+      "token-failed": "Token-Generierung fehlgeschlagen"
     },
     "no-access": "Sie haben keinen Zugriff auf diesen Arbeitsbereich. Bitte kontaktieren Sie den Studienadministrator für Zugriff."
   },
@@ -304,10 +347,6 @@
         "button": "Ergebnisse vergleichen",
         "notEnough": "Um Ergebnisse zu vergleichen, werden mindestens zwei Kodierer-Schulungen benötigt."
       },
-      "create": {
-        "button": "Neue Schulung erstellen",
-        "first": "Erste Schulung erstellen"
-      },
       "loading": "Lade Kodierer-Schulungen...",
       "empty": {
         "title": "Keine Kodierer-Schulungen vorhanden",
@@ -336,8 +375,25 @@
           "message": "Sind Sie sicher, dass Sie die Schulung \"{{label}}\" mit {{count}} {{jobText}} löschen möchten?",
           "warning": "Diese Aktion kann nicht rückgängig gemacht werden."
         },
+        "success": "Schulung '{{label}}' mit {{count}} Kodierjobs wurde gelöscht",
         "error": {
-          "generic": "Fehler beim Löschen der Schulung: {{error}}"
+          "generic": "Fehler beim Löschen der Schulung: {{error}}",
+          "not-found": "Schulung mit ID {{trainingId}} nicht in Workspace {{workspaceId}} gefunden"
+        }
+      },
+      "create": {
+        "button": "Neue Schulung erstellen",
+        "first": "Erste Schulung erstellen",
+        "success": "Erfolgreich {{count}} Kodierjobs erstellt",
+        "error": {
+          "generic": "Fehler beim Erstellen der Kodierjobs: {{error}}"
+        }
+      },
+      "update": {
+        "success": "Schulung erfolgreich aktualisiert: {{label}}",
+        "error": {
+          "generic": "Fehler beim Aktualisieren der Schulung: {{error}}",
+          "not-found": "Schulung mit ID {{trainingId}} nicht in Workspace {{workspaceId}} gefunden"
         }
       }
     },
@@ -722,7 +778,9 @@
       "coding-run-selector": "Kodier-Lauf auswählen:",
       "first-autocode-run": "1 Autocoder Lauf",
       "manual-coding-run": "manuelle Kodierung",
-      "second-autocode-run": "2 Autocoder Lauf"
+      "second-autocode-run": "2 Autocoder Lauf",
+      "difference-tooltip-v1": "Differenz zum 1. Autocoder-Lauf",
+      "difference-tooltip-v2": "Differenz zur manuellen Kodierung"
     },
     "columns": {
       "unitname": "Aufgabe",
@@ -985,6 +1043,12 @@
       "data-preparation": "Daten werden für Validierung vorbereitet...",
       "validation-progress": "Validierung wird durchgeführt (Seite {{page}})..."
     },
+    "loading": {
+      "variable-coverage": "Variablenabdeckung wird geladen...",
+      "case-coverage": "Fallabdeckung wird geladen...",
+      "coding-progress": "Kodierungsfortschritt wird geladen...",
+      "kappa-summary": "Kappa-Statistiken werden geladen..."
+    },
     "titles": {
       "validation-running": "Validierung läuft",
       "validation-results": "Validierungsergebnisse",
@@ -1035,6 +1099,18 @@
     },
     "import": {
       "errors-and-warnings": "Fehler und Warnungen"
+    },
+    "response-matching": {
+      "title": "Antwort-Matching",
+      "description": "Legen Sie fest, wann Antworten von verschiedenen Testpersonen als gleicher Fall behandelt werden sollen.",
+      "no-aggregation": "Nicht aggregieren (jede Antwort ist ein eigener Fall)",
+      "ignore-case": "Groß-/Kleinschreibung ignorieren",
+      "ignore-whitespace": "Leerzeichen ignorieren",
+      "hint-exact": "Aktuelle Einstellung: Exakte Übereinstimmung - Antworten werden nur bei identischem Wert zusammengefasst.",
+      "hint-no-aggregation": "Aktuelle Einstellung: Keine Aggregation - Jede Antwort wird als separater Fall behandelt.",
+      "hint-aggregating": "Aktuelle Einstellung: Antworten werden unter Berücksichtigung der gewählten Optionen zusammengefasst.",
+      "save-success": "Matching-Einstellungen gespeichert",
+      "save-error": "Fehler beim Speichern der Matching-Einstellungen"
     }
   },
 
@@ -1066,7 +1142,8 @@
       "data-extraction-progress": "Daten werden extrahiert ({{current}}/{{total}})...",
       "data-preparation": "Daten werden für Validierung vorbereitet...",
       "validation-running": "Validierung wird durchgeführt...",
-      "validation-page-progress": "Validierung wird durchgeführt (Seite {{page}})..."
+      "validation-page-progress": "Validierung wird durchgeführt (Seite {{page}})...",
+      "view-results-button": "Validierungs Ergebnisse anzeigen"
     }
   },
   "export-coding-book": {
@@ -1185,6 +1262,10 @@
         "variable-id": "Variablen-ID"
       }
     },
+    "validation": {
+      "coder-required": "Es muss mindestens ein Kodierer ausgewählt werden",
+      "variable-or-bundle-required": "Es muss mindestens eine Variable oder ein Variablenbündel ausgewählt werden"
+    },
     "snackbars": {
       "no-workspace-selected": "Kein Arbeitsbereich ausgewählt",
       "job-updated-success": "Kodierauftrag erfolgreich aktualisiert",
@@ -1214,6 +1295,7 @@
       "definition": {
         "draft": "Entwurf",
         "pending-review": "Warten auf Genehmigung",
+        "pending_review": "Warten auf Genehmigung",
         "approved": "Genehmigt"
       },
       "job": {
@@ -1360,7 +1442,7 @@
     "variables-requiring-manual-coding": "Variablen, die manuelle Kodierung erfordern",
     "variables-with-incomplete-status": "Variablen mit CODING_INCOMPLETE Status",
     "response-status-summary": "Zusammenfassung des Antwortstatus",
-    "coding-incomplete": "CODING_INCOMPLETE:",
+    "coding-incomplete": "Gesamt zu kodierende Fälle:",
     "applied-results": "Angewendete Ergebnisse:",
     "remaining": "Verbleibend:",
     "completion-progress": "Fertigstellungsfortschritt",
@@ -1369,6 +1451,30 @@
     "coding-complete": "CODING_COMPLETE:",
     "invalid": "INVALID:",
     "coding-error": "CODING_ERROR:"
+  },
+
+  "coding-validation-results": {
+    "title": "Validierungsergebnisse",
+    "download-button": "Als Excel herunterladen",
+    "close-button": "Schließen",
+    "previous-page": "Vorherige",
+    "next-page": "Nächste",
+    "page-size": "Einträge pro Seite:",
+    "table": {
+      "headers": {
+        "unit-key": "Aufgabe",
+        "login-name": "Login-Name",
+        "login-group": "Login-Gruppe",
+        "login-code": "Login-Code",
+        "booklet-id": "Testheft",
+        "variable-id": "Variable",
+        "status": "Status"
+      },
+      "status": {
+        "missing": "Fehlend",
+        "present": "Vorhanden"
+      }
+    }
   },
 
   "coding-results": {

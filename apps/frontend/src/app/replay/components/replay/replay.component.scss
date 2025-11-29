@@ -147,6 +147,16 @@
   font-weight: 500;
 }
 
+.watermark.code-selector-active {
+  right: 470px;
+}
+
+@media (max-width: 1200px) {
+  .watermark.code-selector-active {
+    right: 15px;
+  }
+}
+
 .coding-progress {
   position: absolute;
   top: 15px;

@@ -1,0 +1,69 @@
+<div class="export-toast-container" *ngIf="hasJobs">
+  <mat-card class="export-toast-card">
+    <div class="toast-header" (click)="toggleCollapse()">
+      <div class="header-left">
+        <mat-icon>download</mat-icon>
+        <span class="title">{{ 'export-toast.title' | translate }}</span>
+        <span class="badge" *ngIf="activeJobCount > 0">{{ activeJobCount }}</span>
+      </div>
+      <button mat-icon-button class="collapse-btn">
+        <mat-icon>{{ isCollapsed ? 'expand_less' : 'expand_more' }}</mat-icon>
+      </button>
+    </div>
+
+    <div class="toast-content" *ngIf="!isCollapsed">
+      <div class="job-list">
+        <div *ngFor="let job of jobs" class="job-item" [class]="getStatusClass(job.status)">
+          <div class="job-info">
+            <mat-icon [class]="getStatusClass(job.status)" class="status-icon">
+              {{ getStatusIcon(job.status) }}
+            </mat-icon>
+            <span class="job-type">{{ getExportTypeLabel(job.exportType) }}</span>
+          </div>
+
+          <div class="job-progress" *ngIf="job.status === 'waiting' || job.status === 'active'">
+            <mat-progress-bar
+              mode="determinate"
+              [value]="job.progress">
+            </mat-progress-bar>
+            <span class="progress-text">{{ job.progress }}%</span>
+          </div>
+
+          <div class="job-error" *ngIf="job.status === 'failed' && job.error">
+            <span class="error-text">{{ job.error }}</span>
+          </div>
+
+          <div class="job-actions">
+            <button
+              mat-icon-button
+              *ngIf="job.status === 'waiting' || job.status === 'active'"
+              (click)="cancelJob(job)"
+              matTooltip="{{ 'export-toast.cancel' | translate }}">
+              <mat-icon>cancel</mat-icon>
+            </button>
+            <button
+              mat-icon-button
+              *ngIf="job.status === 'completed'"
+              (click)="downloadFile(job)"
+              matTooltip="{{ 'export-toast.download' | translate }}">
+              <mat-icon>file_download</mat-icon>
+            </button>
+            <button
+              mat-icon-button
+              *ngIf="job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled'"
+              (click)="removeJob(job)"
+              matTooltip="{{ 'export-toast.remove' | translate }}">
+              <mat-icon>close</mat-icon>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="toast-footer" *ngIf="completedJobCount > 0 || failedJobCount > 0">
+        <button mat-button (click)="clearCompleted()">
+          {{ 'export-toast.clear-all' | translate }}
+        </button>
+      </div>
+    </div>
+  </mat-card>
+</div>

@@ -58,10 +58,11 @@
       <div class="code-list scrollable-codes">
         <div class="code-row"
              [class.selected]="item.id === selectedCode"
-             [class.read-only]="isReadOnly"
+             [class.read-only]="isReadOnly || isRegularSelectionDisabled"
              *ngFor="let item of regularCodes;"
-             [style.cursor]="isReadOnly ? 'not-allowed' : 'pointer'"
-             (click)="isReadOnly ? null : onSelect(item.id)">
+             [style.cursor]="(isReadOnly || isRegularSelectionDisabled) ? 'not-allowed' : 'pointer'"
+             (click)="(isReadOnly || isRegularSelectionDisabled) ? null : onSelect(item.id)">
+
           <div class="code-content">
             <span class="code-info">
               <span class="code-id">{{ item.id }}</span>

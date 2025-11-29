@@ -394,6 +394,29 @@
           color: #555;
           font-weight: 500;
         }
+
+        .difference-value {
+          font-size: 13px;
+          font-weight: 600;
+          padding: 2px 8px;
+          border-radius: 12px;
+          margin-left: 4px;
+
+          &.difference-positive {
+            color: #2e7d32;
+            background-color: rgba(46, 125, 50, 0.15);
+          }
+
+          &.difference-negative {
+            color: #c62828;
+            background-color: rgba(198, 40, 40, 0.15);
+          }
+
+          &.difference-neutral {
+            color: #757575;
+            background-color: rgba(117, 117, 117, 0.15);
+          }
+        }
       }
 
       .view-button {
@@ -707,10 +730,9 @@
 }
 
 .status-derive-pending {
-  color: #ffeb3b;
+  color: #f57c00; // Darker text for better readability on yellow background
   background-color: rgba(255, 235, 59, 0.1);
   border: 1px solid rgba(255, 235, 59, 0.2);
-  color: #f57c00; // Darker text for better readability on yellow background
 }
 
 .status-intended-incomplete {
@@ -720,10 +742,9 @@
 }
 
 .status-code-selection-pending {
-  color: #fff9c4;
+  color: #f57c00; // Darker text for better readability on light yellow background
   background-color: rgba(255, 249, 196, 0.1);
   border: 1px solid rgba(255, 249, 196, 0.2);
-  color: #f57c00; // Darker text for better readability on light yellow background
 }
 
 .empty-state {

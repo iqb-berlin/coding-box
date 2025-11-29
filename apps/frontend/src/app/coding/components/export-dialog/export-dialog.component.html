@@ -26,7 +26,7 @@
       <h3>{{ 'export-dialog.validation.section-title' | translate }}</h3>
       <div class="validation-controls">
         <button mat-button color="" (click)="validationFileInput.click()" [disabled]="isValidating">
-          <mat-icon>fact_check</mat-icon>
+          <mat-icon>file_upload</mat-icon>
           {{ 'export-dialog.validation.upload-button' | translate }}
         </button>
         <input #validationFileInput type="file" style="display: none;" accept=".xlsx, .xls" (change)="onValidationFileSelected($event)">
@@ -58,6 +58,10 @@
       <!-- Validation Results -->
       @if (validationResults && validationProgress && validationProgress.status === 'completed') {
         <div class="validation-results-section">
+          <button mat-button (click)="openValidationResultsDialog(validationResults)">
+            <mat-icon>visibility</mat-icon>
+            {{ 'export-dialog.validation.view-results-button' | translate }}
+          </button>
           <button mat-button (click)="downloadValidationExcel()" [disabled]="isValidating || !validationCacheKey">
             <mat-icon>download</mat-icon>
             {{ 'export-dialog.validation.download-button' | translate }}

@@ -32,7 +32,11 @@ export function validateToken(token: string): { isValid: boolean; errorType?: 't
  * @returns True if the test person identifier is valid, false otherwise
  */
 export function isTestperson(testperson: string): boolean {
-  if (testperson.split('@').length !== 3) return false;
-  const reg = /^.+(@.+){2}$/;
-  return reg.test(testperson);
+  const parts = testperson.split('@');
+  // Support both old format (3 parts: login@code@booklet) and new format (4 parts: login@code@group@booklet)
+  if (parts.length !== 3 && parts.length !== 4) return false;
+
+  // At least 2 parts must have values (not empty strings)
+  const nonEmptyParts = parts.filter(part => part.trim() !== '');
+  return nonEmptyParts.length >= 2;
 }

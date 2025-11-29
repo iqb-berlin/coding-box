@@ -156,12 +156,17 @@ export class CodeSelectorComponent implements OnChanges {
       const codingIssueItem = this.selectableItems.find(item => item.id === this.preSelectedCodingIssueOptionId);
       if (codingIssueItem && codingIssueItem.type === 'codingIssueOption') {
         this.selectedCodingIssueOption = this.preSelectedCodingIssueOptionId;
+        // Clear regular code selection when pre-selecting -3 or -4
+        if (this.preSelectedCodingIssueOptionId === -3 || this.preSelectedCodingIssueOptionId === -4) {
+          this.selectedCode = null;
+        }
       }
     }
 
     const codeDto = this.selectedCode !== null ? this.createCodeOrCodingIssueOption(
       this.selectableItems.find(item => item.id === this.selectedCode)!
     ) : null;
+
     const codingIssueOption = this.selectedCodingIssueOption !== null ? this.createCodeOrCodingIssueOption(
       this.selectableItems.find(item => item.id === this.selectedCodingIssueOption)!
     ) as CodingIssueDto : null;
@@ -198,8 +203,16 @@ export class CodeSelectorComponent implements OnChanges {
     if (this.isReadOnly) return;
     const selectedItem = this.selectableItems.find(item => item.id === codeId);
     if (!selectedItem) return;
+
+    // Prevent selection of regular codes when isRegularSelectionDisabled is true
+    if (selectedItem.type !== 'codingIssueOption' && this.isRegularSelectionDisabled) return;
+
     if (selectedItem.type === 'codingIssueOption') {
       this.selectedCodingIssueOption = codeId;
+      // Clear regular code selection when selecting -3 or -4
+      if (codeId === -3 || codeId === -4) {
+        this.selectedCode = null;
+      }
     } else {
       this.selectedCode = codeId;
     }
@@ -222,6 +235,14 @@ export class CodeSelectorComponent implements OnChanges {
 
   get codingIssueOptionCodes(): SelectableItem[] {
     return this.selectableItems.filter(item => item.type === 'codingIssueOption');
+  }
+
+  get isRegularSelectionDisabled(): boolean {
+    return this.selectedCodingIssueOption === -3 || this.selectedCodingIssueOption === -4;
+  }
+
+  private hasCurrentSelection(): boolean {
+    return this.selectedCode !== null || this.selectedCodingIssueOption !== null;
   }
 
   deselectAll(): void {
@@ -256,6 +277,10 @@ export class CodeSelectorComponent implements OnChanges {
       return;
     }
 
+    if (!this.isReadOnly && !this.hasCurrentSelection()) {
+      return;
+    }
+
     const currentIndex = data.currentUnitIndex;
     const nextIndex = currentIndex + 1;
     if (nextIndex >= 0 && nextIndex < data.units.length) {
@@ -281,7 +306,13 @@ export class CodeSelectorComponent implements OnChanges {
     if (!data || !data.units.length) return false;
 
     const nextIndex = data.currentUnitIndex + 1;
-    return nextIndex < data.units.length;
+    const hasNext = nextIndex < data.units.length;
+
+    if (this.isReadOnly) {
+      return hasNext;
+    }
+
+    return hasNext && this.hasCurrentSelection();
   }
 
   hasPreviousUnit(): boolean {

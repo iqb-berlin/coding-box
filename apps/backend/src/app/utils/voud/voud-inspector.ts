@@ -1,5 +1,6 @@
+/* eslint-disable no-console */
+
 import * as fs from 'fs';
-import * as path from 'path';
 import { extractVariableLocation } from './extractVariableLocation';
 
 function inspectVoudFile(filePathOrContent) {
@@ -18,7 +19,6 @@ function inspectVoudFile(filePathOrContent) {
     }
 
     // Parse the JSON
-    const unitData = JSON.parse(content);
 
     // Create the unit object as expected by extractVariableLocation
     const unit = { definition: content };
@@ -39,7 +39,7 @@ function inspectVoudFile(filePathOrContent) {
       console.log(`  Always Visible: ${variable.variable_page_always_visible ?? 'false'}`);
 
       if (variable.variable_dependencies && variable.variable_dependencies.length > 0) {
-        console.log(`  Dependencies:`);
+        console.log('  Dependencies:');
         variable.variable_dependencies.forEach(dep => {
           console.log(`    - ${dep.variable_dependency_ref} (path: pages[${dep.variable_dependency_path.pages}] -> sections[${dep.variable_dependency_path.sections}] -> elements[${dep.variable_dependency_path.elements}])`);
         });
@@ -50,7 +50,6 @@ function inspectVoudFile(filePathOrContent) {
     });
 
     console.log('=== Inspection Complete ===');
-
   } catch (error) {
     console.error('Error processing VOUD file:', error.message);
     if (error.stack) {
@@ -87,4 +86,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { inspectVoudFile };
+export { inspectVoudFile };
