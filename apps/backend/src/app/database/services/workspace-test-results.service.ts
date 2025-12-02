@@ -2,7 +2,12 @@ import {
   Injectable, Logger, Inject, forwardRef
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Connection, Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
+import { Response } from 'express';
+import * as csv from 'fast-csv';
+import * as fs from 'fs';
+import { Writable } from 'stream';
+import { ResponseValueType } from '@iqbspecs/response/response.interface';
 import Persons from '../entities/persons.entity';
 import { statusNumberToString, statusStringToNumber } from '../utils/response-status-converter';
 import { Unit } from '../entities/unit.entity';
@@ -10,12 +15,11 @@ import { Booklet } from '../entities/booklet.entity';
 import { ResponseEntity } from '../entities/response.entity';
 import { BookletInfo } from '../entities/bookletInfo.entity';
 import { BookletLog } from '../entities/bookletLog.entity';
-import { UnitLog } from '../entities/unitLog.entity';
-import { Session } from '../entities/session.entity';
 import { UnitTagService } from './unit-tag.service';
 import { JournalService } from './journal.service';
 import { CacheService } from '../../cache/cache.service';
 import { CodingListService } from './coding-list.service';
+import { Chunk, TcMergeResponse } from './shared-types';
 
 interface PersonWhere {
   code: string;
@@ -42,11 +46,7 @@ export class WorkspaceTestResultsService {
     private bookletInfoRepository: Repository<BookletInfo>,
     @InjectRepository(BookletLog)
     private bookletLogRepository: Repository<BookletLog>,
-    @InjectRepository(UnitLog)
-    private unitLogRepository: Repository<UnitLog>,
-    @InjectRepository(Session)
-    private sessionRepository: Repository<Session>,
-    private readonly connection: Connection,
+    private readonly connection: DataSource,
     private readonly unitTagService: UnitTagService,
     private readonly journalService: JournalService,
     private readonly cacheService: CacheService,
@@ -390,7 +390,7 @@ export class WorkspaceTestResultsService {
 
     const responsesArray = Object.keys(responsesBySubform).map(subform => {
       const uniqueResponses = responsesBySubform[subform].filter(
-        (response, index, self) => index === self.findIndex(r => r.id === response.id)
+        (response: { id: string }, index: number, self: { id: string }[]) => index === self.findIndex((r: { id: string }) => r.id === response.id)
       );
 
       return {
@@ -1075,5 +1075,213 @@ export class WorkspaceTestResultsService {
       );
       throw new Error(`An error occurred while searching for booklets with name: ${bookletName}: ${error.message}`);
     }
+  }
+
+  async exportTestResults(workspaceId: number, res: Response, filters?: { groupNames?: string[]; bookletNames?: string[]; unitNames?: string[]; personIds?: number[] }): Promise<void> {
+    this.logger.log(`Exporting test results for workspace ${workspaceId}`);
+    await this.exportTestResultsToStream(workspaceId, res, filters);
+  }
+
+  async exportTestResultsToFile(
+    workspaceId: number,
+    filePath: string,
+    filters?: { groupNames?: string[]; bookletNames?: string[]; unitNames?: string[]; personIds?: number[] },
+    progressCallback?: (progress: number) => Promise<void> | void
+  ): Promise<void> {
+    this.logger.log(`Exporting test results for workspace ${workspaceId} to file ${filePath}`);
+    const fileStream = fs.createWriteStream(filePath);
+    await this.exportTestResultsToStream(workspaceId, fileStream, filters, progressCallback);
+  }
+
+  async exportTestResultsToStream(
+    workspaceId: number,
+    stream: Writable,
+    filters?: { groupNames?: string[]; bookletNames?: string[]; unitNames?: string[]; personIds?: number[] },
+    progressCallback?: (progress: number) => Promise<void> | void
+  ): Promise<void> {
+    const csvStream = csv.format({
+      headers: [
+        'groupname',
+        'loginname',
+        'code',
+        'bookletname',
+        'unitname',
+        'responses',
+        'laststate',
+        'originalUnitId'
+      ],
+      delimiter: ';',
+      quote: '"'
+    });
+
+    csvStream.pipe(stream);
+
+    const BATCH_SIZE = 20;
+    let processedCount = 0;
+
+    const createQuery = () => {
+      const qb = this.unitRepository.createQueryBuilder('unit')
+        .innerJoinAndSelect('unit.booklet', 'booklet')
+        .innerJoinAndSelect('booklet.person', 'person')
+        .innerJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
+        .leftJoinAndSelect('unit.responses', 'response')
+        .leftJoinAndSelect('unit.unitLastStates', 'laststate')
+        .where('person.workspace_id = :workspaceId', { workspaceId })
+        .andWhere('person.consider = :consider', { consider: true });
+
+      if (filters?.groupNames?.length) {
+        qb.andWhere('person.group IN (:...groupNames)', { groupNames: filters.groupNames });
+      }
+      if (filters?.bookletNames?.length) {
+        qb.andWhere('bookletinfo.name IN (:...bookletNames)', { bookletNames: filters.bookletNames });
+      }
+      if (filters?.unitNames?.length) {
+        qb.andWhere('unit.name IN (:...unitNames)', { unitNames: filters.unitNames });
+      }
+      if (filters?.personIds?.length) {
+        qb.andWhere('person.id IN (:...personIds)', { personIds: filters.personIds });
+      }
+      return qb;
+    };
+
+    const totalCount = await createQuery().getCount();
+    this.logger.log(`Total units to export: ${totalCount}`);
+
+    let lastUnitId = 0;
+    let hasMore = true;
+
+    while (hasMore) {
+      const units = await createQuery()
+        .andWhere('unit.id > :lastUnitId', { lastUnitId })
+        .orderBy('unit.id', 'ASC')
+        .take(BATCH_SIZE)
+        .getMany();
+
+      if (units.length === 0) {
+        hasMore = false;
+        break;
+      }
+
+      lastUnitId = units[units.length - 1].id;
+
+      for (const unit of units) {
+        const responsesBySubform = new Map<string, TcMergeResponse[]>();
+
+        if (unit.responses) {
+          unit.responses.forEach(r => {
+            const subform = r.subform || '';
+            if (!responsesBySubform.has(subform)) {
+              responsesBySubform.set(subform, []);
+            }
+
+            let value: ResponseValueType = r.value;
+            try {
+              value = JSON.parse(r.value);
+            } catch (e) {
+              // keep as string
+            }
+
+            responsesBySubform.get(subform).push({
+              id: r.variableid,
+              value: value,
+              status: statusNumberToString(r.status) || 'UNSET',
+              subform: r.subform,
+              code: r.code_v1,
+              score: r.score_v1
+            });
+          });
+        }
+
+        const chunks: Chunk[] = [];
+        responsesBySubform.forEach((responses, subform) => {
+          chunks.push({
+            id: subform,
+            subForm: subform,
+            responseType: 'state',
+            ts: 0,
+            content: JSON.stringify(responses)
+          });
+        });
+
+        const lastStateMap: { [key: string]: unknown } = {};
+        if (unit.unitLastStates) {
+          unit.unitLastStates.forEach(ls => {
+            lastStateMap[ls.key] = ls.value;
+          });
+        }
+
+        const canContinue = csvStream.write({
+          groupname: unit.booklet.person.group,
+          loginname: unit.booklet.person.login,
+          code: unit.booklet.person.code,
+          bookletname: unit.booklet.bookletinfo.name,
+          unitname: unit.name,
+          responses: JSON.stringify(chunks),
+          laststate: JSON.stringify(lastStateMap),
+          originalUnitId: unit.alias || unit.name
+        });
+
+        if (!canContinue) {
+          await new Promise(resolve => {
+            csvStream.once('drain', resolve);
+          });
+        }
+
+        processedCount += 1;
+      }
+
+      if (progressCallback && totalCount > 0) {
+        await progressCallback(Math.round((processedCount / totalCount) * 100));
+      }
+    }
+
+    csvStream.end();
+
+    return new Promise<void>((resolve, reject) => {
+      stream.on('finish', () => resolve());
+      stream.on('error', reject);
+    });
+  }
+
+  async getExportOptions(workspaceId: number): Promise<{
+    testPersons: { id: number; groupName: string; code: string; login: string }[];
+    booklets: string[];
+    units: string[];
+  }> {
+    const testPersons = await this.personsRepository
+      .createQueryBuilder('person')
+      .select(['person.id', 'person.group', 'person.code', 'person.login'])
+      .where('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('person.consider = :consider', { consider: true })
+      .orderBy('person.group', 'ASC')
+      .addOrderBy('person.code', 'ASC')
+      .addOrderBy('person.login', 'ASC')
+      .getMany();
+
+    const booklets = await this.bookletRepository
+      .createQueryBuilder('booklet')
+      .innerJoin('booklet.person', 'person')
+      .innerJoin('booklet.bookletinfo', 'bookletinfo')
+      .select('DISTINCT bookletinfo.name', 'name')
+      .where('person.workspace_id = :workspaceId', { workspaceId })
+      .orderBy('bookletinfo.name', 'ASC')
+      .getRawMany();
+
+    const units = await this.unitRepository
+      .createQueryBuilder('unit')
+      .innerJoin('unit.booklet', 'booklet')
+      .innerJoin('booklet.person', 'person')
+      .select('DISTINCT unit.name', 'name')
+      .where('person.workspace_id = :workspaceId', { workspaceId })
+      .orderBy('unit.name', 'ASC')
+      .getRawMany();
+
+    return {
+      testPersons: testPersons.map(p => ({
+        id: p.id, groupName: p.group, code: p.code, login: p.login
+      })),
+      booklets: booklets.map(b => b.name),
+      units: units.map(u => u.name)
+    };
   }
 }
