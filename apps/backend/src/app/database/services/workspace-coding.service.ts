@@ -1043,7 +1043,12 @@ export class WorkspaceCodingService {
       const responses = await this.responseRepository.find({
         where: {
           unitid: In(unitIds),
-          status_v1: In([statusStringToNumber('CODING_INCOMPLETE'), statusStringToNumber('INTENDED_INCOMPLETE'), statusStringToNumber('CODE_SELECTION_PENDING')])
+          status_v1: In([
+            statusStringToNumber('CODING_INCOMPLETE'),
+            statusStringToNumber('INTENDED_INCOMPLETE'),
+            statusStringToNumber('CODE_SELECTION_PENDING'),
+            statusStringToNumber('CODING_ERROR')
+          ])
         }
       });
 

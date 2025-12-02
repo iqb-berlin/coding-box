@@ -28,6 +28,7 @@ import { CodingResultsService } from './coding-results.service';
 import { CodingJobService } from './coding-job.service';
 import { CodingExportService } from './coding-export.service';
 import { CodebookGenerator } from '../../admin/code-book/codebook-generator.class';
+import { statusStringToNumber } from '../utils/response-status-converter';
 
 const mockCodingFactory = { code: jest.fn() };
 
@@ -1202,6 +1203,17 @@ describe('WorkspaceCodingService', () => {
       expect(result).toHaveLength(2);
       expect(result[0]).toHaveProperty('unitname');
       expect(result[0].unitname).toBe('UNIT_1');
+
+      const findArgs = (responseRepository.find as jest.Mock).mock.calls[0][0];
+      const statusFilter = findArgs.where.status_v1;
+      // TypeORM FindOperator stores value in _value or value property
+      const filterValues = statusFilter.value;
+      expect(filterValues).toEqual(expect.arrayContaining([
+        statusStringToNumber('CODING_INCOMPLETE'),
+        statusStringToNumber('INTENDED_INCOMPLETE'),
+        statusStringToNumber('CODE_SELECTION_PENDING'),
+        statusStringToNumber('CODING_ERROR')
+      ]));
     });
 
     it('should handle no persons found', async () => {
