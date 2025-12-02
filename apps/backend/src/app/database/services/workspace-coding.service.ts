@@ -731,8 +731,11 @@ export class WorkspaceCodingService {
       // Step 5: Get responses - 50% progress
       const responseQueryStart = Date.now();
       const allResponses = await this.responseRepository.find({
-        where: { unitid: In(unitIdsArray), status: In([3, 2, 1]) },
-        select: ['id', 'unitid', 'variableid', 'value', 'status'] // Only select needed fields
+        where: [
+          { unitid: In(unitIdsArray), status: In([3, 2, 1]) },
+          { unitid: In(unitIdsArray), status_v1: statusStringToNumber('DERIVE_PENDING') as number }
+        ],
+        select: ['id', 'unitid', 'variableid', 'value', 'status', 'status_v1', 'status_v2'] // Only select needed fields
       });
       metrics.responseQuery = Date.now() - responseQueryStart;
 
