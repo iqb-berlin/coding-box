@@ -23,7 +23,10 @@ export const DEFAULT_RESPONSE_MATCHING_MODE: ResponseMatchingModeDto = {
 })
 export class WorkspaceSettingsService {
   private http = inject(HttpClient);
-  private serverUrl = inject(SERVER_URL);
+  private rawServerUrl = inject(SERVER_URL);
+  private get serverUrl(): string {
+    return this.rawServerUrl.endsWith('/') ? this.rawServerUrl.slice(0, -1) : this.rawServerUrl;
+  }
 
   getWorkspaceSetting(workspaceId: number, key: string): Observable<WorkspaceSettings> {
     return this.http.get<WorkspaceSettings>(`${this.serverUrl}/workspace/${workspaceId}/settings/${key}`);
@@ -54,14 +57,14 @@ export class WorkspaceSettingsService {
           next: setting => {
             try {
               const parsed = JSON.parse(setting.value);
-              observer.next(parsed.enabled ?? true); // Default to true
+              observer.next(parsed.enabled ?? true);
             } catch {
-              observer.next(true); // Default to true if parsing fails
+              observer.next(true);
             }
             observer.complete();
           },
           error: () => {
-            observer.next(true); // Default to true if setting doesn't exist
+            observer.next(true);
             observer.complete();
           }
         });
