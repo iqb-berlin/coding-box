@@ -2,7 +2,7 @@ import {
   BadRequestException,
   Controller,
   Delete,
-  Get, Param, Post, Query, Req, UseGuards, UseInterceptors, UploadedFiles, Res
+  Get, Param, Post, Query, Req, UseGuards, UseInterceptors, UploadedFiles, Res, Body
 } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
@@ -11,7 +11,7 @@ import {
 } from '@nestjs/swagger';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { logger } from 'nx/src/utils/logger';
-import { Response } from 'express';
+import { Request, Response } from 'express';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
@@ -20,6 +20,29 @@ import Persons from '../../database/entities/persons.entity';
 import { ResponseEntity } from '../../database/entities/response.entity';
 import { WorkspaceTestResultsService } from '../../database/services/workspace-test-results.service';
 import { DatabaseExportService } from '../database/database-export.service';
+import { JobQueueService } from '../../job-queue/job-queue.service';
+import { CacheService } from '../../cache/cache.service';
+
+interface RequestWithUser extends Request {
+  user: {
+    id: string;
+  };
+}
+
+interface ExportJobStatus {
+  jobId: string;
+  status: string;
+  progress: number;
+  exportType: string;
+  createdAt: Date;
+  error: string;
+}
+
+interface ExportResult {
+  workspaceId: number;
+  filePath: string;
+  fileName: string;
+}
 
 @ApiTags('Admin Workspace Test Results')
 @Controller('admin/workspace')
@@ -27,7 +50,9 @@ export class WorkspaceTestResultsController {
   constructor(
     private workspaceTestResultsService: WorkspaceTestResultsService,
     private uploadResults: UploadResultsService,
-    private databaseExportService: DatabaseExportService
+    private databaseExportService: DatabaseExportService,
+    private jobQueueService: JobQueueService,
+    private cacheService: CacheService
   ) {}
 
   @Get(':workspace_id/test-results')
@@ -178,7 +203,7 @@ export class WorkspaceTestResultsController {
   async deleteTestGroups(
     @Query('testPersons')testPersonIds:string,
       @Param('workspace_id')workspaceId:string,
-      @Req() req): Promise<{
+      @Req() req: RequestWithUser): Promise<{
         success: boolean;
         report: {
           deletedPersons: string[];
@@ -216,7 +241,7 @@ export class WorkspaceTestResultsController {
   async deleteUnit(
     @Param('workspace_id') workspaceId: number,
       @Param('unitId') unitId: number,
-      @Req() req
+      @Req() req: RequestWithUser
   ): Promise<{
         success: boolean;
         report: {
@@ -255,7 +280,7 @@ export class WorkspaceTestResultsController {
   async deleteResponse(
     @Param('workspace_id') workspaceId: number,
       @Param('responseId') responseId: number,
-      @Req() req
+      @Req() req: RequestWithUser
   ): Promise<{
         success: boolean;
         report: {
@@ -294,7 +319,7 @@ export class WorkspaceTestResultsController {
   async deleteBooklet(
     @Param('workspace_id') workspaceId: number,
       @Param('bookletId') bookletId: number,
-      @Req() req
+      @Req() req: RequestWithUser
   ): Promise<{
         success: boolean;
         report: {
@@ -887,5 +912,229 @@ export class WorkspaceTestResultsController {
         response.status(500).json({ error: 'Failed to export workspace database to SQLite' });
       }
     }
+  }
+
+  @Get(':workspace_id/results/export')
+  @ApiOperation({
+    summary: 'Export test results',
+    description: 'Exports test results for a workspace as CSV'
+  })
+  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
+  @ApiResponse({
+    status: 200,
+    description: 'CSV file downloaded successfully',
+    content: {
+      'text/csv': {
+        schema: {
+          type: 'string',
+          format: 'binary'
+        }
+      }
+    }
+  })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  async exportTestResults(
+    @Param('workspace_id') workspace_id: number,
+      @Res() response: Response
+  ): Promise<void> {
+    try {
+      response.setHeader('Content-Type', 'text/csv');
+      response.setHeader('Content-Disposition', `attachment; filename=workspace-${workspace_id}-results-${new Date().toISOString().split('T')[0]}.csv`);
+
+      await this.workspaceTestResultsService.exportTestResults(workspace_id, response);
+    } catch (error) {
+      if (!response.headersSent) {
+        response.status(500).json({ error: 'Failed to export test results' });
+      }
+    }
+  }
+
+  @Get(':workspace_id/results/export/options')
+  @ApiOperation({
+    summary: 'Get export options',
+    description: 'Retrieves available options for filtering test results export (groups, booklets, units)'
+  })
+  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
+  @ApiOkResponse({
+    description: 'Export options retrieved successfully.',
+    schema: {
+      type: 'object',
+      properties: {
+        testPersons: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'number' },
+              code: { type: 'string' },
+              groupName: { type: 'string' },
+              login: { type: 'string' }
+            }
+          }
+        },
+        booklets: { type: 'array', items: { type: 'string' } },
+        units: { type: 'array', items: { type: 'string' } }
+      }
+    }
+  })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  async getExportOptions(
+    @Param('workspace_id') workspace_id: number
+  ): Promise<{
+        testPersons: { id: number; code: string; groupName: string; login: string }[];
+        booklets: string[];
+        units: string[];
+      }> {
+    return this.workspaceTestResultsService.getExportOptions(Number(workspace_id));
+  }
+
+  @Post(':workspace_id/results/export/job')
+  @ApiOperation({
+    summary: 'Start background export of test results',
+    description: 'Starts a background job to export test results for a workspace as CSV'
+  })
+  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        groupNames: { type: 'array', items: { type: 'string' } },
+        bookletNames: { type: 'array', items: { type: 'string' } },
+        unitNames: { type: 'array', items: { type: 'string' } },
+        personIds: { type: 'array', items: { type: 'number' } }
+      }
+    },
+    required: false
+  })
+  @ApiOkResponse({
+    description: 'Export job started successfully.',
+    schema: {
+      type: 'object',
+      properties: {
+        jobId: { type: 'string' },
+        message: { type: 'string' }
+      }
+    }
+  })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  async startExportTestResultsJob(
+    @Param('workspace_id') workspace_id: number,
+      @Req() req: RequestWithUser,
+      @Body() filters?: { groupNames?: string[]; bookletNames?: string[]; unitNames?: string[]; personIds?: number[] }
+  ): Promise<{ jobId: string; message: string }> {
+    const job = await this.jobQueueService.addExportJob({
+      workspaceId: Number(workspace_id),
+      userId: Number(req.user.id),
+      exportType: 'test-results',
+      authToken: req.headers.authorization?.replace('Bearer ', ''),
+      testResultFilters: filters
+    });
+
+    return {
+      jobId: job.id.toString(),
+      message: 'Export job started successfully'
+    };
+  }
+
+  @Get(':workspace_id/results/export/jobs')
+  @ApiOperation({
+    summary: 'Get export jobs',
+    description: 'Retrieves a list of export jobs for a workspace'
+  })
+  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
+  @ApiOkResponse({
+    description: 'List of export jobs retrieved successfully.',
+    schema: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          jobId: { type: 'string' },
+          status: { type: 'string' },
+          progress: { type: 'number' },
+          exportType: { type: 'string' },
+          createdAt: { type: 'string', format: 'date-time' },
+          error: { type: 'string' }
+        }
+      }
+    }
+  })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  async getExportJobs(
+    @Param('workspace_id') workspace_id: number
+  ): Promise<ExportJobStatus[]> {
+    const jobs = await this.jobQueueService.getExportJobs(Number(workspace_id));
+
+    const result: ExportJobStatus[] = [];
+    for (const job of jobs) {
+      const state = await job.getState();
+      const progress = await job.progress();
+      result.push({
+        jobId: job.id.toString(),
+        status: state,
+        progress: progress,
+        exportType: job.data.exportType,
+        createdAt: new Date(job.timestamp),
+        error: job.failedReason
+      });
+    }
+
+    return result.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }
+
+  @Get(':workspace_id/results/export/jobs/:jobId/download')
+  @ApiOperation({
+    summary: 'Download export job result',
+    description: 'Downloads the result file of a completed export job'
+  })
+  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
+  @ApiParam({ name: 'jobId', type: String, description: 'ID of the job' })
+  @ApiOkResponse({
+    description: 'File downloaded successfully.'
+  })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  async downloadExportJobResult(
+    @Param('workspace_id') workspace_id: number,
+      @Param('jobId') jobId: string,
+      @Res() res: Response
+  ): Promise<void> {
+    const result = await this.cacheService.get<ExportResult>(`export-result:${jobId}`);
+
+    if (!result) {
+      throw new BadRequestException('Export result not found or expired.');
+    }
+
+    if (Number(result.workspaceId) !== Number(workspace_id)) {
+      throw new BadRequestException('Invalid workspace ID.');
+    }
+
+    res.download(result.filePath, result.fileName);
+  }
+
+  @Delete(':workspace_id/results/export/jobs/:jobId')
+  @ApiOperation({
+    summary: 'Delete export job',
+    description: 'Deletes an export job'
+  })
+  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
+  @ApiParam({ name: 'jobId', type: String, description: 'ID of the job' })
+  @ApiOkResponse({
+    description: 'Job deleted successfully.'
+  })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  async deleteExportJob(
+    @Param('jobId') jobId: string
+  ): Promise<{ success: boolean; message: string }> {
+    const success = await this.jobQueueService.deleteExportJob(jobId);
+    if (!success) {
+      throw new BadRequestException('Failed to delete job');
+    }
+    return { success: true, message: 'Job deleted successfully' };
   }
 }

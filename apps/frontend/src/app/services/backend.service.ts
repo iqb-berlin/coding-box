@@ -369,6 +369,73 @@ export class BackendService {
     return this.testResultService.getTestResults(workspaceId, page, limit, searchText);
   }
 
+  getExportOptions(workspaceId: number): Observable<{
+    testPersons: { id: number; code: string; groupName: string; login: string }[];
+    booklets: string[];
+    units: string[];
+  }> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/results/export/options`;
+    return this.http.get<{
+      testPersons: { id: number; code: string; groupName: string; login: string }[];
+      booklets: string[];
+      units: string[];
+    }>(url, {
+      headers: this.authHeader
+    });
+  }
+
+  exportTestResults(workspaceId: number): Observable<Blob> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/results/export`;
+    return this.http.get(url, {
+      responseType: 'blob',
+      headers: this.authHeader
+    });
+  }
+
+  startExportTestResultsJob(
+    workspaceId: number,
+    filters?: { groupNames?: string[]; bookletNames?: string[]; unitNames?: string[]; personIds?: number[] }
+  ): Observable<{ jobId: string; message: string }> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/results/export/job`;
+    return this.http.post<{ jobId: string; message: string }>(url, filters || {}, {
+      headers: this.authHeader
+    });
+  }
+
+  getExportTestResultsJobs(workspaceId: number): Observable<Array<{
+    jobId: string;
+    status: string;
+    progress: number;
+    exportType: string;
+    createdAt: number;
+  }>> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/results/export/jobs`;
+    return this.http.get<Array<{
+      jobId: string;
+      status: string;
+      progress: number;
+      exportType: string;
+      createdAt: number;
+    }>>(url, {
+      headers: this.authHeader
+    });
+  }
+
+  downloadExportTestResultsJob(workspaceId: number, jobId: string): Observable<Blob> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/results/export/jobs/${jobId}/download`;
+    return this.http.get(url, {
+      responseType: 'blob',
+      headers: this.authHeader
+    });
+  }
+
+  deleteTestResultExportJob(workspaceId: number, jobId: string): Observable<{ success: boolean; message: string }> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/results/export/jobs/${jobId}`;
+    return this.http.delete<{ success: boolean; message: string }>(url, {
+      headers: this.authHeader
+    });
+  }
+
   getPersonTestResults(workspaceId: number, personId: number): Observable<PersonTestResult[]> {
     return this.testResultService.getPersonTestResults(workspaceId, personId);
   }
