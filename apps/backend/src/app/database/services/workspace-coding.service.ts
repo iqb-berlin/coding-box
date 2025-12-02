@@ -16,9 +16,6 @@ import { Unit } from '../entities/unit.entity';
 import { Booklet } from '../entities/booklet.entity';
 import { ResponseEntity } from '../entities/response.entity';
 import { CodingJob } from '../entities/coding-job.entity';
-import { CodingJobCoder } from '../entities/coding-job-coder.entity';
-import { CodingJobVariable } from '../entities/coding-job-variable.entity';
-import { CodingJobVariableBundle } from '../entities/coding-job-variable-bundle.entity';
 import { CodingJobUnit } from '../entities/coding-job-unit.entity';
 import { JobDefinition } from '../entities/job-definition.entity';
 import { VariableBundle } from '../entities/variable-bundle.entity';
@@ -67,12 +64,6 @@ export class WorkspaceCodingService {
     private responseRepository: Repository<ResponseEntity>,
     @InjectRepository(CodingJob)
     private codingJobRepository: Repository<CodingJob>,
-    @InjectRepository(CodingJobCoder)
-    private codingJobCoderRepository: Repository<CodingJobCoder>,
-    @InjectRepository(CodingJobVariable)
-    private codingJobVariableRepository: Repository<CodingJobVariable>,
-    @InjectRepository(CodingJobVariableBundle)
-    private codingJobVariableBundleRepository: Repository<CodingJobVariableBundle>,
     @InjectRepository(CodingJobUnit)
     private codingJobUnitRepository: Repository<CodingJobUnit>,
     @InjectRepository(JobDefinition)
@@ -215,36 +206,8 @@ export class WorkspaceCodingService {
         const state = await bullJob.getState();
         const progress = await bullJob.progress() || 0;
 
-        let status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'paused';
-        switch (state) {
-          case 'active':
-            status = 'processing';
-            break;
-          case 'completed':
-            status = 'completed';
-            break;
-          case 'failed':
-            status = 'failed';
-            break;
-          case 'delayed':
-          case 'waiting':
-            status = 'pending';
-            break;
-          case 'paused':
-            status = 'paused';
-            break;
-          default:
-            status = 'pending';
-        }
-
-        let result: CodingStatistics | undefined;
-        let error: string | undefined;
-
-        if (state === 'completed' && bullJob.returnvalue) {
-          result = bullJob.returnvalue as CodingStatistics;
-        } else if (state === 'failed' && bullJob.failedReason) {
-          error = bullJob.failedReason;
-        }
+        const status = this.bullJobManagementService.mapJobStateToStatus(state);
+        const { result, error } = this.bullJobManagementService.extractJobResult(bullJob, state);
 
         return {
           status,
@@ -358,7 +321,7 @@ export class WorkspaceCodingService {
     const updateStart = Date.now();
     try {
       const updateBatchSize = 500;
-      const batches = [];
+      const batches: CodedResponse[][] = [];
       for (let i = 0; i < allCodedResponses.length; i += updateBatchSize) {
         batches.push(allCodedResponses.slice(i, i + updateBatchSize));
       }
@@ -1619,10 +1582,6 @@ export class WorkspaceCodingService {
 
   async exportCodingResultsAggregated(workspaceId: number, outputCommentsInsteadOfCodes = false): Promise<Buffer> {
     return this.codingExportService.exportCodingResultsAggregated(workspaceId, outputCommentsInsteadOfCodes);
-  }
-
-  async exportCodingResultsByCoder(workspaceId: number, outputCommentsInsteadOfCodes = false): Promise<Buffer> {
-    return this.codingExportService.exportCodingResultsByCoder(workspaceId, outputCommentsInsteadOfCodes);
   }
 
   async exportCodingResultsByVariable(workspaceId: number, includeModalValue = false, includeDoubleCoded = false, includeComments = false, outputCommentsInsteadOfCodes = false): Promise<Buffer> {
