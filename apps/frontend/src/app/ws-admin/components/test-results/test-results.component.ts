@@ -1384,18 +1384,12 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       .subscribe({
         next: jobs => {
           const testResultJobs = jobs.filter(j => j.exportType === 'test-results');
-          // Find the most recent active or completed job
+          // Find the most recent active job only (not completed jobs)
           const activeJob = testResultJobs.find(j => j.status === 'active' || j.status === 'waiting' || j.status === 'delayed');
           if (activeJob) {
             this.exportJobId = activeJob.jobId;
             this.isExporting = true;
             this.pollExportJobStatus(activeJob.jobId);
-          } else {
-            const completedJob = testResultJobs.find(j => j.status === 'completed');
-            if (completedJob) {
-              this.exportJobId = completedJob.jobId;
-              this.exportJobStatus = 'completed';
-            }
           }
         }
       });
