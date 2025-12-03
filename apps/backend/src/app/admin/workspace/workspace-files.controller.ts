@@ -17,6 +17,7 @@ import { VariableInfo } from '@iqbspecs/variable-info/variable-info.interface';
 import { FilesDto } from '../../../../../../api-dto/files/files.dto';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
+import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import { FileDownloadDto } from '../../../../../../api-dto/files/file-download.dto';
 import { FileValidationResultDto } from '../../../../../../api-dto/files/file-validation-result.dto';
 import { WorkspaceFilesService } from '../../database/services/workspace-files.service';
@@ -127,7 +128,8 @@ export class WorkspaceFilesController {
 
   @Delete(':workspace_id/files')
   @ApiTags('ws admin test-files')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   async deleteTestFiles(@Query() query: { fileIds: string },
     @Param('workspace_id') workspace_id: number) {
     return this.workspaceFilesService.deleteTestFiles(workspace_id, query.fileIds.split(';'));
@@ -135,7 +137,8 @@ export class WorkspaceFilesController {
 
   @Post(':workspace_id/persons/exclude')
   @ApiTags('ws admin test-files')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   @ApiOperation({ summary: 'Mark persons as not to be considered', description: 'Marks persons with specified logins as not to be considered in the persons database' })
   @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
   @ApiBody({
@@ -189,7 +192,8 @@ export class WorkspaceFilesController {
   }
 
   @Post(':workspace_id/upload')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Upload test files', description: 'Uploads test files to a workspace' })
   @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
@@ -604,7 +608,8 @@ export class WorkspaceFilesController {
 
   @Delete(':workspace_id/files/invalid-responses')
   @ApiTags('test files validation')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   @ApiOperation({ summary: 'Delete invalid responses', description: 'Deletes invalid responses from the database' })
   @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
   @ApiQuery({ name: 'responseIds', type: String, description: 'Comma-separated list of response IDs to delete' })
@@ -621,7 +626,8 @@ export class WorkspaceFilesController {
 
   @Delete(':workspace_id/files/all-invalid-responses')
   @ApiTags('test files validation')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   @ApiOperation({ summary: 'Delete all invalid responses', description: 'Deletes all invalid responses of a specific type from the database' })
   @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
   @ApiQuery({
@@ -641,7 +647,8 @@ export class WorkspaceFilesController {
 
   @Post(':workspace_id/files/create-dummy-testtaker')
   @ApiTags('test files validation')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   @ApiOperation({ summary: 'Create dummy testtaker file', description: 'Creates a dummy testtaker file that includes all booklets in the workspace' })
   @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
   @ApiOkResponse({

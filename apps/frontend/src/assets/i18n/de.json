@@ -16,6 +16,9 @@
   "close": "Schließen",
   "warning": "Warnung",
   "confirm": "Bestätigen",
+  "error-insufficient-access": "Sie haben nicht die erforderliche Zugriffsberechtigung für diese Aktion",
+  "error-unauthorized": "Sie sind nicht angemeldet oder Ihre Sitzung ist abgelaufen",
+  "error-forbidden": "Sie haben keine Berechtigung für diese Aktion",
   "filter-by": "Filtern nach...",
   "hour": "Uhr",
   "files-import": "Dateien importieren",
@@ -184,10 +187,13 @@
     "cleaning-action-button": "Datenbereinigung starten",
     "export": "Datenexport",
     "export-title": "Datenexport",
+    "my-coding-jobs": "Meine Kodierjobs",
+    "coding-management": "Kodierung-Management",
     "export-subtitle": "Export der Daten nach Kodierung und Bereinigung",
     "export-description": "Diese Komponente wird für den Export der Daten nach Kodierung und Bereinigung verwendet.",
     "export-placeholder": "Die Funktionalität zum Datenexport wird in einer zukünftigen Version implementiert.",
     "export-action-button": "Datenexport starten",
+    "no-access": "Sie haben keinen Zugriff auf diesen Arbeitsbereich. Bitte kontaktieren Sie den Studienadministrator für Zugriff.",
     "export.exporting": "Datenexport läuft...",
     "export.starting": "Export wird gestartet...",
     "export.success": "Datenexport erfolgreich abgeschlossen",
@@ -242,8 +248,7 @@
       "invalid-format": "Ungültiges Exportformat",
       "export-failed": "Export fehlgeschlagen",
       "token-failed": "Token-Generierung fehlgeschlagen"
-    },
-    "no-access": "Sie haben keinen Zugriff auf diesen Arbeitsbereich. Bitte kontaktieren Sie den Studienadministrator für Zugriff."
+    }
   },
   "search-filter": {
     "filter-users": "Suche nach Nutzer:innen",
