@@ -29,6 +29,7 @@ import { WorkspaceCoreService } from '../../database/services/workspace-core.ser
 import { WorkspaceId } from './workspace.decorator';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
+import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 
 @ApiTags('Admin Workspace')
 @Controller('admin/workspace')
@@ -115,7 +116,8 @@ export class WorkspaceController {
   }
 
   @Delete()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Delete workspaces',
@@ -137,7 +139,8 @@ export class WorkspaceController {
 
   @Patch()
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   @ApiOperation({
     summary: 'Update workspace',
     description: 'Updates an existing workspace with the provided data'
@@ -155,7 +158,8 @@ export class WorkspaceController {
   }
 
   @Post()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Create a new workspace', description: 'Creates a new workspace with the provided data' })
   @ApiBody({

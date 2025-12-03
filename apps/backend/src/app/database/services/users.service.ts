@@ -81,6 +81,14 @@ export class UsersService {
     return !!user;
   }
 
+  async getUserAccessLevel(userId: number, workspaceId: number): Promise<number | null> {
+    this.logger.log(`Retrieving access level for user ${userId} in workspace ${workspaceId}`);
+    const wsUser = await this.workspaceUserRepository.findOne({
+      where: { userId: userId, workspaceId: workspaceId }
+    });
+    return wsUser ? wsUser.accessLevel : null;
+  }
+
   async getUserWorkspaces(userId: number): Promise<number[]> {
     this.logger.log(`Retrieving workspace IDs for user with ID: ${userId}`);
     const workspaces = await this.workspaceUserRepository
