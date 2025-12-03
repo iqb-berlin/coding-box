@@ -54,6 +54,7 @@ export interface FlattenedVariable {
   codes?: CodeInfo[];
   isDerived?: boolean;
   hasManualInstruction?: boolean;
+  hasClosedCoding?: boolean;
 }
 
 @Component({
@@ -89,6 +90,7 @@ export class CodingVariablesDialogComponent implements OnInit {
   hasCodesFilter = true;
   isDerivedFilter = false;
   isManualOnlyFilter = false;
+  isClosedCodingFilter = false;
   selectedTypes: string[] = [];
   availableTypes = ['string', 'integer', 'number', 'boolean', 'attachment', 'json'];
   isLoading = false;
@@ -113,7 +115,7 @@ export class CodingVariablesDialogComponent implements OnInit {
     this.dataSource.filterPredicate = (data: FlattenedVariable, filter: string): boolean => {
       try {
         const {
-          unitName, variableId, hasCodingScheme, hasCodes, isDerived, isManualOnly, types
+          unitName, variableId, hasCodingScheme, hasCodes, isDerived, isManualOnly, isClosedCoding, types
         } = JSON.parse(filter || '{}');
 
         const matchesUnitName = !unitName ||
@@ -124,9 +126,10 @@ export class CodingVariablesDialogComponent implements OnInit {
         const matchesCodes = !hasCodes || (!!data.codes && data.codes.length > 0);
         const matchesDerived = !isDerived || data.isDerived === true;
         const matchesManualOnly = !isManualOnly || data.hasManualInstruction === true;
+        const matchesClosedCoding = !isClosedCoding || data.hasClosedCoding === true;
         const matchesType = !types || types.length === 0 || types.includes(data.variableType);
 
-        return matchesUnitName && matchesVariableId && matchesCodingScheme && matchesCodes && matchesDerived && matchesManualOnly && matchesType;
+        return matchesUnitName && matchesVariableId && matchesCodingScheme && matchesCodes && matchesDerived && matchesManualOnly && matchesClosedCoding && matchesType;
       } catch {
         return true;
       }
@@ -141,7 +144,7 @@ export class CodingVariablesDialogComponent implements OnInit {
         const flattenedData: FlattenedVariable[] = [];
 
         unitVariableDetails.forEach(unit => {
-          unit.variables.forEach((variable: { id: string; alias: string; type: string; hasCodingScheme: boolean; codingSchemeRef?: string; codes?: CodeInfo[]; isDerived?: boolean; hasManualInstruction?: boolean }) => {
+          unit.variables.forEach((variable: { id: string; alias: string; type: string; hasCodingScheme: boolean; codingSchemeRef?: string; codes?: CodeInfo[]; isDerived?: boolean; hasManualInstruction?: boolean; hasClosedCoding?: boolean }) => {
             flattenedData.push({
               unitName: unit.unitName,
               unitId: unit.unitId,
@@ -152,7 +155,8 @@ export class CodingVariablesDialogComponent implements OnInit {
               codingSchemeRef: variable.codingSchemeRef,
               codes: variable.codes,
               isDerived: variable.isDerived,
-              hasManualInstruction: variable.hasManualInstruction
+              hasManualInstruction: variable.hasManualInstruction,
+              hasClosedCoding: variable.hasClosedCoding
             });
           });
         });
@@ -180,6 +184,7 @@ export class CodingVariablesDialogComponent implements OnInit {
       hasCodes: this.hasCodesFilter,
       isDerived: this.isDerivedFilter,
       isManualOnly: this.isManualOnlyFilter,
+      isClosedCoding: this.isClosedCodingFilter,
       types: this.selectedTypes
     });
     this.dataSource.filter = filterValue;
@@ -192,6 +197,7 @@ export class CodingVariablesDialogComponent implements OnInit {
     this.hasCodesFilter = false;
     this.isDerivedFilter = false;
     this.isManualOnlyFilter = false;
+    this.isClosedCodingFilter = false;
     this.selectedTypes = [];
     this.applyFilter();
   }

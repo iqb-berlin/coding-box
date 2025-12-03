@@ -3037,6 +3037,7 @@ ${bookletRefs}
       const codingSchemeVariablesMap = new Map<string, Map<string, string>>();
       const codingSchemeCodesMap = new Map<string, Map<string, Array<{ id: string | number; label: string; score?: number }>>>();
       const codingSchemeManualInstructionsMap = new Map<string, Map<string, boolean>>();
+      const codingSchemeClosedCodingMap = new Map<string, Map<string, boolean>>();
 
       for (const scheme of codingSchemes) {
         try {
@@ -3047,13 +3048,14 @@ ${bookletRefs}
             variableCodings?: {
               id: string;
               sourceType?: string;
-              codes?: Array<{ id: number | string; label?: string; score?: number; manualInstruction?: string }>;
+              codes?: Array<{ id: number | string; label?: string; score?: number; manualInstruction?: string; type?: string }>;
             }[]
           };
           if (parsedScheme.variableCodings && Array.isArray(parsedScheme.variableCodings)) {
             const variableSourceTypes = new Map<string, string>();
             const variableCodes = new Map<string, Array<{ id: string | number; label: string; score?: number }>>();
             const variableManualInstructions = new Map<string, boolean>();
+            const variableClosedCoding = new Map<string, boolean>();
 
             for (const vc of parsedScheme.variableCodings) {
               if (vc.id && vc.sourceType) {
@@ -3076,11 +3078,18 @@ ${bookletRefs}
                 if (hasManualInstruction) {
                   variableManualInstructions.set(vc.id, true);
                 }
+
+                // Check if any code is closed coding (similar to isClosed() in codebook-generator)
+                const hasClosedCoding = vc.codes.some(code => code.type === 'RESIDUAL_AUTO' || code.type === 'INTENDED_INCOMPLETE');
+                if (hasClosedCoding) {
+                  variableClosedCoding.set(vc.id, true);
+                }
               }
             }
             codingSchemeVariablesMap.set(unitId, variableSourceTypes);
             codingSchemeCodesMap.set(unitId, variableCodes);
             codingSchemeManualInstructionsMap.set(unitId, variableManualInstructions);
+            codingSchemeClosedCodingMap.set(unitId, variableClosedCoding);
           }
         } catch (error) {
           this.logger.error(`Error parsing coding scheme ${scheme.file_id}: ${error.message}`, error.stack);
@@ -3105,6 +3114,7 @@ ${bookletRefs}
               codes?: Array<{ id: string | number; label: string; score?: number }>;
               isDerived?: boolean;
               hasManualInstruction?: boolean;
+              hasClosedCoding?: boolean;
             }> = [];
 
             // Process BaseVariables
@@ -3130,6 +3140,8 @@ ${bookletRefs}
                   const variableCodes = unitCodes?.get(variableId);
                   const unitManualInstructions = codingSchemeManualInstructionsMap.get(unitName);
                   const hasManualInstruction = unitManualInstructions?.get(variableId) || false;
+                  const unitClosedCoding = codingSchemeClosedCodingMap.get(unitName);
+                  const hasClosedCoding = unitClosedCoding?.get(variableId) || false;
 
                   variables.push({
                     id: variableId,
@@ -3139,7 +3151,8 @@ ${bookletRefs}
                     codingSchemeRef: hasCodingScheme ? codingSchemeMap.get(unitName) : undefined,
                     codes: variableCodes,
                     isDerived: false,
-                    hasManualInstruction
+                    hasManualInstruction,
+                    hasClosedCoding
                   });
                 }
               }
@@ -3168,6 +3181,8 @@ ${bookletRefs}
                   const variableCodes = unitCodes?.get(variableId);
                   const unitManualInstructions = codingSchemeManualInstructionsMap.get(unitName);
                   const hasManualInstruction = unitManualInstructions?.get(variableId) || false;
+                  const unitClosedCoding = codingSchemeClosedCodingMap.get(unitName);
+                  const hasClosedCoding = unitClosedCoding?.get(variableId) || false;
 
                   variables.push({
                     id: variableId,
@@ -3177,7 +3192,8 @@ ${bookletRefs}
                     codingSchemeRef: hasCodingScheme ? codingSchemeMap.get(unitName) : undefined,
                     codes: variableCodes,
                     isDerived: true,
-                    hasManualInstruction
+                    hasManualInstruction,
+                    hasClosedCoding
                   });
                 }
               }
