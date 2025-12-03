@@ -110,6 +110,26 @@ export class JobQueueService {
     }
 
     try {
+      const state = await job.getState();
+
+      if (state === 'waiting' || state === 'delayed') {
+        await job.remove();
+        this.logger.log(`Job ${jobId} has been cancelled and removed from queue`);
+        return true;
+      }
+
+      if (state === 'active') {
+        await job.discard();
+        this.logger.log(`Job ${jobId} is active, marked for discard (will not retry on failure)`);
+        return true;
+      }
+
+      if (state === 'completed' || state === 'failed') {
+        this.logger.log(`Job ${jobId} is already ${state}, no action needed`);
+        return true;
+      }
+
+      // Fallback: try to remove
       await job.remove();
       this.logger.log(`Job ${jobId} has been cancelled`);
       return true;

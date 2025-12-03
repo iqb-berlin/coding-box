@@ -948,6 +948,7 @@
       "run-1": "1 Autocoder Lauf",
       "run-2": "2 Autocoder Lauf"
     },
+
     "select-groups-label": "Testpersonengruppen auswählen",
     "select-groups-hint": "Wählen Sie eine oder mehrere Gruppen zum Kodieren aus",
     "deselect-all-groups": "Alle abwählen",
@@ -962,6 +963,7 @@
     "enter-test-person-ids": "Bitte geben Sie Testpersonen-IDs ein",
     "job-error": "Fehler: {{error}}",
     "coding-failed": "Kodierung der Testpersonen fehlgeschlagen",
+    "job-deleted-by-id": "Kodierungsauftrag mit ID {{jobId}} wurde gelöscht",
     "job-completed": "Kodierungsauftrag erfolgreich abgeschlossen",
     "job-completed-with-error": "Kodierungsauftrag fehlgeschlagen: {{error}}",
     "job-cancelled": "Kodierungsauftrag wurde abgebrochen",
