@@ -259,6 +259,13 @@ export class WorkspaceCodingService {
         };
       }
 
+      if (state === 'active') {
+        return {
+          success: false,
+          message: `Job with ID ${jobId} is currently being processed and cannot be cancelled. Please wait for it to complete or use pause instead.`
+        };
+      }
+
       const result = await this.jobQueueService.cancelTestPersonCodingJob(jobId);
       if (result) {
         this.logger.log(`Job ${jobId} has been cancelled successfully`);
