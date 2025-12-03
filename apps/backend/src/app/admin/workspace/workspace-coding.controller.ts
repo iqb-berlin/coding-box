@@ -3325,6 +3325,7 @@ export class WorkspaceCodingController {
           items: {
             type: 'object',
             properties: {
+              responseId: { type: 'number', description: 'Response ID' },
               unitName: { type: 'string', description: 'Name of the unit' },
               variableId: { type: 'string', description: 'Variable ID' },
               personLogin: { type: 'string', description: 'Person login' },
@@ -3362,6 +3363,7 @@ export class WorkspaceCodingController {
                    @Query('limit') limit: number = 50
   ): Promise<{
         data: Array<{
+          responseId: number;
           unitName: string;
           variableId: string;
           personLogin: string;
@@ -3389,6 +3391,60 @@ export class WorkspaceCodingController {
       workspace_id,
       validPage,
       validLimit
+    );
+  }
+
+  @Post(':workspace_id/coding/double-coded-review/apply-resolutions')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiBody({
+    description: 'Apply resolutions for double-coded variables',
+    schema: {
+      type: 'object',
+      properties: {
+        decisions: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              responseId: { type: 'number', description: 'Response ID' },
+              selectedJobId: { type: 'number', description: 'Selected coding job ID' },
+              resolutionComment: { type: 'string', nullable: true, description: 'Optional resolution comment' }
+            },
+            required: ['responseId', 'selectedJobId']
+          }
+        }
+      },
+      required: ['decisions']
+    }
+  })
+  @ApiOkResponse({
+    description: 'Resolutions applied successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', description: 'Whether the operation was successful' },
+        appliedCount: { type: 'number', description: 'Number of resolutions applied' },
+        failedCount: { type: 'number', description: 'Number of resolutions that failed' },
+        skippedCount: { type: 'number', description: 'Number of resolutions skipped' },
+        message: { type: 'string', description: 'Summary message' }
+      }
+    }
+  })
+  async applyDoubleCodedResolutions(
+    @WorkspaceId() workspace_id: number,
+      @Body() body: { decisions: Array<{ responseId: number; selectedJobId: number; resolutionComment?: string }> }
+  ): Promise<{
+        success: boolean;
+        appliedCount: number;
+        failedCount: number;
+        skippedCount: number;
+        message: string;
+      }> {
+    return this.workspaceCodingService.applyDoubleCodedResolutions(
+      workspace_id,
+      body.decisions
     );
   }
 

@@ -663,19 +663,34 @@ describe('WorkspaceCodingService', () => {
 
   describe('Job Management Methods', () => {
     describe('cancelJob', () => {
-      it('should successfully cancel a running job', async () => {
+      it('should return error for active job that cannot be cancelled', async () => {
         const mockBullJob = {
           getState: jest.fn().mockResolvedValue('active')
         };
 
         mockJobQueueService.getTestPersonCodingJob = jest.fn().mockResolvedValue(mockBullJob);
-        mockJobQueueService.cancelTestPersonCodingJob = jest.fn().mockResolvedValue(true);
 
         const result = await service.cancelJob('job-123');
 
         expect(result).toEqual({
+          success: false,
+          message: 'Job with ID job-123 is currently being processed and cannot be cancelled. Please wait for it to complete or use pause instead.'
+        });
+      });
+
+      it('should successfully cancel a pending job', async () => {
+        const mockBullJob = {
+          getState: jest.fn().mockResolvedValue('waiting')
+        };
+
+        mockJobQueueService.getTestPersonCodingJob = jest.fn().mockResolvedValue(mockBullJob);
+        mockJobQueueService.cancelTestPersonCodingJob = jest.fn().mockResolvedValue(true);
+
+        const result = await service.cancelJob('job-456');
+
+        expect(result).toEqual({
           success: true,
-          message: 'Job job-123 has been cancelled successfully'
+          message: 'Job job-456 has been cancelled successfully'
         });
       });
 
