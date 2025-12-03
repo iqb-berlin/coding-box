@@ -23,6 +23,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatCheckboxModule } from '@angular/material/checkbox';
+import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { UnitVariableDetailsDto } from '../../models/unit-variable-details.dto';
 import { BackendService } from '../../services/backend.service';
@@ -36,6 +37,12 @@ export interface CodingVariablesDialogData {
   workspaceId: number;
 }
 
+export interface CodeInfo {
+  id: string | number;
+  label: string;
+  score?: number;
+}
+
 export interface FlattenedVariable {
   unitName: string;
   unitId: string;
@@ -44,6 +51,7 @@ export interface FlattenedVariable {
   variableType: string;
   hasCodingScheme: boolean;
   codingSchemeRef?: string;
+  codes?: CodeInfo[];
 }
 
 @Component({
@@ -65,7 +73,8 @@ export interface FlattenedVariable {
     MatInputModule,
     MatTooltipModule,
     MatChipsModule,
-    MatCheckboxModule
+    MatCheckboxModule,
+    MatSelectModule
   ]
 })
 export class CodingVariablesDialogComponent implements OnInit {
@@ -74,7 +83,10 @@ export class CodingVariablesDialogComponent implements OnInit {
 
   unitNameFilter = '';
   variableIdFilter = '';
-  hasCodingSchemeFilter = false;
+  hasCodingSchemeFilter = true;
+  hasCodesFilter = true;
+  selectedTypes: string[] = [];
+  availableTypes = ['string', 'integer', 'number', 'boolean', 'attachment', 'json'];
   isLoading = false;
 
   @ViewChild(MatSort) sort!: MatSort;
@@ -96,15 +108,19 @@ export class CodingVariablesDialogComponent implements OnInit {
   private setupFilter(): void {
     this.dataSource.filterPredicate = (data: FlattenedVariable, filter: string): boolean => {
       try {
-        const { unitName, variableId, hasCodingScheme } = JSON.parse(filter || '{}');
+        const {
+          unitName, variableId, hasCodingScheme, hasCodes, types
+        } = JSON.parse(filter || '{}');
 
         const matchesUnitName = !unitName ||
           data.unitName.toLowerCase().includes(unitName.toLowerCase());
         const matchesVariableId = !variableId ||
           data.variableAlias.toLowerCase().includes(variableId.toLowerCase());
         const matchesCodingScheme = !hasCodingScheme || data.hasCodingScheme;
+        const matchesCodes = !hasCodes || (!!data.codes && data.codes.length > 0);
+        const matchesType = !types || types.length === 0 || types.includes(data.variableType);
 
-        return matchesUnitName && matchesVariableId && matchesCodingScheme;
+        return matchesUnitName && matchesVariableId && matchesCodingScheme && matchesCodes && matchesType;
       } catch {
         return true;
       }
@@ -119,7 +135,7 @@ export class CodingVariablesDialogComponent implements OnInit {
         const flattenedData: FlattenedVariable[] = [];
 
         unitVariableDetails.forEach(unit => {
-          unit.variables.forEach((variable: { id: string; alias: string; type: string; hasCodingScheme: boolean; codingSchemeRef?: string }) => {
+          unit.variables.forEach((variable: { id: string; alias: string; type: string; hasCodingScheme: boolean; codingSchemeRef?: string; codes?: CodeInfo[] }) => {
             flattenedData.push({
               unitName: unit.unitName,
               unitId: unit.unitId,
@@ -127,13 +143,15 @@ export class CodingVariablesDialogComponent implements OnInit {
               variableAlias: variable.alias,
               variableType: variable.type,
               hasCodingScheme: variable.hasCodingScheme,
-              codingSchemeRef: variable.codingSchemeRef
+              codingSchemeRef: variable.codingSchemeRef,
+              codes: variable.codes
             });
           });
         });
 
         this.dataSource.data = flattenedData;
         this.dataSource.sort = this.sort;
+        this.applyFilter();
         this.isLoading = false;
       },
       error: () => {
@@ -150,7 +168,9 @@ export class CodingVariablesDialogComponent implements OnInit {
     const filterValue = JSON.stringify({
       unitName: this.unitNameFilter,
       variableId: this.variableIdFilter,
-      hasCodingScheme: this.hasCodingSchemeFilter
+      hasCodingScheme: this.hasCodingSchemeFilter,
+      hasCodes: this.hasCodesFilter,
+      types: this.selectedTypes
     });
     this.dataSource.filter = filterValue;
   }
@@ -159,6 +179,8 @@ export class CodingVariablesDialogComponent implements OnInit {
     this.unitNameFilter = '';
     this.variableIdFilter = '';
     this.hasCodingSchemeFilter = false;
+    this.hasCodesFilter = false;
+    this.selectedTypes = [];
     this.applyFilter();
   }
 

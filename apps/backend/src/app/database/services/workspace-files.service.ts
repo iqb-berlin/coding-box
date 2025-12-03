@@ -3035,6 +3035,7 @@ ${bookletRefs}
 
       const codingSchemeMap = new Map<string, string>();
       const codingSchemeVariablesMap = new Map<string, Map<string, string>>();
+      const codingSchemeCodesMap = new Map<string, Map<string, Array<{ id: string | number; label: string; score?: number }>>>();
 
       for (const scheme of codingSchemes) {
         try {
@@ -3042,16 +3043,35 @@ ${bookletRefs}
           codingSchemeMap.set(unitId, scheme.file_id);
 
           const parsedScheme = JSON.parse(scheme.data) as {
-            variableCodings?: { id: string; sourceType?: string }[]
+            variableCodings?: {
+              id: string;
+              sourceType?: string;
+              codes?: Array<{ id: number | string; label?: string; score?: number }>;
+            }[]
           };
           if (parsedScheme.variableCodings && Array.isArray(parsedScheme.variableCodings)) {
             const variableSourceTypes = new Map<string, string>();
+            const variableCodes = new Map<string, Array<{ id: string | number; label: string; score?: number }>>();
+
             for (const vc of parsedScheme.variableCodings) {
               if (vc.id && vc.sourceType) {
                 variableSourceTypes.set(vc.id, vc.sourceType);
               }
+              if (vc.id && vc.codes && Array.isArray(vc.codes)) {
+                const codes = vc.codes
+                  .filter(code => code.id !== undefined)
+                  .map(code => ({
+                    id: code.id,
+                    label: code.label || String(code.id),
+                    score: code.score
+                  }));
+                if (codes.length > 0) {
+                  variableCodes.set(vc.id, codes);
+                }
+              }
             }
             codingSchemeVariablesMap.set(unitId, variableSourceTypes);
+            codingSchemeCodesMap.set(unitId, variableCodes);
           }
         } catch (error) {
           this.logger.error(`Error parsing coding scheme ${scheme.file_id}: ${error.message}`, error.stack);
@@ -3073,17 +3093,17 @@ ${bookletRefs}
               type: 'string' | 'integer' | 'number' | 'boolean' | 'attachment' | 'json' | 'no-value';
               hasCodingScheme: boolean;
               codingSchemeRef?: string;
-            }> = [];
-
-            if (parsedXml.Unit.BaseVariables && parsedXml.Unit.BaseVariables.Variable) {
+              codes?: Array<{ id: string | number; label: string; score?: number }>;
+            }> = []; if (parsedXml.Unit.BaseVariables && parsedXml.Unit.BaseVariables.Variable) {
               const baseVariables = Array.isArray(parsedXml.Unit.BaseVariables.Variable) ?
                 parsedXml.Unit.BaseVariables.Variable :
                 [parsedXml.Unit.BaseVariables.Variable];
 
               for (const variable of baseVariables) {
                 if (variable.$.alias && variable.$.type !== 'no-value') {
+                  const variableId = variable.$.id || variable.$.alias;
                   const unitSourceTypes = codingSchemeVariablesMap.get(unitName);
-                  const sourceType = unitSourceTypes?.get(variable.$.alias);
+                  const sourceType = unitSourceTypes?.get(variableId);
 
                   // Skip variables with BASE_NO_VALUE sourceType in coding scheme
                   // If no coding scheme exists, sourceType is undefined and variable is included
@@ -3092,12 +3112,16 @@ ${bookletRefs}
                   }
 
                   const hasCodingScheme = codingSchemeMap.has(unitName);
+                  const unitCodes = codingSchemeCodesMap.get(unitName);
+                  const variableCodes = unitCodes?.get(variableId);
+
                   variables.push({
-                    id: variable.$.id || variable.$.alias,
+                    id: variableId,
                     alias: variable.$.alias,
                     type: variable.$.type as 'string' | 'integer' | 'number' | 'boolean' | 'attachment' | 'json' | 'no-value',
                     hasCodingScheme,
-                    codingSchemeRef: hasCodingScheme ? codingSchemeMap.get(unitName) : undefined
+                    codingSchemeRef: hasCodingScheme ? codingSchemeMap.get(unitName) : undefined,
+                    codes: variableCodes
                   });
                 }
               }

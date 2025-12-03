@@ -728,7 +728,6 @@
       "statistics-overview": "Übersicht über den Status der Kodierung und Antworten",
       "load-statistics": "Klicken Sie hier, um die Kodierstatistiken zu laden",
       "no-data": "Noch keine Kodierdaten angezeigt",
-      "click-display": "Klicken Sie auf \"Anzeigen\" um Daten zu laden.",
       "no-results": "Keine Antworten mit Status {{status}} gefunden.",
       "missing-replay-info": "Fehlende Informationen für Replay",
       "missing-token": "Fehler beim Abrufen des Tokens für Replay",
