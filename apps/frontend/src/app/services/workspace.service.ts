@@ -1,16 +1,19 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import {
+  BehaviorSubject,
   catchError,
   map,
   Observable,
-  of
+  of,
+  tap
 } from 'rxjs';
 import { WorkspaceFullDto } from '../../../../../api-dto/workspaces/workspace-full-dto';
 import { CreateWorkspaceDto } from '../../../../../api-dto/workspaces/create-workspace-dto';
 import { PaginatedWorkspacesDto } from '../../../../../api-dto/workspaces/paginated-workspaces-dto';
 import { PaginatedWorkspaceUserDto } from '../../../../../api-dto/workspaces/paginated-workspace-user-dto';
 import { SERVER_URL } from '../injection-tokens';
+import { AccessRightsMatrixDto } from '../../../../../api-dto/workspaces/access-rights-matrix-dto';
 
 @Injectable({
   providedIn: 'root'
@@ -18,6 +21,7 @@ import { SERVER_URL } from '../injection-tokens';
 export class WorkspaceService {
   readonly serverUrl = inject(SERVER_URL);
   private http = inject(HttpClient);
+  private accessRightsMatrixCache$ = new BehaviorSubject<AccessRightsMatrixDto | null>(null);
 
   get authHeader() {
     return { Authorization: `Bearer ${localStorage.getItem('id_token')}` };
@@ -125,5 +129,26 @@ export class WorkspaceService {
       map(() => true),
       catchError(() => of(false))
     );
+  }
+
+  getAccessRightsMatrix(): Observable<AccessRightsMatrixDto> {
+    const cached = this.accessRightsMatrixCache$.value;
+    if (cached) {
+      return of(cached);
+    }
+
+    return this.http
+      .get<AccessRightsMatrixDto>(`${this.serverUrl}admin/workspace/access-rights-matrix`,
+      { headers: this.authHeader })
+      .pipe(
+        tap(matrix => this.accessRightsMatrixCache$.next(matrix)),
+        catchError(() => {
+          const emptyMatrix: AccessRightsMatrixDto = {
+            levels: [],
+            categories: []
+          };
+          return of(emptyMatrix);
+        })
+      );
   }
 }

@@ -272,6 +272,58 @@
     "access-level-4": "Admin"
   },
 
+  "access-matrix": {
+    "title": "Zugriffsrechte-Matrix",
+    "description": "Diese Matrix zeigt, welche Funktionen mit welcher Zugriffsebene verwendet werden können.",
+    "feature-column": "Funktion",
+    "close": "Schließen",
+    "admin-note": "System-Administratoren haben unabhängig von der Arbeitsbereichs-Zugriffsebene vollen Zugriff auf alle Funktionen.",
+    "guest-note": "Gäste (Zugriffsebene 0) haben keinen Zugriff auf Arbeitsbereichsfunktionen und werden daher in dieser Matrix nicht angezeigt.",
+    "category": {
+      "test-files": "Testdateien",
+      "test-results": "Testergebnisse",
+      "coding": "Kodierung",
+      "users": "Benutzerverwaltung",
+      "settings": "Einstellungen"
+    },
+    "feature": {
+      "view-test-files": "Testdateien ansehen",
+      "download-test-files": "Testdateien herunterladen",
+      "validate-test-files": "Testdateien validieren",
+      "upload-test-files": "Testdateien hochladen",
+      "delete-test-files": "Testdateien löschen",
+      "import-from-testcenter": "Aus Testcenter importieren",
+      "exclude-persons": "Personen ausschließen",
+      "view-resource-packages": "Ressourcenpakete ansehen",
+      "delete-resource-packages": "Ressourcenpakete löschen",
+      "view-test-results": "Testergebnisse ansehen",
+      "view-responses": "Antworten ansehen",
+      "view-logs": "Logs ansehen",
+      "upload-test-results": "Testergebnisse hochladen",
+      "delete-test-results": "Testergebnisse löschen",
+      "export-database": "Datenbank exportieren",
+      "clean-responses": "Antworten bereinigen",
+      "view-replay-statistics": "Replay-Statistiken ansehen",
+      "view-coding-jobs": "Eigene Kodieraufträge ansehen",
+      "work-on-coding-jobs": "An Kodieraufträgen arbeiten",
+      "view-all-jobs": "Alle Kodieraufträge ansehen",
+      "create-job-definitions": "Job-Definitionen erstellen",
+      "edit-job-definitions": "Job-Definitionen bearbeiten",
+      "delete-job-definitions": "Job-Definitionen löschen",
+      "manage-missings-profiles": "Missings-Profile verwalten",
+      "export-coding-data": "Kodierdaten exportieren",
+      "import-external-codings": "Externe Kodierungen importieren",
+      "validate-coding-completeness": "Kodier-Vollständigkeit prüfen",
+      "apply-job-results": "Job-Ergebnisse anwenden",
+      "view-workspace-users": "Arbeitsbereichsnutzer ansehen",
+      "manage-user-access": "Benutzerzugriff verwalten",
+      "view-workspace-settings": "Arbeitsbereichseinstellungen ansehen",
+      "edit-workspace-settings": "Arbeitsbereichseinstellungen bearbeiten",
+      "delete-workspace": "Arbeitsbereich löschen",
+      "view-journal": "Journal ansehen"
+    }
+  },
+
   "file-upload" : {
     "filename": "Dateiname",
     "file_type": "Dateityp",
