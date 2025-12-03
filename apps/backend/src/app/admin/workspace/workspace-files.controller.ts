@@ -24,6 +24,7 @@ import { InvalidVariableDto } from '../../../../../../api-dto/files/variable-val
 import { TestTakersValidationDto } from '../../../../../../api-dto/files/testtakers-validation.dto';
 import { DuplicateResponsesResultDto } from '../../../../../../api-dto/files/duplicate-response.dto';
 import { PersonService } from '../../database/services/person.service';
+import { UnitVariableDetailsDto } from '../../models/unit-variable-details.dto';
 
 @ApiTags('Admin Workspace Files')
 @Controller('admin/workspace')
@@ -684,40 +685,44 @@ export class WorkspaceFilesController {
   @Get(':workspace_id/files/unit-variables')
   @ApiTags('admin workspace')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
-  @ApiOperation({ summary: 'Get unit variables mapping', description: 'Retrieves a mapping of all units and their defined variables from Unit XML files' })
+  @ApiOperation({ summary: 'Get unit variables with details', description: 'Retrieves detailed information about all units and their variables from Unit XML files, including types and coding scheme references. Units with no variables are excluded.' })
   @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
   @ApiOkResponse({
-    description: 'Unit variables mapping retrieved successfully',
+    description: 'Unit variables details retrieved successfully',
     schema: {
       type: 'array',
       items: {
         type: 'object',
         properties: {
-          unitName: { type: 'string' },
+          unitName: { type: 'string', description: 'Name of the unit' },
+          unitId: { type: 'string', description: 'ID of the unit' },
           variables: {
             type: 'array',
-            items: { type: 'string' }
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'string', description: 'Variable ID' },
+                alias: { type: 'string', description: 'Variable alias' },
+                type: { type: 'string', description: 'Variable type (string, integer, number, boolean, etc.)' },
+                hasCodingScheme: { type: 'boolean', description: 'Whether the unit has a coding scheme' },
+                codingSchemeRef: { type: 'string', description: 'Coding scheme filename (if exists)' }
+              }
+            }
           }
         }
       }
     }
   })
   @ApiBadRequestResponse({
-    description: 'Failed to retrieve unit variables mapping'
+    description: 'Failed to retrieve unit variables details'
   })
   async getUnitVariables(
-    @Param('workspace_id') workspace_id: number): Promise<{ unitName: string; variables: string[] }[]> {
+    @Param('workspace_id') workspace_id: number): Promise<UnitVariableDetailsDto[]> {
     if (!workspace_id) {
       throw new BadRequestException('Workspace ID is required.');
     }
 
-    const unitVariableMap: Map<string, Set<string>> = await this.workspaceFilesService.getUnitVariableMap(workspace_id);
-
-    const res = Array.from(unitVariableMap.entries()).map(([unitName, variables]: [string, Set<string>]) => ({
-      unitName,
-      variables: Array.from(variables)
-    }));
-    return res;
+    return this.workspaceFilesService.getUnitVariableDetails(workspace_id);
   }
 
   @Get(':workspace_id/files/variable-info/:scheme_file_id')
