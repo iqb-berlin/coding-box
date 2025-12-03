@@ -22,4 +22,5 @@ export interface VariableDetailDto {
   codes?: CodeInfo[];
   isDerived?: boolean;
   hasManualInstruction?: boolean;
+  hasClosedCoding?: boolean;
 }

@@ -33,7 +33,9 @@
             </mat-option>
           </mat-select>
         </mat-form-field>
+      </div>
 
+      <div class="filter-row">
         <mat-checkbox [(ngModel)]="hasCodingSchemeFilter" (change)="applyFilter()" class="coding-scheme-checkbox">
           Nur mit Kodierungsschema
         </mat-checkbox>
@@ -44,6 +46,10 @@
 
         <mat-checkbox [(ngModel)]="isManualOnlyFilter" (change)="applyFilter()" class="coding-scheme-checkbox">
           Nur mit manueller Kodierung
+        </mat-checkbox>
+
+        <mat-checkbox [(ngModel)]="isClosedCodingFilter" (change)="applyFilter()" class="coding-scheme-checkbox">
+          Nur mit geschlossener Kodierung
         </mat-checkbox>
 
         <mat-checkbox [(ngModel)]="isDerivedFilter" (change)="applyFilter()" class="coding-scheme-checkbox">
