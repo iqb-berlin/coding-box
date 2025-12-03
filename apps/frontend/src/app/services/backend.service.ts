@@ -47,6 +47,7 @@ import { InvalidVariableDto } from '../../../../../api-dto/files/variable-valida
 import { BookletInfoDto } from '../../../../../api-dto/booklet-info/booklet-info.dto';
 import { UnitInfoDto } from '../../../../../api-dto/unit-info/unit-info.dto';
 import { CodeBookContentSetting } from '../../../../../api-dto/coding/codebook-content-setting';
+import { UnitVariableDetailsDto } from '../models/unit-variable-details.dto';
 import { MissingsProfilesDto } from '../../../../../api-dto/coding/missings-profiles.dto';
 import { VariableAnalysisItemDto } from '../../../../../api-dto/coding/variable-analysis-item.dto';
 import { ResponseEntity } from '../shared/models/response-entity.model';
@@ -1264,9 +1265,9 @@ export class BackendService {
     }>(url, {});
   }
 
-  getUnitVariables(workspaceId: number): Observable<{ unitName: string; variables: string[] }[]> {
+  getUnitVariables(workspaceId: number): Observable<UnitVariableDetailsDto[]> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/files/unit-variables`;
-    return this.http.get<{ unitName: string; variables: string[] }[]>(url);
+    return this.http.get<UnitVariableDetailsDto[]>(url);
   }
 
   createJobDefinition(workspaceId: number, jobDefinition: Omit<import('../coding/components/coding-job-definition-dialog/coding-job-definition-dialog.component').JobDefinition, 'id'>): Observable<JobDefinition> {

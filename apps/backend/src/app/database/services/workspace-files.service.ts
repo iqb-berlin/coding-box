@@ -19,6 +19,7 @@ import { ResponseDto } from '../../../../../../api-dto/responses/response-dto';
 import { InvalidVariableDto } from '../../../../../../api-dto/files/variable-validation.dto';
 import { DuplicateResponseDto, DuplicateResponsesResultDto } from '../../../../../../api-dto/files/duplicate-response.dto';
 import { Unit } from '../entities/unit.entity';
+import { UnitVariableDetailsDto } from '../../models/unit-variable-details.dto';
 import { ResponseEntity } from '../entities/response.entity';
 import { Booklet } from '../entities/booklet.entity';
 import {
@@ -1560,10 +1561,14 @@ ${bookletRefs}
 
   async getCodingSchemeByRef(workspaceId: number, codingSchemeRef: string): Promise<FileDownloadDto | null> {
     try {
+      const fileId = codingSchemeRef.toUpperCase().endsWith('.VOCS') ?
+        codingSchemeRef.toUpperCase() :
+        `${codingSchemeRef.toUpperCase()}.VOCS`;
+
       const codingSchemeFile = await this.fileUploadRepository.findOne({
         where: {
           workspace_id: workspaceId,
-          file_id: `${codingSchemeRef.toUpperCase()}.VOCS`
+          file_id: fileId
         }
       });
 
@@ -3010,5 +3015,113 @@ ${bookletRefs}
       await this.refreshUnitVariableCache(workspaceId);
     }
     return this.unitVariableCache.get(workspaceId) || new Map();
+  }
+
+  async getUnitVariableDetails(workspaceId: number): Promise<UnitVariableDetailsDto[]> {
+    this.logger.log(`Getting detailed unit variable information for workspace ${workspaceId}`);
+
+    try {
+      const unitFiles = await this.fileUploadRepository.find({
+        where: { workspace_id: workspaceId, file_type: 'Unit' }
+      });
+
+      const codingSchemes = await this.fileUploadRepository.find({
+        where: {
+          workspace_id: workspaceId,
+          file_type: 'Resource',
+          file_id: Like('%.VOCS')
+        }
+      });
+
+      const codingSchemeMap = new Map<string, string>();
+      const codingSchemeVariablesMap = new Map<string, Map<string, string>>();
+
+      for (const scheme of codingSchemes) {
+        try {
+          const unitId = scheme.file_id.replace('.VOCS', '');
+          codingSchemeMap.set(unitId, scheme.file_id);
+
+          const parsedScheme = JSON.parse(scheme.data) as {
+            variableCodings?: { id: string; sourceType?: string }[]
+          };
+          if (parsedScheme.variableCodings && Array.isArray(parsedScheme.variableCodings)) {
+            const variableSourceTypes = new Map<string, string>();
+            for (const vc of parsedScheme.variableCodings) {
+              if (vc.id && vc.sourceType) {
+                variableSourceTypes.set(vc.id, vc.sourceType);
+              }
+            }
+            codingSchemeVariablesMap.set(unitId, variableSourceTypes);
+          }
+        } catch (error) {
+          this.logger.error(`Error parsing coding scheme ${scheme.file_id}: ${error.message}`, error.stack);
+        }
+      }
+
+      const unitVariableDetails: UnitVariableDetailsDto[] = [];
+
+      for (const unitFile of unitFiles) {
+        try {
+          const xmlContent = unitFile.data.toString();
+          const parsedXml = await parseStringPromise(xmlContent, { explicitArray: false });
+
+          if (parsedXml.Unit && parsedXml.Unit.Metadata && parsedXml.Unit.Metadata.Id) {
+            const unitName = parsedXml.Unit.Metadata.Id;
+            const variables: Array<{
+              id: string;
+              alias: string;
+              type: 'string' | 'integer' | 'number' | 'boolean' | 'attachment' | 'json' | 'no-value';
+              hasCodingScheme: boolean;
+              codingSchemeRef?: string;
+            }> = [];
+
+            if (parsedXml.Unit.BaseVariables && parsedXml.Unit.BaseVariables.Variable) {
+              const baseVariables = Array.isArray(parsedXml.Unit.BaseVariables.Variable) ?
+                parsedXml.Unit.BaseVariables.Variable :
+                [parsedXml.Unit.BaseVariables.Variable];
+
+              for (const variable of baseVariables) {
+                if (variable.$.alias && variable.$.type !== 'no-value') {
+                  const unitSourceTypes = codingSchemeVariablesMap.get(unitName);
+                  const sourceType = unitSourceTypes?.get(variable.$.alias);
+
+                  // Skip variables with BASE_NO_VALUE sourceType in coding scheme
+                  // If no coding scheme exists, sourceType is undefined and variable is included
+                  if (sourceType === 'BASE_NO_VALUE') {
+                    continue;
+                  }
+
+                  const hasCodingScheme = codingSchemeMap.has(unitName);
+                  variables.push({
+                    id: variable.$.id || variable.$.alias,
+                    alias: variable.$.alias,
+                    type: variable.$.type as 'string' | 'integer' | 'number' | 'boolean' | 'attachment' | 'json' | 'no-value',
+                    hasCodingScheme,
+                    codingSchemeRef: hasCodingScheme ? codingSchemeMap.get(unitName) : undefined
+                  });
+                }
+              }
+            }
+
+            // Only include units with at least one variable
+            if (variables.length > 0) {
+              unitVariableDetails.push({
+                unitName,
+                unitId: unitName,
+                variables
+              });
+            }
+          }
+        } catch (e) {
+          this.logger.warn(`Error parsing unit file ${unitFile.file_id}: ${(e as Error).message}`);
+        }
+      }
+
+      this.logger.log(`Retrieved ${unitVariableDetails.length} units with variables for workspace ${workspaceId}`);
+      return unitVariableDetails;
+    } catch (error) {
+      this.logger.error(`Error getting unit variable details for workspace ${workspaceId}: ${error.message}`, error.stack);
+      return [];
+    }
   }
 }

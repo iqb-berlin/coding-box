@@ -43,6 +43,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { responseStatesNumericMap } from '@iqbspecs/response/response.interface';
 import { ContentDialogComponent } from '../../../shared/dialogs/content-dialog/content-dialog.component';
+import { CodingVariablesDialogComponent } from '../../../coding-management/coding-variables-dialog/coding-variables-dialog.component';
 import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
 import { WorkspaceSettingsService } from '../../../ws-admin/services/workspace-settings.service';
@@ -1000,38 +1001,15 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
 
   fetchUnitVariables(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
-    this.isLoading = true;
 
-    this.backendService.getUnitVariables(workspaceId)
-      .pipe(
-        catchError(() => {
-          this.isLoading = false;
-          this.snackBar.open('Fehler beim Abrufen der Kodiervariablen', 'Schließen', {
-            duration: 5000,
-            panelClass: ['error-snackbar']
-          });
-          return of([]);
-        }),
-        finalize(() => {
-          this.isLoading = false;
-        })
-      )
-      .subscribe((data: { unitName: string; variables: string[] }[]) => {
-        if (data.length === 0) {
-          this.snackBar.open('Keine Kodiervariablen gefunden.', 'Schließen', {
-            duration: 5000
-          });
-          return;
-        }
-        this.dialog.open(ContentDialogComponent, {
-          width: '80%',
-          data: {
-            title: 'Kodiervariablen',
-            content: JSON.stringify(data, null, 2),
-            isJson: true
-          }
-        });
-      });
+    this.dialog.open(CodingVariablesDialogComponent, {
+      width: '90%',
+      maxWidth: '1400px',
+      height: '90vh',
+      data: {
+        workspaceId
+      }
+    });
   }
 
   protected readonly Number = Number;
