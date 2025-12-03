@@ -30,12 +30,15 @@ import { WorkspaceId } from './workspace.decorator';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
+import { AccessRightsMatrixService } from './access-rights-matrix.service';
+import { AccessRightsMatrixDto } from '../../../../../../api-dto/workspaces/access-rights-matrix-dto';
 
 @ApiTags('Admin Workspace')
 @Controller('admin/workspace')
 export class WorkspaceController {
   constructor(
-    private workspaceCoreService: WorkspaceCoreService
+    private workspaceCoreService: WorkspaceCoreService,
+    private accessRightsMatrixService: AccessRightsMatrixService
   ) {}
 
   @Get()
@@ -83,6 +86,22 @@ export class WorkspaceController {
     } catch (error) {
       throw new BadRequestException('Failed to retrieve admin workspaces. Please try again later.');
     }
+  }
+
+  @Get('access-rights-matrix')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get access rights matrix',
+    description: 'Retrieves the complete access rights matrix showing which features each access level can access'
+  })
+  @ApiOkResponse({
+    description: 'Access rights matrix retrieved successfully.',
+    type: AccessRightsMatrixDto
+  })
+  @ApiTags('admin workspaces')
+  async getAccessRightsMatrix(): Promise<AccessRightsMatrixDto> {
+    return this.accessRightsMatrixService.getAccessRightsMatrix();
   }
 
   @Get(':workspace_id')

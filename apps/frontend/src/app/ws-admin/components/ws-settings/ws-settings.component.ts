@@ -10,6 +10,7 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { CdkTextareaAutosize } from '@angular/cdk/text-field';
 import { Clipboard } from '@angular/cdk/clipboard';
 
@@ -18,6 +19,7 @@ import { WsAccessRightsComponent } from '../ws-access-rights/ws-access-rights.co
 import { JournalComponent } from '../journal/journal.component';
 import { EditMissingsProfilesDialogComponent } from '../../../coding/components/edit-missings-profiles-dialog/edit-missings-profiles-dialog.component';
 import { ReplayStatisticsDialogComponent } from '../replay-statistics-dialog/replay-statistics-dialog.component';
+import { AccessRightsMatrixDialogComponent } from '../access-rights-matrix-dialog/access-rights-matrix-dialog.component';
 import { WorkspaceSettingsService } from '../../services/workspace-settings.service';
 
 @Component({
@@ -36,6 +38,7 @@ import { WorkspaceSettingsService } from '../../services/workspace-settings.serv
     MatDialogModule,
     MatSlideToggleModule,
     MatProgressBarModule,
+    MatTooltipModule,
     CdkTextareaAutosize,
     WsAccessRightsComponent,
     JournalComponent
@@ -98,6 +101,13 @@ export class WsSettingsComponent implements OnInit {
         data: { workspaceId }
       });
     }
+  }
+
+  openAccessRightsMatrix(): void {
+    this.dialog.open(AccessRightsMatrixDialogComponent, {
+      width: '1200px',
+      maxHeight: '90vh'
+    });
   }
 
   toggleAutoFetchCodingStatistics(toggleEvent: { checked: boolean }

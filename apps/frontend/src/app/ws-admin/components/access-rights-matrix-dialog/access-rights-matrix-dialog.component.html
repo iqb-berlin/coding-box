@@ -1,0 +1,72 @@
+<div class="access-matrix-dialog">
+  <h2 mat-dialog-title>{{ 'access-matrix.title' | translate }}</h2>
+
+  <mat-dialog-content>
+    <!-- Admin Note Banner -->
+    <div class="info-banner admin-note">
+      <mat-icon>info</mat-icon>
+      <span>{{ 'access-matrix.admin-note' | translate }}</span>
+    </div>
+
+    <!-- Guest Note -->
+    <div class="info-banner guest-note">
+      <mat-icon>info_outline</mat-icon>
+      <span>{{ 'access-matrix.guest-note' | translate }}</span>
+    </div>
+
+    <!-- Matrix Description -->
+    <p class="matrix-description">{{ 'access-matrix.description' | translate }}</p>
+
+    <!-- Loading Spinner -->
+    <div *ngIf="loading" class="loading-container">
+      <mat-progress-spinner mode="indeterminate" diameter="50"></mat-progress-spinner>
+    </div>
+
+    <!-- Access Rights Matrix Table -->
+    <div *ngIf="!loading && matrix" class="table-container">
+      <table mat-table [dataSource]="dataSource" class="access-matrix-table">
+
+        <!-- Feature Column -->
+        <ng-container matColumnDef="feature">
+          <th mat-header-cell *matHeaderCellDef class="feature-header">
+            {{ 'access-matrix.feature-column' | translate }}
+          </th>
+          <td mat-cell *matCellDef="let row" 
+              [class.category-row]="row.isCategory"
+              [class.feature-row]="!row.isCategory">
+            <span [class.category-label]="row.isCategory">
+              {{ row.translationKey | translate }}
+            </span>
+          </td>
+        </ng-container>
+
+        <!-- Access Level Columns -->
+        <ng-container *ngFor="let level of levels" [matColumnDef]="'level-' + level.level">
+          <th mat-header-cell *matHeaderCellDef class="level-header">
+            <div class="level-header-content">
+              <mat-icon *ngIf="level.icon">{{ level.icon }}</mat-icon>
+              <span>{{ level.translationKey | translate }}</span>
+            </div>
+          </th>
+          <td mat-cell *matCellDef="let row" 
+              [class.category-row]="row.isCategory"
+              class="permission-cell">
+            <mat-icon *ngIf="!row.isCategory && hasPermission(row, level.level)" class="permission-icon">
+              check_circle
+            </mat-icon>
+            <span *ngIf="!row.isCategory && !hasPermission(row, level.level)" class="no-permission">—</span>
+          </td>
+        </ng-container>
+
+        <tr mat-header-row *matHeaderRowDef="displayedColumns; sticky: true"></tr>
+        <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+      </table>
+    </div>
+  </mat-dialog-content>
+
+  <mat-dialog-actions align="end">
+    <button mat-button mat-dialog-close>
+      {{ 'access-matrix.close' | translate }}
+    </button>
+  </mat-dialog-actions>
+</div>

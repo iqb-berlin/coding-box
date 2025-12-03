@@ -96,7 +96,16 @@
 
   <mat-card class="access-rights-card">
     <mat-card-header>
-      <mat-card-title>{{ 'ws-settings.user-rights' | translate }}</mat-card-title>
+      <mat-card-title>
+        {{ 'ws-settings.user-rights' | translate }}
+        <button 
+          mat-icon-button 
+          class="help-button"
+          (click)="openAccessRightsMatrix()"
+          [matTooltip]="'access-matrix.title' | translate">
+          <mat-icon>help_outline</mat-icon>
+        </button>
+      </mat-card-title>
     </mat-card-header>
     <mat-card-content>
       <coding-box-ws-access-rights></coding-box-ws-access-rights>

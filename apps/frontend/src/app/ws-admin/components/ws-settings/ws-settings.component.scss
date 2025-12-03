@@ -29,6 +29,18 @@ mat-card-title {
   color: #07465e;
   font-size: 20px;
   margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  .help-button {
+    color: rgba(0, 0, 0, 0.54);
+    
+    &:hover {
+      color: #07465e;
+      background-color: rgba(0, 0, 0, 0.04);
+    }
+  }
 }
 
 mat-card-content {
