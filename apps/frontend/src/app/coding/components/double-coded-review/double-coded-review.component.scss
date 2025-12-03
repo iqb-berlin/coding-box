@@ -269,6 +269,38 @@
     }
 
     .review-card {
+      .filter-section {
+        padding: 16px 24px;
+        border-bottom: 1px solid #e0e0e0;
+        margin-bottom: 16px;
+
+        mat-checkbox {
+          margin-bottom: 12px;
+        }
+
+        .statistics {
+          display: flex;
+          gap: 16px;
+          align-items: center;
+          margin-top: 8px;
+          padding: 8px 12px;
+          background-color: #e3f2fd;
+          border-radius: 4px;
+
+          .stat-text {
+            font-size: 14px;
+            color: #1976d2;
+            font-weight: 500;
+          }
+
+          .unresolved-text {
+            font-size: 14px;
+            color: #f57c00;
+            font-weight: 500;
+          }
+        }
+      }
+
       .review-table {
         width: 100%;
         margin-bottom: 24px;
@@ -326,6 +358,17 @@
         }
 
         .coder-results-cell {
+          position: relative;
+
+          .conflict-icon {
+            position: absolute;
+            top: -4px;
+            left: -4px;
+            font-size: 20px;
+            width: 20px;
+            height: 20px;
+          }
+
           .coder-result-item {
             margin-bottom: 12px;
             padding: 8px 12px;
@@ -374,13 +417,30 @@
           }
         }
 
-        .coder-selection {
+        .selection-cell {
           display: flex;
           flex-direction: column;
-          gap: 8px;
+          gap: 16px;
 
-          .coder-radio {
-            margin-bottom: 4px;
+          .coder-selection {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+
+            .coder-radio {
+              margin-bottom: 4px;
+            }
+          }
+
+          .comment-field {
+            width: 100%;
+            margin-top: 8px;
+
+            textarea {
+              min-height: 60px;
+              font-size: 14px;
+              line-height: 1.5;
+            }
           }
         }
       }

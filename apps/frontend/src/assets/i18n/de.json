@@ -1409,6 +1409,10 @@
       "title": "Keine Daten verfügbar",
       "message": "Es sind keine doppelkodierten Variablen zur Überprüfung verfügbar."
     },
+    "no-conflicts": {
+      "title": "Keine Konflikte gefunden",
+      "message": "Alle Doppelkodierungen stimmen überein. Es gibt keine Konflikte, die gelöst werden müssen."
+    },
     "table-title": "Doppelkodierte Variablen",
     "table-subtitle": "{{count}} Variable(n) zur Überprüfung",
     "columns": {
@@ -1421,6 +1425,16 @@
     "code-label": "Code",
     "score-label": "Bewertung",
     "apply-decisions": "Entscheidungen anwenden",
+    "filter": {
+      "show-only-conflicts": "Nur Konflikte anzeigen"
+    },
+    "statistics": {
+      "showing-conflicts": "Zeige {{visible}} von {{total}} Konflikten",
+      "unresolved": "{{count}} ungelöst"
+    },
+    "conflict-indicator": "Konflikt: Kodierer haben unterschiedliche Codes vergeben",
+    "comment-label": "Kommentar zur Auflösung (optional)",
+    "comment-placeholder": "Begründen Sie Ihre Entscheidung...",
     "kappa": {
       "title": "Cohen's Kappa Statistik",
       "subtitle": "Inter-Rater Agreement für doppelkodierte Variablen",
@@ -1434,7 +1448,11 @@
     "errors": {
       "no-workspace-selected": "Kein Arbeitsbereich ausgewählt",
       "failed-to-load": "Fehler beim Laden der doppelkodierten Variablen",
-      "review-applied": "Überprüfungsentscheidungen erfolgreich angewendet"
+      "failed-to-apply": "Fehler beim Anwenden der Auflösungen",
+      "no-decisions": "Keine Entscheidungen zum Anwenden ausgewählt"
+    },
+    "success": {
+      "resolutions-applied": "{{count}} Auflösung(en) erfolgreich angewendet"
     }
   },
 

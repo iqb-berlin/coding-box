@@ -1962,6 +1962,7 @@ export class WorkspaceCodingService {
     limit: number = 50
   ): Promise<{
       data: Array<{
+        responseId: number;
         unitName: string;
         variableId: string;
         personLogin: string;
@@ -2017,6 +2018,7 @@ export class WorkspaceCodingService {
       });
 
       const responseGroups = new Map<number, {
+        responseId: number;
         unitName: string;
         variableId: string;
         personLogin: string;
@@ -2039,6 +2041,7 @@ export class WorkspaceCodingService {
 
         if (!responseGroups.has(responseId)) {
           responseGroups.set(responseId, {
+            responseId: responseId,
             unitName: unit.response?.unit?.name || '',
             variableId: unit.variable_id,
             personLogin: unit.response?.unit?.booklet?.person?.login || '',
@@ -2078,6 +2081,95 @@ export class WorkspaceCodingService {
     } catch (error) {
       this.logger.error(`Error getting double-coded variables for review: ${error.message}`, error.stack);
       throw new Error('Could not get double-coded variables for review. Please check the database connection.');
+    }
+  }
+
+  async applyDoubleCodedResolutions(
+    workspaceId: number,
+    decisions: Array<{ responseId: number; selectedJobId: number; resolutionComment?: string }>
+  ): Promise<{
+      success: boolean;
+      appliedCount: number;
+      failedCount: number;
+      skippedCount: number;
+      message: string;
+    }> {
+    try {
+      this.logger.log(`Applying ${decisions.length} double-coded resolutions in workspace ${workspaceId}`);
+
+      let appliedCount = 0;
+      let failedCount = 0;
+      let skippedCount = 0;
+
+      for (const decision of decisions) {
+        try {
+          // Get the selected coder's coding_job_unit entry
+          const selectedCodingJobUnit = await this.codingJobUnitRepository.findOne({
+            where: {
+              response_id: decision.responseId,
+              coding_job_id: decision.selectedJobId
+            },
+            relations: ['response', 'coding_job']
+          });
+
+          if (!selectedCodingJobUnit) {
+            this.logger.warn(`Could not find coding_job_unit for responseId ${decision.responseId} and jobId ${decision.selectedJobId}`);
+            skippedCount += 1;
+            continue;
+          }
+
+          // Verify workspace ID
+          if (selectedCodingJobUnit.coding_job?.workspace_id !== workspaceId) {
+            this.logger.warn(`Workspace mismatch for responseId ${decision.responseId}`);
+            skippedCount += 1;
+            continue;
+          }
+
+          const response = selectedCodingJobUnit.response;
+          if (!response) {
+            this.logger.warn(`Could not find response for responseId ${decision.responseId}`);
+            skippedCount += 1;
+            continue;
+          }
+
+          // Build resolution comment with timestamp if provided
+          let updatedValue = response.value || '';
+          if (decision.resolutionComment && decision.resolutionComment.trim()) {
+            const timestamp = new Date().toISOString().replace('T', ' ').substring(0, 16);
+            const resolutionNote = `[RESOLUTION - ${timestamp}]: ${decision.resolutionComment.trim()}\n`;
+            // Store resolution comment at the beginning of the value field as a note
+            updatedValue = resolutionNote + updatedValue;
+          }
+
+          // Update response with selected coder's values
+          response.status_v2 = statusStringToNumber('CODING_COMPLETE');
+          response.code_v2 = selectedCodingJobUnit.code;
+          response.score_v2 = selectedCodingJobUnit.score;
+          response.value = updatedValue;
+
+          await this.responseRepository.save(response);
+          appliedCount += 1;
+
+          this.logger.debug(`Applied resolution for responseId ${decision.responseId}: code=${selectedCodingJobUnit.code}, score=${selectedCodingJobUnit.score}`);
+        } catch (error) {
+          this.logger.error(`Error applying resolution for responseId ${decision.responseId}: ${error.message}`, error.stack);
+          failedCount += 1;
+        }
+      }
+
+      const message = `Applied ${appliedCount} resolutions successfully. ${failedCount > 0 ? `${failedCount} failed.` : ''} ${skippedCount > 0 ? `${skippedCount} skipped.` : ''}`;
+      this.logger.log(message);
+
+      return {
+        success: appliedCount > 0,
+        appliedCount,
+        failedCount,
+        skippedCount,
+        message
+      };
+    } catch (error) {
+      this.logger.error(`Error applying double-coded resolutions: ${error.message}`, error.stack);
+      throw new Error('Could not apply double-coded resolutions. Please check the database connection.');
     }
   }
 
