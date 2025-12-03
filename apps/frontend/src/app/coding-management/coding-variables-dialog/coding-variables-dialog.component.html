@@ -42,6 +42,10 @@
           Nur mit Codes
         </mat-checkbox>
 
+        <mat-checkbox [(ngModel)]="isManualOnlyFilter" (change)="applyFilter()" class="coding-scheme-checkbox">
+          Nur mit manueller Kodierung
+        </mat-checkbox>
+
         <mat-checkbox [(ngModel)]="isDerivedFilter" (change)="applyFilter()" class="coding-scheme-checkbox">
           Nur abgeleitete Variablen
         </mat-checkbox>

@@ -3036,6 +3036,7 @@ ${bookletRefs}
       const codingSchemeMap = new Map<string, string>();
       const codingSchemeVariablesMap = new Map<string, Map<string, string>>();
       const codingSchemeCodesMap = new Map<string, Map<string, Array<{ id: string | number; label: string; score?: number }>>>();
+      const codingSchemeManualInstructionsMap = new Map<string, Map<string, boolean>>();
 
       for (const scheme of codingSchemes) {
         try {
@@ -3046,12 +3047,13 @@ ${bookletRefs}
             variableCodings?: {
               id: string;
               sourceType?: string;
-              codes?: Array<{ id: number | string; label?: string; score?: number }>;
+              codes?: Array<{ id: number | string; label?: string; score?: number; manualInstruction?: string }>;
             }[]
           };
           if (parsedScheme.variableCodings && Array.isArray(parsedScheme.variableCodings)) {
             const variableSourceTypes = new Map<string, string>();
             const variableCodes = new Map<string, Array<{ id: string | number; label: string; score?: number }>>();
+            const variableManualInstructions = new Map<string, boolean>();
 
             for (const vc of parsedScheme.variableCodings) {
               if (vc.id && vc.sourceType) {
@@ -3068,10 +3070,17 @@ ${bookletRefs}
                 if (codes.length > 0) {
                   variableCodes.set(vc.id, codes);
                 }
+
+                // Check if any code has manual instruction (similar to isManual() in codebook-generator)
+                const hasManualInstruction = vc.codes.some(code => code.manualInstruction && code.manualInstruction.trim() !== '');
+                if (hasManualInstruction) {
+                  variableManualInstructions.set(vc.id, true);
+                }
               }
             }
             codingSchemeVariablesMap.set(unitId, variableSourceTypes);
             codingSchemeCodesMap.set(unitId, variableCodes);
+            codingSchemeManualInstructionsMap.set(unitId, variableManualInstructions);
           }
         } catch (error) {
           this.logger.error(`Error parsing coding scheme ${scheme.file_id}: ${error.message}`, error.stack);
@@ -3095,6 +3104,7 @@ ${bookletRefs}
               codingSchemeRef?: string;
               codes?: Array<{ id: string | number; label: string; score?: number }>;
               isDerived?: boolean;
+              hasManualInstruction?: boolean;
             }> = [];
 
             // Process BaseVariables
@@ -3118,6 +3128,8 @@ ${bookletRefs}
                   const hasCodingScheme = codingSchemeMap.has(unitName);
                   const unitCodes = codingSchemeCodesMap.get(unitName);
                   const variableCodes = unitCodes?.get(variableId);
+                  const unitManualInstructions = codingSchemeManualInstructionsMap.get(unitName);
+                  const hasManualInstruction = unitManualInstructions?.get(variableId) || false;
 
                   variables.push({
                     id: variableId,
@@ -3126,7 +3138,8 @@ ${bookletRefs}
                     hasCodingScheme,
                     codingSchemeRef: hasCodingScheme ? codingSchemeMap.get(unitName) : undefined,
                     codes: variableCodes,
-                    isDerived: false
+                    isDerived: false,
+                    hasManualInstruction
                   });
                 }
               }
@@ -3153,6 +3166,8 @@ ${bookletRefs}
                   const hasCodingScheme = codingSchemeMap.has(unitName);
                   const unitCodes = codingSchemeCodesMap.get(unitName);
                   const variableCodes = unitCodes?.get(variableId);
+                  const unitManualInstructions = codingSchemeManualInstructionsMap.get(unitName);
+                  const hasManualInstruction = unitManualInstructions?.get(variableId) || false;
 
                   variables.push({
                     id: variableId,
@@ -3161,7 +3176,8 @@ ${bookletRefs}
                     hasCodingScheme,
                     codingSchemeRef: hasCodingScheme ? codingSchemeMap.get(unitName) : undefined,
                     codes: variableCodes,
-                    isDerived: true
+                    isDerived: true,
+                    hasManualInstruction
                   });
                 }
               }
