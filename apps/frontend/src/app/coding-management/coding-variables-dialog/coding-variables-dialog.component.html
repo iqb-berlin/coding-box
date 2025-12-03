@@ -10,16 +10,16 @@
     <div class="filter-container">
       <div class="filter-row">
         <mat-form-field class="filter-field">
-          <mat-label>Aufgaben-Name Filter</mat-label>
-          <input matInput [(ngModel)]="unitNameFilter" placeholder="Filter nach Aufgaben-Name" (input)="applyFilter()">
+          <mat-label>Aufgaben Filter</mat-label>
+          <input matInput [(ngModel)]="unitNameFilter" placeholder="Filter nach Aufgabe" (input)="applyFilter()">
           <button *ngIf="unitNameFilter" matSuffix mat-icon-button aria-label="Clear" (click)="unitNameFilter=''; applyFilter()">
             <mat-icon>close</mat-icon>
           </button>
         </mat-form-field>
 
         <mat-form-field class="filter-field">
-          <mat-label>Variablen-ID Filter</mat-label>
-          <input matInput [(ngModel)]="variableIdFilter" placeholder="Filter nach Variablen-ID" (input)="applyFilter()">
+          <mat-label>Variablen Filter</mat-label>
+          <input matInput [(ngModel)]="variableIdFilter" placeholder="Filter nach Variablen" (input)="applyFilter()">
           <button *ngIf="variableIdFilter" matSuffix mat-icon-button aria-label="Clear" (click)="variableIdFilter=''; applyFilter()">
             <mat-icon>close</mat-icon>
           </button>
@@ -40,6 +40,10 @@
 
         <mat-checkbox [(ngModel)]="hasCodesFilter" (change)="applyFilter()" class="coding-scheme-checkbox">
           Nur mit Codes
+        </mat-checkbox>
+
+        <mat-checkbox [(ngModel)]="isDerivedFilter" (change)="applyFilter()" class="coding-scheme-checkbox">
+          Nur abgeleitete Variablen
         </mat-checkbox>
 
         <button mat-raised-button (click)="clearFilters()">

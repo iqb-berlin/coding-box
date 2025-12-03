@@ -3094,7 +3094,11 @@ ${bookletRefs}
               hasCodingScheme: boolean;
               codingSchemeRef?: string;
               codes?: Array<{ id: string | number; label: string; score?: number }>;
-            }> = []; if (parsedXml.Unit.BaseVariables && parsedXml.Unit.BaseVariables.Variable) {
+              isDerived?: boolean;
+            }> = [];
+
+            // Process BaseVariables
+            if (parsedXml.Unit.BaseVariables && parsedXml.Unit.BaseVariables.Variable) {
               const baseVariables = Array.isArray(parsedXml.Unit.BaseVariables.Variable) ?
                 parsedXml.Unit.BaseVariables.Variable :
                 [parsedXml.Unit.BaseVariables.Variable];
@@ -3121,7 +3125,43 @@ ${bookletRefs}
                     type: variable.$.type as 'string' | 'integer' | 'number' | 'boolean' | 'attachment' | 'json' | 'no-value',
                     hasCodingScheme,
                     codingSchemeRef: hasCodingScheme ? codingSchemeMap.get(unitName) : undefined,
-                    codes: variableCodes
+                    codes: variableCodes,
+                    isDerived: false
+                  });
+                }
+              }
+            }
+
+            // Process DerivedVariables (derived variables are not BASE_NO_VALUE and not BASE type)
+            if (parsedXml.Unit.DerivedVariables && parsedXml.Unit.DerivedVariables.Variable) {
+              const derivedVariables = Array.isArray(parsedXml.Unit.DerivedVariables.Variable) ?
+                parsedXml.Unit.DerivedVariables.Variable :
+                [parsedXml.Unit.DerivedVariables.Variable];
+
+              for (const variable of derivedVariables) {
+                if (variable.$.alias && variable.$.type !== 'no-value') {
+                  const variableId = variable.$.id || variable.$.alias;
+                  const unitSourceTypes = codingSchemeVariablesMap.get(unitName);
+                  const sourceType = unitSourceTypes?.get(variableId);
+
+                  // Skip variables with BASE_NO_VALUE sourceType in coding scheme
+                  // Skip variables with BASE sourceType (include only derived variables)
+                  if (sourceType === 'BASE_NO_VALUE' || sourceType === 'BASE') {
+                    continue;
+                  }
+
+                  const hasCodingScheme = codingSchemeMap.has(unitName);
+                  const unitCodes = codingSchemeCodesMap.get(unitName);
+                  const variableCodes = unitCodes?.get(variableId);
+
+                  variables.push({
+                    id: variableId,
+                    alias: variable.$.alias,
+                    type: variable.$.type as 'string' | 'integer' | 'number' | 'boolean' | 'attachment' | 'json' | 'no-value',
+                    hasCodingScheme,
+                    codingSchemeRef: hasCodingScheme ? codingSchemeMap.get(unitName) : undefined,
+                    codes: variableCodes,
+                    isDerived: true
                   });
                 }
               }
