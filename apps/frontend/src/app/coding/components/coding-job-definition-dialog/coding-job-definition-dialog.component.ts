@@ -23,6 +23,7 @@ import { MatDividerModule } from '@angular/material/divider';
 import { MatTabsModule } from '@angular/material/tabs';
 import { MatExpansionModule } from '@angular/material/expansion';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
+import { MatRadioModule } from '@angular/material/radio';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateService, TranslateModule } from '@ngx-translate/core';
 import { SelectionModel } from '@angular/cdk/collections';
@@ -54,6 +55,7 @@ export interface JobDefinition {
   maxCodingCases?: number;
   doubleCodingAbsolute?: number;
   doubleCodingPercentage?: number;
+  caseOrderingMode?: 'continuous' | 'alternating';
   created_at?: Date;
   updated_at?: Date;
 }
@@ -100,6 +102,7 @@ interface CreationResults {
     MatDividerModule,
     MatTabsModule,
     MatExpansionModule,
+    MatRadioModule,
     TranslateModule,
     MatTooltip
   ]
@@ -288,7 +291,8 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
       durationSeconds: [this.data.codingJob?.durationSeconds || 1, [Validators.min(1)]],
       maxCodingCases: [this.data.codingJob?.maxCodingCases || null, [Validators.min(1)]],
       doubleCodingAbsolute: [this.data.codingJob?.doubleCodingAbsolute ?? 0, []],
-      doubleCodingPercentage: [this.data.codingJob?.doubleCodingPercentage ?? 0, []]
+      doubleCodingPercentage: [this.data.codingJob?.doubleCodingPercentage ?? 0, []],
+      caseOrderingMode: [this.data.codingJob?.caseOrderingMode || 'continuous', []]
     };
 
     if (this.data.isEdit) {
@@ -865,7 +869,8 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
       durationSeconds: this.codingJobForm.value.durationSeconds,
       maxCodingCases: this.codingJobForm.value.maxCodingCases,
       doubleCodingAbsolute: this.codingJobForm.value.doubleCodingAbsolute,
-      doubleCodingPercentage: this.codingJobForm.value.doubleCodingPercentage
+      doubleCodingPercentage: this.codingJobForm.value.doubleCodingPercentage,
+      caseOrderingMode: this.codingJobForm.value.caseOrderingMode
     };
 
     this.backendService.createJobDefinition(workspaceId, jobDefinition).subscribe({
@@ -900,7 +905,8 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
       durationSeconds: this.codingJobForm.value.durationSeconds,
       maxCodingCases: this.codingJobForm.value.maxCodingCases,
       doubleCodingAbsolute: this.codingJobForm.value.doubleCodingAbsolute,
-      doubleCodingPercentage: this.codingJobForm.value.doubleCodingPercentage
+      doubleCodingPercentage: this.codingJobForm.value.doubleCodingPercentage,
+      caseOrderingMode: this.codingJobForm.value.caseOrderingMode
     };
 
     if (this.codingJobForm.get('status')) {
@@ -964,7 +970,8 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
       durationSeconds: this.codingJobForm.value.durationSeconds,
       maxCodingCases: this.codingJobForm.value.maxCodingCases,
       doubleCodingAbsolute: this.codingJobForm.value.doubleCodingAbsolute,
-      doubleCodingPercentage: this.codingJobForm.value.doubleCodingPercentage
+      doubleCodingPercentage: this.codingJobForm.value.doubleCodingPercentage,
+      caseOrderingMode: this.codingJobForm.value.caseOrderingMode
     };
 
     this.backendService.createJobDefinition(workspaceId, jobDefinition).subscribe({
