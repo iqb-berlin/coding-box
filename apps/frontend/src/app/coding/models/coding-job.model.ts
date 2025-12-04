@@ -28,6 +28,7 @@ export interface CodingJob {
   maxCodingCases?: number;
   doubleCodingAbsolute?: number;
   doubleCodingPercentage?: number;
+  caseOrderingMode?: 'continuous' | 'alternating';
   jobDefinitionId?: number;
   showScore?: boolean;
   allowComments?: boolean;

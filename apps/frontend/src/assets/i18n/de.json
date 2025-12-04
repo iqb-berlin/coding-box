@@ -1306,6 +1306,12 @@
       },
       "percentage-hint": "Der Prozentsatz muss zwischen 0 und 100 liegen"
     },
+    "case-ordering-mode": {
+      "title": "Sortierung der Kodierfälle",
+      "description": "Wählen Sie, wie die Kodierfälle sortiert werden: kontinuierlich nach Variablen oder abwechselnd nach Fällen.",
+      "continuous": "Kontinuierlich - Alle Fälle einer Variable zusammen",
+      "alternating": "Abwechselnd - Alle Variablen eines Falls, dann nächster Fall"
+    },
     "selection-summary": {
       "title": "Ausgewählte Elemente",
       "variables": "Variablen:",

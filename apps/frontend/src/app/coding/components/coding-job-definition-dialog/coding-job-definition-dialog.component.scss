@@ -595,4 +595,18 @@
       flex: 1;
     }
   }
+
+  .case-ordering-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+
+    mat-radio-button {
+      margin-bottom: 8px;
+    }
+  }
+
+  .section-divider {
+    margin: 24px 0;
+  }
 }

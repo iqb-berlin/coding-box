@@ -14,6 +14,7 @@ import { CodingJob } from './coding-job.entity';
 import Workspace from './workspace.entity';
 
 export type JobDefinitionStatus = 'draft' | 'pending_review' | 'approved';
+export type CaseOrderingMode = 'continuous' | 'alternating';
 
 export interface JobDefinitionVariable {
   unitName: string;
@@ -74,6 +75,13 @@ export class JobDefinition {
     type: 'decimal', precision: 5, scale: 2, nullable: true
   })
     double_coding_percentage?: number;
+
+  @Column({
+    type: 'enum',
+    enum: ['continuous', 'alternating'],
+    default: 'continuous'
+  })
+    case_ordering_mode: CaseOrderingMode;
 
   @CreateDateColumn()
     created_at: Date;

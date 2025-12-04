@@ -424,7 +424,8 @@ export class CodingService {
     selectedCoders: { id: number; name: string; username: string }[],
     doubleCodingAbsolute?: number,
     doubleCodingPercentage?: number,
-    selectedVariableBundles?: { id: number; name: string; variables: { unitName: string; variableId: string }[] }[]
+    selectedVariableBundles?: { id: number; name: string; variables: { unitName: string; variableId: string }[] }[],
+    caseOrderingMode?: 'continuous' | 'alternating'
   ): Observable<{
       success: boolean;
       jobsCreated: number;
@@ -466,7 +467,8 @@ export class CodingService {
         selectedCoders,
         doubleCodingAbsolute,
         doubleCodingPercentage,
-        selectedVariableBundles
+        selectedVariableBundles,
+        caseOrderingMode
       },
       { headers: this.authHeader }
     )

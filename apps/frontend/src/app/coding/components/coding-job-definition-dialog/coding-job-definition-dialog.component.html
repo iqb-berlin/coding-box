@@ -56,6 +56,22 @@
           </div>
         </div>
 
+        <div class="case-ordering-mode-section" *ngIf="data.mode === 'definition'">
+          <h4>{{ 'coding-job-definition-dialog.case-ordering-mode.title' | translate }}</h4>
+          <p class="section-description">{{ 'coding-job-definition-dialog.case-ordering-mode.description' | translate }}</p>
+
+          <mat-radio-group formControlName="caseOrderingMode" class="case-ordering-controls">
+            <mat-radio-button value="continuous">
+              {{ 'coding-job-definition-dialog.case-ordering-mode.continuous' | translate }}
+            </mat-radio-button>
+            <mat-radio-button value="alternating">
+              {{ 'coding-job-definition-dialog.case-ordering-mode.alternating' | translate }}
+            </mat-radio-button>
+          </mat-radio-group>
+        </div>
+
+        <mat-divider class="section-divider"></mat-divider>
+
         <div class="coding-display-options-section" *ngIf="data.mode === 'job'">
           <h4>{{ 'coding-job-definition-dialog.coding-display-options.title' | translate }}</h4>
           <p class="section-description">{{ 'coding-job-definition-dialog.coding-display-options.description' | translate }}</p>
@@ -75,6 +91,8 @@
           </div>
         </div>
 
+        <mat-divider class="section-divider"></mat-divider>
+
         <mat-form-field appearance="fill" class="full-width" *ngIf="data.isEdit && data.mode === 'definition'">
           <mat-label>{{ 'coding-job-definition-dialog.form-fields.status-label' | translate }}</mat-label>
           <mat-select formControlName="status">
@@ -92,6 +110,8 @@
             <mat-option value="completed">{{ 'coding-job-definition-dialog.status.job.completed' | translate }}</mat-option>
           </mat-select>
         </mat-form-field>
+
+        <mat-divider class="section-divider"></mat-divider>
 
         <div class="coding-job-count-info" *ngIf="!data.isEdit">
           <mat-icon class="info-icon">info</mat-icon>

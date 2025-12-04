@@ -21,6 +21,7 @@ export interface BulkCreationData {
   selectedCoders: Coder[];
   doubleCodingAbsolute?: number;
   doubleCodingPercentage?: number;
+  caseOrderingMode?: 'continuous' | 'alternating';
   creationResults?: {
     doubleCodingInfo: Record<string, {
       totalCases: number;

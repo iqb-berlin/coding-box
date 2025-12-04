@@ -35,6 +35,7 @@ interface JobDefinition {
   maxCodingCases?: number;
   doubleCodingAbsolute?: number;
   doubleCodingPercentage?: number;
+  caseOrderingMode?: 'continuous' | 'alternating';
   created_at?: Date;
   updated_at?: Date;
 }
@@ -211,6 +212,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
         maxCodingCases: definition.maxCodingCases,
         doubleCodingAbsolute: definition.doubleCodingAbsolute,
         doubleCodingPercentage: definition.doubleCodingPercentage,
+        caseOrderingMode: definition.caseOrderingMode,
         created_at: definition.created_at!,
         updated_at: definition.updated_at!
       }
@@ -338,7 +340,8 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
         selectedVariableBundles: definition.assignedVariableBundles || [],
         selectedCoders: selectedCoders,
         doubleCodingAbsolute: definition.doubleCodingAbsolute,
-        doubleCodingPercentage: definition.doubleCodingPercentage
+        doubleCodingPercentage: definition.doubleCodingPercentage,
+        caseOrderingMode: definition.caseOrderingMode || 'continuous'
       };
       const dialogRef = this.dialog.open(CodingJobBulkCreationDialogComponent, {
         width: '1200px',
@@ -370,7 +373,8 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
         mappedCoders,
         data.doubleCodingAbsolute,
         data.doubleCodingPercentage,
-        data.selectedVariableBundles
+        data.selectedVariableBundles,
+        data.caseOrderingMode
       ).toPromise();
 
       if (result && result.success) {

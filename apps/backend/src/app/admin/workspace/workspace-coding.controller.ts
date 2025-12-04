@@ -2448,6 +2448,7 @@ export class WorkspaceCodingController {
         selectedCoders: { id: number; name: string; username: string }[];
         doubleCodingAbsolute?: number;
         doubleCodingPercentage?: number;
+        caseOrderingMode?: 'continuous' | 'alternating';
       }
   ): Promise<{
         distribution: Record<string, Record<string, number>>;
@@ -2575,6 +2576,7 @@ export class WorkspaceCodingController {
         selectedCoders: { id: number; name: string; username: string }[];
         doubleCodingAbsolute?: number;
         doubleCodingPercentage?: number;
+        caseOrderingMode?: 'continuous' | 'alternating';
       }
   ): Promise<{
         success: boolean;

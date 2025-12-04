@@ -7,7 +7,7 @@ import {
   ValidateNested
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { JobDefinitionStatus } from '../../../database/entities/job-definition.entity';
+import { JobDefinitionStatus, CaseOrderingMode } from '../../../database/entities/job-definition.entity';
 import {
   JobDefinitionVariableDto,
   JobDefinitionVariableBundleDto
@@ -94,4 +94,14 @@ export class CreateJobDefinitionDto {
   @IsNumber()
   @IsOptional()
     doubleCodingPercentage?: number;
+
+  @ApiProperty({
+    description: 'Case ordering mode for distribution: continuous (sort by variable first) or alternating (sort by case first)',
+    enum: ['continuous', 'alternating'],
+    default: 'continuous',
+    required: false
+  })
+  @IsEnum(['continuous', 'alternating'])
+  @IsOptional()
+    caseOrderingMode?: CaseOrderingMode;
 }

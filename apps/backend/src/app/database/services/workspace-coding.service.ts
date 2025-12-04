@@ -1567,6 +1567,7 @@ export class WorkspaceCodingService {
       selectedCoders: { id: number; name: string; username: string }[];
       doubleCodingAbsolute?: number;
       doubleCodingPercentage?: number;
+      caseOrderingMode?: 'continuous' | 'alternating';
     }
   ): Promise<{
       success: boolean;
