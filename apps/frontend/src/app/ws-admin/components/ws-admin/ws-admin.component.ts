@@ -28,10 +28,12 @@ export class WsAdminComponent implements OnInit {
   appService = inject(AppService);
   private backendService = inject(BackendService);
 
-  navLinks: string[] = ['test-files', 'test-results', 'coding', 'cleaning', 'export', 'settings'];
+  private allNavLinks: string[] = ['test-files', 'test-results', 'coding', 'cleaning', 'export', 'settings'];
+  navLinks: string[] = [];
   codingManagerLinks = [
     { path: 'coding/my-jobs', label: 'ws-admin.my-coding-jobs' },
-    { path: 'coding/management', label: 'ws-admin.coding-management' }
+    { path: 'coding/management', label: 'ws-admin.coding-management' },
+    { path: 'coding/job-definitions', label: 'ws-admin.job-definitions' }
   ];
 
   accessLevel: number = 0;
@@ -61,9 +63,22 @@ export class WsAdminComponent implements OnInit {
           const currentUser = users.find(user => user.id === authData.userId);
           if (currentUser) {
             this.accessLevel = currentUser.accessLevel;
+            this.updateNavLinks();
           }
         });
       }
     });
+  }
+
+  private updateNavLinks(): void {
+    if (this.accessLevel < 3) {
+      this.navLinks = ['coding'];
+    } else {
+      this.navLinks = [...this.allNavLinks];
+    }
+  }
+
+  canAccessFeature(minLevel: number): boolean {
+    return this.accessLevel >= minLevel || this.authData.isAdmin;
   }
 }

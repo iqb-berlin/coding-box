@@ -1097,7 +1097,7 @@ export class WorkspaceCodingController {
 
   @Post(':workspace_id/coding/external-coding-import/stream')
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
-  @RequireAccessLevel(3)
+  @RequireAccessLevel(2)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiBody({
@@ -1153,7 +1153,7 @@ export class WorkspaceCodingController {
 
   @Post(':workspace_id/coding/external-coding-import')
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
-  @RequireAccessLevel(3)
+  @RequireAccessLevel(2)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiBody({
@@ -1952,7 +1952,8 @@ export class WorkspaceCodingController {
   }
 
   @Post(':workspace_id/coding/job-definitions')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(2)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiBody({
@@ -2044,7 +2045,8 @@ export class WorkspaceCodingController {
   }
 
   @Put(':workspace_id/coding/job-definitions/:id')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(2)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiParam({ name: 'id', type: Number, description: 'Job definition ID' })
@@ -2085,7 +2087,7 @@ export class WorkspaceCodingController {
 
   @Delete(':workspace_id/coding/job-definitions/:id')
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
-  @RequireAccessLevel(3)
+  @RequireAccessLevel(2)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiParam({ name: 'id', type: Number, description: 'Job definition ID' })

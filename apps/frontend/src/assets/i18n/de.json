@@ -19,6 +19,11 @@
   "error-insufficient-access": "Sie haben nicht die erforderliche Zugriffsberechtigung für diese Aktion",
   "error-unauthorized": "Sie sind nicht angemeldet oder Ihre Sitzung ist abgelaufen",
   "error-forbidden": "Sie haben keine Berechtigung für diese Aktion",
+  "errors": {
+    "requires-study-manager-access": "Diese Funktion erfordert Studienadministrator-Zugriff",
+    "requires-coding-manager-access": "Diese Funktion erfordert Kodierungsmanager-Zugriff",
+    "insufficient-permissions": "Unzureichende Berechtigungen für diese Aktion"
+  },
   "filter-by": "Filtern nach...",
   "hour": "Uhr",
   "files-import": "Dateien importieren",
@@ -189,6 +194,7 @@
     "export-title": "Datenexport",
     "my-coding-jobs": "Meine Kodierjobs",
     "coding-management": "Kodierung-Management",
+    "job-definitions": "Job-Definitionen",
     "export-subtitle": "Export der Daten nach Kodierung und Bereinigung",
     "export-description": "Diese Komponente wird für den Export der Daten nach Kodierung und Bereinigung verwendet.",
     "export-placeholder": "Die Funktionalität zum Datenexport wird in einer zukünftigen Version implementiert.",
@@ -278,7 +284,7 @@
     "feature-column": "Funktion",
     "close": "Schließen",
     "admin-note": "System-Administratoren haben unabhängig von der Arbeitsbereichs-Zugriffsebene vollen Zugriff auf alle Funktionen.",
-    "guest-note": "Gäste (Zugriffsebene 0) haben keinen Zugriff auf Arbeitsbereichsfunktionen und werden daher in dieser Matrix nicht angezeigt.",
+    "guest-note": "Gäste haben keinen Zugriff auf Arbeitsbereichsfunktionen und werden daher in dieser Matrix nicht angezeigt.",
     "category": {
       "test-files": "Testdateien",
       "test-results": "Testergebnisse",
