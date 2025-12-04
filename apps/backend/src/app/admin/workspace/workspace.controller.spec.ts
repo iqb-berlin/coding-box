@@ -6,6 +6,7 @@ import { UsersService } from '../../database/services/users.service';
 import { TestcenterService } from '../../database/services/testcenter.service';
 import { UploadResultsService } from '../../database/services/upload-results.service'; // ggf. anpassen, falls anderer Pfad
 import { WorkspaceCoreService } from '../../database/services/workspace-core.service';
+import { AccessRightsMatrixService } from './access-rights-matrix.service';
 
 describe('WorkspaceController', () => {
   let controller: WorkspaceController;
@@ -33,6 +34,10 @@ describe('WorkspaceController', () => {
         {
           provide: WorkspaceCoreService,
           useValue: createMock<WorkspaceCoreService>()
+        },
+        {
+          provide: AccessRightsMatrixService,
+          useValue: createMock<AccessRightsMatrixService>()
         }
       ]
     }).compile();
