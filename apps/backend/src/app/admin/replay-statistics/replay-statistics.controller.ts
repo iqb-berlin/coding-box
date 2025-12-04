@@ -11,6 +11,8 @@ import {
   ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
+import { WorkspaceGuard } from '../workspace/workspace.guard';
+import { AccessLevelGuard, RequireAccessLevel } from '../workspace/access-level.guard';
 import { ReplayStatisticsService } from '../../database/services/replay-statistics.service';
 import { ReplayStatistics } from '../../database/entities/replay-statistics.entity';
 
@@ -57,7 +59,8 @@ export class ReplayStatisticsController {
   @ApiParam({ name: 'workspace_id', description: 'ID of the workspace' })
   @ApiResponse({ status: 200, description: 'Replay statistics retrieved successfully' })
   @Get()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   async getReplayStatistics(
     @Param('workspace_id') workspaceId: string
   ): Promise<ReplayStatistics[]> {
@@ -71,7 +74,8 @@ export class ReplayStatisticsController {
   @ApiParam({ name: 'workspace_id', description: 'ID of the workspace' })
   @ApiResponse({ status: 200, description: 'Replay frequency retrieved successfully' })
   @Get('frequency')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   async getReplayFrequencyByUnit(
     @Param('workspace_id') workspaceId: string
   ): Promise<Record<string, number>> {
@@ -86,7 +90,8 @@ export class ReplayStatisticsController {
   @ApiQuery({ name: 'unitId', required: false, description: 'Filter by unit ID' })
   @ApiResponse({ status: 200, description: 'Replay duration statistics retrieved successfully' })
   @Get('duration')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   async getReplayDurationStatistics(
     @Param('workspace_id') workspaceId: string,
       @Query('unitId') unitId?: string
@@ -110,7 +115,8 @@ export class ReplayStatisticsController {
   @ApiParam({ name: 'workspace_id', description: 'ID of the workspace' })
   @ApiResponse({ status: 200, description: 'Replay distribution by day retrieved successfully' })
   @Get('distribution/day')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   async getReplayDistributionByDay(
     @Param('workspace_id') workspaceId: string
   ): Promise<Record<string, number>> {
@@ -124,7 +130,8 @@ export class ReplayStatisticsController {
   @ApiParam({ name: 'workspace_id', description: 'ID of the workspace' })
   @ApiResponse({ status: 200, description: 'Replay distribution by hour retrieved successfully' })
   @Get('distribution/hour')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   async getReplayDistributionByHour(
     @Param('workspace_id') workspaceId: string
   ): Promise<Record<string, number>> {
@@ -138,7 +145,8 @@ export class ReplayStatisticsController {
   @ApiParam({ name: 'workspace_id', description: 'ID of the workspace' })
   @ApiResponse({ status: 200, description: 'Replay error statistics retrieved successfully' })
   @Get('errors')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   async getReplayErrorStatistics(
     @Param('workspace_id') workspaceId: string
   ): Promise<{
@@ -158,7 +166,8 @@ export class ReplayStatisticsController {
   @ApiParam({ name: 'workspace_id', description: 'ID of the workspace' })
   @ApiResponse({ status: 200, description: 'Failure distribution by unit retrieved successfully' })
   @Get('failures/unit')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   async getFailureDistributionByUnit(
     @Param('workspace_id') workspaceId: string
   ): Promise<Record<string, number>> {
@@ -172,7 +181,8 @@ export class ReplayStatisticsController {
   @ApiParam({ name: 'workspace_id', description: 'ID of the workspace' })
   @ApiResponse({ status: 200, description: 'Failure distribution by day retrieved successfully' })
   @Get('failures/day')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   async getFailureDistributionByDay(
     @Param('workspace_id') workspaceId: string
   ): Promise<Record<string, number>> {
@@ -186,7 +196,8 @@ export class ReplayStatisticsController {
   @ApiParam({ name: 'workspace_id', description: 'ID of the workspace' })
   @ApiResponse({ status: 200, description: 'Failure distribution by hour retrieved successfully' })
   @Get('failures/hour')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   async getFailureDistributionByHour(
     @Param('workspace_id') workspaceId: string
   ): Promise<Record<string, number>> {

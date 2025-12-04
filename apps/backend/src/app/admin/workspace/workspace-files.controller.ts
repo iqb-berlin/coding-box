@@ -94,7 +94,8 @@ export class WorkspaceFilesController {
   @ApiBadRequestResponse({
     description: 'Invalid workspace ID or error fetching files.'
   })
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   async findFiles(
     @Param('workspace_id') workspace_id: number,
                            @Query('page') page: number = 1,
@@ -173,7 +174,8 @@ export class WorkspaceFilesController {
 
   @Get(':workspace_id/files/validation')
   @ApiTags('test files validation')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   @ApiOperation({ summary: 'Validate test files', description: 'Validates test files and returns a hierarchical view of expected files and their status' })
   @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
   @ApiQuery({
@@ -237,7 +239,8 @@ export class WorkspaceFilesController {
   }
 
   @Get(':workspace_id/files/:fileId/download')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Download a file', description: 'Downloads a specific file from a workspace' })
   @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
@@ -368,7 +371,8 @@ export class WorkspaceFilesController {
 
   @Get(':workspace_id/files/validate-testtakers')
   @ApiTags('test files validation')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   @ApiOperation({ summary: 'Validate TestTakers', description: 'Validates TestTakers XML files and checks if each person from the persons table is found' })
   @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
   @ApiOkResponse({
@@ -381,7 +385,8 @@ export class WorkspaceFilesController {
 
   @Get(':workspace_id/files/validate-group-responses')
   @ApiTags('test files validation')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   @ApiOperation({ summary: 'Validate group responses', description: 'Validates if there\'s at least one response for each group found in TestTakers XML files' })
   @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
   @ApiQuery({
@@ -436,7 +441,8 @@ export class WorkspaceFilesController {
 
   @Get(':workspace_id/files/validate-response-status')
   @ApiTags('test files validation')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   @ApiOperation({ summary: 'Validate response status', description: 'Validates if response status is one of the valid values (VALUE_CHANGED, NOT_REACHED, DISPLAYED, UNSET, PARTLY_DISPLAYED)' })
   @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
   @ApiQuery({
@@ -473,7 +479,8 @@ export class WorkspaceFilesController {
 
   @Get(':workspace_id/files/validate-duplicate-responses')
   @ApiTags('test files validation')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   @ApiOperation({ summary: 'Validate duplicate responses', description: 'Identifies duplicate responses (same variable ID for the same unit, booklet, and test taker)' })
   @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
   @ApiQuery({
@@ -533,7 +540,8 @@ export class WorkspaceFilesController {
 
   @Get(':workspace_id/files/validate-variables')
   @ApiTags('test files validation')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   @ApiOperation({ summary: 'Validate variables', description: 'Validates if variables in responses are defined in Unit-XMLs' })
   @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
   @ApiQuery({
@@ -570,7 +578,8 @@ export class WorkspaceFilesController {
 
   @Get(':workspace_id/files/validate-variable-types')
   @ApiTags('test files validation')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   @ApiOperation({ summary: 'Validate variable types', description: 'Validates if variable values match their defined types in Unit-XMLs' })
   @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
   @ApiQuery({
@@ -768,7 +777,8 @@ export class WorkspaceFilesController {
 
   @Get(':workspace_id/files/download-zip')
   @ApiTags('admin workspace')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   @ApiOperation({ summary: 'Download all workspace files as ZIP', description: 'Creates and downloads a ZIP file containing all files in the workspace' })
   @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
   @ApiOkResponse({

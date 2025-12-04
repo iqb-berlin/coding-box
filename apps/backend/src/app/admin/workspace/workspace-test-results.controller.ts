@@ -90,7 +90,8 @@ export class WorkspaceTestResultsController {
     }
   })
   @ApiBadRequestResponse({ description: 'Failed to retrieve test results' })
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   async findTestResults(
     @Param('workspace_id') workspace_id: number,
                            @Query('page') page: number = 1,
@@ -180,7 +181,8 @@ export class WorkspaceTestResultsController {
     }
   })
   @ApiBadRequestResponse({ description: 'Failed to retrieve test results' })
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   async findPersonTestResults(
     @Param('workspace_id') workspace_id: number,
       @Param('personId') personId: number
@@ -339,7 +341,8 @@ export class WorkspaceTestResultsController {
   }
 
   @Get(':workspace_id/responses')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiQuery({
     name: 'page',
@@ -376,7 +379,8 @@ export class WorkspaceTestResultsController {
   }
 
   @Get(':workspace_id/responses/:testPerson/:unitId')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   @ApiParam({ name: 'workspace_id', type: Number })
   async findResponse(@WorkspaceId() id: number,
     @Param('testPerson') testPerson:string,
@@ -530,7 +534,8 @@ export class WorkspaceTestResultsController {
     }
   })
   @ApiBadRequestResponse({ description: 'Failed to search for responses' })
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   async searchResponses(
     @Param('workspace_id') workspace_id: number,
       @Query('value') value?: string,
@@ -651,7 +656,8 @@ export class WorkspaceTestResultsController {
     }
   })
   @ApiBadRequestResponse({ description: 'Failed to search for booklets' })
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   async findBookletsByName(
     @Param('workspace_id') workspace_id: number,
       @Query('bookletName') bookletName: string,
@@ -773,7 +779,8 @@ export class WorkspaceTestResultsController {
     }
   })
   @ApiBadRequestResponse({ description: 'Failed to search for units' })
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   async findUnitsByName(
     @Param('workspace_id') workspace_id: number,
       @Query('unitName') unitName: string,
