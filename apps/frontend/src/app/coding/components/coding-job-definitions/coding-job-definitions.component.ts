@@ -22,6 +22,7 @@ import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
 import { Variable, VariableBundle } from '../../models/coding-job.model';
 import { CoderService } from '../../services/coder.service';
+import { CodingJobService } from '../../services/coding-job.service';
 import { CodingJobDefinitionDialogComponent, CodingJobDefinitionDialogData } from '../coding-job-definition-dialog/coding-job-definition-dialog.component';
 import { CodingJobBulkCreationDialogComponent, BulkCreationData } from '../coding-job-bulk-creation-dialog/coding-job-bulk-creation-dialog.component';
 
@@ -74,6 +75,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
   private snackBar = inject(MatSnackBar);
   private dialog = inject(MatDialog);
   private coderService = inject(CoderService);
+  private codingJobService = inject(CodingJobService);
   private translateService = inject(TranslateService);
   private destroy$ = new Subject<void>();
 
@@ -404,6 +406,8 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
 
     this.loadJobDefinitions();
     this.bulkCreationCompleted.emit();
+    // Emit event for auto-refresh in dialog
+    this.codingJobService.jobsCreatedEvent.emit();
   }
 
   private showError(message: string): void {
