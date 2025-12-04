@@ -21,6 +21,7 @@ import {
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
+import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import { WorkspaceId } from './workspace.decorator';
 import { JournalService } from '../../database/services/journal.service';
 import { JournalEntry } from '../../database/entities/journal-entry.entity';
@@ -50,9 +51,7 @@ export class JournalController {
     @WorkspaceId() workspaceId: number,
       @Body() createJournalEntryDto: CreateJournalEntryDto
   ): Promise<JournalEntry> {
-    // Get the user ID from the request (assuming it's available in the JWT token)
-    // For now, we'll use a placeholder
-    const userId = 'current-user'; // This should be replaced with actual user ID from JWT
+    const userId = 'current-user';
 
     const entityId = parseInt(createJournalEntryDto.entity_id, 10);
 
@@ -130,7 +129,8 @@ export class JournalController {
     type: PaginatedJournalEntriesDto
   })
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   async getJournalEntries(
     @WorkspaceId() workspaceId: number,
       @Query('page') page?: number,
@@ -207,7 +207,8 @@ export class JournalController {
     type: PaginatedJournalEntriesDto
   })
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   async getJournalEntriesByEntity(
     @WorkspaceId() workspaceId: number,
       @Param('entityType') entityType: string,
@@ -250,7 +251,8 @@ export class JournalController {
     type: PaginatedJournalEntriesDto
   })
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   async getJournalEntriesByUser(
     @WorkspaceId() workspaceId: number,
       @Param('userId') userId: string,
@@ -291,7 +293,8 @@ export class JournalController {
     type: PaginatedJournalEntriesDto
   })
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   async getJournalEntriesByAction(
     @WorkspaceId() workspaceId: number,
       @Param('actionType') actionType: string,
@@ -328,7 +331,8 @@ export class JournalController {
   @Header('Content-Type', 'text/csv')
   @Header('Content-Disposition', 'attachment; filename=journal-entries.csv')
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   async downloadJournalEntriesAsCsv(
     @WorkspaceId() workspaceId: number,
       @Res() response: Response

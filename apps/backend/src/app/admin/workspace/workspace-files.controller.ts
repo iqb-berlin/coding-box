@@ -94,7 +94,8 @@ export class WorkspaceFilesController {
   @ApiBadRequestResponse({
     description: 'Invalid workspace ID or error fetching files.'
   })
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   async findFiles(
     @Param('workspace_id') workspace_id: number,
                            @Query('page') page: number = 1,
@@ -173,7 +174,8 @@ export class WorkspaceFilesController {
 
   @Get(':workspace_id/files/validation')
   @ApiTags('test files validation')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   @ApiOperation({ summary: 'Validate test files', description: 'Validates test files and returns a hierarchical view of expected files and their status' })
   @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
   @ApiQuery({
@@ -237,7 +239,8 @@ export class WorkspaceFilesController {
   }
 
   @Get(':workspace_id/files/:fileId/download')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Download a file', description: 'Downloads a specific file from a workspace' })
   @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
@@ -768,7 +771,8 @@ export class WorkspaceFilesController {
 
   @Get(':workspace_id/files/download-zip')
   @ApiTags('admin workspace')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   @ApiOperation({ summary: 'Download all workspace files as ZIP', description: 'Creates and downloads a ZIP file containing all files in the workspace' })
   @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
   @ApiOkResponse({

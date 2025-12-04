@@ -90,7 +90,8 @@ export class WorkspaceTestResultsController {
     }
   })
   @ApiBadRequestResponse({ description: 'Failed to retrieve test results' })
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   async findTestResults(
     @Param('workspace_id') workspace_id: number,
                            @Query('page') page: number = 1,
@@ -180,7 +181,8 @@ export class WorkspaceTestResultsController {
     }
   })
   @ApiBadRequestResponse({ description: 'Failed to retrieve test results' })
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   async findPersonTestResults(
     @Param('workspace_id') workspace_id: number,
       @Param('personId') personId: number

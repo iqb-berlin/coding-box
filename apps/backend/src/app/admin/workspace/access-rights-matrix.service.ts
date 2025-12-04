@@ -67,17 +67,17 @@ export class AccessRightsMatrixService {
       {
         featureKey: 'view-test-files',
         translationKey: 'access-matrix.feature.view-test-files',
-        minAccessLevel: 1
+        minAccessLevel: 3
       },
       {
         featureKey: 'download-test-files',
         translationKey: 'access-matrix.feature.download-test-files',
-        minAccessLevel: 1
+        minAccessLevel: 3
       },
       {
         featureKey: 'validate-test-files',
         translationKey: 'access-matrix.feature.validate-test-files',
-        minAccessLevel: 1
+        minAccessLevel: 3
       },
       {
         featureKey: 'upload-test-files',
@@ -102,7 +102,7 @@ export class AccessRightsMatrixService {
       {
         featureKey: 'view-resource-packages',
         translationKey: 'access-matrix.feature.view-resource-packages',
-        minAccessLevel: 1
+        minAccessLevel: 3
       },
       {
         featureKey: 'delete-resource-packages',
@@ -126,17 +126,17 @@ export class AccessRightsMatrixService {
       {
         featureKey: 'view-test-results',
         translationKey: 'access-matrix.feature.view-test-results',
-        minAccessLevel: 1
+        minAccessLevel: 3
       },
       {
         featureKey: 'view-responses',
         translationKey: 'access-matrix.feature.view-responses',
-        minAccessLevel: 1
+        minAccessLevel: 3
       },
       {
         featureKey: 'view-logs',
         translationKey: 'access-matrix.feature.view-logs',
-        minAccessLevel: 1
+        minAccessLevel: 3
       },
       {
         featureKey: 'upload-test-results',
@@ -161,7 +161,7 @@ export class AccessRightsMatrixService {
       {
         featureKey: 'view-replay-statistics',
         translationKey: 'access-matrix.feature.view-replay-statistics',
-        minAccessLevel: 1
+        minAccessLevel: 3
       }
     ];
 
@@ -195,17 +195,17 @@ export class AccessRightsMatrixService {
       {
         featureKey: 'create-job-definitions',
         translationKey: 'access-matrix.feature.create-job-definitions',
-        minAccessLevel: 3
+        minAccessLevel: 2
       },
       {
         featureKey: 'edit-job-definitions',
         translationKey: 'access-matrix.feature.edit-job-definitions',
-        minAccessLevel: 3
+        minAccessLevel: 2
       },
       {
         featureKey: 'delete-job-definitions',
         translationKey: 'access-matrix.feature.delete-job-definitions',
-        minAccessLevel: 3
+        minAccessLevel: 2
       },
       {
         featureKey: 'manage-missings-profiles',
@@ -220,7 +220,7 @@ export class AccessRightsMatrixService {
       {
         featureKey: 'import-external-codings',
         translationKey: 'access-matrix.feature.import-external-codings',
-        minAccessLevel: 3
+        minAccessLevel: 2
       },
       {
         featureKey: 'validate-coding-completeness',
@@ -288,7 +288,7 @@ export class AccessRightsMatrixService {
       {
         featureKey: 'view-journal',
         translationKey: 'access-matrix.feature.view-journal',
-        minAccessLevel: 1
+        minAccessLevel: 3
       }
     ];
 
