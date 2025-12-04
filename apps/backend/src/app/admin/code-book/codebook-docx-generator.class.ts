@@ -79,9 +79,10 @@ export class CodebookDocxGenerator {
         }
       },
       spacing: {
+        before: 400,
         after: 200
       },
-      text: `${variableCoding.key}  ${variableCoding.name}`,
+      text: variableCoding.name,
       heading: HeadingLevel.HEADING_1,
       alignment: AlignmentType.CENTER
     });
@@ -326,7 +327,7 @@ export class CodebookDocxGenerator {
    */
   private static getVariableHeader(variable: BookVariable): Paragraph {
     return new Paragraph({
-      text: `${variable.id} ${variable.label}`,
+      text: variable.label,
       heading: HeadingLevel.HEADING_2,
       spacing: {
         before: 400,
@@ -500,14 +501,16 @@ export class CodebookDocxGenerator {
             })
           },
           children: [
-            new Paragraph({
-              text: 'Missings',
-              heading: HeadingLevel.HEADING_1,
-              spacing: {
-                after: 200
-              }
-            }),
-            ...missings,
+            ...(missings.length > 0 ? [
+              new Paragraph({
+                text: 'Missings',
+                heading: HeadingLevel.HEADING_1,
+                spacing: {
+                  after: 200
+                }
+              }),
+              ...missings
+            ] : []),
             ...children
           ]
         }

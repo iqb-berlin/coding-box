@@ -52,6 +52,9 @@ export interface FlattenedVariable {
   hasCodingScheme: boolean;
   codingSchemeRef?: string;
   codes?: CodeInfo[];
+  isDerived?: boolean;
+  hasManualInstruction?: boolean;
+  hasClosedCoding?: boolean;
 }
 
 @Component({
@@ -85,6 +88,9 @@ export class CodingVariablesDialogComponent implements OnInit {
   variableIdFilter = '';
   hasCodingSchemeFilter = true;
   hasCodesFilter = true;
+  isDerivedFilter = false;
+  isManualOnlyFilter = false;
+  isClosedCodingFilter = false;
   selectedTypes: string[] = [];
   availableTypes = ['string', 'integer', 'number', 'boolean', 'attachment', 'json'];
   isLoading = false;
@@ -109,7 +115,7 @@ export class CodingVariablesDialogComponent implements OnInit {
     this.dataSource.filterPredicate = (data: FlattenedVariable, filter: string): boolean => {
       try {
         const {
-          unitName, variableId, hasCodingScheme, hasCodes, types
+          unitName, variableId, hasCodingScheme, hasCodes, isDerived, isManualOnly, isClosedCoding, types
         } = JSON.parse(filter || '{}');
 
         const matchesUnitName = !unitName ||
@@ -118,9 +124,12 @@ export class CodingVariablesDialogComponent implements OnInit {
           data.variableAlias.toLowerCase().includes(variableId.toLowerCase());
         const matchesCodingScheme = !hasCodingScheme || data.hasCodingScheme;
         const matchesCodes = !hasCodes || (!!data.codes && data.codes.length > 0);
+        const matchesDerived = !isDerived || data.isDerived === true;
+        const matchesManualOnly = !isManualOnly || data.hasManualInstruction === true;
+        const matchesClosedCoding = !isClosedCoding || data.hasClosedCoding === true;
         const matchesType = !types || types.length === 0 || types.includes(data.variableType);
 
-        return matchesUnitName && matchesVariableId && matchesCodingScheme && matchesCodes && matchesType;
+        return matchesUnitName && matchesVariableId && matchesCodingScheme && matchesCodes && matchesDerived && matchesManualOnly && matchesClosedCoding && matchesType;
       } catch {
         return true;
       }
@@ -135,7 +144,7 @@ export class CodingVariablesDialogComponent implements OnInit {
         const flattenedData: FlattenedVariable[] = [];
 
         unitVariableDetails.forEach(unit => {
-          unit.variables.forEach((variable: { id: string; alias: string; type: string; hasCodingScheme: boolean; codingSchemeRef?: string; codes?: CodeInfo[] }) => {
+          unit.variables.forEach((variable: { id: string; alias: string; type: string; hasCodingScheme: boolean; codingSchemeRef?: string; codes?: CodeInfo[]; isDerived?: boolean; hasManualInstruction?: boolean; hasClosedCoding?: boolean }) => {
             flattenedData.push({
               unitName: unit.unitName,
               unitId: unit.unitId,
@@ -144,7 +153,10 @@ export class CodingVariablesDialogComponent implements OnInit {
               variableType: variable.type,
               hasCodingScheme: variable.hasCodingScheme,
               codingSchemeRef: variable.codingSchemeRef,
-              codes: variable.codes
+              codes: variable.codes,
+              isDerived: variable.isDerived,
+              hasManualInstruction: variable.hasManualInstruction,
+              hasClosedCoding: variable.hasClosedCoding
             });
           });
         });
@@ -170,6 +182,9 @@ export class CodingVariablesDialogComponent implements OnInit {
       variableId: this.variableIdFilter,
       hasCodingScheme: this.hasCodingSchemeFilter,
       hasCodes: this.hasCodesFilter,
+      isDerived: this.isDerivedFilter,
+      isManualOnly: this.isManualOnlyFilter,
+      isClosedCoding: this.isClosedCodingFilter,
       types: this.selectedTypes
     });
     this.dataSource.filter = filterValue;
@@ -180,6 +195,9 @@ export class CodingVariablesDialogComponent implements OnInit {
     this.variableIdFilter = '';
     this.hasCodingSchemeFilter = false;
     this.hasCodesFilter = false;
+    this.isDerivedFilter = false;
+    this.isManualOnlyFilter = false;
+    this.isClosedCodingFilter = false;
     this.selectedTypes = [];
     this.applyFilter();
   }

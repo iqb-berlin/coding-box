@@ -34,6 +34,7 @@ import { DatabaseAdminController } from './database/database-admin.controller';
 import { DatabaseExportService } from './database/database-export.service';
 import { JobQueueModule } from '../job-queue/job-queue.module';
 import { CacheModule } from '../cache/cache.module';
+import { AccessRightsMatrixService } from './workspace/access-rights-matrix.service';
 
 @Module({
   imports: [
@@ -73,7 +74,8 @@ import { CacheModule } from '../cache/cache.module';
   providers: [
     BookletInfoService,
     UnitInfoService,
-    DatabaseExportService
+    DatabaseExportService,
+    AccessRightsMatrixService
   ]
 })
 export class AdminModule {}
