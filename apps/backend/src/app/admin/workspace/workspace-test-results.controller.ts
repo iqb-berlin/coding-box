@@ -13,6 +13,7 @@ import { FilesInterceptor } from '@nestjs/platform-express';
 import { logger } from 'nx/src/utils/logger';
 import { Request, Response } from 'express';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
+import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
 import { UploadResultsService } from '../../database/services/upload-results.service';
@@ -89,7 +90,8 @@ export class WorkspaceTestResultsController {
     }
   })
   @ApiBadRequestResponse({ description: 'Failed to retrieve test results' })
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   async findTestResults(
     @Param('workspace_id') workspace_id: number,
                            @Query('page') page: number = 1,
@@ -179,7 +181,8 @@ export class WorkspaceTestResultsController {
     }
   })
   @ApiBadRequestResponse({ description: 'Failed to retrieve test results' })
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   async findPersonTestResults(
     @Param('workspace_id') workspace_id: number,
       @Param('personId') personId: number
@@ -199,7 +202,8 @@ export class WorkspaceTestResultsController {
   }
 
   @Delete(':workspace_id/test-results')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   async deleteTestGroups(
     @Query('testPersons')testPersonIds:string,
       @Param('workspace_id')workspaceId:string,
@@ -214,6 +218,8 @@ export class WorkspaceTestResultsController {
   }
 
   @Delete(':workspace_id/units/:unitId')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   @ApiOperation({
     summary: 'Delete a unit',
     description: 'Deletes a unit and all its associated responses'
@@ -253,6 +259,8 @@ export class WorkspaceTestResultsController {
   }
 
   @Delete(':workspace_id/responses/:responseId')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   @ApiOperation({
     summary: 'Delete a response',
     description: 'Deletes a response'
@@ -292,6 +300,8 @@ export class WorkspaceTestResultsController {
   }
 
   @Delete(':workspace_id/booklets/:bookletId')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   @ApiOperation({
     summary: 'Delete a booklet',
     description: 'Deletes a booklet and all its associated units and responses'
@@ -804,7 +814,8 @@ export class WorkspaceTestResultsController {
   }
 
   @Post(':workspace_id/upload/results/:resultType')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Upload test results',
@@ -991,6 +1002,8 @@ export class WorkspaceTestResultsController {
   }
 
   @Post(':workspace_id/results/export/job')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   @ApiOperation({
     summary: 'Start background export of test results',
     description: 'Starts a background job to export test results for a workspace as CSV'
@@ -1127,7 +1140,8 @@ export class WorkspaceTestResultsController {
     description: 'Job deleted successfully.'
   })
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   async deleteExportJob(
     @Param('jobId') jobId: string
   ): Promise<{ success: boolean; message: string }> {

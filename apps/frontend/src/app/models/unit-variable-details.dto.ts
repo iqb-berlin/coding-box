@@ -20,4 +20,7 @@ export interface VariableDetailDto {
   hasCodingScheme: boolean;
   codingSchemeRef?: string;
   codes?: CodeInfo[];
+  isDerived?: boolean;
+  hasManualInstruction?: boolean;
+  hasClosedCoding?: boolean;
 }

@@ -1099,17 +1099,11 @@ export class WorkspaceCodingService {
       const unitProperties: UnitPropertiesForCodebook[] = units.map(unit => ({
         id: unit.id,
         key: unit.file_id,
-        name: unit.filename,
+        name: unit.filename.toLowerCase().endsWith('.vocs') ? unit.filename.substring(0, unit.filename.length - 5) : unit.filename,
         scheme: unit.data || ''
       }));
 
-      let missings: Missing[] = [
-        {
-          code: '999',
-          label: 'Missing',
-          description: 'Value is missing'
-        }
-      ];
+      let missings: Missing[] = [];
 
       if (missingsProfile) {
         const profile = await this.missingsProfilesService.getMissingsProfileDetails(workspaceId, missingsProfile);
