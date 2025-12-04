@@ -56,6 +56,8 @@ import { ExportCodingBookComponent } from '../export-coding-book/export-coding-b
 import { CodingManagementManualComponent } from '../coding-management-manual/coding-management-manual.component';
 import { VariableAnalysisDialogComponent } from '../variable-analysis-dialog/variable-analysis-dialog.component';
 import { GermanPaginatorIntl } from '../../../shared/services/german-paginator-intl.service';
+import { CodingReportService } from '../../services/coding-report.service';
+import { CodingReportDialogComponent } from '../coding-report/coding-report-dialog.component';
 
 @Component({
   selector: 'app-coding-management',
@@ -99,6 +101,28 @@ import { GermanPaginatorIntl } from '../../../shared/services/german-paginator-i
   styleUrls: ['./coding-management.component.scss']
 })
 export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestroy {
+  private codingReportService = inject(CodingReportService);
+  openCodingReportDialog(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    this.codingReportService.getCodingReport(workspaceId).subscribe({
+      next: result => {
+        this.dialog.open(CodingReportDialogComponent, {
+          width: '90vw',
+          height: '90vh',
+          maxWidth: '100vw',
+          maxHeight: '100vh',
+          data: { codingReport: result.rows }
+        });
+      },
+      error: () => {
+        this.snackBar.open('Fehler beim Laden des Coding-Reports', 'Schließen', {
+          duration: 5000,
+          panelClass: ['error-snackbar']
+        });
+      }
+    });
+  }
+
   private backendService = inject(BackendService);
   private appService = inject(AppService);
   private workspaceSettingsService = inject(WorkspaceSettingsService);

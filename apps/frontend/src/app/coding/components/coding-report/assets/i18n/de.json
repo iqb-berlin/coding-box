@@ -1,0 +1,13 @@
+{
+  "coding-report": {
+    "title": "Kodierbericht",
+    "filter-by": "Filtern nach",
+    "coded-variables-only": "Nur mit Regeln kodierte Variablen",
+    "close": "Schließen",
+    "unit": "Aufgabe",
+    "variable": "Variable",
+    "item": "Item",
+    "validation": "Validierung",
+    "codingType": "Kodiertyp"
+  }
+}
