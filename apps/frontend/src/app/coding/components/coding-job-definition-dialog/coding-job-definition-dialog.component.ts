@@ -1,5 +1,5 @@
 import {
-  Component, Inject, OnInit, inject
+  Component, Inject, OnInit, OnDestroy, inject
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import {
@@ -28,7 +28,7 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateService, TranslateModule } from '@ngx-translate/core';
 import { SelectionModel } from '@angular/cdk/collections';
 import { MatTooltip } from '@angular/material/tooltip';
-import { forkJoin } from 'rxjs';
+import { forkJoin, Subject, takeUntil } from 'rxjs';
 import { CodingJob, VariableBundle, Variable } from '../../models/coding-job.model';
 import { Coder } from '../../models/coder.model';
 import { BackendService } from '../../../services/backend.service';
@@ -107,7 +107,7 @@ interface CreationResults {
     MatTooltip
   ]
 })
-export class CodingJobDefinitionDialogComponent implements OnInit {
+export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   private fb = inject(FormBuilder);
   private backendService = inject(BackendService);
   private appService = inject(AppService);
@@ -116,6 +116,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
   private codingJobService = inject(CodingJobService);
   private matDialog = inject(MatDialog);
   private translateService = inject(TranslateService);
+  private destroy$ = new Subject<void>();
 
   codingJobForm!: FormGroup;
   isLoading = false;
@@ -151,6 +152,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
   unitNameFilter = '';
   variableIdFilter = '';
   bundleNameFilter = '';
+  availabilityFilter: 'all' | 'full' | 'partial' | 'none' = 'all';
 
   private disabledVariableKeys = new Set<string>();
   existingJobDefinitions: JobDefinition[] = [];
@@ -191,6 +193,19 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
         return true;
       }
     };
+
+    // Subscribe to jobs created event for auto-refresh
+    this.codingJobService.jobsCreatedEvent.pipe(
+      takeUntil(this.destroy$)
+    ).subscribe(() => {
+      this.loadCodingIncompleteVariables();
+      this.applyAvailabilityFilter();
+    });
+  }
+
+  ngOnDestroy(): void {
+    this.destroy$.next();
+    this.destroy$.complete();
   }
 
   loadAvailableCoders(): void {
@@ -412,10 +427,46 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
 
   applyFilter(): void {
     this.loadCodingIncompleteVariables(this.unitNameFilter);
-    this.dataSource.filter = JSON.stringify({
-      unitName: this.unitNameFilter || '',
-      variableId: this.variableIdFilter || ''
-    });
+    this.applyAvailabilityFilter();
+  }
+
+  applyAvailabilityFilter(): void {
+    let filteredData = this.variables;
+
+    // Apply text filters
+    if (this.unitNameFilter || this.variableIdFilter) {
+      filteredData = filteredData.filter(v => {
+        const matchesUnit = !this.unitNameFilter ||
+          v.unitName?.toLowerCase().includes(this.unitNameFilter.toLowerCase());
+        const matchesVariable = !this.variableIdFilter ||
+          v.variableId?.toLowerCase().includes(this.variableIdFilter.toLowerCase());
+        return matchesUnit && matchesVariable;
+      });
+    }
+
+    // Apply availability filter
+    if (this.availabilityFilter !== 'all') {
+      filteredData = filteredData.filter(v => {
+        if (v.availableCases === undefined || v.responseCount === undefined) {
+          return this.availabilityFilter === 'full';
+        }
+
+        const availabilityPercentage = (v.availableCases / v.responseCount) * 100;
+
+        switch (this.availabilityFilter) {
+          case 'full':
+            return availabilityPercentage === 100;
+          case 'partial':
+            return availabilityPercentage > 0 && availabilityPercentage < 100;
+          case 'none':
+            return availabilityPercentage === 0;
+          default:
+            return true;
+        }
+      });
+    }
+
+    this.dataSource.data = filteredData;
   }
 
   applyBundleFilter(): void {
@@ -429,8 +480,8 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
   clearFilters(): void {
     this.unitNameFilter = '';
     this.variableIdFilter = '';
-    this.dataSource.filter = '';
-    this.loadCodingIncompleteVariables();
+    this.availabilityFilter = 'all';
+    this.dataSource.data = this.variables;
   }
 
   clearBundleFilter(): void {
@@ -472,6 +523,11 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
       return false;
     }
 
+    // Disable if no cases are available
+    if (variable.availableCases !== undefined && variable.availableCases === 0) {
+      return true;
+    }
+
     // Allow variables that were originally assigned to the current job definition being edited
     if (this.data.isEdit && this.isVariableOriginallyAssigned(variable)) {
       return false;
@@ -494,6 +550,11 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
   }
 
   getVariableDisabledReason(variable: Variable): string {
+    // Check if no cases are available
+    if (variable.availableCases !== undefined && variable.availableCases === 0) {
+      return `Alle ${variable.responseCount || 0} Fälle bereits verteilt`;
+    }
+
     // Check if variable is included in currently selected variable bundle
     const selectedBundle = this.selectedVariableBundles.selected.find(bundle => bundle.variables.some(bundleVar => bundleVar.unitName === variable.unitName && bundleVar.variableId === variable.variableId
     )
@@ -532,6 +593,29 @@ export class CodingJobDefinitionDialogComponent implements OnInit {
     const min = Math.floor(seconds / 60);
     const sec = seconds % 60;
     return `${min}:${sec.toString().padStart(2, '0')}`;
+  }
+
+  getAvailabilityClass(variable: Variable): string {
+    if (variable.availableCases === undefined || variable.responseCount === undefined) {
+      return '';
+    }
+
+    const availabilityPercentage = (variable.availableCases / variable.responseCount) * 100;
+
+    if (availabilityPercentage === 100) {
+      return 'availability-full';
+    } if (availabilityPercentage > 0) {
+      return 'availability-partial';
+    }
+    return 'availability-none';
+  }
+
+  getAvailabilityText(variable: Variable): string {
+    if (variable.availableCases === undefined || variable.responseCount === undefined) {
+      return `${variable.responseCount || 0}`;
+    }
+
+    return `${variable.availableCases}/${variable.responseCount}`;
   }
 
   isAllSelected(): boolean {

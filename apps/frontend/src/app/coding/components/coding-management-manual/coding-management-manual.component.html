@@ -287,6 +287,14 @@
                 <span class="stat-value missing">{{variableCoverageOverview.missingVariables}}</span>
               </div>
               <div class="stat-item">
+                <span class="stat-label">Vollständig abgedeckt:</span>
+                <span class="stat-value covered">{{variableCoverageOverview.fullyAbgedeckteVariablen}}</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">Partiell abgedeckt:</span>
+                <span class="stat-value partial">{{variableCoverageOverview.partiallyAbgedeckteVariablen}}</span>
+              </div>
+              <div class="stat-item">
                 <span class="stat-label">Abdeckungsrate:</span>
                 <span class="stat-value percentage">{{variableCoverageOverview.coveragePercentage | number:'1.1-1'}}%</span>
               </div>
