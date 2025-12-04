@@ -626,4 +626,265 @@ export class CodingListService {
 
     return filteredResults;
   }
+
+  async getCodingResultsByVersionCsvStream(workspace_id: number, version: 'v1' | 'v2' | 'v3', authToken: string, serverUrl?: string) {
+    this.logger.log(`Memory-efficient CSV export for coding results version ${version}, workspace ${workspace_id}`);
+    this.voudCache.clear();
+    this.vocsCache.clear();
+    const csvStream = fastCsv.format({ headers: true });
+
+    (async () => {
+      try {
+        const batchSize = 5000;
+        let lastId = 0;
+        let totalWritten = 0;
+
+        for (; ;) {
+          const responses = await this.responseRepository.createQueryBuilder('response')
+            .leftJoinAndSelect('response.unit', 'unit')
+            .leftJoinAndSelect('unit.booklet', 'booklet')
+            .leftJoinAndSelect('booklet.person', 'person')
+            .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
+            .where(`response.status_${version} IS NOT NULL`)
+            .andWhere('person.workspace_id = :workspace_id', { workspace_id })
+            .andWhere('response.id > :lastId', { lastId })
+            .orderBy('response.id', 'ASC')
+            .take(batchSize)
+            .getMany();
+
+          if (!responses.length) break;
+
+          // Process responses in parallel batches for better performance
+          const items: CodingItem[] = [];
+          const processingPromises = responses.map(response => this.processResponseItemWithVersions(response, version, authToken, serverUrl!, workspace_id)
+          );
+
+          const results = await Promise.allSettled(processingPromises);
+
+          for (const result of results) {
+            if (result.status === 'fulfilled' && result.value !== null) {
+              items.push(result.value);
+            }
+          }
+
+          // Write items to CSV stream
+          for (const item of items) {
+            const ok = csvStream.write(item);
+            totalWritten += 1;
+
+            if (!ok) {
+              await new Promise(resolve => { csvStream.once('drain', resolve); });
+            }
+          }
+
+          // Force garbage collection hint after each batch
+          if (global.gc) {
+            global.gc();
+          }
+
+          lastId = responses[responses.length - 1].id;
+          await new Promise(resolve => { setImmediate(resolve); });
+        }
+
+        this.logger.log(`CSV stream finished for version ${version}. Rows written: ${totalWritten}`);
+        csvStream.end();
+      } catch (error) {
+        this.logger.error(`Error streaming CSV export for version ${version}: ${error.message}`);
+        csvStream.emit('error', error);
+      } finally {
+        // Clear caches after export to free memory
+        this.voudCache.clear();
+        this.vocsCache.clear();
+      }
+    })();
+
+    return csvStream;
+  }
+
+  async getCodingResultsByVersionAsExcel(workspace_id: number, version: 'v1' | 'v2' | 'v3', authToken?: string, serverUrl?: string): Promise<Buffer> {
+    this.logger.log(`Starting Excel export for coding results version ${version}, workspace ${workspace_id}`);
+    this.voudCache.clear();
+    this.vocsCache.clear();
+
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Coding Results');
+
+    // Define headers based on version (include lower versions)
+    const headers = this.getHeadersForVersion(version);
+    worksheet.columns = headers.map(h => ({ header: h, key: h, width: 20 }));
+
+    // Style header row
+    worksheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    worksheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4472C4' } };
+    worksheet.getRow(1).alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+
+    const batchSize = 5000;
+    let lastId = 0;
+
+    try {
+      for (; ;) {
+        const responses = await this.responseRepository.createQueryBuilder('response')
+          .leftJoinAndSelect('response.unit', 'unit')
+          .leftJoinAndSelect('unit.booklet', 'booklet')
+          .leftJoinAndSelect('booklet.person', 'person')
+          .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
+          .where(`response.status_${version} IS NOT NULL`)
+          .andWhere('person.workspace_id = :workspace_id', { workspace_id })
+          .andWhere('response.id > :lastId', { lastId })
+          .orderBy('response.id', 'ASC')
+          .take(batchSize)
+          .getMany();
+
+        if (!responses.length) break;
+
+        for (const response of responses) {
+          const itemData = await this.processResponseItemWithVersions(response, version, authToken || '', serverUrl || '', workspace_id);
+          if (itemData) {
+            worksheet.addRow(itemData);
+          }
+        }
+
+        // Force garbage collection hint
+        if (global.gc) {
+          global.gc();
+        }
+
+        lastId = responses[responses.length - 1].id;
+        await new Promise(resolve => { setImmediate(resolve); });
+      }
+
+      this.logger.log(`Excel export completed for version ${version}`);
+      return await workbook.xlsx.writeBuffer() as Buffer;
+    } catch (error) {
+      this.logger.error(`Error during Excel export for version ${version}: ${error.message}`);
+      throw error;
+    } finally {
+      this.voudCache.clear();
+      this.vocsCache.clear();
+    }
+  }
+
+  private getHeadersForVersion(version: 'v1' | 'v2' | 'v3'): string[] {
+    const baseHeaders = [
+      'unit_key',
+      'unit_alias',
+      'login_name',
+      'login_code',
+      'login_group',
+      'booklet_id',
+      'variable_id',
+      'variable_page',
+      'variable_anchor',
+      'url'
+    ];
+
+    // Add version-specific columns for comparison
+    if (version === 'v1') {
+      return [
+        ...baseHeaders,
+        'status_v1',
+        'code_v1',
+        'score_v1'
+      ];
+    } if (version === 'v2') {
+      return [
+        ...baseHeaders,
+        'status_v1',
+        'code_v1',
+        'score_v1',
+        'status_v2',
+        'code_v2',
+        'score_v2'
+      ];
+    } // v3
+    return [
+      ...baseHeaders,
+      'status_v1',
+      'code_v1',
+      'score_v1',
+      'status_v2',
+      'code_v2',
+      'score_v2',
+      'status_v3',
+      'code_v3',
+      'score_v3'
+    ];
+  }
+
+  private async processResponseItemWithVersions(
+    response: ResponseEntity,
+    targetVersion: 'v1' | 'v2' | 'v3',
+    authToken: string,
+    serverUrl: string,
+    workspaceId: number
+  ): Promise<CodingItem | null> {
+    try {
+      const unit = response.unit;
+      if (!unit) return null;
+
+      const booklet = unit.booklet;
+      if (!booklet) return null;
+
+      const person = booklet.person;
+      const bookletInfo = booklet.bookletinfo;
+
+      const unitKey = unit.name || '';
+      const variableId = response.variableid || '';
+
+      // Load variable page mapping
+      const variablePageMap = await this.loadVoudData(unitKey, workspaceId);
+      const variablePage = variablePageMap.get(variableId) || '0';
+
+      const loginName = person?.login || '';
+      const loginCode = person?.code || '';
+      const loginGroup = person?.group || '';
+      const bookletId = bookletInfo?.name || '';
+      const unitAlias = unit.alias || '';
+      const variableAnchor = variableId;
+
+      const url = `${serverUrl}/#/replay/${loginName}@${loginCode}@${loginGroup}@${bookletId}/${unitKey}/${variablePage}/${variableAnchor}?auth=${authToken}`;
+
+      const baseItem: CodingItem & Record<string, unknown> = {
+        unit_key: unitKey,
+        unit_alias: unitAlias,
+        login_name: loginName,
+        login_code: loginCode,
+        login_group: loginGroup,
+        booklet_id: bookletId,
+        variable_id: variableId,
+        variable_page: variablePage,
+        variable_anchor: variableAnchor,
+        url: url
+      };
+
+      // Add version-specific data (include all lower versions)
+      if (targetVersion === 'v1') {
+        baseItem.status_v1 = response.status_v1 || '';
+        baseItem.code_v1 = response.code_v1 || '';
+        baseItem.score_v1 = response.score_v1 || '';
+      } else if (targetVersion === 'v2') {
+        baseItem.status_v1 = response.status_v1 || '';
+        baseItem.code_v1 = response.code_v1 || '';
+        baseItem.score_v1 = response.score_v1 || '';
+        baseItem.status_v2 = response.status_v2 || '';
+        baseItem.code_v2 = response.code_v2 || '';
+        baseItem.score_v2 = response.score_v2 || '';
+      } else { // v3
+        baseItem.status_v1 = response.status_v1 || '';
+        baseItem.code_v1 = response.code_v1 || '';
+        baseItem.score_v1 = response.score_v1 || '';
+        baseItem.status_v2 = response.status_v2 || '';
+        baseItem.code_v2 = response.code_v2 || '';
+        baseItem.score_v2 = response.score_v2 || '';
+        baseItem.status_v3 = response.status_v3 || '';
+        baseItem.code_v3 = response.code_v3 || '';
+        baseItem.score_v3 = response.score_v3 || '';
+      }
+
+      return baseItem;
+    } catch (error) {
+      this.logger.error(`Error processing response ${response.id}: ${error.message}`);
+      return null;
+    }
+  }
 }

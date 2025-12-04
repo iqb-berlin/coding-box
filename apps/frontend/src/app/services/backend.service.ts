@@ -236,6 +236,14 @@ export class BackendService {
     return this.codingService.getCodingListAsExcel(workspace_id);
   }
 
+  getCodingResultsByVersion(workspace_id: number, version: 'v1' | 'v2' | 'v3'): Observable<Blob> {
+    return this.codingService.getCodingResultsByVersion(workspace_id, version);
+  }
+
+  getCodingResultsByVersionAsExcel(workspace_id: number, version: 'v1' | 'v2' | 'v3'): Observable<Blob> {
+    return this.codingService.getCodingResultsByVersionAsExcel(workspace_id, version);
+  }
+
   getCodingStatistics(workspace_id: number, version: 'v1' | 'v2' | 'v3' = 'v1'): Observable<CodingStatistics> {
     return this.codingService.getCodingStatistics(workspace_id, version);
   }

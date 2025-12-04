@@ -233,6 +233,97 @@ export class WorkspaceCodingController {
     }
   }
 
+  @Get(':workspace_id/coding/results-by-version')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiQuery({
+    name: 'version',
+    required: true,
+    description: 'Coding version to export: v1, v2, or v3',
+    enum: ['v1', 'v2', 'v3']
+  })
+  @ApiQuery({
+    name: 'authToken',
+    required: true,
+    description: 'Authentication token for generating replay URLs',
+    type: String
+  })
+  @ApiQuery({
+    name: 'serverUrl',
+    required: false,
+    description: 'Server URL to use for generating links',
+    type: String
+  })
+  @ApiOkResponse({
+    description: 'Coding results for specified version exported as CSV',
+    content: {
+      'text/csv': {
+        schema: {
+          type: 'string',
+          format: 'binary'
+        }
+      }
+    }
+  })
+  async getCodingResultsByVersion(
+    @WorkspaceId() workspace_id: number,
+      @Query('version') version: 'v1' | 'v2' | 'v3',
+      @Query('authToken') authToken: string,
+      @Query('serverUrl') serverUrl: string,
+      @Res() res: Response
+  ): Promise<void> {
+    const csvStream = await this.codingListService.getCodingResultsByVersionCsvStream(workspace_id, version, authToken || '', serverUrl || '');
+    csvStream.pipe(res);
+  }
+
+  @Get(':workspace_id/coding/results-by-version/excel')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiQuery({
+    name: 'version',
+    required: true,
+    description: 'Coding version to export: v1, v2, or v3',
+    enum: ['v1', 'v2', 'v3']
+  })
+  @ApiQuery({
+    name: 'authToken',
+    required: true,
+    description: 'Authentication token for generating replay URLs',
+    type: String
+  })
+  @ApiQuery({
+    name: 'serverUrl',
+    required: false,
+    description: 'Server URL to use for generating links',
+    type: String
+  })
+  @ApiOkResponse({
+    description: 'Coding results for specified version exported as Excel',
+    content: {
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': {
+        schema: {
+          type: 'string',
+          format: 'binary'
+        }
+      }
+    }
+  })
+  async getCodingResultsByVersionAsExcel(
+    @WorkspaceId() workspace_id: number,
+      @Query('version') version: 'v1' | 'v2' | 'v3',
+      @Query('authToken') authToken: string,
+      @Query('serverUrl') serverUrl: string,
+      @Res() res: Response
+  ): Promise<void> {
+    const excelData = await this.codingListService.getCodingResultsByVersionAsExcel(workspace_id, version, authToken || '', serverUrl || '');
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="coding-results-${version}-${new Date().toISOString().slice(0, 10)}.xlsx"`);
+    res.send(excelData);
+  }
+
   @Get(':workspace_id/coding/statistics')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiTags('coding')
