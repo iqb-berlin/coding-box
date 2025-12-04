@@ -1335,22 +1335,17 @@ describe('WorkspaceCodingService', () => {
     };
     const unitIds = [1, 2];
 
-    beforeEach(() => {
-      // Mock CodebookGenerator
-      jest.mock('../../admin/code-book/codebook-generator.class', () => ({
-        CodebookGenerator: {
-          generateCodebook: jest.fn()
-        }
-      }));
-    });
-
     it('should successfully generate codebook', async () => {
       const mockCodebook = Buffer.from('mock codebook data');
       (CodebookGenerator.generateCodebook as jest.Mock).mockResolvedValue(mockCodebook);
 
       fileUploadRepository.findBy = jest.fn().mockResolvedValue([
-        { id: 1, file_id: 'unit1', data: 'unit data 1' },
-        { id: 2, file_id: 'unit2', data: 'unit data 2' }
+        {
+          id: 1, file_id: 'unit1', filename: 'unit1.vocs', data: 'unit data 1'
+        },
+        {
+          id: 2, file_id: 'unit2', filename: 'unit2.vocs', data: 'unit data 2'
+        }
       ]);
 
       const result = await service.generateCodebook(workspaceId, missingsProfile, contentOptions, unitIds);
@@ -1371,7 +1366,9 @@ describe('WorkspaceCodingService', () => {
       (CodebookGenerator.generateCodebook as jest.Mock).mockRejectedValue(new Error('Generation failed'));
 
       fileUploadRepository.findBy = jest.fn().mockResolvedValue([
-        { id: 1, file_id: 'unit1', data: 'unit data 1' }
+        {
+          id: 1, file_id: 'unit1', filename: 'unit1.vocs', data: 'unit data 1'
+        }
       ]);
 
       const result = await service.generateCodebook(workspaceId, missingsProfile, contentOptions, unitIds);
