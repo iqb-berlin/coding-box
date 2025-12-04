@@ -781,7 +781,8 @@
       "item-variable-analysis": "Item/Variablenanalyse",
       "coding-variables": "Kodiervariablen",
       "load-statistics": "Anzeigen",
-      "update-statistics": "Statistiken aktualisieren"
+      "update-statistics": "Statistiken aktualisieren",
+      "reset-version": "Version zurücksetzen"
     },
     "titles": {
       "coding-statistics": "Kodierstatistiken",
@@ -816,7 +817,9 @@
       "error-coding-variables": "Fehler beim Abrufen der Kodiervariablen",
       "no-coding-variables": "Keine Kodiervariablen gefunden.",
       "coding-variables-title": "Kodiervariablen",
-      "error-unit-xml-processing": "Fehler beim Verarbeiten der Unit-XML-Daten"
+      "error-unit-xml-processing": "Fehler beim Verarbeiten der Unit-XML-Daten",
+      "error-reset": "Fehler beim Zurücksetzen der Kodierversion",
+      "error-workspace": "Fehler: Kein Arbeitsbereich ausgewählt"
     },
     "loading": {
       "loading-statistics": "Lade Kodierstatistiken...",
@@ -837,7 +840,7 @@
       "missing-schemas": "Kodierschemata fehlen",
       "uncoded-responses-title": "Unkodierte Antworten",
       "responses-with-status-title": "Antworten mit Status: {{status}}",
-      "coding-run-selector": "Kodier-Lauf auswählen:",
+      "coding-version-selector": "Kodierversion auswählen:",
       "first-autocode-run": "1 Autocoder Lauf",
       "manual-coding-run": "manuelle Kodierung",
       "second-autocode-run": "2 Autocoder Lauf",
@@ -871,6 +874,18 @@
       "variable-id": "Variablen-ID",
       "variable-id-placeholder": "Variablen-ID eingeben...",
       "clear": "Filter löschen"
+    },
+    "reset-dialog": {
+      "title": "Kodierversion zurücksetzen",
+      "warning-message": "Sie sind dabei, eine Kodierversion zurückzusetzen. Dies löscht alle kodierten Daten dieser Version.",
+      "version-to-reset": "Zu resettierende Version",
+      "cascade-warning": "Diese Version und alle später im Prozess folgenden Versionen werden zurückgesetzt",
+      "cascade-versions": "Folgende Versionen werden ebenfalls gelöscht",
+      "cascade-explanation": "Alle nachfolgenden Kodierversionen (später im Prozess) werden ebenfalls vollständig gelöscht. Dies ist notwendig, um die Konsistenz des Kodierungsprozesses zu gewährleisten",
+      "irreversible-warning": "Diese Aktion kann nicht rückgängig gemacht werden! Stellen Sie sicher, dass Sie ein Backup der Daten haben.",
+      "cancel-button": "Abbrechen",
+      "confirm-button": "Ja, zurücksetzen",
+      "reset-tooltip": "Kodierversion zurücksetzen"
     },
     "aria": {
       "select-page": "Seiten auswählen"

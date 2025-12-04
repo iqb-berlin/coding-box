@@ -259,6 +259,19 @@ export class BackendService {
     return this.codingService.getResponsesByStatus(workspace_id, status, version, page, limit);
   }
 
+  resetCodingVersion(
+    workspace_id: number,
+    version: 'v1' | 'v2' | 'v3',
+    unitFilters?: string[],
+    variableFilters?: string[]
+  ): Observable<{
+      affectedResponseCount: number;
+      cascadeResetVersions: ('v2' | 'v3')[];
+      message: string;
+    }> {
+    return this.codingService.resetCodingVersion(workspace_id, version, unitFilters, variableFilters);
+  }
+
   changeWorkspace(workspaceData: WorkspaceFullDto): Observable<boolean> {
     return this.workspaceService.changeWorkspace(workspaceData);
   }
