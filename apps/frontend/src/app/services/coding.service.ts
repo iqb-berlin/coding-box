@@ -202,6 +202,48 @@ export class CodingService {
     );
   }
 
+  getCodingResultsByVersion(workspace_id: number, version: 'v1' | 'v2' | 'v3'): Observable<Blob> {
+    const identity = this.appService.loggedUser?.sub || '';
+    return this.appService.createToken(workspace_id, identity, 60).pipe(
+      catchError(() => of('')),
+      switchMap(token => {
+        const params = new HttpParams()
+          .set('authToken', token)
+          .set('serverUrl', window.location.origin)
+          .set('version', version);
+        return this.http.get(
+          `${this.serverUrl}admin/workspace/${workspace_id}/coding/results-by-version`,
+          {
+            headers: this.authHeader,
+            params,
+            responseType: 'blob' as 'json'
+          }
+        ) as unknown as Observable<Blob>;
+      })
+    );
+  }
+
+  getCodingResultsByVersionAsExcel(workspace_id: number, version: 'v1' | 'v2' | 'v3'): Observable<Blob> {
+    const identity = this.appService.loggedUser?.sub || '';
+    return this.appService.createToken(workspace_id, identity, 60).pipe(
+      catchError(() => of('')),
+      switchMap(token => {
+        const params = new HttpParams()
+          .set('authToken', token)
+          .set('serverUrl', window.location.origin)
+          .set('version', version);
+        return this.http.get(
+          `${this.serverUrl}admin/workspace/${workspace_id}/coding/results-by-version/excel`,
+          {
+            headers: this.authHeader,
+            params,
+            responseType: 'blob' as 'json'
+          }
+        ) as unknown as Observable<Blob>;
+      })
+    );
+  }
+
   getCodingStatistics(workspace_id: number, version: 'v1' | 'v2' | 'v3' = 'v1'): Observable<CodingStatistics> {
     const params = new HttpParams().set('version', version);
     return this.http

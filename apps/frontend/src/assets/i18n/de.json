@@ -887,6 +887,32 @@
       "confirm-button": "Ja, zurücksetzen",
       "reset-tooltip": "Kodierversion zurücksetzen"
     },
+    "download-dialog": {
+      "title": "Kodierergebnisse herunterladen",
+      "info-message": "Wählen Sie die Kodierversion und das Exportformat aus. Die heruntergeladene Datei enthält alle Datensätze, die für die ausgewählte Version kodiert wurden, zusammen mit den Ergebnissen aller vorherigen Versionen zum Vergleich.",
+      "select-version": "Kodierversion auswählen",
+      "v1-description": "Erster Autocoder-Lauf",
+      "v2-description": "Manuelle Kodierung (enthält auch v1-Ergebnisse)",
+      "v3-description": "Zweiter Autocoder-Lauf (enthält auch v1 und v2-Ergebnisse)",
+      "select-format": "Exportformat auswählen",
+      "notice-title": "Hinweis",
+      "notice-message": "Die heruntergeladene Datei enthält ALLE Datensätze für die ausgewählte Version, nicht nur die derzeit angezeigten gefilterten Datensätze.",
+      "download-button": "Herunterladen",
+      "download-tooltip": "Kodierergebnisse herunterladen",
+      "creating-file": "Datei wird erstellt...",
+      "unknown-format": "Unbekanntes Format",
+      "error-json": "Fehler beim Abrufen der Kodierergebnisse (JSON)",
+      "error-json-conversion": "Fehler beim Umwandeln der CSV-Daten in JSON",
+      "success-json": "Kodierergebnisse wurden als JSON erfolgreich heruntergeladen.",
+      "error-csv": "Fehler beim Abrufen der Kodierergebnisse (CSV)",
+      "success-csv": "Kodierergebnisse wurden als CSV erfolgreich heruntergeladen.",
+      "error-excel": "Fehler beim Abrufen der Kodierergebnisse (Excel)",
+      "success-excel": "Kodierergebnisse wurden als Excel erfolgreich heruntergeladen.",
+      "no-entries": "Keine Einträge in den Kodierergebnissen gefunden.",
+      "download-started": "Download für {{version}} als {{format}} gestartet...",
+      "download-complete": "Download für {{version}} als {{format}} abgeschlossen",
+      "download-failed": "Download fehlgeschlagen"
+    },
     "aria": {
       "select-page": "Seiten auswählen"
     }

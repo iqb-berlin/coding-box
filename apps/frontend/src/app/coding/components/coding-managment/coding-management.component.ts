@@ -28,6 +28,7 @@ import {
   MatPaginator, MatPaginatorModule, MatPaginatorIntl, PageEvent
 } from '@angular/material/paginator';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
@@ -57,6 +58,7 @@ import { CodingManagementManualComponent } from '../coding-management-manual/cod
 import { VariableAnalysisDialogComponent } from '../variable-analysis-dialog/variable-analysis-dialog.component';
 import { GermanPaginatorIntl } from '../../../shared/services/german-paginator-intl.service';
 import { ResetVersionDialogComponent } from './reset-version-dialog/reset-version-dialog.component';
+import { DownloadCodingResultsDialogComponent } from './download-coding-results-dialog/download-coding-results-dialog.component';
 
 @Component({
   selector: 'app-coding-management',
@@ -81,6 +83,7 @@ import { ResetVersionDialogComponent } from './reset-version-dialog/reset-versio
     MatSortHeader,
     MatPaginatorModule,
     MatProgressSpinnerModule,
+    MatProgressBarModule,
     ScrollingModule,
     MatFormFieldModule,
     MatInputModule,
@@ -122,6 +125,7 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
   isFilterLoading = false;
   isLoadingStatistics = false;
   isAutoCoding = false;
+  isDownloadInProgress = false;
   showManualCoding = false;
 
   statisticsLoaded = false;
@@ -1078,6 +1082,217 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
           );
         }
       });
+  }
+
+  openDownloadCodingResultsDialog(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      this.snackBar.open(this.translateService.instant('coding-management.descriptions.error-workspace'), this.translateService.instant('close'), {
+        duration: 5000,
+        panelClass: ['error-snackbar']
+      });
+      return;
+    }
+
+    const dialogRef = this.dialog.open(DownloadCodingResultsDialogComponent, {
+      width: '550px',
+      data: {
+        currentVersion: this.selectedStatisticsVersion
+      }
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result) {
+        const { version, format } = result;
+        this.downloadCodingResultsByVersion(workspaceId, version, format);
+      }
+    });
+  }
+
+  private downloadCodingResultsByVersion(workspaceId: number, version: 'v1' | 'v2' | 'v3', format: ExportFormat): void {
+    // Start background download without blocking UI
+    this.performBackgroundDownload(workspaceId, version, format);
+  }
+
+  private async performBackgroundDownload(workspaceId: number, version: 'v1' | 'v2' | 'v3', format: ExportFormat): Promise<void> {
+    this.isDownloadInProgress = true;
+
+    const snackBarRef = this.snackBar.open(
+      this.translateService.instant('coding-management.download-dialog.download-started', { version, format }),
+      this.translateService.instant('close'),
+      {
+        duration: 0, // Keep open until we dismiss it
+        panelClass: ['info-snackbar']
+      }
+    );
+
+    try {
+      switch (format) {
+        case 'csv':
+          await this.downloadCodingResultsAsCsvBackground(workspaceId, version);
+          break;
+        case 'excel':
+          await this.downloadCodingResultsAsExcelBackground(workspaceId, version);
+          break;
+        case 'json':
+          await this.downloadCodingResultsAsJsonBackground(workspaceId, version);
+          break;
+        default:
+          snackBarRef.dismiss();
+          this.snackBar.open(
+            this.translateService.instant('coding-management.download-dialog.error-unknown-format'),
+            this.translateService.instant('close'),
+            {
+              duration: 5000,
+              panelClass: ['error-snackbar']
+            }
+          );
+          return;
+      }
+
+      snackBarRef.dismiss();
+      this.snackBar.open(
+        this.translateService.instant('coding-management.download-dialog.download-complete', { version, format }),
+        this.translateService.instant('close'),
+        {
+          duration: 5000,
+          panelClass: ['success-snackbar']
+        }
+      );
+    } catch (error) {
+      snackBarRef.dismiss();
+      this.snackBar.open(
+        this.translateService.instant('coding-management.download-dialog.download-failed'),
+        this.translateService.instant('close'),
+        {
+          duration: 5000,
+          panelClass: ['error-snackbar']
+        }
+      );
+    } finally {
+      this.isDownloadInProgress = false;
+    }
+  }
+
+  private downloadCodingResultsAsJsonBackground(workspaceId: number, version: 'v1' | 'v2' | 'v3'): Promise<void> {
+    return new Promise((resolve, reject) => {
+      this.backendService.getCodingResultsByVersion(workspaceId, version)
+        .pipe(
+          catchError(() => {
+            reject(new Error('Failed to fetch JSON data'));
+            return of(null);
+          })
+        )
+        .subscribe(async (blob: Blob | null) => {
+          if (!blob) {
+            reject(new Error('No data received'));
+            return;
+          }
+          try {
+            const text = await blob.text();
+            const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
+            if (lines.length === 0) {
+              reject(new Error('No entries found'));
+              return;
+            }
+            const headers = lines[0].split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map(h => h.replace(/^"|"$/g, ''));
+            const data = lines.slice(1).map(line => {
+              const values = line.split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map(v => v.replace(/^"|"$/g, ''));
+              const obj: Record<string, unknown> = {};
+              headers.forEach((h, i) => { obj[h] = values[i] ?? ''; });
+              return obj;
+            });
+
+            const jsonData = JSON.stringify(data, null, 2);
+            const jsonBlob = new Blob([jsonData], { type: 'application/json' });
+            const url = window.URL.createObjectURL(jsonBlob);
+
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `coding-results-${version}-${new Date().toISOString().slice(0, 10)}.json`;
+            document.body.appendChild(a);
+            a.click();
+
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+
+            resolve();
+          } catch (e) {
+            reject(e);
+          }
+        });
+    });
+  }
+
+  private downloadCodingResultsAsCsvBackground(workspaceId: number, version: 'v1' | 'v2' | 'v3'): Promise<void> {
+    return new Promise((resolve, reject) => {
+      this.backendService.getCodingResultsByVersion(workspaceId, version)
+        .pipe(
+          catchError(() => {
+            reject(new Error('Failed to fetch CSV data'));
+            return of(null);
+          })
+        )
+        .subscribe(response => {
+          if (!response) {
+            reject(new Error('No data received'));
+            return;
+          }
+          try {
+            const blob = response as Blob;
+            const url = window.URL.createObjectURL(blob);
+
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `coding-results-${version}-${new Date().toISOString().slice(0, 10)}.csv`;
+            document.body.appendChild(a);
+            a.click();
+
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+
+            resolve();
+          } catch (e) {
+            reject(e);
+          }
+        });
+    });
+  }
+
+  private downloadCodingResultsAsExcelBackground(workspaceId: number, version: 'v1' | 'v2' | 'v3'): Promise<void> {
+    return new Promise((resolve, reject) => {
+      this.backendService.getCodingResultsByVersionAsExcel(workspaceId, version)
+        .pipe(
+          catchError(() => {
+            reject(new Error('Failed to fetch Excel data'));
+            return of(null);
+          })
+        )
+        .subscribe(response => {
+          if (!response) {
+            reject(new Error('No data received'));
+            return;
+          }
+
+          try {
+            const blob = response as Blob;
+            const url = window.URL.createObjectURL(blob);
+
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `coding-results-${version}-${new Date().toISOString().slice(0, 10)}.xlsx`;
+            document.body.appendChild(a);
+            a.click();
+
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+
+            resolve();
+          } catch (e) {
+            reject(e);
+          }
+        });
+    });
   }
 
   protected readonly Number = Number;
