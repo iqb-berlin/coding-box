@@ -481,4 +481,37 @@ export class CodingService {
         }))
       );
   }
+
+  resetCodingVersion(
+    workspaceId: number,
+    version: 'v1' | 'v2' | 'v3',
+    unitFilters?: string[],
+    variableFilters?: string[]
+  ): Observable<{
+      affectedResponseCount: number;
+      cascadeResetVersions: ('v2' | 'v3')[];
+      message: string;
+    }> {
+    return this.http
+      .post<{
+      affectedResponseCount: number;
+      cascadeResetVersions:('v2' | 'v3')[];
+      message: string;
+    }>(
+        `${this.serverUrl}admin/workspace/${workspaceId}/coding/reset-version`,
+        {
+          version,
+          unitFilters: unitFilters || [],
+          variableFilters: variableFilters || []
+        },
+        { headers: this.authHeader }
+        )
+      .pipe(
+        catchError(() => of({
+          affectedResponseCount: 0,
+          cascadeResetVersions: [],
+          message: 'Failed to reset coding version'
+        }))
+      );
+  }
 }

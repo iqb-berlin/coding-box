@@ -2352,4 +2352,89 @@ export class WorkspaceCodingService {
       throw new Error('Could not calculate workspace-wide Cohen\'s Kappa. Please check the database connection.');
     }
   }
+
+  async resetCodingVersion(
+    workspaceId: number,
+    version: 'v1' | 'v2' | 'v3',
+    unitFilters?: string[],
+    variableFilters?: string[]
+  ): Promise<{
+      affectedResponseCount: number;
+      cascadeResetVersions: ('v2' | 'v3')[];
+      message: string;
+    }> {
+    try {
+      this.logger.log(
+        `Starting reset for version ${version} in workspace ${workspaceId}, filters: units=${unitFilters?.join(',')}, variables=${variableFilters?.join(',')}`
+      );
+
+      // Determine which versions to reset
+      const versionsToReset: ('v1' | 'v2' | 'v3')[] = [version];
+      if (version === 'v2') {
+        versionsToReset.push('v3'); // Cascade: resetting v2 also resets v3
+      }
+
+      // Build base query
+      const queryBuilder = this.responseRepository.createQueryBuilder('response')
+        .leftJoinAndSelect('response.unit', 'unit')
+        .leftJoinAndSelect('unit.booklet', 'booklet')
+        .leftJoinAndSelect('booklet.person', 'person')
+        .where('person.workspace_id = :workspaceId', { workspaceId });
+
+      // Apply unit filter if provided
+      if (unitFilters && unitFilters.length > 0) {
+        queryBuilder.andWhere('unit.name IN (:...unitNames)', { unitNames: unitFilters });
+      }
+
+      // Apply variable filter if provided
+      if (variableFilters && variableFilters.length > 0) {
+        queryBuilder.andWhere('response.variableid IN (:...variableIds)', { variableIds: variableFilters });
+      }
+
+      // Get responses to reset (for counting affected rows)
+      const responsesToReset = await queryBuilder.getMany();
+      const affectedResponseCount = responsesToReset.length;
+
+      if (affectedResponseCount === 0) {
+        this.logger.log(`No responses found to reset for version ${version}`);
+        return {
+          affectedResponseCount: 0,
+          cascadeResetVersions: version === 'v2' ? ['v3'] : [],
+          message: `No responses found matching the filters for version ${version}`
+        };
+      }
+
+      // Prepare update object dynamically based on versions to reset
+      const updateObj: Record<string, null> = {};
+      versionsToReset.forEach(v => {
+        updateObj[`status_${v}`] = null;
+        updateObj[`code_${v}`] = null;
+        updateObj[`score_${v}`] = null;
+      });
+
+      // Execute update
+      await this.responseRepository.update(
+        {
+          id: In(responsesToReset.map(r => r.id))
+        },
+        updateObj
+      );
+
+      this.logger.log(
+        `Reset successful: ${affectedResponseCount} responses cleared for version(s) ${versionsToReset.join(', ')}`
+      );
+
+      return {
+        affectedResponseCount,
+        cascadeResetVersions: version === 'v2' ? ['v3'] : [],
+        message: `Successfully reset ${affectedResponseCount} responses for version ${version}${version === 'v2' ? ' and v3 (cascade)' : ''}`
+      };
+    } catch (error) {
+      this.logger.error(
+        `Error resetting coding version ${version} in workspace ${workspaceId}: ${error.message}`,
+        error.stack
+      );
+      throw new Error(`Failed to reset coding version: ${error.message}`);
+    }
+  }
 }

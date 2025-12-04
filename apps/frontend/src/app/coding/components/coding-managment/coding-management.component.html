@@ -67,7 +67,7 @@
                 </div>
                 <div class="statistics-version-selector">
                   <mat-form-field appearance="outline" class="statistics-version-field">
-                    <mat-label>{{ 'coding-management.statistics.coding-run-selector' | translate }}</mat-label>
+                    <mat-label>{{ 'coding-management.statistics.coding-version-selector' | translate }}</mat-label>
                     <mat-select [(value)]="selectedStatisticsVersion" (selectionChange)="onStatisticsVersionChange()">
                       @for (option of codingRunOptions; track option.value) {
                         <mat-option [value]="option.value">
@@ -76,6 +76,13 @@
                       }
                     </mat-select>
                   </mat-form-field>
+                  <button 
+                    mat-icon-button 
+                    (click)="openResetVersionDialog()"
+                    [matTooltip]="'coding-management.reset-dialog.reset-tooltip' | translate"
+                    class="reset-version-button">
+                    <mat-icon>restart_alt</mat-icon>
+                  </button>
                 </div>
               </div>
               <mat-divider></mat-divider>

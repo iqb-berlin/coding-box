@@ -56,6 +56,7 @@ import { ExportCodingBookComponent } from '../export-coding-book/export-coding-b
 import { CodingManagementManualComponent } from '../coding-management-manual/coding-management-manual.component';
 import { VariableAnalysisDialogComponent } from '../variable-analysis-dialog/variable-analysis-dialog.component';
 import { GermanPaginatorIntl } from '../../../shared/services/german-paginator-intl.service';
+import { ResetVersionDialogComponent } from './reset-version-dialog/reset-version-dialog.component';
 
 @Component({
   selector: 'app-coding-management',
@@ -1010,6 +1011,73 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
         workspaceId
       }
     });
+  }
+
+  openResetVersionDialog(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      this.snackBar.open(this.translateService.instant('coding-management.descriptions.error-workspace'), this.translateService.instant('close'), {
+        duration: 5000,
+        panelClass: ['error-snackbar']
+      });
+      return;
+    }
+
+    // Get version label
+    const versionOption = this.codingRunOptions.find(opt => opt.value === this.selectedStatisticsVersion);
+    const versionLabel = versionOption?.label || '';
+
+    // Determine cascade versions
+    const cascadeVersions = this.selectedStatisticsVersion === 'v2' ? ['v3'] : [];
+
+    const dialogRef = this.dialog.open(ResetVersionDialogComponent, {
+      width: '500px',
+      data: {
+        version: this.selectedStatisticsVersion,
+        versionLabel: versionLabel,
+        cascadeVersions: cascadeVersions
+      }
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result === true) {
+        this.resetCodingVersion(this.selectedStatisticsVersion);
+      }
+    });
+  }
+
+  private resetCodingVersion(version: 'v1' | 'v2' | 'v3'): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) return;
+
+    this.isLoading = true;
+    this.backendService.resetCodingVersion(workspaceId, version)
+      .pipe(
+        finalize(() => {
+          this.isLoading = false;
+        })
+      )
+      .subscribe({
+        next: result => {
+          this.snackBar.open(result.message, this.translateService.instant('close'), {
+            duration: 5000,
+            panelClass: ['success-snackbar']
+          });
+
+          // Refresh statistics after reset
+          this.fetchCodingStatistics();
+        },
+        error: () => {
+          this.snackBar.open(
+            this.translateService.instant('coding-management.descriptions.error-reset'),
+            this.translateService.instant('close'),
+            {
+              duration: 5000,
+              panelClass: ['error-snackbar']
+            }
+          );
+        }
+      });
   }
 
   protected readonly Number = Number;
