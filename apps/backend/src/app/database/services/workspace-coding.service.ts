@@ -16,9 +16,6 @@ import { Unit } from '../entities/unit.entity';
 import { Booklet } from '../entities/booklet.entity';
 import { ResponseEntity } from '../entities/response.entity';
 import { CodingJob } from '../entities/coding-job.entity';
-import { CodingJobCoder } from '../entities/coding-job-coder.entity';
-import { CodingJobVariable } from '../entities/coding-job-variable.entity';
-import { CodingJobVariableBundle } from '../entities/coding-job-variable-bundle.entity';
 import { CodingJobUnit } from '../entities/coding-job-unit.entity';
 import { JobDefinition } from '../entities/job-definition.entity';
 import { VariableBundle } from '../entities/variable-bundle.entity';
@@ -67,12 +64,6 @@ export class WorkspaceCodingService {
     private responseRepository: Repository<ResponseEntity>,
     @InjectRepository(CodingJob)
     private codingJobRepository: Repository<CodingJob>,
-    @InjectRepository(CodingJobCoder)
-    private codingJobCoderRepository: Repository<CodingJobCoder>,
-    @InjectRepository(CodingJobVariable)
-    private codingJobVariableRepository: Repository<CodingJobVariable>,
-    @InjectRepository(CodingJobVariableBundle)
-    private codingJobVariableBundleRepository: Repository<CodingJobVariableBundle>,
     @InjectRepository(CodingJobUnit)
     private codingJobUnitRepository: Repository<CodingJobUnit>,
     @InjectRepository(JobDefinition)
@@ -215,36 +206,8 @@ export class WorkspaceCodingService {
         const state = await bullJob.getState();
         const progress = await bullJob.progress() || 0;
 
-        let status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'paused';
-        switch (state) {
-          case 'active':
-            status = 'processing';
-            break;
-          case 'completed':
-            status = 'completed';
-            break;
-          case 'failed':
-            status = 'failed';
-            break;
-          case 'delayed':
-          case 'waiting':
-            status = 'pending';
-            break;
-          case 'paused':
-            status = 'paused';
-            break;
-          default:
-            status = 'pending';
-        }
-
-        let result: CodingStatistics | undefined;
-        let error: string | undefined;
-
-        if (state === 'completed' && bullJob.returnvalue) {
-          result = bullJob.returnvalue as CodingStatistics;
-        } else if (state === 'failed' && bullJob.failedReason) {
-          error = bullJob.failedReason;
-        }
+        const status = this.bullJobManagementService.mapJobStateToStatus(state);
+        const { result, error } = this.bullJobManagementService.extractJobResult(bullJob, state);
 
         return {
           status,
@@ -293,6 +256,13 @@ export class WorkspaceCodingService {
         return {
           success: false,
           message: `Job with ID ${jobId} cannot be cancelled because it is already ${state}`
+        };
+      }
+
+      if (state === 'active') {
+        return {
+          success: false,
+          message: `Job with ID ${jobId} is currently being processed and cannot be cancelled. Please wait for it to complete or use pause instead.`
         };
       }
 
@@ -358,7 +328,7 @@ export class WorkspaceCodingService {
     const updateStart = Date.now();
     try {
       const updateBatchSize = 500;
-      const batches = [];
+      const batches: CodedResponse[][] = [];
       for (let i = 0; i < allCodedResponses.length; i += updateBatchSize) {
         batches.push(allCodedResponses.slice(i, i + updateBatchSize));
       }
@@ -731,8 +701,11 @@ export class WorkspaceCodingService {
       // Step 5: Get responses - 50% progress
       const responseQueryStart = Date.now();
       const allResponses = await this.responseRepository.find({
-        where: { unitid: In(unitIdsArray), status: In([3, 2, 1]) },
-        select: ['id', 'unitid', 'variableid', 'value', 'status'] // Only select needed fields
+        where: [
+          { unitid: In(unitIdsArray), status: In([3, 2, 1]) },
+          { unitid: In(unitIdsArray), status_v1: statusStringToNumber('DERIVE_PENDING') as number }
+        ],
+        select: ['id', 'unitid', 'variableid', 'value', 'status', 'status_v1', 'status_v2'] // Only select needed fields
       });
       metrics.responseQuery = Date.now() - responseQueryStart;
 
@@ -1077,7 +1050,12 @@ export class WorkspaceCodingService {
       const responses = await this.responseRepository.find({
         where: {
           unitid: In(unitIds),
-          status_v1: In([statusStringToNumber('CODING_INCOMPLETE'), statusStringToNumber('INTENDED_INCOMPLETE'), statusStringToNumber('CODE_SELECTION_PENDING')])
+          status_v1: In([
+            statusStringToNumber('CODING_INCOMPLETE'),
+            statusStringToNumber('INTENDED_INCOMPLETE'),
+            statusStringToNumber('CODE_SELECTION_PENDING'),
+            statusStringToNumber('CODING_ERROR')
+          ])
         }
       });
 
@@ -1121,17 +1099,11 @@ export class WorkspaceCodingService {
       const unitProperties: UnitPropertiesForCodebook[] = units.map(unit => ({
         id: unit.id,
         key: unit.file_id,
-        name: unit.filename,
+        name: unit.filename.toLowerCase().endsWith('.vocs') ? unit.filename.substring(0, unit.filename.length - 5) : unit.filename,
         scheme: unit.data || ''
       }));
 
-      let missings: Missing[] = [
-        {
-          code: '999',
-          label: 'Missing',
-          description: 'Value is missing'
-        }
-      ];
+      let missings: Missing[] = [];
 
       if (missingsProfile) {
         const profile = await this.missingsProfilesService.getMissingsProfileDetails(workspaceId, missingsProfile);
@@ -1595,6 +1567,7 @@ export class WorkspaceCodingService {
       selectedCoders: { id: number; name: string; username: string }[];
       doubleCodingAbsolute?: number;
       doubleCodingPercentage?: number;
+      caseOrderingMode?: 'continuous' | 'alternating';
     }
   ): Promise<{
       success: boolean;
@@ -1616,10 +1589,6 @@ export class WorkspaceCodingService {
 
   async exportCodingResultsAggregated(workspaceId: number, outputCommentsInsteadOfCodes = false): Promise<Buffer> {
     return this.codingExportService.exportCodingResultsAggregated(workspaceId, outputCommentsInsteadOfCodes);
-  }
-
-  async exportCodingResultsByCoder(workspaceId: number, outputCommentsInsteadOfCodes = false): Promise<Buffer> {
-    return this.codingExportService.exportCodingResultsByCoder(workspaceId, outputCommentsInsteadOfCodes);
   }
 
   async exportCodingResultsByVariable(workspaceId: number, includeModalValue = false, includeDoubleCoded = false, includeComments = false, outputCommentsInsteadOfCodes = false): Promise<Buffer> {
@@ -1988,6 +1957,7 @@ export class WorkspaceCodingService {
     limit: number = 50
   ): Promise<{
       data: Array<{
+        responseId: number;
         unitName: string;
         variableId: string;
         personLogin: string;
@@ -2043,6 +2013,7 @@ export class WorkspaceCodingService {
       });
 
       const responseGroups = new Map<number, {
+        responseId: number;
         unitName: string;
         variableId: string;
         personLogin: string;
@@ -2065,6 +2036,7 @@ export class WorkspaceCodingService {
 
         if (!responseGroups.has(responseId)) {
           responseGroups.set(responseId, {
+            responseId: responseId,
             unitName: unit.response?.unit?.name || '',
             variableId: unit.variable_id,
             personLogin: unit.response?.unit?.booklet?.person?.login || '',
@@ -2104,6 +2076,95 @@ export class WorkspaceCodingService {
     } catch (error) {
       this.logger.error(`Error getting double-coded variables for review: ${error.message}`, error.stack);
       throw new Error('Could not get double-coded variables for review. Please check the database connection.');
+    }
+  }
+
+  async applyDoubleCodedResolutions(
+    workspaceId: number,
+    decisions: Array<{ responseId: number; selectedJobId: number; resolutionComment?: string }>
+  ): Promise<{
+      success: boolean;
+      appliedCount: number;
+      failedCount: number;
+      skippedCount: number;
+      message: string;
+    }> {
+    try {
+      this.logger.log(`Applying ${decisions.length} double-coded resolutions in workspace ${workspaceId}`);
+
+      let appliedCount = 0;
+      let failedCount = 0;
+      let skippedCount = 0;
+
+      for (const decision of decisions) {
+        try {
+          // Get the selected coder's coding_job_unit entry
+          const selectedCodingJobUnit = await this.codingJobUnitRepository.findOne({
+            where: {
+              response_id: decision.responseId,
+              coding_job_id: decision.selectedJobId
+            },
+            relations: ['response', 'coding_job']
+          });
+
+          if (!selectedCodingJobUnit) {
+            this.logger.warn(`Could not find coding_job_unit for responseId ${decision.responseId} and jobId ${decision.selectedJobId}`);
+            skippedCount += 1;
+            continue;
+          }
+
+          // Verify workspace ID
+          if (selectedCodingJobUnit.coding_job?.workspace_id !== workspaceId) {
+            this.logger.warn(`Workspace mismatch for responseId ${decision.responseId}`);
+            skippedCount += 1;
+            continue;
+          }
+
+          const response = selectedCodingJobUnit.response;
+          if (!response) {
+            this.logger.warn(`Could not find response for responseId ${decision.responseId}`);
+            skippedCount += 1;
+            continue;
+          }
+
+          // Build resolution comment with timestamp if provided
+          let updatedValue = response.value || '';
+          if (decision.resolutionComment && decision.resolutionComment.trim()) {
+            const timestamp = new Date().toISOString().replace('T', ' ').substring(0, 16);
+            const resolutionNote = `[RESOLUTION - ${timestamp}]: ${decision.resolutionComment.trim()}\n`;
+            // Store resolution comment at the beginning of the value field as a note
+            updatedValue = resolutionNote + updatedValue;
+          }
+
+          // Update response with selected coder's values
+          response.status_v2 = statusStringToNumber('CODING_COMPLETE');
+          response.code_v2 = selectedCodingJobUnit.code;
+          response.score_v2 = selectedCodingJobUnit.score;
+          response.value = updatedValue;
+
+          await this.responseRepository.save(response);
+          appliedCount += 1;
+
+          this.logger.debug(`Applied resolution for responseId ${decision.responseId}: code=${selectedCodingJobUnit.code}, score=${selectedCodingJobUnit.score}`);
+        } catch (error) {
+          this.logger.error(`Error applying resolution for responseId ${decision.responseId}: ${error.message}`, error.stack);
+          failedCount += 1;
+        }
+      }
+
+      const message = `Applied ${appliedCount} resolutions successfully. ${failedCount > 0 ? `${failedCount} failed.` : ''} ${skippedCount > 0 ? `${skippedCount} skipped.` : ''}`;
+      this.logger.log(message);
+
+      return {
+        success: appliedCount > 0,
+        appliedCount,
+        failedCount,
+        skippedCount,
+        message
+      };
+    } catch (error) {
+      this.logger.error(`Error applying double-coded resolutions: ${error.message}`, error.stack);
+      throw new Error('Could not apply double-coded resolutions. Please check the database connection.');
     }
   }
 
@@ -2290,6 +2351,91 @@ export class WorkspaceCodingService {
     } catch (error) {
       this.logger.error(`Error calculating workspace-wide Cohen's Kappa: ${error.message}`, error.stack);
       throw new Error('Could not calculate workspace-wide Cohen\'s Kappa. Please check the database connection.');
+    }
+  }
+
+  async resetCodingVersion(
+    workspaceId: number,
+    version: 'v1' | 'v2' | 'v3',
+    unitFilters?: string[],
+    variableFilters?: string[]
+  ): Promise<{
+      affectedResponseCount: number;
+      cascadeResetVersions: ('v2' | 'v3')[];
+      message: string;
+    }> {
+    try {
+      this.logger.log(
+        `Starting reset for version ${version} in workspace ${workspaceId}, filters: units=${unitFilters?.join(',')}, variables=${variableFilters?.join(',')}`
+      );
+
+      // Determine which versions to reset
+      const versionsToReset: ('v1' | 'v2' | 'v3')[] = [version];
+      if (version === 'v2') {
+        versionsToReset.push('v3'); // Cascade: resetting v2 also resets v3
+      }
+
+      // Build base query
+      const queryBuilder = this.responseRepository.createQueryBuilder('response')
+        .leftJoinAndSelect('response.unit', 'unit')
+        .leftJoinAndSelect('unit.booklet', 'booklet')
+        .leftJoinAndSelect('booklet.person', 'person')
+        .where('person.workspace_id = :workspaceId', { workspaceId });
+
+      // Apply unit filter if provided
+      if (unitFilters && unitFilters.length > 0) {
+        queryBuilder.andWhere('unit.name IN (:...unitNames)', { unitNames: unitFilters });
+      }
+
+      // Apply variable filter if provided
+      if (variableFilters && variableFilters.length > 0) {
+        queryBuilder.andWhere('response.variableid IN (:...variableIds)', { variableIds: variableFilters });
+      }
+
+      // Get responses to reset (for counting affected rows)
+      const responsesToReset = await queryBuilder.getMany();
+      const affectedResponseCount = responsesToReset.length;
+
+      if (affectedResponseCount === 0) {
+        this.logger.log(`No responses found to reset for version ${version}`);
+        return {
+          affectedResponseCount: 0,
+          cascadeResetVersions: version === 'v2' ? ['v3'] : [],
+          message: `No responses found matching the filters for version ${version}`
+        };
+      }
+
+      // Prepare update object dynamically based on versions to reset
+      const updateObj: Record<string, null> = {};
+      versionsToReset.forEach(v => {
+        updateObj[`status_${v}`] = null;
+        updateObj[`code_${v}`] = null;
+        updateObj[`score_${v}`] = null;
+      });
+
+      // Execute update
+      await this.responseRepository.update(
+        {
+          id: In(responsesToReset.map(r => r.id))
+        },
+        updateObj
+      );
+
+      this.logger.log(
+        `Reset successful: ${affectedResponseCount} responses cleared for version(s) ${versionsToReset.join(', ')}`
+      );
+
+      return {
+        affectedResponseCount,
+        cascadeResetVersions: version === 'v2' ? ['v3'] : [],
+        message: `Successfully reset ${affectedResponseCount} responses for version ${version}${version === 'v2' ? ' and v3 (cascade)' : ''}`
+      };
+    } catch (error) {
+      this.logger.error(
+        `Error resetting coding version ${version} in workspace ${workspaceId}: ${error.message}`,
+        error.stack
+      );
+      throw new Error(`Failed to reset coding version: ${error.message}`);
     }
   }
 }

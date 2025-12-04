@@ -202,6 +202,48 @@ export class CodingService {
     );
   }
 
+  getCodingResultsByVersion(workspace_id: number, version: 'v1' | 'v2' | 'v3'): Observable<Blob> {
+    const identity = this.appService.loggedUser?.sub || '';
+    return this.appService.createToken(workspace_id, identity, 60).pipe(
+      catchError(() => of('')),
+      switchMap(token => {
+        const params = new HttpParams()
+          .set('authToken', token)
+          .set('serverUrl', window.location.origin)
+          .set('version', version);
+        return this.http.get(
+          `${this.serverUrl}admin/workspace/${workspace_id}/coding/results-by-version`,
+          {
+            headers: this.authHeader,
+            params,
+            responseType: 'blob' as 'json'
+          }
+        ) as unknown as Observable<Blob>;
+      })
+    );
+  }
+
+  getCodingResultsByVersionAsExcel(workspace_id: number, version: 'v1' | 'v2' | 'v3'): Observable<Blob> {
+    const identity = this.appService.loggedUser?.sub || '';
+    return this.appService.createToken(workspace_id, identity, 60).pipe(
+      catchError(() => of('')),
+      switchMap(token => {
+        const params = new HttpParams()
+          .set('authToken', token)
+          .set('serverUrl', window.location.origin)
+          .set('version', version);
+        return this.http.get(
+          `${this.serverUrl}admin/workspace/${workspace_id}/coding/results-by-version/excel`,
+          {
+            headers: this.authHeader,
+            params,
+            responseType: 'blob' as 'json'
+          }
+        ) as unknown as Observable<Blob>;
+      })
+    );
+  }
+
   getCodingStatistics(workspace_id: number, version: 'v1' | 'v2' | 'v3' = 'v1'): Observable<CodingStatistics> {
     const params = new HttpParams().set('version', version);
     return this.http
@@ -382,7 +424,8 @@ export class CodingService {
     selectedCoders: { id: number; name: string; username: string }[],
     doubleCodingAbsolute?: number,
     doubleCodingPercentage?: number,
-    selectedVariableBundles?: { id: number; name: string; variables: { unitName: string; variableId: string }[] }[]
+    selectedVariableBundles?: { id: number; name: string; variables: { unitName: string; variableId: string }[] }[],
+    caseOrderingMode?: 'continuous' | 'alternating'
   ): Observable<{
       success: boolean;
       jobsCreated: number;
@@ -424,7 +467,8 @@ export class CodingService {
         selectedCoders,
         doubleCodingAbsolute,
         doubleCodingPercentage,
-        selectedVariableBundles
+        selectedVariableBundles,
+        caseOrderingMode
       },
       { headers: this.authHeader }
     )
@@ -478,6 +522,39 @@ export class CodingService {
           doubleCodingInfo: {},
           aggregationInfo: {},
           matchingFlags: []
+        }))
+      );
+  }
+
+  resetCodingVersion(
+    workspaceId: number,
+    version: 'v1' | 'v2' | 'v3',
+    unitFilters?: string[],
+    variableFilters?: string[]
+  ): Observable<{
+      affectedResponseCount: number;
+      cascadeResetVersions: ('v2' | 'v3')[];
+      message: string;
+    }> {
+    return this.http
+      .post<{
+      affectedResponseCount: number;
+      cascadeResetVersions:('v2' | 'v3')[];
+      message: string;
+    }>(
+        `${this.serverUrl}admin/workspace/${workspaceId}/coding/reset-version`,
+        {
+          version,
+          unitFilters: unitFilters || [],
+          variableFilters: variableFilters || []
+        },
+        { headers: this.authHeader }
+        )
+      .pipe(
+        catchError(() => of({
+          affectedResponseCount: 0,
+          cascadeResetVersions: [],
+          message: 'Failed to reset coding version'
         }))
       );
   }

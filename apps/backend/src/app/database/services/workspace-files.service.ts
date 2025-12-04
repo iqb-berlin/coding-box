@@ -19,6 +19,7 @@ import { ResponseDto } from '../../../../../../api-dto/responses/response-dto';
 import { InvalidVariableDto } from '../../../../../../api-dto/files/variable-validation.dto';
 import { DuplicateResponseDto, DuplicateResponsesResultDto } from '../../../../../../api-dto/files/duplicate-response.dto';
 import { Unit } from '../entities/unit.entity';
+import { UnitVariableDetailsDto } from '../../models/unit-variable-details.dto';
 import { ResponseEntity } from '../entities/response.entity';
 import { Booklet } from '../entities/booklet.entity';
 import {
@@ -1560,10 +1561,14 @@ ${bookletRefs}
 
   async getCodingSchemeByRef(workspaceId: number, codingSchemeRef: string): Promise<FileDownloadDto | null> {
     try {
+      const fileId = codingSchemeRef.toUpperCase().endsWith('.VOCS') ?
+        codingSchemeRef.toUpperCase() :
+        `${codingSchemeRef.toUpperCase()}.VOCS`;
+
       const codingSchemeFile = await this.fileUploadRepository.findOne({
         where: {
           workspace_id: workspaceId,
-          file_id: `${codingSchemeRef.toUpperCase()}.VOCS`
+          file_id: fileId
         }
       });
 
@@ -3010,5 +3015,209 @@ ${bookletRefs}
       await this.refreshUnitVariableCache(workspaceId);
     }
     return this.unitVariableCache.get(workspaceId) || new Map();
+  }
+
+  async getUnitVariableDetails(workspaceId: number): Promise<UnitVariableDetailsDto[]> {
+    this.logger.log(`Getting detailed unit variable information for workspace ${workspaceId}`);
+
+    try {
+      const unitFiles = await this.fileUploadRepository.find({
+        where: { workspace_id: workspaceId, file_type: 'Unit' }
+      });
+
+      const codingSchemes = await this.fileUploadRepository.find({
+        where: {
+          workspace_id: workspaceId,
+          file_type: 'Resource',
+          file_id: Like('%.VOCS')
+        }
+      });
+
+      const codingSchemeMap = new Map<string, string>();
+      const codingSchemeVariablesMap = new Map<string, Map<string, string>>();
+      const codingSchemeCodesMap = new Map<string, Map<string, Array<{ id: string | number; label: string; score?: number }>>>();
+      const codingSchemeManualInstructionsMap = new Map<string, Map<string, boolean>>();
+      const codingSchemeClosedCodingMap = new Map<string, Map<string, boolean>>();
+
+      for (const scheme of codingSchemes) {
+        try {
+          const unitId = scheme.file_id.replace('.VOCS', '');
+          codingSchemeMap.set(unitId, scheme.file_id);
+
+          const parsedScheme = JSON.parse(scheme.data) as {
+            variableCodings?: {
+              id: string;
+              sourceType?: string;
+              codes?: Array<{ id: number | string; label?: string; score?: number; manualInstruction?: string; type?: string }>;
+            }[]
+          };
+          if (parsedScheme.variableCodings && Array.isArray(parsedScheme.variableCodings)) {
+            const variableSourceTypes = new Map<string, string>();
+            const variableCodes = new Map<string, Array<{ id: string | number; label: string; score?: number }>>();
+            const variableManualInstructions = new Map<string, boolean>();
+            const variableClosedCoding = new Map<string, boolean>();
+
+            for (const vc of parsedScheme.variableCodings) {
+              if (vc.id && vc.sourceType) {
+                variableSourceTypes.set(vc.id, vc.sourceType);
+              }
+              if (vc.id && vc.codes && Array.isArray(vc.codes)) {
+                const codes = vc.codes
+                  .filter(code => code.id !== undefined)
+                  .map(code => ({
+                    id: code.id,
+                    label: code.label || String(code.id),
+                    score: code.score
+                  }));
+                if (codes.length > 0) {
+                  variableCodes.set(vc.id, codes);
+                }
+
+                // Check if any code has manual instruction (similar to isManual() in codebook-generator)
+                const hasManualInstruction = vc.codes.some(code => code.manualInstruction && code.manualInstruction.trim() !== '');
+                if (hasManualInstruction) {
+                  variableManualInstructions.set(vc.id, true);
+                }
+
+                // Check if any code is closed coding (similar to isClosed() in codebook-generator)
+                const hasClosedCoding = vc.codes.some(code => code.type === 'RESIDUAL_AUTO' || code.type === 'INTENDED_INCOMPLETE');
+                if (hasClosedCoding) {
+                  variableClosedCoding.set(vc.id, true);
+                }
+              }
+            }
+            codingSchemeVariablesMap.set(unitId, variableSourceTypes);
+            codingSchemeCodesMap.set(unitId, variableCodes);
+            codingSchemeManualInstructionsMap.set(unitId, variableManualInstructions);
+            codingSchemeClosedCodingMap.set(unitId, variableClosedCoding);
+          }
+        } catch (error) {
+          this.logger.error(`Error parsing coding scheme ${scheme.file_id}: ${error.message}`, error.stack);
+        }
+      }
+
+      const unitVariableDetails: UnitVariableDetailsDto[] = [];
+
+      for (const unitFile of unitFiles) {
+        try {
+          const xmlContent = unitFile.data.toString();
+          const parsedXml = await parseStringPromise(xmlContent, { explicitArray: false });
+
+          if (parsedXml.Unit && parsedXml.Unit.Metadata && parsedXml.Unit.Metadata.Id) {
+            const unitName = parsedXml.Unit.Metadata.Id;
+            const variables: Array<{
+              id: string;
+              alias: string;
+              type: 'string' | 'integer' | 'number' | 'boolean' | 'attachment' | 'json' | 'no-value';
+              hasCodingScheme: boolean;
+              codingSchemeRef?: string;
+              codes?: Array<{ id: string | number; label: string; score?: number }>;
+              isDerived?: boolean;
+              hasManualInstruction?: boolean;
+              hasClosedCoding?: boolean;
+            }> = [];
+
+            // Process BaseVariables
+            if (parsedXml.Unit.BaseVariables && parsedXml.Unit.BaseVariables.Variable) {
+              const baseVariables = Array.isArray(parsedXml.Unit.BaseVariables.Variable) ?
+                parsedXml.Unit.BaseVariables.Variable :
+                [parsedXml.Unit.BaseVariables.Variable];
+
+              for (const variable of baseVariables) {
+                if (variable.$.alias && variable.$.type !== 'no-value') {
+                  const variableId = variable.$.id || variable.$.alias;
+                  const unitSourceTypes = codingSchemeVariablesMap.get(unitName);
+                  const sourceType = unitSourceTypes?.get(variableId);
+
+                  // Skip variables with BASE_NO_VALUE sourceType in coding scheme
+                  // If no coding scheme exists, sourceType is undefined and variable is included
+                  if (sourceType === 'BASE_NO_VALUE') {
+                    continue;
+                  }
+
+                  const hasCodingScheme = codingSchemeMap.has(unitName);
+                  const unitCodes = codingSchemeCodesMap.get(unitName);
+                  const variableCodes = unitCodes?.get(variableId);
+                  const unitManualInstructions = codingSchemeManualInstructionsMap.get(unitName);
+                  const hasManualInstruction = unitManualInstructions?.get(variableId) || false;
+                  const unitClosedCoding = codingSchemeClosedCodingMap.get(unitName);
+                  const hasClosedCoding = unitClosedCoding?.get(variableId) || false;
+
+                  variables.push({
+                    id: variableId,
+                    alias: variable.$.alias,
+                    type: variable.$.type as 'string' | 'integer' | 'number' | 'boolean' | 'attachment' | 'json' | 'no-value',
+                    hasCodingScheme,
+                    codingSchemeRef: hasCodingScheme ? codingSchemeMap.get(unitName) : undefined,
+                    codes: variableCodes,
+                    isDerived: false,
+                    hasManualInstruction,
+                    hasClosedCoding
+                  });
+                }
+              }
+            }
+
+            // Process DerivedVariables (derived variables are not BASE_NO_VALUE and not BASE type)
+            if (parsedXml.Unit.DerivedVariables && parsedXml.Unit.DerivedVariables.Variable) {
+              const derivedVariables = Array.isArray(parsedXml.Unit.DerivedVariables.Variable) ?
+                parsedXml.Unit.DerivedVariables.Variable :
+                [parsedXml.Unit.DerivedVariables.Variable];
+
+              for (const variable of derivedVariables) {
+                if (variable.$.alias && variable.$.type !== 'no-value') {
+                  const variableId = variable.$.id || variable.$.alias;
+                  const unitSourceTypes = codingSchemeVariablesMap.get(unitName);
+                  const sourceType = unitSourceTypes?.get(variableId);
+
+                  // Skip variables with BASE_NO_VALUE sourceType in coding scheme
+                  // Skip variables with BASE sourceType (include only derived variables)
+                  if (sourceType === 'BASE_NO_VALUE' || sourceType === 'BASE') {
+                    continue;
+                  }
+
+                  const hasCodingScheme = codingSchemeMap.has(unitName);
+                  const unitCodes = codingSchemeCodesMap.get(unitName);
+                  const variableCodes = unitCodes?.get(variableId);
+                  const unitManualInstructions = codingSchemeManualInstructionsMap.get(unitName);
+                  const hasManualInstruction = unitManualInstructions?.get(variableId) || false;
+                  const unitClosedCoding = codingSchemeClosedCodingMap.get(unitName);
+                  const hasClosedCoding = unitClosedCoding?.get(variableId) || false;
+
+                  variables.push({
+                    id: variableId,
+                    alias: variable.$.alias,
+                    type: variable.$.type as 'string' | 'integer' | 'number' | 'boolean' | 'attachment' | 'json' | 'no-value',
+                    hasCodingScheme,
+                    codingSchemeRef: hasCodingScheme ? codingSchemeMap.get(unitName) : undefined,
+                    codes: variableCodes,
+                    isDerived: true,
+                    hasManualInstruction,
+                    hasClosedCoding
+                  });
+                }
+              }
+            }
+
+            // Only include units with at least one variable
+            if (variables.length > 0) {
+              unitVariableDetails.push({
+                unitName,
+                unitId: unitName,
+                variables
+              });
+            }
+          }
+        } catch (e) {
+          this.logger.warn(`Error parsing unit file ${unitFile.file_id}: ${(e as Error).message}`);
+        }
+      }
+
+      this.logger.log(`Retrieved ${unitVariableDetails.length} units with variables for workspace ${workspaceId}`);
+      return unitVariableDetails;
+    } catch (error) {
+      this.logger.error(`Error getting unit variable details for workspace ${workspaceId}: ${error.message}`, error.stack);
+      return [];
+    }
   }
 }

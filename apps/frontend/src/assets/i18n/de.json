@@ -16,6 +16,14 @@
   "close": "Schließen",
   "warning": "Warnung",
   "confirm": "Bestätigen",
+  "error-insufficient-access": "Sie haben nicht die erforderliche Zugriffsberechtigung für diese Aktion",
+  "error-unauthorized": "Sie sind nicht angemeldet oder Ihre Sitzung ist abgelaufen",
+  "error-forbidden": "Sie haben keine Berechtigung für diese Aktion",
+  "errors": {
+    "requires-study-manager-access": "Diese Funktion erfordert Studienadministrator-Zugriff",
+    "requires-coding-manager-access": "Diese Funktion erfordert Kodierungsmanager-Zugriff",
+    "insufficient-permissions": "Unzureichende Berechtigungen für diese Aktion"
+  },
   "filter-by": "Filtern nach...",
   "hour": "Uhr",
   "files-import": "Dateien importieren",
@@ -184,10 +192,14 @@
     "cleaning-action-button": "Datenbereinigung starten",
     "export": "Datenexport",
     "export-title": "Datenexport",
+    "my-coding-jobs": "Meine Kodierjobs",
+    "coding-management": "Kodierung-Management",
+    "job-definitions": "Job-Definitionen",
     "export-subtitle": "Export der Daten nach Kodierung und Bereinigung",
     "export-description": "Diese Komponente wird für den Export der Daten nach Kodierung und Bereinigung verwendet.",
     "export-placeholder": "Die Funktionalität zum Datenexport wird in einer zukünftigen Version implementiert.",
     "export-action-button": "Datenexport starten",
+    "no-access": "Sie haben keinen Zugriff auf diesen Arbeitsbereich. Bitte kontaktieren Sie den Studienadministrator für Zugriff.",
     "export.exporting": "Datenexport läuft...",
     "export.starting": "Export wird gestartet...",
     "export.success": "Datenexport erfolgreich abgeschlossen",
@@ -242,8 +254,7 @@
       "invalid-format": "Ungültiges Exportformat",
       "export-failed": "Export fehlgeschlagen",
       "token-failed": "Token-Generierung fehlgeschlagen"
-    },
-    "no-access": "Sie haben keinen Zugriff auf diesen Arbeitsbereich. Bitte kontaktieren Sie den Studienadministrator für Zugriff."
+    }
   },
   "search-filter": {
     "filter-users": "Suche nach Nutzer:innen",
@@ -265,6 +276,58 @@
     "access-level-2": "Kodierung-Manager:in",
     "access-level-3": "Studienmanager:in",
     "access-level-4": "Admin"
+  },
+
+  "access-matrix": {
+    "title": "Zugriffsrechte-Matrix",
+    "description": "Diese Matrix zeigt, welche Funktionen mit welcher Zugriffsebene verwendet werden können.",
+    "feature-column": "Funktion",
+    "close": "Schließen",
+    "admin-note": "System-Administratoren haben unabhängig von der Arbeitsbereichs-Zugriffsebene vollen Zugriff auf alle Funktionen.",
+    "guest-note": "Gäste haben keinen Zugriff auf Arbeitsbereichsfunktionen und werden daher in dieser Matrix nicht angezeigt.",
+    "category": {
+      "test-files": "Testdateien",
+      "test-results": "Testergebnisse",
+      "coding": "Kodierung",
+      "users": "Benutzerverwaltung",
+      "settings": "Einstellungen"
+    },
+    "feature": {
+      "view-test-files": "Testdateien ansehen",
+      "download-test-files": "Testdateien herunterladen",
+      "validate-test-files": "Testdateien validieren",
+      "upload-test-files": "Testdateien hochladen",
+      "delete-test-files": "Testdateien löschen",
+      "import-from-testcenter": "Aus Testcenter importieren",
+      "exclude-persons": "Personen ausschließen",
+      "view-resource-packages": "Ressourcenpakete ansehen",
+      "delete-resource-packages": "Ressourcenpakete löschen",
+      "view-test-results": "Testergebnisse ansehen",
+      "view-responses": "Antworten ansehen",
+      "view-logs": "Logs ansehen",
+      "upload-test-results": "Testergebnisse hochladen",
+      "delete-test-results": "Testergebnisse löschen",
+      "export-database": "Datenbank exportieren",
+      "clean-responses": "Antworten bereinigen",
+      "view-replay-statistics": "Replay-Statistiken ansehen",
+      "view-coding-jobs": "Eigene Kodieraufträge ansehen",
+      "work-on-coding-jobs": "An Kodieraufträgen arbeiten",
+      "view-all-jobs": "Alle Kodieraufträge ansehen",
+      "create-job-definitions": "Job-Definitionen erstellen",
+      "edit-job-definitions": "Job-Definitionen bearbeiten",
+      "delete-job-definitions": "Job-Definitionen löschen",
+      "manage-missings-profiles": "Missings-Profile verwalten",
+      "export-coding-data": "Kodierdaten exportieren",
+      "import-external-codings": "Externe Kodierungen importieren",
+      "validate-coding-completeness": "Kodier-Vollständigkeit prüfen",
+      "apply-job-results": "Job-Ergebnisse anwenden",
+      "view-workspace-users": "Arbeitsbereichsnutzer ansehen",
+      "manage-user-access": "Benutzerzugriff verwalten",
+      "view-workspace-settings": "Arbeitsbereichseinstellungen ansehen",
+      "edit-workspace-settings": "Arbeitsbereichseinstellungen bearbeiten",
+      "delete-workspace": "Arbeitsbereich löschen",
+      "view-journal": "Journal ansehen"
+    }
   },
 
   "file-upload" : {
@@ -718,7 +781,8 @@
       "item-variable-analysis": "Item/Variablenanalyse",
       "coding-variables": "Kodiervariablen",
       "load-statistics": "Anzeigen",
-      "update-statistics": "Statistiken aktualisieren"
+      "update-statistics": "Statistiken aktualisieren",
+      "reset-version": "Version zurücksetzen"
     },
     "titles": {
       "coding-statistics": "Kodierstatistiken",
@@ -728,7 +792,6 @@
       "statistics-overview": "Übersicht über den Status der Kodierung und Antworten",
       "load-statistics": "Klicken Sie hier, um die Kodierstatistiken zu laden",
       "no-data": "Noch keine Kodierdaten angezeigt",
-      "click-display": "Klicken Sie auf \"Anzeigen\" um Daten zu laden.",
       "no-results": "Keine Antworten mit Status {{status}} gefunden.",
       "missing-replay-info": "Fehlende Informationen für Replay",
       "missing-token": "Fehler beim Abrufen des Tokens für Replay",
@@ -754,7 +817,9 @@
       "error-coding-variables": "Fehler beim Abrufen der Kodiervariablen",
       "no-coding-variables": "Keine Kodiervariablen gefunden.",
       "coding-variables-title": "Kodiervariablen",
-      "error-unit-xml-processing": "Fehler beim Verarbeiten der Unit-XML-Daten"
+      "error-unit-xml-processing": "Fehler beim Verarbeiten der Unit-XML-Daten",
+      "error-reset": "Fehler beim Zurücksetzen der Kodierversion",
+      "error-workspace": "Fehler: Kein Arbeitsbereich ausgewählt"
     },
     "loading": {
       "loading-statistics": "Lade Kodierstatistiken...",
@@ -775,7 +840,7 @@
       "missing-schemas": "Kodierschemata fehlen",
       "uncoded-responses-title": "Unkodierte Antworten",
       "responses-with-status-title": "Antworten mit Status: {{status}}",
-      "coding-run-selector": "Kodier-Lauf auswählen:",
+      "coding-version-selector": "Kodierversion auswählen:",
       "first-autocode-run": "1 Autocoder Lauf",
       "manual-coding-run": "manuelle Kodierung",
       "second-autocode-run": "2 Autocoder Lauf",
@@ -809,6 +874,44 @@
       "variable-id": "Variablen-ID",
       "variable-id-placeholder": "Variablen-ID eingeben...",
       "clear": "Filter löschen"
+    },
+    "reset-dialog": {
+      "title": "Kodierversion zurücksetzen",
+      "warning-message": "Sie sind dabei, eine Kodierversion zurückzusetzen. Dies löscht alle kodierten Daten dieser Version.",
+      "version-to-reset": "Zu resettierende Version",
+      "cascade-warning": "Diese Version und alle später im Prozess folgenden Versionen werden zurückgesetzt",
+      "cascade-versions": "Folgende Versionen werden ebenfalls gelöscht",
+      "cascade-explanation": "Alle nachfolgenden Kodierversionen (später im Prozess) werden ebenfalls vollständig gelöscht. Dies ist notwendig, um die Konsistenz des Kodierungsprozesses zu gewährleisten",
+      "irreversible-warning": "Diese Aktion kann nicht rückgängig gemacht werden! Stellen Sie sicher, dass Sie ein Backup der Daten haben.",
+      "cancel-button": "Abbrechen",
+      "confirm-button": "Ja, zurücksetzen",
+      "reset-tooltip": "Kodierversion zurücksetzen"
+    },
+    "download-dialog": {
+      "title": "Kodierergebnisse herunterladen",
+      "info-message": "Wählen Sie die Kodierversion und das Exportformat aus. Die heruntergeladene Datei enthält alle Datensätze, die für die ausgewählte Version kodiert wurden, zusammen mit den Ergebnissen aller vorherigen Versionen zum Vergleich.",
+      "select-version": "Kodierversion auswählen",
+      "v1-description": "Erster Autocoder-Lauf",
+      "v2-description": "Manuelle Kodierung (enthält auch v1-Ergebnisse)",
+      "v3-description": "Zweiter Autocoder-Lauf (enthält auch v1 und v2-Ergebnisse)",
+      "select-format": "Exportformat auswählen",
+      "notice-title": "Hinweis",
+      "notice-message": "Die heruntergeladene Datei enthält ALLE Datensätze für die ausgewählte Version, nicht nur die derzeit angezeigten gefilterten Datensätze.",
+      "download-button": "Herunterladen",
+      "download-tooltip": "Kodierergebnisse herunterladen",
+      "creating-file": "Datei wird erstellt...",
+      "unknown-format": "Unbekanntes Format",
+      "error-json": "Fehler beim Abrufen der Kodierergebnisse (JSON)",
+      "error-json-conversion": "Fehler beim Umwandeln der CSV-Daten in JSON",
+      "success-json": "Kodierergebnisse wurden als JSON erfolgreich heruntergeladen.",
+      "error-csv": "Fehler beim Abrufen der Kodierergebnisse (CSV)",
+      "success-csv": "Kodierergebnisse wurden als CSV erfolgreich heruntergeladen.",
+      "error-excel": "Fehler beim Abrufen der Kodierergebnisse (Excel)",
+      "success-excel": "Kodierergebnisse wurden als Excel erfolgreich heruntergeladen.",
+      "no-entries": "Keine Einträge in den Kodierergebnissen gefunden.",
+      "download-started": "Download für {{version}} als {{format}} gestartet...",
+      "download-complete": "Download für {{version}} als {{format}} abgeschlossen",
+      "download-failed": "Download fehlgeschlagen"
     },
     "aria": {
       "select-page": "Seiten auswählen"
@@ -948,6 +1051,7 @@
       "run-1": "1 Autocoder Lauf",
       "run-2": "2 Autocoder Lauf"
     },
+
     "select-groups-label": "Testpersonengruppen auswählen",
     "select-groups-hint": "Wählen Sie eine oder mehrere Gruppen zum Kodieren aus",
     "deselect-all-groups": "Alle abwählen",
@@ -962,6 +1066,7 @@
     "enter-test-person-ids": "Bitte geben Sie Testpersonen-IDs ein",
     "job-error": "Fehler: {{error}}",
     "coding-failed": "Kodierung der Testpersonen fehlgeschlagen",
+    "job-deleted-by-id": "Kodierungsauftrag mit ID {{jobId}} wurde gelöscht",
     "job-completed": "Kodierungsauftrag erfolgreich abgeschlossen",
     "job-completed-with-error": "Kodierungsauftrag fehlgeschlagen: {{error}}",
     "job-cancelled": "Kodierungsauftrag wurde abgebrochen",
@@ -1201,6 +1306,12 @@
       },
       "percentage-hint": "Der Prozentsatz muss zwischen 0 und 100 liegen"
     },
+    "case-ordering-mode": {
+      "title": "Sortierung der Kodierfälle",
+      "description": "Wählen Sie, wie die Kodierfälle sortiert werden: kontinuierlich nach Variablen oder abwechselnd nach Fällen.",
+      "continuous": "Kontinuierlich - Alle Fälle einer Variable zusammen",
+      "alternating": "Abwechselnd - Alle Variablen eines Falls, dann nächster Fall"
+    },
     "selection-summary": {
       "title": "Ausgewählte Elemente",
       "variables": "Variablen:",
@@ -1407,6 +1518,10 @@
       "title": "Keine Daten verfügbar",
       "message": "Es sind keine doppelkodierten Variablen zur Überprüfung verfügbar."
     },
+    "no-conflicts": {
+      "title": "Keine Konflikte gefunden",
+      "message": "Alle Doppelkodierungen stimmen überein. Es gibt keine Konflikte, die gelöst werden müssen."
+    },
     "table-title": "Doppelkodierte Variablen",
     "table-subtitle": "{{count}} Variable(n) zur Überprüfung",
     "columns": {
@@ -1419,6 +1534,16 @@
     "code-label": "Code",
     "score-label": "Bewertung",
     "apply-decisions": "Entscheidungen anwenden",
+    "filter": {
+      "show-only-conflicts": "Nur Konflikte anzeigen"
+    },
+    "statistics": {
+      "showing-conflicts": "Zeige {{visible}} von {{total}} Konflikten",
+      "unresolved": "{{count}} ungelöst"
+    },
+    "conflict-indicator": "Konflikt: Kodierer haben unterschiedliche Codes vergeben",
+    "comment-label": "Kommentar zur Auflösung (optional)",
+    "comment-placeholder": "Begründen Sie Ihre Entscheidung...",
     "kappa": {
       "title": "Cohen's Kappa Statistik",
       "subtitle": "Inter-Rater Agreement für doppelkodierte Variablen",
@@ -1432,7 +1557,11 @@
     "errors": {
       "no-workspace-selected": "Kein Arbeitsbereich ausgewählt",
       "failed-to-load": "Fehler beim Laden der doppelkodierten Variablen",
-      "review-applied": "Überprüfungsentscheidungen erfolgreich angewendet"
+      "failed-to-apply": "Fehler beim Anwenden der Auflösungen",
+      "no-decisions": "Keine Entscheidungen zum Anwenden ausgewählt"
+    },
+    "success": {
+      "resolutions-applied": "{{count}} Auflösung(en) erfolgreich angewendet"
     }
   },
 

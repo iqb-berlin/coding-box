@@ -3,15 +3,29 @@
     @if(accessLevel === 1) {
       <coding-box-coding-jobs></coding-box-coding-jobs>
     } @else if (accessLevel === 2){
-      <coding-box-coding-management-manual></coding-box-coding-management-manual>
-    } @else if (accessLevel > 2 || authData.isAdmin){
+      <div class="flex-container">
+        <nav mat-tab-nav-bar class="navigation" [tabPanel]="tabPanel">
+          @for (link of codingManagerLinks; track link.path) {
+            <a mat-tab-link
+               [routerLink]="link.path"
+               routerLinkActive="active-link"
+               #rla="routerLinkActive"
+               [active]="rla.isActive">
+              {{ link.label | translate }}
+            </a>
+          }
+        </nav>
+        <mat-tab-nav-panel #tabPanel class="router-panel">
+          <router-outlet></router-outlet>
+        </mat-tab-nav-panel>
+      </div>
+    } @else if (accessLevel >= 3 || authData.isAdmin){
       <div class="flex-container">
       <nav mat-tab-nav-bar class="navigation" [tabPanel]="tabPanel">
       @for (link of navLinks; track link) {
         <a mat-tab-link
-           [routerLink]="link"
-           routerLinkActive="active-link"
-           #rla="routerLinkActive"
+           (click)="navigateToTab(link)"
+           routerLinkActive #rla="routerLinkActive"
            [active]="rla.isActive">
           {{'ws-admin.' + link | translate}}
         </a>

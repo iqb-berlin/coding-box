@@ -9,6 +9,7 @@ import {
 import { Request, Response } from 'express';
 import { CodingStatistics } from '../../database/services/shared-types';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
+import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
 import { WorkspaceCodingService } from '../../database/services/workspace-coding.service';
@@ -29,10 +30,20 @@ import { ExportValidationResultsRequestDto } from '../../../../../../api-dto/cod
 import { ExternalCodingImportDto } from '../../../../../../api-dto/coding/external-coding-import.dto';
 import { MissingsProfilesService } from '../../database/services/missings-profiles.service';
 import { JobDefinitionService } from '../../database/services/job-definition.service';
+import { JournalService } from '../../database/services/journal.service';
 import { CodingJob } from '../../database/entities/coding-job.entity';
 import { CreateJobDefinitionDto } from '../coding-job/dto/create-job-definition.dto';
 import { UpdateJobDefinitionDto } from '../coding-job/dto/update-job-definition.dto';
 import { ApproveJobDefinitionDto } from '../coding-job/dto/approve-job-definition.dto';
+
+interface RequestWithUser extends Request {
+  user: {
+    userId: string;
+    id: string;
+    name: string;
+    workspace: string;
+  };
+}
 
 @ApiTags('Admin Workspace Coding')
 @Controller('admin/workspace')
@@ -49,7 +60,8 @@ export class WorkspaceCodingController {
     private codingExportService: CodingExportService,
     private codingStatisticsService: CodingStatisticsService,
     private jobQueueService: JobQueueService,
-    private cacheService: CacheService
+    private cacheService: CacheService,
+    private journalService: JournalService
   ) {}
 
   @Get(':workspace_id/coding')
@@ -219,6 +231,97 @@ export class WorkspaceCodingController {
         res.status(500).json({ error: 'Export initialization failed' });
       }
     }
+  }
+
+  @Get(':workspace_id/coding/results-by-version')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiQuery({
+    name: 'version',
+    required: true,
+    description: 'Coding version to export: v1, v2, or v3',
+    enum: ['v1', 'v2', 'v3']
+  })
+  @ApiQuery({
+    name: 'authToken',
+    required: true,
+    description: 'Authentication token for generating replay URLs',
+    type: String
+  })
+  @ApiQuery({
+    name: 'serverUrl',
+    required: false,
+    description: 'Server URL to use for generating links',
+    type: String
+  })
+  @ApiOkResponse({
+    description: 'Coding results for specified version exported as CSV',
+    content: {
+      'text/csv': {
+        schema: {
+          type: 'string',
+          format: 'binary'
+        }
+      }
+    }
+  })
+  async getCodingResultsByVersion(
+    @WorkspaceId() workspace_id: number,
+      @Query('version') version: 'v1' | 'v2' | 'v3',
+      @Query('authToken') authToken: string,
+      @Query('serverUrl') serverUrl: string,
+      @Res() res: Response
+  ): Promise<void> {
+    const csvStream = await this.codingListService.getCodingResultsByVersionCsvStream(workspace_id, version, authToken || '', serverUrl || '');
+    csvStream.pipe(res);
+  }
+
+  @Get(':workspace_id/coding/results-by-version/excel')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiQuery({
+    name: 'version',
+    required: true,
+    description: 'Coding version to export: v1, v2, or v3',
+    enum: ['v1', 'v2', 'v3']
+  })
+  @ApiQuery({
+    name: 'authToken',
+    required: true,
+    description: 'Authentication token for generating replay URLs',
+    type: String
+  })
+  @ApiQuery({
+    name: 'serverUrl',
+    required: false,
+    description: 'Server URL to use for generating links',
+    type: String
+  })
+  @ApiOkResponse({
+    description: 'Coding results for specified version exported as Excel',
+    content: {
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': {
+        schema: {
+          type: 'string',
+          format: 'binary'
+        }
+      }
+    }
+  })
+  async getCodingResultsByVersionAsExcel(
+    @WorkspaceId() workspace_id: number,
+      @Query('version') version: 'v1' | 'v2' | 'v3',
+      @Query('authToken') authToken: string,
+      @Query('serverUrl') serverUrl: string,
+      @Res() res: Response
+  ): Promise<void> {
+    const excelData = await this.codingListService.getCodingResultsByVersionAsExcel(workspace_id, version, authToken || '', serverUrl || '');
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="coding-results-${version}-${new Date().toISOString().slice(0, 10)}.xlsx"`);
+    res.send(excelData);
   }
 
   @Get(':workspace_id/coding/statistics')
@@ -1095,7 +1198,8 @@ export class WorkspaceCodingController {
   }
 
   @Post(':workspace_id/coding/external-coding-import/stream')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(2)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiBody({
@@ -1150,7 +1254,8 @@ export class WorkspaceCodingController {
   }
 
   @Post(':workspace_id/coding/external-coding-import')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(2)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiBody({
@@ -1843,7 +1948,8 @@ export class WorkspaceCodingController {
   }
 
   @Delete(':workspace_id/coding/coder-trainings/:trainingId')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiParam({ name: 'trainingId', type: Number, description: 'ID of the coder training to delete' })
@@ -1948,7 +2054,8 @@ export class WorkspaceCodingController {
   }
 
   @Post(':workspace_id/coding/job-definitions')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(2)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiBody({
@@ -2040,7 +2147,8 @@ export class WorkspaceCodingController {
   }
 
   @Put(':workspace_id/coding/job-definitions/:id')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(2)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiParam({ name: 'id', type: Number, description: 'Job definition ID' })
@@ -2080,7 +2188,8 @@ export class WorkspaceCodingController {
   }
 
   @Delete(':workspace_id/coding/job-definitions/:id')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(2)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiParam({ name: 'id', type: Number, description: 'Job definition ID' })
@@ -2164,7 +2273,8 @@ export class WorkspaceCodingController {
   }
 
   @Post(':workspace_id/coding/jobs/bulk-apply-results')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiOkResponse({
@@ -2338,6 +2448,7 @@ export class WorkspaceCodingController {
         selectedCoders: { id: number; name: string; username: string }[];
         doubleCodingAbsolute?: number;
         doubleCodingPercentage?: number;
+        caseOrderingMode?: 'continuous' | 'alternating';
       }
   ): Promise<{
         distribution: Record<string, Record<string, number>>;
@@ -2465,6 +2576,7 @@ export class WorkspaceCodingController {
         selectedCoders: { id: number; name: string; username: string }[];
         doubleCodingAbsolute?: number;
         doubleCodingPercentage?: number;
+        caseOrderingMode?: 'continuous' | 'alternating';
       }
   ): Promise<{
         success: boolean;
@@ -3325,6 +3437,7 @@ export class WorkspaceCodingController {
           items: {
             type: 'object',
             properties: {
+              responseId: { type: 'number', description: 'Response ID' },
               unitName: { type: 'string', description: 'Name of the unit' },
               variableId: { type: 'string', description: 'Variable ID' },
               personLogin: { type: 'string', description: 'Person login' },
@@ -3362,6 +3475,7 @@ export class WorkspaceCodingController {
                    @Query('limit') limit: number = 50
   ): Promise<{
         data: Array<{
+          responseId: number;
           unitName: string;
           variableId: string;
           personLogin: string;
@@ -3389,6 +3503,60 @@ export class WorkspaceCodingController {
       workspace_id,
       validPage,
       validLimit
+    );
+  }
+
+  @Post(':workspace_id/coding/double-coded-review/apply-resolutions')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiBody({
+    description: 'Apply resolutions for double-coded variables',
+    schema: {
+      type: 'object',
+      properties: {
+        decisions: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              responseId: { type: 'number', description: 'Response ID' },
+              selectedJobId: { type: 'number', description: 'Selected coding job ID' },
+              resolutionComment: { type: 'string', nullable: true, description: 'Optional resolution comment' }
+            },
+            required: ['responseId', 'selectedJobId']
+          }
+        }
+      },
+      required: ['decisions']
+    }
+  })
+  @ApiOkResponse({
+    description: 'Resolutions applied successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', description: 'Whether the operation was successful' },
+        appliedCount: { type: 'number', description: 'Number of resolutions applied' },
+        failedCount: { type: 'number', description: 'Number of resolutions that failed' },
+        skippedCount: { type: 'number', description: 'Number of resolutions skipped' },
+        message: { type: 'string', description: 'Summary message' }
+      }
+    }
+  })
+  async applyDoubleCodedResolutions(
+    @WorkspaceId() workspace_id: number,
+      @Body() body: { decisions: Array<{ responseId: number; selectedJobId: number; resolutionComment?: string }> }
+  ): Promise<{
+        success: boolean;
+        appliedCount: number;
+        failedCount: number;
+        skippedCount: number;
+        message: string;
+      }> {
+    return this.workspaceCodingService.applyDoubleCodedResolutions(
+      workspace_id,
+      body.decisions
     );
   }
 
@@ -3476,5 +3644,81 @@ export class WorkspaceCodingController {
       @Param('codingJobId') codingJobId: number
   ): Promise<Record<string, string>> {
     return this.codingJobService.getCodingNotes(codingJobId);
+  }
+
+  @Post(':workspace_id/coding/reset-version')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
+  @ApiBody({
+    description: 'Reset coding version request',
+    schema: {
+      type: 'object',
+      properties: {
+        version: { type: 'string', enum: ['v1', 'v2', 'v3'], description: 'Coding version to reset' },
+        unitFilters: {
+          type: 'array', items: { type: 'string' }, nullable: true, description: 'Optional unit names to filter by'
+        },
+        variableFilters: {
+          type: 'array', items: { type: 'string' }, nullable: true, description: 'Optional variable IDs to filter by'
+        }
+      },
+      required: ['version']
+    }
+  })
+  @ApiOkResponse({
+    description: 'Coding version reset successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        affectedResponseCount: { type: 'number', description: 'Number of responses that were reset' },
+        cascadeResetVersions: { type: 'array', items: { type: 'string' }, description: 'Versions that were also reset due to cascade' },
+        message: { type: 'string', description: 'Summary message of the reset operation' }
+      }
+    }
+  })
+  async resetCodingVersion(
+    @WorkspaceId() workspace_id: number,
+      @Body() body: { version: 'v1' | 'v2' | 'v3'; unitFilters?: string[]; variableFilters?: string[] },
+      @Req() request: RequestWithUser
+  ): Promise<{
+        affectedResponseCount: number;
+        cascadeResetVersions: ('v2' | 'v3')[];
+        message: string;
+      }> {
+    const result = await this.workspaceCodingService.resetCodingVersion(
+      workspace_id,
+      body.version,
+      body.unitFilters,
+      body.variableFilters
+    );
+
+    // Invalidate statistics cache for reset versions
+    await this.codingStatisticsService.invalidateCache(workspace_id, body.version);
+    if (result.cascadeResetVersions.length > 0) {
+      for (const cascadeVersion of result.cascadeResetVersions) {
+        await this.codingStatisticsService.invalidateCache(workspace_id, cascadeVersion);
+      }
+    }
+
+    // Log to journal
+    const userId = request.user?.id || 'unknown';
+    await this.journalService.createEntry(
+      userId,
+      workspace_id,
+      'RESET_VERSION',
+      'CODING',
+      workspace_id,
+      {
+        version: body.version,
+        affectedResponseCount: result.affectedResponseCount,
+        unitFilters: body.unitFilters || [],
+        variableFilters: body.variableFilters || [],
+        cascadeResetVersions: result.cascadeResetVersions
+      }
+    );
+
+    return result;
   }
 }

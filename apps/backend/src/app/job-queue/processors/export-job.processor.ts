@@ -10,6 +10,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { ExportJobData, ExportJobResult, JobQueueService } from '../job-queue.service';
 import { CodingExportService } from '../../database/services/coding-export.service';
+import { WorkspaceTestResultsService } from '../../database/services/workspace-test-results.service';
 import { CacheService } from '../../cache/cache.service';
 import { ExportJobCancelledException } from '../exceptions/export-job-cancelled.exception';
 
@@ -21,6 +22,8 @@ export class ExportJobProcessor {
   constructor(
     @Inject(forwardRef(() => CodingExportService))
     private codingExportService: CodingExportService,
+    @Inject(forwardRef(() => WorkspaceTestResultsService))
+    private workspaceTestResultsService: WorkspaceTestResultsService,
     private cacheService: CacheService,
     private jobQueueService: JobQueueService
   ) {}
@@ -45,7 +48,7 @@ export class ExportJobProcessor {
   async process(job: Job<ExportJobData>): Promise<ExportJobResult> {
     this.logger.log(`Processing export job ${job.id} for workspace ${job.data.workspaceId}, type: ${job.data.exportType}`);
 
-    const validExportTypes = ['aggregated', 'by-coder', 'by-variable', 'detailed', 'coding-times'];
+    const validExportTypes = ['aggregated', 'by-coder', 'by-variable', 'detailed', 'coding-times', 'test-results'];
     if (!validExportTypes.includes(job.data.exportType)) {
       const errorMessage = `Unknown export type: ${job.data.exportType}`;
       this.logger.error(`Error processing export job ${job.id}: ${errorMessage}`);
@@ -55,33 +58,23 @@ export class ExportJobProcessor {
     let filePath: string | undefined;
 
     try {
-      // Check for cancellation before starting
       await this.checkCancellation(job);
-
       await job.progress(10);
-
-      // Ensure temp directory exists
       const tempDir = path.join(process.cwd(), 'temp');
       if (!fs.existsSync(tempDir)) {
         fs.mkdirSync(tempDir, { recursive: true });
       }
-
       const fileName = `export_${job.id}_${Date.now()}.xlsx`;
       filePath = path.join(tempDir, fileName);
-
       this.logger.log(`Generating export file: ${filePath}`);
-
-      // Check for cancellation before generating export
       await this.checkCancellation(job, filePath);
 
       await job.progress(20);
-
-      // Create cancellation check callback for granular checks in export service
       const checkCancellation = async (): Promise<void> => {
         await this.checkCancellation(job, filePath);
       };
 
-      let buffer: Buffer;
+      let buffer: Buffer | undefined;
 
       // eslint-disable-next-line default-case
       switch (job.data.exportType) {
@@ -157,29 +150,43 @@ export class ExportJobProcessor {
           );
           break;
 
+        case 'test-results':
+          filePath = filePath.replace('.xlsx', '.csv');
+          await this.workspaceTestResultsService.exportTestResultsToFile(
+            job.data.workspaceId,
+            filePath,
+            job.data.testResultFilters,
+            async progress => {
+              const jobProgress = 20 + Math.round((progress / 100) * 70);
+              await job.progress(jobProgress);
+              await this.checkCancellation(job, filePath);
+            }
+          );
+          break;
+
         // no default - exportType is validated at the start of the method
       }
 
-      // Check for cancellation after export generation
       await this.checkCancellation(job, filePath);
 
       await job.progress(90);
 
-      // Write buffer to file
-      fs.writeFileSync(filePath, buffer);
+      if (buffer) {
+        fs.writeFileSync(filePath, buffer);
+      }
 
-      // Check for cancellation before caching
       await this.checkCancellation(job, filePath);
 
       const stats = fs.statSync(filePath);
       const fileSize = stats.size;
+      const finalFileName = path.basename(filePath);
 
-      this.logger.log(`Export file generated successfully: ${fileName} (${fileSize} bytes)`);
+      this.logger.log(`Export file generated successfully: ${finalFileName} (${fileSize} bytes)`);
 
       // Cache file metadata in Redis with 1 hour TTL
       const metadata: ExportJobResult = {
         fileId: job.id.toString(),
-        fileName,
+        fileName: finalFileName,
         filePath,
         fileSize,
         workspaceId: job.data.workspaceId,

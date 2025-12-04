@@ -13,7 +13,7 @@ export interface TestPersonCodingJobData {
 export interface ExportJobData {
   workspaceId: number;
   userId: number;
-  exportType: 'aggregated' | 'by-coder' | 'by-variable' | 'detailed' | 'coding-times';
+  exportType: 'aggregated' | 'by-coder' | 'by-variable' | 'detailed' | 'coding-times' | 'test-results';
   outputCommentsInsteadOfCodes?: boolean;
   includeReplayUrl?: boolean;
   anonymizeCoders?: boolean;
@@ -25,6 +25,12 @@ export interface ExportJobData {
   excludeAutoCoded?: boolean;
   authToken?: string;
   isCancelled?: boolean;
+  testResultFilters?: {
+    groupNames?: string[];
+    bookletNames?: string[];
+    unitNames?: string[];
+    personIds?: number[];
+  };
 }
 
 export interface ExportJobResult {
@@ -104,6 +110,26 @@ export class JobQueueService {
     }
 
     try {
+      const state = await job.getState();
+
+      if (state === 'waiting' || state === 'delayed') {
+        await job.remove();
+        this.logger.log(`Job ${jobId} has been cancelled and removed from queue`);
+        return true;
+      }
+
+      if (state === 'active') {
+        await job.discard();
+        this.logger.log(`Job ${jobId} is active, marked for discard (will not retry on failure)`);
+        return true;
+      }
+
+      if (state === 'completed' || state === 'failed') {
+        this.logger.log(`Job ${jobId} is already ${state}, no action needed`);
+        return true;
+      }
+
+      // Fallback: try to remove
       await job.remove();
       this.logger.log(`Job ${jobId} has been cancelled`);
       return true;

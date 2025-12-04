@@ -553,6 +553,7 @@ export class TestPersonCodingService {
     limit: number = 50
   ): Observable<{
       data: Array<{
+        responseId: number;
         unitName: string;
         variableId: string;
         personLogin: string;
@@ -580,6 +581,7 @@ export class TestPersonCodingService {
     return this.http
       .get<{
       data: Array<{
+        responseId: number;
         unitName: string;
         variableId: string;
         personLogin: string;
@@ -609,6 +611,39 @@ export class TestPersonCodingService {
           total: 0,
           page,
           limit
+        }))
+      );
+  }
+
+  applyDoubleCodedResolutions(
+    workspaceId: number,
+    dto: { decisions: Array<{ responseId: number; selectedJobId: number; resolutionComment?: string }> }
+  ): Observable<{
+      success: boolean;
+      appliedCount: number;
+      failedCount: number;
+      skippedCount: number;
+      message: string;
+    }> {
+    return this.http
+      .post<{
+      success: boolean;
+      appliedCount: number;
+      failedCount: number;
+      skippedCount: number;
+      message: string;
+    }>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/coding/double-coded-review/apply-resolutions`,
+      dto,
+      { headers: this.authHeader }
+    )
+      .pipe(
+        catchError(() => of({
+          success: false,
+          appliedCount: 0,
+          failedCount: 0,
+          skippedCount: 0,
+          message: 'Failed to apply resolutions'
         }))
       );
   }
