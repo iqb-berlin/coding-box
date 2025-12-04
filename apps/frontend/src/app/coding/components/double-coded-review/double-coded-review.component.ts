@@ -3,7 +3,8 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatCardModule } from '@angular/material/card';
-import { MatTableModule } from '@angular/material/table';
+import { MatTableModule, MatTableDataSource } from '@angular/material/table';
+import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
@@ -31,6 +32,7 @@ interface CoderResult {
 }
 
 interface DoubleCodedItem {
+  responseId: number;
   unitName: string;
   variableId: string;
   personLogin: string;
@@ -55,6 +57,7 @@ interface DoubleCodedItem {
     MatPaginatorModule,
     MatProgressSpinnerModule,
     MatRadioModule,
+    MatCheckboxModule,
     MatFormFieldModule,
     MatInputModule,
     MatSnackBarModule,
@@ -84,17 +87,29 @@ export class DoubleCodedReviewComponent implements OnInit {
     'selection'
   ];
 
-  data: DoubleCodedItem[] = [];
+  dataSource = new MatTableDataSource<DoubleCodedItem>([]);
+  allData: DoubleCodedItem[] = [];
   totalItems = 0;
   currentPage = 1;
   pageSize = 10;
   isLoading = false;
+  showOnlyConflicts = true;
 
   selectionForm!: FormGroup;
 
   ngOnInit(): void {
     this.initializeForm();
+    this.setupFilterPredicate();
     this.loadData();
+  }
+
+  private setupFilterPredicate(): void {
+    this.dataSource.filterPredicate = (data: DoubleCodedItem, filter: string): boolean => {
+      if (filter === 'conflicts-only') {
+        return this.hasConflict(data);
+      }
+      return true;
+    };
   }
 
   private initializeForm(): void {
@@ -108,11 +123,57 @@ export class DoubleCodedReviewComponent implements OnInit {
     });
 
     // Add form controls for each item
-    this.data.forEach((item, index) => {
+    this.dataSource.data.forEach((item, index) => {
       const controlName = `item_${index}`;
       const defaultValue = item.coderResults.length > 0 ? item.coderResults[0].coderId.toString() : '';
       this.selectionForm.addControl(controlName, new FormControl(defaultValue));
+
+      // Add comment control for conflicting items
+      if (this.hasConflict(item)) {
+        const commentControlName = `comment_${index}`;
+        this.selectionForm.addControl(commentControlName, new FormControl(''));
+      }
     });
+  }
+
+  hasConflict(item: DoubleCodedItem): boolean {
+    if (item.coderResults.length < 2) {
+      return false;
+    }
+    const firstCode = item.coderResults[0].code;
+    return item.coderResults.some(result => result.code !== firstCode);
+  }
+
+  onFilterChange(): void {
+    this.dataSource.filter = this.showOnlyConflicts ? 'conflicts-only' : '';
+  }
+
+  areAllVisibleConflictsResolved(): boolean {
+    return this.dataSource.data.every((item, index) => {
+      if (!this.hasConflict(item)) {
+        return true; // Non-conflicting items don't need resolution
+      }
+      const controlName = `item_${index}`;
+      const value = this.selectionForm.get(controlName)?.value;
+      return value && value !== '';
+    });
+  }
+
+  getConflictCount(): number {
+    return this.allData.filter(item => this.hasConflict(item)).length;
+  }
+
+  getVisibleConflictCount(): number {
+    return this.dataSource.data.filter(item => this.hasConflict(item)).length;
+  }
+
+  getUnresolvedCount(): number {
+    return this.dataSource.data.filter((item, index) => {
+      if (!this.hasConflict(item)) return false;
+      const controlName = `item_${index}`;
+      const value = this.selectionForm.get(controlName)?.value;
+      return !value || value === '';
+    }).length;
   }
 
   loadData(): void {
@@ -133,11 +194,16 @@ export class DoubleCodedReviewComponent implements OnInit {
       this.pageSize
     ).subscribe({
       next: response => {
-        this.data = response.data.map(item => ({
+        this.allData = response.data.map(item => ({
           ...item,
           selectedCoderResult: item.coderResults[0] // Default to first coder
         }));
+        this.dataSource.data = this.allData;
         this.totalItems = response.total;
+
+        // Apply conflict filter if enabled
+        this.onFilterChange();
+
         this.updateForm();
         this.isLoading = false;
       },
@@ -170,14 +236,74 @@ export class DoubleCodedReviewComponent implements OnInit {
   getSelectedCoderResultFromForm(index: number): CoderResult | undefined {
     const controlName = `item_${index}`;
     const selectedCoderId = this.selectionForm.get(controlName)?.value;
-    const item = this.data[index];
+    const item = this.dataSource.data[index];
     return item.coderResults.find(cr => cr.coderId.toString() === selectedCoderId);
   }
 
   applyReviewDecisions(): void {
-    // TODO: Implement applying review decisions
-    this.translateService.get('double-coded-review.errors.review-applied').subscribe(message => {
-      this.showSuccess(message);
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      this.translateService.get('double-coded-review.errors.no-workspace-selected').subscribe(message => {
+        this.showError(message);
+      });
+      return;
+    }
+
+    // Collect decisions from current page
+    const decisions: Array<{ responseId: number; selectedJobId: number; resolutionComment?: string }> = [];
+
+    this.dataSource.data.forEach((item, index) => {
+      const controlName = `item_${index}`;
+      const selectedCoderId = this.selectionForm.get(controlName)?.value;
+
+      if (selectedCoderId) {
+        const selectedResult = item.coderResults.find(cr => cr.coderId.toString() === selectedCoderId);
+        if (selectedResult) {
+          const decision: { responseId: number; selectedJobId: number; resolutionComment?: string } = {
+            responseId: item.responseId,
+            selectedJobId: selectedResult.jobId
+          };
+
+          // Add comment if provided for conflicting items
+          if (this.hasConflict(item)) {
+            const commentControlName = `comment_${index}`;
+            const comment = this.selectionForm.get(commentControlName)?.value;
+            if (comment && comment.trim()) {
+              decision.resolutionComment = comment.trim();
+            }
+          }
+
+          decisions.push(decision);
+        }
+      }
+    });
+
+    if (decisions.length === 0) {
+      this.translateService.get('double-coded-review.errors.no-decisions').subscribe(message => {
+        this.showError(message);
+      });
+      return;
+    }
+
+    this.isLoading = true;
+    this.testPersonCodingService.applyDoubleCodedResolutions(workspaceId, { decisions }).subscribe({
+      next: response => {
+        this.translateService.get('double-coded-review.success.resolutions-applied', {
+          count: response.appliedCount
+        }).subscribe(message => {
+          this.showSuccess(message);
+        });
+
+        // Reset to page 1 and reload data
+        this.currentPage = 1;
+        this.loadData();
+      },
+      error: () => {
+        this.translateService.get('double-coded-review.errors.failed-to-apply').subscribe(message => {
+          this.showError(message);
+        });
+        this.isLoading = false;
+      }
     });
   }
 

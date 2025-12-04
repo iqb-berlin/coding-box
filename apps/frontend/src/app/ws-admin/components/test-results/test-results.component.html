@@ -25,11 +25,37 @@
         <mat-icon>search</mat-icon>
         Suchen
       </a>
+      <a mat-raised-button color="primary" (click)="exportResults()" [disabled]="isExporting">
+        @if (!isExporting) {
+          <mat-icon>download</mat-icon>
+        }
+        @if (isExporting) {
+          <mat-spinner diameter="20" style="display: inline-block; margin-right: 8px;"></mat-spinner>
+        }
+        @if (!isExporting) {
+          <span>Ergebnisse exportieren</span>
+        }
+        @if (isExporting) {
+          <span>Export läuft...</span>
+        }
+      </a>
+      @if (exportJobStatus === 'completed' && !isExporting && exportJobId) {
+        <a mat-raised-button color="accent" (click)="downloadExportResult(exportJobId!)">
+          <mat-icon>file_download</mat-icon>
+          Download bereit
+        </a>
+      }
       <a mat-raised-button color="primary" (click)="openValidationDialog()">
-        <mat-icon *ngIf="isAnyValidationRunning()" class="rotating-icon">sync</mat-icon>
-        <mat-icon *ngIf="!isAnyValidationRunning()">rule</mat-icon>
+        @if (isAnyValidationRunning()) {
+          <mat-icon class="rotating-icon">sync</mat-icon>
+        }
+        @if (!isAnyValidationRunning()) {
+          <mat-icon>rule</mat-icon>
+        }
         Validieren
-        <span *ngIf="isAnyValidationRunning()" class="validation-status-text">Läuft...</span>
+        @if (isAnyValidationRunning()) {
+          <span class="validation-status-text">Läuft...</span>
+        }
       </a>
       <a mat-raised-button color="primary" (click)="openVariableAnalysisDialog()">
         <mat-icon>analytics</mat-icon>
@@ -176,10 +202,12 @@
             <p class="section-description">Wählen Sie ein Testheft aus, um dessen Aufgaben anzuzeigen</p>
             <mat-divider></mat-divider>
 
-            <div *ngIf="isLoadingBooklets" class="loading-container">
-              <mat-spinner class="mat-spinner"></mat-spinner>
-              <p class="loading-text">Testhefte werden geladen...</p>
-            </div>
+            @if (isLoadingBooklets) {
+              <div class="loading-container">
+                <mat-spinner class="mat-spinner"></mat-spinner>
+                <p class="loading-text">Testhefte werden geladen...</p>
+              </div>
+            }
 
             <mat-accordion class="accordion" [style.display]="isLoadingBooklets ? 'none' : 'block'">
               @for (booklet of booklets; track booklet.id) {
@@ -286,10 +314,11 @@
                     <mat-icon>note</mat-icon>
                     Notizen
                   </button>
-                  <span *ngIf="selectedUnit && selectedUnit.id && hasUnitNotes(selectedUnit.id)"
-                        style="position: absolute; top: -5px; right: -5px; display: flex; justify-content: center; align-items: center; width: 16px; height: 16px;">
-                    <mat-icon style="color: #2196F3; font-size: 10px; height: 10px; width: 10px;">circle</mat-icon>
-                  </span>
+                  @if (selectedUnit && selectedUnit.id && hasUnitNotes(selectedUnit.id)) {
+                    <span style="position: absolute; top: -5px; right: -5px; display: flex; justify-content: center; align-items: center; width: 16px; height: 16px;">
+                      <mat-icon style="color: #2196F3; font-size: 10px; height: 10px; width: 10px;">circle</mat-icon>
+                    </span>
+                  }
                 </div>
             </div>
             <div class="var-list">

@@ -12,7 +12,17 @@
           <p>{{ 'double-coded-review.loading' | translate }}</p>
         </div>
       } @else {
-        @if (data.length === 0) {
+        @if (dataSource.data.length === 0 && showOnlyConflicts) {
+          <mat-card class="no-data-card">
+            <mat-card-content>
+              <div class="no-data-content">
+                <mat-icon class="no-data-icon">check_circle</mat-icon>
+                <h3>{{ 'double-coded-review.no-conflicts.title' | translate }}</h3>
+                <p>{{ 'double-coded-review.no-conflicts.message' | translate }}</p>
+              </div>
+            </mat-card-content>
+          </mat-card>
+        } @else if (dataSource.data.length === 0) {
           <mat-card class="no-data-card">
             <mat-card-content>
               <div class="no-data-content">
@@ -30,8 +40,30 @@
             </mat-card-header>
 
             <mat-card-content>
+              <div class="filter-section">
+                <mat-checkbox [(ngModel)]="showOnlyConflicts" 
+                              (change)="onFilterChange()" 
+                              [ngModelOptions]="{standalone: true}"
+                              color="primary">
+                  {{ 'double-coded-review.filter.show-only-conflicts' | translate }}
+                </mat-checkbox>
+                
+                @if (showOnlyConflicts) {
+                  <div class="statistics">
+                    <span class="stat-text">
+                      {{ 'double-coded-review.statistics.showing-conflicts' | translate:{visible: getVisibleConflictCount(), total: getConflictCount()} }}
+                    </span>
+                    @if (getUnresolvedCount() > 0) {
+                      <span class="unresolved-text">
+                        {{ 'double-coded-review.statistics.unresolved' | translate:{count: getUnresolvedCount()} }}
+                      </span>
+                    }
+                  </div>
+                }
+              </div>
+
               <form [formGroup]="selectionForm">
-                <table mat-table [dataSource]="data" class="review-table">
+                <table mat-table [dataSource]="dataSource" class="review-table">
                   <!-- Unit & Variable Column -->
                   <ng-container matColumnDef="unitVariable">
                     <th mat-header-cell *matHeaderCellDef>{{ 'double-coded-review.columns.unit-variable' | translate }}</th>
@@ -70,6 +102,9 @@
                     <th mat-header-cell *matHeaderCellDef>{{ 'double-coded-review.columns.coder-results' | translate }}</th>
                     <td mat-cell *matCellDef="let element">
                       <div class="coder-results-cell">
+                        @if (hasConflict(element)) {
+                          <mat-icon class="conflict-icon" color="warn" title="{{ 'double-coded-review.conflict-indicator' | translate }}">warning</mat-icon>
+                        }
                         @for (result of element.coderResults; track result.coderId) {
                           <div class="coder-result-item">
                             <div class="coder-name">{{ result.coderName }}</div>
@@ -94,16 +129,28 @@
                   <ng-container matColumnDef="selection">
                     <th mat-header-cell *matHeaderCellDef>{{ 'double-coded-review.columns.selection' | translate }}</th>
                     <td mat-cell *matCellDef="let element; let i = index">
-                      <mat-radio-group
-                        [formControlName]="'item_' + i"
-                        (change)="onSelectionChange(element, $event.value)"
-                        class="coder-selection">
-                        @for (result of element.coderResults; track result.coderId) {
-                          <mat-radio-button [value]="result.coderId.toString()" class="coder-radio">
-                            {{ result.coderName }}
-                          </mat-radio-button>
+                      <div class="selection-cell">
+                        <mat-radio-group
+                          [formControlName]="'item_' + i"
+                          (change)="onSelectionChange(element, $event.value)"
+                          class="coder-selection">
+                          @for (result of element.coderResults; track result.coderId) {
+                            <mat-radio-button [value]="result.coderId.toString()" class="coder-radio">
+                              {{ result.coderName }}
+                            </mat-radio-button>
+                          }
+                        </mat-radio-group>
+                        
+                        @if (hasConflict(element)) {
+                          <mat-form-field class="comment-field" appearance="outline">
+                            <mat-label>{{ 'double-coded-review.comment-label' | translate }}</mat-label>
+                            <textarea matInput
+                                      [formControlName]="'comment_' + i"
+                                      rows="2"
+                                      [placeholder]="'double-coded-review.comment-placeholder' | translate"></textarea>
+                          </mat-form-field>
                         }
-                      </mat-radio-group>
+                      </div>
                     </td>
                   </ng-container>
 
@@ -126,7 +173,7 @@
                 mat-raised-button
                 color="primary"
                 (click)="applyReviewDecisions()"
-                [disabled]="data.length === 0">
+                [disabled]="dataSource.data.length === 0 || !areAllVisibleConflictsResolved() || isLoading">
                 <mat-icon>check_circle</mat-icon>
                 {{ 'double-coded-review.apply-decisions' | translate }}
               </button>
@@ -160,7 +207,17 @@
         <p>{{ 'double-coded-review.loading' | translate }}</p>
       </div>
     } @else {
-      @if (data.length === 0) {
+      @if (dataSource.data.length === 0 && showOnlyConflicts) {
+        <mat-card class="no-data-card">
+          <mat-card-content>
+            <div class="no-data-content">
+              <mat-icon class="no-data-icon">check_circle</mat-icon>
+              <h3>{{ 'double-coded-review.no-conflicts.title' | translate }}</h3>
+              <p>{{ 'double-coded-review.no-conflicts.message' | translate }}</p>
+            </div>
+          </mat-card-content>
+        </mat-card>
+      } @else if (dataSource.data.length === 0) {
         <mat-card class="no-data-card">
           <mat-card-content>
             <div class="no-data-content">
@@ -178,8 +235,30 @@
           </mat-card-header>
 
           <mat-card-content>
+            <div class="filter-section">
+              <mat-checkbox [(ngModel)]="showOnlyConflicts" 
+                            (change)="onFilterChange()" 
+                            [ngModelOptions]="{standalone: true}"
+                            color="primary">
+                {{ 'double-coded-review.filter.show-only-conflicts' | translate }}
+              </mat-checkbox>
+              
+              @if (showOnlyConflicts) {
+                <div class="statistics">
+                  <span class="stat-text">
+                    {{ 'double-coded-review.statistics.showing-conflicts' | translate:{visible: getVisibleConflictCount(), total: getConflictCount()} }}
+                  </span>
+                  @if (getUnresolvedCount() > 0) {
+                    <span class="unresolved-text">
+                      {{ 'double-coded-review.statistics.unresolved' | translate:{count: getUnresolvedCount()} }}
+                    </span>
+                  }
+                </div>
+              }
+            </div>
+
             <form [formGroup]="selectionForm">
-              <table mat-table [dataSource]="data" class="review-table">
+              <table mat-table [dataSource]="dataSource" class="review-table">
                 <!-- Unit & Variable Column -->
                 <ng-container matColumnDef="unitVariable">
                   <th mat-header-cell *matHeaderCellDef>{{ 'double-coded-review.columns.unit-variable' | translate }}</th>
@@ -218,6 +297,9 @@
                   <th mat-header-cell *matHeaderCellDef>{{ 'double-coded-review.columns.coder-results' | translate }}</th>
                   <td mat-cell *matCellDef="let element">
                     <div class="coder-results-cell">
+                      @if (hasConflict(element)) {
+                        <mat-icon class="conflict-icon" color="warn" title="{{ 'double-coded-review.conflict-indicator' | translate }}">warning</mat-icon>
+                      }
                       @for (result of element.coderResults; track result.coderId) {
                         <div class="coder-result-item">
                           <div class="coder-name">{{ result.coderName }}</div>
@@ -242,16 +324,28 @@
                 <ng-container matColumnDef="selection">
                   <th mat-header-cell *matHeaderCellDef>{{ 'double-coded-review.columns.selection' | translate }}</th>
                   <td mat-cell *matCellDef="let element; let i = index">
-                    <mat-radio-group
-                      [formControlName]="'item_' + i"
-                      (change)="onSelectionChange(element, $event.value)"
-                      class="coder-selection">
-                      @for (result of element.coderResults; track result.coderId) {
-                        <mat-radio-button [value]="result.coderId.toString()" class="coder-radio">
-                          {{ result.coderName }}
-                        </mat-radio-button>
+                    <div class="selection-cell">
+                      <mat-radio-group
+                        [formControlName]="'item_' + i"
+                        (change)="onSelectionChange(element, $event.value)"
+                        class="coder-selection">
+                        @for (result of element.coderResults; track result.coderId) {
+                          <mat-radio-button [value]="result.coderId.toString()" class="coder-radio">
+                            {{ result.coderName }}
+                          </mat-radio-button>
+                        }
+                      </mat-radio-group>
+                      
+                      @if (hasConflict(element)) {
+                        <mat-form-field class="comment-field" appearance="outline">
+                          <mat-label>{{ 'double-coded-review.comment-label' | translate }}</mat-label>
+                          <textarea matInput
+                                    [formControlName]="'comment_' + i"
+                                    rows="2"
+                                    [placeholder]="'double-coded-review.comment-placeholder' | translate"></textarea>
+                        </mat-form-field>
                       }
-                    </mat-radio-group>
+                    </div>
                   </td>
                 </ng-container>
 
@@ -274,7 +368,7 @@
               mat-raised-button
               color="primary"
               (click)="applyReviewDecisions()"
-              [disabled]="data.length === 0">
+              [disabled]="dataSource.data.length === 0 || !areAllVisibleConflictsResolved() || isLoading">
               <mat-icon>check_circle</mat-icon>
               {{ 'double-coded-review.apply-decisions' | translate }}
             </button>

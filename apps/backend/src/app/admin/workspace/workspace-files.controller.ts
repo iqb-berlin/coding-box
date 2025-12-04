@@ -17,6 +17,7 @@ import { VariableInfo } from '@iqbspecs/variable-info/variable-info.interface';
 import { FilesDto } from '../../../../../../api-dto/files/files.dto';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
+import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import { FileDownloadDto } from '../../../../../../api-dto/files/file-download.dto';
 import { FileValidationResultDto } from '../../../../../../api-dto/files/file-validation-result.dto';
 import { WorkspaceFilesService } from '../../database/services/workspace-files.service';
@@ -24,6 +25,7 @@ import { InvalidVariableDto } from '../../../../../../api-dto/files/variable-val
 import { TestTakersValidationDto } from '../../../../../../api-dto/files/testtakers-validation.dto';
 import { DuplicateResponsesResultDto } from '../../../../../../api-dto/files/duplicate-response.dto';
 import { PersonService } from '../../database/services/person.service';
+import { UnitVariableDetailsDto } from '../../models/unit-variable-details.dto';
 
 @ApiTags('Admin Workspace Files')
 @Controller('admin/workspace')
@@ -92,7 +94,8 @@ export class WorkspaceFilesController {
   @ApiBadRequestResponse({
     description: 'Invalid workspace ID or error fetching files.'
   })
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   async findFiles(
     @Param('workspace_id') workspace_id: number,
                            @Query('page') page: number = 1,
@@ -126,7 +129,8 @@ export class WorkspaceFilesController {
 
   @Delete(':workspace_id/files')
   @ApiTags('ws admin test-files')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   async deleteTestFiles(@Query() query: { fileIds: string },
     @Param('workspace_id') workspace_id: number) {
     return this.workspaceFilesService.deleteTestFiles(workspace_id, query.fileIds.split(';'));
@@ -134,7 +138,8 @@ export class WorkspaceFilesController {
 
   @Post(':workspace_id/persons/exclude')
   @ApiTags('ws admin test-files')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   @ApiOperation({ summary: 'Mark persons as not to be considered', description: 'Marks persons with specified logins as not to be considered in the persons database' })
   @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
   @ApiBody({
@@ -169,7 +174,8 @@ export class WorkspaceFilesController {
 
   @Get(':workspace_id/files/validation')
   @ApiTags('test files validation')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   @ApiOperation({ summary: 'Validate test files', description: 'Validates test files and returns a hierarchical view of expected files and their status' })
   @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
   @ApiQuery({
@@ -188,7 +194,8 @@ export class WorkspaceFilesController {
   }
 
   @Post(':workspace_id/upload')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Upload test files', description: 'Uploads test files to a workspace' })
   @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
@@ -232,7 +239,8 @@ export class WorkspaceFilesController {
   }
 
   @Get(':workspace_id/files/:fileId/download')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Download a file', description: 'Downloads a specific file from a workspace' })
   @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
@@ -603,7 +611,8 @@ export class WorkspaceFilesController {
 
   @Delete(':workspace_id/files/invalid-responses')
   @ApiTags('test files validation')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   @ApiOperation({ summary: 'Delete invalid responses', description: 'Deletes invalid responses from the database' })
   @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
   @ApiQuery({ name: 'responseIds', type: String, description: 'Comma-separated list of response IDs to delete' })
@@ -620,7 +629,8 @@ export class WorkspaceFilesController {
 
   @Delete(':workspace_id/files/all-invalid-responses')
   @ApiTags('test files validation')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   @ApiOperation({ summary: 'Delete all invalid responses', description: 'Deletes all invalid responses of a specific type from the database' })
   @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
   @ApiQuery({
@@ -640,7 +650,8 @@ export class WorkspaceFilesController {
 
   @Post(':workspace_id/files/create-dummy-testtaker')
   @ApiTags('test files validation')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   @ApiOperation({ summary: 'Create dummy testtaker file', description: 'Creates a dummy testtaker file that includes all booklets in the workspace' })
   @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
   @ApiOkResponse({
@@ -684,40 +695,44 @@ export class WorkspaceFilesController {
   @Get(':workspace_id/files/unit-variables')
   @ApiTags('admin workspace')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
-  @ApiOperation({ summary: 'Get unit variables mapping', description: 'Retrieves a mapping of all units and their defined variables from Unit XML files' })
+  @ApiOperation({ summary: 'Get unit variables with details', description: 'Retrieves detailed information about all units and their variables from Unit XML files, including types and coding scheme references. Units with no variables are excluded.' })
   @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
   @ApiOkResponse({
-    description: 'Unit variables mapping retrieved successfully',
+    description: 'Unit variables details retrieved successfully',
     schema: {
       type: 'array',
       items: {
         type: 'object',
         properties: {
-          unitName: { type: 'string' },
+          unitName: { type: 'string', description: 'Name of the unit' },
+          unitId: { type: 'string', description: 'ID of the unit' },
           variables: {
             type: 'array',
-            items: { type: 'string' }
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'string', description: 'Variable ID' },
+                alias: { type: 'string', description: 'Variable alias' },
+                type: { type: 'string', description: 'Variable type (string, integer, number, boolean, etc.)' },
+                hasCodingScheme: { type: 'boolean', description: 'Whether the unit has a coding scheme' },
+                codingSchemeRef: { type: 'string', description: 'Coding scheme filename (if exists)' }
+              }
+            }
           }
         }
       }
     }
   })
   @ApiBadRequestResponse({
-    description: 'Failed to retrieve unit variables mapping'
+    description: 'Failed to retrieve unit variables details'
   })
   async getUnitVariables(
-    @Param('workspace_id') workspace_id: number): Promise<{ unitName: string; variables: string[] }[]> {
+    @Param('workspace_id') workspace_id: number): Promise<UnitVariableDetailsDto[]> {
     if (!workspace_id) {
       throw new BadRequestException('Workspace ID is required.');
     }
 
-    const unitVariableMap: Map<string, Set<string>> = await this.workspaceFilesService.getUnitVariableMap(workspace_id);
-
-    const res = Array.from(unitVariableMap.entries()).map(([unitName, variables]: [string, Set<string>]) => ({
-      unitName,
-      variables: Array.from(variables)
-    }));
-    return res;
+    return this.workspaceFilesService.getUnitVariableDetails(workspace_id);
   }
 
   @Get(':workspace_id/files/variable-info/:scheme_file_id')
@@ -756,7 +771,8 @@ export class WorkspaceFilesController {
 
   @Get(':workspace_id/files/download-zip')
   @ApiTags('admin workspace')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   @ApiOperation({ summary: 'Download all workspace files as ZIP', description: 'Creates and downloads a ZIP file containing all files in the workspace' })
   @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
   @ApiOkResponse({

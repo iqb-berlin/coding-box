@@ -1,0 +1,146 @@
+<div class="dialog-container">
+  <h2 class="dialog-title">Kodiervariablen</h2>
+  <p class="dialog-explanation">
+    Diese Tabelle zeigt alle Kodiervariablen aus den Aufgaben des Arbeitsbereiches.
+  </p>
+  <mat-divider></mat-divider>
+
+  <div class="dialog-content">
+    <!-- Filter controls -->
+    <div class="filter-container">
+      <div class="filter-row">
+        <mat-form-field class="filter-field">
+          <mat-label>Aufgaben Filter</mat-label>
+          <input matInput [(ngModel)]="unitNameFilter" placeholder="Filter nach Aufgabe" (input)="applyFilter()">
+          <button *ngIf="unitNameFilter" matSuffix mat-icon-button aria-label="Clear" (click)="unitNameFilter=''; applyFilter()">
+            <mat-icon>close</mat-icon>
+          </button>
+        </mat-form-field>
+
+        <mat-form-field class="filter-field">
+          <mat-label>Variablen Filter</mat-label>
+          <input matInput [(ngModel)]="variableIdFilter" placeholder="Filter nach Variablen" (input)="applyFilter()">
+          <button *ngIf="variableIdFilter" matSuffix mat-icon-button aria-label="Clear" (click)="variableIdFilter=''; applyFilter()">
+            <mat-icon>close</mat-icon>
+          </button>
+        </mat-form-field>
+
+        <mat-form-field class="filter-field">
+          <mat-label>Typ Filter</mat-label>
+          <mat-select [(ngModel)]="selectedTypes" multiple (selectionChange)="applyFilter()">
+            <mat-option *ngFor="let type of availableTypes" [value]="type">
+              {{ type }}
+            </mat-option>
+          </mat-select>
+        </mat-form-field>
+      </div>
+
+      <div class="filter-row">
+        <mat-checkbox [(ngModel)]="hasCodingSchemeFilter" (change)="applyFilter()" class="coding-scheme-checkbox">
+          Nur mit Kodierungsschema
+        </mat-checkbox>
+
+        <mat-checkbox [(ngModel)]="hasCodesFilter" (change)="applyFilter()" class="coding-scheme-checkbox">
+          Nur mit Codes
+        </mat-checkbox>
+
+        <mat-checkbox [(ngModel)]="isManualOnlyFilter" (change)="applyFilter()" class="coding-scheme-checkbox">
+          Nur mit manueller Kodierung
+        </mat-checkbox>
+
+        <mat-checkbox [(ngModel)]="isClosedCodingFilter" (change)="applyFilter()" class="coding-scheme-checkbox">
+          Nur mit geschlossener Kodierung
+        </mat-checkbox>
+
+        <mat-checkbox [(ngModel)]="isDerivedFilter" (change)="applyFilter()" class="coding-scheme-checkbox">
+          Nur abgeleitete Variablen
+        </mat-checkbox>
+
+        <button mat-raised-button (click)="clearFilters()">
+          <mat-icon>clear</mat-icon>
+          Filter zurücksetzen
+        </button>
+      </div>
+    </div>
+
+    @if (isLoading) {
+      <div class="loading-container">
+        <mat-spinner diameter="40"></mat-spinner>
+        <p class="loading-text">Lade Kodiervariablen...</p>
+      </div>
+    }
+
+    @if (!isLoading && dataSource.data.length > 0) {
+      <div class="table-container">
+        <table mat-table [dataSource]="dataSource" matSort class="variables-table">
+
+          <!-- Unit Name Column -->
+          <ng-container matColumnDef="unitName">
+            <th mat-header-cell *matHeaderCellDef mat-sort-header>Unit-Name</th>
+            <td mat-cell *matCellDef="let element">
+              <a class="unit-link" (click)="openUnitInfo(element.unitId)" matTooltip="Unit-Informationen anzeigen">
+                {{ element.unitName }}
+              </a>
+            </td>
+          </ng-container>
+
+          <!-- Variable Alias Column -->
+          <ng-container matColumnDef="variableAlias">
+            <th mat-header-cell *matHeaderCellDef mat-sort-header>Variablen-ID</th>
+            <td mat-cell *matCellDef="let element">{{ element.variableAlias }}</td>
+          </ng-container>
+
+          <!-- Variable Type Column -->
+          <ng-container matColumnDef="variableType">
+            <th mat-header-cell *matHeaderCellDef mat-sort-header>Typ</th>
+            <td mat-cell *matCellDef="let element">
+              <mat-chip-set>
+                <mat-chip [class]="getTypeClass(element.variableType)">
+                  {{ element.variableType }}
+                </mat-chip>
+              </mat-chip-set>
+            </td>
+          </ng-container>
+
+          <!-- Actions Column -->
+          <ng-container matColumnDef="actions">
+            <th mat-header-cell *matHeaderCellDef>Aktionen</th>
+            <td mat-cell *matCellDef="let element">
+              <div class="action-buttons">
+                <button mat-icon-button
+                        (click)="openUnitInfo(element.unitId)"
+                        matTooltip="Unit-Definition anzeigen"
+                        color="primary">
+                  <mat-icon>info</mat-icon>
+                </button>
+                @if (element.hasCodingScheme && element.codingSchemeRef) {
+                  <button mat-icon-button
+                          (click)="openCodingScheme(element.codingSchemeRef)"
+                          matTooltip="Kodierungsschema öffnen"
+                          color="primary">
+                    <mat-icon>edit_note</mat-icon>
+                  </button>
+                }
+              </div>
+            </td>
+          </ng-container>
+
+          <tr mat-header-row *matHeaderRowDef="displayedColumns; sticky: true"></tr>
+          <tr mat-row *matRowDef="let row; columns: displayedColumns;" class="data-row"></tr>
+        </table>
+      </div>
+    }
+
+    @if (!isLoading && dataSource.data.length === 0) {
+      <div class="empty-state">
+        <mat-icon class="empty-icon">list_alt</mat-icon>
+        <h3>Keine Kodiervariablen gefunden</h3>
+        <p class="empty-text">Es wurden keine Kodiervariablen im Workspace gefunden.</p>
+      </div>
+    }
+  </div>
+
+  <div class="dialog-actions">
+    <button mat-raised-button color="primary" (click)="close()">Schließen</button>
+  </div>
+</div>

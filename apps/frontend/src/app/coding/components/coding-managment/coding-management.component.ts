@@ -28,6 +28,7 @@ import {
   MatPaginator, MatPaginatorModule, MatPaginatorIntl, PageEvent
 } from '@angular/material/paginator';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
@@ -43,6 +44,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { responseStatesNumericMap } from '@iqbspecs/response/response.interface';
 import { ContentDialogComponent } from '../../../shared/dialogs/content-dialog/content-dialog.component';
+import { CodingVariablesDialogComponent } from '../../../coding-management/coding-variables-dialog/coding-variables-dialog.component';
 import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
 import { WorkspaceSettingsService } from '../../../ws-admin/services/workspace-settings.service';
@@ -55,6 +57,8 @@ import { ExportCodingBookComponent } from '../export-coding-book/export-coding-b
 import { CodingManagementManualComponent } from '../coding-management-manual/coding-management-manual.component';
 import { VariableAnalysisDialogComponent } from '../variable-analysis-dialog/variable-analysis-dialog.component';
 import { GermanPaginatorIntl } from '../../../shared/services/german-paginator-intl.service';
+import { ResetVersionDialogComponent } from './reset-version-dialog/reset-version-dialog.component';
+import { DownloadCodingResultsDialogComponent } from './download-coding-results-dialog/download-coding-results-dialog.component';
 
 @Component({
   selector: 'app-coding-management',
@@ -79,6 +83,7 @@ import { GermanPaginatorIntl } from '../../../shared/services/german-paginator-i
     MatSortHeader,
     MatPaginatorModule,
     MatProgressSpinnerModule,
+    MatProgressBarModule,
     ScrollingModule,
     MatFormFieldModule,
     MatInputModule,
@@ -120,6 +125,7 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
   isFilterLoading = false;
   isLoadingStatistics = false;
   isAutoCoding = false;
+  isDownloadInProgress = false;
   showManualCoding = false;
 
   statisticsLoaded = false;
@@ -1000,38 +1006,293 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
 
   fetchUnitVariables(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
-    this.isLoading = true;
 
-    this.backendService.getUnitVariables(workspaceId)
+    this.dialog.open(CodingVariablesDialogComponent, {
+      width: '90%',
+      maxWidth: '1400px',
+      height: '90vh',
+      data: {
+        workspaceId
+      }
+    });
+  }
+
+  openResetVersionDialog(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      this.snackBar.open(this.translateService.instant('coding-management.descriptions.error-workspace'), this.translateService.instant('close'), {
+        duration: 5000,
+        panelClass: ['error-snackbar']
+      });
+      return;
+    }
+
+    // Get version label
+    const versionOption = this.codingRunOptions.find(opt => opt.value === this.selectedStatisticsVersion);
+    const versionLabel = versionOption?.label || '';
+
+    // Determine cascade versions
+    const cascadeVersions = this.selectedStatisticsVersion === 'v2' ? ['v3'] : [];
+
+    const dialogRef = this.dialog.open(ResetVersionDialogComponent, {
+      width: '500px',
+      data: {
+        version: this.selectedStatisticsVersion,
+        versionLabel: versionLabel,
+        cascadeVersions: cascadeVersions
+      }
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result === true) {
+        this.resetCodingVersion(this.selectedStatisticsVersion);
+      }
+    });
+  }
+
+  private resetCodingVersion(version: 'v1' | 'v2' | 'v3'): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) return;
+
+    this.isLoading = true;
+    this.backendService.resetCodingVersion(workspaceId, version)
       .pipe(
-        catchError(() => {
-          this.isLoading = false;
-          this.snackBar.open('Fehler beim Abrufen der Kodiervariablen', 'Schließen', {
-            duration: 5000,
-            panelClass: ['error-snackbar']
-          });
-          return of([]);
-        }),
         finalize(() => {
           this.isLoading = false;
         })
       )
-      .subscribe((data: { unitName: string; variables: string[] }[]) => {
-        if (data.length === 0) {
-          this.snackBar.open('Keine Kodiervariablen gefunden.', 'Schließen', {
-            duration: 5000
+      .subscribe({
+        next: result => {
+          this.snackBar.open(result.message, this.translateService.instant('close'), {
+            duration: 5000,
+            panelClass: ['success-snackbar']
           });
-          return;
+
+          // Refresh statistics after reset
+          this.fetchCodingStatistics();
+        },
+        error: () => {
+          this.snackBar.open(
+            this.translateService.instant('coding-management.descriptions.error-reset'),
+            this.translateService.instant('close'),
+            {
+              duration: 5000,
+              panelClass: ['error-snackbar']
+            }
+          );
         }
-        this.dialog.open(ContentDialogComponent, {
-          width: '80%',
-          data: {
-            title: 'Kodiervariablen',
-            content: JSON.stringify(data, null, 2),
-            isJson: true
+      });
+  }
+
+  openDownloadCodingResultsDialog(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      this.snackBar.open(this.translateService.instant('coding-management.descriptions.error-workspace'), this.translateService.instant('close'), {
+        duration: 5000,
+        panelClass: ['error-snackbar']
+      });
+      return;
+    }
+
+    const dialogRef = this.dialog.open(DownloadCodingResultsDialogComponent, {
+      width: '550px',
+      data: {
+        currentVersion: this.selectedStatisticsVersion
+      }
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result) {
+        const { version, format } = result;
+        this.downloadCodingResultsByVersion(workspaceId, version, format);
+      }
+    });
+  }
+
+  private downloadCodingResultsByVersion(workspaceId: number, version: 'v1' | 'v2' | 'v3', format: ExportFormat): void {
+    // Start background download without blocking UI
+    this.performBackgroundDownload(workspaceId, version, format);
+  }
+
+  private async performBackgroundDownload(workspaceId: number, version: 'v1' | 'v2' | 'v3', format: ExportFormat): Promise<void> {
+    this.isDownloadInProgress = true;
+
+    const snackBarRef = this.snackBar.open(
+      this.translateService.instant('coding-management.download-dialog.download-started', { version, format }),
+      this.translateService.instant('close'),
+      {
+        duration: 0, // Keep open until we dismiss it
+        panelClass: ['info-snackbar']
+      }
+    );
+
+    try {
+      switch (format) {
+        case 'csv':
+          await this.downloadCodingResultsAsCsvBackground(workspaceId, version);
+          break;
+        case 'excel':
+          await this.downloadCodingResultsAsExcelBackground(workspaceId, version);
+          break;
+        case 'json':
+          await this.downloadCodingResultsAsJsonBackground(workspaceId, version);
+          break;
+        default:
+          snackBarRef.dismiss();
+          this.snackBar.open(
+            this.translateService.instant('coding-management.download-dialog.error-unknown-format'),
+            this.translateService.instant('close'),
+            {
+              duration: 5000,
+              panelClass: ['error-snackbar']
+            }
+          );
+          return;
+      }
+
+      snackBarRef.dismiss();
+      this.snackBar.open(
+        this.translateService.instant('coding-management.download-dialog.download-complete', { version, format }),
+        this.translateService.instant('close'),
+        {
+          duration: 5000,
+          panelClass: ['success-snackbar']
+        }
+      );
+    } catch (error) {
+      snackBarRef.dismiss();
+      this.snackBar.open(
+        this.translateService.instant('coding-management.download-dialog.download-failed'),
+        this.translateService.instant('close'),
+        {
+          duration: 5000,
+          panelClass: ['error-snackbar']
+        }
+      );
+    } finally {
+      this.isDownloadInProgress = false;
+    }
+  }
+
+  private downloadCodingResultsAsJsonBackground(workspaceId: number, version: 'v1' | 'v2' | 'v3'): Promise<void> {
+    return new Promise((resolve, reject) => {
+      this.backendService.getCodingResultsByVersion(workspaceId, version)
+        .pipe(
+          catchError(() => {
+            reject(new Error('Failed to fetch JSON data'));
+            return of(null);
+          })
+        )
+        .subscribe(async (blob: Blob | null) => {
+          if (!blob) {
+            reject(new Error('No data received'));
+            return;
+          }
+          try {
+            const text = await blob.text();
+            const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
+            if (lines.length === 0) {
+              reject(new Error('No entries found'));
+              return;
+            }
+            const headers = lines[0].split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map(h => h.replace(/^"|"$/g, ''));
+            const data = lines.slice(1).map(line => {
+              const values = line.split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map(v => v.replace(/^"|"$/g, ''));
+              const obj: Record<string, unknown> = {};
+              headers.forEach((h, i) => { obj[h] = values[i] ?? ''; });
+              return obj;
+            });
+
+            const jsonData = JSON.stringify(data, null, 2);
+            const jsonBlob = new Blob([jsonData], { type: 'application/json' });
+            const url = window.URL.createObjectURL(jsonBlob);
+
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `coding-results-${version}-${new Date().toISOString().slice(0, 10)}.json`;
+            document.body.appendChild(a);
+            a.click();
+
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+
+            resolve();
+          } catch (e) {
+            reject(e);
           }
         });
-      });
+    });
+  }
+
+  private downloadCodingResultsAsCsvBackground(workspaceId: number, version: 'v1' | 'v2' | 'v3'): Promise<void> {
+    return new Promise((resolve, reject) => {
+      this.backendService.getCodingResultsByVersion(workspaceId, version)
+        .pipe(
+          catchError(() => {
+            reject(new Error('Failed to fetch CSV data'));
+            return of(null);
+          })
+        )
+        .subscribe(response => {
+          if (!response) {
+            reject(new Error('No data received'));
+            return;
+          }
+          try {
+            const blob = response as Blob;
+            const url = window.URL.createObjectURL(blob);
+
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `coding-results-${version}-${new Date().toISOString().slice(0, 10)}.csv`;
+            document.body.appendChild(a);
+            a.click();
+
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+
+            resolve();
+          } catch (e) {
+            reject(e);
+          }
+        });
+    });
+  }
+
+  private downloadCodingResultsAsExcelBackground(workspaceId: number, version: 'v1' | 'v2' | 'v3'): Promise<void> {
+    return new Promise((resolve, reject) => {
+      this.backendService.getCodingResultsByVersionAsExcel(workspaceId, version)
+        .pipe(
+          catchError(() => {
+            reject(new Error('Failed to fetch Excel data'));
+            return of(null);
+          })
+        )
+        .subscribe(response => {
+          if (!response) {
+            reject(new Error('No data received'));
+            return;
+          }
+
+          try {
+            const blob = response as Blob;
+            const url = window.URL.createObjectURL(blob);
+
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `coding-results-${version}-${new Date().toISOString().slice(0, 10)}.xlsx`;
+            document.body.appendChild(a);
+            a.click();
+
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+
+            resolve();
+          } catch (e) {
+            reject(e);
+          }
+        });
+    });
   }
 
   protected readonly Number = Number;

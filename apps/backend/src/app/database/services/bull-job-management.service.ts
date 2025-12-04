@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { JobQueueService } from '../../job-queue/job-queue.service';
+import { Job } from 'bull';
+import { JobQueueService, TestPersonCodingJobData } from '../../job-queue/job-queue.service';
 import { CodingStatistics } from './shared-types';
 
 @Injectable()
@@ -100,6 +101,36 @@ export class BullJobManagementService {
     }
   }
 
+  mapJobStateToStatus(state: string): 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'paused' {
+    switch (state) {
+      case 'active':
+        return 'processing';
+      case 'completed':
+        return 'completed';
+      case 'failed':
+        return 'failed';
+      case 'delayed':
+      case 'waiting':
+        return 'pending';
+      case 'paused':
+        return 'paused';
+      default:
+        return 'pending';
+    }
+  }
+
+  extractJobResult(bullJob: Job<TestPersonCodingJobData>, state: string): { result?: CodingStatistics; error?: string } {
+    let result: CodingStatistics | undefined;
+    let error: string | undefined;
+
+    if (state === 'completed' && bullJob.returnvalue) {
+      result = bullJob.returnvalue as CodingStatistics;
+    } else if (state === 'failed' && bullJob.failedReason) {
+      error = bullJob.failedReason;
+    }
+    return { result, error };
+  }
+
   async getBullJobs(workspaceId: number): Promise<{
     jobId: string;
     status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'paused';
@@ -133,36 +164,8 @@ export class BullJobManagementService {
         const state = await bullJob.getState();
         const progress = await bullJob.progress() || 0;
         // Map Bull job state to our job status
-        let status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'paused';
-        switch (state) {
-          case 'active':
-            status = 'processing';
-            break;
-          case 'completed':
-            status = 'completed';
-            break;
-          case 'failed':
-            status = 'failed';
-            break;
-          case 'delayed':
-          case 'waiting':
-            status = 'pending';
-            break;
-          case 'paused':
-            status = 'paused';
-            break;
-          default:
-            status = 'pending';
-        }
-
-        let result: CodingStatistics | undefined;
-        let error: string | undefined;
-
-        if (state === 'completed' && bullJob.returnvalue) {
-          result = bullJob.returnvalue as CodingStatistics;
-        } else if (state === 'failed' && bullJob.failedReason) {
-          error = bullJob.failedReason;
-        }
+        const status = this.mapJobStateToStatus(state);
+        const { result, error } = this.extractJobResult(bullJob, state);
 
         jobs.push({
           jobId: bullJob.id.toString(),

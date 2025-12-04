@@ -204,16 +204,18 @@
     }
   }
 
-  .statistics-title-section {
+  .data-section {
     flex: 1;
   }
 
   .statistics-version-selector {
+    display: flex;
+    align-items: center;
+    gap: 12px;
     flex: 0 0 auto;
-    min-width: 200px;
 
     @media (max-width: 768px) {
-      min-width: 100%;
+      flex-wrap: wrap;
     }
   }
 
@@ -249,6 +251,19 @@
 
     ::ng-deep .mat-mdc-select-arrow {
       color: #1976d2;
+    }
+  }
+
+  .reset-version-button {
+    flex: 0 0 auto;
+    color: #ff9800;
+
+    &:hover {
+      background-color: rgba(255, 152, 0, 0.08);
+    }
+
+    &:active {
+      background-color: rgba(255, 152, 0, 0.12);
     }
   }
 
@@ -958,4 +973,20 @@
 @keyframes spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
+}
+
+.button-group {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+
+  .button-progress {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    border-radius: 2px;
+  }
 }

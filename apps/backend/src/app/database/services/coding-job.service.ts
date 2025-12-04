@@ -1133,6 +1133,7 @@ export class CodingJobService {
       selectedCoders: { id: number; name: string; username: string }[];
       doubleCodingAbsolute?: number;
       doubleCodingPercentage?: number;
+      caseOrderingMode?: 'continuous' | 'alternating';
     }
   ): Promise<{
       distribution: Record<string, Record<string, number>>;
@@ -1141,7 +1142,7 @@ export class CodingJobService {
       matchingFlags: ResponseMatchingFlag[];
     }> {
     const {
-      selectedVariables, selectedCoders, doubleCodingAbsolute, doubleCodingPercentage
+      selectedVariables, selectedCoders, doubleCodingAbsolute, doubleCodingPercentage, caseOrderingMode = 'continuous'
     } = request;
     const distribution: Record<string, Record<string, number>> = {};
     const doubleCodingInfo: Record<string, { totalCases: number; doubleCodedCases: number; singleCodedCasesAssigned: number; doubleCodedCasesPerCoder: Record<string, number> }> = {};
@@ -1225,7 +1226,60 @@ export class CodingJobService {
       }
 
       const sortedResponses = [...responses].sort((a, b) => {
+        if (caseOrderingMode === 'alternating') {
+          // Alternating mode: sort by case (unit/booklet/person), then by variable
+          // First by unit name
+          const aUnitName = a.unit?.name || '';
+          const bUnitName = b.unit?.name || '';
+          if (aUnitName !== bUnitName) return aUnitName.localeCompare(bUnitName);
+
+          // Then by testperson: login, code, group, booklet.name
+          const aLogin = a.unit?.booklet?.person?.login || '';
+          const bLogin = b.unit?.booklet?.person?.login || '';
+          if (aLogin !== bLogin) return aLogin.localeCompare(bLogin);
+
+          const aCode = a.unit?.booklet?.person?.code || '';
+          const bCode = b.unit?.booklet?.person?.code || '';
+          if (aCode !== bCode) return aCode.localeCompare(bCode);
+
+          const aGroup = a.unit?.booklet?.person?.group || '';
+          const bGroup = b.unit?.booklet?.person?.group || '';
+          if (aGroup !== bGroup) return aGroup.localeCompare(bGroup);
+
+          const aBooklet = a.unit?.booklet?.bookletinfo?.name || '';
+          const bBooklet = b.unit?.booklet?.bookletinfo?.name || '';
+          if (aBooklet !== bBooklet) return aBooklet.localeCompare(bBooklet);
+
+          // Finally by variable
+          if (a.variableid !== b.variableid) return a.variableid.localeCompare(b.variableid);
+
+          return a.id - b.id;
+        }
+        // Continuous mode (default): sort by variable first, then by case
         if (a.variableid !== b.variableid) return a.variableid.localeCompare(b.variableid);
+
+        // Then by unit name
+        const aUnitName = a.unit?.name || '';
+        const bUnitName = b.unit?.name || '';
+        if (aUnitName !== bUnitName) return aUnitName.localeCompare(bUnitName);
+
+        // Then by testperson: login, code, group, booklet.name
+        const aLogin = a.unit?.booklet?.person?.login || '';
+        const bLogin = b.unit?.booklet?.person?.login || '';
+        if (aLogin !== bLogin) return aLogin.localeCompare(bLogin);
+
+        const aCode = a.unit?.booklet?.person?.code || '';
+        const bCode = b.unit?.booklet?.person?.code || '';
+        if (aCode !== bCode) return aCode.localeCompare(bCode);
+
+        const aGroup = a.unit?.booklet?.person?.group || '';
+        const bGroup = b.unit?.booklet?.person?.group || '';
+        if (aGroup !== bGroup) return aGroup.localeCompare(bGroup);
+
+        const aBooklet = a.unit?.booklet?.bookletinfo?.name || '';
+        const bBooklet = b.unit?.booklet?.bookletinfo?.name || '';
+        if (aBooklet !== bBooklet) return aBooklet.localeCompare(bBooklet);
+
         return a.id - b.id;
       });
       const doubleCodingResponses = sortedResponses.slice(0, doubleCodingCount);
@@ -1279,6 +1333,7 @@ export class CodingJobService {
       selectedCoders: { id: number; name: string; username: string }[];
       doubleCodingAbsolute?: number;
       doubleCodingPercentage?: number;
+      caseOrderingMode?: 'continuous' | 'alternating';
     }
   ): Promise<{
       success: boolean;

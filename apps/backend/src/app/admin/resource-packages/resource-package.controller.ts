@@ -19,6 +19,7 @@ import { Express } from 'express';
 import 'multer';
 import { ResourcePackageService } from '../../database/services/resource-package.service';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
+import { AccessLevelGuard, RequireAccessLevel } from '../workspace/access-level.guard';
 import { ApiFile } from './api-file.decorator';
 import { fileMimetypeFilter } from './file-mimetype-filter';
 import { ParseFile } from './parse-file-pipe';
@@ -32,7 +33,8 @@ export class ResourcePackageController {
   ) {}
 
   @Get()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Get all resource packages for a workspace',
@@ -117,7 +119,8 @@ export class ResourcePackageController {
   @Header('Content-Disposition', 'filename="resource-package.zip"')
   @Header('Cache-Control', 'none')
   @Header('Content-Type', 'application/zip')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   @ApiBearerAuth()
   @ApiTags('admin resource-packages')
   @ApiParam({

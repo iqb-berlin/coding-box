@@ -28,25 +28,22 @@ import { CodingResultsService } from './coding-results.service';
 import { CodingJobService } from './coding-job.service';
 import { CodingExportService } from './coding-export.service';
 import { CodebookGenerator } from '../../admin/code-book/codebook-generator.class';
+import { statusStringToNumber } from '../utils/response-status-converter';
 
-// Mock imports for dynamic requires
 const mockCodingFactory = { code: jest.fn() };
 
-// Mock the Autocoder module
 jest.mock('@iqb/responses', () => ({
   CodingFactory: {
     code: jest.fn()
   }
 }));
 
-// Mock cheerio
 jest.mock('cheerio', () => jest.fn().mockImplementation(() => ({
   find: jest.fn().mockReturnValue({
     text: jest.fn().mockReturnValue('test-scheme-ref')
   })
 })));
 
-// Mock CodebookGenerator
 jest.mock('../../admin/code-book/codebook-generator.class', () => ({
   CodebookGenerator: {
     generateCodebook: jest.fn()
@@ -61,7 +58,6 @@ describe('WorkspaceCodingService', () => {
   let responseRepository: Repository<ResponseEntity>;
   let fileUploadRepository: Repository<FileUpload>;
 
-  // Mock services
   const mockWorkspaceFilesService = {
     getUnitVariableMap: jest.fn()
   };
@@ -93,7 +89,9 @@ describe('WorkspaceCodingService', () => {
     pauseJob: jest.fn(),
     resumeJob: jest.fn(),
     restartJob: jest.fn(),
-    getBullJobs: jest.fn()
+    getBullJobs: jest.fn(),
+    mapJobStateToStatus: jest.fn(),
+    extractJobResult: jest.fn()
   };
 
   const mockCodingJobService = {
@@ -107,7 +105,6 @@ describe('WorkspaceCodingService', () => {
 
   const mockCodingExportService = {
     exportCodingResultsAggregated: jest.fn().mockResolvedValue(Buffer.from('test-export-data')),
-    exportCodingResultsByCoder: jest.fn().mockResolvedValue(Buffer.from('test-export-data')),
     exportCodingResultsByVariable: jest.fn().mockResolvedValue(Buffer.from('test-export-data'))
   };
 
@@ -124,7 +121,6 @@ describe('WorkspaceCodingService', () => {
     getVariableAnalysis: jest.fn()
   };
 
-  // Helper functions for creating mock data
   const createMockPerson = (id: number, workspaceId: number = 1) => ({
     id: id.toString(),
     workspace_id: workspaceId,
@@ -179,7 +175,6 @@ describe('WorkspaceCodingService', () => {
   });
 
   beforeEach(async () => {
-    // Clear all mocks
     jest.clearAllMocks();
 
     const mockQueryRunner = {
@@ -302,7 +297,6 @@ describe('WorkspaceCodingService', () => {
     const jobId = 'test-job-id';
 
     beforeEach(() => {
-      // Setup default mocks for successful processing
       personsRepository.find = jest.fn().mockResolvedValue([
         createMockPerson(1),
         createMockPerson(2)
@@ -351,7 +345,6 @@ describe('WorkspaceCodingService', () => {
         return Promise.resolve(null);
       });
 
-      // Mock Autocoder
       mockCodingFactory.code.mockReturnValue({
         code: 1,
         status: 'VALUE_PROVIDED',
@@ -359,7 +352,7 @@ describe('WorkspaceCodingService', () => {
       });
     });
 
-    it('should handle empty person IDs array', async () => {
+    it('should handle an empty person IDs array', async () => {
       // Override mocks to ensure no data is returned for empty array
       personsRepository.find = jest.fn().mockResolvedValue([]);
       bookletRepository.find = jest.fn().mockResolvedValue([]);
@@ -454,7 +447,6 @@ describe('WorkspaceCodingService', () => {
     });
 
     it('should call progress callback at appropriate intervals', async () => {
-      // Override the mock for this specific test to not be paused
       mockJobQueueService.getTestPersonCodingJob = jest.fn().mockResolvedValue({
         getState: jest.fn().mockResolvedValue('active'),
         data: { isPaused: false }
@@ -556,6 +548,20 @@ describe('WorkspaceCodingService', () => {
   });
 
   describe('getJobStatus', () => {
+    beforeEach(() => {
+      mockBullJobManagementService.mapJobStateToStatus.mockImplementation(state => {
+        if (state === 'active') return 'processing';
+        if (state === 'completed') return 'completed';
+        if (state === 'failed') return 'failed';
+        return 'pending';
+      });
+      mockBullJobManagementService.extractJobResult.mockImplementation((job, state) => {
+        if (state === 'completed') return { result: job.returnvalue };
+        if (state === 'failed') return { error: job.failedReason };
+        return {};
+      });
+    });
+
     it('should return job status for active job', async () => {
       const mockBullJob = {
         getState: jest.fn().mockResolvedValue('active'),
@@ -576,7 +582,7 @@ describe('WorkspaceCodingService', () => {
       });
     });
 
-    it('should return completed job status with result', async () => {
+    it('should return completed job status with a result', async () => {
       const expectedResult = { totalResponses: 100, statusCounts: { VALUE_PROVIDED: 100 } };
       const mockBullJob = {
         getState: jest.fn().mockResolvedValue('completed'),
@@ -657,19 +663,34 @@ describe('WorkspaceCodingService', () => {
 
   describe('Job Management Methods', () => {
     describe('cancelJob', () => {
-      it('should successfully cancel a running job', async () => {
+      it('should return error for active job that cannot be cancelled', async () => {
         const mockBullJob = {
           getState: jest.fn().mockResolvedValue('active')
         };
 
         mockJobQueueService.getTestPersonCodingJob = jest.fn().mockResolvedValue(mockBullJob);
-        mockJobQueueService.cancelTestPersonCodingJob = jest.fn().mockResolvedValue(true);
 
         const result = await service.cancelJob('job-123');
 
         expect(result).toEqual({
+          success: false,
+          message: 'Job with ID job-123 is currently being processed and cannot be cancelled. Please wait for it to complete or use pause instead.'
+        });
+      });
+
+      it('should successfully cancel a pending job', async () => {
+        const mockBullJob = {
+          getState: jest.fn().mockResolvedValue('waiting')
+        };
+
+        mockJobQueueService.getTestPersonCodingJob = jest.fn().mockResolvedValue(mockBullJob);
+        mockJobQueueService.cancelTestPersonCodingJob = jest.fn().mockResolvedValue(true);
+
+        const result = await service.cancelJob('job-456');
+
+        expect(result).toEqual({
           success: true,
-          message: 'Job job-123 has been cancelled successfully'
+          message: 'Job job-456 has been cancelled successfully'
         });
       });
 
@@ -796,6 +817,16 @@ describe('WorkspaceCodingService', () => {
       }
     ];
 
+    const setupValidationQueryBuilderMock = (count: number) => {
+      const mockQueryBuilder = {
+        innerJoin: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        getCount: jest.fn().mockResolvedValue(count)
+      };
+      responseRepository.createQueryBuilder = jest.fn().mockReturnValue(mockQueryBuilder);
+    };
+
     beforeEach(() => {
       mockCacheService.generateValidationCacheKey = jest.fn().mockReturnValue('cache-key-123');
       mockCacheService.getPaginatedValidationResults = jest.fn();
@@ -829,14 +860,7 @@ describe('WorkspaceCodingService', () => {
       mockCacheService.getPaginatedValidationResults = jest.fn().mockResolvedValue(null);
 
       // Mock the query builder for response existence check
-      const mockQueryBuilder = {
-        innerJoin: jest.fn().mockReturnThis(),
-        where: jest.fn().mockReturnThis(),
-        andWhere: jest.fn().mockReturnThis(),
-        getCount: jest.fn().mockResolvedValue(1)
-      };
-
-      responseRepository.createQueryBuilder = jest.fn().mockReturnValue(mockQueryBuilder);
+      setupValidationQueryBuilderMock(1);
 
       const result = await service.validateCodingCompleteness(workspaceId, expectedCombinations);
 
@@ -850,14 +874,7 @@ describe('WorkspaceCodingService', () => {
     it('should handle missing responses', async () => {
       mockCacheService.getPaginatedValidationResults = jest.fn().mockResolvedValue(null);
 
-      const mockQueryBuilder = {
-        innerJoin: jest.fn().mockReturnThis(),
-        where: jest.fn().mockReturnThis(),
-        andWhere: jest.fn().mockReturnThis(),
-        getCount: jest.fn().mockResolvedValue(0) // No response found
-      };
-
-      responseRepository.createQueryBuilder = jest.fn().mockReturnValue(mockQueryBuilder);
+      setupValidationQueryBuilderMock(0);
 
       const result = await service.validateCodingCompleteness(workspaceId, expectedCombinations);
 
@@ -876,14 +893,7 @@ describe('WorkspaceCodingService', () => {
 
       mockCacheService.getPaginatedValidationResults = jest.fn().mockResolvedValue(null);
 
-      const mockQueryBuilder = {
-        innerJoin: jest.fn().mockReturnThis(),
-        where: jest.fn().mockReturnThis(),
-        andWhere: jest.fn().mockReturnThis(),
-        getCount: jest.fn().mockResolvedValue(1)
-      };
-
-      responseRepository.createQueryBuilder = jest.fn().mockReturnValue(mockQueryBuilder);
+      setupValidationQueryBuilderMock(1);
 
       const result = await service.validateCodingCompleteness(workspaceId, largeCombinations, 2, 25);
 
@@ -1058,6 +1068,20 @@ describe('WorkspaceCodingService', () => {
   describe('exportCodingResultsByVariable', () => {
     const workspaceId = 1;
 
+    const setupExportQueryBuilderMock = (results: { unitName: string; variableId: string }[]) => {
+      responseRepository.createQueryBuilder = jest.fn().mockReturnValue({
+        select: jest.fn().mockReturnThis(),
+        addSelect: jest.fn().mockReturnThis(),
+        leftJoin: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        groupBy: jest.fn().mockReturnThis(),
+        addGroupBy: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        getRawMany: jest.fn().mockResolvedValue(results)
+      });
+    };
+
     beforeEach(() => {
       // Mock ExcelJS
       jest.mock('exceljs', () => ({
@@ -1097,7 +1121,7 @@ describe('WorkspaceCodingService', () => {
       expect(mockCodingExportService.exportCodingResultsByVariable).toHaveBeenCalledWith(workspaceId, false, false, false, false);
     });
 
-    it('should throw error when no coded variables found', async () => {
+    it('should throw an error when no coded variables found', async () => {
       mockCodingExportService.exportCodingResultsByVariable.mockRejectedValueOnce(new Error('No coded variables found for this workspace'));
 
       await expect(service.exportCodingResultsByVariable(workspaceId))
@@ -1114,17 +1138,7 @@ describe('WorkspaceCodingService', () => {
         { unitName: 'UNIT_3', variableId: 'var3' }
       ];
 
-      responseRepository.createQueryBuilder = jest.fn().mockReturnValue({
-        select: jest.fn().mockReturnThis(),
-        addSelect: jest.fn().mockReturnThis(),
-        leftJoin: jest.fn().mockReturnThis(),
-        where: jest.fn().mockReturnThis(),
-        andWhere: jest.fn().mockReturnThis(),
-        groupBy: jest.fn().mockReturnThis(),
-        addGroupBy: jest.fn().mockReturnThis(),
-        orderBy: jest.fn().mockReturnThis(),
-        getRawMany: jest.fn().mockResolvedValue(mockUnitVariableResults)
-      });
+      setupExportQueryBuilderMock(mockUnitVariableResults);
 
       responseRepository.count = jest.fn().mockResolvedValue(50);
       responseRepository.find = jest.fn().mockResolvedValue([]);
@@ -1142,17 +1156,7 @@ describe('WorkspaceCodingService', () => {
         { unitName: 'UNIT_1', variableId: 'var1' }
       ];
 
-      responseRepository.createQueryBuilder = jest.fn().mockReturnValue({
-        select: jest.fn().mockReturnThis(),
-        addSelect: jest.fn().mockReturnThis(),
-        leftJoin: jest.fn().mockReturnThis(),
-        where: jest.fn().mockReturnThis(),
-        andWhere: jest.fn().mockReturnThis(),
-        groupBy: jest.fn().mockReturnThis(),
-        addGroupBy: jest.fn().mockReturnThis(),
-        orderBy: jest.fn().mockReturnThis(),
-        getRawMany: jest.fn().mockResolvedValue(mockUnitVariableResults)
-      });
+      setupExportQueryBuilderMock(mockUnitVariableResults);
 
       // Mock count exceeding limit
       responseRepository.count = jest.fn().mockResolvedValue(50);
@@ -1214,6 +1218,17 @@ describe('WorkspaceCodingService', () => {
       expect(result).toHaveLength(2);
       expect(result[0]).toHaveProperty('unitname');
       expect(result[0].unitname).toBe('UNIT_1');
+
+      const findArgs = (responseRepository.find as jest.Mock).mock.calls[0][0];
+      const statusFilter = findArgs.where.status_v1;
+      // TypeORM FindOperator stores value in _value or value property
+      const filterValues = statusFilter.value;
+      expect(filterValues).toEqual(expect.arrayContaining([
+        statusStringToNumber('CODING_INCOMPLETE'),
+        statusStringToNumber('INTENDED_INCOMPLETE'),
+        statusStringToNumber('CODE_SELECTION_PENDING'),
+        statusStringToNumber('CODING_ERROR')
+      ]));
     });
 
     it('should handle no persons found', async () => {
@@ -1320,22 +1335,17 @@ describe('WorkspaceCodingService', () => {
     };
     const unitIds = [1, 2];
 
-    beforeEach(() => {
-      // Mock CodebookGenerator
-      jest.mock('../../admin/code-book/codebook-generator.class', () => ({
-        CodebookGenerator: {
-          generateCodebook: jest.fn()
-        }
-      }));
-    });
-
     it('should successfully generate codebook', async () => {
       const mockCodebook = Buffer.from('mock codebook data');
       (CodebookGenerator.generateCodebook as jest.Mock).mockResolvedValue(mockCodebook);
 
       fileUploadRepository.findBy = jest.fn().mockResolvedValue([
-        { id: 1, file_id: 'unit1', data: 'unit data 1' },
-        { id: 2, file_id: 'unit2', data: 'unit data 2' }
+        {
+          id: 1, file_id: 'unit1', filename: 'unit1.vocs', data: 'unit data 1'
+        },
+        {
+          id: 2, file_id: 'unit2', filename: 'unit2.vocs', data: 'unit data 2'
+        }
       ]);
 
       const result = await service.generateCodebook(workspaceId, missingsProfile, contentOptions, unitIds);
@@ -1356,7 +1366,9 @@ describe('WorkspaceCodingService', () => {
       (CodebookGenerator.generateCodebook as jest.Mock).mockRejectedValue(new Error('Generation failed'));
 
       fileUploadRepository.findBy = jest.fn().mockResolvedValue([
-        { id: 1, file_id: 'unit1', data: 'unit data 1' }
+        {
+          id: 1, file_id: 'unit1', filename: 'unit1.vocs', data: 'unit data 1'
+        }
       ]);
 
       const result = await service.generateCodebook(workspaceId, missingsProfile, contentOptions, unitIds);

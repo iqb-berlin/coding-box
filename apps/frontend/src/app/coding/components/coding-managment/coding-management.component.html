@@ -67,7 +67,7 @@
                 </div>
                 <div class="statistics-version-selector">
                   <mat-form-field appearance="outline" class="statistics-version-field">
-                    <mat-label>{{ 'coding-management.statistics.coding-run-selector' | translate }}</mat-label>
+                    <mat-label>{{ 'coding-management.statistics.coding-version-selector' | translate }}</mat-label>
                     <mat-select [(value)]="selectedStatisticsVersion" (selectionChange)="onStatisticsVersionChange()">
                       @for (option of codingRunOptions; track option.value) {
                         <mat-option [value]="option.value">
@@ -76,6 +76,28 @@
                       }
                     </mat-select>
                   </mat-form-field>
+                  <div class="button-group">
+                    <button 
+                      mat-icon-button 
+                      (click)="openDownloadCodingResultsDialog()"
+                      [matTooltip]="'coding-management.download-dialog.download-tooltip' | translate"
+                      color="primary"
+                      [disabled]="isDownloadInProgress"
+                      class="download-results-button">
+                      <mat-icon>download</mat-icon>
+                    </button>
+                    @if (isDownloadInProgress) {
+                      <mat-progress-bar mode="indeterminate" class="button-progress"></mat-progress-bar>
+                    }
+                  </div>
+                  <button 
+                    mat-icon-button 
+                    (click)="openResetVersionDialog()"
+                    [matTooltip]="'coding-management.reset-dialog.reset-tooltip' | translate"
+                    color="primary"
+                    class="reset-version-button">
+                    <mat-icon>restart_alt</mat-icon>
+                  </button>
                 </div>
               </div>
               <mat-divider></mat-divider>
@@ -298,7 +320,6 @@
             <div class="empty-state">
               <mat-icon class="empty-icon">code</mat-icon>
               <h3>{{ 'coding-management.descriptions.no-data' | translate }}</h3>
-              <p class="empty-text">{{ 'coding-management.descriptions.click-display' | translate }}</p>
             </div>
           }
         </div>

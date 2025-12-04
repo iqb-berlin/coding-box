@@ -34,8 +34,12 @@ import { MatIcon } from '@angular/material/icon';
 import { Router } from '@angular/router';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { MatCheckbox } from '@angular/material/checkbox';
-import { MatAnchor, MatButton, MatIconButton } from '@angular/material/button';
-import { MatDialog } from '@angular/material/dialog';
+import {
+  MatAnchor, MatButton, MatIconButton
+} from '@angular/material/button';
+import {
+  MatDialog
+} from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDivider } from '@angular/material/divider';
 import { MatTooltipModule } from '@angular/material/tooltip';
@@ -61,6 +65,7 @@ import { BookletInfoDialogComponent } from '../booklet-info-dialog/booklet-info-
 import { UnitInfoDialogComponent } from '../unit-info-dialog/unit-info-dialog.component';
 import { UnitInfoDto } from '../../../../../../../api-dto/unit-info/unit-info.dto';
 import { GermanPaginatorIntl } from '../../../shared/services/german-paginator-intl.service';
+import { ExportOptionsDialogComponent, ExportOptions } from './export-options-dialog.component';
 
 interface BookletLog {
   id: number;
@@ -227,6 +232,11 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   private validationStatusInterval: number | null = null;
   private isInitialized: boolean = false;
 
+  exportJobId: string | null = null;
+  isExporting: boolean = false;
+  exportJobStatus: string | null = null;
+  exportJobProgress: number = 0;
+
   @ViewChild(MatPaginator) paginator!: MatPaginator;
   @ViewChild(MatSort) sort!: MatSort;
 
@@ -240,6 +250,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
     this.createTestResultsList(0, this.pageSize);
     this.startValidationStatusCheck();
+    this.checkExistingExportJobs();
     this.isInitialized = true;
   }
 
@@ -1316,5 +1327,150 @@ export class TestResultsComponent implements OnInit, OnDestroy {
         );
       }
     });
+  }
+
+  exportResults(): void {
+    if (!this.appService.selectedWorkspaceId) {
+      return;
+    }
+
+    const dialogRef = this.dialog.open(ExportOptionsDialogComponent, {
+      width: '800px',
+      data: {
+        workspaceId: this.appService.selectedWorkspaceId
+      }
+    });
+
+    dialogRef.afterClosed().subscribe((result: ExportOptions | undefined) => {
+      if (result) {
+        const filters = {
+          groupNames: result.groupNames && result.groupNames.length > 0 ? result.groupNames : undefined,
+          bookletNames: result.bookletNames && result.bookletNames.length > 0 ? result.bookletNames : undefined,
+          unitNames: result.unitNames && result.unitNames.length > 0 ? result.unitNames : undefined,
+          personIds: result.personIds && result.personIds.length > 0 ? result.personIds : undefined
+        };
+
+        this.isExporting = true;
+        this.backendService.startExportTestResultsJob(this.appService.selectedWorkspaceId, filters)
+          .subscribe({
+            next: response => {
+              this.exportJobId = response.jobId;
+              this.exportJobStatus = 'active';
+              this.snackBar.open(
+                'Export gestartet. Sie werden benachrichtigt, wenn der Download bereitsteht.',
+                'OK',
+                { duration: 3000 }
+              );
+              this.pollExportJobStatus(response.jobId);
+            },
+            error: () => {
+              this.isExporting = false;
+              this.snackBar.open(
+                'Fehler beim Starten des Exports',
+                'Fehler',
+                { duration: 3000 }
+              );
+            }
+          });
+      }
+    });
+  }
+
+  private checkExistingExportJobs(): void {
+    if (!this.appService.selectedWorkspaceId) {
+      return;
+    }
+    this.backendService.getExportTestResultsJobs(this.appService.selectedWorkspaceId)
+      .subscribe({
+        next: jobs => {
+          const testResultJobs = jobs.filter(j => j.exportType === 'test-results');
+          // Find the most recent active job only (not completed jobs)
+          const activeJob = testResultJobs.find(j => j.status === 'active' || j.status === 'waiting' || j.status === 'delayed');
+          if (activeJob) {
+            this.exportJobId = activeJob.jobId;
+            this.isExporting = true;
+            this.pollExportJobStatus(activeJob.jobId);
+          }
+        }
+      });
+  }
+
+  private pollExportJobStatus(jobId: string): void {
+    const pollingInterval = 2000;
+    const timer = setInterval(() => {
+      if (!this.appService.selectedWorkspaceId) {
+        clearInterval(timer);
+        return;
+      }
+      this.backendService.getExportTestResultsJobs(this.appService.selectedWorkspaceId)
+        .subscribe({
+          next: jobs => {
+            const job = jobs.find(j => j.jobId === jobId);
+            if (job) {
+              this.exportJobStatus = job.status;
+              this.exportJobProgress = job.progress;
+
+              if (job.status === 'completed') {
+                clearInterval(timer);
+                this.isExporting = false;
+                const snackBarRef = this.snackBar.open(
+                  'Export abgeschlossen',
+                  'Herunterladen',
+                  { duration: 10000 }
+                );
+                snackBarRef.onAction().subscribe(() => {
+                  this.downloadExportResult(jobId);
+                });
+              } else if (job.status === 'failed') {
+                clearInterval(timer);
+                this.isExporting = false;
+                this.snackBar.open(
+                  'Export fehlgeschlagen',
+                  'Fehler',
+                  { duration: 5000 }
+                );
+              }
+            } else {
+              clearInterval(timer);
+              this.isExporting = false;
+            }
+          },
+          error: () => {
+            clearInterval(timer);
+            this.isExporting = false;
+          }
+        });
+    }, pollingInterval);
+  }
+
+  downloadExportResult(jobId: string): void {
+    if (!this.appService.selectedWorkspaceId) {
+      return;
+    }
+    this.backendService.downloadExportTestResultsJob(this.appService.selectedWorkspaceId, jobId)
+      .subscribe({
+        next: blob => {
+          const url = window.URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = `workspace-${this.appService.selectedWorkspaceId}-results-${new Date().toISOString().split('T')[0]}.csv`;
+          link.click();
+          window.URL.revokeObjectURL(url);
+
+          // Hide the download button after successful download
+          this.exportJobStatus = null;
+          this.exportJobId = null;
+
+          // Delete the job from the server
+          this.backendService.deleteTestResultExportJob(this.appService.selectedWorkspaceId, jobId).subscribe();
+        },
+        error: () => {
+          this.snackBar.open(
+            'Fehler beim Herunterladen der Ergebnisse',
+            'Fehler',
+            { duration: 3000 }
+          );
+        }
+      });
   }
 }
