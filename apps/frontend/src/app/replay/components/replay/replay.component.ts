@@ -389,7 +389,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         patch: (typeof matches[5] === 'string') ? parseInt(matches[5].substring(1), 10) : 0,
         label: (typeof matches[6] === 'string') ? matches[6].substring(1) : ''
       };
-      return `${rawIdParts.module}-${rawIdParts.major}.${rawIdParts.minor}`.toUpperCase();
+      return `${rawIdParts.module}-${rawIdParts.major}.${rawIdParts.minor}.${rawIdParts.patch}`.toUpperCase();
     }
     ReplayComponent.throwError('PlayerError');
     return '';

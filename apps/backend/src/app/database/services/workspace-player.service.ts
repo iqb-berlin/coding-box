@@ -66,16 +66,42 @@ export class WorkspacePlayerService {
     this.logger.log(`Attempting to retrieve files for player '${playerName}' in workspace ${workspaceId}`);
 
     try {
-      // Parse the player name to extract module and major version
+      // Parse the player name to extract module, major, minor, and optional patch version
       const playerNameUpperCase = playerName.toUpperCase();
-      const regex = /^(\D+)-(\d+)\.(\d+)$/;
+      const regex = /^(.+?)-(\d+)\.(\d+)(?:\.(\d+))?$/;
       const matches = playerNameUpperCase.match(regex);
 
       if (matches) {
         const module = matches[1];
         const majorVersion = matches[2];
+        const minorVersion = matches[3];
+        const exactMinorPlayers = await this.fileUploadRepository
+          .createQueryBuilder('file')
+          .where('file.workspace_id = :workspaceId', { workspaceId })
+          .andWhere(
+            '(file.file_id LIKE :patternWithPatch OR file.file_id = :exactTwoPart)',
+            {
+              patternWithPatch: `${module}-${majorVersion}.${minorVersion}.%`,
+              exactTwoPart: `${module}-${majorVersion}.${minorVersion}`
+            }
+          )
+          .getMany();
 
-        // Always search for all players with the same module and major version
+        if (exactMinorPlayers.length > 0) {
+          this.logger.log(`Found ${exactMinorPlayers.length} player(s) with exact match ${module}-${majorVersion}.${minorVersion}.x in workspace ${workspaceId}`);
+          exactMinorPlayers.sort((a, b) => {
+            const partsA = a.file_id.split('.');
+            const partsB = b.file_id.split('.');
+            const patchA = partsA.length >= 3 ? parseInt(partsA[2], 10) : 0;
+            const patchB = partsB.length >= 3 ? parseInt(partsB[2], 10) : 0;
+            return patchB - patchA; // Descending order
+          });
+
+          this.logger.log(`Selecting player with highest patch version: ${exactMinorPlayers[0].file_id}`);
+          return [exactMinorPlayers[0]];
+        }
+
+        // Fallback: search for all players with the same module and major version (any minor)
         const similarPlayers = await this.fileUploadRepository
           .createQueryBuilder('file')
           .where('file.workspace_id = :workspaceId', { workspaceId })
@@ -83,16 +109,25 @@ export class WorkspacePlayerService {
           .getMany();
 
         if (similarPlayers.length > 0) {
-          this.logger.log(`Found ${similarPlayers.length} player(s) with module ${module} and major version ${majorVersion} in workspace ${workspaceId}`);
+          this.logger.log(`No exact minor version match found. Found ${similarPlayers.length} player(s) with module ${module} and major version ${majorVersion} in workspace ${workspaceId}`);
 
-          // Sort by minor version (descending) and return the highest one
+          // Sort by minor and patch version (descending) and return the highest one
           similarPlayers.sort((a, b) => {
-            const minorA = parseInt(a.file_id.split('.')[1], 10);
-            const minorB = parseInt(b.file_id.split('.')[1], 10);
-            return minorB - minorA; // Descending order
+            const partsA = a.file_id.split('.');
+            const partsB = b.file_id.split('.');
+            // partsA/B = ['MODULE-MAJOR', 'MINOR', 'PATCH'] or ['MODULE-MAJOR', 'MINOR']
+            const minorA = partsA.length >= 2 ? parseInt(partsA[1], 10) : 0;
+            const minorB = partsB.length >= 2 ? parseInt(partsB[1], 10) : 0;
+            const patchA = partsA.length >= 3 ? parseInt(partsA[2], 10) : 0;
+            const patchB = partsB.length >= 3 ? parseInt(partsB[2], 10) : 0;
+
+            if (minorB !== minorA) {
+              return minorB - minorA; // Descending order by minor
+            }
+            return patchB - patchA; // Descending order by patch
           });
 
-          this.logger.log(`Automatically selecting player with highest minor version: ${similarPlayers[0].file_id}`);
+          this.logger.log(`Automatically selecting player with highest minor.patch version: ${similarPlayers[0].file_id}`);
           return [similarPlayers[0]];
         }
       }
@@ -182,64 +217,55 @@ export class WorkspacePlayerService {
   async getBookletUnits(workspaceId: number, bookletId: string): Promise<BookletUnit[]> {
     this.logger.log(`Getting units for booklet ${bookletId} in workspace ${workspaceId}`);
 
-    try {
-      const bookletFiles = await this.fileUploadRepository.find({
-        where: {
-          file_id: bookletId.toUpperCase(),
-          workspace_id: workspaceId
-        }
-      });
-
-      if (!bookletFiles || bookletFiles.length === 0) {
-        this.logger.error(`Booklet file with ID ${bookletId} not found in workspace ${workspaceId}`);
-        throw new NotFoundException(`Booklet file with ID ${bookletId} not found`);
+    const bookletFiles = await this.fileUploadRepository.find({
+      where: {
+        file_id: bookletId.toUpperCase(),
+        workspace_id: workspaceId
       }
+    });
 
-      const bookletFile = bookletFiles[0];
-      const bookletData = bookletFile.data;
-
-      const units: BookletUnit[] = [];
-      let parsedBookletId = 0;
-
-      try {
-        const result = await parseStringPromise(bookletData);
-
-        if (result.Booklet && result.Booklet.$) {
-          parsedBookletId = parseInt(result.Booklet.$.id || '0', 10) || 0;
-          this.logger.log(`Parsed booklet ID: ${parsedBookletId}`);
-        }
-
-        if (result.Booklet && result.Booklet.Units && result.Booklet.Units[0]) {
-          const unitsElement = result.Booklet.Units[0];
-
-          const indexTracker = { currentIndex: 0 };
-
-          this.logger.log(`Starting to process booklet structure with ID: ${parsedBookletId}`);
-
-          // Process all units and testlets in the booklet
-          this.processUnitsAndTestlets(unitsElement, units, parsedBookletId, indexTracker);
-
-          this.logger.log(`Finished processing booklet structure. Final index: ${indexTracker.currentIndex}`);
-
-          this.logger.log(`Found ${units.length} total units in booklet ${bookletId}`);
-        }
-      } catch (error) {
-        this.logger.error(`Error parsing booklet XML: ${error.message}`, error.stack);
-        throw new Error(`Error parsing booklet XML: ${error.message}`);
-      }
-
-      if (units.length === 0) {
-        this.logger.warn(`No units found in booklet ${bookletId}`);
-      }
-
-      return units;
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      this.logger.error(`Error getting units for booklet ${bookletId}: ${error.message}`, error.stack);
-      throw new Error(`Error getting units for booklet ${bookletId}: ${error.message}`);
+    if (!bookletFiles || bookletFiles.length === 0) {
+      this.logger.error(`Booklet file with ID ${bookletId} not found in workspace ${workspaceId}`);
+      throw new NotFoundException(`Booklet file with ID ${bookletId} not found`);
     }
+
+    const bookletFile = bookletFiles[0];
+    const bookletData = bookletFile.data;
+
+    const units: BookletUnit[] = [];
+    let parsedBookletId = 0;
+
+    try {
+      const result = await parseStringPromise(bookletData);
+
+      if (result.Booklet && result.Booklet.$) {
+        parsedBookletId = parseInt(result.Booklet.$.id || '0', 10) || 0;
+        this.logger.log(`Parsed booklet ID: ${parsedBookletId}`);
+      }
+
+      if (result.Booklet && result.Booklet.Units && result.Booklet.Units[0]) {
+        const unitsElement = result.Booklet.Units[0];
+
+        const indexTracker = { currentIndex: 0 };
+
+        this.logger.log(`Starting to process booklet structure with ID: ${parsedBookletId}`);
+
+        this.processUnitsAndTestlets(unitsElement, units, parsedBookletId, indexTracker);
+
+        this.logger.log(`Finished processing booklet structure. Final index: ${indexTracker.currentIndex}`);
+
+        this.logger.log(`Found ${units.length} total units in booklet ${bookletId}`);
+      }
+    } catch (error) {
+      this.logger.error(`Error parsing booklet XML: ${error.message}`, error.stack);
+      throw new Error(`Error parsing booklet XML: ${error.message}`);
+    }
+
+    if (units.length === 0) {
+      this.logger.warn(`No units found in booklet ${bookletId}`);
+    }
+
+    return units;
   }
 
   private processUnitsAndTestlets(
@@ -258,16 +284,12 @@ export class WorkspacePlayerService {
       });
     }
 
-    // Process Testlet elements if they exist
     if (element.Testlet && Array.isArray(element.Testlet)) {
       this.logger.log(`Processing ${element.Testlet.length} Testlet elements`);
       element.Testlet.forEach((testlet: TestletElement) => {
-        // Log testlet ID for debugging
         if (testlet && testlet.$) {
           this.logger.log(`Processing Testlet with ID: ${testlet.$.id || 'unknown'}`);
         }
-
-        // Process units inside this testlet
         this.processUnitsAndTestlets(testlet, units, bookletId, indexTracker);
       });
     }
@@ -280,7 +302,6 @@ export class WorkspacePlayerService {
     indexTracker: IndexTracker
   ): void {
     if (unitElement && unitElement.$) {
-      // Use the current index and then increment it
       const currentIndex = indexTracker.currentIndex;
       indexTracker.currentIndex += 1;
 
