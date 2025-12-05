@@ -281,6 +281,16 @@
                 </button>
 
               </div>
+
+              <div class="filter-row availability-filter-row">
+                <span class="filter-label">Verfügbarkeit:</span>
+                <mat-button-toggle-group [(value)]="availabilityFilter" (change)="applyAvailabilityFilter()">
+                  <mat-button-toggle value="all">Alle</mat-button-toggle>
+                  <mat-button-toggle value="full">Vollständig verfügbar</mat-button-toggle>
+                  <mat-button-toggle value="partial">Teilweise verfügbar</mat-button-toggle>
+                  <mat-button-toggle value="none">Nicht verfügbar</mat-button-toggle>
+                </mat-button-toggle-group>
+              </div>
             </div>
 
             @if (isLoadingVariableAnalysis) {
@@ -313,7 +323,11 @@
                         <div class="variable-identifiers">
                           <div class="variable-id">
                             {{ variable.unitName }}_{{ variable.variableId }}
-                            @if (variable.responseCount != null) {
+                            @if (variable.availableCases !== undefined && variable.responseCount !== undefined) {
+                              <mat-chip class="availability-chip" [ngClass]="getAvailabilityClass(variable)">
+                                {{ getAvailabilityText(variable) }} verfügbar
+                              </mat-chip>
+                            } @else if (variable.responseCount != null) {
                               <span class="response-count">({{ variable.responseCount }})</span>
                             }
 

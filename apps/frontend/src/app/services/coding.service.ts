@@ -498,6 +498,7 @@ export class CodingService {
       doubleCodingInfo: Record<string, { totalCases: number; doubleCodedCases: number; singleCodedCasesAssigned: number; doubleCodedCasesPerCoder: Record<string, number> }>;
       aggregationInfo: Record<string, { uniqueCases: number; totalResponses: number }>;
       matchingFlags: string[];
+      warnings: Array<{ unitName: string; variableId: string; message: string; casesInJobs: number; availableCases: number }>;
     }> {
     return this.http
       .post<{
@@ -505,6 +506,7 @@ export class CodingService {
       doubleCodingInfo: Record<string, { totalCases: number; doubleCodedCases: number; singleCodedCasesAssigned: number; doubleCodedCasesPerCoder: Record<string, number> }>;
       aggregationInfo: Record<string, { uniqueCases: number; totalResponses: number }>;
       matchingFlags: string[];
+      warnings: Array<{ unitName: string; variableId: string; message: string; casesInJobs: number; availableCases: number }>;
     }>(
       `${this.serverUrl}admin/workspace/${workspaceId}/coding/calculate-distribution`,
       {
@@ -521,7 +523,8 @@ export class CodingService {
           distribution: {},
           doubleCodingInfo: {},
           aggregationInfo: {},
-          matchingFlags: []
+          matchingFlags: [],
+          warnings: []
         }))
       );
   }

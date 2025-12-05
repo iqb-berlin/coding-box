@@ -1,4 +1,4 @@
-import { Injectable, inject } from '@angular/core';
+import { Injectable, inject, EventEmitter } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import {
   BehaviorSubject, Observable, catchError, map, of, tap
@@ -16,6 +16,9 @@ export class CodingJobService {
   private readonly serverUrl = inject(SERVER_URL);
   private appService = inject(AppService);
   private codingJobsSubject = new BehaviorSubject<CodingJob[]>([]);
+
+  // Event emitter for auto-refresh after bulk job creation
+  jobsCreatedEvent = new EventEmitter<void>();
 
   assignCoder(codingJobId: number, coderId: number): Observable<CodingJob | undefined> {
     const workspaceId = this.appService.selectedWorkspaceId;

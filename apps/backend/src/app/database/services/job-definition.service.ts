@@ -256,6 +256,8 @@ export class JobDefinitionService {
     if (approveDto.status === 'pending_review' && jobDefinition.status === 'draft') {
       jobDefinition.status = 'pending_review';
     } else if (approveDto.status === 'approved' && ['draft', 'pending_review'].includes(jobDefinition.status)) {
+      // Validate variable availability before approving
+      await this.validateVariableAvailability(jobDefinition);
       jobDefinition.status = 'approved';
     } else {
       throw new Error(`Invalid status transition from ${jobDefinition.status} to ${approveDto.status}`);
@@ -263,6 +265,59 @@ export class JobDefinitionService {
 
     const savedDefinition = await this.jobDefinitionRepository.save(jobDefinition);
     return savedDefinition;
+  }
+
+  /**
+   * Validate that assigned variables still have available cases
+   */
+  private async validateVariableAvailability(jobDefinition: JobDefinition): Promise<void> {
+    const workspaceId = jobDefinition.workspace_id;
+    const allVariables: Array<{ unitName: string; variableId: string }> = [];
+
+    // Collect all variables from direct assignments
+    if (jobDefinition.assigned_variables) {
+      allVariables.push(...jobDefinition.assigned_variables);
+    }
+
+    // Collect variables from bundles
+    if (jobDefinition.assigned_variable_bundles) {
+      const bundleIds = jobDefinition.assigned_variable_bundles.map(b => b.id);
+      if (bundleIds.length > 0) {
+        const bundles = await this.variableBundleRepository.find({
+          where: { id: In(bundleIds) }
+        });
+        bundles.forEach(bundle => {
+          if (bundle.variables) {
+            allVariables.push(...bundle.variables);
+          }
+        });
+      }
+    }
+
+    if (allVariables.length === 0) {
+      return;
+    }
+
+    // Get current availability for all variables
+    const incompleteVariables = await this.workspaceCodingService.getCodingIncompleteVariables(workspaceId);
+
+    const unavailableVariables: string[] = [];
+
+    allVariables.forEach(variable => {
+      const matchingVar = incompleteVariables.find(
+        v => v.unitName === variable.unitName && v.variableId === variable.variableId
+      );
+
+      if (!matchingVar || matchingVar.availableCases === 0) {
+        unavailableVariables.push(`${variable.unitName}_${variable.variableId}`);
+      }
+    });
+
+    if (unavailableVariables.length > 0) {
+      throw new Error(
+        `Cannot approve job definition: The following variables have no available cases: ${unavailableVariables.join(', ')}`
+      );
+    }
   }
 
   async deleteJobDefinition(id: number): Promise<void> {

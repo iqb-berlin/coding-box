@@ -258,6 +258,18 @@
   }
 }
 
+.availability-filter-row {
+  margin-top: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+
+  .filter-label {
+    font-weight: 500;
+    color: rgba(0, 0, 0, 0.87);
+  }
+}
+
 .quick-selection-tools {
   display: flex;
   justify-content: space-between;
@@ -440,6 +452,28 @@
               color: rgba(0, 0, 0, 0.6);
               font-weight: 400;
               margin-left: 4px;
+            }
+
+            .availability-chip {
+              font-size: 0.75rem;
+              min-height: 24px;
+              padding: 2px 8px;
+              margin-left: 8px;
+
+              &.availability-full {
+                background-color: #c8e6c9;
+                color: #2e7d32;
+              }
+
+              &.availability-partial {
+                background-color: #ffe0b2;
+                color: #e65100;
+              }
+
+              &.availability-none {
+                background-color: #ffcdd2;
+                color: #c62828;
+              }
             }
 
             .assigned-indicator {

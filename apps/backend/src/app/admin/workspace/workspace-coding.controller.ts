@@ -1002,7 +1002,9 @@ export class WorkspaceCodingController {
         properties: {
           unitName: { type: 'string', description: 'Unit name' },
           variableId: { type: 'string', description: 'Variable ID' },
-          responseCount: { type: 'number', description: 'Number of responses for this variable' }
+          responseCount: { type: 'number', description: 'Number of responses for this variable' },
+          casesInJobs: { type: 'number', description: 'Number of unique cases already assigned to coding jobs' },
+          availableCases: { type: 'number', description: 'Number of cases available for new job assignments' }
         }
       }
     }
@@ -1010,7 +1012,7 @@ export class WorkspaceCodingController {
   async getCodingIncompleteVariables(
     @WorkspaceId() workspace_id: number,
       @Query('unitName') unitName?: string
-  ): Promise<{ unitName: string; variableId: string; responseCount: number }[]> {
+  ): Promise<{ unitName: string; variableId: string; responseCount: number; casesInJobs: number; availableCases: number }[]> {
     return this.workspaceCodingService.getCodingIncompleteVariables(
       workspace_id,
       unitName
@@ -1126,6 +1128,8 @@ export class WorkspaceCodingController {
         coveredByApproved: { type: 'number', description: 'Number of variables covered by approved job definitions' },
         conflictedVariables: { type: 'number', description: 'Number of variables assigned to multiple job definitions' },
         missingVariables: { type: 'number', description: 'Number of variables not covered by job definitions' },
+        partiallyAbgedeckteVariablen: { type: 'number', description: 'Number of variables with partial case coverage' },
+        fullyAbgedeckteVariablen: { type: 'number', description: 'Number of variables with full case coverage' },
         coveragePercentage: { type: 'number', description: 'Percentage of variables covered by job definitions' },
         variableCaseCounts: {
           type: 'array',
@@ -1179,6 +1183,8 @@ export class WorkspaceCodingController {
     coveredByApproved: number;
     conflictedVariables: number;
     missingVariables: number;
+    partiallyAbgedeckteVariablen: number;
+    fullyAbgedeckteVariablen: number;
     coveragePercentage: number;
     variableCaseCounts: { unitName: string; variableId: string; caseCount: number }[];
     coverageByStatus: {

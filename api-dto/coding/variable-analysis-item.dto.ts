@@ -28,4 +28,10 @@ export interface VariableAnalysisItemDto {
 
   // Relative occurrence (for bar chart)
   relativeOccurrence: number;
+
+  // Number of unique cases already assigned to coding jobs
+  casesInJobs?: number;
+
+  // Number of cases available for new job assignments
+  availableCases?: number;
 }

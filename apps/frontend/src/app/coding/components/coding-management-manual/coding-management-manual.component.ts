@@ -105,6 +105,8 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     coveredByApproved: number;
     conflictedVariables: number;
     missingVariables: number;
+    partiallyAbgedeckteVariablen?: number;
+    fullyAbgedeckteVariablen?: number;
     coveragePercentage: number;
     variableCaseCounts: { unitName: string; variableId: string; caseCount: number }[];
     coverageByStatus: {
