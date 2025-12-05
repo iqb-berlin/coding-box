@@ -3,28 +3,20 @@ import { HttpClient } from '@angular/common/http';
 import {
   BehaviorSubject,
   Observable,
-  Subject,
-  catchError,
-  map,
-  of,
-  switchMap
+  Subject
 } from 'rxjs';
-import { KeycloakProfile, KeycloakTokenParsed } from 'keycloak-js';
+import { DecodedToken } from '../core/services/auth.service';
 import { AppLogoDto } from '../../../../../api-dto/app-logo-dto';
 import { AuthDataDto } from '../../../../../api-dto/auth-data-dto';
 import { AppHttpError } from '../core/interceptors/app-http-error.class';
-import { TestGroupsInListDto } from '../../../../../api-dto/test-groups/testgroups-in-list.dto';
-import { FilesInListDto } from '../../../../../api-dto/files/files-in-list.dto';
 import { CreateUserDto } from '../../../../../api-dto/user/create-user-dto';
 import { LogoService } from './logo.service';
 import { SERVER_URL } from '../injection-tokens';
 
-type WorkspaceData = {
-  testGroups: TestGroupsInListDto[];
-  testFiles: { data:FilesInListDto[] };
-  settings: unknown;
-  selectUnitPlay: unknown;
-};
+export interface AuthIdentity {
+  identity: string;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -42,36 +34,21 @@ export class AppService {
     workspaces: []
   };
 
-  kcUser !:CreateUserDto;
-  userProfile: KeycloakProfile = {};
-  isLoggedInKeycloak = false;
+  user !:CreateUserDto;
+  isLoggedIn = false;
   errorMessagesDisabled = false;
   selectedWorkspaceId = 0;
   dataLoading: boolean | number = false;
   appLogo: AppLogoDto = standardLogo;
   postMessage$ = new Subject<MessageEvent>();
-  loggedUser: KeycloakTokenParsed | undefined;
+  loggedUser: DecodedToken | undefined;
   errorMessages: AppHttpError[] = [];
   errorMessageCounter = 0;
-  workspaceData : WorkspaceData = {
-    testGroups: [],
-    testFiles: { data: [] },
-    settings: {},
-    selectUnitPlay: {}
-  };
-
-  authHeader = { Authorization: `Bearer ${localStorage.getItem('id_token')}` };
+  authHeader = { Authorization: `Bearer ${localStorage.getItem('auth_token')}` };
   constructor() {
     this.loadLogoSettings();
   }
 
-  /**
-   * Creates a token for the specified workspace, identity, and duration
-   * @param workspace_id The ID of the workspace
-   * @param identity The identity to create the token for
-   * @param duration The duration of the token in seconds
-   * @returns An Observable of the token string
-   */
   createToken(workspace_id: number, identity: string, duration: number): Observable<string> {
     return this.http.get<string>(
       `${this.serverUrl}admin/workspace/${workspace_id}/${identity}/token/${duration}`,
@@ -79,44 +56,16 @@ export class AppService {
     );
   }
 
-  keycloakLogin(user: CreateUserDto): Observable<boolean | null> {
-    return this.http.post<string>(`${this.serverUrl}keycloak-login`, user)
-      .pipe(
-        catchError(() => of(false)),
-        map(loginToken => {
-          if (typeof loginToken === 'string') {
-            localStorage.setItem('id_token', loginToken);
-            this.authHeader = { Authorization: `Bearer ${loginToken}` };
-            return this.getAuthData(user.identity || '')
-              .pipe(
-                map(authData => {
-                  this.updateAuthData(authData);
-                  return true;
-                }),
-                catchError(() => of(false))
-              );
-          }
-          return of(false);
-        }),
-        switchMap(result => {
-          if (result instanceof Observable) {
-            return result;
-          }
-          return of(result);
-        })
-      );
-  }
-
-  getAuthData(id: string): Observable<AuthDataDto> {
+  getAuthData(authObj: AuthIdentity): Observable<AuthDataDto> {
     return this.http.get<AuthDataDto>(
-      `${this.serverUrl}auth-data?identity=${id}`,
+      `${this.serverUrl}auth-data?identity=${authObj.identity}`,
       { headers: this.authHeader }
     );
   }
 
   refreshAuthData(): void {
     if (this.loggedUser?.sub) {
-      this.getAuthData(this.loggedUser.sub).subscribe(authData => {
+      this.getAuthData({ identity: this.loggedUser.sub }).subscribe(authData => {
         this.updateAuthData(authData);
       });
     }
@@ -139,6 +88,14 @@ export class AppService {
 
   get authData$() {
     return this.authDataSubject.asObservable();
+  }
+
+  get authData(): AuthDataDto {
+    return this.authDataSubject.value;
+  }
+
+  set authData(newAuthData: AuthDataDto) {
+    this.authDataSubject.next(newAuthData);
   }
 
   updateAuthData(newAuthData: AuthDataDto): void {

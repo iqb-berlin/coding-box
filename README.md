@@ -89,6 +89,28 @@ For production environments, you can use the file `docker-compose.coding-box.pro
 
 ---
 
+## Authentication
+
+### Keycloak Auth Flow
+
+This application uses **Keycloak** as the identity provider with the **OAuth2 Authorization Code flow** for user authentication:
+
+1. **Login Initiation** (`GET /auth/login`): User is redirected to Keycloak login page with a generated state parameter and callback URI
+2. **User Authentication**: User authenticates with Keycloak (username/password, SSO, etc.)
+3. **Authorization Callback** (`GET /auth/callback`): Keycloak redirects back with authorization code and state
+4. **Token Exchange**: Backend exchanges the authorization code for access/refresh tokens from Keycloak
+5. **User Info Retrieval**: Backend fetches user profile information using the access token
+6. **User Storage**: User data is stored in the application database while using Keycloak tokens directly
+7. **Token Response**: Access token, ID token, and refresh token are returned to the frontend
+
+The flow supports:
+- Secure state parameter handling to prevent CSRF attacks
+- Custom redirect URIs after successful authentication
+- Admin role mapping from Keycloak realm roles
+- Token refresh and logout functionality
+
+---
+
 ## Additional Information
 
 - **Contributing**: Contributions are welcome. Submit a pull request with detailed changes.

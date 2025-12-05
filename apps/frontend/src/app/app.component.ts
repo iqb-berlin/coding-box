@@ -2,18 +2,18 @@ import {
   Component, OnInit, OnDestroy, inject
 } from '@angular/core';
 import {
-  Router, RouterLink, RouterOutlet, NavigationEnd
+  RouterLink, RouterOutlet, Router, ActivatedRoute,NavigationEnd
 } from '@angular/router';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MatButton } from '@angular/material/button';
-import { LocationStrategy } from '@angular/common';
-import { KeycloakProfile } from 'keycloak-js';
-import { Subscription, filter } from 'rxjs';
+import { LocationStrategy, Location } from '@angular/common';
+import { filter, firstValueFrom, Subscription } from 'rxjs';
+import { UserProfile, AuthService } from './core/services/auth.service';
+
 import { AppService } from './services/app.service';
-import { AuthService } from './core/services/auth.service';
 import { CreateUserDto } from '../../../../api-dto/user/create-user-dto';
 import { BackendService } from './services/backend.service';
 import { WrappedIconComponent } from './shared/wrapped-icon/wrapped-icon.component';
@@ -33,10 +33,12 @@ export class AppComponent implements OnInit, OnDestroy {
   authService = inject(AuthService);
   backendService = inject(BackendService);
   url = inject(LocationStrategy);
+  route = inject(ActivatedRoute);
+  location = inject(Location);
   private router = inject(Router);
 
   title = 'IQB-Kodierbox';
-  loggedInKeycloak: boolean = false;
+  isLoggedIn: boolean = false;
   errorMessage = '';
   authData: AuthDataDto = AppService.defaultAuthData;
   currentWorkspaceName = '';
@@ -75,24 +77,35 @@ export class AppComponent implements OnInit, OnDestroy {
     this.routerSubscription?.unsubscribe();
   }
 
-  async keycloakLogin(user: CreateUserDto): Promise<void> {
+  async backendLogin(): Promise<void> {
     this.errorMessage = '';
     this.appService.errorMessagesDisabled = true;
-    this.appService.keycloakLogin(user).subscribe(() => {
-    });
+    if (this.authService.isLoggedIn()) {
+      try {
+        this.appService.authData = await firstValueFrom(this.backendService.getAuthData());
+      } catch (error) {
+        if (!this.authService.hasValidToken()) {
+          this.authService.login();
+        }
+      }
+      return;
+    }
+
+    this.authService.login();
   }
 
   async ngOnInit(): Promise<void> {
+    await this.handleAuthCallback();
+
     if (this.authService.isLoggedIn()) {
       this.setAuthState();
 
-      const keycloakUserProfile = await this.authService.loadUserProfile();
+      const userProfile = await this.authService.loadUserProfile();
       const isAdmin = this.authService.getRoles().includes('admin');
 
-      if (this.isValidUserProfile(keycloakUserProfile)) {
-        const keycloakUser = this.createKeycloakUser(keycloakUserProfile, isAdmin);
-        this.appService.kcUser = keycloakUser;
-        await this.keycloakLogin(keycloakUser);
+      if (this.isValidUserProfile(userProfile)) {
+        this.appService.user = this.createUser(userProfile, isAdmin);
+        await this.backendLogin();
       }
     }
 
@@ -102,24 +115,58 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   private setAuthState(): void {
-    this.loggedInKeycloak = true;
-    this.appService.isLoggedInKeycloak = true;
+    this.isLoggedIn = true;
+    this.appService.isLoggedIn = true;
     this.appService.loggedUser = this.authService.getLoggedUser();
   }
 
-  private isValidUserProfile(userProfile: KeycloakProfile): boolean {
+  private isValidUserProfile(userProfile: UserProfile): boolean {
     return !!userProfile?.id && !!userProfile?.username;
   }
 
-  private createKeycloakUser(userProfile: KeycloakProfile, isAdmin: boolean): CreateUserDto {
+  private createUser(userProfile: UserProfile, isAdmin: boolean): CreateUserDto {
     return {
-      issuer: this.appService.loggedUser?.iss || '',
-      identity: userProfile.id,
+      issuer: this.appService.loggedUser?.sub || '',
+      identity: userProfile.id || '',
       username: userProfile.username || '',
       lastName: userProfile.lastName || '',
       firstName: userProfile.firstName || '',
       email: userProfile.email || '',
       isAdmin: isAdmin
     };
+  }
+
+  private async handleAuthCallback(): Promise<void> {
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const token = urlParams.get('token');
+      const idToken = urlParams.get('id_token');
+      const refreshToken = urlParams.get('refresh_token');
+
+      if (token) {
+        this.authService.setToken(token);
+
+        if (idToken) {
+          this.authService.setIdToken(idToken);
+        }
+
+        if (refreshToken) {
+          this.authService.setRefreshToken(refreshToken);
+        }
+
+        urlParams.delete('token');
+        urlParams.delete('id_token');
+        urlParams.delete('refresh_token');
+
+        // Update the URL without the token parameters
+        const newUrl = urlParams.toString() ?
+          `${window.location.pathname}?${urlParams.toString()}` :
+          window.location.pathname;
+
+        this.location.replaceState(newUrl);
+      }
+    } catch (error) {
+      this.authService.login();
+    }
   }
 }
