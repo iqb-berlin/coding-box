@@ -231,6 +231,123 @@
   }
 }
 
+// Warnings Section
+.warnings-section {
+  margin-bottom: 32px;
+
+  .warnings-panel {
+    background-color: #fff3e0;
+    border: 2px solid #ffb74d;
+    box-shadow: 0 2px 8px rgba(255, 107, 0, 0.1) !important;
+
+    ::ng-deep {
+      .mat-expansion-panel-header {
+        background-color: #fff8e1 !important;
+
+        &:hover {
+          background-color: #ffe082 !important;
+        }
+      }
+    }
+  }
+
+  .warnings-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    color: #e65100;
+
+    .warning-icon {
+      color: #ff6d00;
+      font-size: 22px;
+      width: 22px;
+      height: 22px;
+      flex-shrink: 0;
+    }
+
+    .warning-count {
+      background-color: #ff6d00;
+      color: white;
+      border-radius: 12px;
+      padding: 2px 8px;
+      font-size: 0.85rem;
+      font-weight: 700;
+      margin-left: 8px;
+    }
+  }
+
+  .warnings-content {
+    padding: 20px 16px;
+
+    .warnings-description {
+      color: rgba(0, 0, 0, 0.7);
+      font-size: 0.95rem;
+      margin-bottom: 16px;
+      padding: 12px;
+      background-color: #ffe082;
+      border-radius: 6px;
+      border-left: 4px solid #ff6d00;
+    }
+
+    .warnings-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      max-height: 300px;
+      overflow-y: auto;
+
+      .warning-item {
+        padding: 12px 16px;
+        background-color: #fff9c4;
+        border: 1px solid #fff59d;
+        border-radius: 6px;
+        border-left: 4px solid #ff6d00;
+
+        .warning-header {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          margin-bottom: 8px;
+
+          .warning-item-icon {
+            color: #ff6d00;
+            font-size: 18px;
+            width: 18px;
+            height: 18px;
+            flex-shrink: 0;
+          }
+
+          .warning-variable {
+            font-weight: 600;
+            color: #e65100;
+            font-size: 0.95rem;
+          }
+        }
+
+        .warning-details {
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+          margin-left: 26px;
+
+          .warning-message {
+            color: rgba(0, 0, 0, 0.8);
+            font-size: 0.9rem;
+            font-weight: 500;
+          }
+
+          .warning-info {
+            color: rgba(0, 0, 0, 0.6);
+            font-size: 0.85rem;
+            font-style: italic;
+          }
+        }
+      }
+    }
+  }
+}
+
 .section-title {
   font-size: 1.3rem;
   font-weight: 500;

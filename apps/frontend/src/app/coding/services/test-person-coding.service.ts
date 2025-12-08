@@ -452,6 +452,8 @@ export class TestPersonCodingService {
     coveredByApproved: number;
     conflictedVariables: number;
     missingVariables: number;
+    partiallyAbgedeckteVariablen?: number;
+    fullyAbgedeckteVariablen?: number;
     coveragePercentage: number;
     variableCaseCounts: { unitName: string; variableId: string; caseCount: number }[];
     coverageByStatus: {
@@ -476,6 +478,8 @@ export class TestPersonCodingService {
       coveredByApproved: number;
       conflictedVariables: number;
       missingVariables: number;
+      partiallyAbgedeckteVariablen?: number;
+      fullyAbgedeckteVariablen?: number;
       coveragePercentage: number;
       variableCaseCounts: { unitName: string; variableId: string; caseCount: number }[];
       coverageByStatus: {
@@ -503,6 +507,8 @@ export class TestPersonCodingService {
           coveredByApproved: 0,
           conflictedVariables: 0,
           missingVariables: 0,
+          partiallyAbgedeckteVariablen: 0,
+          fullyAbgedeckteVariablen: 0,
           coveragePercentage: 0,
           variableCaseCounts: [],
           coverageByStatus: {

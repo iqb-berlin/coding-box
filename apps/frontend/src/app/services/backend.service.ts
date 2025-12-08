@@ -741,6 +741,7 @@ export class BackendService {
       doubleCodingInfo: Record<string, { totalCases: number; doubleCodedCases: number; singleCodedCasesAssigned: number; doubleCodedCasesPerCoder: Record<string, number> }>;
       aggregationInfo: Record<string, { uniqueCases: number; totalResponses: number }>;
       matchingFlags: string[];
+      warnings: Array<{ unitName: string; variableId: string; message: string; casesInJobs: number; availableCases: number }>;
     }> {
     return this.codingService.calculateDistribution(workspaceId, selectedVariables, selectedCoders, doubleCodingAbsolute, doubleCodingPercentage, selectedVariableBundles);
   }

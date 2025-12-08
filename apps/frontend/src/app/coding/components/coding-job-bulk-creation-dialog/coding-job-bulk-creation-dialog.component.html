@@ -72,11 +72,43 @@
           </div>
         </div>
 
-        <div class="double-coding-info">
-          <mat-icon class="info-icon">info</mat-icon>
-          <span>{{ 'coding-job-bulk-creation-dialog.double-coding-summary.info-text' | translate }}</span>
-        </div>
+      <div class="double-coding-info">
+        <mat-icon class="info-icon">info</mat-icon>
+        <span>{{ 'coding-job-bulk-creation-dialog.double-coding-summary.info-text' | translate }}</span>
       </div>
+    </div>
+    }
+
+    @if (!isLoading && warnings.length > 0) {
+      <mat-accordion class="warnings-section">
+        <mat-expansion-panel class="warnings-panel" [expanded]="showWarningsPanel">
+          <mat-expansion-panel-header>
+            <mat-panel-title class="warnings-title">
+              <mat-icon class="warning-icon">warning</mat-icon>
+              {{ 'coding-job-bulk-creation-dialog.warnings.title' | translate }}
+              <span class="warning-count">({{ warnings.length }})</span>
+            </mat-panel-title>
+          </mat-expansion-panel-header>
+
+          <div class="warnings-content">
+            <p class="warnings-description">{{ 'coding-job-bulk-creation-dialog.warnings.description' | translate }}</p>
+            <div class="warnings-list">
+              @for (warning of warnings; track warning.unitName + '::' + warning.variableId) {
+                <div class="warning-item">
+                  <div class="warning-header">
+                    <mat-icon class="warning-item-icon">warning_amber</mat-icon>
+                    <span class="warning-variable">{{ warning.unitName }} → {{ warning.variableId }}</span>
+                  </div>
+                  <div class="warning-details">
+                    <span class="warning-message">{{ warning.message }}</span>
+                    <span class="warning-info">({{ warning.availableCases }} von {{ warning.availableCases + warning.casesInJobs }} verfügbar)</span>
+                  </div>
+                </div>
+              }
+            </div>
+          </div>
+        </mat-expansion-panel>
+      </mat-accordion>
     }
 
     @if (!isLoading) {
@@ -203,8 +235,14 @@
 
   <div class="dialog-actions">
     <button mat-button (click)="onCancel()">{{ 'coding-job-bulk-creation-dialog.buttons.cancel' | translate }}</button>
-    <button mat-raised-button color="primary" [disabled]="isLoading" (click)="onConfirm()">
-      {{ 'coding-job-bulk-creation-dialog.buttons.confirm' | translate:{count: jobPreviews.length} }}
-    </button>
+    @if (warnings.length > 0 && !warningsConfirmed) {
+      <button mat-raised-button color="warn" [disabled]="isLoading" (click)="onConfirm()">
+        {{ 'coding-job-bulk-creation-dialog.buttons.continue' | translate }}
+      </button>
+    } @else {
+      <button mat-raised-button color="primary" [disabled]="isLoading" (click)="onConfirm()">
+        {{ 'coding-job-bulk-creation-dialog.buttons.confirm' | translate:{count: jobPreviews.length} }}
+      </button>
+    }
   </div>
 </div>
