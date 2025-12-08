@@ -131,7 +131,7 @@
                     <td mat-cell *matCellDef="let element; let i = index">
                       <div class="selection-cell">
                         <mat-radio-group
-                          [formControlName]="'item_' + i"
+                          [formControlName]="getItemControlName(element)"
                           (change)="onSelectionChange(element, $event.value)"
                           class="coder-selection">
                           @for (result of element.coderResults; track result.coderId) {
@@ -145,7 +145,7 @@
                           <mat-form-field class="comment-field" appearance="outline">
                             <mat-label>{{ 'double-coded-review.comment-label' | translate }}</mat-label>
                             <textarea matInput
-                                      [formControlName]="'comment_' + i"
+                                      [formControlName]="getCommentControlName(element)"
                                       rows="2"
                                       [placeholder]="'double-coded-review.comment-placeholder' | translate"></textarea>
                           </mat-form-field>
@@ -326,7 +326,7 @@
                   <td mat-cell *matCellDef="let element; let i = index">
                     <div class="selection-cell">
                       <mat-radio-group
-                        [formControlName]="'item_' + i"
+                        [formControlName]="getItemControlName(element)"
                         (change)="onSelectionChange(element, $event.value)"
                         class="coder-selection">
                         @for (result of element.coderResults; track result.coderId) {
@@ -340,7 +340,7 @@
                         <mat-form-field class="comment-field" appearance="outline">
                           <mat-label>{{ 'double-coded-review.comment-label' | translate }}</mat-label>
                           <textarea matInput
-                                    [formControlName]="'comment_' + i"
+                                    [formControlName]="getCommentControlName(element)"
                                     rows="2"
                                     [placeholder]="'double-coded-review.comment-placeholder' | translate"></textarea>
                         </mat-form-field>

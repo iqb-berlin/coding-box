@@ -44,6 +44,14 @@ interface CodingScheme {
   variableCodings?: CodingSchemeVariableCoding[];
 }
 
+interface JobCreationWarning {
+  unitName: string;
+  variableId: string;
+  message: string;
+  casesInJobs: number;
+  availableCases: number;
+}
+
 type VariableReference = { unitName: string; variableId: string };
 type BundleItem = { id: number; name: string; variables: VariableReference[] };
 type DistributionItem = { type: 'bundle' | 'variable'; item: BundleItem | VariableReference };
@@ -1140,6 +1148,7 @@ export class CodingJobService {
       doubleCodingInfo: Record<string, { totalCases: number; doubleCodedCases: number; singleCodedCasesAssigned: number; doubleCodedCasesPerCoder: Record<string, number> }>;
       aggregationInfo: Record<string, { uniqueCases: number; totalResponses: number }>;
       matchingFlags: ResponseMatchingFlag[];
+      warnings: JobCreationWarning[];
     }> {
     const {
       selectedVariables, selectedCoders, doubleCodingAbsolute, doubleCodingPercentage, caseOrderingMode = 'continuous'
@@ -1147,6 +1156,7 @@ export class CodingJobService {
     const distribution: Record<string, Record<string, number>> = {};
     const doubleCodingInfo: Record<string, { totalCases: number; doubleCodedCases: number; singleCodedCasesAssigned: number; doubleCodedCasesPerCoder: Record<string, number> }> = {};
     const aggregationInfo: Record<string, { uniqueCases: number; totalResponses: number }> = {};
+    const warnings: JobCreationWarning[] = [];
 
     // Get response matching mode for this workspace
     const matchingFlags = await this.getResponseMatchingMode(workspaceId);
@@ -1167,6 +1177,25 @@ export class CodingJobService {
     }
 
     const allResponses = await this.getResponsesForVariables(workspaceId, allVariables);
+
+    // Generate warnings for variables that have reduced available cases
+    const casesInJobsMap = await this.getVariableCasesInJobs(workspaceId);
+    for (const variable of allVariables) {
+      const key = `${variable.unitName}::${variable.variableId}`;
+      const casesInJobs = casesInJobsMap.get(key) || 0;
+      const totalAvailable = allResponses.filter(r => r.unit?.name === variable.unitName && r.variableid === variable.variableId).length;
+      const availableCases = totalAvailable - casesInJobs;
+
+      if (casesInJobs > 0 && availableCases > 0 && availableCases < totalAvailable) {
+        warnings.push({
+          unitName: variable.unitName,
+          variableId: variable.variableId,
+          message: `Variable: nur noch ${availableCases} von ${totalAvailable} Fällen verfügbar`,
+          casesInJobs,
+          availableCases
+        });
+      }
+    }
 
     const sortedCoders = [...selectedCoders].sort((a, b) => a.name.localeCompare(b.name));
 
@@ -1321,7 +1350,7 @@ export class CodingJobService {
     }
 
     return {
-      distribution, doubleCodingInfo, aggregationInfo, matchingFlags
+      distribution, doubleCodingInfo, aggregationInfo, matchingFlags, warnings
     };
   }
 
@@ -1343,6 +1372,7 @@ export class CodingJobService {
       doubleCodingInfo: Record<string, { totalCases: number; doubleCodedCases: number; singleCodedCasesAssigned: number; doubleCodedCasesPerCoder: Record<string, number> }>;
       aggregationInfo: Record<string, { uniqueCases: number; totalResponses: number }>;
       matchingFlags: ResponseMatchingFlag[];
+      warnings: JobCreationWarning[];
       jobs: {
         coderId: number;
         coderName: string;
@@ -1368,6 +1398,7 @@ export class CodingJobService {
       jobName: string;
       caseCount: number;
     }[] = [];
+    const warnings: JobCreationWarning[] = [];
 
     // Get response matching mode for this workspace
     const matchingFlags = await this.getResponseMatchingMode(workspaceId);
@@ -1388,6 +1419,25 @@ export class CodingJobService {
         items.push({ type: 'variable', item: variable });
         allVariables.push(variable);
       } const allResponses = await this.getResponsesForVariables(workspaceId, allVariables);
+
+      // Generate warnings for variables that have reduced available cases
+      const casesInJobsMap = await this.getVariableCasesInJobs(workspaceId);
+      for (const variable of allVariables) {
+        const key = `${variable.unitName}::${variable.variableId}`;
+        const casesInJobs = casesInJobsMap.get(key) || 0;
+        const totalAvailable = allResponses.filter(r => r.unit?.name === variable.unitName && r.variableid === variable.variableId).length;
+        const availableCases = totalAvailable - casesInJobs;
+
+        if (casesInJobs > 0 && availableCases > 0 && availableCases < totalAvailable) {
+          warnings.push({
+            unitName: variable.unitName,
+            variableId: variable.variableId,
+            message: `Variable: nur noch ${availableCases} von ${totalAvailable} Fällen verfügbar`,
+            casesInJobs,
+            availableCases
+          });
+        }
+      }
 
       // Sort coders alphabetically for deterministic distribution
       const sortedCoders = [...selectedCoders].sort((a, b) => a.name.localeCompare(b.name));
@@ -1563,6 +1613,7 @@ export class CodingJobService {
         doubleCodingInfo,
         aggregationInfo,
         matchingFlags,
+        warnings,
         jobs: createdJobs
       };
     } catch (error) {
@@ -1575,6 +1626,7 @@ export class CodingJobService {
         doubleCodingInfo: {},
         aggregationInfo: {},
         matchingFlags: [],
+        warnings: [],
         jobs: []
       };
     }
@@ -1589,6 +1641,30 @@ export class CodingJobService {
     return codingJobUnits.some(unit => unit.coding_issue_option !== null ||
       (unit.code !== null && unit.code < 0)
     );
+  }
+
+  private async getVariableCasesInJobs(
+    workspaceId: number
+  ): Promise<Map<string, number>> {
+    const rawResults = await this.codingJobUnitRepository.createQueryBuilder('cju')
+      .select('cju.unit_name', 'unitName')
+      .addSelect('cju.variable_id', 'variableId')
+      .addSelect('COUNT(DISTINCT cju.response_id)', 'casesInJobs')
+      .leftJoin('cju.coding_job', 'coding_job')
+      .where('coding_job.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('coding_job.training_id IS NULL')
+      .groupBy('cju.unit_name')
+      .addGroupBy('cju.variable_id')
+      .getRawMany();
+
+    const casesInJobsMap = new Map<string, number>();
+
+    rawResults.forEach(row => {
+      const key = `${row.unitName}::${row.variableId}`;
+      casesInJobsMap.set(key, parseInt(row.casesInJobs, 10));
+    });
+
+    return casesInJobsMap;
   }
 
   async getBulkCodingProgress(codingJobIds: number[], workspaceId: number): Promise<Record<number, Record<string, SaveCodingProgressDto['selectedCode']>>> {

@@ -6,7 +6,7 @@ import { TcMergeBooklet } from '../services/shared-types';
 import { Booklet } from './booklet.entity';
 
 @Entity()
-@Unique('persons_pk', ['code', 'group', 'login'])
+@Unique('persons_pk', ['code', 'group', 'login', 'workspace_id'])
 @Index(['workspace_id', 'code']) // Composite index for common query patterns
 @Index(['workspace_id', 'group']) // Composite index for filtering by group within workspace
 @Index(['login', 'code', 'workspace_id']) // Composite index for findUnitResponse query

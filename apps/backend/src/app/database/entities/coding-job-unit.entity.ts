@@ -5,7 +5,8 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   ManyToOne,
-  JoinColumn
+  JoinColumn,
+  Index
 } from 'typeorm';
 // eslint-disable-next-line import/no-cycle
 import { CodingJob } from './coding-job.entity';
@@ -23,6 +24,7 @@ export class CodingJobUnit {
   @Column()
     coding_job_id: number;
 
+  @Index()
   @Column()
     response_id: number;
 

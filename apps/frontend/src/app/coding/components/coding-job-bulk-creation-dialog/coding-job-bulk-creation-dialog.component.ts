@@ -9,11 +9,20 @@ import { MatChipsModule } from '@angular/material/chips';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatSnackBarModule, MatSnackBar } from '@angular/material/snack-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatExpansionModule } from '@angular/material/expansion';
 import { TranslateModule } from '@ngx-translate/core';
 import { A11yModule } from '@angular/cdk/a11y';
 import { VariableBundle, Variable } from '../../models/coding-job.model';
 import { Coder } from '../../models/coder.model';
 import { BackendService } from '../../../services/backend.service';
+
+interface JobCreationWarning {
+  unitName: string;
+  variableId: string;
+  message: string;
+  casesInJobs: number;
+  availableCases: number;
+}
 
 export interface BulkCreationData {
   selectedVariables: Variable[];
@@ -40,6 +49,7 @@ export interface BulkCreationData {
   };
   distribution?: Record<string, Record<string, number>>;
   doubleCodingInfo?: Record<string, { totalCases: number; doubleCodedCases: number; singleCodedCasesAssigned: number; doubleCodedCasesPerCoder: Record<string, number> }>;
+  warnings?: JobCreationWarning[];
 }
 
 interface DoubleCodingPreview {
@@ -88,6 +98,7 @@ interface DistributionMatrixRow {
     MatCheckboxModule,
     MatProgressSpinnerModule,
     MatSnackBarModule,
+    MatExpansionModule,
     TranslateModule,
     A11yModule
   ]
@@ -100,6 +111,9 @@ export class CodingJobBulkCreationDialogComponent {
   jobPreviews: JobPreview[] = [];
   distributionMatrix: DistributionMatrixRow[] = [];
   doubleCodingPreview?: DoubleCodingPreview;
+  warnings: JobCreationWarning[] = [];
+  showWarningsPanel = false;
+  warningsConfirmed = false;
   isLoading = false;
 
   constructor(
@@ -138,6 +152,9 @@ export class CodingJobBulkCreationDialogComponent {
 
       this.data.distribution = result?.distribution || {};
       this.data.doubleCodingInfo = result?.doubleCodingInfo || {};
+      this.warnings = result?.warnings || [];
+      this.showWarningsPanel = this.warnings.length > 0;
+
       this.initializeFromData();
 
       if (!result || Object.keys(result.distribution || {}).length === 0) {
@@ -369,6 +386,12 @@ export class CodingJobBulkCreationDialogComponent {
   }
 
   onConfirm(): void {
+    // If there are warnings and user hasn't confirmed, just mark warnings as confirmed and return
+    if (this.warnings.length > 0 && !this.warningsConfirmed) {
+      this.warningsConfirmed = true;
+      return;
+    }
+
     const result: BulkCreationResult = {
       confirmed: true,
       showScore: this.displayOptionsForm.value.showScore,
