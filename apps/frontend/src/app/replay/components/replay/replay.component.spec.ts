@@ -137,7 +137,28 @@ describe('ReplayComponent', () => {
 
   it('should normalize player ID correctly', () => {
     const normalizedId = ReplayComponent.getNormalizedPlayerId('player-1.2.3-beta.js');
-    expect(normalizedId).toBe('PLAYER-1.2');
+    expect(normalizedId).toBe('PLAYER-1.2.3');
+  });
+
+  it('should normalize player ID with different separators', () => {
+    expect(ReplayComponent.getNormalizedPlayerId('ASPECT@2.5.1')).toBe('ASPECT-2.5.1');
+    expect(ReplayComponent.getNormalizedPlayerId('ASPECT-2.5.1')).toBe('ASPECT-2.5.1');
+    expect(ReplayComponent.getNormalizedPlayerId('ASPECTV2.5.1')).toBe('ASPECT-2.5.1');
+  });
+
+  it('should normalize player ID without patch version', () => {
+    const normalizedId = ReplayComponent.getNormalizedPlayerId('player-1.2');
+    expect(normalizedId).toBe('PLAYER-1.2.0');
+  });
+
+  it('should normalize player ID without file extension', () => {
+    const normalizedId = ReplayComponent.getNormalizedPlayerId('iqb-player-aspect-2.9.4');
+    expect(normalizedId).toBe('IQB-PLAYER-ASPECT-2.9.4');
+  });
+
+  it('should handle player ID with only major version', () => {
+    const normalizedId = ReplayComponent.getNormalizedPlayerId('player-1');
+    expect(normalizedId).toBe('PLAYER-1.0.0');
   });
 
   it('should reset unit data correctly', () => {

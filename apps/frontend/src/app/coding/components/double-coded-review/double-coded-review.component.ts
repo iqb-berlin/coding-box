@@ -116,21 +116,38 @@ export class DoubleCodedReviewComponent implements OnInit {
     this.selectionForm = this.fb.group({});
   }
 
+  getCurrentItems(): DoubleCodedItem[] {
+    return this.dataSource.filteredData && this.dataSource.filteredData.length > 0 ?
+      this.dataSource.filteredData :
+      this.dataSource.data;
+  }
+
+  getItemControlName(item: DoubleCodedItem): string {
+    return `item_${item.responseId}`;
+  }
+
+  getCommentControlName(item: DoubleCodedItem): string {
+    return `comment_${item.responseId}`;
+  }
+
   private updateForm(): void {
     // Clear existing form controls
     Object.keys(this.selectionForm.controls).forEach(key => {
       this.selectionForm.removeControl(key);
     });
 
-    // Add form controls for each item
-    this.dataSource.data.forEach((item, index) => {
-      const controlName = `item_${index}`;
+    // Determine the current set of rows to base the form on (respect active filter)
+    const currentItems = this.getCurrentItems();
+
+    // Add form controls for each visible/filtered item
+    currentItems.forEach(item => {
+      const controlName = this.getItemControlName(item);
       const defaultValue = item.coderResults.length > 0 ? item.coderResults[0].coderId.toString() : '';
       this.selectionForm.addControl(controlName, new FormControl(defaultValue));
 
       // Add comment control for conflicting items
       if (this.hasConflict(item)) {
-        const commentControlName = `comment_${index}`;
+        const commentControlName = this.getCommentControlName(item);
         this.selectionForm.addControl(commentControlName, new FormControl(''));
       }
     });
@@ -146,14 +163,17 @@ export class DoubleCodedReviewComponent implements OnInit {
 
   onFilterChange(): void {
     this.dataSource.filter = this.showOnlyConflicts ? 'conflicts-only' : '';
+    // Rebuild form controls to match the currently visible (filtered) rows
+    this.updateForm();
   }
 
   areAllVisibleConflictsResolved(): boolean {
-    return this.dataSource.data.every((item, index) => {
+    const currentItems = this.getCurrentItems();
+    return currentItems.every(item => {
       if (!this.hasConflict(item)) {
         return true; // Non-conflicting items don't need resolution
       }
-      const controlName = `item_${index}`;
+      const controlName = this.getItemControlName(item);
       const value = this.selectionForm.get(controlName)?.value;
       return value && value !== '';
     });
@@ -168,9 +188,10 @@ export class DoubleCodedReviewComponent implements OnInit {
   }
 
   getUnresolvedCount(): number {
-    return this.dataSource.data.filter((item, index) => {
+    const currentItems = this.getCurrentItems();
+    return currentItems.filter(item => {
       if (!this.hasConflict(item)) return false;
-      const controlName = `item_${index}`;
+      const controlName = this.getItemControlName(item);
       const value = this.selectionForm.get(controlName)?.value;
       return !value || value === '';
     }).length;
@@ -234,9 +255,13 @@ export class DoubleCodedReviewComponent implements OnInit {
   }
 
   getSelectedCoderResultFromForm(index: number): CoderResult | undefined {
-    const controlName = `item_${index}`;
+    const currentItems = this.getCurrentItems();
+    const item = currentItems[index];
+    if (!item) {
+      return undefined;
+    }
+    const controlName = this.getItemControlName(item);
     const selectedCoderId = this.selectionForm.get(controlName)?.value;
-    const item = this.dataSource.data[index];
     return item.coderResults.find(cr => cr.coderId.toString() === selectedCoderId);
   }
 
@@ -249,11 +274,13 @@ export class DoubleCodedReviewComponent implements OnInit {
       return;
     }
 
-    // Collect decisions from current page
+    // Collect decisions from current (visible) items on the page
     const decisions: Array<{ responseId: number; selectedJobId: number; resolutionComment?: string }> = [];
 
-    this.dataSource.data.forEach((item, index) => {
-      const controlName = `item_${index}`;
+    const currentItems = this.getCurrentItems();
+
+    currentItems.forEach(item => {
+      const controlName = this.getItemControlName(item);
       const selectedCoderId = this.selectionForm.get(controlName)?.value;
 
       if (selectedCoderId) {
@@ -266,7 +293,7 @@ export class DoubleCodedReviewComponent implements OnInit {
 
           // Add comment if provided for conflicting items
           if (this.hasConflict(item)) {
-            const commentControlName = `comment_${index}`;
+            const commentControlName = this.getCommentControlName(item);
             const comment = this.selectionForm.get(commentControlName)?.value;
             if (comment && comment.trim()) {
               decision.resolutionComment = comment.trim();

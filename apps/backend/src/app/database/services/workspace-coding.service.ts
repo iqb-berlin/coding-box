@@ -1316,20 +1316,22 @@ export class WorkspaceCodingService {
   async getCodingIncompleteVariables(
     workspaceId: number,
     unitName?: string
-  ): Promise<{ unitName: string; variableId: string; responseCount: number }[]> {
+  ): Promise<{ unitName: string; variableId: string; responseCount: number; casesInJobs: number; availableCases: number }[]> {
     try {
       if (unitName) {
         this.logger.log(`Querying CODING_INCOMPLETE variables for workspace ${workspaceId} and unit ${unitName} (not cached)`);
-        return await this.fetchCodingIncompleteVariablesFromDb(workspaceId, unitName);
+        const variables = await this.fetchCodingIncompleteVariablesFromDb(workspaceId, unitName);
+        return await this.enrichVariablesWithCaseInfo(workspaceId, variables);
       }
       const cacheKey = this.generateIncompleteVariablesCacheKey(workspaceId);
-      const cachedResult = await this.cacheService.get<{ unitName: string; variableId: string; responseCount: number }[]>(cacheKey);
+      const cachedResult = await this.cacheService.get<{ unitName: string; variableId: string; responseCount: number; casesInJobs: number; availableCases: number }[]>(cacheKey);
       if (cachedResult) {
         this.logger.log(`Retrieved ${cachedResult.length} CODING_INCOMPLETE variables from cache for workspace ${workspaceId}`);
         return cachedResult;
       }
       this.logger.log(`Cache miss: Querying CODING_INCOMPLETE variables for workspace ${workspaceId}`);
-      const result = await this.fetchCodingIncompleteVariablesFromDb(workspaceId);
+      const variables = await this.fetchCodingIncompleteVariablesFromDb(workspaceId);
+      const result = await this.enrichVariablesWithCaseInfo(workspaceId, variables);
 
       const cacheSet = await this.cacheService.set(cacheKey, result, 300); // Cache for 5 minutes
       if (cacheSet) {
@@ -1342,6 +1344,28 @@ export class WorkspaceCodingService {
       this.logger.error(`Error getting CODING_INCOMPLETE variables: ${error.message}`, error.stack);
       throw new Error('Could not get CODING_INCOMPLETE variables. Please check the database connection.');
     }
+  }
+
+  /**
+   * Enrich variables with case information (cases in jobs and available cases)
+   */
+  private async enrichVariablesWithCaseInfo(
+    workspaceId: number,
+    variables: { unitName: string; variableId: string; responseCount: number }[]
+  ): Promise<{ unitName: string; variableId: string; responseCount: number; casesInJobs: number; availableCases: number }[]> {
+    const casesInJobsMap = await this.getVariableCasesInJobs(workspaceId);
+
+    return variables.map(variable => {
+      const key = `${variable.unitName}::${variable.variableId}`;
+      const casesInJobs = casesInJobsMap.get(key) || 0;
+      const availableCases = Math.max(0, variable.responseCount - casesInJobs);
+
+      return {
+        ...variable,
+        casesInJobs,
+        availableCases
+      };
+    });
   }
 
   private async fetchCodingIncompleteVariablesFromDb(
@@ -1399,6 +1423,36 @@ export class WorkspaceCodingService {
     const cacheKey = this.generateIncompleteVariablesCacheKey(workspaceId);
     await this.cacheService.delete(cacheKey);
     this.logger.log(`Invalidated CODING_INCOMPLETE variables cache for workspace ${workspaceId}`);
+  }
+
+  /**
+   * Get the number of unique cases (response_ids) already assigned to coding jobs for each variable
+   * This counts distinct response_ids to properly handle double-coding scenarios
+   */
+  async getVariableCasesInJobs(
+    workspaceId: number
+  ): Promise<Map<string, number>> {
+    const rawResults = await this.codingJobUnitRepository.createQueryBuilder('cju')
+      .select('cju.unit_name', 'unitName')
+      .addSelect('cju.variable_id', 'variableId')
+      .addSelect('COUNT(DISTINCT cju.response_id)', 'casesInJobs')
+      .leftJoin('cju.coding_job', 'coding_job')
+      .where('coding_job.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('coding_job.training_id IS NULL')
+      .groupBy('cju.unit_name')
+      .addGroupBy('cju.variable_id')
+      .getRawMany();
+
+    const casesInJobsMap = new Map<string, number>();
+
+    rawResults.forEach(row => {
+      const key = `${row.unitName}::${row.variableId}`;
+      casesInJobsMap.set(key, parseInt(row.casesInJobs, 10));
+    });
+
+    this.logger.log(`Found cases in jobs for ${casesInJobsMap.size} variables in workspace ${workspaceId}`);
+
+    return casesInJobsMap;
   }
 
   async importExternalCodingWithProgress(
@@ -1799,6 +1853,8 @@ export class WorkspaceCodingService {
     coveredByApproved: number;
     conflictedVariables: number;
     missingVariables: number;
+    partiallyAbgedeckteVariablen: number;
+    fullyAbgedeckteVariablen: number;
     coveragePercentage: number;
     variableCaseCounts: { unitName: string; variableId: string; caseCount: number }[];
     coverageByStatus: {
@@ -1907,10 +1963,32 @@ export class WorkspaceCodingService {
         }
       });
 
+      // Get cases in jobs to determine partial vs full coverage
+      const casesInJobsMap = await this.getVariableCasesInJobs(workspaceId);
+
       const missingVariables = new Set<string>();
+      const partiallyAbgedeckteVariablen = new Set<string>();
+      const fullyAbgedeckteVariablen = new Set<string>();
+
       variablesNeedingCoding.forEach(variableKey => {
         if (!coveredVariables.has(variableKey)) {
           missingVariables.add(variableKey);
+          return;
+        }
+
+        // Check if variable is fully or partially covered based on cases in jobs
+        const variableCaseInfo = variableCaseCounts.find(
+          v => `${v.unitName}:${v.variableId}` === variableKey
+        );
+
+        if (variableCaseInfo) {
+          const casesInJobs = casesInJobsMap.get(`${variableCaseInfo.unitName}::${variableCaseInfo.variableId}`) || 0;
+
+          if (casesInJobs >= variableCaseInfo.caseCount) {
+            fullyAbgedeckteVariablen.add(variableKey);
+          } else if (casesInJobs > 0) {
+            partiallyAbgedeckteVariablen.add(variableKey);
+          }
         }
       });
 
@@ -1921,9 +1999,11 @@ export class WorkspaceCodingService {
       const approvedCount = coverageByStatus.approved.size;
       const conflictCount = conflictedVariables.size;
       const missingCount = missingVariables.size;
+      const partiallyAbgedeckteCount = partiallyAbgedeckteVariablen.size;
+      const fullyAbgedeckteCount = fullyAbgedeckteVariablen.size;
       const coveragePercentage = totalVariables > 0 ? (coveredCount / totalVariables) * 100 : 0;
 
-      this.logger.log(`Variable coverage for workspace ${workspaceId}: ${coveredCount}/${totalVariables} CODING_INCOMPLETE variables covered (${coveragePercentage.toFixed(1)}%) - Draft: ${draftCount}, Pending: ${pendingReviewCount}, Approved: ${approvedCount}, Conflicted: ${conflictCount}`);
+      this.logger.log(`Variable coverage for workspace ${workspaceId}: ${coveredCount}/${totalVariables} CODING_INCOMPLETE variables covered (${coveragePercentage.toFixed(1)}%) - Draft: ${draftCount}, Pending: ${pendingReviewCount}, Approved: ${approvedCount}, Conflicted: ${conflictCount}, Fully covered: ${fullyAbgedeckteCount}, Partially covered: ${partiallyAbgedeckteCount}`);
 
       return {
         totalVariables,
@@ -1933,6 +2013,8 @@ export class WorkspaceCodingService {
         coveredByApproved: approvedCount,
         conflictedVariables: conflictCount,
         missingVariables: missingCount,
+        partiallyAbgedeckteVariablen: partiallyAbgedeckteCount,
+        fullyAbgedeckteVariablen: fullyAbgedeckteCount,
         coveragePercentage,
         variableCaseCounts,
         coverageByStatus: {
@@ -2375,26 +2457,22 @@ export class WorkspaceCodingService {
         versionsToReset.push('v3'); // Cascade: resetting v2 also resets v3
       }
 
-      // Build base query
-      const queryBuilder = this.responseRepository.createQueryBuilder('response')
-        .leftJoinAndSelect('response.unit', 'unit')
-        .leftJoinAndSelect('unit.booklet', 'booklet')
-        .leftJoinAndSelect('booklet.person', 'person')
+      const baseQueryBuilder = this.responseRepository.createQueryBuilder('response')
+        .leftJoin('response.unit', 'unit')
+        .leftJoin('unit.booklet', 'booklet')
+        .leftJoin('booklet.person', 'person')
         .where('person.workspace_id = :workspaceId', { workspaceId });
 
-      // Apply unit filter if provided
       if (unitFilters && unitFilters.length > 0) {
-        queryBuilder.andWhere('unit.name IN (:...unitNames)', { unitNames: unitFilters });
+        baseQueryBuilder.andWhere('unit.name IN (:...unitNames)', { unitNames: unitFilters });
       }
 
-      // Apply variable filter if provided
       if (variableFilters && variableFilters.length > 0) {
-        queryBuilder.andWhere('response.variableid IN (:...variableIds)', { variableIds: variableFilters });
+        baseQueryBuilder.andWhere('response.variableid IN (:...variableIds)', { variableIds: variableFilters });
       }
 
-      // Get responses to reset (for counting affected rows)
-      const responsesToReset = await queryBuilder.getMany();
-      const affectedResponseCount = responsesToReset.length;
+      const countQueryBuilder = baseQueryBuilder.clone();
+      const affectedResponseCount = await countQueryBuilder.getCount();
 
       if (affectedResponseCount === 0) {
         this.logger.log(`No responses found to reset for version ${version}`);
@@ -2405,7 +2483,6 @@ export class WorkspaceCodingService {
         };
       }
 
-      // Prepare update object dynamically based on versions to reset
       const updateObj: Record<string, null> = {};
       versionsToReset.forEach(v => {
         updateObj[`status_${v}`] = null;
@@ -2413,13 +2490,31 @@ export class WorkspaceCodingService {
         updateObj[`score_${v}`] = null;
       });
 
-      // Execute update
-      await this.responseRepository.update(
-        {
-          id: In(responsesToReset.map(r => r.id))
-        },
-        updateObj
-      );
+      const batchSize = 5000;
+      let offset = 0;
+
+      for (;;) {
+        const batchQueryBuilder = baseQueryBuilder.clone()
+          .select(['response.id'])
+          .orderBy('response.id', 'ASC')
+          .skip(offset)
+          .take(batchSize);
+
+        const batchResponses = await batchQueryBuilder.getMany();
+        if (batchResponses.length === 0) {
+          break;
+        }
+
+        const batchIds = batchResponses.map(r => r.id);
+        await this.responseRepository.update(
+          {
+            id: In(batchIds)
+          },
+          updateObj
+        );
+
+        offset += batchSize;
+      }
 
       this.logger.log(
         `Reset successful: ${affectedResponseCount} responses cleared for version(s) ${versionsToReset.join(', ')}`

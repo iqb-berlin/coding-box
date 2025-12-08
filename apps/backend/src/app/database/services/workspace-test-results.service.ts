@@ -15,6 +15,8 @@ import { Booklet } from '../entities/booklet.entity';
 import { ResponseEntity } from '../entities/response.entity';
 import { BookletInfo } from '../entities/bookletInfo.entity';
 import { BookletLog } from '../entities/bookletLog.entity';
+import { ChunkEntity } from '../entities/chunk.entity';
+import { UnitLastState } from '../entities/unitLastState.entity';
 import { UnitTagService } from './unit-tag.service';
 import { JournalService } from './journal.service';
 import { CacheService } from '../../cache/cache.service';
@@ -46,6 +48,8 @@ export class WorkspaceTestResultsService {
     private bookletInfoRepository: Repository<BookletInfo>,
     @InjectRepository(BookletLog)
     private bookletLogRepository: Repository<BookletLog>,
+    @InjectRepository(ChunkEntity)
+    private chunkRepository: Repository<ChunkEntity>,
     private readonly connection: DataSource,
     private readonly unitTagService: UnitTagService,
     private readonly journalService: JournalService,
@@ -352,7 +356,30 @@ export class WorkspaceTestResultsService {
       throw new Error(`Keine Unit mit der ID ${unitId} für das Booklet ${bookletId} gefunden.`);
     }
 
-    const responsesBySubform = {};
+    const chunks = await this.chunkRepository.find({
+      where: { unitid: unit.id }
+    });
+
+    if (chunks.length > 0) {
+      this.logger.log(`Found ${chunks.length} chunks for unit ${unit.id}`);
+      chunks.forEach(chunk => {
+        this.logger.log(`Chunk: key=${chunk.key}, type=${chunk.type}, variables=${chunk.variables}, ts=${chunk.ts}`);
+      });
+    } else {
+      this.logger.log(`No chunks found for unit ${unit.id}`);
+    }
+
+    const chunkKeyMap = new Map<string, string>();
+    chunks.forEach(chunk => {
+      if (chunk.variables) {
+        const variables = chunk.variables.split(',').map(v => v.trim());
+        variables.forEach(variable => {
+          chunkKeyMap.set(variable, chunk.key);
+        });
+      }
+    });
+
+    const responsesByChunk = {};
 
     unit.responses.forEach(response => {
       let value = response.value;
@@ -379,22 +406,22 @@ export class WorkspaceTestResultsService {
         status: response.status
       };
 
-      const subformKey = response.subform || '';
+      const chunkKey = chunkKeyMap.get(response.variableid) || response.subform || '';
 
-      if (!responsesBySubform[subformKey]) {
-        responsesBySubform[subformKey] = [];
+      if (!responsesByChunk[chunkKey]) {
+        responsesByChunk[chunkKey] = [];
       }
 
-      responsesBySubform[subformKey].push(mappedResponse);
+      responsesByChunk[chunkKey].push(mappedResponse);
     });
 
-    const responsesArray = Object.keys(responsesBySubform).map(subform => {
-      const uniqueResponses = responsesBySubform[subform].filter(
+    const responsesArray = Object.keys(responsesByChunk).map(chunkKey => {
+      const uniqueResponses = responsesByChunk[chunkKey].filter(
         (response: { id: string }, index: number, self: { id: string }[]) => index === self.findIndex((r: { id: string }) => r.id === response.id)
       );
 
       return {
-        id: subform || '',
+        id: chunkKey,
         content: uniqueResponses
       };
     });
@@ -1116,16 +1143,24 @@ export class WorkspaceTestResultsService {
 
     csvStream.pipe(stream);
 
-    const BATCH_SIZE = 20;
+    const BATCH_SIZE = 100;
     let processedCount = 0;
 
-    const createQuery = () => {
+    const createBaseQuery = () => {
       const qb = this.unitRepository.createQueryBuilder('unit')
-        .innerJoinAndSelect('unit.booklet', 'booklet')
-        .innerJoinAndSelect('booklet.person', 'person')
-        .innerJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
-        .leftJoinAndSelect('unit.responses', 'response')
-        .leftJoinAndSelect('unit.unitLastStates', 'laststate')
+        .innerJoin('unit.booklet', 'booklet')
+        .innerJoin('booklet.person', 'person')
+        .innerJoin('booklet.bookletinfo', 'bookletinfo')
+        .select([
+          'unit.id',
+          'unit.name',
+          'unit.alias',
+          'booklet.id',
+          'person.group',
+          'person.login',
+          'person.code',
+          'bookletinfo.name'
+        ])
         .where('person.workspace_id = :workspaceId', { workspaceId })
         .andWhere('person.consider = :consider', { consider: true });
 
@@ -1144,14 +1179,14 @@ export class WorkspaceTestResultsService {
       return qb;
     };
 
-    const totalCount = await createQuery().getCount();
+    const totalCount = await createBaseQuery().getCount();
     this.logger.log(`Total units to export: ${totalCount}`);
 
     let lastUnitId = 0;
     let hasMore = true;
 
     while (hasMore) {
-      const units = await createQuery()
+      const units = await createBaseQuery()
         .andWhere('unit.id > :lastUnitId', { lastUnitId })
         .orderBy('unit.id', 'ASC')
         .take(BATCH_SIZE)
@@ -1163,52 +1198,139 @@ export class WorkspaceTestResultsService {
       }
 
       lastUnitId = units[units.length - 1].id;
+      const unitIds = units.map(u => u.id);
+
+      const responses = await this.responseRepository
+        .createQueryBuilder('response')
+        .select([
+          'response.id',
+          'response.unitid',
+          'response.variableid',
+          'response.status',
+          'response.value',
+          'response.subform',
+          'response.code_v1',
+          'response.score_v1',
+          'response.status_v1'
+        ])
+        .where('response.unitid IN (:...unitIds)', { unitIds })
+        .getMany();
+
+      const chunks = await this.chunkRepository
+        .createQueryBuilder('chunk')
+        .select([
+          'chunk.unitid',
+          'chunk.key',
+          'chunk.variables',
+          'chunk.ts',
+          'chunk.type'
+        ])
+        .where('chunk.unitid IN (:...unitIds)', { unitIds })
+        .getMany();
+
+      const lastStates = await this.connection
+        .getRepository(UnitLastState)
+        .createQueryBuilder('laststate')
+        .select(['laststate.unitid', 'laststate.key', 'laststate.value'])
+        .where('laststate.unitid IN (:...unitIds)', { unitIds })
+        .getMany();
+
+      // Create maps for quick lookup
+      const responsesByUnitId = new Map<number, ResponseEntity[]>();
+      const chunksByUnitId = new Map<number, ChunkEntity[]>();
+      const lastStatesByUnitId = new Map<number, Array<{ key: string; value: unknown }>>();
+
+      responses.forEach(r => {
+        if (!responsesByUnitId.has(r.unitid)) {
+          responsesByUnitId.set(r.unitid, []);
+        }
+        responsesByUnitId.get(r.unitid)!.push(r);
+      });
+
+      chunks.forEach(chunk => {
+        if (!chunksByUnitId.has(chunk.unitid)) {
+          chunksByUnitId.set(chunk.unitid, []);
+        }
+        chunksByUnitId.get(chunk.unitid)!.push(chunk);
+      });
+
+      lastStates.forEach(ls => {
+        if (!lastStatesByUnitId.has(ls.unitid)) {
+          lastStatesByUnitId.set(ls.unitid, []);
+        }
+        lastStatesByUnitId.get(ls.unitid)!.push({ key: ls.key, value: ls.value });
+      });
 
       for (const unit of units) {
-        const responsesBySubform = new Map<string, TcMergeResponse[]>();
+        const unitResponses = responsesByUnitId.get(unit.id) || [];
+        const unitChunks = chunksByUnitId.get(unit.id) || [];
+        const unitLastStates = lastStatesByUnitId.get(unit.id) || [];
 
-        if (unit.responses) {
-          unit.responses.forEach(r => {
-            const subform = r.subform || '';
-            if (!responsesBySubform.has(subform)) {
-              responsesBySubform.set(subform, []);
-            }
+        const chunkKeyMap = new Map<string, string>();
+        const chunkMetaByKey = new Map<string, { ts: number; type: string }>();
 
-            let value: ResponseValueType = r.value;
-            try {
-              value = JSON.parse(r.value);
-            } catch (e) {
-              // keep as string
-            }
-
-            responsesBySubform.get(subform).push({
-              id: r.variableid,
-              value: value,
-              status: statusNumberToString(r.status) || 'UNSET',
-              subform: r.subform,
-              code: r.code_v1,
-              score: r.score_v1
+        unitChunks.forEach(chunk => {
+          if (chunk.variables) {
+            const variables = chunk.variables.split(',').map(v => v.trim());
+            variables.forEach(variable => {
+              chunkKeyMap.set(variable, chunk.key);
             });
-          });
-        }
+          }
 
-        const chunks: Chunk[] = [];
-        responsesBySubform.forEach((responses, subform) => {
-          chunks.push({
-            id: subform,
-            subForm: subform,
-            responseType: 'state',
-            ts: 0,
-            content: JSON.stringify(responses)
+          // Store timestamp and type for each chunk key so we can use it in the export
+          if (!chunkMetaByKey.has(chunk.key)) {
+            chunkMetaByKey.set(chunk.key, {
+              ts: Number(chunk.ts) || 0,
+              type: chunk.type || 'state'
+            });
+          }
+        });
+
+        const responsesByChunkKey = new Map<string, TcMergeResponse[]>();
+
+        unitResponses.forEach(r => {
+          const chunkKey = chunkKeyMap.get(r.variableid) || r.subform || '';
+          if (!responsesByChunkKey.has(chunkKey)) {
+            responsesByChunkKey.set(chunkKey, []);
+          }
+
+          let value: ResponseValueType = r.value;
+          try {
+            if (typeof r.value === 'string' && r.value.length > 0) {
+              value = JSON.parse(r.value);
+            }
+          } catch (e) {
+            // keep as string
+          }
+
+          responsesByChunkKey.get(chunkKey)!.push({
+            id: r.variableid,
+            value: value,
+            status: statusNumberToString(r.status) || 'UNSET',
+            subform: r.subform,
+            code: r.code_v1,
+            score: r.score_v1
+          });
+        });
+
+        const exportChunks: Chunk[] = [];
+        responsesByChunkKey.forEach((chunkResponses, chunkKey) => {
+          const meta = chunkMetaByKey.get(chunkKey);
+          const resolvedSubForm = chunkResponses.find(r => r.subform && r.subform.length > 0)?.subform || '';
+
+          exportChunks.push({
+            id: chunkKey,
+            subForm: resolvedSubForm,
+            responseType: meta?.type || 'state',
+            ts: meta?.ts || 0,
+            content: JSON.stringify(chunkResponses)
           });
         });
 
         const lastStateMap: { [key: string]: unknown } = {};
-        if (unit.unitLastStates) {
-          unit.unitLastStates.forEach(ls => {
-            lastStateMap[ls.key] = ls.value;
-          });
-        }
+        unitLastStates.forEach(ls => {
+          lastStateMap[ls.key] = ls.value;
+        });
 
         const canContinue = csvStream.write({
           groupname: unit.booklet.person.group,
@@ -1216,7 +1338,7 @@ export class WorkspaceTestResultsService {
           code: unit.booklet.person.code,
           bookletname: unit.booklet.bookletinfo.name,
           unitname: unit.name,
-          responses: JSON.stringify(chunks),
+          responses: JSON.stringify(exportChunks),
           laststate: JSON.stringify(lastStateMap),
           originalUnitId: unit.alias || unit.name
         });

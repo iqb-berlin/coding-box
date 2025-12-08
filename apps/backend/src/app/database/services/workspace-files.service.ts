@@ -1531,14 +1531,14 @@ ${bookletRefs}
       throw new Error(`Invalid player name: ${name}`);
     }
 
-    const [, module = '', , major = '', minorDot = ''] = matches;
+    const [, module = '', , major = '', minorDot = '', patchDot = ''] = matches;
 
     const majorVersion = parseInt(major, 10) || 0;
     const minorVersion = minorDot ? parseInt(minorDot.substring(1), 10) : 0;
-    // const patchVersion = patchDot ? parseInt(patchDot.substring(1), 10) : 0;
+    const patchVersion = patchDot ? parseInt(patchDot.substring(1), 10) : 0;
     // const label = labelWithDash ? labelWithDash.substring(1) : '';
 
-    return `${module}-${majorVersion}.${minorVersion}`.toUpperCase();
+    return `${module}-${majorVersion}.${minorVersion}.${patchVersion}`.toUpperCase();
   }
 
   async getUnitContent(workspaceId: number, unitId: number): Promise<string> {
@@ -1667,7 +1667,7 @@ ${bookletRefs}
       });
 
       if (!files || files.length === 0) {
-        throw new Error(`No files found in workspace ${workspaceId}`);
+        this.logger.error(`No files found in workspace ${workspaceId}`);
       }
 
       this.logger.log(`Found ${files.length} files to include in ZIP`);
