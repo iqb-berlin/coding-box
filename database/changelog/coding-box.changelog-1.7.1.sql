@@ -15,6 +15,5 @@ CREATE UNIQUE INDEX person_unique_idx ON "public"."persons" ("code", "group", "l
 
 -- rollback ALTER TABLE "public"."persons" DROP CONSTRAINT "persons_pk";
 -- rollback DROP INDEX IF EXISTS person_unique_idx;
--- rollback ALTER TABLE "public"."persons" ADD CONSTRAINT "persons_pk" UNIQUE ("code", "group", "login");
 -- rollback ALTER TABLE "public"."persons" ADD CONSTRAINT person_id UNIQUE ("group", "login", "code");
 -- rollback CREATE UNIQUE INDEX person_unique_idx ON "public"."persons" ("code", "group", "login");
