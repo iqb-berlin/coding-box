@@ -16,6 +16,7 @@ import { ResponseEntity } from '../entities/response.entity';
 import { BookletInfo } from '../entities/bookletInfo.entity';
 import { BookletLog } from '../entities/bookletLog.entity';
 import { ChunkEntity } from '../entities/chunk.entity';
+import { UnitLastState } from '../entities/unitLastState.entity';
 import { UnitTagService } from './unit-tag.service';
 import { JournalService } from './journal.service';
 import { CacheService } from '../../cache/cache.service';
@@ -1142,16 +1143,24 @@ export class WorkspaceTestResultsService {
 
     csvStream.pipe(stream);
 
-    const BATCH_SIZE = 20;
+    const BATCH_SIZE = 100;
     let processedCount = 0;
 
-    const createQuery = () => {
+    const createBaseQuery = () => {
       const qb = this.unitRepository.createQueryBuilder('unit')
-        .innerJoinAndSelect('unit.booklet', 'booklet')
-        .innerJoinAndSelect('booklet.person', 'person')
-        .innerJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
-        .leftJoinAndSelect('unit.responses', 'response')
-        .leftJoinAndSelect('unit.unitLastStates', 'laststate')
+        .innerJoin('unit.booklet', 'booklet')
+        .innerJoin('booklet.person', 'person')
+        .innerJoin('booklet.bookletinfo', 'bookletinfo')
+        .select([
+          'unit.id',
+          'unit.name',
+          'unit.alias',
+          'booklet.id',
+          'person.group',
+          'person.login',
+          'person.code',
+          'bookletinfo.name'
+        ])
         .where('person.workspace_id = :workspaceId', { workspaceId })
         .andWhere('person.consider = :consider', { consider: true });
 
@@ -1170,14 +1179,14 @@ export class WorkspaceTestResultsService {
       return qb;
     };
 
-    const totalCount = await createQuery().getCount();
+    const totalCount = await createBaseQuery().getCount();
     this.logger.log(`Total units to export: ${totalCount}`);
 
     let lastUnitId = 0;
     let hasMore = true;
 
     while (hasMore) {
-      const units = await createQuery()
+      const units = await createBaseQuery()
         .andWhere('unit.id > :lastUnitId', { lastUnitId })
         .orderBy('unit.id', 'ASC')
         .take(BATCH_SIZE)
@@ -1189,52 +1198,95 @@ export class WorkspaceTestResultsService {
       }
 
       lastUnitId = units[units.length - 1].id;
+      const unitIds = units.map(u => u.id);
+
+      const responses = await this.responseRepository
+        .createQueryBuilder('response')
+        .select([
+          'response.id',
+          'response.unitid',
+          'response.variableid',
+          'response.status',
+          'response.value',
+          'response.subform',
+          'response.code_v1',
+          'response.score_v1',
+          'response.status_v1'
+        ])
+        .where('response.unitid IN (:...unitIds)', { unitIds })
+        .getMany();
+
+      const lastStates = await this.connection
+        .getRepository(UnitLastState)
+        .createQueryBuilder('laststate')
+        .select(['laststate.unitid', 'laststate.key', 'laststate.value'])
+        .where('laststate.unitid IN (:...unitIds)', { unitIds })
+        .getMany();
+
+      // Create maps for quick lookup
+      const responsesByUnitId = new Map<number, ResponseEntity[]>();
+      const lastStatesByUnitId = new Map<number, Array<{ key: string; value: unknown }>>();
+
+      responses.forEach(r => {
+        if (!responsesByUnitId.has(r.unitid)) {
+          responsesByUnitId.set(r.unitid, []);
+        }
+        responsesByUnitId.get(r.unitid)!.push(r);
+      });
+
+      lastStates.forEach(ls => {
+        if (!lastStatesByUnitId.has(ls.unitid)) {
+          lastStatesByUnitId.set(ls.unitid, []);
+        }
+        lastStatesByUnitId.get(ls.unitid)!.push({ key: ls.key, value: ls.value });
+      });
 
       for (const unit of units) {
+        const unitResponses = responsesByUnitId.get(unit.id) || [];
+        const unitLastStates = lastStatesByUnitId.get(unit.id) || [];
+
         const responsesBySubform = new Map<string, TcMergeResponse[]>();
 
-        if (unit.responses) {
-          unit.responses.forEach(r => {
-            const subform = r.subform || '';
-            if (!responsesBySubform.has(subform)) {
-              responsesBySubform.set(subform, []);
-            }
+        unitResponses.forEach(r => {
+          const subform = r.subform || '';
+          if (!responsesBySubform.has(subform)) {
+            responsesBySubform.set(subform, []);
+          }
 
-            let value: ResponseValueType = r.value;
-            try {
+          let value: ResponseValueType = r.value;
+          try {
+            if (typeof r.value === 'string' && r.value.length > 0) {
               value = JSON.parse(r.value);
-            } catch (e) {
-              // keep as string
             }
+          } catch (e) {
+            // keep as string
+          }
 
-            responsesBySubform.get(subform).push({
-              id: r.variableid,
-              value: value,
-              status: statusNumberToString(r.status) || 'UNSET',
-              subform: r.subform,
-              code: r.code_v1,
-              score: r.score_v1
-            });
+          responsesBySubform.get(subform)!.push({
+            id: r.variableid,
+            value: value,
+            status: statusNumberToString(r.status) || 'UNSET',
+            subform: r.subform,
+            code: r.code_v1,
+            score: r.score_v1
           });
-        }
+        });
 
         const chunks: Chunk[] = [];
-        responsesBySubform.forEach((responses, subform) => {
+        responsesBySubform.forEach((subformResponses, subform) => {
           chunks.push({
             id: subform,
             subForm: subform,
             responseType: 'state',
             ts: 0,
-            content: JSON.stringify(responses)
+            content: JSON.stringify(subformResponses)
           });
         });
 
         const lastStateMap: { [key: string]: unknown } = {};
-        if (unit.unitLastStates) {
-          unit.unitLastStates.forEach(ls => {
-            lastStateMap[ls.key] = ls.value;
-          });
-        }
+        unitLastStates.forEach(ls => {
+          lastStateMap[ls.key] = ls.value;
+        });
 
         const canContinue = csvStream.write({
           groupname: unit.booklet.person.group,
