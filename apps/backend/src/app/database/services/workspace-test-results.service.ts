@@ -15,6 +15,7 @@ import { Booklet } from '../entities/booklet.entity';
 import { ResponseEntity } from '../entities/response.entity';
 import { BookletInfo } from '../entities/bookletInfo.entity';
 import { BookletLog } from '../entities/bookletLog.entity';
+import { ChunkEntity } from '../entities/chunk.entity';
 import { UnitTagService } from './unit-tag.service';
 import { JournalService } from './journal.service';
 import { CacheService } from '../../cache/cache.service';
@@ -46,6 +47,8 @@ export class WorkspaceTestResultsService {
     private bookletInfoRepository: Repository<BookletInfo>,
     @InjectRepository(BookletLog)
     private bookletLogRepository: Repository<BookletLog>,
+    @InjectRepository(ChunkEntity)
+    private chunkRepository: Repository<ChunkEntity>,
     private readonly connection: DataSource,
     private readonly unitTagService: UnitTagService,
     private readonly journalService: JournalService,
@@ -352,7 +355,30 @@ export class WorkspaceTestResultsService {
       throw new Error(`Keine Unit mit der ID ${unitId} für das Booklet ${bookletId} gefunden.`);
     }
 
-    const responsesBySubform = {};
+    const chunks = await this.chunkRepository.find({
+      where: { unitid: unit.id }
+    });
+
+    if (chunks.length > 0) {
+      this.logger.log(`Found ${chunks.length} chunks for unit ${unit.id}`);
+      chunks.forEach(chunk => {
+        this.logger.log(`Chunk: key=${chunk.key}, type=${chunk.type}, variables=${chunk.variables}, ts=${chunk.ts}`);
+      });
+    } else {
+      this.logger.log(`No chunks found for unit ${unit.id}`);
+    }
+
+    const chunkKeyMap = new Map<string, string>();
+    chunks.forEach(chunk => {
+      if (chunk.variables) {
+        const variables = chunk.variables.split(',').map(v => v.trim());
+        variables.forEach(variable => {
+          chunkKeyMap.set(variable, chunk.key);
+        });
+      }
+    });
+
+    const responsesByChunk = {};
 
     unit.responses.forEach(response => {
       let value = response.value;
@@ -379,22 +405,22 @@ export class WorkspaceTestResultsService {
         status: response.status
       };
 
-      const subformKey = response.subform || '';
+      const chunkKey = chunkKeyMap.get(response.variableid) || response.subform || '';
 
-      if (!responsesBySubform[subformKey]) {
-        responsesBySubform[subformKey] = [];
+      if (!responsesByChunk[chunkKey]) {
+        responsesByChunk[chunkKey] = [];
       }
 
-      responsesBySubform[subformKey].push(mappedResponse);
+      responsesByChunk[chunkKey].push(mappedResponse);
     });
 
-    const responsesArray = Object.keys(responsesBySubform).map(subform => {
-      const uniqueResponses = responsesBySubform[subform].filter(
+    const responsesArray = Object.keys(responsesByChunk).map(chunkKey => {
+      const uniqueResponses = responsesByChunk[chunkKey].filter(
         (response: { id: string }, index: number, self: { id: string }[]) => index === self.findIndex((r: { id: string }) => r.id === response.id)
       );
 
       return {
-        id: subform || '',
+        id: chunkKey,
         content: uniqueResponses
       };
     });
