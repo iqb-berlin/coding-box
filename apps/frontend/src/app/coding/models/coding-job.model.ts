@@ -40,6 +40,8 @@ export interface Variable {
   unitName: string;
   variableId: string;
   responseCount?: number;
+  casesInJobs?: number;
+  availableCases?: number;
 }
 
 export interface VariableBundle {

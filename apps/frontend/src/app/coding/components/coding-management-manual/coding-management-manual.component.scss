@@ -164,6 +164,10 @@
 
               &.missing {
                 color: #f44336;
+              &.partial {
+                color: #ff9800;
+              }
+
               }
 
               &.percentage {
