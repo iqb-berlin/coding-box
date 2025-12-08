@@ -478,7 +478,7 @@ export class PersonService {
 
       this.logger.log(`Starting to process ${personList.length} persons for workspace ${workspace_id}`);
 
-      await this.personsRepository.upsert(personList, ['group', 'code', 'login']);
+      await this.personsRepository.upsert(personList, ['group', 'code', 'login', 'workspace_id']);
       const persons = await this.personsRepository.find({ where: { workspace_id } });
 
       if (!persons || persons.length === 0) {
