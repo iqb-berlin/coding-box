@@ -90,14 +90,25 @@
                       <mat-progress-bar mode="indeterminate" class="button-progress"></mat-progress-bar>
                     }
                   </div>
-                  <button 
-                    mat-icon-button 
-                    (click)="openResetVersionDialog()"
-                    [matTooltip]="'coding-management.reset-dialog.reset-tooltip' | translate"
-                    color="primary"
-                    class="reset-version-button">
-                    <mat-icon>restart_alt</mat-icon>
-                  </button>
+                  <div class="button-group">
+                    <button
+                      mat-icon-button
+                      (click)="openResetVersionDialog()"
+                      [matTooltip]="'coding-management.reset-dialog.reset-tooltip' | translate"
+                      color="primary"
+                      class="reset-version-button"
+                      [disabled]="isLoading || isDownloadInProgress">
+                      <mat-icon>restart_alt</mat-icon>
+                    </button>
+                    @if (isLoading) {
+                      <mat-progress-spinner
+                        mode="indeterminate"
+                        diameter="24"
+                        strokeWidth="3"
+                        class="reset-button-spinner">
+                      </mat-progress-spinner>
+                    }
+                  </div>
                 </div>
               </div>
               <mat-divider></mat-divider>

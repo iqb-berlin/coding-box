@@ -2457,26 +2457,22 @@ export class WorkspaceCodingService {
         versionsToReset.push('v3'); // Cascade: resetting v2 also resets v3
       }
 
-      // Build base query
-      const queryBuilder = this.responseRepository.createQueryBuilder('response')
-        .leftJoinAndSelect('response.unit', 'unit')
-        .leftJoinAndSelect('unit.booklet', 'booklet')
-        .leftJoinAndSelect('booklet.person', 'person')
+      const baseQueryBuilder = this.responseRepository.createQueryBuilder('response')
+        .leftJoin('response.unit', 'unit')
+        .leftJoin('unit.booklet', 'booklet')
+        .leftJoin('booklet.person', 'person')
         .where('person.workspace_id = :workspaceId', { workspaceId });
 
-      // Apply unit filter if provided
       if (unitFilters && unitFilters.length > 0) {
-        queryBuilder.andWhere('unit.name IN (:...unitNames)', { unitNames: unitFilters });
+        baseQueryBuilder.andWhere('unit.name IN (:...unitNames)', { unitNames: unitFilters });
       }
 
-      // Apply variable filter if provided
       if (variableFilters && variableFilters.length > 0) {
-        queryBuilder.andWhere('response.variableid IN (:...variableIds)', { variableIds: variableFilters });
+        baseQueryBuilder.andWhere('response.variableid IN (:...variableIds)', { variableIds: variableFilters });
       }
 
-      // Get responses to reset (for counting affected rows)
-      const responsesToReset = await queryBuilder.getMany();
-      const affectedResponseCount = responsesToReset.length;
+      const countQueryBuilder = baseQueryBuilder.clone();
+      const affectedResponseCount = await countQueryBuilder.getCount();
 
       if (affectedResponseCount === 0) {
         this.logger.log(`No responses found to reset for version ${version}`);
@@ -2487,7 +2483,6 @@ export class WorkspaceCodingService {
         };
       }
 
-      // Prepare update object dynamically based on versions to reset
       const updateObj: Record<string, null> = {};
       versionsToReset.forEach(v => {
         updateObj[`status_${v}`] = null;
@@ -2495,13 +2490,31 @@ export class WorkspaceCodingService {
         updateObj[`score_${v}`] = null;
       });
 
-      // Execute update
-      await this.responseRepository.update(
-        {
-          id: In(responsesToReset.map(r => r.id))
-        },
-        updateObj
-      );
+      const batchSize = 5000;
+      let offset = 0;
+
+      for (;;) {
+        const batchQueryBuilder = baseQueryBuilder.clone()
+          .select(['response.id'])
+          .orderBy('response.id', 'ASC')
+          .skip(offset)
+          .take(batchSize);
+
+        const batchResponses = await batchQueryBuilder.getMany();
+        if (batchResponses.length === 0) {
+          break;
+        }
+
+        const batchIds = batchResponses.map(r => r.id);
+        await this.responseRepository.update(
+          {
+            id: In(batchIds)
+          },
+          updateObj
+        );
+
+        offset += batchSize;
+      }
 
       this.logger.log(
         `Reset successful: ${affectedResponseCount} responses cleared for version(s) ${versionsToReset.join(', ')}`
