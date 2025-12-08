@@ -1216,6 +1216,18 @@ export class WorkspaceTestResultsService {
         .where('response.unitid IN (:...unitIds)', { unitIds })
         .getMany();
 
+      const chunks = await this.chunkRepository
+        .createQueryBuilder('chunk')
+        .select([
+          'chunk.unitid',
+          'chunk.key',
+          'chunk.variables',
+          'chunk.ts',
+          'chunk.type'
+        ])
+        .where('chunk.unitid IN (:...unitIds)', { unitIds })
+        .getMany();
+
       const lastStates = await this.connection
         .getRepository(UnitLastState)
         .createQueryBuilder('laststate')
@@ -1225,6 +1237,7 @@ export class WorkspaceTestResultsService {
 
       // Create maps for quick lookup
       const responsesByUnitId = new Map<number, ResponseEntity[]>();
+      const chunksByUnitId = new Map<number, ChunkEntity[]>();
       const lastStatesByUnitId = new Map<number, Array<{ key: string; value: unknown }>>();
 
       responses.forEach(r => {
@@ -1232,6 +1245,13 @@ export class WorkspaceTestResultsService {
           responsesByUnitId.set(r.unitid, []);
         }
         responsesByUnitId.get(r.unitid)!.push(r);
+      });
+
+      chunks.forEach(chunk => {
+        if (!chunksByUnitId.has(chunk.unitid)) {
+          chunksByUnitId.set(chunk.unitid, []);
+        }
+        chunksByUnitId.get(chunk.unitid)!.push(chunk);
       });
 
       lastStates.forEach(ls => {
@@ -1243,14 +1263,35 @@ export class WorkspaceTestResultsService {
 
       for (const unit of units) {
         const unitResponses = responsesByUnitId.get(unit.id) || [];
+        const unitChunks = chunksByUnitId.get(unit.id) || [];
         const unitLastStates = lastStatesByUnitId.get(unit.id) || [];
 
-        const responsesBySubform = new Map<string, TcMergeResponse[]>();
+        const chunkKeyMap = new Map<string, string>();
+        const chunkMetaByKey = new Map<string, { ts: number; type: string }>();
+
+        unitChunks.forEach(chunk => {
+          if (chunk.variables) {
+            const variables = chunk.variables.split(',').map(v => v.trim());
+            variables.forEach(variable => {
+              chunkKeyMap.set(variable, chunk.key);
+            });
+          }
+
+          // Store timestamp and type for each chunk key so we can use it in the export
+          if (!chunkMetaByKey.has(chunk.key)) {
+            chunkMetaByKey.set(chunk.key, {
+              ts: Number(chunk.ts) || 0,
+              type: chunk.type || 'state'
+            });
+          }
+        });
+
+        const responsesByChunkKey = new Map<string, TcMergeResponse[]>();
 
         unitResponses.forEach(r => {
-          const subform = r.subform || '';
-          if (!responsesBySubform.has(subform)) {
-            responsesBySubform.set(subform, []);
+          const chunkKey = chunkKeyMap.get(r.variableid) || r.subform || '';
+          if (!responsesByChunkKey.has(chunkKey)) {
+            responsesByChunkKey.set(chunkKey, []);
           }
 
           let value: ResponseValueType = r.value;
@@ -1262,7 +1303,7 @@ export class WorkspaceTestResultsService {
             // keep as string
           }
 
-          responsesBySubform.get(subform)!.push({
+          responsesByChunkKey.get(chunkKey)!.push({
             id: r.variableid,
             value: value,
             status: statusNumberToString(r.status) || 'UNSET',
@@ -1272,14 +1313,17 @@ export class WorkspaceTestResultsService {
           });
         });
 
-        const chunks: Chunk[] = [];
-        responsesBySubform.forEach((subformResponses, subform) => {
-          chunks.push({
-            id: subform,
-            subForm: subform,
-            responseType: 'state',
-            ts: 0,
-            content: JSON.stringify(subformResponses)
+        const exportChunks: Chunk[] = [];
+        responsesByChunkKey.forEach((chunkResponses, chunkKey) => {
+          const meta = chunkMetaByKey.get(chunkKey);
+          const resolvedSubForm = chunkResponses.find(r => r.subform && r.subform.length > 0)?.subform || '';
+
+          exportChunks.push({
+            id: chunkKey,
+            subForm: resolvedSubForm,
+            responseType: meta?.type || 'state',
+            ts: meta?.ts || 0,
+            content: JSON.stringify(chunkResponses)
           });
         });
 
@@ -1294,7 +1338,7 @@ export class WorkspaceTestResultsService {
           code: unit.booklet.person.code,
           bookletname: unit.booklet.bookletinfo.name,
           unitname: unit.name,
-          responses: JSON.stringify(chunks),
+          responses: JSON.stringify(exportChunks),
           laststate: JSON.stringify(lastStateMap),
           originalUnitId: unit.alias || unit.name
         });
