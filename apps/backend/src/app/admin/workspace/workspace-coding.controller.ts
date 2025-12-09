@@ -621,6 +621,30 @@ export class WorkspaceCodingController {
     return this.personService.getWorkspaceGroups(workspace_id);
   }
 
+  @Get(':workspace_id/coding/groups/stats')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiOkResponse({
+    description: 'List of all test person groups in the workspace with coding statistics.',
+    schema: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          groupName: { type: 'string', description: 'Group name' },
+          testPersonCount: { type: 'number', description: 'Number of test persons in this group' },
+          responsesToCode: { type: 'number', description: 'Number of responses that still need to be coded for this group' }
+        }
+      }
+    }
+  })
+  async getWorkspaceGroupCodingStats(
+    @WorkspaceId() workspace_id: number
+  ): Promise<{ groupName: string; testPersonCount: number; responsesToCode: number }[]> {
+    return this.personService.getWorkspaceGroupCodingStats(workspace_id);
+  }
+
   @Get(':workspace_id/coding/job/:jobId/pause')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiTags('coding')

@@ -57,10 +57,17 @@ export interface JobStatus {
   groupNames?: string;
   durationMs?: number;
   completedAt?: Date;
+  autoCoderRun?: number;
 }
 
 export interface JobInfo extends JobStatus {
   jobId: string;
+}
+
+export interface WorkspaceGroupCodingStats {
+  groupName: string;
+  testPersonCount: number;
+  responsesToCode: number;
 }
 
 @Injectable({
@@ -216,10 +223,10 @@ export class TestPersonCodingService {
       );
   }
 
-  getWorkspaceGroups(workspaceId: number): Observable<string[]> {
+  getWorkspaceGroups(workspaceId: number): Observable<WorkspaceGroupCodingStats[]> {
     return this.http
-      .get<string[]>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/coding/groups`,
+      .get<WorkspaceGroupCodingStats[]>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/coding/groups/stats`,
       { headers: this.authHeader }
     )
       .pipe(

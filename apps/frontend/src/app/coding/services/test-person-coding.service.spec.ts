@@ -277,14 +277,17 @@ describe('TestPersonCodingService', () => {
   });
 
   describe('getWorkspaceGroups', () => {
-    it('should send a GET request to get workspace groups', () => {
-      const mockResponse = ['Group1', 'Group2', 'Group3'];
+    it('should send a GET request to get workspace group coding stats', () => {
+      const mockResponse = [
+        { groupName: 'Group1', testPersonCount: 10, responsesToCode: 100 },
+        { groupName: 'Group2', testPersonCount: 5, responsesToCode: 50 }
+      ];
 
       service.getWorkspaceGroups(mockWorkspaceId).subscribe(response => {
         expect(response).toEqual(mockResponse);
       });
 
-      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/groups`);
+      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/groups/stats`);
       expect(req.request.method).toBe('GET');
       req.flush(mockResponse);
     });
@@ -294,7 +297,7 @@ describe('TestPersonCodingService', () => {
         expect(response).toEqual([]);
       });
 
-      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/groups`);
+      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/groups/stats`);
       req.error(new ProgressEvent('error'));
     });
   });
