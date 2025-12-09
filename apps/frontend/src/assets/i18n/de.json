@@ -1051,7 +1051,7 @@
     "paginator": "Seite wählen"
   },
   "test-person-coding": {
-    "title": "Testpersonen Kodieren",
+    "title": "Testgruppen Kodieren",
     "autocoder-run-selection": {
       "select-run": "Autocoder Lauf auswählen",
       "run-1": "1 Autocoder Lauf",
@@ -1060,11 +1060,12 @@
 
     "select-groups-label": "Testpersonengruppen auswählen",
     "select-groups-hint": "Wählen Sie eine oder mehrere Gruppen zum Kodieren aus",
+    "select-all-groups": "Alle auswählen",
     "deselect-all-groups": "Alle abwählen",
     "loading-groups": "Gruppen werden geladen...",
     "no-groups": "Keine Gruppen verfügbar",
     "code-selected-groups": "Ausgewählte Gruppen kodieren",
-    "code-all-test-persons": "Alle Testpersonen kodieren",
+    "code-all-test-persons": "Alle Testgruppen kodieren",
     "coding-all-groups": "Kodiere Testpersonen aus allen {{count}} Gruppen",
     "coding-test-persons-count": "Kodiere {{count}} Testpersonen",
     "responses-coded": "{{count}} Antworten kodiert",
@@ -1118,6 +1119,16 @@
       "duration": "Dauer:",
       "error": "Fehler:",
       "cancel": "Auftrag abbrechen"
+    }
+    ,
+    "job-result-dialog": {
+      "title": "Ergebnis des Kodierauftrags",
+      "total-responses": "Insgesamt kodierte Antworten",
+      "status-header": "Verteilung der Kodierstatus",
+      "status-column": "Kodierstatus",
+      "count-column": "Anzahl",
+      "autocoder-run": "Kodier-Lauf",
+      "close": "Schließen"
     }
   },
   "coding-management-manual": {
