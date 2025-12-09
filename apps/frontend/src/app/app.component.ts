@@ -20,10 +20,11 @@ import { WrappedIconComponent } from './shared/wrapped-icon/wrapped-icon.compone
 import { UserMenuComponent } from './sys-admin/components/user-menu/user-menu.component';
 import { AuthDataDto } from '../../../../api-dto/auth-data-dto';
 import { ExportToastComponent } from './components/export-toast/export-toast.component';
+import { ErrorMessageDisplayComponent } from './shared/components/error-message-display/error-message-display.component';
 
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, MatSlideToggleModule, MatProgressSpinner, RouterLink, TranslateModule, MatTooltip, MatButton, UserMenuComponent, WrappedIconComponent, ExportToastComponent],
+  imports: [RouterOutlet, MatSlideToggleModule, MatProgressSpinner, RouterLink, TranslateModule, MatTooltip, MatButton, UserMenuComponent, WrappedIconComponent, ExportToastComponent, ErrorMessageDisplayComponent],
   templateUrl: './app.component.html',
   styleUrl: './app.component.scss',
   providers: [AuthService]
@@ -78,7 +79,10 @@ export class AppComponent implements OnInit, OnDestroy {
   async keycloakLogin(user: CreateUserDto): Promise<void> {
     this.errorMessage = '';
     this.appService.errorMessagesDisabled = true;
-    this.appService.keycloakLogin(user).subscribe(() => {
+    this.appService.keycloakLogin(user).subscribe(success => {
+      if (success) {
+        this.appService.setNeedsReAuthentication(false);
+      }
     });
   }
 

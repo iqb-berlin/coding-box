@@ -346,7 +346,13 @@
   "error": {
     "general": "Fehler: {{error}}",
     "noWorkspaceSelected": "Kein Workspace ausgewählt",
-    "unknown": "Unbekannter Fehler"
+    "unknown": "Unbekannter Fehler",
+    "backend_unavailable_title": "Backend nicht verfügbar",
+    "backend_unavailable_message": "Der Backend-Server ist derzeit nicht erreichbar. Bitte versuchen Sie es später erneut.",
+    "reauthentication_title": "Anmeldung erforderlich",
+    "reauthentication_message": "Ihre Sitzung ist abgelaufen oder Sie sind nicht mehr angemeldet. Bitte melden Sie sich erneut an.",
+    "login_button": "Anmelden",
+    "error_title": "Fehler"
   },
 
   "coding": {
