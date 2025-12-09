@@ -64,7 +64,6 @@ export class CodingListService {
       try {
         const respDefinition = { definition: voudFile.data as string };
         const variableLocation = extractVariableLocation([respDefinition]);
-
         if (variableLocation[0]?.variable_pages) {
           for (const pageInfo of variableLocation[0].variable_pages) {
             variablePageMap.set(pageInfo.variable_ref, pageInfo.variable_path?.pages?.toString() || '0');

@@ -36,6 +36,8 @@ import { WorkspaceFilesService } from './workspace-files.service';
 import { CodingResultsService } from './coding-results.service';
 import { CodingJobService } from './coding-job.service';
 import { CodingExportService } from './coding-export.service';
+import { CodingListService } from './coding-list.service';
+import { generateReplayUrl } from '../../utils/replay-url.util';
 
 interface CodedResponse {
   id: number;
@@ -81,7 +83,8 @@ export class WorkspaceCodingService {
     private workspaceFilesService: WorkspaceFilesService,
     private codingResultsService: CodingResultsService,
     private codingJobService: CodingJobService,
-    private codingExportService: CodingExportService
+    private codingExportService: CodingExportService,
+    private codingListService: CodingListService
   ) {}
 
   private codingSchemeCache: Map<string, { scheme: CodingScheme; timestamp: number }> = new Map();
@@ -1593,6 +1596,62 @@ export class WorkspaceCodingService {
     } catch (error) {
       this.logger.error(`Error getting responses by status: ${error.message}`, error.stack);
       throw new Error('Could not retrieve responses. Please check the database connection or query.');
+    }
+  }
+
+  async generateReplayUrlForResponse(
+    workspaceId: number,
+    responseId: number,
+    serverUrl: string,
+    authToken: string
+  ): Promise<{ replayUrl: string }> {
+    try {
+      const response = await this.responseRepository.findOne({
+        where: { id: responseId },
+        relations: ['unit', 'unit.booklet', 'unit.booklet.person', 'unit.booklet.bookletinfo']
+      });
+
+      if (!response) {
+        throw new Error(`Response with id ${responseId} not found`);
+      }
+
+      const person = response.unit?.booklet?.person;
+      if (!person || person.workspace_id !== workspaceId) {
+        throw new Error(`Response ${responseId} does not belong to workspace ${workspaceId}`);
+      }
+
+      const unitName = response.unit?.name || '';
+      const variableId = response.variableid || '';
+      const loginName = person.login || '';
+      const loginCode = person.code || '';
+      const loginGroup = person.group || '';
+      const bookletId = response.unit?.booklet?.bookletinfo?.name || '';
+
+      // Get the variable page from VOUD data
+      this.logger.log(`Looking up variablePage for unit '${unitName}', variable '${variableId}' in workspace ${workspaceId}`);
+      const variablePageMap = await this.codingListService.getVariablePageMap(unitName, workspaceId);
+      this.logger.log(`VOUD lookup result: variablePageMap has ${variablePageMap.size} entries for unit '${unitName}'`);
+      const variablePage = variablePageMap.get(variableId) || '0';
+      this.logger.log(`Variable '${variableId}' resolved to page '${variablePage}' (found in map: ${variablePageMap.has(variableId)})`);
+
+      const replayUrl = generateReplayUrl({
+        serverUrl,
+        loginName,
+        loginCode,
+        loginGroup,
+        bookletId,
+        unitId: unitName,
+        variablePage,
+        variableAnchor: variableId,
+        authToken
+      });
+
+      this.logger.log(`Generated replay URL for response ${responseId} in workspace ${workspaceId}`);
+
+      return { replayUrl };
+    } catch (error) {
+      this.logger.error(`Error generating replay URL for response ${responseId}: ${error.message}`, error.stack);
+      throw error;
     }
   }
 

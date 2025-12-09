@@ -21,18 +21,6 @@ interface PaginatedResponse<T> {
   limit: number;
 }
 
-export interface CodingListItem {
-  unit_key: string;
-  unit_alias: string;
-  login_name: string;
-  login_code: string;
-  booklet_id: string;
-  variable_id: string;
-  variable_page: string;
-  variable_anchor: string;
-  url: string;
-}
-
 @Injectable({
   providedIn: 'root'
 })
@@ -102,63 +90,6 @@ export class CodingService {
           progress: 0,
           error: 'Failed to get job status'
         }))
-      );
-  }
-
-  cancelCodingJob(workspace_id: number, jobId: string): Observable<{
-    success: boolean;
-    message: string;
-  }> {
-    return this.http
-      .get<{
-      success: boolean;
-      message: string;
-    }>(
-      `${this.serverUrl}admin/workspace/${workspace_id}/coding/job/${jobId}/cancel`,
-      { headers: this.authHeader }
-    )
-      .pipe(
-        catchError(() => of({
-          success: false,
-          message: 'Failed to cancel job'
-        }))
-      );
-  }
-
-  getAllCodingJobs(workspace_id: number): Observable<{
-    jobId: string;
-    status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'paused';
-    progress: number;
-    result?: {
-      totalResponses: number;
-      statusCounts: {
-        [key: string]: number;
-      };
-    };
-    error?: string;
-    workspaceId?: number;
-    createdAt?: Date;
-  }[]> {
-    return this.http
-      .get<{
-      jobId: string;
-      status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'paused';
-      progress: number;
-      result?: {
-        totalResponses: number;
-        statusCounts: {
-          [key: string]: number;
-        };
-      };
-      error?: string;
-      workspaceId?: number;
-      createdAt?: Date;
-    }[]>(
-      `${this.serverUrl}admin/workspace/${workspace_id}/coding/jobs`,
-      { headers: this.authHeader }
-    )
-      .pipe(
-        catchError(() => of([]))
       );
   }
 
@@ -285,6 +216,19 @@ export class CodingService {
           page,
           limit
         }))
+      );
+  }
+
+  getReplayUrl(workspaceId: number, responseId: number, authToken: string): Observable<{ replayUrl: string }> {
+    const params = new HttpParams().set('authToken', authToken);
+
+    return this.http
+      .get<{ replayUrl: string }>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/coding/responses/${responseId}/replay-url`,
+      { headers: this.authHeader, params }
+    )
+      .pipe(
+        catchError(() => of({ replayUrl: '' }))
       );
   }
 

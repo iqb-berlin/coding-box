@@ -2059,6 +2059,41 @@ export class WorkspaceCodingController {
     );
   }
 
+  @Get(':workspace_id/coding/responses/:responseId/replay-url')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiParam({ name: 'responseId', type: Number, description: 'ID of the response' })
+  @ApiQuery({
+    name: 'authToken',
+    required: true,
+    description: 'Authentication token for the replay URL',
+    type: String
+  })
+  @ApiOkResponse({
+    description: 'Replay URL generated successfully.',
+    schema: {
+      type: 'object',
+      properties: {
+        replayUrl: { type: 'string', description: 'The generated replay URL' }
+      }
+    }
+  })
+  async getReplayUrl(
+    @WorkspaceId() workspace_id: number,
+      @Param('responseId') responseId: number,
+      @Query('authToken') authToken: string,
+      @Req() req: Request
+  ): Promise<{ replayUrl: string }> {
+    const serverUrl = `${req.protocol}://${req.get('host')}`;
+    return this.workspaceCodingService.generateReplayUrlForResponse(
+      workspace_id,
+      responseId,
+      serverUrl,
+      authToken
+    );
+  }
+
   @Post(':workspace_id/coding/job-definitions')
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @RequireAccessLevel(2)
