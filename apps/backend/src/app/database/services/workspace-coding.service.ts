@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import {
   In, IsNull, Not, Repository
 } from 'typeorm';
-import { CodingScheme } from '@iqbspecs/coding-scheme/coding-scheme.interface';
+import { CodingScheme, VariableCodingData } from '@iqbspecs/coding-scheme/coding-scheme.interface';
 import * as Autocoder from '@iqb/responses';
 import * as cheerio from 'cheerio';
 import * as crypto from 'crypto';
@@ -450,17 +450,42 @@ export class WorkspaceCodingService {
         const scheme = codingSchemeRef ?
           (fileIdToCodingSchemeMap.get(codingSchemeRef) || emptyScheme) :
           emptyScheme;
+
+        const variableAliasToIdMap = new Map<string, string>();
+        if (Array.isArray(scheme.variableCodings)) {
+          scheme.variableCodings.forEach((vc: VariableCodingData) => {
+            const key = (vc.alias ?? vc.id) as string | undefined;
+            const value = vc.id as string | undefined;
+            if (key && value) {
+              variableAliasToIdMap.set(key, value);
+            }
+          });
+        }
+
         for (const response of responses) {
           let inputStatus = response.status;
           if (autoCoderRun === 2) {
             inputStatus = response.status_v2 || response.status_v1 || response.status;
           }
 
-          const codedResult = Autocoder.CodingFactory.code({
-            id: response.variableid,
-            value: response.value,
-            status: statusNumberToString(inputStatus) || 'UNSET'
-          }, scheme.variableCodings[0]);
+          const variableAlias = String(response.variableid);
+          const resolvedVariableId = variableAliasToIdMap.get(variableAlias) ?? variableAlias;
+
+          const variableCoding = Array.isArray(scheme.variableCodings) ?
+            scheme.variableCodings.find((vc: VariableCodingData) => {
+              const key = (vc.alias ?? vc.id) as string | undefined;
+              return key === variableAlias || key === resolvedVariableId;
+            }) :
+            undefined;
+
+          const codedResult = Autocoder.CodingFactory.code(
+            {
+              id: response.variableid,
+              value: response.value,
+              status: statusNumberToString(inputStatus) || 'UNSET'
+            },
+            variableCoding
+          );
           const codedStatus = codedResult?.status;
           if (!statistics.statusCounts[codedStatus]) {
             statistics.statusCounts[codedStatus] = 0;
@@ -542,8 +567,12 @@ export class WorkspaceCodingService {
           const $ = cheerio.load(testFile.data);
           const codingSchemeRefText = $('codingSchemeRef').text();
           if (codingSchemeRefText) {
-            codingSchemeRefs.add(codingSchemeRefText.toUpperCase());
-            unitToCodingSchemeRefMap.set(unit.id, codingSchemeRefText.toUpperCase());
+            const codingSchemeRefUpper = codingSchemeRefText.toUpperCase();
+            codingSchemeRefs.add(codingSchemeRefUpper);
+            unitToCodingSchemeRefMap.set(unit.id, codingSchemeRefUpper);
+            this.logger.debug(
+              `Extracted coding scheme mapping: unitId=${unit.id}, unitAlias=${unit.alias.toUpperCase()}, codingSchemeRef=${codingSchemeRefUpper}`
+            );
           }
         } catch (error) {
           this.logger.error(`--- Fehler beim Verarbeiten der Datei ${testFile.filename}: ${error.message}`);
