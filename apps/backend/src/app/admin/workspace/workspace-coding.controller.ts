@@ -255,6 +255,12 @@ export class WorkspaceCodingController {
     description: 'Server URL to use for generating links',
     type: String
   })
+  @ApiQuery({
+    name: 'includeReplayUrls',
+    required: false,
+    description: 'Include replay URLs in the export',
+    type: Boolean
+  })
   @ApiOkResponse({
     description: 'Coding results for specified version exported as CSV',
     content: {
@@ -271,9 +277,11 @@ export class WorkspaceCodingController {
       @Query('version') version: 'v1' | 'v2' | 'v3',
       @Query('authToken') authToken: string,
       @Query('serverUrl') serverUrl: string,
+      @Query('includeReplayUrls', { transform: value => value === 'true' }) includeReplayUrls: boolean,
       @Res() res: Response
   ): Promise<void> {
-    const csvStream = await this.codingListService.getCodingResultsByVersionCsvStream(workspace_id, version, authToken || '', serverUrl || '');
+    const includeReplay = includeReplayUrls ?? false;
+    const csvStream = await this.codingListService.getCodingResultsByVersionCsvStream(workspace_id, version, authToken || '', serverUrl || '', includeReplay);
     csvStream.pipe(res);
   }
 
@@ -299,6 +307,12 @@ export class WorkspaceCodingController {
     description: 'Server URL to use for generating links',
     type: String
   })
+  @ApiQuery({
+    name: 'includeReplayUrls',
+    required: false,
+    description: 'Include replay URLs in the export',
+    type: Boolean
+  })
   @ApiOkResponse({
     description: 'Coding results for specified version exported as Excel',
     content: {
@@ -315,9 +329,11 @@ export class WorkspaceCodingController {
       @Query('version') version: 'v1' | 'v2' | 'v3',
       @Query('authToken') authToken: string,
       @Query('serverUrl') serverUrl: string,
+      @Query('includeReplayUrls', { transform: value => value === 'true' }) includeReplayUrls: boolean,
       @Res() res: Response
   ): Promise<void> {
-    const excelData = await this.codingListService.getCodingResultsByVersionAsExcel(workspace_id, version, authToken || '', serverUrl || '');
+    const includeReplay = includeReplayUrls ?? false;
+    const excelData = await this.codingListService.getCodingResultsByVersionAsExcel(workspace_id, version, authToken || '', serverUrl || '', includeReplay);
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="coding-results-${version}-${new Date().toISOString().slice(0, 10)}.xlsx"`);

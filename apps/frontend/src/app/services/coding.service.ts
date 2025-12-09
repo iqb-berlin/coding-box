@@ -133,7 +133,7 @@ export class CodingService {
     );
   }
 
-  getCodingResultsByVersion(workspace_id: number, version: 'v1' | 'v2' | 'v3'): Observable<Blob> {
+  getCodingResultsByVersion(workspace_id: number, version: 'v1' | 'v2' | 'v3', includeReplayUrls: boolean = false): Observable<Blob> {
     const identity = this.appService.loggedUser?.sub || '';
     return this.appService.createToken(workspace_id, identity, 60).pipe(
       catchError(() => of('')),
@@ -141,7 +141,8 @@ export class CodingService {
         const params = new HttpParams()
           .set('authToken', token)
           .set('serverUrl', window.location.origin)
-          .set('version', version);
+          .set('version', version)
+          .set('includeReplayUrls', includeReplayUrls ? 'true' : 'false');
         return this.http.get(
           `${this.serverUrl}admin/workspace/${workspace_id}/coding/results-by-version`,
           {
@@ -154,7 +155,7 @@ export class CodingService {
     );
   }
 
-  getCodingResultsByVersionAsExcel(workspace_id: number, version: 'v1' | 'v2' | 'v3'): Observable<Blob> {
+  getCodingResultsByVersionAsExcel(workspace_id: number, version: 'v1' | 'v2' | 'v3', includeReplayUrls: boolean = false): Observable<Blob> {
     const identity = this.appService.loggedUser?.sub || '';
     return this.appService.createToken(workspace_id, identity, 60).pipe(
       catchError(() => of('')),
@@ -162,7 +163,8 @@ export class CodingService {
         const params = new HttpParams()
           .set('authToken', token)
           .set('serverUrl', window.location.origin)
-          .set('version', version);
+          .set('version', version)
+          .set('includeReplayUrls', includeReplayUrls ? 'true' : 'false');
         return this.http.get(
           `${this.serverUrl}admin/workspace/${workspace_id}/coding/results-by-version/excel`,
           {

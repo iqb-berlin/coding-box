@@ -5,6 +5,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatRadioModule } from '@angular/material/radio';
+import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatCardModule } from '@angular/material/card';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
@@ -30,6 +31,7 @@ export interface DownloadCodingResultsDialogData {
     MatCardModule,
     FormsModule,
     ReactiveFormsModule,
+    MatCheckboxModule,
     TranslateModule
   ],
   template: `
@@ -100,6 +102,22 @@ export interface DownloadCodingResultsDialogData {
               </div>
             </mat-radio-button>
           </mat-radio-group>
+        </mat-card-content>
+      </mat-card>
+
+      <mat-card class="section-card options-card">
+        <mat-card-header>
+          <mat-card-title>{{ 'coding-management.download-dialog.options-title' | translate }}</mat-card-title>
+        </mat-card-header>
+        <mat-card-content>
+          <div class="option-item">
+            <mat-checkbox [(ngModel)]="includeReplayUrls" class="option-checkbox">
+              {{ 'coding-management.download-dialog.include-replay-urls' | translate }}
+            </mat-checkbox>
+            <p class="option-description">
+              {{ 'coding-management.download-dialog.replay-urls-description' | translate }}
+            </p>
+          </div>
         </mat-card-content>
       </mat-card>
 
@@ -182,6 +200,29 @@ export interface DownloadCodingResultsDialogData {
       mat-card-content {
         padding: 8px 16px 16px 16px;
         margin: 0;
+      }
+    }
+
+    .option-item {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+
+      .option-checkbox {
+        margin: 0;
+
+        ::ng-deep .mat-mdc-checkbox-label {
+          font-size: 14px;
+          font-weight: 500;
+          color: rgba(0, 0, 0, 0.87);
+        }
+      }
+
+      .option-description {
+        margin: 0 0 0 32px;
+        font-size: 12px;
+        color: rgba(0, 0, 0, 0.6);
+        line-height: 1.4;
       }
     }
 
@@ -281,6 +322,7 @@ export interface DownloadCodingResultsDialogData {
 export class DownloadCodingResultsDialogComponent {
   selectedVersion: 'v1' | 'v2' | 'v3' = 'v1';
   selectedFormat: ExportFormat = 'csv';
+  includeReplayUrls: boolean = false;
 
   constructor(
     public dialogRef: MatDialogRef<DownloadCodingResultsDialogComponent>,
@@ -292,7 +334,8 @@ export class DownloadCodingResultsDialogComponent {
   onDownload(): void {
     this.dialogRef.close({
       version: this.selectedVersion,
-      format: this.selectedFormat
+      format: this.selectedFormat,
+      includeReplayUrls: this.includeReplayUrls
     });
   }
 

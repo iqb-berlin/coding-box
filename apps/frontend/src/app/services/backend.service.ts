@@ -224,12 +224,12 @@ export class BackendService {
     return this.codingService.getCodingListAsExcel(workspace_id);
   }
 
-  getCodingResultsByVersion(workspace_id: number, version: 'v1' | 'v2' | 'v3'): Observable<Blob> {
-    return this.codingService.getCodingResultsByVersion(workspace_id, version);
+  getCodingResultsByVersion(workspace_id: number, version: 'v1' | 'v2' | 'v3', includeReplayUrls: boolean = false): Observable<Blob> {
+    return this.codingService.getCodingResultsByVersion(workspace_id, version, includeReplayUrls);
   }
 
-  getCodingResultsByVersionAsExcel(workspace_id: number, version: 'v1' | 'v2' | 'v3'): Observable<Blob> {
-    return this.codingService.getCodingResultsByVersionAsExcel(workspace_id, version);
+  getCodingResultsByVersionAsExcel(workspace_id: number, version: 'v1' | 'v2' | 'v3', includeReplayUrls: boolean = false): Observable<Blob> {
+    return this.codingService.getCodingResultsByVersionAsExcel(workspace_id, version, includeReplayUrls);
   }
 
   getCodingStatistics(workspace_id: number, version: 'v1' | 'v2' | 'v3' = 'v1'): Observable<CodingStatistics> {
