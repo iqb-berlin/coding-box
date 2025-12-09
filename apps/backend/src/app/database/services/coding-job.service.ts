@@ -1689,6 +1689,38 @@ export class CodingJobService {
 
     return progressMap;
   }
+
+  async generateReplayUrlsForItems(
+    workspaceId: number,
+    items: Array<{ responseId: number; unitName: string; unitAlias: string | null; variableId: string; variableAnchor: string; bookletName: string; personLogin: string; personCode: string; personGroup: string }>,
+    serverUrl: string
+  ): Promise<Array<{ responseId: number; unitName: string; unitAlias: string | null; variableId: string; variableAnchor: string; bookletName: string; personLogin: string; personCode: string; personGroup: string; replayUrl: string }>> {
+    const itemsWithUrls = await Promise.all(
+      items.map(async (item) => {
+        try {
+          const result = await this.workspaceCodingService.generateReplayUrlForResponse(
+            workspaceId,
+            item.responseId,
+            serverUrl,
+            '' // Empty auth token - will be provided by frontend
+          );
+          // Remove the empty auth parameter from the URL so frontend can add the correct one
+          const replayUrlWithoutAuth = result.replayUrl.replace('?auth=', '');
+          return {
+            ...item,
+            replayUrl: replayUrlWithoutAuth
+          };
+        } catch (error) {
+          this.logger.warn(`Failed to generate replay URL for response ${item.responseId}: ${error.message}`);
+          return {
+            ...item,
+            replayUrl: '' // Return empty URL if generation fails
+          };
+        }
+      })
+    );
+    return itemsWithUrls;
+  }
 }
 
 function generateJobName(coderName: string, unitName: string, variableId: string, caseCount: number): string {

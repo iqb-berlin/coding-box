@@ -501,7 +501,8 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
           bookletId: 0,
           testPerson: `${item.personLogin}@${item.personCode}@${item.personGroup || ''}@${item.bookletName}`,
           variableId: item.variableId,
-          variableAnchor: item.variableAnchor
+          variableAnchor: item.variableAnchor,
+          replayUrl: item.replayUrl
         }));
 
         const bookletData = {
@@ -512,8 +513,6 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
         };
 
         const first = units[0];
-        const firstTestPerson = first.testPerson;
-        const firstUnitId = first.name;
 
         this.appService
           .createToken(this.appService.selectedWorkspaceId, this.appService.loggedUser?.sub || '', 1)
@@ -525,18 +524,13 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
               // ignore
             }
 
-            const queryParams = {
-              auth: token,
-              mode: 'coding',
-              bookletKey
-            } as const;
-
-            const url = this.router.serializeUrl(
-              this.router.createUrlTree([
-                `replay/${firstTestPerson}/${firstUnitId}/0/0`
-              ], { queryParams })
-            );
-            window.open(`#/${url}`, '_blank');
+            const queryParams = `auth=${encodeURIComponent(token || '')}&mode=coding&bookletKey=${encodeURIComponent(bookletKey)}`;
+            const replayUrl = first.replayUrl ? `${first.replayUrl}?${queryParams}` : '';
+            if (replayUrl) {
+              window.open(replayUrl, '_blank');
+            } else {
+              this.snackBar.open('Fehler beim Generieren der Replay-URL', 'Fehler', { duration: 3000 });
+            }
             this.snackBar.open(`${startResult.total} Antworten für Replay vorbereitet`, 'Schließen', { duration: 3000 });
           });
       },
@@ -726,7 +720,8 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
                   bookletId: 0,
                   testPerson: `${item.personLogin}@${item.personCode}@${item.personGroup || ''}@${item.bookletName}`,
                   variableId: item.variableId,
-                  variableAnchor: item.variableAnchor
+                  variableAnchor: item.variableAnchor,
+                  replayUrl: item.replayUrl
                 }));
 
                 const bookletData = {
@@ -737,8 +732,6 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
                 };
 
                 const first = units[0];
-                const firstTestPerson = first.testPerson;
-                const firstUnitId = first.name;
 
                 this.appService
                   .createToken(this.appService.selectedWorkspaceId, this.appService.loggedUser?.sub || '', 1)
@@ -750,18 +743,13 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
                       // ignore
                     }
 
-                    const queryParams = {
-                      auth: token,
-                      mode: 'coding',
-                      bookletKey
-                    } as const;
-
-                    const url = this.router.serializeUrl(
-                      this.router.createUrlTree([
-                        `replay/${firstTestPerson}/${firstUnitId}/0/0`
-                      ], { queryParams })
-                    );
-                    window.open(`#/${url}`, '_blank');
+                    const queryParams = `auth=${encodeURIComponent(token || '')}&mode=coding&bookletKey=${encodeURIComponent(bookletKey)}`;
+                    const replayUrl = first.replayUrl ? `${first.replayUrl}?${queryParams}` : '';
+                    if (replayUrl) {
+                      window.open(replayUrl, '_blank');
+                    } else {
+                      this.snackBar.open('Fehler beim Generieren der Replay-URL', 'Fehler', { duration: 3000 });
+                    }
                     this.snackBar.open(`${restartResult.total} offene Einheiten für Replay vorbereitet`, 'Schließen', { duration: 3000 });
                   });
               },
