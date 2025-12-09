@@ -659,16 +659,16 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
   }
 
   openReplay(response: Success): void {
-    const page = response.variable_page || '0';
     const workspaceId = this.appService.selectedWorkspaceId;
 
-    if (!response.login_name || !response.login_code || !response.booklet_id) {
-      this.snackBar.open('Fehlende Informationen für Replay', 'Schließen', {
+    if (!response.id) {
+      this.snackBar.open('Fehlende Response-ID für Replay', 'Schließen', {
         duration: 5000,
         panelClass: ['error-snackbar']
       });
       return;
     }
+
     this.appService.createToken(workspaceId, this.appService.loggedUser?.sub || '', 3600)
       .pipe(
         catchError(() => {
@@ -677,16 +677,24 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
             panelClass: ['error-snackbar']
           });
           return of('');
+        }),
+        switchMap(token => {
+          if (!token) {
+            return of({ replayUrl: '' });
+          }
+          return this.backendService.getReplayUrl(workspaceId, response.id, token);
         })
       )
-      .subscribe(token => {
-        if (!token) {
+      .subscribe(result => {
+        if (!result.replayUrl) {
+          this.snackBar.open('Fehler beim Generieren der Replay-URL', 'Schließen', {
+            duration: 5000,
+            panelClass: ['error-snackbar']
+          });
           return;
         }
-        const url = `${window.location.origin}/#/replay/${response.login_name}@${response.login_code}@${response.login_group}@${response.booklet_id}/${response.unitname}/${page}/${response.variableid}?auth=${token}`;
-        window.open(url, '_blank');
-      }
-      );
+        window.open(result.replayUrl, '_blank');
+      });
   }
 
   onAutoCode(): void {

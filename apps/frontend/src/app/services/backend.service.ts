@@ -20,7 +20,7 @@ import { CodingService } from './coding.service';
 import { UnitTagService } from './unit-tag.service';
 import { UnitNoteService } from './unit-note.service';
 import { ResponseService } from './response.service';
-import { TestResultService, TestResultsResponse, PersonTestResult } from './test-result.service';
+import { TestResultService, PersonTestResult } from './test-result.service';
 import { ResourcePackageService } from './resource-package.service';
 import { ValidationService } from './validation.service';
 import { UnitService } from './unit.service';
@@ -101,18 +101,6 @@ interface PaginatedResponse<T> {
   total: number;
   page: number;
   limit: number;
-}
-
-export interface CodingListItem {
-  unit_key: string;
-  unit_alias: string;
-  login_name: string;
-  login_code: string;
-  booklet_id: string;
-  variable_id: string;
-  variable_page: string;
-  variable_anchor: string;
-  url: string;
 }
 
 @Injectable({
@@ -267,6 +255,10 @@ export class BackendService {
     return this.codingService.getResponsesByStatus(workspace_id, status, version, page, limit);
   }
 
+  getReplayUrl(workspaceId: number, responseId: number, authToken: string): Observable<{ replayUrl: string }> {
+    return this.codingService.getReplayUrl(workspaceId, responseId, authToken);
+  }
+
   resetCodingVersion(
     workspace_id: number,
     version: 'v1' | 'v2' | 'v3',
@@ -387,10 +379,6 @@ export class BackendService {
     return this.testResultService.getTestPersons(workspaceId);
   }
 
-  getTestResults(workspaceId: number, page: number, limit: number, searchText?: string): Observable<TestResultsResponse> {
-    return this.testResultService.getTestResults(workspaceId, page, limit, searchText);
-  }
-
   getExportOptions(workspaceId: number): Observable<{
     testPersons: { id: number; code: string; groupName: string; login: string }[];
     booklets: string[];
@@ -402,14 +390,6 @@ export class BackendService {
       booklets: string[];
       units: string[];
     }>(url, {
-      headers: this.authHeader
-    });
-  }
-
-  exportTestResults(workspaceId: number): Observable<Blob> {
-    const url = `${this.serverUrl}admin/workspace/${workspaceId}/results/export`;
-    return this.http.get(url, {
-      responseType: 'blob',
       headers: this.authHeader
     });
   }
@@ -1332,47 +1312,6 @@ export class BackendService {
     return this.http.delete<{ success: boolean; message: string }>(url);
   }
 
-  exportCodingResultsAggregated(workspaceId: number): Observable<Blob> {
-    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/aggregated`;
-    return this.http.get(url, {
-      responseType: 'blob',
-      headers: this.authHeader
-    });
-  }
-
-  exportCodingResultsByCoder(workspaceId: number): Observable<Blob> {
-    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/by-coder`;
-    return this.http.get(url, {
-      responseType: 'blob',
-      headers: this.authHeader
-    });
-  }
-
-  exportCodingResultsByVariable(workspaceId: number): Observable<Blob> {
-    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/by-variable`;
-    return this.http.get(url, {
-      responseType: 'blob',
-      headers: this.authHeader
-    });
-  }
-
-  exportCodingResultsDetailed(workspaceId: number): Observable<Blob> {
-    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/detailed`;
-    return this.http.get(url, {
-      responseType: 'blob',
-      headers: this.authHeader
-    });
-  }
-
-  exportCodingTimesReport(workspaceId: number): Observable<Blob> {
-    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/coding-times`;
-    return this.http.get(url, {
-      responseType: 'blob',
-      headers: this.authHeader
-    });
-  }
-
-  // Background export job methods
   startExportJob(workspaceId: number, exportConfig: {
     exportType: 'aggregated' | 'by-coder' | 'by-variable' | 'detailed' | 'coding-times';
     userId: number;
@@ -1432,32 +1371,6 @@ export class BackendService {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/job/${jobId}/download`;
     return this.http.get(url, {
       responseType: 'blob',
-      headers: this.authHeader
-    });
-  }
-
-  getExportJobs(workspaceId: number): Observable<Array<{
-    jobId: string;
-    status: string;
-    progress: number;
-    exportType: string;
-    createdAt: number;
-  }>> {
-    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/jobs`;
-    return this.http.get<Array<{
-      jobId: string;
-      status: string;
-      progress: number;
-      exportType: string;
-      createdAt: number;
-    }>>(url, {
-      headers: this.authHeader
-    });
-  }
-
-  deleteExportJob(workspaceId: number, jobId: string): Observable<{ success: boolean; message: string }> {
-    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/job/${jobId}`;
-    return this.http.delete<{ success: boolean; message: string }>(url, {
       headers: this.authHeader
     });
   }
