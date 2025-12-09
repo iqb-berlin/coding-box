@@ -2530,6 +2530,7 @@ export class WorkspaceCodingController {
         doubleCodingAbsolute?: number;
         doubleCodingPercentage?: number;
         caseOrderingMode?: 'continuous' | 'alternating';
+        maxCodingCases?: number;
       }
   ): Promise<{
         distribution: Record<string, Record<string, number>>;
@@ -2658,6 +2659,7 @@ export class WorkspaceCodingController {
         doubleCodingAbsolute?: number;
         doubleCodingPercentage?: number;
         caseOrderingMode?: 'continuous' | 'alternating';
+        maxCodingCases?: number;
       }
   ): Promise<{
         success: boolean;

@@ -1684,6 +1684,37 @@ export class WorkspaceCodingService {
     }
   }
 
+  async generateReplayUrlsForItems(
+    workspaceId: number,
+    items: Array<{ responseId: number; unitName: string; unitAlias: string | null; variableId: string; variableAnchor: string; bookletName: string; personLogin: string; personCode: string; personGroup: string }>,
+    serverUrl: string
+  ): Promise<Array<{ responseId: number; unitName: string; unitAlias: string | null; variableId: string; variableAnchor: string; bookletName: string; personLogin: string; personCode: string; personGroup: string; replayUrl: string }>> {
+    const itemsWithUrls = await Promise.all(
+      items.map(async item => {
+        try {
+          const result = await this.generateReplayUrlForResponse(
+            workspaceId,
+            item.responseId,
+            serverUrl,
+            ''
+          );
+          const replayUrlWithoutAuth = result.replayUrl.replace('?auth=', '');
+          return {
+            ...item,
+            replayUrl: replayUrlWithoutAuth
+          };
+        } catch (error) {
+          this.logger.warn(`Failed to generate replay URL for response ${item.responseId}: ${error.message}`);
+          return {
+            ...item,
+            replayUrl: ''
+          };
+        }
+      })
+    );
+    return itemsWithUrls;
+  }
+
   async applyCodingResults(workspaceId: number, codingJobId: number): Promise<{
     success: boolean;
     updatedResponsesCount: number;
@@ -1710,6 +1741,7 @@ export class WorkspaceCodingService {
       doubleCodingAbsolute?: number;
       doubleCodingPercentage?: number;
       caseOrderingMode?: 'continuous' | 'alternating';
+      maxCodingCases?: number;
     }
   ): Promise<{
       success: boolean;
@@ -2044,15 +2076,28 @@ export class WorkspaceCodingService {
         });
       }
 
+      const casesInJobsMap = await this.getVariableCasesInJobs(workspaceId);
+
       const conflictedVariables = new Map<string, Array<{ id: number; status: string }>>();
       variableToDefinitions.forEach((definitions, variableKey) => {
         if (definitions.length > 1) {
-          conflictedVariables.set(variableKey, definitions);
+          // Only report as conflict if there aren't enough available cases
+          const [unitName, variableId] = variableKey.split(':');
+          const variableCaseInfo = variableCaseCounts.find(
+            v => v.unitName === unitName && v.variableId === variableId
+          );
+
+          if (variableCaseInfo) {
+            const casesInJobs = casesInJobsMap.get(`${variableCaseInfo.unitName}::${variableCaseInfo.variableId}`) || 0;
+            const availableCases = variableCaseInfo.caseCount - casesInJobs;
+
+            // Only mark as conflict if there are no available cases left
+            if (availableCases <= 0) {
+              conflictedVariables.set(variableKey, definitions);
+            }
+          }
         }
       });
-
-      // Get cases in jobs to determine partial vs full coverage
-      const casesInJobsMap = await this.getVariableCasesInJobs(workspaceId);
 
       const missingVariables = new Set<string>();
       const partiallyAbgedeckteVariablen = new Set<string>();
@@ -2283,7 +2328,6 @@ export class WorkspaceCodingService {
             continue;
           }
 
-          // Verify workspace ID
           if (selectedCodingJobUnit.coding_job?.workspace_id !== workspaceId) {
             this.logger.warn(`Workspace mismatch for responseId ${decision.responseId}`);
             skippedCount += 1;
@@ -2297,16 +2341,13 @@ export class WorkspaceCodingService {
             continue;
           }
 
-          // Build resolution comment with timestamp if provided
           let updatedValue = response.value || '';
           if (decision.resolutionComment && decision.resolutionComment.trim()) {
             const timestamp = new Date().toISOString().replace('T', ' ').substring(0, 16);
             const resolutionNote = `[RESOLUTION - ${timestamp}]: ${decision.resolutionComment.trim()}\n`;
-            // Store resolution comment at the beginning of the value field as a note
             updatedValue = resolutionNote + updatedValue;
           }
 
-          // Update response with selected coder's values
           response.status_v2 = statusStringToNumber('CODING_COMPLETE');
           response.code_v2 = selectedCodingJobUnit.code;
           response.score_v2 = selectedCodingJobUnit.score;

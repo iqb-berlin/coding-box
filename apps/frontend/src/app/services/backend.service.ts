@@ -688,7 +688,8 @@ export class BackendService {
     doubleCodingAbsolute?: number,
     doubleCodingPercentage?: number,
     selectedVariableBundles?: { id: number; name: string; variables: { unitName: string; variableId: string }[] }[],
-    caseOrderingMode?: 'continuous' | 'alternating'
+    caseOrderingMode?: 'continuous' | 'alternating',
+    maxCodingCases?: number
   ): Observable<{
       success: boolean;
       jobsCreated: number;
@@ -706,7 +707,7 @@ export class BackendService {
         caseCount: number;
       }[];
     }> {
-    return this.codingService.createDistributedCodingJobs(workspaceId, selectedVariables, selectedCoders, doubleCodingAbsolute, doubleCodingPercentage, selectedVariableBundles, caseOrderingMode);
+    return this.codingService.createDistributedCodingJobs(workspaceId, selectedVariables, selectedCoders, doubleCodingAbsolute, doubleCodingPercentage, selectedVariableBundles, caseOrderingMode, maxCodingCases);
   }
 
   calculateDistribution(
@@ -715,7 +716,8 @@ export class BackendService {
     selectedCoders: { id: number; name: string; username: string }[],
     doubleCodingAbsolute?: number,
     doubleCodingPercentage?: number,
-    selectedVariableBundles?: { id: number; name: string; variables: { unitName: string; variableId: string }[] }[]
+    selectedVariableBundles?: { id: number; name: string; variables: { unitName: string; variableId: string }[] }[],
+    maxCodingCases?: number
   ): Observable<{
       distribution: Record<string, Record<string, number>>;
       doubleCodingInfo: Record<string, { totalCases: number; doubleCodedCases: number; singleCodedCasesAssigned: number; doubleCodedCasesPerCoder: Record<string, number> }>;
@@ -723,7 +725,7 @@ export class BackendService {
       matchingFlags: string[];
       warnings: Array<{ unitName: string; variableId: string; message: string; casesInJobs: number; availableCases: number }>;
     }> {
-    return this.codingService.calculateDistribution(workspaceId, selectedVariables, selectedCoders, doubleCodingAbsolute, doubleCodingPercentage, selectedVariableBundles);
+    return this.codingService.calculateDistribution(workspaceId, selectedVariables, selectedCoders, doubleCodingAbsolute, doubleCodingPercentage, selectedVariableBundles, maxCodingCases);
   }
 
   createValidationTask(

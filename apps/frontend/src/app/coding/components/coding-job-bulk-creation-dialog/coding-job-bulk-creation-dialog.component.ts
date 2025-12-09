@@ -12,6 +12,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatExpansionModule } from '@angular/material/expansion';
 import { TranslateModule } from '@ngx-translate/core';
 import { A11yModule } from '@angular/cdk/a11y';
+import { firstValueFrom } from 'rxjs';
 import { VariableBundle, Variable } from '../../models/coding-job.model';
 import { Coder } from '../../models/coder.model';
 import { BackendService } from '../../../services/backend.service';
@@ -31,6 +32,7 @@ export interface BulkCreationData {
   doubleCodingAbsolute?: number;
   doubleCodingPercentage?: number;
   caseOrderingMode?: 'continuous' | 'alternating';
+  maxCodingCases?: number;
   creationResults?: {
     doubleCodingInfo: Record<string, {
       totalCases: number;
@@ -127,7 +129,7 @@ export class CodingJobBulkCreationDialogComponent {
     } else if (this.data.creationResults) {
       this.initializeFromCreationResults();
     } else {
-      this.calculateDistributionWithBackend();
+      this.calculateDistributionWithBackend().catch(() => {});
     }
   }
 
@@ -141,14 +143,15 @@ export class CodingJobBulkCreationDialogComponent {
         return;
       }
 
-      const result = await this.backendService.calculateDistribution(
+      const result = await firstValueFrom(this.backendService.calculateDistribution(
         workspaceId,
         this.data.selectedVariables,
         this.data.selectedCoders.map(coder => ({ ...coder, username: coder.name })),
         this.data.doubleCodingAbsolute,
         this.data.doubleCodingPercentage,
-        this.data.selectedVariableBundles
-      ).toPromise();
+        this.data.selectedVariableBundles,
+        this.data.maxCodingCases
+      ));
 
       this.data.distribution = result?.distribution || {};
       this.data.doubleCodingInfo = result?.doubleCodingInfo || {};
@@ -386,6 +389,18 @@ export class CodingJobBulkCreationDialogComponent {
   }
 
   onConfirm(): void {
+    if (this.data.maxCodingCases !== undefined && this.data.maxCodingCases !== null && this.data.maxCodingCases > 0) {
+      const totalCases = this.getGrandTotal();
+      if (totalCases > this.data.maxCodingCases) {
+        this.snackBar.open(
+          `Die Gesamtzahl der Kodierfälle (${totalCases}) überschreitet das Maximum von ${this.data.maxCodingCases}.`,
+          'Schließen',
+          { duration: 5000 }
+        );
+        return;
+      }
+    }
+
     // If there are warnings and user hasn't confirmed, just mark warnings as confirmed and return
     if (this.warnings.length > 0 && !this.warningsConfirmed) {
       this.warningsConfirmed = true;

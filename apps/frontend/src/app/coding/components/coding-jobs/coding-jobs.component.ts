@@ -3,6 +3,7 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { firstValueFrom } from 'rxjs';
 import { MatSort, MatSortModule } from '@angular/material/sort';
 import { MatPaginator, MatPaginatorModule } from '@angular/material/paginator';
 import {
@@ -25,7 +26,6 @@ import { MatAnchor, MatIconButton, MatButton } from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatCheckbox } from '@angular/material/checkbox';
 import { SelectionModel } from '@angular/cdk/collections';
-import { Router } from '@angular/router';
 import { AppService } from '../../../services/app.service';
 import { BackendService } from '../../../services/backend.service';
 
@@ -90,7 +90,6 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
   private snackBar = inject(MatSnackBar);
   private dialog = inject(MatDialog);
   private coderService = inject(CoderService);
-  private router = inject(Router);
 
   private coderNamesByJobId = new Map<number, string>();
   allCoders: Coder[] = [];
@@ -160,7 +159,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
 
             const jobIds = processedData.map(job => job.id);
             try {
-              const bulkProgressResult = await this.backendService.getBulkCodingProgress(workspaceId, jobIds).toPromise();
+              const bulkProgressResult = await firstValueFrom(this.backendService.getBulkCodingProgress(workspaceId, jobIds));
 
               processedData.forEach(job => {
                 const progressResult = bulkProgressResult?.[job.id];
@@ -203,7 +202,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
 
             const fallbackJobIds = processedData.map(job => job.id);
             try {
-              const fallbackBulkProgressResult = await this.backendService.getBulkCodingProgress(workspaceId, fallbackJobIds).toPromise();
+              const fallbackBulkProgressResult = await firstValueFrom(this.backendService.getBulkCodingProgress(workspaceId, fallbackJobIds));
 
               processedData.forEach(job => {
                 const progressResult = fallbackBulkProgressResult?.[job.id];
@@ -531,7 +530,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
             } else {
               this.snackBar.open('Fehler beim Generieren der Replay-URL', 'Fehler', { duration: 3000 });
             }
-            this.snackBar.open(`${startResult.total} Antworten für Replay vorbereitet`, 'Schließen', { duration: 3000 });
+            this.snackBar.open(`Kodierjob "${selectedJob.name}" gestartet`, 'Schließen', { duration: 3000 });
           });
       },
       error: () => {
@@ -871,7 +870,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
 
     for (const job of jobs) {
       try {
-        const response = await this.backendService.deleteCodingJob(workspaceId, job.id).toPromise();
+        const response = await firstValueFrom(this.backendService.deleteCodingJob(workspaceId, job.id));
         if (response?.success) {
           successCount += 1;
         } else {

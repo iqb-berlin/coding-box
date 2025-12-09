@@ -26,18 +26,8 @@ export class JobDefinitionService {
   private async checkVariableConflicts(
     workspaceId: number,
     assignedVariables: JobDefinitionVariable[],
-    assignedVariableBundles: JobDefinitionVariableBundle[],
-    excludeDefinitionId?: number
+    assignedVariableBundles: JobDefinitionVariableBundle[]
   ): Promise<string[]> {
-    const queryBuilder = this.jobDefinitionRepository.createQueryBuilder('definition')
-      .where('definition.workspace_id = :workspaceId', { workspaceId });
-
-    if (excludeDefinitionId) {
-      queryBuilder.andWhere('definition.id != :excludeDefinitionId', { excludeDefinitionId });
-    }
-
-    const existingDefinitions = await queryBuilder.getMany();
-
     const newVariables = new Set<string>();
 
     if (assignedVariables) {
@@ -63,42 +53,24 @@ export class JobDefinitionService {
       }
     }
 
-    const conflictingVariables: string[] = [];
+    // Get available cases for all variables
+    const incompleteVariables = await this.workspaceCodingService.getCodingIncompleteVariables(workspaceId);
 
-    for (const existingDefinition of existingDefinitions) {
-      const existingVariables = new Set<string>();
+    const unavailableVariables: string[] = [];
 
-      if (existingDefinition.assigned_variables) {
-        existingDefinition.assigned_variables.forEach(variable => {
-          existingVariables.add(`${variable.unitName}:${variable.variableId}`);
-        });
+    newVariables.forEach(variableKey => {
+      const [unitName, variableId] = variableKey.split(':');
+      const matchingVar = incompleteVariables.find(
+        v => v.unitName === unitName && v.variableId === variableId
+      );
+
+      // Only report as conflict if there are no available cases
+      if (!matchingVar || matchingVar.availableCases === 0) {
+        unavailableVariables.push(variableKey);
       }
+    });
 
-      if (existingDefinition.assigned_variable_bundles) {
-        const bundleIds = existingDefinition.assigned_variable_bundles.map(bundle => bundle.id);
-        if (bundleIds.length > 0) {
-          const variableBundles = await this.variableBundleRepository.find({
-            where: { id: In(bundleIds) }
-          });
-
-          variableBundles.forEach(bundle => {
-            if (bundle.variables) {
-              bundle.variables.forEach(variable => {
-                existingVariables.add(`${variable.unitName}:${variable.variableId}`);
-              });
-            }
-          });
-        }
-      }
-
-      newVariables.forEach(variableKey => {
-        if (existingVariables.has(variableKey) && !conflictingVariables.includes(variableKey)) {
-          conflictingVariables.push(variableKey);
-        }
-      });
-    }
-
-    return conflictingVariables;
+    return unavailableVariables;
   }
 
   async createJobDefinition(createDto: CreateJobDefinitionDto, workspaceId: number): Promise<JobDefinition> {
@@ -129,8 +101,7 @@ export class JobDefinitionService {
       double_coding_percentage: createDto.doubleCodingPercentage
     });
 
-    const savedDefinition = await this.jobDefinitionRepository.save(jobDefinition);
-    return savedDefinition;
+    return this.jobDefinitionRepository.save(jobDefinition);
   }
 
   async getJobDefinition(id: number): Promise<JobDefinition> {
@@ -207,8 +178,7 @@ export class JobDefinitionService {
       const conflicts = await this.checkVariableConflicts(
         jobDefinition.workspace_id,
         variablesToCheck,
-        bundlesToCheck,
-        id
+        bundlesToCheck
       );
 
       if (conflicts.length > 0) {

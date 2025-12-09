@@ -409,6 +409,7 @@
       box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
       transition: all 0.2s ease;
       cursor: pointer;
+      overflow: hidden;
 
       &:hover {
         box-shadow: 0 3px 6px rgba(0, 0, 0, 0.1);
@@ -437,7 +438,7 @@
 
       .variable-card-header {
         display: flex;
-        align-items: center;
+        align-items: flex-start;
 
         .variable-identifiers {
           .variable-id {
@@ -445,7 +446,9 @@
             font-size: 1rem;
             display: flex;
             align-items: center;
+            justify-content: space-between;
             gap: 8px;
+            flex-wrap: wrap;
 
             .response-count {
               font-size: 0.85rem;
@@ -459,6 +462,10 @@
               min-height: 24px;
               padding: 2px 8px;
               margin-left: 8px;
+              max-width: 100%;
+              white-space: nowrap;
+              text-overflow: ellipsis;
+              overflow: hidden;
 
               &.availability-full {
                 background-color: #c8e6c9;
