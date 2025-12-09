@@ -10,8 +10,10 @@ import {
   Post,
   Put,
   Query,
+  Req,
   UseGuards
 } from '@nestjs/common';
+import { Request } from 'express';
 
 import {
   ApiBadRequestResponse,
@@ -212,7 +214,7 @@ export class WsgCodingJobController {
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Start a coding job',
-    description: 'Finds all responses matching assigned variables and prepares replay data'
+    description: 'Finds all responses matching assigned variables and prepares replay data with URLs'
   })
   @ApiParam({
     name: 'workspace_id',
@@ -245,7 +247,8 @@ export class WsgCodingJobController {
               bookletName: { type: 'string' },
               personLogin: { type: 'string' },
               personCode: { type: 'string' },
-              personGroup: { type: 'string' }
+              personGroup: { type: 'string' },
+              replayUrl: { type: 'string' }
             }
           }
         }
@@ -254,8 +257,9 @@ export class WsgCodingJobController {
   })
   async startCodingJob(
     @WorkspaceId() workspaceId: number,
-      @Param('id', ParseIntPipe) id: number
-  ): Promise<{ total: number; items: Array<{ responseId: number; unitName: string; unitAlias: string | null; variableId: string; variableAnchor: string; bookletName: string; personLogin: string; personCode: string; personGroup: string }> }> {
+      @Param('id', ParseIntPipe) id: number,
+      @Req() req: Request
+  ): Promise<{ total: number; items: Array<{ responseId: number; unitName: string; unitAlias: string | null; variableId: string; variableAnchor: string; bookletName: string; personLogin: string; personCode: string; personGroup: string; replayUrl: string }> }> {
     const job = await this.codingJobService.getCodingJob(id, workspaceId);
     const onlyOpen = job.codingJob.status === 'pending';
     const items = await this.codingJobService.getCodingJobUnits(id, onlyOpen);
@@ -264,7 +268,14 @@ export class WsgCodingJobController {
       await this.codingJobService.updateCodingJob(id, workspaceId, { status: 'active' });
     }
 
-    return { total: items.length, items };
+    const serverUrl = `${req.protocol}://${req.get('host') ?? ''}`;
+    const itemsWithReplayUrls = await this.codingJobService.generateReplayUrlsForItems(
+      workspaceId,
+      items,
+      serverUrl
+    );
+
+    return { total: itemsWithReplayUrls.length, items: itemsWithReplayUrls };
   }
 
   @Delete(':id')
