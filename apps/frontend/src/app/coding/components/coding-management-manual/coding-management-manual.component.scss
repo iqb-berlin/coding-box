@@ -64,6 +64,9 @@
   padding: 24px;
   margin-bottom: 24px;
   width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow-x: hidden;
   transition: box-shadow 0.3s ease, transform 0.2s ease;
   border: 1px solid rgba(0, 0, 0, 0.03);
 
@@ -119,6 +122,7 @@
 
   .statistics-content {
     margin: 20px 0;
+    max-width: 100%;
 
     .coding-progress-section {
       margin-bottom: 30px;

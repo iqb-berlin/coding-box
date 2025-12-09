@@ -17,7 +17,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { MatCardModule } from '@angular/material/card';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatChipsModule } from '@angular/material/chips';
-import { Subject, takeUntil } from 'rxjs';
+import { Subject, firstValueFrom, takeUntil } from 'rxjs';
 import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
 import { Variable, VariableBundle } from '../../models/coding-job.model';
@@ -334,7 +334,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
     }
 
     try {
-      const allCoders = await this.coderService.getCoders().toPromise();
+      const allCoders = await firstValueFrom(this.coderService.getCoders());
       const selectedCoders = allCoders?.filter(coder => definition.assignedCoders!.includes(coder.id)) || [];
 
       const dialogData: BulkCreationData = {
@@ -343,17 +343,18 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
         selectedCoders: selectedCoders,
         doubleCodingAbsolute: definition.doubleCodingAbsolute,
         doubleCodingPercentage: definition.doubleCodingPercentage,
-        caseOrderingMode: definition.caseOrderingMode || 'continuous'
+        caseOrderingMode: definition.caseOrderingMode || 'continuous',
+        maxCodingCases: definition.maxCodingCases
       };
       const dialogRef = this.dialog.open(CodingJobBulkCreationDialogComponent, {
         width: '1200px',
         data: dialogData
       });
 
-      const result = await dialogRef.afterClosed().toPromise();
+      const result = await firstValueFrom(dialogRef.afterClosed());
 
       if (result && result.confirmed) {
-        this.createBulkJobsFromDefinition(dialogData, workspaceId, result);
+        await this.createBulkJobsFromDefinition(dialogData, workspaceId, result);
       }
     } catch (error) {
       this.showError(this.translateService.instant('coding-job-definitions.messages.snackbar.coders-loading-failed', { error: (error as Error).message }));
@@ -369,24 +370,25 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
         username: coder.name
       }));
 
-      const result = await this.backendService.createDistributedCodingJobs(
+      const result = await firstValueFrom(this.backendService.createDistributedCodingJobs(
         workspaceId,
         data.selectedVariables,
         mappedCoders,
         data.doubleCodingAbsolute,
         data.doubleCodingPercentage,
         data.selectedVariableBundles,
-        data.caseOrderingMode
-      ).toPromise();
+        data.caseOrderingMode,
+        data.maxCodingCases
+      ));
 
       if (result && result.success) {
         if (creationResult) {
           const updatePromises = result.jobs.map(job => (
-            this.backendService.updateCodingJob(workspaceId, job.jobId, {
+            firstValueFrom(this.backendService.updateCodingJob(workspaceId, job.jobId, {
               showScore: creationResult.showScore,
               allowComments: creationResult.allowComments,
               suppressGeneralInstructions: creationResult.suppressGeneralInstructions
-            }).toPromise()
+            }))
           ));
 
           await Promise.allSettled(updatePromises);

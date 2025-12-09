@@ -371,7 +371,8 @@ export class CodingService {
     doubleCodingAbsolute?: number,
     doubleCodingPercentage?: number,
     selectedVariableBundles?: { id: number; name: string; variables: { unitName: string; variableId: string }[] }[],
-    caseOrderingMode?: 'continuous' | 'alternating'
+    caseOrderingMode?: 'continuous' | 'alternating',
+    maxCodingCases?: number
   ): Observable<{
       success: boolean;
       jobsCreated: number;
@@ -414,7 +415,8 @@ export class CodingService {
         doubleCodingAbsolute,
         doubleCodingPercentage,
         selectedVariableBundles,
-        caseOrderingMode
+        caseOrderingMode,
+        maxCodingCases
       },
       { headers: this.authHeader }
     )
@@ -438,7 +440,8 @@ export class CodingService {
     selectedCoders: { id: number; name: string; username: string }[],
     doubleCodingAbsolute?: number,
     doubleCodingPercentage?: number,
-    selectedVariableBundles?: { id: number; name: string; variables: { unitName: string; variableId: string }[] }[]
+    selectedVariableBundles?: { id: number; name: string; variables: { unitName: string; variableId: string }[] }[],
+    maxCodingCases?: number
   ): Observable<{
       distribution: Record<string, Record<string, number>>;
       doubleCodingInfo: Record<string, { totalCases: number; doubleCodedCases: number; singleCodedCasesAssigned: number; doubleCodedCasesPerCoder: Record<string, number> }>;
@@ -446,6 +449,25 @@ export class CodingService {
       matchingFlags: string[];
       warnings: Array<{ unitName: string; variableId: string; message: string; casesInJobs: number; availableCases: number }>;
     }> {
+    const body: {
+      selectedVariables: { unitName: string; variableId: string }[];
+      selectedVariableBundles?: { id: number; name: string; variables: { unitName: string; variableId: string }[] }[];
+      selectedCoders: { id: number; name: string; username: string }[];
+      doubleCodingAbsolute?: number;
+      doubleCodingPercentage?: number;
+      maxCodingCases?: number;
+    } = {
+      selectedVariables,
+      selectedVariableBundles,
+      selectedCoders,
+      doubleCodingAbsolute,
+      doubleCodingPercentage
+    };
+
+    if (maxCodingCases !== undefined && maxCodingCases !== null) {
+      body.maxCodingCases = maxCodingCases;
+    }
+
     return this.http
       .post<{
       distribution: Record<string, Record<string, number>>;
@@ -455,13 +477,7 @@ export class CodingService {
       warnings: Array<{ unitName: string; variableId: string; message: string; casesInJobs: number; availableCases: number }>;
     }>(
       `${this.serverUrl}admin/workspace/${workspaceId}/coding/calculate-distribution`,
-      {
-        selectedVariables,
-        selectedCoders,
-        doubleCodingAbsolute,
-        doubleCodingPercentage,
-        selectedVariableBundles
-      },
+      body,
       { headers: this.authHeader }
     )
       .pipe(
