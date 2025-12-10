@@ -27,6 +27,7 @@ import { BullJobManagementService } from './bull-job-management.service';
 import { CodingResultsService } from './coding-results.service';
 import { CodingJobService } from './coding-job.service';
 import { CodingExportService } from './coding-export.service';
+import { CodingListService } from './coding-list.service';
 import { CodebookGenerator } from '../../admin/code-book/codebook-generator.class';
 import { statusStringToNumber } from '../utils/response-status-converter';
 
@@ -120,6 +121,9 @@ describe('WorkspaceCodingService', () => {
   const mockVariableAnalysisReplayService = {
     getVariableAnalysis: jest.fn()
   };
+  const mockCodingListService = {
+    getCodingListCsvStream: jest.fn()
+  };
 
   const createMockPerson = (id: number, workspaceId: number = 1) => ({
     id: id.toString(),
@@ -212,6 +216,7 @@ describe('WorkspaceCodingService', () => {
         { provide: CodingResultsService, useValue: mockCodingResultsService },
         { provide: CodingJobService, useValue: mockCodingJobService },
         { provide: CodingExportService, useValue: mockCodingExportService },
+        { provide: CodingListService, useValue: mockCodingListService },
         {
           provide: getRepositoryToken(FileUpload),
           useValue: {
@@ -271,7 +276,21 @@ describe('WorkspaceCodingService', () => {
         { provide: getRepositoryToken(CodingJobCoder), useValue: {} },
         { provide: getRepositoryToken(CodingJobVariable), useValue: {} },
         { provide: getRepositoryToken(CodingJobVariableBundle), useValue: {} },
-        { provide: getRepositoryToken(CodingJobUnit), useValue: {} },
+        {
+          provide: getRepositoryToken(CodingJobUnit),
+          useValue: {
+            createQueryBuilder: jest.fn().mockReturnValue({
+              select: jest.fn().mockReturnThis(),
+              addSelect: jest.fn().mockReturnThis(),
+              leftJoin: jest.fn().mockReturnThis(),
+              where: jest.fn().mockReturnThis(),
+              andWhere: jest.fn().mockReturnThis(),
+              groupBy: jest.fn().mockReturnThis(),
+              addGroupBy: jest.fn().mockReturnThis(),
+              getRawMany: jest.fn().mockResolvedValue([])
+            })
+          }
+        },
         { provide: getRepositoryToken(JobDefinition), useValue: {} },
         { provide: getRepositoryToken(VariableBundle), useValue: {} },
         { provide: getRepositoryToken(Setting), useValue: {} }
@@ -959,7 +978,13 @@ describe('WorkspaceCodingService', () => {
       const result = await service.getCodingIncompleteVariables(workspaceId);
 
       expect(result).toEqual([
-        { unitName: 'UNIT_1', variableId: 'var1', responseCount: 3 }
+        {
+          unitName: 'UNIT_1',
+          variableId: 'var1',
+          responseCount: 3,
+          casesInJobs: 0,
+          availableCases: 3
+        }
       ]);
       expect(mockCacheService.set).toHaveBeenCalled();
     });
