@@ -156,4 +156,15 @@ export class CreateCodingJobDto {
   })
   @IsOptional()
     suppressGeneralInstructions?: boolean;
+
+  @ApiProperty({
+    description: 'Case ordering mode for the coding job',
+    example: 'continuous',
+    enum: ['continuous', 'alternating'],
+    default: 'continuous',
+    required: false
+  })
+  @IsEnum(['continuous', 'alternating'])
+  @IsOptional()
+    caseOrderingMode?: 'continuous' | 'alternating';
 }
