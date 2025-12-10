@@ -22,6 +22,15 @@
   font-weight: 500;
 }
 
+.general-instruction-row {
+  cursor: default;
+}
+
+.code-row.general-instruction-row:hover {
+  background-color: transparent;
+  border-color: transparent;
+}
+
 .code-row.selected .code-id {
   font-weight: 700;
   color: #1976d2;
