@@ -1,40 +1,19 @@
 {
   "migrations": [
     {
-      "version": "22.0.0-beta.1",
-      "description": "Updates release version config based on the breaking changes in Nx v22",
-      "implementation": "./src/migrations/update-22-0-0/release-version-config-changes",
-      "package": "nx",
-      "name": "22-0-0-release-version-config-changes"
+      "version": "20.2.0",
+      "description": "Replaces usages of the deprecated Router.getCurrentNavigation method with the Router.currentNavigation signal",
+      "factory": "./bundles/router-current-navigation.cjs#migrate",
+      "optional": true,
+      "package": "@angular/core",
+      "name": "router-current-navigation"
     },
     {
-      "version": "22.0.0-beta.2",
-      "description": "Consolidates releaseTag* options into nested releaseTag object structure",
-      "implementation": "./src/migrations/update-22-0-0/consolidate-release-tag-config",
-      "package": "nx",
-      "name": "22-0-0-consolidate-release-tag-config"
-    },
-    {
-      "cli": "nx",
-      "version": "22.1.0-beta.5",
-      "description": "Updates the nx wrapper.",
-      "implementation": "./src/migrations/update-22-1-0/update-nx-wrapper",
-      "package": "nx",
-      "name": "22-1-0-update-nx-wrapper"
-    },
-    {
-      "version": "21.3.0-beta.3",
-      "description": "Rename the CLI option `testPathPattern` to `testPathPatterns`.",
-      "implementation": "./src/migrations/update-21-3-0/rename-test-path-pattern",
-      "package": "@nx/jest",
-      "name": "rename-test-path-pattern"
-    },
-    {
-      "version": "22.2.0-beta.2",
-      "description": "Convert jest.config.ts files from ESM to CJS syntax (export default -> module.exports, import -> require) for projects using CommonJS resolution to ensure correct loading under Node.js type-stripping.",
-      "implementation": "./src/migrations/update-22-2-0/convert-jest-config-to-cjs",
-      "package": "@nx/jest",
-      "name": "convert-jest-config-to-cjs"
+      "version": "20.3.0",
+      "description": "Adds `BootstrapContext` to `bootstrapApplication` calls in `main.server.ts` to support server rendering.",
+      "factory": "./bundles/add-bootstrap-context-to-server-main.cjs#migrate",
+      "package": "@angular/core",
+      "name": "add-bootstrap-context-to-server-main"
     }
   ]
 }
