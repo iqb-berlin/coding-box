@@ -105,6 +105,13 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
     this.destroy$.complete();
   }
 
+  /**
+   * Public method to refresh job definitions from parent component
+   */
+  refresh(): void {
+    this.loadJobDefinitions();
+  }
+
   private loadCoders(): void {
     this.coderService.getCoders()
       .pipe(takeUntil(this.destroy$))

@@ -863,12 +863,40 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
           this.responseMatchingFlags = flags;
           this.isSavingMatchingMode = false;
           this.showSuccess(this.translateService.instant('coding-management-manual.response-matching.save-success'));
+
+          // Refresh all affected areas after matching mode change
+          this.onResponseMatchingModeChanged();
         },
         error: () => {
           this.isSavingMatchingMode = false;
           this.showError(this.translateService.instant('coding-management-manual.response-matching.save-error'));
         }
       });
+  }
+
+  /**
+   * Called when response matching mode changes to refresh all affected areas:
+   * - Response analysis (empty responses, duplicate values)
+   * - Coding progress overview (total cases to code)
+   * - Case coverage overview
+   * - Coding incomplete variables
+   * - Coding jobs list
+   * - Job definitions component
+   */
+  private onResponseMatchingModeChanged(): void {
+    // Refresh response analysis with new matching settings
+    this.loadResponseAnalysis();
+
+    // Refresh statistics that depend on case aggregation
+    this.loadCodingProgressOverview();
+    this.loadCaseCoverageOverview();
+    this.loadCodingIncompleteVariables();
+
+    // Refresh child components
+    this.reloadCodingJobsList();
+    if (this.codingJobDefinitionsComponent) {
+      this.codingJobDefinitionsComponent.refresh();
+    }
   }
 
   isMatchingOptionDisabled(flag: ResponseMatchingFlag): boolean {
