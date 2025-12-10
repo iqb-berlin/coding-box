@@ -56,6 +56,9 @@
   <div class="codes-section">
     <div *ngIf="regularCodes.length; else noCodes">
       <div class="code-list scrollable-codes">
+        <div class="code-row general-instruction-row" *ngIf="!suppressGeneralInstructions && variableManualInstruction">
+          <div class="code-instruction" [innerHTML]="getSafeHtml(variableManualInstruction)"></div>
+        </div>
         <div class="code-row"
              [class.selected]="item.id === selectedCode"
              [class.read-only]="isReadOnly || isRegularSelectionDisabled"

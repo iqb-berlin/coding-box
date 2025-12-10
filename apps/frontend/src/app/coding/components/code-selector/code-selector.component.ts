@@ -63,6 +63,7 @@ export class CodeSelectorComponent implements OnChanges {
   selectableItems: SelectableItem[] = [];
   selectedCode: number | null = null;
   selectedCodingIssueOption: number | null = null;
+  variableManualInstruction: string | null = null;
   constructor(private sanitizer: DomSanitizer, private translateService: TranslateService) {}
 
   ngOnChanges(changes: SimpleChanges): void {
@@ -77,6 +78,7 @@ export class CodeSelectorComponent implements OnChanges {
   private loadCodes(): void {
     if (!this.codingScheme || !this.variableId) {
       this.selectableItems = [];
+      this.variableManualInstruction = null;
       return;
     }
 
@@ -94,6 +96,8 @@ export class CodeSelectorComponent implements OnChanges {
 
     const variableCoding = scheme.variableCodings.find((v: VariableCoding) => v.alias === this.variableId);
     if (variableCoding) {
+      this.variableManualInstruction = variableCoding.manualInstruction || null;
+      console.log(this.variableManualInstruction);
       const codeItems: SelectableItem[] = variableCoding.codes.map((code: Code) => ({
         id: code.id,
         label: code.label,
@@ -130,6 +134,7 @@ export class CodeSelectorComponent implements OnChanges {
       setTimeout(() => this.selectPreSelectedCode(), 0);
     } else {
       this.selectableItems = [];
+      this.variableManualInstruction = null;
     }
   }
 
