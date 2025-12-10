@@ -78,6 +78,7 @@ interface JobDefinitionApiResponse {
   max_coding_cases?: number;
   double_coding_absolute?: number;
   double_coding_percentage?: number;
+  case_ordering_mode?: 'continuous' | 'alternating';
   created_at?: Date;
   updated_at?: Date;
 }
@@ -1303,6 +1304,7 @@ export class BackendService {
         maxCodingCases: def.max_coding_cases,
         doubleCodingAbsolute: def.double_coding_absolute,
         doubleCodingPercentage: def.double_coding_percentage,
+        caseOrderingMode: def.case_ordering_mode,
         createdAt: def.created_at,
         updatedAt: def.updated_at
       })))
