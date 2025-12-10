@@ -7,7 +7,7 @@ export class ExternalCodingImportDto {
     type: 'string'
   })
   @IsString()
-    file: string;
+    file!: string;
 
   @ApiProperty({
     description: 'Optional filename',

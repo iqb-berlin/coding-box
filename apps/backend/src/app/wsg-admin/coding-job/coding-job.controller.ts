@@ -10,8 +10,10 @@ import {
   Post,
   Put,
   Query,
+  Req,
   UseGuards
 } from '@nestjs/common';
+import { Request } from 'express';
 
 import {
   ApiBadRequestResponse,
@@ -28,6 +30,7 @@ import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from '../../admin/workspace/workspace.guard';
 import { WorkspaceId } from '../../admin/workspace/workspace.decorator';
 import { CodingJobService } from '../../database/services/coding-job.service';
+import { WorkspaceCodingService } from '../../database/services/workspace-coding.service';
 import { CodingJobDto } from '../../admin/coding-job/dto/coding-job.dto';
 import { CreateCodingJobDto } from '../../admin/coding-job/dto/create-coding-job.dto';
 import { UpdateCodingJobDto } from '../../admin/coding-job/dto/update-coding-job.dto';
@@ -36,7 +39,10 @@ import { SaveCodingProgressDto } from '../../admin/coding-job/dto/save-coding-pr
 @ApiTags('WSG Admin Coding Jobs')
 @Controller('wsg-admin/workspace/:workspace_id/coding-job')
 export class WsgCodingJobController {
-  constructor(private readonly codingJobService: CodingJobService) {}
+  constructor(
+    private readonly codingJobService: CodingJobService,
+    private readonly workspaceCodingService: WorkspaceCodingService
+  ) {}
 
   @Get()
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
@@ -212,7 +218,7 @@ export class WsgCodingJobController {
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Start a coding job',
-    description: 'Finds all responses matching assigned variables and prepares replay data'
+    description: 'Finds all responses matching assigned variables and prepares replay data with URLs'
   })
   @ApiParam({
     name: 'workspace_id',
@@ -245,7 +251,8 @@ export class WsgCodingJobController {
               bookletName: { type: 'string' },
               personLogin: { type: 'string' },
               personCode: { type: 'string' },
-              personGroup: { type: 'string' }
+              personGroup: { type: 'string' },
+              replayUrl: { type: 'string' }
             }
           }
         }
@@ -254,17 +261,26 @@ export class WsgCodingJobController {
   })
   async startCodingJob(
     @WorkspaceId() workspaceId: number,
-      @Param('id', ParseIntPipe) id: number
-  ): Promise<{ total: number; items: Array<{ responseId: number; unitName: string; unitAlias: string | null; variableId: string; variableAnchor: string; bookletName: string; personLogin: string; personCode: string; personGroup: string }> }> {
+      @Param('id', ParseIntPipe) id: number,
+      @Req() req: Request
+  ): Promise<{ total: number; items: Array<{ responseId: number; unitName: string; unitAlias: string | null; variableId: string; variableAnchor: string; bookletName: string; personLogin: string; personCode: string; personGroup: string; replayUrl: string }> }> {
     const job = await this.codingJobService.getCodingJob(id, workspaceId);
-    const onlyOpen = job.codingJob.status === 'pending';
+
+    const onlyOpen = job.codingJob.status === 'open';
     const items = await this.codingJobService.getCodingJobUnits(id, onlyOpen);
 
     if (job.codingJob.status !== 'results_applied') {
       await this.codingJobService.updateCodingJob(id, workspaceId, { status: 'active' });
     }
 
-    return { total: items.length, items };
+    const serverUrl = `${req.protocol}://${req.get('host') ?? ''}`;
+    const itemsWithReplayUrls = await this.workspaceCodingService.generateReplayUrlsForItems(
+      workspaceId,
+      items,
+      serverUrl
+    );
+
+    return { total: itemsWithReplayUrls.length, items: itemsWithReplayUrls };
   }
 
   @Delete(':id')

@@ -16,7 +16,7 @@ import { CodingJobUnit } from './coding-job-unit.entity';
 // eslint-disable-next-line import/no-cycle
 import { CodingJobCoder } from './coding-job-coder.entity';
 // eslint-disable-next-line import/no-cycle
-import { JobDefinition } from './job-definition.entity';
+import { JobDefinition, CaseOrderingMode } from './job-definition.entity';
 // eslint-disable-next-line import/no-cycle
 import { CodingJobVariableBundle } from './coding-job-variable-bundle.entity';
 
@@ -78,6 +78,15 @@ export class CodingJob {
   @ManyToOne(() => JobDefinition, jobDefinition => jobDefinition.codingJobs, { nullable: true })
   @JoinColumn({ name: 'job_definition_id' })
     jobDefinition?: JobDefinition;
+
+  @Column({
+    name: 'case_ordering_mode',
+    type: 'varchar',
+    length: 20,
+    enum: ['continuous', 'alternating'],
+    default: 'continuous'
+  })
+    case_ordering_mode: CaseOrderingMode;
 
   @CreateDateColumn()
     created_at: Date;

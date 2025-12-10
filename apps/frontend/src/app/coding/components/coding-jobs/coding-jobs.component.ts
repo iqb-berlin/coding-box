@@ -3,6 +3,7 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { firstValueFrom } from 'rxjs';
 import { MatSort, MatSortModule } from '@angular/material/sort';
 import { MatPaginator, MatPaginatorModule } from '@angular/material/paginator';
 import {
@@ -25,7 +26,6 @@ import { MatAnchor, MatIconButton, MatButton } from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatCheckbox } from '@angular/material/checkbox';
 import { SelectionModel } from '@angular/cdk/collections';
-import { Router } from '@angular/router';
 import { AppService } from '../../../services/app.service';
 import { BackendService } from '../../../services/backend.service';
 
@@ -90,7 +90,6 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
   private snackBar = inject(MatSnackBar);
   private dialog = inject(MatDialog);
   private coderService = inject(CoderService);
-  private router = inject(Router);
 
   private coderNamesByJobId = new Map<number, string>();
   allCoders: Coder[] = [];
@@ -160,7 +159,10 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
 
             const jobIds = processedData.map(job => job.id);
             try {
-              const bulkProgressResult = await this.backendService.getBulkCodingProgress(workspaceId, jobIds).toPromise();
+              let bulkProgressResult: Record<number, Record<string, unknown>> | undefined;
+              if (jobIds.length > 0) {
+                bulkProgressResult = await firstValueFrom(this.backendService.getBulkCodingProgress(workspaceId, jobIds));
+              }
 
               processedData.forEach(job => {
                 const progressResult = bulkProgressResult?.[job.id];
@@ -203,7 +205,10 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
 
             const fallbackJobIds = processedData.map(job => job.id);
             try {
-              const fallbackBulkProgressResult = await this.backendService.getBulkCodingProgress(workspaceId, fallbackJobIds).toPromise();
+              let fallbackBulkProgressResult: Record<number, Record<string, unknown>> | undefined;
+              if (fallbackJobIds.length > 0) {
+                fallbackBulkProgressResult = await firstValueFrom(this.backendService.getBulkCodingProgress(workspaceId, fallbackJobIds));
+              }
 
               processedData.forEach(job => {
                 const progressResult = fallbackBulkProgressResult?.[job.id];
@@ -501,7 +506,8 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
           bookletId: 0,
           testPerson: `${item.personLogin}@${item.personCode}@${item.personGroup || ''}@${item.bookletName}`,
           variableId: item.variableId,
-          variableAnchor: item.variableAnchor
+          variableAnchor: item.variableAnchor,
+          replayUrl: item.replayUrl
         }));
 
         const bookletData = {
@@ -512,8 +518,6 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
         };
 
         const first = units[0];
-        const firstTestPerson = first.testPerson;
-        const firstUnitId = first.name;
 
         this.appService
           .createToken(this.appService.selectedWorkspaceId, this.appService.loggedUser?.sub || '', 1)
@@ -525,19 +529,14 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
               // ignore
             }
 
-            const queryParams = {
-              auth: token,
-              mode: 'coding',
-              bookletKey
-            } as const;
-
-            const url = this.router.serializeUrl(
-              this.router.createUrlTree([
-                `replay/${firstTestPerson}/${firstUnitId}/0/0`
-              ], { queryParams })
-            );
-            window.open(`#/${url}`, '_blank');
-            this.snackBar.open(`${startResult.total} Antworten für Replay vorbereitet`, 'Schließen', { duration: 3000 });
+            const queryParams = `auth=${encodeURIComponent(token || '')}&mode=coding&bookletKey=${encodeURIComponent(bookletKey)}`;
+            const replayUrl = first.replayUrl ? `${first.replayUrl}?${queryParams}` : '';
+            if (replayUrl) {
+              window.open(replayUrl, '_blank');
+            } else {
+              this.snackBar.open('Fehler beim Generieren der Replay-URL', 'Fehler', { duration: 3000 });
+            }
+            this.snackBar.open(`Kodierjob "${selectedJob.name}" gestartet`, 'Schließen', { duration: 3000 });
           });
       },
       error: () => {
@@ -726,7 +725,8 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
                   bookletId: 0,
                   testPerson: `${item.personLogin}@${item.personCode}@${item.personGroup || ''}@${item.bookletName}`,
                   variableId: item.variableId,
-                  variableAnchor: item.variableAnchor
+                  variableAnchor: item.variableAnchor,
+                  replayUrl: item.replayUrl
                 }));
 
                 const bookletData = {
@@ -737,8 +737,6 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
                 };
 
                 const first = units[0];
-                const firstTestPerson = first.testPerson;
-                const firstUnitId = first.name;
 
                 this.appService
                   .createToken(this.appService.selectedWorkspaceId, this.appService.loggedUser?.sub || '', 1)
@@ -750,18 +748,13 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
                       // ignore
                     }
 
-                    const queryParams = {
-                      auth: token,
-                      mode: 'coding',
-                      bookletKey
-                    } as const;
-
-                    const url = this.router.serializeUrl(
-                      this.router.createUrlTree([
-                        `replay/${firstTestPerson}/${firstUnitId}/0/0`
-                      ], { queryParams })
-                    );
-                    window.open(`#/${url}`, '_blank');
+                    const queryParams = `auth=${encodeURIComponent(token || '')}&mode=coding&bookletKey=${encodeURIComponent(bookletKey)}`;
+                    const replayUrl = first.replayUrl ? `${first.replayUrl}?${queryParams}` : '';
+                    if (replayUrl) {
+                      window.open(replayUrl, '_blank');
+                    } else {
+                      this.snackBar.open('Fehler beim Generieren der Replay-URL', 'Fehler', { duration: 3000 });
+                    }
                     this.snackBar.open(`${restartResult.total} offene Einheiten für Replay vorbereitet`, 'Schließen', { duration: 3000 });
                   });
               },
@@ -883,7 +876,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
 
     for (const job of jobs) {
       try {
-        const response = await this.backendService.deleteCodingJob(workspaceId, job.id).toPromise();
+        const response = await firstValueFrom(this.backendService.deleteCodingJob(workspaceId, job.id));
         if (response?.success) {
           successCount += 1;
         } else {

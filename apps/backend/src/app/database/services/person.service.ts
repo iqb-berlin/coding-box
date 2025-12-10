@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { Brackets, In, Repository } from 'typeorm';
 import { ResponseStatusType } from '@iqbspecs/response/response.interface';
 import Persons from '../entities/persons.entity';
 import { Booklet } from '../entities/booklet.entity';
@@ -64,6 +64,42 @@ export class PersonService {
       return result.map(item => item.group);
     } catch (error) {
       this.logger.error(`Error fetching workspace groups: ${error.message}`);
+      return [];
+    }
+  }
+
+  async getWorkspaceGroupCodingStats(
+    workspaceId: number
+  ): Promise<{ groupName: string; testPersonCount: number; responsesToCode: number }[]> {
+    try {
+      const derivePending = statusStringToNumber('DERIVE_PENDING') as number | null;
+
+      const rawResults = await this.responseRepository
+        .createQueryBuilder('response')
+        .innerJoin('response.unit', 'unit')
+        .innerJoin('unit.booklet', 'booklet')
+        .innerJoin('booklet.person', 'person')
+        .where('person.workspace_id = :workspaceId', { workspaceId })
+        .andWhere('person.consider = :consider', { consider: true })
+        .andWhere(new Brackets(qb => {
+          qb.where('response.status IN (:...statuses)', { statuses: [1, 2, 3] });
+          if (derivePending !== null && !Number.isNaN(derivePending)) {
+            qb.orWhere('response.status_v1 = :derivePending', { derivePending });
+          }
+        }))
+        .select('person.group', 'groupName')
+        .addSelect('COUNT(DISTINCT person.id)', 'testPersonCount')
+        .addSelect('COUNT(response.id)', 'responsesToCode')
+        .groupBy('person.group')
+        .getRawMany();
+
+      return rawResults.map(item => ({
+        groupName: item.groupName,
+        testPersonCount: Number(item.testPersonCount) || 0,
+        responsesToCode: Number(item.responsesToCode) || 0
+      }));
+    } catch (error) {
+      this.logger.error(`Error fetching workspace group coding stats: ${error.message}`);
       return [];
     }
   }

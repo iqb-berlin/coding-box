@@ -6,21 +6,21 @@ import * as ExcelJS from 'exceljs';
 import FileUpload from '../entities/file_upload.entity';
 import { ResponseEntity } from '../entities/response.entity';
 import { extractVariableLocation } from '../../utils/voud/extractVariableLocation';
-import { statusStringToNumber } from '../utils/response-status-converter';
+import { statusStringToNumber, statusNumberToString } from '../utils/response-status-converter';
 import { LRUCache } from './lru-cache';
 import { WorkspaceFilesService } from './workspace-files.service';
 
 export interface CodingItem {
   unit_key: string;
   unit_alias: string;
-  login_name: string;
-  login_code: string;
-  login_group: string;
-  booklet_id: string;
+  person_login: string;
+  person_code: string;
+  person_group: string;
+  booklet_name: string;
   variable_id: string;
   variable_page: string;
   variable_anchor: string;
-  url: string;
+  url?: string;
 }
 
 interface JsonStream {
@@ -64,7 +64,6 @@ export class CodingListService {
       try {
         const respDefinition = { definition: voudFile.data as string };
         const variableLocation = extractVariableLocation([respDefinition]);
-
         if (variableLocation[0]?.variable_pages) {
           for (const pageInfo of variableLocation[0].variable_pages) {
             variablePageMap.set(pageInfo.variable_ref, pageInfo.variable_path?.pages?.toString() || '0');
@@ -166,10 +165,10 @@ export class CodingListService {
     return {
       unit_key: unitKey,
       unit_alias: unitAlias,
-      login_name: loginName,
-      login_code: loginCode,
-      login_group: loginGroup,
-      booklet_id: bookletId,
+      person_login: loginName,
+      person_code: loginCode,
+      person_group: loginGroup,
+      booklet_name: bookletId,
       variable_id: variableId,
       variable_page: variablePage,
       variable_anchor: variableAnchor,
@@ -285,10 +284,10 @@ export class CodingListService {
         return {
           unit_key: unitKey,
           unit_alias: unitAlias,
-          login_name: loginName,
-          login_code: loginCode,
-          login_group: loginGroup,
-          booklet_id: bookletId,
+          person_login: loginName,
+          person_code: loginCode,
+          person_group: loginGroup,
+          booklet_name: bookletId,
           variable_id: variableId,
           variable_page: variablePage,
           variable_anchor: variableAnchor,
@@ -399,10 +398,10 @@ export class CodingListService {
     worksheet.columns = [
       { header: 'unit_key', key: 'unit_key', width: 30 },
       { header: 'unit_alias', key: 'unit_alias', width: 30 },
-      { header: 'login_name', key: 'login_name', width: 25 },
-      { header: 'login_code', key: 'login_code', width: 25 },
-      { header: 'login_group', key: 'login_group', width: 25 },
-      { header: 'booklet_id', key: 'booklet_id', width: 30 },
+      { header: 'person_login', key: 'person_login', width: 25 },
+      { header: 'person_code', key: 'person_code', width: 25 },
+      { header: 'person_group', key: 'person_group', width: 25 },
+      { header: 'booklet_name', key: 'booklet_name', width: 30 },
       { header: 'variable_id', key: 'variable_id', width: 30 },
       { header: 'variable_page', key: 'variable_page', width: 15 },
       { header: 'variable_anchor', key: 'variable_anchor', width: 30 },
@@ -627,8 +626,8 @@ export class CodingListService {
     return filteredResults;
   }
 
-  async getCodingResultsByVersionCsvStream(workspace_id: number, version: 'v1' | 'v2' | 'v3', authToken: string, serverUrl?: string) {
-    this.logger.log(`Memory-efficient CSV export for coding results version ${version}, workspace ${workspace_id}`);
+  async getCodingResultsByVersionCsvStream(workspace_id: number, version: 'v1' | 'v2' | 'v3', authToken: string, serverUrl?: string, includeReplayUrls: boolean = false) {
+    this.logger.log(`Memory-efficient CSV export for coding results version ${version}, workspace ${workspace_id} (replay URLs: ${includeReplayUrls})`);
     this.voudCache.clear();
     this.vocsCache.clear();
     const csvStream = fastCsv.format({ headers: true });
@@ -656,7 +655,7 @@ export class CodingListService {
 
           // Process responses in parallel batches for better performance
           const items: CodingItem[] = [];
-          const processingPromises = responses.map(response => this.processResponseItemWithVersions(response, version, authToken, serverUrl!, workspace_id)
+          const processingPromises = responses.map(response => this.processResponseItemWithVersions(response, version, authToken, serverUrl!, workspace_id, includeReplayUrls)
           );
 
           const results = await Promise.allSettled(processingPromises);
@@ -701,8 +700,8 @@ export class CodingListService {
     return csvStream;
   }
 
-  async getCodingResultsByVersionAsExcel(workspace_id: number, version: 'v1' | 'v2' | 'v3', authToken?: string, serverUrl?: string): Promise<Buffer> {
-    this.logger.log(`Starting Excel export for coding results version ${version}, workspace ${workspace_id}`);
+  async getCodingResultsByVersionAsExcel(workspace_id: number, version: 'v1' | 'v2' | 'v3', authToken?: string, serverUrl?: string, includeReplayUrls: boolean = false): Promise<Buffer> {
+    this.logger.log(`Starting Excel export for coding results version ${version}, workspace ${workspace_id} (replay URLs: ${includeReplayUrls})`);
     this.voudCache.clear();
     this.vocsCache.clear();
 
@@ -710,7 +709,13 @@ export class CodingListService {
     const worksheet = workbook.addWorksheet('Coding Results');
 
     // Define headers based on version (include lower versions)
-    const headers = this.getHeadersForVersion(version);
+    let headers = this.getHeadersForVersion(version);
+
+    // Add URL column if replay URLs are included
+    if (includeReplayUrls) {
+      headers = [...headers, 'url'];
+    }
+
     worksheet.columns = headers.map(h => ({ header: h, key: h, width: 20 }));
 
     // Style header row
@@ -738,7 +743,7 @@ export class CodingListService {
         if (!responses.length) break;
 
         for (const response of responses) {
-          const itemData = await this.processResponseItemWithVersions(response, version, authToken || '', serverUrl || '', workspace_id);
+          const itemData = await this.processResponseItemWithVersions(response, version, authToken || '', serverUrl || '', workspace_id, includeReplayUrls);
           if (itemData) {
             worksheet.addRow(itemData);
           }
@@ -754,7 +759,7 @@ export class CodingListService {
       }
 
       this.logger.log(`Excel export completed for version ${version}`);
-      return await workbook.xlsx.writeBuffer() as Buffer;
+      return await workbook.xlsx.writeBuffer() as unknown as Buffer;
     } catch (error) {
       this.logger.error(`Error during Excel export for version ${version}: ${error.message}`);
       throw error;
@@ -774,8 +779,7 @@ export class CodingListService {
       'booklet_id',
       'variable_id',
       'variable_page',
-      'variable_anchor',
-      'url'
+      'variable_anchor'
     ];
 
     // Add version-specific columns for comparison
@@ -816,7 +820,8 @@ export class CodingListService {
     targetVersion: 'v1' | 'v2' | 'v3',
     authToken: string,
     serverUrl: string,
-    workspaceId: number
+    workspaceId: number,
+    includeReplayUrls: boolean = false
   ): Promise<CodingItem | null> {
     try {
       const unit = response.unit;
@@ -847,38 +852,42 @@ export class CodingListService {
       const baseItem: CodingItem & Record<string, unknown> = {
         unit_key: unitKey,
         unit_alias: unitAlias,
-        login_name: loginName,
-        login_code: loginCode,
-        login_group: loginGroup,
-        booklet_id: bookletId,
+        person_login: loginName,
+        person_code: loginCode,
+        person_group: loginGroup,
+        booklet_name: bookletId,
         variable_id: variableId,
         variable_page: variablePage,
-        variable_anchor: variableAnchor,
-        url: url
+        variable_anchor: variableAnchor
       };
 
-      // Add version-specific data (include all lower versions)
+      // Add version-specific data (include all lower versions) and convert status numbers to strings
       if (targetVersion === 'v1') {
-        baseItem.status_v1 = response.status_v1 || '';
+        baseItem.status_v1 = response.status_v1 != null ? statusNumberToString(response.status_v1) || '' : '';
         baseItem.code_v1 = response.code_v1 || '';
         baseItem.score_v1 = response.score_v1 || '';
       } else if (targetVersion === 'v2') {
-        baseItem.status_v1 = response.status_v1 || '';
+        baseItem.status_v1 = response.status_v1 != null ? statusNumberToString(response.status_v1) || '' : '';
         baseItem.code_v1 = response.code_v1 || '';
         baseItem.score_v1 = response.score_v1 || '';
-        baseItem.status_v2 = response.status_v2 || '';
+        baseItem.status_v2 = response.status_v2 != null ? statusNumberToString(response.status_v2) || '' : '';
         baseItem.code_v2 = response.code_v2 || '';
         baseItem.score_v2 = response.score_v2 || '';
       } else { // v3
-        baseItem.status_v1 = response.status_v1 || '';
+        baseItem.status_v1 = response.status_v1 != null ? statusNumberToString(response.status_v1) || '' : '';
         baseItem.code_v1 = response.code_v1 || '';
         baseItem.score_v1 = response.score_v1 || '';
-        baseItem.status_v2 = response.status_v2 || '';
+        baseItem.status_v2 = response.status_v2 != null ? statusNumberToString(response.status_v2) || '' : '';
         baseItem.code_v2 = response.code_v2 || '';
         baseItem.score_v2 = response.score_v2 || '';
-        baseItem.status_v3 = response.status_v3 || '';
+        baseItem.status_v3 = response.status_v3 != null ? statusNumberToString(response.status_v3) || '' : '';
         baseItem.code_v3 = response.code_v3 || '';
         baseItem.score_v3 = response.score_v3 || '';
+      }
+
+      // Append replay URL as the last field if requested
+      if (includeReplayUrls) {
+        baseItem.url = url;
       }
 
       return baseItem;

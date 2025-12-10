@@ -5,7 +5,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatChipsModule } from '@angular/material/chips';
-import { MatDialogModule } from '@angular/material/dialog';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
@@ -28,14 +28,17 @@ import {
   tap
 } from 'rxjs';
 import {
-  CodingStatistics, JobInfo,
+  CodingStatistics,
+  JobInfo,
   JobStatus,
   PaginatedCodingList,
-  TestPersonCodingService
+  TestPersonCodingService,
+  WorkspaceGroupCodingStats
 } from '../../services/test-person-coding.service';
 import { AppService } from '../../../services/app.service';
 import { BackendService } from '../../../services/backend.service';
 import { BackendMessageTranslatorService } from '../../services/backend-message-translator.service';
+import { TestPersonCodingJobResultDialogComponent } from '../test-person-coding-job-result-dialog/test-person-coding-job-result-dialog.component';
 
 @Component({
   selector: 'coding-box-test-person-coding',
@@ -72,6 +75,7 @@ export class TestPersonCodingComponent implements OnInit {
   private backendService = inject(BackendService);
   private translateService = inject(TranslateService);
   private backendMessageTranslator = inject(BackendMessageTranslatorService);
+  private dialog = inject(MatDialog);
   Math = Math;
   get workspaceId(): number {
     return this.appService.selectedWorkspaceId;
@@ -101,7 +105,7 @@ export class TestPersonCodingComponent implements OnInit {
   jobsLoading = false;
   jobsRefreshInterval: number | null = null;
 
-  availableGroups: string[] = [];
+  availableGroups: WorkspaceGroupCodingStats[] = [];
   selectedGroups: string[] = [];
   groupsLoading = false;
 
@@ -331,30 +335,20 @@ export class TestPersonCodingComponent implements OnInit {
       this.snackBar.open(this.translateService.instant('test-person-coding.job-result-unavailable'), this.translateService.instant('close'), { duration: 3000 });
       return;
     }
-
-    let message = `${this.translateService.instant('test-person-coding.jobs.table.job-id')}: ${job.jobId}\n\n`;
-
-    if (job.groupNames) {
-      message += `${this.translateService.instant('test-person-coding.jobs.table.groups')}: ${job.groupNames}\n\n`;
-    }
-
-    if (job.durationMs) {
-      message += `${this.translateService.instant('test-person-coding.jobs.table.duration')}: ${this.formatDuration(job.durationMs)}\n\n`;
-    }
-
-    message += `${this.translateService.instant('test-person-coding.responses-coded', { count: job.result.totalResponses })}\n\n`;
-    message += `${this.translateService.instant('coding.status')}:\n`;
-
-    for (const [status, count] of Object.entries(job.result.statusCounts)) {
-      message += `${status || this.translateService.instant('test-person-coding.jobs.table.unknown')}: ${count}\n`;
-    }
-
-    this.snackBar.open(message, this.translateService.instant('close'), { duration: 10000 });
+    const formattedDuration = job.durationMs ? this.formatDuration(job.durationMs) : null;
+    this.dialog.open(TestPersonCodingJobResultDialogComponent, {
+      width: '600px',
+      data: {
+        job,
+        formattedDuration,
+        autoCoderRun: (job as unknown as { autoCoderRun?: number }).autoCoderRun ?? 1
+      }
+    });
   }
 
   codeAllTestPersons(): void {
     if (this.availableGroups.length > 0) {
-      this.selectedGroups = [...this.availableGroups];
+      this.selectedGroups = this.availableGroups.map(group => group.groupName);
       this.codeTestPersons(this.selectedGroups.join(','));
       this.snackBar.open(this.translateService.instant('test-person-coding.coding-all-groups', { count: this.selectedGroups.length }), this.translateService.instant('close'), { duration: 3000 });
       return;
@@ -384,6 +378,9 @@ export class TestPersonCodingComponent implements OnInit {
 
   formatDuration(durationMs: number): string {
     if (!durationMs) return '-';
+    if (durationMs < 1000) {
+      return `${Math.round(durationMs)}ms`;
+    }
 
     const seconds = Math.floor((durationMs / 1000) % 60);
     const minutes = Math.floor((durationMs / (1000 * 60)) % 60);
@@ -406,6 +403,10 @@ export class TestPersonCodingComponent implements OnInit {
 
   deselectAllGroups(): void {
     this.selectedGroups = [];
+  }
+
+  selectAllGroups(): void {
+    this.selectedGroups = this.availableGroups.map(group => group.groupName);
   }
 
   truncateText(text: string, maxLength: number): string {

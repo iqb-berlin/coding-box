@@ -11,10 +11,16 @@
             <mat-select multiple [(ngModel)]="selectedGroups">
               <mat-option *ngIf="groupsLoading" disabled>{{ 'test-person-coding.loading-groups' | translate }}</mat-option>
               <mat-option *ngIf="!groupsLoading && availableGroups.length === 0" disabled>{{ 'test-person-coding.no-groups' | translate }}</mat-option>
-              <mat-option *ngFor="let group of availableGroups" [value]="group">{{ group }}</mat-option>
+              <mat-option *ngFor="let group of availableGroups" [value]="group.groupName">
+                {{ group.groupName }} ({{ group.testPersonCount }} Testpersonen, {{ group.responsesToCode }} Antworten)
+              </mat-option>
             </mat-select>
             <mat-hint>{{ 'test-person-coding.select-groups-hint' | translate }}</mat-hint>
           </mat-form-field>
+          <button mat-button type="button" [disabled]="availableGroups.length === 0" (click)="selectAllGroups()">
+            <mat-icon>select_all</mat-icon>
+            {{ 'test-person-coding.select-all-groups' | translate }}
+          </button>
           <button mat-button type="button" [disabled]="selectedGroups.length === 0" (click)="deselectAllGroups()">
             <mat-icon>clear_all</mat-icon>
             {{ 'test-person-coding.deselect-all-groups' | translate }}

@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import {
   In, IsNull, Not, Repository
 } from 'typeorm';
-import { CodingScheme } from '@iqbspecs/coding-scheme/coding-scheme.interface';
+import { CodingScheme, VariableCodingData } from '@iqbspecs/coding-scheme/coding-scheme.interface';
 import * as Autocoder from '@iqb/responses';
 import * as cheerio from 'cheerio';
 import * as crypto from 'crypto';
@@ -26,6 +26,7 @@ import { VariableAnalysisItemDto } from '../../../../../../api-dto/coding/variab
 import { ExpectedCombinationDto } from '../../../../../../api-dto/coding/expected-combination.dto';
 import { ValidationResultDto } from '../../../../../../api-dto/coding/validation-result.dto';
 import { ValidateCodingCompletenessResponseDto } from '../../../../../../api-dto/coding/validate-coding-completeness-response.dto';
+import { ResponseAnalysisDto, EmptyResponseDto, DuplicateValueGroupDto } from '../../../../../../api-dto/coding/response-analysis.dto';
 import { JobQueueService } from '../../job-queue/job-queue.service';
 import { CodingStatisticsService } from './coding-statistics.service';
 import { VariableAnalysisReplayService } from './variable-analysis-replay.service';
@@ -36,6 +37,8 @@ import { WorkspaceFilesService } from './workspace-files.service';
 import { CodingResultsService } from './coding-results.service';
 import { CodingJobService } from './coding-job.service';
 import { CodingExportService } from './coding-export.service';
+import { CodingListService } from './coding-list.service';
+import { generateReplayUrl } from '../../utils/replay-url.util';
 
 interface CodedResponse {
   id: number;
@@ -81,7 +84,8 @@ export class WorkspaceCodingService {
     private workspaceFilesService: WorkspaceFilesService,
     private codingResultsService: CodingResultsService,
     private codingJobService: CodingJobService,
-    private codingExportService: CodingExportService
+    private codingExportService: CodingExportService,
+    private codingListService: CodingListService
   ) {}
 
   private codingSchemeCache: Map<string, { scheme: CodingScheme; timestamp: number }> = new Map();
@@ -447,17 +451,42 @@ export class WorkspaceCodingService {
         const scheme = codingSchemeRef ?
           (fileIdToCodingSchemeMap.get(codingSchemeRef) || emptyScheme) :
           emptyScheme;
+
+        const variableAliasToIdMap = new Map<string, string>();
+        if (Array.isArray(scheme.variableCodings)) {
+          scheme.variableCodings.forEach((vc: VariableCodingData) => {
+            const key = (vc.alias ?? vc.id) as string | undefined;
+            const value = vc.id as string | undefined;
+            if (key && value) {
+              variableAliasToIdMap.set(key, value);
+            }
+          });
+        }
+
         for (const response of responses) {
           let inputStatus = response.status;
           if (autoCoderRun === 2) {
             inputStatus = response.status_v2 || response.status_v1 || response.status;
           }
 
-          const codedResult = Autocoder.CodingFactory.code({
-            id: response.variableid,
-            value: response.value,
-            status: statusNumberToString(inputStatus) || 'UNSET'
-          }, scheme.variableCodings[0]);
+          const variableAlias = String(response.variableid);
+          const resolvedVariableId = variableAliasToIdMap.get(variableAlias) ?? variableAlias;
+
+          const variableCoding = Array.isArray(scheme.variableCodings) ?
+            scheme.variableCodings.find((vc: VariableCodingData) => {
+              const key = (vc.alias ?? vc.id) as string | undefined;
+              return key === variableAlias || key === resolvedVariableId;
+            }) :
+            undefined;
+
+          const codedResult = Autocoder.CodingFactory.code(
+            {
+              id: response.variableid,
+              value: response.value,
+              status: statusNumberToString(inputStatus) || 'UNSET'
+            },
+            variableCoding
+          );
           const codedStatus = codedResult?.status;
           if (!statistics.statusCounts[codedStatus]) {
             statistics.statusCounts[codedStatus] = 0;
@@ -539,8 +568,12 @@ export class WorkspaceCodingService {
           const $ = cheerio.load(testFile.data);
           const codingSchemeRefText = $('codingSchemeRef').text();
           if (codingSchemeRefText) {
-            codingSchemeRefs.add(codingSchemeRefText.toUpperCase());
-            unitToCodingSchemeRefMap.set(unit.id, codingSchemeRefText.toUpperCase());
+            const codingSchemeRefUpper = codingSchemeRefText.toUpperCase();
+            codingSchemeRefs.add(codingSchemeRefUpper);
+            unitToCodingSchemeRefMap.set(unit.id, codingSchemeRefUpper);
+            this.logger.debug(
+              `Extracted coding scheme mapping: unitId=${unit.id}, unitAlias=${unit.alias.toUpperCase()}, codingSchemeRef=${codingSchemeRefUpper}`
+            );
           }
         } catch (error) {
           this.logger.error(`--- Fehler beim Verarbeiten der Datei ${testFile.filename}: ${error.message}`);
@@ -1596,6 +1629,93 @@ export class WorkspaceCodingService {
     }
   }
 
+  async generateReplayUrlForResponse(
+    workspaceId: number,
+    responseId: number,
+    serverUrl: string,
+    authToken: string
+  ): Promise<{ replayUrl: string }> {
+    try {
+      const response = await this.responseRepository.findOne({
+        where: { id: responseId },
+        relations: ['unit', 'unit.booklet', 'unit.booklet.person', 'unit.booklet.bookletinfo']
+      });
+
+      if (!response) {
+        throw new Error(`Response with id ${responseId} not found`);
+      }
+
+      const person = response.unit?.booklet?.person;
+      if (!person || person.workspace_id !== workspaceId) {
+        throw new Error(`Response ${responseId} does not belong to workspace ${workspaceId}`);
+      }
+
+      const unitName = response.unit?.name || '';
+      const variableId = response.variableid || '';
+      const loginName = person.login || '';
+      const loginCode = person.code || '';
+      const loginGroup = person.group || '';
+      const bookletId = response.unit?.booklet?.bookletinfo?.name || '';
+
+      // Get the variable page from VOUD data
+      this.logger.log(`Looking up variablePage for unit '${unitName}', variable '${variableId}' in workspace ${workspaceId}`);
+      const variablePageMap = await this.codingListService.getVariablePageMap(unitName, workspaceId);
+      this.logger.log(`VOUD lookup result: variablePageMap has ${variablePageMap.size} entries for unit '${unitName}'`);
+      const variablePage = variablePageMap.get(variableId) || '0';
+      this.logger.log(`Variable '${variableId}' resolved to page '${variablePage}' (found in map: ${variablePageMap.has(variableId)})`);
+
+      const replayUrl = generateReplayUrl({
+        serverUrl,
+        loginName,
+        loginCode,
+        loginGroup,
+        bookletId,
+        unitId: unitName,
+        variablePage,
+        variableAnchor: variableId,
+        authToken
+      });
+
+      this.logger.log(`Generated replay URL for response ${responseId} in workspace ${workspaceId}`);
+
+      return { replayUrl };
+    } catch (error) {
+      this.logger.error(`Error generating replay URL for response ${responseId}: ${error.message}`, error.stack);
+      throw error;
+    }
+  }
+
+  async generateReplayUrlsForItems(
+    workspaceId: number,
+    items: Array<{ responseId: number; unitName: string; unitAlias: string | null; variableId: string; variableAnchor: string; bookletName: string; personLogin: string; personCode: string; personGroup: string }>,
+    serverUrl: string
+  ): Promise<Array<{ responseId: number; unitName: string; unitAlias: string | null; variableId: string; variableAnchor: string; bookletName: string; personLogin: string; personCode: string; personGroup: string; replayUrl: string }>> {
+    const itemsWithUrls = await Promise.all(
+      items.map(async item => {
+        try {
+          const result = await this.generateReplayUrlForResponse(
+            workspaceId,
+            item.responseId,
+            serverUrl,
+            ''
+          );
+          const replayUrlWithoutAuth = result.replayUrl.replace('?auth=', '');
+          return {
+            ...item,
+            replayUrl: replayUrlWithoutAuth
+          };
+        } catch (error) {
+          this.logger.warn(`Failed to generate replay URL for response ${item.responseId}: ${error.message}`);
+          return {
+            ...item,
+            replayUrl: ''
+          };
+        }
+      })
+    );
+    return itemsWithUrls;
+  }
+
   async applyCodingResults(workspaceId: number, codingJobId: number): Promise<{
     success: boolean;
     updatedResponsesCount: number;
@@ -1622,6 +1742,7 @@ export class WorkspaceCodingService {
       doubleCodingAbsolute?: number;
       doubleCodingPercentage?: number;
       caseOrderingMode?: 'continuous' | 'alternating';
+      maxCodingCases?: number;
     }
   ): Promise<{
       success: boolean;
@@ -1956,15 +2077,28 @@ export class WorkspaceCodingService {
         });
       }
 
+      const casesInJobsMap = await this.getVariableCasesInJobs(workspaceId);
+
       const conflictedVariables = new Map<string, Array<{ id: number; status: string }>>();
       variableToDefinitions.forEach((definitions, variableKey) => {
         if (definitions.length > 1) {
-          conflictedVariables.set(variableKey, definitions);
+          // Only report as conflict if there aren't enough available cases
+          const [unitName, variableId] = variableKey.split(':');
+          const variableCaseInfo = variableCaseCounts.find(
+            v => v.unitName === unitName && v.variableId === variableId
+          );
+
+          if (variableCaseInfo) {
+            const casesInJobs = casesInJobsMap.get(`${variableCaseInfo.unitName}::${variableCaseInfo.variableId}`) || 0;
+            const availableCases = variableCaseInfo.caseCount - casesInJobs;
+
+            // Only mark as conflict if there are no available cases left
+            if (availableCases <= 0) {
+              conflictedVariables.set(variableKey, definitions);
+            }
+          }
         }
       });
-
-      // Get cases in jobs to determine partial vs full coverage
-      const casesInJobsMap = await this.getVariableCasesInJobs(workspaceId);
 
       const missingVariables = new Set<string>();
       const partiallyAbgedeckteVariablen = new Set<string>();
@@ -2195,7 +2329,6 @@ export class WorkspaceCodingService {
             continue;
           }
 
-          // Verify workspace ID
           if (selectedCodingJobUnit.coding_job?.workspace_id !== workspaceId) {
             this.logger.warn(`Workspace mismatch for responseId ${decision.responseId}`);
             skippedCount += 1;
@@ -2209,16 +2342,13 @@ export class WorkspaceCodingService {
             continue;
           }
 
-          // Build resolution comment with timestamp if provided
           let updatedValue = response.value || '';
           if (decision.resolutionComment && decision.resolutionComment.trim()) {
             const timestamp = new Date().toISOString().replace('T', ' ').substring(0, 16);
             const resolutionNote = `[RESOLUTION - ${timestamp}]: ${decision.resolutionComment.trim()}\n`;
-            // Store resolution comment at the beginning of the value field as a note
             updatedValue = resolutionNote + updatedValue;
           }
 
-          // Update response with selected coder's values
           response.status_v2 = statusStringToNumber('CODING_COMPLETE');
           response.code_v2 = selectedCodingJobUnit.code;
           response.score_v2 = selectedCodingJobUnit.score;
@@ -2532,5 +2662,236 @@ export class WorkspaceCodingService {
       );
       throw new Error(`Failed to reset coding version: ${error.message}`);
     }
+  }
+
+  /**
+   * Analyzes responses for a workspace to identify:
+   * 1. Empty responses (null or empty string values)
+   * 2. Duplicate values (same normalized value across different testperson/variable combinations)
+   *
+   * Uses the response matching settings (ignore case, ignore whitespace) for normalization.
+   */
+  async getResponseAnalysis(workspaceId: number): Promise<ResponseAnalysisDto> {
+    try {
+      this.logger.log(`Starting response analysis for workspace ${workspaceId}`);
+
+      // Get response matching flags from settings
+      const matchingFlags = await this.codingJobService.getResponseMatchingMode(workspaceId);
+      this.logger.log(`Response matching flags: ${JSON.stringify(matchingFlags)}`);
+
+      // Get all persons in the workspace that should be considered
+      const persons = await this.personsRepository.find({
+        where: { workspace_id: workspaceId, consider: true }
+      });
+
+      if (persons.length === 0) {
+        this.logger.warn(`No persons found for workspace ${workspaceId}`);
+        return this.createEmptyAnalysisResult(matchingFlags);
+      }
+
+      const personIds = persons.map(person => person.id);
+      const personMap = new Map(persons.map(person => [person.id, person]));
+
+      // Get all booklets for these persons
+      const booklets = await this.bookletRepository.find({
+        where: { personid: In(personIds) },
+        relations: ['bookletinfo']
+      });
+
+      if (booklets.length === 0) {
+        this.logger.warn(`No booklets found for persons in workspace ${workspaceId}`);
+        return this.createEmptyAnalysisResult(matchingFlags);
+      }
+
+      const bookletMap = new Map(booklets.map(booklet => [booklet.id, booklet]));
+
+      // Get all units for these booklets
+      const batchSize = 1000;
+      let allUnits: Unit[] = [];
+      const bookletIds = booklets.map(booklet => booklet.id);
+
+      for (let i = 0; i < bookletIds.length; i += batchSize) {
+        const bookletIdsBatch = bookletIds.slice(i, i + batchSize);
+        const unitsBatch = await this.unitRepository.find({
+          where: { bookletid: In(bookletIdsBatch) }
+        });
+        allUnits = [...allUnits, ...unitsBatch];
+      }
+
+      if (allUnits.length === 0) {
+        this.logger.warn(`No units found for booklets in workspace ${workspaceId}`);
+        return this.createEmptyAnalysisResult(matchingFlags);
+      }
+
+      const unitIds = allUnits.map(unit => unit.id);
+      const unitMap = new Map(allUnits.map(unit => [unit.id, unit]));
+
+      // Get all responses for these units that require manual coding (CODING_INCOMPLETE status)
+      const codingIncompleteStatus = statusStringToNumber('CODING_INCOMPLETE');
+      let allResponses: ResponseEntity[] = [];
+      for (let i = 0; i < unitIds.length; i += batchSize) {
+        const unitIdsBatch = unitIds.slice(i, i + batchSize);
+        const responsesBatch = await this.responseRepository.find({
+          where: {
+            unitid: In(unitIdsBatch),
+            status_v1: codingIncompleteStatus
+          }
+        });
+        allResponses = [...allResponses, ...responsesBatch];
+      }
+
+      if (allResponses.length === 0) {
+        this.logger.warn(`No manual coding responses (CODING_INCOMPLETE) found for units in workspace ${workspaceId}`);
+        return this.createEmptyAnalysisResult(matchingFlags);
+      }
+
+      this.logger.log(`Found ${allResponses.length} responses requiring manual coding in workspace ${workspaceId}`);
+
+      // Analyze empty responses
+      const emptyResponses: EmptyResponseDto[] = [];
+      for (const response of allResponses) {
+        const isEmptyValue = response.value === null || response.value === '' || response.value === undefined;
+        if (isEmptyValue) {
+          const unit = unitMap.get(response.unitid);
+          if (!unit) continue;
+
+          const booklet = bookletMap.get(unit.bookletid);
+          if (!booklet) continue;
+
+          const person = personMap.get(booklet.personid);
+          if (!person) continue;
+
+          emptyResponses.push({
+            unitName: unit.name,
+            unitAlias: unit.alias || null,
+            variableId: response.variableid,
+            personLogin: person.login,
+            personCode: person.code || '',
+            bookletName: booklet.bookletinfo?.name || 'Unknown',
+            responseId: response.id
+          });
+        }
+      }
+
+      // Sort empty responses
+      emptyResponses.sort((a, b) => {
+        if (a.unitName !== b.unitName) return a.unitName.localeCompare(b.unitName);
+        if (a.variableId !== b.variableId) return a.variableId.localeCompare(b.variableId);
+        return a.personLogin.localeCompare(b.personLogin);
+      });
+
+      // Analyze duplicate values (group by unit+variable, then by normalized value)
+      const duplicateValueGroups: DuplicateValueGroupDto[] = [];
+
+      // Group responses by unit+variable
+      const responsesByUnitVariable = new Map<string, ResponseEntity[]>();
+      for (const response of allResponses) {
+        // Skip empty responses for duplicate analysis
+        if (response.value === null || response.value === '' || response.value === undefined) {
+          continue;
+        }
+
+        const unit = unitMap.get(response.unitid);
+        const key = unit ? `${unit.name}_${response.variableid}` : `${response.unitid}_${response.variableid}`;
+        if (!responsesByUnitVariable.has(key)) {
+          responsesByUnitVariable.set(key, []);
+        }
+        responsesByUnitVariable.get(key)!.push(response);
+      }
+      // For each unit+variable group, find duplicate values
+      for (const [, responses] of responsesByUnitVariable.entries()) {
+        if (responses.length < 2) continue;
+
+        // Group by normalized value
+        const valueGroups = new Map<string, ResponseEntity[]>();
+        for (const response of responses) {
+          const normalizedValue = this.codingJobService.normalizeValue(response.value, matchingFlags);
+          if (!valueGroups.has(normalizedValue)) {
+            valueGroups.set(normalizedValue, []);
+          }
+          valueGroups.get(normalizedValue)!.push(response);
+        }
+
+        // Find groups with more than one response (duplicates)
+        for (const [normalizedValue, groupResponses] of valueGroups.entries()) {
+          if (groupResponses.length < 2) continue;
+
+          const firstResponse = groupResponses[0];
+          const unit = unitMap.get(firstResponse.unitid);
+          if (!unit) continue;
+
+          const occurrences = groupResponses.map(response => {
+            const responseUnit = unitMap.get(response.unitid);
+            const booklet = responseUnit ? bookletMap.get(responseUnit.bookletid) : null;
+            const person = booklet ? personMap.get(booklet.personid) : null;
+
+            return {
+              personLogin: person?.login || 'Unknown',
+              personCode: person?.code || '',
+              bookletName: booklet?.bookletinfo?.name || 'Unknown',
+              responseId: response.id,
+              value: response.value || ''
+            };
+          });
+
+          duplicateValueGroups.push({
+            unitName: unit.name,
+            unitAlias: unit.alias || null,
+            variableId: firstResponse.variableid,
+            normalizedValue,
+            originalValue: firstResponse.value || '',
+            occurrences
+          });
+        }
+      }
+
+      // Sort duplicate groups
+      duplicateValueGroups.sort((a, b) => {
+        if (a.unitName !== b.unitName) return a.unitName.localeCompare(b.unitName);
+        return a.variableId.localeCompare(b.variableId);
+      });
+
+      const totalDuplicateResponses = duplicateValueGroups.reduce(
+        (sum, group) => sum + group.occurrences.length,
+        0
+      );
+
+      this.logger.log(
+        `Response analysis complete: ${emptyResponses.length} empty responses, ${duplicateValueGroups.length} duplicate value groups (${totalDuplicateResponses} total responses)`
+      );
+
+      return {
+        emptyResponses: {
+          total: emptyResponses.length,
+          items: emptyResponses
+        },
+        duplicateValues: {
+          total: duplicateValueGroups.length,
+          totalResponses: totalDuplicateResponses,
+          groups: duplicateValueGroups
+        },
+        matchingFlags,
+        analysisTimestamp: new Date().toISOString()
+      };
+    } catch (error) {
+      this.logger.error(`Error analyzing responses for workspace ${workspaceId}: ${error.message}`, error.stack);
+      throw new Error(`Failed to analyze responses: ${error.message}`);
+    }
+  }
+
+  private createEmptyAnalysisResult(matchingFlags: string[]): ResponseAnalysisDto {
+    return {
+      emptyResponses: {
+        total: 0,
+        items: []
+      },
+      duplicateValues: {
+        total: 0,
+        totalResponses: 0,
+        groups: []
+      },
+      matchingFlags,
+      analysisTimestamp: new Date().toISOString()
+    };
   }
 }

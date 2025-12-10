@@ -13,18 +13,10 @@ import { KeycloakProfile, KeycloakTokenParsed } from 'keycloak-js';
 import { AppLogoDto } from '../../../../../api-dto/app-logo-dto';
 import { AuthDataDto } from '../../../../../api-dto/auth-data-dto';
 import { AppHttpError } from '../core/interceptors/app-http-error.class';
-import { TestGroupsInListDto } from '../../../../../api-dto/test-groups/testgroups-in-list.dto';
-import { FilesInListDto } from '../../../../../api-dto/files/files-in-list.dto';
 import { CreateUserDto } from '../../../../../api-dto/user/create-user-dto';
 import { LogoService } from './logo.service';
 import { SERVER_URL } from '../injection-tokens';
 
-type WorkspaceData = {
-  testGroups: TestGroupsInListDto[];
-  testFiles: { data:FilesInListDto[] };
-  settings: unknown;
-  selectUnitPlay: unknown;
-};
 @Injectable({
   providedIn: 'root'
 })
@@ -53,25 +45,14 @@ export class AppService {
   loggedUser: KeycloakTokenParsed | undefined;
   errorMessages: AppHttpError[] = [];
   errorMessageCounter = 0;
-  workspaceData : WorkspaceData = {
-    testGroups: [],
-    testFiles: { data: [] },
-    settings: {},
-    selectUnitPlay: {}
-  };
+  backendUnavailable = false;
+  needsReAuthentication = false;
 
   authHeader = { Authorization: `Bearer ${localStorage.getItem('id_token')}` };
   constructor() {
     this.loadLogoSettings();
   }
 
-  /**
-   * Creates a token for the specified workspace, identity, and duration
-   * @param workspace_id The ID of the workspace
-   * @param identity The identity to create the token for
-   * @param duration The duration of the token in seconds
-   * @returns An Observable of the token string
-   */
   createToken(workspace_id: number, identity: string, duration: number): Observable<string> {
     return this.http.get<string>(
       `${this.serverUrl}admin/workspace/${workspace_id}/${identity}/token/${duration}`,
@@ -164,6 +145,14 @@ export class AppService {
         this.errorMessages.push(error);
       }
     }
+  }
+
+  setBackendUnavailable(unavailable: boolean): void {
+    this.backendUnavailable = unavailable;
+  }
+
+  setNeedsReAuthentication(needs: boolean): void {
+    this.needsReAuthentication = needs;
   }
 }
 

@@ -22,7 +22,7 @@ function collectIdsWithKeyedPaths(
     // Only collect if not under a skipped key
     if ('id' in node && !skipCollect) {
       collected.push({
-        id: node.id,
+        id: node.alias || node.id,
         markingPanels: node.markingPanels,
         connectedTo: node.connectedTo,
         alwaysVisible: currentVisibility,

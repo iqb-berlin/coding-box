@@ -320,19 +320,84 @@ export class TestResultsSearchComponent implements OnInit {
   }
 
   replayUnit(item: UnitSearchResult | ResponseSearchResult): void {
+    if (!this.appService.selectedWorkspaceId) {
+      this.snackBar.open(
+        'Kein Workspace ausgewählt',
+        'Info',
+        { duration: 3000 }
+      );
+      return;
+    }
+
+    if (!item) {
+      this.snackBar.open(
+        'Ungültiger Eintrag für Replay',
+        'Info',
+        { duration: 3000 }
+      );
+      return;
+    }
+
+    const workspaceId = this.appService.selectedWorkspaceId;
+
     this.appService
-      .createToken(this.appService.selectedWorkspaceId, this.appService.loggedUser?.sub || '', 1)
-      .subscribe(token => {
-        const queryParams = {
-          auth: token
-        };
-        const url = this.router
-          .serializeUrl(
-            this.router.createUrlTree(
-              [`replay/${item.personLogin}@${item.personCode}@${item.personGroup}@${item.bookletName}/${item.unitAlias}/0/0`],
-              { queryParams: queryParams })
+      .createToken(workspaceId, this.appService.loggedUser?.sub || '', 1)
+      .subscribe({
+        next: token => {
+          if (!token) {
+            this.snackBar.open(
+              'Fehler beim Erzeugen des Authentifizierungs-Tokens',
+              'Fehler',
+              { duration: 3000 }
+            );
+            return;
+          }
+
+          if ('responseId' in item && item.responseId) {
+            this.backendService.getReplayUrl(
+              workspaceId,
+              item.responseId,
+              token
+            ).subscribe({
+              next: result => {
+                if (result && result.replayUrl) {
+                  window.open(result.replayUrl, '_blank');
+                } else {
+                  this.snackBar.open(
+                    'Replay-URL konnte nicht erzeugt werden',
+                    'Fehler',
+                    { duration: 3000 }
+                  );
+                }
+              },
+              error: () => {
+                this.snackBar.open(
+                  'Fehler beim Laden der Replay-URL',
+                  'Fehler',
+                  { duration: 3000 }
+                );
+              }
+            });
+          } else {
+            const queryParams = {
+              auth: token
+            };
+            const url = this.router
+              .serializeUrl(
+                this.router.createUrlTree(
+                  [`replay/${item.personLogin}@${item.personCode}@${item.personGroup}@${item.bookletName}/${item.unitAlias}/0/0`],
+                  { queryParams: queryParams })
+              );
+            window.open(`#/${url}`, '_blank');
+          }
+        },
+        error: () => {
+          this.snackBar.open(
+            'Fehler beim Erzeugen des Authentifizierungs-Tokens',
+            'Fehler',
+            { duration: 3000 }
           );
-        window.open(`#/${url}`, '_blank');
+        }
       });
   }
 

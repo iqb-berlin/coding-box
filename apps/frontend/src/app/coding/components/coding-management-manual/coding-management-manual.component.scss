@@ -64,6 +64,9 @@
   padding: 24px;
   margin-bottom: 24px;
   width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow-x: hidden;
   transition: box-shadow 0.3s ease, transform 0.2s ease;
   border: 1px solid rgba(0, 0, 0, 0.03);
 
@@ -119,6 +122,7 @@
 
   .statistics-content {
     margin: 20px 0;
+    max-width: 100%;
 
     .coding-progress-section {
       margin-bottom: 30px;
@@ -1107,6 +1111,311 @@
     .matching-options {
       flex-direction: column;
       gap: 12px;
+    }
+  }
+}
+
+// Response Analysis Section Styles
+.response-analysis-section {
+  margin-bottom: 20px;
+  padding: 16px;
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+
+  .subsection-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    color: #1976d2;
+    margin: 0 0 8px 0;
+
+    mat-icon {
+      font-size: 20px;
+      height: 20px;
+      width: 20px;
+    }
+
+    button {
+      margin-left: auto;
+    }
+
+    .loading-indicator {
+      display: inline-flex;
+      margin-left: 8px;
+    }
+  }
+
+  .subsection-description {
+    font-size: 13px;
+    color: #666;
+    margin: 0 0 16px 0;
+    line-height: 1.4;
+  }
+
+  .analysis-summary {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .analysis-card {
+    background-color: #fff;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    border-radius: 8px;
+    overflow: hidden;
+    transition: box-shadow 0.2s ease;
+
+    &:hover {
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    &.has-issues {
+      border-color: #ffc107;
+      background-color: #fffbf0;
+    }
+
+    .analysis-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      cursor: pointer;
+      user-select: none;
+
+      &:hover {
+        background-color: rgba(0, 0, 0, 0.02);
+      }
+
+      .analysis-icon-title {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+
+        mat-icon {
+          font-size: 24px;
+          height: 24px;
+          width: 24px;
+          color: #4caf50;
+
+          &.warning-icon {
+            color: #ff9800;
+          }
+        }
+
+        .analysis-title-content {
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+
+          .analysis-title {
+            font-weight: 600;
+            font-size: 14px;
+            color: #333;
+          }
+
+          .analysis-count {
+            font-size: 13px;
+            color: #666;
+
+            &.warning-count {
+              color: #e65100;
+              font-weight: 600;
+            }
+          }
+        }
+      }
+
+      .expand-icon {
+        color: #666;
+        transition: transform 0.2s ease;
+      }
+    }
+
+    .analysis-details {
+      padding: 0 16px 16px;
+      border-top: 1px solid rgba(0, 0, 0, 0.08);
+      animation: slideDown 0.2s ease-out;
+
+      .analysis-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+        margin-top: 12px;
+
+        th, td {
+          padding: 8px 12px;
+          text-align: left;
+          border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+        }
+
+        th {
+          background-color: #f5f5f5;
+          font-weight: 600;
+          color: #555;
+          font-size: 12px;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+        }
+
+        tr:hover td {
+          background-color: rgba(25, 118, 210, 0.03);
+        }
+
+        tr:last-child td {
+          border-bottom: none;
+        }
+      }
+
+      .more-items-hint {
+        margin: 12px 0 0;
+        font-size: 12px;
+        color: #666;
+        font-style: italic;
+        text-align: center;
+      }
+
+      .duplicate-group {
+        margin-top: 12px;
+        padding: 12px;
+        background-color: #fafafa;
+        border: 1px solid rgba(0, 0, 0, 0.08);
+        border-radius: 6px;
+
+        &:first-child {
+          margin-top: 12px;
+        }
+
+        .duplicate-group-header {
+          display: flex;
+          flex-wrap: wrap;
+          align-items: center;
+          gap: 8px;
+          margin-bottom: 8px;
+
+          strong {
+            color: #1976d2;
+          }
+
+          .duplicate-value {
+            font-family: monospace;
+            font-size: 12px;
+            background-color: #e3f2fd;
+            padding: 2px 8px;
+            border-radius: 4px;
+            color: #1565c0;
+            max-width: 300px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+          }
+
+          .occurrence-count {
+            font-size: 12px;
+            color: #ff9800;
+            font-weight: 600;
+          }
+        }
+
+        .occurrence-list {
+          margin: 0;
+          padding-left: 20px;
+          font-size: 12px;
+          color: #666;
+
+          li {
+            margin-bottom: 4px;
+
+            &:last-child {
+              margin-bottom: 0;
+            }
+
+            &.more-occurrences {
+              color: #999;
+              font-style: italic;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  .analysis-timestamp {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: #999;
+    margin: 12px 0 0;
+
+    mat-icon {
+      font-size: 14px;
+      height: 14px;
+      width: 14px;
+    }
+  }
+
+  .no-analysis-data {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 16px;
+    background-color: rgba(0, 0, 0, 0.02);
+    border-radius: 6px;
+    color: #666;
+    font-size: 14px;
+
+    mat-icon {
+      color: #999;
+    }
+  }
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 768px) {
+  .response-analysis-section {
+    .analysis-card {
+      .analysis-header {
+        .analysis-icon-title {
+          gap: 8px;
+
+          mat-icon {
+            font-size: 20px;
+            height: 20px;
+            width: 20px;
+          }
+        }
+      }
+
+      .analysis-details {
+        .analysis-table {
+          font-size: 12px;
+
+          th, td {
+            padding: 6px 8px;
+          }
+        }
+
+        .duplicate-group {
+          .duplicate-group-header {
+            .duplicate-value {
+              max-width: 150px;
+            }
+          }
+        }
+      }
     }
   }
 }
