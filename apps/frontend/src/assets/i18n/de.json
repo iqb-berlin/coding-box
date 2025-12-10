@@ -1203,7 +1203,10 @@
         "variable-id": "Variablen-ID",
         "status": "Status",
         "unit-alias": "Unit-Alias",
+        "person-login": "Person-Login",
         "person-code": "Person-Code",
+        "person-group": "Person-Gruppe",
+        "booklet-name": "Booklet-Name",
         "original-status": "Original Status",
         "original-code": "Original Code",
         "original-score": "Original Score",
@@ -1223,7 +1226,9 @@
       "items-per-page": "Einträge pro Seite:"
     },
     "import": {
-      "errors-and-warnings": "Fehler und Warnungen"
+      "errors-and-warnings": "Fehler und Warnungen",
+      "tooltip": "Importieren Sie externe Kodierungen aus CSV oder Excel Dateien.",
+      "format-info": "Format: CSV oder Excel (.xlsx). Erforderliche Spalten: 'unit_alias' (oder 'unit_key') und 'variable_id'. Optionale Spalten für die Zuordnung: 'person_code', 'person_login', 'person_group', 'booklet_name'. Weitere optionale Spalten: 'status' (Text), 'code' (Ganzzahl), 'score' (Ganzzahl)."
     },
     "response-matching": {
       "title": "Antwort-Matching",
