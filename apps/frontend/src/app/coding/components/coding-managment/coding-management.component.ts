@@ -659,16 +659,16 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
   }
 
   openReplay(response: Success): void {
-    const page = response.variable_page || '0';
     const workspaceId = this.appService.selectedWorkspaceId;
 
-    if (!response.login_name || !response.login_code || !response.booklet_id) {
-      this.snackBar.open('Fehlende Informationen für Replay', 'Schließen', {
+    if (!response.id) {
+      this.snackBar.open('Fehlende Response-ID für Replay', 'Schließen', {
         duration: 5000,
         panelClass: ['error-snackbar']
       });
       return;
     }
+
     this.appService.createToken(workspaceId, this.appService.loggedUser?.sub || '', 3600)
       .pipe(
         catchError(() => {
@@ -677,16 +677,24 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
             panelClass: ['error-snackbar']
           });
           return of('');
+        }),
+        switchMap(token => {
+          if (!token) {
+            return of({ replayUrl: '' });
+          }
+          return this.backendService.getReplayUrl(workspaceId, response.id, token);
         })
       )
-      .subscribe(token => {
-        if (!token) {
+      .subscribe(result => {
+        if (!result.replayUrl) {
+          this.snackBar.open('Fehler beim Generieren der Replay-URL', 'Schließen', {
+            duration: 5000,
+            panelClass: ['error-snackbar']
+          });
           return;
         }
-        const url = `${window.location.origin}/#/replay/${response.login_name}@${response.login_code}@${response.login_group}@${response.booklet_id}/${response.unitname}/${page}/${response.variableid}?auth=${token}`;
-        window.open(url, '_blank');
-      }
-      );
+        window.open(result.replayUrl, '_blank');
+      });
   }
 
   onAutoCode(): void {
@@ -1103,18 +1111,17 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
 
     dialogRef.afterClosed().subscribe(result => {
       if (result) {
-        const { version, format } = result;
-        this.downloadCodingResultsByVersion(workspaceId, version, format);
+        const { version, format, includeReplayUrls } = result;
+        this.downloadCodingResultsByVersion(workspaceId, version, format, includeReplayUrls);
       }
     });
   }
 
-  private downloadCodingResultsByVersion(workspaceId: number, version: 'v1' | 'v2' | 'v3', format: ExportFormat): void {
-    // Start background download without blocking UI
-    this.performBackgroundDownload(workspaceId, version, format);
+  private downloadCodingResultsByVersion(workspaceId: number, version: 'v1' | 'v2' | 'v3', format: ExportFormat, includeReplayUrls: boolean = false): void {
+    this.performBackgroundDownload(workspaceId, version, format, includeReplayUrls);
   }
 
-  private async performBackgroundDownload(workspaceId: number, version: 'v1' | 'v2' | 'v3', format: ExportFormat): Promise<void> {
+  private async performBackgroundDownload(workspaceId: number, version: 'v1' | 'v2' | 'v3', format: ExportFormat, includeReplayUrls: boolean = false): Promise<void> {
     this.isDownloadInProgress = true;
 
     const snackBarRef = this.snackBar.open(
@@ -1129,13 +1136,13 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
     try {
       switch (format) {
         case 'csv':
-          await this.downloadCodingResultsAsCsvBackground(workspaceId, version);
+          await this.downloadCodingResultsAsCsvBackground(workspaceId, version, includeReplayUrls);
           break;
         case 'excel':
-          await this.downloadCodingResultsAsExcelBackground(workspaceId, version);
+          await this.downloadCodingResultsAsExcelBackground(workspaceId, version, includeReplayUrls);
           break;
         case 'json':
-          await this.downloadCodingResultsAsJsonBackground(workspaceId, version);
+          await this.downloadCodingResultsAsJsonBackground(workspaceId, version, includeReplayUrls);
           break;
         default:
           snackBarRef.dismiss();
@@ -1174,9 +1181,9 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
     }
   }
 
-  private downloadCodingResultsAsJsonBackground(workspaceId: number, version: 'v1' | 'v2' | 'v3'): Promise<void> {
+  private downloadCodingResultsAsJsonBackground(workspaceId: number, version: 'v1' | 'v2' | 'v3', includeReplayUrls: boolean = false): Promise<void> {
     return new Promise((resolve, reject) => {
-      this.backendService.getCodingResultsByVersion(workspaceId, version)
+      this.backendService.getCodingResultsByVersion(workspaceId, version, includeReplayUrls)
         .pipe(
           catchError(() => {
             reject(new Error('Failed to fetch JSON data'));
@@ -1224,9 +1231,9 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
     });
   }
 
-  private downloadCodingResultsAsCsvBackground(workspaceId: number, version: 'v1' | 'v2' | 'v3'): Promise<void> {
+  private downloadCodingResultsAsCsvBackground(workspaceId: number, version: 'v1' | 'v2' | 'v3', includeReplayUrls: boolean = false): Promise<void> {
     return new Promise((resolve, reject) => {
-      this.backendService.getCodingResultsByVersion(workspaceId, version)
+      this.backendService.getCodingResultsByVersion(workspaceId, version, includeReplayUrls)
         .pipe(
           catchError(() => {
             reject(new Error('Failed to fetch CSV data'));
@@ -1259,9 +1266,9 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
     });
   }
 
-  private downloadCodingResultsAsExcelBackground(workspaceId: number, version: 'v1' | 'v2' | 'v3'): Promise<void> {
+  private downloadCodingResultsAsExcelBackground(workspaceId: number, version: 'v1' | 'v2' | 'v3', includeReplayUrls: boolean = false): Promise<void> {
     return new Promise((resolve, reject) => {
-      this.backendService.getCodingResultsByVersionAsExcel(workspaceId, version)
+      this.backendService.getCodingResultsByVersionAsExcel(workspaceId, version, includeReplayUrls)
         .pipe(
           catchError(() => {
             reject(new Error('Failed to fetch Excel data'));

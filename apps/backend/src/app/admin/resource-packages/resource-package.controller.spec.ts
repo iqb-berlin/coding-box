@@ -3,6 +3,8 @@ import { createMock } from '@golevelup/ts-jest';
 import { ResourcePackageController } from './resource-package.controller';
 import { AuthService } from '../../auth/service/auth.service';
 import { ResourcePackageService } from '../../database/services/resource-package.service';
+import { AccessLevelGuard } from '../workspace/access-level.guard';
+import { UsersService } from '../../database/services/users.service';
 
 describe('ResourcePackageController', () => {
   let controller: ResourcePackageController;
@@ -18,6 +20,11 @@ describe('ResourcePackageController', () => {
         {
           provide: ResourcePackageService,
           useValue: createMock<ResourcePackageService>()
+        },
+        AccessLevelGuard,
+        {
+          provide: UsersService,
+          useValue: createMock<UsersService>()
         }
       ]
     }).compile();

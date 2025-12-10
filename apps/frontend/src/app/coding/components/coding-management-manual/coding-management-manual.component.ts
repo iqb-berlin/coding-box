@@ -12,10 +12,9 @@ import { MatIcon } from '@angular/material/icon';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { MatDialogModule } from '@angular/material/dialog';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatCheckboxModule } from '@angular/material/checkbox';
-import * as ExcelJS from 'exceljs';
 import {
   Subject, takeUntil, debounceTime, finalize
 } from 'rxjs';
@@ -23,6 +22,8 @@ import { CodingJobsComponent } from '../coding-jobs/coding-jobs.component';
 import { CodingJobDefinitionsComponent } from '../coding-job-definitions/coding-job-definitions.component';
 import { VariableBundleManagerComponent } from '../variable-bundle-manager/variable-bundle-manager.component';
 import { CoderTrainingComponent, VariableConfig } from '../coder-training/coder-training.component';
+import { CoderTrainingsListComponent } from '../coder-trainings-list/coder-trainings-list.component';
+import { ImportComparisonDialogComponent, ImportComparisonData } from '../import-comparison-dialog/import-comparison-dialog.component';
 import { Coder } from '../../models/coder.model';
 import { TestPersonCodingService } from '../../services/test-person-coding.service';
 import { ExpectedCombinationDto } from '../../../../../../../api-dto/coding/expected-combination.dto';
@@ -33,7 +34,6 @@ import {
   ValidationProgress,
   ValidationStateService
 } from '../../services/validation-state.service';
-import { CoderTrainingsListComponent } from '../coder-trainings-list/coder-trainings-list.component';
 import { WorkspaceSettingsService, ResponseMatchingFlag } from '../../../ws-admin/services/workspace-settings.service';
 
 @Component({
@@ -70,6 +70,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   private validationStateService = inject(ValidationStateService);
   private translateService = inject(TranslateService);
   private workspaceSettingsService = inject(WorkspaceSettingsService);
+  private dialog = inject(MatDialog);
   private destroy$ = new Subject<void>();
 
   validationProgress: ValidationProgress | null = null;
@@ -86,6 +87,46 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   isLoadingMatchingMode = false;
   isSavingMatchingMode = false;
   ResponseMatchingFlag = ResponseMatchingFlag; // Expose enum to template
+
+  // Response analysis data
+  responseAnalysis: {
+    emptyResponses: {
+      total: number;
+      items: {
+        unitName: string;
+        unitAlias: string | null;
+        variableId: string;
+        personLogin: string;
+        personCode: string;
+        bookletName: string;
+        responseId: number;
+      }[];
+    };
+    duplicateValues: {
+      total: number;
+      totalResponses: number;
+      groups: {
+        unitName: string;
+        unitAlias: string | null;
+        variableId: string;
+        normalizedValue: string;
+        originalValue: string;
+        occurrences: {
+          personLogin: string;
+          personCode: string;
+          bookletName: string;
+          responseId: number;
+          value: string;
+        }[];
+      }[];
+    };
+    matchingFlags: string[];
+    analysisTimestamp: string;
+  } | null = null;
+
+  isLoadingResponseAnalysis = false;
+  showEmptyResponsesDetails = false;
+  showDuplicateValuesDetails = false;
 
   // Debouncing for job definition changes
   private jobDefinitionChangeSubject = new Subject<void>();
@@ -169,68 +210,9 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     };
   } | null = null;
 
-  importResults: {
-    message: string;
-    processedRows: number;
-    updatedRows: number;
-    errors: string[];
-    affectedRows: Array<{
-      unitAlias: string;
-      variableId: string;
-      personCode?: string;
-      personLogin?: string;
-      personGroup?: string;
-      bookletName?: string;
-      originalCodedStatus: string;
-      originalCode: number | null;
-      originalScore: number | null;
-      updatedCodedStatus: string | null;
-      updatedCode: number | null;
-      updatedScore: number | null;
-    }>;
-  } | null = null;
-
-  showComparisonTable = false;
   showCoderTraining = false;
 
   expectedCombinations: ExpectedCombinationDto[] = [];
-
-  comparisonCurrentPage = 1;
-  comparisonPageSize = 100;
-
-  get comparisonTotalPages(): number {
-    if (!this.importResults?.affectedRows) return 0;
-    return Math.ceil(this.importResults.affectedRows.length / this.comparisonPageSize);
-  }
-
-  get comparisonHasNextPage(): boolean {
-    return this.comparisonCurrentPage < this.comparisonTotalPages;
-  }
-
-  get comparisonHasPreviousPage(): boolean {
-    return this.comparisonCurrentPage > 1;
-  }
-
-  get paginatedAffectedRows(): Array<{
-    unitAlias: string;
-    variableId: string;
-    personCode?: string;
-    personLogin?: string;
-    personGroup?: string;
-    bookletName?: string;
-    originalCodedStatus: string;
-    originalCode: number | null;
-    originalScore: number | null;
-    updatedCodedStatus: string | null;
-    updatedCode: number | null;
-    updatedScore: number | null;
-  }> {
-    if (!this.importResults?.affectedRows) return [];
-
-    const startIndex = (this.comparisonCurrentPage - 1) * this.comparisonPageSize;
-    const endIndex = startIndex + this.comparisonPageSize;
-    return this.importResults.affectedRows.slice(startIndex, endIndex);
-  }
 
   ngOnInit(): void {
     this.validationStateService.validationProgress$
@@ -266,6 +248,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     this.loadStatusDistribution();
     this.loadAppliedResultsOverview();
     this.loadResponseMatchingMode();
+    this.loadResponseAnalysis();
   }
 
   ngOnDestroy(): void {
@@ -318,7 +301,8 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         workspaceId,
         {
           file: fileData,
-          fileName: file.name
+          fileName: file.name,
+          previewOnly: true
         },
         (progress: number, message: string) => {
           this.validationStateService.updateProgress(progress, message);
@@ -326,11 +310,26 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         // onComplete callback
         (result: ExternalCodingImportResultDto) => {
           this.validationStateService.resetValidation();
-          this.importResults = result;
-          this.showComparisonTable = true;
-          this.comparisonCurrentPage = 1;
 
-          this.showSuccess(this.translateService.instant('coding-management-manual.success.import-completed', { updatedRows: result.updatedRows, processedRows: result.processedRows }));
+          // Open the preview dialog with confirmation options
+          this.dialog.open(ImportComparisonDialogComponent, {
+            width: '95vw',
+            maxWidth: '95vw',
+            height: '90vh',
+            data: {
+              message: result.message,
+              processedRows: result.processedRows,
+              updatedRows: result.updatedRows,
+              errors: result.errors,
+              affectedRows: result.affectedRows,
+              isPreview: true,
+              workspaceId: workspaceId,
+              fileData: fileData,
+              fileName: file.name
+            } as ImportComparisonData
+          });
+
+          this.showSuccess(this.translateService.instant('coding-management-manual.success.preview-completed', { updatedRows: result.updatedRows, processedRows: result.processedRows }));
 
           if (result.errors && result.errors.length > 0) {
             this.showError(this.translateService.instant('error.general', { error: `${result.errors.length} Warnungen aufgetreten. Details in der Konsole.` }));
@@ -366,114 +365,6 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   // Note: Validation functionality has been moved to the export dialog and dedicated validation results dialog
-
-  nextComparisonPage(): void {
-    if (this.comparisonHasNextPage) {
-      this.comparisonCurrentPage += 1;
-    }
-  }
-
-  previousComparisonPage(): void {
-    if (this.comparisonHasPreviousPage) {
-      this.comparisonCurrentPage -= 1;
-    }
-  }
-
-  changeComparisonPageSize(newPageSize: number): void {
-    this.comparisonPageSize = newPageSize;
-    this.comparisonCurrentPage = 1;
-  }
-
-  downloadComparisonTable(): void {
-    if (!this.importResults || !this.importResults.affectedRows || this.importResults.affectedRows.length === 0) {
-      this.showError('Keine Vergleichsdaten zum Herunterladen verfügbar.');
-      return;
-    }
-
-    this.isLoading = true;
-
-    try {
-      const workbook = new ExcelJS.Workbook();
-      const worksheet = workbook.addWorksheet('Import Vergleich');
-
-      const headers = [
-        'Unit Alias',
-        'Variable ID',
-        'Person Code',
-        'Original Status',
-        'Original Code',
-        'Original Score',
-        'Updated Status',
-        'Updated Code',
-        'Updated Score'
-      ];
-      worksheet.addRow(headers);
-
-      // Style headers
-      const headerRow = worksheet.getRow(1);
-      headerRow.font = { bold: true };
-      headerRow.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: 'FFE0E0E0' }
-      };
-
-      this.importResults.affectedRows.forEach(row => {
-        worksheet.addRow([
-          row.unitAlias,
-          row.variableId,
-          row.personCode,
-          row.originalCodedStatus,
-          row.originalCode,
-          row.originalScore,
-          row.updatedCodedStatus,
-          row.updatedCode,
-          row.updatedScore
-        ]);
-      });
-
-      worksheet.columns.forEach(column => {
-        if (column) {
-          let maxLength = 0;
-          column.eachCell?.({ includeEmpty: true }, cell => {
-            const columnLength = cell.value ? cell.value.toString().length : 10;
-            if (columnLength > maxLength) {
-              maxLength = columnLength;
-            }
-          });
-          if (column.width !== undefined) {
-            column.width = Math.min(maxLength + 2, 50);
-          }
-        }
-      });
-
-      workbook.xlsx.writeBuffer().then(buffer => {
-        const blob = new Blob([buffer], {
-          type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        });
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        const timestamp = new Date().toISOString().slice(0, 10);
-        link.download = `import-comparison-${timestamp}.xlsx`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
-
-        this.showSuccess('Vergleichstabelle wurde erfolgreich als Excel-Datei heruntergeladen');
-        this.isLoading = false;
-      });
-    } catch (error) {
-      this.showError('Fehler beim Erstellen der Excel-Datei');
-      this.isLoading = false;
-    }
-  }
-
-  closeComparisonTable(): void {
-    this.showComparisonTable = false;
-    this.importResults = null;
-  }
 
   private showError(message: string): void {
     this.snackBar.open(message, 'Schließen', {
@@ -823,6 +714,9 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
           this.responseMatchingFlags = flags;
           this.isSavingMatchingMode = false;
           this.showSuccess(this.translateService.instant('coding-management-manual.response-matching.save-success'));
+
+          // Refresh all affected areas after matching mode change
+          this.onResponseMatchingModeChanged();
         },
         error: () => {
           this.isSavingMatchingMode = false;
@@ -831,10 +725,56 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       });
   }
 
+  private onResponseMatchingModeChanged(): void {
+    this.loadResponseAnalysis();
+
+    this.loadCodingProgressOverview();
+    this.loadCaseCoverageOverview();
+    this.loadCodingIncompleteVariables();
+
+    this.reloadCodingJobsList();
+    if (this.codingJobDefinitionsComponent) {
+      this.codingJobDefinitionsComponent.refresh();
+    }
+  }
+
   isMatchingOptionDisabled(flag: ResponseMatchingFlag): boolean {
     if (flag === ResponseMatchingFlag.NO_AGGREGATION) {
       return false;
     }
     return this.hasMatchingFlag(ResponseMatchingFlag.NO_AGGREGATION);
+  }
+
+  private loadResponseAnalysis(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      return;
+    }
+
+    this.isLoadingResponseAnalysis = true;
+    this.testPersonCodingService.getResponseAnalysis(workspaceId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: analysis => {
+          this.responseAnalysis = analysis;
+          this.isLoadingResponseAnalysis = false;
+        },
+        error: () => {
+          this.responseAnalysis = null;
+          this.isLoadingResponseAnalysis = false;
+        }
+      });
+  }
+
+  refreshResponseAnalysis(): void {
+    this.loadResponseAnalysis();
+  }
+
+  toggleEmptyResponsesDetails(): void {
+    this.showEmptyResponsesDetails = !this.showEmptyResponsesDetails;
+  }
+
+  toggleDuplicateValuesDetails(): void {
+    this.showDuplicateValuesDetails = !this.showDuplicateValuesDetails;
   }
 }

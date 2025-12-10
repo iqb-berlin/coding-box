@@ -15,6 +15,12 @@ import {
 } from '../../../../../../api-dto/coding/validate-coding-completeness-request.dto';
 import { ExternalCodingImportResultDto } from '../../../../../../api-dto/coding/external-coding-import-result.dto';
 
+interface ExternalCodingImportWithPreviewDto {
+  file: string;
+  fileName?: string;
+  previewOnly?: boolean;
+}
+
 export interface CodingStatistics {
   totalResponses: number;
   statusCounts: {
@@ -57,10 +63,17 @@ export interface JobStatus {
   groupNames?: string;
   durationMs?: number;
   completedAt?: Date;
+  autoCoderRun?: number;
 }
 
 export interface JobInfo extends JobStatus {
   jobId: string;
+}
+
+export interface WorkspaceGroupCodingStats {
+  groupName: string;
+  testPersonCount: number;
+  responsesToCode: number;
 }
 
 @Injectable({
@@ -216,10 +229,10 @@ export class TestPersonCodingService {
       );
   }
 
-  getWorkspaceGroups(workspaceId: number): Observable<string[]> {
+  getWorkspaceGroups(workspaceId: number): Observable<WorkspaceGroupCodingStats[]> {
     return this.http
-      .get<string[]>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/coding/groups`,
+      .get<WorkspaceGroupCodingStats[]>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/coding/groups/stats`,
       { headers: this.authHeader }
     )
       .pipe(
@@ -296,7 +309,7 @@ export class TestPersonCodingService {
 
   async importExternalCodingWithProgress(
     workspaceId: number,
-    data: { file: string; fileName: string },
+    data: ExternalCodingImportWithPreviewDto,
     onProgress: (progress: number, message: string) => void,
     onComplete: (result: ExternalCodingImportResultDto) => void,
     onError: (error: string) => void
@@ -549,6 +562,88 @@ export class TestPersonCodingService {
           singleCodedCases: 0,
           unassignedCases: 0,
           coveragePercentage: 0
+        }))
+      );
+  }
+
+  getResponseAnalysis(workspaceId: number): Observable<{
+    emptyResponses: {
+      total: number;
+      items: {
+        unitName: string;
+        unitAlias: string | null;
+        variableId: string;
+        personLogin: string;
+        personCode: string;
+        bookletName: string;
+        responseId: number;
+      }[];
+    };
+    duplicateValues: {
+      total: number;
+      totalResponses: number;
+      groups: {
+        unitName: string;
+        unitAlias: string | null;
+        variableId: string;
+        normalizedValue: string;
+        originalValue: string;
+        occurrences: {
+          personLogin: string;
+          personCode: string;
+          bookletName: string;
+          responseId: number;
+          value: string;
+        }[];
+      }[];
+    };
+    matchingFlags: string[];
+    analysisTimestamp: string;
+  }> {
+    return this.http
+      .get<{
+      emptyResponses: {
+        total: number;
+        items: {
+          unitName: string;
+          unitAlias: string | null;
+          variableId: string;
+          personLogin: string;
+          personCode: string;
+          bookletName: string;
+          responseId: number;
+        }[];
+      };
+      duplicateValues: {
+        total: number;
+        totalResponses: number;
+        groups: {
+          unitName: string;
+          unitAlias: string | null;
+          variableId: string;
+          normalizedValue: string;
+          originalValue: string;
+          occurrences: {
+            personLogin: string;
+            personCode: string;
+            bookletName: string;
+            responseId: number;
+            value: string;
+          }[];
+        }[];
+      };
+      matchingFlags: string[];
+      analysisTimestamp: string;
+    }>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/coding/response-analysis`,
+      { headers: this.authHeader }
+    )
+      .pipe(
+        catchError(() => of({
+          emptyResponses: { total: 0, items: [] },
+          duplicateValues: { total: 0, totalResponses: 0, groups: [] },
+          matchingFlags: [],
+          analysisTimestamp: new Date().toISOString()
         }))
       );
   }

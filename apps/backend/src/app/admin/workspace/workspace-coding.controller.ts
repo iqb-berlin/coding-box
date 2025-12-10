@@ -171,10 +171,10 @@ export class WorkspaceCodingController {
             properties: {
               unit_key: { type: 'string' },
               unit_alias: { type: 'string' },
-              login_name: { type: 'string' },
-              login_code: { type: 'string' },
-              login_group: { type: 'string' },
-              booklet_id: { type: 'string' },
+              person_login: { type: 'string' },
+              person_code: { type: 'string' },
+              person_group: { type: 'string' },
+              booklet_name: { type: 'string' },
               variable_id: { type: 'string' },
               variable_page: { type: 'string' },
               variable_anchor: { type: 'string' },
@@ -255,6 +255,12 @@ export class WorkspaceCodingController {
     description: 'Server URL to use for generating links',
     type: String
   })
+  @ApiQuery({
+    name: 'includeReplayUrls',
+    required: false,
+    description: 'Include replay URLs in the export',
+    type: Boolean
+  })
   @ApiOkResponse({
     description: 'Coding results for specified version exported as CSV',
     content: {
@@ -271,9 +277,11 @@ export class WorkspaceCodingController {
       @Query('version') version: 'v1' | 'v2' | 'v3',
       @Query('authToken') authToken: string,
       @Query('serverUrl') serverUrl: string,
+      @Query('includeReplayUrls', { transform: value => value === 'true' }) includeReplayUrls: boolean,
       @Res() res: Response
   ): Promise<void> {
-    const csvStream = await this.codingListService.getCodingResultsByVersionCsvStream(workspace_id, version, authToken || '', serverUrl || '');
+    const includeReplay = includeReplayUrls ?? false;
+    const csvStream = await this.codingListService.getCodingResultsByVersionCsvStream(workspace_id, version, authToken || '', serverUrl || '', includeReplay);
     csvStream.pipe(res);
   }
 
@@ -299,6 +307,12 @@ export class WorkspaceCodingController {
     description: 'Server URL to use for generating links',
     type: String
   })
+  @ApiQuery({
+    name: 'includeReplayUrls',
+    required: false,
+    description: 'Include replay URLs in the export',
+    type: Boolean
+  })
   @ApiOkResponse({
     description: 'Coding results for specified version exported as Excel',
     content: {
@@ -315,9 +329,11 @@ export class WorkspaceCodingController {
       @Query('version') version: 'v1' | 'v2' | 'v3',
       @Query('authToken') authToken: string,
       @Query('serverUrl') serverUrl: string,
+      @Query('includeReplayUrls', { transform: value => value === 'true' }) includeReplayUrls: boolean,
       @Res() res: Response
   ): Promise<void> {
-    const excelData = await this.codingListService.getCodingResultsByVersionAsExcel(workspace_id, version, authToken || '', serverUrl || '');
+    const includeReplay = includeReplayUrls ?? false;
+    const excelData = await this.codingListService.getCodingResultsByVersionAsExcel(workspace_id, version, authToken || '', serverUrl || '', includeReplay);
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="coding-results-${version}-${new Date().toISOString().slice(0, 10)}.xlsx"`);
@@ -619,6 +635,30 @@ export class WorkspaceCodingController {
   })
   async getWorkspaceGroups(@WorkspaceId() workspace_id: number): Promise<string[]> {
     return this.personService.getWorkspaceGroups(workspace_id);
+  }
+
+  @Get(':workspace_id/coding/groups/stats')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiOkResponse({
+    description: 'List of all test person groups in the workspace with coding statistics.',
+    schema: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          groupName: { type: 'string', description: 'Group name' },
+          testPersonCount: { type: 'number', description: 'Number of test persons in this group' },
+          responsesToCode: { type: 'number', description: 'Number of responses that still need to be coded for this group' }
+        }
+      }
+    }
+  })
+  async getWorkspaceGroupCodingStats(
+    @WorkspaceId() workspace_id: number
+  ): Promise<{ groupName: string; testPersonCount: number; responsesToCode: number }[]> {
+    return this.personService.getWorkspaceGroupCodingStats(workspace_id);
   }
 
   @Get(':workspace_id/coding/job/:jobId/pause')
@@ -1201,6 +1241,82 @@ export class WorkspaceCodingController {
     };
   }> {
     return this.workspaceCodingService.getVariableCoverageOverview(workspace_id);
+  }
+
+  @Get(':workspace_id/coding/response-analysis')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiOkResponse({
+    description: 'Response analysis retrieved successfully. Identifies empty responses and duplicate values based on response matching settings.',
+    schema: {
+      type: 'object',
+      properties: {
+        emptyResponses: {
+          type: 'object',
+          properties: {
+            total: { type: 'number', description: 'Total number of empty responses' },
+            items: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  unitName: { type: 'string' },
+                  unitAlias: { type: 'string', nullable: true },
+                  variableId: { type: 'string' },
+                  personLogin: { type: 'string' },
+                  personCode: { type: 'string' },
+                  bookletName: { type: 'string' },
+                  responseId: { type: 'number' }
+                }
+              }
+            }
+          }
+        },
+        duplicateValues: {
+          type: 'object',
+          properties: {
+            total: { type: 'number', description: 'Total number of duplicate value groups' },
+            totalResponses: { type: 'number', description: 'Total number of responses in duplicate groups' },
+            groups: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  unitName: { type: 'string' },
+                  unitAlias: { type: 'string', nullable: true },
+                  variableId: { type: 'string' },
+                  normalizedValue: { type: 'string' },
+                  originalValue: { type: 'string' },
+                  occurrences: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      properties: {
+                        personLogin: { type: 'string' },
+                        personCode: { type: 'string' },
+                        bookletName: { type: 'string' },
+                        responseId: { type: 'number' },
+                        value: { type: 'string' }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        matchingFlags: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Response matching flags used for normalization'
+        },
+        analysisTimestamp: { type: 'string', description: 'ISO timestamp of when the analysis was performed' }
+      }
+    }
+  })
+  async getResponseAnalysis(@WorkspaceId() workspace_id: number) {
+    return this.workspaceCodingService.getResponseAnalysis(workspace_id);
   }
 
   @Post(':workspace_id/coding/external-coding-import/stream')
@@ -2059,6 +2175,41 @@ export class WorkspaceCodingController {
     );
   }
 
+  @Get(':workspace_id/coding/responses/:responseId/replay-url')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiParam({ name: 'responseId', type: Number, description: 'ID of the response' })
+  @ApiQuery({
+    name: 'authToken',
+    required: true,
+    description: 'Authentication token for the replay URL',
+    type: String
+  })
+  @ApiOkResponse({
+    description: 'Replay URL generated successfully.',
+    schema: {
+      type: 'object',
+      properties: {
+        replayUrl: { type: 'string', description: 'The generated replay URL' }
+      }
+    }
+  })
+  async getReplayUrl(
+    @WorkspaceId() workspace_id: number,
+      @Param('responseId') responseId: number,
+      @Query('authToken') authToken: string,
+      @Req() req: Request
+  ): Promise<{ replayUrl: string }> {
+    const serverUrl = `${req.protocol}://${req.get('host')}`;
+    return this.workspaceCodingService.generateReplayUrlForResponse(
+      workspace_id,
+      responseId,
+      serverUrl,
+      authToken
+    );
+  }
+
   @Post(':workspace_id/coding/job-definitions')
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @RequireAccessLevel(2)
@@ -2455,6 +2606,7 @@ export class WorkspaceCodingController {
         doubleCodingAbsolute?: number;
         doubleCodingPercentage?: number;
         caseOrderingMode?: 'continuous' | 'alternating';
+        maxCodingCases?: number;
       }
   ): Promise<{
         distribution: Record<string, Record<string, number>>;
@@ -2583,6 +2735,7 @@ export class WorkspaceCodingController {
         doubleCodingAbsolute?: number;
         doubleCodingPercentage?: number;
         caseOrderingMode?: 'continuous' | 'alternating';
+        maxCodingCases?: number;
       }
   ): Promise<{
         success: boolean;
