@@ -216,6 +216,116 @@
       </div>
       <hr>
 
+      <!-- Response Analysis Section -->
+      <div class="response-analysis-section">
+        <h3 class="subsection-title">
+          <mat-icon>analytics</mat-icon>
+          {{ 'coding-management-manual.response-analysis.title' | translate }}
+          <button mat-icon-button (click)="refreshResponseAnalysis()" matTooltip="{{ 'coding-management-manual.response-analysis.refresh' | translate }}" [disabled]="isLoadingResponseAnalysis">
+            <mat-icon>refresh</mat-icon>
+          </button>
+          <span *ngIf="isLoadingResponseAnalysis" class="loading-indicator">
+            <mat-spinner diameter="16"></mat-spinner>
+          </span>
+        </h3>
+        <p class="subsection-description">{{ 'coding-management-manual.response-analysis.description' | translate }}</p>
+
+        <div *ngIf="responseAnalysis" class="analysis-summary">
+          <!-- Empty Responses Summary -->
+          <div class="analysis-card" [class.has-issues]="responseAnalysis.emptyResponses.total > 0">
+            <div class="analysis-header" (click)="toggleEmptyResponsesDetails()">
+              <div class="analysis-icon-title">
+                <mat-icon [class.warning-icon]="responseAnalysis.emptyResponses.total > 0">
+                  {{ responseAnalysis.emptyResponses.total > 0 ? 'warning' : 'check_circle' }}
+                </mat-icon>
+                <div class="analysis-title-content">
+                  <span class="analysis-title">{{ 'coding-management-manual.response-analysis.empty-responses' | translate }}</span>
+                  <span class="analysis-count" [class.warning-count]="responseAnalysis.emptyResponses.total > 0">
+                    {{ responseAnalysis.emptyResponses.total }}
+                  </span>
+                </div>
+              </div>
+              <mat-icon class="expand-icon">{{ showEmptyResponsesDetails ? 'expand_less' : 'expand_more' }}</mat-icon>
+            </div>
+            
+            <div *ngIf="showEmptyResponsesDetails && responseAnalysis.emptyResponses.total > 0" class="analysis-details">
+              <table class="analysis-table">
+                <thead>
+                  <tr>
+                    <th>{{ 'coding-management-manual.response-analysis.table.unit' | translate }}</th>
+                    <th>{{ 'coding-management-manual.response-analysis.table.variable' | translate }}</th>
+                    <th>{{ 'coding-management-manual.response-analysis.table.person' | translate }}</th>
+                    <th>{{ 'coding-management-manual.response-analysis.table.booklet' | translate }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let item of responseAnalysis.emptyResponses.items | slice:0:50">
+                    <td>{{ item.unitAlias || item.unitName }}</td>
+                    <td>{{ item.variableId }}</td>
+                    <td>{{ item.personLogin }}{{ item.personCode ? ' (' + item.personCode + ')' : '' }}</td>
+                    <td>{{ item.bookletName }}</td>
+                  </tr>
+                </tbody>
+              </table>
+              <p *ngIf="responseAnalysis.emptyResponses.total > 50" class="more-items-hint">
+                {{ 'coding-management-manual.response-analysis.showing-first-50' | translate:{ total: responseAnalysis.emptyResponses.total } }}
+              </p>
+            </div>
+          </div>
+
+          <!-- Duplicate Values Summary -->
+          <div class="analysis-card" [class.has-issues]="responseAnalysis.duplicateValues.total > 0">
+            <div class="analysis-header" (click)="toggleDuplicateValuesDetails()">
+              <div class="analysis-icon-title">
+                <mat-icon [class.warning-icon]="responseAnalysis.duplicateValues.total > 0">
+                  {{ responseAnalysis.duplicateValues.total > 0 ? 'content_copy' : 'check_circle' }}
+                </mat-icon>
+                <div class="analysis-title-content">
+                  <span class="analysis-title">{{ 'coding-management-manual.response-analysis.duplicate-values' | translate }}</span>
+                  <span class="analysis-count" [class.warning-count]="responseAnalysis.duplicateValues.total > 0">
+                    {{ responseAnalysis.duplicateValues.total }} {{ 'coding-management-manual.response-analysis.groups' | translate }}
+                    ({{ responseAnalysis.duplicateValues.totalResponses }} {{ 'coding-management-manual.response-analysis.responses' | translate }})
+                  </span>
+                </div>
+              </div>
+              <mat-icon class="expand-icon">{{ showDuplicateValuesDetails ? 'expand_less' : 'expand_more' }}</mat-icon>
+            </div>
+            
+            <div *ngIf="showDuplicateValuesDetails && responseAnalysis.duplicateValues.total > 0" class="analysis-details">
+              <div *ngFor="let group of responseAnalysis.duplicateValues.groups | slice:0:20" class="duplicate-group">
+                <div class="duplicate-group-header">
+                  <strong>{{ group.unitAlias || group.unitName }}</strong> / {{ group.variableId }}
+                  <span class="duplicate-value">"{{ group.normalizedValue | slice:0:50 }}{{ group.normalizedValue.length > 50 ? '...' : '' }}"</span>
+                  <span class="occurrence-count">({{ group.occurrences.length }}x)</span>
+                </div>
+                <ul class="occurrence-list">
+                  <li *ngFor="let occ of group.occurrences | slice:0:5">
+                    {{ occ.personLogin }}{{ occ.personCode ? ' (' + occ.personCode + ')' : '' }} - {{ occ.bookletName }}
+                  </li>
+                  <li *ngIf="group.occurrences.length > 5" class="more-occurrences">
+                    +{{ group.occurrences.length - 5 }} {{ 'coding-management-manual.response-analysis.more' | translate }}
+                  </li>
+                </ul>
+              </div>
+              <p *ngIf="responseAnalysis.duplicateValues.total > 20" class="more-items-hint">
+                {{ 'coding-management-manual.response-analysis.showing-first-20-groups' | translate:{ total: responseAnalysis.duplicateValues.total } }}
+              </p>
+            </div>
+          </div>
+
+          <p class="analysis-timestamp">
+            <mat-icon>schedule</mat-icon>
+            {{ 'coding-management-manual.response-analysis.last-updated' | translate }}: {{ responseAnalysis.analysisTimestamp | date:'medium' }}
+          </p>
+        </div>
+
+        <div *ngIf="!responseAnalysis && !isLoadingResponseAnalysis" class="no-analysis-data">
+          <mat-icon>info</mat-icon>
+          <span>{{ 'coding-management-manual.response-analysis.no-data' | translate }}</span>
+        </div>
+      </div>
+      <hr>
+
       <div class="statistics-content">
         <!-- Coding Progress Overview -->
         <div *ngIf="codingProgressOverview" class="coding-progress-section statistics-section" [class.blurred-content]="isLoadingCodingProgress">

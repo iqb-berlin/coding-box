@@ -560,6 +560,88 @@ export class TestPersonCodingService {
       );
   }
 
+  getResponseAnalysis(workspaceId: number): Observable<{
+    emptyResponses: {
+      total: number;
+      items: {
+        unitName: string;
+        unitAlias: string | null;
+        variableId: string;
+        personLogin: string;
+        personCode: string;
+        bookletName: string;
+        responseId: number;
+      }[];
+    };
+    duplicateValues: {
+      total: number;
+      totalResponses: number;
+      groups: {
+        unitName: string;
+        unitAlias: string | null;
+        variableId: string;
+        normalizedValue: string;
+        originalValue: string;
+        occurrences: {
+          personLogin: string;
+          personCode: string;
+          bookletName: string;
+          responseId: number;
+          value: string;
+        }[];
+      }[];
+    };
+    matchingFlags: string[];
+    analysisTimestamp: string;
+  }> {
+    return this.http
+      .get<{
+      emptyResponses: {
+        total: number;
+        items: {
+          unitName: string;
+          unitAlias: string | null;
+          variableId: string;
+          personLogin: string;
+          personCode: string;
+          bookletName: string;
+          responseId: number;
+        }[];
+      };
+      duplicateValues: {
+        total: number;
+        totalResponses: number;
+        groups: {
+          unitName: string;
+          unitAlias: string | null;
+          variableId: string;
+          normalizedValue: string;
+          originalValue: string;
+          occurrences: {
+            personLogin: string;
+            personCode: string;
+            bookletName: string;
+            responseId: number;
+            value: string;
+          }[];
+        }[];
+      };
+      matchingFlags: string[];
+      analysisTimestamp: string;
+    }>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/coding/response-analysis`,
+      { headers: this.authHeader }
+    )
+      .pipe(
+        catchError(() => of({
+          emptyResponses: { total: 0, items: [] },
+          duplicateValues: { total: 0, totalResponses: 0, groups: [] },
+          matchingFlags: [],
+          analysisTimestamp: new Date().toISOString()
+        }))
+      );
+  }
+
   getDoubleCodedVariablesForReview(
     workspaceId: number,
     page: number = 1,

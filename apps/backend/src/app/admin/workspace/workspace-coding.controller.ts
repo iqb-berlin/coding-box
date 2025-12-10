@@ -1243,6 +1243,82 @@ export class WorkspaceCodingController {
     return this.workspaceCodingService.getVariableCoverageOverview(workspace_id);
   }
 
+  @Get(':workspace_id/coding/response-analysis')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiOkResponse({
+    description: 'Response analysis retrieved successfully. Identifies empty responses and duplicate values based on response matching settings.',
+    schema: {
+      type: 'object',
+      properties: {
+        emptyResponses: {
+          type: 'object',
+          properties: {
+            total: { type: 'number', description: 'Total number of empty responses' },
+            items: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  unitName: { type: 'string' },
+                  unitAlias: { type: 'string', nullable: true },
+                  variableId: { type: 'string' },
+                  personLogin: { type: 'string' },
+                  personCode: { type: 'string' },
+                  bookletName: { type: 'string' },
+                  responseId: { type: 'number' }
+                }
+              }
+            }
+          }
+        },
+        duplicateValues: {
+          type: 'object',
+          properties: {
+            total: { type: 'number', description: 'Total number of duplicate value groups' },
+            totalResponses: { type: 'number', description: 'Total number of responses in duplicate groups' },
+            groups: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  unitName: { type: 'string' },
+                  unitAlias: { type: 'string', nullable: true },
+                  variableId: { type: 'string' },
+                  normalizedValue: { type: 'string' },
+                  originalValue: { type: 'string' },
+                  occurrences: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      properties: {
+                        personLogin: { type: 'string' },
+                        personCode: { type: 'string' },
+                        bookletName: { type: 'string' },
+                        responseId: { type: 'number' },
+                        value: { type: 'string' }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        matchingFlags: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Response matching flags used for normalization'
+        },
+        analysisTimestamp: { type: 'string', description: 'ISO timestamp of when the analysis was performed' }
+      }
+    }
+  })
+  async getResponseAnalysis(@WorkspaceId() workspace_id: number) {
+    return this.workspaceCodingService.getResponseAnalysis(workspace_id);
+  }
+
   @Post(':workspace_id/coding/external-coding-import/stream')
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @RequireAccessLevel(2)
