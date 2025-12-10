@@ -15,6 +15,7 @@ import FileUpload from '../../database/entities/file_upload.entity';
 import { Setting } from '../../database/entities/setting.entity';
 import { AuthModule } from '../../auth/auth.module';
 import { DatabaseModule } from '../../database/database.module';
+import { CacheModule } from '../../cache/cache.module';
 
 @Module({
   imports: [
@@ -32,7 +33,8 @@ import { DatabaseModule } from '../../database/database.module';
       Setting
     ]),
     AuthModule,
-    DatabaseModule
+    DatabaseModule,
+    CacheModule
   ],
   controllers: [WsgCodingJobController],
   providers: [CodingJobService],

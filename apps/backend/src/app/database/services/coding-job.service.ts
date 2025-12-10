@@ -19,6 +19,7 @@ import { VariableBundle } from '../entities/variable-bundle.entity';
 import { ResponseEntity } from '../entities/response.entity';
 import FileUpload from '../entities/file_upload.entity';
 import { Setting } from '../entities/setting.entity';
+import { CacheService } from '../../cache/cache.service';
 
 function isSafeKey(key: string): boolean {
   return key !== '__proto__' && key !== 'constructor' && key !== 'prototype';
@@ -83,7 +84,8 @@ export class CodingJobService {
     private fileUploadRepository: Repository<FileUpload>,
     @InjectRepository(Setting)
     private settingRepository: Repository<Setting>,
-    private connection: Connection
+    private connection: Connection,
+    private cacheService: CacheService
   ) {}
 
   async getCodingJobProgress(jobId: number): Promise<{ progress: number; coded: number; total: number; open: number }> {
@@ -414,7 +416,16 @@ export class CodingJobService {
 
     await this.codingJobRepository.remove(codingJob.codingJob);
 
+    // Invalidate the incomplete variables cache since coding job units were deleted
+    await this.invalidateIncompleteVariablesCache(workspaceId);
+
     return { success: true };
+  }
+
+  private async invalidateIncompleteVariablesCache(workspaceId: number): Promise<void> {
+    const cacheKey = `coding_incomplete_variables:${workspaceId}`;
+    await this.cacheService.delete(cacheKey);
+    this.logger.log(`Invalidated CODING_INCOMPLETE variables cache for workspace ${workspaceId}`);
   }
 
   async assignCoders(codingJobId: number, userIds: number[], manager?: EntityManager): Promise<CodingJobCoder[]> {
@@ -776,6 +787,28 @@ export class CodingJobService {
       whereClause.is_open = true;
     }
 
+    const codingJob = await this.codingJobRepository.findOne({
+      where: { id: codingJobId }
+    });
+
+    const caseOrderingMode = codingJob?.case_ordering_mode || 'continuous';
+    const order = caseOrderingMode === 'alternating' ?
+      {
+        person_login: 'ASC' as const,
+        person_code: 'ASC' as const,
+        person_group: 'ASC' as const,
+        booklet_name: 'ASC' as const,
+        unit_name: 'ASC' as const,
+        variable_id: 'ASC' as const
+      } :
+      {
+        variable_id: 'ASC' as const,
+        unit_name: 'ASC' as const,
+        booklet_name: 'ASC' as const,
+        person_login: 'ASC' as const,
+        person_code: 'ASC' as const
+      };
+
     const codingJobUnits = await this.codingJobUnitRepository.find({
       where: whereClause,
       select: [
@@ -790,13 +823,7 @@ export class CodingJobService {
         'person_group',
         'notes'
       ],
-      order: {
-        variable_id: 'ASC',
-        unit_name: 'ASC',
-        booklet_name: 'ASC',
-        person_login: 'ASC',
-        person_code: 'ASC'
-      }
+      order
     });
 
     return codingJobUnits.map(unit => ({
@@ -895,7 +922,8 @@ export class CodingJobService {
         description: createCodingJobDto.description,
         status: createCodingJobDto.status || 'pending',
         missings_profile_id: createCodingJobDto.missings_profile_id,
-        job_definition_id: createCodingJobDto.jobDefinitionId
+        job_definition_id: createCodingJobDto.jobDefinitionId,
+        case_ordering_mode: createCodingJobDto.caseOrderingMode || 'continuous'
       });
 
       const savedCodingJob = await codingJobRepo.save(codingJob);
@@ -1426,7 +1454,7 @@ export class CodingJobService {
     this.logger.log(`Creating distributed coding jobs for workspace ${workspaceId}`);
 
     const {
-      selectedVariables, selectedCoders, doubleCodingAbsolute, doubleCodingPercentage, maxCodingCases
+      selectedVariables, selectedCoders, doubleCodingAbsolute, doubleCodingPercentage, maxCodingCases, caseOrderingMode
     } = request;
 
     let remainingCases = typeof maxCodingCases === 'number' && maxCodingCases > 0 ? maxCodingCases : undefined;
@@ -1543,34 +1571,37 @@ export class CodingJobService {
         }
 
         const sortedResponses = [...responses].sort((a, b) => {
-          // First by variableid
-          if (a.variableid !== b.variableid) return a.variableid.localeCompare(b.variableid);
-
-          // Then by unit id (unit.name)
+          const aVariableId = a.variableid || '';
+          const bVariableId = b.variableid || '';
           const aUnitName = a.unit?.name || '';
           const bUnitName = b.unit?.name || '';
-          if (aUnitName !== bUnitName) return aUnitName.localeCompare(bUnitName);
-
-          // Then by testperson: login, code, group, booklet.name
           const aLogin = a.unit?.booklet?.person?.login || '';
           const bLogin = b.unit?.booklet?.person?.login || '';
-          if (aLogin !== bLogin) return aLogin.localeCompare(bLogin);
-
           const aCode = a.unit?.booklet?.person?.code || '';
           const bCode = b.unit?.booklet?.person?.code || '';
-          if (aCode !== bCode) return aCode.localeCompare(bCode);
-
           const aGroup = a.unit?.booklet?.person?.group || '';
           const bGroup = b.unit?.booklet?.person?.group || '';
-          if (aGroup !== bGroup) return aGroup.localeCompare(bGroup);
-
           const aBooklet = a.unit?.booklet?.bookletinfo?.name || '';
           const bBooklet = b.unit?.booklet?.bookletinfo?.name || '';
-          if (aBooklet !== bBooklet) return aBooklet.localeCompare(bBooklet);
-
-          // Finally by id
+          if (caseOrderingMode === 'alternating') {
+            if (aLogin !== bLogin) return aLogin.localeCompare(bLogin);
+            if (aCode !== bCode) return aCode.localeCompare(bCode);
+            if (aGroup !== bGroup) return aGroup.localeCompare(bGroup);
+            if (aBooklet !== bBooklet) return aBooklet.localeCompare(bBooklet);
+            if (aUnitName !== bUnitName) return aUnitName.localeCompare(bUnitName);
+            if (aVariableId !== bVariableId) return aVariableId.localeCompare(bVariableId);
+          } else {
+            if (aVariableId !== bVariableId) return aVariableId.localeCompare(bVariableId);
+            if (aUnitName !== bUnitName) return aUnitName.localeCompare(bUnitName);
+            if (aLogin !== bLogin) return aLogin.localeCompare(bLogin);
+            if (aCode !== bCode) return aCode.localeCompare(bCode);
+            if (aGroup !== bGroup) return aGroup.localeCompare(bGroup);
+            if (aBooklet !== bBooklet) return aBooklet.localeCompare(bBooklet);
+          }
           return a.id - b.id;
         });
+        console.log('caseorder', sortedResponses.map(r => r.variableid));
+
         const doubleCodingResponses = sortedResponses.slice(0, doubleCodingCount);
         const singleCodingResponses = sortedResponses.slice(doubleCodingCount);
 
@@ -1610,7 +1641,6 @@ export class CodingJobService {
 
           let caseCountForCoder = singleCases.length + doubleCases.length;
 
-          // Apply global maxCodingCases cap if configured
           if (remainingCases !== undefined) {
             if (remainingCases <= 0) {
               // Global cap reached: skip creating further jobs
@@ -1648,6 +1678,7 @@ export class CodingJobService {
             {
               name: jobName,
               assignedCoders: [coder.id],
+              caseOrderingMode,
               ...(itemObj.type === 'bundle' ?
                 { variableBundleIds: [(itemObj.item as { id: number; name: string; variables: { unitName: string; variableId: string }[] }).id] } :
                 { variables: itemVariables }
