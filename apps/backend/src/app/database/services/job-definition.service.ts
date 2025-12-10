@@ -98,7 +98,8 @@ export class JobDefinitionService {
       duration_seconds: createDto.durationSeconds,
       max_coding_cases: createDto.maxCodingCases,
       double_coding_absolute: createDto.doubleCodingAbsolute,
-      double_coding_percentage: createDto.doubleCodingPercentage
+      double_coding_percentage: createDto.doubleCodingPercentage,
+      case_ordering_mode: createDto.caseOrderingMode
     });
 
     return this.jobDefinitionRepository.save(jobDefinition);
@@ -214,6 +215,9 @@ export class JobDefinitionService {
     }
     if (updateDto.doubleCodingPercentage !== undefined) {
       jobDefinition.double_coding_percentage = updateDto.doubleCodingPercentage;
+    }
+    if (updateDto.caseOrderingMode !== undefined) {
+      jobDefinition.case_ordering_mode = updateDto.caseOrderingMode;
     }
 
     const savedDefinition = await this.jobDefinitionRepository.save(jobDefinition);
@@ -341,7 +345,8 @@ export class JobDefinitionService {
       assignedCoders: jobDefinition.assigned_coders || [],
       durationSeconds: jobDefinition.duration_seconds,
       doubleCodingAbsolute: jobDefinition.double_coding_absolute,
-      doubleCodingPercentage: jobDefinition.double_coding_percentage
+      doubleCodingPercentage: jobDefinition.double_coding_percentage,
+      caseOrderingMode: jobDefinition.case_ordering_mode
     };
 
     return this.codingJobService.createCodingJob(workspaceId, {
