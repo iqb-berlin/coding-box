@@ -15,6 +15,12 @@ import {
 } from '../../../../../../api-dto/coding/validate-coding-completeness-request.dto';
 import { ExternalCodingImportResultDto } from '../../../../../../api-dto/coding/external-coding-import-result.dto';
 
+interface ExternalCodingImportWithPreviewDto {
+  file: string;
+  fileName?: string;
+  previewOnly?: boolean;
+}
+
 export interface CodingStatistics {
   totalResponses: number;
   statusCounts: {
@@ -303,7 +309,7 @@ export class TestPersonCodingService {
 
   async importExternalCodingWithProgress(
     workspaceId: number,
-    data: { file: string; fileName: string },
+    data: ExternalCodingImportWithPreviewDto,
     onProgress: (progress: number, message: string) => void,
     onComplete: (result: ExternalCodingImportResultDto) => void,
     onError: (error: string) => void

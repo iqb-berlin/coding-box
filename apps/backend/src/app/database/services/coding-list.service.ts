@@ -13,10 +13,10 @@ import { WorkspaceFilesService } from './workspace-files.service';
 export interface CodingItem {
   unit_key: string;
   unit_alias: string;
-  login_name: string;
-  login_code: string;
-  login_group: string;
-  booklet_id: string;
+  person_login: string;
+  person_code: string;
+  person_group: string;
+  booklet_name: string;
   variable_id: string;
   variable_page: string;
   variable_anchor: string;
@@ -165,10 +165,10 @@ export class CodingListService {
     return {
       unit_key: unitKey,
       unit_alias: unitAlias,
-      login_name: loginName,
-      login_code: loginCode,
-      login_group: loginGroup,
-      booklet_id: bookletId,
+      person_login: loginName,
+      person_code: loginCode,
+      person_group: loginGroup,
+      booklet_name: bookletId,
       variable_id: variableId,
       variable_page: variablePage,
       variable_anchor: variableAnchor,
@@ -284,10 +284,10 @@ export class CodingListService {
         return {
           unit_key: unitKey,
           unit_alias: unitAlias,
-          login_name: loginName,
-          login_code: loginCode,
-          login_group: loginGroup,
-          booklet_id: bookletId,
+          person_login: loginName,
+          person_code: loginCode,
+          person_group: loginGroup,
+          booklet_name: bookletId,
           variable_id: variableId,
           variable_page: variablePage,
           variable_anchor: variableAnchor,
@@ -398,10 +398,10 @@ export class CodingListService {
     worksheet.columns = [
       { header: 'unit_key', key: 'unit_key', width: 30 },
       { header: 'unit_alias', key: 'unit_alias', width: 30 },
-      { header: 'login_name', key: 'login_name', width: 25 },
-      { header: 'login_code', key: 'login_code', width: 25 },
-      { header: 'login_group', key: 'login_group', width: 25 },
-      { header: 'booklet_id', key: 'booklet_id', width: 30 },
+      { header: 'person_login', key: 'person_login', width: 25 },
+      { header: 'person_code', key: 'person_code', width: 25 },
+      { header: 'person_group', key: 'person_group', width: 25 },
+      { header: 'booklet_name', key: 'booklet_name', width: 30 },
       { header: 'variable_id', key: 'variable_id', width: 30 },
       { header: 'variable_page', key: 'variable_page', width: 15 },
       { header: 'variable_anchor', key: 'variable_anchor', width: 30 },
@@ -852,10 +852,10 @@ export class CodingListService {
       const baseItem: CodingItem & Record<string, unknown> = {
         unit_key: unitKey,
         unit_alias: unitAlias,
-        login_name: loginName,
-        login_code: loginCode,
-        login_group: loginGroup,
-        booklet_id: bookletId,
+        person_login: loginName,
+        person_code: loginCode,
+        person_group: loginGroup,
+        booklet_name: bookletId,
         variable_id: variableId,
         variable_page: variablePage,
         variable_anchor: variableAnchor

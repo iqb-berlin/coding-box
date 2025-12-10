@@ -35,119 +35,7 @@
 
 
 
-  <div *ngIf="showComparisonTable && importResults"
-       class="fx-column-start-start fx-gap-10 comparison-results">
-    <div class="statistics-card">
-      <div class="fx-row-space-between-center fx-gap-10">
-        <div>
-          <h2 class="section-title">Import-Vergleichstabelle</h2>
-          <p class="section-description">
-            {{importResults.message}} |
-            Betroffene Zeilen: {{importResults.affectedRows.length}} |
-            Seite {{comparisonCurrentPage}} von {{comparisonTotalPages}}
-          </p>
-        </div>
-        <div class="fx-row-center-center fx-gap-10">
-          <button mat-raised-button color="accent" (click)="downloadComparisonTable()" [disabled]="isLoading || !importResults.affectedRows.length">
-            <mat-icon>download</mat-icon>
-            Als Excel herunterladen
-          </button>
-          <button mat-button color="primary" (click)="closeComparisonTable()">
-            <mat-icon>close</mat-icon>
-            Schließen
-          </button>
-        </div>
-      </div>
-      <hr>
-
-      <!-- Pagination controls for comparison table -->
-      <div class="fx-row-space-between-center fx-gap-10 pagination-controls" *ngIf="comparisonTotalPages > 1">
-        <div class="fx-row-center-center fx-gap-10">
-          <button mat-button [disabled]="!comparisonHasPreviousPage" (click)="previousComparisonPage()">
-            <mat-icon>chevron_left</mat-icon>
-            Vorherige
-          </button>
-          <span class="pagination-info">
-            Seite {{comparisonCurrentPage}} von {{comparisonTotalPages}}
-          </span>
-          <button mat-button [disabled]="!comparisonHasNextPage" (click)="nextComparisonPage()">
-            Nächste
-            <mat-icon>chevron_right</mat-icon>
-          </button>
-        </div>
-
-        <div class="fx-row-center-center fx-gap-10">
-          <label for="comparisonPageSize">Einträge pro Seite:</label>
-          <select id="comparisonPageSize" [value]="comparisonPageSize" (change)="changeComparisonPageSize(+$any($event.target).value)">
-            <option value="50">50</option>
-            <option value="100">100</option>
-            <option value="200">200</option>
-            <option value="500">500</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="comparison-content" *ngIf="importResults.affectedRows.length > 0">
-        <table class="results-table">
-          <thead>
-            <tr>
-              <th>{{ 'coding-management-manual.table.headers.unit-alias' | translate }}</th>
-              <th>{{ 'coding-management-manual.table.headers.variable-id' | translate }}</th>
-              <th>{{ 'coding-management-manual.table.headers.person-code' | translate }}</th>
-              <th>{{ 'coding-management-manual.table.headers.original-status' | translate }}</th>
-              <th>{{ 'coding-management-manual.table.headers.original-code' | translate }}</th>
-              <th>{{ 'coding-management-manual.table.headers.original-score' | translate }}</th>
-              <th>{{ 'coding-management-manual.table.headers.updated-status' | translate }}</th>
-              <th>{{ 'coding-management-manual.table.headers.updated-code' | translate }}</th>
-              <th>{{ 'coding-management-manual.table.headers.updated-score' | translate }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr *ngFor="let row of paginatedAffectedRows">
-              <td>{{row.unitAlias}}</td>
-              <td>{{row.variableId}}</td>
-              <td>{{row.personCode || '-'}}</td>
-              <td>{{row.originalCodedStatus}}</td>
-              <td>{{row.originalCode || '-'}}</td>
-              <td>{{row.originalScore || '-'}}</td>
-              <td [class.updated]="row.updatedCodedStatus !== row.originalCodedStatus">
-                {{row.updatedCodedStatus || '-'}}
-              </td>
-              <td [class.updated]="row.updatedCode !== row.originalCode">
-                {{row.updatedCode || '-'}}
-              </td>
-              <td [class.updated]="row.updatedScore !== row.originalScore">
-                {{row.updatedScore || '-'}}
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <!-- Bottom pagination controls -->
-      <div class="fx-row-center-center fx-gap-10 pagination-controls" *ngIf="comparisonTotalPages > 1">
-        <button mat-button [disabled]="!comparisonHasPreviousPage" (click)="previousComparisonPage()">
-          <mat-icon>chevron_left</mat-icon>
-          Vorherige
-        </button>
-        <span class="pagination-info">
-          Seite {{comparisonCurrentPage}} von {{comparisonTotalPages}}
-        </span>
-        <button mat-button [disabled]="!comparisonHasNextPage" (click)="nextComparisonPage()">
-          Nächste
-          <mat-icon>chevron_right</mat-icon>
-        </button>
-      </div>
-
-      <div *ngIf="importResults.errors.length > 0" class="error-section">
-        <h3>Fehler und Warnungen</h3>
-        <ul>
-          <li *ngFor="let error of importResults.errors" class="error-item">{{error}}</li>
-        </ul>
-      </div>
-    </div>
-  </div>
-
+  
   <div class="fx-row-space-between-stretch">
     <div class="statistics-card">
       <div class="header-row">
@@ -156,7 +44,7 @@
           <p class="section-description">Verwalten Sie Kodierjobs für die manuelle Kodierung von Antworten.</p>
         </div>
         <div class="header-actions">
-          <button mat-stroked-button color="primary" (click)="externalCodingFileInput.click()" [disabled]="isLoading">
+          <button mat-stroked-button color="primary" (click)="externalCodingFileInput.click()" [disabled]="isLoading" matTooltip="{{ 'coding-management-manual.import.tooltip' | translate }}">
             <mat-icon>link</mat-icon>
             Externe Kodierung einbinden
           </button>

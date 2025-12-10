@@ -3,12 +3,15 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as fastCsv from 'fast-csv';
 import * as ExcelJS from 'exceljs';
+import { CodingScheme } from '@iqbspecs/coding-scheme/coding-scheme.interface';
+import * as cheerio from 'cheerio';
 import { ResponseEntity } from '../entities/response.entity';
 import Persons from '../entities/persons.entity';
 import { Unit } from '../entities/unit.entity';
 import { Booklet } from '../entities/booklet.entity';
 import { CacheService } from '../../cache/cache.service';
 import { statusStringToNumber, statusNumberToString } from '../utils/response-status-converter';
+import FileUpload from '../entities/file_upload.entity';
 
 interface ExternalCodingRow {
   unit_key?: string;
@@ -27,6 +30,7 @@ interface ExternalCodingRow {
 export interface ExternalCodingImportBody {
   file: string; // base64 encoded file data
   fileName?: string;
+  previewOnly?: boolean; // if true, only preview without applying changes
 }
 
 interface QueryParameters {
@@ -48,11 +52,13 @@ export class ExternalCodingImportService {
     @InjectRepository(ResponseEntity)
     private responseRepository: Repository<ResponseEntity>,
     @InjectRepository(Persons)
-    private personsRepository: Repository<Persons>,
+    private personRepository: Repository<Persons>,
     @InjectRepository(Unit)
     private unitRepository: Repository<Unit>,
     @InjectRepository(Booklet)
     private bookletRepository: Repository<Booklet>,
+    @InjectRepository(FileUpload)
+    private fileUploadRepository: Repository<FileUpload>,
     private cacheService: CacheService
   ) {}
 
@@ -137,7 +143,7 @@ export class ExternalCodingImportService {
       this.logger.log(`Parsed ${parsedData.length} rows from external coding file`);
       progressCallback?.(20, `Parsed ${parsedData.length} rows from file`);
 
-      let updatedRows = 0;
+      const updatedRows = 0;
       const processedRows = parsedData.length;
       const affectedRows: Array<{
         unitAlias: string;
@@ -176,7 +182,7 @@ export class ExternalCodingImportService {
           try {
             const {
               unit_key: unitKey,
-              unit_alias: unitAlias, variable_id: variableId, status, score, code,
+              unit_alias: unitAlias, variable_id: variableId, code,
               person_code: personCode, person_login: personLogin, person_group: personGroup, booklet_name: bookletName
             } = row;
 
@@ -190,13 +196,10 @@ export class ExternalCodingImportService {
 
             const queryBuilder = this.responseRepository
               .createQueryBuilder('response')
-              .select(['response.id', 'response.status_v1', 'response.code_v1', 'response.score_v1',
-                'response.status_v2', 'response.code_v2', 'response.score_v2',
-                'unit.alias', 'unit.name', 'person.code', 'person.login', 'person.group', 'bookletinfo.name'])
-              .innerJoin('response.unit', 'unit')
-              .innerJoin('unit.booklet', 'booklet')
-              .innerJoin('booklet.person', 'person')
-              .innerJoin('booklet.bookletinfo', 'bookletinfo');
+              .leftJoinAndSelect('response.unit', 'unit')
+              .leftJoinAndSelect('unit.booklet', 'booklet')
+              .leftJoinAndSelect('booklet.person', 'person')
+              .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo');
 
             // Use unit.name if unit_key was provided, otherwise unit.alias for unit_alias
             if (unitKey) {
@@ -245,39 +248,69 @@ export class ExternalCodingImportService {
             const responsesToUpdate = await queryBuilder.setParameters(queryParameters).getMany();
 
             if (responsesToUpdate.length > 0) {
-              const responseIds = responsesToUpdate.map(r => r.id);
-              const updateResult = await this.responseRepository
-                .createQueryBuilder()
-                .update(ResponseEntity)
-                .set({
-                  status_v2: statusStringToNumber(status) || null,
-                  code_v2: code ? parseInt(code.toString(), 10) : null,
-                  score_v2: score ? parseInt(score.toString(), 10) : null
-                })
-                .where('id IN (:...ids)', { ids: responseIds })
-                .execute();
+              // Validate code against coding scheme for each response
+              const validationPromises = responsesToUpdate.map(async response => {
+                const parsedCode = code ? parseInt(code.toString(), 10) : null;
+                const validation = await this.validateCodeAgainstScheme(
+                  response.unit!,
+                  variableId,
+                  parsedCode
+                );
 
-              if (updateResult.affected && updateResult.affected > 0) {
-                updatedRows += updateResult.affected;
+                return {
+                  responseId: response.id,
+                  validatedStatus: validation.status,
+                  validatedScore: validation.score,
+                  validatedCode: parsedCode
+                };
+              });
 
-                // Add comparison data for each affected response
-                responsesToUpdate.forEach(response => {
-                  affectedRows.push({
-                    unitAlias: response.unit?.alias || unitAlias,
-                    variableId,
-                    personCode: response.unit?.booklet?.person?.code || undefined,
-                    personLogin: response.unit?.booklet?.person?.login || undefined,
-                    personGroup: response.unit?.booklet?.person?.group || undefined,
-                    bookletName: response.unit?.booklet?.bookletinfo?.name || undefined,
-                    originalCodedStatus: statusNumberToString(response.status_v1) || '',
-                    originalCode: response.code_v1,
-                    originalScore: response.score_v1,
-                    updatedCodedStatus: status || null,
-                    updatedCode: code ? parseInt(code.toString(), 10) : null,
-                    updatedScore: score ? parseInt(score.toString(), 10) : null
-                  });
-                });
+              const validationResults = await Promise.all(validationPromises);
+
+              // Only apply updates if not in preview mode
+              if (!body.previewOnly) {
+                // Update each response with validated status and score
+                for (const validation of validationResults) {
+                  await this.responseRepository
+                    .createQueryBuilder()
+                    .update(ResponseEntity)
+                    .set({
+                      status_v2: statusStringToNumber(validation.validatedStatus) || null,
+                      code_v2: validation.validatedCode,
+                      score_v2: validation.validatedScore
+                    })
+                    .where('id = :responseId', { responseId: validation.responseId })
+                    .execute();
+                }
               }
+
+              // Add comparison data for each affected response
+              responsesToUpdate.forEach((response, index) => {
+                const validation = validationResults[index];
+                const responsePersonLogin = response.unit?.booklet?.person?.login || undefined;
+                const responsePersonCode = response.unit?.booklet?.person?.code || undefined;
+                const responsePersonGroup = response.unit?.booklet?.person?.group || undefined;
+                const responseBookletName = response.unit?.booklet?.bookletinfo?.name || undefined;
+
+                // Debug logging to verify data is populated
+                this.logger.debug(`Response ${response.id}: personLogin=${responsePersonLogin}, personCode=${responsePersonCode}, personGroup=${responsePersonGroup}, bookletName=${responseBookletName}`);
+                this.logger.debug(`Validation result: status=${validation.validatedStatus}, score=${validation.validatedScore}, isValid=${validation.validatedStatus === 'CODING_COMPLETE'}`);
+
+                affectedRows.push({
+                  unitAlias: response.unit?.alias || unitAlias,
+                  variableId,
+                  personCode: responsePersonCode,
+                  personLogin: responsePersonLogin,
+                  personGroup: responsePersonGroup,
+                  bookletName: responseBookletName,
+                  originalCodedStatus: statusNumberToString(response.status_v1) || '',
+                  originalCode: response.code_v1,
+                  originalScore: response.score_v1,
+                  updatedCodedStatus: validation.validatedStatus,
+                  updatedCode: validation.validatedCode,
+                  updatedScore: validation.validatedScore
+                });
+              });
             } else {
               const matchingCriteria = [`unit_alias=${unitAlias}`, `variable_id=${variableId}`];
               if (personCode) matchingCriteria.push(`person_code=${personCode}`);
@@ -300,12 +333,16 @@ export class ExternalCodingImportService {
         }
       }
 
-      const message = `External coding import completed. Processed ${processedRows} rows, updated ${updatedRows} response records.`;
+      const message = body.previewOnly ?
+        `External coding preview completed. Processed ${processedRows} rows, ${updatedRows} response records would be updated.` :
+        `External coding import completed. Processed ${processedRows} rows, updated ${updatedRows} response records.`;
       this.logger.log(message);
-      progressCallback?.(100, `Import completed: ${updatedRows} of ${processedRows} rows updated`);
+      progressCallback?.(100, body.previewOnly ?
+        `Preview completed: ${updatedRows} of ${processedRows} rows would be updated` :
+        `Import completed: ${updatedRows} of ${processedRows} rows updated`);
 
-      // Invalidate cache if rows were updated since coding statuses may have changed
-      if (updatedRows > 0) {
+      // Invalidate cache if rows were actually updated (not preview mode)
+      if (updatedRows > 0 && !body.previewOnly) {
         await this.invalidateIncompleteVariablesCache(workspaceId);
       }
 
@@ -320,6 +357,141 @@ export class ExternalCodingImportService {
       this.logger.error(`Error importing external coding: ${error.message}`, error.stack);
       progressCallback?.(0, `Import failed: ${error.message}`);
       throw new Error(`Could not import external coding data: ${error.message}`);
+    }
+  }
+
+  async applyExternalCoding(
+    workspaceId: number,
+    body: ExternalCodingImportBody,
+    progressCallback?: (progress: number, message: string) => void
+  ): Promise<{
+      message: string;
+      processedRows: number;
+      updatedRows: number;
+      errors: string[];
+      affectedRows: Array<{
+        unitAlias: string;
+        variableId: string;
+        personCode?: string;
+        personLogin?: string;
+        personGroup?: string;
+        bookletName?: string;
+        originalCodedStatus: string;
+        originalCode: number | null;
+        originalScore: number | null;
+        updatedCodedStatus: string | null;
+        updatedCode: number | null;
+        updatedScore: number | null;
+      }>;
+    }> {
+    // Set previewOnly to false for actual application
+    return this.importExternalCoding(workspaceId, { ...body, previewOnly: false }, progressCallback);
+  }
+
+  private async getCodingSchemeForUnit(unit: Unit): Promise<CodingScheme | null> {
+    try {
+      // Get the unit's test file to access the coding scheme reference
+      const testFile = await this.fileUploadRepository.findOne({
+        where: { file_id: unit.alias.toUpperCase() }
+      });
+
+      if (!testFile) {
+        this.logger.warn(`Test file not found for unit: ${unit.alias}`);
+        return null;
+      }
+
+      // Load the unit test file XML to find coding scheme reference
+      const $ = cheerio.load(testFile.data, { xmlMode: true });
+      const codingSchemeRefText = $('codingSchemeRef').text();
+
+      if (!codingSchemeRefText) {
+        return null;
+      }
+
+      const codingSchemeRef = codingSchemeRefText.toUpperCase();
+
+      // Get the coding scheme file from the database
+      const codingSchemeFile = await this.fileUploadRepository.findOne({
+        where: { file_id: codingSchemeRef }
+      });
+
+      if (!codingSchemeFile) {
+        this.logger.warn(`Coding scheme file not found: ${codingSchemeRef}`);
+        return null;
+      }
+
+      // Parse and return the coding scheme
+      return new CodingScheme(Buffer.from(codingSchemeFile.data));
+    } catch (error) {
+      this.logger.error(`Error loading coding scheme for unit ${unit.id}: ${error.message}`, error.stack);
+      return null;
+    }
+  }
+
+  private async validateCodeAgainstScheme(
+    unit: Unit,
+    variableId: string,
+    code: number | null
+  ): Promise<{ isValid: boolean; score: number | null; status: string }> {
+    try {
+      const codingScheme = await this.getCodingSchemeForUnit(unit);
+
+      if (!codingScheme) {
+        // No coding scheme found, leave as CODING_INCOMPLETE
+        return {
+          isValid: false,
+          score: null,
+          status: 'CODING_INCOMPLETE'
+        };
+      }
+
+      const variableCoding = Array.isArray(codingScheme.variableCodings) ?
+        codingScheme.variableCodings.find(vc => vc.id === variableId) : null;
+
+      if (!variableCoding) {
+        // Variable not found in coding scheme, leave as CODING_INCOMPLETE
+        return {
+          isValid: false,
+          score: null,
+          status: 'CODING_INCOMPLETE'
+        };
+      }
+
+      if (code === null || code === undefined) {
+        // No code provided, leave as CODING_INCOMPLETE
+        return {
+          isValid: false,
+          score: null,
+          status: 'CODING_INCOMPLETE'
+        };
+      }
+
+      // Check if the code exists in the variable's codes
+      const codeDefinition = variableCoding.codes.find(c => c.id === code);
+
+      if (!codeDefinition) {
+        // Code not found in coding scheme, leave as CODING_INCOMPLETE
+        return {
+          isValid: false,
+          score: null,
+          status: 'CODING_INCOMPLETE'
+        };
+      }
+
+      // Code is valid, return the score and CODING_COMPLETE status
+      return {
+        isValid: true,
+        score: codeDefinition.score || 0,
+        status: 'CODING_COMPLETE'
+      };
+    } catch (error) {
+      this.logger.error(`Error validating code against scheme: ${error.message}`, error.stack);
+      // On error, leave as CODING_INCOMPLETE
+      return {
+        isValid: false,
+        score: null,
+        status: 'CODING_INCOMPLETE'
+      };
     }
   }
 
@@ -357,7 +529,7 @@ export class ExternalCodingImportService {
   private async parseExcelFile(fileData: string): Promise<ExternalCodingRow[]> {
     const buffer = Buffer.from(fileData, 'base64');
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(buffer);
+    await workbook.xlsx.load(buffer as Buffer);
 
     const worksheet = workbook.getWorksheet(1);
     if (!worksheet) {
