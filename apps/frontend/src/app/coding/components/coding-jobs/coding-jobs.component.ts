@@ -159,7 +159,10 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
 
             const jobIds = processedData.map(job => job.id);
             try {
-              const bulkProgressResult = await firstValueFrom(this.backendService.getBulkCodingProgress(workspaceId, jobIds));
+              let bulkProgressResult: Record<number, Record<string, unknown>> | undefined;
+              if (jobIds.length > 0) {
+                bulkProgressResult = await firstValueFrom(this.backendService.getBulkCodingProgress(workspaceId, jobIds));
+              }
 
               processedData.forEach(job => {
                 const progressResult = bulkProgressResult?.[job.id];
@@ -202,7 +205,10 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
 
             const fallbackJobIds = processedData.map(job => job.id);
             try {
-              const fallbackBulkProgressResult = await firstValueFrom(this.backendService.getBulkCodingProgress(workspaceId, fallbackJobIds));
+              let fallbackBulkProgressResult: Record<number, Record<string, unknown>> | undefined;
+              if (fallbackJobIds.length > 0) {
+                fallbackBulkProgressResult = await firstValueFrom(this.backendService.getBulkCodingProgress(workspaceId, fallbackJobIds));
+              }
 
               processedData.forEach(job => {
                 const progressResult = fallbackBulkProgressResult?.[job.id];
