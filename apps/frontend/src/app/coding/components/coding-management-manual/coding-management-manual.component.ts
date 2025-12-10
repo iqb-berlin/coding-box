@@ -87,6 +87,45 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   isSavingMatchingMode = false;
   ResponseMatchingFlag = ResponseMatchingFlag; // Expose enum to template
 
+  // Response analysis data
+  responseAnalysis: {
+    emptyResponses: {
+      total: number;
+      items: {
+        unitName: string;
+        unitAlias: string | null;
+        variableId: string;
+        personLogin: string;
+        personCode: string;
+        bookletName: string;
+        responseId: number;
+      }[];
+    };
+    duplicateValues: {
+      total: number;
+      totalResponses: number;
+      groups: {
+        unitName: string;
+        unitAlias: string | null;
+        variableId: string;
+        normalizedValue: string;
+        originalValue: string;
+        occurrences: {
+          personLogin: string;
+          personCode: string;
+          bookletName: string;
+          responseId: number;
+          value: string;
+        }[];
+      }[];
+    };
+    matchingFlags: string[];
+    analysisTimestamp: string;
+  } | null = null;
+  isLoadingResponseAnalysis = false;
+  showEmptyResponsesDetails = false;
+  showDuplicateValuesDetails = false;
+
   // Debouncing for job definition changes
   private jobDefinitionChangeSubject = new Subject<void>();
   private statisticsRefreshSubject = new Subject<void>();
@@ -266,6 +305,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     this.loadStatusDistribution();
     this.loadAppliedResultsOverview();
     this.loadResponseMatchingMode();
+    this.loadResponseAnalysis();
   }
 
   ngOnDestroy(): void {
@@ -836,5 +876,38 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       return false;
     }
     return this.hasMatchingFlag(ResponseMatchingFlag.NO_AGGREGATION);
+  }
+
+  private loadResponseAnalysis(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      return;
+    }
+
+    this.isLoadingResponseAnalysis = true;
+    this.testPersonCodingService.getResponseAnalysis(workspaceId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: analysis => {
+          this.responseAnalysis = analysis;
+          this.isLoadingResponseAnalysis = false;
+        },
+        error: () => {
+          this.responseAnalysis = null;
+          this.isLoadingResponseAnalysis = false;
+        }
+      });
+  }
+
+  refreshResponseAnalysis(): void {
+    this.loadResponseAnalysis();
+  }
+
+  toggleEmptyResponsesDetails(): void {
+    this.showEmptyResponsesDetails = !this.showEmptyResponsesDetails;
+  }
+
+  toggleDuplicateValuesDetails(): void {
+    this.showDuplicateValuesDetails = !this.showDuplicateValuesDetails;
   }
 }

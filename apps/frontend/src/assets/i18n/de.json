@@ -1236,6 +1236,26 @@
       "hint-aggregating": "Aktuelle Einstellung: Antworten werden unter Berücksichtigung der gewählten Optionen zusammengefasst.",
       "save-success": "Matching-Einstellungen gespeichert",
       "save-error": "Fehler beim Speichern der Matching-Einstellungen"
+    },
+    "response-analysis": {
+      "title": "Antwort-Analyse",
+      "description": "Übersicht über leere Antworten und doppelte Werte basierend auf den Matching-Einstellungen.",
+      "refresh": "Analyse aktualisieren",
+      "empty-responses": "Leere Antworten",
+      "duplicate-values": "Doppelte Werte",
+      "groups": "Gruppen",
+      "responses": "Antworten",
+      "more": "weitere",
+      "last-updated": "Letzte Aktualisierung",
+      "no-data": "Keine Analysedaten verfügbar. Bitte laden Sie die Analyse neu.",
+      "showing-first-50": "Zeige die ersten 50 von {{total}} Einträgen",
+      "showing-first-20-groups": "Zeige die ersten 20 von {{total}} Gruppen",
+      "table": {
+        "unit": "Aufgabe",
+        "variable": "Variable",
+        "person": "Person",
+        "booklet": "Booklet"
+      }
     }
   },
 
