@@ -367,7 +367,9 @@ export class TestFilesComponent implements OnInit, OnDestroy {
             );
 
             this.dialog.open(FilesValidationDialogComponent, {
-              width: '900px',
+              width: '90%',
+              maxWidth: '1400px',
+              height: '80vh',
               data: {
                 validationResults: res.validationResults,
                 filteredTestTakers: res.filteredTestTakers,
@@ -378,7 +380,9 @@ export class TestFilesComponent implements OnInit, OnDestroy {
         });
       } else {
         this.dialog.open(FilesValidationDialogComponent, {
-          width: '900px',
+          width: '90%',
+          maxWidth: '1400px',
+          height: '80vh',
           data: {
             validationResults: res.validationResults,
             filteredTestTakers: res.filteredTestTakers,

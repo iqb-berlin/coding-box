@@ -1306,7 +1306,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     });
   }
 
-  openBookletInfoDialog(booklet: Booklet): void {
+  openBookletInfo(bookletName: string): void {
     const loadingSnackBar = this.snackBar.open(
       'Lade Booklet-Informationen...',
       '',
@@ -1315,16 +1315,17 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
     this.backendService.getBookletInfo(
       this.appService.selectedWorkspaceId,
-      booklet.name
+      bookletName
     ).subscribe({
       next: (bookletInfo: BookletInfoDto) => {
         loadingSnackBar.dismiss();
 
         this.dialog.open(BookletInfoDialogComponent, {
-          width: '800px',
+          width: '1200px',
+          height: '80vh',
           data: {
             bookletInfo,
-            bookletId: booklet.name
+            bookletId: bookletName
           }
         });
       },
@@ -1339,7 +1340,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     });
   }
 
-  openUnitInfoDialog(): void {
+  openUnitInfoForSelectedUnit(): void {
     if (!this.selectedUnit || !this.selectedUnit.name) {
       this.snackBar.open(
         'Keine Unit ausgewählt',
@@ -1363,7 +1364,8 @@ export class TestResultsComponent implements OnInit, OnDestroy {
         loadingSnackBar.dismiss();
 
         this.dialog.open(UnitInfoDialogComponent, {
-          width: '800px',
+          width: '1200px',
+          height: '80vh',
           data: {
             unitInfo,
             unitId: this.selectedUnit?.name

@@ -1,6 +1,6 @@
 <div class="dialog-container">
   <div class="dialog-header">
-    <h2 class="dialog-title">Booklet-Information: {{ data.bookletId }}</h2>
+    <h2 class="dialog-title">Testheft-Information: {{ data.bookletId }}</h2>
     <button mat-icon-button (click)="close()" class="close-button">
       <mat-icon>close</mat-icon>
     </button>
@@ -12,7 +12,7 @@
     <!-- Loading spinner -->
     <div *ngIf="isLoading" class="loading-container">
       <mat-spinner diameter="40"></mat-spinner>
-      <p>Booklet-Informationen werden geladen...</p>
+      <p>Testheft-Informationen werden geladen...</p>
     </div>
 
     <!-- Error message -->
@@ -24,11 +24,23 @@
     <!-- Booklet info content -->
     <div *ngIf="!isLoading && !errorMessage && data.bookletInfo" class="booklet-info">
       <mat-tab-group>
+        <!-- XML tab -->
+        <mat-tab label="XML">
+          <div class="tab-content">
+            <div class="info-section">
+              <h3>Roh-XML</h3>
+              <div class="xml-content">
+                <pre>{{ data.bookletInfo.rawXml }}</pre>
+              </div>
+            </div>
+          </div>
+        </mat-tab>
+
         <!-- Metadata tab -->
         <mat-tab label="Metadaten">
           <div class="tab-content">
             <div class="info-section">
-              <h3>Booklet-Metadaten</h3>
+              <h3>Testheft-Metadaten</h3>
               <div class="info-item">
                 <span class="info-label">ID:</span>
                 <span class="info-value">{{ data.bookletInfo.metadata.id }}</span>
@@ -58,7 +70,7 @@
                 label="Konfiguration ({{ data.bookletInfo.config.items.length }})">
           <div class="tab-content">
             <div class="info-section">
-              <h3>Booklet-Konfiguration</h3>
+              <h3>Testheft-Konfiguration</h3>
               <div class="config-list">
                 <div *ngFor="let configItem of data.bookletInfo.config.items" class="config-item">
                   <span class="config-key">{{ configItem.key }}</span>
@@ -118,7 +130,7 @@
                 label="Aufgaben ({{ data.bookletInfo.units.length }})">
           <div class="tab-content">
             <div class="info-section">
-              <h3>Aufgaben im Booklet</h3>
+              <h3>Aufgaben im Testheft</h3>
               <div class="units-list">
                 <div *ngFor="let unit of data.bookletInfo.units" class="unit-item">
                   <div class="unit-header">
@@ -130,18 +142,6 @@
                     {{ unit.label }}
                   </div>
                 </div>
-              </div>
-            </div>
-          </div>
-        </mat-tab>
-
-        <!-- XML tab -->
-        <mat-tab label="XML">
-          <div class="tab-content">
-            <div class="info-section">
-              <h3>Roh-XML</h3>
-              <div class="xml-content">
-                <pre>{{ data.bookletInfo.rawXml }}</pre>
               </div>
             </div>
           </div>

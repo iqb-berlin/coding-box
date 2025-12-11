@@ -15,7 +15,7 @@ export interface DialogData {
 }
 
 @Component({
-  selector: 'app-content-dialog',
+  selector: 'coding-box-content-dialog',
   standalone: true,
   imports: [
     CommonModule,
@@ -47,9 +47,12 @@ export interface DialogData {
     </mat-dialog-actions>
   `,
   styles: [`
-    .content-container {
+    mat-dialog-content {
       max-height: 80vh;
       overflow-y: auto;
+    }
+
+    .content-container {
       padding: 1rem;
       border: 1px solid #e0e0e0;
       border-radius: 4px;
