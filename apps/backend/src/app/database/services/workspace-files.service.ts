@@ -502,7 +502,9 @@ ${bookletRefs}
       uniqueBooklets
     } = this.extractXmlData(bookletTags, unitTags);
 
-    const { allBookletsExist, missingBooklets, bookletFiles } = await this.checkMissingBooklets(Array.from(uniqueBooklets));
+    const workspaceId = testTaker.workspace_id;
+
+    const { allBookletsExist, missingBooklets, bookletFiles } = await this.checkMissingBooklets(Array.from(uniqueBooklets), workspaceId);
     const {
       allUnitsExist,
       missingUnits,
@@ -519,7 +521,7 @@ ${bookletRefs}
       missingPlayerRefs,
       playerFiles,
       unitsWithoutPlayer
-    } = await this.checkMissingUnits(Array.from(uniqueBooklets));
+    } = await this.checkMissingUnits(Array.from(uniqueBooklets), workspaceId);
 
     const bookletComplete = allBookletsExist;
     const unitComplete = bookletComplete && allUnitsExist;
@@ -1206,7 +1208,7 @@ ${bookletRefs}
     }
   }
 
-  private async checkMissingBooklets(uniqueBookletsArray: string[]): Promise<{
+  private async checkMissingBooklets(uniqueBookletsArray: string[], workspaceId: number): Promise<{
     allBookletsExist: boolean;
     missingBooklets: string[];
     bookletFiles: FileStatus[];
@@ -1221,7 +1223,7 @@ ${bookletRefs}
       if (!bookletId) continue;
 
       const existingBooklet = await this.fileUploadRepository.findOne({
-        where: { file_id: bookletId.toUpperCase(), file_type: 'Booklet' }
+        where: { file_id: bookletId.toUpperCase(), file_type: 'Booklet', workspace_id: workspaceId }
       });
 
       const fileStatus: FileStatus = {
@@ -1242,11 +1244,12 @@ ${bookletRefs}
     return { allBookletsExist, missingBooklets, bookletFiles };
   }
 
-  async checkMissingUnits(bookletNames:string[]): Promise<ValidationResult> {
+  async checkMissingUnits(bookletNames: string[], workspaceId: number): Promise<ValidationResult> {
     try {
       const existingBooklets = await this.fileUploadRepository.findBy({
         file_type: 'Booklet',
-        file_id: In(bookletNames.map(b => b.toUpperCase()))
+        file_id: In(bookletNames.map(b => b.toUpperCase())),
+        workspace_id: workspaceId
       });
 
       const bookletToUnitsMap = new Map<string, string[]>();
@@ -1278,7 +1281,7 @@ ${bookletRefs}
 
       const allUnitsInWorkspace = await this.fileUploadRepository.findBy({
         file_type: 'Unit',
-        workspace_id: existingBooklets.length > 0 ? existingBooklets[0].workspace_id : null
+        workspace_id: workspaceId
       });
 
       const unusedUnits = allUnitsInWorkspace
@@ -1298,7 +1301,7 @@ ${bookletRefs}
       const unitBatchPromises = unitBatches.map(batch => this.fileUploadRepository.find({
         where: {
           file_id: In(batch),
-          workspace_id: existingBooklets.length > 0 ? existingBooklets[0].workspace_id : null
+          workspace_id: workspaceId
         }
       }));
 
@@ -1362,7 +1365,7 @@ ${bookletRefs}
 
       const existingResources = await this.fileUploadRepository.findBy({
         file_type: 'Resource',
-        workspace_id: existingBooklets.length > 0 ? existingBooklets[0].workspace_id : null
+        workspace_id: workspaceId
       });
 
       const allResourceIds = existingResources.map(resource => resource.file_id);
