@@ -48,8 +48,6 @@ type DataValidation = {
   missing: string[];
   missingUnitsPerBooklet?: { booklet: string; missingUnits: string[] }[];
   unitsWithoutPlayer?: string[];
-  unused?: string[];
-  unusedBooklets?: string[];
   files: FileStatus[];
 };
 
@@ -118,6 +116,32 @@ export class WorkspaceFilesService implements OnModuleInit {
       this.logger.error(`Error fetching file types for workspace ${workspaceId}: ${error.message}`, error.stack);
       return [];
     }
+  }
+
+  private static playerRefExists(ref: string, allResourceIds: string[]): boolean {
+    if (allResourceIds.includes(ref)) {
+      return true;
+    }
+
+    const regex = /^(.+?)-(\d+)\.(\d+)(?:\.(\d+))?$/;
+    const match = ref.match(regex);
+
+    if (!match) {
+      return false;
+    }
+
+    const module = match[1];
+    const major = match[2];
+    const minor = match[3];
+    const hasPatch = !!match[4];
+
+    if (hasPatch) {
+      return false;
+    }
+
+    const prefix = `${module}-${major}.${minor}.`;
+
+    return allResourceIds.some(id => id.startsWith(prefix));
   }
 
   async findFiles(
@@ -309,7 +333,7 @@ export class WorkspaceFilesService implements OnModuleInit {
       this.logger.log(`Found ${unusedBooklets.length} booklets not included in any TestTakers file`);
       this.logger.log(`Found ${filteredTestTakers.length} TestTakers with modes other than 'run-hot-return', 'run-hot-restart', 'run-trial'`);
 
-      const validationResultsPromises = testTakers.map(testTaker => this.processTestTaker(testTaker, unusedBooklets));
+      const validationResultsPromises = testTakers.map(testTaker => this.processTestTaker(testTaker));
       const validationResults = (await Promise.all(validationResultsPromises)).filter(Boolean);
 
       if (validationResults.length > 0) {
@@ -322,9 +346,6 @@ export class WorkspaceFilesService implements OnModuleInit {
       }
 
       const emptyValidation = this.createEmptyValidationData();
-      if (emptyValidation.length > 0 && unusedBooklets.length > 0) {
-        emptyValidation[0].booklets.unusedBooklets = unusedBooklets;
-      }
 
       return {
         testTakersFound: true,
@@ -344,7 +365,6 @@ export class WorkspaceFilesService implements OnModuleInit {
       booklets: {
         complete: false,
         missing: [],
-        unusedBooklets: [],
         files: []
       },
       units: {
@@ -352,7 +372,6 @@ export class WorkspaceFilesService implements OnModuleInit {
         missing: [],
         missingUnitsPerBooklet: [],
         unitsWithoutPlayer: [],
-        unused: [],
         files: []
       },
       schemes: { complete: false, missing: [], files: [] },
@@ -486,7 +505,7 @@ ${bookletRefs}
     }
   }
 
-  private async processTestTaker(testTaker: FileUpload, unusedBooklets: string[] = []): Promise<ValidationData | null> {
+  private async processTestTaker(testTaker: FileUpload): Promise<ValidationData | null> {
     const xmlDocument = cheerio.load(testTaker.data, { xml: true });
     const bookletTags = xmlDocument('Booklet');
     const unitTags = xmlDocument('Unit');
@@ -510,7 +529,6 @@ ${bookletRefs}
       missingUnits,
       missingUnitsPerBooklet,
       unitFiles,
-      unusedUnits,
       missingCodingSchemeRefs,
       missingDefinitionRefs,
       schemeFiles,
@@ -531,7 +549,6 @@ ${bookletRefs}
       booklets: {
         complete: bookletComplete,
         missing: missingBooklets,
-        unusedBooklets,
         files: bookletFiles
       },
       units: {
@@ -539,7 +556,6 @@ ${bookletRefs}
         missing: missingUnits,
         missingUnitsPerBooklet: missingUnitsPerBooklet,
         unitsWithoutPlayer: unitsWithoutPlayer,
-        unused: unusedUnits,
         files: unitFiles
       },
       schemes: {
@@ -1373,7 +1389,7 @@ ${bookletRefs}
       // Find missing references
       const missingCodingSchemeRefs = allCodingSchemeRefs.filter(ref => !allResourceIds.includes(ref));
       const missingDefinitionRefs = allDefinitionRefs.filter(ref => !allResourceIds.includes(ref));
-      const missingPlayerRefs = allPlayerRefs.filter(ref => !allResourceIds.includes(ref));
+      const missingPlayerRefs = allPlayerRefs.filter(ref => !WorkspaceFilesService.playerRefExists(ref, allResourceIds));
 
       // Check if all references exist
       const allCodingSchemesExist = missingCodingSchemeRefs.length === 0;
@@ -1419,7 +1435,7 @@ ${bookletRefs}
 
       const playerFiles: FileStatus[] = allPlayerRefs.map(ref => ({
         filename: ref,
-        exists: allResourceIds.includes(ref)
+        exists: WorkspaceFilesService.playerRefExists(ref, allResourceIds)
       }));
 
       return {
@@ -1560,6 +1576,28 @@ ${bookletRefs}
     }
 
     return unitFile.data.toString();
+  }
+
+  async getTestTakerContent(workspaceId: number, testTakerId: string): Promise<string> {
+    const testTakerFile = await this.fileUploadRepository.findOne({
+      where: {
+        workspace_id: workspaceId,
+        file_type: In(['TestTakers', 'Testtakers']),
+        file_id: testTakerId
+      }
+    });
+
+    if (!testTakerFile) {
+      this.logger.error(`TestTakers file with ID ${testTakerId} not found in workspace ${workspaceId}`);
+      throw new Error(`TestTakers file with ID ${testTakerId} not found`);
+    }
+
+    if (!testTakerFile.data) {
+      this.logger.error(`TestTakers file with ID ${testTakerId} has no data content`);
+      throw new Error('TestTakers file has no data content');
+    }
+
+    return testTakerFile.data.toString();
   }
 
   async getCodingSchemeByRef(workspaceId: number, codingSchemeRef: string): Promise<FileDownloadDto | null> {

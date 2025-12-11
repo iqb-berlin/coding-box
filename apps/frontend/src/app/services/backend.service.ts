@@ -507,6 +507,10 @@ export class BackendService {
     return this.fileService.getUnitContentXml(workspaceId, unitId);
   }
 
+  getTestTakerContentXml(workspaceId: number, testTakerId: string): Observable<string | null> {
+    return this.fileService.getTestTakerContentXml(workspaceId, testTakerId);
+  }
+
   searchResponses(
     workspaceId: number,
     searchParams: { value?: string; variableId?: string; unitName?: string; bookletName?: string; status?: string; codedStatus?: string; group?: string; code?: string; version?: 'v1' | 'v2' | 'v3' },

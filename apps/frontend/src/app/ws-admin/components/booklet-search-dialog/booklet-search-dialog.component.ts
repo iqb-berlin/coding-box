@@ -149,7 +149,8 @@ export class BookletSearchDialogComponent implements OnInit {
 
   viewBookletInfo(booklet: BookletSearchResult): void {
     this.dialog.open(BookletInfoDialogComponent, {
-      width: '800px',
+      width: '1200px',
+      height: '80vh',
       data: {
         bookletId: booklet.bookletId,
         bookletName: booklet.bookletName
