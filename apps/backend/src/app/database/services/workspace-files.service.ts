@@ -2,7 +2,6 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Like, Repository } from 'typeorm';
 import * as cheerio from 'cheerio';
-import { Element } from 'domhandler';
 import AdmZip = require('adm-zip');
 import * as fs from 'fs';
 import * as path from 'path';
@@ -141,7 +140,7 @@ export class WorkspaceFilesService implements OnModuleInit {
 
     const prefix = `${module}-${major}.${minor}.`;
 
-    return allResourceIds.some(id => id.startsWith(prefix));
+    return allResourceIds.some(id => id && typeof id === 'string' && id.startsWith(prefix));
   }
 
   async findFiles(
@@ -223,11 +222,95 @@ export class WorkspaceFilesService implements OnModuleInit {
 
   async validateTestFiles(workspaceId: number): Promise<FileValidationResultDto> {
     try {
-      const testTakers = await this.fileUploadRepository.find({
-        where: { workspace_id: workspaceId, file_type: In(['TestTakers', 'Testtakers']) }
-      });
+      this.logger.log(`Starting batched test file validation for workspace ${workspaceId}`);
 
-      if (!testTakers || testTakers.length === 0) {
+      // 1. Preload Context (Booklets, Units, Resources)
+      const [bookletMap, unitMap, resourceIds] = await Promise.all([
+        this.preloadBookletToUnits(workspaceId),
+        this.preloadUnitRefs(workspaceId),
+        this.getAllResourceIds(workspaceId)
+      ]);
+      const resourceIdsArray = Array.from(resourceIds);
+
+      // 2. Prepare for TestTaker processing
+      const validationResults: {
+        testTaker: string;
+        booklets: DataValidation;
+        units: DataValidation;
+        schemes: DataValidation;
+        definitions: DataValidation;
+        player: DataValidation;
+      }[] = [];
+
+      let filteredTestTakers: FilteredTestTaker[] = [];
+      const loginOccurrences = new Map<string, { testTaker: string, mode: string }[]>();
+      const modesNotToFilter = ['run-hot-return', 'run-hot-restart', 'run-trial'];
+      const shouldFilterMode = (loginMode: string) => !modesNotToFilter.includes(loginMode);
+
+      // 3. Process TestTakers in batches
+      const BATCH_SIZE = 20;
+      let offset = 0;
+      let hasTestTakers = false;
+
+      while (true) {
+        const testTakersBatch = await this.fileUploadRepository.find({
+          where: { workspace_id: workspaceId, file_type: In(['TestTakers', 'Testtakers']) },
+          skip: offset,
+          take: BATCH_SIZE
+        });
+
+        if (testTakersBatch.length === 0) break;
+        hasTestTakers = true;
+
+        for (const testTaker of testTakersBatch) {
+          // A. Collect Login Data
+          const xmlDocument = cheerio.load(testTaker.data, { xml: true });
+          const groupElements = xmlDocument('Group');
+
+          for (let i = 0; i < groupElements.length; i++) {
+            const groupElement = groupElements[i];
+            const loginElements = xmlDocument(groupElement).find('Login');
+
+            for (let j = 0; j < loginElements.length; j++) {
+              const loginElement = loginElements[j];
+              const loginName = xmlDocument(loginElement).attr('name');
+              const loginMode = xmlDocument(loginElement).attr('mode');
+
+              if (loginMode && shouldFilterMode(loginMode) && loginName) {
+                filteredTestTakers.push({
+                  testTaker: testTaker.file_id,
+                  mode: loginMode,
+                  login: loginName
+                });
+
+                const occurrences = loginOccurrences.get(loginName) || [];
+                occurrences.push({
+                  testTaker: testTaker.file_id,
+                  mode: loginMode
+                });
+                loginOccurrences.set(loginName, occurrences);
+              }
+            }
+          }
+
+          // B. Validate References
+          const validationResult = this.processTestTakerWithCache(
+            testTaker,
+            bookletMap,
+            unitMap,
+            resourceIds,
+            resourceIdsArray
+          );
+          if (validationResult) {
+            validationResults.push(validationResult);
+          }
+        }
+
+        offset += BATCH_SIZE;
+        // Optional: Trigger garbage collection hint if available, or just rely on scope
+      }
+
+      if (!hasTestTakers) {
         this.logger.warn(`No TestTakers found in workspace with ID ${workspaceId}.`);
         return {
           testTakersFound: false,
@@ -235,56 +318,7 @@ export class WorkspaceFilesService implements OnModuleInit {
         };
       }
 
-      const allBooklets = await this.fileUploadRepository.find({
-        where: { workspace_id: workspaceId, file_type: 'Booklet' }
-      });
-
-      if (!allBooklets || allBooklets.length === 0) {
-        this.logger.warn(`No booklets found in workspace with ID ${workspaceId}.`);
-        return {
-          testTakersFound: true,
-          validationResults: this.createEmptyValidationData()
-        };
-      }
-
-      const modesNotToFilter = ['run-hot-return', 'run-hot-restart', 'run-trial'];
-
-      const shouldFilterMode = (loginMode: string) => !modesNotToFilter.includes(loginMode);
-
-      let filteredTestTakers: FilteredTestTaker[] = [];
-      const loginOccurrences = new Map<string, { testTaker: string, mode: string }[]>();
-
-      for (const testTaker of testTakers) {
-        const xmlDocument = cheerio.load(testTaker.data, { xml: true });
-        const groupElements = xmlDocument('Group');
-
-        for (let i = 0; i < groupElements.length; i++) {
-          const groupElement = groupElements[i];
-          const loginElements = xmlDocument(groupElement).find('Login');
-
-          for (let j = 0; j < loginElements.length; j++) {
-            const loginElement = loginElements[j];
-            const loginName = xmlDocument(loginElement).attr('name');
-            const loginMode = xmlDocument(loginElement).attr('mode');
-
-            if (loginMode && shouldFilterMode(loginMode) && loginName) {
-              filteredTestTakers.push({
-                testTaker: testTaker.file_id,
-                mode: loginMode,
-                login: loginName
-              });
-
-              const occurrences = loginOccurrences.get(loginName) || [];
-              occurrences.push({
-                testTaker: testTaker.file_id,
-                mode: loginMode
-              });
-              loginOccurrences.set(loginName, occurrences);
-            }
-          }
-        }
-      }
-
+      // 4. Process Duplicate TestTakers
       const duplicateTestTakers = Array.from(loginOccurrences.entries())
         .filter(([, occurrences]) => occurrences.length > 1)
         .map(([login, occurrences]) => ({
@@ -294,47 +328,17 @@ export class WorkspaceFilesService implements OnModuleInit {
 
       this.logger.log(`Found ${duplicateTestTakers.length} duplicate test takers across files`);
 
+      // 5. Filter filteredTestTakers against Persons
       if (filteredTestTakers.length > 0) {
         const loginNames = filteredTestTakers.map(item => item.login);
-        const personsNotConsidered = await this.personsRepository.find({
-          where: {
-            workspace_id: workspaceId,
-            login: In(loginNames),
-            consider: false
-          },
-          select: ['login']
-        });
+        // We might need to batch this if there are too many logins
+        const personsNotConsideredLogins = await this.getPersonsNotConsidered(workspaceId, loginNames);
 
-        const loginsNotConsidered = personsNotConsidered.map(person => person.login);
-
-        if (loginsNotConsidered.length > 0) {
-          this.logger.log(`Filtering out ${loginsNotConsidered.length} test takers where consider is false`);
-          filteredTestTakers = filteredTestTakers.filter(item => !loginsNotConsidered.includes(item.login));
+        if (personsNotConsideredLogins.length > 0) {
+          this.logger.log(`Filtering out ${personsNotConsideredLogins.length} test takers where consider is false`);
+          filteredTestTakers = filteredTestTakers.filter(item => !personsNotConsideredLogins.includes(item.login));
         }
       }
-
-      const bookletIdsInTestTakers = new Set<string>();
-      for (const testTaker of testTakers) {
-        const xmlDocument = cheerio.load(testTaker.data, { xml: true });
-        const bookletTags = xmlDocument('Booklet');
-
-        bookletTags.each((_, element) => {
-          const bookletId = xmlDocument(element).text().trim().toUpperCase();
-          if (bookletId) {
-            bookletIdsInTestTakers.add(bookletId);
-          }
-        });
-      }
-
-      const unusedBooklets = allBooklets
-        .filter(booklet => !bookletIdsInTestTakers.has(booklet.file_id.toUpperCase()))
-        .map(booklet => booklet.file_id);
-
-      this.logger.log(`Found ${unusedBooklets.length} booklets not included in any TestTakers file`);
-      this.logger.log(`Found ${filteredTestTakers.length} TestTakers with modes other than 'run-hot-return', 'run-hot-restart', 'run-trial'`);
-
-      const validationResultsPromises = testTakers.map(testTaker => this.processTestTaker(testTaker));
-      const validationResults = (await Promise.all(validationResultsPromises)).filter(Boolean);
 
       if (validationResults.length > 0) {
         return {
@@ -345,18 +349,316 @@ export class WorkspaceFilesService implements OnModuleInit {
         };
       }
 
-      const emptyValidation = this.createEmptyValidationData();
-
       return {
         testTakersFound: true,
         filteredTestTakers: filteredTestTakers.length > 0 ? filteredTestTakers : undefined,
         duplicateTestTakers: duplicateTestTakers.length > 0 ? duplicateTestTakers : undefined,
-        validationResults: emptyValidation
+        validationResults: this.createEmptyValidationData()
       };
     } catch (error) {
       this.logger.error(`Error during test file validation for workspace ID ${workspaceId}: ${error.message}`, error.stack);
       throw new Error(`Error during test file validation for workspace ID ${workspaceId}: ${error.message}`);
     }
+  }
+
+  private async getPersonsNotConsidered(workspaceId: number, loginNames: string[]): Promise<string[]> {
+    const BATCH_SIZE = 500;
+    const notConsideredLogins: string[] = [];
+
+    for (let i = 0; i < loginNames.length; i += BATCH_SIZE) {
+      const batch = loginNames.slice(i, i + BATCH_SIZE);
+      const persons = await this.personsRepository.find({
+        where: {
+          workspace_id: workspaceId,
+          login: In(batch),
+          consider: false
+        },
+        select: ['login']
+      });
+      notConsideredLogins.push(...persons.map(p => p.login));
+    }
+    return notConsideredLogins;
+  }
+
+  private async preloadBookletToUnits(workspaceId: number): Promise<Map<string, string[]>> {
+    const bookletMap = new Map<string, string[]>();
+    const BATCH_SIZE = 100;
+    let offset = 0;
+
+    while (true) {
+      const booklets = await this.fileUploadRepository.find({
+        where: { workspace_id: workspaceId, file_type: 'Booklet' },
+        select: ['file_id', 'data'],
+        skip: offset,
+        take: BATCH_SIZE
+      });
+
+      if (booklets.length === 0) break;
+
+      for (const booklet of booklets) {
+        try {
+          const $ = cheerio.load(booklet.data, { xmlMode: true });
+          const unitIds: string[] = [];
+          $('Unit').each((_, element) => {
+            const unitId = $(element).attr('id');
+            if (unitId) unitIds.push(unitId.toUpperCase());
+          });
+          bookletMap.set(booklet.file_id.toUpperCase(), unitIds);
+        } catch (e) {
+          this.logger.warn(`Failed to parse booklet ${booklet.file_id}: ${e.message}`);
+        }
+      }
+      offset += BATCH_SIZE;
+    }
+    return bookletMap;
+  }
+
+  private async preloadUnitRefs(workspaceId: number): Promise<Map<string, {
+    codingSchemeRefs: string[];
+    definitionRefs: string[];
+    playerRefs: string[];
+    hasPlayer: boolean;
+  }>> {
+    const unitMap = new Map();
+    const BATCH_SIZE = 200;
+    let offset = 0;
+
+    while (true) {
+      const units = await this.fileUploadRepository.find({
+        where: { workspace_id: workspaceId, file_type: 'Unit' },
+        select: ['file_id', 'data'],
+        skip: offset,
+        take: BATCH_SIZE
+      });
+
+      if (units.length === 0) break;
+
+      for (const unit of units) {
+        try {
+          const $ = cheerio.load(unit.data, { xmlMode: true });
+          const refs = {
+            codingSchemeRefs: [] as string[],
+            definitionRefs: [] as string[],
+            playerRefs: [] as string[],
+            hasPlayer: false
+          };
+
+          $('Unit').each((_, element) => {
+            const codingSchemeRef = $(element).find('CodingSchemeRef').text();
+            const definitionRef = $(element).find('DefinitionRef').text();
+            const playerRefAttr = $(element).find('DefinitionRef').attr('player');
+            const playerRef = playerRefAttr ? playerRefAttr.replace('@', '-') : '';
+
+            if (codingSchemeRef) refs.codingSchemeRefs.push(codingSchemeRef.toUpperCase());
+            if (definitionRef) refs.definitionRefs.push(definitionRef.toUpperCase());
+            if (playerRef) {
+              refs.playerRefs.push(playerRef.toUpperCase());
+              refs.hasPlayer = true;
+            }
+          });
+          unitMap.set(unit.file_id.toUpperCase(), refs);
+        } catch (e) {
+          this.logger.warn(`Failed to parse unit ${unit.file_id}: ${e.message}`);
+        }
+      }
+      offset += BATCH_SIZE;
+    }
+    return unitMap;
+  }
+
+  private async getAllResourceIds(workspaceId: number): Promise<Set<string>> {
+    const resourceIds = new Set<string>();
+    const BATCH_SIZE = 5000;
+    let offset = 0;
+
+    while (true) {
+      const files = await this.fileUploadRepository
+        .createQueryBuilder('file')
+        .select(['file.file_id', 'file.filename'])
+        .where('file.workspace_id = :workspaceId', { workspaceId })
+        .skip(offset)
+        .take(BATCH_SIZE)
+        .getRawMany();
+
+      if (files.length === 0) break;
+
+      files.forEach(f => {
+        if (f) {
+          // TypeORM might prefix with entity name alias depending on version/config
+          const id = f.file_id || f.file_file_id;
+          const name = f.filename || f.file_filename;
+
+          if (id) resourceIds.add(id.trim().toUpperCase());
+          if (name) resourceIds.add(name.trim().toUpperCase());
+        }
+      });
+      offset += BATCH_SIZE;
+    }
+    this.logger.log(`Preloaded ${resourceIds.size} unique resource IDs/filenames for workspace ${workspaceId}`);
+    return resourceIds;
+  }
+
+  private resourceExists(ref: string, resourceIds: Set<string>): boolean {
+    const normalizedRef = ref.replace(/\\/g, '/');
+
+    // 1. Exact match
+    if (resourceIds.has(normalizedRef)) return true;
+
+    // 2. Extensions appended
+    if (resourceIds.has(`${normalizedRef}.VOCS`)) return true;
+    if (resourceIds.has(`${normalizedRef}.XML`)) return true;
+    if (resourceIds.has(`${normalizedRef}.HTML`)) return true;
+    if (resourceIds.has(`${normalizedRef}.JSON`)) return true;
+
+    // 3. Strip extension from ref
+    const lastDotIndex = normalizedRef.lastIndexOf('.');
+    if (lastDotIndex > 0) {
+      const refWithoutExt = normalizedRef.substring(0, lastDotIndex);
+      if (resourceIds.has(refWithoutExt)) return true;
+    }
+
+    // 4. Handle paths (check basename)
+    if (normalizedRef.includes('/')) {
+      const basename = normalizedRef.split('/').pop();
+      if (basename) {
+        // Basename exact match
+        if (resourceIds.has(basename)) return true;
+
+        // Basename with appended extensions
+        if (resourceIds.has(`${basename}.VOCS`)) return true;
+        if (resourceIds.has(`${basename}.XML`)) return true;
+        if (resourceIds.has(`${basename}.HTML`)) return true;
+        if (resourceIds.has(`${basename}.JSON`)) return true;
+
+        // Basename stripped of extension
+        const basenameLastDot = basename.lastIndexOf('.');
+        if (basenameLastDot > 0) {
+          const basenameNoExt = basename.substring(0, basenameLastDot);
+          if (resourceIds.has(basenameNoExt)) return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  private processTestTakerWithCache(
+    testTaker: FileUpload,
+    bookletMap: Map<string, string[]>,
+    unitMap: Map<string, any>,
+    resourceIds: Set<string>,
+    resourceIdsArray: string[]
+  ): ValidationData | null {
+    const xmlDocument = cheerio.load(testTaker.data, { xml: true });
+    const bookletTags = xmlDocument('Booklet');
+
+    if (bookletTags.length === 0) return null;
+
+    const uniqueBooklets = new Set<string>();
+    bookletTags.each((_, booklet) => {
+      const bId = cheerio.load(booklet).text().trim().toUpperCase();
+      if (bId) uniqueBooklets.add(bId);
+    });
+
+    const missingBooklets: string[] = [];
+    const bookletFiles: FileStatus[] = [];
+    const uniqueUnits = new Set<string>();
+    const missingUnitsPerBooklet: { booklet: string; missingUnits: string[] }[] = [];
+
+    // Check Booklets
+    for (const bookletId of uniqueBooklets) {
+      const exists = bookletMap.has(bookletId);
+      bookletFiles.push({ filename: bookletId, exists });
+      if (!exists) {
+        missingBooklets.push(bookletId);
+      } else {
+        // Collect Units from existing booklets
+        const units = bookletMap.get(bookletId) || [];
+        units.forEach(u => uniqueUnits.add(u));
+
+        // Check for missing units in this booklet (consistency check)
+        const missingUnitsInBooklet = units.filter(u => !unitMap.has(u));
+        if (missingUnitsInBooklet.length > 0) {
+          missingUnitsPerBooklet.push({
+            booklet: bookletId,
+            missingUnits: missingUnitsInBooklet
+          });
+        }
+      }
+    }
+
+    const missingUnits: string[] = [];
+    const unitFiles: FileStatus[] = [];
+    const unitsWithoutPlayer: string[] = [];
+
+    // Aggregated Refs
+    const allCodingSchemeRefs = new Set<string>();
+    const allDefinitionRefs = new Set<string>();
+    const allPlayerRefs = new Set<string>();
+
+    // Check Units
+    for (const unitId of uniqueUnits) {
+      const exists = unitMap.has(unitId);
+      unitFiles.push({ filename: unitId, exists });
+
+      if (!exists) {
+        missingUnits.push(unitId);
+      } else {
+        const refs = unitMap.get(unitId);
+        if (!refs.hasPlayer) unitsWithoutPlayer.push(unitId);
+
+        refs.codingSchemeRefs.forEach(r => allCodingSchemeRefs.add(r));
+        refs.definitionRefs.forEach(r => allDefinitionRefs.add(r));
+        refs.playerRefs.forEach(r => allPlayerRefs.add(r));
+      }
+    }
+
+    // Check Resources
+    const missingCodingSchemeRefs = Array.from(allCodingSchemeRefs).filter(r => !this.resourceExists(r, resourceIds));
+    const missingDefinitionRefs = Array.from(allDefinitionRefs).filter(r => !this.resourceExists(r, resourceIds));
+    const missingPlayerRefs = Array.from(allPlayerRefs).filter(r => {
+      if (this.resourceExists(r, resourceIds)) return false;
+      return !WorkspaceFilesService.playerRefExists(r, resourceIdsArray);
+    });
+
+    const allBookletsExist = missingBooklets.length === 0;
+    const allUnitsExist = missingUnits.length === 0;
+    const bookletComplete = allBookletsExist;
+    const unitComplete = bookletComplete && allUnitsExist;
+
+    return {
+      testTaker: testTaker.file_id,
+      booklets: {
+        complete: bookletComplete,
+        missing: missingBooklets,
+        files: bookletFiles
+      },
+      units: {
+        complete: unitComplete,
+        missing: missingUnits,
+        missingUnitsPerBooklet: missingUnitsPerBooklet,
+        unitsWithoutPlayer: unitsWithoutPlayer,
+        files: unitFiles
+      },
+      schemes: {
+        complete: unitComplete ? missingCodingSchemeRefs.length === 0 : false,
+        missing: missingCodingSchemeRefs,
+        files: Array.from(allCodingSchemeRefs).map(r => ({ filename: r, exists: this.resourceExists(r, resourceIds) }))
+      },
+      definitions: {
+        complete: unitComplete ? missingDefinitionRefs.length === 0 : false,
+        missing: missingDefinitionRefs,
+        files: Array.from(allDefinitionRefs).map(r => ({ filename: r, exists: this.resourceExists(r, resourceIds) }))
+      },
+      player: {
+        complete: unitComplete ? missingPlayerRefs.length === 0 : false,
+        missing: missingPlayerRefs,
+        files: Array.from(allPlayerRefs).map(r => ({
+          filename: r,
+          exists: this.resourceExists(r, resourceIds) || WorkspaceFilesService.playerRefExists(r, resourceIdsArray)
+        }))
+      }
+    };
   }
 
   private createEmptyValidationData(): ValidationData[] {
@@ -503,121 +805,6 @@ ${bookletRefs}
       this.logger.error(`Error getting units with file IDs for workspace ${workspaceId}: ${error.message}`, error.stack);
       return [];
     }
-  }
-
-  private async processTestTaker(testTaker: FileUpload): Promise<ValidationData | null> {
-    const xmlDocument = cheerio.load(testTaker.data, { xml: true });
-    const bookletTags = xmlDocument('Booklet');
-    const unitTags = xmlDocument('Unit');
-
-    if (bookletTags.length === 0) {
-      this.logger.warn('No <Booklet> elements found in the XML document.');
-      return null;
-    }
-
-    this.logger.log(`Found ${bookletTags.length} <Booklet> elements.`);
-
-    const {
-      uniqueBooklets
-    } = this.extractXmlData(bookletTags, unitTags);
-
-    const workspaceId = testTaker.workspace_id;
-
-    const { allBookletsExist, missingBooklets, bookletFiles } = await this.checkMissingBooklets(Array.from(uniqueBooklets), workspaceId);
-    const {
-      allUnitsExist,
-      missingUnits,
-      missingUnitsPerBooklet,
-      unitFiles,
-      missingCodingSchemeRefs,
-      missingDefinitionRefs,
-      schemeFiles,
-      definitionFiles,
-      allCodingSchemesExist,
-      allCodingDefinitionsExist,
-      allPlayerRefsExist,
-      missingPlayerRefs,
-      playerFiles,
-      unitsWithoutPlayer
-    } = await this.checkMissingUnits(Array.from(uniqueBooklets), workspaceId);
-
-    const bookletComplete = allBookletsExist;
-    const unitComplete = bookletComplete && allUnitsExist;
-
-    return {
-      testTaker: testTaker.file_id,
-      booklets: {
-        complete: bookletComplete,
-        missing: missingBooklets,
-        files: bookletFiles
-      },
-      units: {
-        complete: bookletComplete ? (allUnitsExist) : false,
-        missing: missingUnits,
-        missingUnitsPerBooklet: missingUnitsPerBooklet,
-        unitsWithoutPlayer: unitsWithoutPlayer,
-        files: unitFiles
-      },
-      schemes: {
-        complete: unitComplete ? allCodingSchemesExist : false,
-        missing: missingCodingSchemeRefs,
-        files: schemeFiles
-      },
-      definitions: {
-        complete: unitComplete ? allCodingDefinitionsExist : false,
-        missing: missingDefinitionRefs,
-        files: definitionFiles
-      },
-      player: {
-        complete: unitComplete ? allPlayerRefsExist : false,
-        missing: missingPlayerRefs,
-        files: playerFiles
-      }
-    };
-  }
-
-  private extractXmlData(
-    bookletTags: cheerio.Cheerio<Element>,
-    unitTags: cheerio.Cheerio<Element>
-  ): {
-      uniqueBooklets: Set<string>;
-      uniqueUnits: Set<string>;
-      codingSchemeRefs: string[];
-      definitionRefs: string[];
-    } {
-    const uniqueBooklets = new Set<string>();
-    const uniqueUnits = new Set<string>();
-    const codingSchemeRefs: string[] = [];
-    const definitionRefs: string[] = [];
-
-    bookletTags.each((_, booklet) => {
-      const bookletValue = cheerio.load(booklet).text().trim();
-      uniqueBooklets.add(bookletValue);
-    });
-
-    unitTags.each((_, unit) => {
-      const $ = cheerio.load(unit);
-      const unitElements = $('unit');
-
-      unitElements.each((__, codingScheme) => {
-        const value = $(codingScheme).text().trim();
-        if (value) codingSchemeRefs.push(value);
-      });
-
-      $('DefinitionRef').each((__, definition) => {
-        const value = $(definition).text().trim();
-        if (value) definitionRefs.push(value);
-      });
-
-      const unitId = unitElements.attr('id');
-      if (unitId) {
-        uniqueUnits.add(unitId.trim());
-      }
-    });
-
-    return {
-      uniqueBooklets, uniqueUnits, codingSchemeRefs, definitionRefs
-    };
   }
 
   async uploadTestFiles(workspace_id: number, originalFiles: FileIo[]): Promise<boolean> {
@@ -1224,244 +1411,6 @@ ${bookletRefs}
     }
   }
 
-  private async checkMissingBooklets(uniqueBookletsArray: string[], workspaceId: number): Promise<{
-    allBookletsExist: boolean;
-    missingBooklets: string[];
-    bookletFiles: FileStatus[];
-  }> {
-    this.logger.log(`Checking for missing booklets among ${uniqueBookletsArray.length} unique booklet IDs`);
-
-    const bookletFiles: FileStatus[] = [];
-    const missingBooklets: string[] = [];
-
-    for (const booklet of uniqueBookletsArray) {
-      const bookletId = booklet.trim();
-      if (!bookletId) continue;
-
-      const existingBooklet = await this.fileUploadRepository.findOne({
-        where: { file_id: bookletId.toUpperCase(), file_type: 'Booklet', workspace_id: workspaceId }
-      });
-
-      const fileStatus: FileStatus = {
-        filename: bookletId,
-        exists: !!existingBooklet
-      };
-
-      bookletFiles.push(fileStatus);
-
-      if (!existingBooklet) {
-        missingBooklets.push(bookletId);
-      }
-    }
-
-    const allBookletsExist = missingBooklets.length === 0;
-    this.logger.log(`Found ${missingBooklets.length} missing booklets out of ${uniqueBookletsArray.length} total`);
-
-    return { allBookletsExist, missingBooklets, bookletFiles };
-  }
-
-  async checkMissingUnits(bookletNames: string[], workspaceId: number): Promise<ValidationResult> {
-    try {
-      const existingBooklets = await this.fileUploadRepository.findBy({
-        file_type: 'Booklet',
-        file_id: In(bookletNames.map(b => b.toUpperCase())),
-        workspace_id: workspaceId
-      });
-
-      const bookletToUnitsMap = new Map<string, string[]>();
-
-      const unitIdsPromises = existingBooklets.map(async booklet => {
-        try {
-          const fileData = booklet.data;
-          const $ = cheerio.load(fileData, { xmlMode: true });
-          const unitIds: string[] = [];
-
-          $('Unit').each((_, element) => {
-            const unitId = $(element).attr('id');
-            if (unitId) {
-              unitIds.push(unitId.toUpperCase());
-            }
-          });
-
-          bookletToUnitsMap.set(booklet.file_id, unitIds);
-
-          return unitIds;
-        } catch (error) {
-          this.logger.error(`Fehler beim Verarbeiten von Unit ${booklet.file_id}:`, error);
-          return [];
-        }
-      });
-
-      const allUnitIdsArrays = await Promise.all(unitIdsPromises);
-      const allUnitIds = Array.from(new Set(allUnitIdsArrays.flat()));
-
-      const allUnitsInWorkspace = await this.fileUploadRepository.findBy({
-        file_type: 'Unit',
-        workspace_id: workspaceId
-      });
-
-      const unusedUnits = allUnitsInWorkspace
-        .filter(unit => !allUnitIds.includes(unit.file_id.toUpperCase()))
-        .map(unit => unit.file_id);
-
-      const allUnitsUsedInBooklets = unusedUnits.length === 0;
-
-      const chunkSize = 50;
-      const unitBatches = [];
-
-      for (let i = 0; i < allUnitIds.length; i += chunkSize) {
-        const chunk = allUnitIds.slice(i, i + chunkSize);
-        unitBatches.push(chunk);
-      }
-
-      const unitBatchPromises = unitBatches.map(batch => this.fileUploadRepository.find({
-        where: {
-          file_id: In(batch),
-          workspace_id: workspaceId
-        }
-      }));
-
-      const unitBatchResults = await Promise.all(unitBatchPromises);
-      const existingUnits = unitBatchResults.flat();
-
-      const refsPromises = existingUnits.map(async unit => {
-        try {
-          const fileData = unit.data;
-          const $ = cheerio.load(fileData, { xmlMode: true });
-          const refs = {
-            codingSchemeRefs: [] as string[],
-            definitionRefs: [] as string[],
-            playerRefs: [] as string[],
-            unitId: unit.file_id,
-            hasPlayer: false
-          };
-
-          $('Unit').each((_, element) => {
-            const codingSchemeRef = $(element).find('CodingSchemeRef').text();
-            const definitionRef = $(element).find('DefinitionRef').text();
-            const playerRefAttr = $(element).find('DefinitionRef').attr('player');
-            const playerRef = playerRefAttr ? playerRefAttr.replace('@', '-') : '';
-
-            if (codingSchemeRef) {
-              refs.codingSchemeRefs.push(codingSchemeRef.toUpperCase());
-            }
-
-            if (definitionRef) {
-              refs.definitionRefs.push(definitionRef.toUpperCase());
-            }
-
-            if (playerRef) {
-              refs.playerRefs.push(playerRef.toUpperCase());
-              refs.hasPlayer = true;
-            }
-          });
-
-          return refs;
-        } catch (error) {
-          this.logger.error(`Fehler beim Verarbeiten von Unit ${unit.file_id}:`, error);
-          return {
-            codingSchemeRefs: [],
-            definitionRefs: [],
-            playerRefs: [],
-            unitId: unit.file_id,
-            hasPlayer: false
-          };
-        }
-      });
-
-      const allRefs = await Promise.all(refsPromises);
-
-      const unitsWithoutPlayer = allRefs
-        .filter(ref => !ref.hasPlayer)
-        .map(ref => ref.unitId);
-
-      const allCodingSchemeRefs = Array.from(new Set(allRefs.flatMap(ref => ref.codingSchemeRefs)));
-      const allDefinitionRefs = Array.from(new Set(allRefs.flatMap(ref => ref.definitionRefs)));
-      const allPlayerRefs = Array.from(new Set(allRefs.flatMap(ref => ref.playerRefs)));
-
-      const existingResources = await this.fileUploadRepository.findBy({
-        file_type: 'Resource',
-        workspace_id: workspaceId
-      });
-
-      const allResourceIds = existingResources.map(resource => resource.file_id);
-
-      // Find missing references
-      const missingCodingSchemeRefs = allCodingSchemeRefs.filter(ref => !allResourceIds.includes(ref));
-      const missingDefinitionRefs = allDefinitionRefs.filter(ref => !allResourceIds.includes(ref));
-      const missingPlayerRefs = allPlayerRefs.filter(ref => !WorkspaceFilesService.playerRefExists(ref, allResourceIds));
-
-      // Check if all references exist
-      const allCodingSchemesExist = missingCodingSchemeRefs.length === 0;
-      const allCodingDefinitionsExist = missingDefinitionRefs.length === 0;
-      const allPlayerRefsExist = missingPlayerRefs.length === 0;
-
-      // Find missing units
-      const foundUnitIds = existingUnits.map(unit => unit.file_id.toUpperCase());
-      const missingUnits = allUnitIds.filter(unitId => !foundUnitIds.includes(unitId));
-      const uniqueUnits = Array.from(new Set(missingUnits));
-
-      // Track missing units per booklet
-      const missingUnitsPerBooklet: { booklet: string; missingUnits: string[] }[] = [];
-
-      // Check each booklet for missing units
-      for (const [booklet, units] of bookletToUnitsMap.entries()) {
-        const missingUnitsForBooklet = units.filter(unitId => !foundUnitIds.includes(unitId));
-        if (missingUnitsForBooklet.length > 0) {
-          missingUnitsPerBooklet.push({
-            booklet,
-            missingUnits: missingUnitsForBooklet
-          });
-        }
-      }
-
-      const allUnitsExist = missingUnits.length === 0;
-
-      // Create lists of all files with their match status
-      const unitFiles: FileStatus[] = allUnitIds.map(unitId => ({
-        filename: unitId,
-        exists: foundUnitIds.includes(unitId)
-      }));
-
-      const schemeFiles: FileStatus[] = allCodingSchemeRefs.map(ref => ({
-        filename: ref,
-        exists: allResourceIds.includes(ref)
-      }));
-
-      const definitionFiles: FileStatus[] = allDefinitionRefs.map(ref => ({
-        filename: ref,
-        exists: allResourceIds.includes(ref)
-      }));
-
-      const playerFiles: FileStatus[] = allPlayerRefs.map(ref => ({
-        filename: ref,
-        exists: WorkspaceFilesService.playerRefExists(ref, allResourceIds)
-      }));
-
-      return {
-        allUnitsExist,
-        missingUnits: uniqueUnits,
-        missingUnitsPerBooklet,
-        unitsWithoutPlayer,
-        unitFiles,
-        allUnitsUsedInBooklets,
-        unusedUnits,
-        allCodingSchemesExist,
-        allCodingDefinitionsExist,
-        missingCodingSchemeRefs,
-        missingDefinitionRefs,
-        schemeFiles,
-        definitionFiles,
-        allPlayerRefsExist,
-        missingPlayerRefs,
-        playerFiles
-      };
-    } catch (error) {
-      this.logger.error('Error validating units', error);
-      throw new Error(`Error validating units: ${error.message}`);
-    }
-  }
-
   private getMimeType(fileName: string): string {
     const extension = path.extname(fileName).toLowerCase();
     const mimeTypes: Record<string, string> = {
@@ -1510,7 +1459,14 @@ ${bookletRefs}
       const playerContent = cheerio.load(playerCode);
       const metaDataElement = playerContent('script[type="application/ld+json"]');
       const metadata = JSON.parse(metaDataElement.text());
-      return WorkspaceFilesService.normalizePlayerId(`${metadata.id}-${metadata.version}`);
+      const id = metadata.id || metadata['@id'];
+      const version = metadata.version;
+
+      if (!id || !version) {
+        return WorkspaceFilesService.getResourceId(file);
+      }
+
+      return WorkspaceFilesService.normalizePlayerId(`${id}-${version}`);
     } catch (error) {
       return WorkspaceFilesService.getResourceId(file);
     }
