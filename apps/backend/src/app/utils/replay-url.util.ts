@@ -35,11 +35,6 @@ export function generateReplayUrl(params: ReplayUrlParams): string {
     authToken
   } = params;
 
-  // Validate required parameters
-  if (!loginName || !loginCode || !bookletId || !unitId || !variableAnchor) {
-    return '';
-  }
-
   const encodedLoginName = encodeURIComponent(loginName);
   const encodedLoginCode = encodeURIComponent(loginCode);
   const encodedLoginGroup = encodeURIComponent(loginGroup || '');
