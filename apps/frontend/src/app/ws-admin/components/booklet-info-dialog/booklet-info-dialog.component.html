@@ -125,14 +125,14 @@
           </div>
         </mat-tab>
 
-        <!-- Units tab - only shown if there are no testlets -->
-        <mat-tab *ngIf="!data.bookletInfo.testlets || data.bookletInfo.testlets.length === 0"
-                label="Aufgaben ({{ data.bookletInfo.units.length }})">
+        <!-- Units tab - shows units that are not in any testlet (or all units if there are no testlets) -->
+        <mat-tab *ngIf="hasUnitsTab"
+                label="Aufgaben ({{ unitsOutsideTestlets.length }})">
           <div class="tab-content">
             <div class="info-section">
               <h3>Aufgaben im Testheft</h3>
               <div class="units-list">
-                <div *ngFor="let unit of data.bookletInfo.units" class="unit-item">
+                <div *ngFor="let unit of unitsOutsideTestlets" class="unit-item">
                   <div class="unit-header">
                     <span class="unit-position">#{{ unit.position }}</span>
                     <span class="unit-id">{{ unit.id }}</span>
