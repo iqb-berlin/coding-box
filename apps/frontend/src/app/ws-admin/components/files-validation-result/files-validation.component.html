@@ -170,7 +170,11 @@
                     @if (!val.booklets.complete) {
                       <span class="status-incomplete">
                         <mat-icon class="status-icon">error</mat-icon>
-                        Unvollständig
+                        @if (val.booklets.missing && val.booklets.missing.length > 0) {
+                          Unvollständig (Testhefte fehlen)
+                        } @else {
+                          Unvollständig
+                        }
                       </span>
                     }
                   </p>
@@ -219,9 +223,16 @@
                       </span>
                     }
                     @if (!val.units.complete) {
-                      <span class="status-incomplete">
+                      <span class="status-incomplete"
+                            [matTooltip]="val.units.missing && val.units.missing.length === 0 && !val.booklets.complete ? 'Nicht überprüfbar: Testhefte fehlen oder sind unvollständig' : ''">
                         <mat-icon class="status-icon">error</mat-icon>
-                        Unvollständig
+                        @if (val.units.missing && val.units.missing.length > 0) {
+                          Unvollständig (Aufgaben fehlen)
+                        } @else if (!val.booklets.complete) {
+                          Nicht überprüfbar (Voraussetzungen fehlen)
+                        } @else {
+                          Unvollständig
+                        }
                       </span>
                     }
                   </p>
@@ -270,9 +281,16 @@
                       </span>
                     }
                     @if (!val.schemes.complete) {
-                      <span class="status-incomplete">
+                      <span class="status-incomplete"
+                            [matTooltip]="val.schemes.missing && val.schemes.missing.length === 0 && !val.units.complete ? 'Nicht überprüfbar: Aufgaben fehlen oder sind unvollständig' : ''">
                         <mat-icon class="status-icon">error</mat-icon>
-                        Unvollständig
+                        @if (val.schemes.missing && val.schemes.missing.length > 0) {
+                          Unvollständig (Kodierschemata fehlen)
+                        } @else if (!val.units.complete) {
+                          Nicht überprüfbar (Voraussetzungen fehlen)
+                        } @else {
+                          Unvollständig
+                        }
                       </span>
                     }
                   </p>
@@ -321,9 +339,16 @@
                       </span>
                     }
                     @if (!val.definitions.complete) {
-                      <span class="status-incomplete">
+                      <span class="status-incomplete"
+                            [matTooltip]="val.definitions.missing && val.definitions.missing.length === 0 && !val.units.complete ? 'Nicht überprüfbar: Aufgaben fehlen oder sind unvollständig' : ''">
                         <mat-icon class="status-icon">error</mat-icon>
-                        Unvollständig
+                        @if (val.definitions.missing && val.definitions.missing.length > 0) {
+                          Unvollständig (Definitionen fehlen)
+                        } @else if (!val.units.complete) {
+                          Nicht überprüfbar (Voraussetzungen fehlen)
+                        } @else {
+                          Unvollständig
+                        }
                       </span>
                     }
                   </p>
@@ -372,9 +397,16 @@
                       </span>
                     }
                     @if (!val.player.complete) {
-                      <span class="status-incomplete">
+                      <span class="status-incomplete"
+                            [matTooltip]="val.player.missing && val.player.missing.length === 0 && !val.units.complete ? 'Nicht überprüfbar: Aufgaben fehlen oder sind unvollständig' : ''">
                         <mat-icon class="status-icon">error</mat-icon>
-                        Unvollständig
+                        @if (val.player.missing && val.player.missing.length > 0) {
+                          Unvollständig (Player fehlen)
+                        } @else if (!val.units.complete) {
+                          Nicht überprüfbar (Voraussetzungen fehlen)
+                        } @else {
+                          Unvollständig
+                        }
                       </span>
                     }
                   </p>
