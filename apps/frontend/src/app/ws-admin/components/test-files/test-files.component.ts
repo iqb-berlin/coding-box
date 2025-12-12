@@ -19,6 +19,7 @@ import { SelectionModel } from '@angular/cdk/collections';
 import { MatIcon } from '@angular/material/icon';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { MatCheckbox } from '@angular/material/checkbox';
+import { MatTooltip } from '@angular/material/tooltip';
 import { MatAnchor, MatButton, MatIconButton } from '@angular/material/button';
 import { DatePipe } from '@angular/common';
 import { MatFormField, MatLabel } from '@angular/material/form-field';
@@ -81,7 +82,8 @@ import { GermanPaginatorIntl } from '../../../shared/services/german-paginator-i
     MatSelect,
     MatOption,
     MatPaginator,
-    MatIconButton
+    MatIconButton,
+    MatTooltip
   ]
 })
 export class TestFilesComponent implements OnInit, OnDestroy {
