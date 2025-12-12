@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as cheerio from 'cheerio';
+import { FileIo } from '../../admin/workspace/file-io.interface';
 
 @Injectable()
 export class WorkspaceFileParsingService {
@@ -225,5 +226,68 @@ export class WorkspaceFileParsingService {
       this.logger.error(`Error extracting TestTakers information: ${message}`);
       return {};
     }
+  }
+
+  getPlayerId(file: FileIo): string {
+    try {
+      const playerCode = file.buffer.toString();
+      const playerContent = cheerio.load(playerCode);
+      const metaDataElement = playerContent('script[type="application/ld+json"]');
+      const metadata = JSON.parse(metaDataElement.text());
+      const id = metadata.id || metadata['@id'];
+      const version = metadata.version;
+
+      if (!id || !version) {
+        return this.getResourceId(file);
+      }
+
+      return this.normalizePlayerId(`${id}-${version}`);
+    } catch (error) {
+      return this.getResourceId(file);
+    }
+  }
+
+  getSchemerId(file: FileIo): string {
+    try {
+      const schemerCode = file.buffer.toString();
+      const schemerContent = cheerio.load(schemerCode);
+      const metaDataElement = schemerContent('script[type="application/ld+json"]');
+      const metadata = JSON.parse(metaDataElement.text());
+      return this.normalizePlayerId(`${metadata['@id']}-${metadata.version}`);
+    } catch (error) {
+      return this.getResourceId(file);
+    }
+  }
+
+  getResourceId(file: FileIo): string {
+    if (!file?.originalname) {
+      throw new Error('Invalid file: originalname is required.');
+    }
+    const filePathParts = file.originalname.split('/')
+      .map(part => part.trim());
+    const fileName = filePathParts.pop();
+    if (!fileName) {
+      throw new Error('Invalid file: Could not determine the file name.');
+    }
+    return fileName.toUpperCase();
+  }
+
+  normalizePlayerId(name: string): string {
+    const reg = /^(\D+?)[@V-]?((\d+)(\.\d+)?(\.\d+)?(-\S+?)?)?(.\D{3,4})?$/;
+
+    const matches = name.match(reg);
+
+    if (!matches) {
+      throw new Error(`Invalid player name: ${name}`);
+    }
+
+    const [, module = '', , major = '', minorDot = '', patchDot = ''] = matches;
+
+    const majorVersion = parseInt(major, 10) || 0;
+    const minorVersion = minorDot ? parseInt(minorDot.substring(1), 10) : 0;
+    const patchVersion = patchDot ? parseInt(patchDot.substring(1), 10) : 0;
+    // const label = labelWithDash ? labelWithDash.substring(1) : '';
+
+    return `${module}-${majorVersion}.${minorVersion}.${patchVersion}`.toUpperCase();
   }
 }
