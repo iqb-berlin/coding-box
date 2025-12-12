@@ -121,6 +121,63 @@
           </mat-expansion-panel>
         </div>
       }
+
+      @if (unusedTestFiles && unusedTestFiles.length > 0) {
+        <div class="missing-units-warning filtered-testtakers-warning">
+          <mat-expansion-panel>
+            <mat-expansion-panel-header>
+              <mat-panel-title>
+                <mat-icon class="warning-icon">warning</mat-icon>
+                <span class="warning-title">Nicht verwendete Dateien</span>
+              </mat-panel-title>
+              <mat-panel-description>
+                {{ unusedFilesSelection.selected.length }} / {{ unusedTestFiles.length }}
+              </mat-panel-description>
+            </mat-expansion-panel-header>
+
+            <div class="warning-content">
+              <div class="mode-selection">
+                <div class="select-all-row">
+                  <mat-checkbox
+                    [checked]="allUnusedFilesSelected"
+                    [indeterminate]="unusedFilesSelection.hasValue() && !allUnusedFilesSelected"
+                    (change)="toggleAllUnusedFilesSelection()">
+                    Alle auswählen
+                  </mat-checkbox>
+                  <span class="count-badge">{{ unusedFilesSelection.selected.length }} / {{ unusedTestFiles.length }}</span>
+                </div>
+              </div>
+
+              <cdk-virtual-scroll-viewport class="test-takers-list" [itemSize]="48" [minBufferPx]="200" [maxBufferPx]="400">
+                <div *cdkVirtualFor="let file of unusedTestFiles" class="virtual-item">
+                  <mat-checkbox
+                    [checked]="unusedFilesSelection.isSelected(file)"
+                    (change)="toggleUnusedFilesSelection(file)">
+                    <strong>{{ file.fileId }}</strong>: {{ file.filename }} ({{ file.fileType }})
+                  </mat-checkbox>
+                </div>
+              </cdk-virtual-scroll-viewport>
+
+              <div class="exclude-button-container">
+                <button
+                  mat-raised-button
+                  color="warn"
+                  class="exclude-button"
+                  (click)="deleteSelectedUnusedFiles()"
+                  [disabled]="isDeletingUnusedFiles || unusedFilesSelection.selected.length === 0">
+                  <mat-icon>{{ isDeletingUnusedFiles ? 'hourglass_empty' : 'delete' }}</mat-icon>
+                  @if (isDeletingUnusedFiles) {
+                    Wird gelöscht...
+                  } @else {
+                    Ausgewählte Dateien löschen ({{ unusedFilesSelection.selected.length }})
+                  }
+                </button>
+              </div>
+            </div>
+          </mat-expansion-panel>
+        </div>
+      }
+
       @if (data.validationResults && data.validationResults.length > 0) {
         <mat-tab-group>
           @for (val of data.validationResults; track val.testTaker) {

@@ -22,7 +22,7 @@ import { BookletInfoDialogComponent } from '../booklet-info-dialog/booklet-info-
 import { UnitInfoDialogComponent } from '../unit-info-dialog/unit-info-dialog.component';
 import { SchemeEditorDialogComponent } from '../../../coding/components/scheme-editor-dialog/scheme-editor-dialog.component';
 import { UnitDefinitionPlayerDialogComponent } from '../unit-definition-player-dialog/unit-definition-player-dialog.component';
-import { DuplicateTestTaker } from '../../../../../../../api-dto/files/file-validation-result.dto';
+import { DuplicateTestTaker, UnusedTestFile } from '../../../../../../../api-dto/files/file-validation-result.dto';
 import { ContentDialogComponent } from '../../../shared/dialogs/content-dialog/content-dialog.component';
 
 type FileStatus = {
@@ -88,6 +88,7 @@ export class FilesValidationDialogComponent {
     validationResults: FilesValidation[];
     filteredTestTakers?: FilteredTestTaker[];
     duplicateTestTakers?: DuplicateTestTaker[];
+    unusedTestFiles?: UnusedTestFile[];
     workspaceId?: number;
   }>(MAT_DIALOG_DATA);
 
@@ -95,9 +96,14 @@ export class FilesValidationDialogComponent {
 
   filteredTestTakers: FilteredTestTaker[] = [];
   duplicateTestTakers: DuplicateTestTaker[] = [];
+  unusedTestFiles: UnusedTestFile[] = [];
 
   selection = new SelectionModel<FilteredTestTaker>(true, []);
   duplicateSelection = new Map<string, string>(); // Maps login to selected testTaker file
+
+  unusedFilesSelection = new SelectionModel<UnusedTestFile>(true, []);
+  allUnusedFilesSelected = false;
+  isDeletingUnusedFiles = false;
 
   modeGroups: { mode: string, count: number }[] = [];
 
@@ -147,7 +153,55 @@ export class FilesValidationDialogComponent {
           }
         });
       }
+
+      if (this.data.unusedTestFiles) {
+        this.unusedTestFiles = this.data.unusedTestFiles;
+      }
     }
+  }
+
+  toggleUnusedFilesSelection(file: UnusedTestFile): void {
+    this.unusedFilesSelection.toggle(file);
+    this.checkIfAllUnusedFilesSelected();
+  }
+
+  toggleAllUnusedFilesSelection(): void {
+    if (this.allUnusedFilesSelected) {
+      this.unusedFilesSelection.clear();
+      this.allUnusedFilesSelected = false;
+    } else {
+      this.unusedFilesSelection.select(...this.unusedTestFiles);
+      this.allUnusedFilesSelected = true;
+    }
+  }
+
+  checkIfAllUnusedFilesSelected(): void {
+    this.allUnusedFilesSelected = this.unusedTestFiles.length > 0 &&
+                                 this.unusedFilesSelection.selected.length === this.unusedTestFiles.length;
+  }
+
+  deleteSelectedUnusedFiles(): void {
+    if (!this.data.workspaceId || this.unusedFilesSelection.selected.length === 0 || this.isDeletingUnusedFiles) {
+      return;
+    }
+
+    this.isDeletingUnusedFiles = true;
+    const idsToDelete = this.unusedFilesSelection.selected.map(f => f.id);
+
+    this.backendService.deleteFiles(this.data.workspaceId, idsToDelete)
+      .subscribe({
+        next: success => {
+          if (success) {
+            this.unusedTestFiles = this.unusedTestFiles.filter(f => !idsToDelete.includes(f.id));
+            this.unusedFilesSelection.clear();
+            this.checkIfAllUnusedFilesSelected();
+          }
+          this.isDeletingUnusedFiles = false;
+        },
+        error: () => {
+          this.isDeletingUnusedFiles = false;
+        }
+      });
   }
 
   getExistingCount(data: DataValidation): number {
