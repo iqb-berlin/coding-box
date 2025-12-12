@@ -2,13 +2,12 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Like, Repository } from 'typeorm';
 import * as cheerio from 'cheerio';
-import * as fs from 'fs';
 import * as path from 'path';
 import Ajv, { ValidateFunction } from 'ajv';
 import addFormats from 'ajv-formats';
 import { parseStringPromise } from 'xml2js';
-import codingSchemeSchema = require('../../schemas/coding-scheme.schema.json');
 import { VariableInfo } from '@iqbspecs/variable-info/variable-info.interface';
+import codingSchemeSchema = require('../../schemas/coding-scheme.schema.json');
 import { statusNumberToString } from '../utils/response-status-converter';
 import FileUpload, { StructuredFileData } from '../entities/file_upload.entity';
 import { FilesDto } from '../../../../../../api-dto/files/files.dto';
@@ -1091,8 +1090,6 @@ ${bookletRefs}
     return results;
   }
 
-  
-
   private async handleXmlFile(workspaceId: number, file: FileIo): Promise<unknown> {
     try {
       if (!file.buffer || !file.buffer.length) {
@@ -1206,7 +1203,7 @@ ${bookletRefs}
       };
 
       if (metadata['@type'] === 'schemer') {
-        const resourceFileId = WorkspaceFilesService.getSchemerId(file);
+        const resourceFileId = this.workspaceFileParsingService.getSchemerId(file);
         return await this.fileUploadRepository.upsert({
           filename: file.originalname,
           workspace_id: workspaceId,
@@ -1218,7 +1215,7 @@ ${bookletRefs}
         }, ['file_id', 'workspace_id']);
       }
 
-      const resourceFileId = WorkspaceFilesService.getPlayerId(file);
+      const resourceFileId = this.workspaceFileParsingService.getPlayerId(file);
       return await this.fileUploadRepository.upsert({
         filename: file.originalname,
         workspace_id: workspaceId,
@@ -1229,7 +1226,7 @@ ${bookletRefs}
         structured_data: structuredData
       }, ['file_id', 'workspace_id']);
     } catch (error) {
-      const resourceFileId = WorkspaceFilesService.getResourceId(file);
+      const resourceFileId = this.workspaceFileParsingService.getResourceId(file);
       return this.fileUploadRepository.upsert({
         filename: file.originalname,
         workspace_id: workspaceId,
@@ -1363,69 +1360,6 @@ ${bookletRefs}
       this.logger.error('Error during test center import', error);
       return false;
     }
-  }
-
-  private static getPlayerId(file: FileIo): string {
-    try {
-      const playerCode = file.buffer.toString();
-      const playerContent = cheerio.load(playerCode);
-      const metaDataElement = playerContent('script[type="application/ld+json"]');
-      const metadata = JSON.parse(metaDataElement.text());
-      const id = metadata.id || metadata['@id'];
-      const version = metadata.version;
-
-      if (!id || !version) {
-        return WorkspaceFilesService.getResourceId(file);
-      }
-
-      return WorkspaceFilesService.normalizePlayerId(`${id}-${version}`);
-    } catch (error) {
-      return WorkspaceFilesService.getResourceId(file);
-    }
-  }
-
-  private static getSchemerId(file: FileIo): string {
-    try {
-      const schemerCode = file.buffer.toString();
-      const schemerContent = cheerio.load(schemerCode);
-      const metaDataElement = schemerContent('script[type="application/ld+json"]');
-      const metadata = JSON.parse(metaDataElement.text());
-      return WorkspaceFilesService.normalizePlayerId(`${metadata['@id']}-${metadata.version}`);
-    } catch (error) {
-      return WorkspaceFilesService.getResourceId(file);
-    }
-  }
-
-  private static getResourceId(file: FileIo): string {
-    if (!file?.originalname) {
-      throw new Error('Invalid file: originalname is required.');
-    }
-    const filePathParts = file.originalname.split('/')
-      .map(part => part.trim());
-    const fileName = filePathParts.pop();
-    if (!fileName) {
-      throw new Error('Invalid file: Could not determine the file name.');
-    }
-    return fileName.toUpperCase();
-  }
-
-  private static normalizePlayerId(name: string): string {
-    const reg = /^(\D+?)[@V-]?((\d+)(\.\d+)?(\.\d+)?(-\S+?)?)?(.\D{3,4})?$/;
-
-    const matches = name.match(reg);
-
-    if (!matches) {
-      throw new Error(`Invalid player name: ${name}`);
-    }
-
-    const [, module = '', , major = '', minorDot = '', patchDot = ''] = matches;
-
-    const majorVersion = parseInt(major, 10) || 0;
-    const minorVersion = minorDot ? parseInt(minorDot.substring(1), 10) : 0;
-    const patchVersion = patchDot ? parseInt(patchDot.substring(1), 10) : 0;
-    // const label = labelWithDash ? labelWithDash.substring(1) : '';
-
-    return `${module}-${majorVersion}.${minorVersion}.${patchVersion}`.toUpperCase();
   }
 
   async getUnitContent(workspaceId: number, unitId: number): Promise<string> {
