@@ -181,7 +181,8 @@ export class WorkspaceTestFilesValidationService {
       const unusedTestFiles = await this.getUnusedTestFilesFromValidationGraph(
         workspaceId,
         validationResults,
-        usedTestTakerFileIds
+        usedTestTakerFileIds,
+        resourceIdsArray
       );
 
       const duplicateTestTakers = Array.from(loginOccurrences.entries())
@@ -230,9 +231,42 @@ export class WorkspaceTestFilesValidationService {
   private async getUnusedTestFilesFromValidationGraph(
     workspaceId: number,
     validationResults: ValidationData[],
-    usedTestTakerFileIds: Set<string>
+    usedTestTakerFileIds: Set<string>,
+    allResourceIds: string[]
   ): Promise<Array<{ id: number; fileId: string; filename: string; fileType: string }>> {
     const usedTokens = new Set<string>();
+
+    const addPlayerPatchTokens = (token: string | undefined | null): void => {
+      if (!token) {
+        return;
+      }
+      const normalizedToken = token.trim().toUpperCase().replace(/\\/g, '/');
+      if (!normalizedToken) {
+        return;
+      }
+
+      const reg = /^(\D+?)[@V-]?(\d+)\.(\d+)(?:\.(\d+))?(?:-\S+?)?(?:\.(\D{3,4}))?$/;
+      const match = normalizedToken.match(reg);
+      if (!match) {
+        return;
+      }
+
+      const module = match[1];
+      const major = match[2];
+      const minor = match[3];
+      const patch = match[4];
+
+      if (patch) {
+        return;
+      }
+
+      const prefix = `${module}-${major}.${minor}.`;
+      allResourceIds.forEach(id => {
+        if (id && typeof id === 'string' && id.toUpperCase().startsWith(prefix)) {
+          usedTokens.add(id.toUpperCase());
+        }
+      });
+    };
 
     const addToken = (token: string | undefined | null): void => {
       if (!token) {
@@ -275,7 +309,10 @@ export class WorkspaceTestFilesValidationService {
       result.units.files.forEach(f => addToken(f.filename));
       result.schemes.files.forEach(f => addToken(f.filename));
       result.definitions.files.forEach(f => addToken(f.filename));
-      result.player.files.forEach(f => addToken(f.filename));
+      result.player.files.forEach(f => {
+        addToken(f.filename);
+        addPlayerPatchTokens(f.filename);
+      });
     });
 
     const allFiles = await this.fileUploadRepository.find({
@@ -489,9 +526,17 @@ export class WorkspaceTestFilesValidationService {
       return true;
     }
 
-    const reg = /^(\D+?)[@V-]?((\d+)\.(\d+))(\.\d+)?(-\S+?)?(\.\D{3,4})?$/;
+    const normalizedRef = (ref || '').trim().toUpperCase().replace(/\\/g, '/');
+    if (!normalizedRef) {
+      return false;
+    }
 
-    const match = ref.match(reg);
+    if (allResourceIds.includes(normalizedRef)) {
+      return true;
+    }
+
+    const reg = /^(\D+?)[@V-]?(\d+)\.(\d+)(?:\.(\d+))?(?:-\S+?)?(?:\.(\D{3,4}))?$/;
+    const match = normalizedRef.match(reg);
 
     if (!match) {
       return false;
@@ -500,15 +545,14 @@ export class WorkspaceTestFilesValidationService {
     const module = match[1];
     const major = match[2];
     const minor = match[3];
-    const hasPatch = !!match[4];
+    const patch = match[4];
 
-    if (hasPatch) {
+    if (patch) {
       return false;
     }
 
     const prefix = `${module}-${major}.${minor}.`;
-
-    return allResourceIds.some(id => id && typeof id === 'string' && id.startsWith(prefix));
+    return allResourceIds.some(id => id && typeof id === 'string' && id.toUpperCase().startsWith(prefix));
   }
 
   private processTestTakerWithCache(
