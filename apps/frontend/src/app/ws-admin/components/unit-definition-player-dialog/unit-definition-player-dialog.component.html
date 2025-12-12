@@ -1,0 +1,36 @@
+<div class="dialog-container">
+  <div class="dialog-header">
+    <h2 class="dialog-title">Aufgabendefinition: {{ data.unitId }}</h2>
+    <button mat-icon-button (click)="close()" class="close-button">
+      <mat-icon>close</mat-icon>
+    </button>
+  </div>
+
+  <mat-divider></mat-divider>
+
+  <mat-dialog-content>
+    <div *ngIf="isLoading" class="loading-container">
+      <mat-spinner diameter="40"></mat-spinner>
+      <p>Aufgabendefinition wird geladen...</p>
+    </div>
+
+    <div *ngIf="!isLoading && errorMessage" class="error-container">
+      <mat-icon color="warn">error</mat-icon>
+      <p>{{ errorMessage }}</p>
+    </div>
+
+    <div *ngIf="!isLoading && !errorMessage && unitDef && unitPlayer" class="player-container">
+      <coding-box-unit-player
+        [unitDef]="unitDef"
+        [unitPlayer]="unitPlayer"
+        [printMode]="true">
+      </coding-box-unit-player>
+    </div>
+  </mat-dialog-content>
+
+  <mat-divider></mat-divider>
+
+  <mat-dialog-actions align="end">
+    <button mat-button (click)="close()">Schließen</button>
+  </mat-dialog-actions>
+</div>

@@ -321,6 +321,58 @@ export class WorkspaceFilesController {
     }
   }
 
+  @Get(':workspace_id/files/testtakers/:testtaker_id/content')
+  @ApiTags('admin workspace')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get TestTakers XML content', description: 'Retrieves the XML content of a TestTakers file by its file_id' })
+  @ApiParam({
+    name: 'workspace_id',
+    type: Number,
+    required: true,
+    description: 'The unique ID of the workspace'
+  })
+  @ApiParam({
+    name: 'testtaker_id',
+    type: String,
+    required: true,
+    description: 'The file_id of the TestTakers file'
+  })
+  @ApiOkResponse({
+    description: 'TestTakers XML content retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        content: { type: 'string' }
+      }
+    }
+  })
+  @ApiNotFoundResponse({ description: 'TestTakers file not found' })
+  @ApiBadRequestResponse({ description: 'Invalid workspace ID or TestTakers file_id' })
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  async getTestTakerContent(
+    @Param('workspace_id') workspace_id: number,
+      @Param('testtaker_id') testtaker_id: string
+  ): Promise<{ content: string }> {
+    if (!workspace_id || workspace_id <= 0) {
+      throw new BadRequestException('Invalid workspace ID. Please provide a valid ID.');
+    }
+
+    if (!testtaker_id) {
+      throw new BadRequestException('Invalid TestTakers file_id. Please provide a valid id.');
+    }
+
+    try {
+      const content = await this.workspaceFilesService.getTestTakerContent(workspace_id, testtaker_id);
+      return { content };
+    } catch (error) {
+      if (error.message.includes('not found')) {
+        throw new NotFoundException(`TestTakers file with id ${testtaker_id} not found in workspace ${workspace_id}`);
+      }
+
+      throw new InternalServerErrorException(`Error retrieving TestTakers content: ${error.message}`);
+    }
+  }
+
   @Get(':workspace_id/files/coding-scheme/:coding_scheme_ref')
   @ApiTags('admin workspace')
   @ApiBearerAuth()

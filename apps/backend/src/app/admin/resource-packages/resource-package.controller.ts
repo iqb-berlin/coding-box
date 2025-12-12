@@ -26,7 +26,7 @@ import { ParseFile } from './parse-file-pipe';
 import { ResourcePackageDto } from '../../../../../../api-dto/resource-package/resource-package-dto';
 
 @ApiTags('Admin Resource Packages')
-@Controller('admin/workspace/:workspaceId/resource-packages')
+@Controller('admin/workspace/:workspace_id/resource-packages')
 export class ResourcePackageController {
   constructor(
     private resourcePackageService: ResourcePackageService
@@ -41,7 +41,7 @@ export class ResourcePackageController {
     description: 'Retrieves a list of all resource packages for the specified workspace'
   })
   @ApiParam({
-    name: 'workspaceId',
+    name: 'workspace_id',
     type: Number,
     description: 'The ID of the workspace',
     required: true
@@ -55,7 +55,7 @@ export class ResourcePackageController {
   })
   @ApiBadRequestResponse({ description: 'Failed to retrieve resource packages' })
   async findResourcePackages(
-    @Param('workspaceId', ParseIntPipe) workspaceId: number
+    @Param('workspace_id', ParseIntPipe) workspaceId: number
   ): Promise<ResourcePackageDto[]> {
     const resourcePackages = await this.resourcePackageService.findResourcePackages(workspaceId);
 
@@ -70,7 +70,7 @@ export class ResourcePackageController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiParam({
-    name: 'workspaceId',
+    name: 'workspace_id',
     type: Number,
     description: 'The ID of the workspace',
     required: true
@@ -85,7 +85,7 @@ export class ResourcePackageController {
   @ApiNotFoundResponse({ description: 'Resource package not found.' })
   @ApiTags('admin resource-packages')
   async removeResourcePackage(
-    @Param('workspaceId', ParseIntPipe) workspaceId: number,
+    @Param('workspace_id', ParseIntPipe) workspaceId: number,
       @Param('id', ParseIntPipe) id: number
   ): Promise<void> {
     return this.resourcePackageService.removeResourcePackage(workspaceId, id);
@@ -96,7 +96,7 @@ export class ResourcePackageController {
   @ApiBearerAuth()
   @ApiTags('admin resource-packages')
   @ApiParam({
-    name: 'workspaceId',
+    name: 'workspace_id',
     type: Number,
     description: 'The ID of the workspace',
     required: true
@@ -109,7 +109,7 @@ export class ResourcePackageController {
   })
   @ApiOkResponse({ description: 'Admin resource-packages deleted successfully.' })
   async removeIds(
-    @Param('workspaceId', ParseIntPipe) workspaceId: number,
+    @Param('workspace_id', ParseIntPipe) workspaceId: number,
       @Query('id', new ParseArrayPipe({ items: Number, separator: ',' })) id: number[]
   ) : Promise<void> {
     return this.resourcePackageService.removeResourcePackages(workspaceId, id);
@@ -124,7 +124,7 @@ export class ResourcePackageController {
   @ApiBearerAuth()
   @ApiTags('admin resource-packages')
   @ApiParam({
-    name: 'workspaceId',
+    name: 'workspace_id',
     type: Number,
     description: 'The ID of the workspace',
     required: true
@@ -136,7 +136,7 @@ export class ResourcePackageController {
     required: true
   })
   async getZippedResourcePackage(
-    @Param('workspaceId', ParseIntPipe) workspaceId: number,
+    @Param('workspace_id', ParseIntPipe) workspaceId: number,
       @Param('name') name: string
   ): Promise<StreamableFile> {
     const file = await this.resourcePackageService.getZippedResourcePackage(workspaceId, name);
@@ -161,7 +161,7 @@ export class ResourcePackageController {
   })
   @ApiTags('admin resource-packages')
   async create(
-    @Param('workspaceId', ParseIntPipe) workspaceId: number,
+    @Param('workspace_id', ParseIntPipe) workspaceId: number,
       @UploadedFile(ParseFile) zippedResourcePackage: Express.Multer.File
   ): Promise<number> {
     return this.resourcePackageService.create(workspaceId, zippedResourcePackage);

@@ -4,7 +4,7 @@
       <mat-icon>upload</mat-icon>
       Testcenter Import
     </a>
-    <a mat-raised-button color="primary" (click)="hiddenFileInput.click()">
+    <a mat-raised-button color="primary" (click)="hiddenFileInput.click()" matTooltip="Unterstützte Dateitypen: .xml, .voud, .vocs, .zip, .html">
       <mat-icon>upload</mat-icon>
       Test Dateien hochladen
     </a>
@@ -28,7 +28,7 @@
 
   <input #hiddenFileInput type="file"
     name="files"
-    accept=".xml,.voud,.vocs,.zip,.html,.csv"
+    accept=".xml,.voud,.vocs,.zip,.html"
     multiple
     [hidden]="true"
     (change)="onFileSelected($event.currentTarget)"/>

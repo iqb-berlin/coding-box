@@ -641,7 +641,7 @@ export class TestResultsSearchComponent implements OnInit {
 
   viewBookletInfo(booklet: BookletSearchResult): void {
     const loadingSnackBar = this.snackBar.open(
-      'Lade Booklet-Informationen...',
+      'Lade Testheft-Informationen...',
       '',
       { duration: 3000 }
     );
@@ -654,7 +654,8 @@ export class TestResultsSearchComponent implements OnInit {
         loadingSnackBar.dismiss();
 
         this.dialog.open(BookletInfoDialogComponent, {
-          width: '800px',
+          width: '1200px',
+          height: '80vh',
           data: {
             bookletInfo,
             bookletId: booklet.bookletName
@@ -664,7 +665,7 @@ export class TestResultsSearchComponent implements OnInit {
       error: () => {
         loadingSnackBar.dismiss();
         this.snackBar.open(
-          'Fehler beim Laden der Booklet-Informationen',
+          'Fehler beim Laden der Testheft-Informationen',
           'Fehler',
           { duration: 3000 }
         );

@@ -2,26 +2,20 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Like, Repository } from 'typeorm';
 import * as cheerio from 'cheerio';
-import { Element } from 'domhandler';
-import AdmZip = require('adm-zip');
-import * as fs from 'fs';
 import * as path from 'path';
-import * as libxmljs from 'libxmljs2';
 import { parseStringPromise } from 'xml2js';
 import { VariableInfo } from '@iqbspecs/variable-info/variable-info.interface';
-import { statusNumberToString } from '../utils/response-status-converter';
 import FileUpload, { StructuredFileData } from '../entities/file_upload.entity';
 import { FilesDto } from '../../../../../../api-dto/files/files.dto';
 import { FileIo } from '../../admin/workspace/file-io.interface';
 import { FileDownloadDto } from '../../../../../../api-dto/files/file-download.dto';
-import { FileValidationResultDto, FilteredTestTaker } from '../../../../../../api-dto/files/file-validation-result.dto';
+import { FileValidationResultDto } from '../../../../../../api-dto/files/file-validation-result.dto';
 import { ResponseDto } from '../../../../../../api-dto/responses/response-dto';
 import { InvalidVariableDto } from '../../../../../../api-dto/files/variable-validation.dto';
-import { DuplicateResponseDto, DuplicateResponsesResultDto } from '../../../../../../api-dto/files/duplicate-response.dto';
+import { DuplicateResponsesResultDto } from '../../../../../../api-dto/files/duplicate-response.dto';
 import { Unit } from '../entities/unit.entity';
 import { UnitVariableDetailsDto } from '../../models/unit-variable-details.dto';
 import { ResponseEntity } from '../entities/response.entity';
-import { Booklet } from '../entities/booklet.entity';
 import {
   MissingPersonDto,
   TestTakerLoginDto,
@@ -29,57 +23,11 @@ import {
 } from '../../../../../../api-dto/files/testtakers-validation.dto';
 import Persons from '../entities/persons.entity';
 import { CodingStatisticsService } from './coding-statistics.service';
-
-function sanitizePath(filePath: string): string {
-  const normalizedPath = path.normalize(filePath);
-  if (normalizedPath.startsWith('..')) {
-    throw new Error('Invalid file path: Path cannot navigate outside root.');
-  }
-  return normalizedPath.replace(/\\/g, '/');
-}
-
-type FileStatus = {
-  filename: string;
-  exists: boolean;
-};
-
-type DataValidation = {
-  complete: boolean;
-  missing: string[];
-  missingUnitsPerBooklet?: { booklet: string; missingUnits: string[] }[];
-  unitsWithoutPlayer?: string[];
-  unused?: string[];
-  unusedBooklets?: string[];
-  files: FileStatus[];
-};
-
-type ValidationData = {
-  testTaker: string;
-  booklets: DataValidation;
-  units: DataValidation;
-  schemes: DataValidation;
-  definitions: DataValidation;
-  player: DataValidation;
-};
-
-export type ValidationResult = {
-  allUnitsExist: boolean;
-  missingUnits: string[];
-  missingUnitsPerBooklet: { booklet: string; missingUnits: string[] }[];
-  unitsWithoutPlayer: string[];
-  unitFiles: FileStatus[];
-  allUnitsUsedInBooklets: boolean;
-  unusedUnits: string[];
-  allCodingSchemesExist: boolean;
-  allCodingDefinitionsExist: boolean;
-  missingCodingSchemeRefs: string[];
-  missingDefinitionRefs: string[];
-  schemeFiles: FileStatus[];
-  definitionFiles: FileStatus[];
-  allPlayerRefsExist: boolean;
-  missingPlayerRefs: string[];
-  playerFiles: FileStatus[];
-};
+import { WorkspaceXmlSchemaValidationService } from './workspace-xml-schema-validation.service';
+import { WorkspaceFileStorageService } from './workspace-file-storage.service';
+import { WorkspaceFileParsingService } from './workspace-file-parsing.service';
+import { WorkspaceResponseValidationService } from './workspace-response-validation.service';
+import { WorkspaceTestFilesValidationService } from './workspace-test-files-validation.service';
 
 @Injectable()
 export class WorkspaceFilesService implements OnModuleInit {
@@ -93,13 +41,14 @@ export class WorkspaceFilesService implements OnModuleInit {
     private responseRepository: Repository<ResponseEntity>,
     @InjectRepository(Unit)
     private unitRepository: Repository<Unit>,
-    @InjectRepository(FileUpload)
-    private filesRepository: Repository<FileUpload>,
     @InjectRepository(Persons)
     private personsRepository: Repository<Persons>,
-    @InjectRepository(Booklet)
-    private bookletRepository: Repository<Booklet>,
-    private codingStatisticsService: CodingStatisticsService
+    private codingStatisticsService: CodingStatisticsService,
+    private workspaceXmlSchemaValidationService: WorkspaceXmlSchemaValidationService,
+    private workspaceFileStorageService: WorkspaceFileStorageService,
+    private workspaceFileParsingService: WorkspaceFileParsingService,
+    private workspaceResponseValidationService: WorkspaceResponseValidationService,
+    private workspaceTestFilesValidationService: WorkspaceTestFilesValidationService
   ) {}
 
   async findAllFileTypes(workspaceId: number): Promise<string[]> {
@@ -198,167 +147,7 @@ export class WorkspaceFilesService implements OnModuleInit {
   }
 
   async validateTestFiles(workspaceId: number): Promise<FileValidationResultDto> {
-    try {
-      const testTakers = await this.fileUploadRepository.find({
-        where: { workspace_id: workspaceId, file_type: In(['TestTakers', 'Testtakers']) }
-      });
-
-      if (!testTakers || testTakers.length === 0) {
-        this.logger.warn(`No TestTakers found in workspace with ID ${workspaceId}.`);
-        return {
-          testTakersFound: false,
-          validationResults: this.createEmptyValidationData()
-        };
-      }
-
-      const allBooklets = await this.fileUploadRepository.find({
-        where: { workspace_id: workspaceId, file_type: 'Booklet' }
-      });
-
-      if (!allBooklets || allBooklets.length === 0) {
-        this.logger.warn(`No booklets found in workspace with ID ${workspaceId}.`);
-        return {
-          testTakersFound: true,
-          validationResults: this.createEmptyValidationData()
-        };
-      }
-
-      const modesNotToFilter = ['run-hot-return', 'run-hot-restart', 'run-trial'];
-
-      const shouldFilterMode = (loginMode: string) => !modesNotToFilter.includes(loginMode);
-
-      let filteredTestTakers: FilteredTestTaker[] = [];
-      const loginOccurrences = new Map<string, { testTaker: string, mode: string }[]>();
-
-      for (const testTaker of testTakers) {
-        const xmlDocument = cheerio.load(testTaker.data, { xml: true });
-        const groupElements = xmlDocument('Group');
-
-        for (let i = 0; i < groupElements.length; i++) {
-          const groupElement = groupElements[i];
-          const loginElements = xmlDocument(groupElement).find('Login');
-
-          for (let j = 0; j < loginElements.length; j++) {
-            const loginElement = loginElements[j];
-            const loginName = xmlDocument(loginElement).attr('name');
-            const loginMode = xmlDocument(loginElement).attr('mode');
-
-            if (loginMode && shouldFilterMode(loginMode) && loginName) {
-              filteredTestTakers.push({
-                testTaker: testTaker.file_id,
-                mode: loginMode,
-                login: loginName
-              });
-
-              const occurrences = loginOccurrences.get(loginName) || [];
-              occurrences.push({
-                testTaker: testTaker.file_id,
-                mode: loginMode
-              });
-              loginOccurrences.set(loginName, occurrences);
-            }
-          }
-        }
-      }
-
-      const duplicateTestTakers = Array.from(loginOccurrences.entries())
-        .filter(([, occurrences]) => occurrences.length > 1)
-        .map(([login, occurrences]) => ({
-          login,
-          occurrences
-        }));
-
-      this.logger.log(`Found ${duplicateTestTakers.length} duplicate test takers across files`);
-
-      if (filteredTestTakers.length > 0) {
-        const loginNames = filteredTestTakers.map(item => item.login);
-        const personsNotConsidered = await this.personsRepository.find({
-          where: {
-            workspace_id: workspaceId,
-            login: In(loginNames),
-            consider: false
-          },
-          select: ['login']
-        });
-
-        const loginsNotConsidered = personsNotConsidered.map(person => person.login);
-
-        if (loginsNotConsidered.length > 0) {
-          this.logger.log(`Filtering out ${loginsNotConsidered.length} test takers where consider is false`);
-          filteredTestTakers = filteredTestTakers.filter(item => !loginsNotConsidered.includes(item.login));
-        }
-      }
-
-      const bookletIdsInTestTakers = new Set<string>();
-      for (const testTaker of testTakers) {
-        const xmlDocument = cheerio.load(testTaker.data, { xml: true });
-        const bookletTags = xmlDocument('Booklet');
-
-        bookletTags.each((_, element) => {
-          const bookletId = xmlDocument(element).text().trim().toUpperCase();
-          if (bookletId) {
-            bookletIdsInTestTakers.add(bookletId);
-          }
-        });
-      }
-
-      const unusedBooklets = allBooklets
-        .filter(booklet => !bookletIdsInTestTakers.has(booklet.file_id.toUpperCase()))
-        .map(booklet => booklet.file_id);
-
-      this.logger.log(`Found ${unusedBooklets.length} booklets not included in any TestTakers file`);
-      this.logger.log(`Found ${filteredTestTakers.length} TestTakers with modes other than 'run-hot-return', 'run-hot-restart', 'run-trial'`);
-
-      const validationResultsPromises = testTakers.map(testTaker => this.processTestTaker(testTaker, unusedBooklets));
-      const validationResults = (await Promise.all(validationResultsPromises)).filter(Boolean);
-
-      if (validationResults.length > 0) {
-        return {
-          testTakersFound: true,
-          filteredTestTakers: filteredTestTakers.length > 0 ? filteredTestTakers : undefined,
-          duplicateTestTakers: duplicateTestTakers.length > 0 ? duplicateTestTakers : undefined,
-          validationResults
-        };
-      }
-
-      const emptyValidation = this.createEmptyValidationData();
-      if (emptyValidation.length > 0 && unusedBooklets.length > 0) {
-        emptyValidation[0].booklets.unusedBooklets = unusedBooklets;
-      }
-
-      return {
-        testTakersFound: true,
-        filteredTestTakers: filteredTestTakers.length > 0 ? filteredTestTakers : undefined,
-        duplicateTestTakers: duplicateTestTakers.length > 0 ? duplicateTestTakers : undefined,
-        validationResults: emptyValidation
-      };
-    } catch (error) {
-      this.logger.error(`Error during test file validation for workspace ID ${workspaceId}: ${error.message}`, error.stack);
-      throw new Error(`Error during test file validation for workspace ID ${workspaceId}: ${error.message}`);
-    }
-  }
-
-  private createEmptyValidationData(): ValidationData[] {
-    return [{
-      testTaker: '',
-      booklets: {
-        complete: false,
-        missing: [],
-        unusedBooklets: [],
-        files: []
-      },
-      units: {
-        complete: false,
-        missing: [],
-        missingUnitsPerBooklet: [],
-        unitsWithoutPlayer: [],
-        unused: [],
-        files: []
-      },
-      schemes: { complete: false, missing: [], files: [] },
-      definitions: { complete: false, missing: [], files: [] },
-      player: { complete: false, missing: [], files: [] }
-    }];
+    return this.workspaceTestFilesValidationService.validateTestFiles(workspaceId);
   }
 
   async createDummyTestTakerFile(workspaceId: number): Promise<boolean> {
@@ -486,122 +275,6 @@ ${bookletRefs}
     }
   }
 
-  private async processTestTaker(testTaker: FileUpload, unusedBooklets: string[] = []): Promise<ValidationData | null> {
-    const xmlDocument = cheerio.load(testTaker.data, { xml: true });
-    const bookletTags = xmlDocument('Booklet');
-    const unitTags = xmlDocument('Unit');
-
-    if (bookletTags.length === 0) {
-      this.logger.warn('No <Booklet> elements found in the XML document.');
-      return null;
-    }
-
-    this.logger.log(`Found ${bookletTags.length} <Booklet> elements.`);
-
-    const {
-      uniqueBooklets
-    } = this.extractXmlData(bookletTags, unitTags);
-
-    const { allBookletsExist, missingBooklets, bookletFiles } = await this.checkMissingBooklets(Array.from(uniqueBooklets));
-    const {
-      allUnitsExist,
-      missingUnits,
-      missingUnitsPerBooklet,
-      unitFiles,
-      unusedUnits,
-      missingCodingSchemeRefs,
-      missingDefinitionRefs,
-      schemeFiles,
-      definitionFiles,
-      allCodingSchemesExist,
-      allCodingDefinitionsExist,
-      allPlayerRefsExist,
-      missingPlayerRefs,
-      playerFiles,
-      unitsWithoutPlayer
-    } = await this.checkMissingUnits(Array.from(uniqueBooklets));
-
-    const bookletComplete = allBookletsExist;
-    const unitComplete = bookletComplete && allUnitsExist;
-
-    return {
-      testTaker: testTaker.file_id,
-      booklets: {
-        complete: bookletComplete,
-        missing: missingBooklets,
-        unusedBooklets,
-        files: bookletFiles
-      },
-      units: {
-        complete: bookletComplete ? (allUnitsExist) : false,
-        missing: missingUnits,
-        missingUnitsPerBooklet: missingUnitsPerBooklet,
-        unitsWithoutPlayer: unitsWithoutPlayer,
-        unused: unusedUnits,
-        files: unitFiles
-      },
-      schemes: {
-        complete: unitComplete ? allCodingSchemesExist : false,
-        missing: missingCodingSchemeRefs,
-        files: schemeFiles
-      },
-      definitions: {
-        complete: unitComplete ? allCodingDefinitionsExist : false,
-        missing: missingDefinitionRefs,
-        files: definitionFiles
-      },
-      player: {
-        complete: unitComplete ? allPlayerRefsExist : false,
-        missing: missingPlayerRefs,
-        files: playerFiles
-      }
-    };
-  }
-
-  private extractXmlData(
-    bookletTags: cheerio.Cheerio<Element>,
-    unitTags: cheerio.Cheerio<Element>
-  ): {
-      uniqueBooklets: Set<string>;
-      uniqueUnits: Set<string>;
-      codingSchemeRefs: string[];
-      definitionRefs: string[];
-    } {
-    const uniqueBooklets = new Set<string>();
-    const uniqueUnits = new Set<string>();
-    const codingSchemeRefs: string[] = [];
-    const definitionRefs: string[] = [];
-
-    bookletTags.each((_, booklet) => {
-      const bookletValue = cheerio.load(booklet).text().trim();
-      uniqueBooklets.add(bookletValue);
-    });
-
-    unitTags.each((_, unit) => {
-      const $ = cheerio.load(unit);
-      const unitElements = $('unit');
-
-      unitElements.each((__, codingScheme) => {
-        const value = $(codingScheme).text().trim();
-        if (value) codingSchemeRefs.push(value);
-      });
-
-      $('DefinitionRef').each((__, definition) => {
-        const value = $(definition).text().trim();
-        if (value) definitionRefs.push(value);
-      });
-
-      const unitId = unitElements.attr('id');
-      if (unitId) {
-        uniqueUnits.add(unitId.trim());
-      }
-    });
-
-    return {
-      uniqueBooklets, uniqueUnits, codingSchemeRefs, definitionRefs
-    };
-  }
-
   async uploadTestFiles(workspace_id: number, originalFiles: FileIo[]): Promise<boolean> {
     this.logger.log(`Uploading test files for workspace ${workspace_id}`);
 
@@ -714,237 +387,6 @@ ${bookletRefs}
     return new Error(message);
   }
 
-  private async validateXmlAgainstSchema(xml: string, xsdPath: string): Promise<boolean> {
-    try {
-      const xsdContent = fs.readFileSync(xsdPath, 'utf8');
-      const xsdDoc = libxmljs.parseXml(xsdContent);
-      const xmlDoc = libxmljs.parseXml(xml);
-      return xmlDoc.validate(xsdDoc);
-    } catch (err) {
-      this.logger.error(`XML validation error: ${err.message}`);
-      return false;
-    }
-  }
-
-  private async extractUnitInfo(xmlDocument: cheerio.CheerioAPI): Promise<Record<string, unknown>> {
-    try {
-      const result: Record<string, unknown> = {};
-      const metadata = xmlDocument('Metadata');
-      if (metadata.length) {
-        const metadataInfo: Record<string, string> = {};
-
-        const id = metadata.find('Id');
-        if (id.length) {
-          metadataInfo.id = id.text().trim();
-        }
-
-        const label = metadata.find('Label');
-        if (label.length) {
-          metadataInfo.label = label.text().trim();
-        }
-
-        const description = metadata.find('Description');
-        if (description.length) {
-          metadataInfo.description = description.text().trim();
-        }
-
-        result.metadata = metadataInfo;
-      }
-
-      const baseVariables = xmlDocument('BaseVariables Variable');
-      if (baseVariables.length) {
-        const variables: Array<Record<string, unknown>> = [];
-
-        baseVariables.each((index, element) => {
-          const variable = xmlDocument(element);
-          const variableInfo: Record<string, unknown> = {};
-
-          const attrs = variable.attr();
-          if (attrs) {
-            variableInfo.id = attrs.id;
-            variableInfo.alias = attrs.alias;
-            variableInfo.type = attrs.type;
-            variableInfo.format = attrs.format;
-            variableInfo.multiple = attrs.multiple === 'true';
-            variableInfo.nullable = attrs.nullable !== 'false';
-
-            if (attrs.values) {
-              variableInfo.values = attrs.values.split('|');
-            }
-
-            if (attrs.valuesComplete) {
-              variableInfo.valuesComplete = attrs.valuesComplete === 'true';
-            }
-
-            if (attrs.page) {
-              variableInfo.page = attrs.page;
-            }
-          }
-
-          const alias = variable.text().trim();
-          if (alias) {
-            variableInfo.alias = alias;
-          }
-
-          variables.push(variableInfo);
-        });
-
-        result.variables = variables;
-      }
-
-      const definitions = xmlDocument('Definition');
-      if (definitions.length) {
-        const definitionsArray: Array<Record<string, string>> = [];
-
-        definitions.each((index, element) => {
-          const definition = xmlDocument(element);
-          const definitionInfo: Record<string, string> = {};
-
-          const attrs = definition.attr();
-          if (attrs) {
-            definitionInfo.id = attrs.id;
-            definitionInfo.type = attrs.type;
-          }
-
-          definitionsArray.push(definitionInfo);
-        });
-
-        result.definitions = definitionsArray;
-      }
-
-      return result;
-    } catch (error) {
-      this.logger.error(`Error extracting Unit information: ${error.message}`);
-      return {};
-    }
-  }
-
-  private async extractBookletInfo(xmlDocument: cheerio.CheerioAPI): Promise<Record<string, unknown>> {
-    try {
-      const result: Record<string, unknown> = {};
-      const metadata = xmlDocument('Metadata');
-      if (metadata.length) {
-        const metadataInfo: Record<string, string> = {};
-        const id = metadata.find('Id');
-        if (id.length) {
-          metadataInfo.id = id.text().trim();
-        }
-        const label = metadata.find('Label');
-        if (label.length) {
-          metadataInfo.label = label.text().trim();
-        }
-        const description = metadata.find('Description');
-        if (description.length) {
-          metadataInfo.description = description.text().trim();
-        }
-
-        result.metadata = metadataInfo;
-      }
-
-      const units = xmlDocument('Units Unit');
-      if (units.length) {
-        const unitsArray: Array<Record<string, string>> = [];
-
-        units.each((index, element) => {
-          const unit = xmlDocument(element);
-          const unitInfo: Record<string, string> = {};
-
-          const attrs = unit.attr();
-          if (attrs) {
-            unitInfo.id = attrs.id;
-            unitInfo.label = attrs.label;
-            unitInfo.labelShort = attrs.labelshort;
-          }
-
-          unitsArray.push(unitInfo);
-        });
-
-        result.units = unitsArray;
-      }
-
-      return result;
-    } catch (error) {
-      this.logger.error(`Error extracting Booklet information: ${error.message}`);
-      return {};
-    }
-  }
-
-  private async extractTestTakersInfo(xmlDocument: cheerio.CheerioAPI): Promise<Record<string, unknown>> {
-    try {
-      const result: Record<string, unknown> = {};
-
-      const testTakers = xmlDocument('Testtaker');
-      if (testTakers.length) {
-        const testTakersArray: Array<Record<string, unknown>> = [];
-
-        testTakers.each((index, element) => {
-          const testTaker = xmlDocument(element);
-          const testTakerInfo: Record<string, unknown> = {};
-
-          const attrs = testTaker.attr();
-          if (attrs) {
-            testTakerInfo.id = attrs.id;
-            testTakerInfo.login = attrs.login;
-            testTakerInfo.code = attrs.code;
-          }
-
-          const booklets = testTaker.find('Booklet');
-          if (booklets.length) {
-            const bookletsArray: string[] = [];
-
-            booklets.each((bookletIndex, bookletElement) => {
-              const booklet = xmlDocument(bookletElement);
-              bookletsArray.push(booklet.text().trim());
-            });
-
-            testTakerInfo.booklets = bookletsArray;
-          }
-
-          testTakersArray.push(testTakerInfo);
-        });
-
-        result.testTakers = testTakersArray;
-      }
-
-      const groups = xmlDocument('Group');
-      if (groups.length) {
-        const groupsArray: Array<Record<string, unknown>> = [];
-
-        groups.each((groupIndex, element) => {
-          const group = xmlDocument(element);
-          const groupInfo: Record<string, unknown> = {};
-
-          const attrs = group.attr();
-          if (attrs) {
-            groupInfo.id = attrs.id;
-            groupInfo.label = attrs.label;
-          }
-
-          const members = group.find('Member');
-          if (members.length) {
-            const membersArray: string[] = [];
-
-            members.each((memberIndex, memberElement) => {
-              const member = xmlDocument(memberElement);
-              membersArray.push(member.text().trim());
-            });
-
-            groupInfo.members = membersArray;
-          }
-
-          groupsArray.push(groupInfo);
-        });
-
-        result.groups = groupsArray;
-      }
-
-      return result;
-    } catch (error) {
-      this.logger.error(`Error extracting TestTakers information: ${error.message}`);
-      return {};
-    }
-  }
-
   private async handleXmlFile(workspaceId: number, file: FileIo): Promise<unknown> {
     try {
       if (!file.buffer || !file.buffer.length) {
@@ -972,17 +414,22 @@ ${bookletRefs}
         return this.unsupportedFile(`Unsupported root tag: ${rootTagName}`);
       }
 
-      const schemaPaths: Record<string, string> = {
-        UNIT: path.resolve(__dirname, 'schemas/unit.xsd'),
-        BOOKLET: path.resolve(__dirname, 'schemas/booklet.xsd'),
-        TESTTAKERS: path.resolve(__dirname, 'schemas/testtakers.xsd')
-      };
-      const xsdPath = schemaPaths[rootTagName];
-      if (!xsdPath || !fs.existsSync(xsdPath)) {
-        return this.unsupportedFile(`No XSD schema found for root tag: ${rootTagName}`);
+      let xmlValidation: { schemaValid: boolean; errors: string[] };
+      try {
+        xmlValidation = await this.workspaceXmlSchemaValidationService.validateXmlViaXsdUrl(xmlContent);
+      } catch (e) {
+        const message = e instanceof Error ? e.message : 'Unknown XML schema validation error';
+        return this.unsupportedFile(message);
       }
 
-      await this.validateXmlAgainstSchema(xmlContent, xsdPath);
+      if (!xmlValidation.schemaValid) {
+        const maxErrors = 10;
+        const errorsPreview = (xmlValidation.errors || []).slice(0, maxErrors);
+        this.logger.warn(
+          `XSD validation failed on upload: ${file.originalname} (errors: ${xmlValidation.errors.length}) ${JSON.stringify(errorsPreview)}`
+        );
+        return this.unsupportedFile(`XSD validation failed: ${file.originalname}`);
+      }
 
       const metadata = xmlDocument('Metadata');
       const idElement = metadata.find('Id');
@@ -1006,11 +453,11 @@ ${bookletRefs}
       let extractedInfo: Record<string, unknown> = {};
       try {
         if (fileType === 'Unit') {
-          extractedInfo = await this.extractUnitInfo(xmlDocument);
+          extractedInfo = await this.workspaceFileParsingService.extractUnitInfo(xmlDocument);
         } else if (fileType === 'Booklet') {
-          extractedInfo = await this.extractBookletInfo(xmlDocument);
+          extractedInfo = await this.workspaceFileParsingService.extractBookletInfo(xmlDocument);
         } else if (fileType === 'TestTakers') {
-          extractedInfo = await this.extractTestTakersInfo(xmlDocument);
+          extractedInfo = await this.workspaceFileParsingService.extractTestTakersInfo(xmlDocument);
         }
         this.logger.log(`Extracted information from ${fileType} file: ${JSON.stringify(extractedInfo)}`);
       } catch (extractError) {
@@ -1053,7 +500,7 @@ ${bookletRefs}
       };
 
       if (metadata['@type'] === 'schemer') {
-        const resourceFileId = WorkspaceFilesService.getSchemerId(file);
+        const resourceFileId = this.workspaceFileParsingService.getSchemerId(file);
         return await this.fileUploadRepository.upsert({
           filename: file.originalname,
           workspace_id: workspaceId,
@@ -1065,7 +512,7 @@ ${bookletRefs}
         }, ['file_id', 'workspace_id']);
       }
 
-      const resourceFileId = WorkspaceFilesService.getPlayerId(file);
+      const resourceFileId = this.workspaceFileParsingService.getPlayerId(file);
       return await this.fileUploadRepository.upsert({
         filename: file.originalname,
         workspace_id: workspaceId,
@@ -1076,7 +523,7 @@ ${bookletRefs}
         structured_data: structuredData
       }, ['file_id', 'workspace_id']);
     } catch (error) {
-      const resourceFileId = WorkspaceFilesService.getResourceId(file);
+      const resourceFileId = this.workspaceFileParsingService.getResourceId(file);
       return this.fileUploadRepository.upsert({
         filename: file.originalname,
         workspace_id: workspaceId,
@@ -1167,35 +614,10 @@ ${bookletRefs}
     const promises: Array<Promise<unknown>> = [];
 
     try {
-      const zip = new AdmZip(file.buffer);
-      const zipEntries = zip.getEntries();
+      const fileIos = this.workspaceFileStorageService.unzipToFileIos(file.buffer);
+      this.logger.log(`Found ${fileIos.length} entries in ZIP file ${file.originalname}`);
 
-      if (zipEntries.length === 0) {
-        this.logger.warn(`ZIP file ${file.originalname} is empty.`);
-        return [Promise.reject(new Error(`ZIP file ${file.originalname} is empty.`))];
-      }
-
-      this.logger.log(`Found ${zipEntries.length} entries in ZIP file ${file.originalname}`);
-
-      zipEntries.forEach(zipEntry => {
-        if (zipEntry.isDirectory) {
-          return;
-        }
-
-        const entryName = zipEntry.entryName;
-        const sanitizedEntryName = sanitizePath(entryName);
-        const entryData = zipEntry.getData();
-
-        const mimeType = this.getMimeType(sanitizedEntryName);
-        const fileIo: FileIo = {
-          originalname: path.basename(sanitizedEntryName),
-          buffer: entryData,
-          mimetype: mimeType,
-          size: entryData.length,
-          fieldname: '',
-          encoding: ''
-        };
-
+      fileIos.forEach(fileIo => {
         promises.push(...this.handleFile(workspaceId, fileIo));
       });
 
@@ -1204,254 +626,6 @@ ${bookletRefs}
       this.logger.error(`Error processing ZIP file ${file.originalname}: ${error.message}`, error.stack);
       return [Promise.reject(error)];
     }
-  }
-
-  private async checkMissingBooklets(uniqueBookletsArray: string[]): Promise<{
-    allBookletsExist: boolean;
-    missingBooklets: string[];
-    bookletFiles: FileStatus[];
-  }> {
-    this.logger.log(`Checking for missing booklets among ${uniqueBookletsArray.length} unique booklet IDs`);
-
-    const bookletFiles: FileStatus[] = [];
-    const missingBooklets: string[] = [];
-
-    for (const booklet of uniqueBookletsArray) {
-      const bookletId = booklet.trim();
-      if (!bookletId) continue;
-
-      const existingBooklet = await this.fileUploadRepository.findOne({
-        where: { file_id: bookletId.toUpperCase(), file_type: 'Booklet' }
-      });
-
-      const fileStatus: FileStatus = {
-        filename: bookletId,
-        exists: !!existingBooklet
-      };
-
-      bookletFiles.push(fileStatus);
-
-      if (!existingBooklet) {
-        missingBooklets.push(bookletId);
-      }
-    }
-
-    const allBookletsExist = missingBooklets.length === 0;
-    this.logger.log(`Found ${missingBooklets.length} missing booklets out of ${uniqueBookletsArray.length} total`);
-
-    return { allBookletsExist, missingBooklets, bookletFiles };
-  }
-
-  async checkMissingUnits(bookletNames:string[]): Promise<ValidationResult> {
-    try {
-      const existingBooklets = await this.fileUploadRepository.findBy({
-        file_type: 'Booklet',
-        file_id: In(bookletNames.map(b => b.toUpperCase()))
-      });
-
-      const bookletToUnitsMap = new Map<string, string[]>();
-
-      const unitIdsPromises = existingBooklets.map(async booklet => {
-        try {
-          const fileData = booklet.data;
-          const $ = cheerio.load(fileData, { xmlMode: true });
-          const unitIds: string[] = [];
-
-          $('Unit').each((_, element) => {
-            const unitId = $(element).attr('id');
-            if (unitId) {
-              unitIds.push(unitId.toUpperCase());
-            }
-          });
-
-          bookletToUnitsMap.set(booklet.file_id, unitIds);
-
-          return unitIds;
-        } catch (error) {
-          this.logger.error(`Fehler beim Verarbeiten von Unit ${booklet.file_id}:`, error);
-          return [];
-        }
-      });
-
-      const allUnitIdsArrays = await Promise.all(unitIdsPromises);
-      const allUnitIds = Array.from(new Set(allUnitIdsArrays.flat()));
-
-      const allUnitsInWorkspace = await this.fileUploadRepository.findBy({
-        file_type: 'Unit',
-        workspace_id: existingBooklets.length > 0 ? existingBooklets[0].workspace_id : null
-      });
-
-      const unusedUnits = allUnitsInWorkspace
-        .filter(unit => !allUnitIds.includes(unit.file_id.toUpperCase()))
-        .map(unit => unit.file_id);
-
-      const allUnitsUsedInBooklets = unusedUnits.length === 0;
-
-      const chunkSize = 50;
-      const unitBatches = [];
-
-      for (let i = 0; i < allUnitIds.length; i += chunkSize) {
-        const chunk = allUnitIds.slice(i, i + chunkSize);
-        unitBatches.push(chunk);
-      }
-
-      const unitBatchPromises = unitBatches.map(batch => this.fileUploadRepository.find({
-        where: {
-          file_id: In(batch),
-          workspace_id: existingBooklets.length > 0 ? existingBooklets[0].workspace_id : null
-        }
-      }));
-
-      const unitBatchResults = await Promise.all(unitBatchPromises);
-      const existingUnits = unitBatchResults.flat();
-
-      const refsPromises = existingUnits.map(async unit => {
-        try {
-          const fileData = unit.data;
-          const $ = cheerio.load(fileData, { xmlMode: true });
-          const refs = {
-            codingSchemeRefs: [] as string[],
-            definitionRefs: [] as string[],
-            playerRefs: [] as string[],
-            unitId: unit.file_id,
-            hasPlayer: false
-          };
-
-          $('Unit').each((_, element) => {
-            const codingSchemeRef = $(element).find('CodingSchemeRef').text();
-            const definitionRef = $(element).find('DefinitionRef').text();
-            const playerRefAttr = $(element).find('DefinitionRef').attr('player');
-            const playerRef = playerRefAttr ? playerRefAttr.replace('@', '-') : '';
-
-            if (codingSchemeRef) {
-              refs.codingSchemeRefs.push(codingSchemeRef.toUpperCase());
-            }
-
-            if (definitionRef) {
-              refs.definitionRefs.push(definitionRef.toUpperCase());
-            }
-
-            if (playerRef) {
-              refs.playerRefs.push(playerRef.toUpperCase());
-              refs.hasPlayer = true;
-            }
-          });
-
-          return refs;
-        } catch (error) {
-          this.logger.error(`Fehler beim Verarbeiten von Unit ${unit.file_id}:`, error);
-          return {
-            codingSchemeRefs: [],
-            definitionRefs: [],
-            playerRefs: [],
-            unitId: unit.file_id,
-            hasPlayer: false
-          };
-        }
-      });
-
-      const allRefs = await Promise.all(refsPromises);
-
-      const unitsWithoutPlayer = allRefs
-        .filter(ref => !ref.hasPlayer)
-        .map(ref => ref.unitId);
-
-      const allCodingSchemeRefs = Array.from(new Set(allRefs.flatMap(ref => ref.codingSchemeRefs)));
-      const allDefinitionRefs = Array.from(new Set(allRefs.flatMap(ref => ref.definitionRefs)));
-      const allPlayerRefs = Array.from(new Set(allRefs.flatMap(ref => ref.playerRefs)));
-
-      const existingResources = await this.fileUploadRepository.findBy({
-        file_type: 'Resource',
-        workspace_id: existingBooklets.length > 0 ? existingBooklets[0].workspace_id : null
-      });
-
-      const allResourceIds = existingResources.map(resource => resource.file_id);
-
-      // Find missing references
-      const missingCodingSchemeRefs = allCodingSchemeRefs.filter(ref => !allResourceIds.includes(ref));
-      const missingDefinitionRefs = allDefinitionRefs.filter(ref => !allResourceIds.includes(ref));
-      const missingPlayerRefs = allPlayerRefs.filter(ref => !allResourceIds.includes(ref));
-
-      // Check if all references exist
-      const allCodingSchemesExist = missingCodingSchemeRefs.length === 0;
-      const allCodingDefinitionsExist = missingDefinitionRefs.length === 0;
-      const allPlayerRefsExist = missingPlayerRefs.length === 0;
-
-      // Find missing units
-      const foundUnitIds = existingUnits.map(unit => unit.file_id.toUpperCase());
-      const missingUnits = allUnitIds.filter(unitId => !foundUnitIds.includes(unitId));
-      const uniqueUnits = Array.from(new Set(missingUnits));
-
-      // Track missing units per booklet
-      const missingUnitsPerBooklet: { booklet: string; missingUnits: string[] }[] = [];
-
-      // Check each booklet for missing units
-      for (const [booklet, units] of bookletToUnitsMap.entries()) {
-        const missingUnitsForBooklet = units.filter(unitId => !foundUnitIds.includes(unitId));
-        if (missingUnitsForBooklet.length > 0) {
-          missingUnitsPerBooklet.push({
-            booklet,
-            missingUnits: missingUnitsForBooklet
-          });
-        }
-      }
-
-      const allUnitsExist = missingUnits.length === 0;
-
-      // Create lists of all files with their match status
-      const unitFiles: FileStatus[] = allUnitIds.map(unitId => ({
-        filename: unitId,
-        exists: foundUnitIds.includes(unitId)
-      }));
-
-      const schemeFiles: FileStatus[] = allCodingSchemeRefs.map(ref => ({
-        filename: ref,
-        exists: allResourceIds.includes(ref)
-      }));
-
-      const definitionFiles: FileStatus[] = allDefinitionRefs.map(ref => ({
-        filename: ref,
-        exists: allResourceIds.includes(ref)
-      }));
-
-      const playerFiles: FileStatus[] = allPlayerRefs.map(ref => ({
-        filename: ref,
-        exists: allResourceIds.includes(ref)
-      }));
-
-      return {
-        allUnitsExist,
-        missingUnits: uniqueUnits,
-        missingUnitsPerBooklet,
-        unitsWithoutPlayer,
-        unitFiles,
-        allUnitsUsedInBooklets,
-        unusedUnits,
-        allCodingSchemesExist,
-        allCodingDefinitionsExist,
-        missingCodingSchemeRefs,
-        missingDefinitionRefs,
-        schemeFiles,
-        definitionFiles,
-        allPlayerRefsExist,
-        missingPlayerRefs,
-        playerFiles
-      };
-    } catch (error) {
-      this.logger.error('Error validating units', error);
-      throw new Error(`Error validating units: ${error.message}`);
-    }
-  }
-
-  private getMimeType(fileName: string): string {
-    const extension = path.extname(fileName).toLowerCase();
-    const mimeTypes: Record<string, string> = {
-      '.xml': 'text/xml',
-      '.html': 'text/html',
-      '.htm': 'text/html',
-      '.zip': 'application/zip'
-    };
-    return mimeTypes[extension] || 'application/octet-stream';
   }
 
   static cleanResponses(rows: ResponseDto[]): ResponseDto[] {
@@ -1485,62 +659,6 @@ ${bookletRefs}
     }
   }
 
-  private static getPlayerId(file: FileIo): string {
-    try {
-      const playerCode = file.buffer.toString();
-      const playerContent = cheerio.load(playerCode);
-      const metaDataElement = playerContent('script[type="application/ld+json"]');
-      const metadata = JSON.parse(metaDataElement.text());
-      return WorkspaceFilesService.normalizePlayerId(`${metadata.id}-${metadata.version}`);
-    } catch (error) {
-      return WorkspaceFilesService.getResourceId(file);
-    }
-  }
-
-  private static getSchemerId(file: FileIo): string {
-    try {
-      const schemerCode = file.buffer.toString();
-      const schemerContent = cheerio.load(schemerCode);
-      const metaDataElement = schemerContent('script[type="application/ld+json"]');
-      const metadata = JSON.parse(metaDataElement.text());
-      return WorkspaceFilesService.normalizePlayerId(`${metadata['@id']}-${metadata.version}`);
-    } catch (error) {
-      return WorkspaceFilesService.getResourceId(file);
-    }
-  }
-
-  private static getResourceId(file: FileIo): string {
-    if (!file?.originalname) {
-      throw new Error('Invalid file: originalname is required.');
-    }
-    const filePathParts = file.originalname.split('/')
-      .map(part => part.trim());
-    const fileName = filePathParts.pop();
-    if (!fileName) {
-      throw new Error('Invalid file: Could not determine the file name.');
-    }
-    return fileName.toUpperCase();
-  }
-
-  private static normalizePlayerId(name: string): string {
-    const reg = /^(\D+?)[@V-]?((\d+)(\.\d+)?(\.\d+)?(-\S+?)?)?(.\D{3,4})?$/;
-
-    const matches = name.match(reg);
-
-    if (!matches) {
-      throw new Error(`Invalid player name: ${name}`);
-    }
-
-    const [, module = '', , major = '', minorDot = '', patchDot = ''] = matches;
-
-    const majorVersion = parseInt(major, 10) || 0;
-    const minorVersion = minorDot ? parseInt(minorDot.substring(1), 10) : 0;
-    const patchVersion = patchDot ? parseInt(patchDot.substring(1), 10) : 0;
-    // const label = labelWithDash ? labelWithDash.substring(1) : '';
-
-    return `${module}-${majorVersion}.${minorVersion}.${patchVersion}`.toUpperCase();
-  }
-
   async getUnitContent(workspaceId: number, unitId: number): Promise<string> {
     const unitFile = await this.fileUploadRepository.findOne({
       where: { workspace_id: workspaceId, file_id: `${unitId}` }
@@ -1557,6 +675,28 @@ ${bookletRefs}
     }
 
     return unitFile.data.toString();
+  }
+
+  async getTestTakerContent(workspaceId: number, testTakerId: string): Promise<string> {
+    const testTakerFile = await this.fileUploadRepository.findOne({
+      where: {
+        workspace_id: workspaceId,
+        file_type: In(['TestTakers', 'Testtakers']),
+        file_id: testTakerId
+      }
+    });
+
+    if (!testTakerFile) {
+      this.logger.error(`TestTakers file with ID ${testTakerId} not found in workspace ${workspaceId}`);
+      throw new Error(`TestTakers file with ID ${testTakerId} not found`);
+    }
+
+    if (!testTakerFile.data) {
+      this.logger.error(`TestTakers file with ID ${testTakerId} has no data content`);
+      throw new Error('TestTakers file has no data content');
+    }
+
+    return testTakerFile.data.toString();
   }
 
   async getCodingSchemeByRef(workspaceId: number, codingSchemeRef: string): Promise<FileDownloadDto | null> {
@@ -1672,33 +812,7 @@ ${bookletRefs}
 
       this.logger.log(`Found ${files.length} files to include in ZIP`);
 
-      const zip = new AdmZip();
-
-      const filesByType: Record<string, FileUpload[]> = {};
-      files.forEach(file => {
-        if (!filesByType[file.file_type]) {
-          filesByType[file.file_type] = [];
-        }
-        filesByType[file.file_type].push(file);
-      });
-
-      for (const [fileType, filesForType] of Object.entries(filesByType)) {
-        for (const file of filesForType) {
-          try {
-            const fileContent = Buffer.from(file.data.toString(), 'utf8');
-
-            const zipPath = `${fileType}/${file.filename}`;
-            zip.addFile(zipPath, fileContent);
-
-            this.logger.debug(`Added file ${zipPath} (${fileContent.length} bytes)`);
-          } catch (error) {
-            this.logger.error(`Error processing file ${file.filename}: ${error.message}`, error.stack);
-          }
-        }
-      }
-
-      // Generate ZIP buffer
-      const zipBuffer = zip.toBuffer();
+      const zipBuffer = this.workspaceFileStorageService.createZipBufferFromFiles(files);
       this.logger.log(`ZIP file created successfully (${zipBuffer.length} bytes)`);
 
       return zipBuffer;
@@ -1709,453 +823,11 @@ ${bookletRefs}
   }
 
   async validateVariables(workspaceId: number, page: number = 1, limit: number = 10): Promise<{ data: InvalidVariableDto[]; total: number; page: number; limit: number }> {
-    if (!workspaceId) {
-      this.logger.error('Workspace ID is required');
-      return {
-        data: [],
-        total: 0,
-        page,
-        limit
-      };
-    }
-
-    const unitFiles = await this.filesRepository.find({
-      where: { workspace_id: workspaceId, file_type: 'Unit' }
-    });
-    const unitVariables = new Map<string, Set<string>>();
-    for (const unitFile of unitFiles) {
-      try {
-        const xmlContent = unitFile.data.toString();
-        const parsedXml = await parseStringPromise(xmlContent, { explicitArray: false });
-        if (parsedXml.Unit && parsedXml.Unit.Metadata && parsedXml.Unit.Metadata.Id) {
-          const unitName = parsedXml.Unit.Metadata.Id;
-          const variables = new Set<string>();
-          if (parsedXml.Unit.BaseVariables && parsedXml.Unit.BaseVariables.Variable) {
-            const baseVariables = Array.isArray(parsedXml.Unit.BaseVariables.Variable) ?
-              parsedXml.Unit.BaseVariables.Variable :
-              [parsedXml.Unit.BaseVariables.Variable];
-            for (const variable of baseVariables) {
-              if (variable.$.alias && variable.$.type !== 'no-value') {
-                variables.add(variable.$.alias);
-              }
-            }
-          }
-          unitVariables.set(unitName, variables);
-        }
-      } catch (e) { /* empty */ }
-    }
-
-    const invalidVariables: InvalidVariableDto[] = [];
-
-    const persons = await this.personsRepository.find({
-      where: { workspace_id: workspaceId, consider: true }
-    });
-
-    if (persons.length === 0) {
-      this.logger.warn(`No persons found for workspace ${workspaceId}`);
-      return {
-        data: [],
-        total: 0,
-        page,
-        limit
-      };
-    }
-
-    const personIds = persons.map(person => person.id);
-
-    if (personIds.length === 0) {
-      this.logger.warn(`No person IDs found for workspace ${workspaceId}`);
-      return {
-        data: [],
-        total: 0,
-        page,
-        limit
-      };
-    }
-
-    const batchSize = 1000;
-    let allUnits: Unit[] = [];
-
-    for (let i = 0; i < personIds.length; i += batchSize) {
-      const personIdsBatch = personIds.slice(i, i + batchSize);
-
-      const unitsBatch = await this.unitRepository.createQueryBuilder('unit')
-        .innerJoin('unit.booklet', 'booklet')
-        .where('booklet.personid IN (:...personIdsBatch)', { personIdsBatch })
-        .getMany();
-
-      allUnits = [...allUnits, ...unitsBatch];
-    }
-
-    if (allUnits.length === 0) {
-      this.logger.warn(`No units found for persons in workspace ${workspaceId}`);
-      return {
-        data: [],
-        total: 0,
-        page,
-        limit
-      };
-    }
-
-    const unitIds = allUnits.map(unit => unit.id);
-
-    if (unitIds.length === 0) {
-      this.logger.warn(`No unit IDs found for persons in workspace ${workspaceId}`);
-      return {
-        data: [],
-        total: 0,
-        page,
-        limit
-      };
-    }
-
-    let allResponses: ResponseEntity[] = [];
-
-    for (let i = 0; i < unitIds.length; i += batchSize) {
-      const unitIdsBatch = unitIds.slice(i, i + batchSize);
-
-      const responsesBatch = await this.responseRepository.find({
-        where: { unitid: In(unitIdsBatch) },
-        relations: ['unit']
-      });
-
-      allResponses = [...allResponses, ...responsesBatch];
-    }
-
-    if (allResponses.length === 0) {
-      this.logger.warn(`No responses found for units in workspace ${workspaceId}`);
-      return {
-        data: [],
-        total: 0,
-        page,
-        limit
-      };
-    }
-
-    for (const response of allResponses) {
-      const unit = response.unit;
-      if (!unit) {
-        this.logger.warn(`Response ${response.id} has no associated unit`);
-        continue;
-      }
-
-      const unitName = unit.name;
-      const variableId = response.variableid;
-
-      if (!variableId) {
-        this.logger.warn(`Response ${response.id} has no variable ID`);
-        continue;
-      }
-
-      if (!unitVariables.has(unitName)) {
-        invalidVariables.push({
-          fileName: `${unitName}`,
-          variableId: variableId,
-          value: response.value || '',
-          responseId: response.id,
-          errorReason: 'Unit not found'
-        });
-        continue;
-      }
-
-      const unitVars = unitVariables.get(unitName);
-      if (!unitVars || !unitVars.has(variableId)) {
-        invalidVariables.push({
-          fileName: `${unitName}`,
-          variableId: variableId,
-          value: response.value || '',
-          responseId: response.id,
-          errorReason: 'Variable not defined in unit'
-        });
-      }
-    }
-
-    const validPage = Math.max(1, page);
-    // Remove the 1000 item limit when limit is set to Number.MAX_SAFE_INTEGER
-    const validLimit = limit === Number.MAX_SAFE_INTEGER ? limit : Math.min(Math.max(1, limit), 1000);
-    const startIndex = (validPage - 1) * validLimit;
-    const endIndex = startIndex + validLimit;
-    const paginatedData = invalidVariables.slice(startIndex, endIndex);
-
-    return {
-      data: paginatedData,
-      total: invalidVariables.length,
-      page: validPage,
-      limit: validLimit
-    };
+    return this.workspaceResponseValidationService.validateVariables(workspaceId, page, limit);
   }
 
   async validateVariableTypes(workspaceId: number, page: number = 1, limit: number = 10): Promise<{ data: InvalidVariableDto[]; total: number; page: number; limit: number }> {
-    if (!workspaceId) {
-      this.logger.error('Workspace ID is required');
-      return {
-        data: [],
-        total: 0,
-        page,
-        limit
-      };
-    }
-
-    const unitFiles = await this.filesRepository.find({
-      where: { workspace_id: workspaceId, file_type: 'Unit' }
-    });
-
-    const unitVariableTypes = new Map<string, Map<string, { type: string; multiple?: boolean; nullable?: boolean }>>();
-
-    for (const unitFile of unitFiles) {
-      try {
-        const xmlContent = unitFile.data.toString();
-        const parsedXml = await parseStringPromise(xmlContent, { explicitArray: false });
-        if (parsedXml.Unit && parsedXml.Unit.Metadata && parsedXml.Unit.Metadata.Id) {
-          const unitName = parsedXml.Unit.Metadata.Id;
-          const variableTypes = new Map<string, { type: string; multiple?: boolean; nullable?: boolean }>();
-
-          if (parsedXml.Unit.BaseVariables && parsedXml.Unit.BaseVariables.Variable) {
-            const baseVariables = Array.isArray(parsedXml.Unit.BaseVariables.Variable) ?
-              parsedXml.Unit.BaseVariables.Variable :
-              [parsedXml.Unit.BaseVariables.Variable];
-
-            for (const variable of baseVariables) {
-              if (variable.$.alias && variable.$.type && variable.$.type !== 'no-value') {
-                const multiple = variable.$.multiple === 'true' || variable.$.multiple === true;
-                const nullable = variable.$.nullable === 'true' || variable.$.nullable === true;
-                variableTypes.set(variable.$.alias, {
-                  type: variable.$.type,
-                  multiple: multiple || undefined,
-                  nullable: nullable || undefined
-                });
-              }
-            }
-          }
-
-          unitVariableTypes.set(unitName, variableTypes);
-        }
-      } catch (e) { /* empty */ }
-    }
-
-    const invalidVariables: InvalidVariableDto[] = [];
-
-    const persons = await this.personsRepository.find({
-      where: { workspace_id: workspaceId, consider: true }
-    });
-
-    if (persons.length === 0) {
-      this.logger.warn(`No persons found for workspace ${workspaceId}`);
-      return {
-        data: [],
-        total: 0,
-        page,
-        limit
-      };
-    }
-
-    const personIds = persons.map(person => person.id);
-
-    if (personIds.length === 0) {
-      this.logger.warn(`No person IDs found for workspace ${workspaceId}`);
-      return {
-        data: [],
-        total: 0,
-        page,
-        limit
-      };
-    }
-
-    const batchSize = 1000;
-    let allUnits: Unit[] = [];
-
-    for (let i = 0; i < personIds.length; i += batchSize) {
-      const personIdsBatch = personIds.slice(i, i + batchSize);
-
-      const unitsBatch = await this.unitRepository.createQueryBuilder('unit')
-        .innerJoin('unit.booklet', 'booklet')
-        .where('booklet.personid IN (:...personIdsBatch)', { personIdsBatch })
-        .getMany();
-
-      allUnits = [...allUnits, ...unitsBatch];
-    }
-
-    if (allUnits.length === 0) {
-      this.logger.warn(`No units found for persons in workspace ${workspaceId}`);
-      return {
-        data: [],
-        total: 0,
-        page,
-        limit
-      };
-    }
-
-    const unitIds = allUnits.map(unit => unit.id);
-
-    if (unitIds.length === 0) {
-      this.logger.warn(`No unit IDs found for persons in workspace ${workspaceId}`);
-      return {
-        data: [],
-        total: 0,
-        page,
-        limit
-      };
-    }
-
-    let allResponses: ResponseEntity[] = [];
-
-    for (let i = 0; i < unitIds.length; i += batchSize) {
-      const unitIdsBatch = unitIds.slice(i, i + batchSize);
-
-      const responsesBatch = await this.responseRepository.find({
-        where: { unitid: In(unitIdsBatch) },
-        relations: ['unit']
-      });
-
-      allResponses = [...allResponses, ...responsesBatch];
-    }
-
-    if (allResponses.length === 0) {
-      this.logger.warn(`No responses found for units in workspace ${workspaceId}`);
-      return {
-        data: [],
-        total: 0,
-        page,
-        limit
-      };
-    }
-
-    for (const response of allResponses) {
-      const unit = response.unit;
-      if (!unit) {
-        this.logger.warn(`Response ${response.id} has no associated unit`);
-        continue;
-      }
-
-      const unitName = unit.name;
-      const variableId = response.variableid;
-
-      if (!variableId) {
-        this.logger.warn(`Response ${response.id} has no variable ID`);
-        continue;
-      }
-
-      const value = response.value || '';
-
-      if (!unitVariableTypes.has(unitName)) {
-        continue;
-      }
-
-      const variableTypes = unitVariableTypes.get(unitName);
-      if (!variableTypes || !variableTypes.has(variableId)) {
-        continue;
-      }
-
-      const variableInfo = variableTypes.get(variableId);
-      const expectedType = variableInfo.type;
-      const isMultiple = variableInfo.multiple === true;
-      const isNullable = variableInfo.nullable !== false; // If nullable is undefined or true, treat as nullable
-
-      // Check if multiple is true and value is not an array
-      if (isMultiple) {
-        try {
-          const parsedValue = JSON.parse(value);
-          if (!Array.isArray(parsedValue)) {
-            invalidVariables.push({
-              fileName: `${unitName}`,
-              variableId: variableId,
-              value: value,
-              responseId: response.id,
-              expectedType: `${expectedType} (array)`,
-              errorReason: 'Variable has multiple=true but value is not an array'
-            });
-            continue;
-          }
-        } catch (e) {
-          invalidVariables.push({
-            fileName: `${unitName}`,
-            variableId: variableId,
-            value: value,
-            responseId: response.id,
-            expectedType: `${expectedType} (array)`,
-            errorReason: 'Variable has multiple=true but value is not a valid JSON array'
-          });
-          continue;
-        }
-      }
-
-      // Check if nullable is false and value is null or empty
-      if (!isNullable && (!value || value.trim() === '')) {
-        invalidVariables.push({
-          fileName: `${unitName}`,
-          variableId: variableId,
-          value: value,
-          responseId: response.id,
-          expectedType: expectedType,
-          errorReason: 'Variable has nullable=false but value is null or empty'
-        });
-        continue;
-      }
-
-      if (!this.isValidValueForType(value, expectedType)) {
-        invalidVariables.push({
-          fileName: `${unitName}`,
-          variableId: variableId,
-          value: value,
-          responseId: response.id,
-          expectedType: expectedType,
-          errorReason: `Value does not match expected type: ${expectedType}`
-        });
-      }
-    }
-
-    const validPage = Math.max(1, page);
-    // Remove the 1000 item limit when limit is set to Number.MAX_SAFE_INTEGER
-    const validLimit = limit === Number.MAX_SAFE_INTEGER ? limit : Math.min(Math.max(1, limit), 1000);
-    const startIndex = (validPage - 1) * validLimit;
-    const endIndex = startIndex + validLimit;
-    const paginatedData = invalidVariables.slice(startIndex, endIndex);
-
-    return {
-      data: paginatedData,
-      total: invalidVariables.length,
-      page: validPage,
-      limit: validLimit
-    };
-  }
-
-  private isValidValueForType(value: string, type: string): boolean {
-    if (!value) {
-      return true; // Skip validation for empty values
-    }
-
-    switch (type.toLowerCase()) {
-      case 'string':
-        return true; // All values are valid strings
-
-      case 'no-value':
-        return true; // Ignore validation for no-value type
-
-      case 'integer':
-        // Check if the value is an integer
-        return /^-?\d+$/.test(value);
-
-      case 'number':
-        // Check if the value is a number (integer or decimal)
-        return !Number.isNaN(Number(value)) && Number.isFinite(Number(value));
-
-      case 'boolean': {
-        // Check if the value is a boolean (true/false, 0/1, yes/no)
-        const lowerValue = value.toLowerCase();
-        return ['true', 'false', '0', '1', 'yes', 'no'].includes(lowerValue);
-      }
-
-      case 'json':
-        try {
-          JSON.parse(value);
-          return true;
-        } catch (e) {
-          return false;
-        }
-
-      default:
-        return true; // For unknown types, assume the value is valid
-    }
+    return this.workspaceResponseValidationService.validateVariableTypes(workspaceId, page, limit);
   }
 
   async validateTestTakers(workspaceId: number): Promise<TestTakersValidationDto> {
@@ -2264,315 +936,11 @@ ${bookletRefs}
   }
 
   async validateDuplicateResponses(workspaceId: number, page: number = 1, limit: number = 10): Promise<DuplicateResponsesResultDto> {
-    if (!workspaceId) {
-      this.logger.error('Workspace ID is required for validateDuplicateResponses');
-      return {
-        data: [],
-        total: 0,
-        page,
-        limit
-      };
-    }
-
-    // Get all persons in the workspace that should be considered
-    const persons = await this.personsRepository.find({
-      where: { workspace_id: workspaceId, consider: true }
-    });
-
-    if (persons.length === 0) {
-      this.logger.warn(`No persons found for workspace ${workspaceId}`);
-      return {
-        data: [],
-        total: 0,
-        page,
-        limit
-      };
-    }
-
-    const personIds = persons.map(person => person.id);
-    const personMap = new Map(persons.map(person => [person.id, person]));
-
-    // Get all booklets for these persons
-    const booklets = await this.bookletRepository.find({
-      where: { personid: In(personIds) },
-      relations: ['bookletinfo']
-    });
-
-    if (booklets.length === 0) {
-      this.logger.warn(`No booklets found for persons in workspace ${workspaceId}`);
-      return {
-        data: [],
-        total: 0,
-        page,
-        limit
-      };
-    }
-
-    const bookletMap = new Map(booklets.map(booklet => [booklet.id, booklet]));
-
-    // Get all units for these booklets
-    const batchSize = 1000;
-    let allUnits: Unit[] = [];
-    const bookletIds = booklets.map(booklet => booklet.id);
-
-    for (let i = 0; i < bookletIds.length; i += batchSize) {
-      const bookletIdsBatch = bookletIds.slice(i, i + batchSize);
-      const unitsBatch = await this.unitRepository.find({
-        where: { bookletid: In(bookletIdsBatch) }
-      });
-      allUnits = [...allUnits, ...unitsBatch];
-    }
-
-    if (allUnits.length === 0) {
-      this.logger.warn(`No units found for booklets in workspace ${workspaceId}`);
-      return {
-        data: [],
-        total: 0,
-        page,
-        limit
-      };
-    }
-
-    const unitIds = allUnits.map(unit => unit.id);
-    const unitMap = new Map(allUnits.map(unit => [unit.id, unit]));
-
-    // Get all responses for these units
-    let allResponses: ResponseEntity[] = [];
-    for (let i = 0; i < unitIds.length; i += batchSize) {
-      const unitIdsBatch = unitIds.slice(i, i + batchSize);
-      const responsesBatch = await this.responseRepository.find({
-        where: { unitid: In(unitIdsBatch) }
-      });
-      allResponses = [...allResponses, ...responsesBatch];
-    }
-
-    if (allResponses.length === 0) {
-      this.logger.warn(`No responses found for units in workspace ${workspaceId}`);
-      return {
-        data: [],
-        total: 0,
-        page,
-        limit
-      };
-    }
-
-    // Group responses by unitid and variableid
-    const responseGroups = new Map<string, ResponseEntity[]>();
-    for (const response of allResponses) {
-      const key = `${response.unitid}_${response.variableid}`;
-      if (!responseGroups.has(key)) {
-        responseGroups.set(key, []);
-      }
-      responseGroups.get(key)?.push(response);
-    }
-
-    // Find groups with more than one response (duplicates)
-    const duplicateResponses: DuplicateResponseDto[] = [];
-    for (const [, responses] of responseGroups.entries()) {
-      if (responses.length > 1) {
-        // Get the first response to extract unit information
-        const firstResponse = responses[0];
-        const unit = unitMap.get(firstResponse.unitid);
-
-        if (!unit) {
-          this.logger.warn(`Unit not found for response ${firstResponse.id}`);
-          continue;
-        }
-
-        const booklet = bookletMap.get(unit.bookletid);
-        if (!booklet) {
-          this.logger.warn(`Booklet not found for unit ${unit.id}`);
-          continue;
-        }
-
-        const person = personMap.get(booklet.personid);
-        if (!person) {
-          this.logger.warn(`Person not found for booklet ${booklet.id}`);
-          continue;
-        }
-
-        const bookletName = booklet.bookletinfo?.name || 'Unknown';
-
-        duplicateResponses.push({
-          unitName: unit.name,
-          unitId: unit.id,
-          variableId: firstResponse.variableid,
-          bookletName,
-          testTakerLogin: person.login,
-          duplicates: responses.map(response => ({
-            responseId: response.id,
-            value: response.value || '',
-            status: statusNumberToString(response.status) || 'UNSET'
-            // We don't have timestamp in the response entity, but could add if needed
-          }))
-        });
-      }
-    }
-
-    // Sort duplicates by unitName, variableId for consistent ordering
-    duplicateResponses.sort((a, b) => {
-      if (a.unitName !== b.unitName) {
-        return a.unitName.localeCompare(b.unitName);
-      }
-      return a.variableId.localeCompare(b.variableId);
-    });
-
-    // Paginate results
-    const validPage = Math.max(1, page);
-    const validLimit = limit === Number.MAX_SAFE_INTEGER ? limit : Math.min(Math.max(1, limit), 1000);
-    const startIndex = (validPage - 1) * validLimit;
-    const endIndex = startIndex + validLimit;
-    const paginatedData = duplicateResponses.slice(startIndex, endIndex);
-
-    return {
-      data: paginatedData,
-      total: duplicateResponses.length,
-      page: validPage,
-      limit: validLimit
-    };
+    return this.workspaceResponseValidationService.validateDuplicateResponses(workspaceId, page, limit);
   }
 
   async validateResponseStatus(workspaceId: number, page: number = 1, limit: number = 10): Promise<{ data: InvalidVariableDto[]; total: number; page: number; limit: number }> {
-    if (!workspaceId) {
-      this.logger.error('Workspace ID is required');
-      return {
-        data: [],
-        total: 0,
-        page,
-        limit
-      };
-    }
-
-    const validStatusValues = ['VALUE_CHANGED', 'NOT_REACHED', 'DISPLAYED', 'UNSET', 'PARTLY_DISPLAYED'];
-
-    const persons = await this.personsRepository.find({
-      where: { workspace_id: workspaceId, consider: true }
-    });
-
-    if (persons.length === 0) {
-      this.logger.warn(`No persons found for workspace ${workspaceId}`);
-      return {
-        data: [],
-        total: 0,
-        page,
-        limit
-      };
-    }
-
-    const personIds = persons.map(person => person.id);
-
-    if (personIds.length === 0) {
-      this.logger.warn(`No person IDs found for workspace ${workspaceId}`);
-      return {
-        data: [],
-        total: 0,
-        page,
-        limit
-      };
-    }
-
-    const batchSize = 1000;
-    let allUnits: Unit[] = [];
-
-    for (let i = 0; i < personIds.length; i += batchSize) {
-      const personIdsBatch = personIds.slice(i, i + batchSize);
-
-      const unitsBatch = await this.unitRepository.createQueryBuilder('unit')
-        .innerJoin('unit.booklet', 'booklet')
-        .where('booklet.personid IN (:...personIdsBatch)', { personIdsBatch })
-        .getMany();
-
-      allUnits = [...allUnits, ...unitsBatch];
-    }
-
-    if (allUnits.length === 0) {
-      this.logger.warn(`No units found for persons in workspace ${workspaceId}`);
-      return {
-        data: [],
-        total: 0,
-        page,
-        limit
-      };
-    }
-
-    const unitIds = allUnits.map(unit => unit.id);
-
-    if (unitIds.length === 0) {
-      this.logger.warn(`No unit IDs found for persons in workspace ${workspaceId}`);
-      return {
-        data: [],
-        total: 0,
-        page,
-        limit
-      };
-    }
-
-    let allResponses: ResponseEntity[] = [];
-
-    for (let i = 0; i < unitIds.length; i += batchSize) {
-      const unitIdsBatch = unitIds.slice(i, i + batchSize);
-
-      const responsesBatch = await this.responseRepository.find({
-        where: { unitid: In(unitIdsBatch) },
-        relations: ['unit'] // Include unit relation to access unit.name
-      });
-
-      allResponses = [...allResponses, ...responsesBatch];
-    }
-
-    if (allResponses.length === 0) {
-      this.logger.warn(`No responses found for units in workspace ${workspaceId}`);
-      return {
-        data: [],
-        total: 0,
-        page,
-        limit
-      };
-    }
-
-    const invalidVariables: InvalidVariableDto[] = [];
-
-    for (const response of allResponses) {
-      const unit = response.unit;
-      if (!unit) {
-        this.logger.warn(`Response ${response.id} has no associated unit`);
-        continue;
-      }
-
-      const unitName = unit.name;
-      const variableId = response.variableid;
-
-      if (!variableId) {
-        this.logger.warn(`Response ${response.id} has no variable ID`);
-        continue;
-      }
-
-      const status = statusNumberToString(response.status);
-
-      if (!status || !validStatusValues.includes(status)) {
-        invalidVariables.push({
-          fileName: `${unitName}`,
-          variableId: variableId,
-          value: response.value || '',
-          responseId: response.id,
-          errorReason: `Invalid response status: ${status}. Valid values are: ${validStatusValues.join(', ')}`
-        });
-      }
-    }
-
-    const validPage = Math.max(1, page);
-    // Remove the 1000 item limit when limit is set to Number.MAX_SAFE_INTEGER
-    const validLimit = limit === Number.MAX_SAFE_INTEGER ? limit : Math.min(Math.max(1, limit), 1000);
-    const startIndex = (validPage - 1) * validLimit;
-    const endIndex = startIndex + validLimit;
-    const paginatedData = invalidVariables.slice(startIndex, endIndex);
-
-    return {
-      data: paginatedData,
-      total: invalidVariables.length,
-      page: validPage,
-      limit: validLimit
-    };
+    return this.workspaceResponseValidationService.validateResponseStatus(workspaceId, page, limit);
   }
 
   async validateGroupResponses(
@@ -2762,156 +1130,11 @@ ${bookletRefs}
   }
 
   async deleteInvalidResponses(workspaceId: number, responseIds: number[]): Promise<number> {
-    try {
-      if (!workspaceId) {
-        this.logger.error('Workspace ID is required');
-        return 0;
-      }
-
-      if (!responseIds || responseIds.length === 0) {
-        this.logger.warn('No response IDs provided for deletion');
-        return 0;
-      }
-
-      this.logger.log(`Deleting invalid responses for workspace ${workspaceId}: ${responseIds.join(', ')}`);
-
-      const persons = await this.personsRepository.find({
-        where: { workspace_id: workspaceId, consider: true }
-      });
-
-      if (persons.length === 0) {
-        this.logger.warn(`No persons found for workspace ${workspaceId}`);
-        return 0;
-      }
-
-      const personIds = persons.map(person => person.id);
-
-      if (personIds.length === 0) {
-        this.logger.warn(`No person IDs found for workspace ${workspaceId}`);
-        return 0;
-      }
-
-      const batchSize = 1000;
-      let allUnits: Unit[] = [];
-
-      for (let i = 0; i < personIds.length; i += batchSize) {
-        const personIdsBatch = personIds.slice(i, i + batchSize);
-
-        const unitsBatch = await this.unitRepository.createQueryBuilder('unit')
-          .innerJoin('unit.booklet', 'booklet')
-          .where('booklet.personid IN (:...personIdsBatch)', { personIdsBatch })
-          .getMany();
-
-        allUnits = [...allUnits, ...unitsBatch];
-      }
-
-      if (allUnits.length === 0) {
-        this.logger.warn(`No units found for persons in workspace ${workspaceId}`);
-        return 0;
-      }
-
-      const unitIds = allUnits.map(unit => unit.id);
-
-      if (unitIds.length === 0) {
-        this.logger.warn(`No unit IDs found for persons in workspace ${workspaceId}`);
-        return 0;
-      }
-
-      let totalDeleted = 0;
-
-      for (let i = 0; i < responseIds.length; i += batchSize) {
-        const responseIdsBatch = responseIds.slice(i, i + batchSize);
-
-        for (let j = 0; j < unitIds.length; j += batchSize) {
-          const unitIdsBatch = unitIds.slice(j, j + batchSize);
-
-          const deleteResult = await this.responseRepository.delete({
-            id: In(responseIdsBatch),
-            unitid: In(unitIdsBatch)
-          });
-
-          totalDeleted += deleteResult.affected || 0;
-        }
-      }
-
-      this.logger.log(`Deleted ${totalDeleted} invalid responses`);
-      return totalDeleted;
-    } catch (error) {
-      this.logger.error(`Error deleting invalid responses: ${error.message}`, error.stack);
-      throw new Error(`Error deleting invalid responses: ${error.message}`);
-    }
+    return this.workspaceResponseValidationService.deleteInvalidResponses(workspaceId, responseIds);
   }
 
   async deleteAllInvalidResponses(workspaceId: number, validationType: 'variables' | 'variableTypes' | 'responseStatus' | 'duplicateResponses'): Promise<number> {
-    try {
-      if (!workspaceId) {
-        this.logger.error('Workspace ID is required');
-        return 0;
-      }
-
-      this.logger.log(`Deleting all invalid responses for workspace ${workspaceId} of type ${validationType}`);
-
-      if (validationType === 'duplicateResponses') {
-        const result = await this.validateDuplicateResponses(workspaceId, 1, Number.MAX_SAFE_INTEGER);
-
-        if (result.data.length === 0) {
-          this.logger.warn(`No duplicate responses found for workspace ${workspaceId}`);
-          return 0;
-        }
-
-        const responseIds: number[] = [];
-        for (const duplicateResponse of result.data) {
-          // For each duplicate response, we take all but the first response ID
-          // This keeps one response and deletes the duplicates
-          if (duplicateResponse.duplicates.length > 1) {
-            // Get all duplicate response IDs (skip the first one to keep it)
-            const duplicateIds = duplicateResponse.duplicates
-              .slice(1) // Skip the first one to keep it
-              .map(duplicate => duplicate.responseId);
-            responseIds.push(...duplicateIds);
-          }
-        }
-
-        if (responseIds.length === 0) {
-          this.logger.warn(`No duplicate response IDs found for workspace ${workspaceId}`);
-          return 0;
-        }
-
-        return await this.deleteInvalidResponses(workspaceId, responseIds);
-      }
-
-      let invalidResponses: InvalidVariableDto[] = [];
-
-      if (validationType === 'variables') {
-        const result = await this.validateVariables(workspaceId, 1, Number.MAX_SAFE_INTEGER);
-        invalidResponses = result.data;
-      } else if (validationType === 'variableTypes') {
-        const result = await this.validateVariableTypes(workspaceId, 1, Number.MAX_SAFE_INTEGER);
-        invalidResponses = result.data;
-      } else if (validationType === 'responseStatus') {
-        const result = await this.validateResponseStatus(workspaceId, 1, Number.MAX_SAFE_INTEGER);
-        invalidResponses = result.data;
-      }
-
-      if (invalidResponses.length === 0) {
-        this.logger.warn(`No invalid responses found for workspace ${workspaceId} of type ${validationType}`);
-        return 0;
-      }
-
-      const responseIds = invalidResponses
-        .filter(variable => variable.responseId !== undefined)
-        .map(variable => variable.responseId as number);
-
-      if (responseIds.length === 0) {
-        this.logger.warn(`No response IDs found for invalid responses in workspace ${workspaceId} of type ${validationType}`);
-        return 0;
-      }
-
-      return await this.deleteInvalidResponses(workspaceId, responseIds);
-    } catch (error) {
-      this.logger.error(`Error deleting all invalid responses: ${error.message}`, error.stack);
-      throw new Error(`Error deleting all invalid responses: ${error.message}`);
-    }
+    return this.workspaceResponseValidationService.deleteAllInvalidResponses(workspaceId, validationType);
   }
 
   async onModuleInit(): Promise<void> {

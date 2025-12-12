@@ -2,8 +2,9 @@
   box-shadow: 5px 10px 20px black;
   background-color: white;
   padding: 25px;
-  margin: 0 15px 15px 15px;
-  height: calc(100% - 65px);
+  margin: 0;
+  height: 100%;
+  box-sizing: border-box;
 }
 
 .communication-error-message {
@@ -15,7 +16,7 @@
 }
 
 .page-body {
-  height: calc(90% - 5px);
+  height: 100%;
 }
 
 a{

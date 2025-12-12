@@ -153,8 +153,10 @@ export class UnitInfoService {
    * @param element CodingSchemeRef element
    */
   private validateCodingSchemeElement(element: XmlElement): void {
-    if (!element.$ || !element.$.schemer) {
-      throw new Error('Invalid unit XML: Missing required schemer attribute in CodingSchemeRef');
+    // For legacy/external units we treat the schemer attribute as optional.
+    // Only enforce that the element at least has an attributes object.
+    if (!element.$) {
+      throw new Error('Invalid unit XML: CodingSchemeRef element has no attributes');
     }
   }
 
@@ -242,8 +244,8 @@ export class UnitInfoService {
 
         codingSchemeRef = {
           content: codingSchemeRefElement._ as string || '',
-          schemer: codingSchemeRefElement.$.schemer as string,
-          schemeType: codingSchemeRefElement.$.schemeType as string
+          schemer: codingSchemeRefElement.$?.schemer as string,
+          schemeType: codingSchemeRefElement.$?.schemeType as string
         };
 
         if (codingSchemeRefElement.$.lastChange) {
