@@ -3,6 +3,8 @@ import { ApiProperty } from '@nestjs/swagger';
 type FileStatus = {
   filename: string;
   exists: boolean;
+  schemaValid?: boolean;
+  schemaErrors?: string[];
 };
 
 type DataValidation = {

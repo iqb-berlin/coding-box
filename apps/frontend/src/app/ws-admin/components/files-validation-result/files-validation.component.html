@@ -194,6 +194,13 @@
                           <li [class.file-exists]="file.exists" [class.file-missing]="!file.exists">
                             <mat-icon class="file-status-icon">{{ file.exists ? 'check_circle' : 'error' }}</mat-icon>
                             <span class="file-name">{{ file.filename }}</span>
+                            @if (file.schemaValid === false) {
+                              <mat-icon
+                                class="file-status-icon"
+                                matTooltip="{{ (file.schemaErrors || []).join('\n') }}">
+                                report_problem
+                              </mat-icon>
+                            }
                             <button
                               mat-icon-button
                               class="file-action-button"
@@ -252,6 +259,13 @@
                           <li [class.file-exists]="file.exists" [class.file-missing]="!file.exists">
                             <mat-icon class="file-status-icon">{{ file.exists ? 'check_circle' : 'error' }}</mat-icon>
                             <span class="file-name">{{ file.filename }}</span>
+                            @if (file.schemaValid === false) {
+                              <mat-icon
+                                class="file-status-icon"
+                                matTooltip="{{ (file.schemaErrors || []).join('\n') }}">
+                                report_problem
+                              </mat-icon>
+                            }
                             <button
                               mat-icon-button
                               class="file-action-button"
@@ -310,6 +324,13 @@
                           <li [class.file-exists]="file.exists" [class.file-missing]="!file.exists">
                             <mat-icon class="file-status-icon">{{ file.exists ? 'check_circle' : 'error' }}</mat-icon>
                             <span class="file-name">{{ file.filename }}</span>
+                            @if (file.schemaValid === false) {
+                              <mat-icon
+                                class="file-status-icon"
+                                matTooltip="{{ (file.schemaErrors || []).join('\n') }}">
+                                report_problem
+                              </mat-icon>
+                            }
                             <button
                               mat-icon-button
                               class="file-action-button"
@@ -368,6 +389,13 @@
                           <li [class.file-exists]="file.exists" [class.file-missing]="!file.exists">
                             <mat-icon class="file-status-icon">{{ file.exists ? 'check_circle' : 'error' }}</mat-icon>
                             <span class="file-name">{{ file.filename }}</span>
+                            @if (file.schemaValid === false) {
+                              <mat-icon
+                                class="file-status-icon"
+                                matTooltip="{{ (file.schemaErrors || []).join('\n') }}">
+                                report_problem
+                              </mat-icon>
+                            }
                             <button
                               mat-icon-button
                               class="file-action-button"
@@ -426,6 +454,13 @@
                           <li [class.file-exists]="file.exists" [class.file-missing]="!file.exists">
                             <mat-icon class="file-status-icon">{{ file.exists ? 'check_circle' : 'error' }}</mat-icon>
                             <span class="file-name">{{ file.filename }}</span>
+                            @if (file.schemaValid === false) {
+                              <mat-icon
+                                class="file-status-icon"
+                                matTooltip="{{ (file.schemaErrors || []).join('\n') }}">
+                                report_problem
+                              </mat-icon>
+                            }
                           </li>
                         }
                       </ul>

@@ -6,7 +6,11 @@ import AdmZip = require('adm-zip');
 import * as fs from 'fs';
 import * as path from 'path';
 import * as libxmljs from 'libxmljs2';
+import Ajv, { ValidateFunction } from 'ajv';
+import addFormats from 'ajv-formats';
 import { parseStringPromise } from 'xml2js';
+import axios from 'axios';
+import codingSchemeSchema = require('../../schemas/coding-scheme.schema.json');
 import { VariableInfo } from '@iqbspecs/variable-info/variable-info.interface';
 import { statusNumberToString } from '../utils/response-status-converter';
 import FileUpload, { StructuredFileData } from '../entities/file_upload.entity';
@@ -40,6 +44,8 @@ function sanitizePath(filePath: string): string {
 type FileStatus = {
   filename: string;
   exists: boolean;
+  schemaValid?: boolean;
+  schemaErrors?: string[];
 };
 
 type DataValidation = {
@@ -49,6 +55,13 @@ type DataValidation = {
   unitsWithoutPlayer?: string[];
   files: FileStatus[];
 };
+
+ type UnitRefs = {
+   codingSchemeRefs: string[];
+   definitionRefs: string[];
+   playerRefs: string[];
+   hasPlayer: boolean;
+ };
 
 type ValidationData = {
   testTaker: string;
@@ -82,6 +95,9 @@ export type ValidationResult = {
 export class WorkspaceFilesService implements OnModuleInit {
   private readonly logger = new Logger(WorkspaceFilesService.name);
   private unitVariableCache: Map<number, Map<string, Set<string>>> = new Map();
+  private codingSchemeValidator: ValidateFunction | null = null;
+  private readonly xsdCache = new Map<string, { xsdDoc: libxmljs.Document; fetchedAt: number }>();
+  private readonly XSD_CACHE_TTL_MS = 60 * 60 * 1000;
 
   constructor(
     @InjectRepository(FileUpload)
@@ -224,12 +240,38 @@ export class WorkspaceFilesService implements OnModuleInit {
     try {
       this.logger.log(`Starting batched test file validation for workspace ${workspaceId}`);
 
-      // 1. Preload Context (Booklets, Units, Resources)
-      const [bookletMap, unitMap, resourceIds] = await Promise.all([
+      // 1. Preload Context (Booklets, Units, Resources, Schema validation)
+      const [bookletMap, unitMap, resourceIds, xmlSchemaResults, codingSchemeResults] = await Promise.all([
         this.preloadBookletToUnits(workspaceId),
         this.preloadUnitRefs(workspaceId),
-        this.getAllResourceIds(workspaceId)
+        this.getAllResourceIds(workspaceId),
+        this.validateAllXmlSchemas(workspaceId),
+        this.validateAllCodingSchemes(workspaceId)
       ]);
+
+      const summarizeSchemaResults = (label: string, results: Map<string, { schemaValid: boolean; errors: string[] }>): void => {
+        const entries = Array.from(results.entries());
+        const ok = entries.filter(([, r]) => r.schemaValid).length;
+        const failed = entries.length - ok;
+        this.logger.log(`${label} validation results for workspace ${workspaceId}: total=${entries.length}, ok=${ok}, failed=${failed}`);
+        if (failed > 0) {
+          const maxFailedToLog = 20;
+          const failedPreview = entries
+            .filter(([, r]) => !r.schemaValid)
+            .slice(0, maxFailedToLog)
+            .map(([key, r]) => ({
+              key,
+              errors: (r.errors || []).slice(0, 5)
+            }));
+          this.logger.warn(`${label} validation failed for workspace ${workspaceId}: ${JSON.stringify(failedPreview)}`);
+          if (failed > maxFailedToLog) {
+            this.logger.warn(`${label} validation: ${failed - maxFailedToLog} more failed file(s) not logged (preview limit reached).`);
+          }
+        }
+      };
+
+      summarizeSchemaResults('XSD schema', xmlSchemaResults);
+      summarizeSchemaResults('JSON schema (coding scheme)', codingSchemeResults);
       const resourceIdsArray = Array.from(resourceIds);
 
       // 2. Prepare for TestTaker processing
@@ -252,14 +294,13 @@ export class WorkspaceFilesService implements OnModuleInit {
       let offset = 0;
       let hasTestTakers = false;
 
-      while (true) {
-        const testTakersBatch = await this.fileUploadRepository.find({
-          where: { workspace_id: workspaceId, file_type: In(['TestTakers', 'Testtakers']) },
-          skip: offset,
-          take: BATCH_SIZE
-        });
+      let testTakersBatch = await this.fileUploadRepository.find({
+        where: { workspace_id: workspaceId, file_type: In(['TestTakers', 'Testtakers']) },
+        skip: offset,
+        take: BATCH_SIZE
+      });
 
-        if (testTakersBatch.length === 0) break;
+      while (testTakersBatch.length > 0) {
         hasTestTakers = true;
 
         for (const testTaker of testTakersBatch) {
@@ -299,7 +340,9 @@ export class WorkspaceFilesService implements OnModuleInit {
             bookletMap,
             unitMap,
             resourceIds,
-            resourceIdsArray
+            resourceIdsArray,
+            xmlSchemaResults,
+            codingSchemeResults
           );
           if (validationResult) {
             validationResults.push(validationResult);
@@ -307,6 +350,11 @@ export class WorkspaceFilesService implements OnModuleInit {
         }
 
         offset += BATCH_SIZE;
+        testTakersBatch = await this.fileUploadRepository.find({
+          where: { workspace_id: workspaceId, file_type: In(['TestTakers', 'Testtakers']) },
+          skip: offset,
+          take: BATCH_SIZE
+        });
         // Optional: Trigger garbage collection hint if available, or just rely on scope
       }
 
@@ -385,16 +433,14 @@ export class WorkspaceFilesService implements OnModuleInit {
     const BATCH_SIZE = 100;
     let offset = 0;
 
-    while (true) {
-      const booklets = await this.fileUploadRepository.find({
-        where: { workspace_id: workspaceId, file_type: 'Booklet' },
-        select: ['file_id', 'data'],
-        skip: offset,
-        take: BATCH_SIZE
-      });
+    let booklets = await this.fileUploadRepository.find({
+      where: { workspace_id: workspaceId, file_type: 'Booklet' },
+      select: ['file_id', 'data'],
+      skip: offset,
+      take: BATCH_SIZE
+    });
 
-      if (booklets.length === 0) break;
-
+    while (booklets.length > 0) {
       for (const booklet of booklets) {
         try {
           const $ = cheerio.load(booklet.data, { xmlMode: true });
@@ -409,6 +455,12 @@ export class WorkspaceFilesService implements OnModuleInit {
         }
       }
       offset += BATCH_SIZE;
+      booklets = await this.fileUploadRepository.find({
+        where: { workspace_id: workspaceId, file_type: 'Booklet' },
+        select: ['file_id', 'data'],
+        skip: offset,
+        take: BATCH_SIZE
+      });
     }
     return bookletMap;
   }
@@ -419,20 +471,18 @@ export class WorkspaceFilesService implements OnModuleInit {
     playerRefs: string[];
     hasPlayer: boolean;
   }>> {
-    const unitMap = new Map();
+    const unitMap = new Map<string, UnitRefs>();
     const BATCH_SIZE = 200;
     let offset = 0;
 
-    while (true) {
-      const units = await this.fileUploadRepository.find({
-        where: { workspace_id: workspaceId, file_type: 'Unit' },
-        select: ['file_id', 'data'],
-        skip: offset,
-        take: BATCH_SIZE
-      });
+    let units = await this.fileUploadRepository.find({
+      where: { workspace_id: workspaceId, file_type: 'Unit' },
+      select: ['file_id', 'data'],
+      skip: offset,
+      take: BATCH_SIZE
+    });
 
-      if (units.length === 0) break;
-
+    while (units.length > 0) {
       for (const unit of units) {
         try {
           const $ = cheerio.load(unit.data, { xmlMode: true });
@@ -462,6 +512,12 @@ export class WorkspaceFilesService implements OnModuleInit {
         }
       }
       offset += BATCH_SIZE;
+      units = await this.fileUploadRepository.find({
+        where: { workspace_id: workspaceId, file_type: 'Unit' },
+        select: ['file_id', 'data'],
+        skip: offset,
+        take: BATCH_SIZE
+      });
     }
     return unitMap;
   }
@@ -471,17 +527,15 @@ export class WorkspaceFilesService implements OnModuleInit {
     const BATCH_SIZE = 5000;
     let offset = 0;
 
-    while (true) {
-      const files = await this.fileUploadRepository
-        .createQueryBuilder('file')
-        .select(['file.file_id', 'file.filename'])
-        .where('file.workspace_id = :workspaceId', { workspaceId })
-        .skip(offset)
-        .take(BATCH_SIZE)
-        .getRawMany();
+    let files = await this.fileUploadRepository
+      .createQueryBuilder('file')
+      .select(['file.file_id', 'file.filename'])
+      .where('file.workspace_id = :workspaceId', { workspaceId })
+      .skip(offset)
+      .take(BATCH_SIZE)
+      .getRawMany();
 
-      if (files.length === 0) break;
-
+    while (files.length > 0) {
       files.forEach(f => {
         if (f) {
           // TypeORM might prefix with entity name alias depending on version/config
@@ -493,6 +547,13 @@ export class WorkspaceFilesService implements OnModuleInit {
         }
       });
       offset += BATCH_SIZE;
+      files = await this.fileUploadRepository
+        .createQueryBuilder('file')
+        .select(['file.file_id', 'file.filename'])
+        .where('file.workspace_id = :workspaceId', { workspaceId })
+        .skip(offset)
+        .take(BATCH_SIZE)
+        .getRawMany();
     }
     this.logger.log(`Preloaded ${resourceIds.size} unique resource IDs/filenames for workspace ${workspaceId}`);
     return resourceIds;
@@ -545,9 +606,11 @@ export class WorkspaceFilesService implements OnModuleInit {
   private processTestTakerWithCache(
     testTaker: FileUpload,
     bookletMap: Map<string, string[]>,
-    unitMap: Map<string, any>,
+    unitMap: Map<string, UnitRefs>,
     resourceIds: Set<string>,
-    resourceIdsArray: string[]
+    resourceIdsArray: string[],
+    xmlSchemaResults: Map<string, { schemaValid: boolean; errors: string[] }>,
+    codingSchemeResults: Map<string, { schemaValid: boolean; errors: string[] }>
   ): ValidationData | null {
     const xmlDocument = cheerio.load(testTaker.data, { xml: true });
     const bookletTags = xmlDocument('Booklet');
@@ -568,7 +631,16 @@ export class WorkspaceFilesService implements OnModuleInit {
     // Check Booklets
     for (const bookletId of uniqueBooklets) {
       const exists = bookletMap.has(bookletId);
-      bookletFiles.push({ filename: bookletId, exists });
+      const schemaKey = `Booklet:${bookletId}`;
+      const schemaInfo = xmlSchemaResults.get(schemaKey);
+      const bookletStatus: FileStatus = { filename: bookletId, exists };
+      if (schemaInfo) {
+        bookletStatus.schemaValid = schemaInfo.schemaValid;
+        if (!schemaInfo.schemaValid) {
+          bookletStatus.schemaErrors = schemaInfo.errors;
+        }
+      }
+      bookletFiles.push(bookletStatus);
       if (!exists) {
         missingBooklets.push(bookletId);
       } else {
@@ -599,7 +671,16 @@ export class WorkspaceFilesService implements OnModuleInit {
     // Check Units
     for (const unitId of uniqueUnits) {
       const exists = unitMap.has(unitId);
-      unitFiles.push({ filename: unitId, exists });
+      const schemaKey = `Unit:${unitId}`;
+      const schemaInfo = xmlSchemaResults.get(schemaKey);
+      const unitStatus: FileStatus = { filename: unitId, exists };
+      if (schemaInfo) {
+        unitStatus.schemaValid = schemaInfo.schemaValid;
+        if (!schemaInfo.schemaValid) {
+          unitStatus.schemaErrors = schemaInfo.errors;
+        }
+      }
+      unitFiles.push(unitStatus);
 
       if (!exists) {
         missingUnits.push(unitId);
@@ -643,7 +724,21 @@ export class WorkspaceFilesService implements OnModuleInit {
       schemes: {
         complete: unitComplete ? missingCodingSchemeRefs.length === 0 : false,
         missing: missingCodingSchemeRefs,
-        files: Array.from(allCodingSchemeRefs).map(r => ({ filename: r, exists: this.resourceExists(r, resourceIds) }))
+        files: Array.from(allCodingSchemeRefs).map(r => {
+          const filename = r;
+          const exists = this.resourceExists(r, resourceIds);
+          const status: FileStatus = { filename, exists };
+
+          const key = r.toUpperCase();
+          const schemaInfo = codingSchemeResults.get(key);
+          if (schemaInfo) {
+            status.schemaValid = schemaInfo.schemaValid;
+            if (!schemaInfo.schemaValid) {
+              status.schemaErrors = schemaInfo.errors;
+            }
+          }
+          return status;
+        })
       },
       definitions: {
         complete: unitComplete ? missingDefinitionRefs.length === 0 : false,
@@ -919,15 +1014,268 @@ ${bookletRefs}
     return new Error(message);
   }
 
-  private async validateXmlAgainstSchema(xml: string, xsdPath: string): Promise<boolean> {
+  private getCodingSchemeValidator(): ValidateFunction {
+    if (!this.codingSchemeValidator) {
+      const ajv = new Ajv({ allErrors: true, strict: false });
+      addFormats(ajv);
+      this.codingSchemeValidator = ajv.compile(codingSchemeSchema as unknown as Record<string, unknown>);
+    }
+    return this.codingSchemeValidator;
+  }
+
+  private async validateAllXmlSchemas(
+    workspaceId: number
+  ): Promise<Map<string, { schemaValid: boolean; errors: string[] }>> {
+    const results = new Map<string, { schemaValid: boolean; errors: string[] }>();
+
+    const BATCH_SIZE = 200;
+    let offset = 0;
+
+    let xmlFiles = await this.fileUploadRepository.find({
+      where: {
+        workspace_id: workspaceId,
+        file_type: In(['Unit', 'Booklet', 'TestTakers', 'Testtakers'])
+      },
+      select: ['file_id', 'filename', 'file_type', 'data'],
+      skip: offset,
+      take: BATCH_SIZE
+    });
+
+    while (xmlFiles.length > 0) {
+      for (const file of xmlFiles) {
+        const fileId = (file.file_id || file.filename || '').toUpperCase();
+        const key = `${file.file_type}:${fileId}`;
+
+        const xml = file.data;
+        try {
+          const xsdUrl = this.extractXsdUrlFromXml(xml);
+          const xsdDoc = await this.getXsdDocCached(xsdUrl);
+          const validation = this.validateXmlAgainstSchemaDoc(xml, xsdDoc);
+          results.set(key, validation);
+
+          if (validation.schemaValid) {
+            this.logger.debug(`XSD validation ok: ${key}`);
+          } else {
+            const maxErrors = 10;
+            const errorsPreview = (validation.errors || []).slice(0, maxErrors);
+            this.logger.warn(
+              `XSD validation failed: ${key} (errors: ${validation.errors.length}) ${JSON.stringify(errorsPreview)}`
+            );
+          }
+        } catch (e) {
+          const message = e instanceof Error ? e.message : 'Unknown XML schema validation error';
+          results.set(key, { schemaValid: false, errors: [message] });
+          this.logger.error(`XSD validation error: ${key}: ${message}`, e instanceof Error ? e.stack : undefined);
+        }
+      }
+
+      offset += BATCH_SIZE;
+      xmlFiles = await this.fileUploadRepository.find({
+        where: {
+          workspace_id: workspaceId,
+          file_type: In(['Unit', 'Booklet', 'TestTakers', 'Testtakers'])
+        },
+        select: ['file_id', 'filename', 'file_type', 'data'],
+        skip: offset,
+        take: BATCH_SIZE
+      });
+    }
+
+    return results;
+  }
+
+  private async validateAllCodingSchemes(
+    workspaceId: number
+  ): Promise<Map<string, { schemaValid: boolean; errors: string[] }>> {
+    const results = new Map<string, { schemaValid: boolean; errors: string[] }>();
+
+    const schemerFiles = await this.fileUploadRepository.find({
+      where: { workspace_id: workspaceId, file_type: 'Schemer' },
+      select: ['file_id', 'filename', 'data']
+    });
+
+    if (schemerFiles.length === 0) {
+      return results;
+    }
+
+    const validator = this.getCodingSchemeValidator();
+
+    for (const file of schemerFiles) {
+      const key = (file.file_id || file.filename || '').toUpperCase();
+
+      try {
+        const html = file.data;
+        const $ = cheerio.load(html);
+        const metaDataElement = $('script[type="application/ld+json"]');
+
+        if (!metaDataElement.length) {
+          results.set(key, {
+            schemaValid: false,
+            errors: ['No <script type="application/ld+json"> block found in HTML']
+          });
+          continue;
+        }
+
+        let metadata: unknown;
+        try {
+          metadata = JSON.parse(metaDataElement.text());
+        } catch (parseError) {
+          const message = parseError instanceof Error ? parseError.message : 'Unknown JSON parse error';
+          results.set(key, {
+            schemaValid: false,
+            errors: [`Invalid JSON in ld+json: ${message}`]
+          });
+          continue;
+        }
+
+        const valid = validator(metadata);
+        if (!valid) {
+          const errors = (validator.errors || []).map(e => `${e.instancePath} ${e.message}`);
+          results.set(key, { schemaValid: false, errors });
+          const maxErrors = 10;
+          this.logger.warn(
+            `JSON schema validation failed: Schemer:${key} (errors: ${errors.length}) ${JSON.stringify(errors.slice(0, maxErrors))}`
+          );
+        } else {
+          results.set(key, { schemaValid: true, errors: [] });
+          this.logger.debug(`JSON schema validation ok: Schemer:${key}`);
+        }
+      } catch (e) {
+        const message = e instanceof Error ? e.message : 'Unknown coding scheme validation error';
+        results.set(key, { schemaValid: false, errors: [message] });
+        this.logger.error(
+          `JSON schema validation error: Schemer:${key}: ${message}`,
+          e instanceof Error ? e.stack : undefined
+        );
+      }
+    }
+
+    return results;
+  }
+
+  private extractXsdUrlFromXml(xml: string): string {
+    const xmlDoc = libxmljs.parseXml(xml);
+    const root = xmlDoc.root();
+    if (!root) {
+      throw new Error('Invalid XML: no root element');
+    }
+
+    const XSI_NS = 'http://www.w3.org/2001/XMLSchema-instance';
+    const attrs = root.attrs() || [];
+
+    const findXsiAttrValue = (localName: 'noNamespaceSchemaLocation' | 'schemaLocation'): string | null => {
+      for (const attr of attrs) {
+        const ns = attr.namespace && typeof attr.namespace === 'function' ? attr.namespace() : null;
+        const nsHref = ns && typeof ns.href === 'function' ? ns.href() : null;
+        const attrName = (typeof attr.name === 'function' ? attr.name() : '').trim();
+
+        // If libxml cannot resolve namespaces reliably, also accept any prefix as long as the local name matches.
+        const localMatches = attrName === localName || attrName.endsWith(`:${localName}`);
+        const nsMatches = nsHref === XSI_NS;
+
+        if (localMatches && (nsMatches || attrName.includes(':'))) {
+          const v = (typeof attr.value === 'function' ? attr.value() : '').trim();
+          return v || null;
+        }
+      }
+      return null;
+    };
+
+    const noNsValue = findXsiAttrValue('noNamespaceSchemaLocation');
+    if (noNsValue) {
+      return noNsValue;
+    }
+
+    const schemaLocValue = findXsiAttrValue('schemaLocation');
+    if (schemaLocValue) {
+      const tokens = schemaLocValue.split(/\s+/).filter(Boolean);
+      if (tokens.length >= 2) {
+        return tokens[tokens.length - 1];
+      }
+    }
+
+    const relevantAttrs = attrs
+      .map(a => {
+        const n = typeof a.name === 'function' ? a.name() : '';
+        const v = typeof a.value === 'function' ? a.value() : '';
+        return { name: n, value: v };
+      })
+      .filter(a => a.name.includes('schema') || a.name.includes('xsi'));
+    throw new Error(
+      `No XSD URL found in XML (xsi:noNamespaceSchemaLocation / xsi:schemaLocation). root=${root.name()} attrs=${JSON.stringify(relevantAttrs)}`
+    );
+  }
+
+  private async getXsdDocCached(xsdUrl: string): Promise<libxmljs.Document> {
+    let parsedUrl: URL;
+    try {
+      parsedUrl = new URL(xsdUrl);
+    } catch {
+      throw new Error(`Invalid XSD URL: ${xsdUrl}`);
+    }
+
+    if (parsedUrl.protocol !== 'https:') {
+      throw new Error(`Only https XSD URLs are allowed: ${xsdUrl}`);
+    }
+
+    const now = Date.now();
+    const cached = this.xsdCache.get(xsdUrl);
+    if (cached && now - cached.fetchedAt < this.XSD_CACHE_TTL_MS) {
+      this.logger.debug(`XSD cache hit: ${xsdUrl}`);
+      return cached.xsdDoc;
+    }
+
+    this.logger.debug(`XSD cache miss, fetching: ${xsdUrl}`);
+    const res = await axios.get<string>(xsdUrl, {
+      responseType: 'text',
+      timeout: 10000,
+      maxContentLength: 2 * 1024 * 1024
+    });
+
+    const xsdText = (res.data ?? '').toString();
+    const xsdDoc = libxmljs.parseXml(xsdText);
+    this.xsdCache.set(xsdUrl, { xsdDoc, fetchedAt: now });
+    return xsdDoc;
+  }
+
+  private validateXmlAgainstSchemaDoc(xml: string, xsdDoc: libxmljs.Document): { schemaValid: boolean; errors: string[] } {
+    try {
+      const xmlDoc = libxmljs.parseXml(xml);
+      const isValid = xmlDoc.validate(xsdDoc);
+      if (isValid) {
+        return { schemaValid: true, errors: [] };
+      }
+
+      const rawErrors = (xmlDoc.validationErrors || [])
+        .map(e => (e && typeof e.message === 'string' ? e.message.trim() : String(e)))
+        .filter(Boolean);
+      const errors = rawErrors.length > 0 ? rawErrors : ['XML schema validation failed'];
+      return { schemaValid: false, errors };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return { schemaValid: false, errors: [message] };
+    }
+  }
+
+  private async validateXmlAgainstSchema(xml: string, xsdPath: string): Promise<{ schemaValid: boolean; errors: string[] }> {
     try {
       const xsdContent = fs.readFileSync(xsdPath, 'utf8');
       const xsdDoc = libxmljs.parseXml(xsdContent);
       const xmlDoc = libxmljs.parseXml(xml);
-      return xmlDoc.validate(xsdDoc);
+      const isValid = xmlDoc.validate(xsdDoc);
+      if (isValid) {
+        return { schemaValid: true, errors: [] };
+      }
+
+      const rawErrors = (xmlDoc.validationErrors || [])
+        .map(e => (e && typeof e.message === 'string' ? e.message.trim() : String(e)))
+        .filter(Boolean);
+      const errors = rawErrors.length > 0 ? rawErrors : ['XML schema validation failed'];
+      return { schemaValid: false, errors };
     } catch (err) {
-      this.logger.error(`XML validation error: ${err.message}`);
-      return false;
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.error(`XML validation error: ${message}`, err instanceof Error ? err.stack : undefined);
+      return { schemaValid: false, errors: [message] };
     }
   }
 
@@ -1177,17 +1525,24 @@ ${bookletRefs}
         return this.unsupportedFile(`Unsupported root tag: ${rootTagName}`);
       }
 
-      const schemaPaths: Record<string, string> = {
-        UNIT: path.resolve(__dirname, 'schemas/unit.xsd'),
-        BOOKLET: path.resolve(__dirname, 'schemas/booklet.xsd'),
-        TESTTAKERS: path.resolve(__dirname, 'schemas/testtakers.xsd')
-      };
-      const xsdPath = schemaPaths[rootTagName];
-      if (!xsdPath || !fs.existsSync(xsdPath)) {
-        return this.unsupportedFile(`No XSD schema found for root tag: ${rootTagName}`);
+      let xmlValidation: { schemaValid: boolean; errors: string[] };
+      try {
+        const xsdUrl = this.extractXsdUrlFromXml(xmlContent);
+        const xsdDoc = await this.getXsdDocCached(xsdUrl);
+        xmlValidation = this.validateXmlAgainstSchemaDoc(xmlContent, xsdDoc);
+      } catch (e) {
+        const message = e instanceof Error ? e.message : 'Unknown XML schema validation error';
+        return this.unsupportedFile(message);
       }
 
-      await this.validateXmlAgainstSchema(xmlContent, xsdPath);
+      if (!xmlValidation.schemaValid) {
+        const maxErrors = 10;
+        const errorsPreview = (xmlValidation.errors || []).slice(0, maxErrors);
+        this.logger.warn(
+          `XSD validation failed on upload: ${file.originalname} (errors: ${xmlValidation.errors.length}) ${JSON.stringify(errorsPreview)}`
+        );
+        return this.unsupportedFile(`XSD validation failed: ${file.originalname}`);
+      }
 
       const metadata = xmlDocument('Metadata');
       const idElement = metadata.find('Id');
