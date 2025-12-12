@@ -28,6 +28,8 @@ import { ContentDialogComponent } from '../../../shared/dialogs/content-dialog/c
 type FileStatus = {
   filename: string;
   exists: boolean;
+  schemaValid?: boolean;
+  schemaErrors?: string[];
 };
 
 type DataValidation = {
