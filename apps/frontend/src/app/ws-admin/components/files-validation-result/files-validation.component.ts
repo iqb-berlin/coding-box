@@ -51,6 +51,7 @@ type FilesValidation = {
   booklets: DataValidation;
   units: DataValidation;
   schemes: DataValidation;
+  schemer: DataValidation;
   definitions: DataValidation;
   player: DataValidation;
 };
@@ -59,6 +60,7 @@ interface ExpandedFilesLists {
   booklets: boolean;
   units: boolean;
   schemes: boolean;
+  schemer: boolean;
   definitions: boolean;
   player: boolean;
 }
@@ -125,6 +127,7 @@ export class FilesValidationDialogComponent {
             booklets: false,
             units: false,
             schemes: false,
+            schemer: false,
             definitions: false,
             player: false
           });
