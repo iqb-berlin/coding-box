@@ -7,6 +7,7 @@ import User from './entities/user.entity';
 import { UsersService } from './services/users.service';
 import { WorkspaceCoreService } from './services/workspace-core.service';
 import { WorkspaceFilesService } from './services/workspace-files.service';
+import { WorkspaceXmlSchemaValidationService } from './services/workspace-xml-schema-validation.service';
 import { WorkspaceTestResultsService } from './services/workspace-test-results.service';
 import { WorkspaceUsersService } from './services/workspace-users.service';
 import { WorkspaceCodingService } from './services/workspace-coding.service';
@@ -151,6 +152,7 @@ import { CodingExportService } from './services/coding-export.service';
     UsersService,
     WorkspaceCoreService,
     WorkspaceFilesService,
+    WorkspaceXmlSchemaValidationService,
     WorkspaceTestResultsService,
     WorkspaceUsersService,
     WorkspaceCodingService,
