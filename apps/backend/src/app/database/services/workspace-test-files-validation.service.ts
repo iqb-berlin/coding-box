@@ -37,6 +37,8 @@ type UnitRefs = {
 
 type ValidationData = {
   testTaker: string;
+  testTakerSchemaValid?: boolean;
+  testTakerSchemaErrors?: string[];
   booklets: DataValidation;
   units: DataValidation;
   schemes: DataValidation;
@@ -711,6 +713,21 @@ export class WorkspaceTestFilesValidationService {
 
     return {
       testTaker: testTaker.file_id,
+      testTakerSchemaValid: (() => {
+        const testTakerId = (testTaker.file_id || testTaker.filename || '').toUpperCase();
+        const schemaKey = `${testTaker.file_type}:${testTakerId}`;
+        const schemaInfo = xmlSchemaResults.get(schemaKey);
+        return schemaInfo ? schemaInfo.schemaValid : undefined;
+      })(),
+      testTakerSchemaErrors: (() => {
+        const testTakerId = (testTaker.file_id || testTaker.filename || '').toUpperCase();
+        const schemaKey = `${testTaker.file_type}:${testTakerId}`;
+        const schemaInfo = xmlSchemaResults.get(schemaKey);
+        if (!schemaInfo || schemaInfo.schemaValid) {
+          return undefined;
+        }
+        return schemaInfo.errors;
+      })(),
       booklets: {
         complete: missingBooklets.length === 0,
         missing: missingBooklets,

@@ -53,6 +53,8 @@ export class FileValidationResultDto {
   @ApiProperty({ type: [Object], description: 'Array of validation results for each test taker' })
     validationResults!: {
     testTaker: string;
+    testTakerSchemaValid?: boolean;
+    testTakerSchemaErrors?: string[];
     booklets: DataValidation;
     units: DataValidation;
     schemes: DataValidation;

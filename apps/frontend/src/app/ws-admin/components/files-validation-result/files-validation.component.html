@@ -247,6 +247,14 @@
               <h4>
                 <mat-icon class="test-taker-icon">person</mat-icon>
                 {{val.testTaker}}
+                @if (val.testTakerSchemaValid === false) {
+                  <mat-icon
+                    class="file-status-icon"
+                    matTooltip="{{ (val.testTakerSchemaErrors || []).join('\n') }}"
+                    [attr.aria-label]="'TestTaker XML ist nicht schema-konform'">
+                    report_problem
+                  </mat-icon>
+                }
                 <button
                   mat-icon-button
                   class="test-taker-xml-button"
