@@ -825,7 +825,8 @@ export class WorkspaceTestResultsService {
         .innerJoinAndSelect('unit.booklet', 'booklet')
         .innerJoinAndSelect('booklet.person', 'person')
         .innerJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
-        .where('person.workspace_id = :workspaceId', { workspaceId });
+        .where('person.workspace_id = :workspaceId', { workspaceId })
+        .andWhere('person.consider = :consider', { consider: true });
 
       if (searchParams.value) {
         query.andWhere('response.value ILIKE :value', { value: `%${searchParams.value}%` });
@@ -960,7 +961,8 @@ export class WorkspaceTestResultsService {
         .innerJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
         .leftJoinAndSelect('unit.responses', 'response')
         .where('unit.name = :unitName', { unitName })
-        .andWhere('person.workspace_id = :workspaceId', { workspaceId });
+        .andWhere('person.workspace_id = :workspaceId', { workspaceId })
+        .andWhere('person.consider = :consider', { consider: true });
 
       const total = await query.getCount();
 
@@ -1065,7 +1067,8 @@ export class WorkspaceTestResultsService {
         .innerJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
         .leftJoinAndSelect('booklet.units', 'unit')
         .where('bookletinfo.name ILIKE :bookletName', { bookletName: `%${bookletName}%` })
-        .andWhere('person.workspace_id = :workspaceId', { workspaceId });
+        .andWhere('person.workspace_id = :workspaceId', { workspaceId })
+        .andWhere('person.consider = :consider', { consider: true });
 
       const total = await query.getCount();
 

@@ -19,6 +19,7 @@ export type FilteredTestTaker = {
   testTaker: string;
   mode: string;
   login: string;
+  consider?: boolean | null;
 };
 
 export type DuplicateTestTaker = {

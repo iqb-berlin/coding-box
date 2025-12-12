@@ -161,6 +161,29 @@ export class PersonService {
     }
   }
 
+  async markPersonsAsConsidered(workspaceId: number, logins: string[]): Promise<boolean> {
+    try {
+      if (!workspaceId || !logins || logins.length === 0) {
+        this.logger.warn('Invalid parameters for markPersonsAsConsidered');
+        return false;
+      }
+
+      const result = await this.personsRepository.update(
+        {
+          workspace_id: workspaceId,
+          login: In(logins)
+        },
+        { consider: true }
+      );
+
+      this.logger.log(`Marked ${result.affected} persons as considered in workspace ${workspaceId}`);
+      return result.affected > 0;
+    } catch (error) {
+      this.logger.error(`Error marking persons as considered: ${error.message}`, error.stack);
+      return false;
+    }
+  }
+
   async getImportStatistics(workspaceId: number): Promise<{
     persons: number;
     booklets: number;

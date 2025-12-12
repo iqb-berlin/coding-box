@@ -197,13 +197,14 @@ export class WorkspaceTestFilesValidationService {
       this.logger.log(`Found ${duplicateTestTakers.length} duplicate test takers across files`);
 
       if (filteredTestTakers.length > 0) {
-        const loginNames = filteredTestTakers.map(item => item.login);
-        const personsNotConsideredLogins = await this.getPersonsNotConsidered(workspaceId, loginNames);
-
-        if (personsNotConsideredLogins.length > 0) {
-          this.logger.log(`Filtering out ${personsNotConsideredLogins.length} test takers where consider is false`);
-          filteredTestTakers = filteredTestTakers.filter(item => !personsNotConsideredLogins.includes(item.login));
-        }
+        const uniqueLogins = Array.from(new Set(filteredTestTakers.map(item => item.login)));
+        const considerByLogin = await this.getPersonsConsiderStatus(workspaceId, uniqueLogins);
+        filteredTestTakers = filteredTestTakers
+          .filter(item => considerByLogin.has(item.login))
+          .map(item => ({
+            ...item,
+            consider: considerByLogin.get(item.login)!
+          }));
       }
 
       if (validationResults.length > 0) {
@@ -361,6 +362,28 @@ export class WorkspaceTestFilesValidationService {
       notConsideredLogins.push(...persons.map(p => p.login));
     }
     return notConsideredLogins;
+  }
+
+  private async getPersonsConsiderStatus(workspaceId: number, loginNames: string[]): Promise<Map<string, boolean>> {
+    const BATCH_SIZE = 500;
+    const considerByLogin = new Map<string, boolean>();
+
+    for (let i = 0; i < loginNames.length; i += BATCH_SIZE) {
+      const batch = loginNames.slice(i, i + BATCH_SIZE);
+      const persons = await this.personsRepository.find({
+        where: {
+          workspace_id: workspaceId,
+          login: In(batch)
+        },
+        select: ['login', 'consider']
+      });
+
+      persons.forEach(p => {
+        considerByLogin.set(p.login, p.consider);
+      });
+    }
+
+    return considerByLogin;
   }
 
   private async preloadBookletToUnits(workspaceId: number): Promise<Map<string, string[]>> {

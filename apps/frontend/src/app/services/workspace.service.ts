@@ -32,12 +32,27 @@ export class WorkspaceService {
       return of(false);
     }
 
-    return this.http.post(
+    return this.http.post<boolean>(
       `${this.serverUrl}admin/workspace/${workspaceId}/persons/exclude`,
       { logins },
       { headers: this.authHeader }
     ).pipe(
-      map(() => true),
+      map(res => res === true),
+      catchError(() => of(false))
+    );
+  }
+
+  markTestTakersAsConsidered(workspaceId: number, logins: string[]): Observable<boolean> {
+    if (!workspaceId || !logins.length) {
+      return of(false);
+    }
+
+    return this.http.post<boolean>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/persons/consider`,
+      { logins },
+      { headers: this.authHeader }
+    ).pipe(
+      map(res => res === true),
       catchError(() => of(false))
     );
   }

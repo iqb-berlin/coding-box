@@ -220,6 +220,7 @@ export class CodingListService {
         .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
         .where('response.status_v1 = :status', { status: statusStringToNumber('CODING_INCOMPLETE') })
         .andWhere('person.workspace_id = :workspace_id', { workspace_id })
+        .andWhere('person.consider = :consider', { consider: true })
         .orderBy('response.id', 'ASC');
 
       const [responses, total] = await queryBuilder.getManyAndCount();
@@ -333,6 +334,7 @@ export class CodingListService {
             .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
             .where('response.status_v1 = :status', { status: statusStringToNumber('CODING_INCOMPLETE') })
             .andWhere('person.workspace_id = :workspace_id', { workspace_id })
+            .andWhere('person.consider = :consider', { consider: true })
             .andWhere('response.id > :lastId', { lastId })
             .orderBy('response.id', 'ASC')
             .take(batchSize)
@@ -547,6 +549,7 @@ export class CodingListService {
       .addSelect('response.variableid', 'variableId')
       .distinct(true)
       .where('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('person.consider = :consider', { consider: true })
       .andWhere('response.status_v1 = :status', { status: statusStringToNumber('CODING_INCOMPLETE') });
 
     interface VocsScheme { variableCodings?: { id: string; sourceType?: string }[] }
