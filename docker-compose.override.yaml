@@ -44,6 +44,7 @@ services:
       - "9229:9229"         # default debug port
     volumes:
       - "./apps/backend/src:/usr/src/coding-box-base/apps/backend/src"
+      - "./api-dto:/usr/src/coding-box-base/api-dto"
       - "backend_vol:/usr/src/coding-box/packages"
     command:
       - "serve"
@@ -69,6 +70,7 @@ services:
       - "${HTTP_PORT}:8080"
     volumes:
       - "./apps/frontend/src:/usr/src/coding-box-base/apps/frontend/src"
+      - "./api-dto:/usr/src/coding-box-base/api-dto"
     command:
       - "serve"
       - "frontend"
