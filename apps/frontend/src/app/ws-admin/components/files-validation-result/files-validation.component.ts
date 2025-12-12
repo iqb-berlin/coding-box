@@ -1,25 +1,35 @@
 import { Component, inject } from '@angular/core';
 import {
   MAT_DIALOG_DATA,
-  MatDialogActions,
-  MatDialogClose,
-  MatDialogContent,
+  MatDialog,
+  MatDialogModule,
   MatDialogRef
 } from '@angular/material/dialog';
-import { NgClass } from '@angular/common';
-import { MatButton } from '@angular/material/button';
+import { MatButtonModule } from '@angular/material/button';
 import { MatCheckbox } from '@angular/material/checkbox';
 import { MatIcon } from '@angular/material/icon';
+import { MatTooltip } from '@angular/material/tooltip';
+import { MatTabsModule } from '@angular/material/tabs';
+import { MatExpansionModule } from '@angular/material/expansion';
 import { FormsModule } from '@angular/forms';
 import { SelectionModel } from '@angular/cdk/collections';
 import { ScrollingModule } from '@angular/cdk/scrolling';
 import { TranslateModule } from '@ngx-translate/core';
+import { MatSnackBar } from '@angular/material/snack-bar';
 import { WorkspaceService } from '../../../services/workspace.service';
-import { DuplicateTestTaker } from '../../../../../../../api-dto/files/file-validation-result.dto';
+import { BackendService } from '../../../services/backend.service';
+import { BookletInfoDialogComponent } from '../booklet-info-dialog/booklet-info-dialog.component';
+import { UnitInfoDialogComponent } from '../unit-info-dialog/unit-info-dialog.component';
+import { SchemeEditorDialogComponent } from '../../../coding/components/scheme-editor-dialog/scheme-editor-dialog.component';
+import { UnitDefinitionPlayerDialogComponent } from '../unit-definition-player-dialog/unit-definition-player-dialog.component';
+import { DuplicateTestTaker, UnusedTestFile } from '../../../../../../../api-dto/files/file-validation-result.dto';
+import { ContentDialogComponent } from '../../../shared/dialogs/content-dialog/content-dialog.component';
 
 type FileStatus = {
   filename: string;
   exists: boolean;
+  schemaValid?: boolean;
+  schemaErrors?: string[];
 };
 
 type DataValidation = {
@@ -27,8 +37,6 @@ type DataValidation = {
   missing: string[];
   missingUnitsPerBooklet?: { booklet: string; missingUnits: string[] }[];
   unitsWithoutPlayer?: string[];
-  unused?: string[];
-  unusedBooklets?: string[];
   files: FileStatus[];
 };
 
@@ -43,6 +51,7 @@ type FilesValidation = {
   booklets: DataValidation;
   units: DataValidation;
   schemes: DataValidation;
+  schemer: DataValidation;
   definitions: DataValidation;
   player: DataValidation;
 };
@@ -51,6 +60,7 @@ interface ExpandedFilesLists {
   booklets: boolean;
   units: boolean;
   schemes: boolean;
+  schemer: boolean;
   definitions: boolean;
   player: boolean;
 }
@@ -59,26 +69,28 @@ interface ExpandedFilesLists {
   selector: 'files-validation-dialog',
   templateUrl: './files-validation.component.html',
   imports: [
-    NgClass,
-    MatDialogContent,
-    MatDialogActions,
-    MatButton,
+    MatDialogModule,
+    MatButtonModule,
     TranslateModule,
-    MatDialogClose,
     MatIcon,
+    MatTabsModule,
+    MatTooltip,
     MatCheckbox,
     FormsModule,
-    ScrollingModule
+    ScrollingModule,
+    MatExpansionModule
   ],
   styleUrls: ['./files-validation.component.scss']
 })
 export class FilesValidationDialogComponent {
   dialogRef = inject<MatDialogRef<FilesValidationDialogComponent>>(MatDialogRef);
+  private dialog = inject(MatDialog);
 
   data = inject<{
     validationResults: FilesValidation[];
     filteredTestTakers?: FilteredTestTaker[];
     duplicateTestTakers?: DuplicateTestTaker[];
+    unusedTestFiles?: UnusedTestFile[];
     workspaceId?: number;
   }>(MAT_DIALOG_DATA);
 
@@ -86,9 +98,14 @@ export class FilesValidationDialogComponent {
 
   filteredTestTakers: FilteredTestTaker[] = [];
   duplicateTestTakers: DuplicateTestTaker[] = [];
+  unusedTestFiles: UnusedTestFile[] = [];
 
   selection = new SelectionModel<FilteredTestTaker>(true, []);
   duplicateSelection = new Map<string, string>(); // Maps login to selected testTaker file
+
+  unusedFilesSelection = new SelectionModel<UnusedTestFile>(true, []);
+  allUnusedFilesSelected = false;
+  isDeletingUnusedFiles = false;
 
   modeGroups: { mode: string, count: number }[] = [];
 
@@ -96,6 +113,8 @@ export class FilesValidationDialogComponent {
   isResolvingDuplicates = false;
 
   private workspaceService = inject(WorkspaceService);
+  private backendService = inject(BackendService);
+  private snackBar = inject(MatSnackBar);
 
   isExcluding = false;
   excludingProgress = 0;
@@ -108,6 +127,7 @@ export class FilesValidationDialogComponent {
             booklets: false,
             units: false,
             schemes: false,
+            schemer: false,
             definitions: false,
             player: false
           });
@@ -136,7 +156,63 @@ export class FilesValidationDialogComponent {
           }
         });
       }
+
+      if (this.data.unusedTestFiles) {
+        this.unusedTestFiles = this.data.unusedTestFiles;
+      }
     }
+  }
+
+  toggleUnusedFilesSelection(file: UnusedTestFile): void {
+    this.unusedFilesSelection.toggle(file);
+    this.checkIfAllUnusedFilesSelected();
+  }
+
+  toggleAllUnusedFilesSelection(): void {
+    if (this.allUnusedFilesSelected) {
+      this.unusedFilesSelection.clear();
+      this.allUnusedFilesSelected = false;
+    } else {
+      this.unusedFilesSelection.select(...this.unusedTestFiles);
+      this.allUnusedFilesSelected = true;
+    }
+  }
+
+  checkIfAllUnusedFilesSelected(): void {
+    this.allUnusedFilesSelected = this.unusedTestFiles.length > 0 &&
+                                 this.unusedFilesSelection.selected.length === this.unusedTestFiles.length;
+  }
+
+  deleteSelectedUnusedFiles(): void {
+    if (!this.data.workspaceId || this.unusedFilesSelection.selected.length === 0 || this.isDeletingUnusedFiles) {
+      return;
+    }
+
+    this.isDeletingUnusedFiles = true;
+    const idsToDelete = this.unusedFilesSelection.selected.map(f => f.id);
+
+    this.backendService.deleteFiles(this.data.workspaceId, idsToDelete)
+      .subscribe({
+        next: success => {
+          if (success) {
+            this.unusedTestFiles = this.unusedTestFiles.filter(f => !idsToDelete.includes(f.id));
+            this.unusedFilesSelection.clear();
+            this.checkIfAllUnusedFilesSelected();
+          }
+          this.isDeletingUnusedFiles = false;
+        },
+        error: () => {
+          this.isDeletingUnusedFiles = false;
+        }
+      });
+  }
+
+  getExistingCount(data: DataValidation): number {
+    return data.files.filter(file => file.exists).length;
+  }
+
+  getMissingCount(data: DataValidation): number {
+    return data.files.filter(file => !file.exists).length;
   }
 
   // Select which occurrence of a duplicate test taker to keep
@@ -390,5 +466,183 @@ export class FilesValidationDialogComponent {
 
   trackByFn(index: number, item: FilteredTestTaker): string {
     return `${item.testTaker}-${item.login}-${item.mode}`;
+  }
+
+  openBookletInfo(bookletId: string): void {
+    if (!this.data.workspaceId || !bookletId) {
+      return;
+    }
+
+    const normalizedBookletId = bookletId.toUpperCase();
+
+    const loadingSnackBar = this.snackBar.open(
+      'Lade Testheft-Informationen...',
+      '',
+      { duration: 3000 }
+    );
+
+    this.backendService.getBookletInfo(
+      this.data.workspaceId,
+      normalizedBookletId
+    ).subscribe({
+      next: bookletInfo => {
+        loadingSnackBar.dismiss();
+
+        this.dialog.open(BookletInfoDialogComponent, {
+          width: '1200px',
+          height: '80vh',
+          data: {
+            bookletInfo,
+            bookletId: normalizedBookletId
+          }
+        });
+      },
+      error: () => {
+        loadingSnackBar.dismiss();
+        this.snackBar.open(
+          'Fehler beim Laden der Testheft-Informationen',
+          'Fehler',
+          { duration: 3000 }
+        );
+      }
+    });
+  }
+
+  openUnitInfo(unitId: string): void {
+    if (!this.data.workspaceId || !unitId) {
+      return;
+    }
+
+    const loadingSnackBar = this.snackBar.open(
+      'Lade Aufgaben-Informationen...',
+      '',
+      { duration: 3000 }
+    );
+
+    this.backendService.getUnitInfo(
+      this.data.workspaceId,
+      unitId
+    ).subscribe({
+      next: unitInfo => {
+        loadingSnackBar.dismiss();
+
+        this.dialog.open(UnitInfoDialogComponent, {
+          width: '1200px',
+          height: '80vh',
+          data: {
+            unitInfo,
+            unitId
+          }
+        });
+      },
+      error: () => {
+        loadingSnackBar.dismiss();
+        this.snackBar.open(
+          'Fehler beim Laden der Aufgaben-Informationen',
+          'Fehler',
+          { duration: 3000 }
+        );
+      }
+    });
+  }
+
+  openSchemeFile(schemeId: string): void {
+    if (!this.data.workspaceId || !schemeId) {
+      return;
+    }
+
+    const loadingSnackBar = this.snackBar.open(
+      'Lade Ressourcendatei...',
+      '',
+      { duration: 3000 }
+    );
+
+    this.backendService.getCodingSchemeFile(
+      this.data.workspaceId,
+      schemeId
+    ).subscribe({
+      next: fileDownload => {
+        loadingSnackBar.dismiss();
+
+        if (!fileDownload) {
+          this.snackBar.open(
+            'Ressourcendatei nicht gefunden.',
+            'Fehler',
+            { duration: 3000 }
+          );
+          return;
+        }
+
+        let decodedContent: string;
+        try {
+          decodedContent = atob(fileDownload.base64Data);
+        } catch {
+          decodedContent = fileDownload.base64Data;
+        }
+
+        this.dialog.open(SchemeEditorDialogComponent, {
+          width: '100vw',
+          height: '90vh',
+          data: {
+            workspaceId: this.data.workspaceId,
+            fileId: fileDownload.filename || schemeId,
+            fileName: fileDownload.filename || schemeId,
+            content: decodedContent
+          }
+        });
+      },
+      error: () => {
+        loadingSnackBar.dismiss();
+        this.snackBar.open(
+          'Fehler beim Laden der Ressourcendatei',
+          'Fehler',
+          { duration: 3000 }
+        );
+      }
+    });
+  }
+
+  openDefinitionFile(definitionRef: string): void {
+    if (!this.data.workspaceId || !definitionRef) {
+      return;
+    }
+
+    const upperRef = definitionRef.toUpperCase();
+    const unitId = upperRef.endsWith('.VOUD') ? upperRef.slice(0, -5) : upperRef;
+
+    this.dialog.open(UnitDefinitionPlayerDialogComponent, {
+      width: '1200px',
+      height: '80vh',
+      data: {
+        workspaceId: this.data.workspaceId!,
+        unitId
+      }
+    });
+  }
+
+  showTestTakerXml(testTakerId: string): void {
+    if (!this.data.workspaceId || !testTakerId) {
+      return;
+    }
+
+    this.backendService.getTestTakerContentXml(this.data.workspaceId, testTakerId)
+      .subscribe(xmlContent => {
+        if (xmlContent) {
+          this.dialog.open(ContentDialogComponent, {
+            width: '80%',
+            data: {
+              title: `TestTakers XML: ${testTakerId}`,
+              content: xmlContent,
+              isXml: true
+            }
+          });
+        } else {
+          this.snackBar.open(
+            `Keine XML-Daten für TestTaker-Datei ${testTakerId} gefunden`,
+            'Schließen',
+            { duration: 3000 }
+          );
+        }
+      });
   }
 }

@@ -4,7 +4,7 @@
  */
 export class UnitCodingSchemeRefDto {
   content!: string;
-  schemer!: string;
+  schemer?: string;
   schemeType?: string;
   lastChange?: Date;
 }

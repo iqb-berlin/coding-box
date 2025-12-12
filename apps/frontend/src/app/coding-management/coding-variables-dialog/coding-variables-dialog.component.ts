@@ -232,7 +232,7 @@ export class CodingVariablesDialogComponent implements OnInit {
 
   openUnitInfo(unitId: string): void {
     const loadingSnackBar = this.snackBar.open(
-      'Unit-Informationen werden geladen...',
+      'Aufgaben-Informationen werden geladen...',
       '',
       { duration: 0 }
     );
@@ -242,14 +242,15 @@ export class CodingVariablesDialogComponent implements OnInit {
         loadingSnackBar.dismiss();
 
         this.dialog.open(UnitInfoDialogComponent, {
-          width: '800px',
+          width: '1200px',
+          height: '80vh',
           data: { unitInfo, unitId }
         });
       },
       error: () => {
         loadingSnackBar.dismiss();
         this.snackBar.open(
-          'Fehler beim Laden der Unit-Informationen',
+          'Fehler beim Laden der Aufgaben-Informationen',
           'Schließen',
           { duration: 3000 }
         );

@@ -18,9 +18,21 @@
 
 .app{
   background: linear-gradient(180deg, rgba(7,70,94,1) 0%, rgba(6,112,123,1) 24%, rgba(1,192,229,1) 85%);
-  height: 100%;
+  height: 100vh;
   width: 100%;
-  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.app-main {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.app-main > * {
+  height: 100%;
 }
 
 img{

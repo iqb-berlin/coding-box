@@ -181,6 +181,16 @@ export class FileService {
     );
   }
 
+  getTestTakerContentXml(workspaceId: number, testTakerId: string): Observable<string | null> {
+    return this.http.get<{ content: string }>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/files/testtakers/${testTakerId}/content`,
+      { headers: this.authHeader }
+    ).pipe(
+      map(response => response.content),
+      catchError(() => of(null))
+    );
+  }
+
   getCodingSchemeFile(workspaceId: number, codingSchemeRef: string): Observable<FileDownloadDto | null> {
     return this.http.get<FileDownloadDto | null>(
       `${this.serverUrl}admin/workspace/${workspaceId}/files/coding-scheme/${codingSchemeRef}`,

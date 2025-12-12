@@ -1,6 +1,6 @@
 <div class="dialog-container">
   <h2 mat-dialog-title>
-    <span>Unit-Informationen: {{ data.unitId }}</span>
+    <span>Aufgaben-Informationen: {{ data.unitId }}</span>
     <button mat-icon-button (click)="close()" class="close-button">
       <mat-icon>close</mat-icon>
     </button>
@@ -9,7 +9,7 @@
   <mat-dialog-content>
     <div *ngIf="isLoading" class="loading-container">
       <mat-spinner diameter="40"></mat-spinner>
-      <p>Unit-Informationen werden geladen...</p>
+      <p>Aufgaben-Informationen werden geladen...</p>
     </div>
 
     <div *ngIf="errorMessage" class="error-container">
@@ -19,6 +19,15 @@
 
     <div *ngIf="!isLoading && !errorMessage && data.unitInfo" class="info-container">
       <mat-tab-group>
+        <!-- Raw XML Tab (first) -->
+        <mat-tab label="Roh-XML">
+          <div class="tab-content">
+            <div class="info-section">
+              <pre class="xml-content">{{ data.unitInfo.rawXml }}</pre>
+            </div>
+          </div>
+        </mat-tab>
+
         <!-- Metadata Tab -->
         <mat-tab label="Metadaten">
           <div class="tab-content">
@@ -235,15 +244,6 @@
                 <span class="info-label">Content:</span>
                 <span class="info-value">{{ data.unitInfo.codingSchemeRef.content }}</span>
               </div>
-            </div>
-          </div>
-        </mat-tab>
-
-        <!-- Raw XML Tab -->
-        <mat-tab label="Roh-XML">
-          <div class="tab-content">
-            <div class="info-section">
-              <pre class="xml-content">{{ data.unitInfo.rawXml }}</pre>
             </div>
           </div>
         </mat-tab>
