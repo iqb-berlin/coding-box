@@ -2,7 +2,6 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Like, Repository } from 'typeorm';
 import * as cheerio from 'cheerio';
-import AdmZip = require('adm-zip');
 import * as fs from 'fs';
 import * as path from 'path';
 import Ajv, { ValidateFunction } from 'ajv';
@@ -31,14 +30,7 @@ import {
 import Persons from '../entities/persons.entity';
 import { CodingStatisticsService } from './coding-statistics.service';
 import { WorkspaceXmlSchemaValidationService } from './workspace-xml-schema-validation.service';
-
-function sanitizePath(filePath: string): string {
-  const normalizedPath = path.normalize(filePath);
-  if (normalizedPath.startsWith('..')) {
-    throw new Error('Invalid file path: Path cannot navigate outside root.');
-  }
-  return normalizedPath.replace(/\\/g, '/');
-}
+import { WorkspaceFileStorageService } from './workspace-file-storage.service';
 
 type FileStatus = {
   filename: string;
@@ -110,7 +102,8 @@ export class WorkspaceFilesService implements OnModuleInit {
     @InjectRepository(Booklet)
     private bookletRepository: Repository<Booklet>,
     private codingStatisticsService: CodingStatisticsService,
-    private workspaceXmlSchemaValidationService: WorkspaceXmlSchemaValidationService
+    private workspaceXmlSchemaValidationService: WorkspaceXmlSchemaValidationService,
+    private workspaceFileStorageService: WorkspaceFileStorageService
   ) {}
 
   async findAllFileTypes(workspaceId: number): Promise<string[]> {
@@ -1544,35 +1537,10 @@ ${bookletRefs}
     const promises: Array<Promise<unknown>> = [];
 
     try {
-      const zip = new AdmZip(file.buffer);
-      const zipEntries = zip.getEntries();
+      const fileIos = this.workspaceFileStorageService.unzipToFileIos(file.buffer);
+      this.logger.log(`Found ${fileIos.length} entries in ZIP file ${file.originalname}`);
 
-      if (zipEntries.length === 0) {
-        this.logger.warn(`ZIP file ${file.originalname} is empty.`);
-        return [Promise.reject(new Error(`ZIP file ${file.originalname} is empty.`))];
-      }
-
-      this.logger.log(`Found ${zipEntries.length} entries in ZIP file ${file.originalname}`);
-
-      zipEntries.forEach(zipEntry => {
-        if (zipEntry.isDirectory) {
-          return;
-        }
-
-        const entryName = zipEntry.entryName;
-        const sanitizedEntryName = sanitizePath(entryName);
-        const entryData = zipEntry.getData();
-
-        const mimeType = this.getMimeType(sanitizedEntryName);
-        const fileIo: FileIo = {
-          originalname: path.basename(sanitizedEntryName),
-          buffer: entryData,
-          mimetype: mimeType,
-          size: entryData.length,
-          fieldname: '',
-          encoding: ''
-        };
-
+      fileIos.forEach(fileIo => {
         promises.push(...this.handleFile(workspaceId, fileIo));
       });
 
@@ -1581,17 +1549,6 @@ ${bookletRefs}
       this.logger.error(`Error processing ZIP file ${file.originalname}: ${error.message}`, error.stack);
       return [Promise.reject(error)];
     }
-  }
-
-  private getMimeType(fileName: string): string {
-    const extension = path.extname(fileName).toLowerCase();
-    const mimeTypes: Record<string, string> = {
-      '.xml': 'text/xml',
-      '.html': 'text/html',
-      '.htm': 'text/html',
-      '.zip': 'application/zip'
-    };
-    return mimeTypes[extension] || 'application/octet-stream';
   }
 
   static cleanResponses(rows: ResponseDto[]): ResponseDto[] {
@@ -1841,33 +1798,7 @@ ${bookletRefs}
 
       this.logger.log(`Found ${files.length} files to include in ZIP`);
 
-      const zip = new AdmZip();
-
-      const filesByType: Record<string, FileUpload[]> = {};
-      files.forEach(file => {
-        if (!filesByType[file.file_type]) {
-          filesByType[file.file_type] = [];
-        }
-        filesByType[file.file_type].push(file);
-      });
-
-      for (const [fileType, filesForType] of Object.entries(filesByType)) {
-        for (const file of filesForType) {
-          try {
-            const fileContent = Buffer.from(file.data.toString(), 'utf8');
-
-            const zipPath = `${fileType}/${file.filename}`;
-            zip.addFile(zipPath, fileContent);
-
-            this.logger.debug(`Added file ${zipPath} (${fileContent.length} bytes)`);
-          } catch (error) {
-            this.logger.error(`Error processing file ${file.filename}: ${error.message}`, error.stack);
-          }
-        }
-      }
-
-      // Generate ZIP buffer
-      const zipBuffer = zip.toBuffer();
+      const zipBuffer = this.workspaceFileStorageService.createZipBufferFromFiles(files);
       this.logger.log(`ZIP file created successfully (${zipBuffer.length} bytes)`);
 
       return zipBuffer;
