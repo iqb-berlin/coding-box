@@ -1,5 +1,34 @@
 <mat-dialog-content>
     <div class="scroll-container">
+      <div class="validation-info">
+        <mat-expansion-panel>
+          <mat-expansion-panel-header>
+            <mat-panel-title>
+              <mat-icon class="info-icon">info</mat-icon>
+              <span class="info-title">Hinweise zur Validierung</span>
+            </mat-panel-title>
+          </mat-expansion-panel-header>
+
+          <div class="info-content">
+            <p>
+              Die Validierung arbeitet in Schritten: Zuerst werden TestTakers-Dateien gelesen und die darin referenzierten Testhefte ermittelt.
+              Aus den Testheften werden die referenzierten Aufgaben (Units) bestimmt. Anschließend werden pro Unit die referenzierten Ressourcen
+              (Kodierschemata, Definitionen, Player und Metadaten) auf Vorhandensein geprüft.
+            </p>
+            <p>
+              Zusätzlich werden Schemas geprüft:
+            </p>
+            <ul>
+              <li>XML-Dateien (TestTakers/Booklet/Unit) werden gegen das in der Datei angegebene XSD validiert.</li>
+              <li>Kodierschemata (Schemer) werden anhand der eingebetteten JSON-LD Metadaten gegen das JSON-Schema validiert.</li>
+            </ul>
+            <p>
+              Dateien, die von keinem TestTaker aus erreichbar sind, werden als "Nicht verwendete Dateien" angezeigt.
+            </p>
+          </div>
+        </mat-expansion-panel>
+      </div>
+
       @if (duplicateTestTakers && duplicateTestTakers.length > 0) {
         <div class="missing-units-warning duplicate-testtakers-warning">
           <mat-expansion-panel>
