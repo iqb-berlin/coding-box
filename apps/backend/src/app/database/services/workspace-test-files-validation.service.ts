@@ -95,6 +95,8 @@ export class WorkspaceTestFilesValidationService {
 
       const validationResults: ValidationData[] = [];
 
+      const usedTestTakerFileIds = new Set<string>();
+
       let filteredTestTakers: FilteredTestTaker[] = [];
       const loginOccurrences = new Map<string, { testTaker: string; mode: string }[]>();
       const modesNotToFilter = ['run-hot-return', 'run-hot-restart', 'run-trial'];
@@ -114,6 +116,9 @@ export class WorkspaceTestFilesValidationService {
         hasTestTakers = true;
 
         for (const testTaker of testTakersBatch) {
+          if (testTaker.file_id) {
+            usedTestTakerFileIds.add(testTaker.file_id.toUpperCase());
+          }
           const xmlDocument = cheerio.load(testTaker.data, { xml: true });
           const groupElements = xmlDocument('Group');
 
@@ -173,6 +178,12 @@ export class WorkspaceTestFilesValidationService {
         };
       }
 
+      const unusedTestFiles = await this.getUnusedTestFilesFromValidationGraph(
+        workspaceId,
+        validationResults,
+        usedTestTakerFileIds
+      );
+
       const duplicateTestTakers = Array.from(loginOccurrences.entries())
         .filter(([, occurrences]) => occurrences.length > 1)
         .map(([login, occurrences]) => ({
@@ -197,6 +208,7 @@ export class WorkspaceTestFilesValidationService {
           testTakersFound: true,
           filteredTestTakers: filteredTestTakers.length > 0 ? filteredTestTakers : undefined,
           duplicateTestTakers: duplicateTestTakers.length > 0 ? duplicateTestTakers : undefined,
+          unusedTestFiles: unusedTestFiles.length > 0 ? unusedTestFiles : undefined,
           validationResults
         };
       }
@@ -205,6 +217,7 @@ export class WorkspaceTestFilesValidationService {
         testTakersFound: true,
         filteredTestTakers: filteredTestTakers.length > 0 ? filteredTestTakers : undefined,
         duplicateTestTakers: duplicateTestTakers.length > 0 ? duplicateTestTakers : undefined,
+        unusedTestFiles: unusedTestFiles.length > 0 ? unusedTestFiles : undefined,
         validationResults: this.createEmptyValidationData()
       };
     } catch (error) {
@@ -212,6 +225,80 @@ export class WorkspaceTestFilesValidationService {
       this.logger.error(`Error during test file validation for workspace ID ${workspaceId}: ${message}`, error instanceof Error ? error.stack : undefined);
       throw new Error(`Error during test file validation for workspace ID ${workspaceId}: ${message}`);
     }
+  }
+
+  private async getUnusedTestFilesFromValidationGraph(
+    workspaceId: number,
+    validationResults: ValidationData[],
+    usedTestTakerFileIds: Set<string>
+  ): Promise<Array<{ id: number; fileId: string; filename: string; fileType: string }>> {
+    const usedTokens = new Set<string>();
+
+    const addToken = (token: string | undefined | null): void => {
+      if (!token) {
+        return;
+      }
+      const normalized = token.trim().replace(/\\/g, '/');
+      if (!normalized) {
+        return;
+      }
+      const upper = normalized.toUpperCase();
+      usedTokens.add(upper);
+
+      const lastDot = normalized.lastIndexOf('.');
+      if (lastDot > 0) {
+        usedTokens.add(normalized.substring(0, lastDot).toUpperCase());
+      }
+
+      if (normalized.includes('/')) {
+        const basename = normalized.split('/').pop();
+        if (basename) {
+          usedTokens.add(basename.toUpperCase());
+          const baseLastDot = basename.lastIndexOf('.');
+          if (baseLastDot > 0) {
+            usedTokens.add(basename.substring(0, baseLastDot).toUpperCase());
+          }
+        }
+      }
+
+      usedTokens.add(`${upper}.VOCS`);
+      usedTokens.add(`${upper}.XML`);
+      usedTokens.add(`${upper}.HTML`);
+      usedTokens.add(`${upper}.JSON`);
+    };
+
+    usedTestTakerFileIds.forEach(id => usedTokens.add(id));
+
+    validationResults.forEach(result => {
+      addToken(result.testTaker);
+      result.booklets.files.forEach(f => addToken(f.filename));
+      result.units.files.forEach(f => addToken(f.filename));
+      result.schemes.files.forEach(f => addToken(f.filename));
+      result.definitions.files.forEach(f => addToken(f.filename));
+      result.player.files.forEach(f => addToken(f.filename));
+    });
+
+    const allFiles = await this.fileUploadRepository.find({
+      where: { workspace_id: workspaceId },
+      select: ['id', 'file_id', 'filename', 'file_type']
+    });
+
+    return allFiles
+      .filter(file => {
+        const fileId = (file.file_id || '').trim().toUpperCase();
+        const filename = (file.filename || '').trim().toUpperCase();
+        if (!fileId && !filename) {
+          return false;
+        }
+        const isUsed = usedTokens.has(fileId) || usedTokens.has(filename);
+        return !isUsed;
+      })
+      .map(file => ({
+        id: file.id,
+        fileId: file.file_id,
+        filename: file.filename,
+        fileType: file.file_type
+      }));
   }
 
   private async getPersonsNotConsidered(workspaceId: number, loginNames: string[]): Promise<string[]> {

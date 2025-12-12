@@ -373,6 +373,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
               data: {
                 validationResults: res.validationResults,
                 filteredTestTakers: res.filteredTestTakers,
+                unusedTestFiles: res.unusedTestFiles,
                 workspaceId: this.appService.selectedWorkspaceId
               }
             });
@@ -386,6 +387,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
           data: {
             validationResults: res.validationResults,
             filteredTestTakers: res.filteredTestTakers,
+            unusedTestFiles: res.unusedTestFiles,
             workspaceId: this.appService.selectedWorkspaceId
           }
         });

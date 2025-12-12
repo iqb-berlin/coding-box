@@ -29,6 +29,13 @@ export type DuplicateTestTaker = {
   }[];
 };
 
+export type UnusedTestFile = {
+  id: number;
+  fileId: string;
+  filename: string;
+  fileType: string;
+};
+
 export class FileValidationResultDto {
   @ApiProperty({ type: Boolean, description: 'Indicates whether test takers were found' })
     testTakersFound!: boolean;
@@ -38,6 +45,9 @@ export class FileValidationResultDto {
 
   @ApiProperty({ type: [Object], description: 'Array of duplicate test takers found across files' })
     duplicateTestTakers?: DuplicateTestTaker[];
+
+  @ApiProperty({ type: [Object], description: 'Array of files not reachable from TestTakers -> Booklets -> Units -> referenced resources' })
+    unusedTestFiles?: UnusedTestFile[];
 
   @ApiProperty({ type: [Object], description: 'Array of validation results for each test taker' })
     validationResults!: {
