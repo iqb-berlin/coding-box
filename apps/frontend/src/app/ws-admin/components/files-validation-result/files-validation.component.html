@@ -88,11 +88,18 @@
                 <span class="warning-title">TestTaker zum Filtern</span>
               </mat-panel-title>
               <mat-panel-description>
-                {{ selection.selected.length }} / {{ filteredTestTakers.length }}
+                {{ filteredExcludedCount }} / {{ filteredTotalCount }}
               </mat-panel-description>
             </mat-expansion-panel-header>
 
             <div class="warning-content">
+              <p>
+                Hier werden Login-Namen aus TestTaker-Dateien angezeigt, deren Modus nicht zu den erlaubten Modi gehört.
+                Es werden nur Logins angezeigt, die bereits als Person im Workspace vorhanden sind.
+                Mit den Aktionen können Sie festlegen, ob diese Personen berücksichtigt oder ausgeschlossen werden.
+                Das wirkt sich auf Auswertungen, Suche, Validierungen sowie Kodier- und Autokodier-Workflows aus.
+              </p>
+
               <div class="mode-selection">
                 <div class="select-all-row">
                   <mat-checkbox
@@ -101,7 +108,7 @@
                     (change)="toggleAllSelection()">
                     Alle auswählen
                   </mat-checkbox>
-                  <span class="count-badge">{{ selection.selected.length }} / {{ filteredTestTakers.length }}</span>
+                  <span class="count-badge">{{ filteredExcludedCount }} / {{ filteredTotalCount }}</span>
                 </div>
 
                 @for (modeGroup of modeGroups; track modeGroup) {
@@ -121,11 +128,31 @@
                     [checked]="selection.isSelected(item)"
                     (change)="toggleSelection(item)">
                     <strong>{{ item.testTaker }}:</strong> {{ item.login }} ({{ item.mode }})
+                    @if (item.consider === true) {
+                      <mat-icon matTooltip="Wird berücksichtigt">check_circle</mat-icon>
+                    }
+                    @if (item.consider === false) {
+                      <mat-icon matTooltip="Wird ausgeschlossen">block</mat-icon>
+                    }
                   </mat-checkbox>
                 </div>
               </cdk-virtual-scroll-viewport>
 
               <div class="exclude-button-container">
+                <button
+                  mat-raised-button
+                  color="primary"
+                  class="exclude-button"
+                  (click)="markTestTakersAsConsidered()"
+                  [disabled]="isConsidering || selection.selected.length === 0">
+                  <mat-icon>{{ isConsidering ? 'hourglass_empty' : 'check_circle' }}</mat-icon>
+                  @if (isConsidering) {
+                    Wird bearbeitet... ({{ consideringProgress }}%)
+                  } @else {
+                    Ausgewählte TestTaker berücksichtigen ({{ selection.selected.length }})
+                  }
+                </button>
+
                 <button
                   mat-raised-button
                   color="warn"
@@ -139,6 +166,12 @@
                     Ausgewählte TestTaker ausschließen ({{ selection.selected.length }})
                   }
                 </button>
+
+                @if (isConsidering) {
+                  <div class="progress-container">
+                    <div class="progress-bar" [style.width.%]="consideringProgress"></div>
+                  </div>
+                }
 
                 @if (isExcluding) {
                   <div class="progress-container">

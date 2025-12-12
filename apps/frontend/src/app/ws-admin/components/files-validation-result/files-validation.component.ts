@@ -18,6 +18,7 @@ import { TranslateModule } from '@ngx-translate/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { WorkspaceService } from '../../../services/workspace.service';
 import { BackendService } from '../../../services/backend.service';
+import { TestResultService } from '../../../services/test-result.service';
 import { BookletInfoDialogComponent } from '../booklet-info-dialog/booklet-info-dialog.component';
 import { UnitInfoDialogComponent } from '../unit-info-dialog/unit-info-dialog.component';
 import { SchemeEditorDialogComponent } from '../../../coding/components/scheme-editor-dialog/scheme-editor-dialog.component';
@@ -44,6 +45,7 @@ type FilteredTestTaker = {
   testTaker: string;
   mode: string;
   login: string;
+  consider?: boolean | null;
 };
 
 type FilesValidation = {
@@ -114,10 +116,34 @@ export class FilesValidationDialogComponent {
 
   private workspaceService = inject(WorkspaceService);
   private backendService = inject(BackendService);
+  private testResultService = inject(TestResultService);
   private snackBar = inject(MatSnackBar);
 
   isExcluding = false;
   excludingProgress = 0;
+
+  isConsidering = false;
+  consideringProgress = 0;
+
+  private isKnownTestTaker(item: FilteredTestTaker): boolean {
+    return item.consider === true || item.consider === false;
+  }
+
+  get knownFilteredTestTakers(): FilteredTestTaker[] {
+    return this.filteredTestTakers.filter(item => this.isKnownTestTaker(item));
+  }
+
+  get knownFilteredCount(): number {
+    return this.knownFilteredTestTakers.length;
+  }
+
+  get filteredTotalCount(): number {
+    return this.filteredTestTakers.length;
+  }
+
+  get filteredExcludedCount(): number {
+    return this.filteredTestTakers.filter(item => item.consider === false).length;
+  }
 
   constructor() {
     if (this.data) {
@@ -138,7 +164,7 @@ export class FilesValidationDialogComponent {
         this.filteredTestTakers = this.data.filteredTestTakers;
 
         const modeMap = new Map<string, number>();
-        this.filteredTestTakers.forEach(item => {
+        this.filteredTestTakers.filter(item => this.isKnownTestTaker(item)).forEach(item => {
           const count = modeMap.get(item.mode) || 0;
           modeMap.set(item.mode, count + 1);
         });
@@ -259,6 +285,9 @@ export class FilesValidationDialogComponent {
   }
 
   toggleSelection(testTaker: FilteredTestTaker): void {
+    if (!this.isKnownTestTaker(testTaker)) {
+      return;
+    }
     this.selection.toggle(testTaker);
     this.checkIfAllSelected();
   }
@@ -268,16 +297,17 @@ export class FilesValidationDialogComponent {
       this.selection.clear();
       this.allSelected = false;
     } else {
-      if (this.filteredTestTakers.length > 1000) {
+      const selectable = this.knownFilteredTestTakers;
+      if (selectable.length > 1000) {
         // For very large datasets, use batch processing
         const batchSize = 500;
-        const totalItems = this.filteredTestTakers.length;
+        const totalItems = selectable.length;
 
         const processBatch = (startIndex: number) => {
           const endIndex = Math.min(startIndex + batchSize, totalItems);
 
           for (let i = startIndex; i < endIndex; i++) {
-            this.selection.select(this.filteredTestTakers[i]);
+            this.selection.select(selectable[i]);
           }
 
           if (endIndex < totalItems) {
@@ -288,7 +318,7 @@ export class FilesValidationDialogComponent {
         processBatch(0);
       } else {
         // For smaller datasets, select all at once
-        this.selection.select(...this.filteredTestTakers);
+        this.selection.select(...selectable);
       }
 
       this.allSelected = true;
@@ -296,7 +326,7 @@ export class FilesValidationDialogComponent {
   }
 
   toggleModeSelection(mode: string): void {
-    const testTakersWithMode = this.filteredTestTakers.filter(item => item.mode === mode);
+    const testTakersWithMode = this.filteredTestTakers.filter(item => item.mode === mode && this.isKnownTestTaker(item));
 
     if (testTakersWithMode.length === 0) {
       return;
@@ -344,14 +374,94 @@ export class FilesValidationDialogComponent {
   }
 
   checkIfAllSelected(): void {
-    this.allSelected = this.filteredTestTakers.length > 0 &&
-                       this.selection.selected.length === this.filteredTestTakers.length;
+    this.allSelected = this.knownFilteredCount > 0 &&
+                       this.selection.selected.length === this.knownFilteredCount;
   }
 
   isModeSelected(mode: string): boolean {
     return this.filteredTestTakers
-      .filter(item => item.mode === mode)
+      .filter(item => item.mode === mode && this.isKnownTestTaker(item))
       .every(item => this.selection.isSelected(item));
+  }
+
+  markTestTakersAsConsidered(): void {
+    if (!this.data.workspaceId || this.selection.selected.length === 0 || this.isConsidering) {
+      return;
+    }
+
+    this.isConsidering = true;
+    this.consideringProgress = 0;
+
+    if (this.selection.selected.length > 500) {
+      const batchSize = 500;
+      const selectedItems = [...this.selection.selected];
+      const totalItems = selectedItems.length;
+
+      const processBatch = (startIndex: number) => {
+        const endIndex = Math.min(startIndex + batchSize, totalItems);
+        const batchItems = selectedItems.slice(startIndex, endIndex);
+        const batchLogins = batchItems.map(item => item.login);
+
+        this.workspaceService.markTestTakersAsConsidered(this.data.workspaceId!, batchLogins)
+          .subscribe({
+            next: success => {
+              if (success) {
+                const loginSet = new Set(batchLogins);
+                this.filteredTestTakers = this.filteredTestTakers.map(item => (loginSet.has(item.login) ? {
+                  ...item,
+                  consider: true
+                } : item));
+
+                this.testResultService.invalidateCache(this.data.workspaceId!);
+
+                this.consideringProgress = Math.round((endIndex / totalItems) * 100);
+
+                if (endIndex < totalItems) {
+                  setTimeout(() => processBatch(endIndex), 100);
+                } else {
+                  this.selection.clear();
+                  this.isConsidering = false;
+                  this.consideringProgress = 0;
+                }
+              } else {
+                this.isConsidering = false;
+                this.consideringProgress = 0;
+              }
+            },
+            error: () => {
+              this.isConsidering = false;
+              this.consideringProgress = 0;
+            }
+          });
+      };
+
+      processBatch(0);
+    } else {
+      const logins = this.selection.selected.map(item => item.login);
+      this.consideringProgress = 50;
+
+      this.workspaceService.markTestTakersAsConsidered(this.data.workspaceId!, logins)
+        .subscribe({
+          next: success => {
+            if (success) {
+              const loginSet = new Set(logins);
+              this.filteredTestTakers = this.filteredTestTakers.map(item => (loginSet.has(item.login) ? {
+                ...item,
+                consider: true
+              } : item));
+              this.selection.clear();
+
+              this.testResultService.invalidateCache(this.data.workspaceId!);
+            }
+            this.isConsidering = false;
+            this.consideringProgress = 0;
+          },
+          error: () => {
+            this.isConsidering = false;
+            this.consideringProgress = 0;
+          }
+        });
+    }
   }
 
   markTestTakersAsExcluded(): void {
@@ -379,10 +489,13 @@ export class FilesValidationDialogComponent {
           .subscribe({
             next: success => {
               if (success) {
-                // Remove the processed items from the list
-                this.filteredTestTakers = this.filteredTestTakers.filter(
-                  item => !batchItems.some(selected => selected.login === item.login)
-                );
+                const loginSet = new Set(batchLogins);
+                this.filteredTestTakers = this.filteredTestTakers.map(item => (loginSet.has(item.login) ? {
+                  ...item,
+                  consider: false
+                } : item));
+
+                this.testResultService.invalidateCache(this.data.workspaceId!);
 
                 // Update progress
                 this.excludingProgress = Math.round((endIndex / totalItems) * 100);
@@ -394,7 +507,6 @@ export class FilesValidationDialogComponent {
                 } else {
                   // All batches processed
                   this.selection.clear();
-                  this.updateModeGroups();
                   this.isExcluding = false;
                   this.excludingProgress = 0;
                 }
@@ -424,12 +536,14 @@ export class FilesValidationDialogComponent {
         .subscribe({
           next: success => {
             if (success) {
-              // Success - remove the selected test takers from the list
-              this.filteredTestTakers = this.filteredTestTakers.filter(
-                item => !this.selection.isSelected(item)
-              );
+              const loginSet = new Set(logins);
+              this.filteredTestTakers = this.filteredTestTakers.map(item => (loginSet.has(item.login) ? {
+                ...item,
+                consider: false
+              } : item));
               this.selection.clear();
-              this.updateModeGroups();
+
+              this.testResultService.invalidateCache(this.data.workspaceId!);
             }
             this.isExcluding = false;
             this.excludingProgress = 0;
@@ -444,7 +558,7 @@ export class FilesValidationDialogComponent {
 
   private updateModeGroups(): void {
     const modeMap = new Map<string, number>();
-    this.filteredTestTakers.forEach(item => {
+    this.filteredTestTakers.filter(item => this.isKnownTestTaker(item)).forEach(item => {
       const count = modeMap.get(item.mode) || 0;
       modeMap.set(item.mode, count + 1);
     });
