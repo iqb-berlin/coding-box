@@ -80,6 +80,82 @@ h4 {
   }
 }
 
+.validation-info {
+  background-color: #f5f9ff;
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin: 0 0 16px 0;
+  border: 1px solid rgba(25, 118, 210, 0.18);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.06);
+  display: block;
+  animation: fadeIn 0.3s ease-in-out;
+
+  mat-expansion-panel {
+    width: 100%;
+    box-shadow: none;
+    background: transparent;
+    border-radius: 4px;
+  }
+
+  mat-expansion-panel-header {
+    padding: 0 8px;
+    min-height: 40px;
+
+    .mat-expansion-panel-header-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+  }
+
+  .info-icon {
+    color: #1976d2;
+    font-size: 24px;
+    height: 24px;
+    width: 24px;
+    flex-shrink: 0;
+  }
+
+  .info-title {
+    font-weight: 600;
+    color: #1976d2;
+    font-size: 16px;
+  }
+
+  .info-content {
+    margin-top: 8px;
+    color: #555;
+
+    p {
+      margin: 0 0 10px 0;
+
+      &:last-child {
+        margin-bottom: 0;
+      }
+    }
+
+    ul {
+      margin: 0 0 10px 0;
+      padding-left: 16px;
+
+      &:last-child {
+        margin-bottom: 0;
+      }
+
+      li {
+        font-size: 14px;
+        color: #555;
+        margin-bottom: 6px;
+        line-height: 1.5;
+
+        &:last-child {
+          margin-bottom: 0;
+        }
+      }
+    }
+  }
+}
+
 .missing-units-warning {
   background-color: #ffebee;
   border-radius: 8px;
