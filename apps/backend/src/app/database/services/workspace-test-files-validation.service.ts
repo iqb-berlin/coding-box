@@ -28,6 +28,7 @@ type DataValidation = {
 };
 
 type UnitRefs = {
+  schemerRefs: string[];
   codingSchemeRefs: string[];
   definitionRefs: string[];
   playerRefs: string[];
@@ -39,6 +40,7 @@ type ValidationData = {
   booklets: DataValidation;
   units: DataValidation;
   schemes: DataValidation;
+  schemer: DataValidation;
   definitions: DataValidation;
   player: DataValidation;
 };
@@ -308,6 +310,10 @@ export class WorkspaceTestFilesValidationService {
       result.booklets.files.forEach(f => addToken(f.filename));
       result.units.files.forEach(f => addToken(f.filename));
       result.schemes.files.forEach(f => addToken(f.filename));
+      result.schemer.files.forEach(f => {
+        addToken(f.filename);
+        addPlayerPatchTokens(f.filename);
+      });
       result.definitions.files.forEach(f => addToken(f.filename));
       result.player.files.forEach(f => {
         addToken(f.filename);
@@ -412,6 +418,7 @@ export class WorkspaceTestFilesValidationService {
         try {
           const $ = cheerio.load(unit.data, { xmlMode: true });
           const refs: UnitRefs = {
+            schemerRefs: [],
             codingSchemeRefs: [],
             definitionRefs: [],
             playerRefs: [],
@@ -420,11 +427,15 @@ export class WorkspaceTestFilesValidationService {
 
           $('Unit').each((_, element) => {
             const codingSchemeRef = $(element).find('CodingSchemeRef').text();
+            const schemerRefAttr = $(element).find('CodingSchemeRef').attr('schemer');
             const definitionRef = $(element).find('DefinitionRef').text();
             const playerRefAttr = $(element).find('DefinitionRef').attr('player');
             const playerRef = playerRefAttr ? playerRefAttr.replace('@', '-') : '';
 
+            const schemerRef = schemerRefAttr ? schemerRefAttr.replace('@', '-') : '';
+
             if (codingSchemeRef) refs.codingSchemeRefs.push(codingSchemeRef.toUpperCase());
+            if (schemerRef) refs.schemerRefs.push(schemerRef.toUpperCase());
             if (definitionRef) refs.definitionRefs.push(definitionRef.toUpperCase());
             if (playerRef) {
               refs.playerRefs.push(playerRef.toUpperCase());
@@ -613,6 +624,7 @@ export class WorkspaceTestFilesValidationService {
     const unitsWithoutPlayer: string[] = [];
 
     const allCodingSchemeRefs = new Set<string>();
+    const allSchemerRefs = new Set<string>();
     const allDefinitionRefs = new Set<string>();
     const allPlayerRefs = new Set<string>();
 
@@ -636,12 +648,17 @@ export class WorkspaceTestFilesValidationService {
         if (refs && !refs.hasPlayer) unitsWithoutPlayer.push(unitId);
 
         refs?.codingSchemeRefs.forEach(r => allCodingSchemeRefs.add(r));
+        refs?.schemerRefs.forEach(r => allSchemerRefs.add(r));
         refs?.definitionRefs.forEach(r => allDefinitionRefs.add(r));
         refs?.playerRefs.forEach(r => allPlayerRefs.add(r));
       }
     }
 
     const missingCodingSchemeRefs = Array.from(allCodingSchemeRefs).filter(r => !this.resourceExists(r, resourceIds));
+    const missingSchemerRefs = Array.from(allSchemerRefs).filter(r => {
+      if (this.resourceExists(r, resourceIds)) return false;
+      return !WorkspaceTestFilesValidationService.playerRefExists(r, resourceIdsArray);
+    });
     const missingDefinitionRefs = Array.from(allDefinitionRefs).filter(r => !this.resourceExists(r, resourceIds));
     const missingPlayerRefs = Array.from(allPlayerRefs).filter(r => {
       if (this.resourceExists(r, resourceIds)) return false;
@@ -688,6 +705,14 @@ export class WorkspaceTestFilesValidationService {
         missing: missingCodingSchemeRefs,
         files: schemeFiles
       },
+      schemer: {
+        complete: unitComplete ? missingSchemerRefs.length === 0 : false,
+        missing: missingSchemerRefs,
+        files: Array.from(allSchemerRefs).map(r => ({
+          filename: r,
+          exists: this.resourceExists(r, resourceIds) || WorkspaceTestFilesValidationService.playerRefExists(r, resourceIdsArray)
+        }))
+      },
       definitions: {
         complete: unitComplete ? missingDefinitionRefs.length === 0 : false,
         missing: missingDefinitionRefs,
@@ -720,6 +745,7 @@ export class WorkspaceTestFilesValidationService {
         files: []
       },
       schemes: { complete: false, missing: [], files: [] },
+      schemer: { complete: false, missing: [], files: [] },
       definitions: { complete: false, missing: [], files: [] },
       player: { complete: false, missing: [], files: [] }
     }];

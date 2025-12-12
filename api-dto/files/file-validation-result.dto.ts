@@ -55,6 +55,7 @@ export class FileValidationResultDto {
     booklets: DataValidation;
     units: DataValidation;
     schemes: DataValidation;
+    schemer: DataValidation;
     definitions: DataValidation;
     player: DataValidation;
   }[];

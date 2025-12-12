@@ -13,7 +13,7 @@
             <p>
               Die Validierung arbeitet in Schritten: Zuerst werden TestTakers-Dateien gelesen und die darin referenzierten Testhefte ermittelt.
               Aus den Testheften werden die referenzierten Aufgaben (Units) bestimmt. Anschließend werden pro Unit die referenzierten Ressourcen
-              (Kodierschemata, Definitionen, Player und Metadaten) auf Vorhandensein geprüft.
+              (Kodierschemata, Schemer, Definitionen, Player und Metadaten) auf Vorhandensein geprüft.
             </p>
             <p>
               Zusätzlich werden Schemas geprüft:
@@ -425,6 +425,63 @@
                               [attr.aria-label]="'Kodierschema anzeigen'">
                               <mat-icon>schema</mat-icon>
                             </button>
+                          </li>
+                        }
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+                <!-- Schemer Section -->
+                <div class="validation-card">
+                  <h3>
+                    <mat-icon class="section-icon">app_registration</mat-icon>
+                    Schemer
+                  </h3>
+                  <p class="status-row">
+                    Status:
+                    @if (val.schemer.complete) {
+                      <span class="status-complete">
+                        <mat-icon class="status-icon">check_circle</mat-icon>
+                        Vollständig
+                      </span>
+                    }
+                    @if (!val.schemer.complete) {
+                      <span class="status-incomplete"
+                            [matTooltip]="val.schemer.missing && val.schemer.missing.length === 0 && !val.units.complete ? 'Nicht überprüfbar: Aufgaben fehlen oder sind unvollständig' : ''">
+                        <mat-icon class="status-icon">error</mat-icon>
+                        @if (val.schemer.missing && val.schemer.missing.length > 0) {
+                          Unvollständig (Schemer fehlen)
+                        } @else if (!val.units.complete) {
+                          Nicht überprüfbar (Voraussetzungen fehlen)
+                        } @else {
+                          Unvollständig
+                        }
+                      </span>
+                    }
+                  </p>
+                  <div class="files-list-container">
+                    <p class="files-header" (click)="toggleFilesList(val.testTaker, 'schemer')">
+                      <mat-icon class="files-icon">list</mat-icon>
+                      <span>
+                        Alle Dateien: {{ val.schemer.files.length }}
+                        (vorhanden: {{ getExistingCount(val.schemer) }},
+                        fehlend: {{ getMissingCount(val.schemer) }})
+                      </span>
+                      <mat-icon class="toggle-icon">{{ isFilesListExpanded(val.testTaker, 'schemer') ? 'expand_less' : 'expand_more' }}</mat-icon>
+                    </p>
+                    <div class="files-list" [class.expanded]="isFilesListExpanded(val.testTaker, 'schemer')">
+                      <ul>
+                        @for (file of val.schemer.files; track file) {
+                          <li [class.file-exists]="file.exists" [class.file-missing]="!file.exists">
+                            <mat-icon class="file-status-icon">{{ file.exists ? 'check_circle' : 'error' }}</mat-icon>
+                            <span class="file-name">{{ file.filename }}</span>
+                            @if (file.schemaValid === false) {
+                              <mat-icon
+                                class="file-status-icon"
+                                matTooltip="{{ (file.schemaErrors || []).join('\n') }}">
+                                report_problem
+                              </mat-icon>
+                            }
                           </li>
                         }
                       </ul>
