@@ -50,6 +50,8 @@ type FilteredTestTaker = {
 
 type FilesValidation = {
   testTaker: string,
+  testTakerSchemaValid?: boolean;
+  testTakerSchemaErrors?: string[];
   booklets: DataValidation;
   units: DataValidation;
   schemes: DataValidation;
