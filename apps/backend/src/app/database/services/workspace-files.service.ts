@@ -31,6 +31,7 @@ import Persons from '../entities/persons.entity';
 import { CodingStatisticsService } from './coding-statistics.service';
 import { WorkspaceXmlSchemaValidationService } from './workspace-xml-schema-validation.service';
 import { WorkspaceFileStorageService } from './workspace-file-storage.service';
+import { WorkspaceFileParsingService } from './workspace-file-parsing.service';
 
 type FileStatus = {
   filename: string;
@@ -103,7 +104,8 @@ export class WorkspaceFilesService implements OnModuleInit {
     private bookletRepository: Repository<Booklet>,
     private codingStatisticsService: CodingStatisticsService,
     private workspaceXmlSchemaValidationService: WorkspaceXmlSchemaValidationService,
-    private workspaceFileStorageService: WorkspaceFileStorageService
+    private workspaceFileStorageService: WorkspaceFileStorageService,
+    private workspaceFileParsingService: WorkspaceFileParsingService
   ) {}
 
   async findAllFileTypes(workspaceId: number): Promise<string[]> {
@@ -1091,225 +1093,6 @@ ${bookletRefs}
 
   
 
-  private async extractUnitInfo(xmlDocument: cheerio.CheerioAPI): Promise<Record<string, unknown>> {
-    try {
-      const result: Record<string, unknown> = {};
-      const metadata = xmlDocument('Metadata');
-      if (metadata.length) {
-        const metadataInfo: Record<string, string> = {};
-
-        const id = metadata.find('Id');
-        if (id.length) {
-          metadataInfo.id = id.text().trim();
-        }
-
-        const label = metadata.find('Label');
-        if (label.length) {
-          metadataInfo.label = label.text().trim();
-        }
-
-        const description = metadata.find('Description');
-        if (description.length) {
-          metadataInfo.description = description.text().trim();
-        }
-
-        result.metadata = metadataInfo;
-      }
-
-      const baseVariables = xmlDocument('BaseVariables Variable');
-      if (baseVariables.length) {
-        const variables: Array<Record<string, unknown>> = [];
-
-        baseVariables.each((index, element) => {
-          const variable = xmlDocument(element);
-          const variableInfo: Record<string, unknown> = {};
-
-          const attrs = variable.attr();
-          if (attrs) {
-            variableInfo.id = attrs.id;
-            variableInfo.alias = attrs.alias;
-            variableInfo.type = attrs.type;
-            variableInfo.format = attrs.format;
-            variableInfo.multiple = attrs.multiple === 'true';
-            variableInfo.nullable = attrs.nullable !== 'false';
-
-            if (attrs.values) {
-              variableInfo.values = attrs.values.split('|');
-            }
-
-            if (attrs.valuesComplete) {
-              variableInfo.valuesComplete = attrs.valuesComplete === 'true';
-            }
-
-            if (attrs.page) {
-              variableInfo.page = attrs.page;
-            }
-          }
-
-          const alias = variable.text().trim();
-          if (alias) {
-            variableInfo.alias = alias;
-          }
-
-          variables.push(variableInfo);
-        });
-
-        result.variables = variables;
-      }
-
-      const definitions = xmlDocument('Definition');
-      if (definitions.length) {
-        const definitionsArray: Array<Record<string, string>> = [];
-
-        definitions.each((index, element) => {
-          const definition = xmlDocument(element);
-          const definitionInfo: Record<string, string> = {};
-
-          const attrs = definition.attr();
-          if (attrs) {
-            definitionInfo.id = attrs.id;
-            definitionInfo.type = attrs.type;
-          }
-
-          definitionsArray.push(definitionInfo);
-        });
-
-        result.definitions = definitionsArray;
-      }
-
-      return result;
-    } catch (error) {
-      this.logger.error(`Error extracting Unit information: ${error.message}`);
-      return {};
-    }
-  }
-
-  private async extractBookletInfo(xmlDocument: cheerio.CheerioAPI): Promise<Record<string, unknown>> {
-    try {
-      const result: Record<string, unknown> = {};
-      const metadata = xmlDocument('Metadata');
-      if (metadata.length) {
-        const metadataInfo: Record<string, string> = {};
-        const id = metadata.find('Id');
-        if (id.length) {
-          metadataInfo.id = id.text().trim();
-        }
-        const label = metadata.find('Label');
-        if (label.length) {
-          metadataInfo.label = label.text().trim();
-        }
-        const description = metadata.find('Description');
-        if (description.length) {
-          metadataInfo.description = description.text().trim();
-        }
-
-        result.metadata = metadataInfo;
-      }
-
-      const units = xmlDocument('Units Unit');
-      if (units.length) {
-        const unitsArray: Array<Record<string, string>> = [];
-
-        units.each((index, element) => {
-          const unit = xmlDocument(element);
-          const unitInfo: Record<string, string> = {};
-
-          const attrs = unit.attr();
-          if (attrs) {
-            unitInfo.id = attrs.id;
-            unitInfo.label = attrs.label;
-            unitInfo.labelShort = attrs.labelshort;
-          }
-
-          unitsArray.push(unitInfo);
-        });
-
-        result.units = unitsArray;
-      }
-
-      return result;
-    } catch (error) {
-      this.logger.error(`Error extracting Booklet information: ${error.message}`);
-      return {};
-    }
-  }
-
-  private async extractTestTakersInfo(xmlDocument: cheerio.CheerioAPI): Promise<Record<string, unknown>> {
-    try {
-      const result: Record<string, unknown> = {};
-
-      const testTakers = xmlDocument('Testtaker');
-      if (testTakers.length) {
-        const testTakersArray: Array<Record<string, unknown>> = [];
-
-        testTakers.each((index, element) => {
-          const testTaker = xmlDocument(element);
-          const testTakerInfo: Record<string, unknown> = {};
-
-          const attrs = testTaker.attr();
-          if (attrs) {
-            testTakerInfo.id = attrs.id;
-            testTakerInfo.login = attrs.login;
-            testTakerInfo.code = attrs.code;
-          }
-
-          const booklets = testTaker.find('Booklet');
-          if (booklets.length) {
-            const bookletsArray: string[] = [];
-
-            booklets.each((bookletIndex, bookletElement) => {
-              const booklet = xmlDocument(bookletElement);
-              bookletsArray.push(booklet.text().trim());
-            });
-
-            testTakerInfo.booklets = bookletsArray;
-          }
-
-          testTakersArray.push(testTakerInfo);
-        });
-
-        result.testTakers = testTakersArray;
-      }
-
-      const groups = xmlDocument('Group');
-      if (groups.length) {
-        const groupsArray: Array<Record<string, unknown>> = [];
-
-        groups.each((groupIndex, element) => {
-          const group = xmlDocument(element);
-          const groupInfo: Record<string, unknown> = {};
-
-          const attrs = group.attr();
-          if (attrs) {
-            groupInfo.id = attrs.id;
-            groupInfo.label = attrs.label;
-          }
-
-          const members = group.find('Member');
-          if (members.length) {
-            const membersArray: string[] = [];
-
-            members.each((memberIndex, memberElement) => {
-              const member = xmlDocument(memberElement);
-              membersArray.push(member.text().trim());
-            });
-
-            groupInfo.members = membersArray;
-          }
-
-          groupsArray.push(groupInfo);
-        });
-
-        result.groups = groupsArray;
-      }
-
-      return result;
-    } catch (error) {
-      this.logger.error(`Error extracting TestTakers information: ${error.message}`);
-      return {};
-    }
-  }
-
   private async handleXmlFile(workspaceId: number, file: FileIo): Promise<unknown> {
     try {
       if (!file.buffer || !file.buffer.length) {
@@ -1376,11 +1159,11 @@ ${bookletRefs}
       let extractedInfo: Record<string, unknown> = {};
       try {
         if (fileType === 'Unit') {
-          extractedInfo = await this.extractUnitInfo(xmlDocument);
+          extractedInfo = await this.workspaceFileParsingService.extractUnitInfo(xmlDocument);
         } else if (fileType === 'Booklet') {
-          extractedInfo = await this.extractBookletInfo(xmlDocument);
+          extractedInfo = await this.workspaceFileParsingService.extractBookletInfo(xmlDocument);
         } else if (fileType === 'TestTakers') {
-          extractedInfo = await this.extractTestTakersInfo(xmlDocument);
+          extractedInfo = await this.workspaceFileParsingService.extractTestTakersInfo(xmlDocument);
         }
         this.logger.log(`Extracted information from ${fileType} file: ${JSON.stringify(extractedInfo)}`);
       } catch (extractError) {

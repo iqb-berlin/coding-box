@@ -9,6 +9,7 @@ import { WorkspaceCoreService } from './services/workspace-core.service';
 import { WorkspaceFilesService } from './services/workspace-files.service';
 import { WorkspaceXmlSchemaValidationService } from './services/workspace-xml-schema-validation.service';
 import { WorkspaceFileStorageService } from './services/workspace-file-storage.service';
+import { WorkspaceFileParsingService } from './services/workspace-file-parsing.service';
 import { WorkspaceTestResultsService } from './services/workspace-test-results.service';
 import { WorkspaceUsersService } from './services/workspace-users.service';
 import { WorkspaceCodingService } from './services/workspace-coding.service';
@@ -155,6 +156,7 @@ import { CodingExportService } from './services/coding-export.service';
     WorkspaceFilesService,
     WorkspaceXmlSchemaValidationService,
     WorkspaceFileStorageService,
+    WorkspaceFileParsingService,
     WorkspaceTestResultsService,
     WorkspaceUsersService,
     WorkspaceCodingService,
