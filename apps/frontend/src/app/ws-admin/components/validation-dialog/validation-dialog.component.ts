@@ -21,6 +21,7 @@ import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
 import { ValidationTaskStateService, ValidationResult } from '../../../services/validation-task-state.service';
 import { ValidationService } from '../../../services/validation.service';
+import { ValidationTaskRunnerService } from '../../../services/validation-task-runner.service';
 import { InvalidVariableDto } from '../../../../../../../api-dto/files/variable-validation.dto';
 import { TestTakersValidationDto, MissingPersonDto } from '../../../../../../../api-dto/files/testtakers-validation.dto';
 import { DuplicateResponsesResultDto } from '../../../../../../../api-dto/files/duplicate-response.dto';
@@ -200,6 +201,7 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
   appService = inject(AppService);
   validationTaskStateService = inject(ValidationTaskStateService);
   validationService = inject(ValidationService);
+  validationTaskRunnerService = inject(ValidationTaskRunnerService);
 
   private subscriptions: Subscription[] = [];
 
@@ -756,49 +758,30 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
     this.isGroupResponsesValidationRunning = true;
     this.subscriptions.forEach(sub => sub.unsubscribe());
     this.subscriptions = [];
-    const subscription = this.backendService.createValidationTask(
+    const subscription = this.validationTaskRunnerService.runTask<{
+      testTakersFound: boolean;
+      groupsWithResponses: { group: string; hasResponse: boolean }[];
+      allGroupsHaveResponses: boolean;
+      total: number;
+      page: number;
+      limit: number;
+    }>(
       this.appService.selectedWorkspaceId,
       'groupResponses',
-      this.currentGroupResponsesPage,
-      this.groupResponsesPageSize
-    ).subscribe(task => {
-      this.groupResponsesValidationTask = task;
-      const pollSubscription = this.backendService.pollValidationTask(
-        this.appService.selectedWorkspaceId,
-        task.id
-      ).subscribe({
-        next: updatedTask => {
-          if (updatedTask.status === 'completed') {
-            this.backendService.getValidationResults(
-              this.appService.selectedWorkspaceId,
-              updatedTask.id
-            ).subscribe(result => {
-              const typedResult = result as {
-                testTakersFound: boolean;
-                groupsWithResponses: { group: string; hasResponse: boolean }[];
-                allGroupsHaveResponses: boolean;
-                total: number;
-                page: number;
-                limit: number;
-              };
-
-              this.groupResponsesResult = typedResult;
-              this.totalGroupResponses = typedResult.total;
-              this.updatePaginatedGroupResponses();
-              this.isGroupResponsesValidationRunning = false;
-            });
-          } else if (updatedTask.status === 'failed') {
-            this.snackBar.open(`Validierung fehlgeschlagen: ${updatedTask.error || 'Unbekannter Fehler'}`, 'Schließen', { duration: 5000 });
-            this.isGroupResponsesValidationRunning = false;
-          }
-        },
-        error: () => {
-          this.snackBar.open('Fehler beim Abrufen des Validierungsstatus', 'Schließen', { duration: 5000 });
-          this.isGroupResponsesValidationRunning = false;
-        }
-      });
-
-      this.subscriptions.push(pollSubscription);
+      { page: this.currentGroupResponsesPage, limit: this.groupResponsesPageSize }
+    ).subscribe({
+      next: ({ createdTask, result }) => {
+        this.groupResponsesValidationTask = createdTask;
+        this.groupResponsesResult = result;
+        this.totalGroupResponses = result.total;
+        this.updatePaginatedGroupResponses();
+        this.isGroupResponsesValidationRunning = false;
+      },
+      error: (err: unknown) => {
+        const message = err instanceof Error ? err.message : 'Unbekannter Fehler';
+        this.snackBar.open(`Validierung fehlgeschlagen: ${message}`, 'Schließen', { duration: 5000 });
+        this.isGroupResponsesValidationRunning = false;
+      }
     });
 
     this.subscriptions.push(subscription);
@@ -811,62 +794,42 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
     this.subscriptions.forEach(sub => sub.unsubscribe());
     this.subscriptions = [];
 
-    const subscription = this.backendService.createValidationTask(
+    const subscription = this.validationTaskRunnerService.runTask<TestTakersValidationDto>(
       this.appService.selectedWorkspaceId,
       'testTakers'
-    ).subscribe(task => {
-      this.testTakersValidationTask = task;
+    ).subscribe({
+      next: ({ createdTask, result }) => {
+        this.testTakersValidationTask = createdTask;
+        this.testTakersValidationResult = result;
 
-      const pollSubscription = this.backendService.pollValidationTask(
-        this.appService.selectedWorkspaceId,
-        task.id
-      ).subscribe({
-        next: updatedTask => {
-          if (updatedTask.status === 'completed') {
-            this.backendService.getValidationResults(
-              this.appService.selectedWorkspaceId,
-              updatedTask.id
-            ).subscribe(result => {
-              this.testTakersValidationResult = result as TestTakersValidationDto;
+        const hasErrors = !result.testTakersFound || result.missingPersons.length > 0;
 
-              const hasErrors =
-                !this.testTakersValidationResult.testTakersFound ||
-                this.testTakersValidationResult.missingPersons.length > 0;
-
-              const validationResult: ValidationResult = {
-                status: hasErrors ? 'failed' : 'success',
-                timestamp: Date.now(),
-                details: {
-                  testTakersFound: this.testTakersValidationResult.testTakersFound,
-                  missingPersonsCount: this.testTakersValidationResult.missingPersons.length,
-                  hasErrors: hasErrors
-                }
-              };
-
-              this.validationTaskStateService.setValidationResult(
-                this.appService.selectedWorkspaceId,
-                'testTakers',
-                validationResult
-              );
-
-              this.updatePaginatedMissingPersons();
-              this.isTestTakersValidationRunning = false;
-              this.testTakersValidationWasRun = true;
-
-              this.saveValidationResult('testTakers');
-            });
-          } else if (updatedTask.status === 'failed') {
-            this.snackBar.open(`Validierung fehlgeschlagen: ${updatedTask.error || 'Unbekannter Fehler'}`, 'Schließen', { duration: 5000 });
-            this.isTestTakersValidationRunning = false;
+        const validationResult: ValidationResult = {
+          status: hasErrors ? 'failed' : 'success',
+          timestamp: Date.now(),
+          details: {
+            testTakersFound: result.testTakersFound,
+            missingPersonsCount: result.missingPersons.length,
+            hasErrors: hasErrors
           }
-        },
-        error: () => {
-          this.snackBar.open('Fehler beim Abrufen des Validierungsstatus', 'Schließen', { duration: 5000 });
-          this.isTestTakersValidationRunning = false;
-        }
-      });
+        };
 
-      this.subscriptions.push(pollSubscription);
+        this.validationTaskStateService.setValidationResult(
+          this.appService.selectedWorkspaceId,
+          'testTakers',
+          validationResult
+        );
+
+        this.updatePaginatedMissingPersons();
+        this.isTestTakersValidationRunning = false;
+        this.testTakersValidationWasRun = true;
+        this.saveValidationResult('testTakers');
+      },
+      error: (err: unknown) => {
+        const message = err instanceof Error ? err.message : 'Unbekannter Fehler';
+        this.snackBar.open(`Validierung fehlgeschlagen: ${message}`, 'Schließen', { duration: 5000 });
+        this.isTestTakersValidationRunning = false;
+      }
     });
 
     this.subscriptions.push(subscription);
@@ -891,69 +854,49 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
     this.currentGroupResponsesPage = 1;
     this.subscriptions.forEach(sub => sub.unsubscribe());
     this.subscriptions = [];
-    const subscription = this.backendService.createValidationTask(
+    const subscription = this.validationTaskRunnerService.runTask<{
+      testTakersFound: boolean;
+      groupsWithResponses: { group: string; hasResponse: boolean }[];
+      allGroupsHaveResponses: boolean;
+      total: number;
+      page: number;
+      limit: number;
+    }>(
       this.appService.selectedWorkspaceId,
       'groupResponses',
-      this.currentGroupResponsesPage,
-      this.groupResponsesPageSize
-    ).subscribe(task => {
-      this.groupResponsesValidationTask = task;
+      { page: this.currentGroupResponsesPage, limit: this.groupResponsesPageSize }
+    ).subscribe({
+      next: ({ createdTask, result }) => {
+        this.groupResponsesValidationTask = createdTask;
 
-      const pollSubscription = this.backendService.pollValidationTask(
-        this.appService.selectedWorkspaceId,
-        task.id
-      ).subscribe({
-        next: updatedTask => {
-          if (updatedTask.status === 'completed') {
-            this.backendService.getValidationResults(
-              this.appService.selectedWorkspaceId,
-              updatedTask.id
-            ).subscribe(result => {
-              const typedResult = result as {
-                testTakersFound: boolean;
-                groupsWithResponses: { group: string; hasResponse: boolean }[];
-                allGroupsHaveResponses: boolean;
-                total: number;
-                page: number;
-                limit: number;
-              };
-              const hasErrors =
-                !typedResult.testTakersFound || !typedResult.allGroupsHaveResponses;
-
-              const validationResult: ValidationResult = {
-                status: hasErrors ? 'failed' : 'success',
-                timestamp: Date.now(),
-                details: {
-                  testTakersFound: typedResult.testTakersFound,
-                  allGroupsHaveResponses: typedResult.allGroupsHaveResponses,
-                  hasErrors: hasErrors
-                }
-              };
-              this.validationTaskStateService.setValidationResult(
-                this.appService.selectedWorkspaceId,
-                'groupResponses',
-                validationResult
-              );
-
-              this.groupResponsesResult = typedResult;
-              this.totalGroupResponses = typedResult.total;
-              this.updatePaginatedGroupResponses();
-              this.isGroupResponsesValidationRunning = false;
-              this.groupResponsesValidationWasRun = true;
-              this.saveValidationResult('groupResponses');
-            });
-          } else if (updatedTask.status === 'failed') {
-            this.snackBar.open(`Validierung fehlgeschlagen: ${updatedTask.error || 'Unbekannter Fehler'}`, 'Schließen', { duration: 5000 });
-            this.isGroupResponsesValidationRunning = false;
+        const hasErrors = !result.testTakersFound || !result.allGroupsHaveResponses;
+        const validationResult: ValidationResult = {
+          status: hasErrors ? 'failed' : 'success',
+          timestamp: Date.now(),
+          details: {
+            testTakersFound: result.testTakersFound,
+            allGroupsHaveResponses: result.allGroupsHaveResponses,
+            hasErrors: hasErrors
           }
-        },
-        error: () => {
-          this.snackBar.open('Fehler beim Abrufen des Validierungsstatus', 'Schließen', { duration: 5000 });
-          this.isGroupResponsesValidationRunning = false;
-        }
-      });
+        };
+        this.validationTaskStateService.setValidationResult(
+          this.appService.selectedWorkspaceId,
+          'groupResponses',
+          validationResult
+        );
 
-      this.subscriptions.push(pollSubscription);
+        this.groupResponsesResult = result;
+        this.totalGroupResponses = result.total;
+        this.updatePaginatedGroupResponses();
+        this.isGroupResponsesValidationRunning = false;
+        this.groupResponsesValidationWasRun = true;
+        this.saveValidationResult('groupResponses');
+      },
+      error: (err: unknown) => {
+        const message = err instanceof Error ? err.message : 'Unbekannter Fehler';
+        this.snackBar.open(`Validierung fehlgeschlagen: ${message}`, 'Schließen', { duration: 5000 });
+        this.isGroupResponsesValidationRunning = false;
+      }
     });
 
     this.subscriptions.push(subscription);
@@ -971,64 +914,45 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
     this.subscriptions.forEach(sub => sub.unsubscribe());
     this.subscriptions = [];
 
-    const subscription = this.backendService.createValidationTask(
+    const subscription = this.validationTaskRunnerService.runTask<DuplicateResponsesResultDto>(
       this.appService.selectedWorkspaceId,
       'duplicateResponses',
-      this.currentDuplicateResponsesPage,
-      this.duplicateResponsesPageSize
-    ).subscribe(task => {
-      const pollSubscription = this.backendService.pollValidationTask(
-        this.appService.selectedWorkspaceId,
-        task.id
-      ).subscribe({
-        next: updatedTask => {
-          if (updatedTask.status === 'completed') {
-            this.backendService.getValidationResults(
-              this.appService.selectedWorkspaceId,
-              updatedTask.id
-            ).subscribe(result => {
-              const typedResult = result as DuplicateResponsesResultDto;
-              const hasErrors = typedResult.total > 0;
-              const validationResult: ValidationResult = {
-                status: hasErrors ? 'failed' : 'success',
-                timestamp: Date.now(),
-                details: {
-                  total: typedResult.total,
-                  hasErrors: hasErrors
-                }
-              };
-
-              this.validationTaskStateService.setValidationResult(
-                this.appService.selectedWorkspaceId,
-                'duplicateResponses',
-                validationResult
-              );
-
-              this.duplicateResponses = typedResult.data.map(duplicate => ({
-                ...duplicate,
-                key: this.buildDuplicateKey(duplicate)
-              }));
-
-              this.totalDuplicateResponses = typedResult.total;
-              this.duplicateResponsesResult = typedResult;
-              this.updatePaginatedDuplicateResponses();
-              this.isDuplicateResponsesValidationRunning = false;
-              this.validateDuplicateResponsesWasRun = true;
-
-              this.saveValidationResult('duplicateResponses');
-            });
-          } else if (updatedTask.status === 'failed') {
-            this.snackBar.open(`Validierung fehlgeschlagen: ${updatedTask.error || 'Unbekannter Fehler'}`, 'Schließen', { duration: 5000 });
-            this.isDuplicateResponsesValidationRunning = false;
+      { page: this.currentDuplicateResponsesPage, limit: this.duplicateResponsesPageSize }
+    ).subscribe({
+      next: ({ result }) => {
+        const hasErrors = result.total > 0;
+        const validationResult: ValidationResult = {
+          status: hasErrors ? 'failed' : 'success',
+          timestamp: Date.now(),
+          details: {
+            total: result.total,
+            hasErrors: hasErrors
           }
-        },
-        error: () => {
-          this.snackBar.open('Fehler beim Abrufen des Validierungsstatus', 'Schließen', { duration: 5000 });
-          this.isDuplicateResponsesValidationRunning = false;
-        }
-      });
+        };
 
-      this.subscriptions.push(pollSubscription);
+        this.validationTaskStateService.setValidationResult(
+          this.appService.selectedWorkspaceId,
+          'duplicateResponses',
+          validationResult
+        );
+
+        this.duplicateResponses = result.data.map(duplicate => ({
+          ...duplicate,
+          key: this.buildDuplicateKey(duplicate)
+        }));
+
+        this.totalDuplicateResponses = result.total;
+        this.duplicateResponsesResult = result;
+        this.updatePaginatedDuplicateResponses();
+        this.isDuplicateResponsesValidationRunning = false;
+        this.validateDuplicateResponsesWasRun = true;
+        this.saveValidationResult('duplicateResponses');
+      },
+      error: (err: unknown) => {
+        const message = err instanceof Error ? err.message : 'Unbekannter Fehler';
+        this.snackBar.open(`Validierung fehlgeschlagen: ${message}`, 'Schließen', { duration: 5000 });
+        this.isDuplicateResponsesValidationRunning = false;
+      }
     });
 
     this.subscriptions.push(subscription);
@@ -1141,49 +1065,27 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
     this.isDuplicateResponsesValidationRunning = true;
     this.subscriptions.forEach(sub => sub.unsubscribe());
     this.subscriptions = [];
-    const subscription = this.backendService.createValidationTask(
+    const subscription = this.validationTaskRunnerService.runTask<DuplicateResponsesResultDto>(
       this.appService.selectedWorkspaceId,
       'duplicateResponses',
-      this.currentDuplicateResponsesPage,
-      this.duplicateResponsesPageSize
-    ).subscribe(task => {
-      const pollSubscription = this.backendService.pollValidationTask(
-        this.appService.selectedWorkspaceId,
-        task.id
-      ).subscribe({
-        next: updatedTask => {
-          if (updatedTask.status === 'completed') {
-            this.backendService.getValidationResults(
-              this.appService.selectedWorkspaceId,
-              updatedTask.id
-            ).subscribe(result => {
-              const typedResult = result as DuplicateResponsesResultDto;
-              this.duplicateResponses = typedResult.data.map(duplicate => {
-                const key = this.buildDuplicateKey(duplicate);
+      { page: this.currentDuplicateResponsesPage, limit: this.duplicateResponsesPageSize }
+    ).subscribe({
+      next: ({ result }) => {
+        this.duplicateResponses = result.data.map(duplicate => ({
+          ...duplicate,
+          key: this.buildDuplicateKey(duplicate)
+        }));
 
-                return {
-                  ...duplicate,
-                  key
-                };
-              });
-
-              this.totalDuplicateResponses = typedResult.total;
-              this.duplicateResponsesResult = typedResult;
-              this.updatePaginatedDuplicateResponses();
-              this.isDuplicateResponsesValidationRunning = false;
-            });
-          } else if (updatedTask.status === 'failed') {
-            this.snackBar.open(`Validierung fehlgeschlagen: ${updatedTask.error || 'Unbekannter Fehler'}`, 'Schließen', { duration: 5000 });
-            this.isDuplicateResponsesValidationRunning = false;
-          }
-        },
-        error: () => {
-          this.snackBar.open('Fehler beim Abrufen des Validierungsstatus', 'Schließen', { duration: 5000 });
-          this.isDuplicateResponsesValidationRunning = false;
-        }
-      });
-
-      this.subscriptions.push(pollSubscription);
+        this.totalDuplicateResponses = result.total;
+        this.duplicateResponsesResult = result;
+        this.updatePaginatedDuplicateResponses();
+        this.isDuplicateResponsesValidationRunning = false;
+      },
+      error: (err: unknown) => {
+        const message = err instanceof Error ? err.message : 'Unbekannter Fehler';
+        this.snackBar.open(`Validierung fehlgeschlagen: ${message}`, 'Schließen', { duration: 5000 });
+        this.isDuplicateResponsesValidationRunning = false;
+      }
     });
 
     this.subscriptions.push(subscription);
@@ -1244,54 +1146,29 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
       return;
     }
     this.isResolvingDuplicateResponses = true;
-    const subscription = this.backendService.createValidationTask(
+    const subscription = this.validationTaskRunnerService.runDeleteAllResponsesTask(
       this.appService.selectedWorkspaceId,
-      'deleteAllResponses',
-      undefined,
-      undefined,
-      { validationType: 'duplicateResponses' }
-    ).subscribe(task => {
-      const pollSubscription = this.backendService.pollValidationTask(
-        this.appService.selectedWorkspaceId,
-        task.id
-      ).subscribe({
-        next: updatedTask => {
-          if (updatedTask.status === 'completed') {
-            this.backendService.getValidationResults(
-              this.appService.selectedWorkspaceId,
-              updatedTask.id
-            ).subscribe(result => {
-              const typedResult = result as { deletedCount: number };
+      'duplicateResponses'
+    ).subscribe({
+      next: ({ result }) => {
+        this.snackBar.open(
+          `${result.deletedCount} doppelte Antworten wurden automatisch aufgelöst.`,
+          'OK',
+          { duration: 3000 }
+        );
 
-              this.snackBar.open(
-                `${typedResult.deletedCount} doppelte Antworten wurden automatisch aufgelöst.`,
-                'OK',
-                { duration: 3000 }
-              );
-
-              this.validateDuplicateResponses();
-              this.isResolvingDuplicateResponses = false;
-            });
-          } else if (updatedTask.status === 'failed') {
-            this.snackBar.open(
-              `Fehler beim Auflösen der doppelten Antworten: ${updatedTask.error || 'Unbekannter Fehler'}`,
-              'Fehler',
-              { duration: 3000 }
-            );
-            this.isResolvingDuplicateResponses = false;
-          }
-        },
-        error: () => {
-          this.snackBar.open(
-            'Fehler beim Auflösen der doppelten Antworten.',
-            'Fehler',
-            { duration: 3000 }
-          );
-          this.isResolvingDuplicateResponses = false;
-        }
-      });
-
-      this.subscriptions.push(pollSubscription);
+        this.validateDuplicateResponses();
+        this.isResolvingDuplicateResponses = false;
+      },
+      error: (err: unknown) => {
+        const message = err instanceof Error ? err.message : 'Unbekannter Fehler';
+        this.snackBar.open(
+          `Fehler beim Auflösen der doppelten Antworten: ${message}`,
+          'Fehler',
+          { duration: 3000 }
+        );
+        this.isResolvingDuplicateResponses = false;
+      }
     });
 
     this.subscriptions.push(subscription);
@@ -1306,66 +1183,48 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
 
     this.subscriptions.forEach(sub => sub.unsubscribe());
     this.subscriptions = [];
-    const subscription = this.backendService.createValidationTask(
+    const subscription = this.validationTaskRunnerService.runTask<{
+      data: InvalidVariableDto[];
+      total: number;
+      page: number;
+      limit: number;
+    }>(
       this.appService.selectedWorkspaceId,
       'variables',
-      this.currentVariablePage,
-      this.variablePageSize
-    ).subscribe(task => {
-      this.variableValidationTask = task;
-      const pollSubscription = this.backendService.pollValidationTask(
-        this.appService.selectedWorkspaceId,
-        task.id
-      ).subscribe({
-        next: updatedTask => {
-          if (updatedTask.status === 'completed') {
-            this.backendService.getValidationResults(
-              this.appService.selectedWorkspaceId,
-              updatedTask.id
-            ).subscribe(result => {
-              const typedResult = result as {
-                data: InvalidVariableDto[];
-                total: number;
-                page: number;
-                limit: number;
-              };
+      { page: this.currentVariablePage, limit: this.variablePageSize }
+    ).subscribe({
+      next: ({ createdTask, result }) => {
+        this.variableValidationTask = createdTask;
 
-              const hasErrors = typedResult.total > 0;
-              const validationResult: ValidationResult = {
-                status: hasErrors ? 'failed' : 'success',
-                timestamp: Date.now(),
-                details: {
-                  total: typedResult.total,
-                  hasErrors: hasErrors
-                }
-              };
-              this.validationTaskStateService.setValidationResult(
-                this.appService.selectedWorkspaceId,
-                'variables',
-                validationResult
-              );
-
-              this.invalidVariables = typedResult.data;
-              this.totalInvalidVariables = typedResult.total;
-              this.currentVariablePage = typedResult.page;
-              this.variablePageSize = typedResult.limit;
-              this.updatePaginatedVariables();
-              this.isVariableValidationRunning = false;
-              this.validateVariablesWasRun = true;
-              this.saveValidationResult('variables');
-            });
-          } else if (updatedTask.status === 'failed') {
-            this.snackBar.open(`Validierung fehlgeschlagen: ${updatedTask.error || 'Unbekannter Fehler'}`, 'Schließen', { duration: 5000 });
-            this.isVariableValidationRunning = false;
+        const hasErrors = result.total > 0;
+        const validationResult: ValidationResult = {
+          status: hasErrors ? 'failed' : 'success',
+          timestamp: Date.now(),
+          details: {
+            total: result.total,
+            hasErrors: hasErrors
           }
-        },
-        error: () => {
-          this.snackBar.open('Fehler beim Abrufen des Validierungsstatus', 'Schließen', { duration: 5000 });
-          this.isVariableValidationRunning = false;
-        }
-      });
+        };
+        this.validationTaskStateService.setValidationResult(
+          this.appService.selectedWorkspaceId,
+          'variables',
+          validationResult
+        );
 
-      this.subscriptions.push(pollSubscription);
+        this.invalidVariables = result.data;
+        this.totalInvalidVariables = result.total;
+        this.currentVariablePage = result.page;
+        this.variablePageSize = result.limit;
+        this.updatePaginatedVariables();
+        this.isVariableValidationRunning = false;
+        this.validateVariablesWasRun = true;
+        this.saveValidationResult('variables');
+      },
+      error: (err: unknown) => {
+        const message = err instanceof Error ? err.message : 'Unbekannter Fehler';
+        this.snackBar.open(`Validierung fehlgeschlagen: ${message}`, 'Schließen', { duration: 5000 });
+        this.isVariableValidationRunning = false;
+      }
     });
 
     this.subscriptions.push(subscription);
@@ -1377,50 +1236,31 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
     this.isVariableValidationRunning = true;
     this.subscriptions.forEach(sub => sub.unsubscribe());
     this.subscriptions = [];
-    const subscription = this.backendService.createValidationTask(
+    const subscription = this.validationTaskRunnerService.runTask<{
+      data: InvalidVariableDto[];
+      total: number;
+      page: number;
+      limit: number;
+    }>(
       this.appService.selectedWorkspaceId,
       'variables',
-      this.currentVariablePage,
-      this.variablePageSize
-    ).subscribe(task => {
-      this.variableValidationTask = task;
-      const pollSubscription = this.backendService.pollValidationTask(
-        this.appService.selectedWorkspaceId,
-        task.id
-      ).subscribe({
-        next: updatedTask => {
-          if (updatedTask.status === 'completed') {
-            this.backendService.getValidationResults(
-              this.appService.selectedWorkspaceId,
-              updatedTask.id
-            ).subscribe(result => {
-              const typedResult = result as {
-                data: InvalidVariableDto[];
-                total: number;
-                page: number;
-                limit: number;
-              };
-
-              this.invalidVariables = typedResult.data;
-              this.totalInvalidVariables = typedResult.total;
-              this.currentVariablePage = typedResult.page;
-              this.variablePageSize = typedResult.limit;
-              this.updatePaginatedVariables();
-              this.isVariableValidationRunning = false;
-              this.validateVariablesWasRun = true;
-            });
-          } else if (updatedTask.status === 'failed') {
-            this.snackBar.open(`Validierung fehlgeschlagen: ${updatedTask.error || 'Unbekannter Fehler'}`, 'Schließen', { duration: 5000 });
-            this.isVariableValidationRunning = false;
-          }
-        },
-        error: () => {
-          this.snackBar.open('Fehler beim Abrufen des Validierungsstatus', 'Schließen', { duration: 5000 });
-          this.isVariableValidationRunning = false;
-        }
-      });
-
-      this.subscriptions.push(pollSubscription);
+      { page: this.currentVariablePage, limit: this.variablePageSize }
+    ).subscribe({
+      next: ({ createdTask, result }) => {
+        this.variableValidationTask = createdTask;
+        this.invalidVariables = result.data;
+        this.totalInvalidVariables = result.total;
+        this.currentVariablePage = result.page;
+        this.variablePageSize = result.limit;
+        this.updatePaginatedVariables();
+        this.isVariableValidationRunning = false;
+        this.validateVariablesWasRun = true;
+      },
+      error: (err: unknown) => {
+        const message = err instanceof Error ? err.message : 'Unbekannter Fehler';
+        this.snackBar.open(`Validierung fehlgeschlagen: ${message}`, 'Schließen', { duration: 5000 });
+        this.isVariableValidationRunning = false;
+      }
     });
 
     this.subscriptions.push(subscription);
@@ -1461,84 +1301,49 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
     const responseIds = Array.from(this.selectedResponses);
     this.subscriptions.forEach(sub => sub.unsubscribe());
     this.subscriptions = [];
-    const subscription = this.backendService.createDeleteResponsesTask(
+    const subscription = this.validationTaskRunnerService.runDeleteResponsesTask(
       this.appService.selectedWorkspaceId,
       responseIds
-    ).subscribe(task => {
-      const pollSubscription = this.backendService.pollValidationTask(
-        this.appService.selectedWorkspaceId,
-        task.id
-      ).subscribe({
-        next: updatedTask => {
-          if (updatedTask.status === 'completed') {
-            this.backendService.getValidationResults(
-              this.appService.selectedWorkspaceId,
-              updatedTask.id
-            ).subscribe(result => {
-              const typedResult = result as { deletedCount: number };
-              this.isDeletingResponses = false;
-              this.snackBar.open(`${typedResult.deletedCount} Antworten gelöscht`, 'Schließen', { duration: 3000 });
-              this.isVariableValidationRunning = true;
-              const validationSubscription = this.backendService.createValidationTask(
-                this.appService.selectedWorkspaceId,
-                'variables',
-                this.currentVariablePage,
-                this.variablePageSize
-              ).subscribe(validationTask => {
-                this.variableValidationTask = validationTask;
-                const validationPollSubscription = this.backendService.pollValidationTask(
-                  this.appService.selectedWorkspaceId,
-                  validationTask.id
-                ).subscribe({
-                  next: updatedValidationTask => {
-                    if (updatedValidationTask.status === 'completed') {
-                      this.backendService.getValidationResults(
-                        this.appService.selectedWorkspaceId,
-                        updatedValidationTask.id
-                      ).subscribe(validationResult => {
-                        const typedValidationResult = validationResult as {
-                          data: InvalidVariableDto[];
-                          total: number;
-                          page: number;
-                          limit: number;
-                        };
+    ).subscribe({
+      next: ({ result }) => {
+        this.isDeletingResponses = false;
+        this.snackBar.open(`${result.deletedCount} Antworten gelöscht`, 'Schließen', { duration: 3000 });
 
-                        this.invalidVariables = typedValidationResult.data;
-                        this.totalInvalidVariables = typedValidationResult.total;
-                        this.currentVariablePage = typedValidationResult.page;
-                        this.variablePageSize = typedValidationResult.limit;
-                        this.updatePaginatedVariables();
-                        this.isVariableValidationRunning = false;
-                        this.validateVariablesWasRun = true;
-                      });
-                    } else if (updatedValidationTask.status === 'failed') {
-                      this.snackBar.open(`Validierung fehlgeschlagen: ${updatedValidationTask.error || 'Unbekannter Fehler'}`, 'Schließen', { duration: 5000 });
-                      this.isVariableValidationRunning = false;
-                    }
-                  },
-                  error: () => {
-                    this.snackBar.open('Fehler beim Abrufen des Validierungsstatus', 'Schließen', { duration: 5000 });
-                    this.isVariableValidationRunning = false;
-                  }
-                });
-
-                this.subscriptions.push(validationPollSubscription);
-              });
-
-              this.subscriptions.push(validationSubscription);
-            });
-          } else if (updatedTask.status === 'failed') {
-            this.isDeletingResponses = false;
-            this.snackBar.open(`Löschen fehlgeschlagen: ${updatedTask.error || 'Unbekannter Fehler'}`, 'Schließen', { duration: 5000 });
+        this.isVariableValidationRunning = true;
+        const refreshSubscription = this.validationTaskRunnerService.runTask<{
+          data: InvalidVariableDto[];
+          total: number;
+          page: number;
+          limit: number;
+        }>(
+          this.appService.selectedWorkspaceId,
+          'variables',
+          { page: this.currentVariablePage, limit: this.variablePageSize }
+        ).subscribe({
+          next: ({ createdTask, result: refreshResult }) => {
+            this.variableValidationTask = createdTask;
+            this.invalidVariables = refreshResult.data;
+            this.totalInvalidVariables = refreshResult.total;
+            this.currentVariablePage = refreshResult.page;
+            this.variablePageSize = refreshResult.limit;
+            this.updatePaginatedVariables();
+            this.isVariableValidationRunning = false;
+            this.validateVariablesWasRun = true;
+          },
+          error: (err: unknown) => {
+            const message = err instanceof Error ? err.message : 'Unbekannter Fehler';
+            this.snackBar.open(`Validierung fehlgeschlagen: ${message}`, 'Schließen', { duration: 5000 });
+            this.isVariableValidationRunning = false;
           }
-        },
-        error: () => {
-          this.isDeletingResponses = false;
-          this.snackBar.open('Fehler beim Abrufen des Löschstatus', 'Schließen', { duration: 5000 });
-        }
-      });
+        });
 
-      this.subscriptions.push(pollSubscription);
+        this.subscriptions.push(refreshSubscription);
+      },
+      error: (err: unknown) => {
+        const message = err instanceof Error ? err.message : 'Unbekannter Fehler';
+        this.isDeletingResponses = false;
+        this.snackBar.open(`Löschen fehlgeschlagen: ${message}`, 'Schließen', { duration: 5000 });
+      }
     });
 
     this.subscriptions.push(subscription);
@@ -1567,84 +1372,49 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
         this.isDeletingResponses = true;
         this.subscriptions.forEach(sub => sub.unsubscribe());
         this.subscriptions = [];
-        const subscription = this.backendService.createDeleteAllResponsesTask(
+        const subscription = this.validationTaskRunnerService.runDeleteAllResponsesTask(
           this.appService.selectedWorkspaceId,
           'variables'
-        ).subscribe(task => {
-          const pollSubscription = this.backendService.pollValidationTask(
-            this.appService.selectedWorkspaceId,
-            task.id
-          ).subscribe({
-            next: updatedTask => {
-              if (updatedTask.status === 'completed') {
-                this.backendService.getValidationResults(
-                  this.appService.selectedWorkspaceId,
-                  updatedTask.id
-                ).subscribe(result => {
-                  const typedResult = result as { deletedCount: number };
-                  this.isDeletingResponses = false;
-                  this.snackBar.open(`${typedResult.deletedCount} Antworten gelöscht`, 'Schließen', { duration: 3000 });
-                  this.isVariableValidationRunning = true;
-                  const validationSubscription = this.backendService.createValidationTask(
-                    this.appService.selectedWorkspaceId,
-                    'variables',
-                    this.currentVariablePage,
-                    this.variablePageSize
-                  ).subscribe(validationTask => {
-                    this.variableValidationTask = validationTask;
-                    const validationPollSubscription = this.backendService.pollValidationTask(
-                      this.appService.selectedWorkspaceId,
-                      validationTask.id
-                    ).subscribe({
-                      next: updatedValidationTask => {
-                        if (updatedValidationTask.status === 'completed') {
-                          this.backendService.getValidationResults(
-                            this.appService.selectedWorkspaceId,
-                            updatedValidationTask.id
-                          ).subscribe(validationResult => {
-                            const typedValidationResult = validationResult as {
-                              data: InvalidVariableDto[];
-                              total: number;
-                              page: number;
-                              limit: number;
-                            };
+        ).subscribe({
+          next: ({ result }) => {
+            this.isDeletingResponses = false;
+            this.snackBar.open(`${result.deletedCount} Antworten gelöscht`, 'Schließen', { duration: 3000 });
 
-                            this.invalidVariables = typedValidationResult.data;
-                            this.totalInvalidVariables = typedValidationResult.total;
-                            this.currentVariablePage = typedValidationResult.page;
-                            this.variablePageSize = typedValidationResult.limit;
-                            this.updatePaginatedVariables();
-                            this.isVariableValidationRunning = false;
-                            this.validateVariablesWasRun = true;
-                          });
-                        } else if (updatedValidationTask.status === 'failed') {
-                          this.snackBar.open(`Validierung fehlgeschlagen: ${updatedValidationTask.error || 'Unbekannter Fehler'}`, 'Schließen', { duration: 5000 });
-                          this.isVariableValidationRunning = false;
-                        }
-                      },
-                      error: () => {
-                        this.snackBar.open('Fehler beim Abrufen des Validierungsstatus', 'Schließen', { duration: 5000 });
-                        this.isVariableValidationRunning = false;
-                      }
-                    });
-
-                    this.subscriptions.push(validationPollSubscription);
-                  });
-
-                  this.subscriptions.push(validationSubscription);
-                });
-              } else if (updatedTask.status === 'failed') {
-                this.isDeletingResponses = false;
-                this.snackBar.open(`Löschen fehlgeschlagen: ${updatedTask.error || 'Unbekannter Fehler'}`, 'Schließen', { duration: 5000 });
+            this.isVariableValidationRunning = true;
+            const refreshSubscription = this.validationTaskRunnerService.runTask<{
+              data: InvalidVariableDto[];
+              total: number;
+              page: number;
+              limit: number;
+            }>(
+              this.appService.selectedWorkspaceId,
+              'variables',
+              { page: this.currentVariablePage, limit: this.variablePageSize }
+            ).subscribe({
+              next: ({ createdTask, result: refreshResult }) => {
+                this.variableValidationTask = createdTask;
+                this.invalidVariables = refreshResult.data;
+                this.totalInvalidVariables = refreshResult.total;
+                this.currentVariablePage = refreshResult.page;
+                this.variablePageSize = refreshResult.limit;
+                this.updatePaginatedVariables();
+                this.isVariableValidationRunning = false;
+                this.validateVariablesWasRun = true;
+              },
+              error: (err: unknown) => {
+                const message = err instanceof Error ? err.message : 'Unbekannter Fehler';
+                this.snackBar.open(`Validierung fehlgeschlagen: ${message}`, 'Schließen', { duration: 5000 });
+                this.isVariableValidationRunning = false;
               }
-            },
-            error: () => {
-              this.isDeletingResponses = false;
-              this.snackBar.open('Fehler beim Abrufen des Löschstatus', 'Schließen', { duration: 5000 });
-            }
-          });
+            });
 
-          this.subscriptions.push(pollSubscription);
+            this.subscriptions.push(refreshSubscription);
+          },
+          error: (err: unknown) => {
+            const message = err instanceof Error ? err.message : 'Unbekannter Fehler';
+            this.isDeletingResponses = false;
+            this.snackBar.open(`Löschen fehlgeschlagen: ${message}`, 'Schließen', { duration: 5000 });
+          }
         });
 
         this.subscriptions.push(subscription);
@@ -1664,67 +1434,48 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
     this.selectedTypeResponses.clear();
     this.subscriptions.forEach(sub => sub.unsubscribe());
     this.subscriptions = [];
-    const subscription = this.backendService.createValidationTask(
+    const subscription = this.validationTaskRunnerService.runTask<{
+      data: InvalidVariableDto[];
+      total: number;
+      page: number;
+      limit: number;
+    }>(
       this.appService.selectedWorkspaceId,
       'variableTypes',
-      this.currentTypeVariablePage,
-      this.typeVariablePageSize
-    ).subscribe(task => {
-      this.variableTypeValidationTask = task;
-      const pollSubscription = this.backendService.pollValidationTask(
-        this.appService.selectedWorkspaceId,
-        task.id
-      ).subscribe({
-        next: updatedTask => {
-          if (updatedTask.status === 'completed') {
-            this.backendService.getValidationResults(
-              this.appService.selectedWorkspaceId,
-              updatedTask.id
-            ).subscribe(result => {
-              const typedResult = result as {
-                data: InvalidVariableDto[];
-                total: number;
-                page: number;
-                limit: number;
-              };
-
-              const hasErrors = typedResult.total > 0;
-              const validationResult: ValidationResult = {
-                status: hasErrors ? 'failed' : 'success',
-                timestamp: Date.now(),
-                details: {
-                  total: typedResult.total,
-                  hasErrors: hasErrors
-                }
-              };
-
-              this.validationTaskStateService.setValidationResult(
-                this.appService.selectedWorkspaceId,
-                'variableTypes',
-                validationResult
-              );
-
-              this.invalidTypeVariables = typedResult.data;
-              this.totalInvalidTypeVariables = typedResult.total;
-              this.currentTypeVariablePage = typedResult.page;
-              this.typeVariablePageSize = typedResult.limit;
-              this.updatePaginatedTypeVariables();
-              this.isVariableTypeValidationRunning = false;
-              this.validateVariableTypesWasRun = true;
-              this.saveValidationResult('variableTypes');
-            });
-          } else if (updatedTask.status === 'failed') {
-            this.snackBar.open(`Validierung fehlgeschlagen: ${updatedTask.error || 'Unbekannter Fehler'}`, 'Schließen', { duration: 5000 });
-            this.isVariableTypeValidationRunning = false;
+      { page: this.currentTypeVariablePage, limit: this.typeVariablePageSize }
+    ).subscribe({
+      next: ({ createdTask, result }) => {
+        this.variableTypeValidationTask = createdTask;
+        const hasErrors = result.total > 0;
+        const validationResult: ValidationResult = {
+          status: hasErrors ? 'failed' : 'success',
+          timestamp: Date.now(),
+          details: {
+            total: result.total,
+            hasErrors: hasErrors
           }
-        },
-        error: () => {
-          this.snackBar.open('Fehler beim Abrufen des Validierungsstatus', 'Schließen', { duration: 5000 });
-          this.isVariableTypeValidationRunning = false;
-        }
-      });
+        };
 
-      this.subscriptions.push(pollSubscription);
+        this.validationTaskStateService.setValidationResult(
+          this.appService.selectedWorkspaceId,
+          'variableTypes',
+          validationResult
+        );
+
+        this.invalidTypeVariables = result.data;
+        this.totalInvalidTypeVariables = result.total;
+        this.currentTypeVariablePage = result.page;
+        this.typeVariablePageSize = result.limit;
+        this.updatePaginatedTypeVariables();
+        this.isVariableTypeValidationRunning = false;
+        this.validateVariableTypesWasRun = true;
+        this.saveValidationResult('variableTypes');
+      },
+      error: (err: unknown) => {
+        const message = err instanceof Error ? err.message : 'Unbekannter Fehler';
+        this.snackBar.open(`Validierung fehlgeschlagen: ${message}`, 'Schließen', { duration: 5000 });
+        this.isVariableTypeValidationRunning = false;
+      }
     });
 
     this.subscriptions.push(subscription);
@@ -1738,65 +1489,47 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
     this.selectedStatusResponses.clear();
     this.subscriptions.forEach(sub => sub.unsubscribe());
     this.subscriptions = [];
-    const subscription = this.backendService.createValidationTask(
+    const subscription = this.validationTaskRunnerService.runTask<{
+      data: InvalidVariableDto[];
+      total: number;
+      page: number;
+      limit: number;
+    }>(
       this.appService.selectedWorkspaceId,
       'responseStatus',
-      this.currentStatusVariablePage,
-      this.statusVariablePageSize
-    ).subscribe(task => {
-      this.responseStatusValidationTask = task;
-      const pollSubscription = this.backendService.pollValidationTask(
-        this.appService.selectedWorkspaceId,
-        task.id
-      ).subscribe({
-        next: updatedTask => {
-          if (updatedTask.status === 'completed') {
-            this.backendService.getValidationResults(
-              this.appService.selectedWorkspaceId,
-              updatedTask.id
-            ).subscribe(result => {
-              const typedResult = result as {
-                data: InvalidVariableDto[];
-                total: number;
-                page: number;
-                limit: number;
-              };
-              const hasErrors = typedResult.total > 0;
-              const validationResult: ValidationResult = {
-                status: hasErrors ? 'failed' : 'success',
-                timestamp: Date.now(),
-                details: {
-                  total: typedResult.total,
-                  hasErrors: hasErrors
-                }
-              };
-              this.validationTaskStateService.setValidationResult(
-                this.appService.selectedWorkspaceId,
-                'responseStatus',
-                validationResult
-              );
-
-              this.invalidStatusVariables = typedResult.data;
-              this.totalInvalidStatusVariables = typedResult.total;
-              this.currentStatusVariablePage = typedResult.page;
-              this.statusVariablePageSize = typedResult.limit;
-              this.updatePaginatedStatusVariables();
-              this.isResponseStatusValidationRunning = false;
-              this.validateResponseStatusWasRun = true;
-              this.saveValidationResult('responseStatus');
-            });
-          } else if (updatedTask.status === 'failed') {
-            this.snackBar.open(`Validierung fehlgeschlagen: ${updatedTask.error || 'Unbekannter Fehler'}`, 'Schließen', { duration: 5000 });
-            this.isResponseStatusValidationRunning = false;
+      { page: this.currentStatusVariablePage, limit: this.statusVariablePageSize }
+    ).subscribe({
+      next: ({ createdTask, result }) => {
+        this.responseStatusValidationTask = createdTask;
+        const hasErrors = result.total > 0;
+        const validationResult: ValidationResult = {
+          status: hasErrors ? 'failed' : 'success',
+          timestamp: Date.now(),
+          details: {
+            total: result.total,
+            hasErrors: hasErrors
           }
-        },
-        error: () => {
-          this.snackBar.open('Fehler beim Abrufen des Validierungsstatus', 'Schließen', { duration: 5000 });
-          this.isResponseStatusValidationRunning = false;
-        }
-      });
+        };
+        this.validationTaskStateService.setValidationResult(
+          this.appService.selectedWorkspaceId,
+          'responseStatus',
+          validationResult
+        );
 
-      this.subscriptions.push(pollSubscription);
+        this.invalidStatusVariables = result.data;
+        this.totalInvalidStatusVariables = result.total;
+        this.currentStatusVariablePage = result.page;
+        this.statusVariablePageSize = result.limit;
+        this.updatePaginatedStatusVariables();
+        this.isResponseStatusValidationRunning = false;
+        this.validateResponseStatusWasRun = true;
+        this.saveValidationResult('responseStatus');
+      },
+      error: (err: unknown) => {
+        const message = err instanceof Error ? err.message : 'Unbekannter Fehler';
+        this.snackBar.open(`Validierung fehlgeschlagen: ${message}`, 'Schließen', { duration: 5000 });
+        this.isResponseStatusValidationRunning = false;
+      }
     });
 
     this.subscriptions.push(subscription);
@@ -1808,50 +1541,31 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
     this.isVariableTypeValidationRunning = true;
     this.subscriptions.forEach(sub => sub.unsubscribe());
     this.subscriptions = [];
-    const subscription = this.backendService.createValidationTask(
+    const subscription = this.validationTaskRunnerService.runTask<{
+      data: InvalidVariableDto[];
+      total: number;
+      page: number;
+      limit: number;
+    }>(
       this.appService.selectedWorkspaceId,
       'variableTypes',
-      this.currentTypeVariablePage,
-      this.typeVariablePageSize
-    ).subscribe(task => {
-      this.variableTypeValidationTask = task;
-      const pollSubscription = this.backendService.pollValidationTask(
-        this.appService.selectedWorkspaceId,
-        task.id
-      ).subscribe({
-        next: updatedTask => {
-          if (updatedTask.status === 'completed') {
-            this.backendService.getValidationResults(
-              this.appService.selectedWorkspaceId,
-              updatedTask.id
-            ).subscribe(result => {
-              const typedResult = result as {
-                data: InvalidVariableDto[];
-                total: number;
-                page: number;
-                limit: number;
-              };
-
-              this.invalidTypeVariables = typedResult.data;
-              this.totalInvalidTypeVariables = typedResult.total;
-              this.currentTypeVariablePage = typedResult.page;
-              this.typeVariablePageSize = typedResult.limit;
-              this.updatePaginatedTypeVariables();
-              this.isVariableTypeValidationRunning = false;
-              this.validateVariableTypesWasRun = true;
-            });
-          } else if (updatedTask.status === 'failed') {
-            this.snackBar.open(`Validierung fehlgeschlagen: ${updatedTask.error || 'Unbekannter Fehler'}`, 'Schließen', { duration: 5000 });
-            this.isVariableTypeValidationRunning = false;
-          }
-        },
-        error: () => {
-          this.snackBar.open('Fehler beim Abrufen des Validierungsstatus', 'Schließen', { duration: 5000 });
-          this.isVariableTypeValidationRunning = false;
-        }
-      });
-
-      this.subscriptions.push(pollSubscription);
+      { page: this.currentTypeVariablePage, limit: this.typeVariablePageSize }
+    ).subscribe({
+      next: ({ createdTask, result }) => {
+        this.variableTypeValidationTask = createdTask;
+        this.invalidTypeVariables = result.data;
+        this.totalInvalidTypeVariables = result.total;
+        this.currentTypeVariablePage = result.page;
+        this.typeVariablePageSize = result.limit;
+        this.updatePaginatedTypeVariables();
+        this.isVariableTypeValidationRunning = false;
+        this.validateVariableTypesWasRun = true;
+      },
+      error: (err: unknown) => {
+        const message = err instanceof Error ? err.message : 'Unbekannter Fehler';
+        this.snackBar.open(`Validierung fehlgeschlagen: ${message}`, 'Schließen', { duration: 5000 });
+        this.isVariableTypeValidationRunning = false;
+      }
     });
 
     this.subscriptions.push(subscription);
@@ -1863,50 +1577,31 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
     this.isResponseStatusValidationRunning = true;
     this.subscriptions.forEach(sub => sub.unsubscribe());
     this.subscriptions = [];
-    const subscription = this.backendService.createValidationTask(
+    const subscription = this.validationTaskRunnerService.runTask<{
+      data: InvalidVariableDto[];
+      total: number;
+      page: number;
+      limit: number;
+    }>(
       this.appService.selectedWorkspaceId,
       'responseStatus',
-      this.currentStatusVariablePage,
-      this.statusVariablePageSize
-    ).subscribe(task => {
-      this.responseStatusValidationTask = task;
-      const pollSubscription = this.backendService.pollValidationTask(
-        this.appService.selectedWorkspaceId,
-        task.id
-      ).subscribe({
-        next: updatedTask => {
-          if (updatedTask.status === 'completed') {
-            this.backendService.getValidationResults(
-              this.appService.selectedWorkspaceId,
-              updatedTask.id
-            ).subscribe(result => {
-              const typedResult = result as {
-                data: InvalidVariableDto[];
-                total: number;
-                page: number;
-                limit: number;
-              };
-
-              this.invalidStatusVariables = typedResult.data;
-              this.totalInvalidStatusVariables = typedResult.total;
-              this.currentStatusVariablePage = typedResult.page;
-              this.statusVariablePageSize = typedResult.limit;
-              this.updatePaginatedStatusVariables();
-              this.isResponseStatusValidationRunning = false;
-              this.validateResponseStatusWasRun = true;
-            });
-          } else if (updatedTask.status === 'failed') {
-            this.snackBar.open(`Validierung fehlgeschlagen: ${updatedTask.error || 'Unbekannter Fehler'}`, 'Schließen', { duration: 5000 });
-            this.isResponseStatusValidationRunning = false;
-          }
-        },
-        error: () => {
-          this.snackBar.open('Fehler beim Abrufen des Validierungsstatus', 'Schließen', { duration: 5000 });
-          this.isResponseStatusValidationRunning = false;
-        }
-      });
-
-      this.subscriptions.push(pollSubscription);
+      { page: this.currentStatusVariablePage, limit: this.statusVariablePageSize }
+    ).subscribe({
+      next: ({ createdTask, result }) => {
+        this.responseStatusValidationTask = createdTask;
+        this.invalidStatusVariables = result.data;
+        this.totalInvalidStatusVariables = result.total;
+        this.currentStatusVariablePage = result.page;
+        this.statusVariablePageSize = result.limit;
+        this.updatePaginatedStatusVariables();
+        this.isResponseStatusValidationRunning = false;
+        this.validateResponseStatusWasRun = true;
+      },
+      error: (err: unknown) => {
+        const message = err instanceof Error ? err.message : 'Unbekannter Fehler';
+        this.snackBar.open(`Validierung fehlgeschlagen: ${message}`, 'Schließen', { duration: 5000 });
+        this.isResponseStatusValidationRunning = false;
+      }
     });
 
     this.subscriptions.push(subscription);
@@ -1947,84 +1642,49 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
     const responseIds = Array.from(this.selectedTypeResponses);
     this.subscriptions.forEach(sub => sub.unsubscribe());
     this.subscriptions = [];
-    const subscription = this.backendService.createDeleteResponsesTask(
+    const subscription = this.validationTaskRunnerService.runDeleteResponsesTask(
       this.appService.selectedWorkspaceId,
       responseIds
-    ).subscribe(task => {
-      const pollSubscription = this.backendService.pollValidationTask(
-        this.appService.selectedWorkspaceId,
-        task.id
-      ).subscribe({
-        next: updatedTask => {
-          if (updatedTask.status === 'completed') {
-            this.backendService.getValidationResults(
-              this.appService.selectedWorkspaceId,
-              updatedTask.id
-            ).subscribe(result => {
-              const typedResult = result as { deletedCount: number };
-              this.isDeletingResponses = false;
-              this.snackBar.open(`${typedResult.deletedCount} Antworten gelöscht`, 'Schließen', { duration: 3000 });
-              this.isVariableTypeValidationRunning = true;
-              const validationSubscription = this.backendService.createValidationTask(
-                this.appService.selectedWorkspaceId,
-                'variableTypes',
-                this.currentTypeVariablePage,
-                this.typeVariablePageSize
-              ).subscribe(validationTask => {
-                this.variableTypeValidationTask = validationTask;
-                const validationPollSubscription = this.backendService.pollValidationTask(
-                  this.appService.selectedWorkspaceId,
-                  validationTask.id
-                ).subscribe({
-                  next: updatedValidationTask => {
-                    if (updatedValidationTask.status === 'completed') {
-                      this.backendService.getValidationResults(
-                        this.appService.selectedWorkspaceId,
-                        updatedValidationTask.id
-                      ).subscribe(validationResult => {
-                        const typedValidationResult = validationResult as {
-                          data: InvalidVariableDto[];
-                          total: number;
-                          page: number;
-                          limit: number;
-                        };
+    ).subscribe({
+      next: ({ result }) => {
+        this.isDeletingResponses = false;
+        this.snackBar.open(`${result.deletedCount} Antworten gelöscht`, 'Schließen', { duration: 3000 });
 
-                        this.invalidTypeVariables = typedValidationResult.data;
-                        this.totalInvalidTypeVariables = typedValidationResult.total;
-                        this.currentTypeVariablePage = typedValidationResult.page;
-                        this.typeVariablePageSize = typedValidationResult.limit;
-                        this.updatePaginatedTypeVariables();
-                        this.isVariableTypeValidationRunning = false;
-                        this.validateVariableTypesWasRun = true;
-                      });
-                    } else if (updatedValidationTask.status === 'failed') {
-                      this.snackBar.open(`Validierung fehlgeschlagen: ${updatedValidationTask.error || 'Unbekannter Fehler'}`, 'Schließen', { duration: 5000 });
-                      this.isVariableTypeValidationRunning = false;
-                    }
-                  },
-                  error: () => {
-                    this.snackBar.open('Fehler beim Abrufen des Validierungsstatus', 'Schließen', { duration: 5000 });
-                    this.isVariableTypeValidationRunning = false;
-                  }
-                });
-
-                this.subscriptions.push(validationPollSubscription);
-              });
-
-              this.subscriptions.push(validationSubscription);
-            });
-          } else if (updatedTask.status === 'failed') {
-            this.isDeletingResponses = false;
-            this.snackBar.open(`Löschen fehlgeschlagen: ${updatedTask.error || 'Unbekannter Fehler'}`, 'Schließen', { duration: 5000 });
+        this.isVariableTypeValidationRunning = true;
+        const refreshSubscription = this.validationTaskRunnerService.runTask<{
+          data: InvalidVariableDto[];
+          total: number;
+          page: number;
+          limit: number;
+        }>(
+          this.appService.selectedWorkspaceId,
+          'variableTypes',
+          { page: this.currentTypeVariablePage, limit: this.typeVariablePageSize }
+        ).subscribe({
+          next: ({ createdTask, result: refreshResult }) => {
+            this.variableTypeValidationTask = createdTask;
+            this.invalidTypeVariables = refreshResult.data;
+            this.totalInvalidTypeVariables = refreshResult.total;
+            this.currentTypeVariablePage = refreshResult.page;
+            this.typeVariablePageSize = refreshResult.limit;
+            this.updatePaginatedTypeVariables();
+            this.isVariableTypeValidationRunning = false;
+            this.validateVariableTypesWasRun = true;
+          },
+          error: (err: unknown) => {
+            const message = err instanceof Error ? err.message : 'Unbekannter Fehler';
+            this.snackBar.open(`Validierung fehlgeschlagen: ${message}`, 'Schließen', { duration: 5000 });
+            this.isVariableTypeValidationRunning = false;
           }
-        },
-        error: () => {
-          this.isDeletingResponses = false;
-          this.snackBar.open('Fehler beim Abrufen des Löschstatus', 'Schließen', { duration: 5000 });
-        }
-      });
+        });
 
-      this.subscriptions.push(pollSubscription);
+        this.subscriptions.push(refreshSubscription);
+      },
+      error: (err: unknown) => {
+        const message = err instanceof Error ? err.message : 'Unbekannter Fehler';
+        this.isDeletingResponses = false;
+        this.snackBar.open(`Löschen fehlgeschlagen: ${message}`, 'Schließen', { duration: 5000 });
+      }
     });
 
     this.subscriptions.push(subscription);
@@ -2053,94 +1713,54 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
         this.isDeletingResponses = true;
         this.subscriptions.forEach(sub => sub.unsubscribe());
         this.subscriptions = [];
-        const subscription = this.backendService.createDeleteAllResponsesTask(
+        const subscription = this.validationTaskRunnerService.runDeleteAllResponsesTask(
           this.appService.selectedWorkspaceId,
           'variableTypes'
-        ).subscribe(task => {
-          const pollSubscription = this.backendService.pollValidationTask(
-            this.appService.selectedWorkspaceId,
-            task.id
-          ).subscribe({
-            next: updatedTask => {
-              if (updatedTask.status === 'completed') {
-                this.backendService.getValidationResults(
-                  this.appService.selectedWorkspaceId,
-                  updatedTask.id
-                ).subscribe(result => {
-                  const typedResult = result as { deletedCount: number };
-                  this.isDeletingResponses = false;
-                  this.snackBar.open(`${typedResult.deletedCount} Antworten gelöscht`, 'Schließen', { duration: 3000 });
-                  this.isVariableTypeValidationRunning = true;
-                  const validationSubscription = this.backendService.createValidationTask(
-                    this.appService.selectedWorkspaceId,
-                    'variableTypes',
-                    this.currentTypeVariablePage,
-                    this.typeVariablePageSize
-                  ).subscribe(validationTask => {
-                    this.variableTypeValidationTask = validationTask;
+        ).subscribe({
+          next: ({ result }) => {
+            this.isDeletingResponses = false;
+            this.snackBar.open(`${result.deletedCount} Antworten gelöscht`, 'Schließen', { duration: 3000 });
 
-                    const validationPollSubscription = this.backendService.pollValidationTask(
-                      this.appService.selectedWorkspaceId,
-                      validationTask.id
-                    ).subscribe({
-                      next: updatedValidationTask => {
-                        if (updatedValidationTask.status === 'completed') {
-                          this.backendService.getValidationResults(
-                            this.appService.selectedWorkspaceId,
-                            updatedValidationTask.id
-                          ).subscribe(validationResult => {
-                            const typedValidationResult = validationResult as {
-                              data: InvalidVariableDto[];
-                              total: number;
-                              page: number;
-                              limit: number;
-                            };
-
-                            this.invalidTypeVariables = typedValidationResult.data;
-                            this.totalInvalidTypeVariables = typedValidationResult.total;
-                            this.currentTypeVariablePage = typedValidationResult.page;
-                            this.typeVariablePageSize = typedValidationResult.limit;
-                            this.updatePaginatedTypeVariables();
-                            this.isVariableTypeValidationRunning = false;
-                            this.validateVariableTypesWasRun = true;
-                          });
-                        } else if (updatedValidationTask.status === 'failed') {
-                          this.snackBar.open(`Validierung fehlgeschlagen: ${updatedValidationTask.error || 'Unbekannter Fehler'}`, 'Schließen', { duration: 5000 });
-                          this.isVariableTypeValidationRunning = false;
-                        }
-                      },
-                      error: () => {
-                        this.snackBar.open('Fehler beim Abrufen des Validierungsstatus', 'Schließen', { duration: 5000 });
-                        this.isVariableTypeValidationRunning = false;
-                      }
-                    });
-
-                    this.subscriptions.push(validationPollSubscription);
-                  });
-
-                  this.subscriptions.push(validationSubscription);
-                });
-              } else if (updatedTask.status === 'failed') {
-                this.isDeletingResponses = false;
-                this.snackBar.open(`Löschen fehlgeschlagen: ${updatedTask.error || 'Unbekannter Fehler'}`, 'Schließen', { duration: 5000 });
+            this.isVariableTypeValidationRunning = true;
+            const refreshSubscription = this.validationTaskRunnerService.runTask<{
+              data: InvalidVariableDto[];
+              total: number;
+              page: number;
+              limit: number;
+            }>(
+              this.appService.selectedWorkspaceId,
+              'variableTypes',
+              { page: this.currentTypeVariablePage, limit: this.typeVariablePageSize }
+            ).subscribe({
+              next: ({ createdTask, result: refreshResult }) => {
+                this.variableTypeValidationTask = createdTask;
+                this.invalidTypeVariables = refreshResult.data;
+                this.totalInvalidTypeVariables = refreshResult.total;
+                this.currentTypeVariablePage = refreshResult.page;
+                this.typeVariablePageSize = refreshResult.limit;
+                this.updatePaginatedTypeVariables();
+                this.isVariableTypeValidationRunning = false;
+                this.validateVariableTypesWasRun = true;
+              },
+              error: (err: unknown) => {
+                const message = err instanceof Error ? err.message : 'Unbekannter Fehler';
+                this.snackBar.open(`Validierung fehlgeschlagen: ${message}`, 'Schließen', { duration: 5000 });
+                this.isVariableTypeValidationRunning = false;
               }
-            },
-            error: () => {
-              this.isDeletingResponses = false;
-              this.snackBar.open('Fehler beim Abrufen des Löschstatus', 'Schließen', { duration: 5000 });
-            }
-          });
+            });
 
-          this.subscriptions.push(pollSubscription);
+            this.subscriptions.push(refreshSubscription);
+          },
+          error: (err: unknown) => {
+            const message = err instanceof Error ? err.message : 'Unbekannter Fehler';
+            this.isDeletingResponses = false;
+            this.snackBar.open(`Löschen fehlgeschlagen: ${message}`, 'Schließen', { duration: 5000 });
+          }
         });
 
         this.subscriptions.push(subscription);
       }
     });
-  }
-
-  toggleTypeExpansion(): void {
-    this.expandedTypePanel = !this.expandedTypePanel;
   }
 
   toggleStatusResponseSelection(responseId: number | undefined): void {
@@ -2179,85 +1799,49 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
     const responseIds = Array.from(this.selectedStatusResponses);
     this.subscriptions.forEach(sub => sub.unsubscribe());
     this.subscriptions = [];
-    const subscription = this.backendService.createDeleteResponsesTask(
+    const subscription = this.validationTaskRunnerService.runDeleteResponsesTask(
       this.appService.selectedWorkspaceId,
       responseIds
-    ).subscribe(task => {
-      const pollSubscription = this.backendService.pollValidationTask(
-        this.appService.selectedWorkspaceId,
-        task.id
-      ).subscribe({
-        next: updatedTask => {
-          if (updatedTask.status === 'completed') {
-            this.backendService.getValidationResults(
-              this.appService.selectedWorkspaceId,
-              updatedTask.id
-            ).subscribe(result => {
-              const typedResult = result as { deletedCount: number };
-              this.isDeletingResponses = false;
-              this.snackBar.open(`${typedResult.deletedCount} Antworten gelöscht`, 'Schließen', { duration: 3000 });
-              this.isResponseStatusValidationRunning = true;
-              const validationSubscription = this.backendService.createValidationTask(
-                this.appService.selectedWorkspaceId,
-                'responseStatus',
-                this.currentStatusVariablePage,
-                this.statusVariablePageSize
-              ).subscribe(validationTask => {
-                this.responseStatusValidationTask = validationTask;
+    ).subscribe({
+      next: ({ result }) => {
+        this.isDeletingResponses = false;
+        this.snackBar.open(`${result.deletedCount} Antworten gelöscht`, 'Schließen', { duration: 3000 });
 
-                const validationPollSubscription = this.backendService.pollValidationTask(
-                  this.appService.selectedWorkspaceId,
-                  validationTask.id
-                ).subscribe({
-                  next: updatedValidationTask => {
-                    if (updatedValidationTask.status === 'completed') {
-                      this.backendService.getValidationResults(
-                        this.appService.selectedWorkspaceId,
-                        updatedValidationTask.id
-                      ).subscribe(validationResult => {
-                        const typedValidationResult = validationResult as {
-                          data: InvalidVariableDto[];
-                          total: number;
-                          page: number;
-                          limit: number;
-                        };
-
-                        this.invalidStatusVariables = typedValidationResult.data;
-                        this.totalInvalidStatusVariables = typedValidationResult.total;
-                        this.currentStatusVariablePage = typedValidationResult.page;
-                        this.statusVariablePageSize = typedValidationResult.limit;
-                        this.updatePaginatedStatusVariables();
-                        this.isResponseStatusValidationRunning = false;
-                        this.validateResponseStatusWasRun = true;
-                      });
-                    } else if (updatedValidationTask.status === 'failed') {
-                      this.snackBar.open(`Validierung fehlgeschlagen: ${updatedValidationTask.error || 'Unbekannter Fehler'}`, 'Schließen', { duration: 5000 });
-                      this.isResponseStatusValidationRunning = false;
-                    }
-                  },
-                  error: () => {
-                    this.snackBar.open('Fehler beim Abrufen des Validierungsstatus', 'Schließen', { duration: 5000 });
-                    this.isResponseStatusValidationRunning = false;
-                  }
-                });
-
-                this.subscriptions.push(validationPollSubscription);
-              });
-
-              this.subscriptions.push(validationSubscription);
-            });
-          } else if (updatedTask.status === 'failed') {
-            this.isDeletingResponses = false;
-            this.snackBar.open(`Löschen fehlgeschlagen: ${updatedTask.error || 'Unbekannter Fehler'}`, 'Schließen', { duration: 5000 });
+        this.isResponseStatusValidationRunning = true;
+        const refreshSubscription = this.validationTaskRunnerService.runTask<{
+          data: InvalidVariableDto[];
+          total: number;
+          page: number;
+          limit: number;
+        }>(
+          this.appService.selectedWorkspaceId,
+          'responseStatus',
+          { page: this.currentStatusVariablePage, limit: this.statusVariablePageSize }
+        ).subscribe({
+          next: ({ createdTask, result: refreshResult }) => {
+            this.responseStatusValidationTask = createdTask;
+            this.invalidStatusVariables = refreshResult.data;
+            this.totalInvalidStatusVariables = refreshResult.total;
+            this.currentStatusVariablePage = refreshResult.page;
+            this.statusVariablePageSize = refreshResult.limit;
+            this.updatePaginatedStatusVariables();
+            this.isResponseStatusValidationRunning = false;
+            this.validateResponseStatusWasRun = true;
+          },
+          error: (err: unknown) => {
+            const message = err instanceof Error ? err.message : 'Unbekannter Fehler';
+            this.snackBar.open(`Validierung fehlgeschlagen: ${message}`, 'Schließen', { duration: 5000 });
+            this.isResponseStatusValidationRunning = false;
           }
-        },
-        error: () => {
-          this.isDeletingResponses = false;
-          this.snackBar.open('Fehler beim Abrufen des Löschstatus', 'Schließen', { duration: 5000 });
-        }
-      });
+        });
 
-      this.subscriptions.push(pollSubscription);
+        this.subscriptions.push(refreshSubscription);
+      },
+      error: (err: unknown) => {
+        const message = err instanceof Error ? err.message : 'Unbekannter Fehler';
+        this.isDeletingResponses = false;
+        this.snackBar.open(`Löschen fehlgeschlagen: ${message}`, 'Schließen', { duration: 5000 });
+      }
     });
 
     this.subscriptions.push(subscription);
@@ -2286,90 +1870,58 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
         this.isDeletingResponses = true;
         this.subscriptions.forEach(sub => sub.unsubscribe());
         this.subscriptions = [];
-        const subscription = this.backendService.createDeleteAllResponsesTask(
+        const subscription = this.validationTaskRunnerService.runDeleteAllResponsesTask(
           this.appService.selectedWorkspaceId,
           'responseStatus'
-        ).subscribe(task => {
-          const pollSubscription = this.backendService.pollValidationTask(
-            this.appService.selectedWorkspaceId,
-            task.id
-          ).subscribe({
-            next: updatedTask => {
-              if (updatedTask.status === 'completed') {
-                this.backendService.getValidationResults(
-                  this.appService.selectedWorkspaceId,
-                  updatedTask.id
-                ).subscribe(result => {
-                  const typedResult = result as { deletedCount: number };
-                  this.isDeletingResponses = false;
-                  this.snackBar.open(`${typedResult.deletedCount} Antworten gelöscht`, 'Schließen', { duration: 3000 });
-                  this.isResponseStatusValidationRunning = true;
-                  const validationSubscription = this.backendService.createValidationTask(
-                    this.appService.selectedWorkspaceId,
-                    'responseStatus',
-                    this.currentStatusVariablePage,
-                    this.statusVariablePageSize
-                  ).subscribe(validationTask => {
-                    this.responseStatusValidationTask = validationTask;
-                    const validationPollSubscription = this.backendService.pollValidationTask(
-                      this.appService.selectedWorkspaceId,
-                      validationTask.id
-                    ).subscribe({
-                      next: updatedValidationTask => {
-                        if (updatedValidationTask.status === 'completed') {
-                          this.backendService.getValidationResults(
-                            this.appService.selectedWorkspaceId,
-                            updatedValidationTask.id
-                          ).subscribe(validationResult => {
-                            const typedValidationResult = validationResult as {
-                              data: InvalidVariableDto[];
-                              total: number;
-                              page: number;
-                              limit: number;
-                            };
+        ).subscribe({
+          next: ({ result }) => {
+            this.isDeletingResponses = false;
+            this.snackBar.open(`${result.deletedCount} Antworten gelöscht`, 'Schließen', { duration: 3000 });
 
-                            this.invalidStatusVariables = typedValidationResult.data;
-                            this.totalInvalidStatusVariables = typedValidationResult.total;
-                            this.currentStatusVariablePage = typedValidationResult.page;
-                            this.statusVariablePageSize = typedValidationResult.limit;
-                            this.updatePaginatedStatusVariables();
-                            this.isResponseStatusValidationRunning = false;
-                            this.validateResponseStatusWasRun = true;
-                          });
-                        } else if (updatedValidationTask.status === 'failed') {
-                          this.snackBar.open(`Validierung fehlgeschlagen: ${updatedValidationTask.error || 'Unbekannter Fehler'}`, 'Schließen', { duration: 5000 });
-                          this.isResponseStatusValidationRunning = false;
-                        }
-                      },
-                      error: () => {
-                        this.snackBar.open('Fehler beim Abrufen des Validierungsstatus', 'Schließen', { duration: 5000 });
-                        this.isResponseStatusValidationRunning = false;
-                      }
-                    });
-
-                    this.subscriptions.push(validationPollSubscription);
-                  });
-
-                  this.subscriptions.push(validationSubscription);
-                  this.selectedStatusResponses.clear();
-                });
-              } else if (updatedTask.status === 'failed') {
-                this.isDeletingResponses = false;
-                this.snackBar.open(`Löschen fehlgeschlagen: ${updatedTask.error || 'Unbekannter Fehler'}`, 'Schließen', { duration: 5000 });
+            this.isResponseStatusValidationRunning = true;
+            const refreshSubscription = this.validationTaskRunnerService.runTask<{
+              data: InvalidVariableDto[];
+              total: number;
+              page: number;
+              limit: number;
+            }>(
+              this.appService.selectedWorkspaceId,
+              'responseStatus',
+              { page: this.currentStatusVariablePage, limit: this.statusVariablePageSize }
+            ).subscribe({
+              next: ({ createdTask, result: refreshResult }) => {
+                this.responseStatusValidationTask = createdTask;
+                this.invalidStatusVariables = refreshResult.data;
+                this.totalInvalidStatusVariables = refreshResult.total;
+                this.currentStatusVariablePage = refreshResult.page;
+                this.statusVariablePageSize = refreshResult.limit;
+                this.updatePaginatedStatusVariables();
+                this.isResponseStatusValidationRunning = false;
+                this.validateResponseStatusWasRun = true;
+              },
+              error: (err: unknown) => {
+                const message = err instanceof Error ? err.message : 'Unbekannter Fehler';
+                this.snackBar.open(`Validierung fehlgeschlagen: ${message}`, 'Schließen', { duration: 5000 });
+                this.isResponseStatusValidationRunning = false;
               }
-            },
-            error: () => {
-              this.isDeletingResponses = false;
-              this.snackBar.open('Fehler beim Abrufen des Löschstatus', 'Schließen', { duration: 5000 });
-            }
-          });
+            });
 
-          this.subscriptions.push(pollSubscription);
+            this.subscriptions.push(refreshSubscription);
+          },
+          error: (err: unknown) => {
+            const message = err instanceof Error ? err.message : 'Unbekannter Fehler';
+            this.isDeletingResponses = false;
+            this.snackBar.open(`Löschen fehlgeschlagen: ${message}`, 'Schließen', { duration: 5000 });
+          }
         });
 
         this.subscriptions.push(subscription);
       }
     });
+  }
+
+  toggleTypeExpansion(): void {
+    this.expandedTypePanel = !this.expandedTypePanel;
   }
 
   toggleStatusExpansion(): void {
