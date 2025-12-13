@@ -1,0 +1,52 @@
+:host {
+  display: block;
+}
+
+.summary {
+  margin: 0 0 10px;
+  font-size: 13px;
+  opacity: 0.9;
+}
+
+.sep {
+  margin: 0 8px;
+  opacity: 0.6;
+}
+
+.viewport {
+  height: 55vh;
+  width: 100%;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 8px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  min-height: 52px;
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.main {
+  min-width: 0;
+  width: 100%;
+}
+
+.title {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.meta,
+.sub {
+  font-size: 12px;
+  opacity: 0.85;
+  display: flex;
+  gap: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

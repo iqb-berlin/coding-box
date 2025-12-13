@@ -9,6 +9,7 @@ import {
 import {
   Component, OnDestroy, OnInit, ViewChild, inject
 } from '@angular/core';
+
 import { MatSort, MatSortHeader } from '@angular/material/sort';
 import { FormsModule, UntypedFormGroup } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -66,6 +67,17 @@ import { UnitInfoDialogComponent } from '../unit-info-dialog/unit-info-dialog.co
 import { UnitInfoDto } from '../../../../../../../api-dto/unit-info/unit-info.dto';
 import { GermanPaginatorIntl } from '../../../shared/services/german-paginator-intl.service';
 import { ExportOptionsDialogComponent, ExportOptions } from './export-options-dialog.component';
+import { TestResultsUploadResultDto } from '../../../../../../../api-dto/files/test-results-upload-result.dto';
+import {
+  TestResultsUploadResultDialogComponent
+} from './test-results-upload-result-dialog.component';
+import { TestResultsFlatTableComponent } from './test-results-flat-table.component';
+import {
+  OverwriteMode,
+  TestResultsUploadOptionsDialogComponent,
+  TestResultsUploadOptionsDialogData,
+  TestResultsUploadOptionsDialogResult
+} from './test-results-upload-options-dialog.component';
 
 interface BookletLog {
   id: number;
@@ -186,7 +198,8 @@ interface P {
     MatButton,
     MatIconButton,
     MatDivider,
-    MatTooltipModule
+    MatTooltipModule,
+    TestResultsFlatTableComponent
   ]
 })
 export class TestResultsComponent implements OnInit, OnDestroy {
@@ -205,6 +218,8 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   selection = new SelectionModel<P>(true, []);
   dataSource !: MatTableDataSource<P>;
   displayedColumns: string[] = ['select', 'code', 'group', 'login', 'uploaded_at'];
+
+  isTableView: boolean = false;
   data: P[] = [];
   booklets!: Booklet[];
   results: { [key: string]: unknown }[] = [];
@@ -236,6 +251,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   isExporting: boolean = false;
   exportJobStatus: string | null = null;
   exportJobProgress: number = 0;
+  exportTypeInProgress: 'test-results' | 'test-logs' | null = null;
 
   @ViewChild(MatPaginator) paginator!: MatPaginator;
   @ViewChild(MatSort) sort!: MatSort;
@@ -261,6 +277,10 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     }
 
     this.stopValidationStatusCheck();
+  }
+
+  toggleTableView(): void {
+    this.isTableView = !this.isTableView;
   }
 
   private startValidationStatusCheck(): void {
@@ -368,6 +388,55 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           this.isLoadingBooklets = false;
         }
       });
+  }
+
+  exportLogs(): void {
+    if (!this.appService.selectedWorkspaceId) {
+      return;
+    }
+
+    const dialogRef = this.dialog.open(ExportOptionsDialogComponent, {
+      width: '800px',
+      data: {
+        workspaceId: this.appService.selectedWorkspaceId
+      }
+    });
+
+    dialogRef.afterClosed().subscribe((result: ExportOptions | undefined) => {
+      if (result) {
+        const filters = {
+          groupNames: result.groupNames && result.groupNames.length > 0 ? result.groupNames : undefined,
+          bookletNames: result.bookletNames && result.bookletNames.length > 0 ? result.bookletNames : undefined,
+          unitNames: result.unitNames && result.unitNames.length > 0 ? result.unitNames : undefined,
+          personIds: result.personIds && result.personIds.length > 0 ? result.personIds : undefined
+        };
+
+        this.isExporting = true;
+        this.exportTypeInProgress = 'test-logs';
+        this.backendService.startExportTestLogsJob(this.appService.selectedWorkspaceId, filters)
+          .subscribe({
+            next: response => {
+              this.exportJobId = response.jobId;
+              this.exportJobStatus = 'active';
+              this.snackBar.open(
+                'Export gestartet. Sie werden benachrichtigt, wenn der Download bereitsteht.',
+                'OK',
+                { duration: 3000 }
+              );
+              this.pollExportJobStatus(response.jobId);
+            },
+            error: () => {
+              this.isExporting = false;
+              this.exportTypeInProgress = null;
+              this.snackBar.open(
+                'Fehler beim Starten des Exports',
+                'Fehler',
+                { duration: 3000 }
+              );
+            }
+          });
+      }
+    });
   }
 
   sortBooklets(): void {
@@ -919,38 +988,76 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     if (targetElement) {
       const inputElement = targetElement as HTMLInputElement;
       if (inputElement.files && inputElement.files.length > 0) {
-        const dialogRef = this.dialog.open(ConfirmDialogComponent, {
-          width: '400px',
-          data: <ConfirmDialogData>{
-            title: resultType === 'logs' ? 'Logs überschreiben' : 'Antworten überschreiben',
-            content: resultType === 'logs' ?
-              'Möchten Sie vorhandene Logs überschreiben, falls diese bereits existieren?' :
-              'Möchten Sie vorhandene Antworten überschreiben, falls diese bereits existieren?',
-            confirmButtonLabel: 'Überschreiben',
-            showCancel: true
-          }
-        });
-
-        dialogRef.afterClosed().subscribe(overwriteExisting => {
-          if (overwriteExisting !== undefined) {
-            this.isLoading = true;
-            this.isUploadingResults = true;
-            this.backendService.uploadTestResults(
-              this.appService.selectedWorkspaceId,
-              inputElement.files,
+        const optionsRef = this.dialog.open<
+        TestResultsUploadOptionsDialogComponent,
+        TestResultsUploadOptionsDialogData,
+        TestResultsUploadOptionsDialogResult | undefined
+        >(
+          TestResultsUploadOptionsDialogComponent,
+          {
+            width: '600px',
+            data: {
               resultType,
-              overwriteExisting
-            ).subscribe(() => {
-              if (this.appService.selectedWorkspaceId) {
-                this.testResultService.invalidateCache(this.appService.selectedWorkspaceId);
-              }
-              setTimeout(() => {
-                this.createTestResultsList(this.pageIndex, this.pageSize, this.getCurrentSearchText());
-              }, 1000);
-              this.isLoading = false;
-              this.isUploadingResults = false;
-            });
+              defaultOverwriteMode: 'skip',
+              defaultScope: 'person'
+            }
           }
+        );
+
+        optionsRef.afterClosed().subscribe((options: TestResultsUploadOptionsDialogResult | undefined) => {
+          if (!options) {
+            return;
+          }
+
+          const overwriteMode: OverwriteMode = options.overwriteMode;
+          const scope = options.scope;
+          const filters = {
+            groupName: options.groupName,
+            bookletName: options.bookletName,
+            unitNameOrAlias: options.unitNameOrAlias,
+            variableId: options.variableId,
+            subform: options.subform
+          };
+
+          // Backward compatibility: old behavior treated overwriteExisting=false as strict skip.
+          const overwriteExisting = overwriteMode !== 'skip';
+
+          this.isLoading = true;
+          this.isUploadingResults = true;
+          this.backendService.uploadTestResults(
+            this.appService.selectedWorkspaceId,
+            inputElement.files,
+            resultType,
+            overwriteExisting,
+            overwriteMode,
+            scope,
+            filters
+          ).subscribe((uploadResult: TestResultsUploadResultDto) => {
+            if (this.appService.selectedWorkspaceId) {
+              this.testResultService.invalidateCache(this.appService.selectedWorkspaceId);
+            }
+
+            this.snackBar.open(
+              `Upload abgeschlossen: Δ Testpersonen ${uploadResult.delta.testPersons}, Δ Responses ${uploadResult.delta.uniqueResponses}`,
+              'OK',
+              { duration: 5000 }
+            );
+
+            this.dialog.open(TestResultsUploadResultDialogComponent, {
+              width: '1000px',
+              maxWidth: '95vw',
+              data: {
+                resultType,
+                result: uploadResult
+              }
+            });
+
+            setTimeout(() => {
+              this.createTestResultsList(this.pageIndex, this.pageSize, this.getCurrentSearchText());
+            }, 1000);
+            this.isLoading = false;
+            this.isUploadingResults = false;
+          });
         });
       }
     }
@@ -1405,6 +1512,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
         };
 
         this.isExporting = true;
+        this.exportTypeInProgress = 'test-results';
         this.backendService.startExportTestResultsJob(this.appService.selectedWorkspaceId, filters)
           .subscribe({
             next: response => {
@@ -1419,6 +1527,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
             },
             error: () => {
               this.isExporting = false;
+              this.exportTypeInProgress = null;
               this.snackBar.open(
                 'Fehler beim Starten des Exports',
                 'Fehler',
@@ -1437,12 +1546,13 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     this.backendService.getExportTestResultsJobs(this.appService.selectedWorkspaceId)
       .subscribe({
         next: jobs => {
-          const testResultJobs = jobs.filter(j => j.exportType === 'test-results');
+          const relevantJobs = jobs.filter(j => j.exportType === 'test-results' || j.exportType === 'test-logs');
           // Find the most recent active job only (not completed jobs)
-          const activeJob = testResultJobs.find(j => j.status === 'active' || j.status === 'waiting' || j.status === 'delayed');
+          const activeJob = relevantJobs.find(j => j.status === 'active' || j.status === 'waiting' || j.status === 'delayed');
           if (activeJob) {
             this.exportJobId = activeJob.jobId;
             this.isExporting = true;
+            this.exportTypeInProgress = activeJob.exportType as 'test-results' | 'test-logs';
             this.pollExportJobStatus(activeJob.jobId);
           }
         }
@@ -1507,13 +1617,16 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           const url = window.URL.createObjectURL(blob);
           const link = document.createElement('a');
           link.href = url;
-          link.download = `workspace-${this.appService.selectedWorkspaceId}-results-${new Date().toISOString().split('T')[0]}.csv`;
+          const datePart = new Date().toISOString().split('T')[0];
+          const suffix = this.exportTypeInProgress === 'test-logs' ? 'logs' : 'results';
+          link.download = `workspace-${this.appService.selectedWorkspaceId}-${suffix}-${datePart}.csv`;
           link.click();
           window.URL.revokeObjectURL(url);
 
           // Hide the download button after successful download
           this.exportJobStatus = null;
           this.exportJobId = null;
+          this.exportTypeInProgress = null;
 
           // Delete the job from the server
           this.backendService.deleteTestResultExportJob(this.appService.selectedWorkspaceId, jobId).subscribe();

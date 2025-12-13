@@ -88,11 +88,18 @@
                 <span class="warning-title">TestTaker zum Filtern</span>
               </mat-panel-title>
               <mat-panel-description>
-                {{ selection.selected.length }} / {{ filteredTestTakers.length }}
+                {{ filteredExcludedCount }} / {{ filteredTotalCount }}
               </mat-panel-description>
             </mat-expansion-panel-header>
 
             <div class="warning-content">
+              <p>
+                Hier werden Login-Namen aus TestTaker-Dateien angezeigt, deren Modus nicht zu den erlaubten Modi gehört.
+                Es werden nur Logins angezeigt, die bereits als Person im Workspace vorhanden sind.
+                Mit den Aktionen können Sie festlegen, ob diese Personen berücksichtigt oder ausgeschlossen werden.
+                Das wirkt sich auf Auswertungen, Suche, Validierungen sowie Kodier- und Autokodier-Workflows aus.
+              </p>
+
               <div class="mode-selection">
                 <div class="select-all-row">
                   <mat-checkbox
@@ -101,7 +108,7 @@
                     (change)="toggleAllSelection()">
                     Alle auswählen
                   </mat-checkbox>
-                  <span class="count-badge">{{ selection.selected.length }} / {{ filteredTestTakers.length }}</span>
+                  <span class="count-badge">{{ filteredExcludedCount }} / {{ filteredTotalCount }}</span>
                 </div>
 
                 @for (modeGroup of modeGroups; track modeGroup) {
@@ -121,11 +128,31 @@
                     [checked]="selection.isSelected(item)"
                     (change)="toggleSelection(item)">
                     <strong>{{ item.testTaker }}:</strong> {{ item.login }} ({{ item.mode }})
+                    @if (item.consider === true) {
+                      <mat-icon matTooltip="Wird berücksichtigt">check_circle</mat-icon>
+                    }
+                    @if (item.consider === false) {
+                      <mat-icon matTooltip="Wird ausgeschlossen">block</mat-icon>
+                    }
                   </mat-checkbox>
                 </div>
               </cdk-virtual-scroll-viewport>
 
               <div class="exclude-button-container">
+                <button
+                  mat-raised-button
+                  color="primary"
+                  class="exclude-button"
+                  (click)="markTestTakersAsConsidered()"
+                  [disabled]="isConsidering || selection.selected.length === 0">
+                  <mat-icon>{{ isConsidering ? 'hourglass_empty' : 'check_circle' }}</mat-icon>
+                  @if (isConsidering) {
+                    Wird bearbeitet... ({{ consideringProgress }}%)
+                  } @else {
+                    Ausgewählte TestTaker berücksichtigen ({{ selection.selected.length }})
+                  }
+                </button>
+
                 <button
                   mat-raised-button
                   color="warn"
@@ -139,6 +166,12 @@
                     Ausgewählte TestTaker ausschließen ({{ selection.selected.length }})
                   }
                 </button>
+
+                @if (isConsidering) {
+                  <div class="progress-container">
+                    <div class="progress-bar" [style.width.%]="consideringProgress"></div>
+                  </div>
+                }
 
                 @if (isExcluding) {
                   <div class="progress-container">
@@ -214,6 +247,14 @@
               <h4>
                 <mat-icon class="test-taker-icon">person</mat-icon>
                 {{val.testTaker}}
+                @if (val.testTakerSchemaValid === false) {
+                  <mat-icon
+                    class="file-status-icon"
+                    matTooltip="{{ (val.testTakerSchemaErrors || []).join('\n') }}"
+                    [attr.aria-label]="'TestTaker XML ist nicht schema-konform'">
+                    report_problem
+                  </mat-icon>
+                }
                 <button
                   mat-icon-button
                   class="test-taker-xml-button"
@@ -410,6 +451,32 @@
                           <li [class.file-exists]="file.exists" [class.file-missing]="!file.exists">
                             <mat-icon class="file-status-icon">{{ file.exists ? 'check_circle' : 'error' }}</mat-icon>
                             <span class="file-name">{{ file.filename }}</span>
+                            @if (!file.exists && getUnitsForMissingRef(val.schemes, file.filename).length > 0) {
+                              <span class="file-name">
+                                (
+                                @for (u of getUnitsForMissingRefLimited(val.schemes, file.filename, 3); track u) {
+                                  <button
+                                    mat-button
+                                    type="button"
+                                    (click)="openUnitInfo(u)">
+                                    {{ u }}
+                                  </button>
+                                }
+                                @if (getUnitsForMissingRefRemainingCount(val.schemes, file.filename, 3) > 0) {
+                                  <button
+                                    mat-button
+                                    type="button"
+                                    (click)="openAffectedUnitsDialog(
+                                      'Betroffene Aufgaben (Kodierschema)',
+                                      getUnitsForMissingRef(val.schemes, file.filename),
+                                      openUnitInfo.bind(this)
+                                    )">
+                                    +{{ getUnitsForMissingRefRemainingCount(val.schemes, file.filename, 3) }} mehr
+                                  </button>
+                                }
+                                )
+                              </span>
+                            }
                             @if (file.schemaValid === false) {
                               <mat-icon
                                 class="file-status-icon"
@@ -475,6 +542,32 @@
                           <li [class.file-exists]="file.exists" [class.file-missing]="!file.exists">
                             <mat-icon class="file-status-icon">{{ file.exists ? 'check_circle' : 'error' }}</mat-icon>
                             <span class="file-name">{{ file.filename }}</span>
+                            @if (!file.exists && getUnitsForMissingRef(val.schemer, file.filename).length > 0) {
+                              <span class="file-name">
+                                (
+                                @for (u of getUnitsForMissingRefLimited(val.schemer, file.filename, 3); track u) {
+                                  <button
+                                    mat-button
+                                    type="button"
+                                    (click)="openUnitInfo(u)">
+                                    {{ u }}
+                                  </button>
+                                }
+                                @if (getUnitsForMissingRefRemainingCount(val.schemer, file.filename, 3) > 0) {
+                                  <button
+                                    mat-button
+                                    type="button"
+                                    (click)="openAffectedUnitsDialog(
+                                      'Betroffene Aufgaben (Schemer)',
+                                      getUnitsForMissingRef(val.schemer, file.filename),
+                                      openUnitInfo.bind(this)
+                                    )">
+                                    +{{ getUnitsForMissingRefRemainingCount(val.schemer, file.filename, 3) }} mehr
+                                  </button>
+                                }
+                                )
+                              </span>
+                            }
                             @if (file.schemaValid === false) {
                               <mat-icon
                                 class="file-status-icon"
@@ -532,6 +625,32 @@
                           <li [class.file-exists]="file.exists" [class.file-missing]="!file.exists">
                             <mat-icon class="file-status-icon">{{ file.exists ? 'check_circle' : 'error' }}</mat-icon>
                             <span class="file-name">{{ file.filename }}</span>
+                            @if (!file.exists && getUnitsForMissingRef(val.definitions, file.filename).length > 0) {
+                              <span class="file-name">
+                                (
+                                @for (u of getUnitsForMissingRefLimited(val.definitions, file.filename, 3); track u) {
+                                  <button
+                                    mat-button
+                                    type="button"
+                                    (click)="openUnitDefinitionForUnit(u)">
+                                    {{ u }}
+                                  </button>
+                                }
+                                @if (getUnitsForMissingRefRemainingCount(val.definitions, file.filename, 3) > 0) {
+                                  <button
+                                    mat-button
+                                    type="button"
+                                    (click)="openAffectedUnitsDialog(
+                                      'Betroffene Aufgaben (Definition)',
+                                      getUnitsForMissingRef(val.definitions, file.filename),
+                                      openUnitInfo.bind(this)
+                                    )">
+                                    +{{ getUnitsForMissingRefRemainingCount(val.definitions, file.filename, 3) }} mehr
+                                  </button>
+                                }
+                                )
+                              </span>
+                            }
                             @if (file.schemaValid === false) {
                               <mat-icon
                                 class="file-status-icon"
@@ -597,6 +716,32 @@
                           <li [class.file-exists]="file.exists" [class.file-missing]="!file.exists">
                             <mat-icon class="file-status-icon">{{ file.exists ? 'check_circle' : 'error' }}</mat-icon>
                             <span class="file-name">{{ file.filename }}</span>
+                            @if (!file.exists && getUnitsForMissingRef(val.player, file.filename).length > 0) {
+                              <span class="file-name">
+                                (
+                                @for (u of getUnitsForMissingRefLimited(val.player, file.filename, 3); track u) {
+                                  <button
+                                    mat-button
+                                    type="button"
+                                    (click)="openUnitDefinitionForUnit(u)">
+                                    {{ u }}
+                                  </button>
+                                }
+                                @if (getUnitsForMissingRefRemainingCount(val.player, file.filename, 3) > 0) {
+                                  <button
+                                    mat-button
+                                    type="button"
+                                    (click)="openAffectedUnitsDialog(
+                                      'Betroffene Aufgaben (Player)',
+                                      getUnitsForMissingRef(val.player, file.filename),
+                                      openUnitInfo.bind(this)
+                                    )">
+                                    +{{ getUnitsForMissingRefRemainingCount(val.player, file.filename, 3) }} mehr
+                                  </button>
+                                }
+                                )
+                              </span>
+                            }
                             @if (file.schemaValid === false) {
                               <mat-icon
                                 class="file-status-icon"

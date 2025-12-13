@@ -1,0 +1,68 @@
+<h2 mat-dialog-title>Upload-Ergebnis</h2>
+
+<div mat-dialog-content>
+  <p class="summary">
+    Versuch: {{ attempted }}
+    <span class="sep">|</span>
+    Erfolgreich: {{ uploadedCount }}
+    <span class="sep">|</span>
+    Fehlgeschlagen: {{ failedCount }}
+    <span class="sep">|</span>
+    Nicht überschrieben: {{ remainingConflictsCount }}
+    @if (overwriteSelectedCount && overwriteSelectedCount > 0) {
+      <span class="sep">|</span>
+      Ausgewählt zum Überschreiben: {{ overwriteSelectedCount }}
+    }
+  </p>
+
+  <mat-form-field appearance="outline" style="width: 100%;">
+    <mat-label>Suche</mat-label>
+    <input matInput [(ngModel)]="filterText" placeholder="Dateiname, ID, Typ oder Grund..." />
+    <mat-icon matSuffix>search</mat-icon>
+  </mat-form-field>
+
+  <mat-tab-group>
+    <mat-tab label="Erfolgreich ({{ uploadedCount }})">
+      <cdk-virtual-scroll-viewport itemSize="52" class="viewport">
+        <div *cdkVirtualFor="let f of filteredUploadedFiles; trackBy: trackByUploaded" class="row">
+          <div class="main">
+            <div class="title">{{ f.filename }}</div>
+            <div class="meta">
+              @if (f.fileId) { <span>ID: {{ f.fileId }}</span> }
+              @if (f.fileType) { <span>Typ: {{ f.fileType }}</span> }
+            </div>
+          </div>
+        </div>
+      </cdk-virtual-scroll-viewport>
+    </mat-tab>
+
+    <mat-tab label="Fehlgeschlagen ({{ failedCount }})">
+      <cdk-virtual-scroll-viewport itemSize="56" class="viewport">
+        <div *cdkVirtualFor="let f of filteredFailedFiles; trackBy: trackByFailed" class="row">
+          <div class="main">
+            <div class="title">{{ f.filename }}</div>
+            @if (f.reason) { <div class="sub">{{ f.reason }}</div> }
+          </div>
+        </div>
+      </cdk-virtual-scroll-viewport>
+    </mat-tab>
+
+    <mat-tab label="Nicht überschrieben ({{ remainingConflictsCount }})">
+      <cdk-virtual-scroll-viewport itemSize="52" class="viewport">
+        <div *cdkVirtualFor="let f of filteredRemainingConflicts; trackBy: trackByConflict" class="row">
+          <div class="main">
+            <div class="title">{{ f.filename }}</div>
+            <div class="meta">
+              <span>ID: {{ f.fileId }}</span>
+              @if (f.fileType) { <span>Typ: {{ f.fileType }}</span> }
+            </div>
+          </div>
+        </div>
+      </cdk-virtual-scroll-viewport>
+    </mat-tab>
+  </mat-tab-group>
+</div>
+
+<div mat-dialog-actions align="end">
+  <button mat-button type="button" (click)="close()">Schließen</button>
+</div>

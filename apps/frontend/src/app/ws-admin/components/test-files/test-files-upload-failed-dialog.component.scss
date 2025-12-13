@@ -1,0 +1,36 @@
+:host {
+  display: block;
+}
+
+cdk-virtual-scroll-viewport {
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 8px;
+}
+
+.failed-row {
+  display: flex;
+  align-items: center;
+  min-height: 56px;
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.failed-main {
+  min-width: 0;
+  width: 100%;
+}
+
+.filename {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reason {
+  font-size: 12px;
+  opacity: 0.85;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

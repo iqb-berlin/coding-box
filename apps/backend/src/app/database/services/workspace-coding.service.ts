@@ -1413,7 +1413,8 @@ export class WorkspaceCodingService {
       .leftJoin('unit.booklet', 'booklet')
       .leftJoin('booklet.person', 'person')
       .where('response.status_v1 = :status', { status: statusStringToNumber('CODING_INCOMPLETE') })
-      .andWhere('person.workspace_id = :workspace_id', { workspace_id: workspaceId });
+      .andWhere('person.workspace_id = :workspace_id', { workspace_id: workspaceId })
+      .andWhere('person.consider = :consider', { consider: true });
 
     if (unitName) {
       queryBuilder.andWhere('unit.name = :unitName', { unitName });
@@ -1591,7 +1592,8 @@ export class WorkspaceCodingService {
         .leftJoinAndSelect('booklet.person', 'person')
         .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
         .select(selectFields)
-        .where('person.workspace_id = :workspaceId', { workspaceId });
+        .where('person.workspace_id = :workspaceId', { workspaceId })
+        .andWhere('person.consider = :consider', { consider: true });
 
       switch (version) {
         case 'v1':
@@ -1888,6 +1890,7 @@ export class WorkspaceCodingService {
       .leftJoin('booklet.person', 'person')
       .where('response.status_v1 = :status', { status: statusStringToNumber('CODING_INCOMPLETE') })
       .andWhere('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('person.consider = :consider', { consider: true })
       .getCount();
 
     const completedCases = await this.codingJobUnitRepository.count({
@@ -1923,6 +1926,7 @@ export class WorkspaceCodingService {
       .leftJoin('booklet.person', 'person')
       .where('response.status_v1 = :status', { status: statusStringToNumber('CODING_INCOMPLETE') })
       .andWhere('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('person.consider = :consider', { consider: true })
       .getCount();
 
     const casesInJobs = await this.codingJobUnitRepository.createQueryBuilder('cju')
@@ -1933,6 +1937,7 @@ export class WorkspaceCodingService {
       .leftJoin('booklet.person', 'person')
       .where('response.status_v1 = :status', { status: statusStringToNumber('CODING_INCOMPLETE') })
       .andWhere('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('person.consider = :consider', { consider: true })
       .andWhere('coding_job.training_id IS NULL')
       .getCount();
 
@@ -1944,6 +1949,7 @@ export class WorkspaceCodingService {
       .leftJoin('booklet.person', 'person')
       .where('response.status_v1 = :status', { status: statusStringToNumber('CODING_INCOMPLETE') })
       .andWhere('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('person.consider = :consider', { consider: true })
       .andWhere('coding_job.training_id IS NULL')
       .select('COUNT(DISTINCT cju.response_id)', 'count')
       .getRawOne();
@@ -2003,6 +2009,7 @@ export class WorkspaceCodingService {
         .leftJoin('booklet.person', 'person')
         .where('response.status_v1 = :status', { status: statusStringToNumber('CODING_INCOMPLETE') })
         .andWhere('person.workspace_id = :workspaceId', { workspaceId })
+        .andWhere('person.consider = :consider', { consider: true })
         .groupBy('unit.name')
         .addGroupBy('response.variableid')
         .getRawMany();
@@ -2406,6 +2413,7 @@ export class WorkspaceCodingService {
           INNER JOIN booklet ON unit.bookletid = booklet.id
           INNER JOIN persons person ON booklet.personid = person.id
           WHERE person.workspace_id = $1
+            AND person.consider = true
             AND response.status_v1 = $2
             AND (${conditions})
             AND response.status_v2 IN ($3, $4, $5)
@@ -2591,7 +2599,8 @@ export class WorkspaceCodingService {
         .leftJoin('response.unit', 'unit')
         .leftJoin('unit.booklet', 'booklet')
         .leftJoin('booklet.person', 'person')
-        .where('person.workspace_id = :workspaceId', { workspaceId });
+        .where('person.workspace_id = :workspaceId', { workspaceId })
+        .andWhere('person.consider = :consider', { consider: true });
 
       if (unitFilters && unitFilters.length > 0) {
         baseQueryBuilder.andWhere('unit.name IN (:...unitNames)', { unitNames: unitFilters });

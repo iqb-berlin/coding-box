@@ -6,6 +6,7 @@ import {
 import { MatButton } from '@angular/material/button';
 import { MatDivider } from '@angular/material/divider';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { StandaloneUnitSchemerComponent } from '../schemer/unit-schemer.component';
 import { UnitScheme } from '../schemer/unit-scheme.interface';
 import { BackendService } from '../../../services/backend.service';
@@ -239,8 +240,10 @@ export class SchemeEditorDialogComponent implements OnInit {
     formData.append('files', file);
 
     this.backendService.uploadTestFiles(this.data.workspaceId, formData)
-      .subscribe(uploadSuccess => {
-        if (uploadSuccess) {
+      .subscribe(result => {
+        const conflicts = result.conflicts || [];
+        const ok = result.failed === 0 && conflicts.length === 0;
+        if (ok) {
           this.snackBar.open('Scheme saved successfully', 'Success', { duration: 3000 });
           this.dialogRef.close(true);
         } else {

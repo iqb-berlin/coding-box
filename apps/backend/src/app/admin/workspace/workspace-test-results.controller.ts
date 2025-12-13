@@ -2,8 +2,10 @@ import {
   BadRequestException,
   Controller,
   Delete,
-  Get, Param, Post, Query, Req, UseGuards, UseInterceptors, UploadedFiles, Res, Body
+  Get, Param, Post, Query, Req, UseGuards, UseInterceptors, UploadedFiles, Res, Body,
+  ParseIntPipe
 } from '@nestjs/common';
+
 import {
   ApiBadRequestResponse,
   ApiBearerAuth, ApiBody, ApiConsumes, ApiOkResponse, ApiOperation,
@@ -23,6 +25,7 @@ import { WorkspaceTestResultsService } from '../../database/services/workspace-t
 import { DatabaseExportService } from '../database/database-export.service';
 import { JobQueueService } from '../../job-queue/job-queue.service';
 import { CacheService } from '../../cache/cache.service';
+import { TestResultsUploadResultDto } from '../../../../../../api-dto/files/test-results-upload-result.dto';
 
 interface RequestWithUser extends Request {
   user: {
@@ -102,6 +105,251 @@ export class WorkspaceTestResultsController {
     return {
       data, total, page, limit
     };
+  }
+
+  @Delete(':workspace_id/test-results')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
+  async deleteTestGroups(
+    @Query('testPersons')testPersonIds:string,
+      @Param('workspace_id')workspaceId:string,
+      @Req() req: RequestWithUser): Promise<{
+        success: boolean;
+        report: {
+          deletedPersons: string[];
+          warnings: string[];
+        };
+      }> {
+    return this.workspaceTestResultsService.deleteTestPersons(Number(workspaceId), testPersonIds, req.user.id);
+  }
+
+  @Delete(':workspace_id/units/:unitId')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
+  @ApiOperation({
+    summary: 'Delete a unit',
+    description: 'Deletes a unit and all its associated responses'
+  })
+  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
+  @ApiParam({ name: 'unitId', type: Number, description: 'ID of the unit to delete' })
+  @ApiOkResponse({
+    description: 'Unit deleted successfully.',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        report: {
+          type: 'object',
+          properties: {
+            deletedUnit: { type: 'number', nullable: true },
+            warnings: { type: 'array', items: { type: 'string' } }
+          }
+        }
+      }
+    }
+  })
+  @ApiBadRequestResponse({ description: 'Failed to delete unit' })
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  async deleteUnit(
+    @Param('workspace_id') workspaceId: number,
+      @Param('unitId') unitId: number,
+      @Req() req: RequestWithUser
+  ): Promise<{
+        success: boolean;
+        report: {
+          deletedUnit: number | null;
+          warnings: string[];
+        };
+      }> {
+    return this.workspaceTestResultsService.deleteUnit(workspaceId, unitId, req.user.id);
+  }
+
+  @Get(':workspace_id/test-results/flat-responses')
+  @ApiOperation({
+    summary: 'Get flat test result responses',
+    description: 'Retrieves paginated flat response rows for a workspace with optional filters (code/group/login/booklet/unit/response/value/tags)'
+  })
+  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
+  @ApiQuery({
+    name: 'page', required: false, description: 'Page number for pagination', type: Number
+  })
+  @ApiQuery({
+    name: 'limit', required: false, description: 'Number of items per page', type: Number
+  })
+  @ApiQuery({
+    name: 'code', required: false, description: 'Filter by person code (ILIKE)', type: String
+  })
+  @ApiQuery({
+    name: 'group', required: false, description: 'Filter by group (ILIKE)', type: String
+  })
+  @ApiQuery({
+    name: 'login', required: false, description: 'Filter by login (ILIKE)', type: String
+  })
+  @ApiQuery({
+    name: 'booklet', required: false, description: 'Filter by booklet name (ILIKE)', type: String
+  })
+  @ApiQuery({
+    name: 'unit', required: false, description: 'Filter by unit alias/name (ILIKE)', type: String
+  })
+  @ApiQuery({
+    name: 'response', required: false, description: 'Filter by response variable id (ILIKE)', type: String
+  })
+  @ApiQuery({
+    name: 'responseValue', required: false, description: 'Filter by response value (ILIKE)', type: String
+  })
+  @ApiQuery({
+    name: 'tags', required: false, description: 'Filter by unit tag (ILIKE)', type: String
+  })
+  @ApiOkResponse({
+    description: 'Flat responses retrieved successfully.',
+    schema: {
+      type: 'object',
+      properties: {
+        data: { type: 'array', items: { type: 'object' } },
+        total: { type: 'number' },
+        page: { type: 'number' },
+        limit: { type: 'number' }
+      }
+    }
+  })
+  @ApiBadRequestResponse({ description: 'Failed to retrieve flat responses' })
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
+  async findFlatResponses(
+    @Param('workspace_id') workspace_id: number,
+                           @Query('page') page: number = 1,
+                           @Query('limit') limit: number = 50,
+                           @Query('code') code?: string,
+                           @Query('group') group?: string,
+                           @Query('login') login?: string,
+                           @Query('booklet') booklet?: string,
+                           @Query('unit') unit?: string,
+                           @Query('response') response?: string,
+                           @Query('responseValue') responseValue?: string,
+                           @Query('tags') tags?: string
+  ): Promise<{ data: unknown[]; total: number; page: number; limit: number }> {
+    const [data, total] = await this.workspaceTestResultsService.findFlatResponses(workspace_id, {
+      page,
+      limit,
+      code,
+      group,
+      login,
+      booklet,
+      unit,
+      response,
+      responseValue,
+      tags
+    });
+    return {
+      data,
+      total,
+      page,
+      limit
+    };
+  }
+
+  @Get(':workspace_id/test-results/flat-responses/filter-options')
+  @ApiOperation({
+    summary: 'Get flat response filter options',
+    description: 'Returns distinct possible values for flat response filters, taking currently active filters into account.'
+  })
+  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
+  @ApiQuery({ name: 'code', required: false, description: 'Filter by person code (ILIKE)', type: String })
+  @ApiQuery({ name: 'group', required: false, description: 'Filter by group (ILIKE)', type: String })
+  @ApiQuery({ name: 'login', required: false, description: 'Filter by login (ILIKE)', type: String })
+  @ApiQuery({ name: 'booklet', required: false, description: 'Filter by booklet name (ILIKE)', type: String })
+  @ApiQuery({ name: 'unit', required: false, description: 'Filter by unit alias/name (ILIKE)', type: String })
+  @ApiQuery({ name: 'response', required: false, description: 'Filter by response variable id (ILIKE)', type: String })
+  @ApiQuery({ name: 'responseValue', required: false, description: 'Filter by response value (ILIKE)', type: String })
+  @ApiQuery({ name: 'tags', required: false, description: 'Filter by unit tag (ILIKE)', type: String })
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
+  async findFlatResponseFilterOptions(
+    @Param('workspace_id') workspace_id: number,
+                           @Query('code') code?: string,
+                           @Query('group') group?: string,
+                           @Query('login') login?: string,
+                           @Query('booklet') booklet?: string,
+                           @Query('unit') unit?: string,
+                           @Query('response') response?: string,
+                           @Query('responseValue') responseValue?: string,
+                           @Query('tags') tags?: string
+  ): Promise<{ codes: string[]; groups: string[]; logins: string[]; booklets: string[]; units: string[]; responses: string[]; tags: string[] }> {
+    return this.workspaceTestResultsService.findFlatResponseFilterOptions(workspace_id, {
+      code,
+      group,
+      login,
+      booklet,
+      unit,
+      response,
+      responseValue,
+      tags
+    });
+  }
+
+  @Get(':workspace_id/units/:unitId/logs')
+  @ApiOperation({
+    summary: 'Get unit logs',
+    description: 'Retrieves all logs for a specific unit (by numeric unit ID) in a workspace'
+  })
+  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
+  @ApiParam({ name: 'unitId', type: Number, description: 'ID of the unit (numeric)' })
+  @ApiOkResponse({
+    description: 'Unit logs retrieved successfully.',
+    schema: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'number' },
+          unitid: { type: 'number' },
+          ts: { type: 'string' },
+          key: { type: 'string' },
+          parameter: { type: 'string' }
+        }
+      }
+    }
+  })
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
+  async findUnitLogs(
+    @Param('workspace_id') workspace_id: number,
+      @Param('unitId', ParseIntPipe) unitId: number
+  ): Promise<{ id: number; unitid: number; ts: string; key: string; parameter: string }[]> {
+    return this.workspaceTestResultsService.findUnitLogs(workspace_id, unitId);
+  }
+
+  @Get(':workspace_id/units/:unitId/booklet-logs')
+  @ApiOperation({
+    summary: 'Get booklet logs for unit',
+    description: 'Retrieves booklet logs and sessions for the booklet that contains the given unit (numeric unit ID)'
+  })
+  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
+  @ApiParam({ name: 'unitId', type: Number, description: 'ID of the unit (numeric)' })
+  @ApiOkResponse({
+    description: 'Booklet logs retrieved successfully.',
+    schema: {
+      type: 'object',
+      properties: {
+        bookletId: { type: 'number' },
+        logs: { type: 'array', items: { type: 'object' } },
+        sessions: { type: 'array', items: { type: 'object' } },
+        units: { type: 'array', items: { type: 'object' } }
+      }
+    }
+  })
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
+  async findBookletLogsForUnit(
+    @Param('workspace_id') workspace_id: number,
+      @Param('unitId', ParseIntPipe) unitId: number
+  ): Promise<{
+      bookletId: number;
+      logs: { id: number; bookletid: number; ts: string; key: string; parameter: string }[];
+      sessions: { id: number; browser: string; os: string; screen: string; ts: string }[];
+      units: { id: number; bookletid: number; name: string; alias: string | null; logs: { id: number; unitid: number; ts: string; key: string; parameter: string }[] }[];
+    }> {
+    return this.workspaceTestResultsService.findBookletLogsByUnitId(workspace_id, unitId);
   }
 
   @Get(':workspace_id/test-results/:personId')
@@ -185,7 +433,7 @@ export class WorkspaceTestResultsController {
   @RequireAccessLevel(3)
   async findPersonTestResults(
     @Param('workspace_id') workspace_id: number,
-      @Param('personId') personId: number
+      @Param('personId', ParseIntPipe) personId: number
   ): Promise<{
         id: number;
         name: string;
@@ -199,63 +447,6 @@ export class WorkspaceTestResultsController {
         }[];
       }[]> {
     return this.workspaceTestResultsService.findPersonTestResults(personId, workspace_id);
-  }
-
-  @Delete(':workspace_id/test-results')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
-  @RequireAccessLevel(3)
-  async deleteTestGroups(
-    @Query('testPersons')testPersonIds:string,
-      @Param('workspace_id')workspaceId:string,
-      @Req() req: RequestWithUser): Promise<{
-        success: boolean;
-        report: {
-          deletedPersons: string[];
-          warnings: string[];
-        };
-      }> {
-    return this.workspaceTestResultsService.deleteTestPersons(Number(workspaceId), testPersonIds, req.user.id);
-  }
-
-  @Delete(':workspace_id/units/:unitId')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
-  @RequireAccessLevel(3)
-  @ApiOperation({
-    summary: 'Delete a unit',
-    description: 'Deletes a unit and all its associated responses'
-  })
-  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
-  @ApiParam({ name: 'unitId', type: Number, description: 'ID of the unit to delete' })
-  @ApiOkResponse({
-    description: 'Unit deleted successfully.',
-    schema: {
-      type: 'object',
-      properties: {
-        success: { type: 'boolean' },
-        report: {
-          type: 'object',
-          properties: {
-            deletedUnit: { type: 'number', nullable: true },
-            warnings: { type: 'array', items: { type: 'string' } }
-          }
-        }
-      }
-    }
-  })
-  @ApiBadRequestResponse({ description: 'Failed to delete unit' })
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
-  async deleteUnit(
-    @Param('workspace_id') workspaceId: number,
-      @Param('unitId') unitId: number,
-      @Req() req: RequestWithUser
-  ): Promise<{
-        success: boolean;
-        report: {
-          deletedUnit: number | null;
-          warnings: string[];
-        };
-      }> {
-    return this.workspaceTestResultsService.deleteUnit(workspaceId, unitId, req.user.id);
   }
 
   @Delete(':workspace_id/responses/:responseId')
@@ -853,7 +1044,7 @@ export class WorkspaceTestResultsController {
   @ApiTags('workspace')
   @ApiOkResponse({
     description: 'Test results successfully uploaded.',
-    type: Boolean
+    type: TestResultsUploadResultDto
   })
   @ApiBadRequestResponse({
     description: 'Invalid request. Please check your input data.'
@@ -864,12 +1055,40 @@ export class WorkspaceTestResultsController {
     required: false,
     description: 'Whether to overwrite existing logs/responses (default: true)'
   })
+  @ApiQuery({
+    name: 'personMatchMode',
+    required: false,
+    description: 'Person matching mode for import (strict: group+login+code; loose: login+code). Default: strict.'
+  })
+  @ApiQuery({
+    name: 'overwriteMode',
+    required: false,
+    description: 'Overwrite mode for existing test results: skip (default), merge (insert missing only), replace (delete matching scope then import).'
+  })
+  @ApiQuery({
+    name: 'scope',
+    required: false,
+    description: 'Scope for import/overwrite: person (default, only persons included in upload) or workspace (potentially affects whole workspace).'
+  })
+  @ApiQuery({ name: 'groupName', required: false })
+  @ApiQuery({ name: 'bookletName', required: false })
+  @ApiQuery({ name: 'unitNameOrAlias', required: false })
+  @ApiQuery({ name: 'variableId', required: false })
+  @ApiQuery({ name: 'subform', required: false })
   async addTestResults(
     @Param('workspace_id') workspace_id: number,
       @Param('resultType') resultType: 'logs' | 'responses',
       @UploadedFiles() files: Express.Multer.File[],
-      @Query('overwriteExisting') overwriteExisting?: string
-  ): Promise<boolean> {
+      @Query('overwriteExisting') overwriteExisting?: string,
+      @Query('personMatchMode') personMatchMode?: string,
+      @Query('overwriteMode') overwriteMode?: string,
+      @Query('scope') scope?: string,
+      @Query('groupName') groupName?: string,
+      @Query('bookletName') bookletName?: string,
+      @Query('unitNameOrAlias') unitNameOrAlias?: string,
+      @Query('variableId') variableId?: string,
+      @Query('subform') subform?: string
+  ): Promise<TestResultsUploadResultDto> {
     if (!workspace_id || Number.isNaN(workspace_id)) {
       throw new BadRequestException('Invalid workspace_id.');
     }
@@ -882,7 +1101,27 @@ export class WorkspaceTestResultsController {
     logger.log(`Uploading test results with overwriteExisting=${shouldOverwrite}`);
 
     try {
-      return await this.uploadResults.uploadTestResults(workspace_id, files, resultType, shouldOverwrite);
+      const mode = (personMatchMode || '').toLowerCase() === 'loose' ? 'loose' : undefined;
+      const requestedOverwriteMode = (overwriteMode || '').toLowerCase();
+      const finalOverwriteMode = !shouldOverwrite ? 'skip' : (requestedOverwriteMode === 'replace' ? 'replace' : (requestedOverwriteMode === 'merge' ? 'merge' : 'skip'));
+      const finalScope = (scope || '').toLowerCase();
+      const normalizedScope = (finalScope === 'workspace' || finalScope === 'person' || finalScope === 'group' || finalScope === 'booklet' || finalScope === 'unit' || finalScope === 'response') ? finalScope : 'person';
+      return await this.uploadResults.uploadTestResults(
+        workspace_id,
+        files,
+        resultType,
+        shouldOverwrite,
+        mode,
+        finalOverwriteMode,
+        normalizedScope as any,
+        {
+          groupName,
+          bookletName,
+          unitNameOrAlias,
+          variableId,
+          subform
+        }
+      );
     } catch (error) {
       logger.error('Error uploading test results!');
       throw new BadRequestException('Uploading test results failed. Please try again.');
@@ -972,6 +1211,7 @@ export class WorkspaceTestResultsController {
     schema: {
       type: 'object',
       properties: {
+        groups: { type: 'array', items: { type: 'string' } },
         testPersons: {
           type: 'array',
           items: {
@@ -995,6 +1235,7 @@ export class WorkspaceTestResultsController {
     @Param('workspace_id') workspace_id: number
   ): Promise<{
         testPersons: { id: number; code: string; groupName: string; login: string }[];
+        groups: string[];
         booklets: string[];
         units: string[];
       }> {
@@ -1042,6 +1283,57 @@ export class WorkspaceTestResultsController {
       workspaceId: Number(workspace_id),
       userId: Number(req.user.id),
       exportType: 'test-results',
+      authToken: req.headers.authorization?.replace('Bearer ', ''),
+      testResultFilters: filters
+    });
+
+    return {
+      jobId: job.id.toString(),
+      message: 'Export job started successfully'
+    };
+  }
+
+  @Post(':workspace_id/results/export/logs/job')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
+  @ApiOperation({
+    summary: 'Start background export of test logs',
+    description: 'Starts a background job to export test logs for a workspace as CSV (re-importable)'
+  })
+  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        groupNames: { type: 'array', items: { type: 'string' } },
+        bookletNames: { type: 'array', items: { type: 'string' } },
+        unitNames: { type: 'array', items: { type: 'string' } },
+        personIds: { type: 'array', items: { type: 'number' } }
+      }
+    },
+    required: false
+  })
+  @ApiOkResponse({
+    description: 'Export job started successfully.',
+    schema: {
+      type: 'object',
+      properties: {
+        jobId: { type: 'string' },
+        message: { type: 'string' }
+      }
+    }
+  })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  async startExportTestLogsJob(
+    @Param('workspace_id') workspace_id: number,
+      @Req() req: RequestWithUser,
+      @Body() filters?: { groupNames?: string[]; bookletNames?: string[]; unitNames?: string[]; personIds?: number[] }
+  ): Promise<{ jobId: string; message: string }> {
+    const job = await this.jobQueueService.addExportJob({
+      workspaceId: Number(workspace_id),
+      userId: Number(req.user.id),
+      exportType: 'test-logs',
       authToken: req.headers.authorization?.replace('Bearer ', ''),
       testResultFilters: filters
     });

@@ -15,6 +15,8 @@ import { Booklet } from '../entities/booklet.entity';
 import { ResponseEntity } from '../entities/response.entity';
 import { BookletInfo } from '../entities/bookletInfo.entity';
 import { BookletLog } from '../entities/bookletLog.entity';
+import { UnitLog } from '../entities/unitLog.entity';
+import { Session } from '../entities/session.entity';
 import { ChunkEntity } from '../entities/chunk.entity';
 import { UnitLastState } from '../entities/unitLastState.entity';
 import { UnitTagService } from './unit-tag.service';
@@ -48,6 +50,10 @@ export class WorkspaceTestResultsService {
     private bookletInfoRepository: Repository<BookletInfo>,
     @InjectRepository(BookletLog)
     private bookletLogRepository: Repository<BookletLog>,
+    @InjectRepository(Session)
+    private sessionRepository: Repository<Session>,
+    @InjectRepository(UnitLog)
+    private unitLogRepository: Repository<UnitLog>,
     @InjectRepository(ChunkEntity)
     private chunkRepository: Repository<ChunkEntity>,
     private readonly connection: DataSource,
@@ -277,6 +283,407 @@ export class WorkspaceTestResultsService {
     }
 
     return result;
+  }
+
+  async findFlatResponses(
+    workspaceId: number,
+    options: {
+      page: number;
+      limit: number;
+      code?: string;
+      group?: string;
+      login?: string;
+      booklet?: string;
+      unit?: string;
+      response?: string;
+      responseValue?: string;
+      tags?: string;
+    }
+  ): Promise<[
+      Array<{
+        responseId: number;
+        unitId: number;
+        personId: number;
+        code: string;
+        group: string;
+        login: string;
+        booklet: string;
+        unit: string;
+        response: string;
+        responseStatus: string;
+        responseValue: string;
+        tags: string[];
+      }>,
+      number
+    ]> {
+    if (!workspaceId || workspaceId <= 0) {
+      throw new Error('Invalid workspaceId provided');
+    }
+
+    const MAX_LIMIT = 200;
+    const MAX_RESPONSE_VALUE_LEN = 2000;
+    const validPage = Math.max(1, Number(options.page || 1));
+    const validLimit = Math.min(Math.max(1, Number(options.limit || 50)), MAX_LIMIT);
+
+    const code = (options.code || '').trim();
+    const group = (options.group || '').trim();
+    const login = (options.login || '').trim();
+    const booklet = (options.booklet || '').trim();
+    const unit = (options.unit || '').trim();
+    const response = (options.response || '').trim();
+    const responseValue = (options.responseValue || '').trim();
+    const tags = (options.tags || '').trim();
+
+    const qb = this.responseRepository
+      .createQueryBuilder('response')
+      .innerJoin('response.unit', 'unit')
+      .innerJoin('unit.booklet', 'bookletEntity')
+      .innerJoin('bookletEntity.person', 'person')
+      .innerJoin('bookletEntity.bookletinfo', 'bookletinfo')
+      .leftJoin('unit.tags', 'unitTag')
+      .where('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('person.consider = :consider', { consider: true });
+
+    if (code) {
+      qb.andWhere('person.code ILIKE :code', { code: `%${code}%` });
+    }
+    if (group) {
+      qb.andWhere('person.group ILIKE :group', { group: `%${group}%` });
+    }
+    if (login) {
+      qb.andWhere('person.login ILIKE :login', { login: `%${login}%` });
+    }
+    if (booklet) {
+      qb.andWhere('bookletinfo.name ILIKE :booklet', { booklet: `%${booklet}%` });
+    }
+    if (unit) {
+      qb.andWhere('(unit.alias ILIKE :unit OR unit.name ILIKE :unit)', { unit: `%${unit}%` });
+    }
+    if (response) {
+      qb.andWhere('response.variableid ILIKE :response', { response: `%${response}%` });
+    }
+    if (responseValue) {
+      qb.andWhere('response.value ILIKE :responseValue', { responseValue: `%${responseValue}%` });
+    }
+    if (tags) {
+      qb.andWhere('unitTag.tag ILIKE :tags', { tags: `%${tags}%` });
+    }
+
+    const countQb = this.responseRepository
+      .createQueryBuilder('response')
+      .innerJoin('response.unit', 'unit')
+      .innerJoin('unit.booklet', 'bookletEntity')
+      .innerJoin('bookletEntity.person', 'person')
+      .innerJoin('bookletEntity.bookletinfo', 'bookletinfo')
+      .where('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('person.consider = :consider', { consider: true });
+
+    if (code) {
+      countQb.andWhere('person.code ILIKE :code', { code: `%${code}%` });
+    }
+    if (group) {
+      countQb.andWhere('person.group ILIKE :group', { group: `%${group}%` });
+    }
+    if (login) {
+      countQb.andWhere('person.login ILIKE :login', { login: `%${login}%` });
+    }
+    if (booklet) {
+      countQb.andWhere('bookletinfo.name ILIKE :booklet', { booklet: `%${booklet}%` });
+    }
+    if (unit) {
+      countQb.andWhere('(unit.alias ILIKE :unit OR unit.name ILIKE :unit)', { unit: `%${unit}%` });
+    }
+    if (response) {
+      countQb.andWhere('response.variableid ILIKE :response', { response: `%${response}%` });
+    }
+    if (responseValue) {
+      countQb.andWhere('response.value ILIKE :responseValue', { responseValue: `%${responseValue}%` });
+    }
+    if (tags) {
+      countQb.leftJoin('unit.tags', 'unitTag');
+      countQb.andWhere('unitTag.tag ILIKE :tags', { tags: `%${tags}%` });
+    }
+
+    const total = await countQb.select('COUNT(DISTINCT response.id)', 'cnt').getRawOne()
+      .then(r => Number(r?.cnt || 0));
+
+    const raw = await qb
+      .select([
+        'response.id AS "responseId"',
+        'unit.id AS "unitId"',
+        'person.id AS "personId"',
+        'person.code AS "code"',
+        'person.group AS "group"',
+        'person.login AS "login"',
+        'bookletinfo.name AS "booklet"',
+        'COALESCE(unit.alias, unit.name) AS "unit"',
+        'response.variableid AS "response"',
+        'response.status AS "responseStatus"',
+        'SUBSTRING(response.value, 1, :maxResponseValueLen) AS "responseValue"',
+        "COALESCE(string_agg(DISTINCT unitTag.tag, ','), '') AS \"tags\""
+      ])
+      .setParameter('maxResponseValueLen', MAX_RESPONSE_VALUE_LEN)
+      .groupBy('response.id')
+      .addGroupBy('unit.id')
+      .addGroupBy('person.id')
+      .addGroupBy('bookletinfo.name')
+      .addGroupBy('unit.alias')
+      .addGroupBy('unit.name')
+      .addGroupBy('person.code')
+      .addGroupBy('person.group')
+      .addGroupBy('person.login')
+      .addGroupBy('response.variableid')
+      .addGroupBy('response.status')
+      .orderBy('person.code', 'ASC')
+      .addOrderBy('bookletinfo.name', 'ASC')
+      .addOrderBy('unit.alias', 'ASC')
+      .addOrderBy('response.variableid', 'ASC')
+      .offset((validPage - 1) * validLimit)
+      .limit(validLimit)
+      .getRawMany();
+
+    const mapped = (raw || []).map(r => {
+      const tagsStr = String(r.tags || '');
+      const tagList = tagsStr ?
+        tagsStr.split(',').map(t => t.trim()).filter(Boolean) :
+        [];
+      return {
+        responseId: Number(r.responseId),
+        unitId: Number(r.unitId),
+        personId: Number(r.personId),
+        code: String(r.code || ''),
+        group: String(r.group || ''),
+        login: String(r.login || ''),
+        booklet: String(r.booklet || ''),
+        unit: String(r.unit || ''),
+        response: String(r.response || ''),
+        responseStatus: String(r.responseStatus ?? ''),
+        responseValue: String(r.responseValue ?? ''),
+        tags: tagList
+      };
+    });
+
+    return [mapped, total];
+  }
+
+  async findFlatResponseFilterOptions(
+    workspaceId: number,
+    options: {
+      code?: string;
+      group?: string;
+      login?: string;
+      booklet?: string;
+      unit?: string;
+      response?: string;
+      responseValue?: string;
+      tags?: string;
+    }
+  ): Promise<{
+      codes: string[];
+      groups: string[];
+      logins: string[];
+      booklets: string[];
+      units: string[];
+      responses: string[];
+      tags: string[];
+    }> {
+    if (!workspaceId || workspaceId <= 0) {
+      throw new Error('Invalid workspaceId provided');
+    }
+
+    const MAX_OPTIONS = 500;
+
+    const code = (options.code || '').trim();
+    const group = (options.group || '').trim();
+    const login = (options.login || '').trim();
+    const booklet = (options.booklet || '').trim();
+    const unit = (options.unit || '').trim();
+    const response = (options.response || '').trim();
+    const responseValue = (options.responseValue || '').trim();
+    const tags = (options.tags || '').trim();
+
+    const baseQb = this.responseRepository
+      .createQueryBuilder('response')
+      .innerJoin('response.unit', 'unit')
+      .innerJoin('unit.booklet', 'bookletEntity')
+      .innerJoin('bookletEntity.person', 'person')
+      .innerJoin('bookletEntity.bookletinfo', 'bookletinfo')
+      .leftJoin('unit.tags', 'unitTag')
+      .where('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('person.consider = :consider', { consider: true });
+
+    if (code) {
+      baseQb.andWhere('person.code ILIKE :code', { code: `%${code}%` });
+    }
+    if (group) {
+      baseQb.andWhere('person.group ILIKE :group', { group: `%${group}%` });
+    }
+    if (login) {
+      baseQb.andWhere('person.login ILIKE :login', { login: `%${login}%` });
+    }
+    if (booklet) {
+      baseQb.andWhere('bookletinfo.name ILIKE :booklet', { booklet: `%${booklet}%` });
+    }
+    if (unit) {
+      baseQb.andWhere('(unit.alias ILIKE :unit OR unit.name ILIKE :unit)', { unit: `%${unit}%` });
+    }
+    if (response) {
+      baseQb.andWhere('response.variableid ILIKE :response', { response: `%${response}%` });
+    }
+    if (responseValue) {
+      baseQb.andWhere('response.value ILIKE :responseValue', { responseValue: `%${responseValue}%` });
+    }
+    if (tags) {
+      baseQb.andWhere('unitTag.tag ILIKE :tags', { tags: `%${tags}%` });
+    }
+
+    const [codeRows, groupRows, loginRows, bookletRows, unitRows, responseRows, tagRows] = await Promise.all([
+      baseQb.clone().select('DISTINCT person.code', 'v').orderBy('person.code', 'ASC').limit(MAX_OPTIONS).getRawMany<{ v: string }>(),
+      baseQb.clone().select('DISTINCT person.group', 'v').orderBy('person.group', 'ASC').limit(MAX_OPTIONS).getRawMany<{ v: string }>(),
+      baseQb.clone().select('DISTINCT person.login', 'v').orderBy('person.login', 'ASC').limit(MAX_OPTIONS).getRawMany<{ v: string }>(),
+      baseQb.clone().select('DISTINCT bookletinfo.name', 'v').orderBy('bookletinfo.name', 'ASC').limit(MAX_OPTIONS).getRawMany<{ v: string }>(),
+      baseQb.clone().select('DISTINCT COALESCE(unit.alias, unit.name)', 'v').orderBy('v', 'ASC').limit(MAX_OPTIONS).getRawMany<{ v: string }>(),
+      baseQb.clone().select('DISTINCT response.variableid', 'v').orderBy('response.variableid', 'ASC').limit(MAX_OPTIONS).getRawMany<{ v: string }>(),
+      baseQb.clone().select('DISTINCT unitTag.tag', 'v').where('unitTag.tag IS NOT NULL').orderBy('unitTag.tag', 'ASC').limit(MAX_OPTIONS).getRawMany<{ v: string }>()
+    ]);
+
+    const mapVals = (rows: Array<{ v: string }>) => (rows || [])
+      .map(r => String(r.v || '').trim())
+      .filter(Boolean);
+
+    return {
+      codes: mapVals(codeRows),
+      groups: mapVals(groupRows),
+      logins: mapVals(loginRows),
+      booklets: mapVals(bookletRows),
+      units: mapVals(unitRows),
+      responses: mapVals(responseRows),
+      tags: mapVals(tagRows)
+    };
+  }
+
+  async findUnitLogs(
+    workspaceId: number,
+    unitId: number
+  ): Promise<{ id: number; unitid: number; ts: string; key: string; parameter: string }[]> {
+    if (!workspaceId || workspaceId <= 0) {
+      throw new Error('Invalid workspaceId provided');
+    }
+    if (!unitId || unitId <= 0) {
+      throw new Error('Invalid unitId provided');
+    }
+
+    const raw = await this.unitLogRepository
+      .createQueryBuilder('unitLog')
+      .innerJoin('unitLog.unit', 'unit')
+      .innerJoin('unit.booklet', 'booklet')
+      .innerJoin('booklet.person', 'person')
+      .where('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('unit.id = :unitId', { unitId })
+      .select([
+        'unitLog.id AS "id"',
+        'unitLog.unitid AS "unitid"',
+        'unitLog.ts AS "ts"',
+        'unitLog.key AS "key"',
+        'unitLog.parameter AS "parameter"'
+      ])
+      .orderBy('unitLog.id', 'ASC')
+      .getRawMany<{
+        id: number;
+        unitid: number;
+        ts: number | null;
+        key: string;
+        parameter: string | null;
+      }>();
+
+    return (raw || []).map(r => ({
+      id: Number(r.id),
+      unitid: Number(r.unitid),
+      ts: r.ts !== null && r.ts !== undefined ? String(r.ts) : '',
+      key: String(r.key || ''),
+      parameter: r.parameter !== null && r.parameter !== undefined ? String(r.parameter) : ''
+    }));
+  }
+
+  async findBookletLogsByUnitId(
+    workspaceId: number,
+    unitId: number
+  ): Promise<{
+      bookletId: number;
+      logs: { id: number; bookletid: number; ts: string; key: string; parameter: string }[];
+      sessions: { id: number; browser: string; os: string; screen: string; ts: string }[];
+      units: { id: number; bookletid: number; name: string; alias: string | null; logs: { id: number; unitid: number; ts: string; key: string; parameter: string }[] }[];
+    }> {
+    if (!workspaceId || workspaceId <= 0) {
+      throw new Error('Invalid workspaceId provided');
+    }
+    if (!unitId || unitId <= 0) {
+      throw new Error('Invalid unitId provided');
+    }
+
+    const unitRow = await this.unitRepository
+      .createQueryBuilder('unit')
+      .innerJoin('unit.booklet', 'booklet')
+      .innerJoin('booklet.person', 'person')
+      .where('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('unit.id = :unitId', { unitId })
+      .select(['unit.id', 'unit.bookletid'])
+      .getOne();
+
+    if (!unitRow) {
+      throw new Error('Unit not found.');
+    }
+
+    const bookletId = Number(unitRow.bookletid);
+
+    const [bookletLogs, sessions, units] = await Promise.all([
+      this.bookletLogRepository
+        .createQueryBuilder('bookletLog')
+        .where('bookletLog.bookletid = :bookletId', { bookletId })
+        .select(['bookletLog.id', 'bookletLog.bookletid', 'bookletLog.ts', 'bookletLog.parameter', 'bookletLog.key'])
+        .orderBy('bookletLog.id', 'ASC')
+        .getMany(),
+      this.sessionRepository
+        .createQueryBuilder('session')
+        .innerJoin('session.booklet', 'booklet')
+        .innerJoin('booklet.person', 'person')
+        .where('person.workspace_id = :workspaceId', { workspaceId })
+        .andWhere('booklet.id = :bookletId', { bookletId })
+        .select(['session.id', 'session.browser', 'session.os', 'session.screen', 'session.ts'])
+        .orderBy('session.id', 'ASC')
+        .getMany(),
+      this.unitRepository
+        .createQueryBuilder('unit')
+        .where('unit.bookletid = :bookletId', { bookletId })
+        .select(['unit.id', 'unit.bookletid', 'unit.name', 'unit.alias'])
+        .orderBy('unit.id', 'ASC')
+        .getMany()
+    ]);
+
+    return {
+      bookletId,
+      logs: (bookletLogs || []).map(l => ({
+        id: l.id,
+        bookletid: l.bookletid,
+        ts: l.ts !== null && l.ts !== undefined ? String(l.ts) : '',
+        key: l.key,
+        parameter: l.parameter || ''
+      })),
+      sessions: (sessions || []).map(s => ({
+        id: s.id,
+        browser: s.browser || '',
+        os: s.os || '',
+        screen: s.screen || '',
+        ts: s.ts !== null && s.ts !== undefined ? String(s.ts) : ''
+      })),
+      units: (units || []).map(u => ({
+        id: u.id,
+        bookletid: u.bookletid,
+        name: u.name,
+        alias: u.alias,
+        logs: []
+      }))
+    };
   }
 
   async findUnitResponse(workspaceId: number, connector: string, unitId: string): Promise<{ responses: { id: string, content: { id: string; value: string; status: string }[] }[] }> {
@@ -825,7 +1232,8 @@ export class WorkspaceTestResultsService {
         .innerJoinAndSelect('unit.booklet', 'booklet')
         .innerJoinAndSelect('booklet.person', 'person')
         .innerJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
-        .where('person.workspace_id = :workspaceId', { workspaceId });
+        .where('person.workspace_id = :workspaceId', { workspaceId })
+        .andWhere('person.consider = :consider', { consider: true });
 
       if (searchParams.value) {
         query.andWhere('response.value ILIKE :value', { value: `%${searchParams.value}%` });
@@ -960,7 +1368,8 @@ export class WorkspaceTestResultsService {
         .innerJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
         .leftJoinAndSelect('unit.responses', 'response')
         .where('unit.name = :unitName', { unitName })
-        .andWhere('person.workspace_id = :workspaceId', { workspaceId });
+        .andWhere('person.workspace_id = :workspaceId', { workspaceId })
+        .andWhere('person.consider = :consider', { consider: true });
 
       const total = await query.getCount();
 
@@ -1065,7 +1474,8 @@ export class WorkspaceTestResultsService {
         .innerJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
         .leftJoinAndSelect('booklet.units', 'unit')
         .where('bookletinfo.name ILIKE :bookletName', { bookletName: `%${bookletName}%` })
-        .andWhere('person.workspace_id = :workspaceId', { workspaceId });
+        .andWhere('person.workspace_id = :workspaceId', { workspaceId })
+        .andWhere('person.consider = :consider', { consider: true });
 
       const total = await query.getCount();
 
@@ -1365,8 +1775,246 @@ export class WorkspaceTestResultsService {
     });
   }
 
+  async exportTestLogs(
+    workspaceId: number,
+    res: Response,
+    filters?: { groupNames?: string[]; bookletNames?: string[]; unitNames?: string[]; personIds?: number[] }
+  ): Promise<void> {
+    this.logger.log(`Exporting test logs for workspace ${workspaceId}`);
+    await this.exportTestLogsToStream(workspaceId, res, filters);
+  }
+
+  async exportTestLogsToFile(
+    workspaceId: number,
+    filePath: string,
+    filters?: { groupNames?: string[]; bookletNames?: string[]; unitNames?: string[]; personIds?: number[] },
+    progressCallback?: (progress: number) => Promise<void> | void
+  ): Promise<void> {
+    this.logger.log(`Exporting test logs for workspace ${workspaceId} to file ${filePath}`);
+    const fileStream = fs.createWriteStream(filePath);
+    await this.exportTestLogsToStream(workspaceId, fileStream, filters, progressCallback);
+  }
+
+  async exportTestLogsToStream(
+    workspaceId: number,
+    stream: Writable,
+    filters?: { groupNames?: string[]; bookletNames?: string[]; unitNames?: string[]; personIds?: number[] },
+    progressCallback?: (progress: number) => Promise<void> | void
+  ): Promise<void> {
+    const csvStream = csv.format({
+      headers: [
+        'groupname',
+        'loginname',
+        'code',
+        'bookletname',
+        'unitname',
+        'originalUnitId',
+        'timestamp',
+        'logentry'
+      ],
+      delimiter: ';',
+      quote: null
+    });
+
+    csvStream.pipe(stream);
+
+    const BATCH_SIZE = 2000;
+    let processedCount = 0;
+
+    const hasUnitFilters = Boolean(filters?.unitNames?.length);
+
+    // Export booklet logs (unitname must be empty string for importer)
+    if (!hasUnitFilters) {
+      let lastBookletLogId = 0;
+      let hasMoreBookletLogs = true;
+
+      const createBookletLogsBaseQuery = () => {
+        const qb = this.bookletLogRepository.createQueryBuilder('bookletLog')
+          .innerJoin('bookletLog.booklet', 'booklet')
+          .innerJoin('booklet.person', 'person')
+          .innerJoin('booklet.bookletinfo', 'bookletinfo')
+          .select('bookletLog.id', 'id')
+          .addSelect('bookletLog.ts', 'ts')
+          .addSelect('bookletLog.key', 'key')
+          .addSelect('bookletLog.parameter', 'parameter')
+          .addSelect('person.group', 'groupname')
+          .addSelect('person.login', 'loginname')
+          .addSelect('person.code', 'code')
+          .addSelect('bookletinfo.name', 'bookletname')
+          .where('person.workspace_id = :workspaceId', { workspaceId })
+          .andWhere('person.consider = :consider', { consider: true });
+
+        if (filters?.groupNames?.length) {
+          qb.andWhere('person.group IN (:...groupNames)', { groupNames: filters.groupNames });
+        }
+        if (filters?.bookletNames?.length) {
+          qb.andWhere('bookletinfo.name IN (:...bookletNames)', { bookletNames: filters.bookletNames });
+        }
+        if (filters?.personIds?.length) {
+          qb.andWhere('person.id IN (:...personIds)', { personIds: filters.personIds });
+        }
+
+        return qb;
+      };
+
+      const totalBookletLogs = await createBookletLogsBaseQuery().getCount();
+
+      while (hasMoreBookletLogs) {
+        const logs = await createBookletLogsBaseQuery()
+          .andWhere('bookletLog.id > :lastBookletLogId', { lastBookletLogId })
+          .orderBy('bookletLog.id', 'ASC')
+          .take(BATCH_SIZE)
+          .getRawMany<{
+          id: number;
+          ts: string | number | null;
+          key: string;
+          parameter: string | null;
+          groupname: string;
+          loginname: string;
+          code: string;
+          bookletname: string;
+        }>();
+
+        if (logs.length === 0) {
+          hasMoreBookletLogs = false;
+          break;
+        }
+
+        lastBookletLogId = Number(logs[logs.length - 1].id);
+
+        for (const log of logs) {
+          const parameter = log.parameter || '';
+          const logentry = `${log.key} : ${parameter}`;
+          const canContinue = csvStream.write({
+            groupname: log.groupname,
+            loginname: log.loginname,
+            code: log.code,
+            bookletname: log.bookletname,
+            unitname: '',
+            originalUnitId: '',
+            timestamp: (log.ts ?? '').toString(),
+            logentry
+          });
+
+          if (!canContinue) {
+            await new Promise(resolve => {
+              csvStream.once('drain', resolve);
+            });
+          }
+
+          processedCount += 1;
+          if (progressCallback && (totalBookletLogs > 0)) {
+            await progressCallback(Math.round((processedCount / totalBookletLogs) * 100));
+          }
+        }
+      }
+    }
+
+    // Export unit logs (unitname must be non-empty for importer)
+    let lastUnitLogId = 0;
+    let hasMoreUnitLogs = true;
+
+    const createUnitLogsBaseQuery = () => {
+      const qb = this.unitLogRepository.createQueryBuilder('unitLog')
+        .innerJoin('unitLog.unit', 'unit')
+        .innerJoin('unit.booklet', 'booklet')
+        .innerJoin('booklet.person', 'person')
+        .innerJoin('booklet.bookletinfo', 'bookletinfo')
+        .select('unitLog.id', 'id')
+        .addSelect('unitLog.ts', 'ts')
+        .addSelect('unitLog.key', 'key')
+        .addSelect('unitLog.parameter', 'parameter')
+        .addSelect('unit.name', 'unitname')
+        .addSelect('unit.alias', 'originalUnitId')
+        .addSelect('person.group', 'groupname')
+        .addSelect('person.login', 'loginname')
+        .addSelect('person.code', 'code')
+        .addSelect('bookletinfo.name', 'bookletname')
+        .where('person.workspace_id = :workspaceId', { workspaceId })
+        .andWhere('person.consider = :consider', { consider: true });
+
+      if (filters?.groupNames?.length) {
+        qb.andWhere('person.group IN (:...groupNames)', { groupNames: filters.groupNames });
+      }
+      if (filters?.bookletNames?.length) {
+        qb.andWhere('bookletinfo.name IN (:...bookletNames)', { bookletNames: filters.bookletNames });
+      }
+      if (filters?.unitNames?.length) {
+        qb.andWhere('unit.name IN (:...unitNames)', { unitNames: filters.unitNames });
+      }
+      if (filters?.personIds?.length) {
+        qb.andWhere('person.id IN (:...personIds)', { personIds: filters.personIds });
+      }
+
+      return qb;
+    };
+
+    const totalUnitLogs = await createUnitLogsBaseQuery().getCount();
+
+    while (hasMoreUnitLogs) {
+      const logs = await createUnitLogsBaseQuery()
+        .andWhere('unitLog.id > :lastUnitLogId', { lastUnitLogId })
+        .orderBy('unitLog.id', 'ASC')
+        .take(BATCH_SIZE)
+        .getRawMany<{
+        id: number;
+        ts: string | number | null;
+        key: string;
+        parameter: string | null;
+        unitname: string;
+        originalUnitId: string | null;
+        groupname: string;
+        loginname: string;
+        code: string;
+        bookletname: string;
+      }>();
+
+      if (logs.length === 0) {
+        hasMoreUnitLogs = false;
+        break;
+      }
+
+      lastUnitLogId = Number(logs[logs.length - 1].id);
+
+      for (const log of logs) {
+        const parameter = log.parameter || '';
+        const logentry = `${log.key}=${parameter}`;
+
+        const canContinue = csvStream.write({
+          groupname: log.groupname,
+          loginname: log.loginname,
+          code: log.code,
+          bookletname: log.bookletname,
+          unitname: log.unitname,
+          originalUnitId: log.originalUnitId || log.unitname,
+          timestamp: (log.ts ?? '').toString(),
+          logentry
+        });
+
+        if (!canContinue) {
+          await new Promise(resolve => {
+            csvStream.once('drain', resolve);
+          });
+        }
+
+        processedCount += 1;
+        if (progressCallback && (totalUnitLogs > 0)) {
+          await progressCallback(Math.round((processedCount / totalUnitLogs) * 100));
+        }
+      }
+    }
+
+    csvStream.end();
+
+    return new Promise<void>((resolve, reject) => {
+      stream.on('finish', () => resolve());
+      stream.on('error', reject);
+    });
+  }
+
   async getExportOptions(workspaceId: number): Promise<{
     testPersons: { id: number; groupName: string; code: string; login: string }[];
+    groups: string[];
     booklets: string[];
     units: string[];
   }> {
@@ -1379,6 +2027,14 @@ export class WorkspaceTestResultsService {
       .addOrderBy('person.code', 'ASC')
       .addOrderBy('person.login', 'ASC')
       .getMany();
+
+    const groups = await this.personsRepository
+      .createQueryBuilder('person')
+      .select('DISTINCT person.group', 'name')
+      .where('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('person.consider = :consider', { consider: true })
+      .orderBy('person.group', 'ASC')
+      .getRawMany();
 
     const booklets = await this.bookletRepository
       .createQueryBuilder('booklet')
@@ -1402,6 +2058,7 @@ export class WorkspaceTestResultsService {
       testPersons: testPersons.map(p => ({
         id: p.id, groupName: p.group, code: p.code, login: p.login
       })),
+      groups: groups.map(g => g.name),
       booklets: booklets.map(b => b.name),
       units: units.map(u => u.name)
     };
