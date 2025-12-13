@@ -48,6 +48,10 @@ interface ExportResult {
   fileName: string;
 }
 
+interface ResolveDuplicateResponsesRequest {
+  resolutionMap: Record<string, number>;
+}
+
 @ApiTags('Admin Workspace Test Results')
 @Controller('admin/workspace')
 export class WorkspaceTestResultsController {
@@ -531,6 +535,51 @@ export class WorkspaceTestResultsController {
         };
       }> {
     return this.workspaceTestResultsService.deleteResponse(workspaceId, responseId, req.user.id);
+  }
+
+  @Post(':workspace_id/responses/resolve-duplicates')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
+  @ApiOperation({
+    summary: 'Resolve duplicate responses',
+    description: 'Resolves duplicate responses by keeping one response per duplicate group and deleting the others.'
+  })
+  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        resolutionMap: {
+          type: 'object',
+          additionalProperties: { type: 'number' }
+        }
+      }
+    }
+  })
+  @ApiOkResponse({
+    description: 'Duplicate responses resolved successfully.',
+    schema: {
+      type: 'object',
+      properties: {
+        resolvedCount: { type: 'number' },
+        success: { type: 'boolean' }
+      }
+    }
+  })
+  async resolveDuplicateResponses(
+    @Param('workspace_id') workspaceId: number,
+      @Body() body: ResolveDuplicateResponsesRequest,
+      @Req() req: RequestWithUser
+  ): Promise<{ resolvedCount: number; success: boolean }> {
+    try {
+      return await this.workspaceTestResultsService.resolveDuplicateResponses(
+        workspaceId,
+        body?.resolutionMap || {},
+        req.user.id
+      );
+    } catch (error) {
+      throw new BadRequestException(`Failed to resolve duplicate responses. ${error.message}`);
+    }
   }
 
   @Delete(':workspace_id/booklets/:bookletId')

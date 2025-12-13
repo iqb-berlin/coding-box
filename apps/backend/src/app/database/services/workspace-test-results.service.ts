@@ -369,6 +369,102 @@ export class WorkspaceTestResultsService {
     return result;
   }
 
+  async resolveDuplicateResponses(
+    workspaceId: number,
+    resolutionMap: Record<string, number>,
+    userId: string
+  ): Promise<{ resolvedCount: number; success: boolean }> {
+    if (!workspaceId || workspaceId <= 0) {
+      throw new Error('Invalid workspaceId provided');
+    }
+
+    if (!resolutionMap || typeof resolutionMap !== 'object' || Object.keys(resolutionMap).length === 0) {
+      return { resolvedCount: 0, success: true };
+    }
+
+    return this.connection.transaction(async manager => {
+      let resolvedCount = 0;
+
+      for (const [key, selectedResponseId] of Object.entries(resolutionMap)) {
+        if (!selectedResponseId) {
+          continue;
+        }
+
+        const parts = key.split('|');
+        if (parts.length !== 4) {
+          this.logger.warn(`Invalid duplicate resolution key: ${key}`);
+          continue;
+        }
+
+        const unitId = Number(parts[0]);
+        const variableId = decodeURIComponent(parts[1] || '');
+        const subform = decodeURIComponent(parts[2] || '');
+        const testTakerLogin = decodeURIComponent(parts[3] || '');
+
+        if (!unitId || Number.isNaN(unitId) || !variableId || !testTakerLogin) {
+          this.logger.warn(`Invalid duplicate resolution key parts: ${key}`);
+          continue;
+        }
+
+        const responses = await manager
+          .createQueryBuilder(ResponseEntity, 'response')
+          .innerJoin('response.unit', 'unit')
+          .innerJoin('unit.booklet', 'booklet')
+          .innerJoin('booklet.person', 'person')
+          .where('person.workspace_id = :workspaceId', { workspaceId })
+          .andWhere('person.consider = :consider', { consider: true })
+          .andWhere('person.login = :testTakerLogin', { testTakerLogin })
+          .andWhere('unit.id = :unitId', { unitId })
+          .andWhere('response.variableid = :variableId', { variableId })
+          .andWhere('COALESCE(response.subform, \'\') = :subform', { subform: subform || '' })
+          .select(['response.id'])
+          .getMany();
+
+        const ids = (responses || []).map(r => r.id);
+        if (ids.length <= 1) {
+          continue;
+        }
+
+        if (!ids.includes(selectedResponseId)) {
+          this.logger.warn(`Selected responseId ${selectedResponseId} not part of duplicate group ${key}`);
+          continue;
+        }
+
+        const deleteIds = ids.filter(id => id !== selectedResponseId);
+        if (deleteIds.length === 0) {
+          continue;
+        }
+
+        const deleteResult = await manager
+          .createQueryBuilder()
+          .delete()
+          .from(ResponseEntity)
+          .where('id IN (:...deleteIds)', { deleteIds })
+          .execute();
+
+        resolvedCount += deleteResult.affected || 0;
+
+        await this.journalService.createEntry(
+          userId,
+          workspaceId,
+          'delete',
+          'response',
+          selectedResponseId,
+          {
+            duplicateGroupKey: key,
+            keptResponseId: selectedResponseId,
+            deletedResponseIds: deleteIds
+          }
+        );
+      }
+
+      return {
+        resolvedCount,
+        success: true
+      };
+    });
+  }
+
   async findFlatResponses(
     workspaceId: number,
     options: {

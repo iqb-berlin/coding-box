@@ -540,14 +540,14 @@ export class WorkspaceResponseValidationService {
 
     const responseGroups = new Map<string, ResponseEntity[]>();
     for (const response of allResponses) {
-      const key = `${response.unitid}_${response.variableid}`;
+      const key = `${response.unitid}_${response.variableid}_${response.subform || ''}`;
       if (!responseGroups.has(key)) {
         responseGroups.set(key, []);
       }
       responseGroups.get(key)?.push(response);
     }
 
-    const duplicateResponses: DuplicateResponseDto[] = [];
+    const duplicateResponses: Array<DuplicateResponseDto & { subform: string }> = [];
     for (const [, responses] of responseGroups.entries()) {
       if (responses.length > 1) {
         const firstResponse = responses[0];
@@ -576,6 +576,7 @@ export class WorkspaceResponseValidationService {
           unitName: unit.name,
           unitId: unit.id,
           variableId: firstResponse.variableid,
+          subform: firstResponse.subform || '',
           bookletName,
           testTakerLogin: person.login,
           duplicates: responses.map(response => ({

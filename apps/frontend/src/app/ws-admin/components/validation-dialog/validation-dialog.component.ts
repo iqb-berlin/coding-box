@@ -258,6 +258,14 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
   duplicateResponsesPageSize: number = 10;
   currentDuplicateResponsesPage: number = 1;
 
+  private buildDuplicateKey(duplicate: { unitId: number; variableId: string; subform: string; testTakerLogin: string }): string {
+    const unitId = String(duplicate.unitId);
+    const variableId = encodeURIComponent(duplicate.variableId || '');
+    const subform = encodeURIComponent(duplicate.subform || '');
+    const login = encodeURIComponent(duplicate.testTakerLogin || '');
+    return `${unitId}|${variableId}|${subform}|${login}`;
+  }
+
   constructor(
     @Inject(MAT_DIALOG_DATA) public data: unknown,
     private dialogRef: MatDialogRef<ValidationDialogComponent>,
@@ -906,13 +914,13 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
                   duplicate.duplicates[0].responseId : undefined;
 
                 if (defaultSelectedId) {
-                  const key = `${duplicate.unitId}_${duplicate.variableId}_${duplicate.testTakerLogin}`;
+                  const key = this.buildDuplicateKey(duplicate);
                   this.duplicateResponseSelections.set(key, defaultSelectedId);
                 }
 
                 return {
                   ...duplicate,
-                  key: `${duplicate.unitId}_${duplicate.variableId}_${duplicate.testTakerLogin}`
+                  key: this.buildDuplicateKey(duplicate)
                 };
               });
 
@@ -996,7 +1004,7 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
             ).subscribe(result => {
               const typedResult = result as DuplicateResponsesResultDto;
               this.duplicateResponses = typedResult.data.map(duplicate => {
-                const key = `${duplicate.unitId}_${duplicate.variableId}_${duplicate.testTakerLogin}`;
+                const key = this.buildDuplicateKey(duplicate);
 
                 if (!this.duplicateResponseSelections.has(key) && duplicate.duplicates.length > 0) {
                   this.duplicateResponseSelections.set(key, duplicate.duplicates[0].responseId);
