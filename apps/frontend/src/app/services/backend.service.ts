@@ -405,6 +405,16 @@ export class BackendService {
     });
   }
 
+  startExportTestLogsJob(
+    workspaceId: number,
+    filters?: { groupNames?: string[]; bookletNames?: string[]; unitNames?: string[]; personIds?: number[] }
+  ): Observable<{ jobId: string; message: string }> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/results/export/logs/job`;
+    return this.http.post<{ jobId: string; message: string }>(url, filters || {}, {
+      headers: this.authHeader
+    });
+  }
+
   getExportTestResultsJobs(workspaceId: number): Observable<Array<{
     jobId: string;
     status: string;

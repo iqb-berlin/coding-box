@@ -236,6 +236,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   isExporting: boolean = false;
   exportJobStatus: string | null = null;
   exportJobProgress: number = 0;
+  exportTypeInProgress: 'test-results' | 'test-logs' | null = null;
 
   @ViewChild(MatPaginator) paginator!: MatPaginator;
   @ViewChild(MatSort) sort!: MatSort;
@@ -368,6 +369,55 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           this.isLoadingBooklets = false;
         }
       });
+  }
+
+  exportLogs(): void {
+    if (!this.appService.selectedWorkspaceId) {
+      return;
+    }
+
+    const dialogRef = this.dialog.open(ExportOptionsDialogComponent, {
+      width: '800px',
+      data: {
+        workspaceId: this.appService.selectedWorkspaceId
+      }
+    });
+
+    dialogRef.afterClosed().subscribe((result: ExportOptions | undefined) => {
+      if (result) {
+        const filters = {
+          groupNames: result.groupNames && result.groupNames.length > 0 ? result.groupNames : undefined,
+          bookletNames: result.bookletNames && result.bookletNames.length > 0 ? result.bookletNames : undefined,
+          unitNames: result.unitNames && result.unitNames.length > 0 ? result.unitNames : undefined,
+          personIds: result.personIds && result.personIds.length > 0 ? result.personIds : undefined
+        };
+
+        this.isExporting = true;
+        this.exportTypeInProgress = 'test-logs';
+        this.backendService.startExportTestLogsJob(this.appService.selectedWorkspaceId, filters)
+          .subscribe({
+            next: response => {
+              this.exportJobId = response.jobId;
+              this.exportJobStatus = 'active';
+              this.snackBar.open(
+                'Export gestartet. Sie werden benachrichtigt, wenn der Download bereitsteht.',
+                'OK',
+                { duration: 3000 }
+              );
+              this.pollExportJobStatus(response.jobId);
+            },
+            error: () => {
+              this.isExporting = false;
+              this.exportTypeInProgress = null;
+              this.snackBar.open(
+                'Fehler beim Starten des Exports',
+                'Fehler',
+                { duration: 3000 }
+              );
+            }
+          });
+      }
+    });
   }
 
   sortBooklets(): void {
@@ -1405,6 +1455,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
         };
 
         this.isExporting = true;
+        this.exportTypeInProgress = 'test-results';
         this.backendService.startExportTestResultsJob(this.appService.selectedWorkspaceId, filters)
           .subscribe({
             next: response => {
@@ -1419,6 +1470,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
             },
             error: () => {
               this.isExporting = false;
+              this.exportTypeInProgress = null;
               this.snackBar.open(
                 'Fehler beim Starten des Exports',
                 'Fehler',
@@ -1437,12 +1489,13 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     this.backendService.getExportTestResultsJobs(this.appService.selectedWorkspaceId)
       .subscribe({
         next: jobs => {
-          const testResultJobs = jobs.filter(j => j.exportType === 'test-results');
+          const relevantJobs = jobs.filter(j => j.exportType === 'test-results' || j.exportType === 'test-logs');
           // Find the most recent active job only (not completed jobs)
-          const activeJob = testResultJobs.find(j => j.status === 'active' || j.status === 'waiting' || j.status === 'delayed');
+          const activeJob = relevantJobs.find(j => j.status === 'active' || j.status === 'waiting' || j.status === 'delayed');
           if (activeJob) {
             this.exportJobId = activeJob.jobId;
             this.isExporting = true;
+            this.exportTypeInProgress = activeJob.exportType as 'test-results' | 'test-logs';
             this.pollExportJobStatus(activeJob.jobId);
           }
         }
@@ -1507,13 +1560,16 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           const url = window.URL.createObjectURL(blob);
           const link = document.createElement('a');
           link.href = url;
-          link.download = `workspace-${this.appService.selectedWorkspaceId}-results-${new Date().toISOString().split('T')[0]}.csv`;
+          const datePart = new Date().toISOString().split('T')[0];
+          const suffix = this.exportTypeInProgress === 'test-logs' ? 'logs' : 'results';
+          link.download = `workspace-${this.appService.selectedWorkspaceId}-${suffix}-${datePart}.csv`;
           link.click();
           window.URL.revokeObjectURL(url);
 
           // Hide the download button after successful download
           this.exportJobStatus = null;
           this.exportJobId = null;
+          this.exportTypeInProgress = null;
 
           // Delete the job from the server
           this.backendService.deleteTestResultExportJob(this.appService.selectedWorkspaceId, jobId).subscribe();

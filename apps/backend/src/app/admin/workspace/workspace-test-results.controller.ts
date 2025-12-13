@@ -1052,6 +1052,57 @@ export class WorkspaceTestResultsController {
     };
   }
 
+  @Post(':workspace_id/results/export/logs/job')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
+  @ApiOperation({
+    summary: 'Start background export of test logs',
+    description: 'Starts a background job to export test logs for a workspace as CSV (re-importable)'
+  })
+  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        groupNames: { type: 'array', items: { type: 'string' } },
+        bookletNames: { type: 'array', items: { type: 'string' } },
+        unitNames: { type: 'array', items: { type: 'string' } },
+        personIds: { type: 'array', items: { type: 'number' } }
+      }
+    },
+    required: false
+  })
+  @ApiOkResponse({
+    description: 'Export job started successfully.',
+    schema: {
+      type: 'object',
+      properties: {
+        jobId: { type: 'string' },
+        message: { type: 'string' }
+      }
+    }
+  })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  async startExportTestLogsJob(
+    @Param('workspace_id') workspace_id: number,
+      @Req() req: RequestWithUser,
+      @Body() filters?: { groupNames?: string[]; bookletNames?: string[]; unitNames?: string[]; personIds?: number[] }
+  ): Promise<{ jobId: string; message: string }> {
+    const job = await this.jobQueueService.addExportJob({
+      workspaceId: Number(workspace_id),
+      userId: Number(req.user.id),
+      exportType: 'test-logs',
+      authToken: req.headers.authorization?.replace('Bearer ', ''),
+      testResultFilters: filters
+    });
+
+    return {
+      jobId: job.id.toString(),
+      message: 'Export job started successfully'
+    };
+  }
+
   @Get(':workspace_id/results/export/jobs')
   @ApiOperation({
     summary: 'Get export jobs',
