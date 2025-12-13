@@ -4,7 +4,6 @@ import {
 import {
   MAT_DIALOG_DATA, MatDialog, MatDialogModule, MatDialogRef
 } from '@angular/material/dialog';
-import { MatStepperModule } from '@angular/material/stepper';
 import { MatButtonModule } from '@angular/material/button';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
@@ -41,7 +40,6 @@ import { GermanPaginatorIntl } from '../../../shared/services/german-paginator-i
   imports: [
     CommonModule,
     MatDialogModule,
-    MatStepperModule,
     MatButtonModule,
     FormsModule,
     ReactiveFormsModule,
@@ -132,37 +130,96 @@ import { GermanPaginatorIntl } from '../../../shared/services/german-paginator-i
       margin-left: 8px;
     }
 
-    .validation-summary {
+    .validation-panel-header {
+      padding: 6px 10px;
+      border-radius: 6px;
+      border-left: 3px solid transparent;
+    }
+
+    .validation-panel-header.validation-running {
+      background-color: rgba(33, 150, 243, 0.04);
+      border-left-color: #2196F3;
+    }
+
+    .validation-panel-header.validation-success {
+      background-color: rgba(76, 175, 80, 0.04);
+      border-left-color: #4CAF50;
+    }
+
+    .validation-panel-header.validation-error {
+      background-color: rgba(244, 67, 54, 0.04);
+      border-left-color: #F44336;
+    }
+
+    .validation-panel-header.validation-not-run {
+      background-color: rgba(158, 158, 158, 0.03);
+      border-left-color: #9E9E9E;
+    }
+
+    .validation-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 1px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 500;
+      line-height: 18px;
+      border: 1px solid rgba(0, 0, 0, 0.08);
+    }
+
+    .validation-badge.validation-running {
+      background-color: rgba(33, 150, 243, 0.06);
+      color: #0D47A1;
+    }
+
+    .validation-badge.validation-success {
+      background-color: rgba(76, 175, 80, 0.06);
+      color: #1B5E20;
+    }
+
+    .validation-badge.validation-error {
+      background-color: rgba(244, 67, 54, 0.06);
+      color: #B71C1C;
+    }
+
+    .validation-badge.validation-not-run {
+      background-color: rgba(158, 158, 158, 0.06);
+      color: #616161;
+    }
+
+    .validation-details {
       display: flex;
       flex-direction: column;
-      gap: 8px;
-      margin-bottom: 16px;
-      padding: 16px;
-      border-radius: 4px;
-      background-color: #f5f5f5;
-      border: 1px solid #e0e0e0;
+      gap: 10px;
+      padding: 6px 2px 2px 2px;
     }
 
-    .validation-summary-title {
-      font-size: 16px;
-      font-weight: 500;
-      margin-bottom: 8px;
+    .validation-details-intro {
+      margin: 0;
+      opacity: 0.9;
     }
 
-    .validation-summary-item {
+    .validation-guidance {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    @media (max-width: 900px) {
+      .validation-guidance {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .validation-guidance .info-banner {
+      margin: 0;
+    }
+
+    .validation-actions {
       display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
       align-items: center;
-      padding: 8px;
-      border-radius: 4px;
-      font-weight: 500;
-    }
-
-    .validation-summary-item mat-icon {
-      margin-right: 8px;
-    }
-
-    .validation-summary-item-label {
-      flex: 1;
     }
 
     .duplicate-response-table {

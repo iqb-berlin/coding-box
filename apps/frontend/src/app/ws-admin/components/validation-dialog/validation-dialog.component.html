@@ -28,149 +28,56 @@
   <span>Validierungen laufen im Hintergrund weiter, auch wenn Sie diesen Dialog schließen.</span>
 </div>
 
-<!-- Validation Summary -->
-<div class="validation-summary">
-  <div class="validation-summary-title">Validierungsstatus</div>
-
-  <!-- TestTakers Validation -->
-  <div class="validation-summary-item"
-       [ngClass]="{
-         'validation-running': getValidationStatus('testTakers') === 'running',
-         'validation-error': getValidationStatus('testTakers') === 'failed',
-         'validation-success': getValidationStatus('testTakers') === 'success',
-         'validation-not-run': getValidationStatus('testTakers') === 'not-run'
-       }">
-    <mat-icon *ngIf="getValidationStatus('testTakers') === 'running'">hourglass_empty</mat-icon>
-    <mat-icon *ngIf="getValidationStatus('testTakers') === 'failed'">error</mat-icon>
-    <mat-icon *ngIf="getValidationStatus('testTakers') === 'success'">check_circle</mat-icon>
-    <mat-icon *ngIf="getValidationStatus('testTakers') === 'not-run'">radio_button_unchecked</mat-icon>
-    <span class="validation-summary-item-label">{{ getValidationLabel('testTakers') }}</span>
-    <span *ngIf="getValidationStatus('testTakers') === 'running'">Läuft...</span>
-    <span *ngIf="getValidationStatus('testTakers') === 'failed' && testTakersValidationResult">
-      {{ testTakersValidationResult.missingPersons.length }} fehlende Testpersonen
-    </span>
-    <span *ngIf="getValidationStatus('testTakers') === 'success'">OK</span>
-    <span *ngIf="getValidationStatus('testTakers') === 'not-run'">Nicht ausgeführt</span>
-  </div>
-
-  <!-- Variables Validation -->
-  <div class="validation-summary-item"
-       [ngClass]="{
-         'validation-running': getValidationStatus('variables') === 'running',
-         'validation-error': getValidationStatus('variables') === 'failed',
-         'validation-success': getValidationStatus('variables') === 'success',
-         'validation-not-run': getValidationStatus('variables') === 'not-run'
-       }">
-    <mat-icon *ngIf="getValidationStatus('variables') === 'running'">hourglass_empty</mat-icon>
-    <mat-icon *ngIf="getValidationStatus('variables') === 'failed'">error</mat-icon>
-    <mat-icon *ngIf="getValidationStatus('variables') === 'success'">check_circle</mat-icon>
-    <mat-icon *ngIf="getValidationStatus('variables') === 'not-run'">radio_button_unchecked</mat-icon>
-    <span class="validation-summary-item-label">{{ getValidationLabel('variables') }}</span>
-    <span *ngIf="getValidationStatus('variables') === 'running'">Läuft...</span>
-    <span *ngIf="getValidationStatus('variables') === 'failed'">
-      {{ totalInvalidVariables }} ungültige Variablen
-    </span>
-    <span *ngIf="getValidationStatus('variables') === 'success'">OK</span>
-    <span *ngIf="getValidationStatus('variables') === 'not-run'">Nicht ausgeführt</span>
-  </div>
-
-  <!-- Variable Types Validation -->
-  <div class="validation-summary-item"
-       [ngClass]="{
-         'validation-running': getValidationStatus('variableTypes') === 'running',
-         'validation-error': getValidationStatus('variableTypes') === 'failed',
-         'validation-success': getValidationStatus('variableTypes') === 'success',
-         'validation-not-run': getValidationStatus('variableTypes') === 'not-run'
-       }">
-    <mat-icon *ngIf="getValidationStatus('variableTypes') === 'running'">hourglass_empty</mat-icon>
-    <mat-icon *ngIf="getValidationStatus('variableTypes') === 'failed'">error</mat-icon>
-    <mat-icon *ngIf="getValidationStatus('variableTypes') === 'success'">check_circle</mat-icon>
-    <mat-icon *ngIf="getValidationStatus('variableTypes') === 'not-run'">radio_button_unchecked</mat-icon>
-    <span class="validation-summary-item-label">{{ getValidationLabel('variableTypes') }}</span>
-    <span *ngIf="getValidationStatus('variableTypes') === 'running'">Läuft...</span>
-    <span *ngIf="getValidationStatus('variableTypes') === 'failed'">
-      {{ totalInvalidTypeVariables }} ungültige Variablentypen
-    </span>
-    <span *ngIf="getValidationStatus('variableTypes') === 'success'">OK</span>
-    <span *ngIf="getValidationStatus('variableTypes') === 'not-run'">Nicht ausgeführt</span>
-  </div>
-
-  <!-- Response Status Validation -->
-  <div class="validation-summary-item"
-       [ngClass]="{
-         'validation-running': getValidationStatus('responseStatus') === 'running',
-         'validation-error': getValidationStatus('responseStatus') === 'failed',
-         'validation-success': getValidationStatus('responseStatus') === 'success',
-         'validation-not-run': getValidationStatus('responseStatus') === 'not-run'
-       }">
-    <mat-icon *ngIf="getValidationStatus('responseStatus') === 'running'">hourglass_empty</mat-icon>
-    <mat-icon *ngIf="getValidationStatus('responseStatus') === 'failed'">error</mat-icon>
-    <mat-icon *ngIf="getValidationStatus('responseStatus') === 'success'">check_circle</mat-icon>
-    <mat-icon *ngIf="getValidationStatus('responseStatus') === 'not-run'">radio_button_unchecked</mat-icon>
-    <span class="validation-summary-item-label">{{ getValidationLabel('responseStatus') }}</span>
-    <span *ngIf="getValidationStatus('responseStatus') === 'running'">Läuft...</span>
-    <span *ngIf="getValidationStatus('responseStatus') === 'failed'">
-      {{ totalInvalidStatusVariables }} ungültige Antwortstatus
-    </span>
-    <span *ngIf="getValidationStatus('responseStatus') === 'success'">OK</span>
-    <span *ngIf="getValidationStatus('responseStatus') === 'not-run'">Nicht ausgeführt</span>
-  </div>
-
-  <!-- Group Responses Validation -->
-  <div class="validation-summary-item"
-       [ngClass]="{
-         'validation-running': getValidationStatus('groupResponses') === 'running',
-         'validation-error': getValidationStatus('groupResponses') === 'failed',
-         'validation-success': getValidationStatus('groupResponses') === 'success',
-         'validation-not-run': getValidationStatus('groupResponses') === 'not-run'
-       }">
-    <mat-icon *ngIf="getValidationStatus('groupResponses') === 'running'">hourglass_empty</mat-icon>
-    <mat-icon *ngIf="getValidationStatus('groupResponses') === 'failed'">error</mat-icon>
-    <mat-icon *ngIf="getValidationStatus('groupResponses') === 'success'">check_circle</mat-icon>
-    <mat-icon *ngIf="getValidationStatus('groupResponses') === 'not-run'">radio_button_unchecked</mat-icon>
-    <span class="validation-summary-item-label">{{ getValidationLabel('groupResponses') }}</span>
-    <span *ngIf="getValidationStatus('groupResponses') === 'running'">Läuft...</span>
-    <span *ngIf="getValidationStatus('groupResponses') === 'failed' && groupResponsesResult">
-      Nicht alle Gruppen haben Antworten
-    </span>
-    <span *ngIf="getValidationStatus('groupResponses') === 'success'">OK</span>
-    <span *ngIf="getValidationStatus('groupResponses') === 'not-run'">Nicht ausgeführt</span>
-  </div>
-
-  <!-- Duplicate Responses Validation -->
-  <div class="validation-summary-item"
-       [ngClass]="{
-         'validation-running': getValidationStatus('duplicateResponses') === 'running',
-         'validation-error': getValidationStatus('duplicateResponses') === 'failed',
-         'validation-success': getValidationStatus('duplicateResponses') === 'success',
-         'validation-not-run': getValidationStatus('duplicateResponses') === 'not-run'
-       }">
-    <mat-icon *ngIf="getValidationStatus('duplicateResponses') === 'running'">hourglass_empty</mat-icon>
-    <mat-icon *ngIf="getValidationStatus('duplicateResponses') === 'failed'">error</mat-icon>
-    <mat-icon *ngIf="getValidationStatus('duplicateResponses') === 'success'">check_circle</mat-icon>
-    <mat-icon *ngIf="getValidationStatus('duplicateResponses') === 'not-run'">radio_button_unchecked</mat-icon>
-    <span class="validation-summary-item-label">{{ getValidationLabel('duplicateResponses') }}</span>
-    <span *ngIf="getValidationStatus('duplicateResponses') === 'running'">Läuft...</span>
-    <span *ngIf="getValidationStatus('duplicateResponses') === 'failed' && duplicateResponsesResult">
-      {{ totalDuplicateResponses }} doppelte Antworten gefunden
-    </span>
-    <span *ngIf="getValidationStatus('duplicateResponses') === 'success'">OK</span>
-    <span *ngIf="getValidationStatus('duplicateResponses') === 'not-run'">Nicht ausgeführt</span>
-  </div>
-</div>
 <mat-dialog-content>
-  <mat-stepper orientation="vertical" [linear]="true" #stepper>
-    <mat-step label="Testperson definiert" >
-      <p>Prüft, ob für jede Testperson in der Datenbank ein entsprechender Eintrag in den TestTakers XML-Dateien existiert.</p>
-      <div class="info-banner">
-        <mat-icon>help</mat-icon>
-        <span><strong>Warum ist das wichtig?</strong> {{ getValidationWhyText('testTakers') }}</span>
+  <mat-accordion multi="true">
+    <mat-expansion-panel>
+      <mat-expansion-panel-header
+        class="validation-panel-header"
+        [ngClass]="{
+          'validation-running': getValidationStatus('testTakers') === 'running',
+          'validation-error': getValidationStatus('testTakers') === 'failed',
+          'validation-success': getValidationStatus('testTakers') === 'success',
+          'validation-not-run': getValidationStatus('testTakers') === 'not-run'
+        }">
+        <mat-panel-title>
+          <mat-icon *ngIf="getValidationStatus('testTakers') === 'running'">hourglass_empty</mat-icon>
+          <mat-icon *ngIf="getValidationStatus('testTakers') === 'failed'">error</mat-icon>
+          <mat-icon *ngIf="getValidationStatus('testTakers') === 'success'">check_circle</mat-icon>
+          <mat-icon *ngIf="getValidationStatus('testTakers') === 'not-run'">radio_button_unchecked</mat-icon>
+          <span style="margin-left: 8px;">{{ getValidationLabel('testTakers') }}</span>
+        </mat-panel-title>
+        <mat-panel-description>
+          @if (getValidationStatus('testTakers') === 'running') {
+            <span class="validation-badge validation-running">Läuft…</span>
+          } @else if (getValidationStatus('testTakers') === 'failed' && testTakersValidationResult) {
+            <span class="validation-badge validation-error">{{ testTakersValidationResult.missingPersons.length }} fehlend</span>
+          } @else if (getValidationStatus('testTakers') === 'success') {
+            <span class="validation-badge validation-success">OK</span>
+          } @else {
+            <span class="validation-badge validation-not-run">Nicht ausgeführt</span>
+          }
+        </mat-panel-description>
+      </mat-expansion-panel-header>
+
+      <div class="validation-details">
+        <p class="validation-details-intro">Prüft, ob für jede Testperson in der Datenbank ein entsprechender Eintrag in den TestTakers XML-Dateien existiert.</p>
+
+        <div class="validation-guidance">
+          <div class="info-banner">
+            <mat-icon>help</mat-icon>
+            <span><strong>Warum ist das wichtig?</strong> {{ getValidationWhyText('testTakers') }}</span>
+          </div>
+          <div class="info-banner">
+            <mat-icon>build</mat-icon>
+            <span><strong>So beheben Sie es:</strong> {{ getValidationFixHint('testTakers') }}</span>
+          </div>
+        </div>
+
+        <div class="validation-actions">
+          <button mat-button (click)="validateTestTakers()" [disabled]="isAnyValidationRunning()">Testpersonen prüfen</button>
+        </div>
       </div>
-      <div class="info-banner">
-        <mat-icon>build</mat-icon>
-        <span><strong>So beheben Sie es:</strong> {{ getValidationFixHint('testTakers') }}</span>
-      </div>
-      <button mat-button (click)="validateTestTakers()">Testpersonen prüfen</button>
+
       @if (isTestTakersValidationRunning) {
         <div class="loading-container">
           <mat-spinner class="mat-spinner"></mat-spinner>
@@ -192,7 +99,7 @@
             </div>
             <div class="actions-container">
               <button mat-button (click)="toggleMissingPersonsExpansion()">
-                {{ expandedMissingPersonsPanel ? 'Liste einklappen' : 'Liste ausklappen' }}
+                {{ expandedMissingPersonsPanel ? 'Details ausblenden' : 'Details anzeigen' }}
               </button>
             </div>
 
@@ -226,21 +133,56 @@
           }
         </div>
       }
-      <div>
-        <button mat-button matStepperNext>Weiter</button>
+    </mat-expansion-panel>
+
+    <mat-expansion-panel>
+      <mat-expansion-panel-header
+        class="validation-panel-header"
+        [ngClass]="{
+          'validation-running': getValidationStatus('variables') === 'running',
+          'validation-error': getValidationStatus('variables') === 'failed',
+          'validation-success': getValidationStatus('variables') === 'success',
+          'validation-not-run': getValidationStatus('variables') === 'not-run'
+        }">
+        <mat-panel-title>
+          <mat-icon *ngIf="getValidationStatus('variables') === 'running'">hourglass_empty</mat-icon>
+          <mat-icon *ngIf="getValidationStatus('variables') === 'failed'">error</mat-icon>
+          <mat-icon *ngIf="getValidationStatus('variables') === 'success'">check_circle</mat-icon>
+          <mat-icon *ngIf="getValidationStatus('variables') === 'not-run'">radio_button_unchecked</mat-icon>
+          <span style="margin-left: 8px;">{{ getValidationLabel('variables') }}</span>
+        </mat-panel-title>
+        <mat-panel-description>
+          @if (getValidationStatus('variables') === 'running') {
+            <span class="validation-badge validation-running">Läuft…</span>
+          } @else if (getValidationStatus('variables') === 'failed') {
+            <span class="validation-badge validation-error">{{ totalInvalidVariables }} ungültig</span>
+          } @else if (getValidationStatus('variables') === 'success') {
+            <span class="validation-badge validation-success">OK</span>
+          } @else {
+            <span class="validation-badge validation-not-run">Nicht ausgeführt</span>
+          }
+        </mat-panel-description>
+      </mat-expansion-panel-header>
+
+      <div class="validation-details">
+        <p class="validation-details-intro">Prüft, ob die Variable in der Unit.xml definiert ist.</p>
+
+        <div class="validation-guidance">
+          <div class="info-banner">
+            <mat-icon>help</mat-icon>
+            <span><strong>Warum ist das wichtig?</strong> {{ getValidationWhyText('variables') }}</span>
+          </div>
+          <div class="info-banner">
+            <mat-icon>build</mat-icon>
+            <span><strong>So beheben Sie es:</strong> {{ getValidationFixHint('variables') }}</span>
+          </div>
+        </div>
+
+        <div class="validation-actions">
+          <button mat-button (click)="validateVariables()" [disabled]="isAnyValidationRunning()">Variablen prüfen</button>
+        </div>
       </div>
-    </mat-step>
-    <mat-step label="Variable definiert">
-      <p>Prüft, ob die Variable in der Unit.xml definiert ist.</p>
-      <div class="info-banner">
-        <mat-icon>help</mat-icon>
-        <span><strong>Warum ist das wichtig?</strong> {{ getValidationWhyText('variables') }}</span>
-      </div>
-      <div class="info-banner">
-        <mat-icon>build</mat-icon>
-        <span><strong>So beheben Sie es:</strong> {{ getValidationFixHint('variables') }}</span>
-      </div>
-      <button mat-button (click)="validateVariables()">Variablen prüfen</button>
+
       @if (isVariableValidationRunning) {
         <div class="loading-container">
           <mat-spinner class="mat-spinner"></mat-spinner>
@@ -255,7 +197,7 @@
         @if (invalidVariables.length > 0) {
           <div class="actions-container">
             <button mat-button (click)="toggleExpansion()">
-              {{ expandedPanel ? 'Liste einklappen' : 'Liste ausklappen' }}
+              {{ expandedPanel ? 'Details ausblenden' : 'Details anzeigen' }}
             </button>
             <button mat-button (click)="selectAllResponses()">Alle auswählen</button>
             <button mat-button (click)="deselectAllResponses()">Auswahl aufheben</button>
@@ -319,21 +261,55 @@
           <span>Prüfung bestanden: Keine ungültigen Variablen gefunden.</span>
         </div>
       }
-      <div>
-        <button mat-button matStepperNext>Weiter</button>
+    </mat-expansion-panel>
+
+    <mat-expansion-panel>
+      <mat-expansion-panel-header
+        class="validation-panel-header"
+        [ngClass]="{
+          'validation-running': getValidationStatus('variableTypes') === 'running',
+          'validation-error': getValidationStatus('variableTypes') === 'failed',
+          'validation-success': getValidationStatus('variableTypes') === 'success',
+          'validation-not-run': getValidationStatus('variableTypes') === 'not-run'
+        }">
+        <mat-panel-title>
+          <mat-icon *ngIf="getValidationStatus('variableTypes') === 'running'">hourglass_empty</mat-icon>
+          <mat-icon *ngIf="getValidationStatus('variableTypes') === 'failed'">error</mat-icon>
+          <mat-icon *ngIf="getValidationStatus('variableTypes') === 'success'">check_circle</mat-icon>
+          <mat-icon *ngIf="getValidationStatus('variableTypes') === 'not-run'">radio_button_unchecked</mat-icon>
+          <span style="margin-left: 8px;">{{ getValidationLabel('variableTypes') }}</span>
+        </mat-panel-title>
+        <mat-panel-description>
+          @if (getValidationStatus('variableTypes') === 'running') {
+            <span class="validation-badge validation-running">Läuft…</span>
+          } @else if (getValidationStatus('variableTypes') === 'failed') {
+            <span class="validation-badge validation-error">{{ totalInvalidTypeVariables }} ungültig</span>
+          } @else if (getValidationStatus('variableTypes') === 'success') {
+            <span class="validation-badge validation-success">OK</span>
+          } @else {
+            <span class="validation-badge validation-not-run">Nicht ausgeführt</span>
+          }
+        </mat-panel-description>
+      </mat-expansion-panel-header>
+
+      <div class="validation-details">
+        <p class="validation-details-intro">Prüft, ob der Wert der Variable dem definierten Typ entspricht (string, integer, number, boolean, json).</p>
+
+        <div class="validation-guidance">
+          <div class="info-banner">
+            <mat-icon>help</mat-icon>
+            <span><strong>Warum ist das wichtig?</strong> {{ getValidationWhyText('variableTypes') }}</span>
+          </div>
+          <div class="info-banner">
+            <mat-icon>build</mat-icon>
+            <span><strong>So beheben Sie es:</strong> {{ getValidationFixHint('variableTypes') }}</span>
+          </div>
+        </div>
+
+        <div class="validation-actions">
+          <button mat-button (click)="validateVariableTypes()" [disabled]="isAnyValidationRunning()">Variablentypen prüfen</button>
+        </div>
       </div>
-    </mat-step>
-    <mat-step label="Variable ist gültig">
-      <p>Prüft, ob der Wert der Variable dem definierten Typ entspricht (string, integer, number, boolean, json).</p>
-      <div class="info-banner">
-        <mat-icon>help</mat-icon>
-        <span><strong>Warum ist das wichtig?</strong> {{ getValidationWhyText('variableTypes') }}</span>
-      </div>
-      <div class="info-banner">
-        <mat-icon>build</mat-icon>
-        <span><strong>So beheben Sie es:</strong> {{ getValidationFixHint('variableTypes') }}</span>
-      </div>
-      <button mat-button (click)="validateVariableTypes()">Variablentypen prüfen</button>
       @if (isVariableTypeValidationRunning) {
         <div class="loading-container">
           <mat-spinner class="mat-spinner"></mat-spinner>
@@ -348,7 +324,7 @@
         @if (invalidTypeVariables.length > 0) {
           <div class="actions-container">
             <button mat-button (click)="toggleTypeExpansion()">
-              {{ expandedTypePanel ? 'Liste einklappen' : 'Liste ausklappen' }}
+              {{ expandedTypePanel ? 'Details ausblenden' : 'Details anzeigen' }}
             </button>
             <button mat-button (click)="selectAllTypeResponses()">Alle auswählen</button>
             <button mat-button (click)="deselectAllTypeResponses()">Auswahl aufheben</button>
@@ -420,21 +396,55 @@
           <span>Prüfung bestanden: Keine ungültigen Variablenwerte gefunden.</span>
         </div>
       }
-      <div>
-        <button mat-button matStepperNext>Weiter</button>
+    </mat-expansion-panel>
+
+    <mat-expansion-panel>
+      <mat-expansion-panel-header
+        class="validation-panel-header"
+        [ngClass]="{
+          'validation-running': getValidationStatus('responseStatus') === 'running',
+          'validation-error': getValidationStatus('responseStatus') === 'failed',
+          'validation-success': getValidationStatus('responseStatus') === 'success',
+          'validation-not-run': getValidationStatus('responseStatus') === 'not-run'
+        }">
+        <mat-panel-title>
+          <mat-icon *ngIf="getValidationStatus('responseStatus') === 'running'">hourglass_empty</mat-icon>
+          <mat-icon *ngIf="getValidationStatus('responseStatus') === 'failed'">error</mat-icon>
+          <mat-icon *ngIf="getValidationStatus('responseStatus') === 'success'">check_circle</mat-icon>
+          <mat-icon *ngIf="getValidationStatus('responseStatus') === 'not-run'">radio_button_unchecked</mat-icon>
+          <span style="margin-left: 8px;">{{ getValidationLabel('responseStatus') }}</span>
+        </mat-panel-title>
+        <mat-panel-description>
+          @if (getValidationStatus('responseStatus') === 'running') {
+            <span class="validation-badge validation-running">Läuft…</span>
+          } @else if (getValidationStatus('responseStatus') === 'failed') {
+            <span class="validation-badge validation-error">{{ totalInvalidStatusVariables }} ungültig</span>
+          } @else if (getValidationStatus('responseStatus') === 'success') {
+            <span class="validation-badge validation-success">OK</span>
+          } @else {
+            <span class="validation-badge validation-not-run">Nicht ausgeführt</span>
+          }
+        </mat-panel-description>
+      </mat-expansion-panel-header>
+
+      <div class="validation-details">
+        <p class="validation-details-intro">Prüft, ob der Status der Antwort gültig ist (gemäß Unit.xml).</p>
+
+        <div class="validation-guidance">
+          <div class="info-banner">
+            <mat-icon>help</mat-icon>
+            <span><strong>Warum ist das wichtig?</strong> {{ getValidationWhyText('responseStatus') }}</span>
+          </div>
+          <div class="info-banner">
+            <mat-icon>build</mat-icon>
+            <span><strong>So beheben Sie es:</strong> {{ getValidationFixHint('responseStatus') }}</span>
+          </div>
+        </div>
+
+        <div class="validation-actions">
+          <button mat-button (click)="validateResponseStatus()" [disabled]="isAnyValidationRunning()">Antwortstatus prüfen</button>
+        </div>
       </div>
-    </mat-step>
-    <mat-step label="Status ist gültig">
-      <p>Prüft, ob der Status der Antwort gültig ist (gemäß Unit.xml).</p>
-      <div class="info-banner">
-        <mat-icon>help</mat-icon>
-        <span><strong>Warum ist das wichtig?</strong> {{ getValidationWhyText('responseStatus') }}</span>
-      </div>
-      <div class="info-banner">
-        <mat-icon>build</mat-icon>
-        <span><strong>So beheben Sie es:</strong> {{ getValidationFixHint('responseStatus') }}</span>
-      </div>
-      <button mat-button (click)="validateResponseStatus()">Antwortstatus prüfen</button>
       @if (isResponseStatusValidationRunning) {
         <div class="loading-container">
           <mat-spinner class="mat-spinner"></mat-spinner>
@@ -449,7 +459,7 @@
         @if (invalidStatusVariables.length > 0) {
           <div class="actions-container">
             <button mat-button (click)="toggleStatusExpansion()">
-              {{ expandedStatusPanel ? 'Liste einklappen' : 'Liste ausklappen' }}
+              {{ expandedStatusPanel ? 'Details ausblenden' : 'Details anzeigen' }}
             </button>
             <button mat-button (click)="selectAllStatusResponses()">Alle auswählen</button>
             <button mat-button (click)="deselectAllStatusResponses()">Auswahl aufheben</button>
@@ -517,21 +527,55 @@
           <span>Prüfung bestanden: Keine ungültigen Antwortstatus gefunden.</span>
         </div>
       }
-      <div>
-        <button mat-button matStepperNext>Weiter</button>
+    </mat-expansion-panel>
+
+    <mat-expansion-panel>
+      <mat-expansion-panel-header
+        class="validation-panel-header"
+        [ngClass]="{
+          'validation-running': getValidationStatus('duplicateResponses') === 'running',
+          'validation-error': getValidationStatus('duplicateResponses') === 'failed',
+          'validation-success': getValidationStatus('duplicateResponses') === 'success',
+          'validation-not-run': getValidationStatus('duplicateResponses') === 'not-run'
+        }">
+        <mat-panel-title>
+          <mat-icon *ngIf="getValidationStatus('duplicateResponses') === 'running'">hourglass_empty</mat-icon>
+          <mat-icon *ngIf="getValidationStatus('duplicateResponses') === 'failed'">error</mat-icon>
+          <mat-icon *ngIf="getValidationStatus('duplicateResponses') === 'success'">check_circle</mat-icon>
+          <mat-icon *ngIf="getValidationStatus('duplicateResponses') === 'not-run'">radio_button_unchecked</mat-icon>
+          <span style="margin-left: 8px;">{{ getValidationLabel('duplicateResponses') }}</span>
+        </mat-panel-title>
+        <mat-panel-description>
+          @if (getValidationStatus('duplicateResponses') === 'running') {
+            <span class="validation-badge validation-running">Läuft…</span>
+          } @else if (getValidationStatus('duplicateResponses') === 'failed') {
+            <span class="validation-badge validation-error">{{ totalDuplicateResponses }} Duplikate</span>
+          } @else if (getValidationStatus('duplicateResponses') === 'success') {
+            <span class="validation-badge validation-success">OK</span>
+          } @else {
+            <span class="validation-badge validation-not-run">Nicht ausgeführt</span>
+          }
+        </mat-panel-description>
+      </mat-expansion-panel-header>
+
+      <div class="validation-details">
+        <p class="validation-details-intro">Prüft, ob doppelte Antworten für die gleiche Variable, Unit und Testperson existieren.</p>
+
+        <div class="validation-guidance">
+          <div class="info-banner">
+            <mat-icon>help</mat-icon>
+            <span><strong>Warum ist das wichtig?</strong> {{ getValidationWhyText('duplicateResponses') }}</span>
+          </div>
+          <div class="info-banner">
+            <mat-icon>build</mat-icon>
+            <span><strong>So beheben Sie es:</strong> {{ getValidationFixHint('duplicateResponses') }}</span>
+          </div>
+        </div>
+
+        <div class="validation-actions">
+          <button mat-button (click)="validateDuplicateResponses()" [disabled]="isAnyValidationRunning()">Duplikate prüfen</button>
+        </div>
       </div>
-    </mat-step>
-    <mat-step label="Doppelte Antworten">
-      <p>Prüft, ob doppelte Antworten für die gleiche Variable, Unit und Testperson existieren.</p>
-      <div class="info-banner">
-        <mat-icon>help</mat-icon>
-        <span><strong>Warum ist das wichtig?</strong> {{ getValidationWhyText('duplicateResponses') }}</span>
-      </div>
-      <div class="info-banner">
-        <mat-icon>build</mat-icon>
-        <span><strong>So beheben Sie es:</strong> {{ getValidationFixHint('duplicateResponses') }}</span>
-      </div>
-      <button mat-button (click)="validateDuplicateResponses()">Duplikate prüfen</button>
       @if (isDuplicateResponsesValidationRunning) {
         <div class="loading-container">
           <mat-spinner class="mat-spinner"></mat-spinner>
@@ -546,7 +590,7 @@
         @if (duplicateResponses.length > 0) {
           <div class="actions-container">
             <button mat-button (click)="toggleDuplicateResponsesExpansion()">
-              {{ expandedDuplicateResponsesPanel ? 'Liste einklappen' : 'Liste ausklappen' }}
+              {{ expandedDuplicateResponsesPanel ? 'Details ausblenden' : 'Details anzeigen' }}
             </button>
             <button mat-button color="primary" (click)="resolveDuplicateResponses()" [disabled]="isResolvingDuplicateResponses || !hasSelectedDuplicateResponses()">
               @if (isResolvingDuplicateResponses) {
@@ -644,28 +688,55 @@
           <span>Prüfung bestanden: Keine doppelten Antworten gefunden.</span>
         </div>
       }
-      <div>
-        <button mat-button matStepperNext>Weiter</button>
+    </mat-expansion-panel>
+
+    <mat-expansion-panel>
+      <mat-expansion-panel-header
+        class="validation-panel-header"
+        [ngClass]="{
+          'validation-running': getValidationStatus('groupResponses') === 'running',
+          'validation-error': getValidationStatus('groupResponses') === 'failed',
+          'validation-success': getValidationStatus('groupResponses') === 'success',
+          'validation-not-run': getValidationStatus('groupResponses') === 'not-run'
+        }">
+        <mat-panel-title>
+          <mat-icon *ngIf="getValidationStatus('groupResponses') === 'running'">hourglass_empty</mat-icon>
+          <mat-icon *ngIf="getValidationStatus('groupResponses') === 'failed'">error</mat-icon>
+          <mat-icon *ngIf="getValidationStatus('groupResponses') === 'success'">check_circle</mat-icon>
+          <mat-icon *ngIf="getValidationStatus('groupResponses') === 'not-run'">radio_button_unchecked</mat-icon>
+          <span style="margin-left: 8px;">{{ getValidationLabel('groupResponses') }}</span>
+        </mat-panel-title>
+        <mat-panel-description>
+          @if (getValidationStatus('groupResponses') === 'running') {
+            <span class="validation-badge validation-running">Läuft…</span>
+          } @else if (getValidationStatus('groupResponses') === 'failed') {
+            <span class="validation-badge validation-error">Unvollständig</span>
+          } @else if (getValidationStatus('groupResponses') === 'success') {
+            <span class="validation-badge validation-success">OK</span>
+          } @else {
+            <span class="validation-badge validation-not-run">Nicht ausgeführt</span>
+          }
+        </mat-panel-description>
+      </mat-expansion-panel-header>
+
+      <div class="validation-details">
+        <p class="validation-details-intro">Prüft, ob Antworten für alle Testperson-Gruppen vorliegen.</p>
+
+        <div class="validation-guidance">
+          <div class="info-banner">
+            <mat-icon>help</mat-icon>
+            <span><strong>Warum ist das wichtig?</strong> {{ getValidationWhyText('groupResponses') }}</span>
+          </div>
+          <div class="info-banner">
+            <mat-icon>build</mat-icon>
+            <span><strong>So beheben Sie es:</strong> {{ getValidationFixHint('groupResponses') }}</span>
+          </div>
+        </div>
+
+        <div class="validation-actions">
+          <button mat-button (click)="validateGroupResponses()" [disabled]="isAnyValidationRunning()">Gruppenantworten prüfen</button>
+        </div>
       </div>
-    </mat-step>
-    <mat-step label="Antwort vorgesehen">
-      <p>Prüft, ob die Antwort für die Kombination Testperson x Booklet x Unit vorgesehen ist.</p>
-      <div>
-        <button mat-button matStepperNext>Daten bereinigen</button>
-        <button mat-button matStepperNext>Daten behalten</button>
-      </div>
-    </mat-step>
-    <mat-step label="Antworten für alle Gruppen">
-      <p>Prüft, ob Antworten für alle Testperson-Gruppen vorliegen.</p>
-      <div class="info-banner">
-        <mat-icon>help</mat-icon>
-        <span><strong>Warum ist das wichtig?</strong> {{ getValidationWhyText('groupResponses') }}</span>
-      </div>
-      <div class="info-banner">
-        <mat-icon>build</mat-icon>
-        <span><strong>So beheben Sie es:</strong> {{ getValidationFixHint('groupResponses') }}</span>
-      </div>
-      <button mat-button (click)="validateGroupResponses()">Gruppenantworten prüfen</button>
       @if (isGroupResponsesValidationRunning) {
         <div class="loading-container">
           <mat-spinner class="mat-spinner"></mat-spinner>
@@ -675,11 +746,11 @@
       @if (groupResponsesResult) {
         <div>
           @if (groupResponsesResult.testTakersFound) {
-            <p>TestTakers gefunden und analysiert.</p>
+            <p>Testpersonen-Datei gefunden und analysiert.</p>
           } @else {
             <div class="validation-result validation-error">
               <mat-icon>error</mat-icon>
-              <span>Prüfung fehlgeschlagen: Keine TestTakers gefunden.</span>
+              <span>Prüfung fehlgeschlagen: Keine Testpersonen-Datei (TestTakers) gefunden.</span>
             </div>
           }
           @if (groupResponsesResult.groupsWithResponses.length > 0) {
@@ -736,11 +807,8 @@
           }
         </div>
       }
-      <div>
-        <button mat-button matStepperNext>Weiter</button>
-      </div>
-    </mat-step>
-  </mat-stepper>
+    </mat-expansion-panel>
+  </mat-accordion>
 </mat-dialog-content>
 <mat-dialog-actions align="end">
   <button mat-button mat-dialog-close>Abbrechen</button>
