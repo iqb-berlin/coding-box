@@ -339,7 +339,6 @@ export class UploadResultsService {
                 rowIndex
               });
             }
-
           });
 
           const basePersons = await this.personService.createPersonList(rowData, workspace_id);

@@ -1004,12 +1004,10 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
                 validationResult
               );
 
-              this.duplicateResponses = typedResult.data.map(duplicate => {
-                return {
-                  ...duplicate,
-                  key: this.buildDuplicateKey(duplicate)
-                };
-              });
+              this.duplicateResponses = typedResult.data.map(duplicate => ({
+                ...duplicate,
+                key: this.buildDuplicateKey(duplicate)
+              }));
 
               this.totalDuplicateResponses = typedResult.total;
               this.duplicateResponsesResult = typedResult;

@@ -111,4 +111,4 @@ export class WorkspaceSettingsService {
       'Controls how responses are aggregated by value similarity for coding case distribution'
     );
   }
- }
+}

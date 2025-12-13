@@ -97,7 +97,6 @@ export class CodeSelectorComponent implements OnChanges {
     const variableCoding = scheme.variableCodings.find((v: VariableCoding) => v.alias === this.variableId);
     if (variableCoding) {
       this.variableManualInstruction = variableCoding.manualInstruction || null;
-      console.log(this.variableManualInstruction);
       const codeItems: SelectableItem[] = variableCoding.codes.map((code: Code) => ({
         id: code.id,
         label: code.label,

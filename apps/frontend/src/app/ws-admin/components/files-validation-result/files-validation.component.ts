@@ -155,9 +155,9 @@ export class FilesValidationDialogComponent {
     }
 
     const ref = this.dialog.open<
-      AffectedUnitsDialogComponent,
-      { title: string; units: string[] },
-      AffectedUnitsDialogResult
+    AffectedUnitsDialogComponent,
+    { title: string; units: string[] },
+    AffectedUnitsDialogResult
     >(AffectedUnitsDialogComponent, {
       width: '600px',
       maxWidth: '95vw',

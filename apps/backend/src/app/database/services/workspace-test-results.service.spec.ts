@@ -1,5 +1,9 @@
-import { DataSource } from 'typeorm';
+import { DataSource, EntityManager, Repository } from 'typeorm';
 import { WorkspaceTestResultsService } from './workspace-test-results.service';
+import { UnitTagService } from './unit-tag.service';
+import { JournalService } from './journal.service';
+import { CacheService } from '../../cache/cache.service';
+import { CodingListService } from './coding-list.service';
 
 describe('WorkspaceTestResultsService.resolveDuplicateResponses', () => {
   it('should delete only non-selected duplicates for the same unit+variable+subform+login', async () => {
@@ -14,25 +18,35 @@ describe('WorkspaceTestResultsService.resolveDuplicateResponses', () => {
 
     let deletedIds: number[] = [];
 
-    const manager = {
-      createQueryBuilder: jest.fn()
-    } as any;
+    type ManagerMock = {
+      createQueryBuilder: jest.MockedFunction<(entity?: unknown) => unknown>;
+    };
+
+    const manager: ManagerMock = {
+      createQueryBuilder: jest.fn<(entity?: unknown) => unknown>()
+    };
 
     const makeSelectQb = () => {
-      const state: { params: Record<string, any> } = { params: {} };
-      const qb: any = {
+      const state: { params: Record<string, unknown> } = { params: {} };
+      const qb: {
+        innerJoin: jest.Mock;
+        where: jest.Mock;
+        andWhere: jest.Mock;
+        select: jest.Mock;
+        getMany: jest.Mock;
+      } = {
         innerJoin: jest.fn().mockReturnThis(),
-        where: jest.fn((_: string, params?: Record<string, any>) => {
+        where: jest.fn((_: string, params?: Record<string, unknown>) => {
           state.params = { ...state.params, ...(params || {}) };
           return qb;
         }),
-        andWhere: jest.fn((_: string, params?: Record<string, any>) => {
+        andWhere: jest.fn((_: string, params?: Record<string, unknown>) => {
           state.params = { ...state.params, ...(params || {}) };
           return qb;
         }),
         select: jest.fn().mockReturnThis(),
         getMany: jest.fn(async () => {
-          const key = `${state.params.unitId}|${state.params.variableId}|${state.params.subform}|${state.params.testTakerLogin}`;
+          const key = `${String(state.params.unitId)}|${String(state.params.variableId)}|${String(state.params.subform)}|${String(state.params.testTakerLogin)}`;
           const ids = responsesByGroup[key] || [];
           return ids.map(id => ({ id }));
         })
@@ -42,11 +56,16 @@ describe('WorkspaceTestResultsService.resolveDuplicateResponses', () => {
 
     const makeDeleteQb = () => {
       const state: { deleteIds: number[] } = { deleteIds: [] };
-      const qb: any = {
+      const qb: {
+        delete: jest.Mock;
+        from: jest.Mock;
+        where: jest.Mock;
+        execute: jest.Mock;
+      } = {
         delete: jest.fn().mockReturnThis(),
         from: jest.fn().mockReturnThis(),
-        where: jest.fn((_: string, params?: Record<string, any>) => {
-          state.deleteIds = (params?.deleteIds || []) as number[];
+        where: jest.fn((_: string, params?: { deleteIds?: number[] }) => {
+          state.deleteIds = params?.deleteIds || [];
           deletedIds = state.deleteIds;
           return qb;
         }),
@@ -62,25 +81,25 @@ describe('WorkspaceTestResultsService.resolveDuplicateResponses', () => {
       return makeDeleteQb();
     });
 
-    const dataSource: DataSource = {
-      transaction: (fn: any) => fn(manager)
-    } as any;
+    const dataSource = {
+      transaction: async <T>(fn: (entityManager: EntityManager) => Promise<T> | T): Promise<T> => fn(manager as unknown as EntityManager)
+    } as unknown as DataSource;
 
     const service = new WorkspaceTestResultsService(
-      {} as any as any, // personsRepository
-      {} as any as any, // unitRepository
-      {} as any as any, // bookletRepository
-      {} as any as any, // responseRepository
-      {} as any as any, // bookletInfoRepository
-      {} as any as any, // bookletLogRepository
-      {} as any as any, // sessionRepository
-      {} as any as any, // unitLogRepository
-      {} as any as any, // chunkRepository
+      {} as unknown as Repository<unknown>, // personsRepository
+      {} as unknown as Repository<unknown>, // unitRepository
+      {} as unknown as Repository<unknown>, // bookletRepository
+      {} as unknown as Repository<unknown>, // responseRepository
+      {} as unknown as Repository<unknown>, // bookletInfoRepository
+      {} as unknown as Repository<unknown>, // bookletLogRepository
+      {} as unknown as Repository<unknown>, // sessionRepository
+      {} as unknown as Repository<unknown>, // unitLogRepository
+      {} as unknown as Repository<unknown>, // chunkRepository
       dataSource,
-      {} as any, // unitTagService
-      journalService as any,
-      {} as any, // cacheService
-      {} as any // codingListService
+      {} as unknown as UnitTagService, // unitTagService
+      journalService as unknown as JournalService,
+      {} as unknown as CacheService, // cacheService
+      {} as unknown as CodingListService // codingListService
     );
 
     const resolutionMap = {

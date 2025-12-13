@@ -92,13 +92,13 @@ export class WorkspaceTestResultsController {
   async getOverview(
     @Param('workspace_id', ParseIntPipe) workspaceId: number
   ): Promise<{
-      testPersons: number;
-      testGroups: number;
-      uniqueBooklets: number;
-      uniqueUnits: number;
-      uniqueResponses: number;
-      responseStatusCounts: Record<string, number>;
-    }> {
+        testPersons: number;
+        testGroups: number;
+        uniqueBooklets: number;
+        uniqueUnits: number;
+        uniqueResponses: number;
+        responseStatusCounts: Record<string, number>;
+      }> {
     try {
       return await this.workspaceTestResultsService.getWorkspaceTestResultsOverview(workspaceId);
     } catch (error) {
@@ -252,7 +252,12 @@ export class WorkspaceTestResultsController {
     schema: {
       type: 'object',
       properties: {
-        data: { type: 'array', items: { type: 'object' } },
+        data: {
+          type: 'array',
+          items: {
+            type: 'object'
+          }
+        },
         total: { type: 'number' },
         page: { type: 'number' },
         limit: { type: 'number' }
@@ -301,26 +306,42 @@ export class WorkspaceTestResultsController {
     description: 'Returns distinct possible values for flat response filters, taking currently active filters into account.'
   })
   @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
-  @ApiQuery({ name: 'code', required: false, description: 'Filter by person code (ILIKE)', type: String })
-  @ApiQuery({ name: 'group', required: false, description: 'Filter by group (ILIKE)', type: String })
-  @ApiQuery({ name: 'login', required: false, description: 'Filter by login (ILIKE)', type: String })
-  @ApiQuery({ name: 'booklet', required: false, description: 'Filter by booklet name (ILIKE)', type: String })
-  @ApiQuery({ name: 'unit', required: false, description: 'Filter by unit alias/name (ILIKE)', type: String })
-  @ApiQuery({ name: 'response', required: false, description: 'Filter by response variable id (ILIKE)', type: String })
-  @ApiQuery({ name: 'responseValue', required: false, description: 'Filter by response value (ILIKE)', type: String })
-  @ApiQuery({ name: 'tags', required: false, description: 'Filter by unit tag (ILIKE)', type: String })
+  @ApiQuery({
+    name: 'code', required: false, description: 'Filter by person code (ILIKE)', type: String
+  })
+  @ApiQuery({
+    name: 'group', required: false, description: 'Filter by group (ILIKE)', type: String
+  })
+  @ApiQuery({
+    name: 'login', required: false, description: 'Filter by login (ILIKE)', type: String
+  })
+  @ApiQuery({
+    name: 'booklet', required: false, description: 'Filter by booklet name (ILIKE)', type: String
+  })
+  @ApiQuery({
+    name: 'unit', required: false, description: 'Filter by unit alias/name (ILIKE)', type: String
+  })
+  @ApiQuery({
+    name: 'response', required: false, description: 'Filter by response variable id (ILIKE)', type: String
+  })
+  @ApiQuery({
+    name: 'responseValue', required: false, description: 'Filter by response value (ILIKE)', type: String
+  })
+  @ApiQuery({
+    name: 'tags', required: false, description: 'Filter by unit tag (ILIKE)', type: String
+  })
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @RequireAccessLevel(3)
   async findFlatResponseFilterOptions(
     @Param('workspace_id') workspace_id: number,
-                           @Query('code') code?: string,
-                           @Query('group') group?: string,
-                           @Query('login') login?: string,
-                           @Query('booklet') booklet?: string,
-                           @Query('unit') unit?: string,
-                           @Query('response') response?: string,
-                           @Query('responseValue') responseValue?: string,
-                           @Query('tags') tags?: string
+      @Query('code') code?: string,
+      @Query('group') group?: string,
+      @Query('login') login?: string,
+      @Query('booklet') booklet?: string,
+      @Query('unit') unit?: string,
+      @Query('response') response?: string,
+      @Query('responseValue') responseValue?: string,
+      @Query('tags') tags?: string
   ): Promise<{ codes: string[]; groups: string[]; logins: string[]; booklets: string[]; units: string[]; responses: string[]; tags: string[] }> {
     return this.workspaceTestResultsService.findFlatResponseFilterOptions(workspace_id, {
       code,
@@ -391,11 +412,11 @@ export class WorkspaceTestResultsController {
     @Param('workspace_id') workspace_id: number,
       @Param('unitId', ParseIntPipe) unitId: number
   ): Promise<{
-      bookletId: number;
-      logs: { id: number; bookletid: number; ts: string; key: string; parameter: string }[];
-      sessions: { id: number; browser: string; os: string; screen: string; ts: string }[];
-      units: { id: number; bookletid: number; name: string; alias: string | null; logs: { id: number; unitid: number; ts: string; key: string; parameter: string }[] }[];
-    }> {
+        bookletId: number;
+        logs: { id: number; bookletid: number; ts: string; key: string; parameter: string }[];
+        sessions: { id: number; browser: string; os: string; screen: string; ts: string }[];
+        units: { id: number; bookletid: number; name: string; alias: string | null; logs: { id: number; unitid: number; ts: string; key: string; parameter: string }[] }[];
+      }> {
     return this.workspaceTestResultsService.findBookletLogsByUnitId(workspace_id, unitId);
   }
 
@@ -1195,9 +1216,22 @@ export class WorkspaceTestResultsController {
     try {
       const mode = (personMatchMode || '').toLowerCase() === 'loose' ? 'loose' : undefined;
       const requestedOverwriteMode = (overwriteMode || '').toLowerCase();
-      const finalOverwriteMode = !shouldOverwrite ? 'skip' : (requestedOverwriteMode === 'replace' ? 'replace' : (requestedOverwriteMode === 'merge' ? 'merge' : 'skip'));
+      const finalOverwriteMode = (() => {
+        if (!shouldOverwrite) {
+          return 'skip';
+        }
+        if (requestedOverwriteMode === 'replace') {
+          return 'replace';
+        }
+        if (requestedOverwriteMode === 'merge') {
+          return 'merge';
+        }
+        return 'skip';
+      })();
       const finalScope = (scope || '').toLowerCase();
-      const normalizedScope = (finalScope === 'workspace' || finalScope === 'person' || finalScope === 'group' || finalScope === 'booklet' || finalScope === 'unit' || finalScope === 'response') ? finalScope : 'person';
+      const allowedScopes = ['workspace', 'person', 'group', 'booklet', 'unit', 'response'] as const;
+      type UploadScope = (typeof allowedScopes)[number];
+      const normalizedScope: UploadScope = (allowedScopes as readonly string[]).includes(finalScope) ? (finalScope as UploadScope) : 'person';
       return await this.uploadResults.uploadTestResults(
         workspace_id,
         files,
@@ -1205,7 +1239,7 @@ export class WorkspaceTestResultsController {
         shouldOverwrite,
         mode,
         finalOverwriteMode,
-        normalizedScope as any,
+        normalizedScope,
         {
           groupName,
           bookletName,
