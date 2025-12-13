@@ -1058,7 +1058,7 @@ export class WorkspaceTestResultsController {
   @ApiQuery({
     name: 'personMatchMode',
     required: false,
-    description: 'Person matching mode for import (strict: group+login+code; loose: login+code). If omitted, workspace setting test-results-person-match-mode is used (default strict).'
+    description: 'Person matching mode for import (strict: group+login+code; loose: login+code). Default: strict.'
   })
   @ApiQuery({
     name: 'overwriteMode',

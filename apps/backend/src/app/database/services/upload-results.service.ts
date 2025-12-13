@@ -1,11 +1,9 @@
 import {
   Injectable, Logger
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
 import 'multer';
 import * as csv from 'fast-csv';
 import { Readable } from 'stream';
-import { Repository } from 'typeorm';
 import { FileIo } from '../../admin/workspace/file-io.interface';
 import { Log, Person, Response } from './shared-types';
 import { PersonService } from './person.service';
@@ -14,7 +12,6 @@ import {
   TestResultsUploadResultDto,
   TestResultsUploadStatsDto
 } from '../../../../../../api-dto/files/test-results-upload-result.dto';
-import { Setting } from '../entities/setting.entity';
 
 type PersonWithoutBooklets = Omit<Person, 'booklets'>;
 
@@ -23,9 +20,7 @@ export class UploadResultsService {
   private readonly logger = new Logger(UploadResultsService.name);
   person: PersonWithoutBooklets[] = [];
   constructor(
-    private readonly personService: PersonService,
-    @InjectRepository(Setting)
-    private readonly settingRepository: Repository<Setting>
+    private readonly personService: PersonService
   ) {
   }
 
@@ -116,21 +111,6 @@ export class UploadResultsService {
     return filtered;
   }
 
-  private async getWorkspacePersonMatchMode(workspaceId: number): Promise<'strict' | 'loose'> {
-    const settingKey = `workspace-${workspaceId}-test-results-person-match-mode`;
-    const setting = await this.settingRepository.findOne({ where: { key: settingKey } });
-    if (!setting) {
-      return 'strict';
-    }
-    try {
-      const parsed = JSON.parse(setting.content);
-      const mode = (parsed?.mode || 'strict').toString().toLowerCase();
-      return mode === 'loose' ? 'loose' : 'strict';
-    } catch {
-      return 'strict';
-    }
-  }
-
   private zeroStats(): TestResultsUploadStatsDto {
     return {
       testPersons: 0,
@@ -165,7 +145,7 @@ export class UploadResultsService {
     this.logger.log(`Uploading test results for workspace ${workspace_id} (overwrite existing: ${overwriteExisting})`);
     const before = await this.personService.getWorkspaceUploadStats(workspace_id);
 
-    const effectivePersonMatchMode: 'strict' | 'loose' = personMatchMode || await this.getWorkspacePersonMatchMode(workspace_id);
+    const effectivePersonMatchMode: 'strict' | 'loose' = personMatchMode || 'strict';
 
     const MAX_FILES_LENGTH = 1000;
     if (originalFiles.length > MAX_FILES_LENGTH) {

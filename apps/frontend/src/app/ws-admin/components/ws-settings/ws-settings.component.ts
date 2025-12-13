@@ -20,8 +20,7 @@ import { JournalComponent } from '../journal/journal.component';
 import { EditMissingsProfilesDialogComponent } from '../../../coding/components/edit-missings-profiles-dialog/edit-missings-profiles-dialog.component';
 import { ReplayStatisticsDialogComponent } from '../replay-statistics-dialog/replay-statistics-dialog.component';
 import { AccessRightsMatrixDialogComponent } from '../access-rights-matrix-dialog/access-rights-matrix-dialog.component';
-import { WorkspaceSettingsService, TestResultsPersonMatchMode } from '../../services/workspace-settings.service';
-import { MatOption, MatSelect } from '@angular/material/select';
+import { WorkspaceSettingsService } from '../../services/workspace-settings.service';
 
 @Component({
   selector: 'coding-box-ws-settings',
@@ -42,9 +41,7 @@ import { MatOption, MatSelect } from '@angular/material/select';
     MatTooltipModule,
     CdkTextareaAutosize,
     WsAccessRightsComponent,
-    JournalComponent,
-    MatSelect,
-    MatOption
+    JournalComponent
   ]
 })
 export class WsSettingsComponent implements OnInit {
@@ -58,7 +55,6 @@ export class WsSettingsComponent implements OnInit {
   authToken: string | null = null;
   duration = 60;
   autoFetchCodingStatistics = true;
-  testResultsPersonMatchMode: TestResultsPersonMatchMode = 'strict';
   isExporting = false;
 
   ngOnInit(): void {
@@ -68,39 +64,7 @@ export class WsSettingsComponent implements OnInit {
         .subscribe(enabled => {
           this.autoFetchCodingStatistics = enabled;
         });
-
-      this.workspaceSettingsService.getTestResultsPersonMatchMode(workspaceId)
-        .subscribe(mode => {
-          this.testResultsPersonMatchMode = mode;
-        });
     }
-  }
-
-  setTestResultsPersonMatchMode(mode: TestResultsPersonMatchMode): void {
-    const workspaceId = this.appService.selectedWorkspaceId;
-    if (!workspaceId) {
-      return;
-    }
-    const previous = this.testResultsPersonMatchMode;
-    this.testResultsPersonMatchMode = mode;
-    this.workspaceSettingsService.setTestResultsPersonMatchMode(workspaceId, mode)
-      .subscribe({
-        next: () => {
-          this.snackBar.open(
-            'Einstellung gespeichert',
-            this.translateService.instant('close'),
-            { duration: 3000 }
-          );
-        },
-        error: () => {
-          this.testResultsPersonMatchMode = previous;
-          this.snackBar.open(
-            this.translateService.instant('ws-settings.error-saving-setting'),
-            this.translateService.instant('close'),
-            { duration: 3000, panelClass: ['error-snackbar'] }
-          );
-        }
-      });
   }
 
   openReplayStatistics(): void {
