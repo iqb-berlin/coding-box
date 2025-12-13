@@ -48,21 +48,24 @@ export class WorkspaceResponseValidationService {
     const unitFiles = await this.filesRepository.find({
       where: { workspace_id: workspaceId, file_type: 'Unit' }
     });
-    const unitVariables = new Map<string, Set<string>>();
+    const unitVariables = new Map<string, { aliases: Set<string>; ids: Set<string> }>();
     for (const unitFile of unitFiles) {
       try {
         const xmlContent = unitFile.data.toString();
         const parsedXml = await parseStringPromise(xmlContent, { explicitArray: false });
         if (parsedXml.Unit && parsedXml.Unit.Metadata && parsedXml.Unit.Metadata.Id) {
           const unitName = parsedXml.Unit.Metadata.Id;
-          const variables = new Set<string>();
+          const variables = { aliases: new Set<string>(), ids: new Set<string>() };
           if (parsedXml.Unit.BaseVariables && parsedXml.Unit.BaseVariables.Variable) {
             const baseVariables = Array.isArray(parsedXml.Unit.BaseVariables.Variable) ?
               parsedXml.Unit.BaseVariables.Variable :
               [parsedXml.Unit.BaseVariables.Variable];
             for (const variable of baseVariables) {
-              if (variable.$.alias && variable.$.type !== 'no-value') {
-                variables.add(variable.$.alias);
+              if (variable.$?.alias) {
+                variables.aliases.add(variable.$.alias);
+              }
+              if (variable.$?.id) {
+                variables.ids.add(variable.$.id);
               }
             }
           }
@@ -185,7 +188,11 @@ export class WorkspaceResponseValidationService {
       }
 
       const unitVars = unitVariables.get(unitName);
-      if (!unitVars || !unitVars.has(variableId)) {
+      const isDefinedInUnit = !!unitVars && (
+        unitVars.aliases.has(variableId) ||
+        (!unitVars.aliases.has(variableId) && unitVars.ids.has(variableId))
+      );
+      if (!isDefinedInUnit) {
         invalidVariables.push({
           fileName: `${unitName}`,
           variableId: variableId,
