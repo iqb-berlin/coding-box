@@ -90,6 +90,15 @@ export interface BookletLogsForUnitResponse {
   units: { id: number; bookletid: number; name: string; alias: string | null; logs: UnitLogRow[] }[];
 }
 
+export interface TestResultsOverviewResponse {
+  testPersons: number;
+  testGroups: number;
+  uniqueBooklets: number;
+  uniqueUnits: number;
+  uniqueResponses: number;
+  responseStatusCounts: Record<string, number>;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -114,6 +123,15 @@ export class TestResultService {
 
   getPersonTestResults(workspaceId: number, personId: number): Observable<PersonTestResult[]> {
     return this.cacheService.getPersonTestResults(workspaceId, personId);
+  }
+
+  getWorkspaceOverview(workspaceId: number): Observable<TestResultsOverviewResponse | null> {
+    return this.http.get<TestResultsOverviewResponse>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/test-results/overview`,
+      { headers: this.authHeader }
+    ).pipe(
+      catchError(() => of(null))
+    );
   }
 
   getFlatResponses(

@@ -46,7 +46,7 @@ import { MatDivider } from '@angular/material/divider';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
-import { TestResultService } from '../../../services/test-result.service';
+import { TestResultService, TestResultsOverviewResponse } from '../../../services/test-result.service';
 import { TestCenterImportComponent } from '../test-center-import/test-center-import.component';
 import { LogDialogComponent } from '../booklet-log-dialog/log-dialog.component';
 import { UnitLogsDialogComponent } from '../unit-logs-dialog/unit-logs-dialog.component';
@@ -247,6 +247,9 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   private validationStatusInterval: number | null = null;
   private isInitialized: boolean = false;
 
+  overview: TestResultsOverviewResponse | null = null;
+  isLoadingOverview: boolean = false;
+
   exportJobId: string | null = null;
   isExporting: boolean = false;
   exportJobStatus: string | null = null;
@@ -265,6 +268,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     });
 
     this.createTestResultsList(0, this.pageSize);
+    this.loadWorkspaceOverview();
     this.startValidationStatusCheck();
     this.checkExistingExportJobs();
     this.isInitialized = true;
@@ -933,6 +937,27 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       });
   }
 
+  private loadWorkspaceOverview(): void {
+    if (!this.appService.selectedWorkspaceId) {
+      this.overview = null;
+      return;
+    }
+
+    this.isLoadingOverview = true;
+    this.testResultService.getWorkspaceOverview(this.appService.selectedWorkspaceId)
+      .subscribe(result => {
+        this.overview = result;
+        this.isLoadingOverview = false;
+      });
+  }
+
+  get overviewStatusCounts(): Array<{ status: string; count: number }> {
+    const map = (this.overview?.responseStatusCounts || {}) as Record<string, number>;
+    return Object.entries(map)
+      .map(([status, count]) => ({ status, count: Number(count) }))
+      .sort((a, b) => b.count - a.count);
+  }
+
   isAllSelected(): boolean {
     const numSelected = this.selection.selected.length;
     const numRows = this.dataSource?.data.length ?? 0;
@@ -979,6 +1004,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
         if (this.appService.selectedWorkspaceId) {
           this.testResultService.invalidateCache(this.appService.selectedWorkspaceId);
         }
+        this.loadWorkspaceOverview();
         this.createTestResultsList(this.pageIndex, this.pageSize, this.getCurrentSearchText());
       }
     });
@@ -1037,6 +1063,8 @@ export class TestResultsComponent implements OnInit, OnDestroy {
               this.testResultService.invalidateCache(this.appService.selectedWorkspaceId);
             }
 
+            this.loadWorkspaceOverview();
+
             this.snackBar.open(
               `Upload abgeschlossen: Δ Testpersonen ${uploadResult.delta.testPersons}, Δ Responses ${uploadResult.delta.uniqueResponses}`,
               'OK',
@@ -1084,6 +1112,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           '',
           { duration: 1000 }
         );
+        this.loadWorkspaceOverview();
         this.createTestResultsList(this.pageIndex, this.pageSize, this.getCurrentSearchText());
       } else {
         this.snackBar.open(

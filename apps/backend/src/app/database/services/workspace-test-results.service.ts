@@ -64,6 +64,90 @@ export class WorkspaceTestResultsService {
     private readonly codingListService: CodingListService
   ) {}
 
+  async getWorkspaceTestResultsOverview(
+    workspaceId: number
+  ): Promise<{
+      testPersons: number;
+      testGroups: number;
+      uniqueBooklets: number;
+      uniqueUnits: number;
+      uniqueResponses: number;
+      responseStatusCounts: Record<string, number>;
+    }> {
+    if (!workspaceId || workspaceId <= 0) {
+      throw new Error('Invalid workspaceId provided');
+    }
+
+    const testPersons = await this.personsRepository.count({
+      where: { workspace_id: workspaceId, consider: true }
+    });
+
+    const groupRows = await this.personsRepository
+      .createQueryBuilder('person')
+      .select('DISTINCT person.group', 'group')
+      .where('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('person.consider = :consider', { consider: true })
+      .getRawMany();
+    const testGroups = groupRows.length;
+
+    const bookletRows = await this.bookletRepository
+      .createQueryBuilder('booklet')
+      .innerJoin('booklet.person', 'person')
+      .innerJoin('booklet.bookletinfo', 'bookletinfo')
+      .select('DISTINCT bookletinfo.name', 'name')
+      .where('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('person.consider = :consider', { consider: true })
+      .getRawMany();
+    const uniqueBooklets = bookletRows.length;
+
+    const unitRows = await this.unitRepository
+      .createQueryBuilder('unit')
+      .innerJoin('unit.booklet', 'booklet')
+      .innerJoin('booklet.person', 'person')
+      .select('DISTINCT COALESCE(unit.alias, unit.name)', 'unitKey')
+      .where('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('person.consider = :consider', { consider: true })
+      .getRawMany();
+    const uniqueUnits = unitRows.length;
+
+    const uniqueResponses = await this.responseRepository
+      .createQueryBuilder('response')
+      .innerJoin('response.unit', 'unit')
+      .innerJoin('unit.booklet', 'booklet')
+      .innerJoin('booklet.person', 'person')
+      .where('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('person.consider = :consider', { consider: true })
+      .getCount();
+
+    const statusRows = await this.responseRepository
+      .createQueryBuilder('response')
+      .innerJoin('response.unit', 'unit')
+      .innerJoin('unit.booklet', 'booklet')
+      .innerJoin('booklet.person', 'person')
+      .where('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('person.consider = :consider', { consider: true })
+      .select('response.status', 'status')
+      .addSelect('COUNT(response.id)', 'count')
+      .groupBy('response.status')
+      .getRawMany<{ status: string | number; count: string | number }>();
+
+    const responseStatusCounts: Record<string, number> = {};
+    (statusRows || []).forEach(r => {
+      const num = Number(r.status);
+      const label = statusNumberToString(num) || String(num);
+      responseStatusCounts[label] = Number(r.count) || 0;
+    });
+
+    return {
+      testPersons,
+      testGroups,
+      uniqueBooklets,
+      uniqueUnits,
+      uniqueResponses,
+      responseStatusCounts
+    };
+  }
+
   async findPersonTestResults(personId: number, workspaceId: number): Promise<{
     id: number;
     name: string;
