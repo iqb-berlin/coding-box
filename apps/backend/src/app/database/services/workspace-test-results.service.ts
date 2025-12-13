@@ -466,6 +466,102 @@ export class WorkspaceTestResultsService {
     return [mapped, total];
   }
 
+  async findFlatResponseFilterOptions(
+    workspaceId: number,
+    options: {
+      code?: string;
+      group?: string;
+      login?: string;
+      booklet?: string;
+      unit?: string;
+      response?: string;
+      responseValue?: string;
+      tags?: string;
+    }
+  ): Promise<{
+      codes: string[];
+      groups: string[];
+      logins: string[];
+      booklets: string[];
+      units: string[];
+      responses: string[];
+      tags: string[];
+    }> {
+    if (!workspaceId || workspaceId <= 0) {
+      throw new Error('Invalid workspaceId provided');
+    }
+
+    const MAX_OPTIONS = 500;
+
+    const code = (options.code || '').trim();
+    const group = (options.group || '').trim();
+    const login = (options.login || '').trim();
+    const booklet = (options.booklet || '').trim();
+    const unit = (options.unit || '').trim();
+    const response = (options.response || '').trim();
+    const responseValue = (options.responseValue || '').trim();
+    const tags = (options.tags || '').trim();
+
+    const baseQb = this.responseRepository
+      .createQueryBuilder('response')
+      .innerJoin('response.unit', 'unit')
+      .innerJoin('unit.booklet', 'bookletEntity')
+      .innerJoin('bookletEntity.person', 'person')
+      .innerJoin('bookletEntity.bookletinfo', 'bookletinfo')
+      .leftJoin('unit.tags', 'unitTag')
+      .where('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('person.consider = :consider', { consider: true });
+
+    if (code) {
+      baseQb.andWhere('person.code ILIKE :code', { code: `%${code}%` });
+    }
+    if (group) {
+      baseQb.andWhere('person.group ILIKE :group', { group: `%${group}%` });
+    }
+    if (login) {
+      baseQb.andWhere('person.login ILIKE :login', { login: `%${login}%` });
+    }
+    if (booklet) {
+      baseQb.andWhere('bookletinfo.name ILIKE :booklet', { booklet: `%${booklet}%` });
+    }
+    if (unit) {
+      baseQb.andWhere('(unit.alias ILIKE :unit OR unit.name ILIKE :unit)', { unit: `%${unit}%` });
+    }
+    if (response) {
+      baseQb.andWhere('response.variableid ILIKE :response', { response: `%${response}%` });
+    }
+    if (responseValue) {
+      baseQb.andWhere('response.value ILIKE :responseValue', { responseValue: `%${responseValue}%` });
+    }
+    if (tags) {
+      baseQb.andWhere('unitTag.tag ILIKE :tags', { tags: `%${tags}%` });
+    }
+
+    const [codeRows, groupRows, loginRows, bookletRows, unitRows, responseRows, tagRows] = await Promise.all([
+      baseQb.clone().select('DISTINCT person.code', 'v').orderBy('person.code', 'ASC').limit(MAX_OPTIONS).getRawMany<{ v: string }>(),
+      baseQb.clone().select('DISTINCT person.group', 'v').orderBy('person.group', 'ASC').limit(MAX_OPTIONS).getRawMany<{ v: string }>(),
+      baseQb.clone().select('DISTINCT person.login', 'v').orderBy('person.login', 'ASC').limit(MAX_OPTIONS).getRawMany<{ v: string }>(),
+      baseQb.clone().select('DISTINCT bookletinfo.name', 'v').orderBy('bookletinfo.name', 'ASC').limit(MAX_OPTIONS).getRawMany<{ v: string }>(),
+      baseQb.clone().select('DISTINCT COALESCE(unit.alias, unit.name)', 'v').orderBy('v', 'ASC').limit(MAX_OPTIONS).getRawMany<{ v: string }>(),
+      baseQb.clone().select('DISTINCT response.variableid', 'v').orderBy('response.variableid', 'ASC').limit(MAX_OPTIONS).getRawMany<{ v: string }>(),
+      baseQb.clone().select('DISTINCT unitTag.tag', 'v').where('unitTag.tag IS NOT NULL').orderBy('unitTag.tag', 'ASC').limit(MAX_OPTIONS).getRawMany<{ v: string }>()
+    ]);
+
+    const mapVals = (rows: Array<{ v: string }>) => (rows || [])
+      .map(r => String(r.v || '').trim())
+      .filter(Boolean);
+
+    return {
+      codes: mapVals(codeRows),
+      groups: mapVals(groupRows),
+      logins: mapVals(loginRows),
+      booklets: mapVals(bookletRows),
+      units: mapVals(unitRows),
+      responses: mapVals(responseRows),
+      tags: mapVals(tagRows)
+    };
+  }
+
   async findUnitLogs(
     workspaceId: number,
     unitId: number

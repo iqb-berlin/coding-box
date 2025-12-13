@@ -8,36 +8,71 @@
       <div class="fx-row-center-center-stretch fx-gap-10" style="margin: 12px 0; flex-wrap: wrap;">
         <mat-form-field appearance="outline" style="width: 180px;">
           <mat-label>Code</mat-label>
-          <input matInput [(ngModel)]="flatFilters.code" (ngModelChange)="onFlatFilterChanged()" />
+          <input matInput [(ngModel)]="flatFilters.code" (ngModelChange)="onFlatFilterChanged()" [matAutocomplete]="codeAuto" />
         </mat-form-field>
+        <mat-autocomplete #codeAuto="matAutocomplete" (optionSelected)="onFlatFilterOptionSelected()">
+          @for (opt of filteredCodes(); track opt) {
+            <mat-option [value]="opt">{{opt}}</mat-option>
+          }
+        </mat-autocomplete>
         <mat-form-field appearance="outline" style="width: 180px;">
           <mat-label>Gruppe</mat-label>
-          <input matInput [(ngModel)]="flatFilters.group" (ngModelChange)="onFlatFilterChanged()" />
+          <input matInput [(ngModel)]="flatFilters.group" (ngModelChange)="onFlatFilterChanged()" [matAutocomplete]="groupAuto" />
         </mat-form-field>
+        <mat-autocomplete #groupAuto="matAutocomplete" (optionSelected)="onFlatFilterOptionSelected()">
+          @for (opt of filteredGroups(); track opt) {
+            <mat-option [value]="opt">{{opt}}</mat-option>
+          }
+        </mat-autocomplete>
         <mat-form-field appearance="outline" style="width: 180px;">
           <mat-label>Login</mat-label>
-          <input matInput [(ngModel)]="flatFilters.login" (ngModelChange)="onFlatFilterChanged()" />
+          <input matInput [(ngModel)]="flatFilters.login" (ngModelChange)="onFlatFilterChanged()" [matAutocomplete]="loginAuto" />
         </mat-form-field>
+        <mat-autocomplete #loginAuto="matAutocomplete" (optionSelected)="onFlatFilterOptionSelected()">
+          @for (opt of filteredLogins(); track opt) {
+            <mat-option [value]="opt">{{opt}}</mat-option>
+          }
+        </mat-autocomplete>
         <mat-form-field appearance="outline" style="width: 220px;">
           <mat-label>Testheft</mat-label>
-          <input matInput [(ngModel)]="flatFilters.booklet" (ngModelChange)="onFlatFilterChanged()" />
+          <input matInput [(ngModel)]="flatFilters.booklet" (ngModelChange)="onFlatFilterChanged()" [matAutocomplete]="bookletAuto" />
         </mat-form-field>
+        <mat-autocomplete #bookletAuto="matAutocomplete" (optionSelected)="onFlatFilterOptionSelected()">
+          @for (opt of filteredBooklets(); track opt) {
+            <mat-option [value]="opt">{{opt}}</mat-option>
+          }
+        </mat-autocomplete>
         <mat-form-field appearance="outline" style="width: 200px;">
           <mat-label>Aufgabe</mat-label>
-          <input matInput [(ngModel)]="flatFilters.unit" (ngModelChange)="onFlatFilterChanged()" />
+          <input matInput [(ngModel)]="flatFilters.unit" (ngModelChange)="onFlatFilterChanged()" [matAutocomplete]="unitAuto" />
         </mat-form-field>
+        <mat-autocomplete #unitAuto="matAutocomplete" (optionSelected)="onFlatFilterOptionSelected()">
+          @for (opt of filteredUnits(); track opt) {
+            <mat-option [value]="opt">{{opt}}</mat-option>
+          }
+        </mat-autocomplete>
         <mat-form-field appearance="outline" style="width: 200px;">
           <mat-label>Variable</mat-label>
-          <input matInput [(ngModel)]="flatFilters.response" (ngModelChange)="onFlatFilterChanged()" />
+          <input matInput [(ngModel)]="flatFilters.response" (ngModelChange)="onFlatFilterChanged()" [matAutocomplete]="responseAuto" />
         </mat-form-field>
+        <mat-autocomplete #responseAuto="matAutocomplete" (optionSelected)="onFlatFilterOptionSelected()">
+          @for (opt of filteredResponses(); track opt) {
+            <mat-option [value]="opt">{{opt}}</mat-option>
+          }
+        </mat-autocomplete>
         <mat-form-field appearance="outline" style="width: 240px;">
           <mat-label>Antwortwert</mat-label>
           <input matInput [(ngModel)]="flatFilters.responseValue" (ngModelChange)="onFlatFilterChanged()" />
         </mat-form-field>
         <mat-form-field appearance="outline" style="width: 220px;">
           <mat-label>Tags</mat-label>
-          <input matInput [(ngModel)]="flatFilters.tags" (ngModelChange)="onFlatFilterChanged()" />
+          <input matInput [(ngModel)]="flatFilters.tags" (ngModelChange)="onFlatFilterChanged()" [matAutocomplete]="tagsAuto" />
         </mat-form-field>
+        <mat-autocomplete #tagsAuto="matAutocomplete" (optionSelected)="onFlatFilterOptionSelected()">
+          @for (opt of filteredTags(); track opt) {
+            <mat-option [value]="opt">{{opt}}</mat-option>
+          }
+        </mat-autocomplete>
         <button mat-stroked-button color="primary" (click)="clearFlatFilters()">
           <mat-icon>clear</mat-icon>
           Filter zurücksetzen
