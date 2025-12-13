@@ -4,6 +4,15 @@ import { UnitTagService } from './unit-tag.service';
 import { JournalService } from './journal.service';
 import { CacheService } from '../../cache/cache.service';
 import { CodingListService } from './coding-list.service';
+import Persons from '../entities/persons.entity';
+import { Unit } from '../entities/unit.entity';
+import { Booklet } from '../entities/booklet.entity';
+import { ResponseEntity } from '../entities/response.entity';
+import { BookletInfo } from '../entities/bookletInfo.entity';
+import { BookletLog } from '../entities/bookletLog.entity';
+import { Session } from '../entities/session.entity';
+import { UnitLog } from '../entities/unitLog.entity';
+import { ChunkEntity } from '../entities/chunk.entity';
 
 describe('WorkspaceTestResultsService.resolveDuplicateResponses', () => {
   it('should delete only non-selected duplicates for the same unit+variable+subform+login', async () => {
@@ -23,7 +32,7 @@ describe('WorkspaceTestResultsService.resolveDuplicateResponses', () => {
     };
 
     const manager: ManagerMock = {
-      createQueryBuilder: jest.fn<(entity?: unknown) => unknown>()
+      createQueryBuilder: jest.fn() as unknown as jest.MockedFunction<(entity?: unknown) => unknown>
     };
 
     const makeSelectQb = () => {
@@ -86,20 +95,20 @@ describe('WorkspaceTestResultsService.resolveDuplicateResponses', () => {
     } as unknown as DataSource;
 
     const service = new WorkspaceTestResultsService(
-      {} as unknown as Repository<unknown>, // personsRepository
-      {} as unknown as Repository<unknown>, // unitRepository
-      {} as unknown as Repository<unknown>, // bookletRepository
-      {} as unknown as Repository<unknown>, // responseRepository
-      {} as unknown as Repository<unknown>, // bookletInfoRepository
-      {} as unknown as Repository<unknown>, // bookletLogRepository
-      {} as unknown as Repository<unknown>, // sessionRepository
-      {} as unknown as Repository<unknown>, // unitLogRepository
-      {} as unknown as Repository<unknown>, // chunkRepository
+      {} as unknown as Repository<Persons>,
+      {} as unknown as Repository<Unit>,
+      {} as unknown as Repository<Booklet>,
+      {} as unknown as Repository<ResponseEntity>,
+      {} as unknown as Repository<BookletInfo>,
+      {} as unknown as Repository<BookletLog>,
+      {} as unknown as Repository<Session>,
+      {} as unknown as Repository<UnitLog>,
+      {} as unknown as Repository<ChunkEntity>,
       dataSource,
-      {} as unknown as UnitTagService, // unitTagService
+      {} as unknown as UnitTagService,
       journalService as unknown as JournalService,
-      {} as unknown as CacheService, // cacheService
-      {} as unknown as CodingListService // codingListService
+      {} as unknown as CacheService,
+      {} as unknown as CodingListService
     );
 
     const resolutionMap = {
