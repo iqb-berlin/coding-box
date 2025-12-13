@@ -49,28 +49,26 @@ export class ValidationTaskRunnerService {
       options?.limit,
       options?.additionalData
     ).pipe(
-      switchMap(createdTask =>
-        this.backendService.pollValidationTask(workspaceId, createdTask.id, pollIntervalMs).pipe(
-          take(1),
-          switchMap(finalTask => {
-            if (finalTask.status === 'failed') {
-              return throwError(() => new Error(finalTask.error || 'Unbekannter Fehler'));
-            }
+      switchMap(createdTask => this.backendService.pollValidationTask(workspaceId, createdTask.id, pollIntervalMs).pipe(
+        take(1),
+        switchMap(finalTask => {
+          if (finalTask.status === 'failed') {
+            return throwError(() => new Error(finalTask.error || 'Unbekannter Fehler'));
+          }
 
-            if (finalTask.status !== 'completed') {
-              return throwError(() => new Error('Unbekannter Task-Status'));
-            }
+          if (finalTask.status !== 'completed') {
+            return throwError(() => new Error('Unbekannter Task-Status'));
+          }
 
-            return this.backendService.getValidationResults(workspaceId, finalTask.id).pipe(
-              map(result => ({
-                createdTask,
-                finalTask,
-                result: result as T
-              }))
-            );
-          })
-        )
-      ),
+          return this.backendService.getValidationResults(workspaceId, finalTask.id).pipe(
+            map(result => ({
+              createdTask,
+              finalTask,
+              result: result as T
+            }))
+          );
+        })
+      ))
     );
   }
 
@@ -80,28 +78,26 @@ export class ValidationTaskRunnerService {
     pollIntervalMs: number = 2000
   ): Observable<RunValidationTaskResult<DeleteTaskResult>> {
     return this.backendService.createDeleteResponsesTask(workspaceId, responseIds).pipe(
-      switchMap(createdTask =>
-        this.backendService.pollValidationTask(workspaceId, createdTask.id, pollIntervalMs).pipe(
-          take(1),
-          switchMap(finalTask => {
-            if (finalTask.status === 'failed') {
-              return throwError(() => new Error(finalTask.error || 'Unbekannter Fehler'));
-            }
+      switchMap(createdTask => this.backendService.pollValidationTask(workspaceId, createdTask.id, pollIntervalMs).pipe(
+        take(1),
+        switchMap(finalTask => {
+          if (finalTask.status === 'failed') {
+            return throwError(() => new Error(finalTask.error || 'Unbekannter Fehler'));
+          }
 
-            if (finalTask.status !== 'completed') {
-              return throwError(() => new Error('Unbekannter Task-Status'));
-            }
+          if (finalTask.status !== 'completed') {
+            return throwError(() => new Error('Unbekannter Task-Status'));
+          }
 
-            return this.backendService.getValidationResults(workspaceId, finalTask.id).pipe(
-              map(result => ({
-                createdTask,
-                finalTask,
-                result: result as DeleteTaskResult
-              }))
-            );
-          })
-        )
-      )
+          return this.backendService.getValidationResults(workspaceId, finalTask.id).pipe(
+            map(result => ({
+              createdTask,
+              finalTask,
+              result: result as DeleteTaskResult
+            }))
+          );
+        })
+      ))
     );
   }
 
@@ -111,28 +107,26 @@ export class ValidationTaskRunnerService {
     pollIntervalMs: number = 2000
   ): Observable<RunValidationTaskResult<DeleteTaskResult>> {
     return this.backendService.createDeleteAllResponsesTask(workspaceId, validationType).pipe(
-      switchMap(createdTask =>
-        this.backendService.pollValidationTask(workspaceId, createdTask.id, pollIntervalMs).pipe(
-          take(1),
-          switchMap(finalTask => {
-            if (finalTask.status === 'failed') {
-              return throwError(() => new Error(finalTask.error || 'Unbekannter Fehler'));
-            }
+      switchMap(createdTask => this.backendService.pollValidationTask(workspaceId, createdTask.id, pollIntervalMs).pipe(
+        take(1),
+        switchMap(finalTask => {
+          if (finalTask.status === 'failed') {
+            return throwError(() => new Error(finalTask.error || 'Unbekannter Fehler'));
+          }
 
-            if (finalTask.status !== 'completed') {
-              return throwError(() => new Error('Unbekannter Task-Status'));
-            }
+          if (finalTask.status !== 'completed') {
+            return throwError(() => new Error('Unbekannter Task-Status'));
+          }
 
-            return this.backendService.getValidationResults(workspaceId, finalTask.id).pipe(
-              map(result => ({
-                createdTask,
-                finalTask,
-                result: result as DeleteTaskResult
-              }))
-            );
-          })
-        )
-      )
+          return this.backendService.getValidationResults(workspaceId, finalTask.id).pipe(
+            map(result => ({
+              createdTask,
+              finalTask,
+              result: result as DeleteTaskResult
+            }))
+          );
+        })
+      ))
     );
   }
 }

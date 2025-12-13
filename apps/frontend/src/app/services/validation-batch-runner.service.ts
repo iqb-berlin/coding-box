@@ -1,6 +1,20 @@
 import { Injectable } from '@angular/core';
-import { Observable, Subscription, from, of, throwError } from 'rxjs';
-import { catchError, concatMap, filter, map, switchMap, take, tap } from 'rxjs/operators';
+import {
+  Observable,
+  Subscription,
+  from,
+  of,
+  throwError
+} from 'rxjs';
+import {
+  catchError,
+  concatMap,
+  filter,
+  map,
+  switchMap,
+  take,
+  tap
+} from 'rxjs/operators';
 import { BackendService } from './backend.service';
 import { ValidationTaskStateService, ValidationResult } from './validation-task-state.service';
 import { ValidationTaskDto } from '../models/validation-task.dto';
@@ -60,7 +74,7 @@ export class ValidationBatchRunnerService {
           finishedAt: Date.now()
         });
       }),
-      map(() => void 0),
+      map(() => undefined),
       catchError(err => {
         const message = err instanceof Error ? err.message : 'Unbekannter Fehler';
         this.validationTaskStateService.setBatchState(workspaceId, {
@@ -92,20 +106,20 @@ export class ValidationBatchRunnerService {
     const existingTaskId = this.validationTaskStateService.getAllTaskIds(workspaceId)[type];
 
     if (!options?.force && existingResult && !existingTaskId) {
-      return of(void 0);
+      return of(undefined);
     }
 
     if (existingTaskId) {
       // Already running (or at least known) -> do not start a second one.
-      return of(void 0);
+      return of(undefined);
     }
 
     return this.backendService.createValidationTask(workspaceId, type).pipe(
       tap(createdTask => {
         this.validationTaskStateService.setTaskId(workspaceId, type, createdTask.id);
       }),
-      switchMap((createdTask: ValidationTaskDto) =>
-        this.backendService.pollValidationTask(workspaceId, createdTask.id, pollIntervalMs).pipe(
+      switchMap((createdTask: ValidationTaskDto) => this.backendService
+        .pollValidationTask(workspaceId, createdTask.id, pollIntervalMs).pipe(
           filter(t => t.status === 'completed' || t.status === 'failed'),
           take(1),
           switchMap(finalTask => {
@@ -118,7 +132,7 @@ export class ValidationBatchRunnerService {
                 details: { error: finalTask.error || 'Unbekannter Fehler' }
               };
               this.validationTaskStateService.setValidationResult(workspaceId, type, result);
-              return of(void 0);
+              return of(undefined);
             }
 
             return this.backendService.getValidationResults(workspaceId, finalTask.id).pipe(
@@ -126,11 +140,10 @@ export class ValidationBatchRunnerService {
                 const validationResult = this.evaluateResult(type, stepResult);
                 this.validationTaskStateService.setValidationResult(workspaceId, type, validationResult);
               }),
-              map(() => void 0)
+              map(() => undefined)
             );
           })
-        )
-      )
+        ))
     );
   }
 

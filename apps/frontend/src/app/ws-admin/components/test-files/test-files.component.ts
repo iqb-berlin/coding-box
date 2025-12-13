@@ -56,7 +56,7 @@ import {
 import { getFileIcon } from '../../utils/file-utils';
 import { GermanPaginatorIntl } from '../../../shared/services/german-paginator-intl.service';
 
-@Component({
+ @Component({
   selector: 'coding-box-test-files',
   templateUrl: './test-files.component.html',
   styleUrls: ['./test-files.component.scss'],
@@ -71,10 +71,6 @@ import { GermanPaginatorIntl } from '../../../shared/services/german-paginator-i
     IsSelectedPipe,
     SearchFilterComponent,
     FileSizePipe,
-    TestFilesUploadConflictsDialogComponent,
-    TestFilesUploadFailedDialogComponent,
-    TestFilesUploadResultDialogComponent,
-    ContentDialogComponent,
     MatIcon,
     MatHeaderCell,
     MatCell,
