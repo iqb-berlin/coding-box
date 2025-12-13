@@ -49,6 +49,16 @@ export interface FlatTestResultResponsesResponse {
   limit: number;
 }
 
+export interface FlatResponseFilterOptionsResponse {
+  codes: string[];
+  groups: string[];
+  logins: string[];
+  booklets: string[];
+  units: string[];
+  responses: string[];
+  tags: string[];
+}
+
 export interface UnitLogRow {
   id: number;
   unitid: number;
@@ -147,6 +157,47 @@ export class TestResultService {
     ).pipe(
       catchError(() => of({
         data: [], total: 0, page: options.page, limit: options.limit
+      }))
+    );
+  }
+
+  getFlatResponseFilterOptions(
+    workspaceId: number,
+    options: {
+      code?: string;
+      group?: string;
+      login?: string;
+      booklet?: string;
+      unit?: string;
+      response?: string;
+      responseValue?: string;
+      tags?: string;
+    }
+  ): Observable<FlatResponseFilterOptionsResponse> {
+    let params = new HttpParams();
+
+    const addIf = (key: string, value?: string) => {
+      const v = (value || '').trim();
+      if (v) {
+        params = params.set(key, v);
+      }
+    };
+
+    addIf('code', options.code);
+    addIf('group', options.group);
+    addIf('login', options.login);
+    addIf('booklet', options.booklet);
+    addIf('unit', options.unit);
+    addIf('response', options.response);
+    addIf('responseValue', options.responseValue);
+    addIf('tags', options.tags);
+
+    return this.http.get<FlatResponseFilterOptionsResponse>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/test-results/flat-responses/filter-options`,
+      { headers: this.authHeader, params }
+    ).pipe(
+      catchError(() => of({
+        codes: [], groups: [], logins: [], booklets: [], units: [], responses: [], tags: []
       }))
     );
   }

@@ -15,7 +15,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { Observable, Subject, Subscription, debounceTime, of, shareReplay, tap } from 'rxjs';
 import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
-import { TestResultService } from '../../../services/test-result.service';
+import { FlatResponseFilterOptionsResponse, TestResultService } from '../../../services/test-result.service';
 import { ConfirmDialogComponent, ConfirmDialogData } from '../../../shared/dialogs/confirm-dialog.component';
 import { BookletInfoDialogComponent } from '../booklet-info-dialog/booklet-info-dialog.component';
 import { UnitInfoDialogComponent } from '../unit-info-dialog/unit-info-dialog.component';
@@ -23,6 +23,7 @@ import { LogDialogComponent } from '../booklet-log-dialog/log-dialog.component';
 import { UnitLogsDialogComponent } from '../unit-logs-dialog/unit-logs-dialog.component';
 import { NoteDialogComponent } from '../note-dialog/note-dialog.component';
 import { UnitNoteDto } from '../../../../../../../api-dto/unit-notes/unit-note.dto';
+import { MatAutocompleteModule } from '@angular/material/autocomplete';
 
 interface FlatResponseRow {
   responseId: number;
@@ -93,7 +94,8 @@ interface BookletFromPersonTestResults {
     MatPaginatorModule,
     MatDividerModule,
     MatProgressSpinnerModule,
-    MatTooltipModule
+    MatTooltipModule,
+    MatAutocompleteModule
   ],
   templateUrl: './test-results-flat-table.component.html',
   styleUrls: ['./test-results-flat-table.component.scss']
@@ -139,18 +141,75 @@ export class TestResultsFlatTableComponent implements OnDestroy {
       tags: ''
     };
 
+  flatFilterOptions: FlatResponseFilterOptionsResponse = {
+    codes: [],
+    groups: [],
+    logins: [],
+    booklets: [],
+    units: [],
+    responses: [],
+    tags: []
+  };
+
   private flatSearchSubject = new Subject<void>();
   private flatSearchSubscription: Subscription;
   private readonly FLAT_FILTER_DEBOUNCE_TIME = 400;
+
+  private suppressNextFlatFilterChange = false;
 
   constructor() {
     this.flatSearchSubscription = this.flatSearchSubject.pipe(
       debounceTime(this.FLAT_FILTER_DEBOUNCE_TIME)
     ).subscribe(() => {
       this.fetchFlatResponses(0, this.flatPageSize);
+      this.fetchFlatResponseFilterOptions();
     });
 
     this.fetchFlatResponses(this.flatPageIndex, this.flatPageSize);
+    this.fetchFlatResponseFilterOptions();
+  }
+
+  onFlatFilterOptionSelected(): void {
+    this.suppressNextFlatFilterChange = true;
+    this.flatPageIndex = 0;
+    this.fetchFlatResponses(0, this.flatPageSize);
+    this.fetchFlatResponseFilterOptions();
+  }
+
+  private filterOptions(options: string[], value: string): string[] {
+    const v = (value || '').trim().toLowerCase();
+    if (!v) {
+      return options || [];
+    }
+    return (options || []).filter(o => String(o).toLowerCase().includes(v));
+  }
+
+  filteredCodes(): string[] {
+    return this.filterOptions(this.flatFilterOptions.codes, this.flatFilters.code);
+  }
+
+  filteredGroups(): string[] {
+    return this.filterOptions(this.flatFilterOptions.groups, this.flatFilters.group);
+  }
+
+  filteredLogins(): string[] {
+    return this.filterOptions(this.flatFilterOptions.logins, this.flatFilters.login);
+  }
+
+  filteredBooklets(): string[] {
+    return this.filterOptions(this.flatFilterOptions.booklets, this.flatFilters.booklet);
+  }
+
+  filteredUnits(): string[] {
+    return this.filterOptions(this.flatFilterOptions.units, this.flatFilters.unit);
+  }
+
+  filteredResponses(): string[] {
+    return this.filterOptions(this.flatFilterOptions.responses, this.flatFilters.response);
+  }
+
+  filteredTags(): string[] {
+    return this.filterOptions(this.flatFilterOptions.tags, this.flatFilters.tags);
   }
 
   openBookletInfoFromFlatRow(row: FlatResponseRow): void {
@@ -410,6 +469,10 @@ export class TestResultsFlatTableComponent implements OnDestroy {
   }
 
   onFlatFilterChanged(): void {
+    if (this.suppressNextFlatFilterChange) {
+      this.suppressNextFlatFilterChange = false;
+      return;
+    }
     this.flatPageIndex = 0;
     this.flatSearchSubject.next();
   }
@@ -427,6 +490,26 @@ export class TestResultsFlatTableComponent implements OnDestroy {
     };
     this.flatPageIndex = 0;
     this.fetchFlatResponses(0, this.flatPageSize);
+    this.fetchFlatResponseFilterOptions();
+  }
+
+  private fetchFlatResponseFilterOptions(): void {
+    if (!this.appService.selectedWorkspaceId) {
+      return;
+    }
+
+    this.testResultService.getFlatResponseFilterOptions(this.appService.selectedWorkspaceId, {
+      code: this.flatFilters.code,
+      group: this.flatFilters.group,
+      login: this.flatFilters.login,
+      booklet: this.flatFilters.booklet,
+      unit: this.flatFilters.unit,
+      response: this.flatFilters.response,
+      responseValue: this.flatFilters.responseValue,
+      tags: this.flatFilters.tags
+    }).subscribe(opts => {
+      this.flatFilterOptions = opts;
+    });
   }
 
   onFlatPaginatorChange(event: PageEvent): void {

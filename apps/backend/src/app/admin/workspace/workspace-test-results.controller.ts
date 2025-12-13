@@ -248,6 +248,45 @@ export class WorkspaceTestResultsController {
     };
   }
 
+  @Get(':workspace_id/test-results/flat-responses/filter-options')
+  @ApiOperation({
+    summary: 'Get flat response filter options',
+    description: 'Returns distinct possible values for flat response filters, taking currently active filters into account.'
+  })
+  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
+  @ApiQuery({ name: 'code', required: false, description: 'Filter by person code (ILIKE)', type: String })
+  @ApiQuery({ name: 'group', required: false, description: 'Filter by group (ILIKE)', type: String })
+  @ApiQuery({ name: 'login', required: false, description: 'Filter by login (ILIKE)', type: String })
+  @ApiQuery({ name: 'booklet', required: false, description: 'Filter by booklet name (ILIKE)', type: String })
+  @ApiQuery({ name: 'unit', required: false, description: 'Filter by unit alias/name (ILIKE)', type: String })
+  @ApiQuery({ name: 'response', required: false, description: 'Filter by response variable id (ILIKE)', type: String })
+  @ApiQuery({ name: 'responseValue', required: false, description: 'Filter by response value (ILIKE)', type: String })
+  @ApiQuery({ name: 'tags', required: false, description: 'Filter by unit tag (ILIKE)', type: String })
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
+  async findFlatResponseFilterOptions(
+    @Param('workspace_id') workspace_id: number,
+                           @Query('code') code?: string,
+                           @Query('group') group?: string,
+                           @Query('login') login?: string,
+                           @Query('booklet') booklet?: string,
+                           @Query('unit') unit?: string,
+                           @Query('response') response?: string,
+                           @Query('responseValue') responseValue?: string,
+                           @Query('tags') tags?: string
+  ): Promise<{ codes: string[]; groups: string[]; logins: string[]; booklets: string[]; units: string[]; responses: string[]; tags: string[] }> {
+    return this.workspaceTestResultsService.findFlatResponseFilterOptions(workspace_id, {
+      code,
+      group,
+      login,
+      booklet,
+      unit,
+      response,
+      responseValue,
+      tags
+    });
+  }
+
   @Get(':workspace_id/units/:unitId/logs')
   @ApiOperation({
     summary: 'Get unit logs',
