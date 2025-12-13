@@ -32,7 +32,7 @@ describe('WorkspaceTestResultsService.resolveDuplicateResponses', () => {
     };
 
     const manager: ManagerMock = {
-      createQueryBuilder: jest.fn() as unknown as jest.MockedFunction<(entity?: unknown) => unknown>
+      createQueryBuilder: jest.fn<unknown, [unknown?]>() as unknown as jest.MockedFunction<(entity?: unknown) => unknown>
     };
 
     const makeSelectQb = () => {
@@ -85,9 +85,9 @@ describe('WorkspaceTestResultsService.resolveDuplicateResponses', () => {
 
     manager.createQueryBuilder.mockImplementation((entity?: unknown) => {
       if (entity) {
-        return makeSelectQb();
+        return makeSelectQb() as unknown;
       }
-      return makeDeleteQb();
+      return makeDeleteQb() as unknown;
     });
 
     const dataSource = {
