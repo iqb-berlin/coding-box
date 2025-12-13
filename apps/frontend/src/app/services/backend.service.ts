@@ -390,6 +390,19 @@ export class BackendService {
     return this.testResultService.getTestPersons(workspaceId);
   }
 
+  getUnitLogs(workspaceId: number, unitId: number): Observable<{ id: number; unitid: number; ts: string; key: string; parameter: string }[]> {
+    return this.testResultService.getUnitLogs(workspaceId, unitId);
+  }
+
+  getBookletLogsForUnit(workspaceId: number, unitId: number): Observable<{
+    bookletId: number;
+    logs: { id: number; bookletid: number; ts: string; key: string; parameter: string }[];
+    sessions: { id: number; browser: string; os: string; screen: string; ts: string }[];
+    units: { id: number; bookletid: number; name: string; alias: string | null; logs: { id: number; unitid: number; ts: string; key: string; parameter: string }[] }[];
+  } | null> {
+    return this.testResultService.getBookletLogsForUnit(workspaceId, unitId);
+  }
+
   getExportOptions(workspaceId: number): Observable<{
     testPersons: { id: number; code: string; groupName: string; login: string }[];
     groups: string[];

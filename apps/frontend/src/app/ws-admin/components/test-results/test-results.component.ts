@@ -71,6 +71,7 @@ import { TestResultsUploadResultDto } from '../../../../../../../api-dto/files/t
 import {
   TestResultsUploadResultDialogComponent
 } from './test-results-upload-result-dialog.component';
+import { TestResultsFlatTableComponent } from './test-results-flat-table.component';
 import {
   OverwriteMode,
   TestResultsUploadOptionsDialogComponent,
@@ -198,8 +199,7 @@ interface P {
     MatIconButton,
     MatDivider,
     MatTooltipModule,
-    TestResultsUploadResultDialogComponent,
-    TestResultsUploadOptionsDialogComponent
+    TestResultsFlatTableComponent
   ]
 })
 export class TestResultsComponent implements OnInit, OnDestroy {
@@ -218,6 +218,8 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   selection = new SelectionModel<P>(true, []);
   dataSource !: MatTableDataSource<P>;
   displayedColumns: string[] = ['select', 'code', 'group', 'login', 'uploaded_at'];
+
+  isTableView: boolean = false;
   data: P[] = [];
   booklets!: Booklet[];
   results: { [key: string]: unknown }[] = [];
@@ -275,6 +277,10 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     }
 
     this.stopValidationStatusCheck();
+  }
+
+  toggleTableView(): void {
+    this.isTableView = !this.isTableView;
   }
 
   private startValidationStatusCheck(): void {
