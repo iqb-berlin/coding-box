@@ -39,6 +39,20 @@
           <span>Export läuft...</span>
         }
       </a>
+      <a mat-raised-button color="primary" (click)="exportLogs()" [disabled]="isExporting">
+        @if (!isExporting) {
+          <mat-icon>download</mat-icon>
+        }
+        @if (isExporting) {
+          <mat-spinner diameter="20" style="display: inline-block; margin-right: 8px;"></mat-spinner>
+        }
+        @if (!isExporting) {
+          <span>Logs exportieren</span>
+        }
+        @if (isExporting) {
+          <span>Export läuft...</span>
+        }
+      </a>
       @if (exportJobStatus === 'completed' && !isExporting && exportJobId) {
         <a mat-raised-button color="accent" (click)="downloadExportResult(exportJobId!)">
           <mat-icon>file_download</mat-icon>

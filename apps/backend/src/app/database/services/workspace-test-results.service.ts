@@ -15,6 +15,7 @@ import { Booklet } from '../entities/booklet.entity';
 import { ResponseEntity } from '../entities/response.entity';
 import { BookletInfo } from '../entities/bookletInfo.entity';
 import { BookletLog } from '../entities/bookletLog.entity';
+import { UnitLog } from '../entities/unitLog.entity';
 import { ChunkEntity } from '../entities/chunk.entity';
 import { UnitLastState } from '../entities/unitLastState.entity';
 import { UnitTagService } from './unit-tag.service';
@@ -48,6 +49,8 @@ export class WorkspaceTestResultsService {
     private bookletInfoRepository: Repository<BookletInfo>,
     @InjectRepository(BookletLog)
     private bookletLogRepository: Repository<BookletLog>,
+    @InjectRepository(UnitLog)
+    private unitLogRepository: Repository<UnitLog>,
     @InjectRepository(ChunkEntity)
     private chunkRepository: Repository<ChunkEntity>,
     private readonly connection: DataSource,
@@ -1357,6 +1360,243 @@ export class WorkspaceTestResultsService {
 
       if (progressCallback && totalCount > 0) {
         await progressCallback(Math.round((processedCount / totalCount) * 100));
+      }
+    }
+
+    csvStream.end();
+
+    return new Promise<void>((resolve, reject) => {
+      stream.on('finish', () => resolve());
+      stream.on('error', reject);
+    });
+  }
+
+  async exportTestLogs(
+    workspaceId: number,
+    res: Response,
+    filters?: { groupNames?: string[]; bookletNames?: string[]; unitNames?: string[]; personIds?: number[] }
+  ): Promise<void> {
+    this.logger.log(`Exporting test logs for workspace ${workspaceId}`);
+    await this.exportTestLogsToStream(workspaceId, res, filters);
+  }
+
+  async exportTestLogsToFile(
+    workspaceId: number,
+    filePath: string,
+    filters?: { groupNames?: string[]; bookletNames?: string[]; unitNames?: string[]; personIds?: number[] },
+    progressCallback?: (progress: number) => Promise<void> | void
+  ): Promise<void> {
+    this.logger.log(`Exporting test logs for workspace ${workspaceId} to file ${filePath}`);
+    const fileStream = fs.createWriteStream(filePath);
+    await this.exportTestLogsToStream(workspaceId, fileStream, filters, progressCallback);
+  }
+
+  async exportTestLogsToStream(
+    workspaceId: number,
+    stream: Writable,
+    filters?: { groupNames?: string[]; bookletNames?: string[]; unitNames?: string[]; personIds?: number[] },
+    progressCallback?: (progress: number) => Promise<void> | void
+  ): Promise<void> {
+    const csvStream = csv.format({
+      headers: [
+        'groupname',
+        'loginname',
+        'code',
+        'bookletname',
+        'unitname',
+        'originalUnitId',
+        'timestamp',
+        'logentry'
+      ],
+      delimiter: ';',
+      quote: null
+    });
+
+    csvStream.pipe(stream);
+
+    const BATCH_SIZE = 2000;
+    let processedCount = 0;
+
+    const hasUnitFilters = Boolean(filters?.unitNames?.length);
+
+    // Export booklet logs (unitname must be empty string for importer)
+    if (!hasUnitFilters) {
+      let lastBookletLogId = 0;
+      let hasMoreBookletLogs = true;
+
+      const createBookletLogsBaseQuery = () => {
+        const qb = this.bookletLogRepository.createQueryBuilder('bookletLog')
+          .innerJoin('bookletLog.booklet', 'booklet')
+          .innerJoin('booklet.person', 'person')
+          .innerJoin('booklet.bookletinfo', 'bookletinfo')
+          .select('bookletLog.id', 'id')
+          .addSelect('bookletLog.ts', 'ts')
+          .addSelect('bookletLog.key', 'key')
+          .addSelect('bookletLog.parameter', 'parameter')
+          .addSelect('person.group', 'groupname')
+          .addSelect('person.login', 'loginname')
+          .addSelect('person.code', 'code')
+          .addSelect('bookletinfo.name', 'bookletname')
+          .where('person.workspace_id = :workspaceId', { workspaceId })
+          .andWhere('person.consider = :consider', { consider: true });
+
+        if (filters?.groupNames?.length) {
+          qb.andWhere('person.group IN (:...groupNames)', { groupNames: filters.groupNames });
+        }
+        if (filters?.bookletNames?.length) {
+          qb.andWhere('bookletinfo.name IN (:...bookletNames)', { bookletNames: filters.bookletNames });
+        }
+        if (filters?.personIds?.length) {
+          qb.andWhere('person.id IN (:...personIds)', { personIds: filters.personIds });
+        }
+
+        return qb;
+      };
+
+      const totalBookletLogs = await createBookletLogsBaseQuery().getCount();
+
+      while (hasMoreBookletLogs) {
+        const logs = await createBookletLogsBaseQuery()
+          .andWhere('bookletLog.id > :lastBookletLogId', { lastBookletLogId })
+          .orderBy('bookletLog.id', 'ASC')
+          .take(BATCH_SIZE)
+          .getRawMany<{
+            id: number;
+            ts: string | number | null;
+            key: string;
+            parameter: string | null;
+            groupname: string;
+            loginname: string;
+            code: string;
+            bookletname: string;
+          }>();
+
+        if (logs.length === 0) {
+          hasMoreBookletLogs = false;
+          break;
+        }
+
+        lastBookletLogId = Number(logs[logs.length - 1].id);
+
+        for (const log of logs) {
+          const parameter = log.parameter || '';
+          const logentry = `${log.key} : ${parameter}`;
+          const canContinue = csvStream.write({
+            groupname: log.groupname,
+            loginname: log.loginname,
+            code: log.code,
+            bookletname: log.bookletname,
+            unitname: '',
+            originalUnitId: '',
+            timestamp: (log.ts ?? '').toString(),
+            logentry
+          });
+
+          if (!canContinue) {
+            await new Promise(resolve => {
+              csvStream.once('drain', resolve);
+            });
+          }
+
+          processedCount += 1;
+          if (progressCallback && (totalBookletLogs > 0)) {
+            await progressCallback(Math.round((processedCount / totalBookletLogs) * 100));
+          }
+        }
+      }
+    }
+
+    // Export unit logs (unitname must be non-empty for importer)
+    let lastUnitLogId = 0;
+    let hasMoreUnitLogs = true;
+
+    const createUnitLogsBaseQuery = () => {
+      const qb = this.unitLogRepository.createQueryBuilder('unitLog')
+        .innerJoin('unitLog.unit', 'unit')
+        .innerJoin('unit.booklet', 'booklet')
+        .innerJoin('booklet.person', 'person')
+        .innerJoin('booklet.bookletinfo', 'bookletinfo')
+        .select('unitLog.id', 'id')
+        .addSelect('unitLog.ts', 'ts')
+        .addSelect('unitLog.key', 'key')
+        .addSelect('unitLog.parameter', 'parameter')
+        .addSelect('unit.name', 'unitname')
+        .addSelect('unit.alias', 'originalUnitId')
+        .addSelect('person.group', 'groupname')
+        .addSelect('person.login', 'loginname')
+        .addSelect('person.code', 'code')
+        .addSelect('bookletinfo.name', 'bookletname')
+        .where('person.workspace_id = :workspaceId', { workspaceId })
+        .andWhere('person.consider = :consider', { consider: true });
+
+      if (filters?.groupNames?.length) {
+        qb.andWhere('person.group IN (:...groupNames)', { groupNames: filters.groupNames });
+      }
+      if (filters?.bookletNames?.length) {
+        qb.andWhere('bookletinfo.name IN (:...bookletNames)', { bookletNames: filters.bookletNames });
+      }
+      if (filters?.unitNames?.length) {
+        qb.andWhere('unit.name IN (:...unitNames)', { unitNames: filters.unitNames });
+      }
+      if (filters?.personIds?.length) {
+        qb.andWhere('person.id IN (:...personIds)', { personIds: filters.personIds });
+      }
+
+      return qb;
+    };
+
+    const totalUnitLogs = await createUnitLogsBaseQuery().getCount();
+
+    while (hasMoreUnitLogs) {
+      const logs = await createUnitLogsBaseQuery()
+        .andWhere('unitLog.id > :lastUnitLogId', { lastUnitLogId })
+        .orderBy('unitLog.id', 'ASC')
+        .take(BATCH_SIZE)
+        .getRawMany<{
+          id: number;
+          ts: string | number | null;
+          key: string;
+          parameter: string | null;
+          unitname: string;
+          originalUnitId: string | null;
+          groupname: string;
+          loginname: string;
+          code: string;
+          bookletname: string;
+        }>();
+
+      if (logs.length === 0) {
+        hasMoreUnitLogs = false;
+        break;
+      }
+
+      lastUnitLogId = Number(logs[logs.length - 1].id);
+
+      for (const log of logs) {
+        const parameter = log.parameter || '';
+        const logentry = `${log.key}=${parameter}`;
+
+        const canContinue = csvStream.write({
+          groupname: log.groupname,
+          loginname: log.loginname,
+          code: log.code,
+          bookletname: log.bookletname,
+          unitname: log.unitname,
+          originalUnitId: log.originalUnitId || log.unitname,
+          timestamp: (log.ts ?? '').toString(),
+          logentry
+        });
+
+        if (!canContinue) {
+          await new Promise(resolve => {
+            csvStream.once('drain', resolve);
+          });
+        }
+
+        processedCount += 1;
+        if (progressCallback && (totalUnitLogs > 0)) {
+          await progressCallback(Math.round((processedCount / totalUnitLogs) * 100));
+        }
       }
     }
 
