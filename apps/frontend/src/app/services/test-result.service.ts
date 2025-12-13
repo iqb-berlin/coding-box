@@ -27,6 +27,59 @@ export interface PersonTestResult {
   [key: string]: unknown;
 }
 
+export interface FlatTestResultResponseRow {
+  responseId: number;
+  unitId: number;
+  personId: number;
+  code: string;
+  group: string;
+  login: string;
+  booklet: string;
+  unit: string;
+  response: string;
+  responseStatus: string;
+  responseValue: string;
+  tags: string[];
+}
+
+export interface FlatTestResultResponsesResponse {
+  data: FlatTestResultResponseRow[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export interface UnitLogRow {
+  id: number;
+  unitid: number;
+  ts: string;
+  key: string;
+  parameter: string;
+}
+
+export interface BookletLogRow {
+  id: number;
+  bookletid: number;
+  ts: string;
+  key: string;
+  parameter: string;
+}
+
+export interface BookletSessionRow {
+  id: number;
+  browser: string;
+  os: string;
+  screen: string;
+  ts: string;
+}
+
+export interface BookletLogsForUnitResponse {
+  bookletId: number;
+  logs: BookletLogRow[];
+  sessions: BookletSessionRow[];
+  units: { id: number; bookletid: number; name: string; alias: string | null; logs: UnitLogRow[] }[];
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -51,6 +104,69 @@ export class TestResultService {
 
   getPersonTestResults(workspaceId: number, personId: number): Observable<PersonTestResult[]> {
     return this.cacheService.getPersonTestResults(workspaceId, personId);
+  }
+
+  getFlatResponses(
+    workspaceId: number,
+    options: {
+      page: number;
+      limit: number;
+      code?: string;
+      group?: string;
+      login?: string;
+      booklet?: string;
+      unit?: string;
+      response?: string;
+      responseValue?: string;
+      tags?: string;
+    }
+  ): Observable<FlatTestResultResponsesResponse> {
+    let params = new HttpParams()
+      .set('page', String(options.page))
+      .set('limit', String(options.limit));
+
+    const addIf = (key: string, value?: string) => {
+      const v = (value || '').trim();
+      if (v) {
+        params = params.set(key, v);
+      }
+    };
+
+    addIf('code', options.code);
+    addIf('group', options.group);
+    addIf('login', options.login);
+    addIf('booklet', options.booklet);
+    addIf('unit', options.unit);
+    addIf('response', options.response);
+    addIf('responseValue', options.responseValue);
+    addIf('tags', options.tags);
+
+    return this.http.get<FlatTestResultResponsesResponse>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/test-results/flat-responses`,
+      { headers: this.authHeader, params }
+    ).pipe(
+      catchError(() => of({
+        data: [], total: 0, page: options.page, limit: options.limit
+      }))
+    );
+  }
+
+  getUnitLogs(workspaceId: number, unitId: number): Observable<UnitLogRow[]> {
+    return this.http.get<UnitLogRow[]>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/units/${unitId}/logs`,
+      { headers: this.authHeader }
+    ).pipe(
+      catchError(() => of([]))
+    );
+  }
+
+  getBookletLogsForUnit(workspaceId: number, unitId: number): Observable<BookletLogsForUnitResponse | null> {
+    return this.http.get<BookletLogsForUnitResponse>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/units/${unitId}/booklet-logs`,
+      { headers: this.authHeader }
+    ).pipe(
+      catchError(() => of(null))
+    );
   }
 
   invalidateCache(workspaceId: number): void {

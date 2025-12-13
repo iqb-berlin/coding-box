@@ -5,11 +5,11 @@
         <mat-icon>upload</mat-icon>
         Testcenter Import
       </a>
-      <a mat-raised-button color="primary" (click)=hiddenResponsesFileInput.click()>
+      <a mat-raised-button color="primary" (click)="hiddenResponsesFileInput.click()">
         <mat-icon>upload</mat-icon>
         Antworten hochladen
       </a>
-      <a mat-raised-button color="primary" (click)=hiddenLogsFileInput.click()>
+      <a mat-raised-button color="primary" (click)="hiddenLogsFileInput.click()">
         <mat-icon>upload</mat-icon>
         Logs hochladen
       </a>
@@ -75,6 +75,14 @@
         <mat-icon>analytics</mat-icon>
         Item/Variablen Analyse
       </a>
+      <a mat-raised-button color="primary" (click)="toggleTableView()">
+        <mat-icon>table_chart</mat-icon>
+        @if (!isTableView) {
+          <span>Tabellenansicht</span>
+        } @else {
+          <span>Detailansicht</span>
+        }
+      </a>
     </div>
   </div>
   <input #hiddenResponsesFileInput type="file"
@@ -97,7 +105,10 @@
   }
 
   @if(!isUploadingResults){
-    @if ( dataSource) {
+    @if (dataSource) {
+      @if (isTableView) {
+        <coding-box-test-results-flat-table></coding-box-test-results-flat-table>
+      } @else {
       <div class="content-container">
         <div class="data-card">
           <h2 class="section-title">Testpersonen</h2>
@@ -390,17 +401,24 @@
               }
             </div>
           </div>
-        }
-      </div>
-
-    </div>
-  } @else {
-    <div class="empty-state-container">
-      <mat-icon class="empty-state-icon">assignment</mat-icon>
-      <h2 class="empty-state-title">Keine Testergebnisse vorhanden</h2>
-      <p class="empty-state-description">Laden Sie Antworten oder Logs hoch, um Testergebnisse anzuzeigen.</p>
+          } @else {
+            <div class="empty-state-container">
+              <mat-icon class="empty-state-icon">assignment</mat-icon>
+              <h2 class="empty-state-title">Keine Testergebnisse vorhanden</h2>
+              <p class="empty-state-description">Laden Sie Antworten oder Logs hoch, um Testergebnisse anzuzeigen.</p>
+            </div>
+          }
+        </div>
     </div>
   }
 }
-
+    @else {
+      <div class="empty-state-container">
+        <mat-icon class="empty-state-icon">assignment</mat-icon>
+        <h2 class="empty-state-title">Keine Testergebnisse vorhanden</h2>
+        <p class="empty-state-description">Laden Sie Antworten oder Logs hoch, um Testergebnisse anzuzeigen.</p>
+      </div>
+    }
+  }
 </div>
+
