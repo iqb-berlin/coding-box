@@ -9,6 +9,7 @@ import {
 import {
   Component, OnDestroy, OnInit, ViewChild, inject
 } from '@angular/core';
+
 import { MatSort, MatSortHeader } from '@angular/material/sort';
 import { FormsModule, UntypedFormGroup } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -66,6 +67,16 @@ import { UnitInfoDialogComponent } from '../unit-info-dialog/unit-info-dialog.co
 import { UnitInfoDto } from '../../../../../../../api-dto/unit-info/unit-info.dto';
 import { GermanPaginatorIntl } from '../../../shared/services/german-paginator-intl.service';
 import { ExportOptionsDialogComponent, ExportOptions } from './export-options-dialog.component';
+import { TestResultsUploadResultDto } from '../../../../../../../api-dto/files/test-results-upload-result.dto';
+import {
+  TestResultsUploadResultDialogComponent
+} from './test-results-upload-result-dialog.component';
+import {
+  OverwriteMode,
+  TestResultsUploadOptionsDialogComponent,
+  TestResultsUploadOptionsDialogData,
+  TestResultsUploadOptionsDialogResult
+} from './test-results-upload-options-dialog.component';
 
 interface BookletLog {
   id: number;
@@ -186,7 +197,9 @@ interface P {
     MatButton,
     MatIconButton,
     MatDivider,
-    MatTooltipModule
+    MatTooltipModule,
+    TestResultsUploadResultDialogComponent,
+    TestResultsUploadOptionsDialogComponent
   ]
 })
 export class TestResultsComponent implements OnInit, OnDestroy {
@@ -969,38 +982,76 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     if (targetElement) {
       const inputElement = targetElement as HTMLInputElement;
       if (inputElement.files && inputElement.files.length > 0) {
-        const dialogRef = this.dialog.open(ConfirmDialogComponent, {
-          width: '400px',
-          data: <ConfirmDialogData>{
-            title: resultType === 'logs' ? 'Logs überschreiben' : 'Antworten überschreiben',
-            content: resultType === 'logs' ?
-              'Möchten Sie vorhandene Logs überschreiben, falls diese bereits existieren?' :
-              'Möchten Sie vorhandene Antworten überschreiben, falls diese bereits existieren?',
-            confirmButtonLabel: 'Überschreiben',
-            showCancel: true
-          }
-        });
-
-        dialogRef.afterClosed().subscribe(overwriteExisting => {
-          if (overwriteExisting !== undefined) {
-            this.isLoading = true;
-            this.isUploadingResults = true;
-            this.backendService.uploadTestResults(
-              this.appService.selectedWorkspaceId,
-              inputElement.files,
+        const optionsRef = this.dialog.open<
+        TestResultsUploadOptionsDialogComponent,
+        TestResultsUploadOptionsDialogData,
+        TestResultsUploadOptionsDialogResult | undefined
+        >(
+          TestResultsUploadOptionsDialogComponent,
+          {
+            width: '600px',
+            data: {
               resultType,
-              overwriteExisting
-            ).subscribe(() => {
-              if (this.appService.selectedWorkspaceId) {
-                this.testResultService.invalidateCache(this.appService.selectedWorkspaceId);
-              }
-              setTimeout(() => {
-                this.createTestResultsList(this.pageIndex, this.pageSize, this.getCurrentSearchText());
-              }, 1000);
-              this.isLoading = false;
-              this.isUploadingResults = false;
-            });
+              defaultOverwriteMode: 'skip',
+              defaultScope: 'person'
+            }
           }
+        );
+
+        optionsRef.afterClosed().subscribe((options: TestResultsUploadOptionsDialogResult | undefined) => {
+          if (!options) {
+            return;
+          }
+
+          const overwriteMode: OverwriteMode = options.overwriteMode;
+          const scope = options.scope;
+          const filters = {
+            groupName: options.groupName,
+            bookletName: options.bookletName,
+            unitNameOrAlias: options.unitNameOrAlias,
+            variableId: options.variableId,
+            subform: options.subform
+          };
+
+          // Backward compatibility: old behavior treated overwriteExisting=false as strict skip.
+          const overwriteExisting = overwriteMode !== 'skip';
+
+          this.isLoading = true;
+          this.isUploadingResults = true;
+          this.backendService.uploadTestResults(
+            this.appService.selectedWorkspaceId,
+            inputElement.files,
+            resultType,
+            overwriteExisting,
+            overwriteMode,
+            scope,
+            filters
+          ).subscribe((uploadResult: TestResultsUploadResultDto) => {
+            if (this.appService.selectedWorkspaceId) {
+              this.testResultService.invalidateCache(this.appService.selectedWorkspaceId);
+            }
+
+            this.snackBar.open(
+              `Upload abgeschlossen: Δ Testpersonen ${uploadResult.delta.testPersons}, Δ Responses ${uploadResult.delta.uniqueResponses}`,
+              'OK',
+              { duration: 5000 }
+            );
+
+            this.dialog.open(TestResultsUploadResultDialogComponent, {
+              width: '1000px',
+              maxWidth: '95vw',
+              data: {
+                resultType,
+                result: uploadResult
+              }
+            });
+
+            setTimeout(() => {
+              this.createTestResultsList(this.pageIndex, this.pageSize, this.getCurrentSearchText());
+            }, 1000);
+            this.isLoading = false;
+            this.isUploadingResults = false;
+          });
         });
       }
     }

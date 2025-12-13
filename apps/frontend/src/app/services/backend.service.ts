@@ -52,6 +52,7 @@ import { UnitVariableDetailsDto } from '../models/unit-variable-details.dto';
 import { MissingsProfilesDto } from '../../../../../api-dto/coding/missings-profiles.dto';
 import { VariableAnalysisItemDto } from '../../../../../api-dto/coding/variable-analysis-item.dto';
 import { ResponseEntity } from '../shared/models/response-entity.model';
+import { TestResultsUploadResultDto } from '../../../../../api-dto/files/test-results-upload-result.dto';
 
 type ReplayStatisticsResponse = {
   id: number;
@@ -291,9 +292,12 @@ export class BackendService {
     workspaceId: number,
     files: FileList | null,
     resultType: 'logs' | 'responses',
-    overwriteExisting: boolean = true
-  ): Observable<number> {
-    return this.fileService.uploadTestResults(workspaceId, files, resultType, overwriteExisting);
+    overwriteExisting: boolean = true,
+    overwriteMode: 'skip' | 'merge' | 'replace' = 'skip',
+    scope: string = 'person',
+    filters?: { groupName?: string; bookletName?: string; unitNameOrAlias?: string; variableId?: string; subform?: string }
+  ): Observable<TestResultsUploadResultDto> {
+    return this.fileService.uploadTestResults(workspaceId, files, resultType, overwriteExisting, overwriteMode, scope, filters);
   }
 
   setUserWorkspaceAccessRight(userId: number, workspaceIds: number[]): Observable<boolean> {

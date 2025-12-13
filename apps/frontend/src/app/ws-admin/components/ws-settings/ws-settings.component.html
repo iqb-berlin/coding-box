@@ -51,6 +51,26 @@
             <mat-icon>edit</mat-icon> {{ 'workspace.edit-missings-profiles' | translate }}
           </button>
         </div>
+
+        <div class="setting-item">
+          <div class="setting-info">
+            <h4>Test Results: Person-Matching</h4>
+            <p>
+              strict: Gruppe + Login + Code
+              <br />
+              loose: Login + Code
+            </p>
+          </div>
+          <div class="setting-control">
+            <mat-form-field appearance="outline">
+              <mat-label>Modus</mat-label>
+              <mat-select [value]="testResultsPersonMatchMode" (selectionChange)="setTestResultsPersonMatchMode($event.value)">
+                <mat-option value="strict">strict</mat-option>
+                <mat-option value="loose">loose</mat-option>
+              </mat-select>
+            </mat-form-field>
+          </div>
+        </div>
       </div>
     </mat-card-content>
   </mat-card>

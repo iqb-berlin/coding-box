@@ -39,6 +39,14 @@ export class WorkspaceSettingsController {
           description: 'Controls how responses are aggregated by value similarity for coding case distribution'
         };
       }
+      if (key === 'test-results-person-match-mode') {
+        return {
+          id: 0,
+          key: settingKey,
+          value: JSON.stringify({ mode: 'strict' }),
+          description: 'Controls how persons are matched during test results import (strict: group+login+code, loose: login+code)'
+        };
+      }
       throw new Error(`Setting ${key} not found for workspace ${workspaceId}`);
     }
 
