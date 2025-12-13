@@ -25,6 +25,10 @@ import { SchemeEditorDialogComponent } from '../../../coding/components/scheme-e
 import { UnitDefinitionPlayerDialogComponent } from '../unit-definition-player-dialog/unit-definition-player-dialog.component';
 import { DuplicateTestTaker, UnusedTestFile } from '../../../../../../../api-dto/files/file-validation-result.dto';
 import { ContentDialogComponent } from '../../../shared/dialogs/content-dialog/content-dialog.component';
+import {
+  AffectedUnitsDialogComponent,
+  AffectedUnitsDialogResult
+} from './affected-units-dialog.component';
 
 type FileStatus = {
   filename: string;
@@ -38,6 +42,7 @@ type DataValidation = {
   missing: string[];
   missingUnitsPerBooklet?: { booklet: string; missingUnits: string[] }[];
   unitsWithoutPlayer?: string[];
+  missingRefsPerUnit?: { unit: string; missingRefs: string[] }[];
   files: FileStatus[];
 };
 
@@ -129,6 +134,44 @@ export class FilesValidationDialogComponent {
 
   private isKnownTestTaker(item: FilteredTestTaker): boolean {
     return item.consider === true || item.consider === false;
+  }
+
+  getUnitsForMissingRefLimited(data: DataValidation, ref: string, limit: number): string[] {
+    const units = this.getUnitsForMissingRef(data, ref);
+    if (limit <= 0) {
+      return [];
+    }
+    return units.slice(0, limit);
+  }
+
+  getUnitsForMissingRefRemainingCount(data: DataValidation, ref: string, limit: number): number {
+    const units = this.getUnitsForMissingRef(data, ref);
+    return Math.max(0, units.length - Math.max(0, limit));
+  }
+
+  openAffectedUnitsDialog(title: string, units: string[], onSelect: (unitId: string) => void): void {
+    if (!units || units.length === 0) {
+      return;
+    }
+
+    const ref = this.dialog.open<
+      AffectedUnitsDialogComponent,
+      { title: string; units: string[] },
+      AffectedUnitsDialogResult
+    >(AffectedUnitsDialogComponent, {
+      width: '600px',
+      maxWidth: '95vw',
+      data: {
+        title,
+        units
+      }
+    });
+
+    ref.afterClosed().subscribe(result => {
+      if (result?.unitId) {
+        onSelect(result.unitId);
+      }
+    });
   }
 
   get knownFilteredTestTakers(): FilteredTestTaker[] {
@@ -241,6 +284,35 @@ export class FilesValidationDialogComponent {
 
   getMissingCount(data: DataValidation): number {
     return data.files.filter(file => !file.exists).length;
+  }
+
+  getUnitsForMissingRef(data: DataValidation, ref: string): string[] {
+    if (!data.missingRefsPerUnit || data.missingRefsPerUnit.length === 0 || !ref) {
+      return [];
+    }
+
+    const normalize = (value: string): { full: string; base: string; noExt: string } => {
+      const full = (value || '').trim().toUpperCase().replace(/\\/g, '/');
+      const base = full.includes('/') ? (full.split('/').pop() || full) : full;
+      const dot = base.lastIndexOf('.');
+      const noExt = dot > 0 ? base.substring(0, dot) : base;
+      return { full, base, noExt };
+    };
+
+    const target = normalize(ref);
+
+    const matches = (candidateRaw: string): boolean => {
+      const candidate = normalize(candidateRaw);
+      return (
+        candidate.full === target.full ||
+        candidate.base === target.base ||
+        candidate.noExt === target.noExt
+      );
+    };
+
+    return data.missingRefsPerUnit
+      .filter(entry => (entry.missingRefs || []).some(r => matches(r || '')))
+      .map(entry => entry.unit);
   }
 
   // Select which occurrence of a duplicate test taker to keep
@@ -732,6 +804,21 @@ export class FilesValidationDialogComponent {
       data: {
         workspaceId: this.data.workspaceId!,
         unitId
+      }
+    });
+  }
+
+  openUnitDefinitionForUnit(unitId: string): void {
+    if (!this.data.workspaceId || !unitId) {
+      return;
+    }
+
+    this.dialog.open(UnitDefinitionPlayerDialogComponent, {
+      width: '1200px',
+      height: '80vh',
+      data: {
+        workspaceId: this.data.workspaceId!,
+        unitId: unitId.toUpperCase()
       }
     });
   }

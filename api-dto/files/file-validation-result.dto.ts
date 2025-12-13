@@ -12,6 +12,7 @@ type DataValidation = {
   missing: string[];
   missingUnitsPerBooklet?: { booklet: string; missingUnits: string[] }[];
   unitsWithoutPlayer?: string[];
+  missingRefsPerUnit?: { unit: string; missingRefs: string[] }[];
   files: FileStatus[];
 };
 

@@ -451,6 +451,32 @@
                           <li [class.file-exists]="file.exists" [class.file-missing]="!file.exists">
                             <mat-icon class="file-status-icon">{{ file.exists ? 'check_circle' : 'error' }}</mat-icon>
                             <span class="file-name">{{ file.filename }}</span>
+                            @if (!file.exists && getUnitsForMissingRef(val.schemes, file.filename).length > 0) {
+                              <span class="file-name">
+                                (
+                                @for (u of getUnitsForMissingRefLimited(val.schemes, file.filename, 3); track u) {
+                                  <button
+                                    mat-button
+                                    type="button"
+                                    (click)="openUnitInfo(u)">
+                                    {{ u }}
+                                  </button>
+                                }
+                                @if (getUnitsForMissingRefRemainingCount(val.schemes, file.filename, 3) > 0) {
+                                  <button
+                                    mat-button
+                                    type="button"
+                                    (click)="openAffectedUnitsDialog(
+                                      'Betroffene Aufgaben (Kodierschema)',
+                                      getUnitsForMissingRef(val.schemes, file.filename),
+                                      openUnitInfo.bind(this)
+                                    )">
+                                    +{{ getUnitsForMissingRefRemainingCount(val.schemes, file.filename, 3) }} mehr
+                                  </button>
+                                }
+                                )
+                              </span>
+                            }
                             @if (file.schemaValid === false) {
                               <mat-icon
                                 class="file-status-icon"
@@ -516,6 +542,32 @@
                           <li [class.file-exists]="file.exists" [class.file-missing]="!file.exists">
                             <mat-icon class="file-status-icon">{{ file.exists ? 'check_circle' : 'error' }}</mat-icon>
                             <span class="file-name">{{ file.filename }}</span>
+                            @if (!file.exists && getUnitsForMissingRef(val.schemer, file.filename).length > 0) {
+                              <span class="file-name">
+                                (
+                                @for (u of getUnitsForMissingRefLimited(val.schemer, file.filename, 3); track u) {
+                                  <button
+                                    mat-button
+                                    type="button"
+                                    (click)="openUnitInfo(u)">
+                                    {{ u }}
+                                  </button>
+                                }
+                                @if (getUnitsForMissingRefRemainingCount(val.schemer, file.filename, 3) > 0) {
+                                  <button
+                                    mat-button
+                                    type="button"
+                                    (click)="openAffectedUnitsDialog(
+                                      'Betroffene Aufgaben (Schemer)',
+                                      getUnitsForMissingRef(val.schemer, file.filename),
+                                      openUnitInfo.bind(this)
+                                    )">
+                                    +{{ getUnitsForMissingRefRemainingCount(val.schemer, file.filename, 3) }} mehr
+                                  </button>
+                                }
+                                )
+                              </span>
+                            }
                             @if (file.schemaValid === false) {
                               <mat-icon
                                 class="file-status-icon"
@@ -573,6 +625,32 @@
                           <li [class.file-exists]="file.exists" [class.file-missing]="!file.exists">
                             <mat-icon class="file-status-icon">{{ file.exists ? 'check_circle' : 'error' }}</mat-icon>
                             <span class="file-name">{{ file.filename }}</span>
+                            @if (!file.exists && getUnitsForMissingRef(val.definitions, file.filename).length > 0) {
+                              <span class="file-name">
+                                (
+                                @for (u of getUnitsForMissingRefLimited(val.definitions, file.filename, 3); track u) {
+                                  <button
+                                    mat-button
+                                    type="button"
+                                    (click)="openUnitDefinitionForUnit(u)">
+                                    {{ u }}
+                                  </button>
+                                }
+                                @if (getUnitsForMissingRefRemainingCount(val.definitions, file.filename, 3) > 0) {
+                                  <button
+                                    mat-button
+                                    type="button"
+                                    (click)="openAffectedUnitsDialog(
+                                      'Betroffene Aufgaben (Definition)',
+                                      getUnitsForMissingRef(val.definitions, file.filename),
+                                      openUnitInfo.bind(this)
+                                    )">
+                                    +{{ getUnitsForMissingRefRemainingCount(val.definitions, file.filename, 3) }} mehr
+                                  </button>
+                                }
+                                )
+                              </span>
+                            }
                             @if (file.schemaValid === false) {
                               <mat-icon
                                 class="file-status-icon"
@@ -638,6 +716,32 @@
                           <li [class.file-exists]="file.exists" [class.file-missing]="!file.exists">
                             <mat-icon class="file-status-icon">{{ file.exists ? 'check_circle' : 'error' }}</mat-icon>
                             <span class="file-name">{{ file.filename }}</span>
+                            @if (!file.exists && getUnitsForMissingRef(val.player, file.filename).length > 0) {
+                              <span class="file-name">
+                                (
+                                @for (u of getUnitsForMissingRefLimited(val.player, file.filename, 3); track u) {
+                                  <button
+                                    mat-button
+                                    type="button"
+                                    (click)="openUnitDefinitionForUnit(u)">
+                                    {{ u }}
+                                  </button>
+                                }
+                                @if (getUnitsForMissingRefRemainingCount(val.player, file.filename, 3) > 0) {
+                                  <button
+                                    mat-button
+                                    type="button"
+                                    (click)="openAffectedUnitsDialog(
+                                      'Betroffene Aufgaben (Player)',
+                                      getUnitsForMissingRef(val.player, file.filename),
+                                      openUnitInfo.bind(this)
+                                    )">
+                                    +{{ getUnitsForMissingRefRemainingCount(val.player, file.filename, 3) }} mehr
+                                  </button>
+                                }
+                                )
+                              </span>
+                            }
                             @if (file.schemaValid === false) {
                               <mat-icon
                                 class="file-status-icon"
