@@ -9,6 +9,12 @@ import FileUpload, { StructuredFileData } from '../entities/file_upload.entity';
 import { FilesDto } from '../../../../../../api-dto/files/files.dto';
 import { FileIo } from '../../admin/workspace/file-io.interface';
 import { FileDownloadDto } from '../../../../../../api-dto/files/file-download.dto';
+import {
+  TestFilesUploadConflictDto,
+  TestFilesUploadFailedDto,
+  TestFilesUploadResultDto,
+  TestFilesUploadUploadedDto
+} from '../../../../../../api-dto/files/test-files-upload-result.dto';
 import { FileValidationResultDto } from '../../../../../../api-dto/files/file-validation-result.dto';
 import { ResponseDto } from '../../../../../../api-dto/responses/response-dto';
 import { InvalidVariableDto } from '../../../../../../api-dto/files/variable-validation.dto';
@@ -275,45 +281,100 @@ ${bookletRefs}
     }
   }
 
-  async uploadTestFiles(workspace_id: number, originalFiles: FileIo[]): Promise<boolean> {
+  async uploadTestFiles(
+    workspace_id: number,
+    originalFiles: FileIo[],
+    overwriteExisting: boolean,
+    overwriteFileIds?: string[]
+  ): Promise<TestFilesUploadResultDto> {
     this.logger.log(`Uploading test files for workspace ${workspace_id}`);
 
+    const overwriteAllowList = (overwriteFileIds && overwriteFileIds.length > 0) ?
+      new Set(overwriteFileIds.map(s => (s || '').trim().toUpperCase()).filter(Boolean)) :
+      undefined;
+
     const MAX_CONCURRENT_UPLOADS = 5;
-    const processInBatches = async (files: FileIo[], batchSize: number): Promise<PromiseSettledResult<void>[]> => {
-      const results: PromiseSettledResult<void>[] = [];
-      const batches = [];
+    const processInBatches = async (
+      files: FileIo[],
+      batchSize: number,
+      overwriteExisting: boolean,
+      overwriteAllowList?: Set<string>
+    ): Promise<TestFilesUploadResultDto> => {
+      const tasks: Array<{ filename: string; promise: Promise<unknown> }> = [];
+
       for (let i = 0; i < files.length; i += batchSize) {
         const batch = files.slice(i, i + batchSize);
-        batches.push(
-          Promise.allSettled(batch.flatMap(file => this.handleFile(workspace_id, file)))
-        );
+        batch.forEach(file => {
+          const promises = this.handleFile(workspace_id, file, overwriteExisting, overwriteAllowList);
+          promises.forEach(p => tasks.push({ filename: file.originalname, promise: p }));
+        });
+        await Promise.allSettled(tasks.slice(i, i + batchSize).map(t => t.promise));
       }
-      const batchResults = await Promise.all(batches);
-      batchResults.forEach(batch => results.push(...batch as PromiseSettledResult<void>[]));
-      return results;
+
+      const settled = await Promise.allSettled(tasks.map(t => t.promise));
+      const conflicts: TestFilesUploadConflictDto[] = [];
+      const failedFiles: TestFilesUploadFailedDto[] = [];
+      const uploadedFiles: TestFilesUploadUploadedDto[] = [];
+      let uploaded = 0;
+
+      const isConflict = (value: unknown): value is (TestFilesUploadConflictDto & { conflict: true }) =>
+        !!value && typeof value === 'object' && (value as { conflict?: unknown }).conflict === true;
+
+      settled.forEach((result, idx) => {
+        const task = tasks[idx];
+        if (result.status === 'rejected') {
+          const reason = (result as PromiseRejectedResult).reason;
+          failedFiles.push({
+            filename: task?.filename || 'unknown',
+            reason: reason instanceof Error ? reason.message : String(reason)
+          });
+          return;
+        }
+
+        const value = result.value;
+        if (isConflict(value)) {
+          conflicts.push({
+            fileId: value.fileId,
+            filename: value.filename,
+            fileType: value.fileType
+          });
+          return;
+        }
+
+        if (this.isUploaded(value)) {
+          uploaded += 1;
+          uploadedFiles.push(value);
+          return;
+        }
+
+        if (typeof value !== 'undefined') {
+          uploaded += 1;
+        }
+      });
+
+      return {
+        total: originalFiles.length,
+        uploaded,
+        failed: failedFiles.length,
+        conflicts: conflicts.length > 0 ? conflicts : undefined,
+        failedFiles: failedFiles.length > 0 ? failedFiles : undefined,
+        uploadedFiles: uploadedFiles.length > 0 ? uploadedFiles : undefined
+      };
     };
 
     try {
-      const results = await processInBatches(originalFiles, MAX_CONCURRENT_UPLOADS);
-      const failedFiles = results
-        .filter(result => result.status === 'rejected')
-        .map((result, index) => ({
-          file: originalFiles[index],
-          reason: (result as PromiseRejectedResult).reason
-        }));
-
-      if (failedFiles.length > 0) {
-        this.logger.warn(`Some files failed to upload for workspace ${workspace_id}:`);
-        failedFiles.forEach(({ file, reason }) => this.logger.warn(`File: ${JSON.stringify(file)}, Reason: ${reason}`)
-        );
-      }
+      const result = await processInBatches(originalFiles, MAX_CONCURRENT_UPLOADS, overwriteExisting, overwriteAllowList);
       await this.codingStatisticsService.invalidateCache(workspace_id);
       await this.codingStatisticsService.invalidateIncompleteVariablesCache(workspace_id);
-
-      return failedFiles.length === 0;
+      return result;
     } catch (error) {
       this.logger.error(`Unexpected error while uploading files for workspace ${workspace_id}:`, error);
-      return false;
+      return {
+        total: originalFiles.length,
+        uploaded: 0,
+        failed: originalFiles.length,
+        failedFiles: originalFiles.map(file => ({ filename: file.originalname, reason: error.message }))
+      };
     }
   }
 
@@ -357,23 +418,28 @@ ${bookletRefs}
     };
   }
 
-  handleFile(workspaceId: number, file: FileIo): Array<Promise<unknown>> {
+  handleFile(
+    workspaceId: number,
+    file: FileIo,
+    overwriteExisting: boolean,
+    overwriteAllowList?: Set<string>
+  ): Array<Promise<unknown>> {
     const filePromises: Array<Promise<unknown>> = [];
 
     switch (file.mimetype) {
       case 'text/xml':
-        filePromises.push(this.handleXmlFile(workspaceId, file));
+        filePromises.push(this.handleXmlFile(workspaceId, file, overwriteExisting, overwriteAllowList));
         break;
       case 'text/html':
-        filePromises.push(this.handleHtmlFile(workspaceId, file));
+        filePromises.push(this.handleHtmlFile(workspaceId, file, overwriteExisting, overwriteAllowList));
         break;
       case 'application/octet-stream':
-        filePromises.push(this.handleOctetStreamFile(workspaceId, file));
+        filePromises.push(this.handleOctetStreamFile(workspaceId, file, overwriteExisting, overwriteAllowList));
         break;
       case 'application/zip':
       case 'application/x-zip-compressed':
       case 'application/x-zip':
-        filePromises.push(...this.handleZipFile(workspaceId, file));
+        filePromises.push(...this.handleZipFile(workspaceId, file, overwriteExisting, overwriteAllowList));
         break;
       default:
         this.logger.warn(`Unsupported file type: ${file.mimetype}`);
@@ -387,7 +453,12 @@ ${bookletRefs}
     return new Error(message);
   }
 
-  private async handleXmlFile(workspaceId: number, file: FileIo): Promise<unknown> {
+  private async handleXmlFile(
+    workspaceId: number,
+    file: FileIo,
+    overwriteExisting: boolean,
+    overwriteAllowList?: Set<string>
+  ): Promise<unknown> {
     try {
       if (!file.buffer || !file.buffer.length) {
         this.logger.warn('Empty file buffer');
@@ -435,19 +506,27 @@ ${bookletRefs}
       const idElement = metadata.find('Id');
       const fileId = idElement.length ? idElement.text().toUpperCase().trim() : null;
       const resolvedFileId = fileType === 'TestTakers' ? fileId || file.originalname : fileId;
+      const resolvedFileIdNormalized = (resolvedFileId || '').toUpperCase();
 
       const existingFile = await this.fileUploadRepository.findOne({
         where: { file_id: resolvedFileId, workspace_id: workspaceId }
       });
       if (existingFile) {
-        this.logger.warn(
-          `File with ID ${resolvedFileId} in Workspace ${workspaceId} already exists.`
-        );
-        return {
-          message: `File with ID ${resolvedFileId} already exists`,
-          fileId: resolvedFileId,
-          filename: file.originalname
-        };
+        const overwriteAllowed = overwriteExisting && (!overwriteAllowList || overwriteAllowList.has(resolvedFileIdNormalized));
+        if (!overwriteAllowed) {
+          if (overwriteExisting && overwriteAllowList) {
+            return await Promise.resolve();
+          }
+          this.logger.warn(
+            `File with ID ${resolvedFileId} in Workspace ${workspaceId} already exists.`
+          );
+          return {
+            conflict: true,
+            fileId: resolvedFileId,
+            filename: file.originalname,
+            fileType
+          };
+        }
       }
 
       let extractedInfo: Record<string, unknown> = {};
@@ -468,22 +547,34 @@ ${bookletRefs}
         extractedInfo
       };
 
-      return await this.fileUploadRepository.upsert({
+      await this.fileUploadRepository.upsert({
         workspace_id: workspaceId,
         filename: file.originalname,
         file_type: fileType,
         file_size: file.size,
+        created_at: new Date() as unknown as number,
         data: file.buffer.toString(),
         file_id: resolvedFileId,
         structured_data: structuredData
       }, ['file_id', 'workspace_id']);
+
+      return {
+        fileId: resolvedFileId,
+        filename: file.originalname,
+        fileType
+      };
     } catch (error) {
       this.logger.error(`Error processing XML file: ${error.message}`);
       throw error;
     }
   }
 
-  private async handleHtmlFile(workspaceId: number, file: FileIo): Promise<unknown> {
+  private async handleHtmlFile(
+    workspaceId: number,
+    file: FileIo,
+    overwriteExisting: boolean,
+    overwriteAllowList?: Set<string>
+  ): Promise<unknown> {
     try {
       const playerCode = file.buffer.toString();
       const playerContent = cheerio.load(playerCode);
@@ -501,42 +592,100 @@ ${bookletRefs}
 
       if (metadata['@type'] === 'schemer') {
         const resourceFileId = this.workspaceFileParsingService.getSchemerId(file);
-        return await this.fileUploadRepository.upsert({
+        const existing = await this.fileUploadRepository.findOne({
+          where: { file_id: resourceFileId, workspace_id: workspaceId }
+        });
+        const resourceFileIdNormalized = (resourceFileId || '').toUpperCase();
+        const overwriteAllowed = overwriteExisting && (!overwriteAllowList || overwriteAllowList.has(resourceFileIdNormalized));
+        if (existing && !overwriteAllowed) {
+          if (overwriteExisting && overwriteAllowList) {
+            return await Promise.resolve();
+          }
+          return {
+            conflict: true,
+            fileId: resourceFileId,
+            filename: file.originalname,
+            fileType: 'Schemer'
+          };
+        }
+        await this.fileUploadRepository.upsert({
           filename: file.originalname,
           workspace_id: workspaceId,
           file_type: 'Schemer',
           file_size: file.size,
+          created_at: new Date() as unknown as number,
           file_id: resourceFileId,
           data: file.buffer.toString(),
           structured_data: structuredData
         }, ['file_id', 'workspace_id']);
+
+        return {
+          fileId: resourceFileId,
+          filename: file.originalname,
+          fileType: 'Schemer'
+        };
       }
 
       const resourceFileId = this.workspaceFileParsingService.getPlayerId(file);
-      return await this.fileUploadRepository.upsert({
+      const existing = await this.fileUploadRepository.findOne({
+        where: { file_id: resourceFileId, workspace_id: workspaceId }
+      });
+      const resourceFileIdNormalized = (resourceFileId || '').toUpperCase();
+      const overwriteAllowed = overwriteExisting && (!overwriteAllowList || overwriteAllowList.has(resourceFileIdNormalized));
+      if (existing && !overwriteAllowed) {
+        if (overwriteExisting && overwriteAllowList) {
+          return await Promise.resolve();
+        }
+        return {
+          conflict: true,
+          fileId: resourceFileId,
+          filename: file.originalname,
+          fileType: 'Resource'
+        };
+      }
+      await this.fileUploadRepository.upsert({
         filename: file.originalname,
         workspace_id: workspaceId,
         file_type: 'Resource',
         file_size: file.size,
+        created_at: new Date() as unknown as number,
         file_id: resourceFileId,
         data: file.buffer.toString(),
         structured_data: structuredData
       }, ['file_id', 'workspace_id']);
+
+      return {
+        fileId: resourceFileId,
+        filename: file.originalname,
+        fileType: 'Resource'
+      };
     } catch (error) {
       const resourceFileId = this.workspaceFileParsingService.getResourceId(file);
-      return this.fileUploadRepository.upsert({
+      await this.fileUploadRepository.upsert({
         filename: file.originalname,
         workspace_id: workspaceId,
         file_type: 'Resource',
         file_size: file.size,
+        created_at: new Date() as unknown as number,
         file_id: resourceFileId,
         data: file.buffer.toString(),
         structured_data: { metadata: {} }
       }, ['file_id', 'workspace_id']);
+
+      return {
+        fileId: resourceFileId,
+        filename: file.originalname,
+        fileType: 'Resource'
+      };
     }
   }
 
-  private async handleOctetStreamFile(workspaceId: number, file: FileIo): Promise<void> {
+  private async handleOctetStreamFile(
+    workspaceId: number,
+    file: FileIo,
+    overwriteExisting: boolean,
+    overwriteAllowList?: Set<string>
+  ): Promise<unknown> {
     this.logger.log(`Processing octet-stream file: ${file.originalname} for workspace ${workspaceId}`);
     try {
       const fileExtension = path.extname(file.originalname).toLowerCase();
@@ -597,19 +746,56 @@ ${bookletRefs}
         file_id: file.originalname.toUpperCase(),
         file_type: fileType,
         file_size: file.size,
+        created_at: new Date() as unknown as number,
         data: fileContent,
         structured_data: structuredData
       });
 
-      await this.fileUploadRepository.upsert(fileUpload, ['file_id', 'workspace_id']);
+      const existing = await this.fileUploadRepository.findOne({
+        where: { file_id: fileUpload.file_id, workspace_id: workspaceId }
+      });
+      const fileIdNormalized = (fileUpload.file_id || '').toUpperCase();
+      const overwriteAllowed = overwriteExisting && (!overwriteAllowList || overwriteAllowList.has(fileIdNormalized));
+      if (existing && !overwriteAllowed) {
+        if (overwriteExisting && overwriteAllowList) {
+          return await Promise.resolve();
+        }
+        return {
+          conflict: true,
+          fileId: fileUpload.file_id,
+          filename: file.originalname,
+          fileType
+        };
+      }
+
+      const upsertResult = await this.fileUploadRepository.upsert(fileUpload, ['file_id', 'workspace_id']);
       this.logger.log(`Successfully processed octet-stream file: ${file.originalname} as ${fileType}`);
+      void upsertResult;
+      return {
+        fileId: fileUpload.file_id,
+        filename: file.originalname,
+        fileType
+      };
     } catch (error) {
       this.logger.error(`Error processing octet-stream file ${file.originalname}: ${error.message}`, error.stack);
       throw error;
     }
   }
 
-  private handleZipFile(workspaceId: number, file: FileIo): Array<Promise<unknown>> {
+  private isUploaded(value: unknown): value is TestFilesUploadUploadedDto {
+    if (!value || typeof value !== 'object') {
+      return false;
+    }
+    const v = value as Record<string, unknown>;
+    return typeof v['filename'] === 'string' && (typeof v['fileId'] === 'string' || typeof v['fileId'] === 'undefined');
+  }
+
+  private handleZipFile(
+    workspaceId: number,
+    file: FileIo,
+    overwriteExisting: boolean,
+    overwriteAllowList?: Set<string>
+  ): Array<Promise<unknown>> {
     this.logger.log(`Processing ZIP file: ${file.originalname} for workspace ${workspaceId}`);
     const promises: Array<Promise<unknown>> = [];
 
@@ -617,10 +803,7 @@ ${bookletRefs}
       const fileIos = this.workspaceFileStorageService.unzipToFileIos(file.buffer);
       this.logger.log(`Found ${fileIos.length} entries in ZIP file ${file.originalname}`);
 
-      fileIos.forEach(fileIo => {
-        promises.push(...this.handleFile(workspaceId, fileIo));
-      });
-
+      fileIos.forEach(fileIo => promises.push(...this.handleFile(workspaceId, fileIo, overwriteExisting, overwriteAllowList)));
       return promises;
     } catch (error) {
       this.logger.error(`Error processing ZIP file ${file.originalname}: ${error.message}`, error.stack);

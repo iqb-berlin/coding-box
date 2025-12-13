@@ -24,6 +24,7 @@ import { WorkspaceFilesService } from '../../database/services/workspace-files.s
 import { InvalidVariableDto } from '../../../../../../api-dto/files/variable-validation.dto';
 import { TestTakersValidationDto } from '../../../../../../api-dto/files/testtakers-validation.dto';
 import { DuplicateResponsesResultDto } from '../../../../../../api-dto/files/duplicate-response.dto';
+import { TestFilesUploadResultDto } from '../../../../../../api-dto/files/test-files-upload-result.dto';
 import { PersonService } from '../../database/services/person.service';
 import { UnitVariableDetailsDto } from '../../models/unit-variable-details.dto';
 import { CodingStatisticsService } from '../../database/services/coding-statistics.service';
@@ -269,13 +270,15 @@ export class WorkspaceFilesController {
       }
     }
   })
-  @ApiOkResponse({ description: 'Files uploaded successfully', type: Boolean })
+  @ApiOkResponse({ description: 'Files uploaded successfully', type: TestFilesUploadResultDto })
   @ApiBadRequestResponse({ description: 'Invalid workspace ID or no files uploaded' })
   @ApiTags('workspace')
   async addTestFiles(
     @Param('workspace_id') workspaceId: number,
+      @Query('overwriteExisting') overwriteExisting: string | undefined,
+      @Query('overwriteFileIds') overwriteFileIds: string | undefined,
       @UploadedFiles() files: Express.Multer.File[]
-  ): Promise<boolean> {
+  ): Promise<TestFilesUploadResultDto> {
     if (!workspaceId) {
       throw new BadRequestException('Workspace ID is required.');
     }
@@ -285,10 +288,20 @@ export class WorkspaceFilesController {
     }
 
     try {
-      return await this.workspaceFilesService.uploadTestFiles(workspaceId, files);
+      const overwrite = (overwriteExisting || '').toLowerCase() === 'true';
+      const overwriteIds = (overwriteFileIds || '')
+        .split(';')
+        .map(s => s.trim())
+        .filter(Boolean);
+      return await this.workspaceFilesService.uploadTestFiles(workspaceId, files, overwrite, overwriteIds.length > 0 ? overwriteIds : undefined);
     } catch (error) {
       logger.error('Error uploading test files:');
-      return false;
+      return {
+        total: files.length,
+        uploaded: 0,
+        failed: files.length,
+        failedFiles: files.map(f => ({ filename: f.originalname, reason: 'Upload failed' }))
+      };
     }
   }
 

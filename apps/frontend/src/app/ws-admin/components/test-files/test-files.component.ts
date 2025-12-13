@@ -41,8 +41,18 @@ import { FileSizePipe } from '../../../shared/pipes/filesize.pipe';
 import { FilesInListDto } from '../../../../../../../api-dto/files/files-in-list.dto';
 import { FileValidationResultDto } from '../../../../../../../api-dto/files/file-validation-result.dto';
 import { FileDownloadDto } from '../../../../../../../api-dto/files/file-download.dto';
+import { TestFilesUploadResultDto } from '../../../../../../../api-dto/files/test-files-upload-result.dto';
 import { ContentDialogComponent } from '../../../shared/dialogs/content-dialog/content-dialog.component';
 import { ConfirmDialogComponent } from '../../../shared/dialogs/confirm-dialog.component';
+import {
+  TestFilesUploadConflictsDialogComponent,
+  TestFilesUploadConflictsDialogResult
+} from './test-files-upload-conflicts-dialog.component';
+import { TestFilesUploadFailedDialogComponent } from './test-files-upload-failed-dialog.component';
+import {
+  TestFilesUploadResultDialogComponent,
+  TestFilesUploadResultDialogData
+} from './test-files-upload-result-dialog.component';
 import { getFileIcon } from '../../utils/file-utils';
 import { GermanPaginatorIntl } from '../../../shared/services/german-paginator-intl.service';
 
@@ -61,6 +71,10 @@ import { GermanPaginatorIntl } from '../../../shared/services/german-paginator-i
     IsSelectedPipe,
     SearchFilterComponent,
     FileSizePipe,
+    TestFilesUploadConflictsDialogComponent,
+    TestFilesUploadFailedDialogComponent,
+    TestFilesUploadResultDialogComponent,
+    ContentDialogComponent,
     MatIcon,
     MatHeaderCell,
     MatCell,
@@ -138,6 +152,14 @@ export class TestFilesComponent implements OnInit, OnDestroy {
     }
   }
 
+  private openUploadResultDialog(data: TestFilesUploadResultDialogData): void {
+    this.dialog.open(TestFilesUploadResultDialogComponent, {
+      width: '900px',
+      maxWidth: '95vw',
+      data
+    });
+  }
+
   get matSort(): MatSort {
     if (this.dataSource) {
       this.dataSource.sort = this.sort;
@@ -199,15 +221,116 @@ export class TestFilesComponent implements OnInit, OnDestroy {
     this.applyFilters();
   }
 
+  private showUploadSummary(result: TestFilesUploadResultDto): void {
+    const conflicts = result.conflicts || [];
+    const conflictInfo = conflicts.length > 0 ? `, Konflikte: ${conflicts.length}` : '';
+    this.snackBar.open(
+      `Upload abgeschlossen: ${result.uploaded} erfolgreich, ${result.failed} fehlgeschlagen${conflictInfo}`,
+      'OK',
+      { duration: 5000 }
+    );
+
+    if (result.failedFiles && result.failedFiles.length > 0) {
+      this.dialog.open(TestFilesUploadFailedDialogComponent, {
+        width: '800px',
+        maxWidth: '95vw',
+        data: {
+          failedFiles: result.failedFiles
+        }
+      });
+    }
+  }
+
+  private handleUploadResult(
+    workspaceId: number,
+    files: FileList | FormData,
+    result: TestFilesUploadResultDto
+  ): void {
+    this.showUploadSummary(result);
+
+    const conflicts = result.conflicts || [];
+    const uploadedFiles = result.uploadedFiles || [];
+    const failedFiles = result.failedFiles || [];
+    const attempted = result.total;
+    if (conflicts.length === 0) {
+      this.openUploadResultDialog({
+        attempted,
+        uploadedFiles,
+        failedFiles,
+        remainingConflicts: []
+      });
+      this.onUploadSuccess();
+      return;
+    }
+
+    const ref = this.dialog.open<
+      TestFilesUploadConflictsDialogComponent,
+      { conflicts: typeof conflicts },
+      TestFilesUploadConflictsDialogResult
+    >(TestFilesUploadConflictsDialogComponent, {
+      width: '800px',
+      maxWidth: '95vw',
+      data: { conflicts }
+    });
+
+    ref.afterClosed().subscribe(resultChoice => {
+      if (resultChoice?.overwrite === true) {
+        this.isLoading = true;
+        const overwriteSelectedCount = (resultChoice.overwriteFileIds || []).length;
+        this.backendService.uploadTestFiles(workspaceId, files, true, resultChoice.overwriteFileIds)
+          .subscribe({
+            next: overwriteResult => {
+              this.isLoading = false;
+              this.showUploadSummary(overwriteResult);
+
+              const finalUploadedFiles = [...uploadedFiles, ...(overwriteResult.uploadedFiles || [])];
+              const finalFailedFiles = [...failedFiles, ...(overwriteResult.failedFiles || [])];
+              const remainingConflicts = conflicts.filter(c => !(resultChoice.overwriteFileIds || []).includes(c.fileId));
+
+              this.openUploadResultDialog({
+                attempted,
+                overwriteSelectedCount,
+                uploadedFiles: finalUploadedFiles,
+                failedFiles: finalFailedFiles,
+                remainingConflicts
+              });
+              this.onUploadSuccess();
+            },
+            error: () => {
+              this.isLoading = false;
+              this.snackBar.open('Fehler beim Überschreiben der Dateien.', this.translate.instant('error'), { duration: 3000 });
+            }
+          });
+      } else {
+        // Skip overwriting, keep already uploaded (non-conflicting) files.
+        this.openUploadResultDialog({
+          attempted,
+          uploadedFiles,
+          failedFiles,
+          remainingConflicts: conflicts
+        });
+        this.onUploadSuccess();
+      }
+    });
+  }
+
   onFileSelected(target: EventTarget | null): void {
     if (!target) return;
     const inputElement = target as HTMLInputElement;
     const files = inputElement.files;
     if (files && files.length) {
       this.isLoading = true;
-      this.backendService.uploadTestFiles(this.appService.selectedWorkspaceId, files)
-        .subscribe(() => {
-          this.onUploadSuccess();
+      const workspaceId = this.appService.selectedWorkspaceId;
+      this.backendService.uploadTestFiles(workspaceId, files, false)
+        .subscribe({
+          next: result => {
+            this.isLoading = false;
+            this.handleUploadResult(workspaceId, files, result);
+          },
+          error: () => {
+            this.isLoading = false;
+            this.snackBar.open('Fehler beim Hochladen der Dateien.', this.translate.instant('error'), { duration: 3000 });
+          }
         });
     }
   }
