@@ -24,6 +24,7 @@ type DataValidation = {
   missing: string[];
   missingUnitsPerBooklet?: { booklet: string; missingUnits: string[] }[];
   unitsWithoutPlayer?: string[];
+  missingRefsPerUnit?: { unit: string; missingRefs: string[] }[];
   files: FileStatus[];
 };
 
@@ -648,6 +649,11 @@ export class WorkspaceTestFilesValidationService {
     const unitFiles: FileStatus[] = [];
     const unitsWithoutPlayer: string[] = [];
 
+    const missingCodingSchemeRefsByUnit: { unit: string; missingRefs: string[] }[] = [];
+    const missingDefinitionRefsByUnit: { unit: string; missingRefs: string[] }[] = [];
+    const missingPlayerRefsByUnit: { unit: string; missingRefs: string[] }[] = [];
+    const missingSchemerRefsByUnit: { unit: string; missingRefs: string[] }[] = [];
+
     const allCodingSchemeRefs = new Set<string>();
     const allSchemerRefs = new Set<string>();
     const allDefinitionRefs = new Set<string>();
@@ -676,6 +682,32 @@ export class WorkspaceTestFilesValidationService {
         refs?.schemerRefs.forEach(r => allSchemerRefs.add(r));
         refs?.definitionRefs.forEach(r => allDefinitionRefs.add(r));
         refs?.playerRefs.forEach(r => allPlayerRefs.add(r));
+
+        const codingSchemeMissingForUnit = (refs?.codingSchemeRefs || []).filter(r => !this.resourceExists(r, resourceIds));
+        if (codingSchemeMissingForUnit.length > 0) {
+          missingCodingSchemeRefsByUnit.push({ unit: unitId, missingRefs: codingSchemeMissingForUnit });
+        }
+
+        const schemerMissingForUnit = (refs?.schemerRefs || []).filter(r => {
+          if (this.resourceExists(r, resourceIds)) return false;
+          return !WorkspaceTestFilesValidationService.playerRefExists(r, resourceIdsArray);
+        });
+        if (schemerMissingForUnit.length > 0) {
+          missingSchemerRefsByUnit.push({ unit: unitId, missingRefs: schemerMissingForUnit });
+        }
+
+        const definitionMissingForUnit = (refs?.definitionRefs || []).filter(r => !this.resourceExists(r, resourceIds));
+        if (definitionMissingForUnit.length > 0) {
+          missingDefinitionRefsByUnit.push({ unit: unitId, missingRefs: definitionMissingForUnit });
+        }
+
+        const playerMissingForUnit = (refs?.playerRefs || []).filter(r => {
+          if (this.resourceExists(r, resourceIds)) return false;
+          return !WorkspaceTestFilesValidationService.playerRefExists(r, resourceIdsArray);
+        });
+        if (playerMissingForUnit.length > 0) {
+          missingPlayerRefsByUnit.push({ unit: unitId, missingRefs: playerMissingForUnit });
+        }
       }
     }
 
@@ -743,11 +775,13 @@ export class WorkspaceTestFilesValidationService {
       schemes: {
         complete: unitComplete ? missingCodingSchemeRefs.length === 0 : false,
         missing: missingCodingSchemeRefs,
+        missingRefsPerUnit: missingCodingSchemeRefsByUnit,
         files: schemeFiles
       },
       schemer: {
         complete: unitComplete ? missingSchemerRefs.length === 0 : false,
         missing: missingSchemerRefs,
+        missingRefsPerUnit: missingSchemerRefsByUnit,
         files: Array.from(allSchemerRefs).map(r => ({
           filename: r,
           exists: this.resourceExists(r, resourceIds) || WorkspaceTestFilesValidationService.playerRefExists(r, resourceIdsArray)
@@ -756,11 +790,13 @@ export class WorkspaceTestFilesValidationService {
       definitions: {
         complete: unitComplete ? missingDefinitionRefs.length === 0 : false,
         missing: missingDefinitionRefs,
+        missingRefsPerUnit: missingDefinitionRefsByUnit,
         files: Array.from(allDefinitionRefs).map(r => ({ filename: r, exists: this.resourceExists(r, resourceIds) }))
       },
       player: {
         complete: unitComplete ? missingPlayerRefs.length === 0 : false,
         missing: missingPlayerRefs,
+        missingRefsPerUnit: missingPlayerRefsByUnit,
         files: Array.from(allPlayerRefs).map(r => ({
           filename: r,
           exists: this.resourceExists(r, resourceIds) || WorkspaceTestFilesValidationService.playerRefExists(r, resourceIdsArray)
