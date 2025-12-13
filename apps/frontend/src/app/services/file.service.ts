@@ -12,6 +12,7 @@ import { FilesInListDto } from '../../../../../api-dto/files/files-in-list.dto';
 import { FilesDto } from '../../../../../api-dto/files/files.dto';
 import { FileValidationResultDto } from '../../../../../api-dto/files/file-validation-result.dto';
 import { FileDownloadDto } from '../../../../../api-dto/files/file-download.dto';
+import { TestFilesUploadResultDto } from '../../../../../api-dto/files/test-files-upload-result.dto';
 import { BookletInfoDto } from '../../../../../api-dto/booklet-info/booklet-info.dto';
 import { UnitInfoDto } from '../../../../../api-dto/unit-info/unit-info.dto';
 import { SERVER_URL } from '../injection-tokens';
@@ -105,7 +106,12 @@ export class FileService {
       );
   }
 
-  uploadTestFiles(workspaceId: number, files: FileList | FormData | null): Observable<number> {
+  uploadTestFiles(
+    workspaceId: number,
+    files: FileList | FormData | null,
+    overwriteExisting: boolean = false,
+    overwriteFileIds?: string[]
+  ): Observable<TestFilesUploadResultDto> {
     let formData: FormData;
 
     if (files instanceof FormData) {
@@ -119,7 +125,11 @@ export class FileService {
       }
     }
 
-    return this.http.post<never>(`${this.serverUrl}admin/workspace/${workspaceId}/upload`, formData, {
+    const overwriteIdsQuery = (overwriteFileIds && overwriteFileIds.length > 0) ?
+      `&overwriteFileIds=${encodeURIComponent(overwriteFileIds.join(';'))}` :
+      '';
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/upload?overwriteExisting=${overwriteExisting}${overwriteIdsQuery}`;
+    return this.http.post<TestFilesUploadResultDto>(url, formData, {
       headers: this.authHeader
     });
   }

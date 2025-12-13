@@ -7,6 +7,7 @@ import { FilesInListDto } from 'api-dto/files/files-in-list.dto';
 import { UnitNoteDto } from 'api-dto/unit-notes/unit-note.dto';
 import { UnitTagDto } from 'api-dto/unit-tags/unit-tag.dto';
 import { CreateUnitTagDto } from 'api-dto/unit-tags/create-unit-tag.dto';
+import { TestFilesUploadResultDto } from 'api-dto/files/test-files-upload-result.dto';
 import { CreateWorkspaceDto } from 'api-dto/workspaces/create-workspace-dto';
 import { PaginatedWorkspacesDto } from 'api-dto/workspaces/paginated-workspaces-dto';
 import { CodingJob, Variable, VariableBundle } from '../coding/models/coding-job.model';
@@ -277,8 +278,13 @@ export class BackendService {
     return this.workspaceService.changeWorkspace(workspaceData);
   }
 
-  uploadTestFiles(workspaceId: number, files: FileList | FormData | null): Observable<number> {
-    return this.fileService.uploadTestFiles(workspaceId, files);
+  uploadTestFiles(
+    workspaceId: number,
+    files: FileList | FormData | null,
+    overwriteExisting: boolean = false,
+    overwriteFileIds?: string[]
+  ): Observable<TestFilesUploadResultDto> {
+    return this.fileService.uploadTestFiles(workspaceId, files, overwriteExisting, overwriteFileIds);
   }
 
   uploadTestResults(
