@@ -972,6 +972,7 @@ export class WorkspaceTestResultsController {
     schema: {
       type: 'object',
       properties: {
+        groups: { type: 'array', items: { type: 'string' } },
         testPersons: {
           type: 'array',
           items: {
@@ -995,6 +996,7 @@ export class WorkspaceTestResultsController {
     @Param('workspace_id') workspace_id: number
   ): Promise<{
         testPersons: { id: number; code: string; groupName: string; login: string }[];
+        groups: string[];
         booklets: string[];
         units: string[];
       }> {

@@ -1610,6 +1610,7 @@ export class WorkspaceTestResultsService {
 
   async getExportOptions(workspaceId: number): Promise<{
     testPersons: { id: number; groupName: string; code: string; login: string }[];
+    groups: string[];
     booklets: string[];
     units: string[];
   }> {
@@ -1622,6 +1623,14 @@ export class WorkspaceTestResultsService {
       .addOrderBy('person.code', 'ASC')
       .addOrderBy('person.login', 'ASC')
       .getMany();
+
+    const groups = await this.personsRepository
+      .createQueryBuilder('person')
+      .select('DISTINCT person.group', 'name')
+      .where('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('person.consider = :consider', { consider: true })
+      .orderBy('person.group', 'ASC')
+      .getRawMany();
 
     const booklets = await this.bookletRepository
       .createQueryBuilder('booklet')
@@ -1645,6 +1654,7 @@ export class WorkspaceTestResultsService {
       testPersons: testPersons.map(p => ({
         id: p.id, groupName: p.group, code: p.code, login: p.login
       })),
+      groups: groups.map(g => g.name),
       booklets: booklets.map(b => b.name),
       units: units.map(u => u.name)
     };
