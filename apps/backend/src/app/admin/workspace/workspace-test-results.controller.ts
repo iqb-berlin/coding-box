@@ -23,6 +23,7 @@ import { WorkspaceTestResultsService } from '../../database/services/workspace-t
 import { DatabaseExportService } from '../database/database-export.service';
 import { JobQueueService } from '../../job-queue/job-queue.service';
 import { CacheService } from '../../cache/cache.service';
+import { TestResultsUploadResultDto } from '../../../../../../api-dto/files/test-results-upload-result.dto';
 
 interface RequestWithUser extends Request {
   user: {
@@ -853,7 +854,7 @@ export class WorkspaceTestResultsController {
   @ApiTags('workspace')
   @ApiOkResponse({
     description: 'Test results successfully uploaded.',
-    type: Boolean
+    type: TestResultsUploadResultDto
   })
   @ApiBadRequestResponse({
     description: 'Invalid request. Please check your input data.'
@@ -864,12 +865,40 @@ export class WorkspaceTestResultsController {
     required: false,
     description: 'Whether to overwrite existing logs/responses (default: true)'
   })
+  @ApiQuery({
+    name: 'personMatchMode',
+    required: false,
+    description: 'Person matching mode for import (strict: group+login+code; loose: login+code). If omitted, workspace setting test-results-person-match-mode is used (default strict).'
+  })
+  @ApiQuery({
+    name: 'overwriteMode',
+    required: false,
+    description: 'Overwrite mode for existing test results: skip (default), merge (insert missing only), replace (delete matching scope then import).'
+  })
+  @ApiQuery({
+    name: 'scope',
+    required: false,
+    description: 'Scope for import/overwrite: person (default, only persons included in upload) or workspace (potentially affects whole workspace).'
+  })
+  @ApiQuery({ name: 'groupName', required: false })
+  @ApiQuery({ name: 'bookletName', required: false })
+  @ApiQuery({ name: 'unitNameOrAlias', required: false })
+  @ApiQuery({ name: 'variableId', required: false })
+  @ApiQuery({ name: 'subform', required: false })
   async addTestResults(
     @Param('workspace_id') workspace_id: number,
       @Param('resultType') resultType: 'logs' | 'responses',
       @UploadedFiles() files: Express.Multer.File[],
-      @Query('overwriteExisting') overwriteExisting?: string
-  ): Promise<boolean> {
+      @Query('overwriteExisting') overwriteExisting?: string,
+      @Query('personMatchMode') personMatchMode?: string,
+      @Query('overwriteMode') overwriteMode?: string,
+      @Query('scope') scope?: string,
+      @Query('groupName') groupName?: string,
+      @Query('bookletName') bookletName?: string,
+      @Query('unitNameOrAlias') unitNameOrAlias?: string,
+      @Query('variableId') variableId?: string,
+      @Query('subform') subform?: string
+  ): Promise<TestResultsUploadResultDto> {
     if (!workspace_id || Number.isNaN(workspace_id)) {
       throw new BadRequestException('Invalid workspace_id.');
     }
@@ -882,7 +911,27 @@ export class WorkspaceTestResultsController {
     logger.log(`Uploading test results with overwriteExisting=${shouldOverwrite}`);
 
     try {
-      return await this.uploadResults.uploadTestResults(workspace_id, files, resultType, shouldOverwrite);
+      const mode = (personMatchMode || '').toLowerCase() === 'loose' ? 'loose' : undefined;
+      const requestedOverwriteMode = (overwriteMode || '').toLowerCase();
+      const finalOverwriteMode = !shouldOverwrite ? 'skip' : (requestedOverwriteMode === 'replace' ? 'replace' : (requestedOverwriteMode === 'merge' ? 'merge' : 'skip'));
+      const finalScope = (scope || '').toLowerCase();
+      const normalizedScope = (finalScope === 'workspace' || finalScope === 'person' || finalScope === 'group' || finalScope === 'booklet' || finalScope === 'unit' || finalScope === 'response') ? finalScope : 'person';
+      return await this.uploadResults.uploadTestResults(
+        workspace_id,
+        files,
+        resultType,
+        shouldOverwrite,
+        mode,
+        finalOverwriteMode,
+        normalizedScope as any,
+        {
+          groupName,
+          bookletName,
+          unitNameOrAlias,
+          variableId,
+          subform
+        }
+      );
     } catch (error) {
       logger.error('Error uploading test results!');
       throw new BadRequestException('Uploading test results failed. Please try again.');

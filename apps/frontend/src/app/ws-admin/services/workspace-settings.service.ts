@@ -18,6 +18,8 @@ export const DEFAULT_RESPONSE_MATCHING_MODE: ResponseMatchingModeDto = {
   flags: []
 };
 
+export type TestResultsPersonMatchMode = 'strict' | 'loose';
+
 @Injectable({
   providedIn: 'root'
 })
@@ -109,6 +111,37 @@ export class WorkspaceSettingsService {
       'response-matching-mode',
       value,
       'Controls how responses are aggregated by value similarity for coding case distribution'
+    );
+  }
+
+  getTestResultsPersonMatchMode(workspaceId: number): Observable<TestResultsPersonMatchMode> {
+    return new Observable(observer => {
+      this.getWorkspaceSetting(workspaceId, 'test-results-person-match-mode')
+        .subscribe({
+          next: setting => {
+            try {
+              const parsed = JSON.parse(setting.value);
+              observer.next(parsed.mode === 'loose' ? 'loose' : 'strict');
+            } catch {
+              observer.next('strict');
+            }
+            observer.complete();
+          },
+          error: () => {
+            observer.next('strict');
+            observer.complete();
+          }
+        });
+    });
+  }
+
+  setTestResultsPersonMatchMode(workspaceId: number, mode: TestResultsPersonMatchMode): Observable<WorkspaceSettings> {
+    const value = JSON.stringify({ mode });
+    return this.setWorkspaceSetting(
+      workspaceId,
+      'test-results-person-match-mode',
+      value,
+      'Controls how persons are matched during test results import (strict: group+login+code, loose: login+code)'
     );
   }
 }

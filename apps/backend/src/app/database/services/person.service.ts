@@ -23,6 +23,7 @@ import {
   TcMergeSubForms,
   TcMergeUnit, Response
 } from './shared-types';
+import { TestResultsUploadStatsDto } from '../../../../../../api-dto/files/test-results-upload-result.dto';
 
 @Injectable()
 export class PersonService {
@@ -63,8 +64,70 @@ export class PersonService {
 
       return result.map(item => item.group);
     } catch (error) {
-      this.logger.error(`Error fetching workspace groups: ${error.message}`);
+      this.logger.error(`Error fetching groups for workspace ${workspaceId}: ${error.message}`);
       return [];
+    }
+  }
+
+  async getWorkspaceUploadStats(workspaceId: number): Promise<TestResultsUploadStatsDto> {
+    try {
+      const testPersons = await this.personsRepository.count({
+        where: { workspace_id: workspaceId, consider: true }
+      });
+
+      const groupRows = await this.personsRepository
+        .createQueryBuilder('person')
+        .select('DISTINCT person.group', 'group')
+        .where('person.workspace_id = :workspaceId', { workspaceId })
+        .andWhere('person.consider = :consider', { consider: true })
+        .getRawMany();
+      const testGroups = groupRows.length;
+
+      const bookletRows = await this.bookletRepository
+        .createQueryBuilder('booklet')
+        .innerJoin('booklet.person', 'person')
+        .innerJoin('booklet.bookletinfo', 'bookletinfo')
+        .select('DISTINCT bookletinfo.name', 'name')
+        .where('person.workspace_id = :workspaceId', { workspaceId })
+        .andWhere('person.consider = :consider', { consider: true })
+        .getRawMany();
+      const uniqueBooklets = bookletRows.length;
+
+      const unitRows = await this.unitRepository
+        .createQueryBuilder('unit')
+        .innerJoin('unit.booklet', 'booklet')
+        .innerJoin('booklet.person', 'person')
+        .select('DISTINCT COALESCE(unit.alias, unit.name)', 'unitKey')
+        .where('person.workspace_id = :workspaceId', { workspaceId })
+        .andWhere('person.consider = :consider', { consider: true })
+        .getRawMany();
+      const uniqueUnits = unitRows.length;
+
+      const uniqueResponses = await this.responseRepository
+        .createQueryBuilder('response')
+        .innerJoin('response.unit', 'unit')
+        .innerJoin('unit.booklet', 'booklet')
+        .innerJoin('booklet.person', 'person')
+        .where('person.workspace_id = :workspaceId', { workspaceId })
+        .andWhere('person.consider = :consider', { consider: true })
+        .getCount();
+
+      return {
+        testPersons,
+        testGroups,
+        uniqueBooklets,
+        uniqueUnits,
+        uniqueResponses
+      };
+    } catch (error) {
+      this.logger.error(`Error fetching workspace upload stats: ${error.message}`);
+      return {
+        testPersons: 0,
+        testGroups: 0,
+        uniqueBooklets: 0,
+        uniqueUnits: 0,
+        uniqueResponses: 0
+      };
     }
   }
 
@@ -523,7 +586,9 @@ export class PersonService {
 
   async processPersonBooklets(
     personList: Person[],
-    workspace_id: number
+    workspace_id: number,
+    overwriteMode: 'skip' | 'merge' | 'replace' = 'skip',
+    scope: 'person' | 'workspace' = 'person'
   ): Promise<void> {
     try {
       if (!Array.isArray(personList) || personList.length === 0) {
@@ -538,7 +603,43 @@ export class PersonService {
       this.logger.log(`Starting to process ${personList.length} persons for workspace ${workspace_id}`);
 
       await this.personsRepository.upsert(personList, ['group', 'code', 'login', 'workspace_id']);
-      const persons = await this.personsRepository.find({ where: { workspace_id } });
+
+      let persons: Persons[] = [];
+      if (scope === 'workspace') {
+        persons = await this.personsRepository.find({ where: { workspace_id } });
+      } else {
+        // Person-scope default: process only persons that were part of the uploaded file.
+        // This avoids unintentionally re-processing all persons in the workspace.
+        const uniqueKeys = Array.from(new Set(
+          personList.map(p => `${p.group}@@${p.login}@@${p.code}`)
+        ));
+
+        const BATCH_SIZE = 200;
+        for (let i = 0; i < uniqueKeys.length; i += BATCH_SIZE) {
+          const batchKeys = uniqueKeys.slice(i, i + BATCH_SIZE)
+            .map(k => {
+              const [group, login, code] = k.split('@@');
+              return { group, login, code };
+            });
+
+          const batchPersons = await this.personsRepository
+            .createQueryBuilder('person')
+            .where('person.workspace_id = :workspaceId', { workspaceId: workspace_id })
+            .andWhere(new Brackets(qb => {
+              batchKeys.forEach((k, idx) => {
+                const clause = `(person.group = :g${idx} AND person.login = :l${idx} AND person.code = :c${idx})`;
+                if (idx === 0) {
+                  qb.where(clause, { [`g${idx}`]: k.group, [`l${idx}`]: k.login, [`c${idx}`]: k.code });
+                } else {
+                  qb.orWhere(clause, { [`g${idx}`]: k.group, [`l${idx}`]: k.login, [`c${idx}`]: k.code });
+                }
+              });
+            }))
+            .getMany();
+
+          persons.push(...batchPersons);
+        }
+      }
 
       if (!persons || persons.length === 0) {
         this.logger.warn(`No persons found for workspace_id: ${workspace_id}`);
@@ -562,7 +663,7 @@ export class PersonService {
           }
 
           try {
-            await this.processBookletWithTransaction(booklet, person);
+            await this.processBookletWithTransaction(booklet, person, overwriteMode);
             totalBookletsProcessed += 1;
 
             if (Array.isArray(booklet.units)) {
@@ -598,7 +699,8 @@ export class PersonService {
 
   private async processBookletWithTransaction(
     booklet: TcMergeBooklet,
-    person: Persons
+    person: Persons,
+    overwriteMode: 'skip' | 'merge' | 'replace' = 'skip'
   ): Promise<void> {
     let bookletInfo = await this.bookletInfoRepository.findOne({ where: { name: booklet.id } });
     if (!bookletInfo) {
@@ -622,13 +724,7 @@ export class PersonService {
       return;
     }
 
-    // Prevent duplicate entries - return early if booklet already exists
-    if (existingBooklet) {
-      this.logger.log(`Booklet ${booklet.id} already exists for person ${person.id}, skipping duplicate`);
-      return;
-    }
-
-    const newBooklet = await this.bookletRepository.save(
+    const targetBooklet = existingBooklet || await this.bookletRepository.save(
       this.bookletRepository.create({
         personid: person.id,
         infoid: bookletInfo.id,
@@ -636,6 +732,11 @@ export class PersonService {
         firstts: Date.now()
       })
     );
+
+    if (existingBooklet && overwriteMode === 'skip') {
+      this.logger.log(`Booklet ${booklet.id} already exists for person ${person.id}, skipping (overwriteMode=skip)`);
+      return;
+    }
 
     if (Array.isArray(booklet.units) && booklet.units.length > 0) {
       const batchSize = 10;
@@ -648,24 +749,27 @@ export class PersonService {
             }
             try {
               const existingUnit = await this.unitRepository.findOne({
-                where: { alias: unit.alias, name: unit.id, bookletid: newBooklet.id }
+                where: { alias: unit.alias, name: unit.id, bookletid: targetBooklet.id }
               });
 
-              if (!existingUnit) {
-                const newUnit = await this.unitRepository.save(
-                  this.unitRepository.create({
-                    alias: unit.alias,
-                    name: unit.id,
-                    bookletid: newBooklet.id
-                  })
-                );
-                if (newUnit) {
-                  await Promise.all([
-                    this.saveUnitLastState(unit, newUnit),
-                    this.processSubforms(unit, newUnit),
-                    this.processChunks(unit, newUnit, booklet)
-                  ]);
-                }
+              if (existingUnit && overwriteMode === 'skip') {
+                return;
+              }
+
+              const targetUnit = existingUnit || await this.unitRepository.save(
+                this.unitRepository.create({
+                  alias: unit.alias,
+                  name: unit.id,
+                  bookletid: targetBooklet.id
+                })
+              );
+
+              if (targetUnit) {
+                await Promise.all([
+                  this.saveUnitLastState(unit, targetUnit),
+                  this.processSubforms(unit, targetUnit, overwriteMode),
+                  this.processChunks(unit, targetUnit, booklet)
+                ]);
               }
             } catch (unitError) {
               this.logger.error(
@@ -705,12 +809,13 @@ export class PersonService {
 
   private async processSubforms(
     unit: TcMergeUnit,
-    savedUnit: Unit
+    savedUnit: Unit,
+    overwriteMode: 'skip' | 'merge' | 'replace' = 'skip'
   ): Promise<{ success: boolean; saved: number; skipped: number }> {
     try {
       const subforms = unit.subforms;
       if (subforms && subforms.length > 0) {
-        return await this.saveSubformResponsesForUnit(savedUnit, subforms);
+        return await this.saveSubformResponsesForUnit(savedUnit, subforms, overwriteMode);
       }
       return { success: true, saved: 0, skipped: 0 };
     } catch (error) {
@@ -744,10 +849,12 @@ export class PersonService {
 
   async saveSubformResponsesForUnit(
     savedUnit: Unit,
-    subforms: TcMergeSubForms[]
+    subforms: TcMergeSubForms[],
+    overwriteMode: 'skip' | 'merge' | 'replace' = 'skip'
   ): Promise<{ success: boolean; saved: number; skipped: number }> {
     try {
       let totalResponsesSaved = 0;
+      let totalResponsesSkipped = 0;
       for (const subform of subforms) {
         if (subform.responses && subform.responses.length > 0) {
           const responseEntries = subform.responses.map(response => {
@@ -772,12 +879,46 @@ export class PersonService {
           });
 
           if (responseEntries.length > 0) {
+            const variables = Array.from(new Set(responseEntries.map(r => r.variableid)));
+
+            if (overwriteMode === 'replace') {
+              await this.responseRepository
+                .createQueryBuilder()
+                .delete()
+                .from(ResponseEntity)
+                .where('unitid = :unitid', { unitid: savedUnit.id })
+                .andWhere('subform = :subform', { subform: subform.id })
+                .andWhere('variableid IN (:...variables)', { variables })
+                .execute();
+            }
+
+            let filteredEntries = responseEntries;
+            if (overwriteMode === 'skip' || overwriteMode === 'merge') {
+              const existing = await this.responseRepository.find({
+                where: {
+                  unitid: Number(savedUnit.id),
+                  subform: subform.id,
+                  variableid: In(variables)
+                },
+                select: ['variableid', 'subform']
+              });
+              const existingKeys = new Set(existing.map(r => `${r.variableid}@@${r.subform || ''}`));
+              filteredEntries = responseEntries.filter(r => {
+                const k = `${r.variableid}@@${r.subform || ''}`;
+                return !existingKeys.has(k);
+              });
+              totalResponsesSkipped += (responseEntries.length - filteredEntries.length);
+            }
+
+            if (filteredEntries.length === 0) {
+              continue;
+            }
             const BATCH_SIZE = 1000;
-            for (let i = 0; i < responseEntries.length; i += BATCH_SIZE) {
-              const batch = responseEntries.slice(i, i + BATCH_SIZE);
+            for (let i = 0; i < filteredEntries.length; i += BATCH_SIZE) {
+              const batch = filteredEntries.slice(i, i + BATCH_SIZE);
               await this.responseRepository.save(batch);
             }
-            totalResponsesSaved += responseEntries.length;
+            totalResponsesSaved += filteredEntries.length;
           }
         }
       }
@@ -785,7 +926,7 @@ export class PersonService {
       return {
         success: true,
         saved: totalResponsesSaved,
-        skipped: 0
+        skipped: totalResponsesSkipped
       };
     } catch (error) {
       this.logger.error(`Failed to save responses for unit: ${savedUnit.id}: ${error.message}`);
