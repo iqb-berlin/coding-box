@@ -382,12 +382,14 @@ export class BackendService {
 
   getExportOptions(workspaceId: number): Observable<{
     testPersons: { id: number; code: string; groupName: string; login: string }[];
+    groups: string[];
     booklets: string[];
     units: string[];
   }> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/results/export/options`;
     return this.http.get<{
       testPersons: { id: number; code: string; groupName: string; login: string }[];
+      groups: string[];
       booklets: string[];
       units: string[];
     }>(url, {

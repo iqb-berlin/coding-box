@@ -35,6 +35,22 @@ export interface ExportOptions {
       <p>Wählen Sie die Daten aus, die exportiert werden sollen.</p>
 
       <mat-tab-group>
+        <mat-tab label="Testgruppen">
+          <div class="selection-actions">
+            <button mat-button (click)="groupsList.selectAll()">Alle auswählen</button>
+            <button mat-button (click)="groupsList.deselectAll()">Alle abwählen</button>
+          </div>
+          <div class="list-container">
+            <mat-selection-list #groupsList [(ngModel)]="data.groupNames">
+              @for (group of availableOptions.groups; track group) {
+                <mat-list-option [value]="group">
+                  {{ group }}
+                </mat-list-option>
+              }
+            </mat-selection-list>
+          </div>
+        </mat-tab>
+
         <mat-tab label="Testpersonen">
           <div class="selection-actions">
             <button mat-button (click)="personsList.selectAll()">Alle auswählen</button>
@@ -123,10 +139,12 @@ export class ExportOptionsDialogComponent implements OnInit {
 
   availableOptions: {
     testPersons: { id: number; code: string; groupName: string; login: string }[];
+    groups: string[];
     booklets: string[];
     units: string[];
   } = {
       testPersons: [],
+      groups: [],
       booklets: [],
       units: []
     };
