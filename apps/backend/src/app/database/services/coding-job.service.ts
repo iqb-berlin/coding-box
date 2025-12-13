@@ -1601,7 +1601,6 @@ export class CodingJobService {
           }
           return a.id - b.id;
         });
-        console.log('caseorder', sortedResponses.map(r => r.variableid));
 
         const doubleCodingResponses = sortedResponses.slice(0, doubleCodingCount);
         const singleCodingResponses = sortedResponses.slice(doubleCodingCount);

@@ -12,7 +12,16 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDialog } from '@angular/material/dialog';
-import { Observable, Subject, Subscription, debounceTime, of, shareReplay, tap } from 'rxjs';
+import { MatAutocompleteModule } from '@angular/material/autocomplete';
+import {
+  Observable,
+  Subject,
+  Subscription,
+  debounceTime,
+  of,
+  shareReplay,
+  tap
+} from 'rxjs';
 import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
 import { FlatResponseFilterOptionsResponse, TestResultService } from '../../../services/test-result.service';
@@ -23,7 +32,6 @@ import { LogDialogComponent } from '../booklet-log-dialog/log-dialog.component';
 import { UnitLogsDialogComponent } from '../unit-logs-dialog/unit-logs-dialog.component';
 import { NoteDialogComponent } from '../note-dialog/note-dialog.component';
 import { UnitNoteDto } from '../../../../../../../api-dto/unit-notes/unit-note.dto';
-import { MatAutocompleteModule } from '@angular/material/autocomplete';
 
 interface FlatResponseRow {
   responseId: number;

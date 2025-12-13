@@ -584,7 +584,9 @@ export class WorkspaceTestResultsService {
       countQb.andWhere('unitTag.tag ILIKE :tags', { tags: `%${tags}%` });
     }
 
-    const total = await countQb.select('COUNT(DISTINCT response.id)', 'cnt').getRawOne()
+    const total = await countQb
+      .select('COUNT(DISTINCT response.id)', 'cnt')
+      .getRawOne()
       .then(r => Number(r?.cnt || 0));
 
     const raw = await qb
@@ -718,13 +720,21 @@ export class WorkspaceTestResultsService {
     }
 
     const [codeRows, groupRows, loginRows, bookletRows, unitRows, responseRows, tagRows] = await Promise.all([
-      baseQb.clone().select('DISTINCT person.code', 'v').orderBy('person.code', 'ASC').limit(MAX_OPTIONS).getRawMany<{ v: string }>(),
-      baseQb.clone().select('DISTINCT person.group', 'v').orderBy('person.group', 'ASC').limit(MAX_OPTIONS).getRawMany<{ v: string }>(),
-      baseQb.clone().select('DISTINCT person.login', 'v').orderBy('person.login', 'ASC').limit(MAX_OPTIONS).getRawMany<{ v: string }>(),
-      baseQb.clone().select('DISTINCT bookletinfo.name', 'v').orderBy('bookletinfo.name', 'ASC').limit(MAX_OPTIONS).getRawMany<{ v: string }>(),
-      baseQb.clone().select('DISTINCT COALESCE(unit.alias, unit.name)', 'v').orderBy('v', 'ASC').limit(MAX_OPTIONS).getRawMany<{ v: string }>(),
-      baseQb.clone().select('DISTINCT response.variableid', 'v').orderBy('response.variableid', 'ASC').limit(MAX_OPTIONS).getRawMany<{ v: string }>(),
-      baseQb.clone().select('DISTINCT unitTag.tag', 'v').where('unitTag.tag IS NOT NULL').orderBy('unitTag.tag', 'ASC').limit(MAX_OPTIONS).getRawMany<{ v: string }>()
+      baseQb.clone().select('DISTINCT person.code', 'v').orderBy('person.code', 'ASC').limit(MAX_OPTIONS)
+        .getRawMany<{ v: string }>(),
+      baseQb.clone().select('DISTINCT person.group', 'v').orderBy('person.group', 'ASC').limit(MAX_OPTIONS)
+        .getRawMany<{ v: string }>(),
+      baseQb.clone().select('DISTINCT person.login', 'v').orderBy('person.login', 'ASC').limit(MAX_OPTIONS)
+        .getRawMany<{ v: string }>(),
+      baseQb.clone().select('DISTINCT bookletinfo.name', 'v').orderBy('bookletinfo.name', 'ASC').limit(MAX_OPTIONS)
+        .getRawMany<{ v: string }>(),
+      baseQb.clone().select('DISTINCT COALESCE(unit.alias, unit.name)', 'v').orderBy('v', 'ASC').limit(MAX_OPTIONS)
+        .getRawMany<{ v: string }>(),
+      baseQb.clone().select('DISTINCT response.variableid', 'v').orderBy('response.variableid', 'ASC').limit(MAX_OPTIONS)
+        .getRawMany<{ v: string }>(),
+      baseQb.clone().select('DISTINCT unitTag.tag', 'v').where('unitTag.tag IS NOT NULL').orderBy('unitTag.tag', 'ASC')
+        .limit(MAX_OPTIONS)
+        .getRawMany<{ v: string }>()
     ]);
 
     const mapVals = (rows: Array<{ v: string }>) => (rows || [])
@@ -769,12 +779,12 @@ export class WorkspaceTestResultsService {
       ])
       .orderBy('unitLog.id', 'ASC')
       .getRawMany<{
-        id: number;
-        unitid: number;
-        ts: number | null;
-        key: string;
-        parameter: string | null;
-      }>();
+      id: number;
+      unitid: number;
+      ts: number | null;
+      key: string;
+      parameter: string | null;
+    }>();
 
     return (raw || []).map(r => ({
       id: Number(r.id),

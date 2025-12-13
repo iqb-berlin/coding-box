@@ -297,15 +297,15 @@ ${bookletRefs}
     const processInBatches = async (
       files: FileIo[],
       batchSize: number,
-      overwriteExisting: boolean,
-      overwriteAllowList?: Set<string>
+      overwriteExistingParam: boolean,
+      overwriteAllowListParam?: Set<string>
     ): Promise<TestFilesUploadResultDto> => {
       const tasks: Array<{ filename: string; promise: Promise<unknown> }> = [];
 
       for (let i = 0; i < files.length; i += batchSize) {
         const batch = files.slice(i, i + batchSize);
         batch.forEach(file => {
-          const promises = this.handleFile(workspace_id, file, overwriteExisting, overwriteAllowList);
+          const promises = this.handleFile(workspace_id, file, overwriteExistingParam, overwriteAllowListParam);
           promises.forEach(p => tasks.push({ filename: file.originalname, promise: p }));
         });
         await Promise.allSettled(tasks.slice(i, i + batchSize).map(t => t.promise));
@@ -317,8 +317,9 @@ ${bookletRefs}
       const uploadedFiles: TestFilesUploadUploadedDto[] = [];
       let uploaded = 0;
 
-      const isConflict = (value: unknown): value is (TestFilesUploadConflictDto & { conflict: true }) =>
-        !!value && typeof value === 'object' && (value as { conflict?: unknown }).conflict === true;
+      const isConflict = (value: unknown): value is (TestFilesUploadConflictDto & { conflict: true }) => (
+        !!value && typeof value === 'object' && (value as { conflict?: unknown }).conflict === true
+      );
 
       settled.forEach((result, idx) => {
         const task = tasks[idx];
@@ -768,9 +769,8 @@ ${bookletRefs}
         };
       }
 
-      const upsertResult = await this.fileUploadRepository.upsert(fileUpload, ['file_id', 'workspace_id']);
+      await this.fileUploadRepository.upsert(fileUpload, ['file_id', 'workspace_id']);
       this.logger.log(`Successfully processed octet-stream file: ${file.originalname} as ${fileType}`);
-      void upsertResult;
       return {
         fileId: fileUpload.file_id,
         filename: file.originalname,
@@ -786,8 +786,8 @@ ${bookletRefs}
     if (!value || typeof value !== 'object') {
       return false;
     }
-    const v = value as Record<string, unknown>;
-    return typeof v['filename'] === 'string' && (typeof v['fileId'] === 'string' || typeof v['fileId'] === 'undefined');
+    const v = value as { filename?: unknown; fileId?: unknown };
+    return typeof v.filename === 'string' && (typeof v.fileId === 'string' || typeof v.fileId === 'undefined');
   }
 
   private handleZipFile(
