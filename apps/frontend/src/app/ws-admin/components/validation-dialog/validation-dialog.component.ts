@@ -162,6 +162,31 @@ import { GermanPaginatorIntl } from '../../../shared/services/german-paginator-i
     .validation-summary-item-label {
       flex: 1;
     }
+
+    .duplicate-response-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .duplicate-response-table th,
+    .duplicate-response-table td {
+      padding: 6px 8px;
+      border-bottom: 1px solid #e0e0e0;
+      vertical-align: top;
+      word-break: break-word;
+    }
+
+    .duplicate-row-selected {
+      background-color: rgba(33, 150, 243, 0.08);
+    }
+
+    .duplicate-cell-conflict {
+      background-color: rgba(244, 67, 54, 0.10);
+    }
+
+    .duplicate-cell-selected {
+      outline: 1px solid rgba(33, 150, 243, 0.35);
+    }
   `]
 })
 export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestroy {
@@ -244,6 +269,7 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
   selectedTypeResponses: Set<number> = new Set<number>();
   selectedStatusResponses: Set<number> = new Set<number>();
   duplicateResponseSelections: Map<string, number> = new Map<string, number>();
+  duplicateResponseTouchedKeys: Set<string> = new Set<string>();
 
   pageSizeOptions = [25, 50, 100, 200];
 
@@ -264,6 +290,74 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
     const subform = encodeURIComponent(duplicate.subform || '');
     const login = encodeURIComponent(duplicate.testTakerLogin || '');
     return `${unitId}|${variableId}|${subform}|${login}`;
+  }
+
+  private hasDifferentDuplicateValues(duplicate: DuplicateResponseSelectionDto): boolean {
+    const values = new Set((duplicate.duplicates || []).map(d => String(d.value ?? '')));
+    return values.size > 1;
+  }
+
+  private hasDifferentDuplicateStatuses(duplicate: DuplicateResponseSelectionDto): boolean {
+    const statuses = new Set((duplicate.duplicates || []).map(d => String(d.status ?? '')));
+    return statuses.size > 1;
+  }
+
+  getSelectedDuplicateResponseId(duplicate: DuplicateResponseSelectionDto): number | undefined {
+    return this.duplicateResponseSelections.get(duplicate.key);
+  }
+
+  isDuplicateRowSelected(duplicate: DuplicateResponseSelectionDto, responseId: number): boolean {
+    return this.getSelectedDuplicateResponseId(duplicate) === responseId;
+  }
+
+  isDuplicateValueConflicting(duplicate: DuplicateResponseSelectionDto, responseId: number): boolean {
+    if (!this.hasDifferentDuplicateValues(duplicate)) {
+      return false;
+    }
+    const selectedId = this.getSelectedDuplicateResponseId(duplicate);
+    if (!selectedId) {
+      // No baseline selected yet -> mark value column as conflicting for all rows
+      return true;
+    }
+    const selected = (duplicate.duplicates || []).find(d => d.responseId === selectedId);
+    const current = (duplicate.duplicates || []).find(d => d.responseId === responseId);
+    return String(current?.value ?? '') !== String(selected?.value ?? '');
+  }
+
+  isDuplicateStatusConflicting(duplicate: DuplicateResponseSelectionDto, responseId: number): boolean {
+    if (!this.hasDifferentDuplicateStatuses(duplicate)) {
+      return false;
+    }
+    const selectedId = this.getSelectedDuplicateResponseId(duplicate);
+    if (!selectedId) {
+      // No baseline selected yet -> mark status column as conflicting for all rows
+      return true;
+    }
+    const selected = (duplicate.duplicates || []).find(d => d.responseId === selectedId);
+    const current = (duplicate.duplicates || []).find(d => d.responseId === responseId);
+    return String(current?.status ?? '') !== String(selected?.status ?? '');
+  }
+
+  getDuplicateConflictLabel(duplicate: DuplicateResponseSelectionDto): string {
+    const parts: string[] = [];
+    if (this.hasDifferentDuplicateValues(duplicate)) {
+      parts.push('Wert');
+    }
+    if (this.hasDifferentDuplicateStatuses(duplicate)) {
+      parts.push('Status');
+    }
+    if (parts.length === 0) {
+      return 'Duplikate sind identisch';
+    }
+    return `Unterschiede: ${parts.join(', ')}`;
+  }
+
+  isDuplicateGroupTouched(duplicate: DuplicateResponseSelectionDto): boolean {
+    return this.duplicateResponseTouchedKeys.has(duplicate.key);
+  }
+
+  markDuplicateGroupTouched(duplicate: DuplicateResponseSelectionDto): void {
+    this.duplicateResponseTouchedKeys.add(duplicate.key);
   }
 
   constructor(
@@ -873,6 +967,7 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
     this.validateDuplicateResponsesWasRun = false;
     this.currentDuplicateResponsesPage = 1;
     this.duplicateResponseSelections.clear();
+    this.duplicateResponseTouchedKeys.clear();
     this.subscriptions.forEach(sub => sub.unsubscribe());
     this.subscriptions = [];
 
@@ -910,14 +1005,6 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
               );
 
               this.duplicateResponses = typedResult.data.map(duplicate => {
-                const defaultSelectedId = duplicate.duplicates.length > 0 ?
-                  duplicate.duplicates[0].responseId : undefined;
-
-                if (defaultSelectedId) {
-                  const key = this.buildDuplicateKey(duplicate);
-                  this.duplicateResponseSelections.set(key, defaultSelectedId);
-                }
-
                 return {
                   ...duplicate,
                   key: this.buildDuplicateKey(duplicate)
@@ -970,14 +1057,84 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
 
   selectDuplicateResponse(duplicate: DuplicateResponseSelectionDto, responseId: number): void {
     this.duplicateResponseSelections.set(duplicate.key, responseId);
+    this.markDuplicateGroupTouched(duplicate);
   }
 
   hasSelectedDuplicateResponses(): boolean {
-    return this.duplicateResponseSelections.size > 0;
+    return this.getSelectedDuplicateResponsesCount() > 0;
   }
 
   getSelectedDuplicateResponsesCount(): number {
-    return this.duplicateResponseSelections.size;
+    return this.duplicateResponseTouchedKeys.size;
+  }
+
+  resolveDuplicateGroup(duplicate: DuplicateResponseSelectionDto): void {
+    const selected = this.duplicateResponseSelections.get(duplicate.key);
+    if (!selected) {
+      this.snackBar.open('Bitte zuerst eine Antwort auswählen.', 'OK', { duration: 3000 });
+      return;
+    }
+
+    this.isResolvingDuplicateResponses = true;
+    const request = { resolutionMap: { [duplicate.key]: selected } };
+
+    this.validationService.resolveDuplicateResponses(this.appService.selectedWorkspaceId, request)
+      .subscribe({
+        next: result => {
+          if (result.success) {
+            this.snackBar.open(
+              `${result.resolvedCount} doppelte Antworten wurden erfolgreich aufgelöst.`,
+              'OK',
+              { duration: 3000 }
+            );
+            this.validateDuplicateResponses();
+          } else {
+            this.snackBar.open('Fehler beim Auflösen der doppelten Antworten.', 'Fehler', { duration: 3000 });
+          }
+          this.isResolvingDuplicateResponses = false;
+        },
+        error: () => {
+          this.snackBar.open('Fehler beim Auflösen der doppelten Antworten.', 'Fehler', { duration: 3000 });
+          this.isResolvingDuplicateResponses = false;
+        }
+      });
+  }
+
+  selectSuggestedDuplicateResponse(duplicate: DuplicateResponseSelectionDto): void {
+    if (!duplicate?.duplicates?.length) {
+      return;
+    }
+
+    const rankStatus = (s: string): number => {
+      // Prefer real values over not reached/unset.
+      switch (String(s || '')) {
+        case 'VALUE_CHANGED':
+          return 5;
+        case 'DISPLAYED':
+          return 4;
+        case 'PARTLY_DISPLAYED':
+          return 3;
+        case 'NOT_REACHED':
+          return 2;
+        case 'UNSET':
+          return 1;
+        default:
+          return 0;
+      }
+    };
+
+    const scored = duplicate.duplicates
+      .map(d => ({
+        responseId: d.responseId,
+        score: rankStatus(d.status) + (String(d.value ?? '').trim() !== '' ? 1 : 0)
+      }))
+      .sort((a, b) => b.score - a.score);
+
+    const best = scored[0]?.responseId;
+    if (best) {
+      this.duplicateResponseSelections.set(duplicate.key, best);
+      this.markDuplicateGroupTouched(duplicate);
+    }
   }
 
   onDuplicateResponsesPageChange(event: PageEvent): void {
@@ -1005,10 +1162,6 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
               const typedResult = result as DuplicateResponsesResultDto;
               this.duplicateResponses = typedResult.data.map(duplicate => {
                 const key = this.buildDuplicateKey(duplicate);
-
-                if (!this.duplicateResponseSelections.has(key) && duplicate.duplicates.length > 0) {
-                  this.duplicateResponseSelections.set(key, duplicate.duplicates[0].responseId);
-                }
 
                 return {
                   ...duplicate,
@@ -1045,8 +1198,11 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
 
     this.isResolvingDuplicateResponses = true;
     const responseIdsToKeep: Record<string, number> = {};
-    this.duplicateResponseSelections.forEach((responseId, key) => {
-      responseIdsToKeep[key] = responseId;
+    this.duplicateResponseTouchedKeys.forEach(key => {
+      const responseId = this.duplicateResponseSelections.get(key);
+      if (responseId) {
+        responseIdsToKeep[key] = responseId;
+      }
     });
 
     const request = {
