@@ -19,9 +19,10 @@ import { MatIconModule } from '@angular/material/icon';
 import { Subscription } from 'rxjs';
 import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
-import { ValidationTaskStateService, ValidationResult } from '../../../services/validation-task-state.service';
+import { ValidationTaskStateService, ValidationBatchState, ValidationResult } from '../../../services/validation-task-state.service';
 import { ValidationService } from '../../../services/validation.service';
 import { ValidationTaskRunnerService } from '../../../services/validation-task-runner.service';
+import { ValidationBatchRunnerService } from '../../../services/validation-batch-runner.service';
 import { InvalidVariableDto } from '../../../../../../../api-dto/files/variable-validation.dto';
 import { TestTakersValidationDto, MissingPersonDto } from '../../../../../../../api-dto/files/testtakers-validation.dto';
 import { DuplicateResponsesResultDto } from '../../../../../../../api-dto/files/duplicate-response.dto';
@@ -202,16 +203,20 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
   validationTaskStateService = inject(ValidationTaskStateService);
   validationService = inject(ValidationService);
   validationTaskRunnerService = inject(ValidationTaskRunnerService);
+  validationBatchRunnerService = inject(ValidationBatchRunnerService);
 
   private subscriptions: Subscription[] = [];
 
   private isClosing = false;
+
+  private lastBatchState: ValidationBatchState | null = null;
 
   private variableValidationTask: ValidationTaskDto | null = null;
   private variableTypeValidationTask: ValidationTaskDto | null = null;
   private responseStatusValidationTask: ValidationTaskDto | null = null;
   private testTakersValidationTask: ValidationTaskDto | null = null;
   private groupResponsesValidationTask: ValidationTaskDto | null = null;
+  private duplicateResponsesValidationTask: ValidationTaskDto | null = null;
 
   invalidVariables: InvalidVariableDto[] = [];
   totalInvalidVariables: number = 0;
@@ -372,6 +377,43 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
   ngOnInit(): void {
     this.checkForExistingTasks();
     this.loadPreviousValidationResults();
+
+    const workspaceId = this.appService.selectedWorkspaceId;
+
+    const sub1 = this.validationTaskStateService.observeValidationResults(workspaceId)
+      .subscribe(results => {
+        this.applyInMemoryResults(results);
+      });
+    this.subscriptions.push(sub1);
+
+    const sub2 = this.validationTaskStateService.observeTaskIds(workspaceId)
+      .subscribe(taskIds => {
+        this.isVariableValidationRunning = Boolean(taskIds.variables);
+        this.isVariableTypeValidationRunning = Boolean(taskIds.variableTypes);
+        this.isResponseStatusValidationRunning = Boolean(taskIds.responseStatus);
+        this.isTestTakersValidationRunning = Boolean(taskIds.testTakers);
+        this.isGroupResponsesValidationRunning = Boolean(taskIds.groupResponses);
+        this.isDuplicateResponsesValidationRunning = Boolean(taskIds.duplicateResponses);
+      });
+    this.subscriptions.push(sub2);
+
+    const sub3 = this.validationTaskStateService.observeBatchState(workspaceId)
+      .subscribe(state => {
+        const previous = this.lastBatchState?.status;
+        this.lastBatchState = state;
+        if (previous !== 'completed' && state.status === 'completed') {
+          this.snackBar.open('Alle Prüfungen abgeschlossen. Bitte Ergebnisse prüfen.', 'OK', { duration: 4000 });
+        }
+        if (previous !== 'failed' && state.status === 'failed') {
+          this.snackBar.open(`Validierungsbatch fehlgeschlagen: ${state.error || 'Unbekannter Fehler'}`, 'OK', { duration: 6000 });
+        }
+      });
+    this.subscriptions.push(sub3);
+
+    const autoStart = (this.data as { autoStart?: boolean } | null)?.autoStart;
+    if (autoStart) {
+      this.startAllValidations();
+    }
   }
 
   ngAfterViewInit(): void {
@@ -413,10 +455,14 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
     if (taskIds.groupResponses) {
       this.loadExistingTask('groupResponses', taskIds.groupResponses);
     }
+
+    if (taskIds.duplicateResponses) {
+      this.loadExistingTask('duplicateResponses', taskIds.duplicateResponses);
+    }
   }
 
   private loadExistingTask(
-    type: 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'groupResponses',
+    type: 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'groupResponses' | 'duplicateResponses',
     taskId: number
   ): void {
     const workspaceId = this.appService.selectedWorkspaceId;
@@ -436,6 +482,9 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
         break;
       case 'groupResponses':
         this.isGroupResponsesValidationRunning = true;
+        break;
+      case 'duplicateResponses':
+        this.isDuplicateResponsesValidationRunning = true;
         break;
       default:
         break;
@@ -459,6 +508,9 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
               break;
             case 'groupResponses':
               this.groupResponsesValidationTask = task;
+              break;
+            case 'duplicateResponses':
+              this.duplicateResponsesValidationTask = task;
               break;
             default:
               break;
@@ -488,6 +540,9 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
               case 'groupResponses':
                 this.isGroupResponsesValidationRunning = false;
                 break;
+              case 'duplicateResponses':
+                this.isDuplicateResponsesValidationRunning = false;
+                break;
               default:
                 break;
             }
@@ -513,6 +568,9 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
             case 'groupResponses':
               this.isGroupResponsesValidationRunning = false;
               break;
+            case 'duplicateResponses':
+              this.isDuplicateResponsesValidationRunning = false;
+              break;
             default:
               break;
           }
@@ -523,7 +581,7 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
   }
 
   private pollExistingTask(
-    type: 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'groupResponses',
+    type: 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'groupResponses' | 'duplicateResponses',
     taskId: number
   ): void {
     const workspaceId = this.appService.selectedWorkspaceId;
@@ -555,6 +613,9 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
             case 'groupResponses':
               this.isGroupResponsesValidationRunning = false;
               break;
+            case 'duplicateResponses':
+              this.isDuplicateResponsesValidationRunning = false;
+              break;
             default:
               break;
           }
@@ -580,6 +641,9 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
           case 'groupResponses':
             this.isGroupResponsesValidationRunning = false;
             break;
+          case 'duplicateResponses':
+            this.isDuplicateResponsesValidationRunning = false;
+            break;
           default:
             break;
         }
@@ -590,7 +654,7 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
   }
 
   private loadTaskResults(
-    type: 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'groupResponses',
+    type: 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'groupResponses' | 'duplicateResponses',
     taskId: number
   ): void {
     const workspaceId = this.appService.selectedWorkspaceId;
@@ -677,6 +741,21 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
             break;
           }
 
+          case 'duplicateResponses': {
+            const typedResult = result as DuplicateResponsesResultDto;
+            this.duplicateResponsesResult = typedResult;
+            this.duplicateResponses = (typedResult.data || []).map(duplicate => ({
+              ...duplicate,
+              key: this.buildDuplicateKey(duplicate)
+            }));
+            this.totalDuplicateResponses = typedResult.total;
+            this.updatePaginatedDuplicateResponses();
+            this.isDuplicateResponsesValidationRunning = false;
+            this.validateDuplicateResponsesWasRun = true;
+            this.saveValidationResult(type);
+            break;
+          }
+
           default:
             break;
         }
@@ -702,6 +781,9 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
             break;
           case 'groupResponses':
             this.isGroupResponsesValidationRunning = false;
+            break;
+          case 'duplicateResponses':
+            this.isDuplicateResponsesValidationRunning = false;
             break;
           default:
             break;
@@ -733,6 +815,35 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
 
     if (this.groupResponsesValidationTask && (this.groupResponsesValidationTask.status === 'pending' || this.groupResponsesValidationTask.status === 'processing')) {
       this.validationTaskStateService.setTaskId(workspaceId, 'groupResponses', this.groupResponsesValidationTask.id);
+    }
+
+    if (this.duplicateResponsesValidationTask && (this.duplicateResponsesValidationTask.status === 'pending' || this.duplicateResponsesValidationTask.status === 'processing')) {
+      this.validationTaskStateService.setTaskId(workspaceId, 'duplicateResponses', this.duplicateResponsesValidationTask.id);
+    }
+  }
+
+  startAllValidations(): void {
+    this.validationBatchRunnerService.startBatch(this.appService.selectedWorkspaceId);
+  }
+
+  private applyInMemoryResults(results: Record<string, ValidationResult>): void {
+    if (results.variables) {
+      this.processVariablesResult(results.variables, true);
+    }
+    if (results.variableTypes) {
+      this.processVariableTypesResult(results.variableTypes, true);
+    }
+    if (results.responseStatus) {
+      this.processResponseStatusResult(results.responseStatus, true);
+    }
+    if (results.testTakers) {
+      this.processTestTakersResult(results.testTakers, true);
+    }
+    if (results.groupResponses) {
+      this.processGroupResponsesResult(results.groupResponses, true);
+    }
+    if (results.duplicateResponses) {
+      this.processDuplicateResponsesResult(results.duplicateResponses, true);
     }
   }
 
@@ -1991,6 +2102,165 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
     }
   }
 
+  getOverallIssuesCount(): number {
+    let total = 0;
+
+    if (this.hasValidationFailed('variables')) {
+      total += this.totalInvalidVariables;
+    }
+
+    if (this.hasValidationFailed('variableTypes')) {
+      total += this.totalInvalidTypeVariables;
+    }
+
+    if (this.hasValidationFailed('responseStatus')) {
+      total += this.totalInvalidStatusVariables;
+    }
+
+    if (this.hasValidationFailed('testTakers')) {
+      total += this.testTakersValidationResult?.missingPersons?.length ?? 0;
+    }
+
+    if (this.hasValidationFailed('groupResponses')) {
+      total += (this.groupResponsesResult?.groupsWithResponses ?? []).filter((g: { group: string; hasResponse: boolean }) => !g.hasResponse).length;
+    }
+
+    if (this.hasValidationFailed('duplicateResponses')) {
+      total += this.totalDuplicateResponses;
+    }
+
+    return total;
+  }
+
+  getOverallStatus(): 'running' | 'failed' | 'success' | 'not-run' {
+    if (this.isAnyValidationRunning()) {
+      return 'running';
+    }
+
+    const anyRun =
+      this.validateVariablesWasRun ||
+      this.validateVariableTypesWasRun ||
+      this.validateResponseStatusWasRun ||
+      this.testTakersValidationWasRun ||
+      this.groupResponsesValidationWasRun ||
+      this.validateDuplicateResponsesWasRun;
+
+    if (!anyRun) {
+      return 'not-run';
+    }
+
+    if (
+      this.hasValidationFailed('variables') ||
+      this.hasValidationFailed('variableTypes') ||
+      this.hasValidationFailed('responseStatus') ||
+      this.hasValidationFailed('testTakers') ||
+      this.hasValidationFailed('groupResponses') ||
+      this.hasValidationFailed('duplicateResponses')
+    ) {
+      return 'failed';
+    }
+
+    return 'success';
+  }
+
+  getOverallHeadline(): string {
+    const status = this.getOverallStatus();
+    switch (status) {
+      case 'running':
+        return 'Validierung läuft';
+      case 'failed':
+        return 'Validierung: Handlungsbedarf';
+      case 'success':
+        return 'Validierung: Alles in Ordnung';
+      case 'not-run':
+      default:
+        return 'Validierung: Noch nicht gestartet';
+    }
+  }
+
+  getOverallSubline(): string {
+    const status = this.getOverallStatus();
+    const issues = this.getOverallIssuesCount();
+
+    switch (status) {
+      case 'running':
+        return 'Bitte warten – Ergebnisse erscheinen automatisch.';
+      case 'failed':
+        return issues > 0 ? `${issues} Auffälligkeiten gefunden. Details unten.` : 'Auffälligkeiten gefunden. Details unten.';
+      case 'success':
+        return 'Keine Auffälligkeiten gefunden.';
+      case 'not-run':
+      default:
+        return 'Starten Sie unten die gewünschten Prüfungen.';
+    }
+  }
+
+  getRecommendedNextStep(): string {
+    if (this.isAnyValidationRunning()) {
+      return 'Sie können den Dialog schließen – die Prüfungen laufen im Hintergrund weiter.';
+    }
+
+    if (!this.testTakersValidationWasRun) {
+      return 'Empfehlung: Starten Sie zuerst „Testpersonen“ – viele Folgeprüfungen hängen davon ab.';
+    }
+
+    if (!this.validateVariablesWasRun) {
+      return 'Empfehlung: Prüfen Sie danach „Variablen definiert“.';
+    }
+
+    if (!this.validateVariableTypesWasRun) {
+      return 'Empfehlung: Prüfen Sie als Nächstes „Variablentypen“.';
+    }
+
+    if (!this.validateResponseStatusWasRun) {
+      return 'Empfehlung: Prüfen Sie anschließend „Antwortstatus“.';
+    }
+
+    if (!this.validateDuplicateResponsesWasRun) {
+      return 'Empfehlung: Prüfen Sie zuletzt „Doppelte Antworten“.';
+    }
+
+    return 'Tipp: Bei Auffälligkeiten können Sie unten direkt bereinigen oder gezielt einzelne Fälle prüfen.';
+  }
+
+  getValidationWhyText(type: 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'groupResponses' | 'duplicateResponses'): string {
+    switch (type) {
+      case 'testTakers':
+        return 'Ohne passende Testpersonen-Zuordnung können Antworten nicht eindeutig einer Person/Gruppe zugeordnet werden.';
+      case 'variables':
+        return 'Antworten auf nicht definierte Variablen sind i.d.R. Tippfehler oder veraltete Item-Versionen und verfälschen Auswertungen.';
+      case 'variableTypes':
+        return 'Wenn der Datentyp nicht passt (z.B. Text statt Zahl), können Scoring/Filter und Exporte fehlschlagen.';
+      case 'responseStatus':
+        return 'Ungültige Statuswerte können verhindern, dass Antworten korrekt als erreicht/gesetzt interpretiert werden.';
+      case 'duplicateResponses':
+        return 'Doppelte Antworten führen zu Mehrdeutigkeiten (welche Antwort zählt?) und machen Statistiken/Exports inkonsistent.';
+      case 'groupResponses':
+        return 'Wenn Gruppen keine Antworten haben, ist die Stichprobe ggf. unvollständig oder die Zuordnung zu Gruppen fehlerhaft.';
+      default:
+        return '';
+    }
+  }
+
+  getValidationFixHint(type: 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'groupResponses' | 'duplicateResponses'): string {
+    switch (type) {
+      case 'testTakers':
+        return 'Prüfen Sie die TestTakers-XML (Login/Code/Gruppe/Booklet) und importieren Sie fehlende Testpersonen oder korrigieren Sie Schreibweisen.';
+      case 'variables':
+        return 'Öffnen Sie die Unit.xml über den Dateinamen-Link und prüfen Sie, ob die Variable existiert. Danach: Daten bereinigen (löschen) oder Definitionen aktualisieren.';
+      case 'variableTypes':
+        return 'Prüfen Sie erwarteten Typ und Fehlergrund. Häufig hilft eine Korrektur in der Unit.xml oder das Bereinigen einzelner falscher Werte.';
+      case 'responseStatus':
+        return 'Vergleichen Sie Statuswerte mit der Definition in der Unit.xml. Bereinigen Sie ungültige Antworten oder passen Sie die Definition an.';
+      case 'duplicateResponses':
+        return 'Wählen Sie pro Duplikat die „gültige“ Antwort aus (oder „Vorschlag übernehmen“) und lösen Sie anschließend auf.';
+      case 'groupResponses':
+        return 'Prüfen Sie Gruppen/Booklets der Testpersonen sowie den Import der Antworten. Oft fehlen Daten für eine Gruppe oder die Gruppenzuordnung ist inkonsistent.';
+      default:
+        return '';
+    }
+  }
+
   getValidationStatus(type: 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'groupResponses' | 'duplicateResponses'): 'running' | 'failed' | 'success' | 'not-run' {
     switch (type) {
       case 'variables':
@@ -2107,23 +2377,27 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
     const workspaceId = this.appService.selectedWorkspaceId;
     const inMemoryResults = this.validationTaskStateService.getAllValidationResults(workspaceId);
     if (inMemoryResults.variables) {
-      this.processVariablesResult(inMemoryResults.variables, false);
+      this.processVariablesResult(inMemoryResults.variables, true);
     }
 
     if (inMemoryResults.variableTypes) {
-      this.processVariableTypesResult(inMemoryResults.variableTypes, false);
+      this.processVariableTypesResult(inMemoryResults.variableTypes, true);
     }
 
     if (inMemoryResults.responseStatus) {
-      this.processResponseStatusResult(inMemoryResults.responseStatus, false);
+      this.processResponseStatusResult(inMemoryResults.responseStatus, true);
     }
 
     if (inMemoryResults.testTakers) {
-      this.processTestTakersResult(inMemoryResults.testTakers, false);
+      this.processTestTakersResult(inMemoryResults.testTakers, true);
     }
 
     if (inMemoryResults.groupResponses) {
-      this.processGroupResponsesResult(inMemoryResults.groupResponses, false);
+      this.processGroupResponsesResult(inMemoryResults.groupResponses, true);
+    }
+
+    if (inMemoryResults.duplicateResponses) {
+      this.processDuplicateResponsesResult(inMemoryResults.duplicateResponses, true);
     }
 
     const subscription = this.validationService.getLastValidationResults(workspaceId)
@@ -2203,6 +2477,21 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
             this.processGroupResponsesResult(validationResult, false);
             this.validationTaskStateService.setValidationResult(workspaceId, 'groupResponses', validationResult);
           }
+
+          if (results.duplicateResponses) {
+            const { task, result } = results.duplicateResponses;
+            let status: 'success' | 'failed' | 'not-run' = 'not-run';
+            if (task.status === 'completed') {
+              status = task.error ? 'failed' : 'success';
+            }
+            const validationResult: ValidationResult = {
+              status,
+              timestamp: new Date(task.created_at).getTime(),
+              details: result
+            };
+            this.processDuplicateResponsesResult(validationResult, false);
+            this.validationTaskStateService.setValidationResult(workspaceId, 'duplicateResponses', validationResult);
+          }
         },
         error: () => {
         }
@@ -2212,73 +2501,114 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
   }
 
   private processVariablesResult(result: ValidationResult, fromCurrentSession: boolean = false): void {
-    if (result.status === 'success') {
-      if (fromCurrentSession) {
-        this.validateVariablesWasRun = true;
+    this.validateVariablesWasRun = this.validateVariablesWasRun || fromCurrentSession;
+
+    if (result.details) {
+      const details = result.details as { total?: number; data?: InvalidVariableDto[]; page?: number; limit?: number };
+      if (typeof details.total === 'number') {
+        this.totalInvalidVariables = Number(details.total);
+      } else if (result.status === 'success') {
+        this.totalInvalidVariables = 0;
       }
+
+      if (typeof details.page === 'number') {
+        this.currentVariablePage = details.page;
+      }
+      if (typeof details.limit === 'number') {
+        this.variablePageSize = details.limit;
+      }
+
+      if (Array.isArray(details.data)) {
+        this.invalidVariables = details.data;
+        this.updatePaginatedVariables();
+        return;
+      }
+    }
+
+    if (result.status === 'success') {
       this.totalInvalidVariables = 0;
       this.invalidVariables = [];
       this.updatePaginatedVariables();
-    } else if (result.status === 'failed' && result.details) {
-      if (fromCurrentSession) {
-        this.validateVariablesWasRun = true;
-      }
-      const details = result.details as { total: number; hasErrors: boolean };
-      this.totalInvalidVariables = details.total;
-
-      if (details.total > 0 && this.invalidVariables.length === 0) {
-        this.validateVariables();
-      }
     }
   }
 
   private processVariableTypesResult(result: ValidationResult, fromCurrentSession: boolean = false): void {
-    if (result.status === 'success') {
-      if (fromCurrentSession) {
-        this.validateVariableTypesWasRun = true;
+    this.validateVariableTypesWasRun = this.validateVariableTypesWasRun || fromCurrentSession;
+
+    if (result.details) {
+      const details = result.details as { total?: number; data?: InvalidVariableDto[]; page?: number; limit?: number };
+      if (typeof details.total === 'number') {
+        this.totalInvalidTypeVariables = Number(details.total);
+      } else if (result.status === 'success') {
+        this.totalInvalidTypeVariables = 0;
       }
+
+      if (typeof details.page === 'number') {
+        this.currentTypeVariablePage = details.page;
+      }
+      if (typeof details.limit === 'number') {
+        this.typeVariablePageSize = details.limit;
+      }
+
+      if (Array.isArray(details.data)) {
+        this.invalidTypeVariables = details.data;
+        this.updatePaginatedTypeVariables();
+        return;
+      }
+    }
+
+    if (result.status === 'success') {
       this.totalInvalidTypeVariables = 0;
       this.invalidTypeVariables = [];
       this.updatePaginatedTypeVariables();
-    } else if (result.status === 'failed' && result.details) {
-      if (fromCurrentSession) {
-        this.validateVariableTypesWasRun = true;
-      }
-      const details = result.details as { total: number; hasErrors: boolean };
-      this.totalInvalidTypeVariables = details.total;
-
-      if (details.total > 0 && this.invalidTypeVariables.length === 0) {
-        this.validateVariableTypes();
-      }
     }
   }
 
   private processResponseStatusResult(result: ValidationResult, fromCurrentSession: boolean = false): void {
-    if (result.status === 'success') {
-      if (fromCurrentSession) {
-        this.validateResponseStatusWasRun = true;
+    this.validateResponseStatusWasRun = this.validateResponseStatusWasRun || fromCurrentSession;
+
+    if (result.details) {
+      const details = result.details as { total?: number; data?: InvalidVariableDto[]; page?: number; limit?: number };
+      if (typeof details.total === 'number') {
+        this.totalInvalidStatusVariables = Number(details.total);
+      } else if (result.status === 'success') {
+        this.totalInvalidStatusVariables = 0;
       }
+
+      if (typeof details.page === 'number') {
+        this.currentStatusVariablePage = details.page;
+      }
+      if (typeof details.limit === 'number') {
+        this.statusVariablePageSize = details.limit;
+      }
+
+      if (Array.isArray(details.data)) {
+        this.invalidStatusVariables = details.data;
+        this.updatePaginatedStatusVariables();
+        return;
+      }
+    }
+
+    if (result.status === 'success') {
       this.totalInvalidStatusVariables = 0;
       this.invalidStatusVariables = [];
       this.updatePaginatedStatusVariables();
-    } else if (result.status === 'failed' && result.details) {
-      if (fromCurrentSession) {
-        this.validateResponseStatusWasRun = true;
-      }
-      const details = result.details as { total: number; hasErrors: boolean };
-      this.totalInvalidStatusVariables = details.total;
-
-      if (details.total > 0 && this.invalidStatusVariables.length === 0) {
-        this.validateResponseStatus();
-      }
     }
   }
 
   private processTestTakersResult(result: ValidationResult, fromCurrentSession: boolean = false): void {
-    if (result.status === 'success') {
-      if (fromCurrentSession) {
-        this.testTakersValidationWasRun = true;
+    this.testTakersValidationWasRun = this.testTakersValidationWasRun || fromCurrentSession;
+
+    if (result.details) {
+      const details = result.details as TestTakersValidationDto;
+      if (typeof details?.testTakersFound === 'boolean') {
+        this.testTakersValidationResult = details;
+        this.updatePaginatedMissingPersons();
+        return;
       }
+    }
+
+    if (result.status === 'success') {
       this.testTakersValidationResult = {
         testTakersFound: true,
         totalGroups: 0,
@@ -2287,46 +2617,72 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
         missingPersons: []
       };
       this.updatePaginatedMissingPersons();
-    } else if (result.status === 'failed' && result.details) {
-      if (fromCurrentSession) {
-        this.testTakersValidationWasRun = true;
-      }
-      const details = result.details as {
-        testTakersFound: boolean;
-        missingPersonsCount: number;
-        hasErrors: boolean
-      };
-
-      if (details.hasErrors && (!this.testTakersValidationResult || this.testTakersValidationResult.missingPersons.length === 0)) {
-        this.validateTestTakers();
-      }
     }
   }
 
   private processGroupResponsesResult(result: ValidationResult, fromCurrentSession: boolean = false): void {
-    if (result.status === 'success') {
-      if (fromCurrentSession) {
-        this.groupResponsesValidationWasRun = true;
+    this.groupResponsesValidationWasRun = this.groupResponsesValidationWasRun || fromCurrentSession;
+
+    if (result.details) {
+      const details = result.details as {
+        testTakersFound?: boolean;
+        groupsWithResponses?: { group: string; hasResponse: boolean }[];
+        allGroupsHaveResponses?: boolean;
+        total?: number;
+        page?: number;
+        limit?: number;
+      };
+      if (typeof details?.testTakersFound === 'boolean') {
+        this.groupResponsesResult = {
+          testTakersFound: Boolean(details.testTakersFound),
+          groupsWithResponses: Array.isArray(details.groupsWithResponses) ? details.groupsWithResponses : [],
+          allGroupsHaveResponses: Boolean(details.allGroupsHaveResponses)
+        };
+        if (typeof details.total === 'number') {
+          this.totalGroupResponses = Number(details.total);
+        }
+        if (typeof details.page === 'number') {
+          this.currentGroupResponsesPage = details.page;
+        }
+        if (typeof details.limit === 'number') {
+          this.groupResponsesPageSize = details.limit;
+        }
+        this.updatePaginatedGroupResponses();
+        return;
       }
+    }
+
+    if (result.status === 'success') {
       this.groupResponsesResult = {
         testTakersFound: true,
         groupsWithResponses: [],
         allGroupsHaveResponses: true
       };
       this.updatePaginatedGroupResponses();
-    } else if (result.status === 'failed' && result.details) {
-      if (fromCurrentSession) {
-        this.groupResponsesValidationWasRun = true;
-      }
-      const details = result.details as {
-        testTakersFound: boolean;
-        allGroupsHaveResponses: boolean;
-        hasErrors: boolean
-      };
+    }
+  }
 
-      if (details.hasErrors && (!this.groupResponsesResult || this.groupResponsesResult.groupsWithResponses.length === 0)) {
-        this.validateGroupResponses();
+  private processDuplicateResponsesResult(result: ValidationResult, fromCurrentSession: boolean = false): void {
+    this.validateDuplicateResponsesWasRun = this.validateDuplicateResponsesWasRun || fromCurrentSession;
+
+    if (result.details) {
+      const details = result.details as DuplicateResponsesResultDto;
+      if (typeof details?.total === 'number') {
+        this.totalDuplicateResponses = details.total;
+        this.duplicateResponsesResult = details;
+        this.duplicateResponses = (details.data || []).map(duplicate => ({
+          ...duplicate,
+          key: this.buildDuplicateKey(duplicate)
+        }));
+        this.updatePaginatedDuplicateResponses();
+        return;
       }
+    }
+
+    if (result.status === 'success') {
+      this.totalDuplicateResponses = 0;
+      this.duplicateResponses = [];
+      this.updatePaginatedDuplicateResponses();
     }
   }
 

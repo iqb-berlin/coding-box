@@ -1,4 +1,28 @@
-<h1 mat-dialog-title>Antworten validieren</h1>
+<h1 mat-dialog-title>Antwortdaten prüfen</h1>
+
+<div class="validation-result"
+     [ngClass]="{
+       'validation-running': getOverallStatus() === 'running',
+       'validation-error': getOverallStatus() === 'failed',
+       'validation-success': getOverallStatus() === 'success',
+       'validation-not-run': getOverallStatus() === 'not-run'
+     }">
+  <mat-icon *ngIf="getOverallStatus() === 'running'">hourglass_empty</mat-icon>
+  <mat-icon *ngIf="getOverallStatus() === 'failed'">error</mat-icon>
+  <mat-icon *ngIf="getOverallStatus() === 'success'">check_circle</mat-icon>
+  <mat-icon *ngIf="getOverallStatus() === 'not-run'">radio_button_unchecked</mat-icon>
+  <div style="display: flex; flex-direction: column; gap: 4px;">
+    <div><strong>{{ getOverallHeadline() }}</strong></div>
+    <div>{{ getOverallSubline() }}</div>
+    <div style="opacity: 0.9;">{{ getRecommendedNextStep() }}</div>
+  </div>
+</div>
+
+<div class="actions-container" style="margin-top: 8px;">
+  <button mat-button color="primary" (click)="startAllValidations()" [disabled]="isAnyValidationRunning()">
+    Alle Prüfungen starten
+  </button>
+</div>
 <div class="info-banner" *ngIf="isAnyValidationRunning()">
   <mat-icon>info</mat-icon>
   <span>Validierungen laufen im Hintergrund weiter, auch wenn Sie diesen Dialog schließen.</span>
@@ -138,11 +162,19 @@
   <mat-stepper orientation="vertical" [linear]="true" #stepper>
     <mat-step label="Testperson definiert" >
       <p>Prüft, ob für jede Testperson in der Datenbank ein entsprechender Eintrag in den TestTakers XML-Dateien existiert.</p>
-      <button mat-button (click)="validateTestTakers()">TestTakers validieren</button>
+      <div class="info-banner">
+        <mat-icon>help</mat-icon>
+        <span><strong>Warum ist das wichtig?</strong> {{ getValidationWhyText('testTakers') }}</span>
+      </div>
+      <div class="info-banner">
+        <mat-icon>build</mat-icon>
+        <span><strong>So beheben Sie es:</strong> {{ getValidationFixHint('testTakers') }}</span>
+      </div>
+      <button mat-button (click)="validateTestTakers()">Testpersonen prüfen</button>
       @if (isTestTakersValidationRunning) {
         <div class="loading-container">
           <mat-spinner class="mat-spinner"></mat-spinner>
-          <p class="loading-text">TestTakers werden validiert...</p>
+          <p class="loading-text">Testpersonen werden geprüft...</p>
         </div>
       }
       @if (testTakersValidationResult) {
@@ -200,11 +232,19 @@
     </mat-step>
     <mat-step label="Variable definiert">
       <p>Prüft, ob die Variable in der Unit.xml definiert ist.</p>
-      <button mat-button (click)="validateVariables()">Variablen validieren</button>
+      <div class="info-banner">
+        <mat-icon>help</mat-icon>
+        <span><strong>Warum ist das wichtig?</strong> {{ getValidationWhyText('variables') }}</span>
+      </div>
+      <div class="info-banner">
+        <mat-icon>build</mat-icon>
+        <span><strong>So beheben Sie es:</strong> {{ getValidationFixHint('variables') }}</span>
+      </div>
+      <button mat-button (click)="validateVariables()">Variablen prüfen</button>
       @if (isVariableValidationRunning) {
         <div class="loading-container">
           <mat-spinner class="mat-spinner"></mat-spinner>
-          <p class="loading-text">Variablen werden validiert...</p>
+          <p class="loading-text">Variablen werden geprüft...</p>
         </div>
       }
       @if (invalidVariables.length > 0 || totalInvalidVariables > 0) {
@@ -285,11 +325,19 @@
     </mat-step>
     <mat-step label="Variable ist gültig">
       <p>Prüft, ob der Wert der Variable dem definierten Typ entspricht (string, integer, number, boolean, json).</p>
-      <button mat-button (click)="validateVariableTypes()">Variablentypen validieren</button>
+      <div class="info-banner">
+        <mat-icon>help</mat-icon>
+        <span><strong>Warum ist das wichtig?</strong> {{ getValidationWhyText('variableTypes') }}</span>
+      </div>
+      <div class="info-banner">
+        <mat-icon>build</mat-icon>
+        <span><strong>So beheben Sie es:</strong> {{ getValidationFixHint('variableTypes') }}</span>
+      </div>
+      <button mat-button (click)="validateVariableTypes()">Variablentypen prüfen</button>
       @if (isVariableTypeValidationRunning) {
         <div class="loading-container">
           <mat-spinner class="mat-spinner"></mat-spinner>
-          <p class="loading-text">Variablentypen werden validiert...</p>
+          <p class="loading-text">Variablentypen werden geprüft...</p>
         </div>
       }
       @if (invalidTypeVariables.length > 0 || totalInvalidTypeVariables > 0) {
@@ -378,11 +426,19 @@
     </mat-step>
     <mat-step label="Status ist gültig">
       <p>Prüft, ob der Status der Antwort gültig ist (gemäß Unit.xml).</p>
-      <button mat-button (click)="validateResponseStatus()">Antwortstatus validieren</button>
+      <div class="info-banner">
+        <mat-icon>help</mat-icon>
+        <span><strong>Warum ist das wichtig?</strong> {{ getValidationWhyText('responseStatus') }}</span>
+      </div>
+      <div class="info-banner">
+        <mat-icon>build</mat-icon>
+        <span><strong>So beheben Sie es:</strong> {{ getValidationFixHint('responseStatus') }}</span>
+      </div>
+      <button mat-button (click)="validateResponseStatus()">Antwortstatus prüfen</button>
       @if (isResponseStatusValidationRunning) {
         <div class="loading-container">
           <mat-spinner class="mat-spinner"></mat-spinner>
-          <p class="loading-text">Antwortstatus wird validiert...</p>
+          <p class="loading-text">Antwortstatus wird geprüft...</p>
         </div>
       }
       @if (invalidStatusVariables.length > 0 || totalInvalidStatusVariables > 0) {
@@ -467,11 +523,19 @@
     </mat-step>
     <mat-step label="Doppelte Antworten">
       <p>Prüft, ob doppelte Antworten für die gleiche Variable, Unit und Testperson existieren.</p>
-      <button mat-button (click)="validateDuplicateResponses()">Doppelte Antworten validieren</button>
+      <div class="info-banner">
+        <mat-icon>help</mat-icon>
+        <span><strong>Warum ist das wichtig?</strong> {{ getValidationWhyText('duplicateResponses') }}</span>
+      </div>
+      <div class="info-banner">
+        <mat-icon>build</mat-icon>
+        <span><strong>So beheben Sie es:</strong> {{ getValidationFixHint('duplicateResponses') }}</span>
+      </div>
+      <button mat-button (click)="validateDuplicateResponses()">Duplikate prüfen</button>
       @if (isDuplicateResponsesValidationRunning) {
         <div class="loading-container">
           <mat-spinner class="mat-spinner"></mat-spinner>
-          <p class="loading-text">Doppelte Antworten werden validiert...</p>
+          <p class="loading-text">Duplikate werden geprüft...</p>
         </div>
       }
       @if (duplicateResponses.length > 0 || totalDuplicateResponses > 0) {
@@ -593,11 +657,19 @@
     </mat-step>
     <mat-step label="Antworten für alle Gruppen">
       <p>Prüft, ob Antworten für alle Testperson-Gruppen vorliegen.</p>
-      <button mat-button (click)="validateGroupResponses()">Gruppenantworten validieren</button>
+      <div class="info-banner">
+        <mat-icon>help</mat-icon>
+        <span><strong>Warum ist das wichtig?</strong> {{ getValidationWhyText('groupResponses') }}</span>
+      </div>
+      <div class="info-banner">
+        <mat-icon>build</mat-icon>
+        <span><strong>So beheben Sie es:</strong> {{ getValidationFixHint('groupResponses') }}</span>
+      </div>
+      <button mat-button (click)="validateGroupResponses()">Gruppenantworten prüfen</button>
       @if (isGroupResponsesValidationRunning) {
         <div class="loading-container">
           <mat-spinner class="mat-spinner"></mat-spinner>
-          <p class="loading-text">Gruppenantworten werden validiert...</p>
+          <p class="loading-text">Gruppenantworten werden geprüft...</p>
         </div>
       }
       @if (groupResponsesResult) {
