@@ -513,6 +513,22 @@
                       <strong>Booklet:</strong> {{ duplicate.bookletName }}
                     </div>
                   </div>
+                  <div class="actions-container" style="margin-top: 8px;">
+                    <span>
+                      <strong>{{ getDuplicateConflictLabel(duplicate) }}</strong>
+                      @if (isDuplicateGroupTouched(duplicate)) {
+                        <span> | Auswahl gesetzt</span>
+                      } @else {
+                        <span> | Keine Auswahl gesetzt</span>
+                      }
+                    </span>
+                    <button mat-button (click)="selectSuggestedDuplicateResponse(duplicate)" [disabled]="isResolvingDuplicateResponses">
+                      Vorschlag übernehmen
+                    </button>
+                    <button mat-button color="primary" (click)="resolveDuplicateGroup(duplicate)" [disabled]="isResolvingDuplicateResponses || !isDuplicateGroupTouched(duplicate)">
+                      Auflösen
+                    </button>
+                  </div>
                   <div class="duplicate-response-duplicates">
                     <table class="duplicate-response-table">
                       <thead>
@@ -525,7 +541,7 @@
                       </thead>
                       <tbody>
                         @for (responseDuplicate of duplicate.duplicates; track responseDuplicate.responseId) {
-                          <tr>
+                          <tr [ngClass]="{ 'duplicate-row-selected': isDuplicateRowSelected(duplicate, responseDuplicate.responseId) }">
                             <td>
                               <input type="radio"
                                      name="duplicate_{{ duplicate.key }}"
@@ -534,8 +550,12 @@
                                      (change)="selectDuplicateResponse(duplicate, responseDuplicate.responseId)">
                             </td>
                             <td>{{ responseDuplicate.responseId }}</td>
-                            <td>{{ responseDuplicate.value }}</td>
-                            <td>{{ responseDuplicate.status }}</td>
+                            <td [ngClass]="{ 'duplicate-cell-conflict': isDuplicateValueConflicting(duplicate, responseDuplicate.responseId), 'duplicate-cell-selected': isDuplicateRowSelected(duplicate, responseDuplicate.responseId) }">
+                              {{ responseDuplicate.value }}
+                            </td>
+                            <td [ngClass]="{ 'duplicate-cell-conflict': isDuplicateStatusConflicting(duplicate, responseDuplicate.responseId), 'duplicate-cell-selected': isDuplicateRowSelected(duplicate, responseDuplicate.responseId) }">
+                              {{ responseDuplicate.status }}
+                            </td>
                           </tr>
                         }
                       </tbody>
