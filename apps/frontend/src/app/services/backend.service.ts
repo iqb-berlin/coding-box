@@ -7,6 +7,7 @@ import { FilesInListDto } from 'api-dto/files/files-in-list.dto';
 import { UnitNoteDto } from 'api-dto/unit-notes/unit-note.dto';
 import { UnitTagDto } from 'api-dto/unit-tags/unit-tag.dto';
 import { CreateUnitTagDto } from 'api-dto/unit-tags/create-unit-tag.dto';
+import { TestFilesUploadResultDto } from 'api-dto/files/test-files-upload-result.dto';
 import { CreateWorkspaceDto } from 'api-dto/workspaces/create-workspace-dto';
 import { PaginatedWorkspacesDto } from 'api-dto/workspaces/paginated-workspaces-dto';
 import { CodingJob, Variable, VariableBundle } from '../coding/models/coding-job.model';
@@ -51,6 +52,7 @@ import { UnitVariableDetailsDto } from '../models/unit-variable-details.dto';
 import { MissingsProfilesDto } from '../../../../../api-dto/coding/missings-profiles.dto';
 import { VariableAnalysisItemDto } from '../../../../../api-dto/coding/variable-analysis-item.dto';
 import { ResponseEntity } from '../shared/models/response-entity.model';
+import { TestResultsUploadResultDto } from '../../../../../api-dto/files/test-results-upload-result.dto';
 
 type ReplayStatisticsResponse = {
   id: number;
@@ -277,17 +279,25 @@ export class BackendService {
     return this.workspaceService.changeWorkspace(workspaceData);
   }
 
-  uploadTestFiles(workspaceId: number, files: FileList | FormData | null): Observable<number> {
-    return this.fileService.uploadTestFiles(workspaceId, files);
+  uploadTestFiles(
+    workspaceId: number,
+    files: FileList | FormData | null,
+    overwriteExisting: boolean = false,
+    overwriteFileIds?: string[]
+  ): Observable<TestFilesUploadResultDto> {
+    return this.fileService.uploadTestFiles(workspaceId, files, overwriteExisting, overwriteFileIds);
   }
 
   uploadTestResults(
     workspaceId: number,
     files: FileList | null,
     resultType: 'logs' | 'responses',
-    overwriteExisting: boolean = true
-  ): Observable<number> {
-    return this.fileService.uploadTestResults(workspaceId, files, resultType, overwriteExisting);
+    overwriteExisting: boolean = true,
+    overwriteMode: 'skip' | 'merge' | 'replace' = 'skip',
+    scope: string = 'person',
+    filters?: { groupName?: string; bookletName?: string; unitNameOrAlias?: string; variableId?: string; subform?: string }
+  ): Observable<TestResultsUploadResultDto> {
+    return this.fileService.uploadTestResults(workspaceId, files, resultType, overwriteExisting, overwriteMode, scope, filters);
   }
 
   setUserWorkspaceAccessRight(userId: number, workspaceIds: number[]): Observable<boolean> {
@@ -380,14 +390,29 @@ export class BackendService {
     return this.testResultService.getTestPersons(workspaceId);
   }
 
+  getUnitLogs(workspaceId: number, unitId: number): Observable<{ id: number; unitid: number; ts: string; key: string; parameter: string }[]> {
+    return this.testResultService.getUnitLogs(workspaceId, unitId);
+  }
+
+  getBookletLogsForUnit(workspaceId: number, unitId: number): Observable<{
+    bookletId: number;
+    logs: { id: number; bookletid: number; ts: string; key: string; parameter: string }[];
+    sessions: { id: number; browser: string; os: string; screen: string; ts: string }[];
+    units: { id: number; bookletid: number; name: string; alias: string | null; logs: { id: number; unitid: number; ts: string; key: string; parameter: string }[] }[];
+  } | null> {
+    return this.testResultService.getBookletLogsForUnit(workspaceId, unitId);
+  }
+
   getExportOptions(workspaceId: number): Observable<{
     testPersons: { id: number; code: string; groupName: string; login: string }[];
+    groups: string[];
     booklets: string[];
     units: string[];
   }> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/results/export/options`;
     return this.http.get<{
       testPersons: { id: number; code: string; groupName: string; login: string }[];
+      groups: string[];
       booklets: string[];
       units: string[];
     }>(url, {
@@ -400,6 +425,16 @@ export class BackendService {
     filters?: { groupNames?: string[]; bookletNames?: string[]; unitNames?: string[]; personIds?: number[] }
   ): Observable<{ jobId: string; message: string }> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/results/export/job`;
+    return this.http.post<{ jobId: string; message: string }>(url, filters || {}, {
+      headers: this.authHeader
+    });
+  }
+
+  startExportTestLogsJob(
+    workspaceId: number,
+    filters?: { groupNames?: string[]; bookletNames?: string[]; unitNames?: string[]; personIds?: number[] }
+  ): Observable<{ jobId: string; message: string }> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/results/export/logs/job`;
     return this.http.post<{ jobId: string; message: string }>(url, filters || {}, {
       headers: this.authHeader
     });
@@ -672,6 +707,13 @@ export class BackendService {
     jobId: number
   ): Observable<VariableAnalysisResultDto> {
     return this.variableAnalysisService.getAnalysisResults(workspaceId, jobId);
+  }
+
+  getVariableAnalysisJob(
+    workspaceId: number,
+    jobId: number
+  ): Observable<VariableAnalysisJobDto> {
+    return this.variableAnalysisService.getAnalysisJob(workspaceId, jobId);
   }
 
   getAllVariableAnalysisJobs(workspaceId: number): Observable<VariableAnalysisJobDto[]> {

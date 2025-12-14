@@ -1,0 +1,54 @@
+<h2 mat-dialog-title>Dateien existieren bereits</h2>
+
+<div mat-dialog-content>
+  <p>
+    {{ conflicts.length }} Datei(en) sind bereits im Workspace vorhanden.
+    @if (filterText && filterText.trim().length > 0) {
+      (Treffer: {{ filteredConflicts.length }})
+    }
+  </p>
+
+  <div class="selection-row">
+    <mat-checkbox
+      [checked]="allFilteredSelected"
+      [indeterminate]="someFilteredSelected"
+      (change)="toggleSelectAllFiltered()">
+      Alle Treffer auswählen
+    </mat-checkbox>
+    <span class="selection-count">Ausgewählt: {{ selectedCount }}</span>
+    <span class="spacer"></span>
+    <button mat-button type="button" (click)="clearSelection()">Auswahl löschen</button>
+  </div>
+
+  <mat-form-field appearance="outline" style="width: 100%;">
+    <mat-label>Suche</mat-label>
+    <input matInput [(ngModel)]="filterText" placeholder="Dateiname, ID oder Typ..." />
+    <mat-icon matSuffix>search</mat-icon>
+  </mat-form-field>
+
+  <cdk-virtual-scroll-viewport itemSize="44" style="height: 55vh; width: 100%;">
+    <div *cdkVirtualFor="let c of filteredConflicts; trackBy: trackByConflict" class="conflict-row">
+      <mat-checkbox
+        class="row-checkbox"
+        [checked]="isSelected(c)"
+        (change)="toggleSelected(c)">
+      </mat-checkbox>
+      <div class="conflict-main">
+        <div class="filename">{{ c.filename }}</div>
+        <div class="meta">
+          <span class="fileid">ID: {{ c.fileId }}</span>
+          @if (c.fileType) {
+            <span class="filetype">Typ: {{ c.fileType }}</span>
+          }
+        </div>
+      </div>
+    </div>
+  </cdk-virtual-scroll-viewport>
+</div>
+
+<div mat-dialog-actions align="end">
+  <button mat-button type="button" (click)="skip()">Nicht überschreiben</button>
+  <button mat-raised-button color="primary" type="button" (click)="overwrite()" [disabled]="selectedCount === 0">
+    Auswahl überschreiben
+  </button>
+</div>

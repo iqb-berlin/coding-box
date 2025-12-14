@@ -4,7 +4,6 @@ import {
 import {
   MAT_DIALOG_DATA, MatDialog, MatDialogModule, MatDialogRef
 } from '@angular/material/dialog';
-import { MatStepperModule } from '@angular/material/stepper';
 import { MatButtonModule } from '@angular/material/button';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
@@ -19,8 +18,10 @@ import { MatIconModule } from '@angular/material/icon';
 import { Subscription } from 'rxjs';
 import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
-import { ValidationTaskStateService, ValidationResult } from '../../../services/validation-task-state.service';
+import { ValidationTaskStateService, ValidationBatchState, ValidationResult } from '../../../services/validation-task-state.service';
 import { ValidationService } from '../../../services/validation.service';
+import { ValidationTaskRunnerService } from '../../../services/validation-task-runner.service';
+import { ValidationBatchRunnerService } from '../../../services/validation-batch-runner.service';
 import { InvalidVariableDto } from '../../../../../../../api-dto/files/variable-validation.dto';
 import { TestTakersValidationDto, MissingPersonDto } from '../../../../../../../api-dto/files/testtakers-validation.dto';
 import { DuplicateResponsesResultDto } from '../../../../../../../api-dto/files/duplicate-response.dto';
@@ -39,7 +40,6 @@ import { GermanPaginatorIntl } from '../../../shared/services/german-paginator-i
   imports: [
     CommonModule,
     MatDialogModule,
-    MatStepperModule,
     MatButtonModule,
     FormsModule,
     ReactiveFormsModule,
@@ -130,37 +130,121 @@ import { GermanPaginatorIntl } from '../../../shared/services/german-paginator-i
       margin-left: 8px;
     }
 
-    .validation-summary {
+    .validation-panel-header {
+      padding: 6px 10px;
+      border-radius: 6px;
+      border-left: 3px solid transparent;
+    }
+
+    .validation-panel-header.validation-running {
+      background-color: rgba(33, 150, 243, 0.04);
+      border-left-color: #2196F3;
+    }
+
+    .validation-panel-header.validation-success {
+      background-color: rgba(76, 175, 80, 0.04);
+      border-left-color: #4CAF50;
+    }
+
+    .validation-panel-header.validation-error {
+      background-color: rgba(244, 67, 54, 0.04);
+      border-left-color: #F44336;
+    }
+
+    .validation-panel-header.validation-not-run {
+      background-color: rgba(158, 158, 158, 0.03);
+      border-left-color: #9E9E9E;
+    }
+
+    .validation-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 1px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 500;
+      line-height: 18px;
+      border: 1px solid rgba(0, 0, 0, 0.08);
+    }
+
+    .validation-badge.validation-running {
+      background-color: rgba(33, 150, 243, 0.06);
+      color: #0D47A1;
+    }
+
+    .validation-badge.validation-success {
+      background-color: rgba(76, 175, 80, 0.06);
+      color: #1B5E20;
+    }
+
+    .validation-badge.validation-error {
+      background-color: rgba(244, 67, 54, 0.06);
+      color: #B71C1C;
+    }
+
+    .validation-badge.validation-not-run {
+      background-color: rgba(158, 158, 158, 0.06);
+      color: #616161;
+    }
+
+    .validation-details {
       display: flex;
       flex-direction: column;
-      gap: 8px;
-      margin-bottom: 16px;
-      padding: 16px;
-      border-radius: 4px;
-      background-color: #f5f5f5;
-      border: 1px solid #e0e0e0;
+      gap: 10px;
+      padding: 6px 2px 2px 2px;
     }
 
-    .validation-summary-title {
-      font-size: 16px;
-      font-weight: 500;
-      margin-bottom: 8px;
+    .validation-details-intro {
+      margin: 0;
+      opacity: 0.9;
     }
 
-    .validation-summary-item {
+    .validation-guidance {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    @media (max-width: 900px) {
+      .validation-guidance {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .validation-guidance .info-banner {
+      margin: 0;
+    }
+
+    .validation-actions {
       display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
       align-items: center;
-      padding: 8px;
-      border-radius: 4px;
-      font-weight: 500;
     }
 
-    .validation-summary-item mat-icon {
-      margin-right: 8px;
+    .duplicate-response-table {
+      width: 100%;
+      border-collapse: collapse;
     }
 
-    .validation-summary-item-label {
-      flex: 1;
+    .duplicate-response-table th,
+    .duplicate-response-table td {
+      padding: 6px 8px;
+      border-bottom: 1px solid #e0e0e0;
+      vertical-align: top;
+      word-break: break-word;
+    }
+
+    .duplicate-row-selected {
+      background-color: rgba(33, 150, 243, 0.08);
+    }
+
+    .duplicate-cell-conflict {
+      background-color: rgba(244, 67, 54, 0.10);
+    }
+
+    .duplicate-cell-selected {
+      outline: 1px solid rgba(33, 150, 243, 0.35);
     }
   `]
 })
@@ -175,16 +259,21 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
   appService = inject(AppService);
   validationTaskStateService = inject(ValidationTaskStateService);
   validationService = inject(ValidationService);
+  validationTaskRunnerService = inject(ValidationTaskRunnerService);
+  validationBatchRunnerService = inject(ValidationBatchRunnerService);
 
   private subscriptions: Subscription[] = [];
 
   private isClosing = false;
+
+  private lastBatchState: ValidationBatchState | null = null;
 
   private variableValidationTask: ValidationTaskDto | null = null;
   private variableTypeValidationTask: ValidationTaskDto | null = null;
   private responseStatusValidationTask: ValidationTaskDto | null = null;
   private testTakersValidationTask: ValidationTaskDto | null = null;
   private groupResponsesValidationTask: ValidationTaskDto | null = null;
+  private duplicateResponsesValidationTask: ValidationTaskDto | null = null;
 
   invalidVariables: InvalidVariableDto[] = [];
   totalInvalidVariables: number = 0;
@@ -244,6 +333,7 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
   selectedTypeResponses: Set<number> = new Set<number>();
   selectedStatusResponses: Set<number> = new Set<number>();
   duplicateResponseSelections: Map<string, number> = new Map<string, number>();
+  duplicateResponseTouchedKeys: Set<string> = new Set<string>();
 
   pageSizeOptions = [25, 50, 100, 200];
 
@@ -258,6 +348,82 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
   duplicateResponsesPageSize: number = 10;
   currentDuplicateResponsesPage: number = 1;
 
+  private buildDuplicateKey(duplicate: { unitId: number; variableId: string; subform: string; testTakerLogin: string }): string {
+    const unitId = String(duplicate.unitId);
+    const variableId = encodeURIComponent(duplicate.variableId || '');
+    const subform = encodeURIComponent(duplicate.subform || '');
+    const login = encodeURIComponent(duplicate.testTakerLogin || '');
+    return `${unitId}|${variableId}|${subform}|${login}`;
+  }
+
+  private hasDifferentDuplicateValues(duplicate: DuplicateResponseSelectionDto): boolean {
+    const values = new Set((duplicate.duplicates || []).map(d => String(d.value ?? '')));
+    return values.size > 1;
+  }
+
+  private hasDifferentDuplicateStatuses(duplicate: DuplicateResponseSelectionDto): boolean {
+    const statuses = new Set((duplicate.duplicates || []).map(d => String(d.status ?? '')));
+    return statuses.size > 1;
+  }
+
+  getSelectedDuplicateResponseId(duplicate: DuplicateResponseSelectionDto): number | undefined {
+    return this.duplicateResponseSelections.get(duplicate.key);
+  }
+
+  isDuplicateRowSelected(duplicate: DuplicateResponseSelectionDto, responseId: number): boolean {
+    return this.getSelectedDuplicateResponseId(duplicate) === responseId;
+  }
+
+  isDuplicateValueConflicting(duplicate: DuplicateResponseSelectionDto, responseId: number): boolean {
+    if (!this.hasDifferentDuplicateValues(duplicate)) {
+      return false;
+    }
+    const selectedId = this.getSelectedDuplicateResponseId(duplicate);
+    if (!selectedId) {
+      // No baseline selected yet -> mark value column as conflicting for all rows
+      return true;
+    }
+    const selected = (duplicate.duplicates || []).find(d => d.responseId === selectedId);
+    const current = (duplicate.duplicates || []).find(d => d.responseId === responseId);
+    return String(current?.value ?? '') !== String(selected?.value ?? '');
+  }
+
+  isDuplicateStatusConflicting(duplicate: DuplicateResponseSelectionDto, responseId: number): boolean {
+    if (!this.hasDifferentDuplicateStatuses(duplicate)) {
+      return false;
+    }
+    const selectedId = this.getSelectedDuplicateResponseId(duplicate);
+    if (!selectedId) {
+      // No baseline selected yet -> mark status column as conflicting for all rows
+      return true;
+    }
+    const selected = (duplicate.duplicates || []).find(d => d.responseId === selectedId);
+    const current = (duplicate.duplicates || []).find(d => d.responseId === responseId);
+    return String(current?.status ?? '') !== String(selected?.status ?? '');
+  }
+
+  getDuplicateConflictLabel(duplicate: DuplicateResponseSelectionDto): string {
+    const parts: string[] = [];
+    if (this.hasDifferentDuplicateValues(duplicate)) {
+      parts.push('Wert');
+    }
+    if (this.hasDifferentDuplicateStatuses(duplicate)) {
+      parts.push('Status');
+    }
+    if (parts.length === 0) {
+      return 'Duplikate sind identisch';
+    }
+    return `Unterschiede: ${parts.join(', ')}`;
+  }
+
+  isDuplicateGroupTouched(duplicate: DuplicateResponseSelectionDto): boolean {
+    return this.duplicateResponseTouchedKeys.has(duplicate.key);
+  }
+
+  markDuplicateGroupTouched(duplicate: DuplicateResponseSelectionDto): void {
+    this.duplicateResponseTouchedKeys.add(duplicate.key);
+  }
+
   constructor(
     @Inject(MAT_DIALOG_DATA) public data: unknown,
     private dialogRef: MatDialogRef<ValidationDialogComponent>,
@@ -268,6 +434,43 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
   ngOnInit(): void {
     this.checkForExistingTasks();
     this.loadPreviousValidationResults();
+
+    const workspaceId = this.appService.selectedWorkspaceId;
+
+    const sub1 = this.validationTaskStateService.observeValidationResults(workspaceId)
+      .subscribe(results => {
+        this.applyInMemoryResults(results);
+      });
+    this.subscriptions.push(sub1);
+
+    const sub2 = this.validationTaskStateService.observeTaskIds(workspaceId)
+      .subscribe(taskIds => {
+        this.isVariableValidationRunning = Boolean(taskIds.variables);
+        this.isVariableTypeValidationRunning = Boolean(taskIds.variableTypes);
+        this.isResponseStatusValidationRunning = Boolean(taskIds.responseStatus);
+        this.isTestTakersValidationRunning = Boolean(taskIds.testTakers);
+        this.isGroupResponsesValidationRunning = Boolean(taskIds.groupResponses);
+        this.isDuplicateResponsesValidationRunning = Boolean(taskIds.duplicateResponses);
+      });
+    this.subscriptions.push(sub2);
+
+    const sub3 = this.validationTaskStateService.observeBatchState(workspaceId)
+      .subscribe(state => {
+        const previous = this.lastBatchState?.status;
+        this.lastBatchState = state;
+        if (previous !== 'completed' && state.status === 'completed') {
+          this.snackBar.open('Alle Prüfungen abgeschlossen. Bitte Ergebnisse prüfen.', 'OK', { duration: 4000 });
+        }
+        if (previous !== 'failed' && state.status === 'failed') {
+          this.snackBar.open(`Validierungsbatch fehlgeschlagen: ${state.error || 'Unbekannter Fehler'}`, 'OK', { duration: 6000 });
+        }
+      });
+    this.subscriptions.push(sub3);
+
+    const autoStart = (this.data as { autoStart?: boolean } | null)?.autoStart;
+    if (autoStart) {
+      this.startAllValidations();
+    }
   }
 
   ngAfterViewInit(): void {
@@ -309,10 +512,14 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
     if (taskIds.groupResponses) {
       this.loadExistingTask('groupResponses', taskIds.groupResponses);
     }
+
+    if (taskIds.duplicateResponses) {
+      this.loadExistingTask('duplicateResponses', taskIds.duplicateResponses);
+    }
   }
 
   private loadExistingTask(
-    type: 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'groupResponses',
+    type: 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'groupResponses' | 'duplicateResponses',
     taskId: number
   ): void {
     const workspaceId = this.appService.selectedWorkspaceId;
@@ -332,6 +539,9 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
         break;
       case 'groupResponses':
         this.isGroupResponsesValidationRunning = true;
+        break;
+      case 'duplicateResponses':
+        this.isDuplicateResponsesValidationRunning = true;
         break;
       default:
         break;
@@ -355,6 +565,9 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
               break;
             case 'groupResponses':
               this.groupResponsesValidationTask = task;
+              break;
+            case 'duplicateResponses':
+              this.duplicateResponsesValidationTask = task;
               break;
             default:
               break;
@@ -384,6 +597,9 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
               case 'groupResponses':
                 this.isGroupResponsesValidationRunning = false;
                 break;
+              case 'duplicateResponses':
+                this.isDuplicateResponsesValidationRunning = false;
+                break;
               default:
                 break;
             }
@@ -409,6 +625,9 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
             case 'groupResponses':
               this.isGroupResponsesValidationRunning = false;
               break;
+            case 'duplicateResponses':
+              this.isDuplicateResponsesValidationRunning = false;
+              break;
             default:
               break;
           }
@@ -419,7 +638,7 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
   }
 
   private pollExistingTask(
-    type: 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'groupResponses',
+    type: 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'groupResponses' | 'duplicateResponses',
     taskId: number
   ): void {
     const workspaceId = this.appService.selectedWorkspaceId;
@@ -451,6 +670,9 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
             case 'groupResponses':
               this.isGroupResponsesValidationRunning = false;
               break;
+            case 'duplicateResponses':
+              this.isDuplicateResponsesValidationRunning = false;
+              break;
             default:
               break;
           }
@@ -476,6 +698,9 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
           case 'groupResponses':
             this.isGroupResponsesValidationRunning = false;
             break;
+          case 'duplicateResponses':
+            this.isDuplicateResponsesValidationRunning = false;
+            break;
           default:
             break;
         }
@@ -486,7 +711,7 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
   }
 
   private loadTaskResults(
-    type: 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'groupResponses',
+    type: 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'groupResponses' | 'duplicateResponses',
     taskId: number
   ): void {
     const workspaceId = this.appService.selectedWorkspaceId;
@@ -573,6 +798,21 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
             break;
           }
 
+          case 'duplicateResponses': {
+            const typedResult = result as DuplicateResponsesResultDto;
+            this.duplicateResponsesResult = typedResult;
+            this.duplicateResponses = (typedResult.data || []).map(duplicate => ({
+              ...duplicate,
+              key: this.buildDuplicateKey(duplicate)
+            }));
+            this.totalDuplicateResponses = typedResult.total;
+            this.updatePaginatedDuplicateResponses();
+            this.isDuplicateResponsesValidationRunning = false;
+            this.validateDuplicateResponsesWasRun = true;
+            this.saveValidationResult(type);
+            break;
+          }
+
           default:
             break;
         }
@@ -598,6 +838,9 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
             break;
           case 'groupResponses':
             this.isGroupResponsesValidationRunning = false;
+            break;
+          case 'duplicateResponses':
+            this.isDuplicateResponsesValidationRunning = false;
             break;
           default:
             break;
@@ -630,6 +873,35 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
     if (this.groupResponsesValidationTask && (this.groupResponsesValidationTask.status === 'pending' || this.groupResponsesValidationTask.status === 'processing')) {
       this.validationTaskStateService.setTaskId(workspaceId, 'groupResponses', this.groupResponsesValidationTask.id);
     }
+
+    if (this.duplicateResponsesValidationTask && (this.duplicateResponsesValidationTask.status === 'pending' || this.duplicateResponsesValidationTask.status === 'processing')) {
+      this.validationTaskStateService.setTaskId(workspaceId, 'duplicateResponses', this.duplicateResponsesValidationTask.id);
+    }
+  }
+
+  startAllValidations(): void {
+    this.validationBatchRunnerService.startBatch(this.appService.selectedWorkspaceId);
+  }
+
+  private applyInMemoryResults(results: Record<string, ValidationResult>): void {
+    if (results.variables) {
+      this.processVariablesResult(results.variables, true);
+    }
+    if (results.variableTypes) {
+      this.processVariableTypesResult(results.variableTypes, true);
+    }
+    if (results.responseStatus) {
+      this.processResponseStatusResult(results.responseStatus, true);
+    }
+    if (results.testTakers) {
+      this.processTestTakersResult(results.testTakers, true);
+    }
+    if (results.groupResponses) {
+      this.processGroupResponsesResult(results.groupResponses, true);
+    }
+    if (results.duplicateResponses) {
+      this.processDuplicateResponsesResult(results.duplicateResponses, true);
+    }
   }
 
   updatePaginatedVariables(): void {
@@ -654,49 +926,30 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
     this.isGroupResponsesValidationRunning = true;
     this.subscriptions.forEach(sub => sub.unsubscribe());
     this.subscriptions = [];
-    const subscription = this.backendService.createValidationTask(
+    const subscription = this.validationTaskRunnerService.runTask<{
+      testTakersFound: boolean;
+      groupsWithResponses: { group: string; hasResponse: boolean }[];
+      allGroupsHaveResponses: boolean;
+      total: number;
+      page: number;
+      limit: number;
+    }>(
       this.appService.selectedWorkspaceId,
       'groupResponses',
-      this.currentGroupResponsesPage,
-      this.groupResponsesPageSize
-    ).subscribe(task => {
-      this.groupResponsesValidationTask = task;
-      const pollSubscription = this.backendService.pollValidationTask(
-        this.appService.selectedWorkspaceId,
-        task.id
-      ).subscribe({
-        next: updatedTask => {
-          if (updatedTask.status === 'completed') {
-            this.backendService.getValidationResults(
-              this.appService.selectedWorkspaceId,
-              updatedTask.id
-            ).subscribe(result => {
-              const typedResult = result as {
-                testTakersFound: boolean;
-                groupsWithResponses: { group: string; hasResponse: boolean }[];
-                allGroupsHaveResponses: boolean;
-                total: number;
-                page: number;
-                limit: number;
-              };
-
-              this.groupResponsesResult = typedResult;
-              this.totalGroupResponses = typedResult.total;
-              this.updatePaginatedGroupResponses();
-              this.isGroupResponsesValidationRunning = false;
-            });
-          } else if (updatedTask.status === 'failed') {
-            this.snackBar.open(`Validierung fehlgeschlagen: ${updatedTask.error || 'Unbekannter Fehler'}`, 'Schließen', { duration: 5000 });
-            this.isGroupResponsesValidationRunning = false;
-          }
-        },
-        error: () => {
-          this.snackBar.open('Fehler beim Abrufen des Validierungsstatus', 'Schließen', { duration: 5000 });
-          this.isGroupResponsesValidationRunning = false;
-        }
-      });
-
-      this.subscriptions.push(pollSubscription);
+      { page: this.currentGroupResponsesPage, limit: this.groupResponsesPageSize }
+    ).subscribe({
+      next: ({ createdTask, result }) => {
+        this.groupResponsesValidationTask = createdTask;
+        this.groupResponsesResult = result;
+        this.totalGroupResponses = result.total;
+        this.updatePaginatedGroupResponses();
+        this.isGroupResponsesValidationRunning = false;
+      },
+      error: (err: unknown) => {
+        const message = err instanceof Error ? err.message : 'Unbekannter Fehler';
+        this.snackBar.open(`Validierung fehlgeschlagen: ${message}`, 'Schließen', { duration: 5000 });
+        this.isGroupResponsesValidationRunning = false;
+      }
     });
 
     this.subscriptions.push(subscription);
@@ -709,62 +962,42 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
     this.subscriptions.forEach(sub => sub.unsubscribe());
     this.subscriptions = [];
 
-    const subscription = this.backendService.createValidationTask(
+    const subscription = this.validationTaskRunnerService.runTask<TestTakersValidationDto>(
       this.appService.selectedWorkspaceId,
       'testTakers'
-    ).subscribe(task => {
-      this.testTakersValidationTask = task;
+    ).subscribe({
+      next: ({ createdTask, result }) => {
+        this.testTakersValidationTask = createdTask;
+        this.testTakersValidationResult = result;
 
-      const pollSubscription = this.backendService.pollValidationTask(
-        this.appService.selectedWorkspaceId,
-        task.id
-      ).subscribe({
-        next: updatedTask => {
-          if (updatedTask.status === 'completed') {
-            this.backendService.getValidationResults(
-              this.appService.selectedWorkspaceId,
-              updatedTask.id
-            ).subscribe(result => {
-              this.testTakersValidationResult = result as TestTakersValidationDto;
+        const hasErrors = !result.testTakersFound || result.missingPersons.length > 0;
 
-              const hasErrors =
-                !this.testTakersValidationResult.testTakersFound ||
-                this.testTakersValidationResult.missingPersons.length > 0;
-
-              const validationResult: ValidationResult = {
-                status: hasErrors ? 'failed' : 'success',
-                timestamp: Date.now(),
-                details: {
-                  testTakersFound: this.testTakersValidationResult.testTakersFound,
-                  missingPersonsCount: this.testTakersValidationResult.missingPersons.length,
-                  hasErrors: hasErrors
-                }
-              };
-
-              this.validationTaskStateService.setValidationResult(
-                this.appService.selectedWorkspaceId,
-                'testTakers',
-                validationResult
-              );
-
-              this.updatePaginatedMissingPersons();
-              this.isTestTakersValidationRunning = false;
-              this.testTakersValidationWasRun = true;
-
-              this.saveValidationResult('testTakers');
-            });
-          } else if (updatedTask.status === 'failed') {
-            this.snackBar.open(`Validierung fehlgeschlagen: ${updatedTask.error || 'Unbekannter Fehler'}`, 'Schließen', { duration: 5000 });
-            this.isTestTakersValidationRunning = false;
+        const validationResult: ValidationResult = {
+          status: hasErrors ? 'failed' : 'success',
+          timestamp: Date.now(),
+          details: {
+            testTakersFound: result.testTakersFound,
+            missingPersonsCount: result.missingPersons.length,
+            hasErrors: hasErrors
           }
-        },
-        error: () => {
-          this.snackBar.open('Fehler beim Abrufen des Validierungsstatus', 'Schließen', { duration: 5000 });
-          this.isTestTakersValidationRunning = false;
-        }
-      });
+        };
 
-      this.subscriptions.push(pollSubscription);
+        this.validationTaskStateService.setValidationResult(
+          this.appService.selectedWorkspaceId,
+          'testTakers',
+          validationResult
+        );
+
+        this.updatePaginatedMissingPersons();
+        this.isTestTakersValidationRunning = false;
+        this.testTakersValidationWasRun = true;
+        this.saveValidationResult('testTakers');
+      },
+      error: (err: unknown) => {
+        const message = err instanceof Error ? err.message : 'Unbekannter Fehler';
+        this.snackBar.open(`Validierung fehlgeschlagen: ${message}`, 'Schließen', { duration: 5000 });
+        this.isTestTakersValidationRunning = false;
+      }
     });
 
     this.subscriptions.push(subscription);
@@ -789,69 +1022,49 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
     this.currentGroupResponsesPage = 1;
     this.subscriptions.forEach(sub => sub.unsubscribe());
     this.subscriptions = [];
-    const subscription = this.backendService.createValidationTask(
+    const subscription = this.validationTaskRunnerService.runTask<{
+      testTakersFound: boolean;
+      groupsWithResponses: { group: string; hasResponse: boolean }[];
+      allGroupsHaveResponses: boolean;
+      total: number;
+      page: number;
+      limit: number;
+    }>(
       this.appService.selectedWorkspaceId,
       'groupResponses',
-      this.currentGroupResponsesPage,
-      this.groupResponsesPageSize
-    ).subscribe(task => {
-      this.groupResponsesValidationTask = task;
+      { page: this.currentGroupResponsesPage, limit: this.groupResponsesPageSize }
+    ).subscribe({
+      next: ({ createdTask, result }) => {
+        this.groupResponsesValidationTask = createdTask;
 
-      const pollSubscription = this.backendService.pollValidationTask(
-        this.appService.selectedWorkspaceId,
-        task.id
-      ).subscribe({
-        next: updatedTask => {
-          if (updatedTask.status === 'completed') {
-            this.backendService.getValidationResults(
-              this.appService.selectedWorkspaceId,
-              updatedTask.id
-            ).subscribe(result => {
-              const typedResult = result as {
-                testTakersFound: boolean;
-                groupsWithResponses: { group: string; hasResponse: boolean }[];
-                allGroupsHaveResponses: boolean;
-                total: number;
-                page: number;
-                limit: number;
-              };
-              const hasErrors =
-                !typedResult.testTakersFound || !typedResult.allGroupsHaveResponses;
-
-              const validationResult: ValidationResult = {
-                status: hasErrors ? 'failed' : 'success',
-                timestamp: Date.now(),
-                details: {
-                  testTakersFound: typedResult.testTakersFound,
-                  allGroupsHaveResponses: typedResult.allGroupsHaveResponses,
-                  hasErrors: hasErrors
-                }
-              };
-              this.validationTaskStateService.setValidationResult(
-                this.appService.selectedWorkspaceId,
-                'groupResponses',
-                validationResult
-              );
-
-              this.groupResponsesResult = typedResult;
-              this.totalGroupResponses = typedResult.total;
-              this.updatePaginatedGroupResponses();
-              this.isGroupResponsesValidationRunning = false;
-              this.groupResponsesValidationWasRun = true;
-              this.saveValidationResult('groupResponses');
-            });
-          } else if (updatedTask.status === 'failed') {
-            this.snackBar.open(`Validierung fehlgeschlagen: ${updatedTask.error || 'Unbekannter Fehler'}`, 'Schließen', { duration: 5000 });
-            this.isGroupResponsesValidationRunning = false;
+        const hasErrors = !result.testTakersFound || !result.allGroupsHaveResponses;
+        const validationResult: ValidationResult = {
+          status: hasErrors ? 'failed' : 'success',
+          timestamp: Date.now(),
+          details: {
+            testTakersFound: result.testTakersFound,
+            allGroupsHaveResponses: result.allGroupsHaveResponses,
+            hasErrors: hasErrors
           }
-        },
-        error: () => {
-          this.snackBar.open('Fehler beim Abrufen des Validierungsstatus', 'Schließen', { duration: 5000 });
-          this.isGroupResponsesValidationRunning = false;
-        }
-      });
+        };
+        this.validationTaskStateService.setValidationResult(
+          this.appService.selectedWorkspaceId,
+          'groupResponses',
+          validationResult
+        );
 
-      this.subscriptions.push(pollSubscription);
+        this.groupResponsesResult = result;
+        this.totalGroupResponses = result.total;
+        this.updatePaginatedGroupResponses();
+        this.isGroupResponsesValidationRunning = false;
+        this.groupResponsesValidationWasRun = true;
+        this.saveValidationResult('groupResponses');
+      },
+      error: (err: unknown) => {
+        const message = err instanceof Error ? err.message : 'Unbekannter Fehler';
+        this.snackBar.open(`Validierung fehlgeschlagen: ${message}`, 'Schließen', { duration: 5000 });
+        this.isGroupResponsesValidationRunning = false;
+      }
     });
 
     this.subscriptions.push(subscription);
@@ -865,77 +1078,49 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
     this.validateDuplicateResponsesWasRun = false;
     this.currentDuplicateResponsesPage = 1;
     this.duplicateResponseSelections.clear();
+    this.duplicateResponseTouchedKeys.clear();
     this.subscriptions.forEach(sub => sub.unsubscribe());
     this.subscriptions = [];
 
-    const subscription = this.backendService.createValidationTask(
+    const subscription = this.validationTaskRunnerService.runTask<DuplicateResponsesResultDto>(
       this.appService.selectedWorkspaceId,
       'duplicateResponses',
-      this.currentDuplicateResponsesPage,
-      this.duplicateResponsesPageSize
-    ).subscribe(task => {
-      const pollSubscription = this.backendService.pollValidationTask(
-        this.appService.selectedWorkspaceId,
-        task.id
-      ).subscribe({
-        next: updatedTask => {
-          if (updatedTask.status === 'completed') {
-            this.backendService.getValidationResults(
-              this.appService.selectedWorkspaceId,
-              updatedTask.id
-            ).subscribe(result => {
-              const typedResult = result as DuplicateResponsesResultDto;
-              const hasErrors = typedResult.total > 0;
-              const validationResult: ValidationResult = {
-                status: hasErrors ? 'failed' : 'success',
-                timestamp: Date.now(),
-                details: {
-                  total: typedResult.total,
-                  hasErrors: hasErrors
-                }
-              };
-
-              this.validationTaskStateService.setValidationResult(
-                this.appService.selectedWorkspaceId,
-                'duplicateResponses',
-                validationResult
-              );
-
-              this.duplicateResponses = typedResult.data.map(duplicate => {
-                const defaultSelectedId = duplicate.duplicates.length > 0 ?
-                  duplicate.duplicates[0].responseId : undefined;
-
-                if (defaultSelectedId) {
-                  const key = `${duplicate.unitId}_${duplicate.variableId}_${duplicate.testTakerLogin}`;
-                  this.duplicateResponseSelections.set(key, defaultSelectedId);
-                }
-
-                return {
-                  ...duplicate,
-                  key: `${duplicate.unitId}_${duplicate.variableId}_${duplicate.testTakerLogin}`
-                };
-              });
-
-              this.totalDuplicateResponses = typedResult.total;
-              this.duplicateResponsesResult = typedResult;
-              this.updatePaginatedDuplicateResponses();
-              this.isDuplicateResponsesValidationRunning = false;
-              this.validateDuplicateResponsesWasRun = true;
-
-              this.saveValidationResult('duplicateResponses');
-            });
-          } else if (updatedTask.status === 'failed') {
-            this.snackBar.open(`Validierung fehlgeschlagen: ${updatedTask.error || 'Unbekannter Fehler'}`, 'Schließen', { duration: 5000 });
-            this.isDuplicateResponsesValidationRunning = false;
+      { page: this.currentDuplicateResponsesPage, limit: this.duplicateResponsesPageSize }
+    ).subscribe({
+      next: ({ result }) => {
+        const hasErrors = result.total > 0;
+        const validationResult: ValidationResult = {
+          status: hasErrors ? 'failed' : 'success',
+          timestamp: Date.now(),
+          details: {
+            total: result.total,
+            hasErrors: hasErrors
           }
-        },
-        error: () => {
-          this.snackBar.open('Fehler beim Abrufen des Validierungsstatus', 'Schließen', { duration: 5000 });
-          this.isDuplicateResponsesValidationRunning = false;
-        }
-      });
+        };
 
-      this.subscriptions.push(pollSubscription);
+        this.validationTaskStateService.setValidationResult(
+          this.appService.selectedWorkspaceId,
+          'duplicateResponses',
+          validationResult
+        );
+
+        this.duplicateResponses = result.data.map(duplicate => ({
+          ...duplicate,
+          key: this.buildDuplicateKey(duplicate)
+        }));
+
+        this.totalDuplicateResponses = result.total;
+        this.duplicateResponsesResult = result;
+        this.updatePaginatedDuplicateResponses();
+        this.isDuplicateResponsesValidationRunning = false;
+        this.validateDuplicateResponsesWasRun = true;
+        this.saveValidationResult('duplicateResponses');
+      },
+      error: (err: unknown) => {
+        const message = err instanceof Error ? err.message : 'Unbekannter Fehler';
+        this.snackBar.open(`Validierung fehlgeschlagen: ${message}`, 'Schließen', { duration: 5000 });
+        this.isDuplicateResponsesValidationRunning = false;
+      }
     });
 
     this.subscriptions.push(subscription);
@@ -962,14 +1147,84 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
 
   selectDuplicateResponse(duplicate: DuplicateResponseSelectionDto, responseId: number): void {
     this.duplicateResponseSelections.set(duplicate.key, responseId);
+    this.markDuplicateGroupTouched(duplicate);
   }
 
   hasSelectedDuplicateResponses(): boolean {
-    return this.duplicateResponseSelections.size > 0;
+    return this.getSelectedDuplicateResponsesCount() > 0;
   }
 
   getSelectedDuplicateResponsesCount(): number {
-    return this.duplicateResponseSelections.size;
+    return this.duplicateResponseTouchedKeys.size;
+  }
+
+  resolveDuplicateGroup(duplicate: DuplicateResponseSelectionDto): void {
+    const selected = this.duplicateResponseSelections.get(duplicate.key);
+    if (!selected) {
+      this.snackBar.open('Bitte zuerst eine Antwort auswählen.', 'OK', { duration: 3000 });
+      return;
+    }
+
+    this.isResolvingDuplicateResponses = true;
+    const request = { resolutionMap: { [duplicate.key]: selected } };
+
+    this.validationService.resolveDuplicateResponses(this.appService.selectedWorkspaceId, request)
+      .subscribe({
+        next: result => {
+          if (result.success) {
+            this.snackBar.open(
+              `${result.resolvedCount} doppelte Antworten wurden erfolgreich aufgelöst.`,
+              'OK',
+              { duration: 3000 }
+            );
+            this.validateDuplicateResponses();
+          } else {
+            this.snackBar.open('Fehler beim Auflösen der doppelten Antworten.', 'Fehler', { duration: 3000 });
+          }
+          this.isResolvingDuplicateResponses = false;
+        },
+        error: () => {
+          this.snackBar.open('Fehler beim Auflösen der doppelten Antworten.', 'Fehler', { duration: 3000 });
+          this.isResolvingDuplicateResponses = false;
+        }
+      });
+  }
+
+  selectSuggestedDuplicateResponse(duplicate: DuplicateResponseSelectionDto): void {
+    if (!duplicate?.duplicates?.length) {
+      return;
+    }
+
+    const rankStatus = (s: string): number => {
+      // Prefer real values over not reached/unset.
+      switch (String(s || '')) {
+        case 'VALUE_CHANGED':
+          return 5;
+        case 'DISPLAYED':
+          return 4;
+        case 'PARTLY_DISPLAYED':
+          return 3;
+        case 'NOT_REACHED':
+          return 2;
+        case 'UNSET':
+          return 1;
+        default:
+          return 0;
+      }
+    };
+
+    const scored = duplicate.duplicates
+      .map(d => ({
+        responseId: d.responseId,
+        score: rankStatus(d.status) + (String(d.value ?? '').trim() !== '' ? 1 : 0)
+      }))
+      .sort((a, b) => b.score - a.score);
+
+    const best = scored[0]?.responseId;
+    if (best) {
+      this.duplicateResponseSelections.set(duplicate.key, best);
+      this.markDuplicateGroupTouched(duplicate);
+    }
   }
 
   onDuplicateResponsesPageChange(event: PageEvent): void {
@@ -978,53 +1233,27 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
     this.isDuplicateResponsesValidationRunning = true;
     this.subscriptions.forEach(sub => sub.unsubscribe());
     this.subscriptions = [];
-    const subscription = this.backendService.createValidationTask(
+    const subscription = this.validationTaskRunnerService.runTask<DuplicateResponsesResultDto>(
       this.appService.selectedWorkspaceId,
       'duplicateResponses',
-      this.currentDuplicateResponsesPage,
-      this.duplicateResponsesPageSize
-    ).subscribe(task => {
-      const pollSubscription = this.backendService.pollValidationTask(
-        this.appService.selectedWorkspaceId,
-        task.id
-      ).subscribe({
-        next: updatedTask => {
-          if (updatedTask.status === 'completed') {
-            this.backendService.getValidationResults(
-              this.appService.selectedWorkspaceId,
-              updatedTask.id
-            ).subscribe(result => {
-              const typedResult = result as DuplicateResponsesResultDto;
-              this.duplicateResponses = typedResult.data.map(duplicate => {
-                const key = `${duplicate.unitId}_${duplicate.variableId}_${duplicate.testTakerLogin}`;
+      { page: this.currentDuplicateResponsesPage, limit: this.duplicateResponsesPageSize }
+    ).subscribe({
+      next: ({ result }) => {
+        this.duplicateResponses = result.data.map(duplicate => ({
+          ...duplicate,
+          key: this.buildDuplicateKey(duplicate)
+        }));
 
-                if (!this.duplicateResponseSelections.has(key) && duplicate.duplicates.length > 0) {
-                  this.duplicateResponseSelections.set(key, duplicate.duplicates[0].responseId);
-                }
-
-                return {
-                  ...duplicate,
-                  key
-                };
-              });
-
-              this.totalDuplicateResponses = typedResult.total;
-              this.duplicateResponsesResult = typedResult;
-              this.updatePaginatedDuplicateResponses();
-              this.isDuplicateResponsesValidationRunning = false;
-            });
-          } else if (updatedTask.status === 'failed') {
-            this.snackBar.open(`Validierung fehlgeschlagen: ${updatedTask.error || 'Unbekannter Fehler'}`, 'Schließen', { duration: 5000 });
-            this.isDuplicateResponsesValidationRunning = false;
-          }
-        },
-        error: () => {
-          this.snackBar.open('Fehler beim Abrufen des Validierungsstatus', 'Schließen', { duration: 5000 });
-          this.isDuplicateResponsesValidationRunning = false;
-        }
-      });
-
-      this.subscriptions.push(pollSubscription);
+        this.totalDuplicateResponses = result.total;
+        this.duplicateResponsesResult = result;
+        this.updatePaginatedDuplicateResponses();
+        this.isDuplicateResponsesValidationRunning = false;
+      },
+      error: (err: unknown) => {
+        const message = err instanceof Error ? err.message : 'Unbekannter Fehler';
+        this.snackBar.open(`Validierung fehlgeschlagen: ${message}`, 'Schließen', { duration: 5000 });
+        this.isDuplicateResponsesValidationRunning = false;
+      }
     });
 
     this.subscriptions.push(subscription);
@@ -1037,8 +1266,11 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
 
     this.isResolvingDuplicateResponses = true;
     const responseIdsToKeep: Record<string, number> = {};
-    this.duplicateResponseSelections.forEach((responseId, key) => {
-      responseIdsToKeep[key] = responseId;
+    this.duplicateResponseTouchedKeys.forEach(key => {
+      const responseId = this.duplicateResponseSelections.get(key);
+      if (responseId) {
+        responseIdsToKeep[key] = responseId;
+      }
     });
 
     const request = {
@@ -1082,54 +1314,29 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
       return;
     }
     this.isResolvingDuplicateResponses = true;
-    const subscription = this.backendService.createValidationTask(
+    const subscription = this.validationTaskRunnerService.runDeleteAllResponsesTask(
       this.appService.selectedWorkspaceId,
-      'deleteAllResponses',
-      undefined,
-      undefined,
-      { validationType: 'duplicateResponses' }
-    ).subscribe(task => {
-      const pollSubscription = this.backendService.pollValidationTask(
-        this.appService.selectedWorkspaceId,
-        task.id
-      ).subscribe({
-        next: updatedTask => {
-          if (updatedTask.status === 'completed') {
-            this.backendService.getValidationResults(
-              this.appService.selectedWorkspaceId,
-              updatedTask.id
-            ).subscribe(result => {
-              const typedResult = result as { deletedCount: number };
+      'duplicateResponses'
+    ).subscribe({
+      next: ({ result }) => {
+        this.snackBar.open(
+          `${result.deletedCount} doppelte Antworten wurden automatisch aufgelöst.`,
+          'OK',
+          { duration: 3000 }
+        );
 
-              this.snackBar.open(
-                `${typedResult.deletedCount} doppelte Antworten wurden automatisch aufgelöst.`,
-                'OK',
-                { duration: 3000 }
-              );
-
-              this.validateDuplicateResponses();
-              this.isResolvingDuplicateResponses = false;
-            });
-          } else if (updatedTask.status === 'failed') {
-            this.snackBar.open(
-              `Fehler beim Auflösen der doppelten Antworten: ${updatedTask.error || 'Unbekannter Fehler'}`,
-              'Fehler',
-              { duration: 3000 }
-            );
-            this.isResolvingDuplicateResponses = false;
-          }
-        },
-        error: () => {
-          this.snackBar.open(
-            'Fehler beim Auflösen der doppelten Antworten.',
-            'Fehler',
-            { duration: 3000 }
-          );
-          this.isResolvingDuplicateResponses = false;
-        }
-      });
-
-      this.subscriptions.push(pollSubscription);
+        this.validateDuplicateResponses();
+        this.isResolvingDuplicateResponses = false;
+      },
+      error: (err: unknown) => {
+        const message = err instanceof Error ? err.message : 'Unbekannter Fehler';
+        this.snackBar.open(
+          `Fehler beim Auflösen der doppelten Antworten: ${message}`,
+          'Fehler',
+          { duration: 3000 }
+        );
+        this.isResolvingDuplicateResponses = false;
+      }
     });
 
     this.subscriptions.push(subscription);
@@ -1144,66 +1351,48 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
 
     this.subscriptions.forEach(sub => sub.unsubscribe());
     this.subscriptions = [];
-    const subscription = this.backendService.createValidationTask(
+    const subscription = this.validationTaskRunnerService.runTask<{
+      data: InvalidVariableDto[];
+      total: number;
+      page: number;
+      limit: number;
+    }>(
       this.appService.selectedWorkspaceId,
       'variables',
-      this.currentVariablePage,
-      this.variablePageSize
-    ).subscribe(task => {
-      this.variableValidationTask = task;
-      const pollSubscription = this.backendService.pollValidationTask(
-        this.appService.selectedWorkspaceId,
-        task.id
-      ).subscribe({
-        next: updatedTask => {
-          if (updatedTask.status === 'completed') {
-            this.backendService.getValidationResults(
-              this.appService.selectedWorkspaceId,
-              updatedTask.id
-            ).subscribe(result => {
-              const typedResult = result as {
-                data: InvalidVariableDto[];
-                total: number;
-                page: number;
-                limit: number;
-              };
+      { page: this.currentVariablePage, limit: this.variablePageSize }
+    ).subscribe({
+      next: ({ createdTask, result }) => {
+        this.variableValidationTask = createdTask;
 
-              const hasErrors = typedResult.total > 0;
-              const validationResult: ValidationResult = {
-                status: hasErrors ? 'failed' : 'success',
-                timestamp: Date.now(),
-                details: {
-                  total: typedResult.total,
-                  hasErrors: hasErrors
-                }
-              };
-              this.validationTaskStateService.setValidationResult(
-                this.appService.selectedWorkspaceId,
-                'variables',
-                validationResult
-              );
-
-              this.invalidVariables = typedResult.data;
-              this.totalInvalidVariables = typedResult.total;
-              this.currentVariablePage = typedResult.page;
-              this.variablePageSize = typedResult.limit;
-              this.updatePaginatedVariables();
-              this.isVariableValidationRunning = false;
-              this.validateVariablesWasRun = true;
-              this.saveValidationResult('variables');
-            });
-          } else if (updatedTask.status === 'failed') {
-            this.snackBar.open(`Validierung fehlgeschlagen: ${updatedTask.error || 'Unbekannter Fehler'}`, 'Schließen', { duration: 5000 });
-            this.isVariableValidationRunning = false;
+        const hasErrors = result.total > 0;
+        const validationResult: ValidationResult = {
+          status: hasErrors ? 'failed' : 'success',
+          timestamp: Date.now(),
+          details: {
+            total: result.total,
+            hasErrors: hasErrors
           }
-        },
-        error: () => {
-          this.snackBar.open('Fehler beim Abrufen des Validierungsstatus', 'Schließen', { duration: 5000 });
-          this.isVariableValidationRunning = false;
-        }
-      });
+        };
+        this.validationTaskStateService.setValidationResult(
+          this.appService.selectedWorkspaceId,
+          'variables',
+          validationResult
+        );
 
-      this.subscriptions.push(pollSubscription);
+        this.invalidVariables = result.data;
+        this.totalInvalidVariables = result.total;
+        this.currentVariablePage = result.page;
+        this.variablePageSize = result.limit;
+        this.updatePaginatedVariables();
+        this.isVariableValidationRunning = false;
+        this.validateVariablesWasRun = true;
+        this.saveValidationResult('variables');
+      },
+      error: (err: unknown) => {
+        const message = err instanceof Error ? err.message : 'Unbekannter Fehler';
+        this.snackBar.open(`Validierung fehlgeschlagen: ${message}`, 'Schließen', { duration: 5000 });
+        this.isVariableValidationRunning = false;
+      }
     });
 
     this.subscriptions.push(subscription);
@@ -1215,50 +1404,31 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
     this.isVariableValidationRunning = true;
     this.subscriptions.forEach(sub => sub.unsubscribe());
     this.subscriptions = [];
-    const subscription = this.backendService.createValidationTask(
+    const subscription = this.validationTaskRunnerService.runTask<{
+      data: InvalidVariableDto[];
+      total: number;
+      page: number;
+      limit: number;
+    }>(
       this.appService.selectedWorkspaceId,
       'variables',
-      this.currentVariablePage,
-      this.variablePageSize
-    ).subscribe(task => {
-      this.variableValidationTask = task;
-      const pollSubscription = this.backendService.pollValidationTask(
-        this.appService.selectedWorkspaceId,
-        task.id
-      ).subscribe({
-        next: updatedTask => {
-          if (updatedTask.status === 'completed') {
-            this.backendService.getValidationResults(
-              this.appService.selectedWorkspaceId,
-              updatedTask.id
-            ).subscribe(result => {
-              const typedResult = result as {
-                data: InvalidVariableDto[];
-                total: number;
-                page: number;
-                limit: number;
-              };
-
-              this.invalidVariables = typedResult.data;
-              this.totalInvalidVariables = typedResult.total;
-              this.currentVariablePage = typedResult.page;
-              this.variablePageSize = typedResult.limit;
-              this.updatePaginatedVariables();
-              this.isVariableValidationRunning = false;
-              this.validateVariablesWasRun = true;
-            });
-          } else if (updatedTask.status === 'failed') {
-            this.snackBar.open(`Validierung fehlgeschlagen: ${updatedTask.error || 'Unbekannter Fehler'}`, 'Schließen', { duration: 5000 });
-            this.isVariableValidationRunning = false;
-          }
-        },
-        error: () => {
-          this.snackBar.open('Fehler beim Abrufen des Validierungsstatus', 'Schließen', { duration: 5000 });
-          this.isVariableValidationRunning = false;
-        }
-      });
-
-      this.subscriptions.push(pollSubscription);
+      { page: this.currentVariablePage, limit: this.variablePageSize }
+    ).subscribe({
+      next: ({ createdTask, result }) => {
+        this.variableValidationTask = createdTask;
+        this.invalidVariables = result.data;
+        this.totalInvalidVariables = result.total;
+        this.currentVariablePage = result.page;
+        this.variablePageSize = result.limit;
+        this.updatePaginatedVariables();
+        this.isVariableValidationRunning = false;
+        this.validateVariablesWasRun = true;
+      },
+      error: (err: unknown) => {
+        const message = err instanceof Error ? err.message : 'Unbekannter Fehler';
+        this.snackBar.open(`Validierung fehlgeschlagen: ${message}`, 'Schließen', { duration: 5000 });
+        this.isVariableValidationRunning = false;
+      }
     });
 
     this.subscriptions.push(subscription);
@@ -1299,84 +1469,49 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
     const responseIds = Array.from(this.selectedResponses);
     this.subscriptions.forEach(sub => sub.unsubscribe());
     this.subscriptions = [];
-    const subscription = this.backendService.createDeleteResponsesTask(
+    const subscription = this.validationTaskRunnerService.runDeleteResponsesTask(
       this.appService.selectedWorkspaceId,
       responseIds
-    ).subscribe(task => {
-      const pollSubscription = this.backendService.pollValidationTask(
-        this.appService.selectedWorkspaceId,
-        task.id
-      ).subscribe({
-        next: updatedTask => {
-          if (updatedTask.status === 'completed') {
-            this.backendService.getValidationResults(
-              this.appService.selectedWorkspaceId,
-              updatedTask.id
-            ).subscribe(result => {
-              const typedResult = result as { deletedCount: number };
-              this.isDeletingResponses = false;
-              this.snackBar.open(`${typedResult.deletedCount} Antworten gelöscht`, 'Schließen', { duration: 3000 });
-              this.isVariableValidationRunning = true;
-              const validationSubscription = this.backendService.createValidationTask(
-                this.appService.selectedWorkspaceId,
-                'variables',
-                this.currentVariablePage,
-                this.variablePageSize
-              ).subscribe(validationTask => {
-                this.variableValidationTask = validationTask;
-                const validationPollSubscription = this.backendService.pollValidationTask(
-                  this.appService.selectedWorkspaceId,
-                  validationTask.id
-                ).subscribe({
-                  next: updatedValidationTask => {
-                    if (updatedValidationTask.status === 'completed') {
-                      this.backendService.getValidationResults(
-                        this.appService.selectedWorkspaceId,
-                        updatedValidationTask.id
-                      ).subscribe(validationResult => {
-                        const typedValidationResult = validationResult as {
-                          data: InvalidVariableDto[];
-                          total: number;
-                          page: number;
-                          limit: number;
-                        };
+    ).subscribe({
+      next: ({ result }) => {
+        this.isDeletingResponses = false;
+        this.snackBar.open(`${result.deletedCount} Antworten gelöscht`, 'Schließen', { duration: 3000 });
 
-                        this.invalidVariables = typedValidationResult.data;
-                        this.totalInvalidVariables = typedValidationResult.total;
-                        this.currentVariablePage = typedValidationResult.page;
-                        this.variablePageSize = typedValidationResult.limit;
-                        this.updatePaginatedVariables();
-                        this.isVariableValidationRunning = false;
-                        this.validateVariablesWasRun = true;
-                      });
-                    } else if (updatedValidationTask.status === 'failed') {
-                      this.snackBar.open(`Validierung fehlgeschlagen: ${updatedValidationTask.error || 'Unbekannter Fehler'}`, 'Schließen', { duration: 5000 });
-                      this.isVariableValidationRunning = false;
-                    }
-                  },
-                  error: () => {
-                    this.snackBar.open('Fehler beim Abrufen des Validierungsstatus', 'Schließen', { duration: 5000 });
-                    this.isVariableValidationRunning = false;
-                  }
-                });
-
-                this.subscriptions.push(validationPollSubscription);
-              });
-
-              this.subscriptions.push(validationSubscription);
-            });
-          } else if (updatedTask.status === 'failed') {
-            this.isDeletingResponses = false;
-            this.snackBar.open(`Löschen fehlgeschlagen: ${updatedTask.error || 'Unbekannter Fehler'}`, 'Schließen', { duration: 5000 });
+        this.isVariableValidationRunning = true;
+        const refreshSubscription = this.validationTaskRunnerService.runTask<{
+          data: InvalidVariableDto[];
+          total: number;
+          page: number;
+          limit: number;
+        }>(
+          this.appService.selectedWorkspaceId,
+          'variables',
+          { page: this.currentVariablePage, limit: this.variablePageSize }
+        ).subscribe({
+          next: ({ createdTask, result: refreshResult }) => {
+            this.variableValidationTask = createdTask;
+            this.invalidVariables = refreshResult.data;
+            this.totalInvalidVariables = refreshResult.total;
+            this.currentVariablePage = refreshResult.page;
+            this.variablePageSize = refreshResult.limit;
+            this.updatePaginatedVariables();
+            this.isVariableValidationRunning = false;
+            this.validateVariablesWasRun = true;
+          },
+          error: (err: unknown) => {
+            const message = err instanceof Error ? err.message : 'Unbekannter Fehler';
+            this.snackBar.open(`Validierung fehlgeschlagen: ${message}`, 'Schließen', { duration: 5000 });
+            this.isVariableValidationRunning = false;
           }
-        },
-        error: () => {
-          this.isDeletingResponses = false;
-          this.snackBar.open('Fehler beim Abrufen des Löschstatus', 'Schließen', { duration: 5000 });
-        }
-      });
+        });
 
-      this.subscriptions.push(pollSubscription);
+        this.subscriptions.push(refreshSubscription);
+      },
+      error: (err: unknown) => {
+        const message = err instanceof Error ? err.message : 'Unbekannter Fehler';
+        this.isDeletingResponses = false;
+        this.snackBar.open(`Löschen fehlgeschlagen: ${message}`, 'Schließen', { duration: 5000 });
+      }
     });
 
     this.subscriptions.push(subscription);
@@ -1405,84 +1540,49 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
         this.isDeletingResponses = true;
         this.subscriptions.forEach(sub => sub.unsubscribe());
         this.subscriptions = [];
-        const subscription = this.backendService.createDeleteAllResponsesTask(
+        const subscription = this.validationTaskRunnerService.runDeleteAllResponsesTask(
           this.appService.selectedWorkspaceId,
           'variables'
-        ).subscribe(task => {
-          const pollSubscription = this.backendService.pollValidationTask(
-            this.appService.selectedWorkspaceId,
-            task.id
-          ).subscribe({
-            next: updatedTask => {
-              if (updatedTask.status === 'completed') {
-                this.backendService.getValidationResults(
-                  this.appService.selectedWorkspaceId,
-                  updatedTask.id
-                ).subscribe(result => {
-                  const typedResult = result as { deletedCount: number };
-                  this.isDeletingResponses = false;
-                  this.snackBar.open(`${typedResult.deletedCount} Antworten gelöscht`, 'Schließen', { duration: 3000 });
-                  this.isVariableValidationRunning = true;
-                  const validationSubscription = this.backendService.createValidationTask(
-                    this.appService.selectedWorkspaceId,
-                    'variables',
-                    this.currentVariablePage,
-                    this.variablePageSize
-                  ).subscribe(validationTask => {
-                    this.variableValidationTask = validationTask;
-                    const validationPollSubscription = this.backendService.pollValidationTask(
-                      this.appService.selectedWorkspaceId,
-                      validationTask.id
-                    ).subscribe({
-                      next: updatedValidationTask => {
-                        if (updatedValidationTask.status === 'completed') {
-                          this.backendService.getValidationResults(
-                            this.appService.selectedWorkspaceId,
-                            updatedValidationTask.id
-                          ).subscribe(validationResult => {
-                            const typedValidationResult = validationResult as {
-                              data: InvalidVariableDto[];
-                              total: number;
-                              page: number;
-                              limit: number;
-                            };
+        ).subscribe({
+          next: ({ result }) => {
+            this.isDeletingResponses = false;
+            this.snackBar.open(`${result.deletedCount} Antworten gelöscht`, 'Schließen', { duration: 3000 });
 
-                            this.invalidVariables = typedValidationResult.data;
-                            this.totalInvalidVariables = typedValidationResult.total;
-                            this.currentVariablePage = typedValidationResult.page;
-                            this.variablePageSize = typedValidationResult.limit;
-                            this.updatePaginatedVariables();
-                            this.isVariableValidationRunning = false;
-                            this.validateVariablesWasRun = true;
-                          });
-                        } else if (updatedValidationTask.status === 'failed') {
-                          this.snackBar.open(`Validierung fehlgeschlagen: ${updatedValidationTask.error || 'Unbekannter Fehler'}`, 'Schließen', { duration: 5000 });
-                          this.isVariableValidationRunning = false;
-                        }
-                      },
-                      error: () => {
-                        this.snackBar.open('Fehler beim Abrufen des Validierungsstatus', 'Schließen', { duration: 5000 });
-                        this.isVariableValidationRunning = false;
-                      }
-                    });
-
-                    this.subscriptions.push(validationPollSubscription);
-                  });
-
-                  this.subscriptions.push(validationSubscription);
-                });
-              } else if (updatedTask.status === 'failed') {
-                this.isDeletingResponses = false;
-                this.snackBar.open(`Löschen fehlgeschlagen: ${updatedTask.error || 'Unbekannter Fehler'}`, 'Schließen', { duration: 5000 });
+            this.isVariableValidationRunning = true;
+            const refreshSubscription = this.validationTaskRunnerService.runTask<{
+              data: InvalidVariableDto[];
+              total: number;
+              page: number;
+              limit: number;
+            }>(
+              this.appService.selectedWorkspaceId,
+              'variables',
+              { page: this.currentVariablePage, limit: this.variablePageSize }
+            ).subscribe({
+              next: ({ createdTask, result: refreshResult }) => {
+                this.variableValidationTask = createdTask;
+                this.invalidVariables = refreshResult.data;
+                this.totalInvalidVariables = refreshResult.total;
+                this.currentVariablePage = refreshResult.page;
+                this.variablePageSize = refreshResult.limit;
+                this.updatePaginatedVariables();
+                this.isVariableValidationRunning = false;
+                this.validateVariablesWasRun = true;
+              },
+              error: (err: unknown) => {
+                const message = err instanceof Error ? err.message : 'Unbekannter Fehler';
+                this.snackBar.open(`Validierung fehlgeschlagen: ${message}`, 'Schließen', { duration: 5000 });
+                this.isVariableValidationRunning = false;
               }
-            },
-            error: () => {
-              this.isDeletingResponses = false;
-              this.snackBar.open('Fehler beim Abrufen des Löschstatus', 'Schließen', { duration: 5000 });
-            }
-          });
+            });
 
-          this.subscriptions.push(pollSubscription);
+            this.subscriptions.push(refreshSubscription);
+          },
+          error: (err: unknown) => {
+            const message = err instanceof Error ? err.message : 'Unbekannter Fehler';
+            this.isDeletingResponses = false;
+            this.snackBar.open(`Löschen fehlgeschlagen: ${message}`, 'Schließen', { duration: 5000 });
+          }
         });
 
         this.subscriptions.push(subscription);
@@ -1502,67 +1602,48 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
     this.selectedTypeResponses.clear();
     this.subscriptions.forEach(sub => sub.unsubscribe());
     this.subscriptions = [];
-    const subscription = this.backendService.createValidationTask(
+    const subscription = this.validationTaskRunnerService.runTask<{
+      data: InvalidVariableDto[];
+      total: number;
+      page: number;
+      limit: number;
+    }>(
       this.appService.selectedWorkspaceId,
       'variableTypes',
-      this.currentTypeVariablePage,
-      this.typeVariablePageSize
-    ).subscribe(task => {
-      this.variableTypeValidationTask = task;
-      const pollSubscription = this.backendService.pollValidationTask(
-        this.appService.selectedWorkspaceId,
-        task.id
-      ).subscribe({
-        next: updatedTask => {
-          if (updatedTask.status === 'completed') {
-            this.backendService.getValidationResults(
-              this.appService.selectedWorkspaceId,
-              updatedTask.id
-            ).subscribe(result => {
-              const typedResult = result as {
-                data: InvalidVariableDto[];
-                total: number;
-                page: number;
-                limit: number;
-              };
-
-              const hasErrors = typedResult.total > 0;
-              const validationResult: ValidationResult = {
-                status: hasErrors ? 'failed' : 'success',
-                timestamp: Date.now(),
-                details: {
-                  total: typedResult.total,
-                  hasErrors: hasErrors
-                }
-              };
-
-              this.validationTaskStateService.setValidationResult(
-                this.appService.selectedWorkspaceId,
-                'variableTypes',
-                validationResult
-              );
-
-              this.invalidTypeVariables = typedResult.data;
-              this.totalInvalidTypeVariables = typedResult.total;
-              this.currentTypeVariablePage = typedResult.page;
-              this.typeVariablePageSize = typedResult.limit;
-              this.updatePaginatedTypeVariables();
-              this.isVariableTypeValidationRunning = false;
-              this.validateVariableTypesWasRun = true;
-              this.saveValidationResult('variableTypes');
-            });
-          } else if (updatedTask.status === 'failed') {
-            this.snackBar.open(`Validierung fehlgeschlagen: ${updatedTask.error || 'Unbekannter Fehler'}`, 'Schließen', { duration: 5000 });
-            this.isVariableTypeValidationRunning = false;
+      { page: this.currentTypeVariablePage, limit: this.typeVariablePageSize }
+    ).subscribe({
+      next: ({ createdTask, result }) => {
+        this.variableTypeValidationTask = createdTask;
+        const hasErrors = result.total > 0;
+        const validationResult: ValidationResult = {
+          status: hasErrors ? 'failed' : 'success',
+          timestamp: Date.now(),
+          details: {
+            total: result.total,
+            hasErrors: hasErrors
           }
-        },
-        error: () => {
-          this.snackBar.open('Fehler beim Abrufen des Validierungsstatus', 'Schließen', { duration: 5000 });
-          this.isVariableTypeValidationRunning = false;
-        }
-      });
+        };
 
-      this.subscriptions.push(pollSubscription);
+        this.validationTaskStateService.setValidationResult(
+          this.appService.selectedWorkspaceId,
+          'variableTypes',
+          validationResult
+        );
+
+        this.invalidTypeVariables = result.data;
+        this.totalInvalidTypeVariables = result.total;
+        this.currentTypeVariablePage = result.page;
+        this.typeVariablePageSize = result.limit;
+        this.updatePaginatedTypeVariables();
+        this.isVariableTypeValidationRunning = false;
+        this.validateVariableTypesWasRun = true;
+        this.saveValidationResult('variableTypes');
+      },
+      error: (err: unknown) => {
+        const message = err instanceof Error ? err.message : 'Unbekannter Fehler';
+        this.snackBar.open(`Validierung fehlgeschlagen: ${message}`, 'Schließen', { duration: 5000 });
+        this.isVariableTypeValidationRunning = false;
+      }
     });
 
     this.subscriptions.push(subscription);
@@ -1576,65 +1657,47 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
     this.selectedStatusResponses.clear();
     this.subscriptions.forEach(sub => sub.unsubscribe());
     this.subscriptions = [];
-    const subscription = this.backendService.createValidationTask(
+    const subscription = this.validationTaskRunnerService.runTask<{
+      data: InvalidVariableDto[];
+      total: number;
+      page: number;
+      limit: number;
+    }>(
       this.appService.selectedWorkspaceId,
       'responseStatus',
-      this.currentStatusVariablePage,
-      this.statusVariablePageSize
-    ).subscribe(task => {
-      this.responseStatusValidationTask = task;
-      const pollSubscription = this.backendService.pollValidationTask(
-        this.appService.selectedWorkspaceId,
-        task.id
-      ).subscribe({
-        next: updatedTask => {
-          if (updatedTask.status === 'completed') {
-            this.backendService.getValidationResults(
-              this.appService.selectedWorkspaceId,
-              updatedTask.id
-            ).subscribe(result => {
-              const typedResult = result as {
-                data: InvalidVariableDto[];
-                total: number;
-                page: number;
-                limit: number;
-              };
-              const hasErrors = typedResult.total > 0;
-              const validationResult: ValidationResult = {
-                status: hasErrors ? 'failed' : 'success',
-                timestamp: Date.now(),
-                details: {
-                  total: typedResult.total,
-                  hasErrors: hasErrors
-                }
-              };
-              this.validationTaskStateService.setValidationResult(
-                this.appService.selectedWorkspaceId,
-                'responseStatus',
-                validationResult
-              );
-
-              this.invalidStatusVariables = typedResult.data;
-              this.totalInvalidStatusVariables = typedResult.total;
-              this.currentStatusVariablePage = typedResult.page;
-              this.statusVariablePageSize = typedResult.limit;
-              this.updatePaginatedStatusVariables();
-              this.isResponseStatusValidationRunning = false;
-              this.validateResponseStatusWasRun = true;
-              this.saveValidationResult('responseStatus');
-            });
-          } else if (updatedTask.status === 'failed') {
-            this.snackBar.open(`Validierung fehlgeschlagen: ${updatedTask.error || 'Unbekannter Fehler'}`, 'Schließen', { duration: 5000 });
-            this.isResponseStatusValidationRunning = false;
+      { page: this.currentStatusVariablePage, limit: this.statusVariablePageSize }
+    ).subscribe({
+      next: ({ createdTask, result }) => {
+        this.responseStatusValidationTask = createdTask;
+        const hasErrors = result.total > 0;
+        const validationResult: ValidationResult = {
+          status: hasErrors ? 'failed' : 'success',
+          timestamp: Date.now(),
+          details: {
+            total: result.total,
+            hasErrors: hasErrors
           }
-        },
-        error: () => {
-          this.snackBar.open('Fehler beim Abrufen des Validierungsstatus', 'Schließen', { duration: 5000 });
-          this.isResponseStatusValidationRunning = false;
-        }
-      });
+        };
+        this.validationTaskStateService.setValidationResult(
+          this.appService.selectedWorkspaceId,
+          'responseStatus',
+          validationResult
+        );
 
-      this.subscriptions.push(pollSubscription);
+        this.invalidStatusVariables = result.data;
+        this.totalInvalidStatusVariables = result.total;
+        this.currentStatusVariablePage = result.page;
+        this.statusVariablePageSize = result.limit;
+        this.updatePaginatedStatusVariables();
+        this.isResponseStatusValidationRunning = false;
+        this.validateResponseStatusWasRun = true;
+        this.saveValidationResult('responseStatus');
+      },
+      error: (err: unknown) => {
+        const message = err instanceof Error ? err.message : 'Unbekannter Fehler';
+        this.snackBar.open(`Validierung fehlgeschlagen: ${message}`, 'Schließen', { duration: 5000 });
+        this.isResponseStatusValidationRunning = false;
+      }
     });
 
     this.subscriptions.push(subscription);
@@ -1646,50 +1709,31 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
     this.isVariableTypeValidationRunning = true;
     this.subscriptions.forEach(sub => sub.unsubscribe());
     this.subscriptions = [];
-    const subscription = this.backendService.createValidationTask(
+    const subscription = this.validationTaskRunnerService.runTask<{
+      data: InvalidVariableDto[];
+      total: number;
+      page: number;
+      limit: number;
+    }>(
       this.appService.selectedWorkspaceId,
       'variableTypes',
-      this.currentTypeVariablePage,
-      this.typeVariablePageSize
-    ).subscribe(task => {
-      this.variableTypeValidationTask = task;
-      const pollSubscription = this.backendService.pollValidationTask(
-        this.appService.selectedWorkspaceId,
-        task.id
-      ).subscribe({
-        next: updatedTask => {
-          if (updatedTask.status === 'completed') {
-            this.backendService.getValidationResults(
-              this.appService.selectedWorkspaceId,
-              updatedTask.id
-            ).subscribe(result => {
-              const typedResult = result as {
-                data: InvalidVariableDto[];
-                total: number;
-                page: number;
-                limit: number;
-              };
-
-              this.invalidTypeVariables = typedResult.data;
-              this.totalInvalidTypeVariables = typedResult.total;
-              this.currentTypeVariablePage = typedResult.page;
-              this.typeVariablePageSize = typedResult.limit;
-              this.updatePaginatedTypeVariables();
-              this.isVariableTypeValidationRunning = false;
-              this.validateVariableTypesWasRun = true;
-            });
-          } else if (updatedTask.status === 'failed') {
-            this.snackBar.open(`Validierung fehlgeschlagen: ${updatedTask.error || 'Unbekannter Fehler'}`, 'Schließen', { duration: 5000 });
-            this.isVariableTypeValidationRunning = false;
-          }
-        },
-        error: () => {
-          this.snackBar.open('Fehler beim Abrufen des Validierungsstatus', 'Schließen', { duration: 5000 });
-          this.isVariableTypeValidationRunning = false;
-        }
-      });
-
-      this.subscriptions.push(pollSubscription);
+      { page: this.currentTypeVariablePage, limit: this.typeVariablePageSize }
+    ).subscribe({
+      next: ({ createdTask, result }) => {
+        this.variableTypeValidationTask = createdTask;
+        this.invalidTypeVariables = result.data;
+        this.totalInvalidTypeVariables = result.total;
+        this.currentTypeVariablePage = result.page;
+        this.typeVariablePageSize = result.limit;
+        this.updatePaginatedTypeVariables();
+        this.isVariableTypeValidationRunning = false;
+        this.validateVariableTypesWasRun = true;
+      },
+      error: (err: unknown) => {
+        const message = err instanceof Error ? err.message : 'Unbekannter Fehler';
+        this.snackBar.open(`Validierung fehlgeschlagen: ${message}`, 'Schließen', { duration: 5000 });
+        this.isVariableTypeValidationRunning = false;
+      }
     });
 
     this.subscriptions.push(subscription);
@@ -1701,50 +1745,31 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
     this.isResponseStatusValidationRunning = true;
     this.subscriptions.forEach(sub => sub.unsubscribe());
     this.subscriptions = [];
-    const subscription = this.backendService.createValidationTask(
+    const subscription = this.validationTaskRunnerService.runTask<{
+      data: InvalidVariableDto[];
+      total: number;
+      page: number;
+      limit: number;
+    }>(
       this.appService.selectedWorkspaceId,
       'responseStatus',
-      this.currentStatusVariablePage,
-      this.statusVariablePageSize
-    ).subscribe(task => {
-      this.responseStatusValidationTask = task;
-      const pollSubscription = this.backendService.pollValidationTask(
-        this.appService.selectedWorkspaceId,
-        task.id
-      ).subscribe({
-        next: updatedTask => {
-          if (updatedTask.status === 'completed') {
-            this.backendService.getValidationResults(
-              this.appService.selectedWorkspaceId,
-              updatedTask.id
-            ).subscribe(result => {
-              const typedResult = result as {
-                data: InvalidVariableDto[];
-                total: number;
-                page: number;
-                limit: number;
-              };
-
-              this.invalidStatusVariables = typedResult.data;
-              this.totalInvalidStatusVariables = typedResult.total;
-              this.currentStatusVariablePage = typedResult.page;
-              this.statusVariablePageSize = typedResult.limit;
-              this.updatePaginatedStatusVariables();
-              this.isResponseStatusValidationRunning = false;
-              this.validateResponseStatusWasRun = true;
-            });
-          } else if (updatedTask.status === 'failed') {
-            this.snackBar.open(`Validierung fehlgeschlagen: ${updatedTask.error || 'Unbekannter Fehler'}`, 'Schließen', { duration: 5000 });
-            this.isResponseStatusValidationRunning = false;
-          }
-        },
-        error: () => {
-          this.snackBar.open('Fehler beim Abrufen des Validierungsstatus', 'Schließen', { duration: 5000 });
-          this.isResponseStatusValidationRunning = false;
-        }
-      });
-
-      this.subscriptions.push(pollSubscription);
+      { page: this.currentStatusVariablePage, limit: this.statusVariablePageSize }
+    ).subscribe({
+      next: ({ createdTask, result }) => {
+        this.responseStatusValidationTask = createdTask;
+        this.invalidStatusVariables = result.data;
+        this.totalInvalidStatusVariables = result.total;
+        this.currentStatusVariablePage = result.page;
+        this.statusVariablePageSize = result.limit;
+        this.updatePaginatedStatusVariables();
+        this.isResponseStatusValidationRunning = false;
+        this.validateResponseStatusWasRun = true;
+      },
+      error: (err: unknown) => {
+        const message = err instanceof Error ? err.message : 'Unbekannter Fehler';
+        this.snackBar.open(`Validierung fehlgeschlagen: ${message}`, 'Schließen', { duration: 5000 });
+        this.isResponseStatusValidationRunning = false;
+      }
     });
 
     this.subscriptions.push(subscription);
@@ -1785,84 +1810,49 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
     const responseIds = Array.from(this.selectedTypeResponses);
     this.subscriptions.forEach(sub => sub.unsubscribe());
     this.subscriptions = [];
-    const subscription = this.backendService.createDeleteResponsesTask(
+    const subscription = this.validationTaskRunnerService.runDeleteResponsesTask(
       this.appService.selectedWorkspaceId,
       responseIds
-    ).subscribe(task => {
-      const pollSubscription = this.backendService.pollValidationTask(
-        this.appService.selectedWorkspaceId,
-        task.id
-      ).subscribe({
-        next: updatedTask => {
-          if (updatedTask.status === 'completed') {
-            this.backendService.getValidationResults(
-              this.appService.selectedWorkspaceId,
-              updatedTask.id
-            ).subscribe(result => {
-              const typedResult = result as { deletedCount: number };
-              this.isDeletingResponses = false;
-              this.snackBar.open(`${typedResult.deletedCount} Antworten gelöscht`, 'Schließen', { duration: 3000 });
-              this.isVariableTypeValidationRunning = true;
-              const validationSubscription = this.backendService.createValidationTask(
-                this.appService.selectedWorkspaceId,
-                'variableTypes',
-                this.currentTypeVariablePage,
-                this.typeVariablePageSize
-              ).subscribe(validationTask => {
-                this.variableTypeValidationTask = validationTask;
-                const validationPollSubscription = this.backendService.pollValidationTask(
-                  this.appService.selectedWorkspaceId,
-                  validationTask.id
-                ).subscribe({
-                  next: updatedValidationTask => {
-                    if (updatedValidationTask.status === 'completed') {
-                      this.backendService.getValidationResults(
-                        this.appService.selectedWorkspaceId,
-                        updatedValidationTask.id
-                      ).subscribe(validationResult => {
-                        const typedValidationResult = validationResult as {
-                          data: InvalidVariableDto[];
-                          total: number;
-                          page: number;
-                          limit: number;
-                        };
+    ).subscribe({
+      next: ({ result }) => {
+        this.isDeletingResponses = false;
+        this.snackBar.open(`${result.deletedCount} Antworten gelöscht`, 'Schließen', { duration: 3000 });
 
-                        this.invalidTypeVariables = typedValidationResult.data;
-                        this.totalInvalidTypeVariables = typedValidationResult.total;
-                        this.currentTypeVariablePage = typedValidationResult.page;
-                        this.typeVariablePageSize = typedValidationResult.limit;
-                        this.updatePaginatedTypeVariables();
-                        this.isVariableTypeValidationRunning = false;
-                        this.validateVariableTypesWasRun = true;
-                      });
-                    } else if (updatedValidationTask.status === 'failed') {
-                      this.snackBar.open(`Validierung fehlgeschlagen: ${updatedValidationTask.error || 'Unbekannter Fehler'}`, 'Schließen', { duration: 5000 });
-                      this.isVariableTypeValidationRunning = false;
-                    }
-                  },
-                  error: () => {
-                    this.snackBar.open('Fehler beim Abrufen des Validierungsstatus', 'Schließen', { duration: 5000 });
-                    this.isVariableTypeValidationRunning = false;
-                  }
-                });
-
-                this.subscriptions.push(validationPollSubscription);
-              });
-
-              this.subscriptions.push(validationSubscription);
-            });
-          } else if (updatedTask.status === 'failed') {
-            this.isDeletingResponses = false;
-            this.snackBar.open(`Löschen fehlgeschlagen: ${updatedTask.error || 'Unbekannter Fehler'}`, 'Schließen', { duration: 5000 });
+        this.isVariableTypeValidationRunning = true;
+        const refreshSubscription = this.validationTaskRunnerService.runTask<{
+          data: InvalidVariableDto[];
+          total: number;
+          page: number;
+          limit: number;
+        }>(
+          this.appService.selectedWorkspaceId,
+          'variableTypes',
+          { page: this.currentTypeVariablePage, limit: this.typeVariablePageSize }
+        ).subscribe({
+          next: ({ createdTask, result: refreshResult }) => {
+            this.variableTypeValidationTask = createdTask;
+            this.invalidTypeVariables = refreshResult.data;
+            this.totalInvalidTypeVariables = refreshResult.total;
+            this.currentTypeVariablePage = refreshResult.page;
+            this.typeVariablePageSize = refreshResult.limit;
+            this.updatePaginatedTypeVariables();
+            this.isVariableTypeValidationRunning = false;
+            this.validateVariableTypesWasRun = true;
+          },
+          error: (err: unknown) => {
+            const message = err instanceof Error ? err.message : 'Unbekannter Fehler';
+            this.snackBar.open(`Validierung fehlgeschlagen: ${message}`, 'Schließen', { duration: 5000 });
+            this.isVariableTypeValidationRunning = false;
           }
-        },
-        error: () => {
-          this.isDeletingResponses = false;
-          this.snackBar.open('Fehler beim Abrufen des Löschstatus', 'Schließen', { duration: 5000 });
-        }
-      });
+        });
 
-      this.subscriptions.push(pollSubscription);
+        this.subscriptions.push(refreshSubscription);
+      },
+      error: (err: unknown) => {
+        const message = err instanceof Error ? err.message : 'Unbekannter Fehler';
+        this.isDeletingResponses = false;
+        this.snackBar.open(`Löschen fehlgeschlagen: ${message}`, 'Schließen', { duration: 5000 });
+      }
     });
 
     this.subscriptions.push(subscription);
@@ -1891,94 +1881,54 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
         this.isDeletingResponses = true;
         this.subscriptions.forEach(sub => sub.unsubscribe());
         this.subscriptions = [];
-        const subscription = this.backendService.createDeleteAllResponsesTask(
+        const subscription = this.validationTaskRunnerService.runDeleteAllResponsesTask(
           this.appService.selectedWorkspaceId,
           'variableTypes'
-        ).subscribe(task => {
-          const pollSubscription = this.backendService.pollValidationTask(
-            this.appService.selectedWorkspaceId,
-            task.id
-          ).subscribe({
-            next: updatedTask => {
-              if (updatedTask.status === 'completed') {
-                this.backendService.getValidationResults(
-                  this.appService.selectedWorkspaceId,
-                  updatedTask.id
-                ).subscribe(result => {
-                  const typedResult = result as { deletedCount: number };
-                  this.isDeletingResponses = false;
-                  this.snackBar.open(`${typedResult.deletedCount} Antworten gelöscht`, 'Schließen', { duration: 3000 });
-                  this.isVariableTypeValidationRunning = true;
-                  const validationSubscription = this.backendService.createValidationTask(
-                    this.appService.selectedWorkspaceId,
-                    'variableTypes',
-                    this.currentTypeVariablePage,
-                    this.typeVariablePageSize
-                  ).subscribe(validationTask => {
-                    this.variableTypeValidationTask = validationTask;
+        ).subscribe({
+          next: ({ result }) => {
+            this.isDeletingResponses = false;
+            this.snackBar.open(`${result.deletedCount} Antworten gelöscht`, 'Schließen', { duration: 3000 });
 
-                    const validationPollSubscription = this.backendService.pollValidationTask(
-                      this.appService.selectedWorkspaceId,
-                      validationTask.id
-                    ).subscribe({
-                      next: updatedValidationTask => {
-                        if (updatedValidationTask.status === 'completed') {
-                          this.backendService.getValidationResults(
-                            this.appService.selectedWorkspaceId,
-                            updatedValidationTask.id
-                          ).subscribe(validationResult => {
-                            const typedValidationResult = validationResult as {
-                              data: InvalidVariableDto[];
-                              total: number;
-                              page: number;
-                              limit: number;
-                            };
-
-                            this.invalidTypeVariables = typedValidationResult.data;
-                            this.totalInvalidTypeVariables = typedValidationResult.total;
-                            this.currentTypeVariablePage = typedValidationResult.page;
-                            this.typeVariablePageSize = typedValidationResult.limit;
-                            this.updatePaginatedTypeVariables();
-                            this.isVariableTypeValidationRunning = false;
-                            this.validateVariableTypesWasRun = true;
-                          });
-                        } else if (updatedValidationTask.status === 'failed') {
-                          this.snackBar.open(`Validierung fehlgeschlagen: ${updatedValidationTask.error || 'Unbekannter Fehler'}`, 'Schließen', { duration: 5000 });
-                          this.isVariableTypeValidationRunning = false;
-                        }
-                      },
-                      error: () => {
-                        this.snackBar.open('Fehler beim Abrufen des Validierungsstatus', 'Schließen', { duration: 5000 });
-                        this.isVariableTypeValidationRunning = false;
-                      }
-                    });
-
-                    this.subscriptions.push(validationPollSubscription);
-                  });
-
-                  this.subscriptions.push(validationSubscription);
-                });
-              } else if (updatedTask.status === 'failed') {
-                this.isDeletingResponses = false;
-                this.snackBar.open(`Löschen fehlgeschlagen: ${updatedTask.error || 'Unbekannter Fehler'}`, 'Schließen', { duration: 5000 });
+            this.isVariableTypeValidationRunning = true;
+            const refreshSubscription = this.validationTaskRunnerService.runTask<{
+              data: InvalidVariableDto[];
+              total: number;
+              page: number;
+              limit: number;
+            }>(
+              this.appService.selectedWorkspaceId,
+              'variableTypes',
+              { page: this.currentTypeVariablePage, limit: this.typeVariablePageSize }
+            ).subscribe({
+              next: ({ createdTask, result: refreshResult }) => {
+                this.variableTypeValidationTask = createdTask;
+                this.invalidTypeVariables = refreshResult.data;
+                this.totalInvalidTypeVariables = refreshResult.total;
+                this.currentTypeVariablePage = refreshResult.page;
+                this.typeVariablePageSize = refreshResult.limit;
+                this.updatePaginatedTypeVariables();
+                this.isVariableTypeValidationRunning = false;
+                this.validateVariableTypesWasRun = true;
+              },
+              error: (err: unknown) => {
+                const message = err instanceof Error ? err.message : 'Unbekannter Fehler';
+                this.snackBar.open(`Validierung fehlgeschlagen: ${message}`, 'Schließen', { duration: 5000 });
+                this.isVariableTypeValidationRunning = false;
               }
-            },
-            error: () => {
-              this.isDeletingResponses = false;
-              this.snackBar.open('Fehler beim Abrufen des Löschstatus', 'Schließen', { duration: 5000 });
-            }
-          });
+            });
 
-          this.subscriptions.push(pollSubscription);
+            this.subscriptions.push(refreshSubscription);
+          },
+          error: (err: unknown) => {
+            const message = err instanceof Error ? err.message : 'Unbekannter Fehler';
+            this.isDeletingResponses = false;
+            this.snackBar.open(`Löschen fehlgeschlagen: ${message}`, 'Schließen', { duration: 5000 });
+          }
         });
 
         this.subscriptions.push(subscription);
       }
     });
-  }
-
-  toggleTypeExpansion(): void {
-    this.expandedTypePanel = !this.expandedTypePanel;
   }
 
   toggleStatusResponseSelection(responseId: number | undefined): void {
@@ -2017,85 +1967,49 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
     const responseIds = Array.from(this.selectedStatusResponses);
     this.subscriptions.forEach(sub => sub.unsubscribe());
     this.subscriptions = [];
-    const subscription = this.backendService.createDeleteResponsesTask(
+    const subscription = this.validationTaskRunnerService.runDeleteResponsesTask(
       this.appService.selectedWorkspaceId,
       responseIds
-    ).subscribe(task => {
-      const pollSubscription = this.backendService.pollValidationTask(
-        this.appService.selectedWorkspaceId,
-        task.id
-      ).subscribe({
-        next: updatedTask => {
-          if (updatedTask.status === 'completed') {
-            this.backendService.getValidationResults(
-              this.appService.selectedWorkspaceId,
-              updatedTask.id
-            ).subscribe(result => {
-              const typedResult = result as { deletedCount: number };
-              this.isDeletingResponses = false;
-              this.snackBar.open(`${typedResult.deletedCount} Antworten gelöscht`, 'Schließen', { duration: 3000 });
-              this.isResponseStatusValidationRunning = true;
-              const validationSubscription = this.backendService.createValidationTask(
-                this.appService.selectedWorkspaceId,
-                'responseStatus',
-                this.currentStatusVariablePage,
-                this.statusVariablePageSize
-              ).subscribe(validationTask => {
-                this.responseStatusValidationTask = validationTask;
+    ).subscribe({
+      next: ({ result }) => {
+        this.isDeletingResponses = false;
+        this.snackBar.open(`${result.deletedCount} Antworten gelöscht`, 'Schließen', { duration: 3000 });
 
-                const validationPollSubscription = this.backendService.pollValidationTask(
-                  this.appService.selectedWorkspaceId,
-                  validationTask.id
-                ).subscribe({
-                  next: updatedValidationTask => {
-                    if (updatedValidationTask.status === 'completed') {
-                      this.backendService.getValidationResults(
-                        this.appService.selectedWorkspaceId,
-                        updatedValidationTask.id
-                      ).subscribe(validationResult => {
-                        const typedValidationResult = validationResult as {
-                          data: InvalidVariableDto[];
-                          total: number;
-                          page: number;
-                          limit: number;
-                        };
-
-                        this.invalidStatusVariables = typedValidationResult.data;
-                        this.totalInvalidStatusVariables = typedValidationResult.total;
-                        this.currentStatusVariablePage = typedValidationResult.page;
-                        this.statusVariablePageSize = typedValidationResult.limit;
-                        this.updatePaginatedStatusVariables();
-                        this.isResponseStatusValidationRunning = false;
-                        this.validateResponseStatusWasRun = true;
-                      });
-                    } else if (updatedValidationTask.status === 'failed') {
-                      this.snackBar.open(`Validierung fehlgeschlagen: ${updatedValidationTask.error || 'Unbekannter Fehler'}`, 'Schließen', { duration: 5000 });
-                      this.isResponseStatusValidationRunning = false;
-                    }
-                  },
-                  error: () => {
-                    this.snackBar.open('Fehler beim Abrufen des Validierungsstatus', 'Schließen', { duration: 5000 });
-                    this.isResponseStatusValidationRunning = false;
-                  }
-                });
-
-                this.subscriptions.push(validationPollSubscription);
-              });
-
-              this.subscriptions.push(validationSubscription);
-            });
-          } else if (updatedTask.status === 'failed') {
-            this.isDeletingResponses = false;
-            this.snackBar.open(`Löschen fehlgeschlagen: ${updatedTask.error || 'Unbekannter Fehler'}`, 'Schließen', { duration: 5000 });
+        this.isResponseStatusValidationRunning = true;
+        const refreshSubscription = this.validationTaskRunnerService.runTask<{
+          data: InvalidVariableDto[];
+          total: number;
+          page: number;
+          limit: number;
+        }>(
+          this.appService.selectedWorkspaceId,
+          'responseStatus',
+          { page: this.currentStatusVariablePage, limit: this.statusVariablePageSize }
+        ).subscribe({
+          next: ({ createdTask, result: refreshResult }) => {
+            this.responseStatusValidationTask = createdTask;
+            this.invalidStatusVariables = refreshResult.data;
+            this.totalInvalidStatusVariables = refreshResult.total;
+            this.currentStatusVariablePage = refreshResult.page;
+            this.statusVariablePageSize = refreshResult.limit;
+            this.updatePaginatedStatusVariables();
+            this.isResponseStatusValidationRunning = false;
+            this.validateResponseStatusWasRun = true;
+          },
+          error: (err: unknown) => {
+            const message = err instanceof Error ? err.message : 'Unbekannter Fehler';
+            this.snackBar.open(`Validierung fehlgeschlagen: ${message}`, 'Schließen', { duration: 5000 });
+            this.isResponseStatusValidationRunning = false;
           }
-        },
-        error: () => {
-          this.isDeletingResponses = false;
-          this.snackBar.open('Fehler beim Abrufen des Löschstatus', 'Schließen', { duration: 5000 });
-        }
-      });
+        });
 
-      this.subscriptions.push(pollSubscription);
+        this.subscriptions.push(refreshSubscription);
+      },
+      error: (err: unknown) => {
+        const message = err instanceof Error ? err.message : 'Unbekannter Fehler';
+        this.isDeletingResponses = false;
+        this.snackBar.open(`Löschen fehlgeschlagen: ${message}`, 'Schließen', { duration: 5000 });
+      }
     });
 
     this.subscriptions.push(subscription);
@@ -2124,90 +2038,58 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
         this.isDeletingResponses = true;
         this.subscriptions.forEach(sub => sub.unsubscribe());
         this.subscriptions = [];
-        const subscription = this.backendService.createDeleteAllResponsesTask(
+        const subscription = this.validationTaskRunnerService.runDeleteAllResponsesTask(
           this.appService.selectedWorkspaceId,
           'responseStatus'
-        ).subscribe(task => {
-          const pollSubscription = this.backendService.pollValidationTask(
-            this.appService.selectedWorkspaceId,
-            task.id
-          ).subscribe({
-            next: updatedTask => {
-              if (updatedTask.status === 'completed') {
-                this.backendService.getValidationResults(
-                  this.appService.selectedWorkspaceId,
-                  updatedTask.id
-                ).subscribe(result => {
-                  const typedResult = result as { deletedCount: number };
-                  this.isDeletingResponses = false;
-                  this.snackBar.open(`${typedResult.deletedCount} Antworten gelöscht`, 'Schließen', { duration: 3000 });
-                  this.isResponseStatusValidationRunning = true;
-                  const validationSubscription = this.backendService.createValidationTask(
-                    this.appService.selectedWorkspaceId,
-                    'responseStatus',
-                    this.currentStatusVariablePage,
-                    this.statusVariablePageSize
-                  ).subscribe(validationTask => {
-                    this.responseStatusValidationTask = validationTask;
-                    const validationPollSubscription = this.backendService.pollValidationTask(
-                      this.appService.selectedWorkspaceId,
-                      validationTask.id
-                    ).subscribe({
-                      next: updatedValidationTask => {
-                        if (updatedValidationTask.status === 'completed') {
-                          this.backendService.getValidationResults(
-                            this.appService.selectedWorkspaceId,
-                            updatedValidationTask.id
-                          ).subscribe(validationResult => {
-                            const typedValidationResult = validationResult as {
-                              data: InvalidVariableDto[];
-                              total: number;
-                              page: number;
-                              limit: number;
-                            };
+        ).subscribe({
+          next: ({ result }) => {
+            this.isDeletingResponses = false;
+            this.snackBar.open(`${result.deletedCount} Antworten gelöscht`, 'Schließen', { duration: 3000 });
 
-                            this.invalidStatusVariables = typedValidationResult.data;
-                            this.totalInvalidStatusVariables = typedValidationResult.total;
-                            this.currentStatusVariablePage = typedValidationResult.page;
-                            this.statusVariablePageSize = typedValidationResult.limit;
-                            this.updatePaginatedStatusVariables();
-                            this.isResponseStatusValidationRunning = false;
-                            this.validateResponseStatusWasRun = true;
-                          });
-                        } else if (updatedValidationTask.status === 'failed') {
-                          this.snackBar.open(`Validierung fehlgeschlagen: ${updatedValidationTask.error || 'Unbekannter Fehler'}`, 'Schließen', { duration: 5000 });
-                          this.isResponseStatusValidationRunning = false;
-                        }
-                      },
-                      error: () => {
-                        this.snackBar.open('Fehler beim Abrufen des Validierungsstatus', 'Schließen', { duration: 5000 });
-                        this.isResponseStatusValidationRunning = false;
-                      }
-                    });
-
-                    this.subscriptions.push(validationPollSubscription);
-                  });
-
-                  this.subscriptions.push(validationSubscription);
-                  this.selectedStatusResponses.clear();
-                });
-              } else if (updatedTask.status === 'failed') {
-                this.isDeletingResponses = false;
-                this.snackBar.open(`Löschen fehlgeschlagen: ${updatedTask.error || 'Unbekannter Fehler'}`, 'Schließen', { duration: 5000 });
+            this.isResponseStatusValidationRunning = true;
+            const refreshSubscription = this.validationTaskRunnerService.runTask<{
+              data: InvalidVariableDto[];
+              total: number;
+              page: number;
+              limit: number;
+            }>(
+              this.appService.selectedWorkspaceId,
+              'responseStatus',
+              { page: this.currentStatusVariablePage, limit: this.statusVariablePageSize }
+            ).subscribe({
+              next: ({ createdTask, result: refreshResult }) => {
+                this.responseStatusValidationTask = createdTask;
+                this.invalidStatusVariables = refreshResult.data;
+                this.totalInvalidStatusVariables = refreshResult.total;
+                this.currentStatusVariablePage = refreshResult.page;
+                this.statusVariablePageSize = refreshResult.limit;
+                this.updatePaginatedStatusVariables();
+                this.isResponseStatusValidationRunning = false;
+                this.validateResponseStatusWasRun = true;
+              },
+              error: (err: unknown) => {
+                const message = err instanceof Error ? err.message : 'Unbekannter Fehler';
+                this.snackBar.open(`Validierung fehlgeschlagen: ${message}`, 'Schließen', { duration: 5000 });
+                this.isResponseStatusValidationRunning = false;
               }
-            },
-            error: () => {
-              this.isDeletingResponses = false;
-              this.snackBar.open('Fehler beim Abrufen des Löschstatus', 'Schließen', { duration: 5000 });
-            }
-          });
+            });
 
-          this.subscriptions.push(pollSubscription);
+            this.subscriptions.push(refreshSubscription);
+          },
+          error: (err: unknown) => {
+            const message = err instanceof Error ? err.message : 'Unbekannter Fehler';
+            this.isDeletingResponses = false;
+            this.snackBar.open(`Löschen fehlgeschlagen: ${message}`, 'Schließen', { duration: 5000 });
+          }
         });
 
         this.subscriptions.push(subscription);
       }
     });
+  }
+
+  toggleTypeExpansion(): void {
+    this.expandedTypePanel = !this.expandedTypePanel;
   }
 
   toggleStatusExpansion(): void {
@@ -2274,6 +2156,165 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
         return this.validateDuplicateResponsesWasRun && this.totalDuplicateResponses === 0;
       default:
         return false;
+    }
+  }
+
+  getOverallIssuesCount(): number {
+    let total = 0;
+
+    if (this.hasValidationFailed('variables')) {
+      total += this.totalInvalidVariables;
+    }
+
+    if (this.hasValidationFailed('variableTypes')) {
+      total += this.totalInvalidTypeVariables;
+    }
+
+    if (this.hasValidationFailed('responseStatus')) {
+      total += this.totalInvalidStatusVariables;
+    }
+
+    if (this.hasValidationFailed('testTakers')) {
+      total += this.testTakersValidationResult?.missingPersons?.length ?? 0;
+    }
+
+    if (this.hasValidationFailed('groupResponses')) {
+      total += (this.groupResponsesResult?.groupsWithResponses ?? []).filter((g: { group: string; hasResponse: boolean }) => !g.hasResponse).length;
+    }
+
+    if (this.hasValidationFailed('duplicateResponses')) {
+      total += this.totalDuplicateResponses;
+    }
+
+    return total;
+  }
+
+  getOverallStatus(): 'running' | 'failed' | 'success' | 'not-run' {
+    if (this.isAnyValidationRunning()) {
+      return 'running';
+    }
+
+    const anyRun =
+      this.validateVariablesWasRun ||
+      this.validateVariableTypesWasRun ||
+      this.validateResponseStatusWasRun ||
+      this.testTakersValidationWasRun ||
+      this.groupResponsesValidationWasRun ||
+      this.validateDuplicateResponsesWasRun;
+
+    if (!anyRun) {
+      return 'not-run';
+    }
+
+    if (
+      this.hasValidationFailed('variables') ||
+      this.hasValidationFailed('variableTypes') ||
+      this.hasValidationFailed('responseStatus') ||
+      this.hasValidationFailed('testTakers') ||
+      this.hasValidationFailed('groupResponses') ||
+      this.hasValidationFailed('duplicateResponses')
+    ) {
+      return 'failed';
+    }
+
+    return 'success';
+  }
+
+  getOverallHeadline(): string {
+    const status = this.getOverallStatus();
+    switch (status) {
+      case 'running':
+        return 'Validierung läuft';
+      case 'failed':
+        return 'Validierung: Handlungsbedarf';
+      case 'success':
+        return 'Validierung: Alles in Ordnung';
+      case 'not-run':
+      default:
+        return 'Validierung: Noch nicht gestartet';
+    }
+  }
+
+  getOverallSubline(): string {
+    const status = this.getOverallStatus();
+    const issues = this.getOverallIssuesCount();
+
+    switch (status) {
+      case 'running':
+        return 'Bitte warten – Ergebnisse erscheinen automatisch.';
+      case 'failed':
+        return issues > 0 ? `${issues} Auffälligkeiten gefunden. Details unten.` : 'Auffälligkeiten gefunden. Details unten.';
+      case 'success':
+        return 'Keine Auffälligkeiten gefunden.';
+      case 'not-run':
+      default:
+        return 'Starten Sie unten die gewünschten Prüfungen.';
+    }
+  }
+
+  getRecommendedNextStep(): string {
+    if (this.isAnyValidationRunning()) {
+      return 'Sie können den Dialog schließen – die Prüfungen laufen im Hintergrund weiter.';
+    }
+
+    if (!this.testTakersValidationWasRun) {
+      return 'Empfehlung: Starten Sie zuerst „Testpersonen“ – viele Folgeprüfungen hängen davon ab.';
+    }
+
+    if (!this.validateVariablesWasRun) {
+      return 'Empfehlung: Prüfen Sie danach „Variablen definiert“.';
+    }
+
+    if (!this.validateVariableTypesWasRun) {
+      return 'Empfehlung: Prüfen Sie als Nächstes „Variablentypen“.';
+    }
+
+    if (!this.validateResponseStatusWasRun) {
+      return 'Empfehlung: Prüfen Sie anschließend „Antwortstatus“.';
+    }
+
+    if (!this.validateDuplicateResponsesWasRun) {
+      return 'Empfehlung: Prüfen Sie zuletzt „Doppelte Antworten“.';
+    }
+
+    return 'Tipp: Bei Auffälligkeiten können Sie unten direkt bereinigen oder gezielt einzelne Fälle prüfen.';
+  }
+
+  getValidationWhyText(type: 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'groupResponses' | 'duplicateResponses'): string {
+    switch (type) {
+      case 'testTakers':
+        return 'Ohne passende Testpersonen-Zuordnung können Antworten nicht eindeutig einer Person/Gruppe zugeordnet werden.';
+      case 'variables':
+        return 'Antworten auf nicht definierte Variablen sind i.d.R. Tippfehler oder veraltete Item-Versionen und verfälschen Auswertungen.';
+      case 'variableTypes':
+        return 'Wenn der Datentyp nicht passt (z.B. Text statt Zahl), können Scoring/Filter und Exporte fehlschlagen.';
+      case 'responseStatus':
+        return 'Ungültige Statuswerte können verhindern, dass Antworten korrekt als erreicht/gesetzt interpretiert werden.';
+      case 'duplicateResponses':
+        return 'Doppelte Antworten führen zu Mehrdeutigkeiten (welche Antwort zählt?) und machen Statistiken/Exports inkonsistent.';
+      case 'groupResponses':
+        return 'Wenn Gruppen keine Antworten haben, ist die Stichprobe ggf. unvollständig oder die Zuordnung zu Gruppen fehlerhaft.';
+      default:
+        return '';
+    }
+  }
+
+  getValidationFixHint(type: 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'groupResponses' | 'duplicateResponses'): string {
+    switch (type) {
+      case 'testTakers':
+        return 'Prüfen Sie die TestTakers-XML (Login/Code/Gruppe/Booklet) und importieren Sie fehlende Testpersonen oder korrigieren Sie Schreibweisen.';
+      case 'variables':
+        return 'Öffnen Sie die Unit.xml über den Dateinamen-Link und prüfen Sie, ob die Variable existiert. Danach: Daten bereinigen (löschen) oder Definitionen aktualisieren.';
+      case 'variableTypes':
+        return 'Prüfen Sie erwarteten Typ und Fehlergrund. Häufig hilft eine Korrektur in der Unit.xml oder das Bereinigen einzelner falscher Werte.';
+      case 'responseStatus':
+        return 'Vergleichen Sie Statuswerte mit der Definition in der Unit.xml. Bereinigen Sie ungültige Antworten oder passen Sie die Definition an.';
+      case 'duplicateResponses':
+        return 'Wählen Sie pro Duplikat die „gültige“ Antwort aus (oder „Vorschlag übernehmen“) und lösen Sie anschließend auf.';
+      case 'groupResponses':
+        return 'Prüfen Sie Gruppen/Booklets der Testpersonen sowie den Import der Antworten. Oft fehlen Daten für eine Gruppe oder die Gruppenzuordnung ist inkonsistent.';
+      default:
+        return '';
     }
   }
 
@@ -2393,23 +2434,27 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
     const workspaceId = this.appService.selectedWorkspaceId;
     const inMemoryResults = this.validationTaskStateService.getAllValidationResults(workspaceId);
     if (inMemoryResults.variables) {
-      this.processVariablesResult(inMemoryResults.variables, false);
+      this.processVariablesResult(inMemoryResults.variables, true);
     }
 
     if (inMemoryResults.variableTypes) {
-      this.processVariableTypesResult(inMemoryResults.variableTypes, false);
+      this.processVariableTypesResult(inMemoryResults.variableTypes, true);
     }
 
     if (inMemoryResults.responseStatus) {
-      this.processResponseStatusResult(inMemoryResults.responseStatus, false);
+      this.processResponseStatusResult(inMemoryResults.responseStatus, true);
     }
 
     if (inMemoryResults.testTakers) {
-      this.processTestTakersResult(inMemoryResults.testTakers, false);
+      this.processTestTakersResult(inMemoryResults.testTakers, true);
     }
 
     if (inMemoryResults.groupResponses) {
-      this.processGroupResponsesResult(inMemoryResults.groupResponses, false);
+      this.processGroupResponsesResult(inMemoryResults.groupResponses, true);
+    }
+
+    if (inMemoryResults.duplicateResponses) {
+      this.processDuplicateResponsesResult(inMemoryResults.duplicateResponses, true);
     }
 
     const subscription = this.validationService.getLastValidationResults(workspaceId)
@@ -2489,6 +2534,21 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
             this.processGroupResponsesResult(validationResult, false);
             this.validationTaskStateService.setValidationResult(workspaceId, 'groupResponses', validationResult);
           }
+
+          if (results.duplicateResponses) {
+            const { task, result } = results.duplicateResponses;
+            let status: 'success' | 'failed' | 'not-run' = 'not-run';
+            if (task.status === 'completed') {
+              status = task.error ? 'failed' : 'success';
+            }
+            const validationResult: ValidationResult = {
+              status,
+              timestamp: new Date(task.created_at).getTime(),
+              details: result
+            };
+            this.processDuplicateResponsesResult(validationResult, false);
+            this.validationTaskStateService.setValidationResult(workspaceId, 'duplicateResponses', validationResult);
+          }
         },
         error: () => {
         }
@@ -2498,73 +2558,114 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
   }
 
   private processVariablesResult(result: ValidationResult, fromCurrentSession: boolean = false): void {
-    if (result.status === 'success') {
-      if (fromCurrentSession) {
-        this.validateVariablesWasRun = true;
+    this.validateVariablesWasRun = this.validateVariablesWasRun || fromCurrentSession;
+
+    if (result.details) {
+      const details = result.details as { total?: number; data?: InvalidVariableDto[]; page?: number; limit?: number };
+      if (typeof details.total === 'number') {
+        this.totalInvalidVariables = Number(details.total);
+      } else if (result.status === 'success') {
+        this.totalInvalidVariables = 0;
       }
+
+      if (typeof details.page === 'number') {
+        this.currentVariablePage = details.page;
+      }
+      if (typeof details.limit === 'number') {
+        this.variablePageSize = details.limit;
+      }
+
+      if (Array.isArray(details.data)) {
+        this.invalidVariables = details.data;
+        this.updatePaginatedVariables();
+        return;
+      }
+    }
+
+    if (result.status === 'success') {
       this.totalInvalidVariables = 0;
       this.invalidVariables = [];
       this.updatePaginatedVariables();
-    } else if (result.status === 'failed' && result.details) {
-      if (fromCurrentSession) {
-        this.validateVariablesWasRun = true;
-      }
-      const details = result.details as { total: number; hasErrors: boolean };
-      this.totalInvalidVariables = details.total;
-
-      if (details.total > 0 && this.invalidVariables.length === 0) {
-        this.validateVariables();
-      }
     }
   }
 
   private processVariableTypesResult(result: ValidationResult, fromCurrentSession: boolean = false): void {
-    if (result.status === 'success') {
-      if (fromCurrentSession) {
-        this.validateVariableTypesWasRun = true;
+    this.validateVariableTypesWasRun = this.validateVariableTypesWasRun || fromCurrentSession;
+
+    if (result.details) {
+      const details = result.details as { total?: number; data?: InvalidVariableDto[]; page?: number; limit?: number };
+      if (typeof details.total === 'number') {
+        this.totalInvalidTypeVariables = Number(details.total);
+      } else if (result.status === 'success') {
+        this.totalInvalidTypeVariables = 0;
       }
+
+      if (typeof details.page === 'number') {
+        this.currentTypeVariablePage = details.page;
+      }
+      if (typeof details.limit === 'number') {
+        this.typeVariablePageSize = details.limit;
+      }
+
+      if (Array.isArray(details.data)) {
+        this.invalidTypeVariables = details.data;
+        this.updatePaginatedTypeVariables();
+        return;
+      }
+    }
+
+    if (result.status === 'success') {
       this.totalInvalidTypeVariables = 0;
       this.invalidTypeVariables = [];
       this.updatePaginatedTypeVariables();
-    } else if (result.status === 'failed' && result.details) {
-      if (fromCurrentSession) {
-        this.validateVariableTypesWasRun = true;
-      }
-      const details = result.details as { total: number; hasErrors: boolean };
-      this.totalInvalidTypeVariables = details.total;
-
-      if (details.total > 0 && this.invalidTypeVariables.length === 0) {
-        this.validateVariableTypes();
-      }
     }
   }
 
   private processResponseStatusResult(result: ValidationResult, fromCurrentSession: boolean = false): void {
-    if (result.status === 'success') {
-      if (fromCurrentSession) {
-        this.validateResponseStatusWasRun = true;
+    this.validateResponseStatusWasRun = this.validateResponseStatusWasRun || fromCurrentSession;
+
+    if (result.details) {
+      const details = result.details as { total?: number; data?: InvalidVariableDto[]; page?: number; limit?: number };
+      if (typeof details.total === 'number') {
+        this.totalInvalidStatusVariables = Number(details.total);
+      } else if (result.status === 'success') {
+        this.totalInvalidStatusVariables = 0;
       }
+
+      if (typeof details.page === 'number') {
+        this.currentStatusVariablePage = details.page;
+      }
+      if (typeof details.limit === 'number') {
+        this.statusVariablePageSize = details.limit;
+      }
+
+      if (Array.isArray(details.data)) {
+        this.invalidStatusVariables = details.data;
+        this.updatePaginatedStatusVariables();
+        return;
+      }
+    }
+
+    if (result.status === 'success') {
       this.totalInvalidStatusVariables = 0;
       this.invalidStatusVariables = [];
       this.updatePaginatedStatusVariables();
-    } else if (result.status === 'failed' && result.details) {
-      if (fromCurrentSession) {
-        this.validateResponseStatusWasRun = true;
-      }
-      const details = result.details as { total: number; hasErrors: boolean };
-      this.totalInvalidStatusVariables = details.total;
-
-      if (details.total > 0 && this.invalidStatusVariables.length === 0) {
-        this.validateResponseStatus();
-      }
     }
   }
 
   private processTestTakersResult(result: ValidationResult, fromCurrentSession: boolean = false): void {
-    if (result.status === 'success') {
-      if (fromCurrentSession) {
-        this.testTakersValidationWasRun = true;
+    this.testTakersValidationWasRun = this.testTakersValidationWasRun || fromCurrentSession;
+
+    if (result.details) {
+      const details = result.details as TestTakersValidationDto;
+      if (typeof details?.testTakersFound === 'boolean') {
+        this.testTakersValidationResult = details;
+        this.updatePaginatedMissingPersons();
+        return;
       }
+    }
+
+    if (result.status === 'success') {
       this.testTakersValidationResult = {
         testTakersFound: true,
         totalGroups: 0,
@@ -2573,46 +2674,72 @@ export class ValidationDialogComponent implements AfterViewInit, OnInit, OnDestr
         missingPersons: []
       };
       this.updatePaginatedMissingPersons();
-    } else if (result.status === 'failed' && result.details) {
-      if (fromCurrentSession) {
-        this.testTakersValidationWasRun = true;
-      }
-      const details = result.details as {
-        testTakersFound: boolean;
-        missingPersonsCount: number;
-        hasErrors: boolean
-      };
-
-      if (details.hasErrors && (!this.testTakersValidationResult || this.testTakersValidationResult.missingPersons.length === 0)) {
-        this.validateTestTakers();
-      }
     }
   }
 
   private processGroupResponsesResult(result: ValidationResult, fromCurrentSession: boolean = false): void {
-    if (result.status === 'success') {
-      if (fromCurrentSession) {
-        this.groupResponsesValidationWasRun = true;
+    this.groupResponsesValidationWasRun = this.groupResponsesValidationWasRun || fromCurrentSession;
+
+    if (result.details) {
+      const details = result.details as {
+        testTakersFound?: boolean;
+        groupsWithResponses?: { group: string; hasResponse: boolean }[];
+        allGroupsHaveResponses?: boolean;
+        total?: number;
+        page?: number;
+        limit?: number;
+      };
+      if (typeof details?.testTakersFound === 'boolean') {
+        this.groupResponsesResult = {
+          testTakersFound: Boolean(details.testTakersFound),
+          groupsWithResponses: Array.isArray(details.groupsWithResponses) ? details.groupsWithResponses : [],
+          allGroupsHaveResponses: Boolean(details.allGroupsHaveResponses)
+        };
+        if (typeof details.total === 'number') {
+          this.totalGroupResponses = Number(details.total);
+        }
+        if (typeof details.page === 'number') {
+          this.currentGroupResponsesPage = details.page;
+        }
+        if (typeof details.limit === 'number') {
+          this.groupResponsesPageSize = details.limit;
+        }
+        this.updatePaginatedGroupResponses();
+        return;
       }
+    }
+
+    if (result.status === 'success') {
       this.groupResponsesResult = {
         testTakersFound: true,
         groupsWithResponses: [],
         allGroupsHaveResponses: true
       };
       this.updatePaginatedGroupResponses();
-    } else if (result.status === 'failed' && result.details) {
-      if (fromCurrentSession) {
-        this.groupResponsesValidationWasRun = true;
-      }
-      const details = result.details as {
-        testTakersFound: boolean;
-        allGroupsHaveResponses: boolean;
-        hasErrors: boolean
-      };
+    }
+  }
 
-      if (details.hasErrors && (!this.groupResponsesResult || this.groupResponsesResult.groupsWithResponses.length === 0)) {
-        this.validateGroupResponses();
+  private processDuplicateResponsesResult(result: ValidationResult, fromCurrentSession: boolean = false): void {
+    this.validateDuplicateResponsesWasRun = this.validateDuplicateResponsesWasRun || fromCurrentSession;
+
+    if (result.details) {
+      const details = result.details as DuplicateResponsesResultDto;
+      if (typeof details?.total === 'number') {
+        this.totalDuplicateResponses = details.total;
+        this.duplicateResponsesResult = details;
+        this.duplicateResponses = (details.data || []).map(duplicate => ({
+          ...duplicate,
+          key: this.buildDuplicateKey(duplicate)
+        }));
+        this.updatePaginatedDuplicateResponses();
+        return;
       }
+    }
+
+    if (result.status === 'success') {
+      this.totalDuplicateResponses = 0;
+      this.duplicateResponses = [];
+      this.updatePaginatedDuplicateResponses();
     }
   }
 

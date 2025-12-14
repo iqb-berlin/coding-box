@@ -1,0 +1,31 @@
+<h2 mat-dialog-title>Fehlgeschlagene Uploads</h2>
+
+<div mat-dialog-content>
+  <p>
+    {{ failedFiles.length }} Datei(en) konnten nicht hochgeladen werden.
+    @if (filterText && filterText.trim().length > 0) {
+      (Treffer: {{ filteredFailedFiles.length }})
+    }
+  </p>
+
+  <mat-form-field appearance="outline" style="width: 100%;">
+    <mat-label>Suche</mat-label>
+    <input matInput [(ngModel)]="filterText" placeholder="Dateiname oder Fehlermeldung..." />
+    <mat-icon matSuffix>search</mat-icon>
+  </mat-form-field>
+
+  <cdk-virtual-scroll-viewport itemSize="56" style="height: 55vh; width: 100%;">
+    <div *cdkVirtualFor="let f of filteredFailedFiles; trackBy: trackByFn" class="failed-row">
+      <div class="failed-main">
+        <div class="filename">{{ f.filename }}</div>
+        @if (f.reason) {
+          <div class="reason">{{ f.reason }}</div>
+        }
+      </div>
+    </div>
+  </cdk-virtual-scroll-viewport>
+</div>
+
+<div mat-dialog-actions align="end">
+  <button mat-button type="button" (click)="close()">Schließen</button>
+</div>

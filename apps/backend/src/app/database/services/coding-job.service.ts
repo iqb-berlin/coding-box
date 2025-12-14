@@ -1141,6 +1141,7 @@ export class CodingJobService {
       .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
       .leftJoinAndSelect('booklet.person', 'person')
       .where('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('person.consider = :consider', { consider: true })
       .andWhere('response.status_v1 = :status', { status: statusStringToNumber('CODING_INCOMPLETE') });
 
     const conditions: string[] = [];
@@ -1600,7 +1601,6 @@ export class CodingJobService {
           }
           return a.id - b.id;
         });
-        console.log('caseorder', sortedResponses.map(r => r.variableid));
 
         const doubleCodingResponses = sortedResponses.slice(0, doubleCodingCount);
         const singleCodingResponses = sortedResponses.slice(doubleCodingCount);

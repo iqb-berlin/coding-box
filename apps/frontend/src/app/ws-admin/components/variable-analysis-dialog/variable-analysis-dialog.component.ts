@@ -42,10 +42,12 @@ export interface VariableAnalysisData {
   }[];
   analysisResults?: {
     variableCombos: {
+      unitId: number;
       unitName: string;
       variableId: string;
     }[];
     frequencies: { [key: string]: {
+      unitId?: number;
       unitName?: string;
       variableId: string;
       value: string;
@@ -58,6 +60,7 @@ export interface VariableAnalysisData {
 }
 
 export interface VariableFrequency {
+  unitId?: number;
   unitName?: string;
   variableid: string;
   value: string;
@@ -66,6 +69,7 @@ export interface VariableFrequency {
 }
 
 export interface VariableCombo {
+  unitId: number;
   unitName: string;
   variableId: string;
 }
@@ -157,7 +161,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
       Object.keys(this.data.analysisResults!.frequencies).forEach(comboKey => {
         const firstFreq = this.data.analysisResults!.frequencies[comboKey][0];
         if (firstFreq) {
-          const newComboKey = `${firstFreq.unitName || 'Unknown'}:${firstFreq.variableId}`;
+          const newComboKey = `${firstFreq.unitId ?? 0}:${firstFreq.variableId}`;
           this.variableFrequencies[newComboKey] = this.data.analysisResults!.frequencies[comboKey].map(freq => ({
             unitName: freq.unitName,
             variableid: freq.variableId,
@@ -172,6 +176,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
 
       const variableIds = Array.from(new Set(this.data.responses.map(r => r.variableid)));
       this.allVariableCombos = variableIds.map(variableId => ({
+        unitId: 0,
         unitName: 'Unknown',
         variableId
       }));
@@ -192,7 +197,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
       Object.keys(responsesByVariable).forEach(variableid => {
         const valueMap = responsesByVariable[variableid];
         const totalResponses = Object.values(valueMap).reduce((sum, count) => sum + count, 0);
-        const comboKey = `Unknown:${variableid}`;
+        const comboKey = `0:${variableid}`;
         this.variableFrequencies[comboKey] = Object.keys(valueMap)
           .map(value => {
             const count = valueMap[value];
@@ -220,6 +225,10 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
     this.filterVariables();
 
     this.isLoading = false;
+  }
+
+  getComboKey(combo: { unitId: number; variableId: string }): string {
+    return `${combo.unitId}:${combo.variableId}`;
   }
 
   filterVariables(): void {

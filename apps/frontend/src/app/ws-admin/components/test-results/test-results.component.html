@@ -5,11 +5,11 @@
         <mat-icon>upload</mat-icon>
         Testcenter Import
       </a>
-      <a mat-raised-button color="primary" (click)=hiddenResponsesFileInput.click()>
+      <a mat-raised-button color="primary" (click)="hiddenResponsesFileInput.click()">
         <mat-icon>upload</mat-icon>
         Antworten hochladen
       </a>
-      <a mat-raised-button color="primary" (click)=hiddenLogsFileInput.click()>
+      <a mat-raised-button color="primary" (click)="hiddenLogsFileInput.click()">
         <mat-icon>upload</mat-icon>
         Logs hochladen
       </a>
@@ -39,6 +39,20 @@
           <span>Export läuft...</span>
         }
       </a>
+      <a mat-raised-button color="primary" (click)="exportLogs()" [disabled]="isExporting">
+        @if (!isExporting) {
+          <mat-icon>download</mat-icon>
+        }
+        @if (isExporting) {
+          <mat-spinner diameter="20" style="display: inline-block; margin-right: 8px;"></mat-spinner>
+        }
+        @if (!isExporting) {
+          <span>Logs exportieren</span>
+        }
+        @if (isExporting) {
+          <span>Export läuft...</span>
+        }
+      </a>
       @if (exportJobStatus === 'completed' && !isExporting && exportJobId) {
         <a mat-raised-button color="accent" (click)="downloadExportResult(exportJobId!)">
           <mat-icon>file_download</mat-icon>
@@ -61,8 +75,75 @@
         <mat-icon>analytics</mat-icon>
         Item/Variablen Analyse
       </a>
+      <a mat-raised-button color="primary" (click)="toggleTableView()">
+        <mat-icon>table_chart</mat-icon>
+        @if (!isTableView) {
+          <span>Tabellenansicht</span>
+        } @else {
+          <span>Detailansicht</span>
+        }
+      </a>
     </div>
   </div>
+
+  <div class="overview-card">
+    <h2 class="section-title">Übersicht (Arbeitsbereich)</h2>
+    <p class="section-description">Kennzahlen und Statusverteilung über alle Testergebnisse im Workspace</p>
+    <mat-divider></mat-divider>
+
+    @if (isLoadingOverview) {
+      <div class="loading-container">
+        <mat-spinner class="mat-spinner"></mat-spinner>
+        <p class="loading-text">Übersicht wird geladen...</p>
+      </div>
+    }
+
+    @if (!isLoadingOverview && overview) {
+      <div class="overview-grid">
+        <div class="overview-metric">
+          <div class="label">Testgruppen</div>
+          <div class="value">{{ overview.testGroups }}</div>
+        </div>
+        <div class="overview-metric">
+          <div class="label">Testpersonen</div>
+          <div class="value">{{ overview.testPersons }}</div>
+        </div>
+        <div class="overview-metric">
+          <div class="label">Aufgaben (einzigartig)</div>
+          <div class="value">{{ overview.uniqueUnits }}</div>
+        </div>
+        <div class="overview-metric">
+          <div class="label">Testhefte (einzigartig)</div>
+          <div class="value">{{ overview.uniqueBooklets }}</div>
+        </div>
+        <div class="overview-metric">
+          <div class="label">Antworten (einzigartig)</div>
+          <div class="value">{{ overview.uniqueResponses }}</div>
+        </div>
+      </div>
+
+      <div class="overview-status">
+        <h3 class="sub-title">Antwort-Status Verteilung</h3>
+        <div class="status-grid">
+          @for (sc of overviewStatusCounts; track sc.status) {
+            <div class="status-chip">
+              <span class="status">{{ sc.status }}</span>
+              <span class="count">{{ sc.count }}</span>
+            </div>
+          }
+        </div>
+      </div>
+    }
+
+    @if (!isLoadingOverview && !overview) {
+      <div class="empty-state-container" style="max-width: unset;">
+        <mat-icon class="empty-state-icon">info</mat-icon>
+        <h2 class="empty-state-title">Keine Übersicht verfügbar</h2>
+        <p class="empty-state-description">Die Übersicht konnte nicht geladen werden.</p>
+      </div>
+    }
+  </div>
+
   <input #hiddenResponsesFileInput type="file"
     name="files"
     accept=".json,.zip,.csv"
@@ -83,7 +164,10 @@
   }
 
   @if(!isUploadingResults){
-    @if ( dataSource) {
+    @if (dataSource) {
+      @if (isTableView) {
+        <coding-box-test-results-flat-table></coding-box-test-results-flat-table>
+      } @else {
       <div class="content-container">
         <div class="data-card">
           <h2 class="section-title">Testpersonen</h2>
@@ -287,6 +371,7 @@
             </mat-accordion>
           </div>
 
+          @if (selectedUnit) {
           @if (responses.length > 0) {
             <div class="responses-card">
               <h2 class="section-title">Antworten</h2>
@@ -376,17 +461,25 @@
               }
             </div>
           </div>
-        }
-      </div>
-
-    </div>
-  } @else {
-    <div class="empty-state-container">
-      <mat-icon class="empty-state-icon">assignment</mat-icon>
-      <h2 class="empty-state-title">Keine Testergebnisse vorhanden</h2>
-      <p class="empty-state-description">Laden Sie Antworten oder Logs hoch, um Testergebnisse anzuzeigen.</p>
+          } @else {
+            <div class="empty-state-container">
+              <mat-icon class="empty-state-icon">assignment</mat-icon>
+              <h2 class="empty-state-title">Keine Testergebnisse vorhanden</h2>
+              <p class="empty-state-description">Laden Sie Antworten oder Logs hoch, um Testergebnisse anzuzeigen.</p>
+            </div>
+          }
+          }
+        </div>
     </div>
   }
 }
-
+    @else {
+      <div class="empty-state-container">
+        <mat-icon class="empty-state-icon">assignment</mat-icon>
+        <h2 class="empty-state-title">Keine Testergebnisse vorhanden</h2>
+        <p class="empty-state-description">Laden Sie Antworten oder Logs hoch, um Testergebnisse anzuzeigen.</p>
+      </div>
+    }
+  }
 </div>
+
