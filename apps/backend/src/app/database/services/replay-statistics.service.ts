@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import type { SelectQueryBuilder } from 'typeorm';
 import { ReplayStatistics } from '../entities/replay-statistics.entity';
 
 /**
@@ -10,6 +11,36 @@ import { ReplayStatistics } from '../entities/replay-statistics.entity';
 @Injectable()
 export class ReplayStatisticsService {
   private readonly logger = new Logger(ReplayStatisticsService.name);
+
+  private applyTimeFilters(
+    qb: SelectQueryBuilder<ReplayStatistics>,
+    options?: { from?: string; to?: string; lastDays?: string }
+  ): void {
+    if (!options) {
+      return;
+    }
+
+    const { from, to, lastDays } = options;
+
+    if (lastDays) {
+      const days = parseInt(lastDays, 10);
+      if (!Number.isNaN(days) && days > 0) {
+        const fromDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+        qb.andWhere('stats.timestamp >= :from', {
+          from: fromDate.toISOString()
+        });
+      }
+      return;
+    }
+
+    if (from) {
+      qb.andWhere('stats.timestamp >= :from', { from });
+    }
+
+    if (to) {
+      qb.andWhere('stats.timestamp < :to', { to });
+    }
+  }
 
   constructor(
     @InjectRepository(ReplayStatistics)
@@ -45,10 +76,14 @@ export class ReplayStatisticsService {
         error_message: data.errorMessage
       };
 
-      const replayStatistics = this.replayStatisticsRepository.create(mappedData);
+      const replayStatistics =
+        this.replayStatisticsRepository.create(mappedData);
       return await this.replayStatisticsRepository.save(replayStatistics);
     } catch (error) {
-      this.logger.error(`Error storing replay statistics: ${error.message}`, error.stack);
+      this.logger.error(
+        `Error storing replay statistics: ${error.message}`,
+        error.stack
+      );
       throw error;
     }
   }
@@ -65,7 +100,10 @@ export class ReplayStatisticsService {
         order: { timestamp: 'DESC' }
       });
     } catch (error) {
-      this.logger.error(`Error retrieving replay statistics: ${error.message}`, error.stack);
+      this.logger.error(
+        `Error retrieving replay statistics: ${error.message}`,
+        error.stack
+      );
       throw error;
     }
   }
@@ -75,16 +113,26 @@ export class ReplayStatisticsService {
    * @param workspaceId The ID of the workspace
    * @returns Object with unit IDs as keys and replay counts as values
    */
-  async getReplayFrequencyByUnit(workspaceId: number): Promise<Record<string, number>> {
+  async getReplayFrequencyByUnit(
+    workspaceId: number,
+    options?: { from?: string; to?: string; lastDays?: string; limit?: string }
+  ): Promise<Record<string, number>> {
     try {
-      const result = await this.replayStatisticsRepository.createQueryBuilder('stats')
-        .select([
-          'stats.unit_id',
-          'COUNT(*) as count'
-        ])
-        .where('stats.workspace_id = :workspaceId', { workspaceId })
-        .groupBy('stats.unit_id')
-        .getRawMany();
+      const qb = this.replayStatisticsRepository
+        .createQueryBuilder('stats')
+        .select(['stats.unit_id', 'COUNT(*) as count'])
+        .where('stats.workspace_id = :workspaceId', { workspaceId });
+
+      this.applyTimeFilters(qb, options);
+
+      qb.groupBy('stats.unit_id').orderBy('count', 'DESC');
+
+      const limit = options?.limit ? parseInt(options.limit, 10) : undefined;
+      if (limit && !Number.isNaN(limit) && limit > 0) {
+        qb.limit(limit);
+      }
+
+      const result = await qb.getRawMany();
 
       const frequency: Record<string, number> = {};
       result.forEach(row => {
@@ -93,7 +141,10 @@ export class ReplayStatisticsService {
 
       return frequency;
     } catch (error) {
-      this.logger.error(`Error calculating replay frequency: ${error.message}`, error.stack);
+      this.logger.error(
+        `Error calculating replay frequency: ${error.message}`,
+        error.stack
+      );
       throw error;
     }
   }
@@ -106,7 +157,8 @@ export class ReplayStatisticsService {
    */
   async getReplayDurationStatistics(
     workspaceId: number,
-    unitId?: string
+    unitId?: string,
+    options?: { from?: string; to?: string; lastDays?: string }
   ): Promise<{
       min: number;
       max: number;
@@ -115,14 +167,18 @@ export class ReplayStatisticsService {
       unitAverages?: Record<string, number>;
     }> {
     try {
-      const baseQuery = this.replayStatisticsRepository.createQueryBuilder('stats')
+      const baseQuery = this.replayStatisticsRepository
+        .createQueryBuilder('stats')
         .where('stats.workspace_id = :workspaceId', { workspaceId });
+
+      this.applyTimeFilters(baseQuery, options);
 
       if (unitId) {
         baseQuery.andWhere('stats.unit_id = :unitId', { unitId });
       }
 
-      const aggregateQuery = baseQuery.clone()
+      const aggregateQuery = baseQuery
+        .clone()
         .select([
           'MIN(stats.duration_milliseconds) as min',
           'MAX(stats.duration_milliseconds) as max',
@@ -146,39 +202,27 @@ export class ReplayStatisticsService {
       const max = parseInt(aggregateResult.max, 10);
       const average = parseFloat(aggregateResult.average);
 
+      const distributionRows = await baseQuery
+        .clone()
+        .select([
+          'FLOOR(stats.duration_milliseconds / 10000) * 10000 as bucket_start',
+          'COUNT(*) as count'
+        ])
+        .groupBy('bucket_start')
+        .orderBy('bucket_start', 'ASC')
+        .getRawMany();
+
       const distribution: Record<string, number> = {};
-      const chunkSize = 10000; // Process 10k records at a time
-      let offset = 0;
-      let hasMore = true;
-
-      while (hasMore) {
-        const chunk = await baseQuery.clone()
-          .select(['stats.duration_milliseconds'])
-          .limit(chunkSize)
-          .offset(offset)
-          .getRawMany();
-
-        if (chunk.length === 0) {
-          hasMore = false;
-          break;
-        }
-
-        chunk.forEach(row => {
-          const duration = parseInt(row.stats_duration_milliseconds, 10);
-          const bucket = Math.floor(duration / 10000) * 10000; // 10-second buckets in milliseconds
-          const bucketKey = `${bucket}-${bucket + 10000}`;
-          distribution[bucketKey] = (distribution[bucketKey] || 0) + 1;
-        });
-
-        offset += chunkSize;
-        if (chunk.length < chunkSize) {
-          hasMore = false;
-        }
-      }
+      distributionRows.forEach(row => {
+        const bucketStart = parseInt(row.bucket_start, 10);
+        const bucketKey = `${bucketStart}-${bucketStart + 10000}`;
+        distribution[bucketKey] = parseInt(row.count, 10);
+      });
 
       let unitAverages: Record<string, number> | undefined;
       if (!unitId) {
-        const unitAveragesQuery = this.replayStatisticsRepository.createQueryBuilder('stats')
+        const unitAveragesQuery = this.replayStatisticsRepository
+          .createQueryBuilder('stats')
           .select([
             'stats.unit_id',
             'AVG(stats.duration_milliseconds) as average'
@@ -202,7 +246,10 @@ export class ReplayStatisticsService {
         unitAverages
       };
     } catch (error) {
-      this.logger.error(`Error calculating duration statistics: ${error.message}`, error.stack);
+      this.logger.error(
+        `Error calculating duration statistics: ${error.message}`,
+        error.stack
+      );
       throw error;
     }
   }
@@ -212,14 +259,19 @@ export class ReplayStatisticsService {
    * @param workspaceId The ID of the workspace
    * @returns Object with days as keys and replay counts as values
    */
-  async getReplayDistributionByDay(workspaceId: number): Promise<Record<string, number>> {
+  async getReplayDistributionByDay(
+    workspaceId: number,
+    options?: { from?: string; to?: string; lastDays?: string }
+  ): Promise<Record<string, number>> {
     try {
-      const result = await this.replayStatisticsRepository.createQueryBuilder('stats')
-        .select([
-          'DATE(stats.timestamp) as day',
-          'COUNT(*) as count'
-        ])
-        .where('stats.workspace_id = :workspaceId', { workspaceId })
+      const qb = this.replayStatisticsRepository
+        .createQueryBuilder('stats')
+        .select(['DATE(stats.timestamp) as day', 'COUNT(*) as count'])
+        .where('stats.workspace_id = :workspaceId', { workspaceId });
+
+      this.applyTimeFilters(qb, options);
+
+      const result = await qb
         .groupBy('DATE(stats.timestamp)')
         .orderBy('day', 'ASC')
         .getRawMany();
@@ -231,7 +283,10 @@ export class ReplayStatisticsService {
 
       return distribution;
     } catch (error) {
-      this.logger.error(`Error calculating replay distribution by day: ${error.message}`, error.stack);
+      this.logger.error(
+        `Error calculating replay distribution by day: ${error.message}`,
+        error.stack
+      );
       throw error;
     }
   }
@@ -241,7 +296,10 @@ export class ReplayStatisticsService {
    * @param workspaceId The ID of the workspace
    * @returns Object with hours (0-23) as keys and replay counts as values
    */
-  async getReplayDistributionByHour(workspaceId: number): Promise<Record<string, number>> {
+  async getReplayDistributionByHour(
+    workspaceId: number,
+    options?: { from?: string; to?: string; lastDays?: string }
+  ): Promise<Record<string, number>> {
     try {
       // Initialize all hours with 0 count
       const hourDistribution: Record<string, number> = {};
@@ -249,12 +307,17 @@ export class ReplayStatisticsService {
         hourDistribution[i.toString()] = 0;
       }
 
-      const result = await this.replayStatisticsRepository.createQueryBuilder('stats')
+      const qb = this.replayStatisticsRepository
+        .createQueryBuilder('stats')
         .select([
           'EXTRACT(HOUR FROM stats.timestamp) as hour',
           'COUNT(*) as count'
         ])
-        .where('stats.workspace_id = :workspaceId', { workspaceId })
+        .where('stats.workspace_id = :workspaceId', { workspaceId });
+
+      this.applyTimeFilters(qb, options);
+
+      const result = await qb
         .groupBy('EXTRACT(HOUR FROM stats.timestamp)')
         .getRawMany();
 
@@ -264,7 +327,10 @@ export class ReplayStatisticsService {
 
       return hourDistribution;
     } catch (error) {
-      this.logger.error(`Error calculating replay distribution by hour: ${error.message}`, error.stack);
+      this.logger.error(
+        `Error calculating replay distribution by hour: ${error.message}`,
+        error.stack
+      );
       throw error;
     }
   }
@@ -274,22 +340,29 @@ export class ReplayStatisticsService {
    * @param workspaceId The ID of the workspace
    * @returns Object with error statistics
    */
-  async getReplayErrorStatistics(workspaceId: number): Promise<{
-    successRate: number;
-    totalReplays: number;
-    successfulReplays: number;
-    failedReplays: number;
-    commonErrors: Array<{ message: string; count: number }>;
-  }> {
+  async getReplayErrorStatistics(
+    workspaceId: number,
+    options?: { from?: string; to?: string; lastDays?: string; limit?: string }
+  ): Promise<{
+      successRate: number;
+      totalReplays: number;
+      successfulReplays: number;
+      failedReplays: number;
+      commonErrors: Array<{ message: string; count: number }>;
+    }> {
     try {
-      const overallStats = await this.replayStatisticsRepository.createQueryBuilder('stats')
+      const overallQb = this.replayStatisticsRepository
+        .createQueryBuilder('stats')
         .select([
           'COUNT(*) as total',
           'COUNT(CASE WHEN stats.success = true THEN 1 END) as successful',
           'COUNT(CASE WHEN stats.success = false THEN 1 END) as failed'
         ])
-        .where('stats.workspace_id = :workspaceId', { workspaceId })
-        .getRawOne();
+        .where('stats.workspace_id = :workspaceId', { workspaceId });
+
+      this.applyTimeFilters(overallQb, options);
+
+      const overallStats = await overallQb.getRawOne();
 
       if (!overallStats || overallStats.total === '0') {
         return {
@@ -306,18 +379,23 @@ export class ReplayStatisticsService {
       const failedReplays = parseInt(overallStats.failed, 10);
       const successRate = (successfulReplays / totalReplays) * 100;
 
-      const errorResult = await this.replayStatisticsRepository.createQueryBuilder('stats')
-        .select([
-          'stats.error_message as message',
-          'COUNT(*) as count'
-        ])
+      const errorsQb = this.replayStatisticsRepository
+        .createQueryBuilder('stats')
+        .select(['stats.error_message as message', 'COUNT(*) as count'])
         .where('stats.workspace_id = :workspaceId', { workspaceId })
         .andWhere('stats.success = false')
         .andWhere('stats.error_message IS NOT NULL')
-        .andWhere('stats.error_message != \'\'')
+        .andWhere("stats.error_message != ''");
+
+      this.applyTimeFilters(errorsQb, options);
+
+      const limit = options?.limit ? parseInt(options.limit, 10) : 10;
+      const safeLimit = !Number.isNaN(limit) && limit > 0 ? limit : 10;
+
+      const errorResult = await errorsQb
         .groupBy('stats.error_message')
         .orderBy('count', 'DESC')
-        .limit(10)
+        .limit(safeLimit)
         .getRawMany();
 
       const commonErrors = errorResult.map(row => ({
@@ -333,7 +411,10 @@ export class ReplayStatisticsService {
         commonErrors
       };
     } catch (error) {
-      this.logger.error(`Error calculating replay error statistics: ${error.message}`, error.stack);
+      this.logger.error(
+        `Error calculating replay error statistics: ${error.message}`,
+        error.stack
+      );
       throw error;
     }
   }
@@ -343,17 +424,27 @@ export class ReplayStatisticsService {
    * @param workspaceId The ID of the workspace
    * @returns Object with units as keys and failure counts as values
    */
-  async getFailureDistributionByUnit(workspaceId: number): Promise<Record<string, number>> {
+  async getFailureDistributionByUnit(
+    workspaceId: number,
+    options?: { from?: string; to?: string; lastDays?: string; limit?: string }
+  ): Promise<Record<string, number>> {
     try {
-      const result = await this.replayStatisticsRepository.createQueryBuilder('stats')
-        .select([
-          'stats.unit_id',
-          'COUNT(*) as count'
-        ])
+      const qb = this.replayStatisticsRepository
+        .createQueryBuilder('stats')
+        .select(['stats.unit_id', 'COUNT(*) as count'])
         .where('stats.workspace_id = :workspaceId', { workspaceId })
-        .andWhere('stats.success = false')
-        .groupBy('stats.unit_id')
-        .getRawMany();
+        .andWhere('stats.success = false');
+
+      this.applyTimeFilters(qb, options);
+
+      qb.groupBy('stats.unit_id').orderBy('count', 'DESC');
+
+      const limit = options?.limit ? parseInt(options.limit, 10) : undefined;
+      if (limit && !Number.isNaN(limit) && limit > 0) {
+        qb.limit(limit);
+      }
+
+      const result = await qb.getRawMany();
 
       const distribution: Record<string, number> = {};
       result.forEach(row => {
@@ -362,7 +453,10 @@ export class ReplayStatisticsService {
 
       return distribution;
     } catch (error) {
-      this.logger.error(`Error calculating failure distribution by unit: ${error.message}`, error.stack);
+      this.logger.error(
+        `Error calculating failure distribution by unit: ${error.message}`,
+        error.stack
+      );
       throw error;
     }
   }
@@ -372,15 +466,20 @@ export class ReplayStatisticsService {
    * @param workspaceId The ID of the workspace
    * @returns Object with days as keys and failure counts as values
    */
-  async getFailureDistributionByDay(workspaceId: number): Promise<Record<string, number>> {
+  async getFailureDistributionByDay(
+    workspaceId: number,
+    options?: { from?: string; to?: string; lastDays?: string }
+  ): Promise<Record<string, number>> {
     try {
-      const result = await this.replayStatisticsRepository.createQueryBuilder('stats')
-        .select([
-          'DATE(stats.timestamp) as day',
-          'COUNT(*) as count'
-        ])
+      const qb = this.replayStatisticsRepository
+        .createQueryBuilder('stats')
+        .select(['DATE(stats.timestamp) as day', 'COUNT(*) as count'])
         .where('stats.workspace_id = :workspaceId', { workspaceId })
-        .andWhere('stats.success = false')
+        .andWhere('stats.success = false');
+
+      this.applyTimeFilters(qb, options);
+
+      const result = await qb
         .groupBy('DATE(stats.timestamp)')
         .orderBy('day', 'ASC')
         .getRawMany();
@@ -392,7 +491,10 @@ export class ReplayStatisticsService {
 
       return distribution;
     } catch (error) {
-      this.logger.error(`Error calculating failure distribution by day: ${error.message}`, error.stack);
+      this.logger.error(
+        `Error calculating failure distribution by day: ${error.message}`,
+        error.stack
+      );
       throw error;
     }
   }
@@ -402,7 +504,10 @@ export class ReplayStatisticsService {
    * @param workspaceId The ID of the workspace
    * @returns Object with hours (0-23) as keys and failure counts as values
    */
-  async getFailureDistributionByHour(workspaceId: number): Promise<Record<string, number>> {
+  async getFailureDistributionByHour(
+    workspaceId: number,
+    options?: { from?: string; to?: string; lastDays?: string }
+  ): Promise<Record<string, number>> {
     try {
       // Initialize all hours with 0 count
       const hourDistribution: Record<string, number> = {};
@@ -410,13 +515,18 @@ export class ReplayStatisticsService {
         hourDistribution[i.toString()] = 0;
       }
 
-      const result = await this.replayStatisticsRepository.createQueryBuilder('stats')
+      const qb = this.replayStatisticsRepository
+        .createQueryBuilder('stats')
         .select([
           'EXTRACT(HOUR FROM stats.timestamp) as hour',
           'COUNT(*) as count'
         ])
         .where('stats.workspace_id = :workspaceId', { workspaceId })
-        .andWhere('stats.success = false')
+        .andWhere('stats.success = false');
+
+      this.applyTimeFilters(qb, options);
+
+      const result = await qb
         .groupBy('EXTRACT(HOUR FROM stats.timestamp)')
         .getRawMany();
 
@@ -426,7 +536,10 @@ export class ReplayStatisticsService {
 
       return hourDistribution;
     } catch (error) {
-      this.logger.error(`Error calculating failure distribution by hour: ${error.message}`, error.stack);
+      this.logger.error(
+        `Error calculating failure distribution by hour: ${error.message}`,
+        error.stack
+      );
       throw error;
     }
   }

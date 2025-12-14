@@ -60,7 +60,8 @@ export class WsSettingsComponent implements OnInit {
   ngOnInit(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (workspaceId) {
-      this.workspaceSettingsService.getAutoFetchCodingStatistics(workspaceId)
+      this.workspaceSettingsService
+        .getAutoFetchCodingStatistics(workspaceId)
         .subscribe(enabled => {
           this.autoFetchCodingStatistics = enabled;
         });
@@ -71,7 +72,10 @@ export class WsSettingsComponent implements OnInit {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (workspaceId) {
       this.dialog.open(ReplayStatisticsDialogComponent, {
-        width: '900px',
+        width: '88vw',
+        maxWidth: '1400px',
+        height: '85vh',
+        maxHeight: '85vh',
         data: { workspaceId }
       });
     }
@@ -79,17 +83,31 @@ export class WsSettingsComponent implements OnInit {
 
   createToken(): void {
     this.appService
-      .createToken(this.appService.selectedWorkspaceId, this.appService.loggedUser?.sub || '', this.duration)
+      .createToken(
+        this.appService.selectedWorkspaceId,
+        this.appService.loggedUser?.sub || '',
+        this.duration
+      )
       .subscribe(authToken => {
         this.authToken = authToken;
-        this.snackBar.open(this.translateService.instant('ws-settings.token-generated-successfully'), this.translateService.instant('close'), { duration: 3000 });
+        this.snackBar.open(
+          this.translateService.instant(
+            'ws-settings.token-generated-successfully'
+          ),
+          this.translateService.instant('close'),
+          { duration: 3000 }
+        );
       });
   }
 
   copyToken(): void {
     if (this.authToken) {
       this.clipboard.copy(this.authToken);
-      this.snackBar.open(this.translateService.instant('ws-settings.token-copied-to-clipboard'), this.translateService.instant('close'), { duration: 3000 });
+      this.snackBar.open(
+        this.translateService.instant('ws-settings.token-copied-to-clipboard'),
+        this.translateService.instant('close'),
+        { duration: 3000 }
+      );
     }
   }
 
@@ -110,28 +128,39 @@ export class WsSettingsComponent implements OnInit {
     });
   }
 
-  toggleAutoFetchCodingStatistics(toggleEvent: { checked: boolean }
-  ): void {
+  toggleAutoFetchCodingStatistics(toggleEvent: { checked: boolean }): void {
     this.autoFetchCodingStatistics = toggleEvent.checked;
     const workspaceId = this.appService.selectedWorkspaceId;
 
     if (workspaceId) {
-      this.workspaceSettingsService.setAutoFetchCodingStatistics(workspaceId, this.autoFetchCodingStatistics)
+      this.workspaceSettingsService
+        .setAutoFetchCodingStatistics(
+          workspaceId,
+          this.autoFetchCodingStatistics
+        )
         .subscribe({
           next: () => {
             this.snackBar.open(
               this.autoFetchCodingStatistics ?
-                this.translateService.instant('ws-settings.auto-fetch-coding-statistics-enabled') :
-                this.translateService.instant('ws-settings.auto-fetch-coding-statistics-disabled'),
+                this.translateService.instant(
+                  'ws-settings.auto-fetch-coding-statistics-enabled'
+                ) :
+                this.translateService.instant(
+                  'ws-settings.auto-fetch-coding-statistics-disabled'
+                ),
               this.translateService.instant('close'),
               { duration: 3000 }
             );
           },
           error: () => {
-            this.snackBar.open(this.translateService.instant('ws-settings.error-saving-setting'), this.translateService.instant('close'), {
-              duration: 3000,
-              panelClass: ['error-snackbar']
-            });
+            this.snackBar.open(
+              this.translateService.instant('ws-settings.error-saving-setting'),
+              this.translateService.instant('close'),
+              {
+                duration: 3000,
+                panelClass: ['error-snackbar']
+              }
+            );
             this.autoFetchCodingStatistics = !this.autoFetchCodingStatistics;
           }
         });
@@ -145,7 +174,11 @@ export class WsSettingsComponent implements OnInit {
 
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
-      this.snackBar.open(this.translateService.instant('ws-settings.no-workspace-selected'), this.translateService.instant('close'), { duration: 3000 });
+      this.snackBar.open(
+        this.translateService.instant('ws-settings.no-workspace-selected'),
+        this.translateService.instant('close'),
+        { duration: 3000 }
+      );
       return;
     }
 
@@ -158,7 +191,11 @@ export class WsSettingsComponent implements OnInit {
     const token = localStorage.getItem('id_token');
 
     if (!token) {
-      this.snackBar.open(this.translateService.instant('ws-settings.authentication-required'), this.translateService.instant('close'), { duration: 5000 });
+      this.snackBar.open(
+        this.translateService.instant('ws-settings.authentication-required'),
+        this.translateService.instant('close'),
+        { duration: 5000 }
+      );
       this.isExporting = false;
       return;
     }
@@ -179,15 +216,29 @@ export class WsSettingsComponent implements OnInit {
       .then(blob => {
         const url = window.URL.createObjectURL(blob);
         anchor.href = url;
-        anchor.download = `workspace-${workspaceId}-export-${new Date().toISOString().split('T')[0]}.sqlite`;
+        anchor.download = `workspace-${workspaceId}-export-${
+          new Date().toISOString().split('T')[0]
+        }.sqlite`;
         anchor.click();
         window.URL.revokeObjectURL(url);
         document.body.removeChild(anchor);
 
-        this.snackBar.open(this.translateService.instant('ws-settings.workspace-database-exported-successfully'), this.translateService.instant('close'), { duration: 3000 });
+        this.snackBar.open(
+          this.translateService.instant(
+            'ws-settings.workspace-database-exported-successfully'
+          ),
+          this.translateService.instant('close'),
+          { duration: 3000 }
+        );
       })
       .catch(() => {
-        this.snackBar.open(this.translateService.instant('ws-settings.error-exporting-workspace-database-retry'), this.translateService.instant('close'), { duration: 5000 });
+        this.snackBar.open(
+          this.translateService.instant(
+            'ws-settings.error-exporting-workspace-database-retry'
+          ),
+          this.translateService.instant('close'),
+          { duration: 5000 }
+        );
         if (document.body.contains(anchor)) {
           document.body.removeChild(anchor);
         }
