@@ -364,7 +364,7 @@ async uploadTestFiles(
     });
 
     return {
-      total: originalFiles.length,
+      total: Array.isArray(originalFiles) ? originalFiles.length : 0,
       uploaded,
       failed: failedFiles.length,
       conflicts: conflicts.length > 0 ? conflicts : undefined,
