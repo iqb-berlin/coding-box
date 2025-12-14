@@ -24,7 +24,13 @@ import {
 } from 'rxjs';
 import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
-import { FlatResponseFilterOptionsResponse, TestResultService } from '../../../services/test-result.service';
+import {
+  FlatResponseFilterOptionsResponse,
+  FlatResponseFrequencyItem,
+  FlatResponseFrequencyRequestCombo,
+  FlatResponseFrequenciesResponse,
+  TestResultService
+} from '../../../services/test-result.service';
 import { ConfirmDialogComponent, ConfirmDialogData } from '../../../shared/dialogs/confirm-dialog.component';
 import { BookletInfoDialogComponent } from '../booklet-info-dialog/booklet-info-dialog.component';
 import { UnitInfoDialogComponent } from '../unit-info-dialog/unit-info-dialog.component';
@@ -121,7 +127,10 @@ export class TestResultsFlatTableComponent implements OnDestroy {
   private personTestResultsCacheOrder: number[] = [];
   private readonly PERSON_TEST_RESULTS_CACHE_MAX = 5;
 
-  flatDisplayedColumns: string[] = ['code', 'group', 'login', 'booklet', 'unit', 'response', 'responseValue', 'tags', 'actions'];
+  flatDisplayedColumns: string[] = ['code', 'group', 'login', 'booklet', 'unit', 'response', 'responseValue', 'frequencies', 'tags', 'actions'];
+
+  isLoadingFrequencies: boolean = false;
+  private frequenciesByComboKey = new Map<string, { total: number; values: FlatResponseFrequencyItem[] }>();
 
   flatData: FlatResponseRow[] = [];
   flatTotalRecords: number = 0;
@@ -175,6 +184,87 @@ export class TestResultsFlatTableComponent implements OnDestroy {
 
     this.fetchFlatResponses(this.flatPageIndex, this.flatPageSize);
     this.fetchFlatResponseFilterOptions();
+  }
+
+  private loadFrequenciesForCurrentPage(): void {
+    if (!this.appService.selectedWorkspaceId) {
+      return;
+    }
+
+    const combosToFetchMap = new Map<string, FlatResponseFrequencyRequestCombo>();
+    (this.flatData || []).forEach(r => {
+      const variableId = String(r.response || '').trim();
+      const unitKey = String(r.unit || '').trim();
+      const value = String(r.responseValue ?? '');
+      if (!unitKey || !variableId) {
+        return;
+      }
+      const key = `${encodeURIComponent(unitKey)}:${encodeURIComponent(variableId)}`;
+
+      const cached = this.frequenciesByComboKey.get(key);
+      const alreadyHave = !!cached && Array.isArray(cached.values) && cached.values.some(v => String(v.value ?? '') === value);
+      if (alreadyHave) {
+        return;
+      }
+
+      const existingReq = combosToFetchMap.get(key);
+      if (existingReq) {
+        if (!existingReq.values.includes(value)) {
+          existingReq.values.push(value);
+        }
+      } else {
+        combosToFetchMap.set(key, { unitKey, variableId, values: [value] });
+      }
+    });
+
+    const combosToFetch = Array.from(combosToFetchMap.values());
+    if (combosToFetch.length === 0) {
+      return;
+    }
+
+    this.isLoadingFrequencies = true;
+    this.testResultService.getFlatResponseFrequencies(this.appService.selectedWorkspaceId, combosToFetch)
+      .subscribe((resp: FlatResponseFrequenciesResponse) => {
+        this.isLoadingFrequencies = false;
+        Object.entries(resp || {}).forEach(([key, incoming]) => {
+          const existing = this.frequenciesByComboKey.get(key);
+          if (!existing) {
+            this.frequenciesByComboKey.set(key, incoming);
+            return;
+          }
+
+          const mergedValues = new Map<string, FlatResponseFrequencyItem>();
+          (existing.values || []).forEach(v => mergedValues.set(String(v.value ?? ''), v));
+          (incoming.values || []).forEach(v => mergedValues.set(String(v.value ?? ''), v));
+
+          this.frequenciesByComboKey.set(key, {
+            total: incoming.total ?? existing.total,
+            values: Array.from(mergedValues.values())
+          });
+        });
+      });
+  }
+
+  getFrequencySummary(row: FlatResponseRow): string {
+    const comboKey = `${encodeURIComponent(String(row.unit || '').trim())}:${encodeURIComponent(String(row.response || '').trim())}`;
+    const entry = this.frequenciesByComboKey.get(comboKey);
+    if (!entry || !Array.isArray(entry.values)) {
+      return '';
+    }
+
+    const fmtP = (p: number) => {
+      const clamped = Math.max(0, Math.min(1, Number(p || 0)));
+      const s = clamped.toFixed(3);
+      return s.startsWith('0') ? s.slice(1) : s;
+    };
+
+    const value = String(row.responseValue ?? '');
+    const match = entry.values.find(v => String(v.value ?? '') === value);
+    if (!match) {
+      return '';
+    }
+
+    return `p=${fmtP(match.p)} (n=${match.count || 0})`;
   }
 
   onFlatFilterOptionSelected(): void {
@@ -562,6 +652,7 @@ export class TestResultsFlatTableComponent implements OnDestroy {
         tags: Array.isArray(r.tags) ? r.tags : []
       }));
 
+      this.loadFrequenciesForCurrentPage();
       this.loadNotesPresenceForCurrentPage();
     });
   }

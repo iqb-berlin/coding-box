@@ -43,7 +43,7 @@
                   <h3 class="variable-title">{{ combo.unitName }}: {{ combo.variableId }}</h3>
 
                   <div class="table-container">
-                    <table mat-table [dataSource]="variableFrequencies[combo.unitName + ':' + combo.variableId]" matSort class="frequency-table">
+                    <table mat-table [dataSource]="variableFrequencies[getComboKey(combo)]" matSort class="frequency-table">
                       <!-- Value Column -->
                       <ng-container matColumnDef="value">
                         <th mat-header-cell *matHeaderCellDef>{{ 'variable-analysis.value-column' | translate }}</th>

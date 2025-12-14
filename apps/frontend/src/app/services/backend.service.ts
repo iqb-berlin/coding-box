@@ -709,6 +709,13 @@ export class BackendService {
     return this.variableAnalysisService.getAnalysisResults(workspaceId, jobId);
   }
 
+  getVariableAnalysisJob(
+    workspaceId: number,
+    jobId: number
+  ): Observable<VariableAnalysisJobDto> {
+    return this.variableAnalysisService.getAnalysisJob(workspaceId, jobId);
+  }
+
   getAllVariableAnalysisJobs(workspaceId: number): Observable<VariableAnalysisJobDto[]> {
     return this.variableAnalysisService.getAllJobs(workspaceId);
   }

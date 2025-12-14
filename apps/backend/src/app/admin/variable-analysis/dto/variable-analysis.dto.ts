@@ -5,12 +5,7 @@ import { VariableFrequencyDto } from './variable-frequency.dto';
  */
 export class VariableAnalysisResultDto {
   /**
-   * List of variable IDs
-   */
-  variables: string[];
-
-  /**
-   * Map of variable ID to frequency data
+   * Map of combo key to frequency data
    */
   frequencies: { [key: string]: VariableFrequencyDto[] };
   total: number;
