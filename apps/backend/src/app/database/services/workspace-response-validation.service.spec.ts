@@ -56,7 +56,10 @@ describe('WorkspaceResponseValidationService.validateVariables', () => {
           unitid: 10,
           variableid: 'A1',
           value: 'x',
-          unit: { id: 10, name: 'UNIT1' } as unknown as Unit
+          unit: {
+            id: 10,
+            name: 'UNIT1'
+          } as unknown as Unit
         } as unknown as ResponseEntity
       ])
     } as unknown as Repository<ResponseEntity>;
@@ -98,7 +101,10 @@ describe('WorkspaceResponseValidationService.validateVariables', () => {
           unitid: 10,
           variableid: 'V1',
           value: 'x',
-          unit: { id: 10, name: 'UNIT1' } as unknown as Unit
+          unit: {
+            id: 10,
+            name: 'UNIT1'
+          } as unknown as Unit
         } as unknown as ResponseEntity
       ])
     } as unknown as Repository<ResponseEntity>;
@@ -140,7 +146,10 @@ describe('WorkspaceResponseValidationService.validateVariables', () => {
           unitid: 10,
           variableid: 'UNKNOWN',
           value: 'x',
-          unit: { id: 10, name: 'UNIT1' } as unknown as Unit
+          unit: {
+            id: 10,
+            name: 'UNIT1'
+          } as unknown as Unit
         } as unknown as ResponseEntity
       ])
     } as unknown as Repository<ResponseEntity>;
@@ -187,7 +196,10 @@ describe('WorkspaceResponseValidationService.validateVariables', () => {
           unitid: 10,
           variableid: 'A1',
           value: 'x',
-          unit: { id: 10, name: 'UNIT1' } as unknown as Unit
+          unit: {
+            id: 10,
+            name: 'UNIT1'
+          } as unknown as Unit
         } as unknown as ResponseEntity
       ])
     } as unknown as Repository<ResponseEntity>;
