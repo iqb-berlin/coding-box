@@ -142,6 +142,25 @@ export class UploadResultsService {
     scope: 'person' | 'workspace' | 'group' | 'booklet' | 'unit' | 'response' = 'person',
     scopeFilters: { groupName?: string; bookletName?: string; unitNameOrAlias?: string; variableId?: string; subform?: string } | undefined = undefined
   ): Promise<TestResultsUploadResultDto> {
+    if (!Array.isArray(originalFiles)) {
+      this.logger.error('The uploaded files parameter is not an array.');
+      const before = await this.personService.getWorkspaceUploadStats(workspace_id);
+      const after = before;
+      return {
+        expected: this.zeroStats(),
+        before,
+        after,
+        delta: {
+          testPersons: 0,
+          testGroups: 0,
+          uniqueBooklets: 0,
+          uniqueUnits: 0,
+          uniqueResponses: 0
+        },
+        responseStatusCounts: {},
+        issues: [{ level: 'error', message: 'Malformed files parameter. Upload failed.' }]
+      };
+    }
     this.logger.log(`Uploading test results for workspace ${workspace_id} (overwrite existing: ${overwriteExisting})`);
     const before = await this.personService.getWorkspaceUploadStats(workspace_id);
 
