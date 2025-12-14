@@ -10,19 +10,19 @@ describe('WorkspaceResponseValidationService.validateVariables', () => {
   const makeUnitXml = (unitId: string, variables: Array<{ id?: string; alias?: string; type?: string }>): Buffer => {
     const variablesXml = variables.map(v => {
       const attrs = [
-        v.id ? `id=\"${v.id}\"` : '',
-        v.alias ? `alias=\"${v.alias}\"` : '',
-        `type=\"${v.type || 'string'}\"`
+        v.id ? `id="${v.id}"` : '',
+        v.alias ? `alias="${v.alias}"` : '',
+        `type="${v.type || 'string'}"`
       ].filter(Boolean).join(' ');
       return `<Variable ${attrs} />`;
     }).join('');
 
     return Buffer.from(
-      `<?xml version=\"1.0\" encoding=\"utf-8\"?>` +
-      `<Unit>` +
+      '<?xml version="1.0" encoding="utf-8"?>' +
+      '<Unit>' +
       `<Metadata><Id>${unitId}</Id></Metadata>` +
       `<BaseVariables>${variablesXml}</BaseVariables>` +
-      `</Unit>`
+      '</Unit>'
     );
   };
 
@@ -51,7 +51,13 @@ describe('WorkspaceResponseValidationService.validateVariables', () => {
 
     const responseRepository = {
       find: jest.fn().mockResolvedValue([
-        { id: 100, unitid: 10, variableid: 'A1', value: 'x', unit: { id: 10, name: 'UNIT1' } as unknown as Unit } as unknown as ResponseEntity
+        {
+          id: 100,
+          unitid: 10,
+          variableid: 'A1',
+          value: 'x',
+          unit: { id: 10, name: 'UNIT1' } as unknown as Unit
+        } as unknown as ResponseEntity
       ])
     } as unknown as Repository<ResponseEntity>;
 
@@ -87,7 +93,13 @@ describe('WorkspaceResponseValidationService.validateVariables', () => {
 
     const responseRepository = {
       find: jest.fn().mockResolvedValue([
-        { id: 100, unitid: 10, variableid: 'V1', value: 'x', unit: { id: 10, name: 'UNIT1' } as unknown as Unit } as unknown as ResponseEntity
+        {
+          id: 100,
+          unitid: 10,
+          variableid: 'V1',
+          value: 'x',
+          unit: { id: 10, name: 'UNIT1' } as unknown as Unit
+        } as unknown as ResponseEntity
       ])
     } as unknown as Repository<ResponseEntity>;
 
@@ -123,7 +135,13 @@ describe('WorkspaceResponseValidationService.validateVariables', () => {
 
     const responseRepository = {
       find: jest.fn().mockResolvedValue([
-        { id: 100, unitid: 10, variableid: 'UNKNOWN', value: 'x', unit: { id: 10, name: 'UNIT1' } as unknown as Unit } as unknown as ResponseEntity
+        {
+          id: 100,
+          unitid: 10,
+          variableid: 'UNKNOWN',
+          value: 'x',
+          unit: { id: 10, name: 'UNIT1' } as unknown as Unit
+        } as unknown as ResponseEntity
       ])
     } as unknown as Repository<ResponseEntity>;
 
@@ -164,7 +182,13 @@ describe('WorkspaceResponseValidationService.validateVariables', () => {
 
     const responseRepository = {
       find: jest.fn().mockResolvedValue([
-        { id: 100, unitid: 10, variableid: 'A1', value: 'x', unit: { id: 10, name: 'UNIT1' } as unknown as Unit } as unknown as ResponseEntity
+        {
+          id: 100,
+          unitid: 10,
+          variableid: 'A1',
+          value: 'x',
+          unit: { id: 10, name: 'UNIT1' } as unknown as Unit
+        } as unknown as ResponseEntity
       ])
     } as unknown as Repository<ResponseEntity>;
 
