@@ -297,10 +297,12 @@ export class WorkspaceFilesController {
     } catch (error) {
       logger.error('Error uploading test files:');
       return {
-        total: files.length,
+        total: Array.isArray(files) ? files.length : 0,
         uploaded: 0,
-        failed: files.length,
-        failedFiles: files.map(f => ({ filename: f.originalname, reason: 'Upload failed' }))
+        failed: Array.isArray(files) ? files.length : 0,
+        failedFiles: Array.isArray(files)
+          ? files.map(f => ({ filename: f.originalname, reason: 'Upload failed' }))
+          : []
       };
     }
   }

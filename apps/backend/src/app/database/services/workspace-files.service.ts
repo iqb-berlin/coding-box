@@ -281,103 +281,115 @@ ${bookletRefs}
     }
   }
 
-  async uploadTestFiles(
-    workspace_id: number,
-    originalFiles: FileIo[],
-    overwriteExisting: boolean,
-    overwriteFileIds?: string[]
-  ): Promise<TestFilesUploadResultDto> {
-    this.logger.log(`Uploading test files for workspace ${workspace_id}`);
+async uploadTestFiles(
+  workspace_id: number,
+  originalFiles: FileIo[],
+  overwriteExisting: boolean,
+  overwriteFileIds?: string[]
+): Promise<TestFilesUploadResultDto> {
+  this.logger.log(`Uploading test files for workspace ${workspace_id}`);
 
-    const overwriteAllowList = (overwriteFileIds && overwriteFileIds.length > 0) ?
-      new Set(overwriteFileIds.map(s => (s || '').trim().toUpperCase()).filter(Boolean)) :
-      undefined;
+  if (!Array.isArray(originalFiles)) {
+    this.logger.error(`uploadTestFiles received non-array originalFiles for workspace ${workspace_id}`);
+    return {
+      total: 0,
+      uploaded: 0,
+      failed: 0,
+      failedFiles: [{ filename: 'unknown', reason: 'Invalid files input: not an array' }]
+    };
+  }
 
-    const MAX_CONCURRENT_UPLOADS = 5;
-    const processInBatches = async (
-      files: FileIo[],
-      batchSize: number,
-      overwriteExistingParam: boolean,
-      overwriteAllowListParam?: Set<string>
-    ): Promise<TestFilesUploadResultDto> => {
-      const tasks: Array<{ filename: string; promise: Promise<unknown> }> = [];
+  const overwriteAllowList = (overwriteFileIds && overwriteFileIds.length > 0) ?
+    new Set(overwriteFileIds.map(s => (s || '').trim().toUpperCase()).filter(Boolean)) :
+    undefined;
 
-      for (let i = 0; i < files.length; i += batchSize) {
-        const batch = files.slice(i, i + batchSize);
-        batch.forEach(file => {
-          const promises = this.handleFile(workspace_id, file, overwriteExistingParam, overwriteAllowListParam);
-          promises.forEach(p => tasks.push({ filename: file.originalname, promise: p }));
+  const MAX_CONCURRENT_UPLOADS = 5;
+  const processInBatches = async (
+    files: FileIo[],
+    batchSize: number,
+    overwriteExistingParam: boolean,
+    overwriteAllowListParam?: Set<string>
+  ): Promise<TestFilesUploadResultDto> => {
+    const tasks: Array<{ filename: string; promise: Promise<unknown> }> = [];
+
+    for (let i = 0; i < files.length; i += batchSize) {
+      const batch = files.slice(i, i + batchSize);
+      batch.forEach(file => {
+        const promises = this.handleFile(workspace_id, file, overwriteExistingParam, overwriteAllowListParam);
+        promises.forEach(p => tasks.push({ filename: file.originalname, promise: p }));
+      });
+      await Promise.allSettled(tasks.slice(i, i + batchSize).map(t => t.promise));
+    }
+
+    const settled = await Promise.allSettled(tasks.map(t => t.promise));
+    const conflicts: TestFilesUploadConflictDto[] = [];
+    const failedFiles: TestFilesUploadFailedDto[] = [];
+    const uploadedFiles: TestFilesUploadUploadedDto[] = [];
+    let uploaded = 0;
+
+    const isConflict = (value: unknown): value is (TestFilesUploadConflictDto & { conflict: true }) => (
+      !!value && typeof value === 'object' && (value as { conflict?: unknown }).conflict === true
+    );
+
+    settled.forEach((result, idx) => {
+      const task = tasks[idx];
+      if (result.status === 'rejected') {
+        const reason = (result as PromiseRejectedResult).reason;
+        failedFiles.push({
+          filename: task?.filename || 'unknown',
+          reason: reason instanceof Error ? reason.message : String(reason)
         });
-        await Promise.allSettled(tasks.slice(i, i + batchSize).map(t => t.promise));
+        return;
       }
 
-      const settled = await Promise.allSettled(tasks.map(t => t.promise));
-      const conflicts: TestFilesUploadConflictDto[] = [];
-      const failedFiles: TestFilesUploadFailedDto[] = [];
-      const uploadedFiles: TestFilesUploadUploadedDto[] = [];
-      let uploaded = 0;
+      const value = result.value;
+      if (isConflict(value)) {
+        conflicts.push({
+          fileId: value.fileId,
+          filename: value.filename,
+          fileType: value.fileType
+        });
+        return;
+      }
 
-      const isConflict = (value: unknown): value is (TestFilesUploadConflictDto & { conflict: true }) => (
-        !!value && typeof value === 'object' && (value as { conflict?: unknown }).conflict === true
-      );
+      if (this.isUploaded(value)) {
+        uploaded += 1;
+        uploadedFiles.push(value);
+        return;
+      }
 
-      settled.forEach((result, idx) => {
-        const task = tasks[idx];
-        if (result.status === 'rejected') {
-          const reason = (result as PromiseRejectedResult).reason;
-          failedFiles.push({
-            filename: task?.filename || 'unknown',
-            reason: reason instanceof Error ? reason.message : String(reason)
-          });
-          return;
-        }
+      if (typeof value !== 'undefined') {
+        uploaded += 1;
+      }
+    });
 
-        const value = result.value;
-        if (isConflict(value)) {
-          conflicts.push({
-            fileId: value.fileId,
-            filename: value.filename,
-            fileType: value.fileType
-          });
-          return;
-        }
-
-        if (this.isUploaded(value)) {
-          uploaded += 1;
-          uploadedFiles.push(value);
-          return;
-        }
-
-        if (typeof value !== 'undefined') {
-          uploaded += 1;
-        }
-      });
-
-      return {
-        total: originalFiles.length,
-        uploaded,
-        failed: failedFiles.length,
-        conflicts: conflicts.length > 0 ? conflicts : undefined,
-        failedFiles: failedFiles.length > 0 ? failedFiles : undefined,
-        uploadedFiles: uploadedFiles.length > 0 ? uploadedFiles : undefined
-      };
+    return {
+      total: originalFiles.length,
+      uploaded,
+      failed: failedFiles.length,
+      conflicts: conflicts.length > 0 ? conflicts : undefined,
+      failedFiles: failedFiles.length > 0 ? failedFiles : undefined,
+      uploadedFiles: uploadedFiles.length > 0 ? uploadedFiles : undefined
     };
+  };
 
-    try {
-      const result = await processInBatches(originalFiles, MAX_CONCURRENT_UPLOADS, overwriteExisting, overwriteAllowList);
-      await this.codingStatisticsService.invalidateCache(workspace_id);
-      await this.codingStatisticsService.invalidateIncompleteVariablesCache(workspace_id);
-      return result;
-    } catch (error) {
-      this.logger.error(`Unexpected error while uploading files for workspace ${workspace_id}:`, error);
-      return {
-        total: originalFiles.length,
-        uploaded: 0,
-        failed: originalFiles.length,
-        failedFiles: originalFiles.map(file => ({ filename: file.originalname, reason: error.message }))
-      };
-    }
+  try {
+    const result = await processInBatches(originalFiles, MAX_CONCURRENT_UPLOADS, overwriteExisting, overwriteAllowList);
+    await this.codingStatisticsService.invalidateCache(workspace_id);
+    await this.codingStatisticsService.invalidateIncompleteVariablesCache(workspace_id);
+    return result;
+  } catch (error) {
+    this.logger.error(`Unexpected error while uploading files for workspace ${workspace_id}:`, error);
+    return {
+      total: Array.isArray(originalFiles) ? originalFiles.length : 0,
+      uploaded: 0,
+      failed: Array.isArray(originalFiles) ? originalFiles.length : 0,
+      failedFiles: Array.isArray(originalFiles)
+        ? originalFiles.map(file => ({ filename: file.originalname, reason: error.message }))
+        : []
+    };
   }
+}
 
   async downloadTestFile(workspace_id: number, fileId: number): Promise<FileDownloadDto> {
     this.logger.log(`Downloading file with ID ${fileId} for workspace ${workspace_id}`);
