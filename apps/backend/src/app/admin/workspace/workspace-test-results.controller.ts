@@ -52,6 +52,10 @@ interface ResolveDuplicateResponsesRequest {
   resolutionMap: Record<string, number>;
 }
 
+interface FlatResponseFrequenciesRequest {
+  combos: Array<{ unitKey: string; variableId: string; values: string[] }>;
+}
+
 @ApiTags('Admin Workspace Test Results')
 @Controller('admin/workspace')
 export class WorkspaceTestResultsController {
@@ -298,6 +302,70 @@ export class WorkspaceTestResultsController {
       page,
       limit
     };
+  }
+
+  @Post(':workspace_id/test-results/flat-responses/frequencies')
+  @ApiOperation({
+    summary: 'Get response value frequencies for flat response combos',
+    description: 'Returns top response value frequencies (p as proportion, n as count) for a set of (unitId, variableId) combos in the workspace.'
+  })
+  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        combos: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              unitKey: { type: 'string' },
+              variableId: { type: 'string' },
+              values: { type: 'array', items: { type: 'string' } }
+            }
+          }
+        }
+      }
+    }
+  })
+  @ApiOkResponse({
+    description: 'Frequencies retrieved successfully.',
+    schema: {
+      type: 'object',
+      additionalProperties: {
+        type: 'object',
+        properties: {
+          total: { type: 'number' },
+          values: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                value: { type: 'string' },
+                count: { type: 'number' },
+                p: { type: 'number' }
+              }
+            }
+          }
+        }
+      }
+    }
+  })
+  @ApiBadRequestResponse({ description: 'Failed to retrieve frequencies' })
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
+  async findFlatResponseFrequencies(
+    @Param('workspace_id', ParseIntPipe) workspaceId: number,
+      @Body() body: FlatResponseFrequenciesRequest
+  ): Promise<Record<string, { total: number; values: Array<{ value: string; count: number; p: number }> }>> {
+    try {
+      return await this.workspaceTestResultsService.findFlatResponseFrequencies(
+        workspaceId,
+        body?.combos || []
+      );
+    } catch (error) {
+      throw new BadRequestException(`Failed to retrieve frequencies. ${error.message}`);
+    }
   }
 
   @Get(':workspace_id/test-results/flat-responses/filter-options')

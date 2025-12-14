@@ -59,6 +59,20 @@ export interface FlatResponseFilterOptionsResponse {
   tags: string[];
 }
 
+export interface FlatResponseFrequencyRequestCombo {
+  unitKey: string;
+  variableId: string;
+  values: string[];
+}
+
+export interface FlatResponseFrequencyItem {
+  value: string;
+  count: number;
+  p: number;
+}
+
+export type FlatResponseFrequenciesResponse = Record<string, { total: number; values: FlatResponseFrequencyItem[] }>;
+
 export interface UnitLogRow {
   id: number;
   unitid: number;
@@ -131,6 +145,19 @@ export class TestResultService {
       { headers: this.authHeader }
     ).pipe(
       catchError(() => of(null))
+    );
+  }
+
+  getFlatResponseFrequencies(
+    workspaceId: number,
+    combos: FlatResponseFrequencyRequestCombo[]
+  ): Observable<FlatResponseFrequenciesResponse> {
+    return this.http.post<FlatResponseFrequenciesResponse>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/test-results/flat-responses/frequencies`,
+      { combos },
+      { headers: this.authHeader }
+    ).pipe(
+      catchError(() => of({} as FlatResponseFrequenciesResponse))
     );
   }
 
