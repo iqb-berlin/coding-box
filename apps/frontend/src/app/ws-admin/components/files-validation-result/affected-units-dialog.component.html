@@ -1,0 +1,19 @@
+<h2 mat-dialog-title>{{ data.title }}</h2>
+
+<div mat-dialog-content>
+  <mat-form-field appearance="outline" style="width: 100%;">
+    <mat-label>Suche</mat-label>
+    <input matInput [(ngModel)]="filterText" placeholder="Unit-ID filtern..." />
+    <mat-icon matSuffix>search</mat-icon>
+  </mat-form-field>
+
+  <cdk-virtual-scroll-viewport itemSize="44" style="height: 50vh; width: 100%;">
+    <div *cdkVirtualFor="let unit of filteredUnits" style="display: flex; align-items: center; height: 44px;">
+      <button mat-button type="button" (click)="selectUnit(unit)">{{ unit }}</button>
+    </div>
+  </cdk-virtual-scroll-viewport>
+</div>
+
+<div mat-dialog-actions align="end">
+  <button mat-button type="button" (click)="close()">Schließen</button>
+</div>

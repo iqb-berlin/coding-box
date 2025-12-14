@@ -24,15 +24,20 @@ import { WorkspaceFilesService } from '../../database/services/workspace-files.s
 import { InvalidVariableDto } from '../../../../../../api-dto/files/variable-validation.dto';
 import { TestTakersValidationDto } from '../../../../../../api-dto/files/testtakers-validation.dto';
 import { DuplicateResponsesResultDto } from '../../../../../../api-dto/files/duplicate-response.dto';
+import { TestFilesUploadResultDto } from '../../../../../../api-dto/files/test-files-upload-result.dto';
 import { PersonService } from '../../database/services/person.service';
 import { UnitVariableDetailsDto } from '../../models/unit-variable-details.dto';
+import { CodingStatisticsService } from '../../database/services/coding-statistics.service';
+import { WorkspaceCodingService } from '../../database/services/workspace-coding.service';
 
 @ApiTags('Admin Workspace Files')
 @Controller('admin/workspace')
 export class WorkspaceFilesController {
   constructor(
     private readonly workspaceFilesService: WorkspaceFilesService,
-    private readonly personService: PersonService
+    private readonly personService: PersonService,
+    private readonly codingStatisticsService: CodingStatisticsService,
+    private readonly workspaceCodingService: WorkspaceCodingService
   ) {}
 
   @Get(':workspace_id/files')
@@ -169,7 +174,57 @@ export class WorkspaceFilesController {
       throw new BadRequestException('At least one login name must be provided.');
     }
 
-    return this.personService.markPersonsAsNotConsidered(workspaceId, body.logins);
+    const success = await this.personService.markPersonsAsNotConsidered(workspaceId, body.logins);
+
+    if (success) {
+      await this.codingStatisticsService.invalidateCache(workspaceId);
+      await this.workspaceCodingService.invalidateIncompleteVariablesCache(workspaceId);
+    }
+
+    return success;
+  }
+
+  @Post(':workspace_id/persons/consider')
+  @ApiTags('ws admin test-files')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
+  @ApiOperation({ summary: 'Mark persons as considered', description: 'Marks persons with specified logins as to be considered in the persons database' })
+  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        logins: {
+          type: 'array',
+          items: {
+            type: 'string'
+          },
+          description: 'Array of login names to mark as considered'
+        }
+      }
+    }
+  })
+  @ApiOkResponse({ description: 'Persons marked as considered', type: Boolean })
+  async considerPersons(
+    @Param('workspace_id') workspaceId: number,
+      @Body() body: { logins: string[] }
+  ): Promise<boolean> {
+    if (!workspaceId) {
+      throw new BadRequestException('Workspace ID is required.');
+    }
+
+    if (!body.logins || !Array.isArray(body.logins) || body.logins.length === 0) {
+      throw new BadRequestException('At least one login name must be provided.');
+    }
+
+    const success = await this.personService.markPersonsAsConsidered(workspaceId, body.logins);
+
+    if (success) {
+      await this.codingStatisticsService.invalidateCache(workspaceId);
+      await this.workspaceCodingService.invalidateIncompleteVariablesCache(workspaceId);
+    }
+
+    return success;
   }
 
   @Get(':workspace_id/files/validation')
@@ -215,13 +270,15 @@ export class WorkspaceFilesController {
       }
     }
   })
-  @ApiOkResponse({ description: 'Files uploaded successfully', type: Boolean })
+  @ApiOkResponse({ description: 'Files uploaded successfully', type: TestFilesUploadResultDto })
   @ApiBadRequestResponse({ description: 'Invalid workspace ID or no files uploaded' })
   @ApiTags('workspace')
   async addTestFiles(
     @Param('workspace_id') workspaceId: number,
+      @Query('overwriteExisting') overwriteExisting: string | undefined,
+      @Query('overwriteFileIds') overwriteFileIds: string | undefined,
       @UploadedFiles() files: Express.Multer.File[]
-  ): Promise<boolean> {
+  ): Promise<TestFilesUploadResultDto> {
     if (!workspaceId) {
       throw new BadRequestException('Workspace ID is required.');
     }
@@ -231,10 +288,22 @@ export class WorkspaceFilesController {
     }
 
     try {
-      return await this.workspaceFilesService.uploadTestFiles(workspaceId, files);
+      const overwrite = (overwriteExisting || '').toLowerCase() === 'true';
+      const overwriteIds = (overwriteFileIds || '')
+        .split(';')
+        .map(s => s.trim())
+        .filter(Boolean);
+      return await this.workspaceFilesService.uploadTestFiles(workspaceId, files, overwrite, overwriteIds.length > 0 ? overwriteIds : undefined);
     } catch (error) {
       logger.error('Error uploading test files:');
-      return false;
+      return {
+        total: Array.isArray(files) ? files.length : 0,
+        uploaded: 0,
+        failed: Array.isArray(files) ? files.length : 0,
+        failedFiles: Array.isArray(files)
+          ? files.map(f => ({ filename: f.originalname, reason: 'Upload failed' }))
+          : []
+      };
     }
   }
 

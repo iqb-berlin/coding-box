@@ -1,6 +1,7 @@
 import { VariableFrequencyDto } from './variable-frequency.dto';
 
 export interface VariableCombo {
+  unitId: number;
   unitName: string;
   variableId: string;
 }

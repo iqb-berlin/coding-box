@@ -2,6 +2,7 @@ export interface DuplicateResponseDto {
   unitName: string;
   unitId: number;
   variableId: string;
+  subform: string;
   bookletName: string;
   testTakerLogin: string;
   duplicates: {

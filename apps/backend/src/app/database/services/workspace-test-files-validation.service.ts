@@ -24,6 +24,7 @@ type DataValidation = {
   missing: string[];
   missingUnitsPerBooklet?: { booklet: string; missingUnits: string[] }[];
   unitsWithoutPlayer?: string[];
+  missingRefsPerUnit?: { unit: string; missingRefs: string[] }[];
   files: FileStatus[];
 };
 
@@ -37,6 +38,8 @@ type UnitRefs = {
 
 type ValidationData = {
   testTaker: string;
+  testTakerSchemaValid?: boolean;
+  testTakerSchemaErrors?: string[];
   booklets: DataValidation;
   units: DataValidation;
   schemes: DataValidation;
@@ -197,13 +200,14 @@ export class WorkspaceTestFilesValidationService {
       this.logger.log(`Found ${duplicateTestTakers.length} duplicate test takers across files`);
 
       if (filteredTestTakers.length > 0) {
-        const loginNames = filteredTestTakers.map(item => item.login);
-        const personsNotConsideredLogins = await this.getPersonsNotConsidered(workspaceId, loginNames);
-
-        if (personsNotConsideredLogins.length > 0) {
-          this.logger.log(`Filtering out ${personsNotConsideredLogins.length} test takers where consider is false`);
-          filteredTestTakers = filteredTestTakers.filter(item => !personsNotConsideredLogins.includes(item.login));
-        }
+        const uniqueLogins = Array.from(new Set(filteredTestTakers.map(item => item.login)));
+        const considerByLogin = await this.getPersonsConsiderStatus(workspaceId, uniqueLogins);
+        filteredTestTakers = filteredTestTakers
+          .filter(item => considerByLogin.has(item.login))
+          .map(item => ({
+            ...item,
+            consider: considerByLogin.get(item.login)!
+          }));
       }
 
       if (validationResults.length > 0) {
@@ -361,6 +365,28 @@ export class WorkspaceTestFilesValidationService {
       notConsideredLogins.push(...persons.map(p => p.login));
     }
     return notConsideredLogins;
+  }
+
+  private async getPersonsConsiderStatus(workspaceId: number, loginNames: string[]): Promise<Map<string, boolean>> {
+    const BATCH_SIZE = 500;
+    const considerByLogin = new Map<string, boolean>();
+
+    for (let i = 0; i < loginNames.length; i += BATCH_SIZE) {
+      const batch = loginNames.slice(i, i + BATCH_SIZE);
+      const persons = await this.personsRepository.find({
+        where: {
+          workspace_id: workspaceId,
+          login: In(batch)
+        },
+        select: ['login', 'consider']
+      });
+
+      persons.forEach(p => {
+        considerByLogin.set(p.login, p.consider);
+      });
+    }
+
+    return considerByLogin;
   }
 
   private async preloadBookletToUnits(workspaceId: number): Promise<Map<string, string[]>> {
@@ -623,6 +649,11 @@ export class WorkspaceTestFilesValidationService {
     const unitFiles: FileStatus[] = [];
     const unitsWithoutPlayer: string[] = [];
 
+    const missingCodingSchemeRefsByUnit: { unit: string; missingRefs: string[] }[] = [];
+    const missingDefinitionRefsByUnit: { unit: string; missingRefs: string[] }[] = [];
+    const missingPlayerRefsByUnit: { unit: string; missingRefs: string[] }[] = [];
+    const missingSchemerRefsByUnit: { unit: string; missingRefs: string[] }[] = [];
+
     const allCodingSchemeRefs = new Set<string>();
     const allSchemerRefs = new Set<string>();
     const allDefinitionRefs = new Set<string>();
@@ -651,6 +682,32 @@ export class WorkspaceTestFilesValidationService {
         refs?.schemerRefs.forEach(r => allSchemerRefs.add(r));
         refs?.definitionRefs.forEach(r => allDefinitionRefs.add(r));
         refs?.playerRefs.forEach(r => allPlayerRefs.add(r));
+
+        const codingSchemeMissingForUnit = (refs?.codingSchemeRefs || []).filter(r => !this.resourceExists(r, resourceIds));
+        if (codingSchemeMissingForUnit.length > 0) {
+          missingCodingSchemeRefsByUnit.push({ unit: unitId, missingRefs: codingSchemeMissingForUnit });
+        }
+
+        const schemerMissingForUnit = (refs?.schemerRefs || []).filter(r => {
+          if (this.resourceExists(r, resourceIds)) return false;
+          return !WorkspaceTestFilesValidationService.playerRefExists(r, resourceIdsArray);
+        });
+        if (schemerMissingForUnit.length > 0) {
+          missingSchemerRefsByUnit.push({ unit: unitId, missingRefs: schemerMissingForUnit });
+        }
+
+        const definitionMissingForUnit = (refs?.definitionRefs || []).filter(r => !this.resourceExists(r, resourceIds));
+        if (definitionMissingForUnit.length > 0) {
+          missingDefinitionRefsByUnit.push({ unit: unitId, missingRefs: definitionMissingForUnit });
+        }
+
+        const playerMissingForUnit = (refs?.playerRefs || []).filter(r => {
+          if (this.resourceExists(r, resourceIds)) return false;
+          return !WorkspaceTestFilesValidationService.playerRefExists(r, resourceIdsArray);
+        });
+        if (playerMissingForUnit.length > 0) {
+          missingPlayerRefsByUnit.push({ unit: unitId, missingRefs: playerMissingForUnit });
+        }
       }
     }
 
@@ -688,6 +745,21 @@ export class WorkspaceTestFilesValidationService {
 
     return {
       testTaker: testTaker.file_id,
+      testTakerSchemaValid: (() => {
+        const testTakerId = (testTaker.file_id || testTaker.filename || '').toUpperCase();
+        const schemaKey = `${testTaker.file_type}:${testTakerId}`;
+        const schemaInfo = xmlSchemaResults.get(schemaKey);
+        return schemaInfo ? schemaInfo.schemaValid : undefined;
+      })(),
+      testTakerSchemaErrors: (() => {
+        const testTakerId = (testTaker.file_id || testTaker.filename || '').toUpperCase();
+        const schemaKey = `${testTaker.file_type}:${testTakerId}`;
+        const schemaInfo = xmlSchemaResults.get(schemaKey);
+        if (!schemaInfo || schemaInfo.schemaValid) {
+          return undefined;
+        }
+        return schemaInfo.errors;
+      })(),
       booklets: {
         complete: missingBooklets.length === 0,
         missing: missingBooklets,
@@ -703,11 +775,13 @@ export class WorkspaceTestFilesValidationService {
       schemes: {
         complete: unitComplete ? missingCodingSchemeRefs.length === 0 : false,
         missing: missingCodingSchemeRefs,
+        missingRefsPerUnit: missingCodingSchemeRefsByUnit,
         files: schemeFiles
       },
       schemer: {
         complete: unitComplete ? missingSchemerRefs.length === 0 : false,
         missing: missingSchemerRefs,
+        missingRefsPerUnit: missingSchemerRefsByUnit,
         files: Array.from(allSchemerRefs).map(r => ({
           filename: r,
           exists: this.resourceExists(r, resourceIds) || WorkspaceTestFilesValidationService.playerRefExists(r, resourceIdsArray)
@@ -716,11 +790,13 @@ export class WorkspaceTestFilesValidationService {
       definitions: {
         complete: unitComplete ? missingDefinitionRefs.length === 0 : false,
         missing: missingDefinitionRefs,
+        missingRefsPerUnit: missingDefinitionRefsByUnit,
         files: Array.from(allDefinitionRefs).map(r => ({ filename: r, exists: this.resourceExists(r, resourceIds) }))
       },
       player: {
         complete: unitComplete ? missingPlayerRefs.length === 0 : false,
         missing: missingPlayerRefs,
+        missingRefsPerUnit: missingPlayerRefsByUnit,
         files: Array.from(allPlayerRefs).map(r => ({
           filename: r,
           exists: this.resourceExists(r, resourceIds) || WorkspaceTestFilesValidationService.playerRefExists(r, resourceIdsArray)

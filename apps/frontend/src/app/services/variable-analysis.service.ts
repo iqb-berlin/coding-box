@@ -14,6 +14,7 @@ export interface JobCancelResult {
 }
 
 export interface VariableFrequencyDto {
+  unitId?: number;
   unitName?: string;
   variableId: string;
   value: string;
@@ -22,6 +23,7 @@ export interface VariableFrequencyDto {
 }
 
 export interface VariableCombo {
+  unitId: number;
   unitName: string;
   variableId: string;
 }

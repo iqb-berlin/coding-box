@@ -27,6 +27,92 @@ export interface PersonTestResult {
   [key: string]: unknown;
 }
 
+export interface FlatTestResultResponseRow {
+  responseId: number;
+  unitId: number;
+  personId: number;
+  code: string;
+  group: string;
+  login: string;
+  booklet: string;
+  unit: string;
+  response: string;
+  responseStatus: string;
+  responseValue: string;
+  tags: string[];
+}
+
+export interface FlatTestResultResponsesResponse {
+  data: FlatTestResultResponseRow[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export interface FlatResponseFilterOptionsResponse {
+  codes: string[];
+  groups: string[];
+  logins: string[];
+  booklets: string[];
+  units: string[];
+  responses: string[];
+  tags: string[];
+}
+
+export interface FlatResponseFrequencyRequestCombo {
+  unitKey: string;
+  variableId: string;
+  values: string[];
+}
+
+export interface FlatResponseFrequencyItem {
+  value: string;
+  count: number;
+  p: number;
+}
+
+export type FlatResponseFrequenciesResponse = Record<string, { total: number; values: FlatResponseFrequencyItem[] }>;
+
+export interface UnitLogRow {
+  id: number;
+  unitid: number;
+  ts: string;
+  key: string;
+  parameter: string;
+}
+
+export interface BookletLogRow {
+  id: number;
+  bookletid: number;
+  ts: string;
+  key: string;
+  parameter: string;
+}
+
+export interface BookletSessionRow {
+  id: number;
+  browser: string;
+  os: string;
+  screen: string;
+  ts: string;
+}
+
+export interface BookletLogsForUnitResponse {
+  bookletId: number;
+  logs: BookletLogRow[];
+  sessions: BookletSessionRow[];
+  units: { id: number; bookletid: number; name: string; alias: string | null; logs: UnitLogRow[] }[];
+}
+
+export interface TestResultsOverviewResponse {
+  testPersons: number;
+  testGroups: number;
+  uniqueBooklets: number;
+  uniqueUnits: number;
+  uniqueResponses: number;
+  responseStatusCounts: Record<string, number>;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -51,6 +137,132 @@ export class TestResultService {
 
   getPersonTestResults(workspaceId: number, personId: number): Observable<PersonTestResult[]> {
     return this.cacheService.getPersonTestResults(workspaceId, personId);
+  }
+
+  getWorkspaceOverview(workspaceId: number): Observable<TestResultsOverviewResponse | null> {
+    return this.http.get<TestResultsOverviewResponse>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/test-results/overview`,
+      { headers: this.authHeader }
+    ).pipe(
+      catchError(() => of(null))
+    );
+  }
+
+  getFlatResponseFrequencies(
+    workspaceId: number,
+    combos: FlatResponseFrequencyRequestCombo[]
+  ): Observable<FlatResponseFrequenciesResponse> {
+    return this.http.post<FlatResponseFrequenciesResponse>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/test-results/flat-responses/frequencies`,
+      { combos },
+      { headers: this.authHeader }
+    ).pipe(
+      catchError(() => of({} as FlatResponseFrequenciesResponse))
+    );
+  }
+
+  getFlatResponses(
+    workspaceId: number,
+    options: {
+      page: number;
+      limit: number;
+      code?: string;
+      group?: string;
+      login?: string;
+      booklet?: string;
+      unit?: string;
+      response?: string;
+      responseValue?: string;
+      tags?: string;
+    }
+  ): Observable<FlatTestResultResponsesResponse> {
+    let params = new HttpParams()
+      .set('page', String(options.page))
+      .set('limit', String(options.limit));
+
+    const addIf = (key: string, value?: string) => {
+      const v = (value || '').trim();
+      if (v) {
+        params = params.set(key, v);
+      }
+    };
+
+    addIf('code', options.code);
+    addIf('group', options.group);
+    addIf('login', options.login);
+    addIf('booklet', options.booklet);
+    addIf('unit', options.unit);
+    addIf('response', options.response);
+    addIf('responseValue', options.responseValue);
+    addIf('tags', options.tags);
+
+    return this.http.get<FlatTestResultResponsesResponse>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/test-results/flat-responses`,
+      { headers: this.authHeader, params }
+    ).pipe(
+      catchError(() => of({
+        data: [], total: 0, page: options.page, limit: options.limit
+      }))
+    );
+  }
+
+  getFlatResponseFilterOptions(
+    workspaceId: number,
+    options: {
+      code?: string;
+      group?: string;
+      login?: string;
+      booklet?: string;
+      unit?: string;
+      response?: string;
+      responseValue?: string;
+      tags?: string;
+    }
+  ): Observable<FlatResponseFilterOptionsResponse> {
+    let params = new HttpParams();
+
+    const addIf = (key: string, value?: string) => {
+      const v = (value || '').trim();
+      if (v) {
+        params = params.set(key, v);
+      }
+    };
+
+    addIf('code', options.code);
+    addIf('group', options.group);
+    addIf('login', options.login);
+    addIf('booklet', options.booklet);
+    addIf('unit', options.unit);
+    addIf('response', options.response);
+    addIf('responseValue', options.responseValue);
+    addIf('tags', options.tags);
+
+    return this.http.get<FlatResponseFilterOptionsResponse>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/test-results/flat-responses/filter-options`,
+      { headers: this.authHeader, params }
+    ).pipe(
+      catchError(() => of({
+        codes: [], groups: [], logins: [], booklets: [], units: [], responses: [], tags: []
+      }))
+    );
+  }
+
+  getUnitLogs(workspaceId: number, unitId: number): Observable<UnitLogRow[]> {
+    return this.http.get<UnitLogRow[]>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/units/${unitId}/logs`,
+      { headers: this.authHeader }
+    ).pipe(
+      catchError(() => of([]))
+    );
+  }
+
+  getBookletLogsForUnit(workspaceId: number, unitId: number): Observable<BookletLogsForUnitResponse | null> {
+    return this.http.get<BookletLogsForUnitResponse>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/units/${unitId}/booklet-logs`,
+      { headers: this.authHeader }
+    ).pipe(
+      catchError(() => of(null))
+    );
   }
 
   invalidateCache(workspaceId: number): void {

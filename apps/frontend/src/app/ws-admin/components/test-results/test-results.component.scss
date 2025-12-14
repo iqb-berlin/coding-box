@@ -32,6 +32,116 @@
   }
 }
 
+.overview-card {
+  background-color: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  padding: 24px;
+  margin-bottom: 24px;
+  width: 100%;
+  border: 1px solid rgba(0, 0, 0, 0.03);
+
+  .section-title {
+    font-size: 22px;
+    font-weight: 500;
+    color: #1976d2;
+    margin: 0 0 10px 0;
+    letter-spacing: -0.3px;
+  }
+
+  .section-description {
+    font-size: 14px;
+    color: #666;
+    margin: 0 0 20px 0;
+    line-height: 1.5;
+  }
+
+  mat-divider {
+    margin-bottom: 20px;
+    opacity: 0.7;
+  }
+
+  .overview-grid {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(120px, 1fr));
+    gap: 14px;
+    margin-bottom: 18px;
+
+    @media (max-width: 1200px) {
+      grid-template-columns: repeat(3, minmax(140px, 1fr));
+    }
+
+    @media (max-width: 700px) {
+      grid-template-columns: repeat(2, minmax(140px, 1fr));
+    }
+  }
+
+  .overview-metric {
+    background-color: #f5f9ff;
+    border: 1px solid rgba(25, 118, 210, 0.12);
+    border-radius: 10px;
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+
+    .label {
+      font-size: 12px;
+      color: #5c6b7a;
+      font-weight: 500;
+    }
+
+    .value {
+      font-size: 20px;
+      color: #1976d2;
+      font-weight: 700;
+      letter-spacing: -0.2px;
+    }
+  }
+
+  .overview-status {
+    margin-top: 4px;
+
+    .sub-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #1976d2;
+      margin: 0 0 10px 0;
+    }
+
+    .status-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .status-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background-color: #f9fafc;
+      border: 1px solid rgba(0, 0, 0, 0.06);
+
+      .status {
+        font-size: 12px;
+        font-weight: 600;
+        color: #444;
+      }
+
+      .count {
+        font-size: 12px;
+        font-weight: 700;
+        color: #1976d2;
+        background-color: rgba(25, 118, 210, 0.08);
+        padding: 2px 8px;
+        border-radius: 999px;
+      }
+    }
+  }
+}
+
 // Card styles
 .action-card, .data-card, .booklets-card, .responses-card, .logs-card {
   background-color: white;

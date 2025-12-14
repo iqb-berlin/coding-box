@@ -48,7 +48,7 @@ export class ExportJobProcessor {
   async process(job: Job<ExportJobData>): Promise<ExportJobResult> {
     this.logger.log(`Processing export job ${job.id} for workspace ${job.data.workspaceId}, type: ${job.data.exportType}`);
 
-    const validExportTypes = ['aggregated', 'by-coder', 'by-variable', 'detailed', 'coding-times', 'test-results'];
+    const validExportTypes = ['aggregated', 'by-coder', 'by-variable', 'detailed', 'coding-times', 'test-results', 'test-logs'];
     if (!validExportTypes.includes(job.data.exportType)) {
       const errorMessage = `Unknown export type: ${job.data.exportType}`;
       this.logger.error(`Error processing export job ${job.id}: ${errorMessage}`);
@@ -153,6 +153,20 @@ export class ExportJobProcessor {
         case 'test-results':
           filePath = filePath.replace('.xlsx', '.csv');
           await this.workspaceTestResultsService.exportTestResultsToFile(
+            job.data.workspaceId,
+            filePath,
+            job.data.testResultFilters,
+            async progress => {
+              const jobProgress = 20 + Math.round((progress / 100) * 70);
+              await job.progress(jobProgress);
+              await this.checkCancellation(job, filePath);
+            }
+          );
+          break;
+
+        case 'test-logs':
+          filePath = filePath.replace('.xlsx', '.csv');
+          await this.workspaceTestResultsService.exportTestLogsToFile(
             job.data.workspaceId,
             filePath,
             job.data.testResultFilters,
