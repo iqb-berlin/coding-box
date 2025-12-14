@@ -107,7 +107,7 @@ import { GermanPaginatorIntl } from '../../../shared/services/german-paginator-i
 
     .info-banner {
       display: flex;
-      align-items: center;
+      align-items: flex-start;
       margin: 0 0 16px 0;
       padding: 8px 16px;
       border-radius: 4px;
@@ -116,7 +116,19 @@ import { GermanPaginatorIntl } from '../../../shared/services/german-paginator-i
       border: 1px solid #2196F3;
     }
 
+    .info-banner span {
+      flex: 1 1 auto;
+      min-width: 0;
+      white-space: normal;
+      overflow-wrap: anywhere;
+      line-height: 1.35;
+    }
+
     .info-banner mat-icon {
+      flex: 0 0 auto;
+      width: 24px;
+      height: 24px;
+      line-height: 24px;
       margin-right: 8px;
     }
 
