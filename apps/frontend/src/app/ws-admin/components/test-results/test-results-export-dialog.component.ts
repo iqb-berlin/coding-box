@@ -15,6 +15,14 @@ export type TestResultsExportDialogResult = {
   type: 'results' | 'logs';
 };
 
+export type TestResultsExportDialogData = {
+  isExporting?: boolean;
+  exportTypeInProgress?: 'test-results' | 'test-logs' | null;
+  exportJobStatus?: string | null;
+  exportJobProgress?: number;
+  exportJobId?: string | null;
+};
+
 @Component({
   selector: 'coding-box-test-results-export-dialog',
   standalone: true,
@@ -28,19 +36,19 @@ export type TestResultsExportDialogResult = {
     MatProgressBarModule
   ],
   template: `
-    <h2 mat-dialog-title>Export Test Results</h2>
+    <h2 mat-dialog-title>Testergebnisse exportieren</h2>
     <mat-dialog-content>
       <mat-list>
         <mat-list-item (click)="selectExportType('results')">
           <mat-icon matListItemIcon>download</mat-icon>
           <div matListItemTitle>Ergebnisse exportieren</div>
-          <div matListItemLine>Export test results data</div>
+          <div matListItemLine>Testergebnisdaten exportieren</div>
         </mat-list-item>
         <mat-divider></mat-divider>
         <mat-list-item (click)="selectExportType('logs')">
           <mat-icon matListItemIcon>download</mat-icon>
           <div matListItemTitle>Logs exportieren</div>
-          <div matListItemLine>Export test logs</div>
+          <div matListItemLine>Test-Logs exportieren</div>
         </mat-list-item>
       </mat-list>
 
@@ -76,12 +84,12 @@ export type TestResultsExportDialogResult = {
         <mat-list-item (click)="downloadExport()">
           <mat-icon matListItemIcon>file_download</mat-icon>
           <div matListItemTitle>Download bereit</div>
-          <div matListItemLine>Download your exported file</div>
+          <div matListItemLine>Exportierte Datei herunterladen</div>
         </mat-list-item>
       </div>
     </mat-dialog-content>
     <mat-dialog-actions align="end">
-      <button mat-button (click)="cancel()">Cancel</button>
+      <button mat-button (click)="cancel()">Abbrechen</button>
     </mat-dialog-actions>
   `,
   styles: [
@@ -153,7 +161,7 @@ export type TestResultsExportDialogResult = {
 export class TestResultsExportDialogComponent {
   constructor(
     private dialogRef: MatDialogRef<TestResultsExportDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: any
+    @Inject(MAT_DIALOG_DATA) public data: TestResultsExportDialogData
   ) {}
 
   selectExportType(type: 'results' | 'logs'): void {
