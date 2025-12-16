@@ -112,7 +112,10 @@
       <h3 class="sub-title">Antwort-Status Verteilung</h3>
       <div class="status-grid">
         @for (sc of overviewStatusCounts; track sc.status) {
-        <div class="status-chip">
+        <div
+          class="status-chip"
+          [matTooltip]="getResponseStatusTooltip(sc.status)"
+        >
           <span class="status">{{ sc.status }}</span>
           <span class="count">{{ sc.count }}</span>
         </div>
