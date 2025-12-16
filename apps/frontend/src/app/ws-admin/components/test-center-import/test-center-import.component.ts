@@ -2,13 +2,20 @@ import { Component, inject } from '@angular/core';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatButton } from '@angular/material/button';
 import {
-  MatDialogContent, MatDialogActions, MatDialogClose,
-  MAT_DIALOG_DATA, MatDialog
+  MatDialogContent,
+  MatDialogActions,
+  MatDialogClose,
+  MAT_DIALOG_DATA,
+  MatDialog,
+  MatDialogRef
 } from '@angular/material/dialog';
-import { MatFormField, MatLabel } from '@angular/material/form-field';
+import { MatFormField, MatHint, MatLabel } from '@angular/material/form-field';
 import {
   FormsModule,
-  ReactiveFormsModule, UntypedFormBuilder, UntypedFormGroup, Validators
+  ReactiveFormsModule,
+  UntypedFormBuilder,
+  UntypedFormGroup,
+  Validators
 } from '@angular/forms';
 import { MatInput } from '@angular/material/input';
 import { MatOption, MatSelect } from '@angular/material/select';
@@ -19,7 +26,15 @@ import { catchError, firstValueFrom, of } from 'rxjs';
 import { DatePipe } from '@angular/common';
 import {
   MatCell,
-  MatCellDef, MatColumnDef, MatHeaderCell, MatHeaderCellDef, MatHeaderRow, MatHeaderRowDef, MatRow, MatRowDef, MatTable
+  MatCellDef,
+  MatColumnDef,
+  MatHeaderCell,
+  MatHeaderCellDef,
+  MatHeaderRow,
+  MatHeaderRowDef,
+  MatRow,
+  MatRowDef,
+  MatTable
 } from '@angular/material/table';
 import { MatTooltip } from '@angular/material/tooltip';
 import { BackendService } from '../../../services/backend.service';
@@ -27,20 +42,28 @@ import { AppService } from '../../../services/app.service';
 import { WorkspaceAdminService } from '../../services/workspace-admin.service';
 import { ImportOptions, Result } from '../../../services/import.service';
 import { TestGroupsInfoDto } from '../../../../../../../api-dto/files/test-groups-info.dto';
-import { ConfirmDialogComponent, ConfirmDialogData } from '../../../shared/dialogs/confirm-dialog.component';
+import {
+  ConfirmDialogComponent,
+  ConfirmDialogData
+} from '../../../shared/dialogs/confirm-dialog.component';
+import {
+  TestFilesUploadConflictsDialogComponent,
+  TestFilesUploadConflictsDialogResult
+} from '../test-files/test-files-upload-conflicts-dialog.component';
+import { TestFilesUploadResultDto } from '../../../../../../../api-dto/files/test-files-upload-result.dto';
 
 export type WorkspaceAdmin = {
-  label: string,
-  id: string,
-  type: string,
+  label: string;
+  id: string;
+  type: string;
   flags: {
-    mode: string
-  }
+    mode: string;
+  };
 };
 
 export type Testcenter = {
-  id:number,
-  label:string
+  id: number;
+  label: string;
 };
 
 export interface ImportFormValues {
@@ -54,11 +77,40 @@ export interface ImportFormValues {
   selector: 'coding-box-test-center-import',
   templateUrl: 'test-center-import.component.html',
   styleUrls: ['./test-center-import.component.scss'],
-  imports: [MatDialogContent, MatLabel, MatDialogActions, MatButton, MatDialogClose, TranslateModule, MatFormField, ReactiveFormsModule, MatInput, MatSelect, MatOption, MatCheckbox, MatProgressSpinner, MatIcon, FormsModule, DatePipe, MatTable, MatHeaderCellDef, MatCellDef, MatHeaderRowDef, MatRowDef, MatColumnDef, MatHeaderCell, MatCell, MatHeaderRow, MatRow, MatTooltip]
+  imports: [
+    MatDialogContent,
+    MatLabel,
+    MatHint,
+    MatDialogActions,
+    MatButton,
+    MatDialogClose,
+    TranslateModule,
+    MatFormField,
+    ReactiveFormsModule,
+    MatInput,
+    MatSelect,
+    MatOption,
+    MatCheckbox,
+    MatProgressSpinner,
+    MatIcon,
+    FormsModule,
+    DatePipe,
+    MatTable,
+    MatHeaderCellDef,
+    MatCellDef,
+    MatHeaderRowDef,
+    MatRowDef,
+    MatColumnDef,
+    MatHeaderCell,
+    MatCell,
+    MatHeaderRow,
+    MatRow,
+    MatTooltip
+  ]
 })
-
 export class TestCenterImportComponent {
   private backendService = inject(BackendService);
+  private dialogRef = inject(MatDialogRef<TestCenterImportComponent>);
   data = inject<{
     importType: string;
   }>(MAT_DIALOG_DATA);
@@ -68,25 +120,28 @@ export class TestCenterImportComponent {
   private appService = inject(AppService);
   private dialog = inject(MatDialog);
 
-  testCenters: Testcenter[] = [{
-    id: 1,
-    label: 'Testcenter 1'
-  }, {
-    id: 2,
-    label: 'Testcenter 2'
-  },
-  {
-    id: 3,
-    label: 'Testcenter 3'
-  },
-  {
-    id: 4,
-    label: 'Testcenter 4'
-  },
-  {
-    id: 5,
-    label: 'Testcenter 5'
-  }];
+  testCenters: Testcenter[] = [
+    {
+      id: 1,
+      label: 'Testcenter 1'
+    },
+    {
+      id: 2,
+      label: 'Testcenter 2'
+    },
+    {
+      id: 3,
+      label: 'Testcenter 3'
+    },
+    {
+      id: 4,
+      label: 'Testcenter 4'
+    },
+    {
+      id: 5,
+      label: 'Testcenter 5'
+    }
+  ];
 
   authToken: string = '';
   displayedColumns: string[] = [
@@ -112,15 +167,18 @@ export class TestCenterImportComponent {
   isUploadingTestFiles: boolean = false;
   isUploadingTestResults: boolean = false;
   uploadData: Result | null = null;
+  private firstTestFilesImportData: Result | null = null;
   testCenterInstance: Testcenter[] = [];
   showTestGroups: boolean = false;
+
   constructor() {
     this.loginForm = this.fb.group({
       name: this.fb.control('', [Validators.required, Validators.minLength(1)]),
       pw: this.fb.control('', [Validators.required, Validators.minLength(1)]),
       testCenter: this.fb.control('', [Validators.required]),
-      testCenterIndividual: this.fb.control({ value: '', disabled: true }, [Validators.required])
-
+      testCenterIndividual: this.fb.control({ value: '', disabled: true }, [
+        Validators.required
+      ])
     });
     this.importFilesForm = this.fb.group({
       workspace: this.fb.control('', [Validators.required]),
@@ -135,12 +193,61 @@ export class TestCenterImportComponent {
     });
   }
 
+  selectAllImportOptions(): void {
+    let optionControls: string[] = [];
+
+    if (this.data.importType === 'testResults') {
+      // For results import, only responses and logs are relevant
+      optionControls = ['responses', 'logs'];
+    } else {
+      // For test files import, only file-related options are relevant
+      optionControls = [
+        'definitions',
+        'units',
+        'player',
+        'codings',
+        'booklets',
+        'testTakers'
+      ];
+    }
+
+    optionControls.forEach(name => {
+      this.importFilesForm.get(name)?.setValue(true);
+    });
+
+    this.filesSelectionError = false;
+  }
+
+  clearAllImportOptions(): void {
+    const optionControls: string[] = [
+      'responses',
+      'definitions',
+      'units',
+      'player',
+      'codings',
+      'logs',
+      'testTakers',
+      'booklets'
+    ];
+
+    optionControls.forEach(name => {
+      this.importFilesForm.get(name)?.setValue(false);
+    });
+  }
+
   ngOnInit(): void {
+    // Ensure we always start with a clean state when the dialog opens
+    this.uploadData = null;
+    this.isUploadingTestFiles = false;
+    this.isUploadingTestResults = false;
+    this.filesSelectionError = false;
+
     if (this.workspaceAdminService.getAuthToken()) {
       this.authenticated = true;
       this.authToken = this.workspaceAdminService.getAuthToken();
       this.workspaces = this.workspaceAdminService.getClaims();
-      this.testCenterInstance = this.workspaceAdminService.getlastTestcenterInstance();
+      this.testCenterInstance =
+        this.workspaceAdminService.getlastTestcenterInstance();
       this.testGroups = this.workspaceAdminService.getTestGroups();
       const storedServer = this.workspaceAdminService.getLastServer();
       const storedUrl = this.workspaceAdminService.getLastUrl();
@@ -178,28 +285,37 @@ export class TestCenterImportComponent {
   authenticate(): void {
     const name = this.loginForm.get('name')?.value;
     const pw = this.loginForm.get('pw')?.value;
-    const url:string = this.loginForm.get('testCenterIndividual')?.value;
+    const url: string = this.loginForm.get('testCenterIndividual')?.value;
     this.testCenterInstance = this.testCenters.filter(
-      testcenter => testcenter.id === this.loginForm.get('testCenter')?.value);
-    this.backendService.authenticate(name, pw, this.testCenterInstance[0]?.id.toString(), url).pipe(
-      catchError(() => {
-        this.authenticationError = true;
-        return of();
-      })).subscribe(response => {
-      if (!response) {
-        this.authenticationError = true;
-        return;
-      }
-      this.authToken = response.token;
-      this.authenticationError = false;
-      this.workspaceAdminService.setLastAuthToken(response.token);
-      this.workspaceAdminService.setLastServer(this.testCenterInstance[0]?.id.toString());
-      this.workspaceAdminService.setLastUrl(url);
-      this.workspaceAdminService.setClaims(response.claims.workspaceAdmin);
-      this.workspaceAdminService.setlastTestcenterInstance(this.testCenterInstance);
-      this.workspaces = response.claims.workspaceAdmin;
-      this.authenticated = true;
-    });
+      testcenter => testcenter.id === this.loginForm.get('testCenter')?.value
+    );
+    this.backendService
+      .authenticate(name, pw, this.testCenterInstance[0]?.id.toString(), url)
+      .pipe(
+        catchError(() => {
+          this.authenticationError = true;
+          return of();
+        })
+      )
+      .subscribe(response => {
+        if (!response) {
+          this.authenticationError = true;
+          return;
+        }
+        this.authToken = response.token;
+        this.authenticationError = false;
+        this.workspaceAdminService.setLastAuthToken(response.token);
+        this.workspaceAdminService.setLastServer(
+          this.testCenterInstance[0]?.id.toString()
+        );
+        this.workspaceAdminService.setLastUrl(url);
+        this.workspaceAdminService.setClaims(response.claims.workspaceAdmin);
+        this.workspaceAdminService.setlastTestcenterInstance(
+          this.testCenterInstance
+        );
+        this.workspaces = response.claims.workspaceAdmin;
+        this.authenticated = true;
+      });
   }
 
   logout(): boolean {
@@ -214,7 +330,7 @@ export class TestCenterImportComponent {
     return true;
   }
 
-  isIndividualTcSelected(value:number): void {
+  isIndividualTcSelected(value: number): void {
     if (value !== 6) {
       this.loginForm.get('testCenterIndividual')?.disable();
     } else {
@@ -226,12 +342,17 @@ export class TestCenterImportComponent {
     const formValues = {
       testCenter: this.loginForm.get('testCenter')?.value,
       workspace: this.importFilesForm.get('workspace')?.value,
-      testCenterIndividual: this.loginForm.get('testCenterIndividual')?.value || ''
+      testCenterIndividual:
+        this.loginForm.get('testCenterIndividual')?.value || ''
     };
 
     // Use stored server and url if available, otherwise fall back to form values
-    const server = this.workspaceAdminService.getLastServer() || formValues.testCenter?.toString();
-    const url = this.workspaceAdminService.getLastUrl() || formValues.testCenterIndividual;
+    const server =
+      this.workspaceAdminService.getLastServer() ||
+      formValues.testCenter?.toString();
+    const url =
+      this.workspaceAdminService.getLastUrl() ||
+      formValues.testCenterIndividual;
 
     this.isUploadingTestResults = true;
     this.backendService
@@ -257,6 +378,7 @@ export class TestCenterImportComponent {
 
   startNewImport(): void {
     this.uploadData = null;
+    this.firstTestFilesImportData = null;
     this.showTestGroups = false;
     this.selectedRows = [];
 
@@ -267,6 +389,7 @@ export class TestCenterImportComponent {
 
   goBackToTestGroups(): void {
     this.uploadData = null;
+    this.firstTestFilesImportData = null;
     this.selectedRows = [];
     this.showTestGroups = true;
   }
@@ -275,11 +398,16 @@ export class TestCenterImportComponent {
     const formValues = {
       testCenter: this.loginForm.get('testCenter')?.value,
       workspace: this.importFilesForm.get('workspace')?.value,
-      testCenterIndividual: this.loginForm.get('testCenterIndividual')?.value || ''
+      testCenterIndividual:
+        this.loginForm.get('testCenterIndividual')?.value || ''
     };
 
-    const server = this.workspaceAdminService.getLastServer() || formValues.testCenter?.toString();
-    const url = this.workspaceAdminService.getLastUrl() || formValues.testCenterIndividual;
+    const server =
+      this.workspaceAdminService.getLastServer() ||
+      formValues.testCenter?.toString();
+    const url =
+      this.workspaceAdminService.getLastUrl() ||
+      formValues.testCenterIndividual;
 
     const tempIsUploadingTestResults = this.isUploadingTestResults;
     this.isUploadingTestResults = true;
@@ -309,7 +437,9 @@ export class TestCenterImportComponent {
   }
 
   private async confirmOverwriteLogs(): Promise<boolean> {
-    const groupsWithLogs = this.selectedRows.filter(group => group.hasBookletLogs);
+    const groupsWithLogs = this.selectedRows.filter(
+      group => group.hasBookletLogs
+    );
 
     if (groupsWithLogs.length === 0) {
       return true;
@@ -319,8 +449,9 @@ export class TestCenterImportComponent {
       width: '400px',
       data: <ConfirmDialogData>{
         title: 'Logs überschreiben',
-        content: `${groupsWithLogs.length} ausgewählte Testgruppe(n) haben bereits Booklet-Logs in der Datenbank. ` +
-                'Möchten Sie die vorhandenen Logs überschreiben?',
+        content:
+          `${groupsWithLogs.length} ausgewählte Testgruppe(n) haben bereits Booklet-Logs in der Datenbank. ` +
+          'Möchten Sie die vorhandenen Logs überschreiben?',
         confirmButtonLabel: 'Überschreiben',
         showCancel: true
       }
@@ -333,7 +464,8 @@ export class TestCenterImportComponent {
     const formValues = {
       testCenter: this.loginForm.get('testCenter')?.value,
       workspace: this.importFilesForm.get('workspace')?.value,
-      testCenterIndividual: this.loginForm.get('testCenterIndividual')?.value || '',
+      testCenterIndividual:
+        this.loginForm.get('testCenterIndividual')?.value || '',
       importOptions: {
         definitions: this.importFilesForm.get('definitions')?.value,
         responses: this.importFilesForm.get('responses')?.value,
@@ -347,11 +479,15 @@ export class TestCenterImportComponent {
     };
 
     this.uploadData = null;
+    this.firstTestFilesImportData = null;
     this.isUploadingTestFiles = true;
     this.isUploadingTestResults = this.data.importType === 'testResults';
-    const selectedGroupNames = this.selectedRows.map(group => group.groupName);
+    const selectedGroupNames = this.selectedRows.map(
+      group => group.groupName
+    );
 
-    const needsConfirmation = formValues.importOptions.logs && this.hasSelectedGroupsWithLogs();
+    const needsConfirmation =
+      formValues.importOptions.logs && this.hasSelectedGroupsWithLogs();
 
     if (needsConfirmation) {
       this.isUploadingTestFiles = false;
@@ -376,7 +512,8 @@ export class TestCenterImportComponent {
   private performImport(
     formValues: ImportFormValues,
     selectedGroupNames: string[],
-    overwriteExistingLogs: boolean
+    overwriteExistingLogs: boolean,
+    overwriteFileIds?: string[]
   ): void {
     this.backendService
       .importWorkspaceFiles(
@@ -387,16 +524,137 @@ export class TestCenterImportComponent {
         this.authToken,
         formValues.importOptions,
         selectedGroupNames,
-        overwriteExistingLogs
+        overwriteExistingLogs,
+        overwriteFileIds
       )
       .subscribe({
         next: data => {
+          // Keep the latest response for non-testFiles flows.
+          // For the two-step testFiles flow we store the initial response separately to avoid self-merging.
           this.uploadData = data;
           this.isUploadingTestFiles = false;
           this.isUploadingTestResults = false;
 
           if (this.data.importType === 'testResults') {
-            this.refreshTestGroups();
+            // Do not open a nested dialog here; return a payload to the caller.
+            // The caller will compute correct before/after/delta stats from workspace overview.
+            const importedResponses = !!formValues.importOptions.responses;
+            const importedLogs = !!formValues.importOptions.logs;
+            const resultType: 'logs' | 'responses' = importedResponses ?
+              'responses' :
+              'logs';
+
+            this.dialogRef.close({
+              didImport: true,
+              resultType,
+              importedResponses,
+              importedLogs
+            });
+            return;
+          }
+
+          if (this.data.importType === 'testFiles') {
+            const initial = data as unknown as {
+              testFilesUploadResult?: TestFilesUploadResultDto;
+            };
+            const initialResult = initial.testFilesUploadResult;
+            const initialConflicts = initialResult?.conflicts || [];
+
+            if (!overwriteFileIds && initialConflicts.length > 0) {
+              // Persist the first result before triggering the second (overwrite-only) import.
+              this.firstTestFilesImportData = data;
+
+              const ref = this.dialog.open<
+              TestFilesUploadConflictsDialogComponent,
+              { conflicts: typeof initialConflicts },
+              TestFilesUploadConflictsDialogResult
+              >(TestFilesUploadConflictsDialogComponent, {
+                width: '800px',
+                maxWidth: '95vw',
+                data: { conflicts: initialConflicts }
+              });
+
+              ref.afterClosed().subscribe(choice => {
+                if (
+                  choice?.overwrite === true &&
+                  (choice.overwriteFileIds || []).length > 0
+                ) {
+                  this.isUploadingTestFiles = true;
+                  this.performImport(
+                    formValues,
+                    selectedGroupNames,
+                    overwriteExistingLogs,
+                    choice.overwriteFileIds
+                  );
+                } else {
+                  // User chose not to overwrite (or selected none): close with initial result.
+                  this.dialogRef.close({
+                    didImport: true,
+                    importType: 'testFiles',
+                    result: data
+                  });
+                }
+              });
+              return;
+            }
+
+            // Second call: overwrite-only import. Merge with previous (stored in uploadData).
+            if (overwriteFileIds && this.firstTestFilesImportData) {
+              const first = this.firstTestFilesImportData as unknown as {
+                testFilesUploadResult?: TestFilesUploadResultDto;
+              };
+              const firstResult = first.testFilesUploadResult;
+              const second = data as unknown as {
+                testFilesUploadResult?: TestFilesUploadResultDto;
+              };
+              const secondResult = second.testFilesUploadResult;
+
+              const mergedUploadedFiles = [
+                ...(firstResult?.uploadedFiles || []),
+                ...(secondResult?.uploadedFiles || [])
+              ];
+
+              const mergedFailedFiles = [
+                ...(firstResult?.failedFiles || []),
+                ...(secondResult?.failedFiles || [])
+              ];
+
+              const remainingConflicts = (firstResult?.conflicts || []).filter(
+                c => !(overwriteFileIds || []).includes(c.fileId)
+              );
+
+              const mergedResult: TestFilesUploadResultDto = {
+                total: Number(
+                  firstResult?.total ??
+                    mergedUploadedFiles.length + mergedFailedFiles.length
+                ),
+                uploaded: mergedUploadedFiles.length,
+                failed: mergedFailedFiles.length,
+                uploadedFiles: mergedUploadedFiles,
+                failedFiles: mergedFailedFiles,
+                conflicts: remainingConflicts
+              };
+
+              const mergedData = {
+                ...(data as Record<string, unknown>),
+                testFilesUploadResult: mergedResult
+              };
+
+              this.dialogRef.close({
+                didImport: true,
+                importType: 'testFiles',
+                overwriteSelectedCount: overwriteFileIds.length,
+                result: mergedData
+              });
+              return;
+            }
+
+            this.dialogRef.close({
+              didImport: true,
+              importType: 'testFiles',
+              result: data
+            });
+            return;
           }
 
           this.selectedRows = [];

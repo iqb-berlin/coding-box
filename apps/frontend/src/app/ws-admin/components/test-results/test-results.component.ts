@@ -33,7 +33,8 @@ import {
   Subject,
   Subscription,
   debounceTime,
-  distinctUntilChanged
+  distinctUntilChanged,
+  firstValueFrom
 } from 'rxjs';
 import { SelectionModel } from '@angular/cdk/collections';
 import {
@@ -1126,7 +1127,23 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     });
   }
 
-  testCenterImport(): void {
+  async testCenterImport(): Promise<void> {
+    const fallbackOverview: TestResultsOverviewResponse = {
+      testPersons: 0,
+      testGroups: 0,
+      uniqueBooklets: 0,
+      uniqueUnits: 0,
+      uniqueResponses: 0,
+      responseStatusCounts: {}
+    };
+
+    const workspaceId = this.appService.selectedWorkspaceId;
+    const beforeOverview = workspaceId ?
+      (await firstValueFrom(
+        this.testResultService.getWorkspaceOverview(workspaceId)
+      )) || fallbackOverview :
+      this.overview || fallbackOverview;
+
     const dialogRef = this.dialog.open(TestCenterImportComponent, {
       width: '1000px',
       maxWidth: '95vw',
@@ -1136,12 +1153,108 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       }
     });
 
-    dialogRef.afterClosed().subscribe((result: boolean | UntypedFormGroup) => {
+    const sleep = (ms: number) => new Promise<void>(resolve => {
+      window.setTimeout(() => resolve(), ms);
+    });
+
+    const pollOverviewAfterImport =
+      async (): Promise<TestResultsOverviewResponse> => {
+        if (!workspaceId) {
+          return fallbackOverview;
+        }
+        // Poll a bit because the import may finish before overview aggregates are updated.
+        for (let i = 0; i < 10; i += 1) {
+          const current =
+            (await firstValueFrom(
+              this.testResultService.getWorkspaceOverview(workspaceId)
+            )) || fallbackOverview;
+          const changed =
+            current.testPersons !== beforeOverview.testPersons ||
+            current.testGroups !== beforeOverview.testGroups ||
+            current.uniqueBooklets !== beforeOverview.uniqueBooklets ||
+            current.uniqueUnits !== beforeOverview.uniqueUnits ||
+            current.uniqueResponses !== beforeOverview.uniqueResponses;
+          if (changed) {
+            return current;
+          }
+          await sleep(300);
+        }
+        return (
+          (await firstValueFrom(
+            this.testResultService.getWorkspaceOverview(workspaceId)
+          )) || fallbackOverview
+        );
+      };
+
+    dialogRef.afterClosed().subscribe(result => {
+      const maybePayload = result as
+        | {
+          didImport?: boolean;
+          resultType?: 'logs' | 'responses';
+        }
+        | boolean
+        | UntypedFormGroup
+        | undefined;
+
+      if (
+        maybePayload &&
+        typeof maybePayload === 'object' &&
+        'didImport' in maybePayload &&
+        (maybePayload as { didImport?: boolean }).didImport
+      ) {
+        (async () => {
+          if (workspaceId) {
+            this.testResultService.invalidateCache(workspaceId);
+          }
+
+          const afterOverview = await pollOverviewAfterImport();
+
+          const delta = {
+            testPersons: afterOverview.testPersons - beforeOverview.testPersons,
+            testGroups: afterOverview.testGroups - beforeOverview.testGroups,
+            uniqueBooklets:
+              afterOverview.uniqueBooklets - beforeOverview.uniqueBooklets,
+            uniqueUnits: afterOverview.uniqueUnits - beforeOverview.uniqueUnits,
+            uniqueResponses:
+              afterOverview.uniqueResponses - beforeOverview.uniqueResponses
+          };
+
+          const dialogResult: TestResultsUploadResultDto = {
+            expected: { ...delta },
+            before: {
+              testPersons: beforeOverview.testPersons,
+              testGroups: beforeOverview.testGroups,
+              uniqueBooklets: beforeOverview.uniqueBooklets,
+              uniqueUnits: beforeOverview.uniqueUnits,
+              uniqueResponses: beforeOverview.uniqueResponses
+            },
+            after: {
+              testPersons: afterOverview.testPersons,
+              testGroups: afterOverview.testGroups,
+              uniqueBooklets: afterOverview.uniqueBooklets,
+              uniqueUnits: afterOverview.uniqueUnits,
+              uniqueResponses: afterOverview.uniqueResponses
+            },
+            delta,
+            responseStatusCounts: afterOverview.responseStatusCounts,
+            issues: []
+          };
+
+          const payload = maybePayload as { resultType?: 'logs' | 'responses' };
+          this.dialog.open(TestResultsUploadResultDialogComponent, {
+            width: '1000px',
+            maxWidth: '95vw',
+            data: {
+              resultType: payload.resultType || 'responses',
+              result: dialogResult
+            }
+          });
+        })();
+      }
+
       if (result instanceof UntypedFormGroup || result) {
-        if (this.appService.selectedWorkspaceId) {
-          this.testResultService.invalidateCache(
-            this.appService.selectedWorkspaceId
-          );
+        if (workspaceId) {
+          this.testResultService.invalidateCache(workspaceId);
         }
         this.loadWorkspaceOverview();
         this.createTestResultsList(
@@ -1539,6 +1652,14 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       return;
     }
 
+    const unitFileId = String(this.selectedUnit.name || '')
+      .trim()
+      .toUpperCase();
+    if (!unitFileId) {
+      this.snackBar.open('Keine Unit ausgewählt', 'Info', { duration: 3000 });
+      return;
+    }
+
     const loadingSnackBar = this.snackBar.open(
       'Lade Unit-Informationen...',
       '',
@@ -1546,7 +1667,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     );
 
     this.backendService
-      .getUnitInfo(this.appService.selectedWorkspaceId, this.selectedUnit.name)
+      .getUnitInfo(this.appService.selectedWorkspaceId, unitFileId)
       .subscribe({
         next: (unitInfo: UnitInfoDto) => {
           loadingSnackBar.dismiss();
@@ -1556,7 +1677,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
             height: '80vh',
             data: {
               unitInfo,
-              unitId: this.selectedUnit?.name
+              unitId: unitFileId
             }
           });
         },

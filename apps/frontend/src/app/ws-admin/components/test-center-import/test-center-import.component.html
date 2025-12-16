@@ -1,455 +1,429 @@
-
 <mat-dialog-content class="dialog-content">
   <div class="dialog-header">
     <h2 class="dialog-title">Test Center Import</h2>
-    <p class="dialog-description">Importieren Sie Daten aus einem Test Center in Ihren Workspace</p>
+    <p class="dialog-description">
+      @if (data.importType === 'testFiles') { Importieren Sie Testdateien
+      (Aufgaben, Testhefte, Player, Kodierschemata, Testteilnehmer) aus einem
+      Testcenter in diesen Arbeitsbereich. } @else if (data.importType ===
+      'testResults') { Importieren Sie Testergebnisse (Antworten und Logs) aus
+      einem Testcenter in diesen Arbeitsbereich. } @else { Importieren Sie Daten
+      aus einem Testcenter in Ihren Arbeitsbereich. }
+    </p>
   </div>
 
-  @if(!authenticated)
-    {
-    <div class="auth-section">
-      <form class="auth-form"
-        [formGroup]="loginForm"
-        (ngSubmit)="authenticate()">
-        <div class="form-fields">
-          <mat-form-field appearance="outline">
-            <mat-label>{{'home.user-name' | translate}}</mat-label>
-            <input matInput formControlName="name"
-              (keyup.enter)="pw.focus()">
-            <mat-icon matSuffix>person</mat-icon>
-          </mat-form-field>
+  @if(!authenticated) {
+  <div class="auth-section">
+    <form class="auth-form" [formGroup]="loginForm" (ngSubmit)="authenticate()">
+      <div class="form-fields">
+        <mat-form-field appearance="outline">
+          <mat-label>{{ 'home.user-name' | translate }}</mat-label>
+          <input matInput formControlName="name" (keyup.enter)="pw.focus()" />
+          <mat-icon matSuffix>person</mat-icon>
+        </mat-form-field>
 
-          <mat-form-field appearance="outline">
-            <mat-label>{{'home.password' | translate}}</mat-label>
-            <input matInput #pw
-              type="password"
-              formControlName="pw"
-              (keyup.enter)="authenticate()">
-            <mat-icon matSuffix>lock</mat-icon>
-          </mat-form-field>
+        <mat-form-field appearance="outline">
+          <mat-label>{{ 'home.password' | translate }}</mat-label>
+          <input
+            matInput
+            #pw
+            type="password"
+            formControlName="pw"
+            (keyup.enter)="authenticate()"
+          />
+          <mat-icon matSuffix>lock</mat-icon>
+        </mat-form-field>
 
-          <mat-form-field appearance="outline">
-            <mat-label>Test Center auswählen</mat-label>
-            <mat-select formControlName="testCenter" (valueChange)="isIndividualTcSelected($event)">
-              <mat-option [value]=6>individuelle Testcenter URL</mat-option>
-              @for (testCenter of testCenters;track testCenter){
-                <mat-option [value]="testCenter.id">{{ testCenter.label }}</mat-option>
-              }
-            </mat-select>
-            <mat-icon matSuffix>cloud</mat-icon>
-          </mat-form-field>
+        <mat-form-field appearance="outline">
+          <mat-label>Test Center auswählen</mat-label>
+          <mat-select
+            formControlName="testCenter"
+            (valueChange)="isIndividualTcSelected($event)"
+          >
+            <mat-option [value]="6">individuelle Testcenter URL</mat-option>
+            @for (testCenter of testCenters;track testCenter){
+            <mat-option [value]="testCenter.id">{{
+              testCenter.label
+            }}</mat-option>
+            }
+          </mat-select>
+          <mat-icon matSuffix>cloud</mat-icon>
+        </mat-form-field>
 
-          <mat-form-field appearance="outline">
-            <mat-label>Testcenter Instanz URL verwenden</mat-label>
-            <input formControlName="testCenterIndividual" matInput type="text">
-            <mat-icon matSuffix>link</mat-icon>
-          </mat-form-field>
-        </div>
+        <mat-form-field appearance="outline">
+          <mat-label>Testcenter Instanz URL verwenden</mat-label>
+          <input formControlName="testCenterIndividual" matInput type="text" />
+          <mat-icon matSuffix>link</mat-icon>
+          <mat-hint>
+            Erwartetes Format z.&nbsp;B.:
+            <code>https://mein-testcenter.example.org</code> oder
+            <code>https://mein-testcenter.example.org/tci</code>. Die URL muss
+            per HTTPS erreichbar sein.
+          </mat-hint>
+        </mat-form-field>
+      </div>
 
-        <div class="form-actions">
-          <button mat-raised-button
-            type="submit"
-            [disabled]="loginForm.invalid"
-            color="primary">
-            <mat-icon>login</mat-icon>
-            {{ 'login' | translate }}
-          </button>
-        </div>
-
-        @if (authenticationError){
-          <div class="error-message">
-            <mat-icon>error</mat-icon>
-            <span>{{'login-error' | translate}}</span>
-          </div>
-        }
-      </form>
-    </div>
-  } @else {
-    @if (workspaces){
-      <div class="session-info">
-        <div class="user-info">
-          <mat-icon>account_circle</mat-icon>
-          <h3>Angemeldet in {{this.testCenterInstance[0].label || this.loginForm.get('testCenterIndividual')?.value }}</h3>
-        </div>
-        <button mat-stroked-button color="primary" (click)="this.logout()">
-          <mat-icon>logout</mat-icon>
-          Abmelden
+      <div class="form-actions">
+        <button
+          mat-raised-button
+          type="submit"
+          [disabled]="loginForm.invalid"
+          color="primary"
+        >
+          <mat-icon>login</mat-icon>
+          {{ 'login' | translate }}
         </button>
       </div>
-      @if (data.importType === 'testFiles' || (data.importType === 'testResults' && !showTestGroups)){
-        <div class="import-section">
-          <form class="import-form"
-            [formGroup]="importFilesForm"
-            (ngSubmit)="data.importType === 'testResults' ? getTestGroups(): getTestData()">
 
-            <div class="form-content">
-              <div class="options-section">
-                <h3 class="section-title">
-                  <mat-icon>settings</mat-icon>
-                  Import Optionen
-                </h3>
-
-                <div class="checkbox-grid">
-                  @if (data.importType === 'testResults'){
-                    <div class="checkbox-item">
-                      <mat-checkbox formControlName="responses">
-                        <span class="checkbox-label">Antworten</span>
-                      </mat-checkbox>
-                    </div>
-                    <div class="checkbox-item">
-                      <mat-checkbox formControlName="logs">
-                        <span class="checkbox-label">Logs</span>
-                      </mat-checkbox>
-                    </div>
-                  }
-                  @if (data.importType === 'testFiles'){
-                    <div class="checkbox-item">
-                      <mat-checkbox formControlName="definitions">
-                        <span class="checkbox-label">Aufgabendefinitionen</span>
-                      </mat-checkbox>
-                    </div>
-                    <div class="checkbox-item">
-                      <mat-checkbox formControlName="units">
-                        <span class="checkbox-label">Units-XML</span>
-                      </mat-checkbox>
-                    </div>
-                    <div class="checkbox-item">
-                      <mat-checkbox formControlName="player">
-                        <span class="checkbox-label">Player</span>
-                      </mat-checkbox>
-                    </div>
-                    <div class="checkbox-item">
-                      <mat-checkbox formControlName="codings">
-                        <span class="checkbox-label">Kodierschemata</span>
-                      </mat-checkbox>
-                    </div>
-                    <div class="checkbox-item">
-                      <mat-checkbox formControlName="booklets">
-                        <span class="checkbox-label">Booklets</span>
-                      </mat-checkbox>
-                    </div>
-                    <div class="checkbox-item">
-                      <mat-checkbox formControlName="testTakers">
-                        <span class="checkbox-label">Test-takers</span>
-                      </mat-checkbox>
-                    </div>
-                  }
-                </div>
-              </div>
-
-              <div class="workspace-section">
-                <mat-form-field appearance="outline">
-                  <mat-label>Studie auswählen</mat-label>
-                  <mat-select formControlName="workspace">
-                    @for (workspace of workspaces;track workspace){
-                      <mat-option [value]="workspace.id">{{ workspace.label }}</mat-option>
-                    }
-                  </mat-select>
-                  <mat-icon matSuffix>folder</mat-icon>
-                </mat-form-field>
-              </div>
-            </div>
-
-            @if (isUploadingTestResults || isUploadingTestFiles) {
-              <div class="loading-container">
-                <mat-spinner diameter="40"></mat-spinner>
-                @if (isUploadingTestResults) {
-                  <p class="loading-text">
-                    Verfügbare Testgruppen im Arbeitsbereich werden abgerufen...
-                  </p>
-                }
-                @if (isUploadingTestFiles) {
-                  <p class="loading-text">
-                    Testdateien werden hochgeladen...
-                  </p>
-                }
-              </div>
-            }
-
-            @if (!isUploadingTestResults && !isUploadingTestFiles) {
-              <div class="form-actions">
-                @if (data.importType === 'testResults') {
-                  <button mat-raised-button
-                    type="submit"
-                    [disabled]="importFilesForm.invalid"
-                    color="primary">
-                    <mat-icon>arrow_forward</mat-icon>
-                    Weiter
-                  </button>
-                }
-                @if (data.importType === 'testFiles') {
-                  <button mat-raised-button
-                    type="submit"
-                    [disabled]="importFilesForm.invalid"
-                    color="primary">
-                    <mat-icon>cloud_upload</mat-icon>
-                    Dateien importieren
-                  </button>
-                }
-              </div>
-            }
-
-            @if(filesSelectionError){
-              <div class="error-message">
-                <mat-icon>error</mat-icon>
-                <span>Bitte mindestens eine Import Option auswählen</span>
-              </div>
-            }
-
-            @if (authenticationError){
-              <div class="error-message">
-                <mat-icon>error</mat-icon>
-                <span>{{'login-error' | translate}}</span>
-              </div>
-            }
-
-            @if(uploadData){
-              <div class="success-message" [class.error-message]="!uploadData.success">
-                <div class="success-header">
-                  @if(uploadData.success) {
-                    <mat-icon>check_circle</mat-icon>
-                    <span>Der Testcenter Import war erfolgreich.</span>
-                  } @else {
-                    <mat-icon>warning</mat-icon>
-                    <span>Der Testcenter Import wurde mit Fehlern abgeschlossen.</span>
-                  }
-                </div>
-
-                <div class="import-stats">
-                  <h4>Import Statistik:</h4>
-                  <ul class="stats-list">
-                    @if (uploadData.testFiles > 0) {
-                      <li>
-                        <mat-icon>description</mat-icon>
-                        <span>{{ uploadData.testFiles }} Testdateien importiert</span>
-                      </li>
-                      @if (data.importType === 'testFiles') {
-                        @if (uploadData.filesUnits && uploadData.filesUnits > 0) {
-                          <li>
-                            <mat-icon>assignment</mat-icon>
-                            <span>{{ uploadData.filesUnits }} Unit-Dateien</span>
-                          </li>
-                        }
-                        @if (uploadData.filesBooklets && uploadData.filesBooklets > 0) {
-                          <li>
-                            <mat-icon>book</mat-icon>
-                            <span>{{ uploadData.filesBooklets }} Booklet-Dateien</span>
-                          </li>
-                        }
-                        @if (uploadData.filesPlayer && uploadData.filesPlayer > 0) {
-                          <li>
-                            <mat-icon>smart_display</mat-icon>
-                            <span>{{ uploadData.filesPlayer }} Player-Dateien</span>
-                          </li>
-                        }
-                        @if (uploadData.filesDefinitions && uploadData.filesDefinitions > 0) {
-                          <li>
-                            <mat-icon>schema</mat-icon>
-                            <span>{{ uploadData.filesDefinitions }} Aufgabendefinitionen</span>
-                          </li>
-                        }
-                        @if (uploadData.filesCodings && uploadData.filesCodings > 0) {
-                          <li>
-                            <mat-icon>code</mat-icon>
-                            <span>{{ uploadData.filesCodings }} Codings</span>
-                          </li>
-                        }
-                        @if (uploadData.filesTestTakers && uploadData.filesTestTakers > 0) {
-                          <li>
-                            <mat-icon>group</mat-icon>
-                            <span>{{ uploadData.filesTestTakers }} Testtakers-Dateien</span>
-                          </li>
-                        }
-                      }
-                    }
-                    @if (uploadData.responses > 0) {
-                      <li>
-                        <mat-icon>question_answer</mat-icon>
-                        <span>{{ uploadData.responses }} Antworten importiert</span>
-                      </li>
-                    }
-                    @if (uploadData.logs > 0) {
-                      <li>
-                        <mat-icon>history</mat-icon>
-                        <span>{{ uploadData.logs }} Logs importiert</span>
-                      </li>
-                    }
-                    @if (uploadData.booklets > 0) {
-                      <li>
-                        <mat-icon>book</mat-icon>
-                        <span>{{ uploadData.booklets }} Booklets importiert</span>
-                      </li>
-                    }
-                    @if (uploadData.units > 0) {
-                      <li>
-                        <mat-icon>assignment</mat-icon>
-                        <span>{{ uploadData.units }} Units importiert</span>
-                      </li>
-                    }
-                    @if (uploadData.persons > 0) {
-                      <li>
-                        <mat-icon>person</mat-icon>
-                        <span>{{ uploadData.persons }} Personen importiert</span>
-                      </li>
-                    }
-                  </ul>
-                </div>
-
-                <div class="success-actions">
-                  @if (data.importType === 'testResults') {
-                    <button mat-stroked-button color="primary" (click)="goBackToTestGroups()" class="back-to-groups-button">
-                      <mat-icon>groups</mat-icon>
-                      Weitere Testgruppen auswählen
-                    </button>
-                  }
-                  <button mat-raised-button color="primary" (click)="startNewImport()" class="new-import-button">
-                    <mat-icon>refresh</mat-icon>
-                    Neuen Import starten
-                  </button>
-                </div>
-              </div>
-            }
-          </form>
-        </div>
+      @if (authenticationError){
+      <div class="error-message">
+        <mat-icon>error</mat-icon>
+        <span>{{ 'login-error' | translate }}</span>
+      </div>
       }
-      @if (data.importType === 'testResults' && showTestGroups){
-        <div class="testgroups-section">
-          <div class="section-header">
-            <div class="section-header-content">
-              <h3 class="section-title">
-                <mat-icon>groups</mat-icon>
-                Verfügbare Testgruppen
-              </h3>
-              <button mat-stroked-button color="primary" (click)="goBackToOptions()" class="back-button">
-                <mat-icon>arrow_back</mat-icon>
-                Zurück zu Optionen
-              </button>
-            </div>
+    </form>
+  </div>
+  } @else { @if (workspaces){
+  <div class="session-info">
+    <div class="user-info">
+      <mat-icon>account_circle</mat-icon>
+      <h3>
+        Angemeldet in
+        {{
+          this.testCenterInstance[0].label ||
+            this.loginForm.get('testCenterIndividual')?.value
+        }}
+      </h3>
+    </div>
+    <button mat-stroked-button color="primary" (click)="this.logout()">
+      <mat-icon>logout</mat-icon>
+      Abmelden
+    </button>
+  </div>
+  @if (data.importType === 'testFiles' || (data.importType === 'testResults' &&
+  !showTestGroups)){
+  <div class="import-section">
+    <form
+      class="import-form"
+      [formGroup]="importFilesForm"
+      (ngSubmit)="
+        data.importType === 'testResults' ? getTestGroups() : getTestData()
+      "
+    >
+      <div class="form-content">
+        <div class="options-section">
+          <h3 class="section-title">
+            <mat-icon>settings</mat-icon>
+            Import-Optionen
+          </h3>
+
+          <p class="options-description">
+            Wählen Sie, welche Daten aus dem Testcenter übernommen werden
+            sollen. Sie können alle Optionen auswählen oder nur einzelne
+            Datenarten importieren.
+          </p>
+
+          <div class="options-toolbar">
+            <button
+              mat-stroked-button
+              type="button"
+              (click)="selectAllImportOptions()"
+            >
+              Alle auswählen
+            </button>
+            <button mat-button type="button" (click)="clearAllImportOptions()">
+              Auswahl aufheben
+            </button>
           </div>
 
-          @if (isUploadingTestResults) {
-            <div class="loading-container">
-              <mat-spinner diameter="40"></mat-spinner>
-              <p class="loading-text">Testresultate werden hochgeladen...</p>
+          <div class="checkbox-grid">
+            @if (data.importType === 'testResults'){
+            <div class="checkbox-item">
+              <mat-checkbox formControlName="responses">
+                <span class="checkbox-label">Antworten</span>
+              </mat-checkbox>
+              <div class="checkbox-hint">
+                Importiert Testergebnisse der Teilnehmenden
+              </div>
             </div>
-          }
-
-          @if (!isUploadingTestResults) {
-            <div class="table-container">
-              <table mat-table [dataSource]="testGroups" class="testgroups-table">
-                <ng-container matColumnDef="select">
-                  <th mat-header-cell *matHeaderCellDef>
-                    <mat-checkbox
-                      (change)="toggleAllRows($event)"
-                      [checked]="isAllSelected()"
-                      color="primary"
-                    ></mat-checkbox>
-                  </th>
-                  <td mat-cell *matCellDef="let group">
-                    <mat-checkbox
-                      (change)="toggleRow(group)"
-                      [checked]="selectedRows.includes(group)"
-                      color="primary"
-                    ></mat-checkbox>
-                  </td>
-                </ng-container>
-                <ng-container matColumnDef="groupName">
-                  <th mat-header-cell *matHeaderCellDef> Gruppenname </th>
-                  <td mat-cell *matCellDef="let group"> {{ group.groupName }} </td>
-                </ng-container>
-                <ng-container matColumnDef="groupLabel">
-                  <th mat-header-cell *matHeaderCellDef> Gruppenlabel </th>
-                  <td mat-cell *matCellDef="let group"> {{ group.groupLabel }} </td>
-                </ng-container>
-                <ng-container matColumnDef="status">
-                  <th mat-header-cell *matHeaderCellDef> Status </th>
-                  <td mat-cell *matCellDef="let group">
-                    <div class="status-badges">
-                      @if (group.existsInDatabase) {
-                        <span class="status-badge existing" matTooltip="Diese Gruppe existiert bereits in der Datenbank">
-                          <mat-icon>check_circle</mat-icon> Vorhanden
-                        </span>
-                      } @else {
-                        <span class="status-badge new" matTooltip="Diese Gruppe ist neu und existiert noch nicht in der Datenbank">
-                          <mat-icon>add_circle</mat-icon> Neu
-                        </span>
-                      }
-
-                      <!-- Logs status badge -->
-                      @if (group.hasBookletLogs) {
-                        <span class="status-badge logs" matTooltip="Diese Gruppe hat bereits Booklet-Logs in der Datenbank">
-                          <mat-icon>history</mat-icon> Logs vorhanden
-                        </span>
-                      }
-                    </div>
-                  </td>
-                </ng-container>
-                <ng-container matColumnDef="bookletsStarted">
-                  <th mat-header-cell *matHeaderCellDef> Gestartete Booklets </th>
-                  <td mat-cell *matCellDef="let group">
-                    <span class="count-badge">{{ group.bookletsStarted }}</span>
-                  </td>
-                </ng-container>
-                <ng-container matColumnDef="numUnitsMin">
-                  <th mat-header-cell *matHeaderCellDef> Min. Einheiten </th>
-                  <td mat-cell *matCellDef="let group"> {{ group.numUnitsMin }} </td>
-                </ng-container>
-                <ng-container matColumnDef="numUnitsMax">
-                  <th mat-header-cell *matHeaderCellDef> Max. Einheiten </th>
-                  <td mat-cell *matCellDef="let group"> {{ group.numUnitsMax }} </td>
-                </ng-container>
-                <ng-container matColumnDef="numUnitsAvg">
-                  <th mat-header-cell *matHeaderCellDef> Durchschnittliche Einheiten </th>
-                  <td mat-cell *matCellDef="let group"> {{ group.numUnitsAvg }} </td>
-                </ng-container>
-                <ng-container matColumnDef="numUnitsTotal">
-                  <th mat-header-cell *matHeaderCellDef> Gesamte Einheiten </th>
-                  <td mat-cell *matCellDef="let group">
-                    <span class="count-badge total">{{ group.numUnitsTotal }}</span>
-                  </td>
-                </ng-container>
-                <ng-container matColumnDef="lastChange">
-                  <th mat-header-cell *matHeaderCellDef> Letzte Änderung </th>
-                  <td mat-cell *matCellDef="let group"> {{ group.lastChange | date:'dd.MM.yyyy HH:mm' }} </td>
-                </ng-container>
-                <tr mat-header-row *matHeaderRowDef="displayedColumns; sticky: true"></tr>
-                <tr mat-row *matRowDef="let row; columns: displayedColumns;" class="clickable-row"></tr>
-              </table>
+            <div class="checkbox-item">
+              <mat-checkbox formControlName="logs">
+                <span class="checkbox-label">Logs</span>
+              </mat-checkbox>
+              <div class="checkbox-hint">
+                Importiert Logdaten zu Bearbeitungsverläufen
+              </div>
             </div>
-          }
-
-          @if (selectedRows.length > 0) {
-            <div class="selection-summary">
-              <mat-icon>info</mat-icon>
-              <span>{{ selectedRows.length }} Testgruppe(n) ausgewählt</span>
+            } @if (data.importType === 'testFiles'){
+            <div class="checkbox-item">
+              <mat-checkbox formControlName="definitions">
+                <span class="checkbox-label">Aufgabendefinitionen</span>
+              </mat-checkbox>
+              <div class="checkbox-hint">
+                Definitionen der Aufgaben (<code>.voud</code>-Dateien)
+              </div>
             </div>
-          }
+            <div class="checkbox-item">
+              <mat-checkbox formControlName="units">
+                <span class="checkbox-label">Aufgaben (Units-XML)</span>
+              </mat-checkbox>
+              <div class="checkbox-hint">Aufgaben im XML-Format</div>
+            </div>
+            <div class="checkbox-item">
+              <mat-checkbox formControlName="player">
+                <span class="checkbox-label">Player</span>
+              </mat-checkbox>
+              <div class="checkbox-hint">
+                Player und zugehörige Dateien (<code>.html</code>-Dateien).
+              </div>
+            </div>
+            <div class="checkbox-item">
+              <mat-checkbox formControlName="codings">
+                <span class="checkbox-label">Kodierschemata</span>
+              </mat-checkbox>
+              <div class="checkbox-hint">
+                Kodierinformationen (<code>.vocs</code>-Dateien)
+              </div>
+            </div>
+            <div class="checkbox-item">
+              <mat-checkbox formControlName="booklets">
+                <span class="checkbox-label">Testhefte (Booklets)</span>
+              </mat-checkbox>
+              <div class="checkbox-hint">
+                Testhefte (<code>.xml</code>-Dateien)
+              </div>
+            </div>
+            <div class="checkbox-item">
+              <mat-checkbox formControlName="testTakers">
+                <span class="checkbox-label">Testteilnehmer (Test-takers)</span>
+              </mat-checkbox>
+              <div class="checkbox-hint">
+                Testteilnehmende (<code>.xml</code>-Dateien)
+              </div>
+            </div>
+            }
+          </div>
         </div>
-      }
-    }
-    @else{
-    <div class="error-message">
-      <mat-icon>error</mat-icon>
-      <span>Keine Arbeitsbereiche auswählbar</span>
-    </div>
-  }
-}
 
+        <div class="workspace-section">
+          <mat-form-field appearance="outline">
+            <mat-label>Studie auswählen</mat-label>
+            <mat-select formControlName="workspace">
+              @for (workspace of workspaces;track workspace){
+              <mat-option [value]="workspace.id">{{
+                workspace.label
+              }}</mat-option>
+              }
+            </mat-select>
+            <mat-icon matSuffix>folder</mat-icon>
+          </mat-form-field>
+        </div>
+      </div>
+
+      @if (isUploadingTestResults || isUploadingTestFiles) {
+      <div class="loading-container">
+        <mat-spinner diameter="40"></mat-spinner>
+        @if (isUploadingTestResults) {
+        <p class="loading-text">
+          Verfügbare Testgruppen im Arbeitsbereich werden abgerufen...
+        </p>
+        } @if (isUploadingTestFiles) {
+        <p class="loading-text">Testdateien werden hochgeladen...</p>
+        }
+      </div>
+      } @if (!isUploadingTestResults && !isUploadingTestFiles) {
+      <div class="form-actions">
+        @if (data.importType === 'testResults') {
+        <button
+          mat-raised-button
+          type="submit"
+          [disabled]="importFilesForm.invalid"
+          color="primary"
+        >
+          <mat-icon>arrow_forward</mat-icon>
+          Weiter
+        </button>
+        } @if (data.importType === 'testFiles') {
+        <button
+          mat-raised-button
+          type="submit"
+          [disabled]="importFilesForm.invalid"
+          color="primary"
+        >
+          <mat-icon>cloud_upload</mat-icon>
+          Dateien importieren
+        </button>
+        }
+      </div>
+      } @if(filesSelectionError){
+      <div class="error-message">
+        <mat-icon>error</mat-icon>
+        <span>Bitte mindestens eine Import Option auswählen</span>
+      </div>
+      } @if (authenticationError){
+      <div class="error-message">
+        <mat-icon>error</mat-icon>
+        <span>{{ 'login-error' | translate }}</span>
+      </div>
+      }
+    </form>
+  </div>
+  } @if (data.importType === 'testResults' && showTestGroups){
+  <div class="testgroups-section">
+    <div class="section-header">
+      <div class="section-header-content">
+        <h3 class="section-title">
+          <mat-icon>groups</mat-icon>
+          Verfügbare Testgruppen
+        </h3>
+        <button
+          mat-stroked-button
+          color="primary"
+          (click)="goBackToOptions()"
+          class="back-button"
+        >
+          <mat-icon>arrow_back</mat-icon>
+          Zurück zu Optionen
+        </button>
+      </div>
+    </div>
+
+    @if (isUploadingTestResults) {
+    <div class="loading-container">
+      <mat-spinner diameter="40"></mat-spinner>
+      <p class="loading-text">Testresultate werden hochgeladen...</p>
+    </div>
+    } @if (!isUploadingTestResults) {
+    <div class="table-container">
+      <table mat-table [dataSource]="testGroups" class="testgroups-table">
+        <ng-container matColumnDef="select">
+          <th mat-header-cell *matHeaderCellDef>
+            <mat-checkbox
+              (change)="toggleAllRows($event)"
+              [checked]="isAllSelected()"
+              color="primary"
+            ></mat-checkbox>
+          </th>
+          <td mat-cell *matCellDef="let group">
+            <mat-checkbox
+              (change)="toggleRow(group)"
+              [checked]="selectedRows.includes(group)"
+              color="primary"
+            ></mat-checkbox>
+          </td>
+        </ng-container>
+        <ng-container matColumnDef="groupName">
+          <th mat-header-cell *matHeaderCellDef>Gruppenname</th>
+          <td mat-cell *matCellDef="let group">{{ group.groupName }}</td>
+        </ng-container>
+        <ng-container matColumnDef="groupLabel">
+          <th mat-header-cell *matHeaderCellDef>Gruppenlabel</th>
+          <td mat-cell *matCellDef="let group">{{ group.groupLabel }}</td>
+        </ng-container>
+        <ng-container matColumnDef="status">
+          <th mat-header-cell *matHeaderCellDef>Status</th>
+          <td mat-cell *matCellDef="let group">
+            <div class="status-badges">
+              @if (group.existsInDatabase) {
+              <span
+                class="status-badge existing"
+                matTooltip="Diese Gruppe existiert bereits in der Datenbank"
+              >
+                <mat-icon>check_circle</mat-icon> Vorhanden
+              </span>
+              } @else {
+              <span
+                class="status-badge new"
+                matTooltip="Diese Gruppe ist neu und existiert noch nicht in der Datenbank"
+              >
+                <mat-icon>add_circle</mat-icon> Neu
+              </span>
+              }
+
+              <!-- Logs status badge -->
+              @if (group.hasBookletLogs) {
+              <span
+                class="status-badge logs"
+                matTooltip="Diese Gruppe hat bereits Booklet-Logs in der Datenbank"
+              >
+                <mat-icon>history</mat-icon> Logs vorhanden
+              </span>
+              }
+            </div>
+          </td>
+        </ng-container>
+        <ng-container matColumnDef="bookletsStarted">
+          <th mat-header-cell *matHeaderCellDef>Gestartete Booklets</th>
+          <td mat-cell *matCellDef="let group">
+            <span class="count-badge">{{ group.bookletsStarted }}</span>
+          </td>
+        </ng-container>
+        <ng-container matColumnDef="numUnitsMin">
+          <th mat-header-cell *matHeaderCellDef>Min. Einheiten</th>
+          <td mat-cell *matCellDef="let group">{{ group.numUnitsMin }}</td>
+        </ng-container>
+        <ng-container matColumnDef="numUnitsMax">
+          <th mat-header-cell *matHeaderCellDef>Max. Einheiten</th>
+          <td mat-cell *matCellDef="let group">{{ group.numUnitsMax }}</td>
+        </ng-container>
+        <ng-container matColumnDef="numUnitsAvg">
+          <th mat-header-cell *matHeaderCellDef>Durchschnittliche Einheiten</th>
+          <td mat-cell *matCellDef="let group">{{ group.numUnitsAvg }}</td>
+        </ng-container>
+        <ng-container matColumnDef="numUnitsTotal">
+          <th mat-header-cell *matHeaderCellDef>Gesamte Einheiten</th>
+          <td mat-cell *matCellDef="let group">
+            <span class="count-badge total">{{ group.numUnitsTotal }}</span>
+          </td>
+        </ng-container>
+        <ng-container matColumnDef="lastChange">
+          <th mat-header-cell *matHeaderCellDef>Letzte Änderung</th>
+          <td mat-cell *matCellDef="let group">
+            {{ group.lastChange | date : 'dd.MM.yyyy HH:mm' }}
+          </td>
+        </ng-container>
+        <tr
+          mat-header-row
+          *matHeaderRowDef="displayedColumns; sticky: true"
+        ></tr>
+        <tr
+          mat-row
+          *matRowDef="let row; columns: displayedColumns"
+          class="clickable-row"
+        ></tr>
+      </table>
+    </div>
+    } @if (selectedRows.length > 0) {
+    <div class="selection-summary">
+      <mat-icon>info</mat-icon>
+      <span>{{ selectedRows.length }} Testgruppe(n) ausgewählt</span>
+    </div>
+    }
+  </div>
+  } } @else{
+  <div class="error-message">
+    <mat-icon>error</mat-icon>
+    <span>Keine Arbeitsbereiche auswählbar</span>
+  </div>
+  } }
 </mat-dialog-content>
 
 <mat-dialog-actions align="end">
   @if (testGroups && testGroups.length > 0) {
-    <button mat-raised-button
-      [disabled]="this.selectedRows.length === 0"
-      (click)="this.getTestData()"
-      color="primary">
-      <mat-icon>cloud_download</mat-icon>
-      Importieren
-    </button>
+  <button
+    mat-raised-button
+    [disabled]="this.selectedRows.length === 0"
+    (click)="this.getTestData()"
+    color="primary"
+  >
+    <mat-icon>cloud_download</mat-icon>
+    Importieren
+  </button>
   }
-  <button mat-stroked-button
+  <button
+    mat-stroked-button
     [disabled]="isUploadingTestFiles || isUploadingTestResults"
-    [mat-dialog-close]="true">
+    [mat-dialog-close]="true"
+  >
     {{ 'close' | translate }}
   </button>
 </mat-dialog-actions>
