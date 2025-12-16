@@ -8,6 +8,7 @@
   flex-direction: column;
   height: 100%;
   overflow-x: hidden;
+  position: relative;
   animation: fadeIn 0.3s ease-in-out;
 }
 
@@ -117,6 +118,30 @@
     font-size: 16px;
     color: #666;
   }
+}
+
+.busy-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 500;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  background-color: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(2px);
+  cursor: wait;
+  pointer-events: all;
+}
+
+.busy-overlay .loading-text {
+  font-size: 16px;
+  color: #666;
+}
+
+.busy-overlay .mat-spinner {
+  margin-bottom: 0;
 }
 
 // Search section styles
