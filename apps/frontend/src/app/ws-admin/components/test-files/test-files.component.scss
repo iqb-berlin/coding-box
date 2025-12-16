@@ -31,6 +31,16 @@
   }
 }
 
+:host ::ng-deep coding-box-search-filter {
+  .search-field {
+    padding: 0;
+  }
+
+  .search-field-container {
+    background-color: transparent;
+  }
+}
+
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -114,16 +124,24 @@
   margin-bottom: 20px;
 
   coding-box-search-filter {
-    min-width: 100%;
+    flex: 1 1 360px;
+    min-width: 360px;
   }
 }
 
 // Filter container styles
 .filter-container {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  align-items: center;
+  flex-wrap: wrap;
   gap: 16px;
   margin-bottom: 20px;
+
+  @media (max-width: 768px) {
+    flex-direction: column;
+    align-items: stretch;
+  }
 
   .filter-selects {
     display: flex;
