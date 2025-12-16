@@ -1,17 +1,24 @@
 // Main container styles
 .container {
   margin: 20px;
-  width: 100%;
+  padding: 0;
+  width: auto;
   height: auto;
   max-height: 80vh;
   animation: fadeIn 0.3s ease-in-out;
   display: flex;
   flex-direction: column;
+  box-sizing: border-box;
+  max-width: 100%;
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 // Page header styles
@@ -41,6 +48,10 @@
   width: 100%;
   border: 1px solid rgba(0, 0, 0, 0.03);
 
+  @media (max-width: 700px) {
+    padding: 16px;
+  }
+
   .section-title {
     font-size: 22px;
     font-weight: 500;
@@ -63,16 +74,12 @@
 
   .overview-grid {
     display: grid;
-    grid-template-columns: repeat(5, minmax(120px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
     gap: 14px;
     margin-bottom: 18px;
 
-    @media (max-width: 1200px) {
-      grid-template-columns: repeat(3, minmax(140px, 1fr));
-    }
-
-    @media (max-width: 700px) {
-      grid-template-columns: repeat(2, minmax(140px, 1fr));
+    @media (max-width: 420px) {
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
     }
   }
 
@@ -143,7 +150,11 @@
 }
 
 // Card styles
-.action-card, .data-card, .booklets-card, .responses-card, .logs-card {
+.action-card,
+.data-card,
+.booklets-card,
+.responses-card,
+.logs-card {
   background-color: white;
   border-radius: 12px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
@@ -237,14 +248,16 @@
       }
     }
 
-    .responses-card, .logs-card {
+    .responses-card,
+    .logs-card {
       flex: 1;
       display: flex;
       flex-direction: column;
       height: auto;
       min-height: calc(100vh - 200px);
 
-      .var-list, .log-list {
+      .var-list,
+      .log-list {
         max-height: calc(100vh - 350px); /* Dynamic height based on viewport */
         overflow-y: auto;
         flex: 1; /* Take remaining space */
@@ -296,6 +309,10 @@
   border: 1px solid rgba(25, 118, 210, 0.1);
   transition: all 0.2s ease;
   width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
+  overflow: hidden;
 
   &:focus-within {
     box-shadow: 0 3px 8px rgba(25, 118, 210, 0.15);
@@ -313,6 +330,8 @@
     border: none;
     background: transparent;
     flex: 1;
+    min-width: 0;
+    max-width: 100%;
     font-size: 14px;
     outline: none;
     color: #333;
@@ -322,6 +341,10 @@
       color: #7a9cc6;
       font-weight: 400;
     }
+  }
+
+  .clear-button {
+    flex: 0 0 auto;
   }
 }
 
@@ -395,7 +418,8 @@
 .persons-table {
   width: 100%;
 
-  mat-header-cell, mat-cell {
+  mat-header-cell,
+  mat-cell {
     white-space: nowrap;
     padding: 14px 18px;
   }
@@ -530,8 +554,12 @@
     }
 
     @keyframes rotate {
-      from { transform: rotate(0deg); }
-      to { transform: rotate(360deg); }
+      from {
+        transform: rotate(0deg);
+      }
+      to {
+        transform: rotate(360deg);
+      }
     }
 
     &:hover {
@@ -804,7 +832,7 @@
         font-size: 12px;
         font-weight: 500;
         color: white;
-        background-color: #4285F4;
+        background-color: #4285f4;
         padding: 3px 10px;
         border-radius: 12px;
         margin-left: 8px;
@@ -820,7 +848,9 @@
         margin-left: 12px;
         margin-top: 4px;
         align-items: center;
-        max-width: calc(100% - 120px); /* Leave space for the delete button and icon */
+        max-width: calc(
+          100% - 120px
+        ); /* Leave space for the delete button and icon */
       }
 
       .unit-tag-item {
@@ -921,29 +951,27 @@
         width: 18px;
         vertical-align: middle;
       }
-
     }
   }
 
+  // Notes indicator styles
+  .notes-indicator {
+    position: relative;
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+    width: 16px;
+    height: 16px;
+    margin-left: 8px;
+    vertical-align: middle;
 
-// Notes indicator styles
-.notes-indicator {
-  position: relative;
-  display: inline-flex;
-  justify-content: center;
-  align-items: center;
-  width: 16px;
-  height: 16px;
-  margin-left: 8px;
-  vertical-align: middle;
-
-  .notes-badge {
-    color: #2196F3;
-    font-size: 10px;
-    height: 10px;
-    width: 10px;
+    .notes-badge {
+      color: #2196f3;
+      font-size: 10px;
+      height: 10px;
+      width: 10px;
+    }
   }
-}
 
   // Unit Tags Section
   .unit-tags-section {
@@ -1193,8 +1221,14 @@
       }
 
       @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(-5px); }
-        to { opacity: 1; transform: translateY(0); }
+        from {
+          opacity: 0;
+          transform: translateY(-5px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
       }
 
       .detail-row {
