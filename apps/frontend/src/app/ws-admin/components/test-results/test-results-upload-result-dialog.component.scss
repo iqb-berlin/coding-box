@@ -2,6 +2,16 @@
   display: block;
 }
 
+:host ::ng-deep .mat-mdc-dialog-content {
+  overflow: hidden;
+  max-height: none;
+}
+
+:host ::ng-deep .mat-dialog-content {
+  overflow: hidden;
+  max-height: none;
+}
+
 .summary-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(260px, 1fr));
@@ -66,6 +76,8 @@
   width: 100%;
   border: 1px solid rgba(0, 0, 0, 0.08);
   border-radius: 8px;
+  box-sizing: border-box;
+  overflow-x: hidden;
 }
 
 .issue-row {
@@ -73,6 +85,7 @@
   align-items: center;
   padding: 8px 12px;
   border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  box-sizing: border-box;
 }
 
 .issue-title {
