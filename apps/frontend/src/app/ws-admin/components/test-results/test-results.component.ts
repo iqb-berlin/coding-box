@@ -11,7 +11,14 @@ import {
   MatHeaderRow,
   MatRow
 } from '@angular/material/table';
-import { Component, OnDestroy, OnInit, ViewChild, inject } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  OnDestroy,
+  OnInit,
+  ViewChild,
+  inject
+} from '@angular/core';
 
 import { MatSort, MatSortHeader } from '@angular/material/sort';
 import { FormsModule, UntypedFormGroup } from '@angular/forms';
@@ -213,9 +220,7 @@ interface P {
     MatIconButton,
     MatDivider,
     MatTooltipModule,
-    TestResultsFlatTableComponent,
-    TestResultsImportDialogComponent,
-    TestResultsExportDialogComponent
+    TestResultsFlatTableComponent
   ]
 })
 export class TestResultsComponent implements OnInit, OnDestroy {
@@ -281,13 +286,15 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   @ViewChild(MatPaginator) paginator!: MatPaginator;
   @ViewChild(MatSort) sort!: MatSort;
   @ViewChild('hiddenResponsesFileInput')
-  hiddenResponsesFileInput!: HTMLInputElement;
-  @ViewChild('hiddenLogsFileInput') hiddenLogsFileInput!: HTMLInputElement;
+    hiddenResponsesFileInput!: ElementRef<HTMLInputElement>;
+
+  @ViewChild('hiddenLogsFileInput')
+    hiddenLogsFileInput!: ElementRef<HTMLInputElement>;
 
   ngOnInit(): void {
     this.searchSubscription = this.searchSubject
       .pipe(debounceTime(this.SEARCH_DEBOUNCE_TIME), distinctUntilChanged())
-      .subscribe((searchText) => {
+      .subscribe(searchText => {
         this.createTestResultsList(0, this.pageSize, searchText);
       });
 
@@ -340,7 +347,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
         this.backendService
           .getValidationTask(this.appService.selectedWorkspaceId, taskId)
           .subscribe({
-            next: (task) => {
+            next: task => {
               if (task.status === 'completed' || task.status === 'failed') {
                 this.validationTaskStateService.removeTaskId(
                   this.appService.selectedWorkspaceId,
@@ -392,7 +399,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
       if (Object.keys(results).length > 0) {
         const hasFailedValidation = Object.values(results).some(
-          (result) => result.status === 'failed'
+          result => result.status === 'failed'
         );
         if (hasFailedValidation) {
           return 'failed';
@@ -406,7 +413,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           'groupResponses'
         ];
         const hasAllValidations = validationTypes.every(
-          (type) => results[type]
+          type => results[type]
         );
         if (hasAllValidations) {
           return 'success';
@@ -431,7 +438,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     this.backendService
       .getPersonTestResults(this.appService.selectedWorkspaceId, row.id)
       .subscribe({
-        next: (booklets) => {
+        next: booklets => {
           this.selectedBooklet = '';
           this.booklets = booklets as unknown as Booklet[];
           this.sortBooklets();
@@ -462,21 +469,21 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       if (result) {
         const filters = {
           groupNames:
-            result.groupNames && result.groupNames.length > 0
-              ? result.groupNames
-              : undefined,
+            result.groupNames && result.groupNames.length > 0 ?
+              result.groupNames :
+              undefined,
           bookletNames:
-            result.bookletNames && result.bookletNames.length > 0
-              ? result.bookletNames
-              : undefined,
+            result.bookletNames && result.bookletNames.length > 0 ?
+              result.bookletNames :
+              undefined,
           unitNames:
-            result.unitNames && result.unitNames.length > 0
-              ? result.unitNames
-              : undefined,
+            result.unitNames && result.unitNames.length > 0 ?
+              result.unitNames :
+              undefined,
           personIds:
-            result.personIds && result.personIds.length > 0
-              ? result.personIds
-              : undefined
+            result.personIds && result.personIds.length > 0 ?
+              result.personIds :
+              undefined
         };
 
         this.isExporting = true;
@@ -484,7 +491,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
         this.backendService
           .startExportTestLogsJob(this.appService.selectedWorkspaceId, filters)
           .subscribe({
-            next: (response) => {
+            next: response => {
               this.exportJobId = response.jobId;
               this.exportJobStatus = 'active';
               this.snackBar.open(
@@ -522,7 +529,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.booklets.forEach((booklet) => {
+    this.booklets.forEach(booklet => {
       if (booklet.units && Array.isArray(booklet.units)) {
         booklet.units.sort((a, b) => {
           const aliasA = a.alias || a.name || '';
@@ -542,9 +549,9 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       return;
     }
     this.unitTagsMap.clear();
-    this.booklets.forEach((booklet) => {
+    this.booklets.forEach(booklet => {
       if (booklet.units && Array.isArray(booklet.units)) {
-        booklet.units.forEach((unit) => {
+        booklet.units.forEach(unit => {
           if (unit.id && unit.tags) {
             this.unitTagsMap.set(unit.id, unit.tags);
           }
@@ -559,9 +566,9 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     }
     this.unitNotesMap.clear();
     const unitIds: number[] = [];
-    this.booklets.forEach((booklet) => {
+    this.booklets.forEach(booklet => {
       if (booklet.units && Array.isArray(booklet.units)) {
-        booklet.units.forEach((unit) => {
+        booklet.units.forEach(unit => {
           if (unit.id) {
             unitIds.push(unit.id);
           }
@@ -576,7 +583,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     this.backendService
       .getNotesForMultipleUnits(this.appService.selectedWorkspaceId, unitIds)
       .subscribe({
-        next: (notesByUnitId) => {
+        next: notesByUnitId => {
           Object.entries(notesByUnitId).forEach(([unitId, notes]) => {
             this.unitNotesMap.set(Number(unitId), notes);
           });
@@ -602,7 +609,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     this.unitsReplayService
       .getUnitsFromFileUpload(this.appService.selectedWorkspaceId, booklet.name)
       .subscribe({
-        next: (bookletReplay) => {
+        next: bookletReplay => {
           loadingSnackBar.dismiss();
 
           if (
@@ -624,7 +631,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
               this.appService.loggedUser?.sub || '',
               1
             )
-            .subscribe((token) => {
+            .subscribe(token => {
               const queryParams = {
                 auth: token,
                 mode: 'booklet',
@@ -682,7 +689,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
         1
       )
       .subscribe({
-        next: (token) => {
+        next: token => {
           if (!token) {
             this.snackBar.open(
               'Fehler beim Erzeugen des Authentifizierungs-Tokens',
@@ -699,7 +706,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
               token
             )
             .subscribe({
-              next: (result) => {
+              next: result => {
                 if (result && result.replayUrl) {
                   window.open(result.replayUrl, '_blank');
                 } else {
@@ -789,7 +796,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       }
     });
 
-    dialogRef.afterClosed().subscribe((result) => {
+    dialogRef.afterClosed().subscribe(result => {
       if (result) {
         this.unitTags = result;
         this.unitTagsMap.set(this.selectedUnit?.id as number, result);
@@ -814,7 +821,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       }
     });
 
-    dialogRef.afterClosed().subscribe((result) => {
+    dialogRef.afterClosed().subscribe(result => {
       if (result) {
         this.unitNotes = result;
         this.unitNotesMap.set(this.selectedUnit?.id as number, result);
@@ -866,7 +873,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
         this.backendService
           .getUnitNotes(this.appService.selectedWorkspaceId, unitId)
           .subscribe({
-            next: (notes) => {
+            next: notes => {
               this.unitNotes = notes;
               this.unitNotesMap.set(unitId, notes);
             },
@@ -904,12 +911,10 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     }
 
     const pollingLog = booklet.logs.find(
-      (log: BookletLog) =>
-        log.key === 'CONTROLLER' && log.parameter === 'RUNNING'
+      (log: BookletLog) => log.key === 'CONTROLLER' && log.parameter === 'RUNNING'
     );
     const terminatedLog = booklet.logs.find(
-      (log: BookletLog) =>
-        log.key === 'CONTROLLER' && log.parameter === 'TERMINATED'
+      (log: BookletLog) => log.key === 'CONTROLLER' && log.parameter === 'TERMINATED'
     );
     if (pollingLog && terminatedLog) {
       const pollingTime = Number(pollingLog.ts);
@@ -946,8 +951,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       .map((unit: Unit) => unit.alias)
       .filter((alias: string | null) => alias !== null) as string[];
 
-    const allUnitsVisited = unitAliases.every((alias: string) =>
-      unitIdLogs.some((log: BookletLog) => log.parameter === alias)
+    const allUnitsVisited = unitAliases.every((alias: string) => unitIdLogs.some((log: BookletLog) => log.parameter === alias)
     );
 
     return allUnitsVisited && unitAliases.length > 0;
@@ -975,8 +979,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     }
 
     return unit.results.some(
-      (response: UnitResult) =>
-        response.value && response.value.startsWith('UEsD')
+      (response: UnitResult) => response.value && response.value.startsWith('UEsD')
     );
   }
 
@@ -1036,7 +1039,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
         limit,
         searchText
       )
-      .subscribe((response) => {
+      .subscribe(response => {
         this.isLoading = false;
         this.isSearching = false;
         const { data, total } = response;
@@ -1053,7 +1056,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     this.isLoadingOverview = true;
     this.testResultService
       .getWorkspaceOverview(this.appService.selectedWorkspaceId)
-      .subscribe((result) => {
+      .subscribe(result => {
         this.overview = result;
         this.isLoadingOverview = false;
       });
@@ -1061,8 +1064,8 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
   get overviewStatusCounts(): Array<{ status: string; count: number }> {
     const map = (this.overview?.responseStatusCounts || {}) as Record<
-      string,
-      number
+    string,
+    number
     >;
     return Object.entries(map)
       .map(([status, count]) => ({ status, count: Number(count) }))
@@ -1079,7 +1082,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     if (this.isAllSelected()) {
       this.selection.clear();
     } else {
-      this.dataSource?.data.forEach((row) => this.selection.select(row));
+      this.dataSource?.data.forEach(row => this.selection.select(row));
     }
   }
 
@@ -1106,17 +1109,17 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       width: '500px'
     });
 
-    dialogRef.afterClosed().subscribe((result) => {
+    dialogRef.afterClosed().subscribe(result => {
       if (result) {
         switch (result.type) {
           case 'testcenter':
             this.testCenterImport();
             break;
           case 'responses':
-            this.hiddenResponsesFileInput.click();
+            this.hiddenResponsesFileInput.nativeElement.click();
             break;
           case 'logs':
-            this.hiddenLogsFileInput.click();
+            this.hiddenLogsFileInput.nativeElement.click();
             break;
         }
       }
@@ -1125,7 +1128,8 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
   testCenterImport(): void {
     const dialogRef = this.dialog.open(TestCenterImportComponent, {
-      width: '800px',
+      width: '1000px',
+      maxWidth: '95vw',
       minHeight: '800px',
       data: {
         importType: 'testResults'
@@ -1157,9 +1161,9 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       const inputElement = targetElement as HTMLInputElement;
       if (inputElement.files && inputElement.files.length > 0) {
         const optionsRef = this.dialog.open<
-          TestResultsUploadOptionsDialogComponent,
-          TestResultsUploadOptionsDialogData,
-          TestResultsUploadOptionsDialogResult | undefined
+        TestResultsUploadOptionsDialogComponent,
+        TestResultsUploadOptionsDialogData,
+        TestResultsUploadOptionsDialogResult | undefined
         >(TestResultsUploadOptionsDialogComponent, {
           width: '600px',
           data: {
@@ -1256,9 +1260,9 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     this.backendService
       .deleteTestPersons(
         this.appService.selectedWorkspaceId,
-        selectedTestPersons.map((person) => person.id)
+        selectedTestPersons.map(person => person.id)
       )
-      .subscribe((respOk) => {
+      .subscribe(respOk => {
         if (respOk) {
           this.snackBar.open(
             this.translateService.instant('ws-admin.test-group-deleted'),
@@ -1314,15 +1318,15 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       }
     });
 
-    dialogRef.afterClosed().subscribe((confirmed) => {
+    dialogRef.afterClosed().subscribe(confirmed => {
       if (confirmed) {
         this.backendService
           .deleteUnit(this.appService.selectedWorkspaceId, unit.id as number)
           .subscribe({
-            next: (result) => {
+            next: result => {
               if (result.success) {
                 const unitIndex = booklet.units.findIndex(
-                  (u) => u.id === unit.id
+                  u => u.id === unit.id
                 );
                 if (unitIndex !== -1) {
                   booklet.units.splice(unitIndex, 1);
@@ -1383,7 +1387,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       }
     });
 
-    dialogRef.afterClosed().subscribe((confirmed) => {
+    dialogRef.afterClosed().subscribe(confirmed => {
       if (confirmed) {
         this.backendService
           .deleteResponse(
@@ -1391,10 +1395,10 @@ export class TestResultsComponent implements OnInit, OnDestroy {
             response.id as number
           )
           .subscribe({
-            next: (result) => {
+            next: result => {
               if (result.success) {
                 const responseIndex = this.responses.findIndex(
-                  (r) => r.id === response.id
+                  r => r.id === response.id
                 );
                 if (responseIndex !== -1) {
                   this.responses.splice(responseIndex, 1);
@@ -1438,7 +1442,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       }
     });
 
-    dialogRef.afterClosed().subscribe((result) => {
+    dialogRef.afterClosed().subscribe(result => {
       if (result) {
         if (result.variableValidationResult) {
           this.variableValidationResult = result.variableValidationResult;
@@ -1468,11 +1472,11 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     this.backendService
       .getAllVariableAnalysisJobs(this.appService.selectedWorkspaceId)
       .subscribe({
-        next: (jobs) => {
+        next: jobs => {
           loadingSnackBar.dismiss();
 
           const variableAnalysisJobs = jobs.filter(
-            (job) => job.type === 'variable-analysis'
+            job => job.type === 'variable-analysis'
           );
 
           this.dialog.open(VariableAnalysisDialogComponent, {
@@ -1579,7 +1583,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       }
     });
 
-    dialogRef.afterClosed().subscribe((result) => {
+    dialogRef.afterClosed().subscribe(result => {
       if (result) {
         if (result.type === 'download') {
           this.downloadExportResult(result.jobId);
@@ -1606,39 +1610,39 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       if (result) {
         const filters = {
           groupNames:
-            result.groupNames && result.groupNames.length > 0
-              ? result.groupNames
-              : undefined,
+            result.groupNames && result.groupNames.length > 0 ?
+              result.groupNames :
+              undefined,
           bookletNames:
-            result.bookletNames && result.bookletNames.length > 0
-              ? result.bookletNames
-              : undefined,
+            result.bookletNames && result.bookletNames.length > 0 ?
+              result.bookletNames :
+              undefined,
           unitNames:
-            result.unitNames && result.unitNames.length > 0
-              ? result.unitNames
-              : undefined,
+            result.unitNames && result.unitNames.length > 0 ?
+              result.unitNames :
+              undefined,
           personIds:
-            result.personIds && result.personIds.length > 0
-              ? result.personIds
-              : undefined
+            result.personIds && result.personIds.length > 0 ?
+              result.personIds :
+              undefined
         };
 
         this.isExporting = true;
         this.exportTypeInProgress =
           exportType === 'results' ? 'test-results' : 'test-logs';
         const exportMethod =
-          exportType === 'results'
-            ? this.backendService.startExportTestResultsJob(
-                this.appService.selectedWorkspaceId,
-                filters
-              )
-            : this.backendService.startExportTestLogsJob(
-                this.appService.selectedWorkspaceId,
-                filters
-              );
+          exportType === 'results' ?
+            this.backendService.startExportTestResultsJob(
+              this.appService.selectedWorkspaceId,
+              filters
+            ) :
+            this.backendService.startExportTestLogsJob(
+              this.appService.selectedWorkspaceId,
+              filters
+            );
 
         exportMethod.subscribe({
-          next: (response) => {
+          next: response => {
             this.exportJobId = response.jobId;
             this.exportJobStatus = 'active';
             this.snackBar.open(
@@ -1671,15 +1675,13 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     this.backendService
       .getExportTestResultsJobs(this.appService.selectedWorkspaceId)
       .subscribe({
-        next: (jobs) => {
+        next: jobs => {
           const relevantJobs = jobs.filter(
-            (j) =>
-              j.exportType === 'test-results' || j.exportType === 'test-logs'
+            j => j.exportType === 'test-results' || j.exportType === 'test-logs'
           );
           // Find the most recent active job only (not completed jobs)
           const activeJob = relevantJobs.find(
-            (j) =>
-              j.status === 'active' ||
+            j => j.status === 'active' ||
               j.status === 'waiting' ||
               j.status === 'delayed'
           );
@@ -1705,8 +1707,8 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       this.backendService
         .getExportTestResultsJobs(this.appService.selectedWorkspaceId)
         .subscribe({
-          next: (jobs) => {
-            const job = jobs.find((j) => j.jobId === jobId);
+          next: jobs => {
+            const job = jobs.find(j => j.jobId === jobId);
             if (job) {
               this.exportJobStatus = job.status;
               this.exportJobProgress = job.progress;
@@ -1749,7 +1751,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     this.backendService
       .downloadExportTestResultsJob(this.appService.selectedWorkspaceId, jobId)
       .subscribe({
-        next: (blob) => {
+        next: blob => {
           const url = window.URL.createObjectURL(blob);
           const link = document.createElement('a');
           link.href = url;
