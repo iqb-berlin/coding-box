@@ -1,6 +1,4 @@
-import {
-  Injectable, Logger, Inject, forwardRef
-} from '@nestjs/common';
+import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { Response } from 'express';
@@ -9,7 +7,10 @@ import * as fs from 'fs';
 import { Writable } from 'stream';
 import { ResponseValueType } from '@iqbspecs/response/response.interface';
 import Persons from '../entities/persons.entity';
-import { statusNumberToString, statusStringToNumber } from '../utils/response-status-converter';
+import {
+  statusNumberToString,
+  statusStringToNumber
+} from '../utils/response-status-converter';
 import { Unit } from '../entities/unit.entity';
 import { Booklet } from '../entities/booklet.entity';
 import { ResponseEntity } from '../entities/response.entity';
@@ -64,16 +65,14 @@ export class WorkspaceTestResultsService {
     private readonly codingListService: CodingListService
   ) {}
 
-  async getWorkspaceTestResultsOverview(
-    workspaceId: number
-  ): Promise<{
-      testPersons: number;
-      testGroups: number;
-      uniqueBooklets: number;
-      uniqueUnits: number;
-      uniqueResponses: number;
-      responseStatusCounts: Record<string, number>;
-    }> {
+  async getWorkspaceTestResultsOverview(workspaceId: number): Promise<{
+    testPersons: number;
+    testGroups: number;
+    uniqueBooklets: number;
+    uniqueUnits: number;
+    uniqueResponses: number;
+    responseStatusCounts: Record<string, number>;
+  }> {
     if (!workspaceId || workspaceId <= 0) {
       throw new Error('Invalid workspaceId provided');
     }
@@ -132,7 +131,7 @@ export class WorkspaceTestResultsService {
       .getRawMany<{ status: string | number; count: string | number }>();
 
     const responseStatusCounts: Record<string, number> = {};
-    (statusRows || []).forEach(r => {
+    (statusRows || []).forEach((r) => {
       const num = Number(r.status);
       const label = statusNumberToString(num) || String(num);
       responseStatusCounts[label] = Number(r.count) || 0;
@@ -148,23 +147,52 @@ export class WorkspaceTestResultsService {
     };
   }
 
-  async findPersonTestResults(personId: number, workspaceId: number): Promise<{
-    id: number;
-    name: string;
-    logs: { id: number; bookletid: number; ts: string; parameter: string, key: string }[];
-    units: {
+  async findPersonTestResults(
+    personId: number,
+    workspaceId: number
+  ): Promise<
+    {
       id: number;
       name: string;
-      alias: string | null;
-      results: { id: number; unitid: number; variableid: string; status: string; value: string; subform: string; code?: number; score?: number; codedstatus?: string }[];
-      tags: { id: number; unitId: number; tag: string; color?: string; createdAt: Date }[];
-    }[];
-  }[]> {
+      logs: {
+        id: number;
+        bookletid: number;
+        ts: string;
+        parameter: string;
+        key: string;
+      }[];
+      units: {
+        id: number;
+        name: string;
+        alias: string | null;
+        results: {
+          id: number;
+          unitid: number;
+          variableid: string;
+          status: string;
+          value: string;
+          subform: string;
+          code?: number;
+          score?: number;
+          codedstatus?: string;
+        }[];
+        tags: {
+          id: number;
+          unitId: number;
+          tag: string;
+          color?: string;
+          createdAt: Date;
+        }[];
+      }[];
+    }[]
+  > {
     if (!personId || !workspaceId) {
       throw new Error('Both personId and workspaceId are required.');
     }
 
-    this.logger.log(`Fetching booklet data for person ${personId} in workspace ${workspaceId}`);
+    this.logger.log(
+      `Fetching booklet data for person ${personId} in workspace ${workspaceId}`
+    );
 
     try {
       this.logger.log(
@@ -175,10 +203,7 @@ export class WorkspaceTestResultsService {
         .createQueryBuilder('booklet')
         .innerJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
         .where('booklet.personid = :personId', { personId })
-        .select([
-          'booklet.id',
-          'bookletinfo.name'
-        ])
+        .select(['booklet.id', 'bookletinfo.name'])
         .getMany();
 
       if (!booklets || booklets.length === 0) {
@@ -186,7 +211,7 @@ export class WorkspaceTestResultsService {
         return [];
       }
 
-      const bookletIds = booklets.map(booklet => booklet.id);
+      const bookletIds = booklets.map((booklet) => booklet.id);
 
       const units = await this.unitRepository
         .createQueryBuilder('unit')
@@ -209,14 +234,29 @@ export class WorkspaceTestResultsService {
         ])
         .getMany();
 
-      const unitIds = units.map(unit => unit.id);
+      const unitIds = units.map((unit) => unit.id);
 
-      const unitResultMap = new Map<number, { id: number; unitid: number; variableid: string; status: string; value: string; subform: string; code?: number; score?: number; codedstatus?: string }[]>();
-      units.forEach(unit => {
+      const unitResultMap = new Map<
+        number,
+        {
+          id: number;
+          unitid: number;
+          variableid: string;
+          status: string;
+          value: string;
+          subform: string;
+          code?: number;
+          score?: number;
+          codedstatus?: string;
+        }[]
+      >();
+      units.forEach((unit) => {
         if (unit.responses) {
           const uniqueResponses = Array.from(
-            new Map(unit.responses.map(response => [response.id, response])).values()
-          ).map(response => ({
+            new Map(
+              unit.responses.map((response) => [response.id, response])
+            ).values()
+          ).map((response) => ({
             id: response.id,
             unitid: response.unitid,
             variableid: response.variableid,
@@ -234,15 +274,30 @@ export class WorkspaceTestResultsService {
       const bookletLogs = await this.bookletLogRepository
         .createQueryBuilder('bookletLog')
         .where('bookletLog.bookletid IN (:...bookletIds)', { bookletIds })
-        .select(['bookletLog.id', 'bookletLog.bookletid', 'bookletLog.ts', 'bookletLog.parameter', 'bookletLog.key'])
+        .select([
+          'bookletLog.id',
+          'bookletLog.bookletid',
+          'bookletLog.ts',
+          'bookletLog.parameter',
+          'bookletLog.key'
+        ])
         .getMany();
 
-      const unitTagsMap = new Map<number, { id: number; unitId: number; tag: string; color?: string; createdAt: Date }[]>();
+      const unitTagsMap = new Map<
+        number,
+        {
+          id: number;
+          unitId: number;
+          tag: string;
+          color?: string;
+          createdAt: Date;
+        }[]
+      >();
 
       if (unitIds.length > 0) {
         const allTags = await this.unitTagService.findAllByUnitIds(unitIds);
 
-        allTags.forEach(tag => {
+        allTags.forEach((tag) => {
           if (!unitTagsMap.has(tag.unitId)) {
             unitTagsMap.set(tag.unitId, []);
           }
@@ -250,8 +305,17 @@ export class WorkspaceTestResultsService {
         });
       }
 
-      const bookletLogsMap = new Map<number, { id: number; bookletid: number; ts: string; key: string; parameter: string }[]>();
-      bookletLogs.forEach(log => {
+      const bookletLogsMap = new Map<
+        number,
+        {
+          id: number;
+          bookletid: number;
+          ts: string;
+          key: string;
+          parameter: string;
+        }[]
+      >();
+      bookletLogs.forEach((log) => {
         if (!bookletLogsMap.has(log.bookletid)) {
           bookletLogsMap.set(log.bookletid, []);
         }
@@ -265,18 +329,18 @@ export class WorkspaceTestResultsService {
       });
 
       const unitsMap = new Map<number, Unit[]>();
-      units.forEach(unit => {
+      units.forEach((unit) => {
         if (!unitsMap.has(unit.bookletid)) {
           unitsMap.set(unit.bookletid, []);
         }
         unitsMap.get(unit.bookletid)?.push(unit);
       });
 
-      return booklets.map(booklet => ({
+      return booklets.map((booklet) => ({
         id: booklet.id,
         name: booklet.bookletinfo.name,
         logs: bookletLogsMap.get(booklet.id) || [],
-        units: (unitsMap.get(booklet.id) || []).map(unit => ({
+        units: (unitsMap.get(booklet.id) || []).map((unit) => ({
           id: unit.id,
           name: unit.name,
           alias: unit.alias,
@@ -289,11 +353,16 @@ export class WorkspaceTestResultsService {
         `Failed to fetch booklets, bookletInfo, units, and results for personId: ${personId} and workspaceId: ${workspaceId}`,
         error.stack
       );
-      throw new Error('An error occurred while fetching booklets, their info, units, and test results.');
+      throw new Error(
+        'An error occurred while fetching booklets, their info, units, and test results.'
+      );
     }
   }
 
-  async findTestResults(workspace_id: number, options: { page: number; limit: number; searchText?: string }): Promise<[Persons[], number]> {
+  async findTestResults(
+    workspace_id: number,
+    options: { page: number; limit: number; searchText?: string }
+  ): Promise<[Persons[], number]> {
     const { page, limit, searchText } = options;
 
     if (!workspace_id || workspace_id <= 0) {
@@ -304,10 +373,13 @@ export class WorkspaceTestResultsService {
     const validPage = Math.max(1, page); // minimum 1
     const validLimit = Math.min(Math.max(1, limit), MAX_LIMIT); // Between 1 and MAX_LIMIT
 
-    this.logger.log(`Fetching test results for workspace ${workspace_id} (page ${validPage}, limit ${validLimit})`);
+    this.logger.log(
+      `Fetching test results for workspace ${workspace_id} (page ${validPage}, limit ${validLimit})`
+    );
 
     try {
-      const queryBuilder = this.personsRepository.createQueryBuilder('person')
+      const queryBuilder = this.personsRepository
+        .createQueryBuilder('person')
         .where('person.workspace_id = :workspace_id', { workspace_id })
         .andWhere('person.consider = :consider', { consider: true })
         .select([
@@ -333,12 +405,18 @@ export class WorkspaceTestResultsService {
       const [results, total] = await queryBuilder.getManyAndCount();
       return [results, total];
     } catch (error) {
-      this.logger.error(`Failed to fetch test results for workspace_id ${workspace_id}: ${error.message}`, error.stack);
+      this.logger.error(
+        `Failed to fetch test results for workspace_id ${workspace_id}: ${error.message}`,
+        error.stack
+      );
       throw new Error('An error occurred while fetching test results');
     }
   }
 
-  async findWorkspaceResponses(workspace_id: number, options?: { page: number; limit: number }): Promise<[ResponseEntity[], number]> {
+  async findWorkspaceResponses(
+    workspace_id: number,
+    options?: { page: number; limit: number }
+  ): Promise<[ResponseEntity[], number]> {
     this.logger.log('Returning responses for workspace', workspace_id);
 
     let result: [ResponseEntity[], number];
@@ -355,14 +433,18 @@ export class WorkspaceTestResultsService {
         order: { id: 'ASC' }
       });
 
-      this.logger.log(`Found ${responses.length} responses (page ${validPage}, limit ${validLimit}, total ${total}) for workspace ${workspace_id}`);
+      this.logger.log(
+        `Found ${responses.length} responses (page ${validPage}, limit ${validLimit}, total ${total}) for workspace ${workspace_id}`
+      );
       result = [responses, total];
     } else {
       const responses = await this.responseRepository.find({
         order: { id: 'ASC' }
       });
 
-      this.logger.log(`Found ${responses.length} responses for workspace ${workspace_id}`);
+      this.logger.log(
+        `Found ${responses.length} responses for workspace ${workspace_id}`
+      );
       result = [responses, responses.length];
     }
 
@@ -378,11 +460,15 @@ export class WorkspaceTestResultsService {
       throw new Error('Invalid workspaceId provided');
     }
 
-    if (!resolutionMap || typeof resolutionMap !== 'object' || Object.keys(resolutionMap).length === 0) {
+    if (
+      !resolutionMap ||
+      typeof resolutionMap !== 'object' ||
+      Object.keys(resolutionMap).length === 0
+    ) {
       return { resolvedCount: 0, success: true };
     }
 
-    return this.connection.transaction(async manager => {
+    return this.connection.transaction(async (manager) => {
       let resolvedCount = 0;
 
       for (const [key, selectedResponseId] of Object.entries(resolutionMap)) {
@@ -416,21 +502,25 @@ export class WorkspaceTestResultsService {
           .andWhere('person.login = :testTakerLogin', { testTakerLogin })
           .andWhere('unit.id = :unitId', { unitId })
           .andWhere('response.variableid = :variableId', { variableId })
-          .andWhere('COALESCE(response.subform, \'\') = :subform', { subform: subform || '' })
+          .andWhere("COALESCE(response.subform, '') = :subform", {
+            subform: subform || ''
+          })
           .select(['response.id'])
           .getMany();
 
-        const ids = (responses || []).map(r => r.id);
+        const ids = (responses || []).map((r) => r.id);
         if (ids.length <= 1) {
           continue;
         }
 
         if (!ids.includes(selectedResponseId)) {
-          this.logger.warn(`Selected responseId ${selectedResponseId} not part of duplicate group ${key}`);
+          this.logger.warn(
+            `Selected responseId ${selectedResponseId} not part of duplicate group ${key}`
+          );
           continue;
         }
 
-        const deleteIds = ids.filter(id => id !== selectedResponseId);
+        const deleteIds = ids.filter((id) => id !== selectedResponseId);
         if (deleteIds.length === 0) {
           continue;
         }
@@ -476,10 +566,12 @@ export class WorkspaceTestResultsService {
       booklet?: string;
       unit?: string;
       response?: string;
+      responseStatus?: string;
       responseValue?: string;
       tags?: string;
     }
-  ): Promise<[
+  ): Promise<
+    [
       Array<{
         responseId: number;
         unitId: number;
@@ -495,7 +587,8 @@ export class WorkspaceTestResultsService {
         tags: string[];
       }>,
       number
-    ]> {
+    ]
+  > {
     if (!workspaceId || workspaceId <= 0) {
       throw new Error('Invalid workspaceId provided');
     }
@@ -503,7 +596,10 @@ export class WorkspaceTestResultsService {
     const MAX_LIMIT = 200;
     const MAX_RESPONSE_VALUE_LEN = 2000;
     const validPage = Math.max(1, Number(options.page || 1));
-    const validLimit = Math.min(Math.max(1, Number(options.limit || 50)), MAX_LIMIT);
+    const validLimit = Math.min(
+      Math.max(1, Number(options.limit || 50)),
+      MAX_LIMIT
+    );
 
     const code = (options.code || '').trim();
     const group = (options.group || '').trim();
@@ -511,8 +607,21 @@ export class WorkspaceTestResultsService {
     const booklet = (options.booklet || '').trim();
     const unit = (options.unit || '').trim();
     const response = (options.response || '').trim();
+    const responseStatus = (options.responseStatus || '').trim();
     const responseValue = (options.responseValue || '').trim();
     const tags = (options.tags || '').trim();
+
+    const parseResponseStatus = (s: string): number | null => {
+      const v = (s || '').trim();
+      if (!v) {
+        return null;
+      }
+      if (/^\d+$/.test(v)) {
+        return Number(v);
+      }
+      return statusStringToNumber(v);
+    };
+    const responseStatusNum = parseResponseStatus(responseStatus);
 
     const qb = this.responseRepository
       .createQueryBuilder('response')
@@ -534,16 +643,33 @@ export class WorkspaceTestResultsService {
       qb.andWhere('person.login ILIKE :login', { login: `%${login}%` });
     }
     if (booklet) {
-      qb.andWhere('bookletinfo.name ILIKE :booklet', { booklet: `%${booklet}%` });
+      qb.andWhere('bookletinfo.name ILIKE :booklet', {
+        booklet: `%${booklet}%`
+      });
     }
     if (unit) {
-      qb.andWhere('(unit.alias ILIKE :unit OR unit.name ILIKE :unit)', { unit: `%${unit}%` });
+      qb.andWhere('(unit.alias ILIKE :unit OR unit.name ILIKE :unit)', {
+        unit: `%${unit}%`
+      });
     }
     if (response) {
-      qb.andWhere('response.variableid ILIKE :response', { response: `%${response}%` });
+      qb.andWhere('response.variableid ILIKE :response', {
+        response: `%${response}%`
+      });
+    }
+    if (responseStatus) {
+      if (responseStatusNum === null) {
+        qb.andWhere('1=0');
+      } else {
+        qb.andWhere('response.status = :responseStatusNum', {
+          responseStatusNum
+        });
+      }
     }
     if (responseValue) {
-      qb.andWhere('response.value ILIKE :responseValue', { responseValue: `%${responseValue}%` });
+      qb.andWhere('response.value ILIKE :responseValue', {
+        responseValue: `%${responseValue}%`
+      });
     }
     if (tags) {
       qb.andWhere('unitTag.tag ILIKE :tags', { tags: `%${tags}%` });
@@ -568,16 +694,33 @@ export class WorkspaceTestResultsService {
       countQb.andWhere('person.login ILIKE :login', { login: `%${login}%` });
     }
     if (booklet) {
-      countQb.andWhere('bookletinfo.name ILIKE :booklet', { booklet: `%${booklet}%` });
+      countQb.andWhere('bookletinfo.name ILIKE :booklet', {
+        booklet: `%${booklet}%`
+      });
     }
     if (unit) {
-      countQb.andWhere('(unit.alias ILIKE :unit OR unit.name ILIKE :unit)', { unit: `%${unit}%` });
+      countQb.andWhere('(unit.alias ILIKE :unit OR unit.name ILIKE :unit)', {
+        unit: `%${unit}%`
+      });
     }
     if (response) {
-      countQb.andWhere('response.variableid ILIKE :response', { response: `%${response}%` });
+      countQb.andWhere('response.variableid ILIKE :response', {
+        response: `%${response}%`
+      });
+    }
+    if (responseStatus) {
+      if (responseStatusNum === null) {
+        countQb.andWhere('1=0');
+      } else {
+        countQb.andWhere('response.status = :responseStatusNum', {
+          responseStatusNum
+        });
+      }
     }
     if (responseValue) {
-      countQb.andWhere('response.value ILIKE :responseValue', { responseValue: `%${responseValue}%` });
+      countQb.andWhere('response.value ILIKE :responseValue', {
+        responseValue: `%${responseValue}%`
+      });
     }
     if (tags) {
       countQb.leftJoin('unit.tags', 'unitTag');
@@ -587,7 +730,7 @@ export class WorkspaceTestResultsService {
     const total = await countQb
       .select('COUNT(DISTINCT response.id)', 'cnt')
       .getRawOne()
-      .then(r => Number(r?.cnt || 0));
+      .then((r) => Number(r?.cnt || 0));
 
     const raw = await qb
       .select([
@@ -624,11 +767,17 @@ export class WorkspaceTestResultsService {
       .limit(validLimit)
       .getRawMany();
 
-    const mapped = (raw || []).map(r => {
+    const mapped = (raw || []).map((r) => {
       const tagsStr = String(r.tags || '');
-      const tagList = tagsStr ?
-        tagsStr.split(',').map(t => t.trim()).filter(Boolean) :
-        [];
+      const tagList = tagsStr
+        ? tagsStr
+            .split(',')
+            .map((t) => t.trim())
+            .filter(Boolean)
+        : [];
+
+      const statusNum = Number(r.responseStatus);
+      const statusLabel = statusNumberToString(statusNum);
       return {
         responseId: Number(r.responseId),
         unitId: Number(r.unitId),
@@ -639,7 +788,7 @@ export class WorkspaceTestResultsService {
         booklet: String(r.booklet || ''),
         unit: String(r.unit || ''),
         response: String(r.response || ''),
-        responseStatus: String(r.responseStatus ?? ''),
+        responseStatus: statusLabel || String(r.responseStatus ?? ''),
         responseValue: String(r.responseValue ?? ''),
         tags: tagList
       };
@@ -651,29 +800,46 @@ export class WorkspaceTestResultsService {
   async findFlatResponseFrequencies(
     workspaceId: number,
     combos: Array<{ unitKey: string; variableId: string; values: string[] }>
-  ): Promise<Record<string, { total: number; values: Array<{ value: string; count: number; p: number }> }>> {
+  ): Promise<
+    Record<
+      string,
+      {
+        total: number;
+        values: Array<{ value: string; count: number; p: number }>;
+      }
+    >
+  > {
     if (!workspaceId || workspaceId <= 0) {
       throw new Error('Invalid workspaceId provided');
     }
 
     const normalized = (combos || [])
-      .map(c => ({
+      .map((c) => ({
         unitKey: String(c.unitKey || '').trim(),
         variableId: String(c.variableId || '').trim(),
-        values: Array.isArray(c.values) ? c.values.map(v => String(v ?? '')) : []
+        values: Array.isArray(c.values)
+          ? c.values.map((v) => String(v ?? ''))
+          : []
       }))
-      .filter(c => !!c.unitKey && !!c.variableId);
+      .filter((c) => !!c.unitKey && !!c.variableId);
 
     if (normalized.length === 0) {
       return {};
     }
 
-    const uniqueMap = new Map<string, { unitKey: string; variableId: string; values: string[] }>();
-    normalized.forEach(c => {
-      const key = `${encodeURIComponent(c.unitKey)}:${encodeURIComponent(c.variableId)}`;
+    const uniqueMap = new Map<
+      string,
+      { unitKey: string; variableId: string; values: string[] }
+    >();
+    normalized.forEach((c) => {
+      const key = `${encodeURIComponent(c.unitKey)}:${encodeURIComponent(
+        c.variableId
+      )}`;
       const prev = uniqueMap.get(key);
       if (prev) {
-        prev.values = Array.from(new Set([...(prev.values || []), ...(c.values || [])]));
+        prev.values = Array.from(
+          new Set([...(prev.values || []), ...(c.values || [])])
+        );
       } else {
         uniqueMap.set(key, {
           unitKey: c.unitKey,
@@ -702,11 +868,16 @@ export class WorkspaceTestResultsService {
     });
     qb.andWhere(`(${orParts.join(' OR ')})`, params);
 
-    const allRequestedValues = Array.from(new Set(
-      uniqueCombos.flatMap(c => (c.values || []).map(v => String(v ?? '')))
-    ));
+    const allRequestedValues = Array.from(
+      new Set(
+        uniqueCombos.flatMap((c) =>
+          (c.values || []).map((v) => String(v ?? ''))
+        )
+      )
+    );
 
-    const totalsRaw = await qb.clone()
+    const totalsRaw = await qb
+      .clone()
       .select([
         'COALESCE(unit.alias, unit.name) AS "unitKey"',
         'response.variableid AS "variableId"',
@@ -714,48 +885,73 @@ export class WorkspaceTestResultsService {
       ])
       .groupBy('COALESCE(unit.alias, unit.name)')
       .addGroupBy('response.variableid')
-      .getRawMany<{ unitKey: string; variableId: string; total: number | string }>();
+      .getRawMany<{
+        unitKey: string;
+        variableId: string;
+        total: number | string;
+      }>();
 
     const totalByKey = new Map<string, number>();
-    totalsRaw.forEach(r => {
+    totalsRaw.forEach((r) => {
       const unitKey = String(r.unitKey || '').trim();
       const variableId = String(r.variableId || '').trim();
-      totalByKey.set(`${encodeURIComponent(unitKey)}:${encodeURIComponent(variableId)}`, Number(r.total || 0));
+      totalByKey.set(
+        `${encodeURIComponent(unitKey)}:${encodeURIComponent(variableId)}`,
+        Number(r.total || 0)
+      );
     });
 
     const countsQb = qb.clone();
     if (allRequestedValues.length > 0) {
-      countsQb.andWhere("SUBSTRING(COALESCE(response.value, ''), 1, 2000) IN (:...values)", { values: allRequestedValues });
+      countsQb.andWhere(
+        "SUBSTRING(COALESCE(response.value, ''), 1, 2000) IN (:...values)",
+        { values: allRequestedValues }
+      );
     }
 
     const countsRaw = await countsQb
       .select([
         'COALESCE(unit.alias, unit.name) AS "unitKey"',
         'response.variableid AS "variableId"',
-        "SUBSTRING(COALESCE(response.value, ''), 1, 2000) AS \"value\"",
+        'SUBSTRING(COALESCE(response.value, \'\'), 1, 2000) AS "value"',
         'COUNT(*)::int AS "count"'
       ])
       .groupBy('COALESCE(unit.alias, unit.name)')
       .addGroupBy('response.variableid')
       .addGroupBy("SUBSTRING(COALESCE(response.value, ''), 1, 2000)")
-      .getRawMany<{ unitKey: string; variableId: string; value: string; count: number | string }>();
+      .getRawMany<{
+        unitKey: string;
+        variableId: string;
+        value: string;
+        count: number | string;
+      }>();
 
     const countByKeyAndValue = new Map<string, number>();
-    countsRaw.forEach(r => {
+    countsRaw.forEach((r) => {
       const unitKey = String(r.unitKey || '').trim();
       const variableId = String(r.variableId || '').trim();
-      const comboKey = `${encodeURIComponent(unitKey)}:${encodeURIComponent(variableId)}`;
+      const comboKey = `${encodeURIComponent(unitKey)}:${encodeURIComponent(
+        variableId
+      )}`;
       const value = String(r.value ?? '');
       countByKeyAndValue.set(`${comboKey}@@${value}`, Number(r.count || 0));
     });
 
-    const result: Record<string, { total: number; values: Array<{ value: string; count: number; p: number }> }> = {};
-    uniqueCombos.forEach(c => {
-      const key = `${encodeURIComponent(c.unitKey)}:${encodeURIComponent(c.variableId)}`;
+    const result: Record<
+      string,
+      {
+        total: number;
+        values: Array<{ value: string; count: number; p: number }>;
+      }
+    > = {};
+    uniqueCombos.forEach((c) => {
+      const key = `${encodeURIComponent(c.unitKey)}:${encodeURIComponent(
+        c.variableId
+      )}`;
       const total = totalByKey.get(key) || 0;
       const values = Array.from(new Set(c.values || []));
 
-      const rows = values.map(v => {
+      const rows = values.map((v) => {
         const count = countByKeyAndValue.get(`${key}@@${v}`) || 0;
         return {
           value: v,
@@ -778,18 +974,20 @@ export class WorkspaceTestResultsService {
       booklet?: string;
       unit?: string;
       response?: string;
+      responseStatus?: string;
       responseValue?: string;
       tags?: string;
     }
   ): Promise<{
-      codes: string[];
-      groups: string[];
-      logins: string[];
-      booklets: string[];
-      units: string[];
-      responses: string[];
-      tags: string[];
-    }> {
+    codes: string[];
+    groups: string[];
+    logins: string[];
+    booklets: string[];
+    units: string[];
+    responses: string[];
+    responseStatuses: string[];
+    tags: string[];
+  }> {
     if (!workspaceId || workspaceId <= 0) {
       throw new Error('Invalid workspaceId provided');
     }
@@ -802,8 +1000,21 @@ export class WorkspaceTestResultsService {
     const booklet = (options.booklet || '').trim();
     const unit = (options.unit || '').trim();
     const response = (options.response || '').trim();
+    const responseStatus = (options.responseStatus || '').trim();
     const responseValue = (options.responseValue || '').trim();
     const tags = (options.tags || '').trim();
+
+    const parseResponseStatus = (s: string): number | null => {
+      const v = (s || '').trim();
+      if (!v) {
+        return null;
+      }
+      if (/^\d+$/.test(v)) {
+        return Number(v);
+      }
+      return statusStringToNumber(v);
+    };
+    const responseStatusNum = parseResponseStatus(responseStatus);
 
     const baseQb = this.responseRepository
       .createQueryBuilder('response')
@@ -825,42 +1036,114 @@ export class WorkspaceTestResultsService {
       baseQb.andWhere('person.login ILIKE :login', { login: `%${login}%` });
     }
     if (booklet) {
-      baseQb.andWhere('bookletinfo.name ILIKE :booklet', { booklet: `%${booklet}%` });
+      baseQb.andWhere('bookletinfo.name ILIKE :booklet', {
+        booklet: `%${booklet}%`
+      });
     }
     if (unit) {
-      baseQb.andWhere('(unit.alias ILIKE :unit OR unit.name ILIKE :unit)', { unit: `%${unit}%` });
+      baseQb.andWhere('(unit.alias ILIKE :unit OR unit.name ILIKE :unit)', {
+        unit: `%${unit}%`
+      });
     }
     if (response) {
-      baseQb.andWhere('response.variableid ILIKE :response', { response: `%${response}%` });
+      baseQb.andWhere('response.variableid ILIKE :response', {
+        response: `%${response}%`
+      });
+    }
+    if (responseStatus) {
+      if (responseStatusNum === null) {
+        baseQb.andWhere('1=0');
+      } else {
+        baseQb.andWhere('response.status = :responseStatusNum', {
+          responseStatusNum
+        });
+      }
     }
     if (responseValue) {
-      baseQb.andWhere('response.value ILIKE :responseValue', { responseValue: `%${responseValue}%` });
+      baseQb.andWhere('response.value ILIKE :responseValue', {
+        responseValue: `%${responseValue}%`
+      });
     }
     if (tags) {
       baseQb.andWhere('unitTag.tag ILIKE :tags', { tags: `%${tags}%` });
     }
 
-    const [codeRows, groupRows, loginRows, bookletRows, unitRows, responseRows, tagRows] = await Promise.all([
-      baseQb.clone().select('DISTINCT person.code', 'v').orderBy('person.code', 'ASC').limit(MAX_OPTIONS)
+    const [
+      codeRows,
+      groupRows,
+      loginRows,
+      bookletRows,
+      unitRows,
+      responseRows,
+      responseStatusRows,
+      tagRows
+    ] = await Promise.all([
+      baseQb
+        .clone()
+        .select('DISTINCT person.code', 'v')
+        .orderBy('person.code', 'ASC')
+        .limit(MAX_OPTIONS)
         .getRawMany<{ v: string }>(),
-      baseQb.clone().select('DISTINCT person.group', 'v').orderBy('person.group', 'ASC').limit(MAX_OPTIONS)
+      baseQb
+        .clone()
+        .select('DISTINCT person.group', 'v')
+        .orderBy('person.group', 'ASC')
+        .limit(MAX_OPTIONS)
         .getRawMany<{ v: string }>(),
-      baseQb.clone().select('DISTINCT person.login', 'v').orderBy('person.login', 'ASC').limit(MAX_OPTIONS)
+      baseQb
+        .clone()
+        .select('DISTINCT person.login', 'v')
+        .orderBy('person.login', 'ASC')
+        .limit(MAX_OPTIONS)
         .getRawMany<{ v: string }>(),
-      baseQb.clone().select('DISTINCT bookletinfo.name', 'v').orderBy('bookletinfo.name', 'ASC').limit(MAX_OPTIONS)
+      baseQb
+        .clone()
+        .select('DISTINCT bookletinfo.name', 'v')
+        .orderBy('bookletinfo.name', 'ASC')
+        .limit(MAX_OPTIONS)
         .getRawMany<{ v: string }>(),
-      baseQb.clone().select('DISTINCT COALESCE(unit.alias, unit.name)', 'v').orderBy('v', 'ASC').limit(MAX_OPTIONS)
+      baseQb
+        .clone()
+        .select('DISTINCT COALESCE(unit.alias, unit.name)', 'v')
+        .orderBy('v', 'ASC')
+        .limit(MAX_OPTIONS)
         .getRawMany<{ v: string }>(),
-      baseQb.clone().select('DISTINCT response.variableid', 'v').orderBy('response.variableid', 'ASC').limit(MAX_OPTIONS)
+      baseQb
+        .clone()
+        .select('DISTINCT response.variableid', 'v')
+        .orderBy('response.variableid', 'ASC')
+        .limit(MAX_OPTIONS)
         .getRawMany<{ v: string }>(),
-      baseQb.clone().select('DISTINCT unitTag.tag', 'v').where('unitTag.tag IS NOT NULL').orderBy('unitTag.tag', 'ASC')
+      baseQb
+        .clone()
+        .select('DISTINCT response.status', 'v')
+        .orderBy('response.status', 'ASC')
+        .limit(MAX_OPTIONS)
+        .getRawMany<{ v: string | number }>(),
+      baseQb
+        .clone()
+        .select('DISTINCT unitTag.tag', 'v')
+        .where('unitTag.tag IS NOT NULL')
+        .orderBy('unitTag.tag', 'ASC')
         .limit(MAX_OPTIONS)
         .getRawMany<{ v: string }>()
     ]);
 
-    const mapVals = (rows: Array<{ v: string }>) => (rows || [])
-      .map(r => String(r.v || '').trim())
-      .filter(Boolean);
+    const mapVals = (rows: Array<{ v: string }>) =>
+      (rows || []).map((r) => String(r.v || '').trim()).filter(Boolean);
+
+    const responseStatuses = Array.from(
+      new Set(
+        (responseStatusRows || [])
+          .map((r) =>
+            statusNumberToString(Number((r as { v: string | number }).v))
+          )
+          .filter(
+            (v): v is Exclude<ReturnType<typeof statusNumberToString>, null> =>
+              v !== null
+          )
+      )
+    );
 
     return {
       codes: mapVals(codeRows),
@@ -869,6 +1152,7 @@ export class WorkspaceTestResultsService {
       booklets: mapVals(bookletRows),
       units: mapVals(unitRows),
       responses: mapVals(responseRows),
+      responseStatuses,
       tags: mapVals(tagRows)
     };
   }
@@ -876,7 +1160,9 @@ export class WorkspaceTestResultsService {
   async findUnitLogs(
     workspaceId: number,
     unitId: number
-  ): Promise<{ id: number; unitid: number; ts: string; key: string; parameter: string }[]> {
+  ): Promise<
+    { id: number; unitid: number; ts: string; key: string; parameter: string }[]
+  > {
     if (!workspaceId || workspaceId <= 0) {
       throw new Error('Invalid workspaceId provided');
     }
@@ -900,19 +1186,22 @@ export class WorkspaceTestResultsService {
       ])
       .orderBy('unitLog.id', 'ASC')
       .getRawMany<{
-      id: number;
-      unitid: number;
-      ts: number | null;
-      key: string;
-      parameter: string | null;
-    }>();
+        id: number;
+        unitid: number;
+        ts: number | null;
+        key: string;
+        parameter: string | null;
+      }>();
 
-    return (raw || []).map(r => ({
+    return (raw || []).map((r) => ({
       id: Number(r.id),
       unitid: Number(r.unitid),
       ts: r.ts !== null && r.ts !== undefined ? String(r.ts) : '',
       key: String(r.key || ''),
-      parameter: r.parameter !== null && r.parameter !== undefined ? String(r.parameter) : ''
+      parameter:
+        r.parameter !== null && r.parameter !== undefined
+          ? String(r.parameter)
+          : ''
     }));
   }
 
@@ -920,11 +1209,35 @@ export class WorkspaceTestResultsService {
     workspaceId: number,
     unitId: number
   ): Promise<{
-      bookletId: number;
-      logs: { id: number; bookletid: number; ts: string; key: string; parameter: string }[];
-      sessions: { id: number; browser: string; os: string; screen: string; ts: string }[];
-      units: { id: number; bookletid: number; name: string; alias: string | null; logs: { id: number; unitid: number; ts: string; key: string; parameter: string }[] }[];
-    }> {
+    bookletId: number;
+    logs: {
+      id: number;
+      bookletid: number;
+      ts: string;
+      key: string;
+      parameter: string;
+    }[];
+    sessions: {
+      id: number;
+      browser: string;
+      os: string;
+      screen: string;
+      ts: string;
+    }[];
+    units: {
+      id: number;
+      bookletid: number;
+      name: string;
+      alias: string | null;
+      logs: {
+        id: number;
+        unitid: number;
+        ts: string;
+        key: string;
+        parameter: string;
+      }[];
+    }[];
+  }> {
     if (!workspaceId || workspaceId <= 0) {
       throw new Error('Invalid workspaceId provided');
     }
@@ -951,7 +1264,13 @@ export class WorkspaceTestResultsService {
       this.bookletLogRepository
         .createQueryBuilder('bookletLog')
         .where('bookletLog.bookletid = :bookletId', { bookletId })
-        .select(['bookletLog.id', 'bookletLog.bookletid', 'bookletLog.ts', 'bookletLog.parameter', 'bookletLog.key'])
+        .select([
+          'bookletLog.id',
+          'bookletLog.bookletid',
+          'bookletLog.ts',
+          'bookletLog.parameter',
+          'bookletLog.key'
+        ])
         .orderBy('bookletLog.id', 'ASC')
         .getMany(),
       this.sessionRepository
@@ -960,7 +1279,13 @@ export class WorkspaceTestResultsService {
         .innerJoin('booklet.person', 'person')
         .where('person.workspace_id = :workspaceId', { workspaceId })
         .andWhere('booklet.id = :bookletId', { bookletId })
-        .select(['session.id', 'session.browser', 'session.os', 'session.screen', 'session.ts'])
+        .select([
+          'session.id',
+          'session.browser',
+          'session.os',
+          'session.screen',
+          'session.ts'
+        ])
         .orderBy('session.id', 'ASC')
         .getMany(),
       this.unitRepository
@@ -973,21 +1298,21 @@ export class WorkspaceTestResultsService {
 
     return {
       bookletId,
-      logs: (bookletLogs || []).map(l => ({
+      logs: (bookletLogs || []).map((l) => ({
         id: l.id,
         bookletid: l.bookletid,
         ts: l.ts !== null && l.ts !== undefined ? String(l.ts) : '',
         key: l.key,
         parameter: l.parameter || ''
       })),
-      sessions: (sessions || []).map(s => ({
+      sessions: (sessions || []).map((s) => ({
         id: s.id,
         browser: s.browser || '',
         os: s.os || '',
         screen: s.screen || '',
         ts: s.ts !== null && s.ts !== undefined ? String(s.ts) : ''
       })),
-      units: (units || []).map(u => ({
+      units: (units || []).map((u) => ({
         id: u.id,
         bookletid: u.bookletid,
         name: u.name,
@@ -997,23 +1322,46 @@ export class WorkspaceTestResultsService {
     };
   }
 
-  async findUnitResponse(workspaceId: number, connector: string, unitId: string): Promise<{ responses: { id: string, content: { id: string; value: string; status: string }[] }[] }> {
-    const cacheKey = this.cacheService.generateUnitResponseCacheKey(workspaceId, connector, unitId);
-    const cachedResponse = await this.cacheService.get<{ responses: { id: string, content: { id: string; value: string; status: string }[] }[] }>(cacheKey);
+  async findUnitResponse(
+    workspaceId: number,
+    connector: string,
+    unitId: string
+  ): Promise<{
+    responses: {
+      id: string;
+      content: { id: string; value: string; status: string }[];
+    }[];
+  }> {
+    const cacheKey = this.cacheService.generateUnitResponseCacheKey(
+      workspaceId,
+      connector,
+      unitId
+    );
+    const cachedResponse = await this.cacheService.get<{
+      responses: {
+        id: string;
+        content: { id: string; value: string; status: string }[];
+      }[];
+    }>(cacheKey);
 
     if (cachedResponse) {
-      this.logger.log(`Cache hit for responses: workspace=${workspaceId}, testPerson=${connector}, unitId=${unitId}`);
+      this.logger.log(
+        `Cache hit for responses: workspace=${workspaceId}, testPerson=${connector}, unitId=${unitId}`
+      );
       return cachedResponse;
     }
 
-    this.logger.log(`Cache miss for responses: workspace=${workspaceId}, testPerson=${connector}, unitId=${unitId}`);
+    this.logger.log(
+      `Cache miss for responses: workspace=${workspaceId}, testPerson=${connector}, unitId=${unitId}`
+    );
 
     const parts = connector.split('@');
     const login = parts[0];
     const code = parts[1];
     const group = parts.length >= 4 ? parts[2] : undefined;
     const bookletId = parts[parts.length - 1];
-    const queryBuilder = this.unitRepository.createQueryBuilder('unit')
+    const queryBuilder = this.unitRepository
+      .createQueryBuilder('unit')
       .innerJoinAndSelect('unit.responses', 'response')
       .innerJoin('unit.booklet', 'booklet')
       .innerJoin('booklet.person', 'person')
@@ -1035,7 +1383,10 @@ export class WorkspaceTestResultsService {
 
     if (!unit) {
       const personWhere: PersonWhere = {
-        code, login, workspace_id: workspaceId, consider: true
+        code,
+        login,
+        workspace_id: workspaceId,
+        consider: true
       };
       if (group) {
         personWhere.group = group;
@@ -1046,9 +1397,9 @@ export class WorkspaceTestResultsService {
       });
 
       if (!person) {
-        const searchDescription = group ?
-          `Person mit Login ${login}, Code ${code} und Gruppe ${group}` :
-          `Person mit Login ${login} und Code ${code}`;
+        const searchDescription = group
+          ? `Person mit Login ${login}, Code ${code} und Gruppe ${group}`
+          : `Person mit Login ${login} und Code ${code}`;
         throw new Error(`${searchDescription} wurde nicht gefunden.`);
       }
 
@@ -1068,10 +1419,14 @@ export class WorkspaceTestResultsService {
       });
 
       if (!booklet) {
-        throw new Error(`Kein Booklet für die Person mit ID ${person.id} und Booklet ID ${bookletId} gefunden.`);
+        throw new Error(
+          `Kein Booklet für die Person mit ID ${person.id} und Booklet ID ${bookletId} gefunden.`
+        );
       }
 
-      throw new Error(`Keine Unit mit der ID ${unitId} für das Booklet ${bookletId} gefunden.`);
+      throw new Error(
+        `Keine Unit mit der ID ${unitId} für das Booklet ${bookletId} gefunden.`
+      );
     }
 
     const chunks = await this.chunkRepository.find({
@@ -1080,18 +1435,20 @@ export class WorkspaceTestResultsService {
 
     if (chunks.length > 0) {
       this.logger.log(`Found ${chunks.length} chunks for unit ${unit.id}`);
-      chunks.forEach(chunk => {
-        this.logger.log(`Chunk: key=${chunk.key}, type=${chunk.type}, variables=${chunk.variables}, ts=${chunk.ts}`);
+      chunks.forEach((chunk) => {
+        this.logger.log(
+          `Chunk: key=${chunk.key}, type=${chunk.type}, variables=${chunk.variables}, ts=${chunk.ts}`
+        );
       });
     } else {
       this.logger.log(`No chunks found for unit ${unit.id}`);
     }
 
     const chunkKeyMap = new Map<string, string>();
-    chunks.forEach(chunk => {
+    chunks.forEach((chunk) => {
       if (chunk.variables) {
-        const variables = chunk.variables.split(',').map(v => v.trim());
-        variables.forEach(variable => {
+        const variables = chunk.variables.split(',').map((v) => v.trim());
+        variables.forEach((variable) => {
           chunkKeyMap.set(variable, chunk.key);
         });
       }
@@ -1099,7 +1456,7 @@ export class WorkspaceTestResultsService {
 
     const responsesByChunk = {};
 
-    unit.responses.forEach(response => {
+    unit.responses.forEach((response) => {
       let value = response.value;
       if (typeof value === 'string') {
         if (value.startsWith('[') && value.endsWith(']')) {
@@ -1110,7 +1467,9 @@ export class WorkspaceTestResultsService {
           }
         } else if (value.startsWith('{') && value.endsWith('}')) {
           try {
-            const jsonArrayString = value.replace(/^\{/, '[').replace(/}$/, ']');
+            const jsonArrayString = value
+              .replace(/^\{/, '[')
+              .replace(/}$/, ']');
             value = JSON.parse(jsonArrayString);
           } catch (e) {
             this.logger.warn(`Failed to parse curly brace array: ${value}`);
@@ -1124,7 +1483,8 @@ export class WorkspaceTestResultsService {
         status: response.status
       };
 
-      const chunkKey = chunkKeyMap.get(response.variableid) || response.subform || '';
+      const chunkKey =
+        chunkKeyMap.get(response.variableid) || response.subform || '';
 
       if (!responsesByChunk[chunkKey]) {
         responsesByChunk[chunkKey] = [];
@@ -1133,9 +1493,10 @@ export class WorkspaceTestResultsService {
       responsesByChunk[chunkKey].push(mappedResponse);
     });
 
-    const responsesArray = Object.keys(responsesByChunk).map(chunkKey => {
+    const responsesArray = Object.keys(responsesByChunk).map((chunkKey) => {
       const uniqueResponses = responsesByChunk[chunkKey].filter(
-        (response: { id: string }, index: number, self: { id: string }[]) => index === self.findIndex((r: { id: string }) => r.id === response.id)
+        (response: { id: string }, index: number, self: { id: string }[]) =>
+          index === self.findIndex((r: { id: string }) => r.id === response.id)
       );
 
       return {
@@ -1149,28 +1510,43 @@ export class WorkspaceTestResultsService {
     };
 
     await this.cacheService.set(cacheKey, result);
-    this.logger.log(`Cached responses for: workspace=${workspaceId}, testPerson=${connector}, unitId=${unitId}`);
+    this.logger.log(
+      `Cached responses for: workspace=${workspaceId}, testPerson=${connector}, unitId=${unitId}`
+    );
 
     return result;
   }
 
-  async getResponsesByStatus(workspace_id: number, status: string, options?: { page: number; limit: number }): Promise<[ResponseEntity[], number]> {
-    this.logger.log(`Getting responses with status ${status} for workspace ${workspace_id}`);
+  async getResponsesByStatus(
+    workspace_id: number,
+    status: string,
+    options?: { page: number; limit: number }
+  ): Promise<[ResponseEntity[], number]> {
+    this.logger.log(
+      `Getting responses with status ${status} for workspace ${workspace_id}`
+    );
 
     try {
-      const queryBuilder = this.responseRepository.createQueryBuilder('response')
+      const queryBuilder = this.responseRepository
+        .createQueryBuilder('response')
         .leftJoinAndSelect('response.unit', 'unit')
         .leftJoinAndSelect('unit.booklet', 'booklet')
         .leftJoinAndSelect('booklet.person', 'person')
         .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
-        .where('response.status = :constStatus', { constStatus: statusStringToNumber('VALUE_CHANGED') })
-        .andWhere('person.workspace_id = :workspace_id_param', { workspace_id_param: workspace_id })
+        .where('response.status = :constStatus', {
+          constStatus: statusStringToNumber('VALUE_CHANGED')
+        })
+        .andWhere('person.workspace_id = :workspace_id_param', {
+          workspace_id_param: workspace_id
+        })
         .orderBy('response.id', 'ASC');
 
       if (status === 'null') {
         queryBuilder.andWhere('response.status_v1 IS NULL');
       } else {
-        queryBuilder.andWhere('response.status_v1 = :statusParam', { statusParam: status });
+        queryBuilder.andWhere('response.status_v1 = :statusParam', {
+          statusParam: status
+        });
       }
 
       let result: [ResponseEntity[], number];
@@ -1181,15 +1557,17 @@ export class WorkspaceTestResultsService {
         const validPage = Math.max(1, page);
         const validLimit = Math.min(Math.max(1, limit), MAX_LIMIT);
 
-        queryBuilder
-          .skip((validPage - 1) * validLimit)
-          .take(validLimit);
+        queryBuilder.skip((validPage - 1) * validLimit).take(validLimit);
 
         result = await queryBuilder.getManyAndCount();
-        this.logger.log(`Found ${result[0].length} responses with status ${status} (page ${validPage}, limit ${validLimit}, total ${result[1]}) for workspace ${workspace_id}`);
+        this.logger.log(
+          `Found ${result[0].length} responses with status ${status} (page ${validPage}, limit ${validLimit}, total ${result[1]}) for workspace ${workspace_id}`
+        );
       } else {
         result = await queryBuilder.getManyAndCount();
-        this.logger.log(`Found ${result[0].length} responses with status ${status} for workspace ${workspace_id}`);
+        this.logger.log(
+          `Found ${result[0].length} responses with status ${status} for workspace ${workspace_id}`
+        );
       }
 
       return result;
@@ -1204,14 +1582,14 @@ export class WorkspaceTestResultsService {
     testPersonIds: string,
     userId: string
   ): Promise<{
-      success: boolean;
-      report: {
-        deletedPersons: string[];
-        warnings: string[];
-      };
-    }> {
-    return this.connection.transaction(async manager => {
-      const ids = testPersonIds.split(',').map(id => id.trim());
+    success: boolean;
+    report: {
+      deletedPersons: string[];
+      warnings: string[];
+    };
+  }> {
+    return this.connection.transaction(async (manager) => {
+      const ids = testPersonIds.split(',').map((id) => id.trim());
       const report = {
         deletedPersons: [],
         warnings: []
@@ -1238,7 +1616,7 @@ export class WorkspaceTestResultsService {
         return { success: false, report };
       }
 
-      const existingIds = existingPersons.map(person => person.id);
+      const existingIds = existingPersons.map((person) => person.id);
 
       await manager
         .createQueryBuilder()
@@ -1268,7 +1646,9 @@ export class WorkspaceTestResultsService {
             }
           );
         } catch (error) {
-          this.logger.error(`Failed to create journal entry for deleting test person ${person.id}: ${error.message}`);
+          this.logger.error(
+            `Failed to create journal entry for deleting test person ${person.id}: ${error.message}`
+          );
         }
       }
 
@@ -1281,13 +1661,13 @@ export class WorkspaceTestResultsService {
     unitId: number,
     userId: string
   ): Promise<{
-      success: boolean;
-      report: {
-        deletedUnit: number | null;
-        warnings: string[];
-      };
-    }> {
-    return this.connection.transaction(async manager => {
+    success: boolean;
+    report: {
+      deletedUnit: number | null;
+      warnings: string[];
+    };
+  }> {
+    return this.connection.transaction(async (manager) => {
       const report = {
         deletedUnit: null,
         warnings: []
@@ -1339,7 +1719,9 @@ export class WorkspaceTestResultsService {
           }
         );
       } catch (error) {
-        this.logger.error(`Failed to create journal entry for deleting unit ${unitId}: ${error.message}`);
+        this.logger.error(
+          `Failed to create journal entry for deleting unit ${unitId}: ${error.message}`
+        );
       }
 
       return { success: true, report };
@@ -1351,13 +1733,13 @@ export class WorkspaceTestResultsService {
     responseId: number,
     userId: string
   ): Promise<{
-      success: boolean;
-      report: {
-        deletedResponse: number | null;
-        warnings: string[];
-      };
-    }> {
-    return this.connection.transaction(async manager => {
+    success: boolean;
+    report: {
+      deletedResponse: number | null;
+      warnings: string[];
+    };
+  }> {
+    return this.connection.transaction(async (manager) => {
       const report = {
         deletedResponse: null,
         warnings: []
@@ -1412,7 +1794,9 @@ export class WorkspaceTestResultsService {
           }
         );
       } catch (error) {
-        this.logger.error(`Failed to create journal entry for deleting response ${responseId}: ${error.message}`);
+        this.logger.error(
+          `Failed to create journal entry for deleting response ${responseId}: ${error.message}`
+        );
       }
 
       return { success: true, report };
@@ -1424,13 +1808,13 @@ export class WorkspaceTestResultsService {
     bookletId: number,
     userId: string
   ): Promise<{
-      success: boolean;
-      report: {
-        deletedBooklet: number | null;
-        warnings: string[];
-      };
-    }> {
-    return this.connection.transaction(async manager => {
+    success: boolean;
+    report: {
+      deletedBooklet: number | null;
+      warnings: string[];
+    };
+  }> {
+    return this.connection.transaction(async (manager) => {
       const report = {
         deletedBooklet: null,
         warnings: []
@@ -1480,7 +1864,9 @@ export class WorkspaceTestResultsService {
           }
         );
       } catch (error) {
-        this.logger.error(`Failed to create journal entry for deleting booklet ${bookletId}: ${error.message}`);
+        this.logger.error(
+          `Failed to create journal entry for deleting booklet ${bookletId}: ${error.message}`
+        );
       }
 
       return { success: true, report };
@@ -1498,31 +1884,31 @@ export class WorkspaceTestResultsService {
       codedStatus?: string;
       group?: string;
       code?: string;
-      version?: 'v1' | 'v2' | 'v3'
+      version?: 'v1' | 'v2' | 'v3';
     },
     options: { page?: number; limit?: number } = {}
   ): Promise<{
-      data: {
-        responseId: number;
-        variableId: string;
-        value: string;
-        status: string;
-        code?: number;
-        score?: number;
-        codedStatus?: string;
-        unitId: number;
-        unitName: string;
-        unitAlias: string | null;
-        bookletId: number;
-        bookletName: string;
-        personId: number;
-        personLogin: string;
-        personCode: string;
-        personGroup: string;
-        variablePage?: string;
-      }[];
-      total: number;
-    }> {
+    data: {
+      responseId: number;
+      variableId: string;
+      value: string;
+      status: string;
+      code?: number;
+      score?: number;
+      codedStatus?: string;
+      unitId: number;
+      unitName: string;
+      unitAlias: string | null;
+      bookletId: number;
+      bookletName: string;
+      personId: number;
+      personLogin: string;
+      personCode: string;
+      personGroup: string;
+      variablePage?: string;
+    }[];
+    total: number;
+  }> {
     if (!workspaceId) {
       throw new Error('workspaceId is required.');
     }
@@ -1535,10 +1921,13 @@ export class WorkspaceTestResultsService {
 
     try {
       this.logger.log(
-        `Searching for responses in workspace: ${workspaceId} with params: ${JSON.stringify(searchParams)} (page: ${page}, limit: ${limit})`
+        `Searching for responses in workspace: ${workspaceId} with params: ${JSON.stringify(
+          searchParams
+        )} (page: ${page}, limit: ${limit})`
       );
 
-      const query = this.responseRepository.createQueryBuilder('response')
+      const query = this.responseRepository
+        .createQueryBuilder('response')
         .innerJoinAndSelect('response.unit', 'unit')
         .innerJoinAndSelect('unit.booklet', 'booklet')
         .innerJoinAndSelect('booklet.person', 'person')
@@ -1547,28 +1936,42 @@ export class WorkspaceTestResultsService {
         .andWhere('person.consider = :consider', { consider: true });
 
       if (searchParams.value) {
-        query.andWhere('response.value ILIKE :value', { value: `%${searchParams.value}%` });
+        query.andWhere('response.value ILIKE :value', {
+          value: `%${searchParams.value}%`
+        });
       }
 
       if (searchParams.variableId) {
-        query.andWhere('response.variableid ILIKE :variableId', { variableId: `%${searchParams.variableId}%` });
+        query.andWhere('response.variableid ILIKE :variableId', {
+          variableId: `%${searchParams.variableId}%`
+        });
       }
 
       if (searchParams.unitName) {
-        query.andWhere('unit.name ILIKE :unitName', { unitName: `%${searchParams.unitName}%` });
+        query.andWhere('unit.name ILIKE :unitName', {
+          unitName: `%${searchParams.unitName}%`
+        });
       }
 
       if (searchParams.bookletName) {
-        query.andWhere('bookletinfo.name ILIKE :bookletName', { bookletName: `%${searchParams.bookletName}%` });
+        query.andWhere('bookletinfo.name ILIKE :bookletName', {
+          bookletName: `%${searchParams.bookletName}%`
+        });
       }
 
       if (searchParams.status) {
-        query.andWhere('response.status = :status', { status: searchParams.status });
+        query.andWhere('response.status = :status', {
+          status: searchParams.status
+        });
       }
 
       if (searchParams.codedStatus) {
-        const statusColumn = searchParams.version ? `status_${searchParams.version}` : 'status_v1';
-        query.andWhere(`response.${statusColumn} = :codedStatus`, { codedStatus: searchParams.codedStatus });
+        const statusColumn = searchParams.version
+          ? `status_${searchParams.version}`
+          : 'status_v1';
+        query.andWhere(`response.${statusColumn} = :codedStatus`, {
+          codedStatus: searchParams.codedStatus
+        });
       }
 
       if (searchParams.group) {
@@ -1582,7 +1985,9 @@ export class WorkspaceTestResultsService {
       const total = await query.getCount();
 
       if (total === 0) {
-        this.logger.log(`No responses found matching the criteria in workspace: ${workspaceId}`);
+        this.logger.log(
+          `No responses found matching the criteria in workspace: ${workspaceId}`
+        );
         return { data: [], total: 0 };
       }
 
@@ -1590,22 +1995,35 @@ export class WorkspaceTestResultsService {
 
       const responses = await query.getMany();
 
-      this.logger.log(`Found ${total} responses matching the criteria in workspace: ${workspaceId}, returning ${responses.length} for page ${page}`);
+      this.logger.log(
+        `Found ${total} responses matching the criteria in workspace: ${workspaceId}, returning ${responses.length} for page ${page}`
+      );
 
       // Pre-load variable page maps for all unique units
-      const uniqueUnitNames = [...new Set(responses.map(r => r.unit.name))];
+      const uniqueUnitNames = [...new Set(responses.map((r) => r.unit.name))];
       const variablePageMaps = new Map<string, Map<string, string>>();
       for (const unitName of uniqueUnitNames) {
-        const pageMap = await this.codingListService.getVariablePageMap(unitName, workspaceId);
+        const pageMap = await this.codingListService.getVariablePageMap(
+          unitName,
+          workspaceId
+        );
         variablePageMaps.set(unitName, pageMap);
       }
 
       const version = searchParams.version || 'v1';
-      const data = responses.map(response => {
-        const code = response[`code_${version}` as keyof ResponseEntity] as number;
-        const score = response[`score_${version}` as keyof ResponseEntity] as number;
-        const codedStatus = response[`status_${version}` as keyof ResponseEntity] as number;
-        const variablePage = variablePageMaps.get(response.unit.name)?.get(response.variableid) || '0';
+      const data = responses.map((response) => {
+        const code = response[
+          `code_${version}` as keyof ResponseEntity
+        ] as number;
+        const score = response[
+          `score_${version}` as keyof ResponseEntity
+        ] as number;
+        const codedStatus = response[
+          `status_${version}` as keyof ResponseEntity
+        ] as number;
+        const variablePage =
+          variablePageMaps.get(response.unit.name)?.get(response.variableid) ||
+          '0';
 
         return {
           responseId: response.id,
@@ -1634,7 +2052,9 @@ export class WorkspaceTestResultsService {
         `Failed to search for responses in workspace: ${workspaceId}`,
         error.stack
       );
-      throw new Error(`An error occurred while searching for responses: ${error.message}`);
+      throw new Error(
+        `An error occurred while searching for responses: ${error.message}`
+      );
     }
   }
 
@@ -1643,21 +2063,34 @@ export class WorkspaceTestResultsService {
     unitName: string,
     options: { page?: number; limit?: number } = {}
   ): Promise<{
-      data: {
+    data: {
+      unitId: number;
+      unitName: string;
+      unitAlias: string | null;
+      bookletId: number;
+      bookletName: string;
+      personId: number;
+      personLogin: string;
+      personCode: string;
+      personGroup: string;
+      tags: {
+        id: number;
         unitId: number;
-        unitName: string;
-        unitAlias: string | null;
-        bookletId: number;
-        bookletName: string;
-        personId: number;
-        personLogin: string;
-        personCode: string;
-        personGroup: string;
-        tags: { id: number; unitId: number; tag: string; color?: string; createdAt: Date }[];
-        responses: { variableId: string; value: string; status: string; code?: number; score?: number; codedStatus?: string }[];
+        tag: string;
+        color?: string;
+        createdAt: Date;
       }[];
-      total: number;
-    }> {
+      responses: {
+        variableId: string;
+        value: string;
+        status: string;
+        code?: number;
+        score?: number;
+        codedStatus?: string;
+      }[];
+    }[];
+    total: number;
+  }> {
     if (!workspaceId || !unitName) {
       throw new Error('Both workspaceId and unitName are required.');
     }
@@ -1666,14 +2099,17 @@ export class WorkspaceTestResultsService {
     const limit = options.limit || 10;
     const skip = (page - 1) * limit;
 
-    this.logger.log(`Finding units by name for workspace ${workspaceId}, unitName: ${unitName}`);
+    this.logger.log(
+      `Finding units by name for workspace ${workspaceId}, unitName: ${unitName}`
+    );
 
     try {
       this.logger.log(
         `Searching for units with name: ${unitName} in workspace: ${workspaceId} (page: ${page}, limit: ${limit})`
       );
 
-      const query = this.unitRepository.createQueryBuilder('unit')
+      const query = this.unitRepository
+        .createQueryBuilder('unit')
         .innerJoinAndSelect('unit.booklet', 'booklet')
         .innerJoinAndSelect('booklet.person', 'person')
         .innerJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
@@ -1685,7 +2121,9 @@ export class WorkspaceTestResultsService {
       const total = await query.getCount();
 
       if (total === 0) {
-        this.logger.log(`No units found with name: ${unitName} in workspace: ${workspaceId}`);
+        this.logger.log(
+          `No units found with name: ${unitName} in workspace: ${workspaceId}`
+        );
         return { data: [], total: 0 };
       }
 
@@ -1693,19 +2131,30 @@ export class WorkspaceTestResultsService {
 
       const units = await query.getMany();
 
-      this.logger.log(`Found ${total} units with name: ${unitName} in workspace: ${workspaceId}, returning ${units.length} for page ${page}`);
-
-      const unitIds = units.map(unit => unit.id);
-      const allUnitTags = await Promise.all(
-        unitIds.map(unitId => this.unitTagService.findAllByUnitId(unitId))
+      this.logger.log(
+        `Found ${total} units with name: ${unitName} in workspace: ${workspaceId}, returning ${units.length} for page ${page}`
       );
 
-      const unitTagsMap = new Map<number, { id: number; unitId: number; tag: string; color?: string; createdAt: Date }[]>();
+      const unitIds = units.map((unit) => unit.id);
+      const allUnitTags = await Promise.all(
+        unitIds.map((unitId) => this.unitTagService.findAllByUnitId(unitId))
+      );
+
+      const unitTagsMap = new Map<
+        number,
+        {
+          id: number;
+          unitId: number;
+          tag: string;
+          color?: string;
+          createdAt: Date;
+        }[]
+      >();
       unitIds.forEach((unitId, index) => {
         unitTagsMap.set(unitId, allUnitTags[index]);
       });
 
-      let data = units.map(unit => ({
+      let data = units.map((unit) => ({
         unitId: unit.id,
         unitName: unit.name,
         unitAlias: unit.alias,
@@ -1716,18 +2165,20 @@ export class WorkspaceTestResultsService {
         personCode: unit.booklet.person.code,
         personGroup: unit.booklet.person.group,
         tags: unitTagsMap.get(unit.id) || [],
-        responses: unit.responses ? unit.responses.map(response => ({
-          variableId: response.variableid,
-          value: response.value || '',
-          status: statusNumberToString(response.status) || 'UNSET',
-          code: response.code_v1,
-          score: response.score_v1,
-          codedStatus: statusNumberToString(response.status_v1) || 'UNSET'
-        })) : []
+        responses: unit.responses
+          ? unit.responses.map((response) => ({
+              variableId: response.variableid,
+              value: response.value || '',
+              status: statusNumberToString(response.status) || 'UNSET',
+              code: response.code_v1,
+              score: response.score_v1,
+              codedStatus: statusNumberToString(response.status_v1) || 'UNSET'
+            }))
+          : []
       }));
 
-      const uniqueMap = new Map<string, typeof data[0]>();
-      data.forEach(item => {
+      const uniqueMap = new Map<string, (typeof data)[0]>();
+      data.forEach((item) => {
         const uniqueKey = `${item.personGroup}|${item.personCode}|${item.personLogin}|${item.bookletName}|${item.unitName}`;
         if (!uniqueMap.has(uniqueKey)) {
           uniqueMap.set(uniqueKey, item);
@@ -1741,7 +2192,9 @@ export class WorkspaceTestResultsService {
         `Failed to search for units with name: ${unitName} in workspace: ${workspaceId}`,
         error.stack
       );
-      throw new Error(`An error occurred while searching for units with name: ${unitName}: ${error.message}`);
+      throw new Error(
+        `An error occurred while searching for units with name: ${unitName}: ${error.message}`
+      );
     }
   }
 
@@ -1750,21 +2203,21 @@ export class WorkspaceTestResultsService {
     bookletName: string,
     options: { page?: number; limit?: number } = {}
   ): Promise<{
-      data: {
-        bookletId: number;
-        bookletName: string;
-        personId: number;
-        personLogin: string;
-        personCode: string;
-        personGroup: string;
-        units: {
-          unitId: number;
-          unitName: string;
-          unitAlias: string | null;
-        }[];
+    data: {
+      bookletId: number;
+      bookletName: string;
+      personId: number;
+      personLogin: string;
+      personCode: string;
+      personGroup: string;
+      units: {
+        unitId: number;
+        unitName: string;
+        unitAlias: string | null;
       }[];
-      total: number;
-    }> {
+    }[];
+    total: number;
+  }> {
     if (!workspaceId || !bookletName) {
       throw new Error('Both workspaceId and bookletName are required.');
     }
@@ -1773,25 +2226,32 @@ export class WorkspaceTestResultsService {
     const limit = options.limit || 10;
     const skip = (page - 1) * limit;
 
-    this.logger.log(`Finding booklets by name for workspace ${workspaceId}, bookletName: ${bookletName}`);
+    this.logger.log(
+      `Finding booklets by name for workspace ${workspaceId}, bookletName: ${bookletName}`
+    );
 
     try {
       this.logger.log(
         `Searching for booklets with name: ${bookletName} in workspace: ${workspaceId} (page: ${page}, limit: ${limit})`
       );
 
-      const query = this.bookletRepository.createQueryBuilder('booklet')
+      const query = this.bookletRepository
+        .createQueryBuilder('booklet')
         .innerJoinAndSelect('booklet.person', 'person')
         .innerJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
         .leftJoinAndSelect('booklet.units', 'unit')
-        .where('bookletinfo.name ILIKE :bookletName', { bookletName: `%${bookletName}%` })
+        .where('bookletinfo.name ILIKE :bookletName', {
+          bookletName: `%${bookletName}%`
+        })
         .andWhere('person.workspace_id = :workspaceId', { workspaceId })
         .andWhere('person.consider = :consider', { consider: true });
 
       const total = await query.getCount();
 
       if (total === 0) {
-        this.logger.log(`No booklets found with name: ${bookletName} in workspace: ${workspaceId}`);
+        this.logger.log(
+          `No booklets found with name: ${bookletName} in workspace: ${workspaceId}`
+        );
         return { data: [], total: 0 };
       }
 
@@ -1799,20 +2259,24 @@ export class WorkspaceTestResultsService {
 
       const booklets = await query.getMany();
 
-      this.logger.log(`Found ${total} booklets with name: ${bookletName} in workspace: ${workspaceId}, returning ${booklets.length} for page ${page}`);
+      this.logger.log(
+        `Found ${total} booklets with name: ${bookletName} in workspace: ${workspaceId}, returning ${booklets.length} for page ${page}`
+      );
 
-      const data = booklets.map(booklet => ({
+      const data = booklets.map((booklet) => ({
         bookletId: booklet.id,
         bookletName: booklet.bookletinfo.name,
         personId: booklet.person.id,
         personLogin: booklet.person.login,
         personCode: booklet.person.code,
         personGroup: booklet.person.group,
-        units: booklet.units ? booklet.units.map(unit => ({
-          unitId: unit.id,
-          unitName: unit.name,
-          unitAlias: unit.alias
-        })) : []
+        units: booklet.units
+          ? booklet.units.map((unit) => ({
+              unitId: unit.id,
+              unitName: unit.name,
+              unitAlias: unit.alias
+            }))
+          : []
       }));
 
       return { data, total };
@@ -1821,11 +2285,22 @@ export class WorkspaceTestResultsService {
         `Failed to search for booklets with name: ${bookletName} in workspace: ${workspaceId}`,
         error.stack
       );
-      throw new Error(`An error occurred while searching for booklets with name: ${bookletName}: ${error.message}`);
+      throw new Error(
+        `An error occurred while searching for booklets with name: ${bookletName}: ${error.message}`
+      );
     }
   }
 
-  async exportTestResults(workspaceId: number, res: Response, filters?: { groupNames?: string[]; bookletNames?: string[]; unitNames?: string[]; personIds?: number[] }): Promise<void> {
+  async exportTestResults(
+    workspaceId: number,
+    res: Response,
+    filters?: {
+      groupNames?: string[];
+      bookletNames?: string[];
+      unitNames?: string[];
+      personIds?: number[];
+    }
+  ): Promise<void> {
     this.logger.log(`Exporting test results for workspace ${workspaceId}`);
     await this.exportTestResultsToStream(workspaceId, res, filters);
   }
@@ -1833,18 +2308,35 @@ export class WorkspaceTestResultsService {
   async exportTestResultsToFile(
     workspaceId: number,
     filePath: string,
-    filters?: { groupNames?: string[]; bookletNames?: string[]; unitNames?: string[]; personIds?: number[] },
+    filters?: {
+      groupNames?: string[];
+      bookletNames?: string[];
+      unitNames?: string[];
+      personIds?: number[];
+    },
     progressCallback?: (progress: number) => Promise<void> | void
   ): Promise<void> {
-    this.logger.log(`Exporting test results for workspace ${workspaceId} to file ${filePath}`);
+    this.logger.log(
+      `Exporting test results for workspace ${workspaceId} to file ${filePath}`
+    );
     const fileStream = fs.createWriteStream(filePath);
-    await this.exportTestResultsToStream(workspaceId, fileStream, filters, progressCallback);
+    await this.exportTestResultsToStream(
+      workspaceId,
+      fileStream,
+      filters,
+      progressCallback
+    );
   }
 
   async exportTestResultsToStream(
     workspaceId: number,
     stream: Writable,
-    filters?: { groupNames?: string[]; bookletNames?: string[]; unitNames?: string[]; personIds?: number[] },
+    filters?: {
+      groupNames?: string[];
+      bookletNames?: string[];
+      unitNames?: string[];
+      personIds?: number[];
+    },
     progressCallback?: (progress: number) => Promise<void> | void
   ): Promise<void> {
     const csvStream = csv.format({
@@ -1868,7 +2360,8 @@ export class WorkspaceTestResultsService {
     let processedCount = 0;
 
     const createBaseQuery = () => {
-      const qb = this.unitRepository.createQueryBuilder('unit')
+      const qb = this.unitRepository
+        .createQueryBuilder('unit')
         .innerJoin('unit.booklet', 'booklet')
         .innerJoin('booklet.person', 'person')
         .innerJoin('booklet.bookletinfo', 'bookletinfo')
@@ -1886,16 +2379,24 @@ export class WorkspaceTestResultsService {
         .andWhere('person.consider = :consider', { consider: true });
 
       if (filters?.groupNames?.length) {
-        qb.andWhere('person.group IN (:...groupNames)', { groupNames: filters.groupNames });
+        qb.andWhere('person.group IN (:...groupNames)', {
+          groupNames: filters.groupNames
+        });
       }
       if (filters?.bookletNames?.length) {
-        qb.andWhere('bookletinfo.name IN (:...bookletNames)', { bookletNames: filters.bookletNames });
+        qb.andWhere('bookletinfo.name IN (:...bookletNames)', {
+          bookletNames: filters.bookletNames
+        });
       }
       if (filters?.unitNames?.length) {
-        qb.andWhere('unit.name IN (:...unitNames)', { unitNames: filters.unitNames });
+        qb.andWhere('unit.name IN (:...unitNames)', {
+          unitNames: filters.unitNames
+        });
       }
       if (filters?.personIds?.length) {
-        qb.andWhere('person.id IN (:...personIds)', { personIds: filters.personIds });
+        qb.andWhere('person.id IN (:...personIds)', {
+          personIds: filters.personIds
+        });
       }
       return qb;
     };
@@ -1919,7 +2420,7 @@ export class WorkspaceTestResultsService {
       }
 
       lastUnitId = units[units.length - 1].id;
-      const unitIds = units.map(u => u.id);
+      const unitIds = units.map((u) => u.id);
 
       const responses = await this.responseRepository
         .createQueryBuilder('response')
@@ -1959,27 +2460,32 @@ export class WorkspaceTestResultsService {
       // Create maps for quick lookup
       const responsesByUnitId = new Map<number, ResponseEntity[]>();
       const chunksByUnitId = new Map<number, ChunkEntity[]>();
-      const lastStatesByUnitId = new Map<number, Array<{ key: string; value: unknown }>>();
+      const lastStatesByUnitId = new Map<
+        number,
+        Array<{ key: string; value: unknown }>
+      >();
 
-      responses.forEach(r => {
+      responses.forEach((r) => {
         if (!responsesByUnitId.has(r.unitid)) {
           responsesByUnitId.set(r.unitid, []);
         }
         responsesByUnitId.get(r.unitid)!.push(r);
       });
 
-      chunks.forEach(chunk => {
+      chunks.forEach((chunk) => {
         if (!chunksByUnitId.has(chunk.unitid)) {
           chunksByUnitId.set(chunk.unitid, []);
         }
         chunksByUnitId.get(chunk.unitid)!.push(chunk);
       });
 
-      lastStates.forEach(ls => {
+      lastStates.forEach((ls) => {
         if (!lastStatesByUnitId.has(ls.unitid)) {
           lastStatesByUnitId.set(ls.unitid, []);
         }
-        lastStatesByUnitId.get(ls.unitid)!.push({ key: ls.key, value: ls.value });
+        lastStatesByUnitId
+          .get(ls.unitid)!
+          .push({ key: ls.key, value: ls.value });
       });
 
       for (const unit of units) {
@@ -1990,10 +2496,10 @@ export class WorkspaceTestResultsService {
         const chunkKeyMap = new Map<string, string>();
         const chunkMetaByKey = new Map<string, { ts: number; type: string }>();
 
-        unitChunks.forEach(chunk => {
+        unitChunks.forEach((chunk) => {
           if (chunk.variables) {
-            const variables = chunk.variables.split(',').map(v => v.trim());
-            variables.forEach(variable => {
+            const variables = chunk.variables.split(',').map((v) => v.trim());
+            variables.forEach((variable) => {
               chunkKeyMap.set(variable, chunk.key);
             });
           }
@@ -2009,7 +2515,7 @@ export class WorkspaceTestResultsService {
 
         const responsesByChunkKey = new Map<string, TcMergeResponse[]>();
 
-        unitResponses.forEach(r => {
+        unitResponses.forEach((r) => {
           const chunkKey = chunkKeyMap.get(r.variableid) || r.subform || '';
           if (!responsesByChunkKey.has(chunkKey)) {
             responsesByChunkKey.set(chunkKey, []);
@@ -2037,7 +2543,9 @@ export class WorkspaceTestResultsService {
         const exportChunks: Chunk[] = [];
         responsesByChunkKey.forEach((chunkResponses, chunkKey) => {
           const meta = chunkMetaByKey.get(chunkKey);
-          const resolvedSubForm = chunkResponses.find(r => r.subform && r.subform.length > 0)?.subform || '';
+          const resolvedSubForm =
+            chunkResponses.find((r) => r.subform && r.subform.length > 0)
+              ?.subform || '';
 
           exportChunks.push({
             id: chunkKey,
@@ -2049,7 +2557,7 @@ export class WorkspaceTestResultsService {
         });
 
         const lastStateMap: { [key: string]: unknown } = {};
-        unitLastStates.forEach(ls => {
+        unitLastStates.forEach((ls) => {
           lastStateMap[ls.key] = ls.value;
         });
 
@@ -2065,7 +2573,7 @@ export class WorkspaceTestResultsService {
         });
 
         if (!canContinue) {
-          await new Promise(resolve => {
+          await new Promise((resolve) => {
             csvStream.once('drain', resolve);
           });
         }
@@ -2089,7 +2597,12 @@ export class WorkspaceTestResultsService {
   async exportTestLogs(
     workspaceId: number,
     res: Response,
-    filters?: { groupNames?: string[]; bookletNames?: string[]; unitNames?: string[]; personIds?: number[] }
+    filters?: {
+      groupNames?: string[];
+      bookletNames?: string[];
+      unitNames?: string[];
+      personIds?: number[];
+    }
   ): Promise<void> {
     this.logger.log(`Exporting test logs for workspace ${workspaceId}`);
     await this.exportTestLogsToStream(workspaceId, res, filters);
@@ -2098,18 +2611,35 @@ export class WorkspaceTestResultsService {
   async exportTestLogsToFile(
     workspaceId: number,
     filePath: string,
-    filters?: { groupNames?: string[]; bookletNames?: string[]; unitNames?: string[]; personIds?: number[] },
+    filters?: {
+      groupNames?: string[];
+      bookletNames?: string[];
+      unitNames?: string[];
+      personIds?: number[];
+    },
     progressCallback?: (progress: number) => Promise<void> | void
   ): Promise<void> {
-    this.logger.log(`Exporting test logs for workspace ${workspaceId} to file ${filePath}`);
+    this.logger.log(
+      `Exporting test logs for workspace ${workspaceId} to file ${filePath}`
+    );
     const fileStream = fs.createWriteStream(filePath);
-    await this.exportTestLogsToStream(workspaceId, fileStream, filters, progressCallback);
+    await this.exportTestLogsToStream(
+      workspaceId,
+      fileStream,
+      filters,
+      progressCallback
+    );
   }
 
   async exportTestLogsToStream(
     workspaceId: number,
     stream: Writable,
-    filters?: { groupNames?: string[]; bookletNames?: string[]; unitNames?: string[]; personIds?: number[] },
+    filters?: {
+      groupNames?: string[];
+      bookletNames?: string[];
+      unitNames?: string[];
+      personIds?: number[];
+    },
     progressCallback?: (progress: number) => Promise<void> | void
   ): Promise<void> {
     const csvStream = csv.format({
@@ -2140,7 +2670,8 @@ export class WorkspaceTestResultsService {
       let hasMoreBookletLogs = true;
 
       const createBookletLogsBaseQuery = () => {
-        const qb = this.bookletLogRepository.createQueryBuilder('bookletLog')
+        const qb = this.bookletLogRepository
+          .createQueryBuilder('bookletLog')
           .innerJoin('bookletLog.booklet', 'booklet')
           .innerJoin('booklet.person', 'person')
           .innerJoin('booklet.bookletinfo', 'bookletinfo')
@@ -2156,13 +2687,19 @@ export class WorkspaceTestResultsService {
           .andWhere('person.consider = :consider', { consider: true });
 
         if (filters?.groupNames?.length) {
-          qb.andWhere('person.group IN (:...groupNames)', { groupNames: filters.groupNames });
+          qb.andWhere('person.group IN (:...groupNames)', {
+            groupNames: filters.groupNames
+          });
         }
         if (filters?.bookletNames?.length) {
-          qb.andWhere('bookletinfo.name IN (:...bookletNames)', { bookletNames: filters.bookletNames });
+          qb.andWhere('bookletinfo.name IN (:...bookletNames)', {
+            bookletNames: filters.bookletNames
+          });
         }
         if (filters?.personIds?.length) {
-          qb.andWhere('person.id IN (:...personIds)', { personIds: filters.personIds });
+          qb.andWhere('person.id IN (:...personIds)', {
+            personIds: filters.personIds
+          });
         }
 
         return qb;
@@ -2176,15 +2713,15 @@ export class WorkspaceTestResultsService {
           .orderBy('bookletLog.id', 'ASC')
           .take(BATCH_SIZE)
           .getRawMany<{
-          id: number;
-          ts: string | number | null;
-          key: string;
-          parameter: string | null;
-          groupname: string;
-          loginname: string;
-          code: string;
-          bookletname: string;
-        }>();
+            id: number;
+            ts: string | number | null;
+            key: string;
+            parameter: string | null;
+            groupname: string;
+            loginname: string;
+            code: string;
+            bookletname: string;
+          }>();
 
         if (logs.length === 0) {
           hasMoreBookletLogs = false;
@@ -2208,14 +2745,16 @@ export class WorkspaceTestResultsService {
           });
 
           if (!canContinue) {
-            await new Promise(resolve => {
+            await new Promise((resolve) => {
               csvStream.once('drain', resolve);
             });
           }
 
           processedCount += 1;
-          if (progressCallback && (totalBookletLogs > 0)) {
-            await progressCallback(Math.round((processedCount / totalBookletLogs) * 100));
+          if (progressCallback && totalBookletLogs > 0) {
+            await progressCallback(
+              Math.round((processedCount / totalBookletLogs) * 100)
+            );
           }
         }
       }
@@ -2226,7 +2765,8 @@ export class WorkspaceTestResultsService {
     let hasMoreUnitLogs = true;
 
     const createUnitLogsBaseQuery = () => {
-      const qb = this.unitLogRepository.createQueryBuilder('unitLog')
+      const qb = this.unitLogRepository
+        .createQueryBuilder('unitLog')
         .innerJoin('unitLog.unit', 'unit')
         .innerJoin('unit.booklet', 'booklet')
         .innerJoin('booklet.person', 'person')
@@ -2245,16 +2785,24 @@ export class WorkspaceTestResultsService {
         .andWhere('person.consider = :consider', { consider: true });
 
       if (filters?.groupNames?.length) {
-        qb.andWhere('person.group IN (:...groupNames)', { groupNames: filters.groupNames });
+        qb.andWhere('person.group IN (:...groupNames)', {
+          groupNames: filters.groupNames
+        });
       }
       if (filters?.bookletNames?.length) {
-        qb.andWhere('bookletinfo.name IN (:...bookletNames)', { bookletNames: filters.bookletNames });
+        qb.andWhere('bookletinfo.name IN (:...bookletNames)', {
+          bookletNames: filters.bookletNames
+        });
       }
       if (filters?.unitNames?.length) {
-        qb.andWhere('unit.name IN (:...unitNames)', { unitNames: filters.unitNames });
+        qb.andWhere('unit.name IN (:...unitNames)', {
+          unitNames: filters.unitNames
+        });
       }
       if (filters?.personIds?.length) {
-        qb.andWhere('person.id IN (:...personIds)', { personIds: filters.personIds });
+        qb.andWhere('person.id IN (:...personIds)', {
+          personIds: filters.personIds
+        });
       }
 
       return qb;
@@ -2268,17 +2816,17 @@ export class WorkspaceTestResultsService {
         .orderBy('unitLog.id', 'ASC')
         .take(BATCH_SIZE)
         .getRawMany<{
-        id: number;
-        ts: string | number | null;
-        key: string;
-        parameter: string | null;
-        unitname: string;
-        originalUnitId: string | null;
-        groupname: string;
-        loginname: string;
-        code: string;
-        bookletname: string;
-      }>();
+          id: number;
+          ts: string | number | null;
+          key: string;
+          parameter: string | null;
+          unitname: string;
+          originalUnitId: string | null;
+          groupname: string;
+          loginname: string;
+          code: string;
+          bookletname: string;
+        }>();
 
       if (logs.length === 0) {
         hasMoreUnitLogs = false;
@@ -2303,14 +2851,16 @@ export class WorkspaceTestResultsService {
         });
 
         if (!canContinue) {
-          await new Promise(resolve => {
+          await new Promise((resolve) => {
             csvStream.once('drain', resolve);
           });
         }
 
         processedCount += 1;
-        if (progressCallback && (totalUnitLogs > 0)) {
-          await progressCallback(Math.round((processedCount / totalUnitLogs) * 100));
+        if (progressCallback && totalUnitLogs > 0) {
+          await progressCallback(
+            Math.round((processedCount / totalUnitLogs) * 100)
+          );
         }
       }
     }
@@ -2324,7 +2874,12 @@ export class WorkspaceTestResultsService {
   }
 
   async getExportOptions(workspaceId: number): Promise<{
-    testPersons: { id: number; groupName: string; code: string; login: string }[];
+    testPersons: {
+      id: number;
+      groupName: string;
+      code: string;
+      login: string;
+    }[];
     groups: string[];
     booklets: string[];
     units: string[];
@@ -2366,12 +2921,15 @@ export class WorkspaceTestResultsService {
       .getRawMany();
 
     return {
-      testPersons: testPersons.map(p => ({
-        id: p.id, groupName: p.group, code: p.code, login: p.login
+      testPersons: testPersons.map((p) => ({
+        id: p.id,
+        groupName: p.group,
+        code: p.code,
+        login: p.login
       })),
-      groups: groups.map(g => g.name),
-      booklets: booklets.map(b => b.name),
-      units: units.map(u => u.name)
+      groups: groups.map((g) => g.name),
+      booklets: booklets.map((b) => b.name),
+      units: units.map((u) => u.name)
     };
   }
 }

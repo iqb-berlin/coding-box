@@ -127,9 +127,10 @@ export class TestResultsFlatTableComponent implements OnDestroy {
   private unitIdsWithNotes = new Set<number>();
 
   private personTestResultsCache = new Map<
-    number,
-    Observable<BookletFromPersonTestResults[]>
+  number,
+  Observable<BookletFromPersonTestResults[]>
   >();
+
   private personTestResultsCacheOrder: number[] = [];
   private readonly PERSON_TEST_RESULTS_CACHE_MAX = 5;
 
@@ -140,6 +141,7 @@ export class TestResultsFlatTableComponent implements OnDestroy {
     'booklet',
     'unit',
     'response',
+    'responseStatus',
     'responseValue',
     'frequencies',
     'tags',
@@ -148,8 +150,8 @@ export class TestResultsFlatTableComponent implements OnDestroy {
 
   isLoadingFrequencies: boolean = false;
   private frequenciesByComboKey = new Map<
-    string,
-    { total: number; values: FlatResponseFrequencyItem[] }
+  string,
+  { total: number; values: FlatResponseFrequencyItem[] }
   >();
 
   flatData: FlatResponseRow[] = [];
@@ -165,18 +167,20 @@ export class TestResultsFlatTableComponent implements OnDestroy {
     booklet: string;
     unit: string;
     response: string;
+    responseStatus: string;
     responseValue: string;
     tags: string;
   } = {
-    code: '',
-    group: '',
-    login: '',
-    booklet: '',
-    unit: '',
-    response: '',
-    responseValue: '',
-    tags: ''
-  };
+      code: '',
+      group: '',
+      login: '',
+      booklet: '',
+      unit: '',
+      response: '',
+      responseStatus: '',
+      responseValue: '',
+      tags: ''
+    };
 
   flatFilterOptions: FlatResponseFilterOptionsResponse = {
     codes: [],
@@ -185,6 +189,7 @@ export class TestResultsFlatTableComponent implements OnDestroy {
     booklets: [],
     units: [],
     responses: [],
+    responseStatuses: [],
     tags: []
   };
 
@@ -212,10 +217,10 @@ export class TestResultsFlatTableComponent implements OnDestroy {
     }
 
     const combosToFetchMap = new Map<
-      string,
-      FlatResponseFrequencyRequestCombo
+    string,
+    FlatResponseFrequencyRequestCombo
     >();
-    (this.flatData || []).forEach((r) => {
+    (this.flatData || []).forEach(r => {
       const variableId = String(r.response || '').trim();
       const unitKey = String(r.unit || '').trim();
       const value = String(r.responseValue ?? '');
@@ -230,7 +235,7 @@ export class TestResultsFlatTableComponent implements OnDestroy {
       const alreadyHave =
         !!cached &&
         Array.isArray(cached.values) &&
-        cached.values.some((v) => String(v.value ?? '') === value);
+        cached.values.some(v => String(v.value ?? '') === value);
       if (alreadyHave) {
         return;
       }
@@ -266,11 +271,9 @@ export class TestResultsFlatTableComponent implements OnDestroy {
           }
 
           const mergedValues = new Map<string, FlatResponseFrequencyItem>();
-          (existing.values || []).forEach((v) =>
-            mergedValues.set(String(v.value ?? ''), v)
+          (existing.values || []).forEach(v => mergedValues.set(String(v.value ?? ''), v)
           );
-          (incoming.values || []).forEach((v) =>
-            mergedValues.set(String(v.value ?? ''), v)
+          (incoming.values || []).forEach(v => mergedValues.set(String(v.value ?? ''), v)
           );
 
           this.frequenciesByComboKey.set(key, {
@@ -297,7 +300,7 @@ export class TestResultsFlatTableComponent implements OnDestroy {
     };
 
     const value = String(row.responseValue ?? '');
-    const match = entry.values.find((v) => String(v.value ?? '') === value);
+    const match = entry.values.find(v => String(v.value ?? '') === value);
     if (!match) {
       return '';
     }
@@ -317,7 +320,7 @@ export class TestResultsFlatTableComponent implements OnDestroy {
     if (!v) {
       return options || [];
     }
-    return (options || []).filter((o) => String(o).toLowerCase().includes(v));
+    return (options || []).filter(o => String(o).toLowerCase().includes(v));
   }
 
   filteredCodes(): string[] {
@@ -362,6 +365,13 @@ export class TestResultsFlatTableComponent implements OnDestroy {
     );
   }
 
+  filteredResponseStatuses(): string[] {
+    return this.filterOptions(
+      this.flatFilterOptions.responseStatuses,
+      this.flatFilters.responseStatus
+    );
+  }
+
   filteredTags(): string[] {
     return this.filterOptions(
       this.flatFilterOptions.tags,
@@ -385,7 +395,7 @@ export class TestResultsFlatTableComponent implements OnDestroy {
     this.backendService
       .getBookletInfo(this.appService.selectedWorkspaceId, normalizedBookletId)
       .subscribe({
-        next: (bookletInfo) => {
+        next: bookletInfo => {
           loadingSnackBar.dismiss();
 
           this.dialog.open(BookletInfoDialogComponent, {
@@ -414,8 +424,8 @@ export class TestResultsFlatTableComponent implements OnDestroy {
     }
 
     this.getPersonTestResults(row.personId).subscribe({
-      next: (booklets) => {
-        const booklet = (booklets || []).find((b) => b.name === row.booklet);
+      next: booklets => {
+        const booklet = (booklets || []).find(b => b.name === row.booklet);
         if (!booklet) {
           this.snackBar.open('Testheft nicht gefunden', 'Info', {
             duration: 3000
@@ -423,7 +433,7 @@ export class TestResultsFlatTableComponent implements OnDestroy {
           return;
         }
 
-        const unit = (booklet.units || []).find((u) => u.id === row.unitId);
+        const unit = (booklet.units || []).find(u => u.id === row.unitId);
         const unitFileIdRaw = unit?.name || '';
         const unitFileId = String(unitFileIdRaw).trim().toUpperCase();
         if (!unitFileId) {
@@ -442,7 +452,7 @@ export class TestResultsFlatTableComponent implements OnDestroy {
         this.backendService
           .getUnitInfo(this.appService.selectedWorkspaceId, unitFileId)
           .subscribe({
-            next: (unitInfo) => {
+            next: unitInfo => {
               loadingSnackBar.dismiss();
 
               this.dialog.open(UnitInfoDialogComponent, {
@@ -482,7 +492,7 @@ export class TestResultsFlatTableComponent implements OnDestroy {
     this.backendService
       .getBookletLogsForUnit(this.appService.selectedWorkspaceId, row.unitId)
       .subscribe({
-        next: (result) => {
+        next: result => {
           if (!result || !result.logs || result.logs.length === 0) {
             this.snackBar.open(
               'Keine Logs für dieses Testheft vorhanden',
@@ -497,7 +507,7 @@ export class TestResultsFlatTableComponent implements OnDestroy {
             data: {
               logs: result.logs,
               sessions: result.sessions,
-              units: (result.units || []).map((u) => ({
+              units: (result.units || []).map(u => ({
                 ...u,
                 results: []
               }))
@@ -524,7 +534,7 @@ export class TestResultsFlatTableComponent implements OnDestroy {
     this.backendService
       .getUnitNotes(this.appService.selectedWorkspaceId, row.unitId)
       .subscribe({
-        next: (notes) => {
+        next: notes => {
           loadingSnackBar.dismiss();
 
           this.dialog.open(NoteDialogComponent, {
@@ -553,7 +563,7 @@ export class TestResultsFlatTableComponent implements OnDestroy {
     this.backendService
       .getUnitLogs(this.appService.selectedWorkspaceId, row.unitId)
       .subscribe({
-        next: (logs) => {
+        next: logs => {
           if (!logs || logs.length === 0) {
             this.snackBar.open(
               'Keine Logs für diese Aufgabe vorhanden',
@@ -610,7 +620,7 @@ export class TestResultsFlatTableComponent implements OnDestroy {
 
     this.personTestResultsCache.set(personId, req$);
     this.personTestResultsCacheOrder = this.personTestResultsCacheOrder.filter(
-      (id) => id !== personId
+      id => id !== personId
     );
     this.personTestResultsCacheOrder.push(personId);
     if (
@@ -642,6 +652,7 @@ export class TestResultsFlatTableComponent implements OnDestroy {
       booklet: '',
       unit: '',
       response: '',
+      responseStatus: '',
       responseValue: '',
       tags: ''
     };
@@ -663,10 +674,11 @@ export class TestResultsFlatTableComponent implements OnDestroy {
         booklet: this.flatFilters.booklet,
         unit: this.flatFilters.unit,
         response: this.flatFilters.response,
+        responseStatus: this.flatFilters.responseStatus,
         responseValue: this.flatFilters.responseValue,
         tags: this.flatFilters.tags
       })
-      .subscribe((opts) => {
+      .subscribe(opts => {
         this.flatFilterOptions = opts;
       });
   }
@@ -694,13 +706,14 @@ export class TestResultsFlatTableComponent implements OnDestroy {
         booklet: this.flatFilters.booklet,
         unit: this.flatFilters.unit,
         response: this.flatFilters.response,
+        responseStatus: this.flatFilters.responseStatus,
         responseValue: this.flatFilters.responseValue,
         tags: this.flatFilters.tags
       })
-      .subscribe((resp) => {
+      .subscribe(resp => {
         this.isLoadingFlat = false;
         this.flatTotalRecords = resp.total;
-        this.flatData = (resp.data || []).map((r) => ({
+        this.flatData = (resp.data || []).map(r => ({
           responseId: r.responseId,
           unitId: r.unitId,
           personId: r.personId,
@@ -730,7 +743,7 @@ export class TestResultsFlatTableComponent implements OnDestroy {
     }
 
     const unitIds = Array.from(
-      new Set((this.flatData || []).map((r) => r.unitId).filter((id) => !!id))
+      new Set((this.flatData || []).map(r => r.unitId).filter(id => !!id))
     );
     if (unitIds.length === 0) {
       this.unitIdsWithNotes = new Set<number>();
@@ -740,7 +753,7 @@ export class TestResultsFlatTableComponent implements OnDestroy {
     this.backendService
       .getNotesForMultipleUnits(this.appService.selectedWorkspaceId, unitIds)
       .subscribe({
-        next: (notesByUnitId) => {
+        next: notesByUnitId => {
           const nextSet = new Set<number>();
           Object.entries(notesByUnitId || {}).forEach(([unitId, notes]) => {
             if (Array.isArray(notes) && notes.length > 0) {
@@ -771,7 +784,7 @@ export class TestResultsFlatTableComponent implements OnDestroy {
         1
       )
       .subscribe({
-        next: (token) => {
+        next: token => {
           loadingSnackBar.dismiss();
           if (!token) {
             this.snackBar.open(
@@ -789,7 +802,7 @@ export class TestResultsFlatTableComponent implements OnDestroy {
               token
             )
             .subscribe({
-              next: (result) => {
+              next: result => {
                 if (result && result.replayUrl) {
                   window.open(result.replayUrl, '_blank');
                 } else {
@@ -831,12 +844,12 @@ export class TestResultsFlatTableComponent implements OnDestroy {
       }
     });
 
-    dialogRef.afterClosed().subscribe((confirmed) => {
+    dialogRef.afterClosed().subscribe(confirmed => {
       if (confirmed) {
         this.backendService
           .deleteResponse(this.appService.selectedWorkspaceId, row.responseId)
           .subscribe({
-            next: (result) => {
+            next: result => {
               if (result.success) {
                 this.snackBar.open(
                   `Antwort "${row.response}" wurde erfolgreich gelöscht.`,
