@@ -1,4 +1,6 @@
-import { Component, OnDestroy, OnInit, ViewChild, inject } from '@angular/core';
+import {
+  Component, OnDestroy, OnInit, ViewChild, inject
+} from '@angular/core';
 import { TranslateService, TranslateModule } from '@ngx-translate/core';
 import { MatDialog } from '@angular/material/dialog';
 import { UntypedFormGroup, FormsModule } from '@angular/forms';
@@ -27,7 +29,7 @@ import { DatePipe } from '@angular/common';
 import { MatFormField, MatLabel } from '@angular/material/form-field';
 import { MatOption, MatSelect } from '@angular/material/select';
 import { Subject, Subscription } from 'rxjs';
-import { debounceTime } from 'rxjs/operators';
+import { debounceTime, finalize } from 'rxjs/operators';
 import {
   MatPaginator,
   MatPaginatorIntl,
@@ -116,11 +118,14 @@ export class TestFilesComponent implements OnInit, OnDestroy {
     'created_at',
     'actions'
   ];
-  dataSource!: MatTableDataSource<FilesInListDto>;
+
+  dataSource = new MatTableDataSource<FilesInListDto>([]);
   tableCheckboxSelection = new SelectionModel<FilesInListDto>(true, []);
   isLoading = false;
   isValidating = false;
   isDownloadingAllFiles = false;
+  isDeleting = false;
+  isUploading = false;
   selectedFileType: string = '';
   selectedFileSize: string = '';
   fileTypes: string[] = [];
@@ -175,6 +180,35 @@ export class TestFilesComponent implements OnInit, OnDestroy {
     return this.sort;
   }
 
+  get isBusy(): boolean {
+    return (
+      this.isDeleting ||
+      this.isUploading ||
+      this.isDownloadingAllFiles ||
+      this.isValidating ||
+      this.isLoading
+    );
+  }
+
+  get busyText(): string {
+    if (this.isDeleting) {
+      return 'Datei(en) werden gelöscht...';
+    }
+    if (this.isDownloadingAllFiles) {
+      return 'ZIP-Datei wird erstellt und heruntergeladen...';
+    }
+    if (this.isValidating) {
+      return 'Validierung wird durchgeführt...';
+    }
+    if (this.isUploading) {
+      return 'Datei(en) werden hochgeladen...';
+    }
+    if (this.isLoading) {
+      return 'Dateiliste wird geladen...';
+    }
+    return '';
+  }
+
   private isAllSelected(): boolean {
     const numSelected = this.tableCheckboxSelection.selected.length;
     const numRows = this.dataSource?.data.length || 0;
@@ -182,11 +216,10 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   }
 
   masterToggle(): void {
-    this.isAllSelected()
-      ? this.tableCheckboxSelection.clear()
-      : this.dataSource?.data.forEach((row) =>
-          this.tableCheckboxSelection.select(row)
-        );
+    this.isAllSelected() ?
+      this.tableCheckboxSelection.clear() :
+      this.dataSource?.data.forEach(row => this.tableCheckboxSelection.select(row)
+      );
   }
 
   loadTestFiles(): void {
@@ -201,11 +234,25 @@ export class TestFilesComponent implements OnInit, OnDestroy {
         this.selectedFileSize,
         this.textFilterValue
       )
-      .subscribe((response) => {
-        this.total = response.total;
-        this.page = response.page;
-        this.limit = response.limit;
-        this.updateTable(response);
+      .pipe(
+        finalize(() => {
+          this.isLoading = false;
+        })
+      )
+      .subscribe({
+        next: response => {
+          this.total = response.total;
+          this.page = response.page;
+          this.limit = response.limit;
+          this.updateTable(response);
+        },
+        error: () => {
+          this.snackBar.open(
+            'Fehler beim Laden der Dateiliste.',
+            this.translate.instant('error'),
+            { duration: 3000 }
+          );
+        }
       });
   }
 
@@ -215,7 +262,6 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   }): void {
     this.dataSource = new MatTableDataSource(files.data);
     this.fileTypes = files.fileTypes;
-    this.isLoading = false;
   }
 
   applyFilters(): void {
@@ -280,18 +326,19 @@ export class TestFilesComponent implements OnInit, OnDestroy {
     }
 
     const ref = this.dialog.open<
-      TestFilesUploadConflictsDialogComponent,
-      { conflicts: typeof conflicts },
-      TestFilesUploadConflictsDialogResult
+    TestFilesUploadConflictsDialogComponent,
+    { conflicts: typeof conflicts },
+    TestFilesUploadConflictsDialogResult
     >(TestFilesUploadConflictsDialogComponent, {
       width: '800px',
       maxWidth: '95vw',
       data: { conflicts }
     });
 
-    ref.afterClosed().subscribe((resultChoice) => {
+    ref.afterClosed().subscribe(resultChoice => {
       if (resultChoice?.overwrite === true) {
         this.isLoading = true;
+        this.isUploading = true;
         const overwriteSelectedCount = (resultChoice.overwriteFileIds || [])
           .length;
         this.backendService
@@ -301,9 +348,14 @@ export class TestFilesComponent implements OnInit, OnDestroy {
             true,
             resultChoice.overwriteFileIds
           )
-          .subscribe({
-            next: (overwriteResult) => {
+          .pipe(
+            finalize(() => {
               this.isLoading = false;
+              this.isUploading = false;
+            })
+          )
+          .subscribe({
+            next: overwriteResult => {
               this.showUploadSummary(overwriteResult);
 
               const finalUploadedFiles = [
@@ -315,7 +367,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
                 ...(overwriteResult.failedFiles || [])
               ];
               const remainingConflicts = conflicts.filter(
-                (c) => !(resultChoice.overwriteFileIds || []).includes(c.fileId)
+                c => !(resultChoice.overwriteFileIds || []).includes(c.fileId)
               );
 
               this.openUploadResultDialog({
@@ -328,7 +380,6 @@ export class TestFilesComponent implements OnInit, OnDestroy {
               this.onUploadSuccess();
             },
             error: () => {
-              this.isLoading = false;
               this.snackBar.open(
                 'Fehler beim Überschreiben der Dateien.',
                 this.translate.instant('error'),
@@ -355,21 +406,28 @@ export class TestFilesComponent implements OnInit, OnDestroy {
     const files = inputElement.files;
     if (files && files.length) {
       this.isLoading = true;
+      this.isUploading = true;
       const workspaceId = this.appService.selectedWorkspaceId;
-      this.backendService.uploadTestFiles(workspaceId, files, false).subscribe({
-        next: (result) => {
-          this.isLoading = false;
-          this.handleUploadResult(workspaceId, files, result);
-        },
-        error: () => {
-          this.isLoading = false;
-          this.snackBar.open(
-            'Fehler beim Hochladen der Dateien.',
-            this.translate.instant('error'),
-            { duration: 3000 }
-          );
-        }
-      });
+      this.backendService
+        .uploadTestFiles(workspaceId, files, false)
+        .pipe(
+          finalize(() => {
+            this.isLoading = false;
+            this.isUploading = false;
+          })
+        )
+        .subscribe({
+          next: result => {
+            this.handleUploadResult(workspaceId, files, result);
+          },
+          error: () => {
+            this.snackBar.open(
+              'Fehler beim Hochladen der Dateien.',
+              this.translate.instant('error'),
+              { duration: 3000 }
+            );
+          }
+        });
     }
   }
 
@@ -378,6 +436,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
       this.loadTestFiles();
     }, 1000);
     this.isLoading = false;
+    this.isUploading = false;
     this.isValidating = false;
   }
 
@@ -393,11 +452,11 @@ export class TestFilesComponent implements OnInit, OnDestroy {
     dialogRef.afterClosed().subscribe((result: unknown) => {
       const maybePayload = result as
         | {
-            didImport?: boolean;
-            importType?: 'testFiles';
-            result?: Result;
-            overwriteSelectedCount?: number;
-          }
+          didImport?: boolean;
+          importType?: 'testFiles';
+          result?: Result;
+          overwriteSelectedCount?: number;
+        }
         | boolean
         | UntypedFormGroup
         | undefined;
@@ -444,11 +503,26 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   }
 
   deleteFiles(): void {
-    const fileIds = this.tableCheckboxSelection.selected.map((file) => file.id);
+    const fileIds = this.tableCheckboxSelection.selected.map(file => file.id);
+    this.isDeleting = true;
     this.backendService
       .deleteFiles(this.appService.selectedWorkspaceId, fileIds)
-      .subscribe((respOk) => {
-        this.handleDeleteResponse(respOk);
+      .pipe(
+        finalize(() => {
+          this.isDeleting = false;
+        })
+      )
+      .subscribe({
+        next: respOk => {
+          this.handleDeleteResponse(respOk);
+        },
+        error: () => {
+          this.snackBar.open(
+            this.translate.instant('ws-admin.files-not-deleted'),
+            this.translate.instant('error'),
+            { duration: 3000 }
+          );
+        }
       });
   }
 
@@ -515,16 +589,27 @@ export class TestFilesComponent implements OnInit, OnDestroy {
     this.isValidating = true;
     this.backendService
       .validateFiles(this.appService.selectedWorkspaceId)
-      .subscribe((respOk) => {
-        this.handleValidationResponse(respOk);
+      .subscribe({
+        next: respOk => {
+          this.handleValidationResponse(respOk);
+        },
+        error: () => {
+          this.isLoading = false;
+          this.isValidating = false;
+          this.snackBar.open(
+            this.translate.instant('ws-admin.validation-failed'),
+            this.translate.instant('error'),
+            { duration: 3000 }
+          );
+        }
       });
   }
 
   private handleDeleteResponse(success: boolean): void {
     this.snackBar.open(
-      success
-        ? this.translate.instant('ws-admin.files-deleted')
-        : this.translate.instant('ws-admin.files-not-deleted'),
+      success ?
+        this.translate.instant('ws-admin.files-deleted') :
+        this.translate.instant('ws-admin.files-not-deleted'),
       success ? '' : this.translate.instant('error'),
       { duration: 1000 }
     );
@@ -558,24 +643,34 @@ export class TestFilesComponent implements OnInit, OnDestroy {
           }
         });
 
-        confirmRef.afterClosed().subscribe((result) => {
+        confirmRef.afterClosed().subscribe(result => {
           if (result === true) {
             this.isLoading = true;
             this.backendService
               .createDummyTestTakerFile(this.appService.selectedWorkspaceId)
-              .subscribe((success) => {
-                this.isLoading = false;
-                if (success) {
-                  this.snackBar.open(
-                    'Testtaker-Datei wurde erfolgreich erstellt.',
-                    'OK',
-                    { duration: 3000 }
-                  );
-                  this.loadTestFiles();
-                  setTimeout(() => {
-                    this.validateFiles();
-                  }, 1000);
-                } else {
+              .subscribe({
+                next: success => {
+                  this.isLoading = false;
+                  if (success) {
+                    this.snackBar.open(
+                      'Testtaker-Datei wurde erfolgreich erstellt.',
+                      'OK',
+                      { duration: 3000 }
+                    );
+                    this.loadTestFiles();
+                    setTimeout(() => {
+                      this.validateFiles();
+                    }, 1000);
+                  } else {
+                    this.snackBar.open(
+                      'Fehler beim Erstellen der Testtaker-Datei.',
+                      this.translate.instant('error'),
+                      { duration: 3000 }
+                    );
+                  }
+                },
+                error: () => {
+                  this.isLoading = false;
                   this.snackBar.open(
                     'Fehler beim Erstellen der Testtaker-Datei.',
                     this.translate.instant('error'),
@@ -626,7 +721,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
       }
     });
 
-    dialogRef.afterClosed().subscribe((result) => {
+    dialogRef.afterClosed().subscribe(result => {
       if (result === true) {
         this.resourcePackagesModified = true;
       }
@@ -643,7 +738,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   showFileContent(file: FilesInListDto): void {
     this.backendService
       .downloadFile(this.appService.selectedWorkspaceId, file.id)
-      .subscribe((fileData) => {
+      .subscribe(fileData => {
         const decodedContent = atob(fileData.base64Data);
 
         if (
@@ -661,7 +756,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
             }
           });
 
-          dialogRef.afterClosed().subscribe((result) => {
+          dialogRef.afterClosed().subscribe(result => {
             if (result === true) {
               this.loadTestFiles();
             }
