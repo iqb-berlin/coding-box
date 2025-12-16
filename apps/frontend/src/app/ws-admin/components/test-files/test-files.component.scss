@@ -1,11 +1,13 @@
-
 // Main container styles
 .container {
-  margin: 20px;
-  width: 100%;
-  max-width: 1600px;
-  height: auto;
-  min-height: 60vh;
+  padding: 20px;
+  width: auto;
+  box-sizing: border-box;
+  max-width: none;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow-x: hidden;
   animation: fadeIn 0.3s ease-in-out;
 }
 
@@ -30,18 +32,28 @@
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 // Card styles
-.action-card, .data-card {
+.action-card,
+.data-card {
   background-color: white;
   border-radius: 12px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
   padding: 24px;
   margin-bottom: 24px;
   width: 100%;
+  box-sizing: border-box;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   transition: box-shadow 0.3s ease, transform 0.2s ease;
   border: 1px solid rgba(0, 0, 0, 0.03);
 
@@ -68,6 +80,10 @@
     margin-bottom: 20px;
     opacity: 0.7;
   }
+}
+
+.data-card {
+  margin-bottom: 0;
 }
 
 // Loading container styles
@@ -157,14 +173,16 @@
 // Table container styles
 .table-container {
   position: relative;
-  overflow-x: auto;
+  overflow-x: hidden;
   overflow-y: auto;
-  max-height: 400px; /* Default max height for smaller screens */
+  flex: 1;
+  min-height: 0;
+  max-height: none;
   border-radius: 8px;
   border: 1px solid rgba(0, 0, 0, 0.08);
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
   background-color: white;
-  margin-bottom: 16px;
+  margin-bottom: 0;
 
   /* Custom scrollbar styling */
   &::-webkit-scrollbar {
@@ -188,20 +206,23 @@
 
   /* Responsive max-height adjustments */
   @media (min-height: 768px) {
-    max-height: 500px; /* Medium screens */
+    max-height: none;
   }
 
   @media (min-height: 1024px) {
-    max-height: 600px; /* Larger screens */
+    max-height: none;
   }
 }
 
 // Table styles
-.files-table, .resource-packages-table {
+.files-table,
+.resource-packages-table {
   width: 100%;
 
-  mat-header-cell, mat-cell {
-    white-space: nowrap;
+  mat-header-cell,
+  mat-cell {
+    white-space: normal;
+    overflow-wrap: anywhere;
     padding: 14px 18px;
   }
 
@@ -254,7 +275,9 @@
 }
 
 // Column width styles
-.mat-column-file_size, .mat-column-file_type, .mat-column-created_at {
+.mat-column-file_size,
+.mat-column-file_type,
+.mat-column-created_at {
   width: 20%;
 }
 
