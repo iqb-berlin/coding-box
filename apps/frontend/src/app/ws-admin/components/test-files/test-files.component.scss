@@ -158,6 +158,14 @@
       min-width: 200px;
       max-width: 300px;
 
+      ::ng-deep .mat-mdc-form-field-subscript-wrapper {
+        display: none;
+      }
+
+      ::ng-deep .mat-mdc-form-field-bottom-align::before {
+        display: none;
+      }
+
       @media (max-width: 768px) {
         min-width: 100%;
         max-width: 100%;
@@ -171,6 +179,11 @@
       font-weight: 500;
       letter-spacing: 0.3px;
       transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      align-self: center;
+      box-sizing: border-box;
 
       mat-icon {
         margin-right: 8px;
