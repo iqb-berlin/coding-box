@@ -113,6 +113,23 @@
           <mat-option [value]="opt">{{ opt }}</mat-option>
           }
         </mat-autocomplete>
+        <mat-form-field appearance="outline" style="width: 220px">
+          <mat-label>Antwortstatus</mat-label>
+          <input
+            matInput
+            [(ngModel)]="flatFilters.responseStatus"
+            (ngModelChange)="onFlatFilterChanged()"
+            [matAutocomplete]="responseStatusAuto"
+          />
+        </mat-form-field>
+        <mat-autocomplete
+          #responseStatusAuto="matAutocomplete"
+          (optionSelected)="onFlatFilterOptionSelected()"
+        >
+          @for (opt of filteredResponseStatuses(); track opt) {
+          <mat-option [value]="opt">{{ opt }}</mat-option>
+          }
+        </mat-autocomplete>
         <mat-form-field appearance="outline" style="width: 240px">
           <mat-label>Antwortwert</mat-label>
           <input
@@ -203,6 +220,11 @@
           <ng-container matColumnDef="response">
             <th mat-header-cell *matHeaderCellDef>Variable</th>
             <td mat-cell *matCellDef="let row">{{ row.response }}</td>
+          </ng-container>
+
+          <ng-container matColumnDef="responseStatus">
+            <th mat-header-cell *matHeaderCellDef>Antwortstatus</th>
+            <td mat-cell *matCellDef="let row">{{ row.responseStatus }}</td>
           </ng-container>
 
           <ng-container matColumnDef="responseValue">

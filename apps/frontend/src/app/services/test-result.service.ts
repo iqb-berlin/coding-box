@@ -1,10 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
-import {
-  catchError,
-  Observable,
-  of
-} from 'rxjs';
+import { catchError, Observable, of } from 'rxjs';
 import { logger } from 'nx/src/utils/logger';
 import { SERVER_URL } from '../injection-tokens';
 import { TestResultCacheService } from './test-result-cache.service';
@@ -56,6 +52,7 @@ export interface FlatResponseFilterOptionsResponse {
   booklets: string[];
   units: string[];
   responses: string[];
+  responseStatuses: string[];
   tags: string[];
 }
 
@@ -71,7 +68,10 @@ export interface FlatResponseFrequencyItem {
   p: number;
 }
 
-export type FlatResponseFrequenciesResponse = Record<string, { total: number; values: FlatResponseFrequencyItem[] }>;
+export type FlatResponseFrequenciesResponse = Record<
+string,
+{ total: number; values: FlatResponseFrequencyItem[] }
+>;
 
 export interface UnitLogRow {
   id: number;
@@ -101,7 +101,13 @@ export interface BookletLogsForUnitResponse {
   bookletId: number;
   logs: BookletLogRow[];
   sessions: BookletSessionRow[];
-  units: { id: number; bookletid: number; name: string; alias: string | null; logs: UnitLogRow[] }[];
+  units: {
+    id: number;
+    bookletid: number;
+    name: string;
+    alias: string | null;
+    logs: UnitLogRow[];
+  }[];
 }
 
 export interface TestResultsOverviewResponse {
@@ -128,37 +134,53 @@ export class TestResultService {
   getTestPersons(workspaceId: number): Observable<number[]> {
     return this.http.get<number[]>(
       `${this.serverUrl}admin/workspace/${workspaceId}/test-groups`,
-      { headers: this.authHeader });
+      { headers: this.authHeader }
+    );
   }
 
-  getTestResults(workspaceId: number, page: number, limit: number, searchText?: string): Observable<TestResultsResponse> {
-    return this.cacheService.getTestResults(workspaceId, page, limit, searchText);
+  getTestResults(
+    workspaceId: number,
+    page: number,
+    limit: number,
+    searchText?: string
+  ): Observable<TestResultsResponse> {
+    return this.cacheService.getTestResults(
+      workspaceId,
+      page,
+      limit,
+      searchText
+    );
   }
 
-  getPersonTestResults(workspaceId: number, personId: number): Observable<PersonTestResult[]> {
+  getPersonTestResults(
+    workspaceId: number,
+    personId: number
+  ): Observable<PersonTestResult[]> {
     return this.cacheService.getPersonTestResults(workspaceId, personId);
   }
 
-  getWorkspaceOverview(workspaceId: number): Observable<TestResultsOverviewResponse | null> {
-    return this.http.get<TestResultsOverviewResponse>(
+  getWorkspaceOverview(
+    workspaceId: number
+  ): Observable<TestResultsOverviewResponse | null> {
+    return this.http
+      .get<TestResultsOverviewResponse>(
       `${this.serverUrl}admin/workspace/${workspaceId}/test-results/overview`,
       { headers: this.authHeader }
-    ).pipe(
-      catchError(() => of(null))
-    );
+    )
+      .pipe(catchError(() => of(null)));
   }
 
   getFlatResponseFrequencies(
     workspaceId: number,
     combos: FlatResponseFrequencyRequestCombo[]
   ): Observable<FlatResponseFrequenciesResponse> {
-    return this.http.post<FlatResponseFrequenciesResponse>(
+    return this.http
+      .post<FlatResponseFrequenciesResponse>(
       `${this.serverUrl}admin/workspace/${workspaceId}/test-results/flat-responses/frequencies`,
       { combos },
       { headers: this.authHeader }
-    ).pipe(
-      catchError(() => of({} as FlatResponseFrequenciesResponse))
-    );
+    )
+      .pipe(catchError(() => of({} as FlatResponseFrequenciesResponse)));
   }
 
   getFlatResponses(
@@ -172,6 +194,7 @@ export class TestResultService {
       booklet?: string;
       unit?: string;
       response?: string;
+      responseStatus?: string;
       responseValue?: string;
       tags?: string;
     }
@@ -193,17 +216,24 @@ export class TestResultService {
     addIf('booklet', options.booklet);
     addIf('unit', options.unit);
     addIf('response', options.response);
+    addIf('responseStatus', options.responseStatus);
     addIf('responseValue', options.responseValue);
     addIf('tags', options.tags);
 
-    return this.http.get<FlatTestResultResponsesResponse>(
+    return this.http
+      .get<FlatTestResultResponsesResponse>(
       `${this.serverUrl}admin/workspace/${workspaceId}/test-results/flat-responses`,
       { headers: this.authHeader, params }
-    ).pipe(
-      catchError(() => of({
-        data: [], total: 0, page: options.page, limit: options.limit
-      }))
-    );
+    )
+      .pipe(
+        catchError(() => of({
+          data: [],
+          total: 0,
+          page: options.page,
+          limit: options.limit
+        })
+        )
+      );
   }
 
   getFlatResponseFilterOptions(
@@ -215,6 +245,7 @@ export class TestResultService {
       booklet?: string;
       unit?: string;
       response?: string;
+      responseStatus?: string;
       responseValue?: string;
       tags?: string;
     }
@@ -234,35 +265,49 @@ export class TestResultService {
     addIf('booklet', options.booklet);
     addIf('unit', options.unit);
     addIf('response', options.response);
+    addIf('responseStatus', options.responseStatus);
     addIf('responseValue', options.responseValue);
     addIf('tags', options.tags);
 
-    return this.http.get<FlatResponseFilterOptionsResponse>(
+    return this.http
+      .get<FlatResponseFilterOptionsResponse>(
       `${this.serverUrl}admin/workspace/${workspaceId}/test-results/flat-responses/filter-options`,
       { headers: this.authHeader, params }
-    ).pipe(
-      catchError(() => of({
-        codes: [], groups: [], logins: [], booklets: [], units: [], responses: [], tags: []
-      }))
-    );
+    )
+      .pipe(
+        catchError(() => of({
+          codes: [],
+          groups: [],
+          logins: [],
+          booklets: [],
+          units: [],
+          responses: [],
+          responseStatuses: [],
+          tags: []
+        })
+        )
+      );
   }
 
   getUnitLogs(workspaceId: number, unitId: number): Observable<UnitLogRow[]> {
-    return this.http.get<UnitLogRow[]>(
+    return this.http
+      .get<UnitLogRow[]>(
       `${this.serverUrl}admin/workspace/${workspaceId}/units/${unitId}/logs`,
       { headers: this.authHeader }
-    ).pipe(
-      catchError(() => of([]))
-    );
+    )
+      .pipe(catchError(() => of([])));
   }
 
-  getBookletLogsForUnit(workspaceId: number, unitId: number): Observable<BookletLogsForUnitResponse | null> {
-    return this.http.get<BookletLogsForUnitResponse>(
+  getBookletLogsForUnit(
+    workspaceId: number,
+    unitId: number
+  ): Observable<BookletLogsForUnitResponse | null> {
+    return this.http
+      .get<BookletLogsForUnitResponse>(
       `${this.serverUrl}admin/workspace/${workspaceId}/units/${unitId}/booklet-logs`,
       { headers: this.authHeader }
-    ).pipe(
-      catchError(() => of(null))
-    );
+    )
+      .pipe(catchError(() => of(null)));
   }
 
   invalidateCache(workspaceId: number): void {
@@ -300,7 +345,8 @@ export class TestResultService {
       params = params.set('limit', limit.toString());
     }
 
-    return this.http.get<{
+    return this.http
+      .get<{
       data: {
         bookletId: number;
         bookletName: string;
@@ -315,15 +361,18 @@ export class TestResultService {
         }[];
       }[];
       total: number;
-    }>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/booklets/search`,
-      { headers: this.authHeader, params }
-    ).pipe(
-      catchError(() => {
-        logger.error(`Error searching for booklets with name: ${bookletName}`);
-        return of({ data: [], total: 0 });
-      })
-    );
+    }>(`${this.serverUrl}admin/workspace/${workspaceId}/booklets/search`, {
+      headers: this.authHeader,
+      params
+    })
+      .pipe(
+        catchError(() => {
+          logger.error(
+            `Error searching for booklets with name: ${bookletName}`
+          );
+          return of({ data: [], total: 0 });
+        })
+      );
   }
 
   searchUnitsByName(
@@ -342,8 +391,21 @@ export class TestResultService {
         personLogin: string;
         personCode: string;
         personGroup: string;
-        tags: { id: number; unitId: number; tag: string; color?: string; createdAt: Date }[];
-        responses: { variableId: string; value: string; status: string; code?: number; score?: number; codedStatus?: string }[];
+        tags: {
+          id: number;
+          unitId: number;
+          tag: string;
+          color?: string;
+          createdAt: Date;
+        }[];
+        responses: {
+          variableId: string;
+          value: string;
+          status: string;
+          code?: number;
+          score?: number;
+          codedStatus?: string;
+        }[];
       }[];
       total: number;
     }> {
@@ -357,7 +419,8 @@ export class TestResultService {
       params = params.set('limit', limit.toString());
     }
 
-    return this.http.get<{
+    return this.http
+      .get<{
       data: {
         unitId: number;
         unitName: string;
@@ -368,53 +431,78 @@ export class TestResultService {
         personLogin: string;
         personCode: string;
         personGroup: string;
-        tags: { id: number; unitId: number; tag: string; color?: string; createdAt: Date }[];
-        responses: { variableId: string; value: string; status: string; code?: number; score?: number; codedStatus?: string }[];
+        tags: {
+          id: number;
+          unitId: number;
+          tag: string;
+          color?: string;
+          createdAt: Date;
+        }[];
+        responses: {
+          variableId: string;
+          value: string;
+          status: string;
+          code?: number;
+          score?: number;
+          codedStatus?: string;
+        }[];
       }[];
       total: number;
-    }>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/units/search`,
-      { headers: this.authHeader, params }
-    ).pipe(
-      catchError(() => {
-        logger.error(`Error searching for units with name: ${unitName}`);
-        return of({ data: [], total: 0 });
-      })
-    );
+    }>(`${this.serverUrl}admin/workspace/${workspaceId}/units/search`, {
+      headers: this.authHeader,
+      params
+    })
+      .pipe(
+        catchError(() => {
+          logger.error(`Error searching for units with name: ${unitName}`);
+          return of({ data: [], total: 0 });
+        })
+      );
   }
 
-  deleteUnit(workspaceId: number, unitId: number): Observable<{
-    success: boolean;
-    report: {
-      deletedUnit: number | null;
-      warnings: string[];
-    };
-  }> {
-    return this.http.delete<{
+  deleteUnit(
+    workspaceId: number,
+    unitId: number
+  ): Observable<{
       success: boolean;
       report: {
         deletedUnit: number | null;
         warnings: string[];
       };
-    }>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/units/${unitId}`,
-      { headers: this.authHeader }
-    ).pipe(
-      catchError(() => {
-        logger.error(`Error deleting unit with ID: ${unitId}`);
-        return of({ success: false, report: { deletedUnit: null, warnings: ['Failed to delete unit'] } });
-      })
-    );
+    }> {
+    return this.http
+      .delete<{
+      success: boolean;
+      report: {
+        deletedUnit: number | null;
+        warnings: string[];
+      };
+    }>(`${this.serverUrl}admin/workspace/${workspaceId}/units/${unitId}`, {
+      headers: this.authHeader
+    })
+      .pipe(
+        catchError(() => {
+          logger.error(`Error deleting unit with ID: ${unitId}`);
+          return of({
+            success: false,
+            report: { deletedUnit: null, warnings: ['Failed to delete unit'] }
+          });
+        })
+      );
   }
 
-  deleteBooklet(workspaceId: number, bookletId: number): Observable<{
-    success: boolean;
-    report: {
-      deletedBooklet: number | null;
-      warnings: string[];
-    };
-  }> {
-    return this.http.delete<{
+  deleteBooklet(
+    workspaceId: number,
+    bookletId: number
+  ): Observable<{
+      success: boolean;
+      report: {
+        deletedBooklet: number | null;
+        warnings: string[];
+      };
+    }> {
+    return this.http
+      .delete<{
       success: boolean;
       report: {
         deletedBooklet: number | null;
@@ -423,11 +511,18 @@ export class TestResultService {
     }>(
       `${this.serverUrl}admin/workspace/${workspaceId}/booklets/${bookletId}`,
       { headers: this.authHeader }
-    ).pipe(
-      catchError(() => {
-        logger.error(`Error deleting booklet with ID: ${bookletId}`);
-        return of({ success: false, report: { deletedBooklet: null, warnings: ['Failed to delete booklet'] } });
-      })
-    );
+    )
+      .pipe(
+        catchError(() => {
+          logger.error(`Error deleting booklet with ID: ${bookletId}`);
+          return of({
+            success: false,
+            report: {
+              deletedBooklet: null,
+              warnings: ['Failed to delete booklet']
+            }
+          });
+        })
+      );
   }
 }
