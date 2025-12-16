@@ -2,7 +2,11 @@ import { CommonModule } from '@angular/common';
 import { Component, Inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
-import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
+import {
+  MAT_DIALOG_DATA,
+  MatDialogModule,
+  MatDialogRef
+} from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
@@ -16,6 +20,9 @@ import {
 
 export type TestFilesUploadResultDialogData = {
   attempted: number;
+  uploadedCount?: number;
+  failedCount?: number;
+  remainingConflictsCount?: number;
   uploadedFiles: TestFilesUploadUploadedDto[];
   failedFiles: TestFilesUploadFailedDto[];
   remainingConflicts: TestFilesUploadConflictDto[];
@@ -68,18 +75,21 @@ export class TestFilesUploadResultDialogComponent {
   }
 
   get uploadedCount(): number {
-    return this.uploadedFiles.length;
+    return this.data?.uploadedCount ?? this.uploadedFiles.length;
   }
 
   get failedCount(): number {
-    return this.failedFiles.length;
+    return this.data?.failedCount ?? this.failedFiles.length;
   }
 
   get remainingConflictsCount(): number {
-    return this.remainingConflicts.length;
+    return this.data?.remainingConflictsCount ?? this.remainingConflicts.length;
   }
 
-  private matchesQuery(parts: Array<string | undefined | null>, q: string): boolean {
+  private matchesQuery(
+    parts: Array<string | undefined | null>,
+    q: string
+  ): boolean {
     const qq = (q || '').trim().toUpperCase();
     if (!qq) {
       return true;
@@ -91,21 +101,26 @@ export class TestFilesUploadResultDialogComponent {
 
   get filteredUploadedFiles(): TestFilesUploadUploadedDto[] {
     const q = this.filterText;
-    return this.uploadedFiles.filter(f => this.matchesQuery([f.filename, f.fileId, f.fileType], q));
+    return this.uploadedFiles.filter(f => this.matchesQuery([f.filename, f.fileId, f.fileType], q)
+    );
   }
 
   get filteredFailedFiles(): TestFilesUploadFailedDto[] {
     const q = this.filterText;
-    return this.failedFiles.filter(f => this.matchesQuery([f.filename, f.reason], q));
+    return this.failedFiles.filter(f => this.matchesQuery([f.filename, f.reason], q)
+    );
   }
 
   get filteredRemainingConflicts(): TestFilesUploadConflictDto[] {
     const q = this.filterText;
-    return this.remainingConflicts.filter(f => this.matchesQuery([f.filename, f.fileId, f.fileType], q));
+    return this.remainingConflicts.filter(f => this.matchesQuery([f.filename, f.fileId, f.fileType], q)
+    );
   }
 
   trackByUploaded(index: number, item: TestFilesUploadUploadedDto): string {
-    return `${item.fileId || ''}@@${item.filename}@@${item.fileType || ''}@@${index}`;
+    return `${item.fileId || ''}@@${item.filename}@@${
+      item.fileType || ''
+    }@@${index}`;
   }
 
   trackByFailed(index: number, item: TestFilesUploadFailedDto): string {

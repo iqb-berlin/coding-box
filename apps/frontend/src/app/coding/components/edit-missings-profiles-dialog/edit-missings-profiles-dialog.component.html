@@ -6,12 +6,13 @@
     <div class="profiles-list">
       <h3>{{ 'workspace.missings-profiles' | translate }}</h3>
       <mat-list>
-        @for (profile of missingsProfiles; track profile.label) {
-          <mat-list-item
-            [class.selected]="selectedProfile?.label === profile.label"
-            (click)="selectProfile(profile.label)">
-            {{ profile.label }}
-          </mat-list-item>
+        @for (profile of missingsProfiles; track profile.id) {
+        <mat-list-item
+          [class.selected]="selectedProfile?.label === profile.label"
+          (click)="selectProfile(profile.label)"
+        >
+          {{ profile.label }}
+        </mat-list-item>
         }
       </mat-list>
       <div class="list-actions">
@@ -26,148 +27,179 @@
     <div class="profile-details" *ngIf="selectedProfile">
       <h3>
         @if (editMode) {
-          {{ 'workspace.edit-profile' | translate }}
+        {{ 'workspace.edit-profile' | translate }}
         } @else {
-          {{ selectedProfile.label }}
+        {{ selectedProfile.label }}
         }
       </h3>
 
       @if (editMode) {
-        <div class="profile-form">
-          <mat-form-field appearance="fill">
-            <mat-label>{{ 'workspace.profile-name' | translate }}</mat-label>
-            <input matInput [(ngModel)]="selectedProfile.label" required>
-          </mat-form-field>
+      <div class="profile-form">
+        <mat-form-field appearance="fill">
+          <mat-label>{{ 'workspace.profile-name' | translate }}</mat-label>
+          <input matInput [(ngModel)]="selectedProfile.label" required />
+        </mat-form-field>
 
-          <h4>{{ 'workspace.missing-values' | translate }}</h4>
-          <table mat-table [dataSource]="editMode ? editMissings : getMissings()" class="missings-table">
-            <!-- ID Column -->
-            <ng-container matColumnDef="id">
-              <th mat-header-cell *matHeaderCellDef>{{ 'workspace.missing-id' | translate }}</th>
-              <td mat-cell *matCellDef="let missing; let i = index">
-                <mat-form-field appearance="fill">
-                  <input matInput [(ngModel)]="missing.id">
-                </mat-form-field>
-              </td>
-            </ng-container>
+        <h4>{{ 'workspace.missing-values' | translate }}</h4>
+        <table
+          mat-table
+          [dataSource]="editMode ? editMissings : getMissings()"
+          class="missings-table"
+        >
+          <!-- ID Column -->
+          <ng-container matColumnDef="id">
+            <th mat-header-cell *matHeaderCellDef>
+              {{ 'workspace.missing-id' | translate }}
+            </th>
+            <td mat-cell *matCellDef="let missing; let i = index">
+              <mat-form-field appearance="fill">
+                <input matInput [(ngModel)]="missing.id" />
+              </mat-form-field>
+            </td>
+          </ng-container>
 
-            <!-- Label Column -->
-            <ng-container matColumnDef="label">
-              <th mat-header-cell *matHeaderCellDef>{{ 'workspace.missing-label' | translate }}</th>
-              <td mat-cell *matCellDef="let missing; let i = index">
-                <mat-form-field appearance="fill">
-                  <input matInput [(ngModel)]="missing.label">
-                </mat-form-field>
-              </td>
-            </ng-container>
+          <!-- Label Column -->
+          <ng-container matColumnDef="label">
+            <th mat-header-cell *matHeaderCellDef>
+              {{ 'workspace.missing-label' | translate }}
+            </th>
+            <td mat-cell *matCellDef="let missing; let i = index">
+              <mat-form-field appearance="fill">
+                <input matInput [(ngModel)]="missing.label" />
+              </mat-form-field>
+            </td>
+          </ng-container>
 
-            <!-- Description Column -->
-            <ng-container matColumnDef="description">
-              <th mat-header-cell *matHeaderCellDef>{{ 'workspace.missing-description' | translate }}</th>
-              <td mat-cell *matCellDef="let missing; let i = index">
-                <mat-form-field appearance="fill">
-                  <input matInput [(ngModel)]="missing.description">
-                </mat-form-field>
-              </td>
-            </ng-container>
+          <!-- Description Column -->
+          <ng-container matColumnDef="description">
+            <th mat-header-cell *matHeaderCellDef>
+              {{ 'workspace.missing-description' | translate }}
+            </th>
+            <td mat-cell *matCellDef="let missing; let i = index">
+              <mat-form-field appearance="fill">
+                <input matInput [(ngModel)]="missing.description" />
+              </mat-form-field>
+            </td>
+          </ng-container>
 
-            <!-- Code Column -->
-            <ng-container matColumnDef="code">
-              <th mat-header-cell *matHeaderCellDef>{{ 'workspace.missing-code' | translate }}</th>
-              <td mat-cell *matCellDef="let missing; let i = index">
-                <mat-form-field appearance="fill">
-                  <input matInput type="number" [(ngModel)]="missing.code">
-                </mat-form-field>
-              </td>
-            </ng-container>
+          <!-- Code Column -->
+          <ng-container matColumnDef="code">
+            <th mat-header-cell *matHeaderCellDef>
+              {{ 'workspace.missing-code' | translate }}
+            </th>
+            <td mat-cell *matCellDef="let missing; let i = index">
+              <mat-form-field appearance="fill">
+                <input matInput type="number" [(ngModel)]="missing.code" />
+              </mat-form-field>
+            </td>
+          </ng-container>
 
-            <!-- Actions Column -->
-            <ng-container matColumnDef="actions">
-              <th mat-header-cell *matHeaderCellDef>{{ 'workspace.actions' | translate }}</th>
-              <td mat-cell *matCellDef="let missing; let i = index">
-                <button mat-icon-button color="warn" (click)="removeMissing(i)"
-                        matTooltip="{{ 'workspace.remove-missing' | translate }}">
-                  <mat-icon>delete</mat-icon>
-                </button>
-              </td>
-            </ng-container>
+          <!-- Actions Column -->
+          <ng-container matColumnDef="actions">
+            <th mat-header-cell *matHeaderCellDef>
+              {{ 'workspace.actions' | translate }}
+            </th>
+            <td mat-cell *matCellDef="let missing; let i = index">
+              <button
+                mat-icon-button
+                color="warn"
+                (click)="removeMissing(i)"
+                matTooltip="{{ 'workspace.remove-missing' | translate }}"
+              >
+                <mat-icon>delete</mat-icon>
+              </button>
+            </td>
+          </ng-container>
 
-            <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
-            <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
-          </table>
+          <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+          <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
+        </table>
 
-          <div class="add-missing-button">
-            <button mat-raised-button color="primary" (click)="addMissing()">
-              <mat-icon>add</mat-icon>
-              {{ 'workspace.add-missing' | translate }}
-            </button>
-          </div>
+        <div class="add-missing-button">
+          <button mat-raised-button color="primary" (click)="addMissing()">
+            <mat-icon>add</mat-icon>
+            {{ 'workspace.add-missing' | translate }}
+          </button>
         </div>
+      </div>
       } @else {
-        <div class="profile-info">
-          <h4>{{ 'workspace.missing-values' | translate }}</h4>
-          <table mat-table [dataSource]="getMissings()" class="missings-table">
-            <!-- ID Column -->
-            <ng-container matColumnDef="id">
-              <th mat-header-cell *matHeaderCellDef>{{ 'workspace.missing-id' | translate }}</th>
-              <td mat-cell *matCellDef="let missing">{{ missing.id }}</td>
-            </ng-container>
+      <div class="profile-info">
+        <h4>{{ 'workspace.missing-values' | translate }}</h4>
+        <table mat-table [dataSource]="getMissings()" class="missings-table">
+          <!-- ID Column -->
+          <ng-container matColumnDef="id">
+            <th mat-header-cell *matHeaderCellDef>
+              {{ 'workspace.missing-id' | translate }}
+            </th>
+            <td mat-cell *matCellDef="let missing">{{ missing.id }}</td>
+          </ng-container>
 
-            <!-- Label Column -->
-            <ng-container matColumnDef="label">
-              <th mat-header-cell *matHeaderCellDef>{{ 'workspace.missing-label' | translate }}</th>
-              <td mat-cell *matCellDef="let missing">{{ missing.label }}</td>
-            </ng-container>
+          <!-- Label Column -->
+          <ng-container matColumnDef="label">
+            <th mat-header-cell *matHeaderCellDef>
+              {{ 'workspace.missing-label' | translate }}
+            </th>
+            <td mat-cell *matCellDef="let missing">{{ missing.label }}</td>
+          </ng-container>
 
-            <!-- Description Column -->
-            <ng-container matColumnDef="description">
-              <th mat-header-cell *matHeaderCellDef>{{ 'workspace.missing-description' | translate }}</th>
-              <td mat-cell *matCellDef="let missing">{{ missing.description }}</td>
-            </ng-container>
+          <!-- Description Column -->
+          <ng-container matColumnDef="description">
+            <th mat-header-cell *matHeaderCellDef>
+              {{ 'workspace.missing-description' | translate }}
+            </th>
+            <td mat-cell *matCellDef="let missing">
+              {{ missing.description }}
+            </td>
+          </ng-container>
 
-            <!-- Code Column -->
-            <ng-container matColumnDef="code">
-              <th mat-header-cell *matHeaderCellDef>{{ 'workspace.missing-code' | translate }}</th>
-              <td mat-cell *matCellDef="let missing">{{ missing.code }}</td>
-            </ng-container>
+          <!-- Code Column -->
+          <ng-container matColumnDef="code">
+            <th mat-header-cell *matHeaderCellDef>
+              {{ 'workspace.missing-code' | translate }}
+            </th>
+            <td mat-cell *matCellDef="let missing">{{ missing.code }}</td>
+          </ng-container>
 
-            <!-- Actions Column (empty in view mode) -->
-            <ng-container matColumnDef="actions">
-              <th mat-header-cell *matHeaderCellDef></th>
-              <td mat-cell *matCellDef="let missing"></td>
-            </ng-container>
+          <!-- Actions Column (empty in view mode) -->
+          <ng-container matColumnDef="actions">
+            <th mat-header-cell *matHeaderCellDef></th>
+            <td mat-cell *matCellDef="let missing"></td>
+          </ng-container>
 
-            <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
-            <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
-          </table>
-        </div>
+          <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+          <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
+        </table>
+      </div>
       }
     </div>
   </div>
 </mat-dialog-content>
 
 <mat-dialog-actions align="end">
-  @if (selectedProfile) {
-    @if (editMode) {
-      <button mat-raised-button color="primary" (click)="saveProfile()" [disabled]="saving">
-        <mat-icon>save</mat-icon>
-        {{ 'workspace.save-profile' | translate }}
-      </button>
-      <button mat-raised-button (click)="cancelEdit()">
-        <mat-icon>cancel</mat-icon>
-        {{ 'workspace.cancel' | translate }}
-      </button>
-    } @else {
-      <button mat-raised-button color="primary" (click)="editProfile()">
-        <mat-icon>edit</mat-icon>
-        {{ 'workspace.edit-profile' | translate }}
-      </button>
-      <button mat-raised-button color="warn" (click)="deleteProfile()">
-        <mat-icon>delete</mat-icon>
-        {{ 'workspace.delete-profile' | translate }}
-      </button>
-    }
-  }
+  @if (selectedProfile) { @if (editMode) {
+  <button
+    mat-raised-button
+    color="primary"
+    (click)="saveProfile()"
+    [disabled]="saving"
+  >
+    <mat-icon>save</mat-icon>
+    {{ 'workspace.save-profile' | translate }}
+  </button>
+  <button mat-raised-button (click)="cancelEdit()">
+    <mat-icon>cancel</mat-icon>
+    {{ 'workspace.cancel' | translate }}
+  </button>
+  } @else {
+  <button mat-raised-button color="primary" (click)="editProfile()">
+    <mat-icon>edit</mat-icon>
+    {{ 'workspace.edit-profile' | translate }}
+  </button>
+  <button mat-raised-button color="warn" (click)="deleteProfile()">
+    <mat-icon>delete</mat-icon>
+    {{ 'workspace.delete-profile' | translate }}
+  </button>
+  } }
   <button mat-raised-button (click)="close()">
     <mat-icon>close</mat-icon>
     {{ 'close' | translate }}

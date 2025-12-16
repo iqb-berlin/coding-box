@@ -31,7 +31,10 @@ import {
   FlatResponseFrequenciesResponse,
   TestResultService
 } from '../../../services/test-result.service';
-import { ConfirmDialogComponent, ConfirmDialogData } from '../../../shared/dialogs/confirm-dialog.component';
+import {
+  ConfirmDialogComponent,
+  ConfirmDialogData
+} from '../../../shared/dialogs/confirm-dialog.component';
 import { BookletInfoDialogComponent } from '../booklet-info-dialog/booklet-info-dialog.component';
 import { UnitInfoDialogComponent } from '../unit-info-dialog/unit-info-dialog.component';
 import { LogDialogComponent } from '../booklet-log-dialog/log-dialog.component';
@@ -123,14 +126,31 @@ export class TestResultsFlatTableComponent implements OnDestroy {
 
   private unitIdsWithNotes = new Set<number>();
 
-  private personTestResultsCache = new Map<number, Observable<BookletFromPersonTestResults[]>>();
+  private personTestResultsCache = new Map<
+    number,
+    Observable<BookletFromPersonTestResults[]>
+  >();
   private personTestResultsCacheOrder: number[] = [];
   private readonly PERSON_TEST_RESULTS_CACHE_MAX = 5;
 
-  flatDisplayedColumns: string[] = ['code', 'group', 'login', 'booklet', 'unit', 'response', 'responseValue', 'frequencies', 'tags', 'actions'];
+  flatDisplayedColumns: string[] = [
+    'code',
+    'group',
+    'login',
+    'booklet',
+    'unit',
+    'response',
+    'responseValue',
+    'frequencies',
+    'tags',
+    'actions'
+  ];
 
   isLoadingFrequencies: boolean = false;
-  private frequenciesByComboKey = new Map<string, { total: number; values: FlatResponseFrequencyItem[] }>();
+  private frequenciesByComboKey = new Map<
+    string,
+    { total: number; values: FlatResponseFrequencyItem[] }
+  >();
 
   flatData: FlatResponseRow[] = [];
   flatTotalRecords: number = 0;
@@ -148,15 +168,15 @@ export class TestResultsFlatTableComponent implements OnDestroy {
     responseValue: string;
     tags: string;
   } = {
-      code: '',
-      group: '',
-      login: '',
-      booklet: '',
-      unit: '',
-      response: '',
-      responseValue: '',
-      tags: ''
-    };
+    code: '',
+    group: '',
+    login: '',
+    booklet: '',
+    unit: '',
+    response: '',
+    responseValue: '',
+    tags: ''
+  };
 
   flatFilterOptions: FlatResponseFilterOptionsResponse = {
     codes: [],
@@ -175,12 +195,12 @@ export class TestResultsFlatTableComponent implements OnDestroy {
   private suppressNextFlatFilterChange = false;
 
   constructor() {
-    this.flatSearchSubscription = this.flatSearchSubject.pipe(
-      debounceTime(this.FLAT_FILTER_DEBOUNCE_TIME)
-    ).subscribe(() => {
-      this.fetchFlatResponses(0, this.flatPageSize);
-      this.fetchFlatResponseFilterOptions();
-    });
+    this.flatSearchSubscription = this.flatSearchSubject
+      .pipe(debounceTime(this.FLAT_FILTER_DEBOUNCE_TIME))
+      .subscribe(() => {
+        this.fetchFlatResponses(0, this.flatPageSize);
+        this.fetchFlatResponseFilterOptions();
+      });
 
     this.fetchFlatResponses(this.flatPageIndex, this.flatPageSize);
     this.fetchFlatResponseFilterOptions();
@@ -191,18 +211,26 @@ export class TestResultsFlatTableComponent implements OnDestroy {
       return;
     }
 
-    const combosToFetchMap = new Map<string, FlatResponseFrequencyRequestCombo>();
-    (this.flatData || []).forEach(r => {
+    const combosToFetchMap = new Map<
+      string,
+      FlatResponseFrequencyRequestCombo
+    >();
+    (this.flatData || []).forEach((r) => {
       const variableId = String(r.response || '').trim();
       const unitKey = String(r.unit || '').trim();
       const value = String(r.responseValue ?? '');
       if (!unitKey || !variableId) {
         return;
       }
-      const key = `${encodeURIComponent(unitKey)}:${encodeURIComponent(variableId)}`;
+      const key = `${encodeURIComponent(unitKey)}:${encodeURIComponent(
+        variableId
+      )}`;
 
       const cached = this.frequenciesByComboKey.get(key);
-      const alreadyHave = !!cached && Array.isArray(cached.values) && cached.values.some(v => String(v.value ?? '') === value);
+      const alreadyHave =
+        !!cached &&
+        Array.isArray(cached.values) &&
+        cached.values.some((v) => String(v.value ?? '') === value);
       if (alreadyHave) {
         return;
       }
@@ -223,7 +251,11 @@ export class TestResultsFlatTableComponent implements OnDestroy {
     }
 
     this.isLoadingFrequencies = true;
-    this.testResultService.getFlatResponseFrequencies(this.appService.selectedWorkspaceId, combosToFetch)
+    this.testResultService
+      .getFlatResponseFrequencies(
+        this.appService.selectedWorkspaceId,
+        combosToFetch
+      )
       .subscribe((resp: FlatResponseFrequenciesResponse) => {
         this.isLoadingFrequencies = false;
         Object.entries(resp || {}).forEach(([key, incoming]) => {
@@ -234,8 +266,12 @@ export class TestResultsFlatTableComponent implements OnDestroy {
           }
 
           const mergedValues = new Map<string, FlatResponseFrequencyItem>();
-          (existing.values || []).forEach(v => mergedValues.set(String(v.value ?? ''), v));
-          (incoming.values || []).forEach(v => mergedValues.set(String(v.value ?? ''), v));
+          (existing.values || []).forEach((v) =>
+            mergedValues.set(String(v.value ?? ''), v)
+          );
+          (incoming.values || []).forEach((v) =>
+            mergedValues.set(String(v.value ?? ''), v)
+          );
 
           this.frequenciesByComboKey.set(key, {
             total: incoming.total ?? existing.total,
@@ -246,7 +282,9 @@ export class TestResultsFlatTableComponent implements OnDestroy {
   }
 
   getFrequencySummary(row: FlatResponseRow): string {
-    const comboKey = `${encodeURIComponent(String(row.unit || '').trim())}:${encodeURIComponent(String(row.response || '').trim())}`;
+    const comboKey = `${encodeURIComponent(
+      String(row.unit || '').trim()
+    )}:${encodeURIComponent(String(row.response || '').trim())}`;
     const entry = this.frequenciesByComboKey.get(comboKey);
     if (!entry || !Array.isArray(entry.values)) {
       return '';
@@ -259,7 +297,7 @@ export class TestResultsFlatTableComponent implements OnDestroy {
     };
 
     const value = String(row.responseValue ?? '');
-    const match = entry.values.find(v => String(v.value ?? '') === value);
+    const match = entry.values.find((v) => String(v.value ?? '') === value);
     if (!match) {
       return '';
     }
@@ -279,35 +317,56 @@ export class TestResultsFlatTableComponent implements OnDestroy {
     if (!v) {
       return options || [];
     }
-    return (options || []).filter(o => String(o).toLowerCase().includes(v));
+    return (options || []).filter((o) => String(o).toLowerCase().includes(v));
   }
 
   filteredCodes(): string[] {
-    return this.filterOptions(this.flatFilterOptions.codes, this.flatFilters.code);
+    return this.filterOptions(
+      this.flatFilterOptions.codes,
+      this.flatFilters.code
+    );
   }
 
   filteredGroups(): string[] {
-    return this.filterOptions(this.flatFilterOptions.groups, this.flatFilters.group);
+    return this.filterOptions(
+      this.flatFilterOptions.groups,
+      this.flatFilters.group
+    );
   }
 
   filteredLogins(): string[] {
-    return this.filterOptions(this.flatFilterOptions.logins, this.flatFilters.login);
+    return this.filterOptions(
+      this.flatFilterOptions.logins,
+      this.flatFilters.login
+    );
   }
 
   filteredBooklets(): string[] {
-    return this.filterOptions(this.flatFilterOptions.booklets, this.flatFilters.booklet);
+    return this.filterOptions(
+      this.flatFilterOptions.booklets,
+      this.flatFilters.booklet
+    );
   }
 
   filteredUnits(): string[] {
-    return this.filterOptions(this.flatFilterOptions.units, this.flatFilters.unit);
+    return this.filterOptions(
+      this.flatFilterOptions.units,
+      this.flatFilters.unit
+    );
   }
 
   filteredResponses(): string[] {
-    return this.filterOptions(this.flatFilterOptions.responses, this.flatFilters.response);
+    return this.filterOptions(
+      this.flatFilterOptions.responses,
+      this.flatFilters.response
+    );
   }
 
   filteredTags(): string[] {
-    return this.filterOptions(this.flatFilterOptions.tags, this.flatFilters.tags);
+    return this.filterOptions(
+      this.flatFilterOptions.tags,
+      this.flatFilters.tags
+    );
   }
 
   openBookletInfoFromFlatRow(row: FlatResponseRow): void {
@@ -323,31 +382,30 @@ export class TestResultsFlatTableComponent implements OnDestroy {
       { duration: 3000 }
     );
 
-    this.backendService.getBookletInfo(
-      this.appService.selectedWorkspaceId,
-      normalizedBookletId
-    ).subscribe({
-      next: bookletInfo => {
-        loadingSnackBar.dismiss();
+    this.backendService
+      .getBookletInfo(this.appService.selectedWorkspaceId, normalizedBookletId)
+      .subscribe({
+        next: (bookletInfo) => {
+          loadingSnackBar.dismiss();
 
-        this.dialog.open(BookletInfoDialogComponent, {
-          width: '1200px',
-          height: '80vh',
-          data: {
-            bookletInfo,
-            bookletId: normalizedBookletId
-          }
-        });
-      },
-      error: () => {
-        loadingSnackBar.dismiss();
-        this.snackBar.open(
-          'Fehler beim Laden der Testheft-Informationen',
-          'Fehler',
-          { duration: 3000 }
-        );
-      }
-    });
+          this.dialog.open(BookletInfoDialogComponent, {
+            width: '1200px',
+            height: '80vh',
+            data: {
+              bookletInfo,
+              bookletId: normalizedBookletId
+            }
+          });
+        },
+        error: () => {
+          loadingSnackBar.dismiss();
+          this.snackBar.open(
+            'Fehler beim Laden der Testheft-Informationen',
+            'Fehler',
+            { duration: 3000 }
+          );
+        }
+      });
   }
 
   openUnitInfoFromFlatRow(row: FlatResponseRow): void {
@@ -356,25 +414,22 @@ export class TestResultsFlatTableComponent implements OnDestroy {
     }
 
     this.getPersonTestResults(row.personId).subscribe({
-      next: booklets => {
-        const booklet = (booklets || []).find(b => b.name === row.booklet);
+      next: (booklets) => {
+        const booklet = (booklets || []).find((b) => b.name === row.booklet);
         if (!booklet) {
-          this.snackBar.open(
-            'Testheft nicht gefunden',
-            'Info',
-            { duration: 3000 }
-          );
+          this.snackBar.open('Testheft nicht gefunden', 'Info', {
+            duration: 3000
+          });
           return;
         }
 
-        const unit = (booklet.units || []).find(u => u.id === row.unitId);
-        const unitId = unit ? String(unit.name) : String(row.unit || '');
-        if (!unitId) {
-          this.snackBar.open(
-            'Aufgabe nicht gefunden',
-            'Info',
-            { duration: 3000 }
-          );
+        const unit = (booklet.units || []).find((u) => u.id === row.unitId);
+        const unitFileIdRaw = unit?.name || '';
+        const unitFileId = String(unitFileIdRaw).trim().toUpperCase();
+        if (!unitFileId) {
+          this.snackBar.open('Aufgabe nicht gefunden', 'Info', {
+            duration: 3000
+          });
           return;
         }
 
@@ -384,31 +439,30 @@ export class TestResultsFlatTableComponent implements OnDestroy {
           { duration: 3000 }
         );
 
-        this.backendService.getUnitInfo(
-          this.appService.selectedWorkspaceId,
-          unitId
-        ).subscribe({
-          next: unitInfo => {
-            loadingSnackBar.dismiss();
+        this.backendService
+          .getUnitInfo(this.appService.selectedWorkspaceId, unitFileId)
+          .subscribe({
+            next: (unitInfo) => {
+              loadingSnackBar.dismiss();
 
-            this.dialog.open(UnitInfoDialogComponent, {
-              width: '1200px',
-              height: '80vh',
-              data: {
-                unitInfo,
-                unitId
-              }
-            });
-          },
-          error: () => {
-            loadingSnackBar.dismiss();
-            this.snackBar.open(
-              'Fehler beim Laden der Aufgaben-Informationen',
-              'Fehler',
-              { duration: 3000 }
-            );
-          }
-        });
+              this.dialog.open(UnitInfoDialogComponent, {
+                width: '1200px',
+                height: '80vh',
+                data: {
+                  unitInfo,
+                  unitId: unitFileId
+                }
+              });
+            },
+            error: () => {
+              loadingSnackBar.dismiss();
+              this.snackBar.open(
+                'Fehler beim Laden der Aufgaben-Informationen',
+                'Fehler',
+                { duration: 3000 }
+              );
+            }
+          });
       },
       error: () => {
         this.snackBar.open(
@@ -425,9 +479,10 @@ export class TestResultsFlatTableComponent implements OnDestroy {
       return;
     }
 
-    this.backendService.getBookletLogsForUnit(this.appService.selectedWorkspaceId, row.unitId)
+    this.backendService
+      .getBookletLogsForUnit(this.appService.selectedWorkspaceId, row.unitId)
       .subscribe({
-        next: result => {
+        next: (result) => {
           if (!result || !result.logs || result.logs.length === 0) {
             this.snackBar.open(
               'Keine Logs für dieses Testheft vorhanden',
@@ -442,7 +497,7 @@ export class TestResultsFlatTableComponent implements OnDestroy {
             data: {
               logs: result.logs,
               sessions: result.sessions,
-              units: (result.units || []).map(u => ({
+              units: (result.units || []).map((u) => ({
                 ...u,
                 results: []
               }))
@@ -450,11 +505,9 @@ export class TestResultsFlatTableComponent implements OnDestroy {
           });
         },
         error: () => {
-          this.snackBar.open(
-            'Fehler beim Laden der Testheft-Logs',
-            'Fehler',
-            { duration: 3000 }
-          );
+          this.snackBar.open('Fehler beim Laden der Testheft-Logs', 'Fehler', {
+            duration: 3000
+          });
         }
       });
   }
@@ -464,15 +517,14 @@ export class TestResultsFlatTableComponent implements OnDestroy {
       return;
     }
 
-    const loadingSnackBar = this.snackBar.open(
-      'Lade Notizen...',
-      '',
-      { duration: 3000 }
-    );
+    const loadingSnackBar = this.snackBar.open('Lade Notizen...', '', {
+      duration: 3000
+    });
 
-    this.backendService.getUnitNotes(this.appService.selectedWorkspaceId, row.unitId)
+    this.backendService
+      .getUnitNotes(this.appService.selectedWorkspaceId, row.unitId)
       .subscribe({
-        next: notes => {
+        next: (notes) => {
           loadingSnackBar.dismiss();
 
           this.dialog.open(NoteDialogComponent, {
@@ -486,11 +538,9 @@ export class TestResultsFlatTableComponent implements OnDestroy {
         },
         error: () => {
           loadingSnackBar.dismiss();
-          this.snackBar.open(
-            'Fehler beim Laden der Notizen',
-            'Fehler',
-            { duration: 3000 }
-          );
+          this.snackBar.open('Fehler beim Laden der Notizen', 'Fehler', {
+            duration: 3000
+          });
         }
       });
   }
@@ -500,9 +550,10 @@ export class TestResultsFlatTableComponent implements OnDestroy {
       return;
     }
 
-    this.backendService.getUnitLogs(this.appService.selectedWorkspaceId, row.unitId)
+    this.backendService
+      .getUnitLogs(this.appService.selectedWorkspaceId, row.unitId)
       .subscribe({
-        next: logs => {
+        next: (logs) => {
           if (!logs || logs.length === 0) {
             this.snackBar.open(
               'Keine Logs für diese Aufgabe vorhanden',
@@ -521,11 +572,9 @@ export class TestResultsFlatTableComponent implements OnDestroy {
           });
         },
         error: () => {
-          this.snackBar.open(
-            'Fehler beim Laden der Aufgaben-Logs',
-            'Fehler',
-            { duration: 3000 }
-          );
+          this.snackBar.open('Fehler beim Laden der Aufgaben-Logs', 'Fehler', {
+            duration: 3000
+          });
         }
       });
   }
@@ -534,7 +583,9 @@ export class TestResultsFlatTableComponent implements OnDestroy {
     this.flatSearchSubscription.unsubscribe();
   }
 
-  private getPersonTestResults(personId: number): Observable<BookletFromPersonTestResults[]> {
+  private getPersonTestResults(
+    personId: number
+  ): Observable<BookletFromPersonTestResults[]> {
     if (!this.appService.selectedWorkspaceId) {
       return of([]);
     }
@@ -543,21 +594,29 @@ export class TestResultsFlatTableComponent implements OnDestroy {
       return this.personTestResultsCache.get(personId)!;
     }
 
-    const req$ = (this.backendService
-      .getPersonTestResults(this.appService.selectedWorkspaceId, personId) as unknown as Observable<BookletFromPersonTestResults[]>)
-      .pipe(
-        tap({
-          error: () => {
-            this.personTestResultsCache.delete(personId);
-          }
-        }),
-        shareReplay(1)
-      );
+    const req$ = (
+      this.backendService.getPersonTestResults(
+        this.appService.selectedWorkspaceId,
+        personId
+      ) as unknown as Observable<BookletFromPersonTestResults[]>
+    ).pipe(
+      tap({
+        error: () => {
+          this.personTestResultsCache.delete(personId);
+        }
+      }),
+      shareReplay(1)
+    );
 
     this.personTestResultsCache.set(personId, req$);
-    this.personTestResultsCacheOrder = this.personTestResultsCacheOrder.filter(id => id !== personId);
+    this.personTestResultsCacheOrder = this.personTestResultsCacheOrder.filter(
+      (id) => id !== personId
+    );
     this.personTestResultsCacheOrder.push(personId);
-    if (this.personTestResultsCacheOrder.length > this.PERSON_TEST_RESULTS_CACHE_MAX) {
+    if (
+      this.personTestResultsCacheOrder.length >
+      this.PERSON_TEST_RESULTS_CACHE_MAX
+    ) {
       const evictId = this.personTestResultsCacheOrder.shift();
       if (evictId !== undefined) {
         this.personTestResultsCache.delete(evictId);
@@ -596,18 +655,20 @@ export class TestResultsFlatTableComponent implements OnDestroy {
       return;
     }
 
-    this.testResultService.getFlatResponseFilterOptions(this.appService.selectedWorkspaceId, {
-      code: this.flatFilters.code,
-      group: this.flatFilters.group,
-      login: this.flatFilters.login,
-      booklet: this.flatFilters.booklet,
-      unit: this.flatFilters.unit,
-      response: this.flatFilters.response,
-      responseValue: this.flatFilters.responseValue,
-      tags: this.flatFilters.tags
-    }).subscribe(opts => {
-      this.flatFilterOptions = opts;
-    });
+    this.testResultService
+      .getFlatResponseFilterOptions(this.appService.selectedWorkspaceId, {
+        code: this.flatFilters.code,
+        group: this.flatFilters.group,
+        login: this.flatFilters.login,
+        booklet: this.flatFilters.booklet,
+        unit: this.flatFilters.unit,
+        response: this.flatFilters.response,
+        responseValue: this.flatFilters.responseValue,
+        tags: this.flatFilters.tags
+      })
+      .subscribe((opts) => {
+        this.flatFilterOptions = opts;
+      });
   }
 
   onFlatPaginatorChange(event: PageEvent): void {
@@ -623,38 +684,40 @@ export class TestResultsFlatTableComponent implements OnDestroy {
     const validPage = Math.max(0, page);
     this.isLoadingFlat = true;
 
-    this.testResultService.getFlatResponses(this.appService.selectedWorkspaceId, {
-      page: validPage + 1,
-      limit,
-      code: this.flatFilters.code,
-      group: this.flatFilters.group,
-      login: this.flatFilters.login,
-      booklet: this.flatFilters.booklet,
-      unit: this.flatFilters.unit,
-      response: this.flatFilters.response,
-      responseValue: this.flatFilters.responseValue,
-      tags: this.flatFilters.tags
-    }).subscribe(resp => {
-      this.isLoadingFlat = false;
-      this.flatTotalRecords = resp.total;
-      this.flatData = (resp.data || []).map(r => ({
-        responseId: r.responseId,
-        unitId: r.unitId,
-        personId: r.personId,
-        code: r.code,
-        group: r.group,
-        login: r.login,
-        booklet: r.booklet,
-        unit: r.unit,
-        response: r.response,
-        responseStatus: r.responseStatus,
-        responseValue: r.responseValue,
-        tags: Array.isArray(r.tags) ? r.tags : []
-      }));
+    this.testResultService
+      .getFlatResponses(this.appService.selectedWorkspaceId, {
+        page: validPage + 1,
+        limit,
+        code: this.flatFilters.code,
+        group: this.flatFilters.group,
+        login: this.flatFilters.login,
+        booklet: this.flatFilters.booklet,
+        unit: this.flatFilters.unit,
+        response: this.flatFilters.response,
+        responseValue: this.flatFilters.responseValue,
+        tags: this.flatFilters.tags
+      })
+      .subscribe((resp) => {
+        this.isLoadingFlat = false;
+        this.flatTotalRecords = resp.total;
+        this.flatData = (resp.data || []).map((r) => ({
+          responseId: r.responseId,
+          unitId: r.unitId,
+          personId: r.personId,
+          code: r.code,
+          group: r.group,
+          login: r.login,
+          booklet: r.booklet,
+          unit: r.unit,
+          response: r.response,
+          responseStatus: r.responseStatus,
+          responseValue: r.responseValue,
+          tags: Array.isArray(r.tags) ? r.tags : []
+        }));
 
-      this.loadFrequenciesForCurrentPage();
-      this.loadNotesPresenceForCurrentPage();
-    });
+        this.loadFrequenciesForCurrentPage();
+        this.loadNotesPresenceForCurrentPage();
+      });
   }
 
   hasNotesForRow(row: FlatResponseRow): boolean {
@@ -666,15 +729,18 @@ export class TestResultsFlatTableComponent implements OnDestroy {
       return;
     }
 
-    const unitIds = Array.from(new Set((this.flatData || []).map(r => r.unitId).filter(id => !!id)));
+    const unitIds = Array.from(
+      new Set((this.flatData || []).map((r) => r.unitId).filter((id) => !!id))
+    );
     if (unitIds.length === 0) {
       this.unitIdsWithNotes = new Set<number>();
       return;
     }
 
-    this.backendService.getNotesForMultipleUnits(this.appService.selectedWorkspaceId, unitIds)
+    this.backendService
+      .getNotesForMultipleUnits(this.appService.selectedWorkspaceId, unitIds)
       .subscribe({
-        next: notesByUnitId => {
+        next: (notesByUnitId) => {
           const nextSet = new Set<number>();
           Object.entries(notesByUnitId || {}).forEach(([unitId, notes]) => {
             if (Array.isArray(notes) && notes.length > 0) {
@@ -694,16 +760,18 @@ export class TestResultsFlatTableComponent implements OnDestroy {
       return;
     }
 
-    const loadingSnackBar = this.snackBar.open(
-      'Lade Replay...',
-      '',
-      { duration: 3000 }
-    );
+    const loadingSnackBar = this.snackBar.open('Lade Replay...', '', {
+      duration: 3000
+    });
 
     this.appService
-      .createToken(this.appService.selectedWorkspaceId, this.appService.loggedUser?.sub || '', 1)
+      .createToken(
+        this.appService.selectedWorkspaceId,
+        this.appService.loggedUser?.sub || '',
+        1
+      )
       .subscribe({
-        next: token => {
+        next: (token) => {
           loadingSnackBar.dismiss();
           if (!token) {
             this.snackBar.open(
@@ -714,30 +782,32 @@ export class TestResultsFlatTableComponent implements OnDestroy {
             return;
           }
 
-          this.backendService.getReplayUrl(
-            this.appService.selectedWorkspaceId,
-            row.responseId,
-            token
-          ).subscribe({
-            next: result => {
-              if (result && result.replayUrl) {
-                window.open(result.replayUrl, '_blank');
-              } else {
+          this.backendService
+            .getReplayUrl(
+              this.appService.selectedWorkspaceId,
+              row.responseId,
+              token
+            )
+            .subscribe({
+              next: (result) => {
+                if (result && result.replayUrl) {
+                  window.open(result.replayUrl, '_blank');
+                } else {
+                  this.snackBar.open(
+                    'Replay-URL konnte nicht erzeugt werden',
+                    'Fehler',
+                    { duration: 3000 }
+                  );
+                }
+              },
+              error: () => {
                 this.snackBar.open(
-                  'Replay-URL konnte nicht erzeugt werden',
+                  'Fehler beim Laden der Replay-URL',
                   'Fehler',
                   { duration: 3000 }
                 );
               }
-            },
-            error: () => {
-              this.snackBar.open(
-                'Fehler beim Laden der Replay-URL',
-                'Fehler',
-                { duration: 3000 }
-              );
-            }
-          });
+            });
         },
         error: () => {
           loadingSnackBar.dismiss();
@@ -761,36 +831,37 @@ export class TestResultsFlatTableComponent implements OnDestroy {
       }
     });
 
-    dialogRef.afterClosed().subscribe(confirmed => {
+    dialogRef.afterClosed().subscribe((confirmed) => {
       if (confirmed) {
-        this.backendService.deleteResponse(
-          this.appService.selectedWorkspaceId,
-          row.responseId
-        ).subscribe({
-          next: result => {
-            if (result.success) {
+        this.backendService
+          .deleteResponse(this.appService.selectedWorkspaceId, row.responseId)
+          .subscribe({
+            next: (result) => {
+              if (result.success) {
+                this.snackBar.open(
+                  `Antwort "${row.response}" wurde erfolgreich gelöscht.`,
+                  'Erfolg',
+                  { duration: 3000 }
+                );
+                this.fetchFlatResponses(this.flatPageIndex, this.flatPageSize);
+              } else {
+                this.snackBar.open(
+                  `Fehler beim Löschen der Antwort: ${result.report.warnings.join(
+                    ', '
+                  )}`,
+                  'Fehler',
+                  { duration: 3000 }
+                );
+              }
+            },
+            error: () => {
               this.snackBar.open(
-                `Antwort "${row.response}" wurde erfolgreich gelöscht.`,
-                'Erfolg',
-                { duration: 3000 }
-              );
-              this.fetchFlatResponses(this.flatPageIndex, this.flatPageSize);
-            } else {
-              this.snackBar.open(
-                `Fehler beim Löschen der Antwort: ${result.report.warnings.join(', ')}`,
+                'Fehler beim Löschen der Antwort. Bitte versuchen Sie es später erneut.',
                 'Fehler',
                 { duration: 3000 }
               );
             }
-          },
-          error: () => {
-            this.snackBar.open(
-              'Fehler beim Löschen der Antwort. Bitte versuchen Sie es später erneut.',
-              'Fehler',
-              { duration: 3000 }
-            );
-          }
-        });
+          });
       }
     });
   }

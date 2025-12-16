@@ -1101,17 +1101,118 @@ ${bookletRefs}
     );
   }
 
-  async testCenterImport(entries: Record<string, unknown>[]): Promise<boolean> {
+  async testCenterImport(
+    entries: Record<string, unknown>[]
+  ): Promise<TestFilesUploadResultDto>;
+  async testCenterImport(
+    entries: Record<string, unknown>[],
+    overwriteFileIds?: string[]
+  ): Promise<TestFilesUploadResultDto> {
     try {
-      const registry = this.fileUploadRepository.create(entries);
-      await this.fileUploadRepository.upsert(registry, [
-        'file_id',
-        'workspace_id'
-      ]);
-      return true;
+      const normalized = Array.isArray(entries) ? entries : [];
+      const workspaceId = Number(
+        (normalized[0] as { workspace_id?: unknown } | undefined)?.workspace_id
+      );
+
+      const requestedFileIds = normalized
+        .map(e => String((e as { file_id?: unknown }).file_id ?? ''))
+        .filter(Boolean);
+
+      const conflicts: TestFilesUploadConflictDto[] =
+        workspaceId && requestedFileIds.length ?
+          (
+            await this.fileUploadRepository
+              .createQueryBuilder('file')
+              .select(['file.file_id', 'file.filename', 'file.file_type'])
+              .where('file.workspace_id = :workspaceId', { workspaceId })
+              .andWhere('file.file_id IN (:...fileIds)', {
+                fileIds: requestedFileIds
+              })
+              .getMany()
+          ).map(f => ({
+            fileId: String(f.file_id || ''),
+            filename: String(f.filename || ''),
+            fileType: String(f.file_type || '')
+          })) :
+          [];
+
+      const conflictIds = new Set(conflicts.map(c => c.fileId));
+      const overwriteIdSet = new Set((overwriteFileIds || []).filter(Boolean));
+
+      const attemptedFiles: TestFilesUploadUploadedDto[] = normalized
+        .map(e => ({
+          fileId: String((e as { file_id?: unknown }).file_id ?? ''),
+          filename: String((e as { filename?: unknown }).filename ?? ''),
+          fileType: String((e as { file_type?: unknown }).file_type ?? '')
+        }))
+        .filter(f => !!f.fileId && !!f.filename);
+
+      const shouldOverwrite = (fileId: string): boolean => !!fileId && overwriteIdSet.has(fileId);
+
+      const insertableFiles = attemptedFiles.filter(
+        f => !conflictIds.has(f.fileId)
+      );
+      const overwriteFiles = attemptedFiles.filter(
+        f => conflictIds.has(f.fileId) && shouldOverwrite(f.fileId)
+      );
+      const remainingConflicts = conflicts.filter(
+        c => !shouldOverwrite(c.fileId)
+      );
+
+      const insertableEntries = normalized.filter(e => {
+        const id = String((e as { file_id?: unknown }).file_id ?? '');
+        return !!id && !conflictIds.has(id);
+      });
+      const overwriteEntries = normalized.filter(e => {
+        const id = String((e as { file_id?: unknown }).file_id ?? '');
+        return !!id && conflictIds.has(id) && shouldOverwrite(id);
+      });
+
+      const registry = this.fileUploadRepository.create(insertableEntries);
+      if (registry.length > 0) {
+        await this.fileUploadRepository
+          .createQueryBuilder()
+          .insert()
+          .into(FileUpload)
+          .values(registry)
+          .orIgnore()
+          .execute();
+      }
+
+      const overwriteRegistry = this.fileUploadRepository.create(
+        overwriteEntries.map(e => ({
+          ...(e as Record<string, unknown>),
+          created_at: new Date() as unknown as number
+        }))
+      );
+      if (overwriteRegistry.length > 0) {
+        await this.fileUploadRepository.upsert(overwriteRegistry, [
+          'file_id',
+          'workspace_id'
+        ]);
+      }
+      return {
+        total: attemptedFiles.length,
+        uploaded: insertableFiles.length + overwriteFiles.length,
+        failed: 0,
+        uploadedFiles: [...insertableFiles, ...overwriteFiles],
+        conflicts: remainingConflicts.length ? remainingConflicts : undefined,
+        failedFiles: undefined
+      };
     } catch (error) {
       this.logger.error('Error during test center import', error);
-      return false;
+      return {
+        total: Array.isArray(entries) ? entries.length : 0,
+        uploaded: 0,
+        failed: Array.isArray(entries) ? entries.length : 0,
+        uploadedFiles: [],
+        failedFiles: [
+          {
+            filename: 'Testcenter import',
+            reason: error instanceof Error ? error.message : 'Import failed'
+          }
+        ]
+      };
     }
   }
 

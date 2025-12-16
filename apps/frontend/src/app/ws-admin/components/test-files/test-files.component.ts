@@ -61,6 +61,7 @@ import {
 } from './test-files-upload-result-dialog.component';
 import { getFileIcon } from '../../utils/file-utils';
 import { GermanPaginatorIntl } from '../../../shared/services/german-paginator-intl.service';
+import { Result } from '../../../services/import.service';
 
 @Component({
   selector: 'coding-box-test-files',
@@ -382,13 +383,60 @@ export class TestFilesComponent implements OnInit, OnDestroy {
 
   testCenterImport(): void {
     const dialogRef = this.dialog.open(TestCenterImportComponent, {
-      width: '800px',
+      width: '1000px',
+      maxWidth: '95vw',
       minHeight: '800px',
       data: {
         importType: 'testFiles'
       }
     });
-    dialogRef.afterClosed().subscribe((result: boolean | UntypedFormGroup) => {
+    dialogRef.afterClosed().subscribe((result: unknown) => {
+      const maybePayload = result as
+        | {
+            didImport?: boolean;
+            importType?: 'testFiles';
+            result?: Result;
+            overwriteSelectedCount?: number;
+          }
+        | boolean
+        | UntypedFormGroup
+        | undefined;
+
+      if (
+        maybePayload &&
+        typeof maybePayload === 'object' &&
+        'didImport' in maybePayload &&
+        (maybePayload as { didImport?: boolean }).didImport &&
+        (maybePayload as { importType?: string }).importType === 'testFiles' &&
+        (maybePayload as { result?: unknown }).result
+      ) {
+        const payload = maybePayload as { result: Result };
+        const r = payload.result;
+
+        const detailed = r.testFilesUploadResult;
+        const attempted = Number(detailed?.total ?? r.testFiles ?? 0);
+        const uploadedFiles = detailed?.uploadedFiles || [];
+        const failedFiles = detailed?.failedFiles || [];
+        const remainingConflicts = detailed?.conflicts || [];
+
+        this.openUploadResultDialog({
+          attempted,
+          uploadedCount: Number(detailed?.uploaded ?? uploadedFiles.length),
+          failedCount: Number(detailed?.failed ?? failedFiles.length),
+          remainingConflictsCount: Number(remainingConflicts.length),
+          overwriteSelectedCount: Number(
+            (maybePayload as { overwriteSelectedCount?: number })
+              .overwriteSelectedCount || 0
+          ),
+          uploadedFiles,
+          failedFiles,
+          remainingConflicts
+        } as TestFilesUploadResultDialogData);
+
+        this.onUploadSuccess();
+        return;
+      }
+
       if (result instanceof UntypedFormGroup || result) {
         this.loadTestFiles();
       }
