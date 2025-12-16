@@ -1,10 +1,6 @@
-import { Component, Inject } from '@angular/core';
+import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import {
-  MAT_DIALOG_DATA,
-  MatDialogModule,
-  MatDialogRef
-} from '@angular/material/dialog';
+import { MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatDividerModule } from '@angular/material/divider';
@@ -26,30 +22,30 @@ export type TestResultsImportDialogResult = {
     MatListModule
   ],
   template: `
-    <h2 mat-dialog-title>Import Test Results</h2>
+    <h2 mat-dialog-title>Testergebnisse importieren</h2>
     <mat-dialog-content>
       <mat-list>
         <mat-list-item (click)="selectImportType('testcenter')">
           <mat-icon matListItemIcon>cloud_download</mat-icon>
-          <div matListItemTitle>Testcenter Import</div>
-          <div matListItemLine>Import from Testcenter</div>
+          <div matListItemTitle>Testcenter-Import</div>
+          <div matListItemLine>Aus dem Testcenter importieren</div>
         </mat-list-item>
         <mat-divider></mat-divider>
         <mat-list-item (click)="selectImportType('responses')">
           <mat-icon matListItemIcon>upload</mat-icon>
           <div matListItemTitle>Antworten hochladen</div>
-          <div matListItemLine>Upload responses from file</div>
+          <div matListItemLine>Antworten aus Datei hochladen</div>
         </mat-list-item>
         <mat-divider></mat-divider>
         <mat-list-item (click)="selectImportType('logs')">
           <mat-icon matListItemIcon>upload</mat-icon>
           <div matListItemTitle>Logs hochladen</div>
-          <div matListItemLine>Upload logs from file</div>
+          <div matListItemLine>Logs aus Datei hochladen</div>
         </mat-list-item>
       </mat-list>
     </mat-dialog-content>
     <mat-dialog-actions align="end">
-      <button mat-button (click)="cancel()">Cancel</button>
+      <button mat-button (click)="cancel()">Abbrechen</button>
     </mat-dialog-actions>
   `,
   styles: [
